@@ -1,0 +1,5 @@
+outs:
+- md5: 5fbf49d380d9ef650210c4a859d656f6
+  size: 60509480
+  hash: md5
+  path: graph.obj

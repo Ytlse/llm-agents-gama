@@ -1,14 +1,7 @@
 exports/
 samples/
 experiments*/
-*.geojson
 .DS_Store
 results/
 .venv
-*.dbf
-*.shp
-*.shx
-*.zip
-*.jar
-*.obj
-*.pbf
+
