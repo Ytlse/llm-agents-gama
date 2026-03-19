@@ -29,13 +29,20 @@ global {
 	date _gtfs_calendar_start_date;
 	date _gtfs_calendar_end_date;
 	
+	
 	init {
-		create travel_agent_factory number: 1 with: [
-			data_trip_list::TRIP_LIST,
-			trip_dates_list::TRIP_INFO["calendar"]["dates"],
-			trip_calendar_map::TRIP_INFO["calendar"]["data"]
-		];
+	    
+		map calendar_info <- TRIP_INFO["calendar"] as map;
+		list t_dates <- calendar_info["dates"] as list;
+		map t_data <- calendar_info["data"] as map;
 		
+		// 2. On crée l'agent en utilisant ces variables propres
+		create travel_agent_factory number: 1 with: [
+		    data_trip_list:: TRIP_LIST,
+		    trip_dates_list:: t_dates,
+		    trip_calendar_map:: t_data
+		];
+	
 //		create activity_loc from: toulouse_activities_shape_file;
 
 //		list<point> locs <- [{2.113423910293682, 43.59364960321025}, {2.2440599995768924, 43.59481024293284}] collect to_GAMA_CRS(each, POPULATION_CRS);
@@ -45,7 +52,7 @@ global {
 //		}
 
 		// GTFS calendar
-		list<string> _dates_str <- TRIP_INFO["calendar"]["dates"];
+		list<string> _dates_str <- calendar_info["dates"];
 		_gtfs_calendar_start_date <- date(_dates_str[0]);
 		_gtfs_calendar_end_date <- date(_dates_str[length(_dates_str)-1]);
 	}
@@ -99,13 +106,13 @@ experiment e type: gui {
 			string person_id <- "";
 			int route_type <- 0;
 			string moving_id <- "";
-			save [machine_time,CURRENT_TIMESTAMP,person_id,route_type,moving_id] to: evaluate_modality_choices_file
+			save [gama.machine_time,CURRENT_TIMESTAMP,person_id,route_type,moving_id] to: evaluate_modality_choices_file
 					format:"csv" rewrite: true;
 		}
 		// time, people_name, route_type, moving_id, late_time
 		ask inhabitant {
 			if self.on_vehicle != nil and self.target_location != nil {
-				save [machine_time,CURRENT_TIMESTAMP,person_id,self.on_vehicle.route_type,self.moving_id] to: evaluate_modality_choices_file
+				save [gama.machine_time,CURRENT_TIMESTAMP,person_id,self.on_vehicle.route_type,self.moving_id] to: evaluate_modality_choices_file
 					format:"csv" rewrite: false;
 			}
 		}
@@ -117,14 +124,14 @@ experiment e type: gui {
 			float lat <- 0.0;
 			string trip_id <- nil;
 			string person_id <- nil;
-			save [machine_time,CURRENT_TIMESTAMP,person_id,trip_id,lon,lat] to: evaluate_density_file
+			save [gama.machine_time,CURRENT_TIMESTAMP,person_id,trip_id,lon,lat] to: evaluate_density_file
 					format:"csv" rewrite: true;
 		}
 		
 		ask inhabitant where (!each.is_idle) {
 			string trip_id <- self.on_vehicle != nil ? self.on_vehicle.trip_id : nil;
 			point ploc <- point(location CRS_transform(POPULATION_CRS));
-			save [machine_time,CURRENT_TIMESTAMP,person_id,trip_id, ploc.x, ploc.y]
+			save [gama.machine_time,CURRENT_TIMESTAMP,person_id,trip_id, ploc.x, ploc.y]
 				to: evaluate_density_file
 				format:"csv" rewrite: false;
 		}

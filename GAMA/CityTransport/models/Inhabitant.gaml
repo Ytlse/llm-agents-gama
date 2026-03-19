@@ -92,19 +92,25 @@ species passenger parent: in_transfer virtual: true {
 		list_shape_id <- [];
 	}
 
-	action passenger_set_plan(map<string, float> plan_target, list<map<string, unknown>> legs, map<string, unknown> raw) {		
+	action passenger_set_plan(map<string, float> plan_target, list<map<string, unknown>> legs_raw, map<string, unknown> raw) {		
 		total_activities <- total_activities + 1;
 		
 		// NOTE: set location immediately when legs is empty
 		// TODO: should implement other mobilities than public transport
+		list<map<string, unknown>> legs <- (legs_raw is list) ? list<map<string, unknown>>(legs_raw) : [];
 		if length(legs) = 0 {
+			map<string, unknown> raw_loc <- map<string, unknown>(raw["plan"]);
+			map<string, unknown> start_loc <- map<string, unknown>(raw["start_location"]);
+	        
+	        float start_lon <- float(start_loc["lon"]);
+	        float start_lat <- float(start_loc["lat"]);
 			point start_point <- point(to_GAMA_CRS(
-				{float(raw["plan"]["start_location"]["lon"]), float(raw["plan"]["start_location"]["lat"])}, 
+				{start_lon, start_lat}, 
 				POPULATION_CRS
 			));
 			location <- start_point;
 		}
-					
+
 		is_active <- true;
 		
 		raw_trip <- raw;
@@ -118,25 +124,33 @@ species passenger parent: in_transfer virtual: true {
 		
 		if length(legs) > 0 {
 			// Add walking segment first
-			point start_point <- point(to_GAMA_CRS(
-				{float(legs[0]["start_location"]["lon"]), float(legs[0]["start_location"]["lat"])}, 
+			map<string, unknown> start_loc_0 <- map<string, unknown>(legs[0]["start_location"]);
+	        
+	        float start_lon <- float(start_loc_0["lon"]);
+	        float start_lat <- float(start_loc_0["lat"]);
+			
+			point start_point <- point(to_GAMA_CRS({start_lon,start_lat}, 
 				POPULATION_CRS
 			));
 			list_destination << start_point;
-			list_destination_stop_name << string(legs[0]["start_location"]["stop"]);
+			list_destination_stop_name << string(start_loc_0["stop"]);
 			list_route_id << _ROUTE_NONE_;
 			list_shape_id << nil;
 			
 			loop leg over: legs {
-				point end_point <- point(to_GAMA_CRS(
-					{float(leg["end_location"]["lon"]), float(leg["end_location"]["lat"])}, 
+				map<string, unknown> leg_end_location <-  map<string, unknown>(leg["end_location"]);
+				float leg_end_lon <- float(leg_end_location["lon"]);
+	        	float leg_end_lat <- float(leg_end_location["lat"]);
+				
+				point end_point <- point(to_GAMA_CRS({leg_end_lon, leg_end_lat}, 
 					POPULATION_CRS
 				));
 				list_destination << end_point;
-				list_destination_stop_name << string(leg["end_location"]["stop"]);
+				list_destination_stop_name << string(leg_end_location["stop"]);
 				string transit_route <- string(leg["transit_route"]);
 				list_route_id << (bool(leg["is_transfer"]) ? _ROUTE_NONE_: string(leg["transit_route"]));
-				list_shape_id << (bool(leg["is_transfer"]) ? "": (leg["shape_id"] collect string(each)));
+				// On force le cast de leg["shape_id"] en liste avant d'appliquer le collect
+				list_shape_id << (bool(leg["is_transfer"]) ? "" : (list(leg["shape_id"]) collect string(each)));
 			}
 		}
 		
@@ -359,7 +373,8 @@ species inhabitant parent: passenger {
 	}
 	
 	action submit_ob_tripfeedback(float trip_duration) {
-		float plan_duration <- (float(raw_trip["plan"]["end_time"]) - float(raw_trip["plan"]["start_time"])) / 1000.0;
+		map<string, unknown> plan <- map<string, unknown>(raw_trip["plan"]);
+		float plan_duration <- (float(plan["end_time"]) - float(plan["start_time"])) / 1000.0;
 		map<string,unknown> ob <- [
 			"type"::"arrival",
 			"timestamp"::CURRENT_TIMESTAMP,

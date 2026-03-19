@@ -85,8 +85,9 @@ species llm_agent_sync skills:[network] {
 				map<string, unknown> data <- json["data"];
 				list<map<string, unknown>> people <- data["people"];
 				loop p over: people {
-					float lon <- float(p["location"]["lon"]);
-					float lat <- float(p["location"]["lat"]);
+					map<string, unknown> p_loc <- map<string, unknown>(p["location"]);
+					float lon <- float(p_loc["lon"]);
+					float lat <- float(p_loc["lat"]);
 					point plocation <- point(to_GAMA_CRS({lon, lat}, POPULATION_CRS));
 					create inhabitant with: [
 						route_vehicle_map::ROUTE_VEHICLE_MAP,
@@ -160,18 +161,19 @@ species llm_agent_async skills:[network] {
 			map<string, unknown> data <- action_data["action"];
 			inhabitant person <- INHABITANT_MAP[person_id];
 			if person != nil {
-				write "DATA: "+ data;
 				ask person {
 					self.moving_id <- string(data["move_id"]);
-					self.activity_id <- string(data["for_activity"]["id"]);
+					map<string, unknown> for_activity <- map<string, unknown>(data["for_activity"]);
+					self.activity_id <- string(for_activity["id"]);
 					self.purpose <- string(data["purpose"]);
 					self.expected_arrive_at <- int(data["expected_arrive_at"]);
 					int prepare_before_seconds <- int(data["prepare_before_seconds"]);
 					self.schedule_at <- self.expected_arrive_at - prepare_before_seconds;
 //						self.moving_description <- string(data["description"]);
+					map<string, unknown> plan <- map<string, unknown>(data["plan"]);
 					do passenger_set_plan(
 						data["target_location"],
-						data["plan"]["legs"],
+						plan["legs"],
 						data
 					);
 				}	
@@ -194,4 +196,7 @@ species llm_agent_test skills:[network] {
 		
 	}
 }
+
+
+
 

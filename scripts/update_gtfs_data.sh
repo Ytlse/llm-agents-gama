@@ -11,6 +11,7 @@ if [ ! -d "$EXPORT_DIR" ]; then
 fi
 
 # Extract GTFS data
+echo "Extracting GTFS data..."
 cd "$GTFS_DIR"
 unzip -o -d "$GTFS_DIR" *.zip
 

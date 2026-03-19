@@ -4,4 +4,11 @@ experiments*/
 *.geojson
 .DS_Store
 results/
-.env
+.venv
+*.dbf
+*.shp
+*.shx
+*.zip
+*.jar
+*.obj
+*.pbf

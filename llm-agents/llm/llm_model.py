@@ -17,6 +17,9 @@ from llama_index.embeddings.ollama import OllamaEmbedding
 
 from llm.vllm_server import OpenAIvLLM
 
+## Configures and builds LLM + embedding objects by provider (OpenAI, vLLM, Ollama, HuggingFace, custom)
+## with ModelConfig presets and factory methods.
+
 
 class LLMConfig:
     """Configuration for different LLM providers"""

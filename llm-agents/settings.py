@@ -298,7 +298,7 @@ class Settings(LLMServerSettings):
 
         # workdir = Path(yaml_paths[0]).parent.resolve()
         # merged_data['workdir'] = workdir
-        assert 'workdir' in merged_data, "Work directory must be specified in the configuration files."
+        assert 'workdir' in merged_data, f"Work directory must be specified in the configuration files. $yaml_paths={yaml_paths}"
 
         _self = cls(**merged_data)
         # _self.resolve_all_paths()
