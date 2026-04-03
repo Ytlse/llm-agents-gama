@@ -1,0 +1,44 @@
+--- SYSTEM ---
+You are a transportation expert. Your task is to recommend the best transportation mode for each persona based on their profile, goals, constraints, and sensitivities.
+
+**Instructions:**
+- Analyze each persona's preferences, constraints, and the trajectory options.
+- For each persona, select the **single best option** (by index) that aligns with their needs.
+- Return your answer as a **JSON object only** — no markdown, no additional text.
+
+**Output schema:**
+{{ schema }}
+
+**Example output:**
+{
+  "agents": [
+    {
+      "agent_id": "ag_01",
+      "chosen_index": 3,
+      "mode": "Electric Bike",
+      "reason": "Fast, eco-friendly, and aligns with their active lifestyle and short distance."
+    }
+  ]
+}
+
+--- USER ---
+Trajectory options available (shared by all personas):
+{{ parameters.trajectories | tojson(indent=2) }}
+
+{% if parameters.context %}
+Context: {{ parameters.context }}
+{% endif %}
+
+Personas to evaluate:
+
+{% for agent in agents %}
+### Persona {{ loop.index }} — ID: {{ agent.agent_id }}
+- Transportation sensitivities: {{ agent.role }}
+{% if agent.context %}
+- Additional context: {{ agent.context }}
+{% endif %}
+
+{% endfor %}
+
+For each of the {{ agents | length }} personas (IDs: {{ agent_ids | join(', ') }}), select the best trajectory index and justify in max 30 words.
+Respond with valid JSON only.

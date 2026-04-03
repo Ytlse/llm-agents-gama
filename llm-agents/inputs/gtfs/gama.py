@@ -1,3 +1,11 @@
+"""
+GTFS to GAMA Platform Data Converter
+
+This module converts GTFS (General Transit Feed Specification) data into a format
+suitable for the GAMA multi-agent simulation platform. It processes transit schedules,
+routes, and calendar information to create simulation-ready data structures.
+"""
+
 from collections import defaultdict
 from typing import Optional
 from scipy.sparse import coo_matrix
@@ -13,28 +21,67 @@ DURATION_24H = 24 * 60 * 60
 
 
 class TripInfo(BaseModel):
+    """
+    Data model for a single transit trip information.
+
+    Represents a complete transit trip with its schedule, route, and spatial data
+    needed for simulation in the GAMA platform.
+    """
     trip_id: str
     shape_id: str
     route_id: str
     service_id: str
     route_type: Optional[int] = None
-    stop_times: list[tuple[int, int]]
+    stop_times: list[tuple[int, int]]  # List of (arrival_time, departure_time) in seconds since midnight
     shape_index: Optional[int] = None
     shape_segments: Optional[list[int]] = None
 
 
 class GamaGTFS:
+    """
+    GTFS Data Processor for GAMA Platform.
+
+    This class processes GTFS data and converts it into formats suitable for
+    multi-agent simulation in the GAMA platform. It handles trip schedules,
+    route geometries, and service calendars.
+    """
+
     def __init__(self, gtfs_data: GTFSData):
+        """
+        Initialize the GTFS processor.
+
+        Args:
+            gtfs_data: GTFS data object containing all transit information
+        """
         self.gtfs_data = gtfs_data
 
     @classmethod
     def load_data(cls, file_path: str):
+        """
+        Load processed GTFS data from a JSON file.
+
+        Args:
+            file_path: Path to the JSON file containing processed GTFS data
+
+        Returns:
+            dict: Loaded GTFS data structure
+        """
         with open(file_path, 'r') as f:
             data = json.load(f)
         return data
     
     def build_calendar_sparse_matrix(self):
-        # TODO: this function only works for exception_type = 1 and empty calendar.txt
+        """
+        Build a sparse matrix representation of service calendars.
+
+        Creates a sparse matrix where rows represent service IDs and columns represent dates.
+        A value of 1 indicates the service operates on that date.
+
+        Note: TODO This function only works for exception_type = 1 and empty calendar.txt
+
+        Returns:
+            dict: Sparse matrix data with dates, service_ids, row indices, column indices, and shape
+        """
         calendar_dates = self.gtfs_data.calendar_dates
         # Build the matrix of service_id and date
         min_date = gh.datestr_to_date(calendar_dates['date'].min())
@@ -70,7 +117,18 @@ class GamaGTFS:
         }
     
     def build_calendar_binary_map(self):
-        # TODO: this function only works for exception_type = 1 and empty calendar.txt
+        """
+        Build a binary map representation of service calendars.
+
+        Creates a compact binary representation where each service ID maps to a bitmask
+        indicating which dates the service operates. Each bit represents a date.
+
+        Note: TODO This function only works for exception_type = 1 and empty calendar.txt
+        Limited to 64 dates maximum due to bitmask size.
+
+        Returns:
+            dict: Binary calendar data with dates and service bitmasks
+        """
         calendar_dates = self.gtfs_data.calendar_dates
         # Build the matrix of service_id and date
         min_date = gh.datestr_to_date(calendar_dates['date'].min())
@@ -102,6 +160,18 @@ class GamaGTFS:
         }
         
     def build_trips(self, use_cache=True):
+        """
+        Build trip data from GTFS data for GAMA Platform.
+
+        Processes GTFS trip, route, stop_times, and shape data to create
+        simulation-ready trip information including schedules and geometries.
+
+        Args:
+            use_cache: Whether to cache shape segments for performance optimization
+
+        Returns:
+            dict: Trip data with trip_list and shape_segments_list
+        """
         # Build trips data from GTFS data to use in GAMA Platform
         trips = self.gtfs_data.trips.copy()
         routes = self.gtfs_data.routes
@@ -132,9 +202,10 @@ class GamaGTFS:
             if use_cache and cache_key in cache_:
                 shape_index = cache_[cache_key]
             else:
-                 # get the stop times for the trip
+                # Extract stop times and distances for this trip
                 arrival_time, departure_time, stop_dist_traveled_list = stop_times[stop_times['trip_id'] == trip_id][['arrival_time', 'departure_time', 'shape_dist_traveled']].values.tolist()[0]
-                # convert time to int
+                
+                # Convert GTFS time strings to seconds since midnight
                 stop_times_list = [
                     (gh.timestr_to_seconds(arrival), gh.timestr_to_seconds(departure)) 
                     for arrival, departure in zip(arrival_time, departure_time)
@@ -143,14 +214,13 @@ class GamaGTFS:
                 assert len(stop_dist_traveled_list) == len(stop_times_list), \
                     f"Stop times and shape distances do not match for trip {trip_id} with shape {shape_id}"
 
-                # split the shape segments according to the stop times
-                # stop_dist_traveled_list = stop_times[stop_times['trip_id'] == trip_id]['shape_dist_traveled'].iloc[0]
+                # Split the route shape into segments between stops
                 shape_dist_traveled_list = shapes[shapes['shape_id'] == shape_id]['shape_dist_traveled'].iloc[0]
 
-                # find the segments for the shape
+                # Find shape segment indices corresponding to each stop
                 shape_segments = []
                 idx = 0
-                for stop_dist in stop_dist_traveled_list[1:]:
+                for stop_dist in stop_dist_traveled_list[1:]:  # Skip first stop (departure)
                     seg = []
                     for i in range(idx, len(shape_dist_traveled_list)):
                         seg.append(i)
@@ -191,6 +261,18 @@ class GamaGTFS:
         }
     
     def build_data(self, use_cache=True):
+        """
+        Build complete GTFS data package for GAMA Platform.
+
+        Combines trip data and calendar information into a single data structure
+        ready for export to GAMA simulation.
+
+        Args:
+            use_cache: Whether to use caching for shape segments processing
+
+        Returns:
+            dict: Complete data package with trips, shapes, and calendar
+        """
         # Build the data for GAMA Platform
         print("Build trips data ...")
         trip_data = self.build_trips(use_cache=use_cache)
@@ -203,6 +285,12 @@ class GamaGTFS:
         }
 
 if __name__ == '__main__':
+    """
+    Main execution block for GTFS to GAMA data conversion.
+
+    This script loads GTFS data, processes it for GAMA compatibility,
+    and exports the result as a JSON file for use in the simulation platform.
+    """
     # Example usage
     gtfs = GTFSData.from_gtfs_files("../data/gtfs/")
     gama_gtfs = GamaGTFS(gtfs)

@@ -1,40 +1,57 @@
 /**
-* Name: LLMAgent
-* Based on the internal empty template. 
-* Author: dung
-* Tags: 
+* Nom: LLMAgent
+* Basé sur le modèle vide interne.
+* Auteur: dung
+* Tags: LLM, agents intelligents, communication réseau
+*
+* Description: Module d'intégration des agents alimentés par LLM (Large Language Models).
+* Définit les agents qui communiquent avec des systèmes d'IA externes via HTTP et WebSocket
+* pour prendre des décisions intelligentes dans la simulation de transport urbain.
+* Gère la synchronisation des données, l'envoi d'observations et la réception d'actions.
 */
 
 
 model LLMAgent
 
+// Import des modules nécessaires
 import "Settings.gaml"
-
 import "Inhabitant.gaml"
 
 global {
+	// Configuration de la connexion HTTP pour la communication synchrone
 	int http_port <- 8002;
 	string http_url <- "http://localhost";
-	
+
+	// Configuration MQTT pour la communication asynchrone (non utilisé actuellement)
 	int mqtt_port <- 1883;
 	string mqtt_url <- "localhost";
 	string mqtt_action_topic <- "action/data";
     string mqtt_observation_topic <- "observation/data";
-	
+
 	init {
+		// Créer un agent de synchronisation HTTP
 		create llm_agent_sync number: 1 {
 			do connect to: http_url protocol: "http" port: http_port raw: true;
 		}
-		
+
+		// Créer un agent de communication asynchrone WebSocket
 		create llm_agent_async number: 1 {
 			do connect protocol: "websocket_server" port: 3001 with_name: name raw: true;
 		}
 	}
 }
 
+/**
+ * Agent de synchronisation LLM - gère la communication périodique avec le système LLM via HTTP.
+ * Envoie des données de synchronisation toutes les 15 minutes et des données de population toutes les heures.
+ * Responsable de l'initialisation de la population et de la synchronisation continue.
+ */
 species llm_agent_sync skills:[network] {
+	/**
+	 * Initialisation - envoie les données d'initialisation au système LLM au premier cycle
+	 */
 	reflex init when: cycle = 1 {
-		write "Init population -> LLM, timestamp: " + CURRENT_TIMESTAMP;	
+		write "Init population -> LLM, timestamp: " + CURRENT_TIMESTAMP;
 
 		do send to: "/init" contents: [
 			"POST",
@@ -44,7 +61,11 @@ species llm_agent_sync skills:[network] {
 			["Content-Type"::"application/json"]
 		];
 	}
-	
+
+	/**
+	 * Synchronisation périodique - envoie des données de population inactive toutes les 15 minutes
+	 * Toutes les heures, inclut la liste complète des personnes inactives avec leurs localisations
+	 */
 	reflex sync when: every(15#mn) and cycle > 1 {
 		list<unknown> idle_people <- [];
 		if every(60#mn) {
@@ -70,6 +91,10 @@ species llm_agent_sync skills:[network] {
 	}
 	
 	
+	/**
+	 * Réception et traitement des messages du système LLM
+	 * Traite les réponses d'initialisation et crée la population d'agents
+	 */
 	reflex get_message {
 		loop while:has_more_message()
 		{
@@ -82,6 +107,7 @@ species llm_agent_sync skills:[network] {
 			}
 			string messageType <- json["message_type"];
 			if messageType = "ag_world_init" {
+				// Traiter l'initialisation du monde des agents
 				map<string, unknown> data <- json["data"];
 				list<map<string, unknown>> people <- data["people"];
 				loop p over: people {
@@ -107,14 +133,18 @@ species llm_agent_sync skills:[network] {
 }
 
 
-species llm_agent_async skills:[network] { 
-	string send_to;
-	
+species llm_agent_async skills:[network] {
+	string send_to;  // Identifiant du destinataire WebSocket
+
 //	reflex send when: send_to != nil and every(2#mn) {
 //		write "Sending...";
 //		do send to: send_to contents: name + " at " + cycle + " sent to server_group a message";
 //	}
 
+	/**
+	 * Soumission des observations - envoie les observations collectées par les agents habitants
+	 * Toutes les 5 minutes, transmet les données d'observation pour l'apprentissage du LLM
+	 */
 	reflex submit_obseration when: send_to !=nil and every(5#mn) {
 		loop p over: (inhabitant where (length(each.OB_LIST) > 0)) {
 			list<map<string, unknown>> ob_list <- p.OB_LIST;
@@ -142,17 +172,21 @@ species llm_agent_async skills:[network] {
 		}
 	}
 	   	
+	/**
+	 * Réception des actions du système LLM - traite les messages WebSocket entrants
+	 * Reçoit les décisions d'action du LLM et les applique aux agents habitants appropriés
+	 */
 	reflex get_message when: has_more_message() {
 		loop while:has_more_message()
 		{
 			message mess <- fetch_message();
-			send_to <- mess.sender;
+			send_to <- mess.sender;  // Mémoriser l'expéditeur pour les réponses
 			write "mess.contents " + map(mess.contents);
 			string action_data_json <- map(mess.contents)["contents"];
 			map<string, unknown> payload_data <- from_json(action_data_json);
 			string topic <- payload_data["topic"];
 			if topic != "action/data" {
-				continue;
+				continue;  // Ignorer les messages qui ne sont pas des actions
 			}
 			map<string, unknown> action_data <- payload_data["payload"];
 			
@@ -161,15 +195,22 @@ species llm_agent_async skills:[network] {
 			map<string, unknown> data <- action_data["action"];
 			inhabitant person <- INHABITANT_MAP[person_id];
 			if person != nil {
+				// Appliquer l'action à l'agent trouvé
 				ask person {
+					
+					// Moving ID
 					self.moving_id <- string(data["move_id"]);
+					
+					// Objectif du déplacement (ex: aller travaillier de 9h à 18h)
 					map<string, unknown> for_activity <- map<string, unknown>(data["for_activity"]);
 					self.activity_id <- string(for_activity["id"]);
 					self.purpose <- string(data["purpose"]);
 					self.expected_arrive_at <- int(data["expected_arrive_at"]);
 					int prepare_before_seconds <- int(data["prepare_before_seconds"]);
 					self.schedule_at <- self.expected_arrive_at - prepare_before_seconds;
-//						self.moving_description <- string(data["description"]);
+					//	self.moving_description <- string(data["description"]);
+
+					// Définition du plan de déplacement
 					map<string, unknown> plan <- map<string, unknown>(data["plan"]);
 					do passenger_set_plan(
 						data["target_location"],
@@ -178,7 +219,7 @@ species llm_agent_async skills:[network] {
 					);
 				}	
 			} else {
-				 write "Not found the person: " + person_id;
+				 write "[LLM Message: action/data] Not found the person: " + person_id;
 			}
 			
 		}
@@ -186,7 +227,14 @@ species llm_agent_async skills:[network] {
 	}
 }
 
-species llm_agent_test skills:[network] {    	
+/**
+ * Agent LLM de test - utilisé pour déboguer et tester la communication réseau.
+ * Affiche simplement tous les messages reçus pour vérification du fonctionnement.
+ */
+species llm_agent_test skills:[network] {
+	/**
+	 * Réception de test - affiche tous les messages reçus pour débogage
+	 */
 	reflex get_message {
 		loop while:has_more_message()
 		{

@@ -4,4 +4,4 @@ experiments*/
 .DS_Store
 results/
 .venv
-
+.env

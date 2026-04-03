@@ -34,6 +34,7 @@ global {
 	
 	// Shape
 	file routes0_shape_file <- shape_file("../includes/routes.shp");
+	//file shape_file_buildings <- file("../includes/building.shp");
 	file stops0_shape_file <- shape_file("../includes/stops.shp");
 	file trip_info_file <- json_file("../includes/trip_info.json");
 	map<string, unknown> TRIP_INFO <- trip_info_file.contents;

@@ -1,3 +1,11 @@
+"""
+FastAPI application for LLM-GAMA integration.
+
+This module provides the HTTP API and WebSocket communication layer between
+the GAMA simulation and external LLM (Large Language Model) systems. It handles
+world initialization, synchronization, and real-time observation/action exchange.
+"""
+
 import asyncio
 import json
 import os
@@ -12,34 +20,49 @@ from settings import settings
 import traceback
 from fastapi import FastAPI
 
+# Set working directory from environment if specified
 workdir = os.environ.get("APP_WORKDIR", "")
 if workdir:
     settings.update_workdir(workdir)
 
+# Initialize JSON logging
 create_json_logger()
 
-# import scenario
+# Import scenario factory to bootstrap the simulation scenario
 import scenarios.scenario_v1.factory
 
+# Create FastAPI application instance
 app = FastAPI()
 
+# Configure orjson for faster JSON serialization (handles numpy arrays)
 def orjson_serializer(obj):
     return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
 app.router.json_dumps = orjson_serializer
 
+# Debug print current history file path
 print(settings.app.history_file_v2)
 
+
 class LoopContainer:
+    """
+    Container for managing WebSocket communication and message loops.
+
+    This class handles the bidirectional communication between the FastAPI server
+    and the GAMA simulation via WebSocket. It manages observation publishing and
+    action message handling.
+    """
     action_topic = "action/data"
     observation_topic = "observation/data"
 
     def __init__(self):
         self.client = None
         self.scenario = None
+        # Initialize WebSocket client for GAMA communication
         self.websocket_client = WebSocketClient(settings.server.gama_ws_url)
         self.websocket_client.on_message = self.handle_message
 
     def set_scenario(self, scenario: BaseScenario):
+        """Set the active simulation scenario."""
         self.scenario = scenario
 
     async def greeting(self):
@@ -57,7 +80,13 @@ class LoopContainer:
         if not success:
             logger.error("Failed to send greeting message")
 
-    async def publish_loop(self):    
+    async def publish_loop(self):
+        """
+        Main publishing loop that sends action messages to GAMA via WebSocket.
+
+        Continuously checks for new messages from the scenario and publishes them
+        to the GAMA simulation. Handles connection failures and retries.
+        """
         while True:
             try:
                 # Check if scenario has messages to publish
@@ -95,7 +124,12 @@ class LoopContainer:
             logger.error(f"Error handling message: {e}")
 
     async def process_observation(self, topic: str, payload: str):
-        """Process observation data"""
+        """
+        Process observation data received from GAMA simulation.
+
+        Parses the observation payload and forwards it to the scenario for processing.
+        Observations contain agent state information for LLM decision making.
+        """
         try:
             data = json.loads(payload)
             assert data["topic"] == self.observation_topic, "Invalid topic in observation data"
@@ -105,28 +139,43 @@ class LoopContainer:
             traceback.print_exc()
             logger.error(f"Error processing observation: {e}")
 
-# Global loop container
+# Global loop container instance
 loop_container = LoopContainer()
+# Bootstrap the simulation scenario
 scenario = scenarios.scenario_v1.factory.bootstrap()
 loop_container.set_scenario(scenario)
 
 @app.on_event("startup")
 async def startup_event():
-    # Tạo background task cho WebSocket loop
+    """
+    FastAPI startup event handler.
+
+    Initializes WebSocket connection and starts background tasks for
+    real-time communication with GAMA simulation.
+    """
+    # Send greeting and start WebSocket communication loops
     await loop_container.greeting()
     asyncio.create_task(loop_container.websocket_client.run_with_reconnect())
     asyncio.create_task(loop_container.publish_loop())
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    """FastAPI shutdown event handler - closes WebSocket connections."""
     await loop_container.websocket_client.stop()
 
 @app.get("/")
 async def root():
+    """Root endpoint - returns service status."""
     return {"status": "FastAPI + Websocket running"}
 
 @app.post("/init")
 async def init():
+    """
+    Initialize the simulation world.
+
+    Returns the complete population data to initialize the GAMA simulation
+    with all agents and their home locations.
+    """
     logger.info("Publishing world data")
 
     people = scenario.population.get_people_list()
@@ -136,7 +185,7 @@ async def init():
             **person.model_dump(),
             location=scenario.population.get_person_home_location(person.person_id),
             name=person.identity.name,
-        ) 
+        )
         for person in people
     ]
     return MessageResponse(
@@ -151,6 +200,12 @@ async def init():
 
 @app.post("/reflect")
 async def reflect(request: WorldSyncRequest):
+    """
+    Reflect the current world state at a specific timestamp.
+
+    Forces all agents to update their state to match the simulation time.
+    Used for synchronization and debugging.
+    """
     logger.info(f"Reflecting world at timestamp: {request.timestamp}")
 
     if loop_container.scenario:
@@ -167,6 +222,12 @@ async def reflect(request: WorldSyncRequest):
 
 @app.post("/sync")
 async def sync(request: WorldSyncRequest):
+    """
+    Synchronize the world state with idle population data.
+
+    Updates the scenario with current idle agents and their locations.
+    Called periodically by the GAMA simulation for state synchronization.
+    """
     logger.info(f"Synchronizing world at timestamp: {request.timestamp}")
 
     if loop_container.scenario:
@@ -183,4 +244,10 @@ async def sync(request: WorldSyncRequest):
 
 
 if __name__ == "__main__":
+    """
+    Main entry point for running the FastAPI application.
+
+    Starts the server on host 0.0.0.0 and port 8000.
+    This provides the HTTP API for LLM-GAMA integration.
+    """
     uvicorn.run(app, host="0.0.0.0", port=8000)

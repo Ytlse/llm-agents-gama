@@ -20,7 +20,6 @@ tinydb>=4.8.2,<5.0.0
 cachetools>=6.0.0,<7.0.0
 
 # --- Intelligence Artificielle & LLM ---
-vllm>=0.8,<0.9.0
 openai>=1.86.0,<2.0.0
 faiss-cpu>=1.11.0,<2.0.0
 sentence-transformers>=4.1.0,<5.0.0
@@ -41,3 +40,22 @@ llama-index-vector-stores-chroma>=0.4.2,<0.5.0
 # --- Communication (MQTT) ---
 asyncio-mqtt>=0.16.2,<0.17.0
 paho-mqtt==1.6.1
+ 
+# Worker
+celery>=5.4.0
+ 
+# Redis (broker + stockage)
+redis>=5.0.0
+ 
+# HTTP client (adapters LLM)
+httpx>=0.27.0
+ 
+# Templating prompts
+jinja2>=3.1.4
+ 
+# Logging structuré
+structlog>=24.2.0
+ 
+# Monitoring Celery
+flower>=2.0.0
+ 
