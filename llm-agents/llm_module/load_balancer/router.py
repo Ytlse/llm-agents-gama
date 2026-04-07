@@ -56,6 +56,7 @@ class LoadBalancer:
             sequence.extend([name] * slots)
 
         logger.debug("Séquence WRR construite", extra={"sequence_length": len(sequence)})
+
         return sequence
 
     def rebuild_sequence(self) -> None:

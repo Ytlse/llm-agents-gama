@@ -24,7 +24,7 @@ from llm_module.adapters.base import (
     ProviderServerError,
     register_adapter,
 )
-from llm_module.models import AgentResponse, InternalRequest, LLMOutput
+from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
 
 
 @register_adapter
@@ -46,14 +46,14 @@ class MistralAdapter(BaseAdapter):
             "response_format": {"type": "json_object"},
         }
 
-        from llm_module.config import settings
+        from llm_module.tasks.config import settings
         base_url = settings.providers[self.provider_name].base_url
 
         with httpx.Client(timeout=120.0) as client:
             response = client.post(
                 f"{base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {api_key}",
+                    "Authorization": f"Bearer {api_key.get_secret_value()}",
                     "Content-Type": "application/json",
                 },
                 json=payload,

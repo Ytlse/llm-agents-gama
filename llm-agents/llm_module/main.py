@@ -18,10 +18,10 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from llm_module.broker.redis_broker import get_task_async, save_task_async
-from llm_module.RPM.load_balancer.router import load_balancer
+from llm_module.load_balancer.router import load_balancer
 from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
 from llm_module.telemetry.logger import get_logger
-from llm_module.RPM.worker.task_worker import process_llm_task
+from llm_module.worker.task_worker import process_llm_task
 
 logger = get_logger(__name__)
 

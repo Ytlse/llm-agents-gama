@@ -41,13 +41,13 @@ class BaseAdapter(ABC):
 
     def _resolve_model(self, request: InternalRequest) -> str:
         """Retourne le modèle spécifié ou le défaut du provider."""
-        from llm_module.config import settings
+        from llm_module.tasks.config import settings
         if request.model:
             return request.model
         return settings.providers[self.provider_name].default_model
 
     def _get_api_key(self) -> str:
-        from llm_module.config import settings
+        from llm_module.tasks.config import settings
         return settings.providers[self.provider_name].api_key
 
 
@@ -103,6 +103,6 @@ def get_adapter(provider_name: str) -> BaseAdapter:
     """
     if provider_name not in _REGISTRY:
         # Charger tous les adapters connus (import tardif pour éviter les circulaires)
-        from llm_module.adapters import openai_adapter, google_adapter, mistral_adapter  # noqa
+        from llm_module.adapters import openai_adapter, google_adapter, mistral_adapter, groq_adapter  # noqa
     cls = _REGISTRY[provider_name]
     return cls()

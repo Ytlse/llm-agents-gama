@@ -23,7 +23,7 @@ You are a transportation expert. Your task is to recommend the best transportati
 
 --- USER ---
 Trajectory options available (shared by all personas):
-{{ parameters.trajectories | tojson(indent=2) }}
+{{ (parameters.trajectories | default([])) | tojson(indent=2) }}
 
 {% if parameters.context %}
 Context: {{ parameters.context }}

@@ -20,6 +20,10 @@ from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoe
 
 from llm_module.settings.models import AgentSpec, InternalMessage
 
+from llm_module.telemetry.logger import get_logger
+
+logger = get_logger(__name__)
+
 # ---------------------------------------------------------------------------
 # Schémas JSON par catégorie de template
 # ---------------------------------------------------------------------------
@@ -47,8 +51,8 @@ SCHEMAS: Dict[str, Dict[str, Any]] = {
         "additionalProperties": False,
     },
  
-    # Schéma sélection d'itinéraire (itinerary_selection.md.j2)
-    "itinerary_selection": {
+    # Schéma sélection d'itinéraire (itenary_multi_agent.md.j2)
+    "itenary_multi_agent": {
         "type": "object",
         "properties": {
             "agents": {
@@ -108,7 +112,7 @@ class PromptManager:
             template = self._env.get_template("default.md.j2")
  
         context = {
-            "agents": agents,
+            "agents": [a.dict() if hasattr(a, 'dict') else a for a in agents],
             "parameters": parameters,
             "schema": json.dumps(schema, indent=2, ensure_ascii=False),
             "agent_ids": [a.agent_id for a in agents],

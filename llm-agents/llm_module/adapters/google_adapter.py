@@ -31,8 +31,10 @@ from llm_module.adapters.base import (
     ProviderServerError,
     register_adapter,
 )
-from llm_module.models import AgentResponse, InternalRequest, LLMOutput
+from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
 
+from llm_module.telemetry.logger import get_logger
+logger = get_logger(__name__)
 
 @register_adapter
 class GoogleAdapter(BaseAdapter):
@@ -57,7 +59,7 @@ class GoogleAdapter(BaseAdapter):
                 "temperature": request.temperature,
                 "maxOutputTokens": request.max_tokens,
                 "responseMimeType": "application/json",
-                "responseSchema": request.response_schema,
+                "responseSchema": self._clean_schema(request.response_schema),
             },
         }
 
@@ -66,9 +68,12 @@ class GoogleAdapter(BaseAdapter):
                 "parts": [{"text": system_instruction}]
             }
 
-        from llm_module.config import settings
+        from llm_module.tasks.config import settings
         base_url = settings.providers[self.provider_name].base_url
-        url = f"{base_url}/models/{model}:generateContent?key={api_key}"
+        url = f"{base_url}/models/{model}:generateContent?key={api_key.get_secret_value()}"
+
+        logger.info("Request Payload:")
+        logger.info(json.dumps(payload, indent=2))
 
         with httpx.Client(timeout=120.0) as client:
             response = client.post(
@@ -109,6 +114,19 @@ class GoogleAdapter(BaseAdapter):
             })
 
         return system_text.strip(), contents
+
+    def _clean_schema(self, schema: dict) -> dict:
+        """Supprime récursivement les champs non supportés par Gemini."""
+        UNSUPPORTED = {"additionalProperties", "$defs", "$schema", "title"}
+        if isinstance(schema, dict):
+            return {
+                k: self._clean_schema(v)
+                for k, v in schema.items()
+                if k not in UNSUPPORTED
+            }
+        if isinstance(schema, list):
+            return [self._clean_schema(i) for i in schema]
+        return schema
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         if response.status_code >= 500:

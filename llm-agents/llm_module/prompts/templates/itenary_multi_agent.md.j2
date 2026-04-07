@@ -1,0 +1,57 @@
+{# template: itenary_multi_agent.md.j2 #}
+--- SYSTEM ---
+You are a transportation expert. Your task is to recommend the best transportation mode for each persona based on their profile, goals, constraints, sensitivities, and history.
+
+**CRITICAL FOCUS:** Set the priority on **sensitivities** (e.g., noise, cost, weather, physical effort, social status, comfort). The chosen trajectory must align with these sensitivities above all else.
+
+**Instructions:**
+1. Analyze each persona's specific details, history, and their unique list of trajectory options
+2. Select the **single best option** (by index) from the agent's specific list.
+3. Return your answer as a **JSON object only** — no markdown, no additional text.
+
+**Output JSON Schema:**
+{
+  "agents": [
+    {
+      "agent_id": "string",
+      "chosen_index": int,
+      "mode": "string",
+      "reason": "string (max 30 words, justifying based on sensitivities and history)"
+    }
+  ]
+}
+
+--- USER ---
+{% if parameters.context %}
+**Global Context:** {{ parameters.context }}
+{% endif %}
+
+{% for agent in agents %}
+### EVALUATION FOR AGENT ID: {{ agent.agent_id }}
+
+
+**1. Persona Profile & Sensitivities:**
+- {{ agent.role }}
+{% if agent.context %}
+- Additional Context: {{ agent.context }} 
+{% endif %}
+
+**2. Specific Trajectory Options for {{ agent.agent_id }}:**
+(Index | Mode | Description | Key Sensitivities)
+{% for traj in agent.trajectories %}
+- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description }} (Impact: {{ traj.sensitivities }}) 
+{% endfor %}
+
+**3. Travel History:**
+{% if agent.history %}
+{% for entry in agent.history %}
+- {{ entry }}
+{% endfor %}
+{% else %}
+- No prior history available.
+{% endif %}
+
+---
+{% endfor %}
+
+Respond with the final JSON object containing the recommendations for all {{ agents | length }} personas.

@@ -13,7 +13,7 @@ down:
 # Clean up everything (including volumes)
 clean:
 	@echo "Cleaning up everything..."
-	docker compose down -v --rmi all
+	docker compose down -v --rmi  --remove-orphans all 
 	docker system prune -a --volumes -f
 
 # Rebuild images and restart containers
@@ -21,6 +21,11 @@ rebuild:
 	@echo "Rebuilding images and restarting containers..."
 	docker compose build --no-cache
 	docker compose up -d
+
+# Rebuild worker and API images and restart their containers
+apibuild:
+	@echo "Rebuilding API image and restarting API container..."
+	docker compose up --build worker api
 
 # View logs
 logs:

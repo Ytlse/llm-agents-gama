@@ -31,6 +31,8 @@ class AgentSpec(BaseModel):
     agent_id: str
     role: str
     context: Optional[str] = None
+    history: List[str] = Field(default_factory=list)
+    trajectories: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class LLMRequest(BaseModel):
@@ -69,7 +71,9 @@ class Task(BaseModel):
 class AgentResponse(BaseModel):
     """Un élément du tableau JSON retourné par le LLM."""
     agent_id: str
-    reponse: str
+    chosen_index: int
+    mode: str
+    reason: str
 
 
 class LLMOutput(BaseModel):
@@ -100,7 +104,9 @@ class TaskStatusResponse(BaseModel):
 class InternalMessage(BaseModel):
     """Format normalisé transmis aux adapters."""
     role: str   # "system" | "user" | "assistant"
-    content: str
+    content: Optional[str] = None
+    trajectories: List[Dict[str, Any]] = [] 
+    history: List[str] = [] 
 
 
 class InternalRequest(BaseModel):
