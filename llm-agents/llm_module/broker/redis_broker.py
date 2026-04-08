@@ -2,9 +2,12 @@
 broker/redis_broker.py — Connexion Redis et helpers pour la persistance des tâches.
 
 Redis remplit ici deux rôles distincts :
-  1. Broker de messages pour Celery (file d'attente des tâches) → DB 1
-  2. Stockage du statut/résultat des tâches (polling client)    → DB 0
+  1. Broker de messages pour Celery (file d'attente des tâches) → DB 1 (via celery_broker_url)
+  2. Stockage du statut/résultat des tâches (polling client)    → DB 0 (via redis_url)
   3. Compteurs RPM pour le load balancer                        → DB 0 (préfixe rpm:)
+
+Note : les numéros de DB effectifs dépendent des variables d'environnement redis_url
+et celery_broker_url.
 """
 
 from __future__ import annotations
@@ -55,8 +58,10 @@ def get_sync_redis() -> sync_redis.Redis:
 # Clés Redis
 # ---------------------------------------------------------------------------
 
-TASK_KEY_PREFIX = "task:"
-RPM_KEY_PREFIX  = "rpm:"
+TASK_KEY_PREFIX     = "task:"
+RPM_KEY_PREFIX      = "rpm:"
+COOLDOWN_KEY_PREFIX = "cooldown:"
+BATCH_QUEUE_PREFIX  = "batch:"
 
 
 def _task_key(task_id: str) -> str:
@@ -66,9 +71,17 @@ def _task_key(task_id: str) -> str:
 def _rpm_key(provider: str) -> str:
     """
     Clé Redis pour le compteur RPM d'un fournisseur.
-    On utilise un TTL de 60 s — Redis réinitialise automatiquement le compteur.
+    TTL de 60 s — Redis réinitialise automatiquement le compteur toutes les minutes.
     """
     return f"{RPM_KEY_PREFIX}{provider}"
+
+
+def _cooldown_key(provider: str) -> str:
+    return f"{COOLDOWN_KEY_PREFIX}{provider}"
+
+
+def _batch_queue_key(batch_key: str) -> str:
+    return f"{BATCH_QUEUE_PREFIX}{batch_key}"
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +131,9 @@ def increment_rpm(provider: str) -> int:
     r = get_sync_redis()
     key = _rpm_key(provider)
     pipe = r.pipeline()
-    pipe.incr(key)
-    pipe.expire(key, 60)
+    count = pipe.incr(key)
+    if count == 1:
+        r.expire(key, 60)
     results = pipe.execute()
     return int(results[0])
 
@@ -129,3 +143,68 @@ def get_rpm(provider: str) -> int:
     r = get_sync_redis()
     val = r.get(_rpm_key(provider))
     return int(val) if val else 0
+
+
+# ---------------------------------------------------------------------------
+# Cooldown (sync — utilisé pour exclure temporairement un fournisseur)
+# ---------------------------------------------------------------------------
+
+def mark_cooldown(provider: str, timeout: int = 60) -> None:
+    """Place un fournisseur en quarantaine pour une durée donnée."""
+    r = get_sync_redis()
+    r.set(_cooldown_key(provider), "1", ex=timeout)
+
+
+def is_in_cooldown(provider: str) -> bool:
+    """Vérifie si un fournisseur est actuellement en quarantaine."""
+    r = get_sync_redis()
+    return r.exists(_cooldown_key(provider)) > 0
+
+
+# ---------------------------------------------------------------------------
+# Micro-Batching (sync / async)
+# ---------------------------------------------------------------------------
+
+async def add_task_to_batch_async(batch_key: str, task_id: str) -> int:
+    """Ajoute une tâche au bout de la file de batch et retourne la taille de la file."""
+    r = get_async_redis()
+    key = _batch_queue_key(batch_key)
+    await r.rpush(key, task_id)
+    await r.expire(key, 3600)
+    return await r.llen(key)
+
+
+def pop_tasks_from_batch_sync(batch_key: str, max_agents: int) -> list[Task]:
+    """Dépile les tâches de la file de batch jusqu'à atteindre la limite d'agents."""
+    r = get_sync_redis()
+    key = _batch_queue_key(batch_key)
+    selected_tasks = []
+    current_agents_count = 0
+
+    while True:
+        task_id = r.lpop(key)
+        if not task_id:
+            break
+
+        task = get_task_sync(task_id)
+        if not task:
+            continue
+
+        agents_in_task = len(task.request.agents)
+        if current_agents_count + agents_in_task > max_agents and current_agents_count > 0:
+            # Dépasse la limite et on a déjà des tâches : on remet la tâche en tête de file
+            r.lpush(key, task_id)
+            break
+
+        selected_tasks.append(task)
+        current_agents_count += agents_in_task
+
+    return selected_tasks
+
+
+def requeue_tasks_sync(batch_key: str, task_ids: list[str]) -> None:
+    """En cas d'erreur de réseau (retry), replace les tâches en tête de file."""
+    if not task_ids:
+        return
+    r = get_sync_redis()
+    r.lpush(_batch_queue_key(batch_key), *task_ids)

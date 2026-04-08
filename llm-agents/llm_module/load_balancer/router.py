@@ -5,6 +5,7 @@ Implémente :
   - Weighted Round-Robin : répartition proportionnelle aux quotas RPM
   - Circuit Breaker      : exclusion temporaire si > 95 % du quota atteint
   - Suivi RPM via Redis  : compteurs partagés entre tous les Workers
+
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import threading
 from typing import Dict, List, Optional
 
 from llm_module.tasks.config import settings
-from llm_module.broker.redis_broker import get_rpm, increment_rpm
+from llm_module.broker.redis_broker import get_rpm, increment_rpm, is_in_cooldown
 from llm_module.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +26,7 @@ class LoadBalancer:
     Algorithme Weighted Round-Robin :
     ─────────────────────────────────
     On construit une séquence « pondérée » à partir des poids normalisés.
-    Ex : mistral(w=2), openai(w=1), google(w=1) →  séquence [mistral, mistral, openai, google]
+    Ex : mistral(w=2), openai(w=1), google(w=1) → séquence [mistral, mistral, openai, google]
     On parcourt cette séquence de façon circulaire (modulo).
 
     Le Circuit Breaker court-circuite la rotation : si le compteur Redis
@@ -51,12 +52,10 @@ class LoadBalancer:
         total_weight = sum(p.weight for p in settings.providers.values())
 
         for name, cfg in settings.providers.items():
-            # Nombre de slots dans la séquence proportionnel au poids normalisé
             slots = max(1, round((cfg.weight / total_weight) * 100))
             sequence.extend([name] * slots)
 
-        logger.debug("Séquence WRR construite", extra={"sequence_length": len(sequence)})
-
+        logger.debug("Séquence WRR construite", sequence_length=len(sequence))
         return sequence
 
     def rebuild_sequence(self) -> None:
@@ -86,19 +85,18 @@ class LoadBalancer:
                 f"Fournisseur forcé '{force}' indisponible (quota atteint)."
             )
 
-        # Rotation normale : on parcourt la séquence jusqu'à trouver un provider dispo
-        with self._lock:
-            attempts = len(self._sequence)
-            for _ in range(attempts):
-                candidate = self._sequence[self._cursor % len(self._sequence)]
+        # Rotation normale.
+        # Le lock ne protège que la lecture/écriture du curseur entier.
+        # _is_available() fait des appels Redis HORS du lock (voir docstring module).
+        seq_len = len(self._sequence)
+        for _ in range(seq_len):
+            with self._lock:
+                candidate = self._sequence[self._cursor % seq_len]
                 self._cursor += 1
 
-                if self._is_available(candidate):
-                    logger.debug(
-                        "Provider sélectionné",
-                        extra={"provider": candidate, "cursor": self._cursor},
-                    )
-                    return candidate
+            if self._is_available(candidate):
+                logger.debug("Provider sélectionné", provider=candidate, cursor=self._cursor)
+                return candidate
 
         raise RuntimeError(
             "Tous les fournisseurs LLM ont atteint leur quota RPM. "
@@ -112,7 +110,11 @@ class LoadBalancer:
         """
         cfg = settings.providers.get(provider)
         if cfg is None:
-            logger.warning("Provider inconnu dans la config", extra={"provider": provider})
+            logger.warning("Provider inconnu dans la config", provider=provider)
+            return False
+
+        if is_in_cooldown(provider):
+            logger.debug("Provider en cooldown (ignoré)", provider=provider)
             return False
 
         current_rpm = get_rpm(provider)
@@ -121,12 +123,10 @@ class LoadBalancer:
         if current_rpm >= threshold:
             logger.warning(
                 "Circuit breaker déclenché",
-                extra={
-                    "provider": provider,
-                    "current_rpm": current_rpm,
-                    "threshold": threshold,
-                    "rpm_limit": cfg.rpm_limit,
-                },
+                provider=provider,
+                current_rpm=current_rpm,
+                threshold=threshold,
+                rpm_limit=cfg.rpm_limit,
             )
             return False
         return True
@@ -138,10 +138,7 @@ class LoadBalancer:
         Retourne le compteur RPM mis à jour.
         """
         count = increment_rpm(provider)
-        logger.debug(
-            "RPM incrémenté",
-            extra={"provider": provider, "rpm_count": count},
-        )
+        logger.debug("RPM incrémenté", provider=provider, rpm_count=count)
         return count
 
     def get_status(self) -> Dict[str, Dict]:
@@ -150,10 +147,11 @@ class LoadBalancer:
         for name, cfg in settings.providers.items():
             current = get_rpm(name)
             status[name] = {
-                "current_rpm": current,
-                "rpm_limit": cfg.rpm_limit,
-                "usage_pct": round(current / cfg.rpm_limit * 100, 1) if cfg.rpm_limit else 0,
-                "available": self._is_available(name),
+                "current_rpm":  current,
+                "rpm_limit":    cfg.rpm_limit,
+                "usage_pct":    round(current / cfg.rpm_limit * 100, 1) if cfg.rpm_limit else 0,
+                "cooldown":     is_in_cooldown(name),
+                "available":    self._is_available(name),
             }
         return status
 

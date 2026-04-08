@@ -1,6 +1,14 @@
 # LLM Unified Communication Module
 
-Architecture asynchrone multi-fournisseur LLM avec load balancing RPM.
+LLM multi-provider : il expose une API FastAPI qui reçoit des requêtes batch d'agents, les distribue via un load balancer Weighted Round-Robin avec circuit breaker vers OpenAI/Mistral/Google/Groq, et retourne des réponses structurées JSON pour piloter les comportements de mobilité des agents. Le traitement asynchrone repose sur Celery+Redis : micro-batching des requêtes, retry exponentiel sur les 5xx, démultiplexage des résultats par agent. Les prompts sont assemblés par un moteur Jinja2 avec schémas JSON par catégorie, puis validés via Pydantic avant persistance.
+
+**Fonctionnalités clés :**
+- 🚀 **Micro-batching automatique** : Les requêtes ayant les mêmes paramètres sont regroupées (jusqu'à 20 agents) pour optimiser les appels LLM et éviter les limites de taux (rate-limits).
+- ⚖️ **Load Balancer WRR** : Répartition de charge pondérée (Weighted Round-Robin) basée sur les quotas (RPM) de chaque fournisseur.
+- 🔌 **Circuit Breaker & Cooldowns** : Exclusion temporaire (60s) des fournisseurs saturés (Erreurs 429 ou 5xx) et bascule automatique sur le fournisseur disponible suivant.
+- 🔄 **Retry avec Backoff Exponentiel** : Gestion robuste des pannes réseau via Celery.
+- 📝 **Moteur de Prompts Jinja2** : Séparation claire entre la logique Python et le texte des prompts (`.md.j2`), avec validation stricte de la sortie via des JSON Schemas configurables (`schemas.json`).
+- 📊 **Télémétrie structurée** : Logs au format JSON (structlog) avec rotation des fichiers, extraction précise de la latence et du coût en tokens.
 
 ## Structure
 
@@ -26,9 +34,11 @@ llm_module/
 │   └── google_adapter.py          # Traducteur Google Gemini (format contents/parts)
 │
 ├── prompts/
-│   ├── manager.py                 # Moteur Jinja2, split system/user, schéma JSON
+│   ├── manager.py                 # Moteur Jinja2, split system/user
+│   ├── schemas.json               # Définition des schémas de sortie (Structured Output)
 │   └── templates/
-│       └── default.md.j2          # Template générique (agents + paramètres libres)
+│       ├── itinary_multi_agent.md.j2  # Choix modal avec justifications
+│       └── perception_filter.md.j2    # Génération d'histoires à la première personne
 │
 ├── telemetry/
 │   └── logger.py                  # Logging structuré (structlog, JSON en prod)

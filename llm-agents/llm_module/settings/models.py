@@ -33,6 +33,9 @@ class AgentSpec(BaseModel):
     context: Optional[str] = None
     history: List[str] = Field(default_factory=list)
     trajectories: List[Dict[str, Any]] = Field(default_factory=list)
+    goal: Optional[str] = None
+    constraints: Optional[str] = None
+    feeling: Optional[str] = None
 
 
 class LLMRequest(BaseModel):
@@ -71,9 +74,10 @@ class Task(BaseModel):
 class AgentResponse(BaseModel):
     """Un élément du tableau JSON retourné par le LLM."""
     agent_id: str
-    chosen_index: int
-    mode: str
-    reason: str
+    chosen_index: Optional[int] = None
+    mode: Optional[str] = None
+    reason: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class LLMOutput(BaseModel):

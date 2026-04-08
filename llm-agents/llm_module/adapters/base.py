@@ -102,7 +102,40 @@ def get_adapter(provider_name: str) -> BaseAdapter:
         KeyError si le fournisseur n'est pas enregistré.
     """
     if provider_name not in _REGISTRY:
-        # Charger tous les adapters connus (import tardif pour éviter les circulaires)
-        from llm_module.adapters import openai_adapter, google_adapter, mistral_adapter, groq_adapter  # noqa
+        # Chargement tardif des adapters connus pour éviter les imports circulaires.
+        # Chaque import est protégé individuellement : un adapter manquant (ex: groq)
+        # ne bloque pas les autres.
+        _load_adapters()
+
+    if provider_name not in _REGISTRY:
+        raise KeyError(
+            f"Adapter inconnu pour le fournisseur '{provider_name}'. "
+            f"Adapters disponibles : {list(_REGISTRY.keys())}"
+        )
+
     cls = _REGISTRY[provider_name]
     return cls()
+
+
+def _load_adapters() -> None:
+    """Tente de charger chaque adapter connu. Les imports manquants sont loggés, pas levés."""
+    from llm_module.telemetry.logger import get_logger
+    _logger = get_logger(__name__)
+
+    _known_adapters = {
+        "openai":   "llm_module.adapters.openai_adapter",
+        "google":   "llm_module.adapters.google_adapter",
+        "mistral":  "llm_module.adapters.mistral_adapter",
+        "groq":     "llm_module.adapters.groq_adapter",
+    }
+
+    for name, module_path in _known_adapters.items():
+        try:
+            import importlib
+            importlib.import_module(module_path)
+        except ImportError as e:
+            _logger.warning(
+                "Adapter non disponible (module manquant)",
+                provider=name,
+                reason=str(e),
+            )

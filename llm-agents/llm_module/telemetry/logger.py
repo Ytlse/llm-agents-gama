@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -60,11 +61,16 @@ def _configure_logging() -> None:
         ],
     )
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
 
     root = logging.getLogger()
-    root.handlers = [handler]
+    root.handlers = [console_handler, file_handler]
     root.setLevel(logging.DEBUG if _ENV != "production" else logging.INFO)
 
 

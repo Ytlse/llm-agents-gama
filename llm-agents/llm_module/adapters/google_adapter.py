@@ -32,9 +32,10 @@ from llm_module.adapters.base import (
     register_adapter,
 )
 from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
-
 from llm_module.telemetry.logger import get_logger
+
 logger = get_logger(__name__)
+
 
 @register_adapter
 class GoogleAdapter(BaseAdapter):
@@ -56,10 +57,10 @@ class GoogleAdapter(BaseAdapter):
         payload: Dict[str, Any] = {
             "contents": contents,
             "generationConfig": {
-                "temperature": request.temperature,
-                "maxOutputTokens": request.max_tokens,
+                "temperature":      request.temperature,
+                "maxOutputTokens":  request.max_tokens,
                 "responseMimeType": "application/json",
-                "responseSchema": self._clean_schema(request.response_schema),
+                "responseSchema":   self._clean_schema(request.response_schema),
             },
         }
 
@@ -71,9 +72,6 @@ class GoogleAdapter(BaseAdapter):
         from llm_module.tasks.config import settings
         base_url = settings.providers[self.provider_name].base_url
         url = f"{base_url}/models/{model}:generateContent?key={api_key.get_secret_value()}"
-
-        logger.info("Request Payload:")
-        logger.info(json.dumps(payload, indent=2))
 
         with httpx.Client(timeout=120.0) as client:
             response = client.post(
@@ -87,7 +85,7 @@ class GoogleAdapter(BaseAdapter):
         data = response.json()
         raw_content = data["candidates"][0]["content"]["parts"][0]["text"]
 
-        usage = data.get("usageMetadata", {})
+        usage      = data.get("usageMetadata", {})
         tokens_in  = usage.get("promptTokenCount", 0)
         tokens_out = usage.get("candidatesTokenCount", 0)
 
@@ -109,7 +107,7 @@ class GoogleAdapter(BaseAdapter):
                 continue
             gemini_role = self.ROLE_MAP.get(msg.role, "user")
             contents.append({
-                "role": gemini_role,
+                "role":  gemini_role,
                 "parts": [{"text": msg.content}],
             })
 
@@ -136,7 +134,7 @@ class GoogleAdapter(BaseAdapter):
 
     def _parse_output(self, raw: str) -> LLMOutput:
         try:
-            data = json.loads(raw)
+            data   = json.loads(raw)
             agents = [AgentResponse(**item) for item in data["agents"]]
             return LLMOutput(agents=agents)
         except (json.JSONDecodeError, KeyError, TypeError) as e:

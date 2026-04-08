@@ -13,15 +13,18 @@ Le flux est 100% non-bloquant :
 """
 
 from __future__ import annotations
+import json
+import hashlib
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from llm_module.broker.redis_broker import get_task_async, save_task_async
+from llm_module.broker.redis_broker import get_task_async, save_task_async, add_task_to_batch_async
 from llm_module.load_balancer.router import load_balancer
 from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
+from llm_module.tasks.config import settings
 from llm_module.telemetry.logger import get_logger
-from llm_module.worker.task_worker import process_llm_task
+from llm_module.worker.task_worker import process_batch_task
 
 logger = get_logger(__name__)
 
@@ -69,14 +72,27 @@ async def create_task(request: LLMRequest) -> dict:
 
     await save_task_async(task)
 
-    # Envoi à Celery — uniquement le task_id (pas toute la tâche)
-    process_llm_task.delay(task.task_id)
+    # Création d'une clé de batch basée sur le contexte et les paramètres globaux.
+    # Cela garantit qu'on ne merge que des tâches parfaitement compatibles !
+    params_str = json.dumps(request.parameters, sort_keys=True)
+    hash_str = hashlib.md5(f"{request.category}:{params_str}:{request.force_provider}".encode()).hexdigest()
+    batch_key = f"{request.category}:{hash_str}"
+
+    # Ajout à la file d'attente du batch
+    queue_size = await add_task_to_batch_async(batch_key, task.task_id)
+    
+    # Si c'est le 1er élément du lot, on accorde un court délai (1s) pour en accumuler d'autres.
+    if queue_size == 1:
+        process_batch_task.apply_async(args=[batch_key], countdown=settings.batch_delay_seconds)
+    elif queue_size >= settings.batch_max_agents:
+        process_batch_task.delay(batch_key)  # Optimisation: on traite immédiatement si on est plein
 
     logger.info("Tâche créée et enqueued", task_id=task.task_id, category=request.category)
 
     return {
         "task_id": task.task_id,
         "status": task.status,
+        "provider_used": task.provider_used,
         "message": f"Tâche acceptée. Pollez GET /tasks/{task.task_id} pour le résultat.",
     }
 

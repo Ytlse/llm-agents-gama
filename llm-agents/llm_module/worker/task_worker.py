@@ -31,7 +31,15 @@ from llm_module.adapters.base import (
     ProviderServerError,
     get_adapter,
 )
-from llm_module.broker.redis_broker import get_task_sync, save_task_sync
+from llm_module.broker.redis_broker import (
+    get_task_sync,
+    save_task_sync,
+    mark_cooldown,
+    pop_tasks_from_batch_sync,
+    requeue_tasks_sync,
+    _batch_queue_key,
+    get_sync_redis,
+)
 from llm_module.load_balancer.router import load_balancer
 from llm_module.prompts.manager import prompt_manager
 from llm_module.telemetry.logger import get_logger, log_llm_call
@@ -64,75 +72,139 @@ celery_app.conf.update(
 # ---------------------------------------------------------------------------
 
 @celery_app.task(
-    name="process_llm_task",
+    name="process_batch_task",
     bind=True,
     max_retries=settings.max_retries,
 )
-def process_llm_task(self, task_id: str) -> None:
+def process_batch_task(self, batch_key: str) -> None:
     """
-    Point d'entrée Celery.
+    Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
     """
-    task = get_task_sync(task_id)
-    if task is None:
-        logger.error("Tâche introuvable dans Redis", task_id=task_id)
+    tasks = pop_tasks_from_batch_sync(batch_key, settings.batch_max_agents)
+    if not tasks:
         return
 
     # Marquer comme en cours
-    task.status = TaskStatus.RUNNING
-    task.updated_at = datetime.utcnow()
-    save_task_sync(task)
+    for task in tasks:
+        task.status = TaskStatus.RUNNING
+        task.updated_at = datetime.utcnow()
+        save_task_sync(task)
+
+    batch_id = f"batch_{tasks[0].task_id[:8]}_{len(tasks)}"
 
     try:
-        _execute_task(task)
+        _execute_batch(tasks, batch_id)
+
     except ProviderServerError as e:
-        # Erreur 5xx → backoff exponentiel et retry
-        delay = settings.backoff_base_seconds * (2 ** self.request.retries)
+        # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
+        mark_cooldown(e.provider, timeout=60)
+        delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
         logger.warning(
             "Erreur serveur provider, retry planifié",
-            task_id=task_id,
+            task_id=batch_id,
             provider=e.provider,
             http_status=e.status_code,
             retry_in=delay,
             attempt=self.request.retries + 1,
         )
-        raise self.retry(exc=e, countdown=delay)
+        if self.request.retries < self.max_retries:
+            requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
+            raise self.retry(exc=e, countdown=delay)
+        else:
+            for t in tasks:
+                _fail_task(t, f"Max retries dépassé suite à une erreur 5xx sur {e.provider}")
 
-    except (ProviderClientError, ProviderParseError) as e:
-        # Erreur 4xx ou parse → échec définitif, pas de retry
-        _fail_task(task, str(e))
+    except ProviderClientError as e:
+        if e.status_code == 429:
+            # Rate limit (Too Many Requests) → exclusion temporaire et retry
+            mark_cooldown(e.provider, timeout=60)
+            delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+            logger.warning(
+                "Rate limit (429) atteint, provider en cooldown, retry planifié",
+                task_id=batch_id,
+                provider=e.provider,
+                retry_in=delay,
+                attempt=self.request.retries + 1,
+            )
+            if self.request.retries < self.max_retries:
+                requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
+                raise self.retry(exc=e, countdown=delay)
+            else:
+                for t in tasks:
+                    _fail_task(t, f"Max retries dépassé suite aux Rate Limits sur {e.provider}")
+        else:
+            # Autre erreur 4xx → échec définitif, pas de retry
+            for t in tasks:
+                _fail_task(t, str(e))
+
+    except RuntimeError as e:
+        if "Tous les fournisseurs" in str(e) or "indisponible" in str(e):
+            # Tous les LLM sont bloqués : on attend 15s par retry
+            delay = 15.0
+            logger.warning(
+                "Fournisseurs saturés ou en cooldown, retry planifié",
+                task_id=batch_id,
+                retry_in=delay,
+                attempt=self.request.retries + 1,
+            )
+            if self.request.retries < self.max_retries:
+                requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
+                raise self.retry(exc=e, countdown=delay)
+            else:
+                for t in tasks:
+                    _fail_task(t, "Max retries dépassé : Tous les fournisseurs indisponibles.")
+        else:
+            logger.exception("RuntimeError inattendue dans le worker", task_id=batch_id)
+            for t in tasks:
+                _fail_task(t, f"RuntimeError interne : {str(e)}")
+
+    except ProviderParseError as e:
+        logger.exception("Erreur de parsing de la réponse du provider", task_id=batch_id)
+        for t in tasks:
+            _fail_task(t, f"Erreur de parsing [{e.provider}]: {str(e.raw)}")
 
     except Exception as e:
-        # Erreur inattendue → log et échec
-        logger.exception("Erreur inattendue dans le worker", task_id=task_id)
-        _fail_task(task, f"Erreur interne : {str(e)}")
+        # Cas générique — on logue avec stacktrace complète via logger.exception
+        logger.exception("Exception inattendue dans le worker", task_id=batch_id, error=str(e))
+        for t in tasks:
+            _fail_task(t, f"Exception interne : {str(e)}")
+
+    else:
+        # Succès complet : relancer un worker s'il reste des éléments dans cette file
+        r = get_sync_redis()
+        if r.llen(_batch_queue_key(batch_key)) > 0:
+            process_batch_task.delay(batch_key)
 
 
 # ---------------------------------------------------------------------------
 # Logique métier
 # ---------------------------------------------------------------------------
 
-def _execute_task(task: Task) -> None:
-    req = task.request
+def _execute_batch(tasks: list[Task], batch_id: str) -> None:
+    base_req = tasks[0].request
+    merged_agents = []
+    for t in tasks:
+        merged_agents.extend(t.request.agents)
 
     # 1. Sélection du provider
-    provider_name = load_balancer.select_provider(force=req.force_provider)
+    provider_name = load_balancer.select_provider(force=base_req.force_provider)
 
     # 2. Construction du prompt
     messages = prompt_manager.render(
-        category=req.category,
-        agents=req.agents,
-        parameters=req.parameters,
+        category=base_req.category,
+        agents=merged_agents,
+        parameters=base_req.parameters,
     )
-    schema = prompt_manager.get_output_schema()
+    schema = prompt_manager.get_output_schema(base_req.category)
 
     # 3. Assemblage de la requête interne
     internal_req = InternalRequest(
         provider=provider_name,
         messages=messages,
         response_schema=schema,
-        temperature=req.parameters.get("temperature", 0.7),
-        max_tokens=req.parameters.get("max_tokens", 4096),
+        temperature=base_req.parameters.get("temperature", 0.7),
+        max_tokens=base_req.parameters.get("max_tokens", 4096),
     )
 
     # 4. Enregistrement du call RPM (avant l'appel, pour le circuit breaker)
@@ -144,11 +216,13 @@ def _execute_task(task: Task) -> None:
 
     llm_output, tokens_in, tokens_out = adapter.call(internal_req)
 
+    logger.debug("LLM output reçu", agents_count=len(llm_output.agents))
+
     latency_ms = (time.monotonic() - start_ts) * 1000
 
     # 6. Télémétrie
     log_llm_call(
-        task_id=task.task_id,
+        task_id=batch_id,
         provider=provider_name,
         status="success",
         latency_ms=latency_ms,
@@ -157,19 +231,30 @@ def _execute_task(task: Task) -> None:
         http_status=200,
     )
 
-    # 7. Persistance du résultat
-    task.status       = TaskStatus.SUCCESS
-    task.result       = llm_output.agents
-    task.provider_used = provider_name
-    task.latency_ms   = latency_ms
-    task.tokens_in    = tokens_in
-    task.tokens_out   = tokens_out
-    task.updated_at   = datetime.utcnow()
-    save_task_sync(task)
+    # 7. Démultiplexage et Persistance des résultats
+    results_by_agent = {}
+    for a in llm_output.agents:
+        aid = a.get("agent_id") if isinstance(a, dict) else getattr(a, "agent_id", None)
+        if aid:
+            results_by_agent[aid] = a
+
+    for t in tasks:
+        t_agent_ids = [a.agent_id for a in t.request.agents]
+        t_results = [results_by_agent[aid] for aid in t_agent_ids if aid in results_by_agent]
+
+        t.status        = TaskStatus.SUCCESS
+        t.result        = t_results
+        t.provider_used = provider_name
+        t.latency_ms    = latency_ms
+        t.tokens_in     = tokens_in // len(tasks)   # Approximation du coût par tâche
+        t.tokens_out    = tokens_out // len(tasks)
+        t.updated_at    = datetime.utcnow()
+        save_task_sync(t)
 
     logger.info(
-        "Tâche terminée avec succès",
-        task_id=task.task_id,
+        "Batch terminé avec succès",
+        task_id=batch_id,
+        tasks_merged=len(tasks),
         provider=provider_name,
         latency_ms=round(latency_ms, 2),
         agents_count=len(llm_output.agents),

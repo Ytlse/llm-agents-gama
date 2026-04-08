@@ -52,4 +52,13 @@ exec-%:
 	@echo "Executing command in container $*..."
 	docker compose exec $(container) $(command)
 
+
+tests:
+	@echo "Running all functional tests via main orchestrator..."
+	python llm-agents/llm_module/tests/test_main.py
+
+burst:
+	@echo "Running burst tests..."
+	python llm-agents/llm_module/tests/test_e2e.py --scenario 1 --burst 80
+
 .PHONY: up down clean rebuild logs restart ps status exec
