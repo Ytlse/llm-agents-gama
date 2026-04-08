@@ -3,3 +3,6 @@
 *Model/
 !CityTransport/
 CityTransport/results/
+*.dbf
+*.shp
+*.shx

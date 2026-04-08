@@ -4,3 +4,5 @@ geopandas
 python-dotenv
 dash
 plotly
+openai
+matplotlib

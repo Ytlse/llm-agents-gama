@@ -1,0 +1,135 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # Infrastructure
+  # 
+  # - Redis est une base de données en mémoire, open source, utilisée comme cache, 
+  #   broker de messages et base de données clé-valeur.
+  #   Il va permettre de broker les prompts et les résultats entre l'API Gateway et les Workers LLM
+  # ─────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # OpenTripPlanner — routage multimodal Toulouse
+  # ─────────────────────────────────────────────
+
+  otp:
+    build:
+      context: ./otp-toulouse
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    mem_limit: 5g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s  # OTP met du temps à charger le graph
+
+  # ─────────────────────────────────────────────
+  # LLM Agents — Architecture API Gateway + Worker Celery + Monitoring
+  #
+  # Description :
+  #   - API Gateway (FastAPI) :
+  #       Interface entre GAMA et les modèles de langage (LLM).
+  #       Reçoit les requêtes de GAMA, les transforme en prompts adaptés,
+  #       et envoie les tâches asynchrones au worker Celery.
+  #       Retourne les résultats finaux à GAMA après traitement.
+  #
+  #   - Worker Celery :
+  #       Exécute les tâches de génération de prompts envoyées par l'API.
+  #       Interagit avec les LLM (via vllm, llama-index, etc.) et d'autres services (OTP).
+  #       Retourne les résultats à l'API via Redis.
+  #
+  #   - Flower (Monitoring) :
+  #       Interface web pour visualiser l'état des tâches Celery,
+  #       surveiller les workers, les files d'attente et les résultats.
+  # ─────────────────────────────────────────────
+
+  api:
+    build:
+      context: ./llm-agents
+      dockerfile: Dockerfile
+    command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    env_file: ./.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      OTP_URL: http://otp:8080
+    volumes:
+      - ./llm-agents:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      otp:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./llm-agents
+      dockerfile: Dockerfile
+    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=4
+    env_file: ./.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      OTP_URL: http://otp:8080
+   # volumes:
+   #   - ./llm-agents:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      otp:
+        condition: service_healthy
+
+
+  flower:
+    build:
+      context: ./llm-agents
+      dockerfile: Dockerfile
+    command: celery -A llm_module.worker.task_worker.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file: ./.env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - worker
+
+  # ─────────────────────────────────────────────
+  # GAMA Server — simulation multi-agents
+  # TODO: à configurer quand le Dockerfile GAMA sera prêt
+  # ─────────────────────────────────────────────
+
+  # gama:
+  #   build:
+  #     context: ./GAMA
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "6868:6868"   # port serveur GAMA headless (à confirmer)
+  #   environment:
+  #     OTP_URL: http://otp:8080
+  #     LLM_API_URL: http://api:8000
+  #   depends_on:
+  #     - otp
+  #     - api
+
+volumes:
+  redis_data:

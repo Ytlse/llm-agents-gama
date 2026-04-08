@@ -78,6 +78,7 @@ species node_agent
 
 species building
 {
+	string type;
 	aspect default
 	{
 		draw shape color: #orange;

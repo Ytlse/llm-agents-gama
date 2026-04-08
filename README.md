@@ -36,10 +36,10 @@ The synthetic data includes the activities list for each person; this data is co
 cd otp-toulouse/
 
 # build the graph.obj file
-java -Xmx4G -jar ./bin/otp-shaded-2.7.0.jar --build ./toulouse --save
+java -Xmx4G -jar ./bin/otp-shaded-2.8.1.jar --build ./toulouse --save
 
 # run the server
-java -Xmx4G -jar ./bin/otp-shaded-2.7.0.jar --load ./toulouse
+java -Xmx4G -jar ./bin/otp-shaded-2.8.1.jar --load ./toulouse
 ```
 
 ### 3. Prepare the GTFS data for the LLM agent and GAMA model

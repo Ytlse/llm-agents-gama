@@ -46,6 +46,8 @@ global {
 			route_type::float(get("route_type"))
 		];
 		
+		//create building from: shape_file_buildings with: [type::read ("NATURE")];
+
 		ask stop {
 			ALL_STOPS <+ self.stop_id::self;
 		}
@@ -184,6 +186,18 @@ species travel_agent_factory {
 	}
 	
 }
+
+//species building {
+//	string type; 
+//	rgb color <- #gray  ;
+	
+//	aspect base {
+//		if show_buildings {
+//			draw shape color: color border: #darkgray;
+//		}
+//	}
+//}
+
 
 species route {
 	// attributes

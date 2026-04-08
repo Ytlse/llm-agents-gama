@@ -1,0 +1,6 @@
+outs:
+- md5: e890afb51d643107d72737d22f968eab.dir
+  size: 177186219
+  nfiles: 1
+  hash: md5
+  path: bin

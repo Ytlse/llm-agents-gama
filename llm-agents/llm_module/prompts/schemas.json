@@ -1,0 +1,42 @@
+{
+  "itinary_multi_agent": {
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agent_id": { "type": "string" },
+            "chosen_index": { "type": "integer" },
+            "mode": { "type": "string" },
+            "reason": { "type": "string" }
+          },
+          "required": ["agent_id", "chosen_index", "mode", "reason"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["agents"],
+    "additionalProperties": false
+  },
+  "perception_filter": {
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agent_id": { "type": "string" },
+            "summary": { "type": "string", "description": "L'histoire générée à la première personne" }
+          },
+          "required": ["agent_id", "summary"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["agents"],
+    "additionalProperties": false
+  }
+}

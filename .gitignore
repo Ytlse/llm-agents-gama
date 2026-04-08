@@ -1,7 +1,8 @@
 exports/
 samples/
 experiments*/
-*.geojson
 .DS_Store
 results/
+.venv
 .env
+scripts/general/*.csv
