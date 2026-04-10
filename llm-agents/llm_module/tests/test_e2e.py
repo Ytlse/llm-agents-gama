@@ -17,11 +17,17 @@ import json
 from collections import defaultdict
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+project_root = str(Path(__file__).resolve().parents[2])
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import httpx
+
+from llm_module.client import LLMClient
 
 BASE_URL = "http://localhost:8000"
 POLL_INTERVAL = 2.0   # secondes entre deux polls
@@ -60,48 +66,7 @@ class TestResult:
 # Client
 # ---------------------------------------------------------------------------
 
-def submit_task(client: httpx.Client, payload: dict, expect_http: int = 202) -> Optional[str]:
-    """Envoie la requête POST et retourne le task_id, ou None si erreur attendue."""
-    resp = client.post(f"{BASE_URL}/tasks", json=payload)
-
-    if resp.status_code != expect_http:
-        print(f"  ✗ HTTP {resp.status_code} (attendu {expect_http})")
-        print(f"    {resp.text[:300]}")
-        return None
-
-    if expect_http != 202:
-        print(f"  ✓ Erreur attendue reçue : HTTP {resp.status_code}")
-        return "EXPECTED_ERROR"
-
-    data = resp.json()
-    task_id = data["task_id"]
-    print(f"  → task_id : {task_id}")
-    return task_id
-
-
-def poll_task(client: httpx.Client, task_id: str) -> dict:
-    """Poll jusqu'à completion ou timeout."""
-    deadline = time.monotonic() + POLL_TIMEOUT
-    attempt  = 0
-
-    while time.monotonic() < deadline:
-        attempt += 1
-        resp = client.get(f"{BASE_URL}/tasks/{task_id}")
-        resp.raise_for_status()
-        data = resp.json()
-
-        status = data["status"]
-        provider_info = f" provider={data['provider_used']}" if data.get("provider_used") else " provider= Undefined"
-        print(f"  [poll #{attempt}] status={status}{provider_info}", end="")
-
-        if status in ("success", "failed"):
-            print()
-            return data
-
-        print(f"  (retry dans {POLL_INTERVAL}s...)")
-        time.sleep(POLL_INTERVAL)
-
-    return {"status": "timeout", "error": f"Timeout après {POLL_TIMEOUT}s"}
+llm_client = LLMClient(base_url=BASE_URL, poll_interval=POLL_INTERVAL, poll_timeout=POLL_TIMEOUT)
 
 
 def validate_result(data: dict, payload: dict) -> tuple[bool, bool]:
@@ -109,33 +74,20 @@ def validate_result(data: dict, payload: dict) -> tuple[bool, bool]:
     latency = data.get("latency_ms")
     perf_ok = latency is not None and latency <= 20000  # max 20s de latence LLM
 
-    valid_ok = True
     category = payload.get("category")
-    results = data.get("result", [])
-    
-    if not results:
-        valid_ok = False
-    else:
-        for agent in results:
-            if category == "itinary_multi_agent":
-                if agent.get("chosen_index") is None or not agent.get("mode") or not agent.get("reason"):
-                    valid_ok = False
-            elif category == "perception_filter":
-                if not agent.get("summary") or len(agent.get("summary", "")) < 10:
-                    valid_ok = False
+    valid_ok = llm_client.validate_format(data, category)
     return valid_ok, perf_ok
 
 
 def check_health(client: httpx.Client) -> bool:
-    try:
-        resp = client.get(f"{BASE_URL}/health", timeout=3.0)
-        data = resp.json()
+    success, data = llm_client.check_health(client)
+    if success:
         print(f"  API : {data['status']}")
         for provider, info in data.get("providers", {}).items():
             print(f"  {provider:10s} rpm={info['current_rpm']}/{info['rpm_limit']}  available={info['available']}")
         return True
-    except Exception as e:
-        print(f"  ✗ API inaccessible : {e}")
+    else:
+        print(f"  ✗ API inaccessible : {data.get('error')}")
         return False
 
 
@@ -159,7 +111,7 @@ def run_scenario(client: httpx.Client, scenario: dict, force_provider: Optional[
     t0 = time.monotonic()
 
     # Soumission
-    task_id = submit_task(client, payload, expect_http=expect)
+    task_id = llm_client.submit_task(client, payload, expect_http=expect, verbose=True)
 
     if task_id is None:
         result.error   = "Soumission échouée"
@@ -177,7 +129,9 @@ def run_scenario(client: httpx.Client, scenario: dict, force_provider: Optional[
     result.task_id = task_id
 
     # Polling
-    data = poll_task(client, task_id)
+    data = llm_client.poll_task(client, task_id, verbose=True)
+    llm_client.log_dialogue(payload, data)
+    
     result.elapsed_s  = time.monotonic() - t0
     result.final_status = data.get("status")
     result.provider_used = data.get("provider_used")
@@ -221,7 +175,7 @@ def run_burst(client: httpx.Client, scenario: dict, count: int, force_provider: 
     # 1. Soumission en rafale immédiate
     for i in range(count):
         print(f"  [Rafale #{i+1}/{count}] ", end="")
-        task_id = submit_task(client, payload, expect_http=expect)
+        task_id = llm_client.submit_task(client, payload, expect_http=expect, verbose=False)
         if task_id and task_id != "EXPECTED_ERROR":
             task_ids.append(task_id)
 
@@ -251,12 +205,15 @@ def run_burst(client: httpx.Client, scenario: dict, count: int, force_provider: 
         
         just_finished = []
         for tid in list(pending_ids):
-            resp = client.get(f"{BASE_URL}/tasks/{tid}")
-            if resp.status_code == 200:
-                data = resp.json()
+            try:
+                data = llm_client.get_task_status(client, tid)
                 if data["status"] in ("success", "failed"):
                     just_finished.append(data)
                     pending_ids.remove(tid)
+                    # On journalise le dialogue dès que le batch est terminé
+                    llm_client.log_dialogue(payload, data)
+            except Exception:
+                pass
                     
         print(f"({len(just_finished)} terminées à cet instant)")
         
@@ -376,6 +333,7 @@ def main() -> None:
     args = parser.parse_args()
 
     BASE_URL = args.base_url
+    llm_client.base_url = BASE_URL
 
     print(f"\n{'═' * 60}")
     print("  LLM MODULE — Tests end-to-end")

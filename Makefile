@@ -1,5 +1,11 @@
 # Makefile for Docker Compose commands
 
+# --- GAMA Configuration ---
+GAMA_BIN = /Applications/GAMA.app/Contents/MacOS/GAMA
+WORKSPACE = /Users/yvesb/Documents/llm-agents-gama/GAMA/CityTransport
+MODEL_PATH = $(WORKSPACE)/models/City.gaml
+EXPERIMENT_NAME = exp_yves
+
 # Default target
 up:
 	@echo "Starting all services..."
@@ -13,7 +19,7 @@ down:
 # Clean up everything (including volumes)
 clean:
 	@echo "Cleaning up everything..."
-	docker compose down -v --rmi  --remove-orphans all 
+	docker compose down -v --rmi all 
 	docker system prune -a --volumes -f
 
 # Rebuild images and restart containers
@@ -26,6 +32,11 @@ rebuild:
 apibuild:
 	@echo "Rebuilding API image and restarting API container..."
 	docker compose up --build worker api
+
+# Rebuild worker and API images and restart their containers
+otpbuild:
+	@echo "Rebuilding OTP image and restarting OTP container..."
+	docker compose up --build worker otp
 
 # View logs
 logs:
@@ -61,4 +72,9 @@ burst:
 	@echo "Running burst tests..."
 	python llm-agents/llm_module/tests/test_e2e.py --scenario 1 --burst 80
 
-.PHONY: up down clean rebuild logs restart ps status exec
+
+run: up
+	@echo "Launching GAMA experience: $(EXPERIMENT_NAME)..."
+	@$(GAMA_BIN) -p $(WORKSPACE) -o $(MODEL_PATH) -e "$(EXPERIMENT_NAME)" &
+
+.PHONY: up down clean rebuild logs restart ps status exec run

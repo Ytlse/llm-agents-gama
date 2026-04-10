@@ -29,7 +29,10 @@ class TaskStatus(str, Enum):
 class AgentSpec(BaseModel):
     """Décrit un agent individuel inclus dans le prompt batch."""
     agent_id: str
-    role: str
+    perception: str
+    destination: Optional[str] = None
+    departure_time: Optional[str] = None
+    current_time: Optional[str] = None
     context: Optional[str] = None
     history: List[str] = Field(default_factory=list)
     trajectories: List[Dict[str, Any]] = Field(default_factory=list)
@@ -45,6 +48,7 @@ class LLMRequest(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Paramètres additionnels pour le prompt")
     # Optionnel : forcer un fournisseur spécifique (contourne le load balancer)
     force_provider: Optional[str] = None
+    context: Optional[str] = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")
 
 
 # ---------------------------------------------------------------------------

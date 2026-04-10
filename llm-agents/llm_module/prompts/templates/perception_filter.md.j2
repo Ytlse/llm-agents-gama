@@ -15,7 +15,7 @@ You must output a strictly valid JSON array matching this schema:
 {% for agent in agents %}
 Agent ID: {{ agent.agent_id }}
 Persona details:
-- Profile: {{ agent.role }}
+- Profile: {{ agent.perception }}
 - Goal: {{ agent.goal | default('N/A') }}
 - Routine: {{ agent.context }}
 - Constraints: {{ agent.constraints | default('None') }}

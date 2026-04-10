@@ -24,7 +24,7 @@ global {
 	date GTFS_FIXED_DATE <- nil;
 	
 	// config
-	date starting_date <- date([2025,3,3,3,30,0]);
+	date starting_date <- date([2026,4,10,3,30,0]);
 	
 	// Global helper variables
 	date UTC_START_DATE <- date([1970,1,1,0,0,0]);

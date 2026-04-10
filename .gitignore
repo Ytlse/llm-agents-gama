@@ -6,3 +6,5 @@ results/
 .venv
 .env
 scripts/general/*.csv
+prompt_dialogue.log
+llm-agents/debug.txt

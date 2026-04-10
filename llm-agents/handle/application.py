@@ -14,11 +14,14 @@ import uvicorn
 from loguru import logger
 from helper import create_json_logger
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitResponse, WorldSyncRequest
-from scenarios.base import BaseScenario, Observation
+from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings
 import traceback
 from fastapi import FastAPI
+import urban_mobility_agents.factory.factory
+
+
 
 # Set working directory from environment if specified
 workdir = os.environ.get("APP_WORKDIR", "")
@@ -27,9 +30,6 @@ if workdir:
 
 # Initialize JSON logging
 create_json_logger()
-
-# Import scenario factory to bootstrap the simulation scenario
-import scenarios.scenario_v1.factory
 
 # Create FastAPI application instance
 app = FastAPI()
@@ -52,6 +52,7 @@ class LoopContainer:
     action message handling.
     """
     action_topic = "action/data"
+    system_greeting_topic = "system/greeting"
     observation_topic = "observation/data"
 
     def __init__(self):
@@ -70,7 +71,7 @@ class LoopContainer:
         await self.websocket_client.connect()
 
         greeting_message = {
-            "topic": self.action_topic,
+            "topic": self.system_greeting_topic,
             "payload": {
                 "type": "greeting",
                 "message": "Hello from FastAPI + WebSocket client!"
@@ -142,7 +143,7 @@ class LoopContainer:
 # Global loop container instance
 loop_container = LoopContainer()
 # Bootstrap the simulation scenario
-scenario = scenarios.scenario_v1.factory.bootstrap()
+scenario = urban_mobility_agents.factory.factory.bootstrap()
 loop_container.set_scenario(scenario)
 
 @app.on_event("startup")

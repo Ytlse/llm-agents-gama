@@ -19,7 +19,7 @@ PAYLOAD = {
     "agents": [
         {
             "agent_id": "ag_marc",
-            "role": "38y, Aeronautical Engineer, Pibrac.",
+            "perception": "38y, Aeronautical Engineer, Pibrac.",
             "goal": "Travel time reliability to avoid unpredictable traffic congestion.",
             "context": "Daily home-work commute to city center; car used only for weekend leisure.",
             "constraints": "Strict dependence on SNCF schedules and connections at Matabiau station.",
@@ -30,7 +30,7 @@ PAYLOAD = {
         },
         {
             "agent_id": "ag_sarah",
-            "role": "21y, Master's student, Borderouge.",
+            "perception": "21y, Master's student, Borderouge.",
             "goal": "Radical minimization of travel costs.",
             "context": "Trips to Rangueil campus and Jean Jaurès; grocery shopping on foot.",
             "constraints": "No personal vehicle or license; budget limited to Tisséo social fares.",
@@ -41,7 +41,7 @@ PAYLOAD = {
         },
         {
             "agent_id": "ag_thomas",
-            "role": "38y, Private Banker, lives in Vieille-Toulouse.",
+            "perception": "38y, Private Banker, lives in Vieille-Toulouse.",
             "goal": "Reflect professional success and enjoy a high-end sensory experience during commutes.",
             "context": "Primarily a direct commute between home and the city center or Labège.",
             "constraints": "None",

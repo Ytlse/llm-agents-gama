@@ -13,27 +13,33 @@ You are a transportation expert. Your task is to recommend the best transportati
 {{ schema }}
 
 <!-- USER -->
-{% if parameters.context %}
+{% if context %}
+**Global Context:** {{ context }}
+{% elif parameters and parameters.context %}
 **Global Context:** {{ parameters.context }}
 {% endif %}
 
 {% for agent in agents %}
 ### EVALUATION FOR AGENT ID: {{ agent.agent_id }}
 
-
-**1. Persona Profile & Sensitivities:**
-- {{ agent.role }}
-{% if agent.context %}
-- Additional Context: {{ agent.context }} 
+**1. Context :**
+{% if agent.destination %}
+- Destination: {{ agent.destination }}
+{% endif %}
+{% if agent.current_time %}
+- Current Time: {{ agent.current_time }}
 {% endif %}
 
-**2. Specific Trajectory Options for {{ agent.agent_id }}:**
-(Index | Mode | Description | Key Sensitivities)
+**2. Your profile and perception:**
+{{ agent.perception }}
+
+**3. Trajectory Options for {{ agent.agent_id }}:**
+(Index | Mode | Description)
 {% for traj in agent.trajectories %}
-- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description }} (Impact: {{ traj.sensitivities }}) 
+- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description }}
 {% endfor %}
 
-**3. Travel History:**
+**4. Travel History:**
 {% if agent.history %}
 {% for entry in agent.history %}
 - {{ entry }}

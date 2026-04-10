@@ -261,7 +261,7 @@ class Settings(LLMServerSettings):
     agent: AgentConfig = AgentConfig()
 
     # Directory settings
-    workdir: Path = Field(default_factory=lambda: Path.cwd())
+    workdir: Path = Path.cwd()
 
     # @field_validator('workdir', mode='before')
     # @classmethod
@@ -350,4 +350,3 @@ class FactorySettings:
 
 
 settings = FactorySettings()
-

@@ -122,14 +122,20 @@ services:
   #   build:
   #     context: ./GAMA
   #     dockerfile: Dockerfile
-  #   ports:
-  #     - "6868:6868"   # port serveur GAMA headless (à confirmer)
+  #   container_name: gama_container
   #   environment:
-  #     OTP_URL: http://otp:8080
-  #     LLM_API_URL: http://api:8000
+  #     - OTP_URL=http://otp:8080
+  #     - LLM_API_URL=http://api:8000
+  #   # Utilisation des arguments corrects pour charger l'expérience
+  #   command: >
+  #     /opt/gama-platform/headless/gama-headless.sh 
+  #     -m /path/to/CityTransport/models/City.gaml 
+  #     -e "exp_yves"
   #   depends_on:
-  #     - otp
-  #     - api
+  #     otp:
+  #       condition: service_healthy
+  #     api:
+  #       condition: service_started
 
 volumes:
   redis_data:
