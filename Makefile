@@ -4,17 +4,17 @@
 GAMA_BIN = /Applications/GAMA.app/Contents/MacOS/GAMA
 WORKSPACE = /Users/yvesb/Documents/llm-agents-gama/GAMA/CityTransport
 MODEL_PATH = $(WORKSPACE)/models/City.gaml
-EXPERIMENT_NAME = exp_yves
+EXPERIMENT_NAME = e
 
 # Default target
 up:
 	@echo "Starting all services..."
 	docker compose up -d
 
-# Stop and remove containers, networks, volumes, and images
+# Stop containers
 down:
-	@echo "Stopping and removing containers, networks, volumes, and images..."
-	docker compose down --rmi all
+	@echo "Stopping containers ..."
+	docker compose down
 
 # Clean up everything (including volumes)
 clean:
@@ -29,9 +29,9 @@ rebuild:
 	docker compose up -d
 
 # Rebuild worker and API images and restart their containers
-apibuild:
+api:
 	@echo "Rebuilding API image and restarting API container..."
-	docker compose up --build worker api
+	docker compose up --build worker api controller
 
 # Rebuild worker and API images and restart their containers
 otpbuild:

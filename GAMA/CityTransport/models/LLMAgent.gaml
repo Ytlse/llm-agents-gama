@@ -76,16 +76,20 @@ species llm_agent_sync skills:[network] {
 					"location"::[
 						"lon"::ploc.x,
 				    	"lat"::ploc.y
-					]	
+					]
 				];
 			}
 		}
+
+		string json_body;
+		if length(idle_people) > 0 {
+			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP, "idle_people"::idle_people]);
+		} else {
+			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP]);
+		}
 		do send to: "/sync" contents: [
 			"POST",
-			to_json([
-				"timestamp"::CURRENT_TIMESTAMP,
-				"idle_people"::idle_people
-			]),
+			json_body,
 			["Content-Type"::"application/json"]
 		];
 	}
@@ -244,7 +248,3 @@ species llm_agent_test skills:[network] {
 		
 	}
 }
-
-
-
-

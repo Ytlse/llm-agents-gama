@@ -76,16 +76,15 @@ bash update_gtfs_data.sh
 
 ### 5. Run the simulation
 
-- Start the GAMA model first. The entry model is `GAMA/CityTransport/City.gaml`.
-
-- Start the LLM-Agent next:
+- Start all Docker services first (LLM agents, Redis, OTP, monitoring):
 
 ```shell
-cd llm-agents/
-poetry run python server.py --config ./config/config_gpt-oss-120b_19.yaml
+docker compose up
 ```
 
-- Go back to GAMA and hit the play button to start the simulation.
+- Open the GAMA model. The entry model is `GAMA/CityTransport/City.gaml`.
+
+- Hit the play button to start the simulation. The controller will connect to GAMA automatically via WebSocket.
 
 ## Reference
 

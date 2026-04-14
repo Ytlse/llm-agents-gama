@@ -61,7 +61,7 @@ services:
   api:
     build:
       context: ./llm-agents
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile  
     command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -71,11 +71,42 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       OTP_URL: http://otp:8080
+      #APP_WORKDIR: /app/workdir
+      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+      GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm-agents:/app
+      - ./data/gtfs:/data/gtfs
+      - ./data/po_toulouse.big:/data/po_toulouse.big
+      - ./experiments:/experiments
     depends_on:
       redis:
         condition: service_healthy
+      otp:
+        condition: service_healthy
+
+  controller:
+    build:
+      context: ./llm-agents
+      dockerfile: Dockerfile
+    command: hypercorn handle.application:app --bind 0.0.0.0:8002 --reload
+    ports:
+      - "8002:8002"
+    env_file: ./.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      OTP_URL: http://otp:8080
+      #APP_WORKDIR: /app/workdir
+      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+      GAMA_WS_URL: ws://host.docker.internal:3001
+    volumes:
+      - ./llm-agents:/app
+      - ./data/gtfs:/data/gtfs
+      - ./data/po_toulouse.big:/data/po_toulouse.big
+      - ./experiments:/experiments
+    depends_on:
+      api:
+        condition: service_started
       otp:
         condition: service_healthy
 
@@ -90,8 +121,11 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       OTP_URL: http://otp:8080
-   # volumes:
-   #   - ./llm-agents:/app
+      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+    volumes:
+      - ./llm-agents:/app
+      - ./otp-toulouse/toulouse/gtfs:/data/gtfs
+      - ./experiments:/experiments
     depends_on:
       redis:
         condition: service_healthy
@@ -112,6 +146,31 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
     depends_on:
       - worker
+
+  # ─────────────────────────────────────────────
+  # Monitoring: Prometheus & Grafana
+  # ─────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
 
   # ─────────────────────────────────────────────
   # GAMA Server — simulation multi-agents

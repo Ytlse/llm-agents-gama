@@ -19,7 +19,7 @@ class WebSocketClient:
         self.websocket: Optional[websockets.WebSocketServerProtocol] = None
         self.running = False
         self.reconnect_attempts = 0
-        self.max_reconnect_attempts = 10
+        self.max_reconnect_attempts = float('inf')  # reconnexion indéfinie jusqu'à ce que GAMA soit disponible
         
         # Callbacks
         self.on_message: Optional[Callable] = None
@@ -36,12 +36,13 @@ class WebSocketClient:
                 self.uri,
                 ping_interval=20,
                 ping_timeout=10,
-                close_timeout=10,
+                close_timeout=20,
                 max_size=10**7,  # 10MB max message size
                 compression=None  # Tắt compression để tăng performance
             )
             
             self.reconnect_attempts = 0
+            logger.info("✅ Connexion WebSocket avec GAMA établie avec succès !")
             logger.info(f"Connected to {self.uri}")
             
             if self.on_connect:

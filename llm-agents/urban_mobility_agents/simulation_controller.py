@@ -7,6 +7,7 @@ Son rôle est d'orchestrer le déroulement de la simulation au fil du temps. Il 
 - Le traitement des observations de l'environnement.
 - L'orchestration des cycles de réflexion (mémoire à court et long terme) des agents.
 """
+
 import asyncio
 import json
 from typing import Optional, Tuple
@@ -25,8 +26,15 @@ from utils import random_uuid
 from world.population import WorldPopulation
 from world.world_data import WorldModel
 from settings import settings
+import threading
+
+from prometheus_client import Counter
 
 history_logger = HistoryStreamLog.get_instance()
+
+PROCESS_PERSON_CALLS = Counter('gama_process_person_calls_total', 'Total calls to process_person')
+EVALUATE_PLAN_CALLS = Counter('gama_evaluate_plan_calls_total', 'Total calls to evaluate_and_choose_travel_plan')
+ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
 
 class SimulationLoopV1(BaseScenario):
     MAX_ADJUST_START_TIME = 15*60  # 15 minutes
@@ -232,9 +240,11 @@ class SimulationLoopV1(BaseScenario):
         idle_people = [p for p in self.population.get_people_list() if p.state.heading_to is None]
         
         async def process_person(person):
+            PROCESS_PERSON_CALLS.inc()
             async with self._concurrent_semaphore:
                 move, reasoning = await self.determine_next_move_for_person(person, timestamp)
                 if move:
+                    ACTIONS_CREATED.inc()
                     logger.debug(f"[timestamp: {humanize_date(timestamp)}] Person {person.person_id} is moving to {move.target_location} for {move.purpose}")
                     self._messages.append(Action(
                         person_id=person.person_id,
@@ -356,6 +366,7 @@ class SimulationLoopV1(BaseScenario):
                     activity_id=next_activity.id,
                     data={"type": "travel_plan"},
                 )
+                EVALUATE_PLAN_CALLS.inc()
                 plan_index, reasoning = await self.agent.evaluate_and_choose_travel_plan(
                     context=context,
                     options=itineraries,

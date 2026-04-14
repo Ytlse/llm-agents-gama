@@ -1,0 +1,782 @@
+{
+  "annotations": [
+    {
+      "kind": "AnnotationQuery",
+      "spec": {
+        "builtIn": true,
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "query": {
+          "datasource": { "name": "-- Grafana --" },
+          "group": "grafana",
+          "kind": "DataQuery",
+          "spec": {},
+          "version": "v0"
+        }
+      }
+    }
+  ],
+  "cursorSync": "Off",
+  "editable": true,
+  "elements": {
+
+    "panel-1": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "gama_actions_created_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total d'actions de déplacement envoyées aux agents GAMA",
+        "id": 1,
+        "links": [],
+        "title": "Actions Created",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "fixed", "fixedColor": "green" },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-2": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "gama_process_person_calls_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total d'évaluations d'agents (personnes traitées à chaque cycle de sync)",
+        "id": 2,
+        "links": [],
+        "title": "Agents Processed",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "fixed", "fixedColor": "blue" },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-3": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "gama_evaluate_plan_calls_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total d'appels LLM pour évaluer et choisir un plan de déplacement",
+        "id": 3,
+        "links": [],
+        "title": "Plan Evaluations (LLM)",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "fixed", "fixedColor": "purple" },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": 0 }] }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-4": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_tasks_in_progress", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre de tâches LLM en cours d'exécution (gauge temps réel)",
+        "id": 4,
+        "links": [],
+        "title": "LLM Tasks In Progress",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "thresholds" },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": 0 },
+                    { "color": "yellow", "value": 5 },
+                    { "color": "red", "value": 20 }
+                  ]
+                }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "background",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-5": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_tasks_sent_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total de requêtes envoyées au module LLM",
+        "id": 5,
+        "links": [],
+        "title": "LLM Tasks Sent",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "fixed", "fixedColor": "light-blue" },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "light-blue", "value": 0 }] }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-6": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_tasks_responses_success_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total de réponses LLM réussies",
+        "id": 6,
+        "links": [],
+        "title": "LLM Responses Success",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "fixed", "fixedColor": "green" },
+                "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-7": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_tasks_responses_failure_total", "legendFormat": "__auto", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Nombre total de réponses LLM en échec",
+        "id": 7,
+        "links": [],
+        "title": "LLM Responses Failure",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "thresholds" },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": 0 },
+                    { "color": "red", "value": 1 }
+                  ]
+                }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "background",
+              "graphMode": "none",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-8": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "llm_tasks_responses_success_total / llm_tasks_responses_total * 100", "legendFormat": "Success rate %", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Taux de succès des appels LLM (success / total)",
+        "id": 8,
+        "links": [],
+        "title": "LLM Success Rate",
+        "vizConfig": {
+          "group": "stat",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "color": { "mode": "thresholds" },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red", "value": 0 },
+                    { "color": "yellow", "value": 80 },
+                    { "color": "green", "value": 95 }
+                  ]
+                }
+              },
+              "overrides": []
+            },
+            "options": {
+              "colorMode": "background",
+              "graphMode": "none",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "textMode": "auto",
+              "wideLayout": true
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-9": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(gama_actions_created_total[5m])", "legendFormat": "Actions / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(gama_process_person_calls_total[5m])", "legendFormat": "Agents processed / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(gama_evaluate_plan_calls_total[5m])", "legendFormat": "Plan evaluations / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "C"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Taux d'activité des agents GAMA au fil du temps (fenêtre glissante 5 min)",
+        "id": 9,
+        "links": [],
+        "title": "Agent Activity Rate",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "palette-classic" },
+                "custom": { "lineWidth": 2, "fillOpacity": 10 }
+              },
+              "overrides": []
+            },
+            "options": {
+              "legend": { "displayMode": "list", "placement": "bottom" },
+              "tooltip": { "mode": "multi" }
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-10": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(llm_tasks_sent_total[5m])", "legendFormat": "Tasks sent / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "A"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(llm_tasks_responses_success_total[5m])", "legendFormat": "Success / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "B"
+                }
+              },
+              {
+                "kind": "PanelQuery",
+                "spec": {
+                  "hidden": false,
+                  "query": {
+                    "datasource": { "name": "efj1tnsu3fh8gb" },
+                    "group": "prometheus",
+                    "kind": "DataQuery",
+                    "spec": { "editorMode": "builder", "expr": "rate(llm_tasks_responses_failure_total[5m])", "legendFormat": "Failures / s", "range": true },
+                    "version": "v0"
+                  },
+                  "refId": "C"
+                }
+              }
+            ],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Débit des tâches LLM : envois, succès et échecs par seconde (fenêtre 5 min)",
+        "id": 10,
+        "links": [],
+        "title": "LLM Task Throughput",
+        "vizConfig": {
+          "group": "timeseries",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "palette-classic" },
+                "custom": { "lineWidth": 2, "fillOpacity": 10 }
+              },
+              "overrides": [
+                {
+                  "matcher": { "id": "byName", "options": "Failures / s" },
+                  "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+                }
+              ]
+            },
+            "options": {
+              "legend": { "displayMode": "list", "placement": "bottom" },
+              "tooltip": { "mode": "multi" }
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-11": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_mode_chosen_total", "legendFormat": "{{mode}}", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Distribution des modes de transport choisis par les agents LLM",
+        "id": 11,
+        "links": [],
+        "title": "Transport Mode Distribution",
+        "vizConfig": {
+          "group": "bargauge",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "palette-classic" }
+              },
+              "overrides": []
+            },
+            "options": {
+              "displayMode": "gradient",
+              "orientation": "horizontal",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "valueMode": "color"
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    },
+
+    "panel-12": {
+      "kind": "Panel",
+      "spec": {
+        "data": {
+          "kind": "QueryGroup",
+          "spec": {
+            "queries": [{
+              "kind": "PanelQuery",
+              "spec": {
+                "hidden": false,
+                "query": {
+                  "datasource": { "name": "efj1tnsu3fh8gb" },
+                  "group": "prometheus",
+                  "kind": "DataQuery",
+                  "spec": { "editorMode": "builder", "expr": "llm_index_chosen_total", "legendFormat": "Plan #{{index}}", "range": true },
+                  "version": "v0"
+                },
+                "refId": "A"
+              }
+            }],
+            "queryOptions": {},
+            "transformations": []
+          }
+        },
+        "description": "Distribution des indices de plan choisis par le LLM (0 = premier itinéraire, 1 = second, etc.)",
+        "id": 12,
+        "links": [],
+        "title": "Plan Index Distribution",
+        "vizConfig": {
+          "group": "bargauge",
+          "kind": "VizConfig",
+          "spec": {
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "palette-classic" }
+              },
+              "overrides": []
+            },
+            "options": {
+              "displayMode": "gradient",
+              "orientation": "horizontal",
+              "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+              "valueMode": "color"
+            }
+          },
+          "version": "13.0.0"
+        }
+      }
+    }
+
+  },
+
+  "layout": {
+    "kind": "AutoGridLayout",
+    "spec": {
+      "columnWidthMode": "standard",
+      "maxColumnCount": 4,
+      "rowHeightMode": "standard",
+      "items": [
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-1" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-2" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-3" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-4" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-5" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-6" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-7" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-8" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-9" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-10" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-11" } } },
+        { "kind": "AutoGridLayoutItem", "spec": { "element": { "kind": "ElementReference", "name": "panel-12" } } }
+      ]
+    }
+  },
+
+  "links": [],
+  "liveNow": false,
+  "preload": false,
+  "tags": ["gama", "simulation", "llm"],
+  "timeSettings": {
+    "autoRefresh": "30s",
+    "autoRefreshIntervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"],
+    "fiscalYearStartMonth": 0,
+    "from": "now-1h",
+    "hideTimepicker": false,
+    "timezone": "browser",
+    "to": "now"
+  },
+  "title": "GAMA Simulation"
+}

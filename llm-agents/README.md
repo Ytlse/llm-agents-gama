@@ -75,8 +75,8 @@ Couche d'interface bas niveau avec GAMA et WebSocket.
 
 | Fichier | Description |
 |---|---|
-| `application.py` | Interface principale avec GAMA. Boucle d'écoute des nouveaux messages entrants, traitement des observations, initialisation de GAMA, définition des handlers FastAPI. |
-| `websocket.py` | Gestion de la connexion WebSocket avec GAMA : `connect`, `disconnect`, `send_message`, `listen`. Rôle précis dans l'architecture à approfondir. **TBC** |
+| `application.py` | Interface principale avec GAMA. Boucle d'écoute des nouveaux messages entrants, traitement des observations, initialisation de GAMA, définition des handlers FastAPI.
+| `websocket.py` | Client WebSocket vers le serveur GAMA (port 3001). Gère la connexion, la déconnexion, l'envoi et la réception de messages. Reconnexion automatique indéfinie pour tolérer un démarrage de GAMA postérieur au lancement des services Docker. |
 
 ---
 
@@ -183,7 +183,6 @@ Gestion de l'état global de la simulation.
 |---|---|---|
 | `backup_helper.py` | Rôle exact du roulement de fichiers | **TBD** |
 | `api/batch.py` → `batch_ob_update` | Feedback observations, non implémenté | **TBD** |
-| `handle/websocket.py` | Positionnement dans l'architecture (GAMA WS vs client externe ?) | **TBC** |
 | `llm/longterm.py` | Détail des stratégies de mémoire long terme | **TBC** |
 | `text_helper/templates/repository.py` | Logique de sélection des templates | **TBD** |
 | `trip_helper/solari.py` | Relation exacte avec OTP, statut actif/déprécié | **TBC** |

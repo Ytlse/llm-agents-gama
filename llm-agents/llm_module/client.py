@@ -3,6 +3,15 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
+from prometheus_client import Counter, Gauge
+
+TASKS_IN_PROGRESS = Gauge('llm_tasks_in_progress', 'Number of tasks currently in progress')
+TASKS_SENT = Counter('llm_tasks_sent_total', 'Total number of tasks sent')
+TASKS_RESPONSES = Counter('llm_tasks_responses_total', 'Total number of task responses received')
+TASKS_RESPONSES_SUCCESS = Counter('llm_tasks_responses_success_total', 'Total number of successful task responses')
+TASKS_RESPONSES_FAILURE = Counter('llm_tasks_responses_failure_total', 'Total number of failed task responses')
+MODE_CHOSEN = Counter('llm_mode_chosen_total', 'Distribution of chosen modes', ['mode'])
+INDEX_CHOSEN = Counter('llm_index_chosen_total', 'Distribution of chosen plan indices', ['index'])
 
 
 class LLMClient:
@@ -118,17 +127,36 @@ class LLMClient:
         Soumet une tâche et attend en asynchrone.
         """
         import asyncio
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(f"{self.base_url}/tasks", json=payload)
-            resp.raise_for_status()
-            task_id = resp.json()["task_id"]
-            
-            deadline = time.monotonic() + self.poll_timeout
-            while time.monotonic() < deadline:
-                resp = await client.get(f"{self.base_url}/tasks/{task_id}")
-                data = resp.json()
-                if data["status"] in ("success", "failed"):
-                    self.log_dialogue(payload, data)
-                    return data
-                await asyncio.sleep(self.poll_interval)
-            return {"status": "timeout", "error": "Timeout expiré"}
+        TASKS_SENT.inc()
+        TASKS_IN_PROGRESS.inc()
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(f"{self.base_url}/tasks", json=payload)
+                resp.raise_for_status()
+                task_id = resp.json()["task_id"]
+                
+                deadline = time.monotonic() + self.poll_timeout
+                while time.monotonic() < deadline:
+                    resp = await client.get(f"{self.base_url}/tasks/{task_id}")
+                    data = resp.json()
+                    if data["status"] in ("success", "failed"):
+                        self.log_dialogue(payload, data)
+                        TASKS_RESPONSES.inc()
+                        if data.get("status") == "success" and data.get("result"):
+                            TASKS_RESPONSES_SUCCESS.inc()
+                            results = data.get("result", [])
+                            for agent in results:
+                                mode = agent.get("mode")
+                                if mode:
+                                    MODE_CHOSEN.labels(mode=mode).inc()
+                                chosen_index = agent.get("chosen_index")
+                                if chosen_index is not None:
+                                    INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
+                        else:
+                            TASKS_RESPONSES_FAILURE.inc()
+                        return data
+                    await asyncio.sleep(self.poll_interval)
+                TASKS_RESPONSES_FAILURE.inc()
+                return {"status": "timeout", "error": "Timeout expiré"}
+        finally:
+            TASKS_IN_PROGRESS.dec()

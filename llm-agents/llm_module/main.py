@@ -16,7 +16,8 @@ from __future__ import annotations
 import json
 import hashlib
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from fastapi.middleware.cors import CORSMiddleware
 
 from llm_module.broker.redis_broker import get_task_async, save_task_async, add_task_to_batch_async
@@ -25,6 +26,7 @@ from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusR
 from llm_module.tasks.config import settings
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 logger = get_logger(__name__)
 
@@ -53,12 +55,14 @@ app.add_middleware(
 @app.post(
     "/tasks",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Créer une tâche LLM",
+    summary="Créer une tâche LLM batchée",
     description=(
-        "Soumet une requête LLM en file d'attente. "
-        "Retourne immédiatement un task_id. "
-        "Utilisez GET /tasks/{task_id} pour récupérer le résultat."
+        "Soumet une requête LLM en file d'attente pour traitement asynchrone par Celery. "
+        "Les requêtes similaires (même catégorie, mêmes paramètres) sont automatiquement regroupées en lots (batchs) "
+        "pour optimiser les appels aux LLMs.\n\n"
+        "Retourne immédiatement un `task_id` unique à utiliser pour interroger le statut via `GET /tasks/{task_id}`."
     ),
+    response_description="Le task_id généré et le statut initial de la tâche.",
 )
 async def create_task(request: LLMRequest) -> dict:
     """
@@ -100,7 +104,12 @@ async def create_task(request: LLMRequest) -> dict:
 @app.get(
     "/tasks/{task_id}",
     response_model=TaskStatusResponse,
-    summary="Récupérer le statut d'une tâche",
+    summary="Récupérer le statut et le résultat d'une tâche",
+    description=(
+        "Permet de faire du polling pour vérifier l'état d'une tâche précédemment soumise. "
+        "Si la tâche est terminée (`status == 'success'`), le champ `result` contiendra la réponse du modèle LLM."
+    ),
+    response_description="L'état actuel de la tâche avec ses résultats éventuels.",
 )
 async def get_task_status(task_id: str) -> TaskStatusResponse:
     """
@@ -129,7 +138,9 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
 
 @app.get(
     "/health",
-    summary="Healthcheck et statut RPM",
+    summary="Vérifier la santé du service et les quotas RPM",
+    description="Retourne l'état de fonctionnement de l'API Gateway ainsi que l'état courant des compteurs de requêtes par minute (RPM) pour chaque fournisseur LLM (OpenAI, vLLM, etc.).",
+    response_description="Dictionnaire contenant le statut global et les métriques des fournisseurs.",
 )
 async def health() -> dict:
     """Retourne l'état du service et les compteurs RPM de chaque provider."""
@@ -137,6 +148,25 @@ async def health() -> dict:
         "status": "ok",
         "providers": load_balancer.get_status(),
     }
+
+SYNC_REQUESTS = Counter('gama_sync_requests_total', 'Total number of sync requests')
+INIT_REQUESTS = Counter('gama_init_requests_total', 'Total number of init requests')
+
+@app.get(
+    "/metrics",
+    summary="Exporter les métriques Prometheus",
+    description="Expose les métriques internes de l'application (nombre de requêtes, temps de traitement, succès/échecs) au format lisible par un serveur Prometheus.",
+    response_description="Texte brut au format Prometheus.",
+)
+async def metrics():
+    """Prometheus metrics endpoint."""
+    
+    logger.info("Call to /metrics received.")
+    
+    content = generate_latest(REGISTRY)
+        
+    return Response(content=content, media_type=CONTENT_TYPE_LATEST)
+
 
 
 # ---------------------------------------------------------------------------

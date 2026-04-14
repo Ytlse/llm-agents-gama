@@ -18,7 +18,9 @@ from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings
 import traceback
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 import urban_mobility_agents.factory.factory
 
 
@@ -39,8 +41,6 @@ def orjson_serializer(obj):
     return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
 app.router.json_dumps = orjson_serializer
 
-# Debug print current history file path
-print(settings.app.history_file_v2)
 
 
 class LoopContainer:
@@ -154,8 +154,13 @@ async def startup_event():
     Initializes WebSocket connection and starts background tasks for
     real-time communication with GAMA simulation.
     """
-    # Send greeting and start WebSocket communication loops
+    logger.info(f"[startup] Tentative connexion WebSocket GAMA → {settings.server.gama_ws_url}")
     await loop_container.greeting()
+    ws_connected = loop_container.websocket_client.websocket is not None
+    if ws_connected:
+        logger.info("[startup] ✅ WebSocket GAMA connecté au démarrage")
+    else:
+        logger.warning("[startup] ⚠️  WebSocket GAMA non disponible au démarrage — reconnexion en arrière-plan")
     asyncio.create_task(loop_container.websocket_client.run_with_reconnect())
     asyncio.create_task(loop_container.publish_loop())
 
@@ -164,18 +169,38 @@ async def shutdown_event():
     """FastAPI shutdown event handler - closes WebSocket connections."""
     await loop_container.websocket_client.stop()
 
-@app.get("/")
+@app.get(
+    "/",
+    summary="Vérifier le statut du contrôleur",
+    description="Vérifie si l'API du contrôleur de simulation (FastAPI) est bien démarrée et en attente de la connexion WebSocket avec GAMA.",
+    tags=["Système"]
+)
 async def root():
     """Root endpoint - returns service status."""
     return {"status": "FastAPI + Websocket running"}
 
-@app.post("/init")
+@app.get(
+    "/metrics",
+    summary="Exporter les métriques Prometheus",
+    description="Expose les compteurs d'événements de la simulation GAMA (appels, synchronisations) au format Prometheus.",
+    tags=["Système"]
+)
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+@app.post(
+    "/init",
+    summary="Initialiser la population du monde",
+    description=(
+        "Génère et renvoie la liste complète de la population synthétique (avec les coordonnées des domiciles et les caractéristiques des agents) "
+        "pour peupler la carte GAMA au lancement de la simulation."
+    ),
+    tags=["Simulation"]
+)
 async def init():
     """
     Initialize the simulation world.
-
-    Returns the complete population data to initialize the GAMA simulation
-    with all agents and their home locations.
     """
     logger.info("Publishing world data")
 
@@ -199,7 +224,15 @@ async def init():
         )
     )
 
-@app.post("/reflect")
+@app.post(
+    "/reflect",
+    summary="Déclencher la réflexion forcée des agents",
+    description=(
+        "Force tous les agents de la simulation à mettre à jour leur état cognitif (réflexion sur leur mémoire) "
+        "pour correspondre au timestamp fourni. Utilisé principalement pour le débogage ou la synchronisation manuelle."
+    ),
+    tags=["Simulation"]
+)
 async def reflect(request: WorldSyncRequest):
     """
     Reflect the current world state at a specific timestamp.
@@ -221,27 +254,43 @@ async def reflect(request: WorldSyncRequest):
             error="Scenario not set"
         )
 
-@app.post("/sync")
-async def sync(request: WorldSyncRequest):
+@app.post(
+    "/sync",
+    summary="Synchroniser l'état du monde",
+    description=(
+        "Met à jour l'état du scénario côté Python avec les données de la population inactive (`idle_people`) envoyées par GAMA. "
+        "Le contrôleur lit le corps de la requête en texte brut pour contourner les éventuels problèmes de header HTTP/2 (h2c)."
+    ),
+    tags=["Simulation"]
+)
+async def sync(raw: Request):
     """
     Synchronize the world state with idle population data.
 
-    Updates the scenario with current idle agents and their locations.
-    Called periodically by the GAMA simulation for state synchronization.
+    Reads the raw body to remain compatible with GAMA's Java HTTP client,
+    which sends h2c upgrade headers that prevent uvicorn/h11 from reading
+    the body. hypercorn handles h2c natively, so the body is always available.
     """
+    body = await raw.body()
+
+    if not body:
+        logger.warning("[/sync] Empty body received — sync skipped (unknown timestamp)")
+        return MessageResponse(data="skipped (empty body)", success=True)
+
+    try:
+        data = orjson.loads(body)
+        request = WorldSyncRequest(**data)
+    except Exception as e:
+        logger.error(f"[/sync] JSON parsing error: {e}")
+        return JSONResponse(status_code=422, content={"detail": str(e)})
+
     logger.info(f"Synchronizing world at timestamp: {request.timestamp}")
 
     if loop_container.scenario:
         await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people)
-        return MessageResponse(
-            data="synchronized",
-            success=True,
-        )
+        return MessageResponse(data="synchronized", success=True)
     else:
-        return MessageResponse(
-            success=False,
-            error="Scenario not set"
-        )
+        return MessageResponse(success=False, error="Scenario not set")
 
 
 if __name__ == "__main__":
