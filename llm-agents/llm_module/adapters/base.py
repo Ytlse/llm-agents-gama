@@ -134,8 +134,4 @@ def _load_adapters() -> None:
             import importlib
             importlib.import_module(module_path)
         except ImportError as e:
-            _logger.warning(
-                "Adapter non disponible (module manquant)",
-                provider=name,
-                reason=str(e),
-            )
+            _logger.warning(f"Adapter non disponible (module manquant) | provider={name} reason={e}")

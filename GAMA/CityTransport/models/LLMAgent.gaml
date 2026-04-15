@@ -104,6 +104,11 @@ species llm_agent_sync skills:[network] {
 		{
 			message mess <- fetch_message();
 			string jsonBody <- map(mess.contents)["BODY"];
+			// Guard against non-JSON responses (e.g. HTTP 500 "Internal Server Error")
+			if jsonBody = nil or not (jsonBody contains "{") {
+				write "[ERROR] Received non-JSON HTTP response from controller: " + jsonBody;
+				continue;
+			}
 			map<string, unknown> json <- from_json(jsonBody);
 			if bool(json["success"]) != true {
 				write "[ERROR] Got error message: " + string(json);

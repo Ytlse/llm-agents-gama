@@ -111,7 +111,7 @@ class CachedTripHelper(TripHelper):
                 break
 
         itineraries = rs
-        logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {5}, ")
+        #logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {5}, ")
         return itineraries
 
     async def do_get_iteraries_v1(self,
@@ -181,7 +181,7 @@ class CachedTripHelper(TripHelper):
             # merge all itineraries
             itineraries = self.get_unique_itineraries(new_itineraries + itineraries)
 
-        logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {_stats_number_of_calls}, ")
+        #logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {_stats_number_of_calls}, ")
             
         return itineraries
 

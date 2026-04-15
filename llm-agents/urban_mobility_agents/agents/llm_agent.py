@@ -68,10 +68,14 @@ class LlmAgent:
         self.llm = None
         
         self.short_term_memory: dict[str, UserShortTermMemory] = {}
-        self.long_term_memory = MultiUserLongTermMemory(
-            storage_dir=settings.agent.long_term_memory_storage_dir,
-            long_term_memory_filter_by_datetime=settings.agent.long_term_memory_filter_by_datetime,
-        )
+        if settings.agent.long_term_memory_enabled:
+            self.long_term_memory = MultiUserLongTermMemory(
+                storage_dir=settings.agent.long_term_memory_storage_dir,
+                long_term_memory_filter_by_datetime=settings.agent.long_term_memory_filter_by_datetime,
+            )
+        else:
+            self.long_term_memory = None
+            logger.info("Long-term memory disabled — ChromaDB initialization skipped")
         
         # Instance du client LLM (Singleton naturel pour cet Agent)
         self.llm_client = LLMClient(base_url=os.getenv("LLM_API_URL", "http://localhost:8000"))
@@ -302,7 +306,7 @@ class LlmAgent:
 
         try:
             response_data = await self.llm_client.execute_async(payload)
-            
+
             if response_data.get("status") == "success" and response_data.get("result"):
                 agent_result = response_data["result"][0]
                 index = agent_result.get("chosen_index")

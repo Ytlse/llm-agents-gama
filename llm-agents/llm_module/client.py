@@ -3,6 +3,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
+from loguru import logger
 from prometheus_client import Counter, Gauge
 
 TASKS_IN_PROGRESS = Gauge('llm_tasks_in_progress', 'Number of tasks currently in progress')
@@ -127,14 +128,35 @@ class LLMClient:
         Soumet une tâche et attend en asynchrone.
         """
         import asyncio
+        category = payload.get("category", "unknown")
+        agents_count = len(payload.get("agents", []))
+
         TASKS_SENT.inc()
         TASKS_IN_PROGRESS.inc()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(f"{self.base_url}/tasks", json=payload)
-                resp.raise_for_status()
+                logger.debug(
+                    f"Submitting task to LLM gateway | url={self.base_url}/tasks "
+                    f"category={category} agents={agents_count}"
+                )
+                try:
+                    resp = await client.post(f"{self.base_url}/tasks", json=payload)
+                    resp.raise_for_status()
+                except httpx.ConnectError as e:
+                    logger.error(
+                        f"Cannot connect to LLM gateway | url={self.base_url} error={e}"
+                    )
+                    raise
+                except httpx.HTTPStatusError as e:
+                    logger.error(
+                        f"LLM gateway returned HTTP error | status={e.response.status_code} "
+                        f"url={self.base_url}/tasks body={e.response.text[:300]}"
+                    )
+                    raise
+
                 task_id = resp.json()["task_id"]
-                
+                logger.debug(f"Task submitted | task_id={task_id} category={category}")
+
                 deadline = time.monotonic() + self.poll_timeout
                 while time.monotonic() < deadline:
                     resp = await client.get(f"{self.base_url}/tasks/{task_id}")
@@ -152,11 +174,23 @@ class LLMClient:
                                 chosen_index = agent.get("chosen_index")
                                 if chosen_index is not None:
                                     INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
+                            logger.debug(
+                                f"Task completed successfully | task_id={task_id} category={category}"
+                            )
                         else:
                             TASKS_RESPONSES_FAILURE.inc()
+                            error_detail = data.get("error", "No error detail")
+                            logger.error(
+                                f"Task failed | task_id={task_id} category={category} "
+                                f"error={error_detail}"
+                            )
                         return data
                     await asyncio.sleep(self.poll_interval)
                 TASKS_RESPONSES_FAILURE.inc()
+                logger.warning(
+                    f"Task timed out | task_id={task_id} category={category} "
+                    f"timeout={self.poll_timeout}s"
+                )
                 return {"status": "timeout", "error": "Timeout expiré"}
         finally:
             TASKS_IN_PROGRESS.dec()

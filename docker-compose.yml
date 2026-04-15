@@ -70,9 +70,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      OTP_URL: http://otp:8080
+      OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
       #APP_WORKDIR: /app/workdir
-      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
       GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm-agents:/app
@@ -89,15 +89,16 @@ services:
     build:
       context: ./llm-agents
       dockerfile: Dockerfile
-    command: hypercorn handle.application:app --bind 0.0.0.0:8002 --reload
+    command: sh -c "python /app/archive_log.py && hypercorn handle.application:app --bind 0.0.0.0:8002"
     ports:
       - "8002:8002"
     env_file: ./.env
     environment:
       REDIS_URL: redis://redis:6379/0
-      OTP_URL: http://otp:8080
+      OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
+      LLM_API_URL: http://api:8000
       #APP_WORKDIR: /app/workdir
-      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
       GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm-agents:/app
@@ -120,8 +121,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      OTP_URL: http://otp:8080
-      APP_CONFIG_PATH: /app/config/config_baseline_100_current.yaml
+      OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
     volumes:
       - ./llm-agents:/app
       - ./otp-toulouse/toulouse/gtfs:/data/gtfs
@@ -168,6 +169,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus

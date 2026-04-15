@@ -137,7 +137,7 @@ class WorldPopulation:
                 if act.id in m:
                     (scheduled_start_time, ) = m[act.id]
                     act.scheduled_start_time = scheduled_start_time
-                    logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
+                    #logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
 
     def load_population(self, world_bbox: BBox):
         file_name = f"{settings.data.population_cache_prefix}{settings.data.population_max_size}_{settings.data.number_of_llm_based_agents}.json"
@@ -158,6 +158,7 @@ class WorldPopulation:
 
         n_llm_based = settings.data.number_of_llm_based_agents
         if n_llm_based > 0:
+            logger.info(f"Random {n_llm_based} out of {len(people)}")
             llm_based_persons = random.sample(
                 list(people),
                 n_llm_based,

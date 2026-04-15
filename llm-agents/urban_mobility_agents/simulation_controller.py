@@ -206,7 +206,7 @@ class SimulationLoopV1(BaseScenario):
             timestamp=observation.timestamp
         )
         
-        logger.debug(f"[timestamp: {humanize_date(observation.timestamp)}] Person {observation.person_id} observed: {ob_text}")
+        #logger.debug(f"[timestamp: {humanize_date(observation.timestamp)}] Person {observation.person_id} observed: {ob_text}")
     
     def reschedule_amount(self, arrival_late_seconds: int) -> int:
         """Calculate the reschedule amount based on arrival late seconds"""
@@ -245,7 +245,6 @@ class SimulationLoopV1(BaseScenario):
                 move, reasoning = await self.determine_next_move_for_person(person, timestamp)
                 if move:
                     ACTIONS_CREATED.inc()
-                    logger.debug(f"[timestamp: {humanize_date(timestamp)}] Person {person.person_id} is moving to {move.target_location} for {move.purpose}")
                     self._messages.append(Action(
                         person_id=person.person_id,
                         action=move.model_dump(exclude_none=False)

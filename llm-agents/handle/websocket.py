@@ -1,15 +1,11 @@
 import traceback
-from typing import List
+from typing import List, Optional, Callable
 
 from fastapi import WebSocket
 from loguru import logger
 import asyncio
 import websockets
 import json
-import logging
-from typing import Optional, Callable
-import signal
-import sys
 from datetime import datetime
 
 class WebSocketClient:
@@ -42,8 +38,7 @@ class WebSocketClient:
             )
             
             self.reconnect_attempts = 0
-            logger.info("✅ Connexion WebSocket avec GAMA établie avec succès !")
-            logger.info(f"Connected to {self.uri}")
+            logger.info(f"✅ WebSocket connecté à {self.uri}")
             
             if self.on_connect:
                 await self.on_connect()
@@ -72,7 +67,6 @@ class WebSocketClient:
         if self.websocket:
             try:
                 await self.websocket.send(message)
-                logger.debug(f"Sent: {message}")
                 return True
             except Exception as e:
                 logger.error(f"Send failed: {e}")
@@ -95,7 +89,7 @@ class WebSocketClient:
                         timeout=30.0
                     )
                     
-                    logger.debug(f"Received: {message}")
+                    #logger.debug(f"Received: {message}")
                     
                     if self.on_message:
                         await self.on_message(message)

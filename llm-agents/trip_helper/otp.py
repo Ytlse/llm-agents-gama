@@ -1,4 +1,5 @@
 import json
+import time
 from typing import List, Optional
 
 from datetime import datetime, timezone
@@ -13,6 +14,22 @@ from trip_helper.base import TripHelper
 from utils import random_uuid
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from prometheus_client import Counter, Histogram
+
+OTP_REQUESTS_OK  = Counter(
+    'otp_requests_ok_total',
+    'Requêtes OTP réussies (après éventuels retries)',
+)
+OTP_REQUESTS_ERR = Counter(
+    'otp_requests_err_total',
+    'Tentatives OTP échouées (chaque retry compte)',
+    ['reason'],  # 'timeout' | 'http_error' | 'other'
+)
+OTP_REQUEST_LATENCY = Histogram(
+    'otp_request_duration_seconds',
+    'Durée des requêtes OTP réussies',
+    buckets=[0.1, 0.25, 0.5, 1, 2, 5, 10],
+)
 
 
 QUERY = """
@@ -187,6 +204,14 @@ class OTPTripHelper(TripHelper):
         self.endpoint = endpoint or settings.gtfs.otp_endpoint
         self.fixed_day: datetime = datetime.strptime(settings.gtfs.fixed_day, '%Y%m%d') if settings.gtfs.fixed_day else None
         self.gtfs_data = gtfs_data or GTFSData.DEFAULT()
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    async def get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            # Limite les connexions simultanées pour ne pas saturer le réseau ni OTP
+            connector = aiohttp.TCPConnector(limit=50)
+            self._session = aiohttp.ClientSession(connector=connector)
+        return self._session
 
     def timestamp_from_isoformat(self, iso_format: str) -> int:
         dt = datetime.fromisoformat(iso_format)
@@ -308,57 +333,71 @@ class OTPTripHelper(TripHelper):
             logger.debug(f"Using fixed day {self.fixed_day.date()} for departure_time, real day is {real_day}, new departure_time is {departure_time}")
         real_day = real_day.replace(hour=0, minute=0, second=0, microsecond=0) if real_day else None
 
-        async with aiohttp.ClientSession() as session:
-            start_at = datetime.fromtimestamp(departure_time, tz=timezone.utc).isoformat()
-            payload = {
-                "query": QUERY,
-                "variables": {
-                    "from": {
-                        "coordinates": {
-                            "latitude": origin.lat,
-                            "longitude": origin.lon
-                        }
-                    },
-                    "to": {
-                        "coordinates": {
-                            "latitude": destination.lat,
-                            "longitude": destination.lon
-                        }
-                    },
-                    "dateTime": start_at,
-                    "numTripPatterns": 20,
-                    "searchWindow": search_window_m
+        session = await self.get_session()
+        start_at = datetime.fromtimestamp(departure_time, tz=timezone.utc).isoformat()
+        payload = {
+            "query": QUERY,
+            "variables": {
+                "from": {
+                    "coordinates": {
+                        "latitude": origin.lat,
+                        "longitude": origin.lon
+                    }
                 },
-                "operationName": "trip"
-            }
+                "to": {
+                    "coordinates": {
+                        "latitude": destination.lat,
+                        "longitude": destination.lon
+                    }
+                },
+                "dateTime": start_at,
+                "numTripPatterns": 20,
+                "searchWindow": search_window_m
+            },
+            "operationName": "trip"
+        }
 
-            @retry(
-                stop=stop_after_attempt(5),
-                wait=wait_exponential(multiplier=1, min=1, max=10),
-                retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError))
-            )
-            async def make_request():
+        @retry(
+            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=1, min=1, max=10),
+            retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError))
+        )
+        async def make_request():
+            _t0 = time.monotonic()
+            try:
                 async with session.post(self.endpoint, json=payload, timeout=10) as response:
                     response.raise_for_status()
-                    return await response.json()
-            
-            try:
-                data = await make_request()
-                plans = []
-                for item in data["data"]["trip"]["tripPatterns"]:
-                    try:
-                        p = self._parse_otp_travel_plan(item, start_location=origin, end_location=destination, real_day=real_day)
-                        p.start_in = max(0, p.start_time - real_departure_time)
-                        plans.append(p)
-                    except Exception as e:
-                        logger.error(f"Error parsing travel plan: {e}, body: {item}")
-                plans = list(filter(lambda x: x.legs, plans))
-                plans = self.remove_duplicates(plans, max_candidates=settings.gtfs.max_trip_candidates)
-                logger.debug(f"Payload: {json.dumps(payload, ensure_ascii=False)}, found {len(plans)} itineraries")
-                return plans
-            except Exception as e:
-                logger.error(f"Failed to get itineraries after 5 attempts: {e}")
-                return []
+                    result = await response.json()
+                OTP_REQUESTS_OK.inc()
+                OTP_REQUEST_LATENCY.observe(time.monotonic() - _t0)
+                return result
+            except asyncio.TimeoutError:
+                OTP_REQUESTS_ERR.labels(reason='timeout').inc()
+                raise
+            except aiohttp.ClientResponseError:
+                OTP_REQUESTS_ERR.labels(reason='http_error').inc()
+                raise
+            except aiohttp.ClientError:
+                OTP_REQUESTS_ERR.labels(reason='other').inc()
+                raise
+
+        try:
+            data = await make_request()
+            plans = []
+            for item in data["data"]["trip"]["tripPatterns"]:
+                try:
+                    p = self._parse_otp_travel_plan(item, start_location=origin, end_location=destination, real_day=real_day)
+                    p.start_in = max(0, p.start_time - real_departure_time)
+                    plans.append(p)
+                except Exception as e:
+                    logger.error(f"Error parsing travel plan: {e}, body: {item}")
+            plans = list(filter(lambda x: x.legs, plans))
+            plans = self.remove_duplicates(plans, max_candidates=settings.gtfs.max_trip_candidates)
+            #logger.debug(f"Payload: {json.dumps(payload, ensure_ascii=False)}, found {len(plans)} itineraries")
+            return plans
+        except Exception as e:
+            logger.error(f"Failed to get itineraries after 5 attempts: {e}")
+            return []
 
 
 if __name__ == '__main__':

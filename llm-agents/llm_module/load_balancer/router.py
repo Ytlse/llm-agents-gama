@@ -13,7 +13,7 @@ import threading
 from typing import Dict, List, Optional
 
 from llm_module.tasks.config import settings
-from llm_module.broker.redis_broker import get_rpm, increment_rpm, is_in_cooldown
+from llm_module.broker.redis_broker import get_rpm, increment_rpm, is_in_cooldown, is_provider_disabled
 from llm_module.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,16 +46,33 @@ class LoadBalancer:
     def _build_sequence(self) -> List[str]:
         """
         Construit la liste de rotation pondérée une seule fois au démarrage.
-        Si les poids changent (rechargement config), appeler rebuild_sequence().
+        
+        Utilise l'algorithme Smooth Weighted Round-Robin (SWRR, type NGINX) 
+        pour garantir un entrelacement et éviter les micro-rafales 
+        sur un même fournisseur.
         """
-        sequence: List[str] = []
         total_weight = sum(p.weight for p in settings.providers.values())
+        if total_weight == 0:
+            return []
 
+        # Initialisation des états pour l'algorithme SWRR
+        peers = []
         for name, cfg in settings.providers.items():
-            slots = max(1, round((cfg.weight / total_weight) * 100))
-            sequence.extend([name] * slots)
+            effective_weight = max(1, round((cfg.weight / total_weight) * 100))
+            peers.append({"name": name, "weight": effective_weight, "current_weight": 0})
 
-        logger.debug("Séquence WRR construite", sequence_length=len(sequence))
+        total_slots = sum(p["weight"] for p in peers)
+        sequence: List[str] = []
+
+        # Génération de la séquence entrelacée
+        for _ in range(total_slots):
+            for p in peers:
+                p["current_weight"] += p["weight"]
+            best = max(peers, key=lambda x: x["current_weight"])
+            best["current_weight"] -= total_slots
+            sequence.append(best["name"])
+
+        logger.debug(f"Séquence WRR construite | sequence={sequence}")
         return sequence
 
     def rebuild_sequence(self) -> None:
@@ -95,7 +112,7 @@ class LoadBalancer:
                 self._cursor += 1
 
             if self._is_available(candidate):
-                logger.debug("Provider sélectionné", provider=candidate, cursor=self._cursor)
+                logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor}\n")
                 return candidate
 
         raise RuntimeError(
@@ -110,11 +127,14 @@ class LoadBalancer:
         """
         cfg = settings.providers.get(provider)
         if cfg is None:
-            logger.warning("Provider inconnu dans la config", provider=provider)
+            logger.warning(f"Provider inconnu dans la config | provider={provider}")
+            return False
+
+        if is_provider_disabled(provider):
             return False
 
         if is_in_cooldown(provider):
-            logger.debug("Provider en cooldown (ignoré)", provider=provider)
+            #logger.debug(f"Provider en cooldown (ignoré) | provider={provider}")
             return False
 
         current_rpm = get_rpm(provider)
@@ -122,11 +142,8 @@ class LoadBalancer:
 
         if current_rpm >= threshold:
             logger.warning(
-                "Circuit breaker déclenché",
-                provider=provider,
-                current_rpm=current_rpm,
-                threshold=threshold,
-                rpm_limit=cfg.rpm_limit,
+                f"Circuit breaker déclenché | provider={provider} "
+                f"current_rpm={current_rpm} threshold={threshold:.1f} rpm_limit={cfg.rpm_limit}"
             )
             return False
         return True
@@ -138,7 +155,7 @@ class LoadBalancer:
         Retourne le compteur RPM mis à jour.
         """
         count = increment_rpm(provider)
-        logger.debug("RPM incrémenté", provider=provider, rpm_count=count)
+        logger.debug(f"RPM incrémenté | provider={provider} rpm_count={count}")
         return count
 
     def get_status(self) -> Dict[str, Dict]:

@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     circuit_breaker_threshold:  float = 0.95
     max_retries:                int   = 10
     backoff_base_seconds:       float = 1.0
-    batch_max_agents:           int   = 20
+    batch_max_agents:           int   = 5 #TODO use batch size again LLM capacity (process_batch_task get select_provider with added configuration of capacity)
     batch_delay_seconds:        float = 1.0
 
     # Les api_key viennent de l'env : PROVIDER_KEYS__openai=sk-...

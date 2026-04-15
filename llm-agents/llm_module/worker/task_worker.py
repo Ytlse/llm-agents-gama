@@ -21,7 +21,6 @@ import time
 from datetime import datetime
 
 from celery import Celery
-from celery.utils.log import get_task_logger
 
 from llm_module.tasks.config import settings
 from llm_module.settings.models import InternalRequest, Task, TaskStatus
@@ -39,13 +38,16 @@ from llm_module.broker.redis_broker import (
     requeue_tasks_sync,
     _batch_queue_key,
     get_sync_redis,
+    increment_worker_metric,
+    increment_consecutive_errors,
+    reset_consecutive_errors,
+    disable_provider,
 )
 from llm_module.load_balancer.router import load_balancer
 from llm_module.prompts.manager import prompt_manager
-from llm_module.telemetry.logger import get_logger, log_llm_call
+from llm_module.telemetry.logger import get_logger, log_llm_call, log_llm_exchange
 
 logger = get_logger(__name__)
-task_logger = get_task_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Application Celery
@@ -101,12 +103,9 @@ def process_batch_task(self, batch_key: str) -> None:
         mark_cooldown(e.provider, timeout=60)
         delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
         logger.warning(
-            "Erreur serveur provider, retry planifié",
-            task_id=batch_id,
-            provider=e.provider,
-            http_status=e.status_code,
-            retry_in=delay,
-            attempt=self.request.retries + 1,
+            f"Erreur serveur provider, retry planifié | task_id={batch_id} "
+            f"provider={e.provider} http_status={e.status_code} "
+            f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
         )
         if self.request.retries < self.max_retries:
             requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
@@ -121,11 +120,9 @@ def process_batch_task(self, batch_key: str) -> None:
             mark_cooldown(e.provider, timeout=60)
             delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
             logger.warning(
-                "Rate limit (429) atteint, provider en cooldown, retry planifié",
-                task_id=batch_id,
-                provider=e.provider,
-                retry_in=delay,
-                attempt=self.request.retries + 1,
+                f"Rate limit (429) atteint, provider en cooldown, retry planifié | "
+                f"task_id={batch_id} provider={e.provider} "
+                f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
             )
             if self.request.retries < self.max_retries:
                 requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
@@ -143,10 +140,8 @@ def process_batch_task(self, batch_key: str) -> None:
             # Tous les LLM sont bloqués : on attend 15s par retry
             delay = 15.0
             logger.warning(
-                "Fournisseurs saturés ou en cooldown, retry planifié",
-                task_id=batch_id,
-                retry_in=delay,
-                attempt=self.request.retries + 1,
+                f"Fournisseurs saturés ou en cooldown, retry planifié | "
+                f"task_id={batch_id} retry_in={delay:.1f}s attempt={self.request.retries + 1}"
             )
             if self.request.retries < self.max_retries:
                 requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
@@ -155,18 +150,18 @@ def process_batch_task(self, batch_key: str) -> None:
                 for t in tasks:
                     _fail_task(t, "Max retries dépassé : Tous les fournisseurs indisponibles.")
         else:
-            logger.exception("RuntimeError inattendue dans le worker", task_id=batch_id)
+            logger.exception(f"RuntimeError inattendue dans le worker | task_id={batch_id}")
             for t in tasks:
                 _fail_task(t, f"RuntimeError interne : {str(e)}")
 
     except ProviderParseError as e:
-        logger.exception("Erreur de parsing de la réponse du provider", task_id=batch_id)
+        logger.exception(f"Erreur de parsing de la réponse du provider | task_id={batch_id}")
         for t in tasks:
             _fail_task(t, f"Erreur de parsing [{e.provider}]: {str(e.raw)}")
 
     except Exception as e:
         # Cas générique — on logue avec stacktrace complète via logger.exception
-        logger.exception("Exception inattendue dans le worker", task_id=batch_id, error=str(e))
+        logger.exception(f"Exception inattendue dans le worker | task_id={batch_id} error={e}")
         for t in tasks:
             _fail_task(t, f"Exception interne : {str(e)}")
 
@@ -214,13 +209,42 @@ def _execute_batch(tasks: list[Task], batch_id: str) -> None:
     adapter = get_adapter(provider_name)
     start_ts = time.monotonic()
 
-    llm_output, tokens_in, tokens_out = adapter.call(internal_req)
+    try:
+        llm_output, tokens_in, tokens_out = adapter.call(internal_req)
+    except Exception:
+        logger.error(f"Error with provider | task_id={batch_id} provider={provider_name}")
+        increment_worker_metric(f"llm_calls_err_total:{provider_name}")
+        consecutive = increment_consecutive_errors(provider_name)
+        if consecutive >= 20:
+            disable_provider(provider_name)
+            logger.error(
+                f"Provider désactivé après {consecutive} erreurs consécutives | "
+                f"provider={provider_name}"
+            )
+        raise
 
-    logger.debug("LLM output reçu", agents_count=len(llm_output.agents))
+    reset_consecutive_errors(provider_name)
+
+    #logger.debug(f"LLM output reçu | agents_count={len(llm_output.agents)}")
 
     latency_ms = (time.monotonic() - start_ts) * 1000
 
-    # 6. Télémétrie
+    # Métriques: appel réussi + batching (agents reçus → 1 prompt envoyé)
+    increment_worker_metric(f"llm_calls_ok_total:{provider_name}")
+    increment_worker_metric(f"prompts_sent_total:{base_req.category}")
+    increment_worker_metric(f"agents_batched_total:{base_req.category}", amount=len(merged_agents))
+
+    # 6. Log de l'échange LLM (prompt + réponse + tokens) dans workdir/llm_exchanges.jsonl
+    log_llm_exchange(
+        task_id=batch_id,
+        provider=provider_name,
+        messages=[{"role": m.role, "content": m.content} for m in messages],
+        response=[a.model_dump() if hasattr(a, "model_dump") else a for a in llm_output.agents],
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+    )
+
+    # 7. Télémétrie métriques
     log_llm_call(
         task_id=batch_id,
         provider=provider_name,
@@ -252,12 +276,8 @@ def _execute_batch(tasks: list[Task], batch_id: str) -> None:
         save_task_sync(t)
 
     logger.info(
-        "Batch terminé avec succès",
-        task_id=batch_id,
-        tasks_merged=len(tasks),
-        provider=provider_name,
-        latency_ms=round(latency_ms, 2),
-        agents_count=len(llm_output.agents),
+        f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
+        f"provider={provider_name} latency_ms={latency_ms:.1f} agents_count={len(llm_output.agents)}"
     )
 
 
@@ -266,4 +286,4 @@ def _fail_task(task: Task, error_msg: str) -> None:
     task.error      = error_msg
     task.updated_at = datetime.utcnow()
     save_task_sync(task)
-    logger.error("Tâche échouée", task_id=task.task_id, error=error_msg)
+    logger.error(f"Tâche échouée | task_id={task.task_id} error={error_msg}")

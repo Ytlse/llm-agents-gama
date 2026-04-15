@@ -10,18 +10,23 @@ import asyncio
 import json
 import os
 import orjson
+from datetime import datetime
 import uvicorn
 from loguru import logger
-from helper import create_json_logger
+from helper import setup_logging
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings
 import traceback
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from fastapi.responses import ORJSONResponse
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 import urban_mobility_agents.factory.factory
+
+# Compteurs des endpoints du contrôleur
+SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
+INIT_REQUESTS = Counter('controller_init_requests_total', 'Total requêtes /init reçues de GAMA')
 
 
 
@@ -30,16 +35,14 @@ workdir = os.environ.get("APP_WORKDIR", "")
 if workdir:
     settings.update_workdir(workdir)
 
-# Initialize JSON logging
-create_json_logger()
+# Initialize logging
+setup_logging(settings)
 
 # Create FastAPI application instance
-app = FastAPI()
-
-# Configure orjson for faster JSON serialization (handles numpy arrays)
-def orjson_serializer(obj):
-    return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
-app.router.json_dumps = orjson_serializer
+# ORJSONResponse est la classe de réponse par défaut : elle calcule Content-Length
+# et sérialise le body avec le MÊME sérialiseur (orjson), évitant la désynchronisation
+# qui causait "fixed content-length: X, bytes received: Y" côté Java.
+app = FastAPI(default_response_class=ORJSONResponse)
 
 
 
@@ -117,7 +120,7 @@ class LoopContainer:
     async def handle_message(self, text: str):
         """Handle received Websocket message"""
         try:
-            logger.debug(f"Received: {self.observation_topic} -> {text}")
+            #logger.debug(f"Received: {self.observation_topic} -> {text}")
             await self.process_observation(self.observation_topic, text)
 
         except Exception as e:
@@ -154,13 +157,7 @@ async def startup_event():
     Initializes WebSocket connection and starts background tasks for
     real-time communication with GAMA simulation.
     """
-    logger.info(f"[startup] Tentative connexion WebSocket GAMA → {settings.server.gama_ws_url}")
     await loop_container.greeting()
-    ws_connected = loop_container.websocket_client.websocket is not None
-    if ws_connected:
-        logger.info("[startup] ✅ WebSocket GAMA connecté au démarrage")
-    else:
-        logger.warning("[startup] ⚠️  WebSocket GAMA non disponible au démarrage — reconnexion en arrière-plan")
     asyncio.create_task(loop_container.websocket_client.run_with_reconnect())
     asyncio.create_task(loop_container.publish_loop())
 
@@ -204,6 +201,7 @@ async def init():
     """
     logger.info("Publishing world data")
 
+    INIT_REQUESTS.inc()
     people = scenario.population.get_people_list()
 
     person_response = [
@@ -271,6 +269,7 @@ async def sync(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
+    SYNC_REQUESTS.inc()
     body = await raw.body()
 
     if not body:
@@ -282,7 +281,7 @@ async def sync(raw: Request):
         request = WorldSyncRequest(**data)
     except Exception as e:
         logger.error(f"[/sync] JSON parsing error: {e}")
-        return JSONResponse(status_code=422, content={"detail": str(e)})
+        return ORJSONResponse(status_code=422, content={"detail": str(e)})
 
     logger.info(f"Synchronizing world at timestamp: {request.timestamp}")
 

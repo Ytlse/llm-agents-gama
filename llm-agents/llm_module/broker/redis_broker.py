@@ -60,8 +60,10 @@ def get_sync_redis() -> sync_redis.Redis:
 
 TASK_KEY_PREFIX     = "task:"
 RPM_KEY_PREFIX      = "rpm:"
-COOLDOWN_KEY_PREFIX = "cooldown:"
-BATCH_QUEUE_PREFIX  = "batch:"
+COOLDOWN_KEY_PREFIX   = "cooldown:"
+BATCH_QUEUE_PREFIX    = "batch:"
+CONS_ERR_KEY_PREFIX   = "cons_err:"
+DISABLED_KEY_PREFIX   = "disabled:"
 
 
 def _task_key(task_id: str) -> str:
@@ -131,11 +133,14 @@ def increment_rpm(provider: str) -> int:
     r = get_sync_redis()
     key = _rpm_key(provider)
     pipe = r.pipeline()
-    count = pipe.incr(key)
-    if count == 1:
-        r.expire(key, 60)
+    pipe.incr(key)
+    pipe.ttl(key)
     results = pipe.execute()
-    return int(results[0])
+    count = int(results[0])
+    ttl = results[1]
+    if ttl == -1:  # Clé sans TTL : première incrémentation ou TTL perdu
+        r.expire(key, 60)
+    return count
 
 
 def get_rpm(provider: str) -> int:
@@ -159,6 +164,42 @@ def is_in_cooldown(provider: str) -> bool:
     """Vérifie si un fournisseur est actuellement en quarantaine."""
     r = get_sync_redis()
     return r.exists(_cooldown_key(provider)) > 0
+
+
+# ---------------------------------------------------------------------------
+# Erreurs consécutives et désactivation permanente (sync)
+# ---------------------------------------------------------------------------
+
+def increment_consecutive_errors(provider: str) -> int:
+    """Incrémente le compteur d'erreurs consécutives. Retourne la nouvelle valeur."""
+    return int(get_sync_redis().incr(f"{CONS_ERR_KEY_PREFIX}{provider}"))
+
+
+def reset_consecutive_errors(provider: str) -> None:
+    """Remet le compteur à zéro (appel réussi)."""
+    get_sync_redis().delete(f"{CONS_ERR_KEY_PREFIX}{provider}")
+
+
+def get_consecutive_errors(provider: str) -> int:
+    val = get_sync_redis().get(f"{CONS_ERR_KEY_PREFIX}{provider}")
+    return int(val) if val else 0
+
+
+def disable_provider(provider: str) -> None:
+    """Désactive définitivement un fournisseur (jusqu'à réactivation manuelle)."""
+    get_sync_redis().set(f"{DISABLED_KEY_PREFIX}{provider}", "1")
+
+
+def enable_provider(provider: str) -> None:
+    """Réactive un fournisseur et remet son compteur d'erreurs à zéro."""
+    r = get_sync_redis()
+    r.delete(f"{DISABLED_KEY_PREFIX}{provider}")
+    r.delete(f"{CONS_ERR_KEY_PREFIX}{provider}")
+
+
+def is_provider_disabled(provider: str) -> bool:
+    """Vérifie si un fournisseur a été désactivé suite à trop d'erreurs consécutives."""
+    return get_sync_redis().exists(f"{DISABLED_KEY_PREFIX}{provider}") > 0
 
 
 # ---------------------------------------------------------------------------
@@ -208,3 +249,27 @@ def requeue_tasks_sync(batch_key: str, task_ids: list[str]) -> None:
         return
     r = get_sync_redis()
     r.lpush(_batch_queue_key(batch_key), *task_ids)
+
+
+# ---------------------------------------------------------------------------
+# Métriques Worker (sync — compteurs Redis persistants sans TTL)
+# Exposés via le collecteur custom dans l'API /metrics
+# ---------------------------------------------------------------------------
+
+WORKER_METRIC_PREFIX = "wmetrics:"
+
+
+def increment_worker_metric(name: str, amount: int = 1) -> None:
+    """Incrémente un compteur de métrique worker (persistant, sans TTL)."""
+    get_sync_redis().incrby(f"{WORKER_METRIC_PREFIX}{name}", amount)
+
+
+def scan_worker_metrics(pattern: str):
+    """Retourne un itérateur sur les clés de métriques worker correspondant au pattern."""
+    return get_sync_redis().scan_iter(f"{WORKER_METRIC_PREFIX}{pattern}")
+
+
+def get_worker_metric(name: str) -> int:
+    """Lit la valeur courante d'un compteur worker (0 si inexistant)."""
+    val = get_sync_redis().get(f"{WORKER_METRIC_PREFIX}{name}")
+    return int(val) if val else 0

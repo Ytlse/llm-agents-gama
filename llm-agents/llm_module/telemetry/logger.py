@@ -1,85 +1,29 @@
 """
-telemetry/logger.py — Logging structuré via structlog.
+telemetry/logger.py — Logging unifié via loguru.
 
 Chaque log contient automatiquement :
-  - timestamp ISO8601
+  - timestamp
   - niveau
-  - module source
-  - tous les champs extra passés en kwargs
+  - module source (via {name} loguru)
+  - message
 
-Format JSON en production, format coloré lisible en développement.
+log_llm_exchange() écrit un JSONL dans workdir/llm_exchanges.jsonl :
+  - time, task_id, provider, tokens_in, tokens_out, messages (input), response (output)
 """
 
 from __future__ import annotations
-import logging
+import json
 import os
-import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import structlog
-
-# ---------------------------------------------------------------------------
-# Configuration de structlog
-# ---------------------------------------------------------------------------
-
-_ENV = os.getenv("APP_ENV", "development")
-
-def _configure_logging() -> None:
-    """Configure structlog une seule fois au démarrage."""
-
-    shared_processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.StackInfoRenderer(),
-    ]
-
-    if _ENV == "production":
-        # JSON pour collecteurs (Loki, CloudWatch, etc.)
-        renderer = structlog.processors.JSONRenderer()
-    else:
-        # Lisible en dev
-        renderer = structlog.dev.ConsoleRenderer(colors=True)
-
-    structlog.configure(
-        processors=shared_processors + [
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
-
-    formatter = structlog.stdlib.ProcessorFormatter(
-        foreign_pre_chain=shared_processors,
-        processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            renderer,
-        ],
-    )
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-
-    log_dir = Path("logs")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
-    file_handler.setFormatter(formatter)
-
-    root = logging.getLogger()
-    root.handlers = [console_handler, file_handler]
-    root.setLevel(logging.DEBUG if _ENV != "production" else logging.INFO)
+from loguru import logger
 
 
-_configure_logging()
-
-
-def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    """Retourne un logger structlog lié au module demandeur."""
-    return structlog.get_logger(name)
+def get_logger(name: str):
+    """Retourne le logger loguru. Le paramètre name est conservé pour compatibilité API."""
+    return logger
 
 
 # ---------------------------------------------------------------------------
@@ -96,17 +40,52 @@ def log_llm_call(
     http_status: int,
     error: str | None = None,
 ) -> None:
-    logger = get_logger("telemetry.llm_call")
-    log_fn = logger.info if status == "success" else logger.error
-
-    log_fn(
-        "llm_call_completed",
-        task_id=task_id,
-        provider=provider,
-        status=status,
-        latency_ms=round(latency_ms, 2),
-        tokens_in=tokens_in,
-        tokens_out=tokens_out,
-        http_status=http_status,
-        error=error,
+    msg = (
+        f"llm_call_completed | task_id={task_id} provider={provider} status={status} "
+        f"latency_ms={latency_ms:.1f} tokens_in={tokens_in} tokens_out={tokens_out} "
+        f"http_status={http_status}"
     )
+    if error:
+        msg += f" error={error}"
+
+    if status == "success":
+        logger.info(msg)
+    else:
+        logger.error(msg)
+
+
+# ---------------------------------------------------------------------------
+# Log des échanges LLM (prompt envoyé + réponse + tokens)
+# Écrit dans workdir/llm_exchanges.jsonl
+# ---------------------------------------------------------------------------
+
+def log_llm_exchange(
+    task_id: str,
+    provider: str,
+    messages: list[dict],
+    response: Any,
+    tokens_in: int,
+    tokens_out: int,
+) -> None:
+    """
+    Enregistre un échange complet avec le LLM dans un fichier JSONL.
+    Le fichier est placé dans APP_WORKDIR (env var), ou dans le répertoire courant par défaut.
+    """
+    workdir = os.environ.get("APP_WORKDIR", ".")
+    log_file = Path(workdir) / "llm_exchanges.jsonl"
+
+    entry = {
+        "time": datetime.now(timezone.utc).isoformat(),
+        "task_id": task_id,
+        "provider": provider,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "messages": messages,
+        "response": response,
+    }
+
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+    except OSError as e:
+        logger.warning(f"Impossible d'écrire dans {log_file}: {e}")

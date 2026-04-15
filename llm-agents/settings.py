@@ -241,13 +241,15 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file"]
-    
-    # History settings
-    history_file: str = "history.jsonl"
+    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file"]
+
+    # Simulation history log (HistoryStreamLog)
     history_file_v2: str = "history_stream_log.jsonl"
 
-    # Logging settings
+    # LLM exchange log (service, prompt, response, tokens)
+    llm_exchanges_file: str = "llm_exchanges.jsonl"
+
+    # Application log
     log_file: str = "app.log"
     log_level: str = "DEBUG"
 

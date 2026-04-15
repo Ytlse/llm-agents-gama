@@ -15,20 +15,97 @@ Le flux est 100% non-bloquant :
 from __future__ import annotations
 import json
 import hashlib
+import os
+from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status, Response
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from fastapi.middleware.cors import CORSMiddleware
 
-from llm_module.broker.redis_broker import get_task_async, save_task_async, add_task_to_batch_async
+from llm_module.broker.redis_broker import (
+    get_task_async, save_task_async, add_task_to_batch_async,
+    scan_worker_metrics, get_worker_metric, WORKER_METRIC_PREFIX,
+)
 from llm_module.load_balancer.router import load_balancer
 from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
 from llm_module.tasks.config import settings
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from prometheus_client.metrics_core import CounterMetricFamily
+
 
 logger = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Lifespan — warm-up connexion Celery au démarrage
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Warm up the Celery broker connection before the first request arrives."""
+    try:
+        from llm_module.worker.task_worker import celery_app
+        conn = celery_app.connection()
+        conn.ensure_connection(max_retries=5)
+        conn.release()
+        logger.info("Celery broker connection warmed up.")
+    except Exception as e:
+        logger.warning(f"Celery broker warm-up failed (non-fatal): {e}")
+    yield
+
+
+# ---------------------------------------------------------------------------
+# Métriques API-side
+# ---------------------------------------------------------------------------
+
+# Agents reçus depuis GAMA (avant mini-batching)
+AGENTS_RECEIVED = Counter(
+    'gama_agents_received_total',
+    'Total agents reçus depuis GAMA (avant mini-batching)',
+    ['category'],
+)
+
+# ---------------------------------------------------------------------------
+# Collecteur custom : métriques du Worker (stockées dans Redis)
+# Le worker Celery n'expose pas de /metrics → on lit ses compteurs Redis ici.
+# ---------------------------------------------------------------------------
+
+class WorkerMetricsCollector:
+    """
+    Collecteur Prometheus qui lit les compteurs persistants du Worker depuis Redis.
+    Expose :
+      - llm_provider_calls_ok_total   {provider}  : appels LLM réussis par provider
+      - llm_provider_calls_err_total  {provider}  : appels LLM échoués par provider
+      - llm_prompts_sent_total        {category}  : prompts LLM envoyés par catégorie
+      - llm_agents_batched_total      {category}  : agents batchés par catégorie
+    """
+
+    def collect(self):
+        # ── Appels LLM par provider ──────────────────────────────────────────
+        ok_fam  = CounterMetricFamily('llm_provider_calls_ok_total',  'Appels LLM réussis par provider',  labels=['provider'])
+        err_fam = CounterMetricFamily('llm_provider_calls_err_total', 'Appels LLM échoués par provider',  labels=['provider'])
+        for provider in settings.providers:
+            ok_fam.add_metric([provider],  get_worker_metric(f"llm_calls_ok_total:{provider}"))
+            err_fam.add_metric([provider], get_worker_metric(f"llm_calls_err_total:{provider}"))
+        yield ok_fam
+        yield err_fam
+
+        # ── Prompts envoyés vs agents batchés (ratio mini-batch) ─────────────
+        prompts_fam = CounterMetricFamily('llm_prompts_sent_total',   'Prompts LLM envoyés par catégorie', labels=['category'])
+        batched_fam = CounterMetricFamily('llm_agents_batched_total', 'Agents batchés par catégorie',      labels=['category'])
+        prefix = f"{WORKER_METRIC_PREFIX}prompts_sent_total:"
+        for key in scan_worker_metrics("prompts_sent_total:*"):
+            category = key.removeprefix(prefix)
+            prompts_fam.add_metric([category], get_worker_metric(f"prompts_sent_total:{category}"))
+            batched_fam.add_metric([category], get_worker_metric(f"agents_batched_total:{category}"))
+        yield prompts_fam
+        yield batched_fam
+
+
+REGISTRY.register(WorkerMetricsCollector())
 
 # ---------------------------------------------------------------------------
 # Application
@@ -38,6 +115,7 @@ app = FastAPI(
     title="LLM Unified Communication Module",
     description="Gateway asynchrone multi-fournisseur LLM avec load balancing RPM.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -74,6 +152,7 @@ async def create_task(request: LLMRequest) -> dict:
     """
     task = Task(request=request)
 
+    AGENTS_RECEIVED.labels(category=request.category).inc(len(request.agents))
     await save_task_async(task)
 
     # Création d'une clé de batch basée sur le contexte et les paramètres globaux.
@@ -91,7 +170,7 @@ async def create_task(request: LLMRequest) -> dict:
     elif queue_size >= settings.batch_max_agents:
         process_batch_task.delay(batch_key)  # Optimisation: on traite immédiatement si on est plein
 
-    logger.info("Tâche créée et enqueued", task_id=task.task_id, category=request.category)
+    logger.info(f"Tâche créée et enqueued | task_id={task.task_id} category={request.category}")
 
     return {
         "task_id": task.task_id,
@@ -148,9 +227,6 @@ async def health() -> dict:
         "status": "ok",
         "providers": load_balancer.get_status(),
     }
-
-SYNC_REQUESTS = Counter('gama_sync_requests_total', 'Total number of sync requests')
-INIT_REQUESTS = Counter('gama_init_requests_total', 'Total number of init requests')
 
 @app.get(
     "/metrics",

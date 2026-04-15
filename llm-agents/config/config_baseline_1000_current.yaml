@@ -1,6 +1,6 @@
 data:
-  population_max_size: 100
-  number_of_llm_based_agents: 100
+  population_max_size: 1000
+  number_of_llm_based_agents: 1000
 
 gtfs:
   cache_enabled: false
@@ -13,4 +13,4 @@ agent:
   long_term_reflect_interval: 86400
   llm_model: "gpt-4"
 
-workdir: "../experiments/baseline_100_current"
+workdir: "../experiments/baseline_1_0"

@@ -1,3 +1,5 @@
+import time
+import httpx
 from llm.llm_model import ModelConfig
 from llama_index.core import Settings
 from settings import settings
@@ -12,6 +14,26 @@ from urban_mobility_agents.core.scenario import BaseScenario
 from urban_mobility_agents.config.llm_config import create_llm_config_from_settings
 from urban_mobility_agents.agents.llm_agent import LlmAgent
 from loguru import logger
+
+
+def wait_for_otp(endpoint: str, timeout: int = 300, interval: int = 5) -> bool:
+    """Poll OTP until it responds to a routing request, logging progress."""
+    health_url = endpoint.replace("/otp/transmodel/v3", "/otp")
+    logger.info(f"Waiting for OTP at {health_url} ...")
+    deadline = time.monotonic() + timeout
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        try:
+            resp = httpx.get(health_url, timeout=3.0)
+            if resp.status_code < 500:
+                logger.info(f"✅ OTP accessible (HTTP {resp.status_code}) après {attempt} tentative(s)")
+                return True
+        except Exception as e:
+            logger.debug(f"OTP pas encore prêt (tentative {attempt}) : {e}")
+        time.sleep(interval)
+    logger.error(f"❌ OTP inaccessible après {timeout}s")
+    return False
 
 
 def bootstrap() -> BaseScenario:
@@ -64,6 +86,7 @@ def bootstrap() -> BaseScenario:
     trip_helper = None
     if settings.gtfs.mode == "OTP":
         logger.info("Using OTP trip helper")
+        wait_for_otp(settings.gtfs.otp_endpoint)
         trip_helper = OTPTripHelper(
             endpoint=settings.gtfs.otp_endpoint,
             gtfs_data=gtfs_data
