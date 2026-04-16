@@ -157,11 +157,14 @@ class LLMClient:
                 task_id = resp.json()["task_id"]
                 logger.debug(f"Task submitted | task_id={task_id} category={category}")
 
-                deadline = time.monotonic() + self.poll_timeout
+                poll_start = time.monotonic()
+                deadline = poll_start + self.poll_timeout
+                _last_status_log = poll_start
                 while time.monotonic() < deadline:
                     resp = await client.get(f"{self.base_url}/tasks/{task_id}")
                     data = resp.json()
                     if data["status"] in ("success", "failed"):
+                        wait_s = time.monotonic() - poll_start
                         self.log_dialogue(payload, data)
                         TASKS_RESPONSES.inc()
                         if data.get("status") == "success" and data.get("result"):
@@ -175,21 +178,32 @@ class LLMClient:
                                 if chosen_index is not None:
                                     INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
                             logger.debug(
-                                f"Task completed successfully | task_id={task_id} category={category}"
+                                f"Task completed successfully | task_id={task_id} category={category} wait={wait_s:.1f}s"
                             )
                         else:
                             TASKS_RESPONSES_FAILURE.inc()
                             error_detail = data.get("error", "No error detail")
                             logger.error(
                                 f"Task failed | task_id={task_id} category={category} "
-                                f"error={error_detail}"
+                                f"wait={wait_s:.1f}s error={error_detail}"
                             )
                         return data
+                    # Log a waiting heartbeat every 30s so we can see the task is alive
+                    now = time.monotonic()
+                    if now - _last_status_log >= 30.0:
+                        waited = now - poll_start
+                        logger.warning(
+                            f"Task still pending | task_id={task_id} category={category} "
+                            f"waited={waited:.0f}s task_status={data.get('status')} "
+                            f"provider={data.get('provider_used', 'unassigned')}"
+                        )
+                        _last_status_log = now
                     await asyncio.sleep(self.poll_interval)
                 TASKS_RESPONSES_FAILURE.inc()
+                waited = time.monotonic() - poll_start
                 logger.warning(
                     f"Task timed out | task_id={task_id} category={category} "
-                    f"timeout={self.poll_timeout}s"
+                    f"waited={waited:.0f}s timeout={self.poll_timeout}s"
                 )
                 return {"status": "timeout", "error": "Timeout expiré"}
         finally:

@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import orjson
+import time
 from datetime import datetime
 import uvicorn
 from loguru import logger
@@ -21,12 +22,17 @@ from settings import settings
 import traceback
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import ORJSONResponse
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 import urban_mobility_agents.factory.factory
 
 # Compteurs des endpoints du contrôleur
 SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
 INIT_REQUESTS = Counter('controller_init_requests_total', 'Total requêtes /init reçues de GAMA')
+
+# Métriques de la simulation
+SIM_AGENTS_TOTAL  = Gauge('gama_sim_agents_total', 'Nombre total d\'agents dans la simulation (défini au /init)')
+SIM_STEP_INTERVAL = Gauge('gama_sim_step_interval_seconds', 'Durée réelle entre deux pas de temps GAMA consécutifs (secondes)')
+_last_sync_wall_time: float = 0.0
 
 
 
@@ -203,6 +209,7 @@ async def init():
 
     INIT_REQUESTS.inc()
     people = scenario.population.get_people_list()
+    SIM_AGENTS_TOTAL.set(len(people))
 
     person_response = [
         GamaPersonData(
@@ -269,6 +276,12 @@ async def sync(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
+    global _last_sync_wall_time
+    now = time.time()
+    if _last_sync_wall_time > 0:
+        SIM_STEP_INTERVAL.set(now - _last_sync_wall_time)
+    _last_sync_wall_time = now
+
     SYNC_REQUESTS.inc()
     body = await raw.body()
 

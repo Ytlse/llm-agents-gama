@@ -22,7 +22,7 @@ from datetime import datetime
 
 from celery import Celery
 
-from llm_module.tasks.config import settings
+from llm_module.tasks.config import settings, get_batch_max_agents
 from llm_module.settings.models import InternalRequest, Task, TaskStatus
 from llm_module.adapters.base import (
     ProviderClientError,
@@ -39,6 +39,7 @@ from llm_module.broker.redis_broker import (
     _batch_queue_key,
     get_sync_redis,
     increment_worker_metric,
+    increment_worker_error_by_type,
     increment_consecutive_errors,
     reset_consecutive_errors,
     disable_provider,
@@ -78,14 +79,23 @@ celery_app.conf.update(
     bind=True,
     max_retries=settings.max_retries,
 )
-def process_batch_task(self, batch_key: str) -> None:
+def process_batch_task(self, batch_key: str, force_provider: str | None = None) -> None:
     """
     Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
     """
-    tasks = pop_tasks_from_batch_sync(batch_key, settings.batch_max_agents)
+    r = get_sync_redis()
+    queue_depth_before = r.llen(_batch_queue_key(batch_key))
+    tasks = pop_tasks_from_batch_sync(batch_key, get_batch_max_agents(force_provider))
     if not tasks:
         return
+
+    queue_depth_after = r.llen(_batch_queue_key(batch_key))
+    agents_count = sum(len(t.request.agents) for t in tasks)
+    logger.info(
+        f"[worker] Batch démarré | batch_key={batch_key} tasks={len(tasks)} "
+        f"agents={agents_count} queue_before={queue_depth_before} queue_after={queue_depth_after}"
+    )
 
     # Marquer comme en cours
     for task in tasks:
@@ -169,7 +179,7 @@ def process_batch_task(self, batch_key: str) -> None:
         # Succès complet : relancer un worker s'il reste des éléments dans cette file
         r = get_sync_redis()
         if r.llen(_batch_queue_key(batch_key)) > 0:
-            process_batch_task.delay(batch_key)
+            process_batch_task.delay(batch_key, force_provider)
 
 
 # ---------------------------------------------------------------------------
@@ -202,18 +212,17 @@ def _execute_batch(tasks: list[Task], batch_id: str) -> None:
         max_tokens=base_req.parameters.get("max_tokens", 4096),
     )
 
-    # 4. Enregistrement du call RPM (avant l'appel, pour le circuit breaker)
-    load_balancer.record_call(provider_name)
-
-    # 5. Appel LLM via l'adapter approprié
+    # 4. Appel LLM via l'adapter approprié
     adapter = get_adapter(provider_name)
     start_ts = time.monotonic()
 
     try:
         llm_output, tokens_in, tokens_out = adapter.call(internal_req)
-    except Exception:
+    except Exception as exc:
         logger.error(f"Error with provider | task_id={batch_id} provider={provider_name}")
         increment_worker_metric(f"llm_calls_err_total:{provider_name}")
+        error_type = getattr(exc, "error_type", "unknown")
+        increment_worker_error_by_type(provider_name, error_type)
         consecutive = increment_consecutive_errors(provider_name)
         if consecutive >= 20:
             disable_provider(provider_name)
@@ -225,6 +234,23 @@ def _execute_batch(tasks: list[Task], batch_id: str) -> None:
 
     reset_consecutive_errors(provider_name)
 
+    # ── Métriques métier : mode de transport et tranche de distance ──────────
+    agent_specs_by_id = {a.agent_id: a for a in merged_agents}
+    for agent_resp in llm_output.agents:
+        primary_mode = _extract_primary_mode(agent_resp.mode or "unknown")
+        increment_worker_metric(f"transport_mode_chosen:{primary_mode}")
+        increment_worker_metric(f"mode_by_provider:{primary_mode}:{provider_name}")
+
+        spec = agent_specs_by_id.get(agent_resp.agent_id)
+        if spec and agent_resp.chosen_index is not None and spec.trajectories:
+            idx = agent_resp.chosen_index
+            if 0 <= idx < len(spec.trajectories):
+                dist_m = float(spec.trajectories[idx].get("total_distance_m") or 0)
+                bracket = _get_distance_bracket(dist_m)
+                increment_worker_metric(f"trip_distance_bracket:{bracket}")
+                increment_worker_metric(f"mode_by_distance:{primary_mode}:{bracket}")
+                increment_worker_metric(f"chosen_index:{idx}")
+
     #logger.debug(f"LLM output reçu | agents_count={len(llm_output.agents)}")
 
     latency_ms = (time.monotonic() - start_ts) * 1000
@@ -233,6 +259,12 @@ def _execute_batch(tasks: list[Task], batch_id: str) -> None:
     increment_worker_metric(f"llm_calls_ok_total:{provider_name}")
     increment_worker_metric(f"prompts_sent_total:{base_req.category}")
     increment_worker_metric(f"agents_batched_total:{base_req.category}", amount=len(merged_agents))
+
+    # Métriques tokens
+    increment_worker_metric(f"tokens_in_total:{provider_name}", amount=tokens_in)
+    increment_worker_metric(f"tokens_out_total:{provider_name}", amount=tokens_out)
+    increment_worker_metric("tokens_in_total:__all__", amount=tokens_in)
+    increment_worker_metric("tokens_out_total:__all__", amount=tokens_out)
 
     # 6. Log de l'échange LLM (prompt + réponse + tokens) dans workdir/llm_exchanges.jsonl
     log_llm_exchange(
@@ -287,3 +319,41 @@ def _fail_task(task: Task, error_msg: str) -> None:
     task.updated_at = datetime.utcnow()
     save_task_sync(task)
     logger.error(f"Tâche échouée | task_id={task.task_id} error={error_msg}")
+
+
+# ---------------------------------------------------------------------------
+# Helpers métriques métier
+# ---------------------------------------------------------------------------
+
+def _extract_primary_mode(mode: str) -> str:
+    """
+    Réduit une chaîne de modes composée ("foot,bus,foot") au mode principal.
+    Priorité : metro > tram > bus > cycling > walking > other
+    """
+    if not mode or mode == "unknown":
+        return "unknown"
+    parts = {m.strip().lower() for m in mode.split(",")}
+    if "metro" in parts or "subway" in parts:
+        return "metro"
+    if "tram" in parts or "tramway" in parts:
+        return "tram"
+    if "bus" in parts:
+        return "bus"
+    if "bicycle" in parts or "bike" in parts or "cycling" in parts:
+        return "cycling"
+    if parts <= {"foot", "walk", "walking"}:
+        return "walking"
+    return "other"
+
+
+def _get_distance_bracket(distance_m: float) -> str:
+    """Classe une distance en mètres dans une tranche prédéfinie."""
+    if distance_m < 1_000:
+        return "0-1km"
+    if distance_m < 3_000:
+        return "1-3km"
+    if distance_m < 5_000:
+        return "3-5km"
+    if distance_m < 15_000:
+        return "5-15km"
+    return ">15km"

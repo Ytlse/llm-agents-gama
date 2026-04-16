@@ -78,7 +78,7 @@ class LlmAgent:
             logger.info("Long-term memory disabled — ChromaDB initialization skipped")
         
         # Instance du client LLM (Singleton naturel pour cet Agent)
-        self.llm_client = LLMClient(base_url=os.getenv("LLM_API_URL", "http://localhost:8000"))
+        self.llm_client = LLMClient(base_url=os.getenv("LLM_API_URL", "http://localhost:8000"), poll_timeout=settings.agent.remote_llm_poll_timeout)
         self.prompt_manager = PromptManager(os.path.join(os.path.dirname(__file__), "prompts"))
 
     def get_short_term_memory(self, user_id: str) -> UserShortTermMemory:
@@ -273,7 +273,13 @@ class LlmAgent:
             {
                 "index": i,
                 "mode": ",".join([str(leg.mode) for leg in opt.legs]) if opt.legs else "unknown",
-                "description": env_ob_to_text("travel_plan", opt.model_dump())
+                "description": env_ob_to_text("travel_plan", opt.model_dump()),
+                # Distance totale du trajet (en mètres) — utilisée pour les métriques Prometheus
+                "total_distance_m": (
+                    opt.distance
+                    if opt.distance is not None
+                    else sum(leg.get_distance() for leg in (opt.legs or []))
+                ),
             }
             for i, opt in enumerate(options)
         ]

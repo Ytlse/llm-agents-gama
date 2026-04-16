@@ -1,6 +1,6 @@
 data:
-  population_max_size: 1000
-  number_of_llm_based_agents: 1000
+  population_max_size: 1500
+  number_of_llm_based_agents: 1500
 
 gtfs:
   cache_enabled: false
@@ -14,4 +14,4 @@ agent:
   llm_model: "gpt-4"
   pre_schedule_duration: 3600
 
-workdir: "../experiments/baseline_1000_current"
+workdir: "../experiments/baseline_1500_current"

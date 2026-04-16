@@ -54,6 +54,8 @@ def bootstrap() -> BaseScenario:
     population = WorldPopulation(
         SyntheticPopulationLoader(
             filters=[
+                # TODO: supprimer ce filtre quand le mode voiture sera ajouté
+                # (les agents pourront alors atteindre des destinations non desservies par les TC)
                 PersonCloseToTheStopFilter(
                     max_distance=500,  # 500 meters
                     stop_locations=gtfs_data.all_stop_locations()

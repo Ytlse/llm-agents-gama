@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, Optional
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from llm_module.telemetry.logger import get_logger
@@ -9,38 +9,43 @@ logger = get_logger(__name__)
 
 _PROVIDER_DEFAULTS: Dict[str, dict] = {
     "openai": {
-        "rpm_limit":     15,
-        "base_url":      "https://api.openai.com/v1",
-        "default_model": "gpt-4o-mini",
-        "weight":        1.0,
+        "rpm_limit":        15,
+        "base_url":         "https://api.openai.com/v1",
+        "default_model":    "gpt-4o-mini",
+        "weight":           1.0,
+        "batch_max_agents": 10,
     },
     "mistral": {
-        "rpm_limit":     100,
-        "base_url":      "https://api.mistral.ai/v1",
-        "default_model": "mistral-small-latest",
-        "weight":        2.0,
+        "rpm_limit":        100,
+        "base_url":         "https://api.mistral.ai/v1",
+        "default_model":    "mistral-small-latest",
+        "weight":           2.0,
+        "batch_max_agents": 10,
     },
     "google": {
-        "rpm_limit":     15,
-        "base_url":      "https://generativelanguage.googleapis.com/v1beta",
-        "default_model": "gemini-3.1-flash-lite-preview",
-        "weight":        1.0,
+        "rpm_limit":        15,
+        "base_url":         "https://generativelanguage.googleapis.com/v1beta",
+        "default_model":    "gemini-3.1-flash-lite-preview",
+        "weight":           1.0,
+        "batch_max_agents": 15,
     },
     "groq": {
-        "rpm_limit":     30,
-        "base_url":      "https://api.groq.com/openai/v1",
-        "default_model": "openai/gpt-oss-120b",
-        "weight":        1.0,
+        "rpm_limit":        30,
+        "base_url":         "https://api.groq.com/openai/v1",
+        "default_model":    "openai/gpt-oss-120b",
+        "weight":           1.0,
+        "batch_max_agents": 2,
     },
 }
 
 
 class ProviderConfig(BaseModel):
-    api_key:       SecretStr = SecretStr("")
-    rpm_limit:     int
-    base_url:      str
-    default_model: str
-    weight:        float = 1.0
+    api_key:          SecretStr = SecretStr("")
+    rpm_limit:        int
+    base_url:         str
+    default_model:    str
+    weight:           float = 1.0
+    batch_max_agents: int   = 5
 
     def __repr__(self) -> str:
         return (
@@ -65,7 +70,7 @@ class Settings(BaseSettings):
     circuit_breaker_threshold:  float = 0.95
     max_retries:                int   = 10
     backoff_base_seconds:       float = 1.0
-    batch_max_agents:           int   = 5 #TODO use batch size again LLM capacity (process_batch_task get select_provider with added configuration of capacity)
+    batch_max_agents:           int   = 5
     batch_delay_seconds:        float = 1.0
 
     # Les api_key viennent de l'env : PROVIDER_KEYS__openai=sk-...
@@ -82,6 +87,25 @@ class Settings(BaseSettings):
             result[name] = ProviderConfig(api_key=key, **defaults)
         self.providers = result
         return self
+
+
+def get_batch_max_agents(force_provider: Optional[str] = None) -> int:
+    """
+    Retourne la limite de batch liée à la capacité du provider.
+    - Provider forcé : limite exacte de ce provider.
+    - Provider dynamique : minimum des providers disponibles (approche conservative,
+      car on ne connaît pas encore le provider qui sera sélectionné).
+    - Aucun provider configuré : fallback sur settings.batch_max_agents.
+    """
+    if force_provider:
+        provider_cfg = settings.providers.get(force_provider)
+        if provider_cfg:
+            return provider_cfg.batch_max_agents
+
+    if settings.providers:
+        return min(p.batch_max_agents for p in settings.providers.values())
+
+    return settings.batch_max_agents
 
 
 def filter_providers_without_api_key(settings: Settings) -> Dict[str, ProviderConfig]:

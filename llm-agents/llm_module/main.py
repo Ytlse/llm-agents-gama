@@ -26,10 +26,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from llm_module.broker.redis_broker import (
     get_task_async, save_task_async, add_task_to_batch_async,
     scan_worker_metrics, get_worker_metric, WORKER_METRIC_PREFIX,
+    get_sync_redis,
 )
 from llm_module.load_balancer.router import load_balancer
 from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
-from llm_module.tasks.config import settings
+from llm_module.tasks.config import settings, get_batch_max_agents
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
@@ -84,6 +85,8 @@ class WorkerMetricsCollector:
     """
 
     def collect(self):
+        r = get_sync_redis()
+
         # ── Appels LLM par provider ──────────────────────────────────────────
         ok_fam  = CounterMetricFamily('llm_provider_calls_ok_total',  'Appels LLM réussis par provider',  labels=['provider'])
         err_fam = CounterMetricFamily('llm_provider_calls_err_total', 'Appels LLM échoués par provider',  labels=['provider'])
@@ -103,6 +106,109 @@ class WorkerMetricsCollector:
             batched_fam.add_metric([category], get_worker_metric(f"agents_batched_total:{category}"))
         yield prompts_fam
         yield batched_fam
+
+        # ── Tokens consommés par provider ─────────────────────────────────────
+        tok_in_fam  = CounterMetricFamily('llm_tokens_in_total',  'Tokens en entrée (prompt) consommés par provider', labels=['provider'])
+        tok_out_fam = CounterMetricFamily('llm_tokens_out_total', 'Tokens en sortie (completion) consommés par provider', labels=['provider'])
+        tok_prefix_in  = f"{WORKER_METRIC_PREFIX}tokens_in_total:"
+        tok_prefix_out = f"{WORKER_METRIC_PREFIX}tokens_out_total:"
+        seen_providers = set()
+        for key in r.scan_iter(f"{tok_prefix_in}*"):
+            provider_label = key.removeprefix(tok_prefix_in)
+            seen_providers.add(provider_label)
+            val_in  = r.get(key)
+            val_out = r.get(f"{tok_prefix_out}{provider_label}")
+            tok_in_fam.add_metric([provider_label],  int(val_in)  if val_in  else 0)
+            tok_out_fam.add_metric([provider_label], int(val_out) if val_out else 0)
+        yield tok_in_fam
+        yield tok_out_fam
+
+        # ── Erreurs par provider ET type d'erreur ────────────────────────────
+        err_type_fam = CounterMetricFamily(
+            'llm_provider_errors_by_type_total',
+            'Erreurs LLM par provider et type (rate_limit, tpm_exceeded, quota_exceeded, …)',
+            labels=['provider', 'error_type'],
+        )
+        err_prefix = f"{WORKER_METRIC_PREFIX}llm_errors_by_type:"
+        for key in r.scan_iter(f"{err_prefix}*"):
+            suffix = key.removeprefix(err_prefix)
+            parts  = suffix.split(":", 1)
+            if len(parts) == 2:
+                provider_label, error_type_label = parts
+                val = r.get(key)
+                err_type_fam.add_metric([provider_label, error_type_label], int(val) if val else 0)
+        yield err_type_fam
+
+        # ── Mode de transport choisi ──────────────────────────────────────────
+        mode_fam = CounterMetricFamily(
+            'llm_transport_mode_chosen_total',
+            'Modes de transport principaux choisis par le LLM',
+            labels=['mode'],
+        )
+        mode_prefix = f"{WORKER_METRIC_PREFIX}transport_mode_chosen:"
+        for key in r.scan_iter(f"{mode_prefix}*"):
+            mode_label = key.removeprefix(mode_prefix)
+            val = r.get(key)
+            mode_fam.add_metric([mode_label], int(val) if val else 0)
+        yield mode_fam
+
+        # ── Tranches de distance ──────────────────────────────────────────────
+        dist_fam = CounterMetricFamily(
+            'llm_trip_distance_bracket_total',
+            'Nombre de trajets par tranche de distance',
+            labels=['bracket'],
+        )
+        dist_prefix = f"{WORKER_METRIC_PREFIX}trip_distance_bracket:"
+        for key in r.scan_iter(f"{dist_prefix}*"):
+            bracket_label = key.removeprefix(dist_prefix)
+            val = r.get(key)
+            dist_fam.add_metric([bracket_label], int(val) if val else 0)
+        yield dist_fam
+
+        # ── Mode par tranche de distance ──────────────────────────────────────
+        mode_dist_fam = CounterMetricFamily(
+            'llm_mode_by_distance_total',
+            'Modes de transport par tranche de distance',
+            labels=['mode', 'bracket'],
+        )
+        md_prefix = f"{WORKER_METRIC_PREFIX}mode_by_distance:"
+        for key in r.scan_iter(f"{md_prefix}*"):
+            suffix = key.removeprefix(md_prefix)
+            parts  = suffix.split(":", 1)
+            if len(parts) == 2:
+                mode_label, bracket_label = parts
+                val = r.get(key)
+                mode_dist_fam.add_metric([mode_label, bracket_label], int(val) if val else 0)
+        yield mode_dist_fam
+
+        # ── Mode par provider ─────────────────────────────────────────────────
+        mode_prov_fam = CounterMetricFamily(
+            'llm_mode_by_provider_total',
+            'Modes de transport choisis par provider LLM',
+            labels=['mode', 'provider'],
+        )
+        mp_prefix = f"{WORKER_METRIC_PREFIX}mode_by_provider:"
+        for key in r.scan_iter(f"{mp_prefix}*"):
+            suffix = key.removeprefix(mp_prefix)
+            parts  = suffix.split(":", 1)
+            if len(parts) == 2:
+                mode_label, provider_label = parts
+                val = r.get(key)
+                mode_prov_fam.add_metric([mode_label, provider_label], int(val) if val else 0)
+        yield mode_prov_fam
+
+        # ── Indice de trajectoire choisi ──────────────────────────────────────
+        idx_fam = CounterMetricFamily(
+            'llm_chosen_index_total',
+            'Distribution des indices de trajectoire choisis par le LLM (0 = premier choix proposé)',
+            labels=['index'],
+        )
+        idx_prefix = f"{WORKER_METRIC_PREFIX}chosen_index:"
+        for key in r.scan_iter(f"{idx_prefix}*"):
+            idx_label = key.removeprefix(idx_prefix)
+            val = r.get(key)
+            idx_fam.add_metric([idx_label], int(val) if val else 0)
+        yield idx_fam
 
 
 REGISTRY.register(WorkerMetricsCollector())
@@ -165,10 +271,11 @@ async def create_task(request: LLMRequest) -> dict:
     queue_size = await add_task_to_batch_async(batch_key, task.task_id)
     
     # Si c'est le 1er élément du lot, on accorde un court délai (1s) pour en accumuler d'autres.
+    batch_limit = get_batch_max_agents(request.force_provider)
     if queue_size == 1:
-        process_batch_task.apply_async(args=[batch_key], countdown=settings.batch_delay_seconds)
-    elif queue_size >= settings.batch_max_agents:
-        process_batch_task.delay(batch_key)  # Optimisation: on traite immédiatement si on est plein
+        process_batch_task.apply_async(args=[batch_key, request.force_provider], countdown=settings.batch_delay_seconds)
+    elif queue_size >= batch_limit:
+        process_batch_task.delay(batch_key, request.force_provider)  # Optimisation: on traite immédiatement si on est plein
 
     logger.info(f"Tâche créée et enqueued | task_id={task.task_id} category={request.category}")
 

@@ -29,6 +29,7 @@ from llm_module.adapters.base import (
     ProviderClientError,
     ProviderParseError,
     ProviderServerError,
+    extract_error_type,
     register_adapter,
 )
 from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
@@ -92,9 +93,15 @@ class GroqAdapter(BaseAdapter):
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         if response.status_code >= 500:
-            raise ProviderServerError(self.provider_name, response.status_code, response.text)
+            raise ProviderServerError(
+                self.provider_name, response.status_code, response.text,
+                error_type=extract_error_type(response.text, response.status_code),
+            )
         if response.status_code >= 400:
-            raise ProviderClientError(self.provider_name, response.status_code, response.text)
+            raise ProviderClientError(
+                self.provider_name, response.status_code, response.text,
+                error_type=extract_error_type(response.text, response.status_code),
+            )
 
     def _parse_output(self, raw: str) -> LLMOutput:
         try:

@@ -10,6 +10,7 @@ Son rôle est d'orchestrer le déroulement de la simulation au fil du temps. Il 
 
 import asyncio
 import json
+import time
 from typing import Optional, Tuple
 import datetime
 
@@ -54,6 +55,8 @@ class SimulationLoopV1(BaseScenario):
         self.next_self_reflection_at = None
         # Control the agent's concurrency
         self._concurrent_semaphore = asyncio.Semaphore(settings.agent.remote_llm_max_concurrent_requests)
+        # Background scheduling task — un seul à la fois pour éviter de traiter les mêmes agents en double
+        self._scheduling_task: Optional[asyncio.Task] = None
 
         if settings.agent.reschedule_activity__version == 2:
             self.reschedule_amount_function = self.reschedule_amount_v2
@@ -72,43 +75,74 @@ class SimulationLoopV1(BaseScenario):
         return self.model.bbox
     
     async def sync(self, timestamp: int, idle_people: list[WorldSyncIdlePeople] = None):
-        # Sync idle people if provided
+        _sync_start = time.monotonic()
+        all_people = self.population.get_people_list()
+        currently_idle = [p for p in all_people if p.state.heading_to is None]
+        currently_moving = [p for p in all_people if p.state.heading_to is not None]
+        logger.info(
+            f"[sync] START sim_time={humanize_date(timestamp)} "
+            f"total_people={len(all_people)} idle={len(currently_idle)} moving={len(currently_moving)} "
+            f"gama_idle_update={len(idle_people) if idle_people else 0}"
+        )
+
+        # --- Phase 1 : mise à jour d'état depuis GAMA (rapide, synchrone) ---
+        # Doit être fait avant de retourner pour que les nouveaux arrivants
+        # soient visibles comme "idle" lors du scheduling qui suit.
         if idle_people:
-            logger.info(f"[timestamp: {humanize_date(timestamp)}] Syncing {len(idle_people)} idle people at timestamp {timestamp}")
             for person_data in idle_people:
                 person = self.population.get_person(person_data.person_id)
                 if person:
                     person.state.last_location = person_data.location
                     self.population.get_person_default_scheduler(person).finish_activity()
-                    #logger.debug(f"[timestamp: {humanize_date(timestamp)}] Person {person.person_id} last location updated to {person_data.location}")
                 else:
-                    logger.warning(f"[timestamp: {humanize_date(timestamp)}] Person {person_data.person_id} not found in population")
+                    logger.warning(f"[sync] Person {person_data.person_id} not found in population")
 
-        # Schedule next person move
-        await self.schedule_person_move(timestamp=timestamp)
-
-        # Check reflection period
+        # --- Phase 2 : reflection (peu fréquente, on la garde ici) ---
         if not self.next_reflection_at:
             self.next_reflection_at = timestamp + self.reflect_period
         elif timestamp >= self.next_reflection_at:
-            # Reflect the state of the world
             logger.info(f"[timestamp: {humanize_date(timestamp)}] Reflecting the state of the world")
             await self.trigger_short_term_reflection_for_all(timestamp=timestamp)
             self.next_reflection_at = timestamp + self.reflect_period
 
-        # Check self reflection period
         if settings.agent.long_term_self_reflect_enabled:
             if not self.next_self_reflection_at:
                 self.next_self_reflection_at = timestamp + settings.agent.long_term_self_reflect_interval_days*24*3600
             elif timestamp >= self.next_self_reflection_at:
-                # Self reflect the state of the world
                 logger.info(f"[timestamp: {humanize_date(timestamp)}] Self reflecting the state of the world")
                 _duration_days = settings.agent.long_term_self_reflect_window_days
                 from_date = datetime.datetime.fromtimestamp(timestamp) - datetime.timedelta(days=_duration_days)
-                # set to the start of the day
                 from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 await self.agent.trigger_long_term_reflection_for_all_people(timestamp=timestamp, from_date=from_date, people=self.population.get_people_list())
                 self.next_self_reflection_at = timestamp + settings.agent.long_term_self_reflect_interval_days*24*3600
+
+        # --- Phase 3 : scheduling non-bloquant ---
+        # Les actions partent via le publish_loop WebSocket indépendamment du /sync HTTP.
+        # On lance donc le scheduling en background et on répond à GAMA immédiatement.
+        scheduling_running = self._scheduling_task is not None and not self._scheduling_task.done()
+        if scheduling_running:
+            logger.info(
+                f"[sync] Scheduling task already running — "
+                f"les {len(currently_idle)} idle agents seront capturés au prochain sync"
+            )
+        else:
+            self._scheduling_task = asyncio.create_task(
+                self.schedule_person_move(timestamp=timestamp)
+            )
+            self._scheduling_task.add_done_callback(self._on_scheduling_done)
+
+        _sync_duration = time.monotonic() - _sync_start
+        logger.info(
+            f"[sync] END sim_time={humanize_date(timestamp)} "
+            f"state_update_duration={_sync_duration:.3f}s scheduling=background"
+        )
+
+    def _on_scheduling_done(self, task: asyncio.Task) -> None:
+        """Callback appelé quand la tâche de scheduling background se termine."""
+        if task.cancelled():
+            logger.warning("[schedule_move] Background task annulée")
+        elif task.exception():
+            logger.error(f"[schedule_move] Background task exception: {task.exception()}")
 
     async def trigger_short_term_reflection_for_all(self, timestamp: int):
         idle_people = [
@@ -238,11 +272,32 @@ class SimulationLoopV1(BaseScenario):
     
     async def schedule_person_move(self, timestamp: int):
         idle_people = [p for p in self.population.get_people_list() if p.state.heading_to is None]
-        
+        total = len(idle_people)
+        if total == 0:
+            return
+
+        logger.info(
+            f"[schedule_move] START sim_time={humanize_date(timestamp)} "
+            f"idle_agents={total} semaphore_slots={settings.agent.remote_llm_max_concurrent_requests}"
+        )
+        _schedule_start = time.monotonic()
+        _done_count = 0
+        _done_lock = asyncio.Lock()
+
         async def process_person(person):
+            nonlocal _done_count
             PROCESS_PERSON_CALLS.inc()
             async with self._concurrent_semaphore:
                 move, reasoning = await self.determine_next_move_for_person(person, timestamp)
+                async with _done_lock:
+                    _done_count += 1
+                    done = _done_count
+                if done % 50 == 0 or done == total:
+                    elapsed = time.monotonic() - _schedule_start
+                    logger.info(
+                        f"[schedule_move] progress={done}/{total} "
+                        f"elapsed={elapsed:.1f}s rate={done/elapsed:.1f}/s eta={((total-done)/done*elapsed):.0f}s"
+                    )
                 if move:
                     ACTIONS_CREATED.inc()
                     self._messages.append(Action(
@@ -293,6 +348,14 @@ class SimulationLoopV1(BaseScenario):
         tasks = [process_person(person) for person in idle_people]
         await asyncio.gather(*tasks)
 
+        _schedule_duration = time.monotonic() - _schedule_start
+        new_moves = len(self._messages)
+        logger.info(
+            f"[schedule_move] END sim_time={humanize_date(timestamp)} "
+            f"processed={total} new_moves={new_moves} no_move={total - new_moves} "
+            f"total_duration={_schedule_duration:.1f}s"
+        )
+
     # def log_travel_plan_to_shortterm(self, plan: TravelPlan, reasoning: str):
     #     """Log the travel plan to the person's short-term memory"""
     #     if not plan or not plan.id:
@@ -330,11 +393,26 @@ class SimulationLoopV1(BaseScenario):
         # Query a new trip plan
         from_location = person.state.last_location
 
+        # Use the activity's actual scheduled start time as departure time, not the current
+        # simulation timestamp. When pre_schedule_duration > 0, the agent is triggered early
+        # but should still get an itinerary computed for its real departure time so that
+        # transit connections are correct.
+        actual_departure_time = to_timestamp_based_on_day(
+            target_24h_timestamp=next_activity.start_time,
+            based_on=timestamp,
+        )
+        _otp_start = time.monotonic()
         itineraries = await self.trip_helper.get_itineraries(
             origin=from_location,
             destination=next_activity.location,
-            departure_time=timestamp,
+            departure_time=actual_departure_time,
         )
+        _otp_duration = time.monotonic() - _otp_start
+        if _otp_duration > 2.0:
+            logger.warning(
+                f"[otp] Slow itinerary query | person={person.person_id} "
+                f"duration={_otp_duration:.2f}s n_results={len(itineraries)}"
+            )
         # Populate purpose
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose

@@ -6,6 +6,7 @@ Le Worker ne connaît que BaseAdapter — il reste découplé des SDKs tiers.
 """
 
 from __future__ import annotations
+import json
 from abc import ABC, abstractmethod
 from typing import Tuple
 
@@ -57,9 +58,10 @@ class BaseAdapter(ABC):
 
 class ProviderError(Exception):
     """Base."""
-    def __init__(self, provider: str, status_code: int, message: str):
+    def __init__(self, provider: str, status_code: int, message: str, error_type: str = "unknown"):
         self.provider = provider
         self.status_code = status_code
+        self.error_type = error_type
         super().__init__(f"[{provider}] HTTP {status_code}: {message}")
 
 
@@ -75,10 +77,58 @@ class ProviderClientError(ProviderError):
 
 class ProviderParseError(Exception):
     """La réponse du LLM ne respecte pas le schéma JSON attendu."""
+
     def __init__(self, provider: str, raw: str, detail: str):
         self.provider = provider
         self.raw = raw
+        # Clé de métrique : les 10 premiers mots du détail de parsing
+        self.error_type = _truncate_to_words(f"parse error {detail}", 10)
         super().__init__(f"[{provider}] Parse error: {detail}")
+
+
+# ---------------------------------------------------------------------------
+# Extraction du message d'erreur brut depuis le corps de réponse
+# ---------------------------------------------------------------------------
+
+def _truncate_to_words(text: str, n: int = 10) -> str:
+    """Retourne les n premiers mots de text, en minuscules, sans retours à la ligne."""
+    cleaned = " ".join(text.split())          # normalise les espaces / \n
+    words = cleaned.lower().split()
+    return " ".join(words[:n])
+
+
+def extract_error_type(response_text: str, status_code: int) -> str:
+    """
+    Retourne les 10 premiers mots du message d'erreur tel que renvoyé par le provider.
+
+    Ce texte est utilisé directement comme clé de métrique : chaque message unique
+    crée automatiquement son propre compteur dans Prometheus, sans catégorie prédéfinie.
+
+    Exemples :
+      "request too large for model llama3-8b-8192 in organization"
+      "you exceeded your current quota please check your plan"
+      "invalid api key provided"
+      "http 500"  (si le corps n'est pas du JSON valide)
+    """
+    try:
+        body = json.loads(response_text)
+        err = body.get("error", {})
+
+        # Format OpenAI / Groq / Mistral : {"error": {"message": "..."}}
+        msg = (err.get("message") or "").strip()
+
+        # Format Google : les détails sont parfois dans error.message aussi
+        if not msg:
+            msg = (body.get("message") or body.get("error_message") or "").strip()
+
+        if msg:
+            return _truncate_to_words(msg, 10)
+
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        pass
+
+    # Fallback : code HTTP uniquement
+    return f"http {status_code}"
 
 
 # ---------------------------------------------------------------------------

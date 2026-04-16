@@ -2,7 +2,7 @@
 # Configuration
 # ──────────────────────────────────────────────────────────────────────────────
 
-CONFIG   ?= config_baseline_100_current.yaml
+CONFIG   ?= config_baseline_1000_current.yaml
 export CONFIG_FILE = $(CONFIG)
 
 # Guard: warn immediately if the chosen config file does not exist

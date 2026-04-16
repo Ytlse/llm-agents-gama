@@ -72,7 +72,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
       #APP_WORKDIR: /app/workdir
-      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
       GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm-agents:/app
@@ -98,7 +98,7 @@ services:
       OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
       LLM_API_URL: http://api:8000
       #APP_WORKDIR: /app/workdir
-      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
       GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm-agents:/app
@@ -122,7 +122,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
-      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_100_current.yaml}
+      APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
     volumes:
       - ./llm-agents:/app
       - ./otp-toulouse/toulouse/gtfs:/data/gtfs
@@ -151,6 +151,20 @@ services:
   # ─────────────────────────────────────────────
   # Monitoring: Prometheus & Grafana
   # ─────────────────────────────────────────────
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
 
   prometheus:
     image: prom/prometheus:latest
@@ -191,7 +205,7 @@ services:
   #   command: >
   #     /opt/gama-platform/headless/gama-headless.sh 
   #     -m /path/to/CityTransport/models/City.gaml 
-  #     -e "exp_yves"
+  #     -e "e"
   #   depends_on:
   #     otp:
   #       condition: service_healthy

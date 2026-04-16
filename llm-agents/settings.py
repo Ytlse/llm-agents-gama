@@ -238,6 +238,7 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # Remote LLM settings
     remote_llm_max_concurrent_requests: Optional[int] = 20
+    remote_llm_poll_timeout: float = 300.0  # secondes avant d'abandonner une tâche LLM en attente
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):

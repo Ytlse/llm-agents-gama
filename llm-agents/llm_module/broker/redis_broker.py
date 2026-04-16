@@ -150,6 +150,41 @@ def get_rpm(provider: str) -> int:
     return int(val) if val else 0
 
 
+# Script Lua pour la réservation atomique d'un slot RPM.
+# Garantit que l'incrément et la vérification de limite sont une opération indivisible,
+# éliminant la race condition entre plusieurs workers Celery concurrents.
+_TRY_RESERVE_RPM_SCRIPT = r"""
+local key   = KEYS[1]
+local limit = tonumber(ARGV[1])
+local ttl   = tonumber(ARGV[2])
+local count = redis.call('INCR', key)
+if redis.call('TTL', key) == -1 then
+    redis.call('EXPIRE', key, ttl)
+end
+if count > limit then
+    redis.call('DECR', key)
+    return 0
+end
+return count
+"""
+
+
+def try_reserve_rpm(provider: str, limit: int, ttl: int = 60) -> bool:
+    """
+    Tente de réserver atomiquement un slot RPM pour le fournisseur.
+
+    Utilise un script Lua exécuté côté Redis pour garantir que le INCR et la
+    vérification de la limite forment une opération atomique — aucun autre
+    worker ne peut s'intercaler entre les deux.
+
+    Retourne True si le slot a été réservé (compteur ≤ limit),
+             False si la limite est déjà atteinte (rollback automatique).
+    """
+    r = get_sync_redis()
+    result = r.eval(_TRY_RESERVE_RPM_SCRIPT, 1, _rpm_key(provider), limit, ttl)
+    return int(result) > 0
+
+
 # ---------------------------------------------------------------------------
 # Cooldown (sync — utilisé pour exclure temporairement un fournisseur)
 # ---------------------------------------------------------------------------
@@ -191,10 +226,12 @@ def disable_provider(provider: str) -> None:
 
 
 def enable_provider(provider: str) -> None:
-    """Réactive un fournisseur et remet son compteur d'erreurs à zéro."""
+    """Réactive un fournisseur et remet à zéro son compteur d'erreurs et son RPM.
+    Le compteur RPM est vidé pour éviter un burst immédiat si la clé est encore active."""
     r = get_sync_redis()
     r.delete(f"{DISABLED_KEY_PREFIX}{provider}")
     r.delete(f"{CONS_ERR_KEY_PREFIX}{provider}")
+    r.delete(_rpm_key(provider))
 
 
 def is_provider_disabled(provider: str) -> bool:
@@ -273,3 +310,10 @@ def get_worker_metric(name: str) -> int:
     """Lit la valeur courante d'un compteur worker (0 si inexistant)."""
     val = get_sync_redis().get(f"{WORKER_METRIC_PREFIX}{name}")
     return int(val) if val else 0
+
+
+def increment_worker_error_by_type(provider: str, error_type: str) -> None:
+    """Incrémente le compteur d'erreurs par provider ET par type d'erreur."""
+    get_sync_redis().incrby(
+        f"{WORKER_METRIC_PREFIX}llm_errors_by_type:{provider}:{error_type}", 1
+    )
