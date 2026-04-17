@@ -21,14 +21,10 @@ settings.app.log_level = "DEBUG"
 setup_logging(settings)
 
 from scenarios.scenario_v1.agent import Context
-from trip_helper.base import TripHelper
-from models import Location, Person, TravelPlan
-from text_helper import env_ob_to_text
+from models import  Person
 from scenarios.scenario_v1.factory import bootstrap
 import datetime
 import asyncio
-import pandas as pd
-from tqdm.asyncio import tqdm
 
 settings.data.number_of_llm_based_agents = 1
 settings.data.population_max_size = 1

@@ -15,4 +15,3 @@ agent:
   long_term_max_entries_query: 10
   llm_model: "llama-3.3-70b-versatile"
 
-workdir: "../experiments/llama-3.3-70b-versatile_01"

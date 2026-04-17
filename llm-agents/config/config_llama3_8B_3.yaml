@@ -15,4 +15,3 @@ agent:
   long_term_max_entries_query: 10
   llm_model: "llama3-8b-8192"
 
-workdir: "../experiments/llama3_8B_3"

@@ -1,8 +1,10 @@
 
+from datetime import date
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
+import shutil
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 import os
 
@@ -296,26 +298,21 @@ class Settings(LLMServerSettings):
     def from_yaml_files(cls, *yaml_paths: str, workdir: str = None) -> 'Settings':
         """Load and merge multiple YAML files."""
         merged_data = merge_configs(*yaml_paths)
+        # Remove workdir from YAML data — it is now derived from the config file name
+        merged_data.pop('workdir', None)
         if workdir:
             merged_data['workdir'] = Path(workdir).resolve()
-
-        # workdir = Path(yaml_paths[0]).parent.resolve()
-        # merged_data['workdir'] = workdir
-        assert 'workdir' in merged_data, f"Work directory must be specified in the configuration files. $yaml_paths={yaml_paths}"
-
-        _self = cls(**merged_data)
-        # _self.resolve_all_paths()
-        return _self
+        return cls(**merged_data)
 
 
 class FactorySettings:
     _instance: Optional[Settings] = None
 
     @classmethod
-    def get(cls, workdir: str=None) -> Settings:
+    def get(cls, workdir: str = None) -> Settings:
         if cls._instance is not None:
             return cls._instance
-        
+
         base_config_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "config/config.yaml",
@@ -325,7 +322,19 @@ class FactorySettings:
         if config_file_path and os.path.isfile(config_file_path):
             yaml_files.append(config_file_path)
 
+        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<stem>
+        if not workdir and config_file_path and os.path.isfile(config_file_path):
+            stem = Path(config_file_path).stem
+            exp_name = f"{date.today().strftime('%Y-%m-%d')}_{stem}"
+            experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
+            workdir = str(experiments_dir / exp_name)
+
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
+
+        # Create workdir and copy the config file into it
+        if config_file_path and os.path.isfile(config_file_path):
+            cls._instance.workdir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(config_file_path, cls._instance.workdir / Path(config_file_path).name)
 
         logger.info(f"Settings loaded from: {yaml_files}")
         logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")

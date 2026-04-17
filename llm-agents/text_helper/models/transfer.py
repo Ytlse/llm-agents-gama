@@ -1,5 +1,4 @@
 from typing import Optional
-from pydantic import BaseModel
 from text_helper.templates.repository import tpl_describe_the_ob_transfer
 from text_helper.type import EnvOb
 

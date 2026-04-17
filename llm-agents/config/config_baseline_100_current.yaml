@@ -13,4 +13,3 @@ agent:
   long_term_reflect_interval: 86400
   llm_model: "gpt-4"
 
-workdir: "../experiments/baseline_100_current"

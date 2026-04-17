@@ -1,5 +1,5 @@
 from jinja2 import Environment, FileSystemLoader
-from helper import duration_to_bucket_text, format_route_id, humanize_time, humanize_duration, ensure_timestamp_in_seconds, time_to_bucket_text
+from helper import duration_to_bucket_text, humanize_time, humanize_duration, ensure_timestamp_in_seconds, time_to_bucket_text
 from inputs.gtfs import GTFSData
 from settings import settings
 import os

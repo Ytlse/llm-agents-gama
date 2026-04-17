@@ -4,7 +4,6 @@ from typing import List, Optional
 
 from datetime import datetime, timezone
 from loguru import logger
-from helper import to_24h_timestamp, to_timestamp_based_on_day
 from inputs.gtfs import GTFSData
 from settings import settings
 from models import Location, TransitLocation, TravelPlan, Transit

@@ -9,7 +9,6 @@ Son rôle est d'orchestrer le déroulement de la simulation au fil du temps. Il 
 """
 
 import asyncio
-import json
 import time
 from typing import Optional, Tuple
 import datetime
@@ -27,7 +26,6 @@ from utils import random_uuid
 from world.population import WorldPopulation
 from world.world_data import WorldModel
 from settings import settings
-import threading
 
 from prometheus_client import Counter
 

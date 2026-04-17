@@ -110,7 +110,6 @@ Couche d'intégration LLM et gestion de la mémoire des agents.
 
 | Fichier | Description |
 |---|---|
-| `llm_model.py` | Constructeurs d'interfaces LLM pour différents providers (OpenAI, vLLM, HuggingFace, etc.). Initialisation des clients selon le provider configuré. |
 | `longterm.py` | Mémoire long terme des agents : logique de stockage, récupération, consolidation. Module riche, à documenter en détail. **TBC** |
 | `memory.py` | Définition de la classe `MemoryEntry` : entrée de mémoire unitaire avec toutes ses métadonnées (timestamp, type, contenu, etc.). |
 | `shortterm.py` | Mémoire court terme : liste ordonnée de `MemoryEntry`, gestion de la fenêtre contextuelle de l'agent. |

@@ -14,4 +14,3 @@ agent:
   llm_model: "gpt-4"
   pre_schedule_duration: 3600
 
-workdir: "../experiments/baseline_1500_current"

@@ -260,35 +260,6 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 } },
 
     {
-      "id": 11, "type": "barchart",
-      "title": "Cumul erreurs par provider et type",
-      "description": "Nombre total cumulé d'erreurs LLM par provider et type depuis le démarrage du service. Chaque barre représente le total de toutes les erreurs de ce type pour ce provider.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (provider, error_type) (llm_provider_errors_by_type_total)",
-        "legendFormat": "{{provider}} / {{error_type}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "fillOpacity": 80, "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "barWidth": 0.6,
-        "fillOpacity": 80,
-        "groupWidth": 0.7,
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "orientation": "horizontal",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 31 }
-    },
-
-    {
       "id": 12, "type": "timeseries",
       "title": "Accumulation des erreurs par type (courbe cumulative)",
       "description": "Valeur absolue cumulative du compteur d'erreurs par type — la courbe monte à chaque nouvelle erreur et ne redescend jamais.",

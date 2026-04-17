@@ -9,7 +9,6 @@ trouver le chemin du fichier de log.
 """
 import os
 from datetime import datetime
-
 from settings import settings
 
 if hasattr(settings, 'app') and hasattr(settings.app, 'log_file') and settings.app.log_file:

@@ -1,12 +1,10 @@
-import json
 import sys
 from typing import Tuple
 # from decorator import decorator
 import datetime
-import time
 from loguru import logger
 import humanize
-from settings import Settings, settings
+from settings import Settings
 
 
 # @decorator

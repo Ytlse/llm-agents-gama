@@ -2,7 +2,8 @@
 # Configuration
 # ──────────────────────────────────────────────────────────────────────────────
 
-CONFIG   ?= config_baseline_1000_current.yaml
+CONFIG   ?= config_baseline_10000_current.yaml
+# CONFIG   ?= config_baseline_1000_current.yaml
 export CONFIG_FILE = $(CONFIG)
 
 # Guard: warn immediately if the chosen config file does not exist
@@ -66,10 +67,10 @@ clean_all:
 .PHONY: tests burst
 
 tests:
-	python llm-agents/llm_module/tests/test_main.py
+	python llm_module/tests/test_main.py
 
 burst:
-	python llm-agents/llm_module/tests/test_e2e.py --scenario 1 --burst 80
+	python llm_module/tests/test_e2e.py --scenario 1 --burst 80
 
 # ──────────────────────────────────────────────────────────────────────────────
 # GAMA

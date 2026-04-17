@@ -13,4 +13,3 @@ agent:
   quantify_time_window: true
   llm_model: "mistral-7B-instruct-v0.3"
 
-workdir: "../experiments/mistral7B_50_no_mem"

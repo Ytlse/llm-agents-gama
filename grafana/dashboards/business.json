@@ -92,7 +92,7 @@
     },
 
     {
-      "id": 4, "type": "timeseries", "title": "Durée réelle d'un pas de temps simulé (secondes)",
+      "id": 4, "type": "timeseries", "title": "Durée réelle d'un pas de temps simulé (time step - 2 minutes)",
       "description": "Intervalle wall-clock entre deux appels /sync successifs de GAMA.",
       "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
       "targets": [{ "refId": "A", "expr": "gama_sim_step_interval_seconds", "legendFormat": "Durée pas de temps" }],
@@ -336,36 +336,6 @@
       "gridPos": { "h": 9, "w": 6, "x": 0, "y": 29 }
     },
 
-    {
-      "id": 25, "type": "barchart",
-      "title": "Répartition globale des modes de transport par provider",
-      "description": "Pour chaque provider, répartition des modes de transport choisis. Permet de comparer les préférences de chaque LLM.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode, provider) (llm_mode_by_provider_total)",
-        "legendFormat": "{{mode}} / {{provider}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "fillOpacity": 80, "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "barWidth": 0.7,
-        "fillOpacity": 80,
-        "groupWidth": 0.7,
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "orientation": "auto",
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "xTickLabelRotation": -30
-      },
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 38 }
-    },
-
     { "id": 103, "type": "row", "title": "Choix d'Itinéraire (Chosen Index)", "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 } },
 
@@ -489,11 +459,11 @@
     {
       "id": 35, "type": "timeseries",
       "title": "Évolution des indices choisis dans le temps",
-      "description": "Compteur cumulatif de chaque index de trajectoire. Permet de voir si les préférences du LLM évoluent au fil de la simulation.",
+      "description": "Moyenne par tranche de 5 minutes de chaque index de trajectoire. Permet de voir si les préférences du LLM évoluent au fil de la simulation.",
       "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
       "targets": [{
         "refId": "A",
-        "expr": "sum by (index) (llm_chosen_index_total)",
+        "expr": "avg_over_time((sum by (index) (llm_chosen_index_total))[5m:])",
         "legendFormat": "Index {{index}}"
       }],
       "fieldConfig": {

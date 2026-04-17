@@ -165,7 +165,7 @@ class WorldPopulation:
             bbox=world_bbox,
         )
 
-        n_llm_based = settings.data.number_of_llm_based_agents
+        n_llm_based = min(len(people), settings.data.number_of_llm_based_agents)
         if n_llm_based > 0:
             logger.info(f"Random {n_llm_based} out of {len(people)}")
             llm_based_persons = random.sample(

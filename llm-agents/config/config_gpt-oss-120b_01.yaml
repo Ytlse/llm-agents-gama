@@ -15,4 +15,3 @@ agent:
   long_term_max_entries_query: 10
   llm_model: "openai/gpt-oss-120b"
 
-workdir: "../experiments/gpt-oss-120b_01"

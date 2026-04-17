@@ -24,10 +24,8 @@ from settings import settings
 from typing import Dict, Any
 from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
-
 from llama_index.core.llms import ChatMessage, ChatResponse
 import time
-
 from world.population import PersonScheduler
 from loguru import logger
 

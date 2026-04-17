@@ -9,3 +9,6 @@ scripts/general/*.csv
 prompt_dialogue.log
 llm-agents/debug.txt
 llm-agents/llm_exchanges.jsonl
+grafana_data/
+prometheus_data/
+*.pyc

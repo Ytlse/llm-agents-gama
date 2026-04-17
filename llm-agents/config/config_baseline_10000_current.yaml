@@ -11,7 +11,4 @@ agent:
   long_term_memory_enabled: false
   quantify_time_window: false
   long_term_reflect_interval: 86400
-  llm_model: "gpt-4"
   pre_schedule_duration: 3600
-
-workdir: "../experiments/baseline_10000_current"

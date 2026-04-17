@@ -20,7 +20,7 @@ Modeling realistic human behavior using generative agents in a multimodal transp
 
 Follow this [guide](https://github.com/eqasim-org/ile-de-france/blob/develop/docs/cases/toulouse.md) to generate the population synthetic data.
 
-The synthetic data includes the activities list for each person; this data is combined with the `trait` data as in the sample file data/population_samples/Lila.agent.json. For example, the final population is data/population_samples/population_5_5.json.
+The synthetic data includes the activities list for each person; this data is combined with the `trait` data. For example, the final population is data/population_samples/population_5_5.json.
 
 ### 2. Setup OpenTripPlanner
 

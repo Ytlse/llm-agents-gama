@@ -1,7 +1,5 @@
 import time
 import httpx
-from llm.llm_model import ModelConfig
-from llama_index.core import Settings
 from settings import settings
 from inputs.gtfs.reader import GTFSData
 from world import *
@@ -11,7 +9,6 @@ from inputs.population import SyntheticPopulationLoader, PersonCloseToTheStopFil
 from trip_helper import SolariTripHelper
 from urban_mobility_agents.simulation_controller import SimulationLoopV1
 from urban_mobility_agents.core.scenario import BaseScenario
-from urban_mobility_agents.config.llm_config import create_llm_config_from_settings
 from urban_mobility_agents.agents.llm_agent import LlmAgent
 from loguru import logger
 
@@ -76,14 +73,6 @@ def bootstrap() -> BaseScenario:
         bbox=world_bbox,
         population=population,
     )
-
-    # model_config = ModelConfig.create_openai_config(
-    #     llm_model="gpt-3.5-turbo",
-    #     embedding_model="text-embedding-3-small",
-    # )
-    model_config = create_llm_config_from_settings()
-    #Settings.llm = model_config.create_llm(use_async=True)
-    Settings.embed_model = model_config.create_embedding()
 
     trip_helper = None
     if settings.gtfs.mode == "OTP":

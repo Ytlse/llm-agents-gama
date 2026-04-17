@@ -56,13 +56,6 @@ class ProviderConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_nested_delimiter="__",
-        env_ignore_empty=True,
-        extra="ignore",
-        hide_input_in_errors=True,
-    )
 
     redis_url:                  str   = "redis://localhost:6379/0"
     celery_broker_url:          str   = "redis://localhost:6379/1"

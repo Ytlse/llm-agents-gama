@@ -23,4 +23,3 @@ agent:
   travel_plan_custom_guidelines: |
     - You are most sensitive to the arrival times at activity destinations. Realize which travel option is good or not based on the arrival time.
 
-workdir: "../experiments/gpt-oss-120b_03_fixed_date"

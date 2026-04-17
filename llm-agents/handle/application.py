@@ -154,6 +154,7 @@ loop_container = LoopContainer()
 # Bootstrap the simulation scenario
 scenario = urban_mobility_agents.factory.factory.bootstrap()
 loop_container.set_scenario(scenario)
+print("===> Scenario bootstrapped and set in loop container")
 
 @app.on_event("startup")
 async def startup_event():
