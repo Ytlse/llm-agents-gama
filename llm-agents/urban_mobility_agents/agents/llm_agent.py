@@ -304,9 +304,10 @@ class LlmAgent:
             # If only one option, return it directly
             return 0, "Only one travel option available, no need to choose."
 
-        # shuffle options to avoid bias
-        random.shuffle(options)
-        payload = await self.build_travel_plan_payload(context, options, destination)
+        # shuffle options to avoid position bias — work on a copy to ne pas muter la liste du caller
+        shuffled_options = list(options)
+        random.shuffle(shuffled_options)
+        payload = await self.build_travel_plan_payload(context, shuffled_options, destination)
 
         try:
             response_data = await self.llm_client.execute_async(payload)
@@ -314,9 +315,9 @@ class LlmAgent:
             if response_data.get("status") == "success" and response_data.get("result"):
                 agent_result = response_data["result"][0]
                 index = agent_result.get("chosen_index")
-                
-                # L'index retourné par Structured Output correspond déjà à l'index (0-based) envoyé
-                if isinstance(index, int) and 0 <= index < len(options):
+
+                # L'index retourné par Structured Output correspond à la position dans shuffled_options
+                if isinstance(index, int) and 0 <= index < len(shuffled_options):
                     reason = agent_result.get("reason", "Pas de justification fournie.")
 
                     # Normalisation de la raison (alignement avec aplan_trip_old)
@@ -324,12 +325,13 @@ class LlmAgent:
                         reason = f"This plan {reason.split('is chosen because it', 1)[1].strip()}"
 
                     # Écriture de la décision en short-term memory pour alimenter la réflexion journalière
-                    chosen_plan = options[index]
+                    chosen_plan = shuffled_options[index]
                     plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                     stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> chosen by gateway LLM.\n{plan_summary}\nReasoning: {reason}"
                     self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
 
-                    return index, reason
+                    # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
+                    return options.index(chosen_plan), reason
                     
             error_msg = response_data.get("error", "Format de réponse invalide ou timeout.")
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")

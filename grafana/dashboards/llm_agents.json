@@ -123,11 +123,11 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 } },
 
     {
-      "id": 7, "type": "timeseries", "title": "Débit appels réussis par provider (appels/s)",
+      "id": 7, "type": "timeseries", "title": "Débit appels réussis par provider (appels/min)",
       "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
       "targets": [{
         "refId": "A",
-        "expr": "rate(llm_provider_calls_ok_total[1m])",
+        "expr": "rate(llm_provider_calls_ok_total[1m]) * 60",
         "legendFormat": "{{provider}} — OK"
       }],
       "fieldConfig": {
@@ -147,11 +147,11 @@
     },
 
     {
-      "id": 8, "type": "timeseries", "title": "Débit erreurs par provider (appels/s)",
+      "id": 8, "type": "timeseries", "title": "Débit erreurs par provider (appels/min)",
       "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
       "targets": [{
         "refId": "A",
-        "expr": "rate(llm_provider_calls_err_total[1m])",
+        "expr": "rate(llm_provider_calls_err_total[1m]) * 60",
         "legendFormat": "{{provider}} — Erreurs"
       }],
       "fieldConfig": {
@@ -260,14 +260,86 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 } },
 
     {
+      "id": 199, "type": "stat", "title": "État des providers",
+      "description": "État courant de chaque provider. « Désactivé (tmp) » = ban temporaire (180s) déclenché par trop d'erreurs consécutives via disable_provider — le provider se réactive automatiquement à expiration du TTL.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_provider_state",
+        "legendFormat": "{{provider}}",
+        "instant": true
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Sans clé API",    "color": "gray",   "index": 0 },
+                "1": { "text": "Désactivé (tmp)", "color": "red",    "index": 1 },
+                "2": { "text": "En pause",        "color": "orange", "index": 2 },
+                "3": { "text": "Actif",           "color": "green",  "index": 3 }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "gray",   "value": null },
+            { "color": "red",    "value": 1 },
+            { "color": "orange", "value": 2 },
+            { "color": "green",  "value": 3 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "text": {}
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 31 }
+    },
+
+    {
+      "id": 197, "type": "bargauge", "title": "Réactivation dans (secondes)",
+      "description": "Temps restant avant réactivation automatique des providers désactivés temporairement. 0 = provider actif ou non configuré.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_provider_disable_ttl_seconds",
+        "legendFormat": "{{provider}}",
+        "instant": true
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s", "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "red",   "value": 1 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 36 }
+    },
+
+    {
       "id": 12, "type": "timeseries",
       "title": "Accumulation des erreurs par type (courbe cumulative)",
       "description": "Valeur absolue cumulative du compteur d'erreurs par type — la courbe monte à chaque nouvelle erreur et ne redescend jamais.",
       "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
       "targets": [{
         "refId": "A",
-        "expr": "sum by (error_type) (llm_provider_errors_by_type_total)",
-        "legendFormat": "{{error_type}}"
+        "expr": "sum by (provider, error_type) (llm_provider_errors_by_type_total) * on(provider) group_left(model) llm_provider_info",
+        "legendFormat": "{{provider}} ({{model}}) — {{error_type}}"
       }],
       "fieldConfig": {
         "defaults": {
@@ -283,40 +355,8 @@
       "gridPos": { "h": 10, "w": 12, "x": 12, "y": 31 }
     },
 
-    {
-      "id": 13, "type": "table", "title": "Détail erreurs par provider / type",
-      "description": "Vue tabulaire : nombre cumulé d'occurrences de chaque type d'erreur pour chaque provider",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (provider, error_type) (llm_provider_errors_by_type_total)",
-        "legendFormat": "{{provider}} — {{error_type}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": { "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green", "value": 0 },
-            { "color": "orange", "value": 5 },
-            { "color": "red", "value": 20 }
-          ]}
-        }, "overrides": []
-      },
-      "options": {
-        "sortBy": [{ "displayName": "Value", "desc": true }],
-        "footer": { "show": false }
-      },
-      "transformations": [
-        { "id": "labelsToFields", "options": { "mode": "columns" } },
-        { "id": "organize", "options": {
-          "renameByName": { "provider": "Provider", "error_type": "Type d'erreur", "Value": "Occurrences" }
-        }}
-      ],
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 }
-    },
-
     { "id": 110, "type": "row", "title": "Consommation de Tokens", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 } },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 } },
 
     {
       "id": 50, "type": "stat", "title": "Tokens totaux consommés",
@@ -335,7 +375,7 @@
       },
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
         "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 50 }
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 67 }
     },
 
     {
@@ -355,7 +395,7 @@
       },
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
         "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 50 }
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 67 }
     },
 
     {
@@ -375,7 +415,7 @@
       },
       "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
         "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 50 }
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 67 }
     },
 
     {
@@ -403,7 +443,7 @@
       },
       "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center",
         "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal" },
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 50 }
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 67 }
     },
 
     {
@@ -427,7 +467,7 @@
         "reduceOptions": { "calcs": ["lastNotNull"] },
         "showUnfilled": true
       },
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 50 }
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 67 }
     },
 
     {
@@ -457,7 +497,7 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 }
     },
 
     {
@@ -487,7 +527,7 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 }
     },
 
     {
@@ -523,11 +563,11 @@
         "orientation": "auto",
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 62 }
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 79 }
     },
 
     { "id": 103, "type": "row", "title": "Batching & Catégories", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 70 } },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 87 } },
 
     {
       "id": 14, "type": "timeseries", "title": "Agents reçus de GAMA par catégorie",
@@ -548,7 +588,7 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 88 }
     },
 
     {
@@ -577,11 +617,11 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 88 }
     },
 
     { "id": 104, "type": "row", "title": "OpenTripPlanner (OTP)", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 79 } },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 96 } },
 
     {
       "id": 16, "type": "timeseries", "title": "OTP — Requêtes OK vs Erreurs (req/s)",
@@ -613,7 +653,7 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "none" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 97 }
     },
 
     {
@@ -643,7 +683,7 @@
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "none" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 80 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 97 }
     }
 
   ]

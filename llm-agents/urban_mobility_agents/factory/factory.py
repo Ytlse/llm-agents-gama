@@ -1,3 +1,4 @@
+import os
 import time
 import httpx
 from settings import settings
@@ -13,8 +14,16 @@ from urban_mobility_agents.agents.llm_agent import LlmAgent
 from loguru import logger
 
 
+def _otp_endpoints_to_wait() -> list[str]:
+    """Return the list of OTP transmodel endpoints that will actually be used."""
+    env = os.getenv("OTP_ENDPOINTS", "")
+    if env:
+        return [e.strip() for e in env.split(",") if e.strip()]
+    return [settings.gtfs.otp_endpoint]
+
+
 def wait_for_otp(endpoint: str, timeout: int = 300, interval: int = 5) -> bool:
-    """Poll OTP until it responds to a routing request, logging progress."""
+    """Poll a single OTP endpoint until it responds, logging progress."""
     health_url = endpoint.replace("/otp/transmodel/v3", "/otp")
     logger.info(f"Waiting for OTP at {health_url} ...")
     deadline = time.monotonic() + timeout
@@ -24,13 +33,20 @@ def wait_for_otp(endpoint: str, timeout: int = 300, interval: int = 5) -> bool:
         try:
             resp = httpx.get(health_url, timeout=3.0)
             if resp.status_code < 500:
-                logger.info(f"✅ OTP accessible (HTTP {resp.status_code}) après {attempt} tentative(s)")
+                logger.info(f"✅ OTP accessible (HTTP {resp.status_code}) après {attempt} tentative(s) — {health_url}")
                 return True
         except Exception as e:
-            logger.debug(f"OTP pas encore prêt (tentative {attempt}) : {e}")
+            logger.debug(f"OTP pas encore prêt (tentative {attempt}) : {e} — {health_url}")
         time.sleep(interval)
-    logger.error(f"❌ OTP inaccessible après {timeout}s")
+    logger.error(f"❌ OTP inaccessible après {timeout}s — {health_url}")
     return False
+
+
+def wait_for_all_otp(timeout: int = 300, interval: int = 5) -> bool:
+    """Wait for every OTP endpoint listed in OTP_ENDPOINTS (or the single otp_endpoint)."""
+    endpoints = _otp_endpoints_to_wait()
+    results = [wait_for_otp(ep, timeout=timeout, interval=interval) for ep in endpoints]
+    return all(results)
 
 
 def bootstrap() -> BaseScenario:
@@ -77,11 +93,8 @@ def bootstrap() -> BaseScenario:
     trip_helper = None
     if settings.gtfs.mode == "OTP":
         logger.info("Using OTP trip helper")
-        wait_for_otp(settings.gtfs.otp_endpoint)
-        trip_helper = OTPTripHelper(
-            endpoint=settings.gtfs.otp_endpoint,
-            gtfs_data=gtfs_data
-        )
+        wait_for_all_otp()
+        trip_helper = OTPTripHelper(gtfs_data=gtfs_data)
     else:
         logger.info("Using Solari trip helper")
         trip_helper = CachedTripHelper(

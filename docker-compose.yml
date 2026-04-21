@@ -1,6 +1,6 @@
 x-shared-env: &shared-env
   REDIS_URL: redis://redis:6379/0
-  OTP_ENDPOINT: http://otp:8080/otp/transmodel/v3
+  OTP_ENDPOINTS: http://otp:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
 
 services:
@@ -41,7 +41,21 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s  # OTP met du temps à charger le graph
+      start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
+
+  otp2:
+    build:
+      context: ./otp-toulouse
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    mem_limit: 5g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
 
   # ─────────────────────────────────────────────
   # LLM Agents — Architecture API Gateway + Worker Celery + Monitoring
@@ -55,7 +69,7 @@ services:
   #
   #   - Worker Celery :
   #       Exécute les tâches de génération de prompts envoyées par l'API.
-  #       Interagit avec les LLM (via vllm, llama-index, etc.) et d'autres services (OTP).
+  #       Interagit avec les LLM et d'autres services (OTP).
   #       Retourne les résultats à l'API via Redis.
   #
   #   - Flower (Monitoring) :
@@ -81,11 +95,13 @@ services:
       - ./llm_module:/app/llm_module
       - ./data/gtfs:/data/gtfs
       - ./data/po_toulouse.big:/data/po_toulouse.big
-      - ./experiments:/experiments
+      - ./experiments:/app/experiments
     depends_on:
       redis:
         condition: service_healthy
       otp:
+        condition: service_healthy
+      otp2:
         condition: service_healthy
 
   controller:
@@ -101,36 +117,42 @@ services:
       LLM_API_URL: http://api:8000
       #APP_WORKDIR: /app/workdir
       GAMA_WS_URL: ws://host.docker.internal:3001
+      PYTHONPATH: /app
     volumes:
       - ./llm-agents:/app
       - ./llm_module:/app/llm_module
       - ./data/gtfs:/data/gtfs
       - ./data/po_toulouse.big:/data/po_toulouse.big
-      - ./experiments:/experiments
+      - ./experiments:/app/experiments
     depends_on:
       api:
         condition: service_started
       otp:
+        condition: service_healthy
+      otp2:
         condition: service_healthy
 
   worker:
     build:
       context: ./llm_module
       dockerfile: Dockerfile
-    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=8
     env_file: ./.env
     environment:
       <<: *shared-env
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      APP_WORKDIR: /app/experiments/current
     volumes:
       - ./llm_module:/app/llm_module
       - ./otp-toulouse/toulouse/gtfs:/data/gtfs
-      - ./experiments:/experiments
+      - ./experiments:/app/experiments
     depends_on:
       redis:
         condition: service_healthy
       otp:
+        condition: service_healthy
+      otp2:
         condition: service_healthy
 
 
@@ -145,8 +167,12 @@ services:
     environment:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      - worker
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
 
   # ─────────────────────────────────────────────
   # Monitoring: Prometheus & Grafana
@@ -181,12 +207,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
     volumes:
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
       - ./grafana/dashboards:/var/lib/grafana/dashboards
-      - ./data/grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
 
@@ -216,3 +244,4 @@ services:
 
 volumes:
   redis_data:
+  grafana_data:

@@ -1,4 +1,6 @@
+import itertools
 import json
+import os
 import time
 from typing import List, Optional
 
@@ -200,7 +202,16 @@ class OTPTripHelper(TripHelper):
     SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway"]
 
     def __init__(self, endpoint: str = None, gtfs_data: GTFSData = None):
-        self.endpoint = endpoint or settings.gtfs.otp_endpoint
+        # Support multiple OTP instances via OTP_ENDPOINTS env var (comma-separated URLs).
+        # Falls back to a single endpoint for backward compatibility.
+        endpoints_env = os.getenv("OTP_ENDPOINTS", "")
+        if endpoints_env:
+            endpoints = [e.strip() for e in endpoints_env.split(",") if e.strip()]
+        else:
+            endpoints = [endpoint or settings.gtfs.otp_endpoint]
+        self._endpoint_iter = itertools.cycle(endpoints)
+        logger.info(f"OTPTripHelper initialized with {len(endpoints)} endpoint(s): {endpoints}")
+
         self.fixed_day: datetime = datetime.strptime(settings.gtfs.fixed_day, '%Y%m%d') if settings.gtfs.fixed_day else None
         self.gtfs_data = gtfs_data or GTFSData.DEFAULT()
         self._session: Optional[aiohttp.ClientSession] = None
@@ -217,11 +228,28 @@ class OTPTripHelper(TripHelper):
         return int(dt.timestamp())
     
     def parse_gtfs_entity_id(self, name: str) -> str:
-        # this is based on the GTFS data of Toulouse
-        # it could be changed with other data
+        # OTP returns NeTEx IDs like "feedId:entityType:entityId" (e.g. "1:line:87")
+        # Strip the feedId prefix; keep "entityType:entityId" (e.g. "line:87").
         if name.count(":") >= 2:
             return name.split(":", 1)[1]
         return name
+
+    def _resolve_gtfs_stop(self, raw_id: str):
+        """Try to resolve a stop by attempting multiple ID formats.
+
+        OTP NeTEx IDs ("1:stop_point:SP_5672") strip to "stop_point:SP_5672".
+        Some GTFS datasets store only the last segment ("SP_5672") as stop_id.
+        """
+        parsed_id = self.parse_gtfs_entity_id(raw_id)
+        try:
+            return self.gtfs_data.get_stop(parsed_id)
+        except (ValueError, KeyError):
+            pass
+        # Fallback: try just the last colon-segment
+        last_segment = raw_id.rsplit(":", 1)[-1]
+        if last_segment != parsed_id:
+            return self.gtfs_data.get_stop(last_segment)
+        raise ValueError(f"Stop not found for OTP id '{raw_id}' (tried: '{parsed_id}', '{last_segment}')")
 
     def _parse_otp_travel_plan(self, 
                                travel_plan: dict, 
@@ -255,10 +283,10 @@ class OTPTripHelper(TripHelper):
                     lon=end_location.lon
                 )
 
-            assert place.quay and place.quay.get("id"), f"Invalid place: {place}"
+            if not (place.quay and place.quay.get("id")):
+                raise ValueError(f"Invalid OTP place (missing quay id): {place}")
 
-            stop_id = _pstopid(place.quay["id"])
-            stop = self.gtfs_data.get_stop(stop_id)
+            stop = self._resolve_gtfs_stop(place.quay["id"])
             return TransitLocation(
                 stop=stop.stop_name,
                 lat=stop.stop_lat,
@@ -363,8 +391,9 @@ class OTPTripHelper(TripHelper):
         )
         async def make_request():
             _t0 = time.monotonic()
+            otp_url = next(self._endpoint_iter)
             try:
-                async with session.post(self.endpoint, json=payload, timeout=10) as response:
+                async with session.post(otp_url, json=payload, timeout=10) as response:
                     response.raise_for_status()
                     result = await response.json()
                 OTP_REQUESTS_OK.inc()

@@ -135,10 +135,10 @@ class LLMClient:
         TASKS_IN_PROGRESS.inc()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                logger.debug(
-                    f"Submitting task to LLM gateway | url={self.base_url}/tasks "
-                    f"category={category} agents={agents_count}"
-                )
+                # logger.debug(
+                #     f"Submitting task to LLM gateway | url={self.base_url}/tasks "
+                #     f"category={category} agents={agents_count}"
+                # )
                 try:
                     resp = await client.post(f"{self.base_url}/tasks", json=payload)
                     resp.raise_for_status()
@@ -155,7 +155,7 @@ class LLMClient:
                     raise
 
                 task_id = resp.json()["task_id"]
-                logger.debug(f"Task submitted | task_id={task_id} category={category}")
+                # logger.debug(f"Task submitted | task_id={task_id} category={category}")
 
                 poll_start = time.monotonic()
                 deadline = poll_start + self.poll_timeout
@@ -177,9 +177,9 @@ class LLMClient:
                                 chosen_index = agent.get("chosen_index")
                                 if chosen_index is not None:
                                     INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
-                            logger.debug(
-                                f"Task completed successfully | task_id={task_id} category={category} wait={wait_s:.1f}s"
-                            )
+                            # logger.debug(
+                            #     f"Task completed successfully | task_id={task_id} category={category} wait={wait_s:.1f}s"
+                            # )
                         else:
                             TASKS_RESPONSES_FAILURE.inc()
                             error_detail = data.get("error", "No error detail")

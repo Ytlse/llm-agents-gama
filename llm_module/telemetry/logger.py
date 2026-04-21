@@ -59,6 +59,35 @@ def log_llm_call(
 # Écrit dans workdir/llm_exchanges.jsonl
 # ---------------------------------------------------------------------------
 
+def log_llm_error(
+    task_id: str,
+    provider: str,
+    error_type: str,
+    error_message: str,
+    http_status: int | None = None,
+) -> None:
+    """
+    Enregistre une erreur LLM dans workdir/llm_errors.jsonl.
+    """
+    workdir = Path(os.environ.get("APP_WORKDIR", "."))
+    log_file = workdir / "llm_errors.jsonl"
+
+    entry = {
+        "time": datetime.now(timezone.utc).isoformat(),
+        "task_id": task_id,
+        "provider": provider,
+        "error_type": error_type,
+        "error_message": error_message,
+        "http_status": http_status,
+    }
+
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+    except OSError as e:
+        logger.warning(f"Impossible d'écrire dans {log_file}: {e}")
+
+
 def log_llm_exchange(
     task_id: str,
     provider: str,
@@ -71,8 +100,8 @@ def log_llm_exchange(
     Enregistre un échange complet avec le LLM dans un fichier JSONL.
     Le fichier est placé dans APP_WORKDIR (env var), ou dans le répertoire courant par défaut.
     """
-    workdir = os.environ.get("APP_WORKDIR", ".")
-    log_file = Path(workdir) / "llm_exchanges.jsonl"
+    workdir = Path(os.environ.get("APP_WORKDIR", "."))
+    log_file = workdir / "llm_exchanges.jsonl"
 
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),

@@ -58,12 +58,13 @@ def get_sync_redis() -> sync_redis.Redis:
 # Clés Redis
 # ---------------------------------------------------------------------------
 
-TASK_KEY_PREFIX     = "task:"
-RPM_KEY_PREFIX      = "rpm:"
-COOLDOWN_KEY_PREFIX   = "cooldown:"
-BATCH_QUEUE_PREFIX    = "batch:"
-CONS_ERR_KEY_PREFIX   = "cons_err:"
-DISABLED_KEY_PREFIX   = "disabled:"
+TASK_KEY_PREFIX        = "task:"
+RPM_KEY_PREFIX         = "rpm:"
+COOLDOWN_KEY_PREFIX    = "cooldown:"
+BATCH_QUEUE_PREFIX     = "batch:"
+CONS_ERR_KEY_PREFIX    = "cons_err:"
+DISABLED_KEY_PREFIX    = "disabled:"
+ACTIVE_WORKER_PREFIX   = "active_workers:"
 
 
 def _task_key(task_id: str) -> str:
@@ -220,9 +221,22 @@ def get_consecutive_errors(provider: str) -> int:
     return int(val) if val else 0
 
 
-def disable_provider(provider: str) -> None:
-    """Désactive définitivement un fournisseur (jusqu'à réactivation manuelle)."""
-    get_sync_redis().set(f"{DISABLED_KEY_PREFIX}{provider}", "1")
+def decrement_rpm(provider: str) -> None:
+    """Restitue un slot RPM réservé lorsque l'appel LLM échoue côté serveur.
+    Évite que les erreurs consomment du quota sans appel réussi."""
+    r = get_sync_redis()
+    key = _rpm_key(provider)
+    # On décrémente seulement si la clé existe (sinon DECR créerait -1)
+    if r.exists(key):
+        r.decr(key)
+
+
+def disable_provider(provider: str, timeout: int = 180) -> None:
+    """Désactive temporairement un fournisseur pour `timeout` secondes.
+    À l'expiration du TTL, Redis supprime la clé et le fournisseur redevient éligible."""
+    r = get_sync_redis()
+    r.set(f"{DISABLED_KEY_PREFIX}{provider}", "1", ex=timeout)
+    r.delete(f"{CONS_ERR_KEY_PREFIX}{provider}")
 
 
 def enable_provider(provider: str) -> None:
@@ -234,9 +248,47 @@ def enable_provider(provider: str) -> None:
     r.delete(_rpm_key(provider))
 
 
+def reset_all_rpm_counters(provider_names: list[str]) -> None:
+    """Remet à zéro les compteurs RPM de tous les providers au démarrage."""
+    r = get_sync_redis()
+    keys = [_rpm_key(name) for name in provider_names]
+    if keys:
+        r.delete(*keys)
+
+
 def is_provider_disabled(provider: str) -> bool:
     """Vérifie si un fournisseur a été désactivé suite à trop d'erreurs consécutives."""
     return get_sync_redis().exists(f"{DISABLED_KEY_PREFIX}{provider}") > 0
+
+
+
+# ---------------------------------------------------------------------------
+# Tracking des requêtes actives (Concurrency Limit)
+# ---------------------------------------------------------------------------
+
+def increment_active_worker(provider: str) -> int:
+    """Incrémente le compteur de workers actifs pour un provider."""
+    r = get_sync_redis()
+    key = f"{ACTIVE_WORKER_PREFIX}{provider}"
+    val = r.incr(key)
+    if val == 1:
+        r.expire(key, 600)  # Sécurité : expire après 10 minutes si le worker plante
+    return val
+
+def decrement_active_worker(provider: str) -> int:
+    """Décrémente le compteur de workers actifs pour un provider."""
+    r = get_sync_redis()
+    key = f"{ACTIVE_WORKER_PREFIX}{provider}"
+    val = r.decr(key)
+    if val < 0:
+        r.set(key, 0)
+        val = 0
+    return val
+
+def get_active_workers(provider: str) -> int:
+    """Retourne le nombre de workers actuellement occupés par ce provider."""
+    val = get_sync_redis().get(f"{ACTIVE_WORKER_PREFIX}{provider}")
+    return int(val) if val else 0
 
 
 # ---------------------------------------------------------------------------

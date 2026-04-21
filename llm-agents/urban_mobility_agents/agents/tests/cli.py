@@ -14,8 +14,7 @@ sys.path.append(os.path.join(this_dir, "../.."))
 
 from helper import setup_logging
 from settings import settings
-settings.force_reload_paths(workdir=os.path.join(this_dir, "workdir"))
-os.makedirs(settings.workdir , exist_ok=True)
+settings.force_reload_paths()
 
 settings.app.log_level = "DEBUG"
 setup_logging(settings)

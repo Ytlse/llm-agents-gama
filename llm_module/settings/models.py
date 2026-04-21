@@ -6,8 +6,8 @@ Séparer les modèles du reste évite les imports circulaires.
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional, Union
+from pydantic import BaseModel, Field, field_validator
 import uuid
 
 
@@ -77,11 +77,16 @@ class Task(BaseModel):
 
 class AgentResponse(BaseModel):
     """Un élément du tableau JSON retourné par le LLM."""
-    agent_id: str
+    agent_id: Union[str, int]
     chosen_index: Optional[int] = None
     mode: Optional[str] = None
     reason: Optional[str] = None
     summary: Optional[str] = None
+
+    @field_validator("agent_id")
+    @classmethod
+    def cast_agent_id_to_str(cls, v):
+        return str(v)
 
 
 class LLMOutput(BaseModel):

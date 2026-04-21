@@ -19,7 +19,6 @@ Différences notables vs OpenAI :
 """
 
 from __future__ import annotations
-import json
 from typing import Any, Dict, List, Tuple
 
 import httpx
@@ -27,15 +26,14 @@ import httpx
 from llm_module.adapters.base import (
     BaseAdapter,
     ProviderClientError,
-    ProviderParseError,
     ProviderServerError,
     extract_error_type,
     register_adapter,
 )
-from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
+from llm_module.settings.models import InternalRequest, LLMOutput
 from llm_module.telemetry.logger import get_logger
 
-logger = get_logger(__name__)
+_logger = get_logger(__name__)
 
 
 @register_adapter
@@ -60,8 +58,8 @@ class GoogleAdapter(BaseAdapter):
             "generationConfig": {
                 "temperature":      request.temperature,
                 "maxOutputTokens":  request.max_tokens,
-                "responseMimeType": "application/json",
-                "responseSchema":   self._clean_schema(request.response_schema),
+                "response_mime_type": "application/json",
+                "response_json_schema":   self._clean_schema(request.response_schema),
             },
         }
 
@@ -70,21 +68,34 @@ class GoogleAdapter(BaseAdapter):
                 "parts": [{"text": system_instruction}]
             }
 
-        from llm_module.tasks.config import settings
-        base_url = settings.providers[self.provider_name].base_url
+        base_url = self._get_base_url()
         url = f"{base_url}/models/{model}:generateContent?key={api_key.get_secret_value()}"
 
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                url,
-                headers={"Content-Type": "application/json"},
-                json=payload,
-            )
-
-        self._raise_for_status(response)
+        try:
+            with httpx.Client(timeout=240.0) as client:
+                response = client.post(
+                    url,
+                    headers={"Content-Type": "application/json"},
+                    json=payload,
+                )
+            self._raise_for_status(response)
+        except httpx.TimeoutException as exc:
+            _logger.warning(f"Timeout de l'API Google | model={model} error={exc}")
+            # 504 correspond à Gateway Timeout, éligible au mécanisme de Retry de votre worker
+            raise ProviderServerError(self.provider_name, 504, f"Request timeout: {exc}", error_type="timeout")
 
         data = response.json()
-        raw_content = data["candidates"][0]["content"]["parts"][0]["text"]
+        
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise ProviderClientError(self.provider_name, 400, f"Aucun candidat retourné. Data: {data}")
+            
+        candidate = candidates[0]
+        if "content" not in candidate or "parts" not in candidate["content"]:
+            finish_reason = candidate.get("finishReason", "UNKNOWN")
+            raise ProviderClientError(self.provider_name, 400, f"Réponse bloquée ou vide. Raison: {finish_reason}")
+
+        raw_content = candidate["content"]["parts"][0]["text"]
 
         usage      = data.get("usageMetadata", {})
         tokens_in  = usage.get("promptTokenCount", 0)
@@ -127,6 +138,35 @@ class GoogleAdapter(BaseAdapter):
             return [self._clean_schema(i) for i in schema]
         return schema
 
+    def ping(self) -> bool:
+        from llm_module.tasks.config import settings
+        try:
+            model = settings.providers[self._instance_name].default_model
+            api_key = self._get_api_key().get_secret_value()
+            url = f"{self._get_base_url()}/models/{model}:generateContent?key={api_key}"
+            _logger.debug(f"ping | provider={self._instance_name} model={model} url={url.split('?')[0]}")
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(
+                    url,
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{"parts": [{"text": "Hello"}]}],
+                        "generationConfig": {"maxOutputTokens": 5},
+                    },
+                )
+            ok = resp.status_code < 400
+            if ok:
+                _logger.debug(f"ping OK | provider={self._instance_name} status={resp.status_code}")
+            else:
+                _logger.warning(
+                    f"ping FAILED | provider={self._instance_name} "
+                    f"status={resp.status_code} body={resp.text[:500]!r}"
+                )
+            return ok
+        except Exception as exc:
+            _logger.warning(f"ping EXCEPTION | provider={self._instance_name} error={exc}")
+            return False
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         if response.status_code >= 500:
             raise ProviderServerError(
@@ -138,11 +178,3 @@ class GoogleAdapter(BaseAdapter):
                 self.provider_name, response.status_code, response.text,
                 error_type=extract_error_type(response.text, response.status_code),
             )
-
-    def _parse_output(self, raw: str) -> LLMOutput:
-        try:
-            data   = json.loads(raw)
-            agents = [AgentResponse(**item) for item in data["agents"]]
-            return LLMOutput(agents=agents)
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            raise ProviderParseError(self.provider_name, raw, str(e))

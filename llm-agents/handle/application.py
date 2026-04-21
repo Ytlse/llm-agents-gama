@@ -96,27 +96,37 @@ class LoopContainer:
 
         Continuously checks for new messages from the scenario and publishes them
         to the GAMA simulation. Handles connection failures and retries.
+
+        `pending` is declared outside the try/except so that any unexpected
+        exception (e.g. model_dump failure) never causes message loss: the
+        unsent items remain in the buffer and are retried on the next iteration.
         """
+        pending: list = []
         while True:
             try:
-                # Check if scenario has messages to publish
-                if self.scenario and await self.scenario.has_messages():
-                    messages = await self.scenario.pop_all_messages()
-                    len_messages = len(messages)
-                    while messages:
-                        message = messages[0]
-                        payload = message.model_dump()
-                        success = await self.websocket_client.send_json({
-                            "topic": self.action_topic,
-                            "payload": payload,
-                        })
-                        if not success:
-                            logger.error(f"Failed to send message: {payload}")
-                            await asyncio.sleep(1)  # Wait before retrying
-                            continue
-                        messages.pop(0)  # Remove the message from the list after sending
+                # Only fetch new messages when the pending buffer is empty.
+                if not pending and self.scenario and await self.scenario.has_messages():
+                    pending = await self.scenario.pop_all_messages()
 
-                    logger.info(f"Websocket loop Sent {len_messages} messages to {self.action_topic}")
+                sent = 0
+                while pending:
+                    message = pending[0]
+                    payload = message.model_dump()
+                    success = await self.websocket_client.send_json({
+                        "topic": self.action_topic,
+                        "payload": payload,
+                    })
+                    if not success:
+                        # WebSocket not ready — keep in buffer, retry next tick
+                        logger.warning(
+                            f"WebSocket not connected, will retry {len(pending)} pending message(s)"
+                        )
+                        break
+                    pending.pop(0)
+                    sent += 1
+
+                if sent > 0:
+                    logger.info(f"WebSocket loop sent {sent} message(s) to {self.action_topic}")
             except Exception as e:
                 logger.error(f"WebSocket publish loop error: {e}")
                 await asyncio.sleep(self.reconnect_interval)

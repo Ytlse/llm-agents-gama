@@ -7,7 +7,8 @@ Implémente :
                              sont indivisibles — aucun worker concurrent ne peut dépasser
                              le rpm_limit configuré
   - Circuit Breaker        : exclusion temporaire (cooldown) sur erreurs 5xx / 429
-  - Désactivation durable  : exclusion permanente après N erreurs consécutives
+  - Désactivation temporaire : exclusion automatique après N erreurs consécutives,
+                               réactivation après `disable_timeout` secondes (défaut 180s)
 
 """
 
@@ -16,7 +17,10 @@ import threading
 from typing import Dict, List, Optional
 
 from llm_module.tasks.config import settings
-from llm_module.broker.redis_broker import get_rpm, is_in_cooldown, is_provider_disabled, try_reserve_rpm
+from llm_module.broker.redis_broker import (
+    get_rpm, is_in_cooldown, is_provider_disabled, try_reserve_rpm, reset_all_rpm_counters,
+    get_active_workers,
+)
 from llm_module.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +48,7 @@ class LoadBalancer:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._cursor: int = 0
+        reset_all_rpm_counters(list(settings.providers.keys()))
         self._sequence: List[str] = self._build_sequence()
 
     # ------------------------------------------------------------------
@@ -53,18 +58,22 @@ class LoadBalancer:
     def _build_sequence(self) -> List[str]:
         """
         Construit la liste de rotation pondérée une seule fois au démarrage.
-        
-        Utilise l'algorithme Smooth Weighted Round-Robin (SWRR, type NGINX) 
-        pour garantir un entrelacement et éviter les micro-rafales 
+        Utilise l'algorithme Smooth Weighted Round-Robin (SWRR, type NGINX)
+        pour garantir un entrelacement et éviter les micro-rafales
         sur un même fournisseur.
         """
-        total_weight = sum(p.weight for p in settings.providers.values())
-        if total_weight == 0:
+        active = {name: cfg for name, cfg in settings.providers.items()}
+
+
+        if not active:
+            logger.error("Aucun provider disponible après health checks — séquence vide.")
             return []
+
+        total_weight = sum(p.weight for p in active.values())
 
         # Initialisation des états pour l'algorithme SWRR
         peers = []
-        for name, cfg in settings.providers.items():
+        for name, cfg in active.items():
             effective_weight = max(1, round((cfg.weight / total_weight) * 100))
             peers.append({"name": name, "weight": effective_weight, "current_weight": 0})
 
@@ -121,23 +130,25 @@ class LoadBalancer:
                 self._cursor += 1
 
             if self._try_reserve(candidate):
-                logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor}\n")
+                active = get_active_workers(candidate)
+                logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor} active_tasks={active}\n")
                 return candidate
 
         status_snapshot = {
             name: {
                 "rpm": get_rpm(name),
                 "limit": cfg.rpm_limit,
+                "active_tasks": get_active_workers(name),
                 "cooldown": is_in_cooldown(name),
                 "disabled": is_provider_disabled(name),
             }
             for name, cfg in settings.providers.items()
         }
         logger.warning(
-            f"[load_balancer] TOUS LES PROVIDERS SATURÉS | snapshot={status_snapshot}"
+            f"[load_balancer] TOUS LES PROVIDERS SATURÉS/OCCUPÉS | snapshot={status_snapshot}"
         )
         raise RuntimeError(
-            "Tous les fournisseurs LLM ont atteint leur quota RPM. "
+            "Tous les fournisseurs LLM sont saturés ou ont atteint leur limite de concurrence. "
             "Réessayez dans quelques secondes."
         )
 
@@ -163,9 +174,16 @@ class LoadBalancer:
         if is_in_cooldown(provider):
             return False
 
+        # Limite de concurrence : configurable par provider dans providers.yaml
+        max_active = cfg.concurrency_limit
+        active_count = get_active_workers(provider)
+        if active_count >= max_active:
+            logger.debug(f"Limite de concurrence atteinte | provider={provider} active={active_count}/{max_active}")
+            return False
+
         # Optimisation : évite le round-trip Lua si le quota est déjà dépassé.
         if get_rpm(provider) >= cfg.rpm_limit:
-            logger.warning(
+            logger.debug(
                 f"Quota RPM atteint (fast-path) | provider={provider} "
                 f"rpm_limit={cfg.rpm_limit}"
             )
@@ -188,10 +206,12 @@ class LoadBalancer:
                 not is_provider_disabled(name)
                 and not is_in_cooldown(name)
                 and current < cfg.rpm_limit
+                and get_active_workers(name) < cfg.concurrency_limit
             )
             status[name] = {
                 "current_rpm":  current,
                 "rpm_limit":    cfg.rpm_limit,
+                "active_tasks": get_active_workers(name),
                 "usage_pct":    round(current / cfg.rpm_limit * 100, 1) if cfg.rpm_limit else 0,
                 "cooldown":     is_in_cooldown(name),
                 "available":    available,

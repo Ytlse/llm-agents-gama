@@ -78,9 +78,62 @@ burst:
 
 .PHONY: run
 
+## Wait until the API and controller are ready (polls /health)
+wait-ready:
+	@echo "⏳ Attente que l'API soit prête (max 300s)..."
+	@elapsed=0; \
+	while ! curl -sf http://localhost:8000/health > /dev/null 2>&1; do \
+		if [ $$elapsed -ge 300 ]; then \
+			echo ""; \
+			echo "❌ Timeout : l'API (port 8000) n'a pas répondu en 300s."; \
+			echo "   Vérifiez les logs : make logs"; \
+			exit 1; \
+		fi; \
+		printf "\r   API  (port 8000) : %ds écoulées..." $$elapsed; \
+		sleep 5; elapsed=$$((elapsed + 5)); \
+	done
+	@echo "\n✅ API prête"
+	@echo "⏳ Attente que le Controller soit prêt (max 60s)..."
+	@elapsed=0; \
+	while ! curl -sf http://localhost:8002/ > /dev/null 2>&1; do \
+		if [ $$elapsed -ge 60 ]; then \
+			echo ""; \
+			echo "⚠️  Controller (port 8002) pas encore prêt, lancement GAMA quand même."; \
+			break; \
+		fi; \
+		printf "\r   Controller (port 8002) : %ds écoulées..." $$elapsed; \
+		sleep 3; elapsed=$$((elapsed + 3)); \
+	done
+	@echo "⏳ Attente que Grafana soit prêt (max 60s)..."
+	@elapsed=0; \
+	while ! curl -sf http://localhost:3000/api/health > /dev/null 2>&1; do \
+		if [ $$elapsed -ge 60 ]; then \
+			echo ""; \
+			echo "⚠️  Grafana (port 3000) pas encore prêt, lancement GAMA quand même."; \
+			break; \
+		fi; \
+		printf "\r   Grafana  (port 3000) : %ds écoulées..." $$elapsed; \
+		sleep 3; elapsed=$$((elapsed + 3)); \
+	done
+	@echo "\n✅ Services prêts — lancement GAMA autorisé"
+
 ## Start all services then launch the GAMA experiment
 ## Usage: make run [CONFIG=my_config.yaml] [EXPERIMENT_NAME=e]
-run: up
+run:
+	@read -p "Voulez-vous supprimer l'historique Prometheus/Grafana ? (y/N) : " ans; \
+	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || [ "$$ans" = "yes" ] || [ "$$ans" = "YES" ]; then \
+		echo "🗑️  Arrêt de Grafana et Prometheus..."; \
+		docker compose stop grafana prometheus 2>/dev/null || true; \
+		docker compose rm -f grafana prometheus 2>/dev/null || true; \
+		echo "🗑️  Suppression des données Grafana et Prometheus..."; \
+		rm -rf data/grafana_data data/prometheus_data; \
+		echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
+		docker compose exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r docker compose exec -T redis redis-cli del 2>/dev/null || true; \
+	else \
+		echo "⏩ Conservation des données existantes."; \
+	fi
+	@$(MAKE) up
+	@$(MAKE) wait-ready
 	@if pgrep -f "$(GAMA_BIN)" > /dev/null; then \
 		echo "⚠️  GAMA est déjà en cours d'exécution. Lancement ignoré."; \
 	else \

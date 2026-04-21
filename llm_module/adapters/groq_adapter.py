@@ -27,12 +27,11 @@ import httpx
 from llm_module.adapters.base import (
     BaseAdapter,
     ProviderClientError,
-    ProviderParseError,
     ProviderServerError,
     extract_error_type,
     register_adapter,
 )
-from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
+from llm_module.settings.models import InternalRequest, LLMOutput
 
 from llm_module.telemetry.logger import get_logger
 logger = get_logger(__name__)
@@ -45,8 +44,7 @@ class GroqAdapter(BaseAdapter):
         api_key = self._get_api_key()
         model   = self._resolve_model(request)
 
-        from llm_module.tasks.config import settings
-        base_url = settings.providers[self.provider_name].base_url
+        base_url = self._get_base_url()
         url = f"{base_url}/chat/completions"
 
         payload: Dict[str, Any] = {
@@ -91,6 +89,27 @@ class GroqAdapter(BaseAdapter):
             for msg in request.messages
         ]
 
+    def ping(self) -> bool:
+        from llm_module.tasks.config import settings
+        try:
+            model = settings.providers[self._instance_name].default_model
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.post(
+                    f"{self._get_base_url()}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self._get_api_key().get_secret_value()}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": "Hello"}],
+                        "max_tokens": 5,
+                    },
+                )
+            return resp.status_code < 400
+        except Exception:
+            return False
+
     def _raise_for_status(self, response: httpx.Response) -> None:
         if response.status_code >= 500:
             raise ProviderServerError(
@@ -103,10 +122,3 @@ class GroqAdapter(BaseAdapter):
                 error_type=extract_error_type(response.text, response.status_code),
             )
 
-    def _parse_output(self, raw: str) -> LLMOutput:
-        try:
-            data = json.loads(raw)
-            agents = [AgentResponse(**item) for item in data["agents"]]
-            return LLMOutput(agents=agents)
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            raise ProviderParseError(self.provider_name, raw, str(e))

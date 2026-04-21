@@ -26,15 +26,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from llm_module.broker.redis_broker import (
     get_task_async, save_task_async, add_task_to_batch_async,
     scan_worker_metrics, get_worker_metric, WORKER_METRIC_PREFIX,
-    get_sync_redis,
+    get_sync_redis, is_provider_disabled, is_in_cooldown, DISABLED_KEY_PREFIX,
 )
 from llm_module.load_balancer.router import load_balancer
 from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
-from llm_module.tasks.config import settings, get_batch_max_agents
+from llm_module.tasks.config import settings, get_batch_max_agents, _load_provider_defaults
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
-from prometheus_client.metrics_core import CounterMetricFamily
+from prometheus_client.metrics_core import CounterMetricFamily, GaugeMetricFamily
 
 
 logger = get_logger(__name__)
@@ -85,14 +85,38 @@ class WorkerMetricsCollector:
     """
 
     def collect(self):
+        try:
+            yield from self._collect()
+        except Exception as exc:
+            logger.error(f"WorkerMetricsCollector.collect() failed: {exc}")
+
+    def _collect(self):
         r = get_sync_redis()
 
         # ── Appels LLM par provider ──────────────────────────────────────────
+        # On scanne Redis directement pour ne pas dépendre de settings.providers
+        # (un provider peut avoir des métriques en Redis sans clé API configurée).
         ok_fam  = CounterMetricFamily('llm_provider_calls_ok_total',  'Appels LLM réussis par provider',  labels=['provider'])
         err_fam = CounterMetricFamily('llm_provider_calls_err_total', 'Appels LLM échoués par provider',  labels=['provider'])
+        ok_prefix  = f"{WORKER_METRIC_PREFIX}llm_calls_ok_total:"
+        err_prefix_calls = f"{WORKER_METRIC_PREFIX}llm_calls_err_total:"
+        seen_call_providers: set[str] = set()
+        for key in r.scan_iter(f"{ok_prefix}*"):
+            provider = key.removeprefix(ok_prefix)
+            seen_call_providers.add(provider)
+            val = r.get(key)
+            ok_fam.add_metric([provider], int(val) if val else 0)
+        for key in r.scan_iter(f"{err_prefix_calls}*"):
+            provider = key.removeprefix(err_prefix_calls)
+            seen_call_providers.add(provider)
+        for provider in seen_call_providers:
+            val = r.get(f"{err_prefix_calls}{provider}")
+            err_fam.add_metric([provider], int(val) if val else 0)
+        # Fallback : providers configurés mais sans appels encore (valeur 0)
         for provider in settings.providers:
-            ok_fam.add_metric([provider],  get_worker_metric(f"llm_calls_ok_total:{provider}"))
-            err_fam.add_metric([provider], get_worker_metric(f"llm_calls_err_total:{provider}"))
+            if provider not in seen_call_providers:
+                ok_fam.add_metric([provider], 0)
+                err_fam.add_metric([provider], 0)
         yield ok_fam
         yield err_fam
 
@@ -209,6 +233,48 @@ class WorkerMetricsCollector:
             val = r.get(key)
             idx_fam.add_metric([idx_label], int(val) if val else 0)
         yield idx_fam
+
+        # ── État des providers ─────────────────────────────────────────────────
+        # 0=sans_cle_api, 1=desactive_temporairement (disable_provider TTL), 2=cooldown, 3=actif
+        state_fam = GaugeMetricFamily(
+            'llm_provider_state',
+            'État du provider: 0=sans_cle_api, 1=desactive_tmp, 2=cooldown, 3=actif',
+            labels=['provider'],
+        )
+        all_providers = _load_provider_defaults()
+        for provider in all_providers:
+            if provider not in settings.providers:
+                state_fam.add_metric([provider], 0)
+            elif is_provider_disabled(provider):
+                state_fam.add_metric([provider], 1)
+            elif is_in_cooldown(provider):
+                state_fam.add_metric([provider], 2)
+            else:
+                state_fam.add_metric([provider], 3)
+        yield state_fam
+
+        # ── TTL restant désactivation temporaire (via disable_provider) ────────
+        # Expose le nombre de secondes avant réactivation automatique.
+        disable_ttl_fam = GaugeMetricFamily(
+            'llm_provider_disable_ttl_seconds',
+            'Secondes avant réactivation automatique du provider (0 si actif)',
+            labels=['provider'],
+        )
+        for provider in settings.providers:
+            ttl = r.ttl(f"{DISABLED_KEY_PREFIX}{provider}")
+            disable_ttl_fam.add_metric([provider], ttl if ttl > 0 else 0)
+        yield disable_ttl_fam
+
+        # ── Info statique providers (modèle, adapter) ──────────────────────────
+        info_fam = GaugeMetricFamily(
+            'llm_provider_info',
+            'Informations statiques du provider (modèle, adapter)',
+            labels=['provider', 'model', 'adapter'],
+        )
+        for provider, cfg in settings.providers.items():
+            adapter = cfg.adapter or provider
+            info_fam.add_metric([provider, cfg.default_model, adapter], 1)
+        yield info_fam
 
 
 REGISTRY.register(WorkerMetricsCollector())

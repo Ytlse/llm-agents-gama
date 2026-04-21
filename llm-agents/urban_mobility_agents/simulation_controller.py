@@ -344,7 +344,10 @@ class SimulationLoopV1(BaseScenario):
                     )
 
         tasks = [process_person(person) for person in idle_people]
-        await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for person, result in zip(idle_people, results):
+            if isinstance(result, BaseException):
+                logger.error(f"[schedule_move] Unhandled error for person {person.person_id}: {result}")
 
         _schedule_duration = time.monotonic() - _schedule_start
         new_moves = len(self._messages)
@@ -406,7 +409,7 @@ class SimulationLoopV1(BaseScenario):
             departure_time=actual_departure_time,
         )
         _otp_duration = time.monotonic() - _otp_start
-        if _otp_duration > 2.0:
+        if _otp_duration > 5.0:
             logger.warning(
                 f"[otp] Slow itinerary query | person={person.person_id} "
                 f"duration={_otp_duration:.2f}s n_results={len(itineraries)}"
@@ -447,7 +450,7 @@ class SimulationLoopV1(BaseScenario):
                     options=itineraries,
                     destination=next_activity.purpose,
                 )
-                if plan_index and isinstance(plan_index, int) and len(itineraries) > plan_index and plan_index >= 0:
+                if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     pass
                 else:
                     plan_index = 0

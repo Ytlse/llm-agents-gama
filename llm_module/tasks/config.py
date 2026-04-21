@@ -1,51 +1,33 @@
 from __future__ import annotations
+from pathlib import Path
 from typing import Dict, Optional
+import yaml
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from llm_module.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
 
+_PROVIDERS_YAML = Path(__file__).parent.parent / "config" / "providers.yaml"
 
-_PROVIDER_DEFAULTS: Dict[str, dict] = {
-    "openai": {
-        "rpm_limit":        15,
-        "base_url":         "https://api.openai.com/v1",
-        "default_model":    "gpt-4o-mini",
-        "weight":           1.0,
-        "batch_max_agents": 10,
-    },
-    "mistral": {
-        "rpm_limit":        100,
-        "base_url":         "https://api.mistral.ai/v1",
-        "default_model":    "mistral-small-latest",
-        "weight":           2.0,
-        "batch_max_agents": 10,
-    },
-    "google": {
-        "rpm_limit":        15,
-        "base_url":         "https://generativelanguage.googleapis.com/v1beta",
-        "default_model":    "gemini-3.1-flash-lite-preview",
-        "weight":           1.0,
-        "batch_max_agents": 15,
-    },
-    "groq": {
-        "rpm_limit":        30,
-        "base_url":         "https://api.groq.com/openai/v1",
-        "default_model":    "openai/gpt-oss-120b",
-        "weight":           1.0,
-        "batch_max_agents": 2,
-    },
-}
+
+def _load_provider_defaults() -> Dict[str, dict]:
+    """Charge la liste des providers depuis providers.yaml."""
+    with open(_PROVIDERS_YAML, "r") as f:
+        data = yaml.safe_load(f)
+    return data.get("providers", {})
 
 
 class ProviderConfig(BaseModel):
-    api_key:          SecretStr = SecretStr("")
-    rpm_limit:        int
-    base_url:         str
-    default_model:    str
-    weight:           float = 1.0
-    batch_max_agents: int   = 5
+    api_key:           SecretStr = SecretStr("")
+    rpm_limit:         int
+    base_url:          str
+    default_model:     str
+    weight:            float = 1.0
+    batch_max_agents:  int   = 5
+    concurrency_limit: int   = 2   # nb workers Celery simultanés autorisés pour ce provider
+    disable_timeout:   int   = 180  # secondes de désactivation automatique après N erreurs consécutives
+    adapter:           str   = ""   # nom de la classe d'adapter ; vide = utiliser le nom du provider
 
     def __repr__(self) -> str:
         return (
@@ -56,6 +38,7 @@ class ProviderConfig(BaseModel):
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter='__')
 
     redis_url:                  str   = "redis://localhost:6379/0"
     celery_broker_url:          str   = "redis://localhost:6379/1"
@@ -66,7 +49,7 @@ class Settings(BaseSettings):
     batch_max_agents:           int   = 5
     batch_delay_seconds:        float = 1.0
 
-    # Les api_key viennent de l'env : PROVIDER_KEYS__openai=sk-...
+    # Les api_key viennent de l'env : PROVIDER_KEYS__groq=gsk-...
     provider_keys: Dict[str, SecretStr] = {}
 
     # Construit après validation — pas lu depuis l'env
@@ -74,10 +57,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def build_providers(self) -> "Settings":
+        defaults = _load_provider_defaults()
         result = {}
-        for name, defaults in _PROVIDER_DEFAULTS.items():
-            key = self.provider_keys.get(name, SecretStr(""))
-            result[name] = ProviderConfig(api_key=key, **defaults)
+        for name, entry in defaults.items():
+            # L'api_key est lue via le nom de l'instance ou du provider de base (champ adapter)
+            adapter_name = entry.get("adapter", name)
+            key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+            result[name] = ProviderConfig(api_key=key, **entry)
         self.providers = result
         return self
 

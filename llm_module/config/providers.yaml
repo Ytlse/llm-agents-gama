@@ -12,71 +12,109 @@
 providers:
 
   openai:
-    rpm_limit:        15
-    base_url:         https://api.openai.com/v1
-    default_model:    gpt-4o-mini
-    weight:           1.0
-    batch_max_agents: 10
+    rpm_limit:         15
+    base_url:          https://api.openai.com/v1
+    default_model:     gpt-4o-mini
+    weight:            1.0
+    batch_max_agents:  10
+    concurrency_limit: 3   # 3 × 10 agents = 30 évalués simultanément, RPM=15 contrôle la cadence
 
   mistral:
-    rpm_limit:        100
-    base_url:         https://api.mistral.ai/v1
-    default_model:    mistral-small-latest
-    weight:           1.0
-    batch_max_agents: 10
+    rpm_limit:         100
+    base_url:          https://api.mistral.ai/v1
+    default_model:     mistral-small-latest
+    weight:            1.0
+    batch_max_agents:  10
+    concurrency_limit: 5   # 100 RPM laisse de la marge pour 5 workers parallèles
 
-  google:
-    rpm_limit:        14
-    base_url:         https://generativelanguage.googleapis.com/v1beta
-    default_model:    gemini-2.0-flash-lite
-    weight:           2.0
-    batch_max_agents: 40
-    disable_timeout:  120
+  google_gemini31:
+    adapter:           google
+    rpm_limit:         14
+    base_url:          https://generativelanguage.googleapis.com/v1beta
+    default_model:     gemini-3.1-flash-lite-preview
+    weight:            2.0
+    batch_max_agents:  40
+    concurrency_limit: 2   # batches de 40 agents = déjà très dense, inutile d'augmenter
+    disable_timeout:   120
+
+  google_gemma42:
+    adapter:           google
+    rpm_limit:         5
+    base_url:          https://generativelanguage.googleapis.com/v1beta
+    default_model:     gemma-4-26b-a4b-it
+    weight:            2.0
+    batch_max_agents:  2
+    concurrency_limit: 2
+    disable_timeout:   120
+
+  google_gemma43:
+    adapter:           google
+    rpm_limit:         25
+    base_url:          https://generativelanguage.googleapis.com/v1beta
+    default_model:     gemma-4-31b-it
+    weight:            2.0
+    batch_max_agents:  2
+    concurrency_limit: 3
+    disable_timeout:   120
+
+  # google_gemma3n:
+  #   adapter:          google
+  #   rpm_limit:        25
+  #   base_url:         https://generativelanguage.googleapis.com/v1beta
+  #   default_model:    gemma-3n-e2b-it
+  #   weight:           2.0
+  #   batch_max_agents: 2
+  #   disable_timeout:  120
 
   # ── Groq — trois instances pointant sur des modèles différents ──────────────
   # L'API key partagée est lue depuis PROVIDER_KEYS__groq dans l'environnement.
 
   groq_llama3:
-    adapter:          groq
-    rpm_limit:        25
-    base_url:         https://api.groq.com/openai/v1
-    default_model:    llama-3.3-70b-versatile
-    weight:           1.0
-    batch_max_agents: 1 #12K
-    disable_timeout:  120
+    adapter:           groq
+    rpm_limit:         25
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     llama-3.3-70b-versatile
+    weight:            1.0
+    batch_max_agents:  1 #12K
+    concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
+    disable_timeout:   120
 
   groq_llama4:
-    adapter:          groq
-    rpm_limit:        25
-    base_url:         https://api.groq.com/openai/v1
-    default_model:    meta-llama/llama-4-scout-17b-16e-instruct
-    weight:           1.0
-    batch_max_agents: 4 #30K
-    disable_timeout:  120
+    adapter:           groq
+    rpm_limit:         25
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     meta-llama/llama-4-scout-17b-16e-instruct
+    weight:            1.0
+    batch_max_agents:  4 #30K
+    concurrency_limit: 4
+    disable_timeout:   120
 
   groq_qwen:
-    adapter:          groq
-    rpm_limit:        25
-    base_url:         https://api.groq.com/openai/v1
-    default_model:    qwen/qwen3-32b
-    weight:           1.0
-    batch_max_agents: 1 #6K
-    disable_timeout:  120
+    adapter:           groq
+    rpm_limit:         10
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     qwen/qwen3-32b
+    weight:            1.0
+    batch_max_agents:  1 #6K
+    concurrency_limit: 3
+    disable_timeout:   120
 
   groq_llama31:
-    adapter:          groq
-    rpm_limit:        25
-    base_url:         https://api.groq.com/openai/v1
-    default_model:    llama-3.1-8b-instant
-    weight:           1.0
-    batch_max_agents: 1
-    disable_timeout:  120
+    adapter:           groq
+    rpm_limit:         10
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     llama-3.1-8b-instant
+    weight:            1.0
+    batch_max_agents:  1
+    concurrency_limit: 3
+    disable_timeout:   120
 
   groq_openai:
-    adapter:          groq
-    rpm_limit:        25
-    base_url:         https://api.groq.com/openai/v1
-    default_model:    openai/gpt-oss-120b
-    weight:           1.0
-    batch_max_agents: 1
-    disable_timeout:  120
+    adapter:           groq
+    rpm_limit:         10
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     openai/gpt-oss-120b
+    weight:            1.0
+    batch_max_agents:  1
+    concurrency_limit: 3
+    disable_timeout:   120
