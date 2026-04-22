@@ -1,5 +1,4 @@
 # scalable_memory.py - Scalable long-term memory system optimized for 1000+ users
-import os
 import json
 import gc
 from datetime import datetime, timedelta
@@ -13,8 +12,6 @@ from settings import settings
 
 from loguru import logger
 import numpy as np
-
-from helper import time_to_bucket_text
 
 @dataclass
 class MemorySearchResult:

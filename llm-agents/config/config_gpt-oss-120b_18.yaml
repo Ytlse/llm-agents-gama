@@ -72,4 +72,3 @@ agent:
 
     The **FIRST PRIORITY** is to find the best route that you can trust to travel every day. If you have a route that you can trust, you can use it even if it is not the best in terms of total travel time or walking time. If you don't have a trusted route, you must find the best route based on the above priorities.
 
-workdir: "../experiments/gpt-oss-120b_18"

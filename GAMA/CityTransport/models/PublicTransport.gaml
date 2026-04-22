@@ -26,7 +26,7 @@ global {
 	bool show_always_show_gtfs_routes <- true;
 	float show_label_density <- 1.0;
 	
-	bool pt_verbose <- false;
+	bool pt_verbose <- true;
 	
 	// global
 	map<string, stop> ALL_STOPS <- map([]);

@@ -1,0 +1,690 @@
+{
+  "title": "LLM Agents — Monitoring",
+  "uid": "llm-agents-v2",
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "tags": ["llm", "agents"],
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+  },
+  "refresh": "10s",
+  "timezone": "browser",
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "Vue Globale", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+
+    {
+      "id": 1, "type": "stat", "title": "Appels LLM réussis (total)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{ "refId": "A", "expr": "sum(llm_provider_calls_ok_total)", "legendFormat": "Succès" }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 }
+    },
+
+    {
+      "id": 2, "type": "stat", "title": "Erreurs LLM (total)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{ "refId": "A", "expr": "sum(llm_provider_calls_err_total)", "legendFormat": "Erreurs" }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }, { "color": "red", "value": 1 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 }
+    },
+
+    {
+      "id": 3, "type": "gauge", "title": "Taux de réussite global (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 * sum(llm_provider_calls_ok_total) / clamp_min(sum(llm_provider_calls_ok_total) + sum(llm_provider_calls_err_total), 1)",
+        "legendFormat": "Taux de réussite"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 },
+            { "color": "orange", "value": 80 },
+            { "color": "green", "value": 95 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdMarkers": true },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 }
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "Agents traités (total)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{ "refId": "A", "expr": "sum(llm_agents_batched_total)", "legendFormat": "Agents" }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 }
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "Ratio batching (agents/prompt)",
+      "description": "Nombre moyen d'agents regroupés par prompt envoyé au LLM",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "sum(llm_agents_batched_total) / clamp_min(sum(llm_prompts_sent_total), 1)",
+        "legendFormat": "Ratio"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 }
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Agents reçus de GAMA (total)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{ "refId": "A", "expr": "sum(gama_agents_received_total)", "legendFormat": "GAMA" }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "semi-dark-orange", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 }
+    },
+
+    { "id": 101, "type": "row", "title": "Requêtes par Provider", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 } },
+
+    {
+      "id": 7, "type": "timeseries", "title": "Débit appels réussis par provider (appels/min)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "rate(llm_provider_calls_ok_total[1m]) * 60",
+        "legendFormat": "{{provider}} — OK"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 }
+    },
+
+    {
+      "id": 8, "type": "timeseries", "title": "Débit erreurs par provider (appels/min)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "rate(llm_provider_calls_err_total[1m]) * 60",
+        "legendFormat": "{{provider}} — Erreurs"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 }
+    },
+
+    {
+      "id": 9, "type": "bargauge", "title": "Taux de réussite par provider (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 * llm_provider_calls_ok_total / clamp_min(llm_provider_calls_ok_total + llm_provider_calls_err_total, 1)",
+        "legendFormat": "{{provider}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 },
+            { "color": "orange", "value": 80 },
+            { "color": "green", "value": 95 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }, "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 14 }
+    },
+
+    {
+      "id": 10, "type": "timeseries", "title": "Cumul appels par provider",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_provider_calls_ok_total",
+          "legendFormat": "{{provider}} — OK"
+        },
+        {
+          "refId": "B",
+          "expr": "llm_provider_calls_err_total",
+          "legendFormat": "{{provider}} — Erreurs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 16, "x": 8, "y": 14 }
+    },
+
+    {
+      "id": 18, "type": "timeseries", "title": "Taux de réussite par provider (% / min)",
+      "description": "Pourcentage d'appels LLM réussis par rapport au total, calculé sur une fenêtre glissante de 1 minute, par provider",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 * rate(llm_provider_calls_ok_total[1m]) / (rate(llm_provider_calls_ok_total[1m]) + rate(llm_provider_calls_err_total[1m]))",
+        "legendFormat": "{{provider}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 },
+            { "color": "orange", "value": 80 },
+            { "color": "green", "value": 95 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 }
+    },
+
+    { "id": 102, "type": "row", "title": "Analyse des Erreurs", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 } },
+
+    {
+      "id": 199, "type": "stat", "title": "État des providers",
+      "description": "État courant de chaque provider. « Désactivé (tmp) » = ban temporaire (180s) déclenché par trop d'erreurs consécutives via disable_provider — le provider se réactive automatiquement à expiration du TTL.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_provider_state",
+        "legendFormat": "{{provider}}",
+        "instant": true
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "Sans clé API",    "color": "gray",   "index": 0 },
+                "1": { "text": "Désactivé (tmp)", "color": "red",    "index": 1 },
+                "2": { "text": "En pause",        "color": "orange", "index": 2 },
+                "3": { "text": "Actif",           "color": "green",  "index": 3 }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "gray",   "value": null },
+            { "color": "red",    "value": 1 },
+            { "color": "orange", "value": 2 },
+            { "color": "green",  "value": 3 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "text": {}
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 31 }
+    },
+
+    {
+      "id": 197, "type": "bargauge", "title": "Réactivation dans (secondes)",
+      "description": "Temps restant avant réactivation automatique des providers désactivés temporairement. 0 = provider actif ou non configuré.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_provider_disable_ttl_seconds",
+        "legendFormat": "{{provider}}",
+        "instant": true
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s", "min": 0,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "red",   "value": 1 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 36 }
+    },
+
+    {
+      "id": 12, "type": "timeseries",
+      "title": "Accumulation des erreurs par type (courbe cumulative)",
+      "description": "Valeur absolue cumulative du compteur d'erreurs par type — la courbe monte à chaque nouvelle erreur et ne redescend jamais.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "sum by (provider, error_type) (llm_provider_errors_by_type_total) * on(provider) group_left(model) llm_provider_info",
+        "legendFormat": "{{provider}} ({{model}}) — {{error_type}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 31 }
+    },
+
+    { "id": 110, "type": "row", "title": "Consommation de Tokens", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 } },
+
+    {
+      "id": 50, "type": "stat", "title": "Tokens totaux consommés",
+      "description": "Total des tokens en entrée + sortie depuis le démarrage (tous providers).",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_tokens_in_total{provider=\"__all__\"} + llm_tokens_out_total{provider=\"__all__\"}",
+        "legendFormat": "Total"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 67 }
+    },
+
+    {
+      "id": 51, "type": "stat", "title": "Tokens d'entrée (prompt)",
+      "description": "Total des tokens envoyés dans les prompts (tous providers).",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_tokens_in_total{provider=\"__all__\"}",
+        "legendFormat": "Tokens in"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-green" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "semi-dark-green", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 67 }
+    },
+
+    {
+      "id": 52, "type": "stat", "title": "Tokens de sortie (completion)",
+      "description": "Total des tokens générés en réponse (tous providers).",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "llm_tokens_out_total{provider=\"__all__\"}",
+        "legendFormat": "Tokens out"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "semi-dark-orange" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "semi-dark-orange", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 67 }
+    },
+
+    {
+      "id": 53, "type": "stat", "title": "Tokens in/out moyens par prompt",
+      "description": "Nombre moyen de tokens en entrée et sortie par appel LLM réussi.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_tokens_in_total{provider=\"__all__\"} / clamp_min(sum(llm_provider_calls_ok_total), 1)",
+          "legendFormat": "Moy. in"
+        },
+        {
+          "refId": "B",
+          "expr": "llm_tokens_out_total{provider=\"__all__\"} / clamp_min(sum(llm_provider_calls_ok_total), 1)",
+          "legendFormat": "Moy. out"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "purple" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "purple", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 67 }
+    },
+
+    {
+      "id": 54, "type": "bargauge", "title": "Tokens totaux par provider",
+      "description": "Total de tokens (in + out) consommés par chaque provider depuis le démarrage.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "(llm_tokens_in_total + llm_tokens_out_total) unless llm_tokens_in_total{provider=\"__all__\"}",
+        "legendFormat": "{{provider}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 67 }
+    },
+
+    {
+      "id": 55, "type": "timeseries", "title": "Tokens consommés dans le temps (cumul par provider)",
+      "description": "Évolution cumulative des tokens en entrée et sortie par provider. La pente indique le rythme de consommation.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_tokens_in_total unless llm_tokens_in_total{provider=\"__all__\"}",
+          "legendFormat": "{{provider}} — in"
+        },
+        {
+          "refId": "B",
+          "expr": "llm_tokens_out_total unless llm_tokens_out_total{provider=\"__all__\"}",
+          "legendFormat": "{{provider}} — out"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 71 }
+    },
+
+    {
+      "id": 56, "type": "timeseries", "title": "Débit de tokens (tokens/s par provider)",
+      "description": "Rythme de consommation de tokens par seconde sur une fenêtre glissante d'1 minute.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llm_tokens_in_total[1m]) unless rate(llm_tokens_in_total{provider=\"__all__\"}[1m])",
+          "legendFormat": "{{provider}} — in/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(llm_tokens_out_total[1m]) unless rate(llm_tokens_out_total{provider=\"__all__\"}[1m])",
+          "legendFormat": "{{provider}} — out/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 71 }
+    },
+
+    {
+      "id": 57, "type": "barchart", "title": "Tokens moyens par appel LLM par provider",
+      "description": "Ratio tokens / appels réussis pour chaque provider. Reflète la taille moyenne des prompts et réponses.",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(llm_tokens_in_total unless llm_tokens_in_total{provider=\"__all__\"}) / clamp_min(llm_provider_calls_ok_total, 1)",
+          "legendFormat": "{{provider}} — in moy.",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "(llm_tokens_out_total unless llm_tokens_out_total{provider=\"__all__\"}) / clamp_min(llm_provider_calls_ok_total, 1)",
+          "legendFormat": "{{provider}} — out moy.",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 80, "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
+        }, "overrides": []
+      },
+      "options": {
+        "barWidth": 0.6,
+        "fillOpacity": 80,
+        "groupWidth": 0.7,
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "orientation": "auto",
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 79 }
+    },
+
+    { "id": 103, "type": "row", "title": "Batching & Catégories", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 87 } },
+
+    {
+      "id": 14, "type": "timeseries", "title": "Agents reçus de GAMA par catégorie",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "rate(gama_agents_received_total[1m])",
+        "legendFormat": "{{category}}"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 88 }
+    },
+
+    {
+      "id": 15, "type": "timeseries", "title": "Prompts envoyés vs agents batchés par catégorie",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llm_prompts_sent_total[1m])",
+          "legendFormat": "prompts — {{category}}"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(llm_agents_batched_total[1m])",
+          "legendFormat": "agents — {{category}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 88 }
+    },
+
+    { "id": 104, "type": "row", "title": "OpenTripPlanner (OTP)", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 96 } },
+
+    {
+      "id": 16, "type": "timeseries", "title": "OTP — Requêtes OK vs Erreurs (req/s)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(otp_requests_ok_total[1m])",
+          "legendFormat": "OK / s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(otp_requests_err_total[1m])",
+          "legendFormat": "Erreurs / s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Erreurs / s" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 97 }
+    },
+
+    {
+      "id": 17, "type": "timeseries", "title": "OTP — Latence (p50 / p95)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, rate(otp_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, rate(otp_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 97 }
+    }
+
+  ]
+}

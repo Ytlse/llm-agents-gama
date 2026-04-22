@@ -57,7 +57,6 @@ class SolariTripHelper(TripHelper):
                     except Exception as e:
                         logger.error(f"Error parsing travel plan: {e}, body: {item}")
                 plans = list(filter(lambda x: x.legs, plans))
-                logger.debug(f"Payload: {payload}, found {len(plans)} itineraries")
                 return plans
 
 

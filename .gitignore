@@ -1,8 +1,34 @@
-exports/
-samples/
-experiments*/
-.DS_Store
-results/
-.venv
+# Environnements virtuels Python
+.venv/
+venv/
+env/
+
+# Fichiers de configuration locaux et secrets
 .env
+
+# Cache et fichiers temporaires macOS
+.DS_Store
+
+# Dossiers de résultats et d'export
+exports/
+results/
+samples/
+
+# Dossiers de données de monitoring
+grafana_data/
+prometheus_data/
+
+# Fichiers de logs et de cache Python
+*.pyc
+*.log
+__pycache__/
+
+# Fichiers de données et de debug spécifiques
+llm-agents/debug.txt
+llm-agents/llm_exchanges.jsonl
+
+# Dossiers d'expérimentations
+experiments*/
+
+# Fichiers CSV dans un sous-dossier spécifique
 scripts/general/*.csv

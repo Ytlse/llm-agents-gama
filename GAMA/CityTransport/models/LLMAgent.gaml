@@ -63,8 +63,8 @@ species llm_agent_sync skills:[network] {
 	}
 
 	/**
-	 * Synchronisation périodique - envoie des données de population inactive toutes les 15 minutes
-	 * Toutes les heures, inclut la liste complète des personnes inactives avec leurs localisations
+	 * Synchronisation périodique - envoie des données de population inactive vec leurs localisations toutes les 60 minutes
+	 * Toutes les 15 minutes envoit le timestamp
 	 */
 	reflex sync when: every(15#mn) and cycle > 1 {
 		list<unknown> idle_people <- [];
@@ -76,16 +76,20 @@ species llm_agent_sync skills:[network] {
 					"location"::[
 						"lon"::ploc.x,
 				    	"lat"::ploc.y
-					]	
+					]
 				];
 			}
 		}
+
+		string json_body;
+		if length(idle_people) > 0 {
+			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP, "idle_people"::idle_people]);
+		} else {
+			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP]);
+		}
 		do send to: "/sync" contents: [
 			"POST",
-			to_json([
-				"timestamp"::CURRENT_TIMESTAMP,
-				"idle_people"::idle_people
-			]),
+			json_body,
 			["Content-Type"::"application/json"]
 		];
 	}
@@ -100,6 +104,11 @@ species llm_agent_sync skills:[network] {
 		{
 			message mess <- fetch_message();
 			string jsonBody <- map(mess.contents)["BODY"];
+			// Guard against non-JSON responses (e.g. HTTP 500 "Internal Server Error")
+			if jsonBody = nil or not (jsonBody contains "{") {
+				write "[ERROR] Received non-JSON HTTP response from controller: " + jsonBody;
+				continue;
+			}
 			map<string, unknown> json <- from_json(jsonBody);
 			if bool(json["success"]) != true {
 				write "[ERROR] Got error message: " + string(json);
@@ -244,7 +253,3 @@ species llm_agent_test skills:[network] {
 		
 	}
 }
-
-
-
-

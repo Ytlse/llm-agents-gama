@@ -1,8 +1,10 @@
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
+import shutil
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings
 import os
 
@@ -10,82 +12,6 @@ import yaml
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
-
-class VLLMSettings(BaseSettings):
-    """Settings for VLLM server."""
-    vllm_endpoint: str = os.getenv("VLLM_ENDPOINT", "")
-
-
-class LLMServerSettings(BaseSettings):
-    vllm: VLLMSettings = VLLMSettings()
-
-    MODELS: list[dict[str, Any]] = [
-        {
-            "code": "mistral-7B-instruct-v0.3",
-            "model": "RedHatAI/Mistral-7B-Instruct-v0.3-GPTQ-4bit",
-            # "model": "mistralai/Mistral-7B-Instruct-v0.3",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("VLLM_API_KEY", "EMPTY"),
-            "api_url": os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:1234/v1"),
-            "metadata": {
-                "context_window": 32768,
-            }
-        },
-        {
-            "code": "meta-llama-3-8b-instruct",
-            # "model": "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF",
-            "model": "meta-llama/Meta-Llama-3-8B-Instruct",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("VLLM_API_KEY", "EMPTY"),
-            "api_url": os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:1234/v1"),
-            "metadata": {
-                "context_window": 32768,
-            }
-        },
-        {
-            "code": "gpt-4",
-            "model": "gpt-4",
-            "llm_provider": "openai",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            # "base_url": "https://api.openai.com/v1",
-            "api_url": None,
-        },
-        {
-            "code": "llama3-8b-8192",
-            "model": "llama3-8b-8192",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "qwen/qwen3-32b",
-            "model": "qwen/qwen3-32b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "openai/gpt-oss-120b",
-            "model": "openai/gpt-oss-120b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "deepseek-r1-distill-llama-70b",
-            "model": "deepseek-r1-distill-llama-70b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "llama-3.3-70b-versatile",
-            "model": "llama-3.3-70b-versatile",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-    ]
 
 def merge_configs(*config_paths: str) -> Dict[str, Any]:
     """Merge multiple YAML files, with later files overriding earlier ones."""
@@ -238,21 +164,24 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # Remote LLM settings
     remote_llm_max_concurrent_requests: Optional[int] = 20
+    remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file"]
-    
-    # History settings
-    history_file: str = "history.jsonl"
+    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file"]
+
+    # Simulation history log (HistoryStreamLog)
     history_file_v2: str = "history_stream_log.jsonl"
 
-    # Logging settings
+    # LLM exchange log (service, prompt, response, tokens)
+    llm_exchanges_file: str = "llm_exchanges.jsonl"
+
+    # Application log
     log_file: str = "app.log"
     log_level: str = "DEBUG"
 
 
-class Settings(LLMServerSettings):
+class Settings(BaseSettings):
     app: AppConfig = AppConfig()
     server: ServerConfig = ServerConfig()
     data: DataConfig = DataConfig()
@@ -261,7 +190,7 @@ class Settings(LLMServerSettings):
     agent: AgentConfig = AgentConfig()
 
     # Directory settings
-    workdir: Path = Field(default_factory=lambda: Path.cwd())
+    workdir: Path = Path.cwd()
 
     # @field_validator('workdir', mode='before')
     # @classmethod
@@ -293,36 +222,50 @@ class Settings(LLMServerSettings):
     def from_yaml_files(cls, *yaml_paths: str, workdir: str = None) -> 'Settings':
         """Load and merge multiple YAML files."""
         merged_data = merge_configs(*yaml_paths)
+        # Remove workdir from YAML data — it is now derived from the config file name
+        merged_data.pop('workdir', None)
         if workdir:
             merged_data['workdir'] = Path(workdir).resolve()
-
-        # workdir = Path(yaml_paths[0]).parent.resolve()
-        # merged_data['workdir'] = workdir
-        assert 'workdir' in merged_data, f"Work directory must be specified in the configuration files. $yaml_paths={yaml_paths}"
-
-        _self = cls(**merged_data)
-        # _self.resolve_all_paths()
-        return _self
+        return cls(**merged_data)
 
 
 class FactorySettings:
     _instance: Optional[Settings] = None
 
     @classmethod
-    def get(cls, workdir: str=None) -> Settings:
+    def get(cls) -> Settings:
         if cls._instance is not None:
             return cls._instance
-        
+
         base_config_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "config/config.yaml",
         )
         yaml_files = [base_config_path]
+        workdir = None
         config_file_path = os.environ.get("APP_CONFIG_PATH")
         if config_file_path and os.path.isfile(config_file_path):
             yaml_files.append(config_file_path)
 
+        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<stem>
+        if config_file_path and os.path.isfile(config_file_path):
+            stem = Path(config_file_path).stem
+            now = datetime.now()
+            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}_{stem}"
+            experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
+            workdir = str(experiments_dir / exp_name)
+
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
+
+        # Create workdir, copy the config file into it, and update "current" symlink
+        if config_file_path and os.path.isfile(config_file_path):
+            cls._instance.workdir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(config_file_path, cls._instance.workdir / Path(config_file_path).name)
+
+            current_link = experiments_dir / "current"
+            if current_link.is_symlink() or current_link.exists():
+                current_link.unlink()
+            current_link.symlink_to(cls._instance.workdir.name)
 
         logger.info(f"Settings loaded from: {yaml_files}")
         logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
@@ -343,11 +286,9 @@ class FactorySettings:
         return cls.get()
     
     @classmethod
-    def force_reload_paths(cls, workdir: str) -> Settings:
+    def force_reload_paths(cls) -> Settings:
         cls._instance = None
-        settings = cls.get(workdir=workdir)
-        return settings
+        return cls.get()
 
 
 settings = FactorySettings()
-

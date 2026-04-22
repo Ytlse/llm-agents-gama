@@ -1,0 +1,333 @@
+{
+  "title": "Système — CPU & RAM",
+  "uid": "system-resources",
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "tags": ["system", "cpu", "ram"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m"]
+  },
+  "refresh": "10s",
+  "timezone": "browser",
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "Vue Globale", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+
+    {
+      "id": 1, "type": "gauge", "title": "CPU Usage (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+        "legendFormat": "CPU"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }, "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 }
+    },
+
+    {
+      "id": 2, "type": "gauge", "title": "RAM Usage (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+        "legendFormat": "RAM"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }, "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 }
+    },
+
+    {
+      "id": 3, "type": "stat", "title": "RAM totale",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "node_memory_MemTotal_bytes",
+        "legendFormat": "Total"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 1 }
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "RAM disponible",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "node_memory_MemAvailable_bytes",
+        "legendFormat": "Disponible"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 },
+            { "color": "orange", "value": 2000000000 },
+            { "color": "green", "value": 4000000000 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 4 }
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "Load Average (1 min)",
+      "description": "Charge système moyennée sur 1 minute",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "node_load1",
+        "legendFormat": "Load 1m"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 4 },
+            { "color": "red", "value": 8 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 1 }
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Load Average (5 min)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "node_load5",
+        "legendFormat": "Load 5m"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 4 },
+            { "color": "red", "value": 8 }
+          ]}
+        }, "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "auto",
+        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 4 }
+    },
+
+    { "id": 101, "type": "row", "title": "CPU", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 } },
+
+    {
+      "id": 7, "type": "timeseries", "title": "Utilisation CPU globale (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+        "legendFormat": "CPU total"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20,
+            "gradientMode": "opacity", "showPoints": "never", "spanNulls": false },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+
+    {
+      "id": 8, "type": "timeseries", "title": "CPU par mode (user / system / iowait / irq)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"user\"}[1m])) * 100",
+          "legendFormat": "user"
+        },
+        {
+          "refId": "B",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"system\"}[1m])) * 100",
+          "legendFormat": "system"
+        },
+        {
+          "refId": "C",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"iowait\"}[1m])) * 100",
+          "legendFormat": "iowait"
+        },
+        {
+          "refId": "D",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"irq\"}[1m])) * 100",
+          "legendFormat": "irq"
+        },
+        {
+          "refId": "E",
+          "expr": "avg(rate(node_cpu_seconds_total{mode=\"softirq\"}[1m])) * 100",
+          "legendFormat": "softirq"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 30,
+            "gradientMode": "none", "showPoints": "never", "spanNulls": false,
+            "stacking": { "group": "A", "mode": "normal" } }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    },
+
+    {
+      "id": 9, "type": "timeseries", "title": "Load Average (1m / 5m / 15m)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        { "refId": "A", "expr": "node_load1",  "legendFormat": "1 min" },
+        { "refId": "B", "expr": "node_load5",  "legendFormat": "5 min" },
+        { "refId": "C", "expr": "node_load15", "legendFormat": "15 min" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
+            "gradientMode": "none", "showPoints": "never", "spanNulls": false }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 }
+    },
+
+    { "id": 102, "type": "row", "title": "Mémoire (RAM)", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 } },
+
+    {
+      "id": 10, "type": "timeseries", "title": "Utilisation RAM (%)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [{
+        "refId": "A",
+        "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+        "legendFormat": "RAM utilisée"
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 20,
+            "gradientMode": "opacity", "showPoints": "never", "spanNulls": false },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": 0 },
+            { "color": "orange", "value": 70 },
+            { "color": "red", "value": 90 }
+          ]}
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 }
+    },
+
+    {
+      "id": 11, "type": "timeseries", "title": "RAM par catégorie (octets)",
+      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Buffers_bytes - node_memory_Cached_bytes",
+          "legendFormat": "Utilisée (apps)"
+        },
+        {
+          "refId": "B",
+          "expr": "node_memory_Cached_bytes + node_memory_Buffers_bytes",
+          "legendFormat": "Cache + Buffers"
+        },
+        {
+          "refId": "C",
+          "expr": "node_memory_MemFree_bytes",
+          "legendFormat": "Libre"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes", "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 40,
+            "gradientMode": "none", "showPoints": "never", "spanNulls": false,
+            "stacking": { "group": "A", "mode": "normal" } }
+        }, "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 }
+    }
+
+  ]
+}

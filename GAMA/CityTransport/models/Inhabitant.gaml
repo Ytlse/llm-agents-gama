@@ -54,7 +54,7 @@ species in_transfer skills: [moving] virtual: true {
         // TODO: se déplacer le long des routes extraites des données OSM
         do goto target: moving_target speed: speed;
         last_dist_traveled <- last_dist_traveled + real_speed * step;
-
+        
         // Vérifier si la destination est atteinte
         if (location distance_to moving_target < moving_close_dist) {
             location <- moving_target;
@@ -139,23 +139,29 @@ species passenger parent: in_transfer virtual: true {
      * @param legs_raw Liste des étapes de trajet du moteur de routage
      * @param raw Structure de données de trajet brute
      */
-    action passenger_set_plan(map<string, float> plan_target, list<map<string, unknown>> legs_raw, map<string, unknown> raw) {
+    action passenger_set_plan(map plan_target, list legs_raw, map raw) {
+        
         total_activities <- total_activities + 1;
-
-		list<map<string, unknown>> legs <- (legs_raw is list) ? list<map<string, unknown>>(legs_raw) : [];
+        
+		list legs <- (legs_raw is list) ? legs_raw : [];
 				
         // Gérer la téléportation directe pour les étapes vides (pas de transport public nécessaire)
         if length(legs) = 0 {
-            map<string, unknown> raw_loc <- map<string, unknown>(raw["plan"]);
-            map<string, unknown> start_loc <- map<string, unknown>(raw["start_location"]);
-
-            float start_lon <- float(start_loc["lon"]);
-            float start_lat <- float(start_loc["lat"]);
-            point start_point <- point(to_GAMA_CRS(
-                {start_lon, start_lat},
-                POPULATION_CRS
-            ));
-            location <- start_point;
+            map raw_loc <- (raw != nil and raw.keys contains "plan" and raw["plan"] is map) ? map(raw["plan"]) : nil;
+            map start_loc <- (raw_loc != nil and raw_loc.keys contains "start_location" and raw_loc["start_location"] is map) ? map(raw_loc["start_location"]) : nil;
+            
+            if (start_loc != nil) {
+                if (!(start_loc.keys contains "lon" or start_loc.keys contains "lng") or !(start_loc.keys contains "lat")) {
+                    write "❌ ERREUR: Coordonnées manquantes dans start_location pour l'agent " + name + " ! Données: " + start_loc;
+                } else {
+                    float start_lon <- start_loc.keys contains "lon" ? float(start_loc["lon"]) : float(start_loc["lng"]);
+                    float start_lat <- float(start_loc["lat"]);
+                    point start_point <- point(to_GAMA_CRS({start_lon, start_lat}, POPULATION_CRS));
+                    location <- start_point;
+                }
+            } else {
+                write "❌ ERREUR: start_location est nil pour l'agent " + name + " !";
+            }
         }
 
         // Activer l'agent et stocker les données de trajet
@@ -172,47 +178,57 @@ species passenger parent: in_transfer virtual: true {
         // Construire le plan de voyage à partir des étapes de routage
         if length(legs) > 0 {
             // Ajouter le segment de marche initial vers le premier arrêt de transport
-            map<string, unknown> start_loc_0 <- map<string, unknown>(legs[0]["start_location"]);
+            map leg0 <- map(legs[0]);
+            map start_loc_0 <- map(leg0["start_location"]);
 
-            float start_lon <- float(start_loc_0["lon"]);
-            float start_lat <- float(start_loc_0["lat"]);
+            if (!(start_loc_0.keys contains "lon" or start_loc_0.keys contains "lng") or !(start_loc_0.keys contains "lat")) {
+                write "❌ ERREUR: Coordonnées manquantes dans legs[0]['start_location'] pour l'agent " + name + " ! Données: " + start_loc_0;
+            } else {
+                float start_lon <- start_loc_0.keys contains "lon" ? float(start_loc_0["lon"]) : float(start_loc_0["lng"]);
+                float start_lat <- float(start_loc_0["lat"]);
 
-            point start_point <- point(to_GAMA_CRS({start_lon,start_lat},
-                POPULATION_CRS
-            ));
-            list_destination << start_point;
-            list_destination_stop_name << string(start_loc_0["stop"]);
-            list_route_id << _ROUTE_NONE_;
-            list_shape_id << nil;
+                point start_point <- point(to_GAMA_CRS({start_lon,start_lat}, POPULATION_CRS));
+                list_destination << start_point;
+                list_destination_stop_name << string(start_loc_0["stop"]);
+                list_route_id << _ROUTE_NONE_;
+                list_shape_id << nil;
+            }
 
             // Traiter chaque étape de transport
             loop leg over: legs {
-                map<string, unknown> leg_end_location <-  map<string, unknown>(leg["end_location"]);
-                float leg_end_lon <- float(leg_end_location["lon"]);
-                float leg_end_lat <- float(leg_end_location["lat"]);
+                map leg_map <- map(leg);
+                map leg_end_location <- map(leg_map["end_location"]);
+                
+                if (!(leg_end_location.keys contains "lon" or leg_end_location.keys contains "lng") or !(leg_end_location.keys contains "lat")) {
+                    write "❌ ERREUR: Coordonnées manquantes dans leg['end_location'] pour l'agent " + name + " ! Données: " + leg_end_location;
+                } else {
+                    float leg_end_lon <- leg_end_location.keys contains "lon" ? float(leg_end_location["lon"]) : float(leg_end_location["lng"]);
+                    float leg_end_lat <- float(leg_end_location["lat"]);
 
-                point end_point <- point(to_GAMA_CRS({leg_end_lon, leg_end_lat},
-                    POPULATION_CRS
-                ));
-                list_destination << end_point;
-                list_destination_stop_name << string(leg_end_location["stop"]);
+                    point end_point <- point(to_GAMA_CRS({leg_end_lon, leg_end_lat}, POPULATION_CRS));
+                    list_destination << end_point;
+                    list_destination_stop_name << string(leg_end_location["stop"]);
 
-                // Déterminer si c'est un transfert (marche) ou un segment de transport
-                string transit_route <- string(leg["transit_route"]);
-                list_route_id << (bool(leg["is_transfer"]) ? _ROUTE_NONE_: string(leg["transit_route"]));
-                list_shape_id << (bool(leg["is_transfer"]) ? "" : (list(leg["shape_id"]) collect string(each)));
+                    // Déterminer si c'est un transfert (marche) ou un segment de transport
+                    string transit_route <- string(leg_map["transit_route"]);
+                    list_route_id << (bool(leg_map["is_transfer"]) ? _ROUTE_NONE_: string(leg_map["transit_route"]));
+                    list_shape_id << (bool(leg_map["is_transfer"]) ? nil : (list(leg_map["shape_id"]) collect string(each)));
+                }
             }
         }
 
         // Ajouter le segment de marche final vers la destination
-        point end_point <- point(to_GAMA_CRS(
-            {float(plan_target["lon"]), float(plan_target["lat"])},
-            POPULATION_CRS
-        ));
-        list_destination << end_point;
-        list_destination_stop_name << purpose;
-        list_route_id << _ROUTE_NONE_;
-        list_shape_id << nil;
+        if (!(plan_target.keys contains "lon" or plan_target.keys contains "lng") or !(plan_target.keys contains "lat")) {
+            write "❌ ERREUR: Coordonnées manquantes dans la destination finale pour l'agent " + name + " ! Données: " + plan_target;
+        } else {
+            float target_lon <- plan_target.keys contains "lon" ? float(plan_target["lon"]) : float(plan_target["lng"]);
+            point end_point <- point(to_GAMA_CRS({target_lon, float(plan_target["lat"])}, POPULATION_CRS));
+            
+            list_destination << end_point;
+            list_destination_stop_name << purpose;
+            list_route_id << _ROUTE_NONE_;
+            list_shape_id << nil;
+        }
     }
 
     /**

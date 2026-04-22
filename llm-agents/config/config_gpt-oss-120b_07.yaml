@@ -35,4 +35,3 @@ agent:
   travel_plan_custom_guidelines: |
     - You are most sensitive to the arrival times at activity destinations, and next you must consider the travel time and potential delays. You must span the consideration over past days, consider the prioritized factors, and choose the best option. Any route includes more than 30 minutes of walking should be avoided, even if it is the most reliable option.
 
-workdir: "../experiments/gpt-oss-120b_07"

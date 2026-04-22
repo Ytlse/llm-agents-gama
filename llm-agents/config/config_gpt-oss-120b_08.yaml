@@ -63,4 +63,3 @@ agent:
        - Only use weekend experiences to plan weekend trips.
     2. When reflecting on past experiences, always state if it was a weekday or a weekend.
 
-workdir: "../experiments/gpt-oss-120b_08"

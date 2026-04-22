@@ -47,15 +47,26 @@ class PersonScheduler:
                       timestamp: int, 
                       pre_schedule_duration: Optional[int] = None
             ) -> Optional[Activity]:
+        """
+        Determines the next activity of the person based on the current time.
+        
+        Args:
+            timestamp: The current simulation time.
+            pre_schedule_duration: The anticipation time (in seconds) required for the journey or
+                                   preparation before the actual start of the activity.
+        """
+        # Use the default configured anticipation duration if none is provided
         if pre_schedule_duration is None:
             pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
 
         state = self.person.state
+        # Get the time as seconds elapsed since midnight (time24h)
         day_of_week, time24h = to_24h_timestamp_full(timestamp)
         day24h_seconds = 24 * 60 * 60
         activities = self.person.identity.activities
 
         # Find the latest activity that starts before the current time
+        # Iterate through the day's activities to find the one that should be triggered
         selected_activity = None
         for i in range(len(activities)):
             activity = activities[i]
@@ -67,20 +78,26 @@ class PersonScheduler:
             # filter out the home activity
             if activity.start_time < 0:
                 continue
+
+            # Initialize the scheduled departure time (activity start time minus anticipation)
             if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
                 activity.scheduled_start_time = activity.start_time - pre_schedule_duration
             start_journey_time = activity.scheduled_start_time
             next_end_time = None if next_activity is None else next_activity.start_time
 
+            # Adjust the time if the scheduled departure or the start of the next activity spills over to the next day
             if start_journey_time > day24h_seconds or (next_end_time or -1) > day24h_seconds:
                 time24h += day24h_seconds
 
+            # Check if the current time is within the trigger window for this activity
+            # (i.e. we have passed the `start_journey_time` and have not yet reached the next activity)
             if (start_journey_time > 0 and start_journey_time <= time24h) and \
                (next_end_time is None or next_end_time == -1 or time24h <= next_end_time):
                 selected_activity = activity
                 break
 
         # validate activity is done
+        # Avoid returning the activity if it is already the current one or has been completed
         if selected_activity:
             selected_index = self.person.identity.activities.index(selected_activity)
             if selected_index == state.last_activity_index:
@@ -137,7 +154,14 @@ class WorldPopulation:
                 if act.id in m:
                     (scheduled_start_time, ) = m[act.id]
                     act.scheduled_start_time = scheduled_start_time
-                    logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
+                    #logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
+
+    @staticmethod
+    def _is_within_bbox(person: Person, bbox: BBox) -> bool:
+        home = PersonScheduler(person).get_home_location()
+        if home is None:
+            return False
+        return bbox.min_lon <= home.lon <= bbox.max_lon and bbox.min_lat <= home.lat <= bbox.max_lat
 
     def load_population(self, world_bbox: BBox):
         file_name = f"{settings.data.population_cache_prefix}{settings.data.population_max_size}_{settings.data.number_of_llm_based_agents}.json"
@@ -145,10 +169,12 @@ class WorldPopulation:
             logger.info(f"Loading population from {file_name}")
             with open(file_name, "r", encoding="utf-8") as f:
                 people = json.load(f)
-                self.people = {
-                    person["person_id"]: Person.model_validate(person)
-                    for person in people
-                }
+                all_people = [Person.model_validate(p) for p in people]
+                filtered = [p for p in all_people if self._is_within_bbox(p, world_bbox)]
+                excluded = len(all_people) - len(filtered)
+                if excluded > 0:
+                    logger.warning(f"{excluded} agent(s) excluded from cache: home outside world bbox")
+                self.people = {p.person_id: p for p in filtered}
             return
         
         people = self.population_loader.load_population(
@@ -156,8 +182,9 @@ class WorldPopulation:
             bbox=world_bbox,
         )
 
-        n_llm_based = settings.data.number_of_llm_based_agents
+        n_llm_based = min(len(people), settings.data.number_of_llm_based_agents)
         if n_llm_based > 0:
+            logger.info(f"Random {n_llm_based} out of {len(people)}")
             llm_based_persons = random.sample(
                 list(people),
                 n_llm_based,

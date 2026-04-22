@@ -16,4 +16,3 @@ agent:
   long_term_reflect_interval: 43200  # 12 hours
   llm_model: "mistral-7B-instruct-v0.3"
 
-workdir: "../experiments/mistral7B_50_mem_all"

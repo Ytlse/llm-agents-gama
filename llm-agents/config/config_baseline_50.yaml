@@ -10,4 +10,3 @@ gtfs:
 agent:
   reschedule_activity_departure_time: false
 
-workdir: "../experiments/baseline_50_0"

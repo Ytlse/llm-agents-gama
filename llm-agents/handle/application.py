@@ -10,37 +10,46 @@ import asyncio
 import json
 import os
 import orjson
+import time
+from datetime import datetime
 import uvicorn
 from loguru import logger
-from helper import create_json_logger
+from helper import setup_logging
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitResponse, WorldSyncRequest
-from scenarios.base import BaseScenario, Observation
+from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings
 import traceback
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import ORJSONResponse
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
+import urban_mobility_agents.factory.factory
+
+# Compteurs des endpoints du contrôleur
+SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
+INIT_REQUESTS = Counter('controller_init_requests_total', 'Total requêtes /init reçues de GAMA')
+
+# Métriques de la simulation
+SIM_AGENTS_TOTAL  = Gauge('gama_sim_agents_total', 'Nombre total d\'agents dans la simulation (défini au /init)')
+SIM_STEP_INTERVAL = Gauge('gama_sim_step_interval_seconds', 'Durée réelle entre deux pas de temps GAMA consécutifs (secondes)')
+_last_sync_wall_time: float = 0.0
+
+
 
 # Set working directory from environment if specified
 workdir = os.environ.get("APP_WORKDIR", "")
 if workdir:
     settings.update_workdir(workdir)
 
-# Initialize JSON logging
-create_json_logger()
-
-# Import scenario factory to bootstrap the simulation scenario
-import scenarios.scenario_v1.factory
+# Initialize logging
+setup_logging(settings)
 
 # Create FastAPI application instance
-app = FastAPI()
+# ORJSONResponse est la classe de réponse par défaut : elle calcule Content-Length
+# et sérialise le body avec le MÊME sérialiseur (orjson), évitant la désynchronisation
+# qui causait "fixed content-length: X, bytes received: Y" côté Java.
+app = FastAPI(default_response_class=ORJSONResponse)
 
-# Configure orjson for faster JSON serialization (handles numpy arrays)
-def orjson_serializer(obj):
-    return orjson.dumps(obj, option=orjson.OPT_SERIALIZE_NUMPY).decode()
-app.router.json_dumps = orjson_serializer
-
-# Debug print current history file path
-print(settings.app.history_file_v2)
 
 
 class LoopContainer:
@@ -52,6 +61,7 @@ class LoopContainer:
     action message handling.
     """
     action_topic = "action/data"
+    system_greeting_topic = "system/greeting"
     observation_topic = "observation/data"
 
     def __init__(self):
@@ -70,7 +80,7 @@ class LoopContainer:
         await self.websocket_client.connect()
 
         greeting_message = {
-            "topic": self.action_topic,
+            "topic": self.system_greeting_topic,
             "payload": {
                 "type": "greeting",
                 "message": "Hello from FastAPI + WebSocket client!"
@@ -86,27 +96,37 @@ class LoopContainer:
 
         Continuously checks for new messages from the scenario and publishes them
         to the GAMA simulation. Handles connection failures and retries.
+
+        `pending` is declared outside the try/except so that any unexpected
+        exception (e.g. model_dump failure) never causes message loss: the
+        unsent items remain in the buffer and are retried on the next iteration.
         """
+        pending: list = []
         while True:
             try:
-                # Check if scenario has messages to publish
-                if self.scenario and await self.scenario.has_messages():
-                    messages = await self.scenario.pop_all_messages()
-                    len_messages = len(messages)
-                    while messages:
-                        message = messages[0]
-                        payload = message.model_dump()
-                        success = await self.websocket_client.send_json({
-                            "topic": self.action_topic,
-                            "payload": payload,
-                        })
-                        if not success:
-                            logger.error(f"Failed to send message: {payload}")
-                            await asyncio.sleep(1)  # Wait before retrying
-                            continue
-                        messages.pop(0)  # Remove the message from the list after sending
+                # Only fetch new messages when the pending buffer is empty.
+                if not pending and self.scenario and await self.scenario.has_messages():
+                    pending = await self.scenario.pop_all_messages()
 
-                    logger.info(f"Websocket loop Sent {len_messages} messages to {self.action_topic}")
+                sent = 0
+                while pending:
+                    message = pending[0]
+                    payload = message.model_dump()
+                    success = await self.websocket_client.send_json({
+                        "topic": self.action_topic,
+                        "payload": payload,
+                    })
+                    if not success:
+                        # WebSocket not ready — keep in buffer, retry next tick
+                        logger.warning(
+                            f"WebSocket not connected, will retry {len(pending)} pending message(s)"
+                        )
+                        break
+                    pending.pop(0)
+                    sent += 1
+
+                if sent > 0:
+                    logger.info(f"WebSocket loop sent {sent} message(s) to {self.action_topic}")
             except Exception as e:
                 logger.error(f"WebSocket publish loop error: {e}")
                 await asyncio.sleep(self.reconnect_interval)
@@ -116,7 +136,7 @@ class LoopContainer:
     async def handle_message(self, text: str):
         """Handle received Websocket message"""
         try:
-            logger.debug(f"Received: {self.observation_topic} -> {text}")
+            #logger.debug(f"Received: {self.observation_topic} -> {text}")
             await self.process_observation(self.observation_topic, text)
 
         except Exception as e:
@@ -142,8 +162,9 @@ class LoopContainer:
 # Global loop container instance
 loop_container = LoopContainer()
 # Bootstrap the simulation scenario
-scenario = scenarios.scenario_v1.factory.bootstrap()
+scenario = urban_mobility_agents.factory.factory.bootstrap()
 loop_container.set_scenario(scenario)
+print("===> Scenario bootstrapped and set in loop container")
 
 @app.on_event("startup")
 async def startup_event():
@@ -153,7 +174,6 @@ async def startup_event():
     Initializes WebSocket connection and starts background tasks for
     real-time communication with GAMA simulation.
     """
-    # Send greeting and start WebSocket communication loops
     await loop_container.greeting()
     asyncio.create_task(loop_container.websocket_client.run_with_reconnect())
     asyncio.create_task(loop_container.publish_loop())
@@ -163,22 +183,44 @@ async def shutdown_event():
     """FastAPI shutdown event handler - closes WebSocket connections."""
     await loop_container.websocket_client.stop()
 
-@app.get("/")
+@app.get(
+    "/",
+    summary="Vérifier le statut du contrôleur",
+    description="Vérifie si l'API du contrôleur de simulation (FastAPI) est bien démarrée et en attente de la connexion WebSocket avec GAMA.",
+    tags=["Système"]
+)
 async def root():
     """Root endpoint - returns service status."""
     return {"status": "FastAPI + Websocket running"}
 
-@app.post("/init")
+@app.get(
+    "/metrics",
+    summary="Exporter les métriques Prometheus",
+    description="Expose les compteurs d'événements de la simulation GAMA (appels, synchronisations) au format Prometheus.",
+    tags=["Système"]
+)
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+@app.post(
+    "/init",
+    summary="Initialiser la population du monde",
+    description=(
+        "Génère et renvoie la liste complète de la population synthétique (avec les coordonnées des domiciles et les caractéristiques des agents) "
+        "pour peupler la carte GAMA au lancement de la simulation."
+    ),
+    tags=["Simulation"]
+)
 async def init():
     """
     Initialize the simulation world.
-
-    Returns the complete population data to initialize the GAMA simulation
-    with all agents and their home locations.
     """
     logger.info("Publishing world data")
 
+    INIT_REQUESTS.inc()
     people = scenario.population.get_people_list()
+    SIM_AGENTS_TOTAL.set(len(people))
 
     person_response = [
         GamaPersonData(
@@ -198,7 +240,15 @@ async def init():
         )
     )
 
-@app.post("/reflect")
+@app.post(
+    "/reflect",
+    summary="Déclencher la réflexion forcée des agents",
+    description=(
+        "Force tous les agents de la simulation à mettre à jour leur état cognitif (réflexion sur leur mémoire) "
+        "pour correspondre au timestamp fourni. Utilisé principalement pour le débogage ou la synchronisation manuelle."
+    ),
+    tags=["Simulation"]
+)
 async def reflect(request: WorldSyncRequest):
     """
     Reflect the current world state at a specific timestamp.
@@ -220,27 +270,50 @@ async def reflect(request: WorldSyncRequest):
             error="Scenario not set"
         )
 
-@app.post("/sync")
-async def sync(request: WorldSyncRequest):
+@app.post(
+    "/sync",
+    summary="Synchroniser l'état du monde",
+    description=(
+        "Met à jour l'état du scénario côté Python avec les données de la population inactive (`idle_people`) envoyées par GAMA. "
+        "Le contrôleur lit le corps de la requête en texte brut pour contourner les éventuels problèmes de header HTTP/2 (h2c)."
+    ),
+    tags=["Simulation"]
+)
+async def sync(raw: Request):
     """
     Synchronize the world state with idle population data.
 
-    Updates the scenario with current idle agents and their locations.
-    Called periodically by the GAMA simulation for state synchronization.
+    Reads the raw body to remain compatible with GAMA's Java HTTP client,
+    which sends h2c upgrade headers that prevent uvicorn/h11 from reading
+    the body. hypercorn handles h2c natively, so the body is always available.
     """
+    global _last_sync_wall_time
+    now = time.time()
+    if _last_sync_wall_time > 0:
+        SIM_STEP_INTERVAL.set(now - _last_sync_wall_time)
+    _last_sync_wall_time = now
+
+    SYNC_REQUESTS.inc()
+    body = await raw.body()
+
+    if not body:
+        logger.warning("[/sync] Empty body received — sync skipped (unknown timestamp)")
+        return MessageResponse(data="skipped (empty body)", success=True)
+
+    try:
+        data = orjson.loads(body)
+        request = WorldSyncRequest(**data)
+    except Exception as e:
+        logger.error(f"[/sync] JSON parsing error: {e}")
+        return ORJSONResponse(status_code=422, content={"detail": str(e)})
+
     logger.info(f"Synchronizing world at timestamp: {request.timestamp}")
 
     if loop_container.scenario:
         await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people)
-        return MessageResponse(
-            data="synchronized",
-            success=True,
-        )
+        return MessageResponse(data="synchronized", success=True)
     else:
-        return MessageResponse(
-            success=False,
-            error="Scenario not set"
-        )
+        return MessageResponse(success=False, error="Scenario not set")
 
 
 if __name__ == "__main__":

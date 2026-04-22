@@ -1,3 +1,8 @@
+x-shared-env: &shared-env
+  REDIS_URL: redis://redis:6379/0
+  OTP_ENDPOINTS: http://otp:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3
+  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+
 services:
 
   # ─────────────────────────────────────────────
@@ -36,7 +41,21 @@ services:
       interval: 15s
       timeout: 10s
       retries: 10
-      start_period: 60s  # OTP met du temps à charger le graph
+      start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
+
+  otp2:
+    build:
+      context: ./otp-toulouse
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    mem_limit: 5g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
 
   # ─────────────────────────────────────────────
   # LLM Agents — Architecture API Gateway + Worker Celery + Monitoring
@@ -50,7 +69,7 @@ services:
   #
   #   - Worker Celery :
   #       Exécute les tâches de génération de prompts envoyées par l'API.
-  #       Interagit avec les LLM (via vllm, llama-index, etc.) et d'autres services (OTP).
+  #       Interagit avec les LLM et d'autres services (OTP).
   #       Retourne les résultats à l'API via Redis.
   #
   #   - Flower (Monitoring) :
@@ -60,48 +79,86 @@ services:
 
   api:
     build:
-      context: ./llm-agents
+      context: ./llm_module
       dockerfile: Dockerfile
     command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     env_file: ./.env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      <<: *shared-env
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      OTP_URL: http://otp:8080
+      #APP_WORKDIR: /app/workdir
+      GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
-      - ./llm-agents:/app
+      - ./llm_module:/app/llm_module
+      - ./data/gtfs:/data/gtfs
+      - ./data/po_toulouse.big:/data/po_toulouse.big
+      - ./experiments:/app/experiments
     depends_on:
       redis:
         condition: service_healthy
       otp:
+        condition: service_healthy
+      otp2:
+        condition: service_healthy
+
+  controller:
+    build:
+      context: ./llm-agents
+      dockerfile: Dockerfile
+    command: sh -c "python /app/archive_log.py && hypercorn handle.application:app --bind 0.0.0.0:8002"
+    ports:
+      - "8002:8002"
+    env_file: ./.env
+    environment:
+      <<: *shared-env
+      LLM_API_URL: http://api:8000
+      #APP_WORKDIR: /app/workdir
+      GAMA_WS_URL: ws://host.docker.internal:3001
+      PYTHONPATH: /app
+    volumes:
+      - ./llm-agents:/app
+      - ./llm_module:/app/llm_module
+      - ./data/gtfs:/data/gtfs
+      - ./data/po_toulouse.big:/data/po_toulouse.big
+      - ./experiments:/app/experiments
+    depends_on:
+      api:
+        condition: service_started
+      otp:
+        condition: service_healthy
+      otp2:
         condition: service_healthy
 
   worker:
     build:
-      context: ./llm-agents
+      context: ./llm_module
       dockerfile: Dockerfile
-    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=8
     env_file: ./.env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      <<: *shared-env
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      OTP_URL: http://otp:8080
-   # volumes:
-   #   - ./llm-agents:/app
+      APP_WORKDIR: /app/experiments/current
+    volumes:
+      - ./llm_module:/app/llm_module
+      - ./otp-toulouse/toulouse/gtfs:/data/gtfs
+      - ./experiments:/app/experiments
     depends_on:
       redis:
         condition: service_healthy
       otp:
+        condition: service_healthy
+      otp2:
         condition: service_healthy
 
 
   flower:
     build:
-      context: ./llm-agents
+      context: ./llm_module
       dockerfile: Dockerfile
     command: celery -A llm_module.worker.task_worker.celery_app flower --port=5555
     ports:
@@ -110,8 +167,56 @@ services:
     environment:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      REDIS_URL: redis://redis:6379/0
     depends_on:
-      - worker
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+
+  # ─────────────────────────────────────────────
+  # Monitoring: Prometheus & Grafana
+  # ─────────────────────────────────────────────
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
 
   # ─────────────────────────────────────────────
   # GAMA Server — simulation multi-agents
@@ -122,14 +227,21 @@ services:
   #   build:
   #     context: ./GAMA
   #     dockerfile: Dockerfile
-  #   ports:
-  #     - "6868:6868"   # port serveur GAMA headless (à confirmer)
+  #   container_name: gama_container
   #   environment:
-  #     OTP_URL: http://otp:8080
-  #     LLM_API_URL: http://api:8000
+  #     - OTP_URL=http://otp:8080
+  #     - LLM_API_URL=http://api:8000
+  #   # Utilisation des arguments corrects pour charger l'expérience
+  #   command: >
+  #     /opt/gama-platform/headless/gama-headless.sh 
+  #     -m /path/to/CityTransport/models/City.gaml 
+  #     -e "e"
   #   depends_on:
-  #     - otp
-  #     - api
+  #     otp:
+  #       condition: service_healthy
+  #     api:
+  #       condition: service_started
 
 volumes:
   redis_data:
+  grafana_data:

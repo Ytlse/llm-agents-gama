@@ -15,4 +15,3 @@ agent:
   long_term_max_entries_query: 10
   llm_model: "qwen/qwen3-32b"
 
-workdir: "../experiments/qwen-3.2-32b_1"

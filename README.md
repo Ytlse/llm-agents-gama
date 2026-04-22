@@ -20,7 +20,7 @@ Modeling realistic human behavior using generative agents in a multimodal transp
 
 Follow this [guide](https://github.com/eqasim-org/ile-de-france/blob/develop/docs/cases/toulouse.md) to generate the population synthetic data.
 
-The synthetic data includes the activities list for each person; this data is combined with the `trait` data as in the sample file data/population_samples/Lila.agent.json. For example, the final population is data/population_samples/population_5_5.json.
+The synthetic data includes the activities list for each person; this data is combined with the `trait` data. For example, the final population is data/population_samples/population_5_5.json.
 
 ### 2. Setup OpenTripPlanner
 
@@ -76,16 +76,15 @@ bash update_gtfs_data.sh
 
 ### 5. Run the simulation
 
-- Start the GAMA model first. The entry model is `GAMA/CityTransport/City.gaml`.
-
-- Start the LLM-Agent next:
+- Start all Docker services first (LLM agents, Redis, OTP, monitoring):
 
 ```shell
-cd llm-agents/
-poetry run python server.py --config ./config/config_gpt-oss-120b_19.yaml
+docker compose up
 ```
 
-- Go back to GAMA and hit the play button to start the simulation.
+- Open the GAMA model. The entry model is `GAMA/CityTransport/City.gaml`.
+
+- Hit the play button to start the simulation. The controller will connect to GAMA automatically via WebSocket.
 
 ## Reference
 
