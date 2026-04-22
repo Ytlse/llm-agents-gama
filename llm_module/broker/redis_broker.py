@@ -12,6 +12,7 @@ et celery_broker_url.
 
 from __future__ import annotations
 import json
+import time
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -58,13 +59,14 @@ def get_sync_redis() -> sync_redis.Redis:
 # Clés Redis
 # ---------------------------------------------------------------------------
 
-TASK_KEY_PREFIX        = "task:"
-RPM_KEY_PREFIX         = "rpm:"
-COOLDOWN_KEY_PREFIX    = "cooldown:"
-BATCH_QUEUE_PREFIX     = "batch:"
-CONS_ERR_KEY_PREFIX    = "cons_err:"
-DISABLED_KEY_PREFIX    = "disabled:"
-ACTIVE_WORKER_PREFIX   = "active_workers:"
+TASK_KEY_PREFIX         = "task:"
+RPM_KEY_PREFIX          = "rpm:"
+COOLDOWN_KEY_PREFIX     = "cooldown:"
+BATCH_QUEUE_PREFIX      = "batch:"
+CONS_ERR_KEY_PREFIX     = "cons_err:"
+DISABLED_KEY_PREFIX     = "disabled:"
+ACTIVE_WORKER_PREFIX    = "active_workers:"
+LAST_REQUEST_KEY_PREFIX = "last_req:"
 
 
 def _task_key(task_id: str) -> str:
@@ -77,6 +79,10 @@ def _rpm_key(provider: str) -> str:
     TTL de 60 s — Redis réinitialise automatiquement le compteur toutes les minutes.
     """
     return f"{RPM_KEY_PREFIX}{provider}"
+
+
+def _last_req_key(provider: str) -> str:
+    return f"{LAST_REQUEST_KEY_PREFIX}{provider}"
 
 
 def _cooldown_key(provider: str) -> str:
@@ -186,6 +192,77 @@ def try_reserve_rpm(provider: str, limit: int, ttl: int = 60) -> bool:
     return int(result) > 0
 
 
+# Script Lua pour la réservation avec lissage temporel (rate smoothing).
+# Combine en une seule opération atomique :
+#   1. Vérification de l'intervalle minimum depuis la dernière requête (min_interval = ttl / limit)
+#   2. Réservation du slot RPM (INCR + vérification limite)
+#   3. Mise à jour du timestamp de la dernière requête
+#
+# Valeurs de retour :
+#   -1 : trop tôt — min_interval non respecté (lissage)
+#    0 : quota RPM atteint (rollback DECR)
+#   >0 : slot réservé avec succès (valeur du compteur)
+_TRY_RESERVE_RPM_SMOOTHED_SCRIPT = r"""
+local rpm_key      = KEYS[1]
+local last_req_key = KEYS[2]
+local limit        = tonumber(ARGV[1])
+local ttl          = tonumber(ARGV[2])
+local now          = tonumber(ARGV[3])
+local min_interval = tonumber(ARGV[4])
+
+if min_interval > 0 then
+    local last = redis.call('GET', last_req_key)
+    if last then
+        local elapsed = now - tonumber(last)
+        if elapsed < min_interval then
+            return -1
+        end
+    end
+end
+
+local count = redis.call('INCR', rpm_key)
+if redis.call('TTL', rpm_key) == -1 then
+    redis.call('EXPIRE', rpm_key, ttl)
+end
+if count > limit then
+    redis.call('DECR', rpm_key)
+    return 0
+end
+
+redis.call('SET', last_req_key, tostring(now), 'EX', ttl)
+return count
+"""
+
+
+def try_reserve_rpm_smoothed(provider: str, limit: int, ttl: int = 60) -> int:
+    """
+    Réservation atomique d'un slot RPM avec lissage temporel.
+
+    Garantit un intervalle minimum de (ttl / limit) secondes entre deux requêtes
+    vers le même provider, évitant les rafales en début de fenêtre.
+    Toutes les vérifications et mises à jour sont atomiques côté Redis (Lua).
+
+    Retourne :
+        -1 si le délai minimum entre requêtes n'est pas encore écoulé
+         0 si le quota RPM de la fenêtre courante est atteint
+        >0 si le slot est réservé (valeur du compteur RPM)
+    """
+    r = get_sync_redis()
+    now = time.time()
+    min_interval = ttl / limit if limit > 0 else 0.0
+    result = r.eval(
+        _TRY_RESERVE_RPM_SMOOTHED_SCRIPT,
+        2,
+        _rpm_key(provider),
+        _last_req_key(provider),
+        limit,
+        ttl,
+        now,
+        min_interval,
+    )
+    return int(result)
+
+
 # ---------------------------------------------------------------------------
 # Cooldown (sync — utilisé pour exclure temporairement un fournisseur)
 # ---------------------------------------------------------------------------
@@ -240,12 +317,13 @@ def disable_provider(provider: str, timeout: int = 180) -> None:
 
 
 def enable_provider(provider: str) -> None:
-    """Réactive un fournisseur et remet à zéro son compteur d'erreurs et son RPM.
-    Le compteur RPM est vidé pour éviter un burst immédiat si la clé est encore active."""
+    """Réactive un fournisseur et remet à zéro son compteur d'erreurs, son RPM et
+    le timestamp de lissage pour éviter un burst immédiat au redémarrage."""
     r = get_sync_redis()
     r.delete(f"{DISABLED_KEY_PREFIX}{provider}")
     r.delete(f"{CONS_ERR_KEY_PREFIX}{provider}")
     r.delete(_rpm_key(provider))
+    r.delete(_last_req_key(provider))
 
 
 def reset_all_rpm_counters(provider_names: list[str]) -> None:

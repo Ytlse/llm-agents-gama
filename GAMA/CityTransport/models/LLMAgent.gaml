@@ -63,8 +63,8 @@ species llm_agent_sync skills:[network] {
 	}
 
 	/**
-	 * Synchronisation périodique - envoie des données de population inactive toutes les 15 minutes
-	 * Toutes les heures, inclut la liste complète des personnes inactives avec leurs localisations
+	 * Synchronisation périodique - envoie des données de population inactive vec leurs localisations toutes les 60 minutes
+	 * Toutes les 15 minutes envoit le timestamp
 	 */
 	reflex sync when: every(15#mn) and cycle > 1 {
 		list<unknown> idle_people <- [];

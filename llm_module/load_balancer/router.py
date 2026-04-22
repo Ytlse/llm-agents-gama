@@ -18,8 +18,8 @@ from typing import Dict, List, Optional
 
 from llm_module.tasks.config import settings
 from llm_module.broker.redis_broker import (
-    get_rpm, is_in_cooldown, is_provider_disabled, try_reserve_rpm, reset_all_rpm_counters,
-    get_active_workers,
+    get_rpm, is_in_cooldown, is_provider_disabled, try_reserve_rpm_smoothed,
+    reset_all_rpm_counters, get_active_workers,
 )
 from llm_module.telemetry.logger import get_logger
 
@@ -189,13 +189,21 @@ class LoadBalancer:
             )
             return False
 
-        # Réservation atomique : INCR + vérification limite en une seule opération Redis.
-        reserved = try_reserve_rpm(provider, cfg.rpm_limit)
-        if not reserved:
+        # Réservation atomique avec lissage temporel :
+        # vérifie min_interval, INCR RPM et maj last_req en une seule opération Redis.
+        result = try_reserve_rpm_smoothed(provider, cfg.rpm_limit)
+        if result == -1:
+            logger.debug(
+                f"Lissage RPM : intervalle minimum non écoulé | provider={provider} "
+                f"min_interval={60 / cfg.rpm_limit:.2f}s"
+            )
+            return False
+        if result == 0:
             logger.warning(
                 f"Quota RPM atteint (atomic) | provider={provider} rpm_limit={cfg.rpm_limit}"
             )
-        return reserved
+            return False
+        return True
 
     def get_status(self) -> Dict[str, Dict]:
         """Snapshot des compteurs RPM pour monitoring / debug."""
