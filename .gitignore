@@ -32,3 +32,5 @@ experiments*/
 
 # Fichiers CSV dans un sous-dossier spécifique
 scripts/general/*.csv
+Divers/*
+GAMA/CityTransport/config/sim_params.yaml

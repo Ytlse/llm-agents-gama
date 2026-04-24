@@ -100,8 +100,12 @@ def log_llm_exchange(
     Enregistre un échange complet avec le LLM dans un fichier JSONL.
     Le fichier est placé dans APP_WORKDIR (env var), ou dans le répertoire courant par défaut.
     """
-    workdir = Path(os.environ.get("APP_WORKDIR", "."))
-    log_file = workdir / "llm_exchanges.jsonl"
+    try:
+        from settings import settings
+        log_file = Path(settings.app.llm_exchanges_file)
+    except ImportError:
+        workdir = Path(os.environ.get("APP_WORKDIR", "."))
+        log_file = workdir / "llm_exchanges.jsonl"
 
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),

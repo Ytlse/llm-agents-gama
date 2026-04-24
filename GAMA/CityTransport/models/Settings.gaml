@@ -64,10 +64,53 @@ global {
 		"leisure"::"🎵",
 		"other"::"",
 		"__MOVING__"::"🚌",
-		"__WALKING__"::"🚶"
+		"__WALKING__"::"🚶",
+		"__DRIVING__"::"🚗"
 	];
 	
 //	string POPULATION_CRS <- "EPSG:2154";
 	string POPULATION_CRS <- "EPSG:4326";
+
+	// Config persistence — reloads simulation parameters across GAMA sessions
+	string SIM_CONFIG_PATH <- "../config/sim_params.yaml";
+	list<string> _cfg_lines <- file_exists(SIM_CONFIG_PATH) ? list<string>(text_file(SIM_CONFIG_PATH).contents) : list<string>([]);
+	string _cfg_pop <- first(_cfg_lines where (each index_of "population_size:" = 0));
+	string _cfg_llm  <- first(_cfg_lines where (each index_of "part_of_llm_based_agents:" = 0));
+	string _cfg_ltm  <- first(_cfg_lines where (each index_of "long_term_memory_enabled:" = 0));
+	string _cfg_ltsr <- first(_cfg_lines where (each index_of "long_term_self_reflect_enabled:" = 0));
+
+	int population_size <- 9;
+	float part_of_llm_based_agents <- 1.0;
+	bool long_term_memory_enabled <- false;
+	bool long_term_self_reflect_enabled <- false;
+	
+	action save_sim_config {
+		write "Save config";
+		if (population_size>0){
+			string content <- "population_size: " + string(population_size) + "\n"
+				+ "part_of_llm_based_agents: " + string(part_of_llm_based_agents) + "\n"
+				+ "long_term_memory_enabled: " + string(long_term_memory_enabled) + "\n"
+				+ "long_term_self_reflect_enabled: " + string(long_term_self_reflect_enabled);
+			save content to: SIM_CONFIG_PATH format: "text" rewrite: true;
+		}
+	}
+	
+	action load_sim_config {
+		// Simulation scenario parameters — sent to the Python controller at /init
+		write "Load config";
+		population_size <- (_cfg_pop != nil) ? int((_cfg_pop split_with ":")[1]) : 0;
+		part_of_llm_based_agents <- (_cfg_llm != nil) ? float(string((_cfg_llm split_with ":")[1]) replace(" ", "")) : 1.0;
+		long_term_memory_enabled <- (_cfg_ltm != nil) ? ((_cfg_ltm split_with ":")[1] contains "true") : false;
+		long_term_self_reflect_enabled <- (_cfg_ltsr != nil) ? (string((_cfg_ltsr split_with ":")[1]) contains "true") : false;
+	}
+
+	reflex auto_save_sim_config when: cycle = 2 {
+		do save_sim_config;
+	}
+	
+	init {
+		do load_sim_config;
+	}
+
 }
 

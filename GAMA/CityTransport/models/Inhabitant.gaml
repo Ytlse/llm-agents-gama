@@ -21,7 +21,7 @@ global {
     // Paramètres d'affichage pour les habitants
     float inhabitant_display_size <- 20.0;           // Taille d'affichage des habitants
     bool show_inhabitants <- true;                   // Afficher les habitants
-    int show_inhabitants_label_density <- 100;       // Pourcentage d'agents affichant les labels
+    int show_inhabitants_label_density <- 1;       // Pourcentage d'agents affichant les labels
 
     // Registre global de tous les habitants pour recherche rapide
     map<string, inhabitant> INHABITANT_MAP <- [];
@@ -78,7 +78,8 @@ species in_transfer skills: [moving] virtual: true {
  */
 species passenger parent: in_transfer virtual: true {
     // État d'activité
-    bool is_active <- false;               // Vrai quand l'agent a un plan de trajet actif
+    bool is_ready <- false;               // Vrai quand l'agent a un plan de trajet actif
+    bool is_active <- false;               // Vrai quand l'agent se déplace
 
     // Cache de recherche rapide pour les véhicules de route
     map<string, list<public_vehicle>> route_vehicle_map;
@@ -95,6 +96,7 @@ species passenger parent: in_transfer virtual: true {
 
     // Constantes de route
     string _ROUTE_NONE_ <- "__NONE__";     // Marqueur pour les segments de marche
+    string _ROUTE_CAR_  <- "__CAR__";      // Marqueur pour les segments en voiture
 
     // État d'interaction avec les véhicules
     public_vehicle on_vehicle;             // Véhicule actuellement embarqué (nil si marche)
@@ -106,6 +108,8 @@ species passenger parent: in_transfer virtual: true {
     list<string> list_destination_stop_name <- [];         // Noms d'arrêts pour chaque destination
     list<string> list_route_id <- [];                      // IDs de route (ou _ROUTE_NONE_ pour marche)
     list<list<string>> list_shape_id <- [];                // IDs de forme pour les segments de transport
+    list<float> list_planned_step_duration <- [];          // Durée prévue (secondes) par étape
+    float default_car_speed <- 50#km/#h;                   // Vitesse voiture par défaut ~50 km/h
 
     // Suivi des métriques
     int step_started_at <- 0;                              // Horodatage du début de l'étape actuelle
@@ -129,6 +133,7 @@ species passenger parent: in_transfer virtual: true {
         list_destination_stop_name <- [];
         list_route_id <- [];
         list_shape_id <- [];
+        list_planned_step_duration <- [];
     }
 
     /**
@@ -139,11 +144,9 @@ species passenger parent: in_transfer virtual: true {
      * @param legs_raw Liste des étapes de trajet du moteur de routage
      * @param raw Structure de données de trajet brute
      */
-    action passenger_set_plan(map plan_target, list legs_raw, map raw) {
+    action passenger_set_plan(map plan_target, list legs, map raw) {
         
         total_activities <- total_activities + 1;
-        
-		list legs <- (legs_raw is list) ? legs_raw : [];
 				
         // Gérer la téléportation directe pour les étapes vides (pas de transport public nécessaire)
         if length(legs) = 0 {
@@ -165,7 +168,7 @@ species passenger parent: in_transfer virtual: true {
         }
 
         // Activer l'agent et stocker les données de trajet
-        is_active <- true;
+        is_ready <- true;
         raw_trip <- raw;
 
         // Réinitialiser l'état du voyage et les métriques
@@ -192,11 +195,13 @@ species passenger parent: in_transfer virtual: true {
                 list_destination_stop_name << string(start_loc_0["stop"]);
                 list_route_id << _ROUTE_NONE_;
                 list_shape_id << nil;
+                list_planned_step_duration << 0.0;
             }
 
             // Traiter chaque étape de transport
             loop leg over: legs {
                 map leg_map <- map(leg);
+                write "Next Leg: "+ leg_map;
                 map leg_end_location <- map(leg_map["end_location"]);
                 
                 if (!(leg_end_location.keys contains "lon" or leg_end_location.keys contains "lng") or !(leg_end_location.keys contains "lat")) {
@@ -213,6 +218,11 @@ species passenger parent: in_transfer virtual: true {
                     string transit_route <- string(leg_map["transit_route"]);
                     list_route_id << (bool(leg_map["is_transfer"]) ? _ROUTE_NONE_: string(leg_map["transit_route"]));
                     list_shape_id << (bool(leg_map["is_transfer"]) ? nil : (list(leg_map["shape_id"]) collect string(each)));
+                    // Durée du segment : champ "duration" (secondes) ou calcul depuis end_time-start_time (ms)
+                    float _leg_dur <- (leg_map.keys contains "duration" and leg_map["duration"] != nil) ?
+                        float(int(leg_map["duration"])) :
+                        (float(int(leg_map["end_time"])) - float(int(leg_map["start_time"]))) / 1000.0;
+                    list_planned_step_duration << _leg_dur;
                 }
             }
         }
@@ -228,6 +238,7 @@ species passenger parent: in_transfer virtual: true {
             list_destination_stop_name << purpose;
             list_route_id << _ROUTE_NONE_;
             list_shape_id << nil;
+            list_planned_step_duration << 0.0;
         }
     }
 
@@ -291,12 +302,18 @@ species passenger parent: in_transfer virtual: true {
 	}
 	
 	reflex follow_the_plan_when_stop when: target_location != nil and is_stop_moving and on_vehicle = nil {
+		
+		/* Si l'heure actuelle est inférieure à l'heure prévue (schedule_at), il'agent ne fait rien et attend.  */
 		if CURRENT_TIMESTAMP < schedule_at {
 			return;
 		}
 		
+		 is_ready <- false;
+		 is_active <- true;
+		
 		point dest <- list_destination[step_idx];
-		// passer à l'étape suivante si la destination de l'étape est atteinte
+		
+		// passer à l'étape suivante si la destination de l'étape précédente est atteinte
 		if location distance_to dest < moving_close_dist {
 			// essayer de soumettre l'observation
 			bool is_transfer <- list_route_id[step_idx] = _ROUTE_NONE_;
@@ -328,6 +345,7 @@ species passenger parent: in_transfer virtual: true {
 		
 //		write "Stop: " + step_idx;
 		
+		/* Si l'index de l'étape dépasse la liste des destinations, cela signifie que le voyage est terminé */
 		if step_idx >= length(list_destination) {
 			location <- target_location;
 			
@@ -337,16 +355,29 @@ species passenger parent: in_transfer virtual: true {
 			do on_finish_plan();
 			
 			activity_id <- nil;
+			is_active <- false;
 			return;
 		}
 		
 		// planifier le prochain mouvement, déplacement propre ou attente d'un véhicule
 		string route_id <- list_route_id[step_idx];
 		list<string> shape_id_list <- list_shape_id[step_idx];
-		if route_id != _ROUTE_NONE_ {
+		
+		/* Cas déplacement en VOITURE — vitesse = distance / durée planifiée du segment */
+		if route_id = _ROUTE_CAR_ {
+			write "legs : CAR";
+			point dest2 <- list_destination[step_idx];
+			float planned_dur <- (step_idx < length(list_planned_step_duration)) ? list_planned_step_duration[step_idx] : 0.0;
+			float car_dist <- location distance_to dest2;
+			speed <- (planned_dur > 0 and car_dist > 0) ? (car_dist / planned_dur) : default_car_speed;
+			moving_target <- dest2;
+		}
+		/* Cas transport en COMMUN */
+		else if route_id != _ROUTE_NONE_ {
+
 			if route_id in route_vehicle_map.keys {
 				// TODO: considérer la capacité du véhicule
-				public_vehicle closest_vehicle <- (route_vehicle_map[route_id] 
+				public_vehicle closest_vehicle <- (route_vehicle_map[route_id]
 						first_with (shape_id_list contains each.shape_id and !each.is_full and distance_to(each, self) < get_in_vehicle_dist)
 				);
 				if closest_vehicle != nil {
@@ -354,16 +385,19 @@ species passenger parent: in_transfer virtual: true {
 					ask closest_vehicle {
 						do get_in(name);
 					}
-					
+
 					float waiting_duration <- float(CURRENT_TIMESTAMP-step_started_at);
 					do submit_vehicle_wait_time(waiting_duration, step_idx);
-					
+
 					// métriques
 					on_vehicle_capacity_utilization <- on_vehicle.capacity_utilization;
 				}
 			}
-		} else {
-			// se déplacer vers la cible
+		}
+		/* Cas déplacement a pied */
+		else {
+			write "legs : WALK" + route_id;
+			speed <- 2#m/#s;
 			point dest2 <- list_destination[step_idx];
 			moving_target <- dest2;
 		}
@@ -403,8 +437,24 @@ species inhabitant parent: passenger {
      * Journalise la fin et pourrait notifier l'agent LLM
      */
     action on_finish_plan {
-        write "Hura, person " + person_id + " finished the plan";
-        // TODO: notifier l'agent LLM
+    	
+    	// Calcul de la durée absolue en secondes
+	    float diff_seconds <- float(abs(CURRENT_TIMESTAMP - expected_arrive_at));
+	    
+	    // Extraction des unités
+	    int h <- int(diff_seconds / 3600);
+	    int m <- int((diff_seconds mod 3600) / 60);
+	    int s <- int(diff_seconds mod 60);
+	    
+	    string formatted_time <- "" + h + "h " + m + "m " + s + "s";
+	
+	    if (CURRENT_TIMESTAMP <= expected_arrive_at) {
+	        write "Hura 😊, Person " + person_id + " finished the plan with " + formatted_time + " in advance";
+	    } else {
+	        write "Too late 😡, Person " + person_id + " finished the plan " + formatted_time + " late";
+	    }
+
+        
     }
 	
 	/**
@@ -494,6 +544,9 @@ species inhabitant parent: passenger {
 			if list_route_id != nil and list_route_id[step_idx] = _ROUTE_NONE_ {
 				return PURPOSE_ICON_MAP["__WALKING__"];
 			}
+			if list_route_id != nil and list_route_id[step_idx] = _ROUTE_CAR_ {
+				return PURPOSE_ICON_MAP["__DRIVING__"];
+			}
 			return PURPOSE_ICON_MAP["__MOVING__"];
 		}
 		if purpose in PURPOSE_ICON_MAP.keys {
@@ -503,22 +556,62 @@ species inhabitant parent: passenger {
 	}
 	
 	/**
+	 * Couleur selon l'état de déplacement :
+	 *   gris dark → inactif (pas de trajet)
+	 *   gris   → prêt, en attente avant départ
+	 *   vert   → en transport en commun (dans le véhicule ou attente à l'arrêt)
+	 *   orange → à pied
+	 *   rouge  → en voiture
+	 */
+	rgb get_agent_color {
+		if is_idle {
+			return #darkgray;
+		}
+		// Vérifié en priorité : si l'agent est physiquement dans un véhicule TC → vert garanti
+		if on_vehicle != nil {
+			return #green;
+		}
+		if is_ready {
+			return #gray;
+		}
+		if step_idx < length(list_route_id) {
+			string current_route <- list_route_id[step_idx];
+			if current_route = _ROUTE_CAR_ {
+				return #red;
+			}
+			if current_route = _ROUTE_NONE_ {
+				return #orange;
+			}
+		}
+		// Attente d'un véhicule TC à l'arrêt
+		return #green;
+	}
+
+	/**
 	 * Aspect visuel par défaut pour les agents habitants
-	 * Affiche un carré avec codage couleur (rouge pour basé LLM, gris pour régulier)
-	 * Affiche l'emoji et l'ID quand show_name est activé
+	 * Couleur selon l'état (gris sombre/gris/orange/rouge), taille plus grande pour les agents LLM
 	 */
 	aspect default {
 		if !show_inhabitants {
 			return;
 		}
-		
-		draw 
-			square((is_llm_based ? 20: 9)*inhabitant_display_size) 
-			color: (is_llm_based ? #red : #gray)
-			border: true;
+		rgb agent_color <- get_agent_color();
+		int base_size <- is_llm_based ? 20 : 9;
+		// Agents dans un véhicule TC : cercle (différent du carré habituel) légèrement décalé
+		// pour rester visible par-dessus le dessin du véhicule
+		if on_vehicle != nil {
+			draw circle(base_size * inhabitant_display_size)
+				color: agent_color
+				border: #white
+				at: location + {base_size * inhabitant_display_size * 0.5, -base_size * inhabitant_display_size * 0.5};
+		} else {
+			draw square(base_size * inhabitant_display_size)
+				color: agent_color
+				border: true;
+		}
 		if show_name {
-			draw (get_action_emoji()) at: location + {-3,1.5} anchor: #bottom_center color: (is_llm_based ? #red : #blue) font: font('Default', (is_llm_based ? 18 : 16), #bold);
-			draw (person_id) at: location + {-3,1.5} anchor: #top_left color: (is_llm_based ? #red : #blue) font: font('Default', (is_llm_based ? 10 : 8), #bold); 
+			draw (get_action_emoji()) at: location + {-3,1.5} anchor: #bottom_center color: agent_color font: font('Default', (is_llm_based ? 18 : 16), #bold);
+			draw (person_id) at: location + {-3,1.5} anchor: #top_left color: agent_color font: font('Default', (is_llm_based ? 10 : 8), #bold);
 		}
 	}
 }

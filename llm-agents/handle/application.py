@@ -14,8 +14,8 @@ import time
 from datetime import datetime
 import uvicorn
 from loguru import logger
-from helper import setup_logging
-from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitResponse, WorldSyncRequest
+from helper import setup_logging, humanize_date
+from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings
@@ -23,7 +23,7 @@ import traceback
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
-import urban_mobility_agents.factory.factory
+from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
 
 # Compteurs des endpoints du contrôleur
 SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
@@ -63,6 +63,7 @@ class LoopContainer:
     action_topic = "action/data"
     system_greeting_topic = "system/greeting"
     observation_topic = "observation/data"
+    system_log_topic = "system/log"
 
     def __init__(self):
         self.client = None
@@ -89,6 +90,16 @@ class LoopContainer:
         success = await self.websocket_client.send_json(greeting_message)
         if not success:
             logger.error("Failed to send greeting message")
+
+    async def send_log(self, message: str):
+        """Envoie un message de progression à GAMA via WebSocket"""
+        if self.websocket_client:
+            await self.websocket_client.send_json({
+                "topic": self.system_log_topic,
+                "payload": {
+                    "message": message
+                }
+            })
 
     async def publish_loop(self):
         """
@@ -161,10 +172,9 @@ class LoopContainer:
 
 # Global loop container instance
 loop_container = LoopContainer()
-# Bootstrap the simulation scenario
-scenario = urban_mobility_agents.factory.factory.bootstrap()
-loop_container.set_scenario(scenario)
-print("===> Scenario bootstrapped and set in loop container")
+# Initialisation des données statiques (chargement GTFS, OTP...) au démarrage du serveur
+static_data = init_static_data()
+print("===> Données statiques initialisées. En attente de la requête /init de GAMA...")
 
 @app.on_event("startup")
 async def startup_event():
@@ -208,19 +218,43 @@ async def metrics():
     summary="Initialiser la population du monde",
     description=(
         "Génère et renvoie la liste complète de la population synthétique (avec les coordonnées des domiciles et les caractéristiques des agents) "
-        "pour peupler la carte GAMA au lancement de la simulation."
+        "pour peupler la carte GAMA au lancement de la simulation. "
+        "Bloque jusqu'à ce que tous les premiers itinéraires soient calculés (bootstrap), "
+        "de sorte que GAMA ne commence pas à avancer avant que chaque agent ait son premier trajet en file."
     ),
     tags=["Simulation"]
 )
-async def init():
+async def init(request: WorldInitRequest):
     """
-    Initialize the simulation world.
-    """
-    logger.info("Publishing world data")
+    Initialize the simulation world and pre-compute all first itineraries.
 
+    GAMA's reflex init blocks on this HTTP call, so the simulation cannot
+    advance until bootstrap_all_agents completes and every agent has a move queued.
+    """
     INIT_REQUESTS.inc()
+
+    logger.info(f"[/init] Publishing world data — bootstrap at {humanize_date(request.timestamp)}")
+
+    await loop_container.send_log(f"Création de la population (taille demandée : {request.population_size or 'défaut'})...")
+
+    scenario = init_dynamic_scenario(
+        static_data,
+        population_size=request.population_size,
+        part_of_llm_agents=request.part_of_llm_based_agents,
+        long_term_memory_enabled=request.long_term_memory_enabled,
+        long_term_self_reflect_enabled=request.long_term_self_reflect_enabled,
+    )
+    loop_container.set_scenario(scenario)
+
+    await loop_container.send_log("Pré-calcul du premier itinéraire pour chaque agent via OTP...")
+
+    if request.timestamp > 0:
+        await scenario.bootstrap_all_agents(timestamp=request.timestamp)
+
     people = scenario.population.get_people_list()
     SIM_AGENTS_TOTAL.set(len(people))
+
+    await loop_container.send_log("Initialisation terminée ! Envoi des agents à GAMA.")
 
     person_response = [
         GamaPersonData(
@@ -307,7 +341,7 @@ async def sync(raw: Request):
         logger.error(f"[/sync] JSON parsing error: {e}")
         return ORJSONResponse(status_code=422, content={"detail": str(e)})
 
-    logger.info(f"Synchronizing world at timestamp: {request.timestamp}")
+    logger.info(f"Synchronizing world at timestamp: {request.timestamp} ({humanize_date(request.timestamp)})")
 
     if loop_container.scenario:
         await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people)

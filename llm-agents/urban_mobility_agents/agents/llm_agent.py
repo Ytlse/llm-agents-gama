@@ -11,7 +11,7 @@ from typing import Optional
 from typing import Tuple
 from loguru import logger
 import numpy as np
-from openai import BaseModel
+from pydantic import BaseModel
 from helper import categorize_date_time_short, get_weekday_category, humanize_date, humanize_date_short, humanize_time, time_to_bucket_text
 from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
@@ -125,6 +125,7 @@ class LlmAgent:
         Raises:
             AssertionError: If the LLM call fails after exhausting all retries.
         """
+        params = params or settings.agent.llm_params
         start_time = time.time()
         response = None
         for _ in range(settings.agent.llm_retry_count):
@@ -294,7 +295,10 @@ class LlmAgent:
                     "trajectories": trajectories
                 }
             ],
-            "context": city_context
+            "parameters": {
+                "context": city_context,
+                **settings.agent.llm_params
+            }
         }
 
     async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str) -> tuple[int, str]:

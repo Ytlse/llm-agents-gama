@@ -29,12 +29,12 @@ from llm_module.broker.redis_broker import (
     get_sync_redis, is_provider_disabled, is_in_cooldown, DISABLED_KEY_PREFIX,
 )
 from llm_module.load_balancer.router import load_balancer
-from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
+from llm_module.settings.models import LLMRequest, Task, TaskStatusResponse
 from llm_module.tasks.config import settings, get_batch_max_agents, _load_provider_defaults
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from prometheus_client.metrics_core import CounterMetricFamily, GaugeMetricFamily
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 
 
 logger = get_logger(__name__)

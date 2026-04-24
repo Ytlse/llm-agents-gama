@@ -32,7 +32,10 @@ class BaseRequest(BaseModel):
 """ World Initialization
 """
 class WorldInitRequest(BaseRequest):
-    pass
+    population_size: Optional[int] = None
+    part_of_llm_based_agents: Optional[float] = None
+    long_term_memory_enabled: Optional[bool] = None
+    long_term_self_reflect_enabled: Optional[bool] = None
 
 class WorldSyncIdlePeople(BaseModel):
     person_id: PersonId

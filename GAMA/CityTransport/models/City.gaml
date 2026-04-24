@@ -35,6 +35,7 @@ global {
     // GTFS Calendar date range for the simulation
     date _gtfs_calendar_start_date;
     date _gtfs_calendar_end_date;
+    int nb_ative update: length(inhabitant where (each.is_active));
 
 
     init {
@@ -77,6 +78,7 @@ species activity_loc {
 experiment e type: gui {
     // Simulation time step (2 minutes)
     float step <- 120 #s;
+   
 
     // GTFS visualization parameters
     parameter "Vehicle Size" category:"GTFS" var: vehicle_display_size <- 20.0 among: [5.0, 10.0, 20.0, 30.0, 40.0];
@@ -95,9 +97,17 @@ experiment e type: gui {
     // Verbose output controls
     parameter "Public Transport" category:"Verbose" var: pt_verbose <- false;
 
+    // Simulation scenario parameters — sent to the Python controller at /init
+    // Values are persisted to/from GAMA/CityTransport/config/sim_params.yaml
+    parameter "Population size" category: "Simulation" var: population_size min: 0 max: 10000;
+    parameter "Part of LLM-based agents" category: "Simulation" var: part_of_llm_based_agents <-1.0 min: 0.0 max: 1.0;
+    parameter "Long-term memory" category: "Simulation" var: long_term_memory_enabled <- false;
+    parameter "Long-term self-reflection" category: "Simulation" var: long_term_self_reflect_enabled <- false;
+
     // Evaluation features
     parameter "Public Transport - Dump stop arrival diff time" category:"Features" var: ft_public_transport_eval <- false;
     parameter "Evaluate - Multimodal Choices" category:"Evaluation" var: ft_evaluate_modality_choices <- true;
+
     
     // Building
     //parameter "Shapefile for the buildings:" var: shape_file_buildings category: "GIS";
@@ -150,10 +160,15 @@ experiment e type: gui {
                 format:"csv" rewrite: false;
         }
     }
-	
+   
+
+    
     // Output displays and charts
     output {
-        // Main map display showing all simulation elements
+    	
+    
+        monitor "NB agents active" value: nb_ative;
+        
         // Main map display showing all simulation elements
         display map {
             // Real-time information overlay
@@ -170,17 +185,23 @@ experiment e type: gui {
                     anchor: #top_left
                     border: #orange font: font("Geneva", 10, #bold)
                     wireframe: true width: 2;
-                // Active agents counter
-                draw "Active Agents: " + string(length(inhabitant where (each.is_active))) + " / " + string(length(inhabitant))
+                // Ready agents counter
+                draw "Ready Agents: " + string(length(inhabitant where (each.is_ready))) + " / " + string(length(inhabitant))
                     at: {10, 2400} 
                     anchor: #top_left
-                    border: #red font: font("Geneva", 10, #bold)
+                    border: #blue font: font("Geneva", 10, #bold)
                     wireframe: true width: 2;
-                // Total activities completed
-                draw "Total Activities: " + string(sum(inhabitant collect (each.total_activities)))
+                // Active agents counter
+                draw "Active Agents: " + string(length(inhabitant where (each.is_active))) + " / " + string(length(inhabitant))
                     at: {10, 3600} 
                     anchor: #top_left
                     border: #green font: font("Geneva", 10, #bold)
+                    wireframe: true width: 2;
+                // Total activities completed
+                draw "Total Activities: " + string(sum(inhabitant collect (each.total_activities)))
+                    at: {10, 4800} 
+                    anchor: #top_left
+                    border: #black font: font("Geneva", 10, #bold)
                     wireframe: true width: 2;
             }
 			

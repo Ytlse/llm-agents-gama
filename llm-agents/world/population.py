@@ -58,53 +58,47 @@ class PersonScheduler:
         # Use the default configured anticipation duration if none is provided
         if pre_schedule_duration is None:
             pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
-
-        state = self.person.state
+        
         # Get the time as seconds elapsed since midnight (time24h)
-        day_of_week, time24h = to_24h_timestamp_full(timestamp)
-        day24h_seconds = 24 * 60 * 60
-        activities = self.person.identity.activities
+        day_of_week, current_day_time = to_24h_timestamp_full(timestamp)
+        day24h_seconds = 86400  # 24 * 60 * 60
 
-        # Find the latest activity that starts before the current time
-        # Iterate through the day's activities to find the one that should be triggered
-        selected_activity = None
-        for i in range(len(activities)):
-            activity = activities[i]
-            next_activity = None if i + 1 >= len(activities) else activities[i + 1]
+        moved_activities = [act for act in self.person.identity.activities if act.start_time>=0]
 
-            # TODO: possible bug: if activity.start_time - pre_schedule_duration < 0?
-            # Filter data: activity.start_time > 2h and < 24h
-            # All activity.start_time in ascending order
-            # filter out the home activity
-            if activity.start_time < 0:
-                continue
+        if not moved_activities:
+            logger.warning(f"No valid activities with non-negative start time for person {self.person.person_id}")
+            return None
 
-            # Initialize the scheduled departure time (activity start time minus anticipation)
+        for activity in moved_activities:
             if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
                 activity.scheduled_start_time = activity.start_time - pre_schedule_duration
-            start_journey_time = activity.scheduled_start_time
-            next_end_time = None if next_activity is None else next_activity.start_time
 
-            # Adjust the time if the scheduled departure or the start of the next activity spills over to the next day
-            if start_journey_time > day24h_seconds or (next_end_time or -1) > day24h_seconds:
-                time24h += day24h_seconds
+        ordered_activities = sorted(moved_activities, key=lambda act: (act.scheduled_start_time - current_day_time)% day24h_seconds)
+        return ordered_activities[0] if ordered_activities else None
 
-            # Check if the current time is within the trigger window for this activity
-            # (i.e. we have passed the `start_journey_time` and have not yet reached the next activity)
-            if (start_journey_time > 0 and start_journey_time <= time24h) and \
-               (next_end_time is None or next_end_time == -1 or time24h <= next_end_time):
-                selected_activity = activity
-                break
 
-        # validate activity is done
-        # Avoid returning the activity if it is already the current one or has been completed
-        if selected_activity:
-            selected_index = self.person.identity.activities.index(selected_activity)
-            if selected_index == state.last_activity_index:
-                return None
-        
-        return selected_activity
     
+    def next_upcoming_activity(self, timestamp: int) -> Optional[Activity]:
+        """Return the earliest activity after last_activity_index whose scheduled
+        departure is in the future, regardless of whether we are in its time window.
+        Used at bootstrap to pre-compute itineraries for agents not yet in any window."""
+        _, time24h = to_24h_timestamp_full(timestamp)
+        pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
+        state = self.person.state
+        activities = self.person.identity.activities
+
+        for i, activity in enumerate(activities):
+            if i <= state.last_activity_index:
+                continue
+            if activity.start_time < 0:
+                continue
+            if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
+                activity.scheduled_start_time = activity.start_time - pre_schedule_duration
+            if activity.scheduled_start_time >= time24h:
+                return activity
+
+        return None
+
     def get_home_location(self) -> Optional[Location]:
         if self.person.identity.home:
             return self.person.identity.home
@@ -164,7 +158,7 @@ class WorldPopulation:
         return bbox.min_lon <= home.lon <= bbox.max_lon and bbox.min_lat <= home.lat <= bbox.max_lat
 
     def load_population(self, world_bbox: BBox):
-        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_max_size}_{settings.data.number_of_llm_based_agents}.json"
+        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}_{settings.data.number_of_llm_based_agents}.json"
         if os.path.exists(file_name):
             logger.info(f"Loading population from {file_name}")
             with open(file_name, "r", encoding="utf-8") as f:
@@ -178,7 +172,7 @@ class WorldPopulation:
             return
         
         people = self.population_loader.load_population(
-            max_size=settings.data.population_max_size,
+            max_size=settings.data.population_size,
             bbox=world_bbox,
         )
 

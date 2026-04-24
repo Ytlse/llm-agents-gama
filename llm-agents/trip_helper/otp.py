@@ -198,8 +198,10 @@ class OTPTripPattern(BaseModel):
     systemNotices: Optional[List[OTPSystemNotice]] = []
 
 
+CAR_ROUTE_MARKER = "__CAR__"
+
 class OTPTripHelper(TripHelper):
-    SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway"]
+    SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway", "car"]
 
     def __init__(self, endpoint: str = None, gtfs_data: GTFSData = None):
         # Support multiple OTP instances via OTP_ENDPOINTS env var (comma-separated URLs).
@@ -298,6 +300,7 @@ class OTPTripHelper(TripHelper):
         for leg in obj.legs:
             assert leg.mode in self.SUPPORTED_MODES, f"Unsupported mode: {leg.mode}"
             is_transfer = leg.mode == "foot"
+            is_car = leg.mode == "car"
 
             transit = Transit(
                 start_time=_ptime(leg.expectedStartTime),
@@ -309,7 +312,9 @@ class OTPTripHelper(TripHelper):
                 end_location=_location_from_place(leg.toPlace),
                 is_transfer=is_transfer,
             )
-            if not is_transfer and leg.line:
+            if is_car:
+                transit.transit_route = CAR_ROUTE_MARKER
+            elif not is_transfer and leg.line:
                 transit.transit_route = _proute(leg.line.id)
                 transit.shape_id = self.gtfs_data.get_shape_id_from_route_info(
                     route_id=transit.transit_route,
@@ -346,12 +351,13 @@ class OTPTripHelper(TripHelper):
     def revert_fixed_date(self, timestamp: int, real_date: int) -> int:
         return 0
 
-    async def get_itineraries(self, 
-                              origin: Location, 
-                              destination: Location, 
-                              departure_time: int, 
+    async def get_itineraries(self,
+                              origin: Location,
+                              destination: Location,
+                              departure_time: int,
                               max_options: int=5, # unused
-                              search_window_m: int=30) -> List[TravelPlan]:
+                              search_window_m: int=30,
+                              include_car: bool=False) -> List[TravelPlan]:
 
         real_day = datetime.fromtimestamp(departure_time) if self.fixed_day else None
         real_departure_time = departure_time
@@ -378,7 +384,29 @@ class OTPTripHelper(TripHelper):
                     }
                 },
                 "dateTime": start_at,
-                "numTripPatterns": 20,
+                "modes": {
+                    "accessMode": "foot",
+                    "transportModes": [
+                    {
+                        "transportMode": "bus"
+                    },
+                    {
+                        "transportMode": "metro"
+                    },
+                    {
+                        "transportMode": "tram"
+                    },
+                    {
+                        "transportMode": "cableway"
+                    }
+                    ],
+                "egressMode": "foot",
+                "directMode": "car"
+                },
+                "itineraryFilters": {
+                    "debug": "limitToNumOfItineraries"
+                },
+                "numTripPatterns": 8,
                 "searchWindow": search_window_m
             },
             "operationName": "trip"

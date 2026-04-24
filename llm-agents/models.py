@@ -210,6 +210,8 @@ class PersonState(BaseModel):
     last_activity_index: Optional[int] = 0
     cache_current_activity: Optional[Activity] = None  # current activity
     heading_to: Optional[str] = None  # purpose of the next activity
+    scheduling_in_progress: bool = False  # itinerary computation in flight
+    scheduling_started_at: Optional[int] = None  # sim 24h-timestamp when scheduling was flagged
 
 
 class Person(BaseModel):

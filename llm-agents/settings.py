@@ -107,7 +107,7 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["population_cache_prefix", "state_file"]
 
     # Agent settings
-    population_max_size: Optional[int] = 100 + 20 # buffer 20 agents
+    population_size: Optional[int] = 1
     population_cache_prefix: str = "./population_"
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
@@ -122,7 +122,6 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
 class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["long_term_memory_storage_dir", "chat_log_dir"]
 
-    llm_model: str = "mistral-7B-instruct-v0.3"
     embedding_model: Optional[str] = None
     chat_log_dir: str = "chat_logs"
     long_term_memory_storage_dir: str = "long_term_memory"
@@ -160,10 +159,8 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     quantify_time_window: bool = True
     reflection_custom_guidelines: Optional[str] = None
-    travel_plan_custom_guidelines: Optional[str] = None
 
     # Remote LLM settings
-    remote_llm_max_concurrent_requests: Optional[int] = 20
     remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
 
 
@@ -257,10 +254,11 @@ class FactorySettings:
 
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
-        # Create workdir, copy the config file into it, and update "current" symlink
+        # Create workdir, write the full config into it, and update "current" symlink
         if config_file_path and os.path.isfile(config_file_path):
             cls._instance.workdir.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(config_file_path, cls._instance.workdir / Path(config_file_path).name)
+
+            cls.save_static_config()
 
             current_link = experiments_dir / "current"
             if current_link.is_symlink() or current_link.exists():
@@ -271,9 +269,27 @@ class FactorySettings:
         logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
         return cls._instance
     
+    @classmethod
+    def save_static_config(cls) -> None:
+        """
+        Sauvegarde l'état actuel de la configuration dans le fichier static_config.yaml.
+        À appeler après que la simulation GAMA ait surchargé les paramètres.
+        """
+        if cls._instance and cls._instance.workdir and cls._instance.workdir.exists():
+            static_config_path = cls._instance.workdir / "static_config.yaml"
+            with open(static_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    cls._instance.model_dump(mode="json"), 
+                    f, 
+                    default_flow_style=False, 
+                    allow_unicode=True,
+                    sort_keys=False
+                )
+            logger.info(f"Configuration statique mise à jour : {static_config_path}")
+
     def __getattribute__(self, name):
         # Handle special methods and private attributes directly
-        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths'):
+        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config'):
             return super().__getattribute__(name)
         
         # Delegate all other attributes to the Settings instance

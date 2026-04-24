@@ -376,7 +376,7 @@ def _fail_task(task: Task, error_msg: str) -> None:
 def _extract_primary_mode(mode: str) -> str:
     """
     Réduit une chaîne de modes composée ("foot,bus,foot") au mode principal.
-    Priorité : metro > tram > bus > cycling > walking > other
+    Priorité : metro > tram > bus > car > cycling > walking > other
     """
     if not mode or mode == "unknown":
         return "unknown"
@@ -387,6 +387,8 @@ def _extract_primary_mode(mode: str) -> str:
         return "tram"
     if "bus" in parts:
         return "bus"
+    if "car" in parts or "driving" in parts:
+        return "car"
     if "bicycle" in parts or "bike" in parts or "cycling" in parts:
         return "cycling"
     if parts <= {"foot", "walk", "walking"}:

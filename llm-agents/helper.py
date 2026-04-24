@@ -7,14 +7,6 @@ import humanize
 from settings import Settings
 
 
-# @decorator
-# def time_it(func, *args, **kwargs):
-#     start = time.perf_counter()
-#     result = func(*args, **kwargs)
-#     end = time.perf_counter()
-#     print(f"Function '{func.__name__}' executed in {end - start:.6f} seconds")
-#     return result
-
 
 def to_24h_timestamp(timestamp: int) -> int:
     """
@@ -209,8 +201,3 @@ def setup_logging(settings: Settings = None):
             retention="7 days",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
         )
-
-
-# Alias pour compatibilité avec handle/application.py
-def create_json_logger():
-    setup_logging()

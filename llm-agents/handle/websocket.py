@@ -6,7 +6,6 @@ from loguru import logger
 import asyncio
 import websockets
 import json
-from datetime import datetime
 
 class WebSocketClient:
     def __init__(self, uri: str, reconnect_delay: int = 5):

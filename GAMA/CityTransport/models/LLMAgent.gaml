@@ -52,11 +52,19 @@ species llm_agent_sync skills:[network] {
 	 */
 	reflex init when: cycle = 1 {
 		write "Init population -> LLM, timestamp: " + CURRENT_TIMESTAMP;
+		write "Paramètres envoyés : population=" + population_size
+			+ " part_of_llm=" + part_of_llm_based_agents
+			+ " ltm=" + long_term_memory_enabled
+			+ " self_reflect=" + long_term_self_reflect_enabled;
 
 		do send to: "/init" contents: [
 			"POST",
 			to_json([
-				"timestamp"::CURRENT_TIMESTAMP
+				"timestamp"::CURRENT_TIMESTAMP,
+				"population_size"::population_size,
+				"part_of_llm_based_agents"::part_of_llm_based_agents,
+				"long_term_memory_enabled"::long_term_memory_enabled,
+				"long_term_self_reflect_enabled"::long_term_self_reflect_enabled
 			]),
 			["Content-Type"::"application/json"]
 		];
@@ -115,6 +123,10 @@ species llm_agent_sync skills:[network] {
 				continue;
 			}
 			string messageType <- json["message_type"];
+			
+			/** 
+			 *   --------   WORLD INIT   --------------
+			 */
 			if messageType = "ag_world_init" {
 				// Traiter l'initialisation du monde des agents
 				map<string, unknown> data <- json["data"];
@@ -194,8 +206,21 @@ species llm_agent_async skills:[network] {
 			string action_data_json <- map(mess.contents)["contents"];
 			map<string, unknown> payload_data <- from_json(action_data_json);
 			string topic <- payload_data["topic"];
+			
+			/** 
+			 *   --------   LOG   --------------
+			 */
+			if topic = "system/log" {
+				map<string, unknown> log_payload <- map<string, unknown>(payload_data["payload"]);
+				write "[Python] " + string(log_payload["message"]);
+				continue;
+			}
+			
+			/** 
+			 *   --------   ACTION/DATA   --------------
+			 */
 			if topic != "action/data" {
-				continue;  // Ignorer les messages qui ne sont pas des actions
+				continue;
 			}
 			map<string, unknown> action_data <- payload_data["payload"];
 			
@@ -218,12 +243,15 @@ species llm_agent_async skills:[network] {
 					int prepare_before_seconds <- int(data["prepare_before_seconds"]);
 					self.schedule_at <- self.expected_arrive_at - prepare_before_seconds;
 					//	self.moving_description <- string(data["description"]);
-
+						
 					// Définition du plan de déplacement
-					map<string, unknown> plan <- map<string, unknown>(data["plan"]);
+					//map<string, unknown> plan <- map<string, unknown>(data["plan"]);
+					map plan_map <- map(data["plan"]);
+					list legs_to_send <- list(plan_map["legs"]);
+					
 					do passenger_set_plan(
 						data["target_location"],
-						plan["legs"],
+						legs_to_send,
 						data
 					);
 				}	
@@ -253,3 +281,4 @@ species llm_agent_test skills:[network] {
 		
 	}
 }
+

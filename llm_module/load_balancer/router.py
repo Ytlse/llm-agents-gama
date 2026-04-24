@@ -178,7 +178,7 @@ class LoadBalancer:
         max_active = cfg.concurrency_limit
         active_count = get_active_workers(provider)
         if active_count >= max_active:
-            logger.debug(f"Limite de concurrence atteinte | provider={provider} active={active_count}/{max_active}")
+            # logger.debug(f"Limite de concurrence atteinte | provider={provider} active={active_count}/{max_active}")
             return False
 
         # Optimisation : évite le round-trip Lua si le quota est déjà dépassé.
@@ -193,10 +193,10 @@ class LoadBalancer:
         # vérifie min_interval, INCR RPM et maj last_req en une seule opération Redis.
         result = try_reserve_rpm_smoothed(provider, cfg.rpm_limit)
         if result == -1:
-            logger.debug(
-                f"Lissage RPM : intervalle minimum non écoulé | provider={provider} "
-                f"min_interval={60 / cfg.rpm_limit:.2f}s"
-            )
+            # logger.debug(
+            #     f"Lissage RPM : intervalle minimum non écoulé | provider={provider} "
+            #     f"min_interval={60 / cfg.rpm_limit:.2f}s"
+            # )
             return False
         if result == 0:
             logger.warning(
