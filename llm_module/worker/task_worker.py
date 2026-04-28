@@ -94,10 +94,10 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
         provider_name = load_balancer.select_provider(force=force_provider)
     except RuntimeError as e:
         delay = 5.0
-        logger.warning(
-            f"Fournisseurs saturés ou en cooldown, retry planifié | "
-            f"task_id={batch_key} retry_in={delay:.1f}s attempt={self.request.retries + 1}"
-        )
+        # logger.warning(
+        #     f"Fournisseurs saturés ou en cooldown, retry planifié | "
+        #     f"task_id={batch_key} retry_in={delay:.1f}s attempt={self.request.retries + 1}"
+        # )
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=delay)
         else:

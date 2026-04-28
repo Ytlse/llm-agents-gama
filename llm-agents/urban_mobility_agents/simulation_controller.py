@@ -9,6 +9,7 @@ Son rôle est d'orchestrer le déroulement de la simulation au fil du temps. Il 
 """
 
 import asyncio
+import math
 import time
 from typing import Optional, Tuple
 import datetime
@@ -27,13 +28,30 @@ from world.population import WorldPopulation
 from world.world_data import WorldModel
 from settings import settings
 
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge
 
 history_logger = HistoryStreamLog.get_instance()
 
 PROCESS_PERSON_CALLS = Counter('gama_process_person_calls_total', 'Total calls to process_person')
 EVALUATE_PLAN_CALLS = Counter('gama_evaluate_plan_calls_total', 'Total calls to evaluate_and_choose_travel_plan')
 ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
+PLANNING_LATE = Counter('controller_planning_late_total', 'Agents dont la date de départ était déjà passée lors de la planification')
+ITINERARY_100_COMPLETION = Gauge('agent_itinerary_100_completion_seconds', 'Durée réelle (secondes) pour traiter 100 itinéraires réussis consécutifs')
+BOOTSTRAP_DURATION = Gauge('agent_bootstrap_duration_seconds', 'Durée réelle (secondes) du bootstrap_all_agents (calcul initial des itinéraires au /init)')
+
+
+def _estimate_fallback_duration(origin, destination) -> int:
+    """Estimate travel time in seconds from crow-flies distance at 30 km/h with 1.3 detour factor."""
+    if origin is None or destination is None:
+        return 30 * 60
+    lat1, lon1 = math.radians(origin.lat), math.radians(origin.lon)
+    lat2, lon2 = math.radians(destination.lat), math.radians(destination.lon)
+    a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    distance_m = 2 * 6_371_000 * math.asin(math.sqrt(a))
+    road_distance_m = distance_m * 1.3
+    speed_ms = 30_000 / 3600  # 30 km/h
+    return max(5 * 60, int(road_distance_m / speed_ms))
+
 
 class SimulationLoopV1(BaseScenario):
     MAX_ADJUST_START_TIME = 15*60  # 15 minutes
@@ -45,6 +63,8 @@ class SimulationLoopV1(BaseScenario):
         self.MAX_ADJUST_START_TIME = settings.agent.max_reschedule_amount or self.MAX_ADJUST_START_TIME
         self._messages = []
         self._late_count = 0
+        self._itinerary_success_count = 0
+        self._itinerary_window_start = time.monotonic()
         self.model = world_model
         self.trip_helper = trip_helper
         self.agent = agent
@@ -203,7 +223,7 @@ class SimulationLoopV1(BaseScenario):
                         timestamp=observation.timestamp
                     )
             self.population.get_person_default_scheduler(person).finish_activity()
-            self.population.dump_population_state()
+            #self.population.dump_population_state()
 
         _context = Context(
             person=person,
@@ -278,10 +298,13 @@ class SimulationLoopV1(BaseScenario):
             f"[bootstrap] sim_time={humanize_date(timestamp)} "
             f"computing itineraries for {len(eligible)}/{len(all_people)} agents — GAMA blocked"
         )
+        _bootstrap_start = time.monotonic()
         tasks = [asyncio.create_task(self._schedule_one(person, act, timestamp))
                  for person, act in eligible]
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info(f"[bootstrap] done — {len(eligible)} itineraries computed")
+        _bootstrap_duration = time.monotonic() - _bootstrap_start
+        BOOTSTRAP_DURATION.set(_bootstrap_duration)
+        logger.info(f"[bootstrap] done — {len(eligible)} itineraries computed in {_bootstrap_duration:.2f}s")
 
     async def schedule_person_move(self, timestamp: int):
         all_people = self.population.get_people_list()
@@ -307,6 +330,7 @@ class SimulationLoopV1(BaseScenario):
                     break
                 _seen.add(id(next_act))
                 self._late_count += 1
+                PLANNING_LATE.inc()
                 _late_s = _time24h - next_act.scheduled_start_time
                 logger.warning(
                     f"[schedule_move] LATE — skipping | person={person.person_id} "
@@ -356,6 +380,11 @@ class SimulationLoopV1(BaseScenario):
 
             if move:
                 ACTIONS_CREATED.inc()
+                self._itinerary_success_count += 1
+                if self._itinerary_success_count >= 100:
+                    ITINERARY_100_COMPLETION.set(time.monotonic() - self._itinerary_window_start)
+                    self._itinerary_success_count = 0
+                    self._itinerary_window_start = time.monotonic()
                 self._messages.append(Action(
                     person_id=person.person_id,
                     action=move.model_dump(exclude_none=False)
@@ -417,13 +446,17 @@ class SimulationLoopV1(BaseScenario):
             itinerary.purpose = next_activity.purpose
 
         if not itineraries:
-            logger.debug(f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by public transport, move to the destination anyway")
+            estimated_duration = _estimate_fallback_duration(from_location, next_activity.location)
+            logger.warning(
+                f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by public transport, "
+                f"estimated travel time: {humanize_duration(estimated_duration)}"
+            )
             plan = TravelPlan(
                 id=random_uuid(),
                 start_location=from_location,
                 end_location=next_activity.location,
                 start_time=timestamp,
-                end_time=timestamp + 30*60,  # Assume 30 minutes travel time
+                end_time=timestamp + estimated_duration,
                 purpose=next_activity.purpose,
                 legs=[],
             )

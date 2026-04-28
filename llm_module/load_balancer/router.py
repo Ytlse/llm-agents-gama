@@ -144,9 +144,6 @@ class LoadBalancer:
             }
             for name, cfg in settings.providers.items()
         }
-        logger.warning(
-            f"[load_balancer] TOUS LES PROVIDERS SATURÉS/OCCUPÉS | snapshot={status_snapshot}"
-        )
         raise RuntimeError(
             "Tous les fournisseurs LLM sont saturés ou ont atteint leur limite de concurrence. "
             "Réessayez dans quelques secondes."

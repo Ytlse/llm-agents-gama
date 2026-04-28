@@ -3,7 +3,59 @@ x-shared-env: &shared-env
   OTP_ENDPOINTS: http://otp:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
 
+# ── EQUASIM env vars (override from .env or shell) ───────────────────────────
+# EQASIM_POPULATION_SIZE: if unset, read from APP_CONFIG_PATH
+# EQASIM_GENERATE_PERSONALITY: "true" to populate Big Five scores
+# EQASIM_RANDOM_SEED: reproducibility seed (default 1234)
+x-eqasim-env: &eqasim-env
+  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  EQASIM_POPULATION_SIZE: ${EQASIM_POPULATION_SIZE:-}
+  EQASIM_GENERATE_PERSONALITY: ${EQASIM_GENERATE_PERSONALITY:-false}
+  EQASIM_RANDOM_SEED: ${EQASIM_RANDOM_SEED:-1234}
+
 services:
+
+  # ─────────────────────────────────────────────
+  # EQUASIM Toulouse — génération de la population synthétique
+  #
+  # Service one-shot : se termine une fois le JSON de population produit.
+  # Le controller attend sa complétion via service_completed_successfully.
+  #
+  # Volumes requis sur l'hôte (monter les données INSEE/OSM/GTFS/BAN/BDTOPO) :
+  #   ./data/eqasim/data   → données d'entrée brutes (lecture seule)
+  #   ./data/eqasim/cache  → cache pipeline intermédiaire (accélère les re-runs)
+  # Volume partagé avec le controller :
+  #   eqasim_output        → JSON de population consommé par EqasimJSONPopulationLoader
+  # ─────────────────────────────────────────────
+
+  eqasim:
+    build:
+      context: ./eqasim-toulouse
+      dockerfile: Dockerfile
+    entrypoint: ["uv", "run", "python", "/eqasim/server.py"]
+    ports:
+      - "8003:8003"
+    mem_limit: 10g
+    environment:
+      <<: *eqasim-env
+      EQASIM_PROCESSES: ${EQASIM_PROCESSES:-2}
+    volumes:
+      - ./eqasim-toulouse/generate_population.py:/eqasim/generate_population.py:ro
+      - ./eqasim-toulouse/server.py:/eqasim/server.py:ro
+      - ./llm-agents/config:/app/config:ro
+      - ./eqasim-toulouse/data:/eqasim-data:rw
+      - ./eqasim-toulouse/data/bpe:/eqasim/data/bpe:ro
+      - ./eqasim-toulouse/data/census:/eqasim/data/census:ro
+      - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
+      - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
+      - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
+      - eqasim_cache:/eqasim-cache:rw
+      - eqasim_output:/eqasim-output:rw
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # ─────────────────────────────────────────────
   # Infrastructure
@@ -30,12 +82,14 @@ services:
   # ─────────────────────────────────────────────
 
   otp:
-    build:
-      context: ./otp-toulouse
-      dockerfile: Dockerfile
+    image: eclipse-temurin:21-jre-jammy
     ports:
       - "8080:8080"
     mem_limit: 5g
+    volumes:
+      - ./otp-toulouse/bin:/otp/bin:ro
+      - ./otp-toulouse/toulouse:/var/otp/toulouse:ro
+    command: ["sh", "-c", "java -Xmx4G -jar /otp/bin/*.jar --load /var/otp/toulouse --port 8080"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
@@ -44,12 +98,14 @@ services:
       start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
 
   otp2:
-    build:
-      context: ./otp-toulouse
-      dockerfile: Dockerfile
+    image: eclipse-temurin:21-jre-jammy
     ports:
       - "8081:8080"
     mem_limit: 5g
+    volumes:
+      - ./otp-toulouse/bin:/otp/bin:ro
+      - ./otp-toulouse/toulouse:/var/otp/toulouse:ro
+    command: ["sh", "-c", "java -Xmx4G -jar /otp/bin/*.jar --load /var/otp/toulouse --port 8080"]
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
       interval: 15s
@@ -94,7 +150,6 @@ services:
     volumes:
       - ./llm_module:/app/llm_module
       - ./data/gtfs:/data/gtfs
-      - ./data/po_toulouse.big:/data/po_toulouse.big
       - ./experiments:/app/experiments
     depends_on:
       redis:
@@ -115,21 +170,24 @@ services:
     environment:
       <<: *shared-env
       LLM_API_URL: http://api:8000
+      EQASIM_SERVICE_URL: http://eqasim:8003
       #APP_WORKDIR: /app/workdir
       GAMA_WS_URL: ws://host.docker.internal:3001
-      PYTHONPATH: /app
+      PYTHONPATH: /app:/opt
     volumes:
       - ./llm-agents:/app
-      - ./llm_module:/app/llm_module
+      - ./llm_module:/opt/llm_module
       - ./data/gtfs:/data/gtfs
-      - ./data/po_toulouse.big:/data/po_toulouse.big
       - ./experiments:/app/experiments
+      - eqasim_output:/data/eqasim-output:ro
     depends_on:
       api:
         condition: service_started
       otp:
         condition: service_healthy
       otp2:
+        condition: service_healthy
+      eqasim:
         condition: service_healthy
 
   worker:
@@ -245,3 +303,5 @@ services:
 volumes:
   redis_data:
   grafana_data:
+  eqasim_output:
+  eqasim_cache:

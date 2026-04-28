@@ -4,10 +4,25 @@
   "schemaVersion": 38,
   "version": 3,
   "editable": true,
-  "tags": ["simulation", "métier", "transport"],
-  "time": { "from": "now-3h", "to": "now" },
+  "tags": [
+    "simulation",
+    "métier",
+    "transport"
+  ],
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
   "timepicker": {
-    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h"
+    ]
   },
   "refresh": "30s",
   "timezone": "browser",
@@ -17,7 +32,10 @@
         "name": "provider",
         "label": "Provider",
         "type": "query",
-        "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "ffj2fwnh387pce"
+        },
         "definition": "label_values(llm_mode_by_provider_total, provider)",
         "query": {
           "query": "label_values(llm_mode_by_provider_total, provider)",
@@ -32,453 +50,2270 @@
     ]
   },
   "panels": [
-
-    { "id": 100, "type": "row", "title": "Agents & Simulation", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
-
     {
-      "id": 1, "type": "stat", "title": "Agents dans la simulation",
+      "id": 100,
+      "type": "row",
+      "title": "Agents & Simulation",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Agents dans la simulation",
       "description": "Nombre total d'agents déclarés au lancement de la simulation (/init).",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A", "expr": "gama_sim_agents_total", "legendFormat": "Total" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_sim_agents_total",
+          "legendFormat": "Total"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
-        }, "overrides": []
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center",
-        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 }
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      }
     },
-
     {
-      "id": 2, "type": "stat", "title": "Agents ayant utilisé le LLM",
+      "id": 2,
+      "type": "stat",
+      "title": "Agents ayant utilisé le LLM",
       "description": "Nombre cumulé d'agents dont le choix de trajet a été délégué au LLM.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A", "expr": "sum(llm_agents_batched_total)", "legendFormat": "LLM" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(llm_agents_batched_total)",
+          "legendFormat": "LLM"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "green" },
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
-        }, "overrides": []
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
-        "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 }
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      }
     },
-
     {
-      "id": 3, "type": "gauge", "title": "Part LLM-Based (%)",
+      "id": 3,
+      "type": "gauge",
+      "title": "Part LLM-Based (%)",
       "description": "Part des décisions d'itinéraire prises par un LLM.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "100 * sum(llm_agents_batched_total) / clamp_min(sum(gama_agents_received_total), 1)",
-        "legendFormat": "% LLM"
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(llm_agents_batched_total) / clamp_min(sum(gama_agents_received_total), 1)",
+          "legendFormat": "% LLM"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "orange", "value": 0 },
-            { "color": "green", "value": 80 }
-          ]}
-        }, "overrides": []
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdMarkers": true },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      }
     },
-
     {
-      "id": 4, "type": "timeseries", "title": "Durée réelle d'un pas de temps simulé (time step - 2 minutes)",
+      "id": 4,
+      "type": "timeseries",
+      "title": "Durée réelle d'un pas de temps simulé (time step - 2 minutes)",
       "description": "Intervalle wall-clock entre deux appels /sync successifs de GAMA.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A", "expr": "gama_sim_step_interval_seconds", "legendFormat": "Durée pas de temps" }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_sim_step_interval_seconds",
+          "legendFormat": "Durée pas de temps"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "color": { "mode": "fixed", "fixedColor": "purple" },
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 15,
-            "gradientMode": "opacity", "showPoints": "auto", "spanNulls": false }
-        }, "overrides": []
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      }
     },
-
     {
-      "id": 5, "type": "timeseries", "title": "Agents traités par le LLM (rate / min)",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A",
-        "expr": "rate(llm_agents_batched_total[1m]) * 60",
-        "legendFormat": "{{category}}"
-      }],
+      "id": 5,
+      "type": "timeseries",
+      "title": "Agents traités par le LLM (rate / min)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llm_agents_batched_total[1m]) * 60",
+          "legendFormat": "{{category}}"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "reqpm",
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10,
-            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
-        }, "overrides": []
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 5 }
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      }
     },
-
-    { "id": 101, "type": "row", "title": "Modes de Transport par Tranche de Distance", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 } },
-
     {
-      "id": 10, "type": "piechart",
-      "title": "Modes — 0-1 km",
-      "description": "Répartition des modes de transport pour les trajets de moins de 1 km.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"0-1km\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
+      "id": 50,
+      "type": "piechart",
+      "title": "Répartition : Via LLM vs Réponse directe OTP",
+      "description": "Pour chaque itinéraire traité, distinction entre les agents ayant nécessité un appel LLM (plusieurs choix OTP disponibles) et ceux ayant obtenu une réponse directe sans LLM (un seul choix OTP remontait ou agent non-LLM).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(gama_evaluate_plan_calls_total)",
+          "legendFormat": "Via LLM",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "clamp_min(sum(gama_process_person_calls_total) - sum(gama_evaluate_plan_calls_total), 0)",
+          "legendFormat": "Réponse directe OTP",
+          "instant": true
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 10 }
-    },
-
-    {
-      "id": 11, "type": "piechart",
-      "title": "Modes — 1-3 km",
-      "description": "Répartition des modes de transport pour les trajets entre 1 et 3 km.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"1-3km\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 10 }
-    },
-
-    {
-      "id": 12, "type": "piechart",
-      "title": "Modes — 3-5 km",
-      "description": "Répartition des modes de transport pour les trajets entre 3 et 5 km.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"3-5km\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 10 }
-    },
-
-    {
-      "id": 13, "type": "piechart",
-      "title": "Modes — 5-15 km",
-      "description": "Répartition des modes de transport pour les trajets entre 5 et 15 km.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"5-15km\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 19 }
-    },
-
-    {
-      "id": 14, "type": "piechart",
-      "title": "Modes — > 15 km",
-      "description": "Répartition des modes de transport pour les trajets de plus de 15 km.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\">15km\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
-      },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 19 }
-    },
-
-    {
-      "id": 6, "type": "piechart",
-      "title": "Répartition globale des modes de transport",
-      "description": "Part de chaque mode de transport principal dans l'ensemble des choix effectués par les LLMs.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_transport_mode_chosen_total)",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": [
-          { "matcher": { "id": "byName", "options": "walking" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "bus" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "metro" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "tram" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "purple", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "cycling" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "light-green", "mode": "fixed" } }] }
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Via LLM"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Réponse directe OTP"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
         ]
       },
       "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true,
-          "values": ["value", "percent"] },
-        "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 19 }
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      }
     },
-
-    { "id": 102, "type": "row", "title": "Modes de Transport par Provider LLM", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 28 } },
-
     {
-      "id": 20, "type": "piechart",
+      "id": 51,
+      "type": "timeseries",
+      "title": "LLM vs Direct OTP — Flux dans le temps (req/min)",
+      "description": "Débit en temps réel des requêtes passant par le LLM vs celles résolues directement (un seul choix OTP). Un ratio élevé de direct indique que OTP ne remonte souvent qu'un seul itinéraire.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(gama_evaluate_plan_calls_total[1m]) * 60",
+          "legendFormat": "Via LLM (/ min)"
+        },
+        {
+          "refId": "B",
+          "expr": "clamp_min(rate(gama_process_person_calls_total[1m]) - rate(gama_evaluate_plan_calls_total[1m]), 0) * 60",
+          "legendFormat": "Réponse directe OTP (/ min)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Via LLM (/ min)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Réponse directe OTP (/ min)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 9
+      }
+    },
+    {
+      "id": 101,
+      "type": "row",
+      "title": "Modes de Transport par Tranche de Distance",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      }
+    },
+    {
+      "id": 10,
+      "type": "piechart",
+      "title": "Modes — 0-1 km",
+      "description": "Répartition des modes de transport pour les trajets de moins de 1 km.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"0-1km\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "id": 11,
+      "type": "piechart",
+      "title": "Modes — 1-3 km",
+      "description": "Répartition des modes de transport pour les trajets entre 1 et 3 km.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"1-3km\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      }
+    },
+    {
+      "id": 12,
+      "type": "piechart",
+      "title": "Modes — 3-5 km",
+      "description": "Répartition des modes de transport pour les trajets entre 3 et 5 km.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"3-5km\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      }
+    },
+    {
+      "id": 13,
+      "type": "piechart",
+      "title": "Modes — 5-15 km",
+      "description": "Répartition des modes de transport pour les trajets entre 5 et 15 km.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\"5-15km\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      }
+    },
+    {
+      "id": 14,
+      "type": "piechart",
+      "title": "Modes — > 15 km",
+      "description": "Répartition des modes de transport pour les trajets de plus de 15 km.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_distance_total{bracket=\">15km\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      }
+    },
+    {
+      "id": 6,
+      "type": "piechart",
+      "title": "Répartition globale des modes de transport",
+      "description": "Part de chaque mode de transport principal dans l'ensemble des choix effectués par les LLMs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_transport_mode_chosen_total)",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      }
+    },
+    {
+      "id": 102,
+      "type": "row",
+      "title": "Modes de Transport par Provider LLM",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      }
+    },
+    {
+      "id": 20,
+      "type": "piechart",
       "title": "Modes — $provider",
       "description": "Répartition des modes de transport choisis via ce provider.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
       "repeat": "provider",
       "repeatDirection": "h",
       "maxPerRow": 4,
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (mode) (llm_mode_by_provider_total{provider=\"$provider\"})",
-        "legendFormat": "{{mode}}",
-        "instant": true
-      }],
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (mode) (llm_mode_by_provider_total{provider=\"$provider\"})",
+          "legendFormat": "{{mode}}",
+          "instant": true
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
       },
       "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
         "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 9, "w": 6, "x": 0, "y": 29 }
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 0,
+        "y": 37
+      }
     },
-
-    { "id": 103, "type": "row", "title": "Choix d'Itinéraire (Chosen Index)", "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 } },
-
     {
-      "id": 30, "type": "stat", "title": "Total d'itinéraires évalués",
+      "id": 103,
+      "type": "row",
+      "title": "Choix d'Itinéraire (Chosen Index)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      }
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Total d'itinéraires évalués",
       "description": "Nombre total de fois qu'un agent a eu un itinéraire sélectionné par le LLM.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A",
-        "expr": "sum(llm_chosen_index_total)",
-        "legendFormat": "Total"
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(llm_chosen_index_total)",
+          "legendFormat": "Total"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
-        }, "overrides": []
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 48 }
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 56
+      }
     },
-
     {
-      "id": 31, "type": "stat", "title": "Premier choix sélectionné (index 0)",
+      "id": 31,
+      "type": "stat",
+      "title": "Premier choix sélectionné (index 0)",
       "description": "Nombre de fois que le LLM a choisi le premier itinéraire proposé (index 0).",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{ "refId": "A",
-        "expr": "llm_chosen_index_total{index=\"0\"}",
-        "legendFormat": "Index 0"
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_chosen_index_total{index=\"0\"}",
+          "legendFormat": "Index 0"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "green" },
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": 0 }] }
-        }, "overrides": []
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 48 }
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 56
+      }
     },
-
     {
-      "id": 32, "type": "gauge", "title": "Part du premier choix (%)",
+      "id": 32,
+      "type": "gauge",
+      "title": "Part du premier choix (%)",
       "description": "Fréquence à laquelle le LLM sélectionne l'itinéraire en premier dans la liste.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "100 * llm_chosen_index_total{index=\"0\"} / clamp_min(sum(llm_chosen_index_total), 1)",
-        "legendFormat": "% index 0"
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * llm_chosen_index_total{index=\"0\"} / clamp_min(sum(llm_chosen_index_total), 1)",
+          "legendFormat": "% index 0"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent", "min": 0, "max": 100,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green", "value": 0 },
-            { "color": "orange", "value": 60 },
-            { "color": "red", "value": 85 }
-          ]}
-        }, "overrides": []
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          }
+        },
+        "overrides": []
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdMarkers": true },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 48 }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 56
+      }
     },
-
     {
-      "id": 33, "type": "piechart",
+      "id": 33,
+      "type": "piechart",
       "title": "Distribution des indices choisis",
       "description": "Répartition de l'index d'itinéraire sélectionné par le LLM. Un biais vers l'index 0 indique que le LLM favorise toujours le premier choix.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sum by (index) (llm_chosen_index_total)",
-        "legendFormat": "Index {{index}}",
-        "instant": true
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (index) (llm_chosen_index_total)",
+          "legendFormat": "Index {{index}}",
+          "instant": true
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
       },
       "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"] },
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
         "pieType": "pie",
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 52 }
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 60
+      }
     },
-
     {
-      "id": 34, "type": "barchart",
+      "id": 34,
+      "type": "barchart",
       "title": "Fréquence de sélection par index d'itinéraire",
       "description": "Histogramme du nombre de fois que chaque index a été choisi. Permet de détecter un biais de position (position bias) dans les réponses du LLM.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "sort_desc(sum by (index) (llm_chosen_index_total))",
-        "legendFormat": "Index {{index}}",
-        "instant": true
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(sum by (index) (llm_chosen_index_total))",
+          "legendFormat": "Index {{index}}",
+          "instant": true
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "fillOpacity": 80, "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false } }
-        }, "overrides": []
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
       },
       "options": {
         "barWidth": 0.6,
         "fillOpacity": 80,
         "groupWidth": 0.7,
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "orientation": "auto",
-        "tooltip": { "mode": "single", "sort": "none" }
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
-      "gridPos": { "h": 9, "w": 16, "x": 8, "y": 52 }
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 8,
+        "y": 60
+      }
     },
-
     {
-      "id": 35, "type": "timeseries",
+      "id": 35,
+      "type": "timeseries",
       "title": "Évolution des indices choisis dans le temps",
       "description": "Moyenne par tranche de 5 minutes de chaque index de trajectoire. Permet de voir si les préférences du LLM évoluent au fil de la simulation.",
-      "datasource": { "type": "prometheus", "uid": "ffj2fwnh387pce" },
-      "targets": [{
-        "refId": "A",
-        "expr": "avg_over_time((sum by (index) (llm_chosen_index_total))[5m:])",
-        "legendFormat": "Index {{index}}"
-      }],
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg_over_time((sum by (index) (llm_chosen_index_total))[5m:])",
+          "legendFormat": "Index {{index}}"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8,
-            "gradientMode": "none", "showPoints": "auto", "spanNulls": false }
-        }, "overrides": []
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 61 }
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      }
+    },
+    {
+      "id": 104,
+      "type": "row",
+      "title": "État des Agents (Cycle de Vie)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 77
+      }
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Répartition des états agents dans le temps",
+      "description": "Évolution en temps réel du nombre d'agents par état, synchronisé depuis GAMA à chaque /sync. Inactif = pas encore initialisé ; Ready = en attente de la prochaine activité ; Actif = en calcul d'itinéraire ou en déplacement.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_agent_states{state=\"inactive\"}",
+          "legendFormat": "Inactifs"
+        },
+        {
+          "refId": "B",
+          "expr": "gama_agent_states{state=\"ready\"}",
+          "legendFormat": "Ready"
+        },
+        {
+          "refId": "C",
+          "expr": "gama_agent_states{state=\"active\"}",
+          "legendFormat": "Actifs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Inactifs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "gray",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ready"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actifs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 78
+      }
+    },
+    {
+      "id": 41,
+      "type": "stat",
+      "title": "Inactifs",
+      "description": "Agents déclarés dans la simulation mais pas encore rencontrés dans un sync GAMA (last_location non défini).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_agent_states{state=\"inactive\"}",
+          "legendFormat": "Inactifs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "gray"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "gray",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 14,
+        "y": 78
+      }
+    },
+    {
+      "id": 42,
+      "type": "stat",
+      "title": "Ready",
+      "description": "Agents ayant déjà bougé et en attente de leur prochaine activité planifiée (idle, non en cours de calcul).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_agent_states{state=\"ready\"}",
+          "legendFormat": "Ready"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 17,
+        "y": 78
+      }
+    },
+    {
+      "id": 43,
+      "type": "stat",
+      "title": "Actifs",
+      "description": "Agents en cours de calcul d'itinéraire (scheduling_in_progress) ou en déplacement (heading_to défini).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_agent_states{state=\"active\"}",
+          "legendFormat": "Actifs"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 20,
+        "y": 78
+      }
+    },
+    {
+      "id": 44,
+      "type": "piechart",
+      "title": "Distribution instantanée des états agents",
+      "description": "Part de chaque état dans la population totale au dernier instant.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "gama_agent_states{state=\"inactive\"}",
+          "legendFormat": "Inactifs",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "expr": "gama_agent_states{state=\"ready\"}",
+          "legendFormat": "Ready",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "expr": "gama_agent_states{state=\"active\"}",
+          "legendFormat": "Actifs",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Inactifs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "gray",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ready"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actifs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "pie",
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 7,
+        "x": 14,
+        "y": 82
+      }
     }
-
   ]
 }

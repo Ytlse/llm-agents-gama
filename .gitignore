@@ -34,3 +34,7 @@ experiments*/
 scripts/general/*.csv
 Divers/*
 GAMA/CityTransport/config/sim_params.yaml
+
+# Dossier EQUASIM Toulouse — géré dans un repo git séparé
+eqasim-toulouse/
+GAMA/CityTransport/models/false

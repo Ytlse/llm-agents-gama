@@ -112,9 +112,11 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
 
-    # Synthesis settings
-    synthetic_dir: str = os.path.join(base_dir, "../data/po_toulouse.big")
+    # Eqasim settings
     synthetic_file_prefix: str = "toulouse_"
+    eqasim_output_dir: str = "/data/eqasim-output"
+    generate_personality_traits: bool = False
+
     # Debug
     debug_people_ids: Optional[list[str]] = None
 

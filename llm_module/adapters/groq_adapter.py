@@ -55,9 +55,6 @@ class GroqAdapter(BaseAdapter):
             "response_format": {"type": "json_object"},
         }
 
-        logger.info("Request Payload:")
-        logger.info(json.dumps(payload, indent=2))
-
         with httpx.Client(timeout=120.0) as client:
             response = client.post(
                 url,

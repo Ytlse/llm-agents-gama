@@ -12,6 +12,7 @@ import os
 import orjson
 import time
 from datetime import datetime
+import httpx
 import uvicorn
 from loguru import logger
 from helper import setup_logging, humanize_date
@@ -32,8 +33,53 @@ INIT_REQUESTS = Counter('controller_init_requests_total', 'Total requêtes /init
 # Métriques de la simulation
 SIM_AGENTS_TOTAL  = Gauge('gama_sim_agents_total', 'Nombre total d\'agents dans la simulation (défini au /init)')
 SIM_STEP_INTERVAL = Gauge('gama_sim_step_interval_seconds', 'Durée réelle entre deux pas de temps GAMA consécutifs (secondes)')
-_last_sync_wall_time: float = 0.0
+SIM_LOGICAL_TIME  = Gauge('gama_sim_logical_time_seconds', 'Horodatage logique courant de la simulation (timestamp Unix GAMA)')
+SIM_REAL_ELAPSED  = Gauge('gama_sim_real_elapsed_seconds', 'Temps réel écoulé depuis le dernier /init (secondes)')
+SIM_STEP_COUNT             = Gauge('gama_sim_step_count', 'Numéro du pas de temps courant depuis le /init')
+SIM_STEP_LOGICAL_DURATION  = Gauge('gama_sim_step_logical_duration_seconds', 'Durée logique GAMA d\'un pas de temps (écart entre deux timestamps consécutifs en secondes de temps simulé)')
+AGENT_STATES               = Gauge('gama_agent_states', 'Nombre d\'agents par état (inactive/ready/active)', ['state'])
+_last_sync_wall_time: float  = 0.0
+_sim_init_wall_time: float   = 0.0
+_sim_step_count: int         = 0
+_last_logical_time: int      = 0
 
+# eqasim service URL — set via EQASIM_SERVICE_URL env var (default: http://eqasim:8003)
+_EQASIM_SERVICE_URL = os.environ.get("EQASIM_SERVICE_URL", "http://eqasim:8003")
+
+
+async def _trigger_eqasim_generation(population_size: int, bbox: tuple[float, float, float, float] | None = None) -> None:
+    """Call the eqasim service to ensure the population JSON is ready.
+
+    Blocks until generation completes (or returns immediately on cache hit).
+    Timeout is 30 min to accommodate first-time synpp runs.
+    Raises HTTPException on generation failure so /init surfaces the error
+    to GAMA rather than crashing later on a missing population file.
+
+    bbox: optional (min_lon, min_lat, max_lon, max_lat) in WGS84 — restricts
+    synpp to the communes intersecting this zone so generated profiles stay
+    within the simulation area.
+    """
+    from fastapi import HTTPException
+    url = f"{_EQASIM_SERVICE_URL}/generate"
+    payload: dict = {"population_size": population_size}
+    if bbox is not None:
+        payload["bbox"] = list(bbox)
+    logger.info(f"[eqasim] Triggering population generation via {url} (population_size={population_size}, bbox={bbox})")
+    try:
+        async with httpx.AsyncClient(timeout=1800.0) as client:
+            resp = await client.post(url, json=payload)
+            body = resp.json()
+            if resp.status_code == 200 and body.get("status") == "ok":
+                logger.info(f"[eqasim] Population ready — {body.get('file', '')}")
+            else:
+                exit_code = body.get("exit_code", "?")
+                msg = f"[eqasim] Generation failed (exit_code={exit_code}). Check eqasim container logs (OOM if exit_code=137)."
+                logger.error(msg)
+                raise HTTPException(status_code=503, detail=msg)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"[eqasim] Could not reach eqasim service ({exc}); will attempt to load existing file")
 
 
 # Set working directory from environment if specified
@@ -237,6 +283,11 @@ async def init(request: WorldInitRequest):
 
     await loop_container.send_log(f"Création de la population (taille demandée : {request.population_size or 'défaut'})...")
 
+    min_lon, min_lat, max_lon, max_lat = static_data.gtfs_data.get_bounding_box()
+    buffer = 0.05
+    gtfs_bbox = (min_lon - buffer, min_lat - buffer, max_lon + buffer, max_lat + buffer)
+    await _trigger_eqasim_generation(request.population_size or settings.data.population_size, bbox=gtfs_bbox)
+
     scenario = init_dynamic_scenario(
         static_data,
         population_size=request.population_size,
@@ -253,6 +304,17 @@ async def init(request: WorldInitRequest):
 
     people = scenario.population.get_people_list()
     SIM_AGENTS_TOTAL.set(len(people))
+    global _sim_init_wall_time, _sim_step_count, _last_logical_time
+    _sim_init_wall_time = time.time()
+    _sim_step_count = 0
+    _last_logical_time = request.timestamp if request.timestamp > 0 else 0
+    SIM_STEP_COUNT.set(0)
+    SIM_REAL_ELAPSED.set(0)
+    if request.timestamp > 0:
+        SIM_LOGICAL_TIME.set(request.timestamp)
+    for _state in ('inactive', 'ready', 'active'):
+        AGENT_STATES.labels(state=_state).set(0)
+    AGENT_STATES.labels(state='inactive').set(len(people))
 
     await loop_container.send_log("Initialisation terminée ! Envoi des agents à GAMA.")
 
@@ -321,11 +383,15 @@ async def sync(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
-    global _last_sync_wall_time
+    global _last_sync_wall_time, _sim_step_count, _last_logical_time
     now = time.time()
     if _last_sync_wall_time > 0:
         SIM_STEP_INTERVAL.set(now - _last_sync_wall_time)
     _last_sync_wall_time = now
+    _sim_step_count += 1
+    SIM_STEP_COUNT.set(_sim_step_count)
+    if _sim_init_wall_time > 0:
+        SIM_REAL_ELAPSED.set(now - _sim_init_wall_time)
 
     SYNC_REQUESTS.inc()
     body = await raw.body()
@@ -345,6 +411,21 @@ async def sync(raw: Request):
 
     if loop_container.scenario:
         await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people)
+        try:
+            people = loop_container.scenario.population.get_people_list()
+            inactive = sum(1 for p in people if p.state.last_location is None)
+            ready    = sum(1 for p in people if p.state.last_location is not None
+                          and p.state.heading_to is None and not p.state.scheduling_in_progress)
+            active   = sum(1 for p in people if p.state.scheduling_in_progress or p.state.heading_to is not None)
+            AGENT_STATES.labels(state='inactive').set(inactive)
+            AGENT_STATES.labels(state='ready').set(ready)
+            AGENT_STATES.labels(state='active').set(active)
+            SIM_LOGICAL_TIME.set(request.timestamp)
+            if _last_logical_time > 0 and request.timestamp > _last_logical_time:
+                SIM_STEP_LOGICAL_DURATION.set(request.timestamp - _last_logical_time)
+        except Exception:
+            pass
+        _last_logical_time = request.timestamp
         return MessageResponse(data="synchronized", success=True)
     else:
         return MessageResponse(success=False, error="Scenario not set")

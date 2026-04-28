@@ -144,7 +144,6 @@ class GoogleAdapter(BaseAdapter):
             model = settings.providers[self._instance_name].default_model
             api_key = self._get_api_key().get_secret_value()
             url = f"{self._get_base_url()}/models/{model}:generateContent?key={api_key}"
-            _logger.debug(f"ping | provider={self._instance_name} model={model} url={url.split('?')[0]}")
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     url,
@@ -155,13 +154,6 @@ class GoogleAdapter(BaseAdapter):
                     },
                 )
             ok = resp.status_code < 400
-            if ok:
-                _logger.debug(f"ping OK | provider={self._instance_name} status={resp.status_code}")
-            else:
-                _logger.warning(
-                    f"ping FAILED | provider={self._instance_name} "
-                    f"status={resp.status_code} body={resp.text[:500]!r}"
-                )
             return ok
         except Exception as exc:
             _logger.warning(f"ping EXCEPTION | provider={self._instance_name} error={exc}")

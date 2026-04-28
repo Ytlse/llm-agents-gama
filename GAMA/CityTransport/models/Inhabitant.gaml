@@ -201,7 +201,6 @@ species passenger parent: in_transfer virtual: true {
             // Traiter chaque étape de transport
             loop leg over: legs {
                 map leg_map <- map(leg);
-                write "Next Leg: "+ leg_map;
                 map leg_end_location <- map(leg_map["end_location"]);
                 
                 if (!(leg_end_location.keys contains "lon" or leg_end_location.keys contains "lng") or !(leg_end_location.keys contains "lat")) {

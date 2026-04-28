@@ -8,7 +8,7 @@ from world import *
 from trip_helper.base import TripHelper
 from trip_helper.cached_triphelper import CachedTripHelper
 from trip_helper.otp import OTPTripHelper
-from inputs.population import SyntheticPopulationLoader, PersonCloseToTheStopFilter
+from inputs.population import EqasimJSONPopulationLoader, PersonCloseToTheStopFilter
 from trip_helper import SolariTripHelper
 from urban_mobility_agents.simulation_controller import SimulationLoopV1
 from urban_mobility_agents.core.scenario import BaseScenario
@@ -142,17 +142,13 @@ def init_dynamic_scenario(
     world_grid = WorldGrid(world_bbox)
     time_grid = TimeGrid()
 
+    stop_filter = PersonCloseToTheStopFilter(
+        max_distance=5000,  # 5000 meters — TODO: remove when car mode is added
+        stop_locations=gtfs_data.all_stop_locations(),
+    )
     population = WorldPopulation(
-        SyntheticPopulationLoader(
-            filters=[
-                # TODO: supprimer ce filtre quand le mode voiture sera ajouté
-                # (les agents pourront alors atteindre des destinations non desservies par les TC)
-                PersonCloseToTheStopFilter(
-                    max_distance=5000,  # 5000 meters
-                    stop_locations=gtfs_data.all_stop_locations()
-                )
-            ]
-        )
+        #EqasimJSONPopulationLoader(filters=[stop_filter])
+        EqasimJSONPopulationLoader(filters=[])
     ).init(world_bbox=world_bbox)
 
     # Set all people start from home
