@@ -103,7 +103,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
         else:
             tasks = pop_tasks_from_batch_sync(batch_key, 100)
             for t in tasks:
-                _fail_task(t, "Max retries dépassé : Tous les fournisseurs sont saturés ou en cooldown.")
+                _fail_task(t, f"Max retries ({self.max_retries}) dépassé : Tous les fournisseurs sont saturés ou en cooldown.")
         return
 
     # ------------------------------------------------------------------
@@ -169,7 +169,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
                     raise self.retry(exc=e, countdown=delay)
                 else:
                     for t in tasks:
-                        _fail_task(t, f"Max retries dépassé suite aux Rate Limits sur {e.provider}")
+                        _fail_task(t, f"Max retries dépassé({self.max_retries}) suite aux Rate Limits sur {e.provider}")
             else:
                 # Autre erreur 4xx → échec définitif, pas de retry
                 for t in tasks:
@@ -188,7 +188,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
                     raise self.retry(exc=e, countdown=delay)
                 else:
                     for t in tasks:
-                        _fail_task(t, "Max retries dépassé : Tous les fournisseurs indisponibles.")
+                        _fail_task(t, f"Max retries dépassé({self.max_retries}) : Tous les fournisseurs indisponibles.")
             else:
                 logger.exception(f"RuntimeError inattendue dans le worker | task_id={batch_id}")
                 for t in tasks:
@@ -391,6 +391,7 @@ def _extract_primary_mode(mode: str) -> str:
         return "car"
     if "bicycle" in parts or "bike" in parts or "cycling" in parts:
         return "cycling"
+    logger.debug(f"DDDEEEEBBBBUUUUGGGGGG: Mode de transport non reconnu ou multiple sans priorité claire | mode={mode}")
     if parts <= {"foot", "walk", "walking"}:
         return "walking"
     return "other"

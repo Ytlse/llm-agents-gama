@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     celery_broker_url:          str   = "redis://localhost:6379/1"
     celery_result_backend:      str   = "redis://localhost:6379/2"
     circuit_breaker_threshold:  float = 0.95
-    max_retries:                int   = 10
+    max_retries:                int   = 50
     backoff_base_seconds:       float = 1.0
     batch_max_agents:           int   = 5
     batch_delay_seconds:        float = 1.0

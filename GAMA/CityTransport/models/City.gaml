@@ -35,14 +35,13 @@ global {
     // GTFS Calendar date range for the simulation
     date _gtfs_calendar_start_date;
     date _gtfs_calendar_end_date;
-    int nb_ative update: length(inhabitant where (each.is_active));
 
 
     init {
         // Load calendar information from GTFS data
         map calendar_info <- TRIP_INFO["calendar"] as map;
-        list t_dates <- calendar_info["dates"] as list;
-        map t_data <- calendar_info["data"] as map;
+        list<string> t_dates <- calendar_info["dates"] as list;
+        map<string, int> t_data <- calendar_info["data"] as map;
 
         // Create the travel agent factory with GTFS data
         create travel_agent_factory number: 1 with: [
@@ -167,7 +166,7 @@ experiment e type: gui {
     output {
     	
     
-        monitor "NB agents active" value: nb_ative;
+        monitor "NB agents active" value: length(inhabitant where each.is_active);
         
         // Main map display showing all simulation elements
         display map {
@@ -175,34 +174,65 @@ experiment e type: gui {
             graphics Strings {
                 // Current simulation date
                 draw "Date: " + string(current_date)
-                    at: {10, 10} 
+                    at: {10, -2000} 
                     anchor: #top_left
-                    border: #black font: font("Geneva", 10, #bold)
+                    border: #black font: font("Geneva", 20)
                     wireframe: true width: 2;
                 // GTFS calendar date range
                 draw "GTFS Date: " + string(_gtfs_calendar_start_date, "MM/dd") + " - " + string(_gtfs_calendar_end_date, "MM/dd")
-                    at: {10, 1200} 
+                    at: {-10000, 1200} 
                     anchor: #top_left
-                    border: #orange font: font("Geneva", 10, #bold)
-                    wireframe: true width: 2;
+                    border: #black font: font("Geneva", 12)
+                    wireframe: true width: 1;
                 // Ready agents counter
                 draw "Ready Agents: " + string(length(inhabitant where (each.is_ready))) + " / " + string(length(inhabitant))
-                    at: {10, 2400} 
+                    at: {-10000, 2400} 
                     anchor: #top_left
-                    border: #blue font: font("Geneva", 10, #bold)
-                    wireframe: true width: 2;
+                    border: #black font: font("Geneva", 12)
+                    wireframe: true width: 1;
                 // Active agents counter
                 draw "Active Agents: " + string(length(inhabitant where (each.is_active))) + " / " + string(length(inhabitant))
-                    at: {10, 3600} 
+                    at: {-10000, 3600} 
                     anchor: #top_left
-                    border: #green font: font("Geneva", 10, #bold)
-                    wireframe: true width: 2;
+                    border: #black font: font("Geneva", 12)
+                    wireframe: true width: 1;
                 // Total activities completed
                 draw "Total Activities: " + string(sum(inhabitant collect (each.total_activities)))
-                    at: {10, 4800} 
+                    at: {-10000, 4800} 
                     anchor: #top_left
-                    border: #black font: font("Geneva", 10, #bold)
+                    border: #black font: font("Yellow", 12)
+                    wireframe: true width: 1;
+                    
+                draw "Inactif "
+                    at: {200, 39400} 
+                    anchor: #top_left
+                    border: #darkgray font: font("Geneva", 12, #bold)
                     wireframe: true width: 2;
+                
+                draw "Ready for next activity "
+                    at: {2500, 39400} 
+                    anchor: #top_left
+                    border: #gray font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+                    
+                draw "Transport en commun "
+                    at: {9000, 39400} 
+                    anchor: #top_left
+                    border: #green font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+                    
+               draw "Walking "
+                    at: {15500, 39400} 
+                    anchor: #top_left
+                    border: #orange font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+              
+               draw "Car "
+                    at: {18000, 39400} 
+                    anchor: #top_left
+                    border: #red font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+
             }
 			
             // Species to display on map

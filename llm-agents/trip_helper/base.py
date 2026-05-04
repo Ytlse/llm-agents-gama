@@ -6,10 +6,11 @@ class TripHelper:
     def __init__(self):
         pass
 
-    async def get_itineraries(self, 
-                              origin: Location, 
-                              destination: Location, 
-                              departure_time: int) -> List[TravelPlan]:
+    async def get_itineraries(self,
+                              origin: Location,
+                              destination: Location,
+                              departure_time: int,
+                              car_only: bool = False) -> List[TravelPlan]:
         """
         Get itineraries for a given origin, destination and departure time.
         """

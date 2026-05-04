@@ -12,6 +12,7 @@ x-eqasim-env: &eqasim-env
   EQASIM_POPULATION_SIZE: ${EQASIM_POPULATION_SIZE:-}
   EQASIM_GENERATE_PERSONALITY: ${EQASIM_GENERATE_PERSONALITY:-false}
   EQASIM_RANDOM_SEED: ${EQASIM_RANDOM_SEED:-1234}
+  OTP_ENDPOINT: http://otp:8080
 
 services:
 
@@ -49,8 +50,8 @@ services:
       - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
-      - eqasim_cache:/eqasim-cache:rw
-      - eqasim_output:/eqasim-output:rw
+      - ./data/eqasim_cache:/eqasim-cache:rw
+      - ./data/eqasim_output:/eqasim-output:rw
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
       interval: 5s
@@ -179,7 +180,7 @@ services:
       - ./llm_module:/opt/llm_module
       - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
-      - eqasim_output:/data/eqasim-output:ro
+      - ./data/eqasim_output:/data/eqasim-output:ro
     depends_on:
       api:
         condition: service_started
@@ -303,5 +304,3 @@ services:
 volumes:
   redis_data:
   grafana_data:
-  eqasim_output:
-  eqasim_cache:

@@ -301,12 +301,12 @@ class LlmAgent:
             }
         }
 
-    async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str) -> tuple[int, str]:
+    async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str) -> tuple[int, str, str]:
         assert options, "No travel options provided for planning trip."
-        
+
         if len(options) == 1:
             # If only one option, return it directly
-            return 0, "Only one travel option available, no need to choose."
+            return 0, "Only one travel option available, no need to choose.", ""
 
         # shuffle options to avoid position bias — work on a copy to ne pas muter la liste du caller
         shuffled_options = list(options)
@@ -315,6 +315,7 @@ class LlmAgent:
 
         try:
             response_data = await self.llm_client.execute_async(payload)
+            provider_used = response_data.get("provider_used", "")
 
             if response_data.get("status") == "success" and response_data.get("result"):
                 agent_result = response_data["result"][0]
@@ -335,15 +336,15 @@ class LlmAgent:
                     self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
 
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
-                    return options.index(chosen_plan), reason
-                    
+                    return options.index(chosen_plan), reason, provider_used
+
             error_msg = response_data.get("error", "Format de réponse invalide ou timeout.")
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")
-            return -1, error_msg
-            
+            return -1, error_msg, provider_used
+
         except Exception as e:
             logger.error(f"Erreur lors de l'appel à l'API Gateway LLM: {e}")
-            return -1, str(e)
+            return -1, str(e), ""
 
     def get_reflection_prompt(self, context: Context) -> tuple[str, list[MemoryEntry]]:
         mem = self.get_short_term_memory(context.person.person_id)

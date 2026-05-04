@@ -29,6 +29,7 @@ from world.world_data import WorldModel
 from settings import settings
 
 from prometheus_client import Counter, Gauge
+from urban_mobility_agents.utils.move_logger import MoveLogger
 
 history_logger = HistoryStreamLog.get_instance()
 
@@ -64,6 +65,7 @@ class SimulationLoopV1(BaseScenario):
         self._messages = []
         self._late_count = 0
         self._itinerary_success_count = 0
+        self._slow_otp_log_count = 0
         self._itinerary_window_start = time.monotonic()
         self.model = world_model
         self.trip_helper = trip_helper
@@ -428,28 +430,71 @@ class SimulationLoopV1(BaseScenario):
             target_24h_timestamp=next_activity.start_time,
             based_on=timestamp,
         )
+        out_of_graph_m = next_activity.out_of_graph_distance_m or 0.0
+        car_only = out_of_graph_m > 0
+        include_car = car_only or (person.identity.traits_json.get("number_of_cars", 0) > 0)
         _otp_start = time.monotonic()
+
         itineraries = await self.trip_helper.get_itineraries(
             origin=from_location,
             destination=next_activity.location,
             departure_time=actual_departure_time,
-            include_car=True,
+            include_car=include_car,
+            car_only=car_only,
         )
+
+        # Optimization: Skip OTP call if origin and destination are identical
+        if from_location and next_activity.location and \
+           from_location.lat == next_activity.location.lat and from_location.lon == next_activity.location.lon:
+            itineraries = []
+        else:
+            itineraries = await self.trip_helper.get_itineraries(
+                origin=from_location,
+                destination=next_activity.location,
+                departure_time=actual_departure_time,
+                include_car=include_car,
+                car_only=car_only,
+            )
+
+        if car_only and itineraries and out_of_graph_m > 0:
+            extra_s = int(out_of_graph_m / (40_000 / 3600))
+            for itin in itineraries:
+                itin.duration += extra_s
+                itin.end_time += extra_s
+                if itin.legs:
+                    itin.legs[-1].end_time += extra_s
+                    itin.legs[-1].duration += extra_s
         _otp_duration = time.monotonic() - _otp_start
         if _otp_duration > 5.0:
-            logger.warning(
-                f"[otp] Slow itinerary query | person={person.person_id} "
-                f"duration={_otp_duration:.2f}s n_results={len(itineraries)}"
-            )
+            if self._slow_otp_log_count < 20:
+                logger.warning(
+                    f"[otp] Slow itinerary query | person={person.person_id} "
+                    f"duration={_otp_duration:.2f}s n_results={len(itineraries)}"
+                )
+                self._slow_otp_log_count += 1
+                if self._slow_otp_log_count == 20:
+                    logger.warning("[otp] Limite d'avertissements atteinte. Les prochaines alertes de requêtes lentes seront ignorées.")
         # Populate purpose
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
 
+        selection_method = "Premier choix OTP"
+        provider_info = ""
+
         if not itineraries:
             estimated_duration = _estimate_fallback_duration(from_location, next_activity.location)
+            bbox = self.world_bbox
+            def _in_bbox(loc) -> bool:
+                return (loc is not None and
+                        bbox.min_lat <= loc.lat <= bbox.max_lat and
+                        bbox.min_lon <= loc.lon <= bbox.max_lon)
+            origin_ok = _in_bbox(from_location)
+            dest_ok = _in_bbox(next_activity.location)
             logger.warning(
-                f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by public transport, "
-                f"estimated travel time: {humanize_duration(estimated_duration)}"
+                f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by any transport mode, "
+                f"estimated travel time: {humanize_duration(estimated_duration)} | "
+                f"origin_in_bbox={origin_ok} (lat={from_location.lat:.5f},lon={from_location.lon:.5f}) "
+                f"dest_in_bbox={dest_ok}"
             )
             plan = TravelPlan(
                 id=random_uuid(),
@@ -476,15 +521,17 @@ class SimulationLoopV1(BaseScenario):
                     data={"type": "travel_plan"},
                 )
                 EVALUATE_PLAN_CALLS.inc()
-                plan_index, reasoning = await self.agent.evaluate_and_choose_travel_plan(
+                plan_index, reasoning, provider_info = await self.agent.evaluate_and_choose_travel_plan(
                     context=context,
                     options=itineraries,
                     destination=next_activity.purpose,
                 )
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
-                    pass
+                    selection_method = "LLM"
                 else:
                     plan_index = 0
+                    provider_info = ""
+                    selection_method = "LLM (Default)"
                     logger.debug(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
 
             plan: TravelPlan = itineraries[plan_index]
@@ -507,6 +554,14 @@ class SimulationLoopV1(BaseScenario):
             target_location=next_activity.location,
             for_activity=next_activity,
             plan=plan,
+        )
+
+        await MoveLogger.get_instance().log_move(
+            person=person,
+            plan=plan,
+            purpose=next_activity.purpose,
+            selection_method=selection_method,
+            provider_model=provider_info or "",
         )
 
         history_logger.log_query_travel_plan(

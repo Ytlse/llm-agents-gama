@@ -46,8 +46,7 @@ class Activity(BaseModel):
     end_time: float
     purpose: ActivityPurpose
     location: Optional[Location] = None
-    # TODO: how to populate this from location?
-    # location_name: Optional[str] = None
+    out_of_graph_distance_m: Optional[float] = None
 
 
 """ Travel plan
@@ -64,6 +63,7 @@ class TransitLocation(Location):
     """
 
     stop: str
+    stop_id: Optional[str] = None
     lat: float
     lon: float
 

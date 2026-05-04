@@ -187,8 +187,16 @@ class CachedTripHelper(TripHelper):
 
     async def get_itineraries(self,
                               origin: Location,
-                              destination: Location, 
-                              departure_time: int) -> list[TravelPlan]:
+                              destination: Location,
+                              departure_time: int,
+                              car_only: bool = False) -> list[TravelPlan]:
+        if car_only:
+            return await self.trip_helper.get_itineraries(
+                origin=origin,
+                destination=destination,
+                departure_time=departure_time,
+                car_only=True,
+            )
         grid_origin = self.world_grid.get_location_grid(origin)
         grid_destination = self.world_grid.get_location_grid(destination)
         time_slot = self.time_grid.get_time_slot(departure_time)

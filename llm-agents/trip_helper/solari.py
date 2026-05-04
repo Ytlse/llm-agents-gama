@@ -24,8 +24,8 @@ class SolariTripHelper(TripHelper):
                 _d["transit_route"] = self.gtfs_data.get_route_id_by_name(_d["transit_route"])
                 _d["shape_id"] = self.gtfs_data.get_shape_id_from_route_info(
                     route_id=_d["transit_route"],
-                    from_stop_name=_d["start_location"]["stop"],
-                    to_stop_name=_d["end_location"]["stop"],
+                    from_stop_id=self.gtfs_data.get_stop_id_by_name(_d["start_location"]["stop"]),
+                    to_stop_id=self.gtfs_data.get_stop_id_by_name(_d["end_location"]["stop"]),
                 )
             transits.append(Transit(**_d, is_transfer="transfer" in it))
         return TravelPlan(

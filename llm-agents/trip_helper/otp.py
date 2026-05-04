@@ -97,12 +97,16 @@ query trip($accessEgressPenalty: [PenaltyForStreetMode!], $alightSlackDefault: I
         duration
         fromPlace {
           name
+          latitude
+          longitude
           quay {
             id
           }
         }
         toPlace {
           name
+          latitude
+          longitude
           quay {
             id
           }
@@ -144,7 +148,17 @@ query trip($accessEgressPenalty: [PenaltyForStreetMode!], $alightSlackDefault: I
 
 class OTPPlace(BaseModel):
     name: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     quay: Optional[dict] = None
+
+    @property
+    def lat(self) -> Optional[float]:
+        return self.latitude
+
+    @property
+    def lon(self) -> Optional[float]:
+        return self.longitude
 
 class OTPEstimatedCall(BaseModel):
     destinationDisplay: Optional[dict] = None
@@ -217,6 +231,7 @@ class OTPTripHelper(TripHelper):
         self.fixed_day: datetime = datetime.strptime(settings.gtfs.fixed_day, '%Y%m%d') if settings.gtfs.fixed_day else None
         self.gtfs_data = gtfs_data or GTFSData.DEFAULT()
         self._session: Optional[aiohttp.ClientSession] = None
+        self._semaphore = asyncio.Semaphore(settings.gtfs.otp_max_concurrent)
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -288,12 +303,26 @@ class OTPTripHelper(TripHelper):
             if not (place.quay and place.quay.get("id")):
                 raise ValueError(f"Invalid OTP place (missing quay id): {place}")
 
-            stop = self._resolve_gtfs_stop(place.quay["id"])
-            return TransitLocation(
-                stop=stop.stop_name,
-                lat=stop.stop_lat,
-                lon=stop.stop_lon,
-            )
+            try:
+                stop = self._resolve_gtfs_stop(place.quay["id"])
+                return TransitLocation(
+                    stop=stop.stop_name,
+                    stop_id=stop.stop_id,
+                    lat=stop.stop_lat,
+                    lon=stop.stop_lon,
+                )
+            except (ValueError, KeyError):
+                if place.lat is None or place.lon is None:
+                    raise ValueError(
+                        f"Stop {place.quay['id']} not found in GTFS and OTP returned no coordinates for place '{place.name}'"
+                    )
+                logger.warning(f"Stop {place.quay['id']} not found in GTFS, using OTP coordinates for '{place.name}'")
+                return TransitLocation(
+                    stop=place.name,
+                    stop_id=None,
+                    lat=place.lat,
+                    lon=place.lon,
+                )
 
 
         transits = []
@@ -318,8 +347,8 @@ class OTPTripHelper(TripHelper):
                 transit.transit_route = _proute(leg.line.id)
                 transit.shape_id = self.gtfs_data.get_shape_id_from_route_info(
                     route_id=transit.transit_route,
-                    from_stop_name=transit.start_location.stop,
-                    to_stop_name=transit.end_location.stop,
+                    from_stop_id=transit.start_location.stop_id,
+                    to_stop_id=transit.end_location.stop_id,
                 )
             transits.append(transit)
 
@@ -357,7 +386,8 @@ class OTPTripHelper(TripHelper):
                               departure_time: int,
                               max_options: int=5, # unused
                               search_window_m: int=30,
-                              include_car: bool=False) -> List[TravelPlan]:
+                              include_car: bool=False,
+                              car_only: bool=False) -> List[TravelPlan]:
 
         real_day = datetime.fromtimestamp(departure_time) if self.fixed_day else None
         real_departure_time = departure_time
@@ -368,56 +398,39 @@ class OTPTripHelper(TripHelper):
 
         session = await self.get_session()
         start_at = datetime.fromtimestamp(departure_time, tz=timezone.utc).isoformat()
-        payload = {
-            "query": QUERY,
-            "variables": {
-                "from": {
-                    "coordinates": {
-                        "latitude": origin.lat,
-                        "longitude": origin.lon
-                    }
-                },
-                "to": {
-                    "coordinates": {
-                        "latitude": destination.lat,
-                        "longitude": destination.lon
-                    }
-                },
-                "dateTime": start_at,
-                "modes": {
-                    "accessMode": "foot",
-                    "transportModes": [
-                    {
-                        "transportMode": "bus"
-                    },
-                    {
-                        "transportMode": "metro"
-                    },
-                    {
-                        "transportMode": "tram"
-                    },
-                    {
-                        "transportMode": "cableway"
-                    }
-                    ],
-                "egressMode": "foot",
-                "directMode": "car"
-                },
-                "itineraryFilters": {
-                    "debug": "limitToNumOfItineraries"
-                },
-                "numTripPatterns": 8,
-                "searchWindow": search_window_m
-            },
-            "operationName": "trip"
+
+        common_vars = {
+            "from": {"coordinates": {"latitude": origin.lat, "longitude": origin.lon}},
+            "to": {"coordinates": {"latitude": destination.lat, "longitude": destination.lon}},
+            "dateTime": start_at,
+            "itineraryFilters": {"debug": "limitToNumOfItineraries"},
+            "numTripPatterns": 8,
+            "searchWindow": search_window_m,
         }
+
+        transit_modes = {
+            "accessMode": "foot",
+            "transportModes": [
+                {"transportMode": "bus"},
+                {"transportMode": "metro"},
+                {"transportMode": "tram"},
+                {"transportMode": "cableway"},
+            ],
+            "egressMode": "foot",
+        }
+        if include_car:
+            transit_modes["directMode"] = "car"
+
+        transit_payload = {"query": QUERY, "variables": {**common_vars, "modes": transit_modes}, "operationName": "trip"}
+        walk_payload = {"query": QUERY, "variables": {**common_vars, "modes": {"directMode": "foot"}}, "operationName": "trip"}
+        car_payload = {"query": QUERY, "variables": {**common_vars, "modes": {"directMode": "car"}}, "operationName": "trip"}
 
         @retry(
             stop=stop_after_attempt(5),
             wait=wait_exponential(multiplier=1, min=1, max=10),
             retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError))
         )
-        async def make_request():
+        async def make_request(payload):
             _t0 = time.monotonic()
             otp_url = next(self._endpoint_iter)
             try:
@@ -437,23 +450,56 @@ class OTPTripHelper(TripHelper):
                 OTP_REQUESTS_ERR.labels(reason='other').inc()
                 raise
 
-        try:
-            data = await make_request()
-            plans = []
-            for item in data["data"]["trip"]["tripPatterns"]:
+        async with self._semaphore:
+            if car_only:
+                raw_results = await asyncio.gather(
+                    make_request(car_payload),
+                    return_exceptions=True,
+                )
+            else:
+                raw_results = await asyncio.gather(
+                    make_request(transit_payload),
+                    make_request(walk_payload),
+                    return_exceptions=True,
+                )
+
+        plans = []
+        raw_pattern_counts = []
+        parse_errors = 0
+        no_legs_count = 0
+        for result in raw_results:
+            if isinstance(result, Exception):
+                logger.error(f"OTP request failed: {result}")
+                raw_pattern_counts.append(-1)
+                continue
+            if "data" not in result:
+                errors = result.get("errors", result)
+                logger.warning(f"OTP returned no data: {errors}")
+                raw_pattern_counts.append(-1)
+                continue
+            patterns = result["data"]["trip"]["tripPatterns"]
+            raw_pattern_counts.append(len(patterns))
+            for item in patterns:
                 try:
                     p = self._parse_otp_travel_plan(item, start_location=origin, end_location=destination, real_day=real_day)
                     p.start_in = max(0, p.start_time - real_departure_time)
                     plans.append(p)
                 except Exception as e:
+                    parse_errors += 1
                     logger.error(f"Error parsing travel plan: {e}, body: {item}")
-            plans = list(filter(lambda x: x.legs, plans))
-            plans = self.remove_duplicates(plans, max_candidates=settings.gtfs.max_trip_candidates)
-            #logger.debug(f"Payload: {json.dumps(payload, ensure_ascii=False)}, found {len(plans)} itineraries")
-            return plans
-        except Exception as e:
-            logger.error(f"Failed to get itineraries after 5 attempts: {e}")
-            return []
+        plans_parsed = len(plans)
+        plans = list(filter(lambda x: x.legs, plans))
+        no_legs_count = plans_parsed - len(plans)
+        if not plans:
+            logger.warning(
+                f"OTP no usable itinerary | "
+                f"origin=lat={origin.lat:.5f},lon={origin.lon:.5f} "
+                f"dest=lat={destination.lat:.5f},lon={destination.lon:.5f} | "
+                f"raw_patterns={raw_pattern_counts} parsed={plans_parsed} "
+                f"no_legs={no_legs_count} parse_errors={parse_errors}"
+            )
+        plans = self.remove_duplicates(plans, max_candidates=settings.gtfs.max_trip_candidates)
+        return plans
 
 
 if __name__ == '__main__':

@@ -188,7 +188,7 @@ species llm_agent_async skills:[network] {
 					"payload"::ob_payload
 				]);
 				do send to: send_to contents: payload;
-				write "Send observation of " + p.person_id + ": " + ob;
+				//write "Send observation of " + p.person_id + ": " + ob;
 			}
 		}
 	}
@@ -202,7 +202,7 @@ species llm_agent_async skills:[network] {
 		{
 			message mess <- fetch_message();
 			send_to <- mess.sender;  // Mémoriser l'expéditeur pour les réponses
-			write "mess.contents " + map(mess.contents);
+			//write "mess.contents " + map(mess.contents);
 			string action_data_json <- map(mess.contents)["contents"];
 			map<string, unknown> payload_data <- from_json(action_data_json);
 			string topic <- payload_data["topic"];

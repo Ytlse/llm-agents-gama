@@ -97,6 +97,7 @@ species passenger parent: in_transfer virtual: true {
     // Constantes de route
     string _ROUTE_NONE_ <- "__NONE__";     // Marqueur pour les segments de marche
     string _ROUTE_CAR_  <- "__CAR__";      // Marqueur pour les segments en voiture
+    string _PUBLIC_  <- "__PUBLIC__";   // Marqueur pour transport public
 
     // État d'interaction avec les véhicules
     public_vehicle on_vehicle;             // Véhicule actuellement embarqué (nil si marche)
@@ -110,6 +111,7 @@ species passenger parent: in_transfer virtual: true {
     list<list<string>> list_shape_id <- [];                // IDs de forme pour les segments de transport
     list<float> list_planned_step_duration <- [];          // Durée prévue (secondes) par étape
     float default_car_speed <- 50#km/#h;                   // Vitesse voiture par défaut ~50 km/h
+    string main_mode <- "";
 
     // Suivi des métriques
     int step_started_at <- 0;                              // Horodatage du début de l'étape actuelle
@@ -134,6 +136,7 @@ species passenger parent: in_transfer virtual: true {
         list_route_id <- [];
         list_shape_id <- [];
         list_planned_step_duration <- [];
+        main_mode <- "";
     }
 
     /**
@@ -215,13 +218,23 @@ species passenger parent: in_transfer virtual: true {
 
                     // Déterminer si c'est un transfert (marche) ou un segment de transport
                     string transit_route <- string(leg_map["transit_route"]);
-                    list_route_id << (bool(leg_map["is_transfer"]) ? _ROUTE_NONE_: string(leg_map["transit_route"]));
+                    string mode <- (bool(leg_map["is_transfer"]) ? _ROUTE_NONE_: string(leg_map["transit_route"]));
+                    list_route_id << mode;
                     list_shape_id << (bool(leg_map["is_transfer"]) ? nil : (list(leg_map["shape_id"]) collect string(each)));
+                    
                     // Durée du segment : champ "duration" (secondes) ou calcul depuis end_time-start_time (ms)
                     float _leg_dur <- (leg_map.keys contains "duration" and leg_map["duration"] != nil) ?
                         float(int(leg_map["duration"])) :
                         (float(int(leg_map["end_time"])) - float(int(leg_map["start_time"]))) / 1000.0;
                     list_planned_step_duration << _leg_dur;
+                    
+                    // Mets a jour le main mode si non défini ou marche.
+                    if main_mode = "" {
+                    	main_mode <- mode;
+                    }
+                    else if main_mode = _ROUTE_NONE_ {
+                    	main_mode <- mode;
+                    }
                 }
             }
         }
@@ -364,7 +377,6 @@ species passenger parent: in_transfer virtual: true {
 		
 		/* Cas déplacement en VOITURE — vitesse = distance / durée planifiée du segment */
 		if route_id = _ROUTE_CAR_ {
-			write "legs : CAR";
 			point dest2 <- list_destination[step_idx];
 			float planned_dur <- (step_idx < length(list_planned_step_duration)) ? list_planned_step_duration[step_idx] : 0.0;
 			float car_dist <- location distance_to dest2;
@@ -395,7 +407,6 @@ species passenger parent: in_transfer virtual: true {
 		}
 		/* Cas déplacement a pied */
 		else {
-			write "legs : WALK" + route_id;
 			speed <- 2#m/#s;
 			point dest2 <- list_destination[step_idx];
 			moving_target <- dest2;
@@ -556,33 +567,30 @@ species inhabitant parent: passenger {
 	
 	/**
 	 * Couleur selon l'état de déplacement :
-	 *   gris dark → inactif (pas de trajet)
-	 *   gris   → prêt, en attente avant départ
+	 *   gris clair → inactif (pas de trajet)
+	 *   lightblue   → prêt, en attente avant départ
 	 *   vert   → en transport en commun (dans le véhicule ou attente à l'arrêt)
 	 *   orange → à pied
 	 *   rouge  → en voiture
 	 */
 	rgb get_agent_color {
 		if is_idle {
-			return #darkgray;
+			return #white;
 		}
 		// Vérifié en priorité : si l'agent est physiquement dans un véhicule TC → vert garanti
 		if on_vehicle != nil {
-			return #green;
+			return #lightgray;
 		}
 		if is_ready {
 			return #gray;
 		}
-		if step_idx < length(list_route_id) {
-			string current_route <- list_route_id[step_idx];
-			if current_route = _ROUTE_CAR_ {
-				return #red;
-			}
-			if current_route = _ROUTE_NONE_ {
-				return #orange;
-			}
+		if main_mode = _ROUTE_CAR_ {
+			return #red;
 		}
-		// Attente d'un véhicule TC à l'arrêt
+		if main_mode = _ROUTE_NONE_ {
+			return #orange;
+		}
+		// Autres cas : Véhicule public
 		return #green;
 	}
 
@@ -608,7 +616,7 @@ species inhabitant parent: passenger {
 				color: agent_color
 				border: true;
 		}
-		if show_name {
+		if show_name and is_idle = false {
 			draw (get_action_emoji()) at: location + {-3,1.5} anchor: #bottom_center color: agent_color font: font('Default', (is_llm_based ? 18 : 16), #bold);
 			draw (person_id) at: location + {-3,1.5} anchor: #top_left color: agent_color font: font('Default', (is_llm_based ? 10 : 8), #bold);
 		}

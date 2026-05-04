@@ -140,3 +140,10 @@ run:
 		echo "🚀 Lancement de l'expérience GAMA : $(EXPERIMENT_NAME)..."; \
 		$(GAMA_BIN) -p $(WORKSPACE) -o $(MODEL_PATH) -e "$(EXPERIMENT_NAME)" & \
 	fi
+
+
+error:
+	grep "| ERROR    | " ./experiments/current/app.log
+
+warning:
+	grep "| WARNING  | " ./experiments/current/app.log

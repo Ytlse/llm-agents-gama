@@ -93,6 +93,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OTP provider settings
     otp_endpoint: str = "http://localhost:8080/otp/transmodel/v3"
+    otp_max_concurrent: int = 10  # max simultaneous get_itineraries calls
 
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
