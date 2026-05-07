@@ -40,3 +40,14 @@ eqasim-toulouse/
 GAMA/CityTransport/models/false
 data/eqasim_cache/*
 data/eqasim_output/*
+
+# Cache
+scripts/general/cache/*
+data/osmnx_cache/*
+llm-agents/cache/*
+otp-toulouse/toulouse/gtfs/*
+cache/*
+
+# Temp
+scripts/general/travel_time.py
+llm-agents/.hg_boundary.geojson

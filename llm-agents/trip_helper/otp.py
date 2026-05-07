@@ -12,10 +12,13 @@ from models import Location, TransitLocation, TravelPlan, Transit
 import aiohttp
 import asyncio
 from trip_helper.base import TripHelper
+from trip_helper.osmnx_direct import get_direct_plan
 from utils import random_uuid
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from prometheus_client import Counter, Histogram
+import math
+import numpy as np
 
 OTP_REQUESTS_OK  = Counter(
     'otp_requests_ok_total',
@@ -216,6 +219,9 @@ CAR_ROUTE_MARKER = "__CAR__"
 
 class OTPTripHelper(TripHelper):
     SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway", "car"]
+    # Maximum walking distance (metres) to the nearest transit stop.
+    # If both origin and destination have no stop within this radius, OTP is skipped.
+    MAX_WALK_TO_STOP_M: int = 1_500
 
     def __init__(self, endpoint: str = None, gtfs_data: GTFSData = None):
         # Support multiple OTP instances via OTP_ENDPOINTS env var (comma-separated URLs).
@@ -232,6 +238,17 @@ class OTPTripHelper(TripHelper):
         self.gtfs_data = gtfs_data or GTFSData.DEFAULT()
         self._session: Optional[aiohttp.ClientSession] = None
         self._semaphore = asyncio.Semaphore(settings.gtfs.otp_max_concurrent)
+
+        # Build stop coordinate array once for fast proximity checks (lat, lon).
+        stops_df = self.gtfs_data.stops[['stop_lat', 'stop_lon']].dropna()
+        self._stop_coords = stops_df.values.astype(float)  # shape (n, 2) — [lat, lon]
+
+    def _has_reachable_stop(self, lon: float, lat: float) -> bool:
+        """Return True if a transit stop is within MAX_WALK_TO_STOP_M metres."""
+        dlat = self._stop_coords[:, 0] - lat
+        dlon = (self._stop_coords[:, 1] - lon) * math.cos(math.radians(lat))
+        dist_m = float(np.hypot(dlat, dlon).min()) * 111_320
+        return dist_m <= self.MAX_WALK_TO_STOP_M
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -384,30 +401,58 @@ class OTPTripHelper(TripHelper):
                               origin: Location,
                               destination: Location,
                               departure_time: int,
-                              max_options: int=5, # unused
                               search_window_m: int=30,
-                              include_car: bool=False,
-                              car_only: bool=False) -> List[TravelPlan]:
+                              include_car: bool=False) -> List[TravelPlan]:
+        """
+        Retrieve travel itineraries from OpenTripPlanner (OTP) and direct routes.
 
-        real_day = datetime.fromtimestamp(departure_time) if self.fixed_day else None
+        This method fetches transit itineraries via OTP GraphQL API and optionally
+        includes direct walking, biking, or driving routes using OSMnx. It handles
+        fixed-day remapping for consistent scheduling, parallel requests with retry logic,
+        and deduplication of results.
+
+        Args:
+            origin: Starting location.
+            destination: Ending location.
+            departure_time: Unix timestamp for departure.
+            search_window_m: Search window in minutes (default 30).
+            include_car: Whether to include car routes.
+
+        Returns:
+            List of TravelPlan objects representing itineraries.
+        """
+        # ── Fixed-day remapping ───────────────────────────────────────────────
+        # Adjust departure time to a fixed day for consistent OTP queries,
+        # while keeping the real day for congestion-aware routing.
+        congestion_dt    = datetime.fromtimestamp(departure_time)
+        real_day         = congestion_dt if self.fixed_day else None
         real_departure_time = departure_time
         if self.fixed_day is not None:
-            departure_time = self.fixed_day.replace(hour=real_day.hour, minute=real_day.minute, second=real_day.second).timestamp()
-            logger.debug(f"Using fixed day {self.fixed_day.date()} for departure_time, real day is {real_day}, new departure_time is {departure_time}")
+            departure_time = self.fixed_day.replace(
+                hour=real_day.hour, minute=real_day.minute, second=real_day.second
+            ).timestamp()
+            logger.debug(
+                f"Using fixed day {self.fixed_day.date()} for departure_time, "
+                f"real day is {real_day}, new departure_time is {departure_time}"
+            )
         real_day = real_day.replace(hour=0, minute=0, second=0, microsecond=0) if real_day else None
 
-        session = await self.get_session()
+        # Create an HTTP session for API requests
+        session  = await self.get_session()
+        # Convert departure time to ISO format for OTP API
         start_at = datetime.fromtimestamp(departure_time, tz=timezone.utc).isoformat()
 
+        # Common variables for OTP GraphQL queries
         common_vars = {
             "from": {"coordinates": {"latitude": origin.lat, "longitude": origin.lon}},
-            "to": {"coordinates": {"latitude": destination.lat, "longitude": destination.lon}},
+            "to":   {"coordinates": {"latitude": destination.lat, "longitude": destination.lon}},
             "dateTime": start_at,
             "itineraryFilters": {"debug": "limitToNumOfItineraries"},
             "numTripPatterns": 8,
             "searchWindow": search_window_m,
         }
 
+        # Define transit modes for OTP query (bus, metro, tram, cableway)
         transit_modes = {
             "accessMode": "foot",
             "transportModes": [
@@ -418,13 +463,14 @@ class OTPTripHelper(TripHelper):
             ],
             "egressMode": "foot",
         }
-        if include_car:
-            transit_modes["directMode"] = "car"
+        # Build the payload for transit itinerary request
+        transit_payload = {
+            "query": QUERY,
+            "variables": {**common_vars, "modes": transit_modes},
+            "operationName": "trip",
+        }
 
-        transit_payload = {"query": QUERY, "variables": {**common_vars, "modes": transit_modes}, "operationName": "trip"}
-        walk_payload = {"query": QUERY, "variables": {**common_vars, "modes": {"directMode": "foot"}}, "operationName": "trip"}
-        car_payload = {"query": QUERY, "variables": {**common_vars, "modes": {"directMode": "car"}}, "operationName": "trip"}
-
+        # Define a retry-decorated function for making HTTP requests to OTP
         @retry(
             stop=stop_after_attempt(5),
             wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -450,55 +496,128 @@ class OTPTripHelper(TripHelper):
                 OTP_REQUESTS_ERR.labels(reason='other').inc()
                 raise
 
-        async with self._semaphore:
-            if car_only:
-                raw_results = await asyncio.gather(
-                    make_request(car_payload),
-                    return_exceptions=True,
-                )
-            else:
-                raw_results = await asyncio.gather(
-                    make_request(transit_payload),
-                    make_request(walk_payload),
-                    return_exceptions=True,
-                )
+        # ── Build parallel task list ──────────────────────────────────────────
+        # Prepare tasks for transit (via OTP) and direct routes (via OSMnx).
+        # Use semaphore for transit to limit concurrent requests.
 
-        plans = []
+        task_names: list[str] = []
+        coros = []
+
+        # Use precomputed public_transport flag when available; otherwise compute on-the-fly.
+        origin_has_transit = (
+            origin.public_transport
+            if origin.public_transport is not None
+            else self._has_reachable_stop(origin.lon, origin.lat)
+        )
+        dest_has_transit = (
+            destination.public_transport
+            if destination.public_transport is not None
+            else self._has_reachable_stop(destination.lon, destination.lat)
+        )
+
+        if origin_has_transit and dest_has_transit:
+            logger.debug(
+                f"OTP transit request | "
+                f"from=({origin.lon:.7f},{origin.lat:.7f}) "
+                f"to=({destination.lon:.7f},{destination.lat:.7f})"
+            )
+            # Semaphored transit request to avoid overwhelming OTP
+            async def _transit_semaphored():
+                async with self._semaphore:
+                    return await make_request(transit_payload)
+
+            task_names.append("transit")
+            coros.append(_transit_semaphored())
+        else:
+            logger.debug(
+                f"Skipping OTP transit: origin_has_transit={origin_has_transit} "
+                f"(lat={origin.lat:.5f}, lon={origin.lon:.5f}), "
+                f"dest_has_transit={dest_has_transit} "
+                f"(lat={destination.lat:.5f}, lon={destination.lon:.5f})"
+            )
+
+        # Direct walking route
+        task_names.append("foot")
+        coros.append(get_direct_plan(origin, destination, "foot",
+                                        int(departure_time), congestion_dt))
+        # Direct biking route
+        task_names.append("bicycle")
+        coros.append(get_direct_plan(origin, destination, "bicycle",
+                                        int(departure_time), congestion_dt))
+
+        if include_car:
+            # Direct driving route
+            task_names.append("car")
+            coros.append(get_direct_plan(origin, destination, "car",
+                                         int(departure_time), congestion_dt))
+
+        if not coros:
+            return []
+
+        # Execute all tasks concurrently
+        raw_results = await asyncio.gather(*coros, return_exceptions=True)
+        named = dict(zip(task_names, raw_results))
+
+        # ── Parse OTP transit result ──────────────────────────────────────────
+        plans: List[TravelPlan] = []
         raw_pattern_counts = []
         parse_errors = 0
-        no_legs_count = 0
-        for result in raw_results:
+
+        if "transit" in named:
+            result = named["transit"]
             if isinstance(result, Exception):
-                logger.error(f"OTP request failed: {result}")
+                logger.error(f"OTP transit request failed: {result}")
                 raw_pattern_counts.append(-1)
-                continue
-            if "data" not in result:
-                errors = result.get("errors", result)
-                logger.warning(f"OTP returned no data: {errors}")
+            elif "data" not in result:
+                logger.warning(f"OTP returned no data: {result.get('errors', result)}")
                 raw_pattern_counts.append(-1)
+            else:
+                patterns = result["data"]["trip"]["tripPatterns"]
+                raw_pattern_counts.append(len(patterns))
+                if len(patterns) == 0:
+                    logger.warning(
+                        f"OTP returned 0 patterns (possible 'Couldn't link') | "
+                        f"from=({origin.lon:.7f},{origin.lat:.7f}) "
+                        f"to=({destination.lon:.7f},{destination.lat:.7f})"
+                    )
+                for item in patterns:
+                    try:
+                        # Parse each trip pattern into a TravelPlan
+                        p = self._parse_otp_travel_plan(
+                            item,
+                            start_location=origin,
+                            end_location=destination,
+                            real_day=real_day,
+                        )
+                        # Calculate delay from requested departure
+                        p.start_in = max(0, p.start_time - real_departure_time)
+                        plans.append(p)
+                    except Exception as e:
+                        parse_errors += 1
+                        logger.error(f"Error parsing travel plan: {e}, body: {item}")
+
+        # ── Add OSMnx direct plans ────────────────────────────────────────────
+        for mode in ("foot", "bicycle", "car"):
+            if mode not in named:
                 continue
-            patterns = result["data"]["trip"]["tripPatterns"]
-            raw_pattern_counts.append(len(patterns))
-            for item in patterns:
-                try:
-                    p = self._parse_otp_travel_plan(item, start_location=origin, end_location=destination, real_day=real_day)
-                    p.start_in = max(0, p.start_time - real_departure_time)
-                    plans.append(p)
-                except Exception as e:
-                    parse_errors += 1
-                    logger.error(f"Error parsing travel plan: {e}, body: {item}")
-        plans_parsed = len(plans)
-        plans = list(filter(lambda x: x.legs, plans))
-        no_legs_count = plans_parsed - len(plans)
-        if not plans:
+            plan = named[mode]
+            if isinstance(plan, Exception):
+                logger.error(f"OSMnx {mode} plan failed: {plan}")
+            elif plan is not None:
+                plan.start_in = 0  # Direct plans start immediately
+                plans.append(plan)
+
+        # Filter plans that have legs (valid itineraries)
+        plans_with_legs = [p for p in plans if p.legs]
+        if not plans_with_legs:
             logger.warning(
-                f"OTP no usable itinerary | "
+                f"No usable itinerary | "
                 f"origin=lat={origin.lat:.5f},lon={origin.lon:.5f} "
                 f"dest=lat={destination.lat:.5f},lon={destination.lon:.5f} | "
-                f"raw_patterns={raw_pattern_counts} parsed={plans_parsed} "
-                f"no_legs={no_legs_count} parse_errors={parse_errors}"
+                f"otp_patterns={raw_pattern_counts} parse_errors={parse_errors}"
             )
-        plans = self.remove_duplicates(plans, max_candidates=settings.gtfs.max_trip_candidates)
+        # Remove duplicates and limit to max candidates
+        plans = self.remove_duplicates(plans_with_legs, max_candidates=settings.gtfs.max_trip_candidates)
         return plans
 
 

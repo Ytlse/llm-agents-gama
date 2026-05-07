@@ -95,6 +95,9 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     otp_endpoint: str = "http://localhost:8080/otp/transmodel/v3"
     otp_max_concurrent: int = 10  # max simultaneous get_itineraries calls
 
+    # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
+    osmnx_cache_dir: str = "/app/osmnx_cache"
+
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
     cache_enabled: bool = True
@@ -231,6 +234,7 @@ class Settings(BaseSettings):
 
 class FactorySettings:
     _instance: Optional[Settings] = None
+    _creation_time: Optional[datetime] = None
 
     @classmethod
     def get(cls) -> Settings:
@@ -247,11 +251,11 @@ class FactorySettings:
         if config_file_path and os.path.isfile(config_file_path):
             yaml_files.append(config_file_path)
 
-        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<stem>
+        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<HH_MM>_<stem>
         if config_file_path and os.path.isfile(config_file_path):
-            stem = Path(config_file_path).stem
             now = datetime.now()
-            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}_{stem}"
+            cls._creation_time = now
+            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
             experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
             workdir = str(experiments_dir / exp_name)
 
@@ -268,8 +272,8 @@ class FactorySettings:
                 current_link.unlink()
             current_link.symlink_to(cls._instance.workdir.name)
 
-        logger.info(f"Settings loaded from: {yaml_files}")
-        logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
+        # logger.info(f"Settings loaded from: {yaml_files}")
+        # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
         return cls._instance
     
     @classmethod

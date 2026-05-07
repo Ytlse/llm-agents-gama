@@ -8,23 +8,26 @@ world initialization, synchronization, and real-time observation/action exchange
 
 import asyncio
 import json
+import math
 import os
 import orjson
 import time
 from datetime import datetime
 import httpx
+import numpy as np
 import uvicorn
 from loguru import logger
 from helper import setup_logging, humanize_date
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
-from settings import settings
+from settings import settings, FactorySettings
 import traceback
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
+from geography import TOULOUSE_OSM_ROUTES_30K_BBOX
 
 # Compteurs des endpoints du contrôleur
 SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
@@ -81,6 +84,70 @@ async def _trigger_eqasim_generation(population_size: int, bbox: tuple[float, fl
     except Exception as exc:
         logger.warning(f"[eqasim] Could not reach eqasim service ({exc}); will attempt to load existing file")
 
+
+def _find_population_json() -> str | None:
+    """Return the path of the largest eqasim population JSON, or None if absent."""
+    import re
+    output_dir = settings.data.eqasim_output_dir
+    prefix = settings.data.synthetic_file_prefix
+    pattern = re.compile(rf"^{re.escape(prefix)}population_(\d+)\.json$")
+    candidates = [
+        (int(m.group(1)), os.path.join(output_dir, name))
+        for name in os.listdir(output_dir)
+        if (m := pattern.match(name))
+    ]
+    return max(candidates)[1] if candidates else None
+
+
+def _enrich_population_with_transit(stop_coords: np.ndarray) -> str | None:
+    """Add public_transport boolean to every location in the eqasim population JSON.
+
+    Reads the file produced by eqasim, stamps each home and activity location
+    with public_transport=True/False (nearest GTFS stop ≤ 1 500 m), and writes
+    the file back in-place.  Idempotent: skips the file if already enriched.
+    Returns the path of the population JSON, or None if not found.
+    """
+    MAX_WALK_M = 1_500
+
+    json_path = _find_population_json()
+    if not json_path:
+        logger.warning("[enrich] No eqasim population file found — skipping transit enrichment")
+        return None
+
+    with open(json_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Check if already enriched (inspect first non-null location found)
+    for entry in data:
+        loc = entry.get("identity", {}).get("home")
+        if loc and loc.get("lon") is not None:
+            if "public_transport" in loc:
+                logger.info(f"[enrich] {json_path} already enriched — skipping")
+                return json_path
+            break
+
+    def _flag(lon: float, lat: float) -> bool:
+        dlat = stop_coords[:, 0] - lat
+        dlon = (stop_coords[:, 1] - lon) * math.cos(math.radians(lat))
+        return float(np.hypot(dlat, dlon).min()) * 111_320 <= MAX_WALK_M
+
+    enriched = 0
+    for entry in data:
+        identity = entry.get("identity", {})
+        home = identity.get("home")
+        if home and home.get("lon") is not None:
+            home["public_transport"] = _flag(home["lon"], home["lat"])
+            enriched += 1
+        for act in identity.get("activities", []):
+            loc = act.get("location")
+            if loc and loc.get("lon") is not None:
+                loc["public_transport"] = _flag(loc["lon"], loc["lat"])
+                enriched += 1
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    logger.info(f"[enrich] Enriched {enriched} locations in {json_path}")
+    return json_path
 
 # Set working directory from environment if specified
 workdir = os.environ.get("APP_WORKDIR", "")
@@ -278,26 +345,37 @@ async def init(request: WorldInitRequest):
     advance until bootstrap_all_agents completes and every agent has a move queued.
     """
     INIT_REQUESTS.inc()
+    _N_STEPS = 5
 
-    logger.info(f"[/init] Publishing world data — bootstrap at {humanize_date(request.timestamp)}")
+    logger.info(f"INITIALISATION 1/{_N_STEPS} Génération de la population eqasim (taille demandée : {request.population_size or 'défaut'}) — sim_time={humanize_date(request.timestamp)}")
+    await loop_container.send_log(f"[1/{_N_STEPS}] Génération de la population eqasim...")
 
-    await loop_container.send_log(f"Création de la population (taille demandée : {request.population_size or 'défaut'})...")
+    effective_population_size = request.population_size or settings.data.population_size
+    await _trigger_eqasim_generation(effective_population_size, bbox=TOULOUSE_OSM_ROUTES_30K_BBOX)
 
-    min_lon, min_lat, max_lon, max_lat = static_data.gtfs_data.get_bounding_box()
-    buffer = 0.05
-    gtfs_bbox = (min_lon - buffer, min_lat - buffer, max_lon + buffer, max_lat + buffer)
-    await _trigger_eqasim_generation(request.population_size or settings.data.population_size, bbox=gtfs_bbox)
+    logger.info(f"INITIALISATION 2/{_N_STEPS} Enrichissement des données de transport en commun")
+    await loop_container.send_log(f"[2/{_N_STEPS}] Enrichissement des données de transport en commun...")
+
+    stops_df = static_data.gtfs_data.stops[['stop_lat', 'stop_lon']].dropna()
+    stop_coords = stops_df.values.astype(float)
+    population_json_path = _enrich_population_with_transit(stop_coords)
+    # if population_json_path:
+    #     await _precheck_otp_linkability(population_json_path)
+
+    logger.info(f"INITIALISATION 3/{_N_STEPS} Initialisation du scénario et chargement des agents")
+    await loop_container.send_log(f"[3/{_N_STEPS}] Initialisation du scénario...")
 
     scenario = init_dynamic_scenario(
         static_data,
         population_size=request.population_size,
-        part_of_llm_agents=request.part_of_llm_based_agents,
+        part_of_llm_agents=request.part_of_llm_based_agents if request.part_of_llm_based_agents is not None else 1.0,
         long_term_memory_enabled=request.long_term_memory_enabled,
         long_term_self_reflect_enabled=request.long_term_self_reflect_enabled,
     )
     loop_container.set_scenario(scenario)
 
-    await loop_container.send_log("Pré-calcul du premier itinéraire pour chaque agent via OTP...")
+    logger.info(f"INITIALISATION 4/{_N_STEPS} Pré-calcul du premier itinéraire pour chaque agent (bootstrap)")
+    await loop_container.send_log(f"[4/{_N_STEPS}] Pré-calcul des premiers itinéraires...")
 
     if request.timestamp > 0:
         await scenario.bootstrap_all_agents(timestamp=request.timestamp)
@@ -316,7 +394,8 @@ async def init(request: WorldInitRequest):
         AGENT_STATES.labels(state=_state).set(0)
     AGENT_STATES.labels(state='inactive').set(len(people))
 
-    await loop_container.send_log("Initialisation terminée ! Envoi des agents à GAMA.")
+    logger.info(f"INITIALISATION 5/{_N_STEPS} Démarrage de la simulation — {len(people)} agents envoyés à GAMA")
+    await loop_container.send_log(f"[5/{_N_STEPS}] Démarrage de la simulation — {len(people)} agents envoyés à GAMA.")
 
     person_response = [
         GamaPersonData(

@@ -1,2 +1,0 @@
-feed_id,feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version,conv_rev,plan_rev
-0,SNCF,http://www.sncf.com,fr,20260429,20261031,2026-04-29,1.179,1777497921

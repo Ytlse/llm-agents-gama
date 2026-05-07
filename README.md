@@ -100,6 +100,8 @@ La population est générée par le module EQUASIM Toulouse (voir section 0 ci-d
 - Download the GTFS data from this [link](https://data.toulouse-metropole.fr/explore/dataset/tisseo-gtfs/information/), and extract the GTFS file into the `otp-toulouse/toulouse/gtfs` folder.
 
 - Download the `Toulouse.osm.pbf` file from this [link](https://download.bbbike.org/osm/bbbike/Toulouse/) (find it from the Protocolbuffer (PBF) link on the left side), then put it in the `otp-toulouse/toulouse` folder.
+To use specific area select ing/long at https://extract.bbbike.org/ and extract Protocolbuffer (PBF) File
+
 
 - Run the following commands:
 
@@ -124,28 +126,9 @@ cd scripts/
 bash update_gtfs_data.sh
 ```
 
-### 4. Prepare the config file and workdir
-
-- Create a new config file in the llm-agents/config folder (see the examples in this folder, and find more details in the llm-agents/settings file).
-
-- Copy the sample `population.json` file into the `workdir` folder (which is a setting in the `config.toml` file). Make sure the file name is in the format `population_<number of people>_<number of agents>.json`.
-
-- Depending on which LLM provider you use, populate the api key in the `llm-agents/.envrc` file. The template for this file can be found in `llm-agents/.envrc.example`. In this source code, we support [OpenAI](https://platform.openai.com/), [Groq](https://groq.com/), and self-hosted [vLLM](https://docs.vllm.ai/). If you use vLLM, please populate your `HF_TOKEN` to allow vLLM to download the model from the Hugging Face repository. The `.envrc` file should be loaded as environment variables; you can use direnv for this.
-
-- If you want to experiment with other models, please add a new section in the MODELS list in the `settings.py` file
-
-    ```json
-    {
-        "code": "openai/gpt-oss-120b",
-        "model": "openai/gpt-oss-120b",
-        "llm_provider": "vllm",
-        "api_key": os.getenv("GROQ_API_KEY"),
-        "api_url": "https://api.groq.com/openai/v1",
-    },
-    ```
 
 
-### 5. Run the simulation
+### 4. Run the simulation
 
 - Start all Docker services first (LLM agents, Redis, OTP, monitoring, et génération de la population EQUASIM) :
 

@@ -62,7 +62,7 @@ class EqasimJSONPopulationLoader(PopulationLoader):
             start_time=float(act["start_time"]),
             end_time=float(act["end_time"]),
             purpose=act["purpose"],
-            location=Location(lon=loc["lon"], lat=loc["lat"]) if loc and loc.get("lon") is not None else None,
+            location=Location(lon=loc["lon"], lat=loc["lat"], public_transport=loc.get("public_transport")) if loc and loc.get("lon") is not None else None,
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ class EqasimJSONPopulationLoader(PopulationLoader):
             ]
 
             home_raw = identity_data.get("home")
-            home = Location(lon=home_raw["lon"], lat=home_raw["lat"]) if home_raw and home_raw.get("lon") is not None else None
+            home = Location(lon=home_raw["lon"], lat=home_raw["lat"], public_transport=home_raw.get("public_transport")) if home_raw and home_raw.get("lon") is not None else None
 
             state_raw = entry.get("state", {})
             state = PersonState(
@@ -109,7 +109,7 @@ class EqasimJSONPopulationLoader(PopulationLoader):
                     activities=activities,
                 ),
                 state=state,
-                is_llm_based=entry.get("is_llm_based", False),
+                is_llm_based=entry.get("is_llm_based", True),
             )
             people.append(person)
 

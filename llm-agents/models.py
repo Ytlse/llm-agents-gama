@@ -14,6 +14,7 @@ class LocationType(str, Enum):
 class Location(BaseModel):
     lon: float
     lat: float
+    public_transport: Optional[bool] = None
 
 
 class BBox(BaseModel):
@@ -46,7 +47,6 @@ class Activity(BaseModel):
     end_time: float
     purpose: ActivityPurpose
     location: Optional[Location] = None
-    out_of_graph_distance_m: Optional[float] = None
 
 
 """ Travel plan
@@ -219,4 +219,4 @@ class Person(BaseModel):
     identity: PersonalIdentity
     state: PersonState = PersonState()
     # hybrid technique
-    is_llm_based: bool = False
+    is_llm_based: bool = True

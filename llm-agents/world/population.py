@@ -158,7 +158,7 @@ class WorldPopulation:
         return bbox.min_lon <= home.lon <= bbox.max_lon and bbox.min_lat <= home.lat <= bbox.max_lat
 
     def load_population(self, world_bbox: BBox):
-        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}_{settings.data.number_of_llm_based_agents}.json"
+        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}.json"
         if os.path.exists(file_name):
             logger.info(f"Loading population from {file_name}")
             with open(file_name, "r", encoding="utf-8") as f:

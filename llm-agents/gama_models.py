@@ -48,7 +48,7 @@ class GamaPersonData(BaseModel):
     person_id: PersonId
     name: str
     location: Location
-    is_llm_based: bool = False
+    is_llm_based: bool = True
 
 
 class WorldInitResponse(BaseModel):

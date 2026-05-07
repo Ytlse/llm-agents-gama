@@ -164,9 +164,10 @@ services:
     build:
       context: ./llm-agents
       dockerfile: Dockerfile
-    command: sh -c "python /app/archive_log.py && hypercorn handle.application:app --bind 0.0.0.0:8002"
+    command: sh -c "python /app/archive_log.py && python /app/vizpop.py 5050 & hypercorn handle.application:app --bind 0.0.0.0:8002"
     ports:
       - "8002:8002"
+      - "5050:5050"
     env_file: ./.env
     environment:
       <<: *shared-env
@@ -180,7 +181,8 @@ services:
       - ./llm_module:/opt/llm_module
       - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
-      - ./data/eqasim_output:/data/eqasim-output:ro
+      - ./data/eqasim_output:/data/eqasim-output:rw
+      - ./data/osmnx_cache:/app/osmnx_cache
     depends_on:
       api:
         condition: service_started

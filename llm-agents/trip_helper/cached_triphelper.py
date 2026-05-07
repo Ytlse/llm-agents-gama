@@ -81,7 +81,7 @@ class CachedTripHelper(TripHelper):
         ]
         return len(set(keys)) < len(keys)  # if there are duplicates, it's circular
     
-    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int) -> list[TravelPlan]:
+    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         time_step = settings.world.time_step
         departure_time = departure_time // time_step * time_step  # round down to the nearest time step
@@ -93,6 +93,7 @@ class CachedTripHelper(TripHelper):
                     origin=origin,
                     destination=destination,
                     departure_time=adjusted_time,
+                    include_car=include_car,
                     max_transfers=max_transfers
                 )
             )
@@ -117,10 +118,11 @@ class CachedTripHelper(TripHelper):
     async def do_get_iteraries_v1(self,
                                origin: Location,
                                destination: Location,
-                               departure_time: int) -> list[TravelPlan]:
+                               departure_time: int,
+                               include_car: bool = False) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         recursion_search_depth = self.recursion_search_depth
-        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, max_transfers=max_transfers)
+        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers)
         if not itineraries:
             return []
         
@@ -189,14 +191,9 @@ class CachedTripHelper(TripHelper):
                               origin: Location,
                               destination: Location,
                               departure_time: int,
-                              car_only: bool = False) -> list[TravelPlan]:
-        if car_only:
-            return await self.trip_helper.get_itineraries(
-                origin=origin,
-                destination=destination,
-                departure_time=departure_time,
-                car_only=True,
-            )
+                              include_car: bool = False
+                              ) -> list[TravelPlan]:
+
         grid_origin = self.world_grid.get_location_grid(origin)
         grid_destination = self.world_grid.get_location_grid(destination)
         time_slot = self.time_grid.get_time_slot(departure_time)
@@ -214,7 +211,8 @@ class CachedTripHelper(TripHelper):
             logger.debug(f"[CachedTripHelper]: Blacklist cleared for new hour {day_and_hour}")
         self._notfound_cache_last_hour = day_and_hour
 
-        key = "_".join([str(it) for it in (*grid_origin, *grid_destination, time_slot, day_and_hour)])
+        # include_car is part of the key: a car-owning household gets different routes
+        key = "_".join([str(it) for it in (*grid_origin, *grid_destination, time_slot, day_and_hour, int(include_car))])
         bl_key = (origin.lon, origin.lat, destination.lon, destination.lat)
 
         cache_hit = self.cache_enabled
@@ -222,7 +220,7 @@ class CachedTripHelper(TripHelper):
         cache_hit = cache_hit and (bl_key not in self.blacklist)
 
         if not cache_hit:
-            itineraries = await self.do_get_iteraries(origin, destination, departure_time)
+            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car)
             if itineraries:
                 # identify each itinerary with a unique id
                 for it in itineraries:

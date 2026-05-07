@@ -21,7 +21,7 @@ EXPERIMENT_NAME = e
 # Docker Compose
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: up down restart rebuild logs ps clean
+.PHONY: up down restart rebuild logs ps clean purge-cache
 
 up:
 	docker compose up -d
@@ -59,6 +59,25 @@ clean:
 clean_all:
 	docker ps -aq | xargs -r docker rm -f
 	docker system prune -a -f --volumes
+
+## Purge tous les caches applicatifs (OSMnx, eqasim, RAPTOR) + cache Docker builder
+purge_cache:
+	@echo "🗑️  Cache Docker builder..."
+	docker builder prune -a -f
+	@echo "🗑️  Cache OSMnx graphs (data/osmnx_cache)..."
+	rm -f data/osmnx_cache/*.pkl
+	@echo "🗑️  Cache OSMnx local (llm-agents/osmnx_cache)..."
+	rm -f llm-agents/osmnx_cache/*.pkl
+	@echo "🗑️  Cache scripts OSMnx (scripts/general/cache)..."
+	rm -f scripts/general/cache/*.pkl
+	@echo "🗑️  Cache pipeline eqasim (eqasim-toulouse/cache)..."
+	rm -rf eqasim-toulouse/cache/*.cache
+	@echo "🗑️  Cache eqasim (data/eqasim_cache, data/eqasim_output)..."
+	rm -rf data/eqasim_cache/*.cache
+	rm -f data/eqasim_output/*.json
+	@echo "🗑️  Cache RAPTOR/Solari..."
+	rm -f llm-agents/raptor_cache.pickle
+	@echo "✅ Tous les caches purgés."
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tests

@@ -430,40 +430,24 @@ class SimulationLoopV1(BaseScenario):
             target_24h_timestamp=next_activity.start_time,
             based_on=timestamp,
         )
-        out_of_graph_m = next_activity.out_of_graph_distance_m or 0.0
-        car_only = out_of_graph_m > 0
-        include_car = car_only or (person.identity.traits_json.get("number_of_cars", 0) > 0)
+        include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
         _otp_start = time.monotonic()
 
-        itineraries = await self.trip_helper.get_itineraries(
-            origin=from_location,
-            destination=next_activity.location,
-            departure_time=actual_departure_time,
-            include_car=include_car,
-            car_only=car_only,
+        same_location = (
+            from_location is not None and next_activity.location is not None
+            and from_location.lat == next_activity.location.lat
+            and from_location.lon == next_activity.location.lon
         )
-
-        # Optimization: Skip OTP call if origin and destination are identical
-        if from_location and next_activity.location and \
-           from_location.lat == next_activity.location.lat and from_location.lon == next_activity.location.lon:
+        if same_location:
             itineraries = []
         else:
             itineraries = await self.trip_helper.get_itineraries(
                 origin=from_location,
                 destination=next_activity.location,
                 departure_time=actual_departure_time,
-                include_car=include_car,
-                car_only=car_only,
+                include_car=include_car
             )
 
-        if car_only and itineraries and out_of_graph_m > 0:
-            extra_s = int(out_of_graph_m / (40_000 / 3600))
-            for itin in itineraries:
-                itin.duration += extra_s
-                itin.end_time += extra_s
-                if itin.legs:
-                    itin.legs[-1].end_time += extra_s
-                    itin.legs[-1].duration += extra_s
         _otp_duration = time.monotonic() - _otp_start
         if _otp_duration > 5.0:
             if self._slow_otp_log_count < 20:
@@ -483,19 +467,25 @@ class SimulationLoopV1(BaseScenario):
 
         if not itineraries:
             estimated_duration = _estimate_fallback_duration(from_location, next_activity.location)
-            bbox = self.world_bbox
-            def _in_bbox(loc) -> bool:
-                return (loc is not None and
-                        bbox.min_lat <= loc.lat <= bbox.max_lat and
-                        bbox.min_lon <= loc.lon <= bbox.max_lon)
-            origin_ok = _in_bbox(from_location)
-            dest_ok = _in_bbox(next_activity.location)
-            logger.warning(
-                f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by any transport mode, "
-                f"estimated travel time: {humanize_duration(estimated_duration)} | "
-                f"origin_in_bbox={origin_ok} (lat={from_location.lat:.5f},lon={from_location.lon:.5f}) "
-                f"dest_in_bbox={dest_ok}"
-            )
+            if same_location:
+                logger.debug(
+                    f"[timestamp: {humanize_date(timestamp)}] Already at destination for {next_activity.purpose} "
+                    f"(lat={from_location.lat:.5f},lon={from_location.lon:.5f}) — using fallback duration"
+                )
+            else:
+                bbox = self.world_bbox
+                def _in_bbox(loc) -> bool:
+                    return (loc is not None and
+                            bbox.min_lat <= loc.lat <= bbox.max_lat and
+                            bbox.min_lon <= loc.lon <= bbox.max_lon)
+                origin_ok = _in_bbox(from_location)
+                dest_ok = _in_bbox(next_activity.location)
+                logger.warning(
+                    f"[timestamp: {humanize_date(timestamp)}] Can't get to destination {next_activity.location} by any transport mode, "
+                    f"estimated travel time: {humanize_duration(estimated_duration)} | "
+                    f"origin_in_bbox={origin_ok} (lat={from_location.lat:.5f},lon={from_location.lon:.5f}) "
+                    f"dest_in_bbox={dest_ok}"
+                )
             plan = TravelPlan(
                 id=random_uuid(),
                 start_location=from_location,

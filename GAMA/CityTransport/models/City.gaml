@@ -234,7 +234,9 @@ experiment e type: gui {
                     wireframe: true width: 2;
 
             }
-			
+
+            //image "../includes/toulouse_map.png";
+
             // Species to display on map
             // species building aspect: base ; // Buildings 
             species route;        // Transport routes
