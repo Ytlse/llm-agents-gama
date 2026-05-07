@@ -27,6 +27,7 @@ from utils import random_uuid
 from world.population import WorldPopulation
 from world.world_data import WorldModel
 from settings import settings
+from prometheus_client import Counter
 
 from prometheus_client import Counter, Gauge
 from urban_mobility_agents.utils.move_logger import MoveLogger
@@ -272,6 +273,21 @@ class SimulationLoopV1(BaseScenario):
         messages = self._messages.copy()
         self._messages.clear()
         return messages
+    
+    async def schedule_person_move(self, timestamp: int):
+        idle_people = [p for p in self.population.get_people_list() if p.state.heading_to is None]
+        
+        async def process_person(person):
+            PROCESS_PERSON_CALLS.inc()
+            async with self._concurrent_semaphore:
+                move, reasoning = await self.determine_next_move_for_person(person, timestamp)
+                if move:
+                    ACTIONS_CREATED.inc()
+                    logger.debug(f"[timestamp: {humanize_date(timestamp)}] Person {person.person_id} is moving to {move.target_location} for {move.purpose}")
+                    self._messages.append(Action(
+                        person_id=person.person_id,
+                        action=move.model_dump(exclude_none=False)
+                    ))
 
     async def bootstrap_all_agents(self, timestamp: int):
         """Pre-compute the first upcoming itinerary for every agent.

@@ -85,9 +85,11 @@ purge_cache:
 
 .PHONY: tests burst
 
+## Tests fonctionnels — nécessite que l'API LLM Docker soit démarrée
 tests:
 	python llm_module/tests/test_main.py
 
+## Tests de charge — burst 80 requêtes, scénario 1
 burst:
 	python llm_module/tests/test_e2e.py --scenario 1 --burst 80
 

@@ -1,6 +1,7 @@
 gtfs:
   cache_enabled: false
   mode: OTP
+  gtfs_file: /app/data/gtfs/
 
 agent:
   reschedule_activity_departure_time: false

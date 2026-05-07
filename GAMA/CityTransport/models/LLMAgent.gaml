@@ -117,6 +117,13 @@ species llm_agent_sync skills:[network] {
 				write "[ERROR] Received non-JSON HTTP response from controller: " + jsonBody;
 				continue;
 			}
+			
+			// Sécurité : éviter de crasher l'agent si l'API HTTP est injoignable
+			if (jsonBody = "Invalid HTTP request received." or jsonBody = nil) {
+				write "[ERREUR RESEAU] Impossible de joindre l'API Python sur le port " + http_port;
+				continue;
+			}
+			
 			map<string, unknown> json <- from_json(jsonBody);
 			if bool(json["success"]) != true {
 				write "[ERROR] Got error message: " + string(json);
@@ -281,4 +288,3 @@ species llm_agent_test skills:[network] {
 		
 	}
 }
-

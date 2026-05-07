@@ -79,7 +79,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     mode: str = "SOLARI" # SOLARI or OTP
 
     # GTFS settings
-    gtfs_file: str = os.path.join(base_dir, "../data/gtfs/")
+    gtfs_file: str = os.path.join(base_dir, "./data/gtfs/")
     gtfs_modality_name_map: dict[str, str] = {
         "0": "T1/Tram",
         "1": "Metro",
