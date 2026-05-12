@@ -10,7 +10,9 @@ class TripHelper:
                               origin: Location,
                               destination: Location,
                               departure_time: int,
-                              include_car: bool = False
+                              include_car: bool = False,
+                              include_direct: bool = True,
+                              include_transit: bool = True,
                               ) -> List[TravelPlan]:
         """
         Get itineraries for a given origin, destination and departure time.

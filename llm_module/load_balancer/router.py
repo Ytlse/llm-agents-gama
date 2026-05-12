@@ -131,7 +131,7 @@ class LoadBalancer:
 
             if self._try_reserve(candidate):
                 active = get_active_workers(candidate)
-                logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor} active_tasks={active}\n")
+                # logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor} active_tasks={active}\n")
                 return candidate
 
         status_snapshot = {

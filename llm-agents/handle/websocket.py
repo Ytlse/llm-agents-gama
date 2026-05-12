@@ -45,7 +45,7 @@ class WebSocketClient:
             return True
             
         except Exception as e:
-            logger.error(f"Connection failed: {e}")
+            logger.info(f"Connection failed: {e}")
             if self.on_error:
                 await self.on_error(e)
             return False

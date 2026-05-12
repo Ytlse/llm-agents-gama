@@ -14,10 +14,11 @@
 5. [GAMA — Moteur de simulation multi-agents](#5-gama--moteur-de-simulation-multi-agents)
 6. [Controller — Cerveau Python de la simulation](#6-controller--cerveau-python-de-la-simulation)
 7. [LLM Module — Passerelle d'inférence LLM](#7-llm-module--passerelle-dinférence-llm)
-8. [OpenTripPlanner — Moteur de routage multimodal](#8-opentripplanner--moteur-de-routage-multimodal)
-9. [Infrastructure transversale](#9-infrastructure-transversale)
-10. [Observabilité](#10-observabilité)
-11. [Schéma réseau Docker](#11-schéma-réseau-docker)
+8. [OpenTripPlanner — Moteur de routage transit](#8-opentripplanner--moteur-de-routage-transit)
+9. [OSMnx — Routage direct](#9-osmnx--routage-direct)
+10. [Infrastructure transversale](#10-infrastructure-transversale)
+11. [Observabilité](#11-observabilité)
+12. [Schéma réseau Docker](#12-schéma-réseau-docker)
 
 ---
 
@@ -32,10 +33,13 @@ Le projet simule une ville (Toulouse) peuplée d'agents synthétiques dotés de 
 │   ┌──────────┐  HTTP/WS   ┌────────────────┐  HTTP   ┌───────────┐  │
 │   │   GAMA   │◄──────────►│   Controller   │────────►│    OTP    │  │
 │   │ (GAML)   │            │  (Python/ASGI) │         │  :8080    │  │
-│   └──────────┘            └───────┬────────┘         └───────────┘  │
-│                                   │ HTTP                             │
-│                          ┌────────▼────────┐                        │
-│                          │   LLM Module    │                        │
+│   └──────────┘            └───────┬────────┘         │  transit  │  │
+│                                   │ HTTP              └───────────┘  │
+│                                   │          HTTP   ┌───────────────┐│
+│                                   ├────────────────►│ OSMnx Cluster ││
+│                                   │                 │:8090-8092     ││
+│                          ┌────────▼────────┐        │ pied/vélo/car ││
+│                          │   LLM Module    │        └───────────────┘│
 │                          │  API  │ Worker  │                        │
 │                          │ :8000 │ Celery  │                        │
 │                          └────────┬────────┘                        │
@@ -53,7 +57,7 @@ Le projet simule une ville (Toulouse) peuplée d'agents synthétiques dotés de 
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Principe fondamental :** GAMA est le moteur de simulation qui délègue les décisions de déplacement au Controller Python. Le Controller interroge OTP pour les itinéraires, puis appelle le LLM Module pour que les agents choisissent leur trajet selon leur personnalité et leur historique. Les décisions sont renvoyées à GAMA via WebSocket.
+**Principe fondamental :** GAMA est le moteur de simulation qui délègue les décisions de déplacement au Controller Python. Le Controller interroge OTP pour les itinéraires en transport en commun et le cluster OSMnx pour les modes directs (pied, vélo, voiture), puis appelle le LLM Module pour que les agents choisissent leur trajet selon leur personnalité et leur historique. Les décisions sont renvoyées à GAMA via WebSocket.
 
 ---
 
@@ -63,10 +67,11 @@ Le projet simule une ville (Toulouse) peuplée d'agents synthétiques dotés de 
 |---------|-------------|------|------|
 | `eqasim-init` | `./eqasim-toulouse` | — | **One-shot** : génère la population synthétique JSON avant le démarrage du controller |
 | `redis` | `redis:7-alpine` | 6379 | Broker de messages, cache d'état des tâches, backend Celery |
-| `otp` / `otp2` | `./otp-toulouse` | 8080/8081 | Moteur de routage multimodal (bus, tram, métro, marche) |
+| `otp` / `otp2` | `./otp-toulouse` | 8080/8081 | Moteur de routage **transit** multimodal (bus, tram, métro) |
+| `osmnx1/2/3` | `./llm-agents` | 8090/8091/8092 | Microservice de routage **direct** OSMnx (pied, vélo, voiture) — 3 réplicas, 4 Go RAM chacun |
 | `api` | `./llm_module` | 8000 | Passerelle REST LLM — reçoit les tâches, orchestre les workers |
-| `worker` | `./llm_module` | — | Worker Celery — exécute les inférences LLM (concurrence 8) |
-| `controller` | `./llm-agents` | 8002 | Orchestrateur de simulation — interface GAMA ↔ LLM |
+| `worker` | `./llm_module` | — | Worker Celery — exécute les inférences LLM (concurrence 4) |
+| `controller` | `./llm-agents` | 8002 + 5050 | Orchestrateur de simulation — interface GAMA ↔ LLM · VizPop (carte population) |
 | `flower` | `./llm_module` | 5555 | Monitoring Celery (UI web) |
 | `prometheus` | `prom/prometheus` | 9090 | Collecte des métriques |
 | `grafana` | `grafana/grafana` | 3000 | Dashboards de monitoring |
@@ -81,11 +86,12 @@ eqasim-init ──────────────────────�
                                                            ▼
 redis ──────────────────────┐                         controller
                             ▼                              ▲
-otp ────────────────────► api ─────────────────────────────┘
-                            │
-                            └──────────────► worker
-                                                │
-                                                └──────► flower
+otp / otp2  ────────────► api (healthcheck) ───────────────┤
+                            │                              │
+                            └──────────────► worker        │
+                                                │          │
+osmnx1/2/3  ──────────────────────────────────────────────┘
+  (healthcheck: 300s start_period — chargement des graphes OSM)
 ```
 
 L'ordre de démarrage recommandé en pratique :
@@ -132,7 +138,7 @@ L'ordre de démarrage recommandé en pratique :
                     ▼  [tâche de fond, en parallèle pour chaque agent]
               determine_next_move_for_person()
                     ├─► PersonScheduler.next_activity()    — quelle est la prochaine activité ?
-                    ├─► trip_helper.get_itineraries()      — OTP/Solari: N options d'itinéraires
+                    ├─► trip_helper.get_itineraries()      — OTP (transit) + OSMnx (direct)
                     └─► LlmAgent.evaluate_and_choose_travel_plan()
                               └─► LLMClient.execute_async()
                                         ├─► POST api:8000/tasks
@@ -209,7 +215,7 @@ données INSEE ──► enrichissement démographique ──► échantillonnag
 | Service | `eqasim-init` (one-shot, `restart: no`) |
 | Volume données brutes | `./data/eqasim/data:/eqasim-data` (lecture seule) |
 | Volume cache pipeline | `eqasim_cache` (accélère les re-runs) |
-| Volume sortie | `eqasim_output` (partagé avec `controller` en lecture seule) |
+| Volume sortie | `eqasim_output` (partagé avec `controller` en lecture/écriture) |
 
 ### Variables d'environnement
 
@@ -242,6 +248,15 @@ GAMA est une plateforme de simulation multi-agents open source (développée par
 | `PublicTransport.gaml` | Modélisation des transports en commun |
 | `Settings.gaml` | Paramètres globaux de la simulation |
 
+### Modes de transport simulés
+
+| Symbole GAML | Emoji | Mode |
+|---|---|---|
+| `__MOVING__` | 🚌 | Transport en commun (bus/tram/métro) |
+| `__WALKING__` | 🚶 | Marche à pied |
+| `__BIKE__` | 🚲 | Vélo |
+| `__DRIVING__` | 🚗 | Voiture |
+
 ### Protocole de communication GAMA ↔ Controller
 
 | Direction | Protocole | Endpoint / Topic | Contenu |
@@ -263,8 +278,10 @@ Le Controller (`llm-agents/`) est une application **FastAPI** (servie par **Hype
 
 **Point d'entrée Docker** :
 ```sh
-python /app/archive_log.py && hypercorn handle.application:app --bind 0.0.0.0:8002
+python /app/archive_log.py && python /app/vizpop.py 5050 & hypercorn handle.application:app --bind 0.0.0.0:8002
 ```
+
+Le processus `vizpop.py` (port 5050) démarre en parallèle : c'est un serveur Flask/Folium qui sert une carte interactive de la population simulée (requiert `experiments/current` symlink).
 
 ### API REST
 
@@ -282,7 +299,9 @@ handle/application.py  (FastAPI app)
   │
   ├── SimulationLoopV1  (urban_mobility_agents/simulation_controller.py)
   │     ├── PersonScheduler           — prochaine activité selon l'agenda
-  │     ├── OTPTripHelper             — appels à OpenTripPlanner
+  │     ├── CachedTripHelper          — cache par cellule de grille
+  │     │     ├── OTPTripHelper       — transit uniquement (bus/tram/métro)
+  │     │     └── osmnx_direct        — pied/vélo/voiture (via cluster OSMnx)
   │     └── LlmAgent[]                — un agent IA par habitant simulé
   │           ├── UserShortTermMemory  — buffer conversationnel en mémoire
   │           └── MultiUserLongTermMemory — ChromaDB (index vectoriel partagé)
@@ -290,6 +309,22 @@ handle/application.py  (FastAPI app)
   └── LoopContainer                   — gestion du WebSocket vers GAMA
         └── publish_loop()            — envoi des décisions toutes les ~1s
 ```
+
+### Système de routage d'itinéraires
+
+Le `CachedTripHelper` sépare les requêtes en deux catégories :
+
+| Catégorie | Backend | Appels par requête | Description |
+|-----------|---------|-------------------|-------------|
+| **Transit** | OTP (GraphQL Transmodel v3) | 3 (T, T+15min, T-15min) | Bus, tram, métro — les horaires varient selon l'heure |
+| **Direct** | OSMnx cluster (HTTP) | 1 (à T) | Pied, vélo, voiture — indépendants de l'heure |
+
+Paramètres `get_itineraries()` :
+- `include_car: bool` — inclure les options voiture (désactivé par défaut)
+- `include_direct: bool` — inclure les modes directs (pied/vélo/voiture)
+- `include_transit: bool` — inclure les modes transit
+
+La clé de cache inclut désormais `include_car` pour distinguer les ménages motorisés.
 
 ### Système de mémoire des agents
 
@@ -329,7 +364,7 @@ evaluate_and_choose_travel_plan(person, itineraries, current_time)
   │   ├─ persona traits (perception JSON)
   │   ├─ destination + current_time
   │   ├─ history: top-k mémoires LTM re-classées
-  │   └─ trajectories: liste d'options OTP avec mode, description, distance
+  │   └─ trajectories: liste d'options OTP+OSMnx avec mode, description, distance
   └─► LLMClient.execute_async(category="itinary_multi_agent", ...)
               └─► { chosen_index, mode, reason }
 ```
@@ -452,11 +487,13 @@ Tous les adapters retournent `(LLMOutput, tokens_in, tokens_out)`. L'output est 
 
 ---
 
-## 8. OpenTripPlanner — Moteur de routage multimodal
+## 8. OpenTripPlanner — Moteur de routage transit
 
 ### Description
 
-**OpenTripPlanner (OTP)** est un moteur de routage open source qui calcule des itinéraires multimodaux (bus, tram, métro, marche à pied) à partir de données GTFS et OpenStreetMap.
+**OpenTripPlanner (OTP)** est un moteur de routage open source qui calcule des itinéraires **en transport en commun** (bus, tram, métro) à partir de données GTFS et OpenStreetMap. Depuis la refonte du TripHelper, OTP est utilisé **exclusivement pour le transit** — les modes directs (pied, vélo, voiture) sont délégués au cluster OSMnx.
+
+Deux instances s'exécutent en parallèle : `otp` (:8080) et `otp2` (:8081), interrogées en round-robin via la variable `OTP_ENDPOINTS`.
 
 ### Données Toulouse (`otp-toulouse/toulouse/`)
 
@@ -468,18 +505,93 @@ Tous les adapters retournent `(LLMOutput, tokens_in, tokens_out)`. L'output est 
 
 **Endpoint utilisé** : `GET /otp/transmodel/v3` (API Transmodel v3)
 
-### Modes d'accès depuis le Controller
+### Comportement du TripHelper pour le transit
 
-Le Controller supporte deux modes configurables via `settings.gtfs.mode` :
+Le `CachedTripHelper` effectue 3 requêtes OTP par itinéraire (avec `include_transit=True`, `include_direct=False`) pour couvrir les variations d'horaires :
 
-| Mode | Implémentation | Description |
-|------|----------------|-------------|
-| `OTP` | `OTPTripHelper` | Appels HTTP directs vers OTP à chaque requête |
-| `SOLARI` | `CachedTripHelper(SolariTripHelper)` | Routeur RAPTOR local avec cache — réduit la charge OTP |
+```
+OTP query × 3 :  T, T+15min, T-15min
+  → collecte toutes les options de transit (bus/tram/métro/correspondances)
+  → déduplication + sélection max_trip_candidates (défaut : 3)
+```
 
 ---
 
-## 9. Infrastructure transversale
+## 9. OSMnx — Routage direct
+
+### Description
+
+Le cluster OSMnx est un microservice de routage **pour les modes directs** : marche à pied, vélo, voiture. Il remplace les appels OTP pour ces modes, qui sont indépendants des horaires de transport en commun.
+
+Le microservice (`llm-agents/osmnx_server.py`) est construit depuis la même image Docker que le controller (`./llm-agents`) et déployé en **3 réplicas** pour la charge.
+
+### Architecture interne
+
+```
+osmnx_server.py  (FastAPI + uvicorn :8090)
+  │
+  ├── Lifespan startup:
+  │     └── Pour chaque mode (walk / bike / drive) :
+  │           ├── Charger le graphe OSM depuis le cache disque  
+  │           │   (ou télécharger depuis OSM si absent)
+  │           └── Warmup routing (2 points fixes Toulouse)
+  │
+  ├── POST /route  { origin, destination, mode, congestion_dt }
+  │     ├── mode → osmnx_mode (foot→walk, bicycle→bike, car→drive)
+  │     ├── run_in_executor(_MODE_POOLS[mode], _route_sync_process)
+  │     │     └── NetworkX Dijkstra sur le graphe du mode
+  │     │           ├── foot/bike : distance, temps selon vitesses config
+  │     │           └── car : congestion TomTom Toulouse (table horaire)
+  │     └── retourne TravelPlan compatible OTP (legs, duration, distance)
+  │
+  └── GET /health → {"status": "ok"}
+```
+
+### Graphes OSM et cache
+
+| Mode | Réseau OSMnx | Vitesse nominale | Coupure distance |
+|------|-------------|-----------------|-----------------|
+| `foot` (walk) | `walk` | configurable (config/osmnx.yaml) | 15 km |
+| `bicycle` (bike) | `bike` | configurable | 30 km |
+| `car` (drive) | `drive` | congestion TomTom par heure | aucune |
+
+Les graphes sont persistés dans le volume `./data/osmnx_cache:/app/osmnx_cache`. Le redémarrage d'un replica est quasi-instantané si le cache est présent (chargement depuis pickle), sinon ~5 min pour télécharger OSM.
+
+### Pools d'exécution
+
+```
+_in_daemon = False  (processus autonome, non démon)
+  → ProcessPoolExecutor par mode (1 worker chacun)
+  → Contourne le GIL Python pour le Dijkstra CPU-bound
+  → Chaque worker process charge son propre graphe une fois, puis réutilise
+
+_in_daemon = True  (intégré dans uvicorn/hypercorn comme démon)
+  → ThreadPoolExecutor (fallback — multiprocessing interdit dans les démons)
+```
+
+### Variables d'environnement
+
+| Variable | Description |
+|----------|-------------|
+| `OSMNX_ENDPOINTS` | Liste CSV d'URLs des replicas (`http://osmnx1:8090/route,...`) |
+| `OSMNX_HTTP_CONCURRENCY` | Limite de requêtes HTTP en vol (défaut : nb_replicas × 3) |
+| `APP_CONFIG_PATH` | Pour lire `osmnx_cache_dir` depuis le YAML de config |
+
+### Modèle de congestion voiture
+
+La congestion voiture utilise des tables TomTom Toulouse chargées depuis `config/osmnx.yaml` :
+
+```
+congestion_factor = CITY_DF[heure][jour_semaine]   (centre-ville)
+                  = METRO_DF[heure][jour_semaine]   (périphérie)
+vitesse_effective = free_flow_kmh / congestion_factor
+```
+
+Les facteurs sont interpolés selon le type d'arc OSM (residential, primary, motorway…).
+
+---
+
+## 10. Infrastructure transversale
 
 ### Redis — Triple rôle
 
@@ -504,15 +616,16 @@ return 1
 | `REDIS_URL` | tous | URL Redis partagée (DB 0) |
 | `CELERY_BROKER_URL` | api, worker | Redis DB 1 |
 | `CELERY_RESULT_BACKEND` | api, worker | Redis DB 2 |
-| `OTP_ENDPOINT` | controller | URL de l'API OTP |
-| `APP_CONFIG_PATH` | api, controller | Chemin vers le fichier YAML de config |
+| `OTP_ENDPOINTS` | controller | URLs des instances OTP (CSV) |
+| `OSMNX_ENDPOINTS` | controller | URLs des replicas OSMnx (CSV) |
+| `APP_CONFIG_PATH` | api, controller, osmnx | Chemin vers le fichier YAML de config |
 | `GAMA_WS_URL` | api, controller | WebSocket vers GAMA |
 | `LLM_API_URL` | controller | URL du service `api` |
 | `PROVIDER_KEYS__*` | worker | Clés API par fournisseur LLM |
 
 ---
 
-## 10. Observabilité
+## 11. Observabilité
 
 ### Métriques Prometheus
 
@@ -543,6 +656,14 @@ Deux collecteurs exposent des métriques sur `/metrics` :
 | `gama_evaluate_plan_calls_total` | Appels LLM de décision |
 | `gama_actions_created_total` | Actions retournées à GAMA |
 
+**`osmnx_server:8090/metrics`** — métriques de routage OSMnx :
+
+| Métrique | Labels | Description |
+|----------|--------|-------------|
+| `osmnx_requests_ok_total` | mode | Succès par mode |
+| `osmnx_requests_err_total` | mode, reason | Erreurs par mode et raison |
+| `osmnx_request_duration_seconds` | mode | Latence de routage |
+
 ### Stack de monitoring
 
 ```
@@ -571,7 +692,7 @@ Interface web sur `:5555` permettant de visualiser :
 
 ---
 
-## 11. Schéma réseau Docker
+## 12. Schéma réseau Docker
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -584,7 +705,7 @@ Interface web sur `:5555` permettant de visualiser :
 │                            │ (service_completed_successfully)       │
 │                            ▼                                        │
 │   ┌──────────┐    ┌─────────────┐    ┌────────────┐                │
-│   │   redis  │    │     otp     │    │  prometheus│                │
+│   │   redis  │    │  otp / otp2 │    │  prometheus│                │
 │   │  :6379   │    │  :8080/8081 │    │   :9090    │                │
 │   └─────┬────┘    └──────┬──────┘    └─────┬──────┘                │
 │         │                │                 │                        │
@@ -592,19 +713,24 @@ Interface web sur `:5555` permettant de visualiser :
 │    │                     │     │                                    │
 │    ▼                     ▼     ▼                                    │
 │  ┌──────────────────┐   ┌───────────────────────────────────────┐  │
-│  │       api        │   │  controller  📦 eqasim_output (ro)    │  │
-│  │     :8000        │◄──│              :8002                    │  │
+│  │       api        │   │  controller  📦 eqasim_output (rw)    │  │
+│  │     :8000        │◄──│              :8002 + :5050 (vizpop)   │  │
 │  └──────────────────┘   └───────────────────────────────────────┘  │
-│         ▲                                  ▲                        │
-│  ┌──────┴───────┐                          │ WebSocket              │
-│  │    worker    │                          │ host.docker.internal   │
-│  │   (Celery)   │               ┌──────────┴──────────┐            │
-│  └──────────────┘               │   GAMA (hôte Mac)   │            │
-│         ▲                       │   (non dockerisé)   │            │
-│  ┌──────┴───────┐               └─────────────────────┘            │
-│  │    flower    │                                                   │
-│  │    :5555     │                                                   │
-│  └──────────────┘                                                   │
+│         ▲                         ▲             ▲                   │
+│  ┌──────┴───────┐                 │ WebSocket   │ HTTP              │
+│  │    worker    │                 │ host.docker │ OSMNX_ENDPOINTS   │
+│  │   (Celery)   │    ┌────────────┴──────────┐  │                   │
+│  └──────────────┘    │   GAMA (hôte Mac)     │  │                   │
+│         ▲            │   (non dockerisé)     │  │                   │
+│  ┌──────┴───────┐    └───────────────────────┘  │                   │
+│  │    flower    │                               │                   │
+│  │    :5555     │    ┌───────────────────────────┘                  │
+│  └──────────────┘    │                                              │
+│                      ▼                                              │
+│   ┌──────────────────────────────────────────────────────────────┐  │
+│   │  OSMnx Cluster  📦 osmnx_cache (rw)                          │  │
+│   │  osmnx1 :8090   osmnx2 :8091   osmnx3 :8092   (4 Go chacun) │  │
+│   └──────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  ┌──────────────┐   ┌────────────────┐                             │
 │  │   grafana    │   │  node_exporter │                             │
@@ -613,7 +739,8 @@ Interface web sur `:5555` permettant de visualiser :
 └─────────────────────────────────────────────────────────────────────┘
            ▲ Ports exposés vers l'hôte
            │
-    8000 | 8002 | 8080 | 8081 | 5555 | 9090 | 3000 | 9100 | 6379
+    8000 | 8002 | 5050 | 8080 | 8081 | 8090 | 8091 | 8092
+    5555 | 9090 | 3000 | 9100 | 6379
 ```
 
 ---
@@ -623,6 +750,9 @@ Interface web sur `:5555` permettant de visualiser :
 | Décision | Justification |
 |----------|---------------|
 | **Hypercorn** à la place d'uvicorn pour le Controller | GAMA (Java 21) envoie des headers `Upgrade: h2c` qui brisent la lecture du body sous uvicorn |
+| **Cluster OSMnx 3 réplicas** à la place d'OTP pour le direct | OTP est conçu pour le transit ; les modes directs (pied/vélo/voiture) n'ont pas besoin de GTFS. OSMnx sur graphes NetworkX est plus léger et permet la congestion voiture. Les 3 réplicas absorbent la charge parallèle. |
+| **Séparation transit / direct** dans le TripHelper | OTP fait 3 requêtes (±15 min) pour le transit car les horaires varient. Le direct est invariant en heure → 1 seule requête OSMnx suffit. |
+| **ProcessPoolExecutor** par mode dans OSMnx | Le Dijkstra NetworkX est CPU-bound et bloque le GIL. Un process par mode (walk/bike/drive) donne 3 CPU cores dédiés sans se bloquer mutuellement. |
 | **Script Lua atomique** pour les compteurs RPM | Évite les race conditions entre workers Celery lors de la vérification des quotas |
 | **Mélange des itinéraires** avant envoi au LLM | Supprime le biais de position (le LLM tend à sur-choisir le premier élément) |
 | **Index ChromaDB partagé** avec filtrage par `person_id` | Réduit l'overhead de création d'index ; permet des requêtes cross-agent si nécessaire |
@@ -631,3 +761,4 @@ Interface web sur `:5555` permettant de visualiser :
 | **Ajustement quadratique des horaires** | Modèle comportemental : un retard important produit une adaptation plus forte qu'un léger retard |
 | **Population EQUASIM via service one-shot** | Découple la génération (lente, peut prendre 30 min) du démarrage du controller. Le cache JSON évite de relancer synpp à chaque `docker compose up`. |
 | **Big Five purement aléatoires** (hash person_id) | Alternative délibérée aux ajustements démographiques non sourcés. Reproductible sans biais arbitraire. |
+| **VizPop** co-localisé dans le container controller | Accès direct au volume `eqasim_output` et au symlink `experiments/current` sans service supplémentaire ; port 5050 exposé séparément. |

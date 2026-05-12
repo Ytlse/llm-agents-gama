@@ -18,8 +18,27 @@ from geography import TOULOUSE_TRANSIT_SERVICE_WKT, TOULOUSE_OSM_ROUTES_30K_BBOX
 
 app = Flask(__name__)
 
-EXPERIMENTS_CURRENT = Path(__file__).parent.parent / "experiments" / "current"
-_HG_CACHE = Path(__file__).parent / ".hg_boundary.geojson"
+_HERE = Path(__file__).resolve().parent
+_HG_CACHE = _HERE / ".hg_boundary.geojson"
+
+
+def _experiments_current() -> Path:
+    """Resolve experiments/current at call time so the server picks it up as
+    soon as a new experiment creates the symlink — no restart needed.
+
+    Two candidate locations (tried in order):
+      1. <llm-agents>/experiments/current  — Docker volume mounted at /app/experiments
+      2. <project-root>/experiments/current — local dev (project root is one level up)
+    """
+    for candidate in (
+        _HERE / "experiments" / "current",
+        _HERE.parent / "experiments" / "current",
+    ):
+        if candidate.exists():
+            return candidate
+    # Neither exists yet — return the Docker-native path so the error is legible
+    return _HERE / "experiments" / "current"
+
 
 # ── Haute-Garonne boundary (cached on first call) ───────────────────────────
 
@@ -41,8 +60,9 @@ def _get_hg_geojson() -> dict | None:
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
-def _find_population_files() -> list[Path]:
-    return sorted(Path(p) for p in glob.glob(str(EXPERIMENTS_CURRENT / "population_*.json")))
+def _find_population_files() -> tuple[list[Path], Path]:
+    current = _experiments_current()
+    return sorted(Path(p) for p in glob.glob(str(current / "population_*.json"))), current
 
 
 def _transit_polygon_coords() -> list[tuple[float, float]]:
@@ -270,10 +290,10 @@ def index():
 
 @app.get("/map")
 def generate_map():
-    files = _find_population_files()
+    files, current = _find_population_files()
     if not files:
         return Response(
-            f"Aucun fichier population_*.json dans {EXPERIMENTS_CURRENT}",
+            f"Aucun fichier population_*.json dans {current}",
             status=404,
             mimetype="text/plain",
         )

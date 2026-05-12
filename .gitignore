@@ -50,4 +50,5 @@ cache/*
 
 # Temp
 scripts/general/travel_time.py
-llm-agents/.hg_boundary.geojson
+otp-toulouse/toulouse/*
+otp-toulouse/source/*

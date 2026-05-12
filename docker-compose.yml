@@ -1,7 +1,28 @@
 x-shared-env: &shared-env
   REDIS_URL: redis://redis:6379/0
   OTP_ENDPOINTS: http://otp:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3
+  OSMNX_ENDPOINTS: http://osmnx1:8090/route,http://osmnx2:8090/route,http://osmnx3:8090/route
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+
+x-osmnx-service: &osmnx-service
+  build:
+    context: ./llm-agents
+    dockerfile: Dockerfile
+  command: uvicorn osmnx_server:app --host 0.0.0.0 --port 8090
+  restart: "no"
+  stop_grace_period: 5s
+  volumes:
+    - ./data/osmnx_cache:/app/osmnx_cache
+    - ./llm-agents/config:/app/config:ro
+  environment:
+    APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  healthcheck:
+    test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health')\""]
+    interval: 15s
+    timeout: 10s
+    retries: 20
+    start_period: 300s
+  mem_limit: 4g
 
 # ── EQUASIM env vars (override from .env or shell) ───────────────────────────
 # EQASIM_POPULATION_SIZE: if unset, read from APP_CONFIG_PATH
@@ -112,7 +133,26 @@ services:
       interval: 15s
       timeout: 10s
       retries: 20
-      start_period: 300s  # OTP peut prendre jusqu'à 5 min pour charger le graphe
+      start_period: 300s
+
+  # ─────────────────────────────────────────────
+  # OSMnx routing microservice — 3 réplicas (walk / bike / drive)
+  # ─────────────────────────────────────────────
+
+  osmnx1:
+    <<: *osmnx-service
+    ports:
+      - "8090:8090"
+
+  osmnx2:
+    <<: *osmnx-service
+    ports:
+      - "8091:8090"
+
+  osmnx3:
+    <<: *osmnx-service
+    ports:
+      - "8092:8090"
 
   # ─────────────────────────────────────────────
   # LLM Agents — Architecture API Gateway + Worker Celery + Monitoring
@@ -152,6 +192,12 @@ services:
       - ./llm_module:/app/llm_module
       - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
     depends_on:
       redis:
         condition: service_healthy
@@ -185,12 +231,18 @@ services:
       - ./data/osmnx_cache:/app/osmnx_cache
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
       otp:
         condition: service_healthy
       otp2:
         condition: service_healthy
       eqasim:
+        condition: service_healthy
+      osmnx1:
+        condition: service_healthy
+      osmnx2:
+        condition: service_healthy
+      osmnx3:
         condition: service_healthy
 
   worker:

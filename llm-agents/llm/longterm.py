@@ -417,18 +417,18 @@ class MultiUserLongTermMemory:
 
         # similarity score
         _sim_score = np.array([n.score for n in nodes])
-        logger.debug(f"Sim score debug: {_sim_score.min()}, {_sim_score.max()}, {_sim_score.mean()}")
+        # logger.debug(f"Sim score debug: {_sim_score.min()}, {_sim_score.max()}, {_sim_score.mean()}")
         # importance score based on keywords, use bleu score with the query
         keyword_only = [(n.metadata.get("tags", "") or "") for n in nodes]
         _imp_score = np.array([
             self._bleu_score(query, kw) if kw else default_reflection_importance_score for kw in keyword_only
         ])
-        logger.debug(f"Importance score debug: {_imp_score.min()}, {_imp_score.max()}, {_imp_score.mean()}")
+        # logger.debug(f"Importance score debug: {_imp_score.min()}, {_imp_score.max()}, {_imp_score.mean()}")
         # time decay score
         _time_decay_score = np.array([
             self._time_decay_score(n.metadata.get("timestamp"), query_at) for n in nodes
         ])
-        logger.debug(f"Time decay score debug: {_time_decay_score.min()}, {_time_decay_score.max()}, {_time_decay_score.mean()}")
+        # logger.debug(f"Time decay score debug: {_time_decay_score.min()}, {_time_decay_score.max()}, {_time_decay_score.mean()}")
 
         # Normalize all the score first
         _sim_score = self._normalize_score(_sim_score)

@@ -50,12 +50,6 @@ class CachedTripHelper(TripHelper):
             self.do_get_iteraries = self.do_get_iteraries_v2
 
     def dump_cache_to_file(self):
-        # cache_file = settings.gtfs.solari_cache_file
-
-        # with open(cache_file, 'wb') as f:
-        #     pickle.dump(self.cache, f)  
-        # logger.info(f"Cache dumped to {cache_file}")
-        # TODO: don't need to dump cache
         pass
 
     def get_unique_itineraries(self, itineraries: list[TravelPlan]) -> list[TravelPlan]:
@@ -86,6 +80,7 @@ class CachedTripHelper(TripHelper):
         time_step = settings.world.time_step
         departure_time = departure_time // time_step * time_step  # round down to the nearest time step
         tasks = []
+        # Transit only across the 3 time windows (bus schedules differ by time)
         for i in settings.gtfs.trip_query_range:
             adjusted_time = departure_time + i * 60
             tasks.append(
@@ -94,9 +89,22 @@ class CachedTripHelper(TripHelper):
                     destination=destination,
                     departure_time=adjusted_time,
                     include_car=include_car,
-                    max_transfers=max_transfers
+                    max_transfers=max_transfers,
+                    include_direct=False,
                 )
             )
+        # Direct routes once only: foot/bicycle are time-independent, car congestion
+        # barely differs across ±15 min so one query at T is sufficient.
+        tasks.append(
+            self.trip_helper.get_itineraries(
+                origin=origin,
+                destination=destination,
+                departure_time=departure_time,
+                include_car=include_car,
+                max_transfers=max_transfers,
+                include_transit=False,
+            )
+        )
         results = await asyncio.gather(*tasks)
 
         # Get max candidates from all results
@@ -108,11 +116,8 @@ class CachedTripHelper(TripHelper):
                 continue
             bl.add(code)
             rs.append(plan)
-            if len(rs) >= settings.gtfs.max_trip_candidates:
-                break
 
         itineraries = rs
-        #logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {5}, ")
         return itineraries
 
     async def do_get_iteraries_v1(self,
@@ -183,8 +188,6 @@ class CachedTripHelper(TripHelper):
             # merge all itineraries
             itineraries = self.get_unique_itineraries(new_itineraries + itineraries)
 
-        #logger.debug(f"[CachedTripHelper]: Number of calls to trip_helper: {_stats_number_of_calls}, ")
-            
         return itineraries
 
     async def get_itineraries(self,
@@ -202,13 +205,13 @@ class CachedTripHelper(TripHelper):
         day_and_hour = departure_time // self._cache_duration # e.g. 15 minutes cache duration
         if self._cache_last_hour is None or self._cache_last_hour != day_and_hour:
             self.cache.clear()
-            logger.debug(f"[CachedTripHelper]: Cache cleared for new hour {day_and_hour}")
+            # logger.debug(f"[CachedTripHelper]: Cache cleared for new hour {day_and_hour}")
         self._cache_last_hour = day_and_hour
 
         day_and_hour = departure_time // self._notfound_cache_duration  # e.g. 30 minutes cache duration for not found itineraries
         if self._notfound_cache_last_hour is None or self._notfound_cache_last_hour != day_and_hour:
             self.blacklist.clear()
-            logger.debug(f"[CachedTripHelper]: Blacklist cleared for new hour {day_and_hour}")
+            # logger.debug(f"[CachedTripHelper]: Blacklist cleared for new hour {day_and_hour}")
         self._notfound_cache_last_hour = day_and_hour
 
         # include_car is part of the key: a car-owning household gets different routes
@@ -239,7 +242,7 @@ class CachedTripHelper(TripHelper):
                 self.blacklist.add(bl_key)
         else:
             self._stats_cache_hit = (self._stats_cache_hit[0] + 1, self._stats_cache_hit[1] + 1)
-            logger.debug(f"[CachedTripHelper]: Cache hit for key {key}, ratio: {self._stats_cache_hit[0] / self._stats_cache_hit[1]:.2f}")
+            # logger.debug(f"[CachedTripHelper]: Cache hit for key {key}, ratio: {self._stats_cache_hit[0] / self._stats_cache_hit[1]:.2f}")
 
         # Dump cache if needed
         if self._stats_new_cache >= self._dump_cache_after:

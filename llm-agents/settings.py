@@ -93,7 +93,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OTP provider settings
     otp_endpoint: str = "http://localhost:8080/otp/transmodel/v3"
-    otp_max_concurrent: int = 10  # max simultaneous get_itineraries calls
+    otp_max_concurrent: int = 15  # max simultaneous get_itineraries calls
 
     # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
     osmnx_cache_dir: str = "/app/osmnx_cache"
@@ -103,7 +103,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     cache_enabled: bool = True
     recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
     trip_query_range: list[int] = [0, 15, -15]  # in minutes, relative to the departure time
-    max_trip_candidates: int = 5 # maximum number of trip candidates to be selected
+    max_trip_candidates: int = 3 # maximum number of trip candidates to be selected
     fixed_day: Optional[str] = None
 
 
@@ -268,8 +268,7 @@ class FactorySettings:
             cls.save_static_config()
 
             current_link = experiments_dir / "current"
-            if current_link.is_symlink() or current_link.exists():
-                current_link.unlink()
+            current_link.unlink(missing_ok=True)
             current_link.symlink_to(cls._instance.workdir.name)
 
         # logger.info(f"Settings loaded from: {yaml_files}")

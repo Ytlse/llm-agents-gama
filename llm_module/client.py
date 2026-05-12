@@ -131,37 +131,50 @@ class LLMClient:
         category = payload.get("category", "unknown")
         agents_count = len(payload.get("agents", []))
 
+        _TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError)
+
         TASKS_SENT.inc()
         TASKS_IN_PROGRESS.inc()
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # logger.debug(
-                #     f"Submitting task to LLM gateway | url={self.base_url}/tasks "
-                #     f"category={category} agents={agents_count}"
-                # )
+            # Submit task — retry up to 3 times on transient network errors
+            task_id: str | None = None
+            for attempt in range(3):
                 try:
-                    resp = await client.post(f"{self.base_url}/tasks", json=payload)
-                    resp.raise_for_status()
-                except httpx.ConnectError as e:
-                    logger.error(
-                        f"Cannot connect to LLM gateway | url={self.base_url} error={e}"
-                    )
-                    raise
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(f"{self.base_url}/tasks", json=payload)
+                        resp.raise_for_status()
+                        task_id = resp.json()["task_id"]
+                        break
                 except httpx.HTTPStatusError as e:
                     logger.error(
                         f"LLM gateway returned HTTP error | status={e.response.status_code} "
                         f"url={self.base_url}/tasks body={e.response.text[:300]}"
                     )
                     raise
+                except _TRANSIENT as e:
+                    if attempt == 2:
+                        logger.error(
+                            f"Cannot connect to LLM gateway after 3 attempts | url={self.base_url} error={e}"
+                        )
+                        raise
+                    wait = 2 ** attempt
+                    logger.warning(
+                        f"LLM gateway POST failed (attempt {attempt + 1}/3), retry in {wait}s "
+                        f"| error={type(e).__name__}"
+                    )
+                    await asyncio.sleep(wait)
 
-                task_id = resp.json()["task_id"]
-                # logger.debug(f"Task submitted | task_id={task_id} category={category}")
-
+            # Poll for result — fresh client avoids stale keep-alive connections
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 poll_start = time.monotonic()
                 deadline = poll_start + self.poll_timeout
                 _last_status_log = poll_start
                 while time.monotonic() < deadline:
-                    resp = await client.get(f"{self.base_url}/tasks/{task_id}")
+                    try:
+                        resp = await client.get(f"{self.base_url}/tasks/{task_id}")
+                    except _TRANSIENT:
+                        await asyncio.sleep(self.poll_interval)
+                        continue
                     data = resp.json()
                     if data["status"] in ("success", "failed"):
                         wait_s = time.monotonic() - poll_start
@@ -177,9 +190,6 @@ class LLMClient:
                                 chosen_index = agent.get("chosen_index")
                                 if chosen_index is not None:
                                     INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
-                            # logger.debug(
-                            #     f"Task completed successfully | task_id={task_id} category={category} wait={wait_s:.1f}s"
-                            # )
                         else:
                             TASKS_RESPONSES_FAILURE.inc()
                             error_detail = data.get("error", "No error detail")

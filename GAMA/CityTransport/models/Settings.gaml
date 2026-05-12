@@ -65,6 +65,7 @@ global {
 		"other"::"",
 		"__MOVING__"::"🚌",
 		"__WALKING__"::"🚶",
+		"__BIKE__"::"🚲",
 		"__DRIVING__"::"🚗"
 	];
 	

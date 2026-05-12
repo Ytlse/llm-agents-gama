@@ -376,11 +376,13 @@ def _fail_task(task: Task, error_msg: str) -> None:
 def _extract_primary_mode(mode: str) -> str:
     """
     Réduit une chaîne de modes composée ("foot,bus,foot") au mode principal.
-    Priorité : metro > tram > bus > car > cycling > walking > other
+    Priorité : train > metro > tram > bus > car > cycling > walking > other
     """
     if not mode or mode == "unknown":
         return "unknown"
     parts = {m.strip().lower() for m in mode.split(",")}
+    if "rail" in parts or "train" in parts:
+        return "train"
     if "metro" in parts or "subway" in parts:
         return "metro"
     if "tram" in parts or "tramway" in parts:
@@ -391,9 +393,9 @@ def _extract_primary_mode(mode: str) -> str:
         return "car"
     if "bicycle" in parts or "bike" in parts or "cycling" in parts:
         return "cycling"
-    logger.debug(f"DDDEEEEBBBBUUUUGGGGGG: Mode de transport non reconnu ou multiple sans priorité claire | mode={mode}")
     if parts <= {"foot", "walk", "walking"}:
         return "walking"
+    logger.error(f"Mode de transport inconnu ou non standard dans la réponse LLM | mode={mode}")
     return "other"
 
 
@@ -401,10 +403,14 @@ def _get_distance_bracket(distance_m: float) -> str:
     """Classe une distance en mètres dans une tranche prédéfinie."""
     if distance_m < 1_000:
         return "0-1km"
-    if distance_m < 3_000:
-        return "1-3km"
+    if distance_m < 2_000:
+        return "1-2km"
     if distance_m < 5_000:
-        return "3-5km"
-    if distance_m < 15_000:
-        return "5-15km"
-    return ">15km"
+        return "2-5km"
+    if distance_m < 10_000:
+        return "5-10km"
+    if distance_m < 20_000:
+        return "10-20km"
+    if distance_m < 50_000:
+        return "20-50km"
+    return ">50km"

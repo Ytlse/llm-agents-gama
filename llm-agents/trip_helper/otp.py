@@ -380,7 +380,7 @@ class OTPTripHelper(TripHelper):
             legs=transits,
         )
 
-    def remove_duplicates(self, trips: List[TravelPlan], max_candidates: int) -> List[TravelPlan]:
+    def remove_duplicates(self, trips: List[TravelPlan]) -> List[TravelPlan]:
         # Get max candidates from all results
         bl = set()
         rs = []
@@ -390,8 +390,6 @@ class OTPTripHelper(TripHelper):
                 continue
             bl.add(code)
             rs.append(plan)
-            if len(rs) >= max_candidates:
-                break
         return rs
     
     def revert_fixed_date(self, timestamp: int, real_date: int) -> int:
@@ -402,7 +400,9 @@ class OTPTripHelper(TripHelper):
                               destination: Location,
                               departure_time: int,
                               search_window_m: int=30,
-                              include_car: bool=False) -> List[TravelPlan]:
+                              include_car: bool=False,
+                              include_direct: bool=True,
+                              include_transit: bool=True) -> List[TravelPlan]:
         """
         Retrieve travel itineraries from OpenTripPlanner (OTP) and direct routes.
 
@@ -431,10 +431,10 @@ class OTPTripHelper(TripHelper):
             departure_time = self.fixed_day.replace(
                 hour=real_day.hour, minute=real_day.minute, second=real_day.second
             ).timestamp()
-            logger.debug(
-                f"Using fixed day {self.fixed_day.date()} for departure_time, "
-                f"real day is {real_day}, new departure_time is {departure_time}"
-            )
+            # logger.debug(
+            #     f"Using fixed day {self.fixed_day.date()} for departure_time, "
+            #     f"real day is {real_day}, new departure_time is {departure_time}"
+            # )
         real_day = real_day.replace(hour=0, minute=0, second=0, microsecond=0) if real_day else None
 
         # Create an HTTP session for API requests
@@ -448,7 +448,7 @@ class OTPTripHelper(TripHelper):
             "to":   {"coordinates": {"latitude": destination.lat, "longitude": destination.lon}},
             "dateTime": start_at,
             "itineraryFilters": {"debug": "limitToNumOfItineraries"},
-            "numTripPatterns": 8,
+            "numTripPatterns": settings.gtfs.max_trip_candidates,
             "searchWindow": search_window_m,
         }
 
@@ -515,41 +515,66 @@ class OTPTripHelper(TripHelper):
             else self._has_reachable_stop(destination.lon, destination.lat)
         )
 
-        if origin_has_transit and dest_has_transit:
-            logger.debug(
-                f"OTP transit request | "
-                f"from=({origin.lon:.7f},{origin.lat:.7f}) "
-                f"to=({destination.lon:.7f},{destination.lat:.7f})"
-            )
-            # Semaphored transit request to avoid overwhelming OTP
-            async def _transit_semaphored():
-                async with self._semaphore:
-                    return await make_request(transit_payload)
+        _SLOW_THRESHOLD = 20.0
 
-            task_names.append("transit")
-            coros.append(_transit_semaphored())
-        else:
-            logger.debug(
-                f"Skipping OTP transit: origin_has_transit={origin_has_transit} "
-                f"(lat={origin.lat:.5f}, lon={origin.lon:.5f}), "
-                f"dest_has_transit={dest_has_transit} "
-                f"(lat={destination.lat:.5f}, lon={destination.lon:.5f})"
-            )
+        async def _timed_otp(coro):
+            t0 = time.monotonic()
+            result = await coro
+            d = time.monotonic() - t0
+            if d > _SLOW_THRESHOLD:
+                logger.warning(
+                    f"[otp] Slow transit query | "
+                    f"from=({origin.lon:.5f},{origin.lat:.5f}) "
+                    f"to=({destination.lon:.5f},{destination.lat:.5f}) "
+                    f"duration={d:.2f}s"
+                )
+            return result
 
-        # Direct walking route
-        task_names.append("foot")
-        coros.append(get_direct_plan(origin, destination, "foot",
-                                        int(departure_time), congestion_dt))
-        # Direct biking route
-        task_names.append("bicycle")
-        coros.append(get_direct_plan(origin, destination, "bicycle",
-                                        int(departure_time), congestion_dt))
+        async def _timed_osmnx(coro, mode: str):
+            t0 = time.monotonic()
+            result = await coro
+            d = time.monotonic() - t0
+            if d > _SLOW_THRESHOLD:
+                logger.warning(
+                    f"[osmnx] Slow direct plan | mode={mode} "
+                    f"from=({origin.lon:.5f},{origin.lat:.5f}) "
+                    f"to=({destination.lon:.5f},{destination.lat:.5f}) "
+                    f"duration={d:.2f}s"
+                )
+            return result
 
-        if include_car:
-            # Direct driving route
-            task_names.append("car")
-            coros.append(get_direct_plan(origin, destination, "car",
-                                         int(departure_time), congestion_dt))
+        if include_transit:
+            if origin_has_transit and dest_has_transit:
+                # logger.debug(
+                #     f"OTP transit request | "
+                #     f"from=({origin.lon:.7f},{origin.lat:.7f}) "
+                #     f"to=({destination.lon:.7f},{destination.lat:.7f})"
+                # )
+                async def _transit_semaphored():
+                    async with self._semaphore:
+                        return await make_request(transit_payload)
+
+                task_names.append("transit")
+                coros.append(_timed_otp(_transit_semaphored()))
+            # else:
+            #     logger.debug(
+            #         f"Skipping OTP transit: origin_has_transit={origin_has_transit} "
+            #         f"(lat={origin.lat:.5f}, lon={origin.lon:.5f}), "
+            #         f"dest_has_transit={dest_has_transit} "
+            #         f"(lat={destination.lat:.5f}, lon={destination.lon:.5f})"
+            #     )
+
+        if include_direct:
+            task_names.append("foot")
+            coros.append(_timed_osmnx(get_direct_plan(origin, destination, "foot",
+                                            int(departure_time), congestion_dt), "foot"))
+            task_names.append("bicycle")
+            coros.append(_timed_osmnx(get_direct_plan(origin, destination, "bicycle",
+                                            int(departure_time), congestion_dt), "bicycle"))
+            if include_car:
+                task_names.append("car")
+                coros.append(_timed_osmnx(get_direct_plan(origin, destination, "car",
+                                             int(departure_time), congestion_dt), "car"))
 
         if not coros:
             return []
@@ -617,7 +642,7 @@ class OTPTripHelper(TripHelper):
                 f"otp_patterns={raw_pattern_counts} parse_errors={parse_errors}"
             )
         # Remove duplicates and limit to max candidates
-        plans = self.remove_duplicates(plans_with_legs, max_candidates=settings.gtfs.max_trip_candidates)
+        plans = self.remove_duplicates(plans_with_legs)
         return plans
 
 

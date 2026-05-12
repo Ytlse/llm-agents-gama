@@ -95,9 +95,10 @@ species passenger parent: in_transfer virtual: true {
     point target_location -> length(list_destination) > 0 ? list_destination[length(list_destination)-1]: nil;
 
     // Constantes de route
-    string _ROUTE_NONE_ <- "__NONE__";     // Marqueur pour les segments de marche
-    string _ROUTE_CAR_  <- "__CAR__";      // Marqueur pour les segments en voiture
-    string _PUBLIC_  <- "__PUBLIC__";   // Marqueur pour transport public
+    string _WALK_ <- "__DIRECT_FOOT__";           // Marqueur pour les segments de marche
+    string _CAR_  <- "__DIRECT_CAR__";      // Marqueur pour les segments en voiture
+    string _BIKE_  <- "__DIRECT_BICYCLE__";          // Marqueur pour les segments en vélo
+    string _PUBLIC_  <- "__PUBLIC__";      // Marqueur pour transport public
 
     // État d'interaction avec les véhicules
     public_vehicle on_vehicle;             // Véhicule actuellement embarqué (nil si marche)
@@ -196,7 +197,7 @@ species passenger parent: in_transfer virtual: true {
                 point start_point <- point(to_GAMA_CRS({start_lon,start_lat}, POPULATION_CRS));
                 list_destination << start_point;
                 list_destination_stop_name << string(start_loc_0["stop"]);
-                list_route_id << _ROUTE_NONE_;
+                list_route_id << _WALK_;
                 list_shape_id << nil;
                 list_planned_step_duration << 0.0;
             }
@@ -218,7 +219,7 @@ species passenger parent: in_transfer virtual: true {
 
                     // Déterminer si c'est un transfert (marche) ou un segment de transport
                     string transit_route <- string(leg_map["transit_route"]);
-                    string mode <- (bool(leg_map["is_transfer"]) ? _ROUTE_NONE_: string(leg_map["transit_route"]));
+                    string mode <- (bool(leg_map["is_transfer"]) ? _WALK_: string(leg_map["transit_route"]));
                     list_route_id << mode;
                     list_shape_id << (bool(leg_map["is_transfer"]) ? nil : (list(leg_map["shape_id"]) collect string(each)));
                     
@@ -232,7 +233,7 @@ species passenger parent: in_transfer virtual: true {
                     if main_mode = "" {
                     	main_mode <- mode;
                     }
-                    else if main_mode = _ROUTE_NONE_ {
+                    else if main_mode = _WALK_ {
                     	main_mode <- mode;
                     }
                 }
@@ -248,7 +249,7 @@ species passenger parent: in_transfer virtual: true {
             
             list_destination << end_point;
             list_destination_stop_name << purpose;
-            list_route_id << _ROUTE_NONE_;
+            list_route_id << _WALK_;
             list_shape_id << nil;
             list_planned_step_duration << 0.0;
         }
@@ -328,7 +329,7 @@ species passenger parent: in_transfer virtual: true {
 		// passer à l'étape suivante si la destination de l'étape précédente est atteinte
 		if location distance_to dest < moving_close_dist {
 			// essayer de soumettre l'observation
-			bool is_transfer <- list_route_id[step_idx] = _ROUTE_NONE_;
+			bool is_transfer <- list_route_id[step_idx] = _WALK_;
 			float _duration <- float(CURRENT_TIMESTAMP-step_started_at);
 			// métriques
 			trip_traveled_duration <- trip_traveled_duration + _duration;
@@ -376,15 +377,21 @@ species passenger parent: in_transfer virtual: true {
 		list<string> shape_id_list <- list_shape_id[step_idx];
 		
 		/* Cas déplacement en VOITURE — vitesse = distance / durée planifiée du segment */
-		if route_id = _ROUTE_CAR_ {
+		if route_id = _CAR_ or route_id = _BIKE_ {
 			point dest2 <- list_destination[step_idx];
 			float planned_dur <- (step_idx < length(list_planned_step_duration)) ? list_planned_step_duration[step_idx] : 0.0;
 			float car_dist <- location distance_to dest2;
 			speed <- (planned_dur > 0 and car_dist > 0) ? (car_dist / planned_dur) : default_car_speed;
 			moving_target <- dest2;
 		}
+		/* Cas déplacement a pied */
+		else if route_id = _WALK_{
+			speed <- 2#m/#s;
+			point dest2 <- list_destination[step_idx];
+			moving_target <- dest2;
+		}
 		/* Cas transport en COMMUN */
-		else if route_id != _ROUTE_NONE_ {
+		else {
 
 			if route_id in route_vehicle_map.keys {
 				// TODO: considérer la capacité du véhicule
@@ -404,12 +411,6 @@ species passenger parent: in_transfer virtual: true {
 					on_vehicle_capacity_utilization <- on_vehicle.capacity_utilization;
 				}
 			}
-		}
-		/* Cas déplacement a pied */
-		else {
-			speed <- 2#m/#s;
-			point dest2 <- list_destination[step_idx];
-			moving_target <- dest2;
 		}
 	}
 }
@@ -551,11 +552,16 @@ species inhabitant parent: passenger {
 	 */
 	string get_action_emoji {
 		if !is_idle {
-			if list_route_id != nil and list_route_id[step_idx] = _ROUTE_NONE_ {
-				return PURPOSE_ICON_MAP["__WALKING__"];
-			}
-			if list_route_id != nil and list_route_id[step_idx] = _ROUTE_CAR_ {
-				return PURPOSE_ICON_MAP["__DRIVING__"];
+			if list_route_id != nil {
+				if list_route_id[step_idx] = _WALK_ {
+					return PURPOSE_ICON_MAP["__WALKING__"];
+				}
+				else if list_route_id[step_idx] = _CAR_ {
+					return PURPOSE_ICON_MAP["__DRIVING__"];
+				}
+				else if list_route_id[step_idx] = _BIKE_ {
+					return PURPOSE_ICON_MAP["__BIKE__"];
+				}
 			}
 			return PURPOSE_ICON_MAP["__MOVING__"];
 		}
@@ -584,13 +590,17 @@ species inhabitant parent: passenger {
 		if is_ready {
 			return #gray;
 		}
-		if main_mode = _ROUTE_CAR_ {
+		if main_mode = _BIKE_ {
+			return #purple;
+		}
+		if main_mode = _CAR_ {
 			return #red;
 		}
-		if main_mode = _ROUTE_NONE_ {
+		if main_mode = _WALK_ {
 			return #orange;
 		}
-		// Autres cas : Véhicule public
+
+		// Line or train
 		return #green;
 	}
 

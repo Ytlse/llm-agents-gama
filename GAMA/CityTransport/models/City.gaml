@@ -233,6 +233,12 @@ experiment e type: gui {
                     border: #red font: font("Geneva", 12, #bold)
                     wireframe: true width: 2;
 
+                draw "Bike "
+                    at: {20000, 39400} 
+                    anchor: #top_left
+                    border: #purple font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+
             }
 
             //image "../includes/toulouse_map.png";

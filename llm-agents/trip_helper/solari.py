@@ -37,7 +37,7 @@ class SolariTripHelper(TripHelper):
             legs=transits,
         )
 
-    async def get_itineraries(self, origin: Location, destination: Location, departure_time: int, max_transfers: int=6) -> List[TravelPlan]:
+    async def get_itineraries(self, origin: Location, destination: Location, departure_time: int, max_transfers: int=6, include_car: bool = False, include_direct: bool = True, include_transit: bool = True) -> List[TravelPlan]:
         async with aiohttp.ClientSession() as session:
             start_at_ms = departure_time * 1000
             payload = {

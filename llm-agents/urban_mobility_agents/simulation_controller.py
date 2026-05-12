@@ -54,6 +54,36 @@ def _estimate_fallback_duration(origin, destination) -> int:
     return max(5 * 60, int(road_distance_m / speed_ms))
 
 
+def _primary_mode(plan: TravelPlan) -> str:
+    modes = {(leg.mode or "").lower() for leg in plan.legs if not leg.is_transfer}
+    if modes & {"car"}:
+        return "car"
+    if modes & {"bicycle", "bike"}:
+        return "bike"
+    if not modes - {"foot", "walk", ""}:
+        return "walk"
+    return "transit"
+
+
+def _select_candidates(itineraries: list[TravelPlan], max_n: int) -> list[TravelPlan]:
+    """Cap to max_n itineraries, keeping the fastest plan per mode group first."""
+    by_duration = sorted(itineraries, key=lambda p: p.duration or float("inf"))
+    seen, priority, rest = set(), [], []
+    for plan in by_duration:
+        mode = _primary_mode(plan)
+        if mode not in seen:
+            seen.add(mode)
+            priority.append(plan)
+        else:
+            rest.append(plan)
+    selected = priority[:max_n]
+    for plan in rest:
+        if len(selected) >= max_n:
+            break
+        selected.append(plan)
+    return selected
+
+
 class SimulationLoopV1(BaseScenario):
     MAX_ADJUST_START_TIME = 15*60  # 15 minutes
 
@@ -65,7 +95,6 @@ class SimulationLoopV1(BaseScenario):
         self._messages = []
         self._late_count = 0
         self._itinerary_success_count = 0
-        self._slow_otp_log_count = 0
         self._itinerary_window_start = time.monotonic()
         self.model = world_model
         self.trip_helper = trip_helper
@@ -296,17 +325,27 @@ class SimulationLoopV1(BaseScenario):
             person.state.scheduling_started_at = _time24h
             eligible.append((person, next_act))
 
+        total = len(eligible)
         logger.info(
             f"[bootstrap] sim_time={humanize_date(timestamp)} "
-            f"computing itineraries for {len(eligible)}/{len(all_people)} agents — GAMA blocked"
+            f"computing itineraries for {total}/{len(all_people)} agents — GAMA blocked"
         )
         _bootstrap_start = time.monotonic()
         tasks = [asyncio.create_task(self._schedule_one(person, act, timestamp))
                  for person, act in eligible]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        completed = 0
+        log_interval = max(1, total // 10)
+        for coro in asyncio.as_completed(tasks):
+            try:
+                await coro
+            except Exception:
+                pass
+            completed += 1
+            if completed % log_interval == 0 or completed == total:
+                logger.info(f"[bootstrap] progress {completed}/{total} ({100*completed//total}%)")
         _bootstrap_duration = time.monotonic() - _bootstrap_start
         BOOTSTRAP_DURATION.set(_bootstrap_duration)
-        logger.info(f"[bootstrap] done — {len(eligible)} itineraries computed in {_bootstrap_duration:.2f}s")
+        logger.info(f"[bootstrap] done — {total} itineraries computed in {_bootstrap_duration:.2f}s")
 
     async def schedule_person_move(self, timestamp: int):
         all_people = self.population.get_people_list()
@@ -378,7 +417,7 @@ class SimulationLoopV1(BaseScenario):
     async def _schedule_one(self, person: Person, next_activity: Activity, timestamp: int):
         try:
             PROCESS_PERSON_CALLS.inc()
-            move, reasoning = await self._compute_move_for_activity(person, next_activity, timestamp)
+            move, _ = await self._compute_move_for_activity(person, next_activity, timestamp)
 
             if move:
                 ACTIONS_CREATED.inc()
@@ -431,7 +470,6 @@ class SimulationLoopV1(BaseScenario):
             based_on=timestamp,
         )
         include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
-        _otp_start = time.monotonic()
 
         same_location = (
             from_location is not None and next_activity.location is not None
@@ -447,32 +485,26 @@ class SimulationLoopV1(BaseScenario):
                 departure_time=actual_departure_time,
                 include_car=include_car
             )
-
-        _otp_duration = time.monotonic() - _otp_start
-        if _otp_duration > 5.0:
-            if self._slow_otp_log_count < 20:
-                logger.warning(
-                    f"[otp] Slow itinerary query | person={person.person_id} "
-                    f"duration={_otp_duration:.2f}s n_results={len(itineraries)}"
-                )
-                self._slow_otp_log_count += 1
-                if self._slow_otp_log_count == 20:
-                    logger.warning("[otp] Limite d'avertissements atteinte. Les prochaines alertes de requêtes lentes seront ignorées.")
         # Populate purpose
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
 
-        selection_method = "Premier choix OTP"
+        selection_method = "Undefined"
         provider_info = ""
+        reasoning = ""
 
+        faster_itinerary = None
+        # If no itinerary is found, create a fallback move with estimated duration based on crow-flies distance.      
         if not itineraries:
             estimated_duration = _estimate_fallback_duration(from_location, next_activity.location)
             if same_location:
+                selection_method = "Pas de déplacement (même localisation)"
                 logger.debug(
                     f"[timestamp: {humanize_date(timestamp)}] Already at destination for {next_activity.purpose} "
                     f"(lat={from_location.lat:.5f},lon={from_location.lon:.5f}) — using fallback duration"
                 )
             else:
+                selection_method = "Pas de solution de déplacement"
                 bbox = self.world_bbox
                 def _in_bbox(loc) -> bool:
                     return (loc is not None and
@@ -501,8 +533,19 @@ class SimulationLoopV1(BaseScenario):
             plan_index = 0
             reasoning = "Hard to choice, just pick the first one"
 
-            # Ask LLM agent to choose a best plan
-            if person.is_llm_based and self.agent:
+            for itinerary in itineraries:
+                if faster_itinerary is None or itinerary.duration < faster_itinerary.duration:
+                    faster_itinerary = itinerary
+
+            itineraries = _select_candidates(itineraries, settings.gtfs.max_trip_candidates)
+
+            # Raccourci : s'il n'y a qu'un seul choix possible, inutile d'interroger le LLM
+            if len(itineraries) == 1:
+                reasoning = "Un seul itinéraire disponible, sélection automatique"
+                selection_method = "Un seul itinéraire disponible"
+
+            # Demander au LLM de choisir le meilleur plan (seulement s'il y a plusieurs choix)
+            elif person.is_llm_based and self.agent:
                 # Use the agent to choose the best plan
                 context = Context(
                     person=person,
@@ -521,8 +564,8 @@ class SimulationLoopV1(BaseScenario):
                 else:
                     plan_index = 0
                     provider_info = ""
-                    selection_method = "LLM (Default)"
-                    logger.debug(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
+                    selection_method = "LLM Error (Default index)"
+                    logger.warning(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose
@@ -552,6 +595,8 @@ class SimulationLoopV1(BaseScenario):
             purpose=next_activity.purpose,
             selection_method=selection_method,
             provider_model=provider_info or "",
+            faster_itinerary=faster_itinerary,
+            reasoning=reasoning,
         )
 
         history_logger.log_query_travel_plan(

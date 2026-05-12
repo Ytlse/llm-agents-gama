@@ -9,7 +9,10 @@ Optimised for high-frequency async use:
 """
 
 import asyncio
+import functools
+import gc
 import hashlib
+import itertools
 import math
 import multiprocessing as _mp
 import os
@@ -17,10 +20,12 @@ import pickle
 import sys as _sys
 import time as _time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import aiohttp
 import geopandas as gpd
 import osmnx as ox
 import pandas as pd
@@ -33,6 +38,28 @@ from models import Location, Transit, TransitLocation, TravelPlan
 from geography import TOULOUSE_CENTER_DIST_M
 from settings import settings
 from utils import random_uuid
+
+# ── HTTP client mode (OSMNX_ENDPOINTS) ───────────────────────────────────────
+# When set, get_direct_plan() delegates to remote osmnx microservice replicas
+# instead of computing locally. Falls back to local computation when unset.
+
+_osmnx_endpoints_env = os.getenv("OSMNX_ENDPOINTS", "")
+if _osmnx_endpoints_env:
+    _osmnx_endpoint_list = [e.strip() for e in _osmnx_endpoints_env.split(",") if e.strip()]
+    _osmnx_endpoint_iter = itertools.cycle(_osmnx_endpoint_list)
+    logger.info(f"OSMnx HTTP mode: {len(_osmnx_endpoint_list)} endpoint(s): {_osmnx_endpoint_list}")
+else:
+    _osmnx_endpoint_list = []
+    _osmnx_endpoint_iter = None
+
+# Limit concurrent in-flight HTTP requests so that surplus requests wait cheaply
+# in the asyncio event loop rather than piling up in the osmnx ProcessPoolExecutors.
+# Default = replicas × modes (1 worker per mode per replica), overridable via env.
+_http_concurrency = int(
+    os.getenv("OSMNX_HTTP_CONCURRENCY", str(max(1, len(_osmnx_endpoint_list)) * 3))
+)
+_OSMNX_HTTP_SEMAPHORE = asyncio.Semaphore(_http_concurrency)
+logger.info(f"OSMnx HTTP concurrency limit: {_http_concurrency}")
 
 _CONFIG_PATH = Path(__file__).parent.parent / "config" / "osmnx.yaml"
 with _CONFIG_PATH.open() as _f:
@@ -102,16 +129,34 @@ _MAX_BIKE_M = 30_000   # 30 km
 # spawn is used on macOS/Windows (fork unsafe with asyncio threads);
 # fork is used on Linux (faster startup, COW memory sharing).
 
-_WORKERS_PER_MODE = 4
+_WORKERS_PER_MODE = 1
 
 _IO_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="osmnx-io")
 
-_mp_context = _mp.get_context("fork" if _sys.platform.startswith("linux") else "spawn")
+# Daemon processes cannot spawn child processes (Python multiprocessing restriction).
+# Fall back to ThreadPoolExecutor when running inside a daemon worker (e.g. uvicorn).
+_in_daemon = _mp.current_process().daemon
 
-_MODE_POOLS: dict[str, ProcessPoolExecutor] = {
-    mode: ProcessPoolExecutor(max_workers=_WORKERS_PER_MODE, mp_context=_mp_context)
-    for mode in _OSMNX_MODES
-}
+if _in_daemon:
+    _MODE_POOLS: dict = {
+        mode: ThreadPoolExecutor(max_workers=_WORKERS_PER_MODE, thread_name_prefix=f"osmnx-{mode}")
+        for mode in _OSMNX_MODES
+    }
+else:
+    _mp_context = _mp.get_context("fork" if _sys.platform.startswith("linux") else "spawn")
+    _MODE_POOLS: dict = {
+        mode: ProcessPoolExecutor(max_workers=_WORKERS_PER_MODE, mp_context=_mp_context)
+        for mode in _OSMNX_MODES
+    }
+
+
+def _reset_pool(osmnx_mode: str) -> None:
+    """Recreate a broken ProcessPoolExecutor for the given mode."""
+    old = _MODE_POOLS.get(osmnx_mode)
+    if old is not None:
+        old.shutdown(wait=False, cancel_futures=True)
+    _MODE_POOLS[osmnx_mode] = ProcessPoolExecutor(max_workers=_WORKERS_PER_MODE, mp_context=_mp_context)
+    logger.warning(f"[osmnx] ProcessPool for mode={osmnx_mode} recreated after worker crash.")
 
 # ── Graph singleton ───────────────────────────────────────────────────────────
 
@@ -229,6 +274,25 @@ def _infra_penalty(G, route_nodes: list, osmnx_mode: str) -> float:
     return sum(counts[k] * _PENALTIES[osmnx_mode][k] for k in counts)
 
 
+# ── Memory probe (Linux /proc, no-op on other platforms) ─────────────────────
+
+def _proc_mem_mb() -> str:
+    """Return a compact RSS/VmPeak/VmSize string from /proc/self/status, or '?' if unavailable."""
+    try:
+        fields = {}
+        with open("/proc/self/status") as fh:
+            for line in fh:
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    fields[k.strip()] = v.strip()
+        rss  = fields.get("VmRSS",  "?")
+        peak = fields.get("VmPeak", "?")
+        vsz  = fields.get("VmSize", "?")
+        return f"RSS={rss} VmPeak={peak} VmSize={vsz}"
+    except Exception:
+        return "mem=unavailable"
+
+
 # ── Worker-process state (populated lazily on first task, None in main process) ─
 
 _worker_graph:    object                    = None
@@ -245,14 +309,42 @@ def _route_sync_process(
 ) -> Optional[dict]:
     """Entry point for ProcessPoolExecutor workers. Loads its graph once, then routes."""
     global _worker_graph, _worker_boundary
+    pid = os.getpid()
     if _worker_graph is None:
         g_path = Path(cache_dir) / f"graphs_{cache_key}.pkl"
         b_path = Path(cache_dir) / f"boundary_{cache_key}.pkl"
+
+        pkl_mb = g_path.stat().st_size / 1_048_576 if g_path.exists() else -1
+        logger.info(
+            f"[osmnx-worker] pid={pid} mode={osmnx_mode} COLD START — "
+            f"pickle={pkl_mb:.0f}MB  {_proc_mem_mb()}"
+        )
+        t_load = _time.monotonic()
+
+        # Load full pickle then immediately release the other two mode graphs
+        # so they can be GC'd before routing begins.
         with g_path.open("rb") as fh:
-            _worker_graph = pickle.load(fh)[osmnx_mode]
+            _all = pickle.load(fh)
+        _worker_graph = _all[osmnx_mode]
+        del _all
+        gc.collect()
+
         with b_path.open("rb") as fh:
             _worker_boundary = pickle.load(fh)
-    return _route_sync(_worker_graph, _worker_boundary, origin, destination, osmnx_mode, congestion_dt)
+
+        logger.info(
+            f"[osmnx-worker] pid={pid} mode={osmnx_mode} READY — "
+            f"nodes={_worker_graph.number_of_nodes()} edges={_worker_graph.number_of_edges()} "
+            f"load={_time.monotonic()-t_load:.1f}s  {_proc_mem_mb()}"
+        )
+
+    t_route = _time.monotonic()
+    result = _route_sync(_worker_graph, _worker_boundary, origin, destination, osmnx_mode, congestion_dt)
+    # logger.debug(
+    #     f"[osmnx-worker] pid={pid} mode={osmnx_mode} "
+    #     f"route={_time.monotonic()-t_route:.3f}s  {_proc_mem_mb()}"
+    # )
+    return result
 
 
 def _route_sync(
@@ -313,6 +405,42 @@ def _route_sync(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+_OSMNX_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=800)
+
+
+async def _get_direct_plan_http(
+    origin: Location,
+    destination: Location,
+    trip_mode: str,
+    congestion_dt: datetime,
+) -> Optional[dict]:
+    """POST to the next osmnx replica in the round-robin cycle."""
+    url = next(_osmnx_endpoint_iter)
+    payload = {
+        "origin":       {"lat": origin.lat,      "lon": origin.lon},
+        "destination":  {"lat": destination.lat, "lon": destination.lon},
+        "mode":         trip_mode,
+        "congestion_dt": congestion_dt.isoformat(),
+    }
+    t_wait = _time.monotonic()
+    async with _OSMNX_HTTP_SEMAPHORE:
+        wait_s = _time.monotonic() - t_wait
+        if wait_s > 2.0:
+            logger.warning(
+                f"[osmnx-http] semaphore_wait={wait_s:.1f}s  mode={trip_mode}  "
+                f"url={url}"
+            )
+        t_http = _time.monotonic()
+        async with aiohttp.ClientSession(timeout=_OSMNX_HTTP_TIMEOUT) as session:
+            async with session.post(url, json=payload) as resp:
+                resp.raise_for_status()
+                result = await resp.json()
+        # logger.debug(
+        #     f"[osmnx-http] http={_time.monotonic()-t_http:.3f}s  wait={wait_s:.1f}s  mode={trip_mode}"
+        # )
+        return result
+
+
 async def get_direct_plan(
     origin:        Location,
     destination:   Location,
@@ -334,20 +462,37 @@ async def get_direct_plan(
     t0 = _time.monotonic()
 
     try:
-        # Ensure graphs are on disk before workers try to load them.
-        await _GraphStore.get(city, dist)
-        cache_dir = str(_GraphStore._cache_dir())
-        cache_key = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+        if _osmnx_endpoint_list:
+            # HTTP mode: delegate to a remote osmnx microservice replica.
+            result = await _get_direct_plan_http(origin, destination, trip_mode, congestion_dt)
+        else:
+            # Local mode: compute in-process (thread or process pool depending on daemon status).
+            graphs, boundary = await _GraphStore.get(city, dist)
+            loop = asyncio.get_running_loop()
 
-        loop   = asyncio.get_running_loop()
-        result = await loop.run_in_executor(
-            _MODE_POOLS[osmnx_mode],
-            _route_sync_process,
-            cache_dir, cache_key, origin, destination, osmnx_mode, congestion_dt,
-        )
+            if _in_daemon:
+                # Thread pool: graphs already in memory, call _route_sync directly.
+                fn = functools.partial(
+                    _route_sync,
+                    graphs[osmnx_mode], boundary, origin, destination, osmnx_mode, congestion_dt,
+                )
+            else:
+                # Process pool: workers load their graph from disk cache independently.
+                cache_dir = str(_GraphStore._cache_dir())
+                cache_key = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+                fn = functools.partial(
+                    _route_sync_process,
+                    cache_dir, cache_key, origin, destination, osmnx_mode, congestion_dt,
+                )
+
+            try:
+                result = await loop.run_in_executor(_MODE_POOLS[osmnx_mode], fn)
+            except BrokenProcessPool:
+                _reset_pool(osmnx_mode)
+                result = await loop.run_in_executor(_MODE_POOLS[osmnx_mode], fn)
     except Exception as exc:
         OSMNX_ERR.labels(mode=trip_mode, reason=type(exc).__name__).inc()
-        logger.error(f"OSMnx {trip_mode} routing error: {exc}")
+        logger.exception(f"OSMnx {trip_mode} routing error: {exc}")
         return None
 
     if result is None:
@@ -365,7 +510,7 @@ async def get_direct_plan(
     loc_start = TransitLocation(stop="", lat=origin.lat,      lon=origin.lon)
     loc_end   = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
 
-    logger.info(f"OSMnx success {trip_mode} route: {origin} → {destination}  ({duration_s}s, {distance_m:.1f}m)")
+    #logger.info(f"OSMnx success {trip_mode} route: {origin} → {destination}  ({duration_s}s, {distance_m:.1f}m)")
 
     leg = Transit(
         start_time=start_s,

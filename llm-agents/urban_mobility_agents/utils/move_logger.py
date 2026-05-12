@@ -11,7 +11,8 @@ from settings import settings
 _TOULOUSE_CENTER_LAT = 43.6047
 _TOULOUSE_CENTER_LON = 1.4442
 
-_TRANSIT_MODES = {"bus", "metro", "tram", "cableway", "rail", "ferry", "subway", "gondola", "funicular"}
+_BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular"}
+_RAIL_MODES = {"rail"}
 _CAR_MODES = {"car", "__car__"}
 _BIKE_MODES = {"bicycle", "bike"}
 _WALK_MODES = {"foot", "walk"}
@@ -28,7 +29,8 @@ _PURPOSE_FR = {
 CSV_HEADERS = [
     "Référence",
     "Trajet",
-    "Mode de transport",
+    "Mode de transport Choisi",
+    "Plus rapide",
     "Lieu de résidence",
     "Genre",
     "Âge",
@@ -43,6 +45,7 @@ CSV_HEADERS = [
     "Mémoire à long terme",
     "Filtre de perception",
     "Traits de personnalité",
+    "Raisonnement",
 ]
 
 
@@ -77,8 +80,10 @@ def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
     modes = {(leg.mode or "").lower() for leg in non_transfer}
     if modes & _CAR_MODES:
         return "Voiture Privée"
-    if modes & _TRANSIT_MODES:
-        return "Transports en commun"
+    if modes & _BUS_MODES:
+        return "Bus"
+    if modes & _RAIL_MODES:
+        return "Train"
     if modes & _BIKE_MODES:
         return "Vélo"
     if modes <= _WALK_MODES:
@@ -131,6 +136,8 @@ class MoveLogger:
         purpose: Optional[str],
         selection_method: str,
         provider_model: str,
+        faster_itinerary: Optional[TravelPlan],
+        reasoning: str,
     ):
         async with self._lock:
             self._ensure_header()
@@ -147,9 +154,10 @@ class MoveLogger:
                 settings.workdir.name,
                 trip_id,
                 _plan_transport_mode(plan),
+                _plan_transport_mode(faster_itinerary),
                 _residence_zone(home.lat if home else None, home.lon if home else None),
                 gender,
-                traits.get("age_bracket", ""),
+                traits.get("age", ""),
                 traits.get("main_occupation", ""),
                 "",  # Type de logement — not available in traits_json
                 purpose_fr,
@@ -161,6 +169,7 @@ class MoveLogger:
                 settings.agent.long_term_memory_enabled,
                 settings.agent.long_term_memory_filter_by_datetime,
                 "personality" in traits,
+                reasoning,
             ]
 
             with open(self._path, "a", newline="", encoding="utf-8") as f:

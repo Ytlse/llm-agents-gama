@@ -51,14 +51,26 @@ logs:
 ps:
 	docker compose ps
 
+error:
+	grep "| ERROR    | " ./experiments/current/app.log || true
+
+warning:
+	grep "| WARNING  | " ./experiments/current/app.log || true
+
 ## Remove containers, volumes and images
 clean:
-	docker compose down -v --rmi all
-	docker system prune -a --volumes -f
+	@read -rp "Voulez-vous supprimer toutes les images Docker ? (y/N): " ans; \
+	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || [ "$$ans" = "yes" ] || [ "$$ans" = "YES" ]; then \
+		docker compose down -v --rmi all; \
+		docker system prune -a --volumes -f; \
+	fi
 
 clean_all:
-	docker ps -aq | xargs -r docker rm -f
-	docker system prune -a -f --volumes
+	@read -rp "Voulez-vous supprimer toutes les images Docker ? (y/N): " ans; \
+	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || [ "$$ans" = "yes" ] || [ "$$ans" = "YES" ]; then \
+		docker ps -aq | xargs -r docker rm -f; \
+		docker system prune -a -f --volumes; \
+	fi
 
 ## Purge tous les caches applicatifs (OSMnx, eqasim, RAPTOR) + cache Docker builder
 purge_cache:
@@ -159,10 +171,3 @@ run:
 		echo "🚀 Lancement de l'expérience GAMA : $(EXPERIMENT_NAME)..."; \
 		$(GAMA_BIN) -p $(WORKSPACE) -o $(MODEL_PATH) -e "$(EXPERIMENT_NAME)" & \
 	fi
-
-
-error:
-	grep "| ERROR    | " ./experiments/current/app.log
-
-warning:
-	grep "| WARNING  | " ./experiments/current/app.log
