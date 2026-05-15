@@ -87,7 +87,7 @@ class GroqAdapter(BaseAdapter):
         ]
 
     def ping(self) -> bool:
-        from llm_module.tasks.config import settings
+        from llm_module.tasks.llm_config import settings
         try:
             model = settings.providers[self._instance_name].default_model
             with httpx.Client(timeout=15.0) as client:

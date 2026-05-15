@@ -101,6 +101,10 @@ species travel_agent_factory {
 		if GTFS_FIXED_DATE != nil {
 			date_str <- string(GTFS_FIXED_DATE, "yyyyMMdd");
 		}
+		if !(date_str in trip_dates_map.keys) {
+			warn "is_trip_available_today: date " + date_str + " is outside the GTFS calendar range — no trips will be scheduled";
+			return false;
+		}
 		int date_index <- trip_dates_map[date_str];
 		return !even(trip_calendar_map[service_id] div BITWISE_BIT_VAL[date_index]);
 	}

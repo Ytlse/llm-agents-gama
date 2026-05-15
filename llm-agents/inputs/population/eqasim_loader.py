@@ -179,3 +179,50 @@ class EqasimJSONPopulationLoader(PopulationLoader):
 
         print(f"[EqasimJSONPopulationLoader] Loaded {len(people)} people")
         return people
+
+    def load_population_from_data(self, raw: list, max_size: int, bbox: Optional[BBox] = None) -> list[Person]:
+        """Parse pre-loaded eqasim JSON entries into Person objects (same logic as load_population)."""
+        people: list[Person] = []
+        for entry in raw:
+            identity_data = entry["identity"]
+            activities = [
+                self._parse_activity(act)
+                for act in identity_data.get("activities", [])
+                if act.get("purpose") != "other"
+            ]
+            home_raw = identity_data.get("home")
+            home = Location(
+                lon=home_raw["lon"], lat=home_raw["lat"],
+                public_transport=home_raw.get("public_transport"),
+            ) if home_raw and home_raw.get("lon") is not None else None
+            state_raw = entry.get("state", {})
+            state = PersonState(
+                last_location=None,
+                last_activity_index=state_raw.get("last_activity_index", 0),
+            )
+            traits_json = identity_data["traits_json"]
+            name = traits_json.get("name") or _generate_name(traits_json.get("gender", ""))
+            traits_json["name"] = name
+            person = Person(
+                person_id=entry["person_id"],
+                identity=PersonalIdentity(name=name, traits_json=traits_json, home=home, activities=activities),
+                state=state,
+                is_llm_based=entry.get("is_llm_based", True),
+            )
+            people.append(person)
+
+        if bbox is not None:
+            before = len(people)
+            people = [
+                p for p in people
+                if p.identity.home and
+                   bbox.min_lon <= p.identity.home.lon <= bbox.max_lon and
+                   bbox.min_lat <= p.identity.home.lat <= bbox.max_lat
+            ]
+            print(f"[EqasimJSONPopulationLoader] BBox filter: {before} → {len(people)}")
+
+        if max_size and max_size < len(people):
+            people = list(np.random.choice(people, max_size, replace=False))
+
+        print(f"[EqasimJSONPopulationLoader] Loaded {len(people)} people from pre-loaded data")
+        return people

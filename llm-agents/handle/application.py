@@ -17,7 +17,8 @@ import httpx
 import numpy as np
 import uvicorn
 from loguru import logger
-from helper import setup_logging, humanize_date
+from helper import setup_logging, humanize_date, to_timestamp_based_on_day
+from models import Location
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
@@ -27,6 +28,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
+from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from geography import TOULOUSE_OSM_ROUTES_30K_BBOX
 
 # Compteurs des endpoints du contrôleur
@@ -41,6 +43,7 @@ SIM_REAL_ELAPSED  = Gauge('gama_sim_real_elapsed_seconds', 'Temps réel écoulé
 SIM_STEP_COUNT             = Gauge('gama_sim_step_count', 'Numéro du pas de temps courant depuis le /init')
 SIM_STEP_LOGICAL_DURATION  = Gauge('gama_sim_step_logical_duration_seconds', 'Durée logique GAMA d\'un pas de temps (écart entre deux timestamps consécutifs en secondes de temps simulé)')
 AGENT_STATES               = Gauge('gama_agent_states', 'Nombre d\'agents par état (inactive/ready/active)', ['state'])
+SIM_WALL_CLOCK_RATIO       = Gauge('sim_wall_clock_ratio', 'Ratio temps simulé / temps réel entre deux /sync (accélération effective)')
 _last_sync_wall_time: float  = 0.0
 _sim_init_wall_time: float   = 0.0
 _sim_step_count: int         = 0
@@ -85,11 +88,19 @@ async def _trigger_eqasim_generation(population_size: int, bbox: tuple[float, fl
         logger.warning(f"[eqasim] Could not reach eqasim service ({exc}); will attempt to load existing file")
 
 
-def _find_population_json() -> str | None:
-    """Return the path of the largest eqasim population JSON, or None if absent."""
+def _find_population_json(population_size: int | None = None) -> str | None:
+    """Return the path of the eqasim population JSON for the requested size.
+
+    If population_size is given, looks for the exact file
+    ``{prefix}population_{population_size}.json`` and returns None if absent.
+    If population_size is None, falls back to the largest available file.
+    """
     import re
     output_dir = settings.data.eqasim_output_dir
     prefix = settings.data.synthetic_file_prefix
+    if population_size is not None:
+        exact = os.path.join(output_dir, f"{prefix}population_{population_size}.json")
+        return exact if os.path.exists(exact) else None
     pattern = re.compile(rf"^{re.escape(prefix)}population_(\d+)\.json$")
     candidates = [
         (int(m.group(1)), os.path.join(output_dir, name))
@@ -99,55 +110,153 @@ def _find_population_json() -> str | None:
     return max(candidates)[1] if candidates else None
 
 
-def _enrich_population_with_transit(stop_coords: np.ndarray) -> str | None:
-    """Add public_transport boolean to every location in the eqasim population JSON.
+async def _prepare_population(
+    population_size: int,
+    stop_coords: np.ndarray,
+    sim_base_timestamp: int,
+    bbox,
+) -> str | None:
+    """Ensure workdir/population_{N}.json exists, contains exactly N enriched agents.
 
-    Reads the file produced by eqasim, stamps each home and activity location
-    with public_transport=True/False (nearest GTFS stop ≤ 1 500 m), and writes
-    the file back in-place.  Idempotent: skips the file if already enriched.
-    Returns the path of the population JSON, or None if not found.
+    The workdir file is written in eqasim format (not Pydantic) so that both the
+    OSMnx route cache and world/population.py can consume it.  Writes are atomic
+    (.tmp → rename) so a crash mid-write leaves no corrupted file.
+
+    Idempotence: if workdir/population_{N}.json already exists in enriched eqasim
+    format it is used as-is (no re-generation, no re-enrichment).
     """
-    MAX_WALK_M = 1_500
+    import random as _random
+    from trip_helper.osmnx_direct import get_direct_plan, load_route_cache
 
-    json_path = _find_population_json()
-    if not json_path:
-        logger.warning("[enrich] No eqasim population file found — skipping transit enrichment")
-        return None
+    workdir_path = f"{settings.data.population_cache_prefix}{population_size}.json"
 
-    with open(json_path, encoding="utf-8") as f:
-        data = json.load(f)
+    def _is_eqasim_format(data: list) -> bool:
+        # Eqasim identity has no "name" key; Pydantic PersonalIdentity dump does
+        return bool(data) and "name" not in data[0].get("identity", {})
 
-    # Check if already enriched (inspect first non-null location found)
+    def _needs_osmnx_enrichment(data: list) -> bool:
+        for entry in data:
+            for act in entry.get("identity", {}).get("activities", [])[1:]:
+                if "transfert_from_previous_location" in act:
+                    return False
+        return True
+
+    data = None
+    if os.path.exists(workdir_path):
+        with open(workdir_path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not _is_eqasim_format(data):
+            logger.info(f"[population] File in old Pydantic format — regenerating: {workdir_path}")
+            data = None
+        elif not _needs_osmnx_enrichment(data):
+            logger.info(f"[population] File exists and fully enriched: {workdir_path}")
+            load_route_cache(data)
+            return workdir_path
+        else:
+            logger.info(f"[population] File exists but missing OSMnx routes — enriching")
+
+    if data is None:
+        # Ensure raw eqasim output exists for the exact requested size
+        raw_json_path = _find_population_json(population_size)
+        if not raw_json_path:
+            # No bbox: let eqasim generate the full Toulouse area pool.
+            # Bbox filtering is applied below in Python after loading the raw data.
+            await _trigger_eqasim_generation(population_size)
+            raw_json_path = _find_population_json(population_size)
+            if not raw_json_path:
+                logger.error("[population] No population file found after eqasim generation")
+                return None
+
+        with open(raw_json_path, encoding="utf-8") as f:
+            raw_data = json.load(f)
+
+        # Bbox filter then random sample to exactly population_size
+        if bbox is not None:
+            min_lon, min_lat, max_lon, max_lat = bbox
+            raw_data = [
+                entry for entry in raw_data
+                if (home := entry.get("identity", {}).get("home")) is not None
+                and home.get("lon") is not None
+                and min_lon <= home["lon"] <= max_lon
+                and min_lat <= home["lat"] <= max_lat
+            ]
+        if population_size < len(raw_data):
+            raw_data = _random.sample(raw_data, population_size)
+        data = raw_data
+        logger.info(f"[population] Selected {len(data)} agents from eqasim output")
+
+        # Pass 1: public_transport flag
+        MAX_WALK_M = 1_500
+        def _flag(lon: float, lat: float) -> bool:
+            dlat = stop_coords[:, 0] - lat
+            dlon = (stop_coords[:, 1] - lon) * math.cos(math.radians(lat))
+            return float(np.hypot(dlat, dlon).min()) * 111_320 <= MAX_WALK_M
+
+        pt_count = 0
+        for entry in data:
+            identity = entry.get("identity", {})
+            home = identity.get("home")
+            if home and home.get("lon") is not None:
+                home["public_transport"] = _flag(home["lon"], home["lat"])
+                pt_count += 1
+            for act in identity.get("activities", []):
+                loc = act.get("location")
+                if loc and loc.get("lon") is not None:
+                    loc["public_transport"] = _flag(loc["lon"], loc["lat"])
+                    pt_count += 1
+        logger.info(f"[population] {pt_count} locations flagged with public_transport")
+
+    # Pass 2: OSMnx pre-computed routes
+    tasks_meta = []
+    coros = []
     for entry in data:
-        loc = entry.get("identity", {}).get("home")
-        if loc and loc.get("lon") is not None:
-            if "public_transport" in loc:
-                logger.info(f"[enrich] {json_path} already enriched — skipping")
-                return json_path
-            break
+        activities = entry["identity"].get("activities", [])
+        has_car = entry["identity"].get("traits_json", {}).get("number_of_cars", 0) > 0
+        for i in range(1, len(activities)):
+            prev_loc = activities[i - 1].get("location", {})
+            act = activities[i]
+            act_loc = act.get("location", {})
+            if not prev_loc or not act_loc:
+                continue
+            if prev_loc.get("lon") is None or act_loc.get("lon") is None:
+                continue
+            origin = Location(lat=prev_loc["lat"], lon=prev_loc["lon"])
+            destination = Location(lat=act_loc["lat"], lon=act_loc["lon"])
+            departure_unix = to_timestamp_based_on_day(int(act["start_time"]), sim_base_timestamp)
+            congestion_dt = datetime.fromtimestamp(departure_unix)
+            for mode in (["foot", "bicycle"] + (["car"] if has_car else [])):
+                tasks_meta.append((act, mode))
+                coros.append(get_direct_plan(
+                    origin=origin,
+                    destination=destination,
+                    trip_mode=mode,
+                    departure_time=departure_unix,
+                    congestion_dt=congestion_dt,
+                ))
 
-    def _flag(lon: float, lat: float) -> bool:
-        dlat = stop_coords[:, 0] - lat
-        dlon = (stop_coords[:, 1] - lon) * math.cos(math.radians(lat))
-        return float(np.hypot(dlat, dlon).min()) * 111_320 <= MAX_WALK_M
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    osmnx_ok = 0
+    for (act, mode), result in zip(tasks_meta, results):
+        if "transfert_from_previous_location" not in act:
+            act["transfert_from_previous_location"] = {}
+        if isinstance(result, Exception) or result is None:
+            act["transfert_from_previous_location"][mode] = None
+        else:
+            act["transfert_from_previous_location"][mode] = {
+                "duration_s": result.duration,
+                "distance_m": result.distance,
+            }
+            osmnx_ok += 1
+    logger.info(f"[population] OSMnx pre-computed {osmnx_ok}/{len(tasks_meta)} routes")
 
-    enriched = 0
-    for entry in data:
-        identity = entry.get("identity", {})
-        home = identity.get("home")
-        if home and home.get("lon") is not None:
-            home["public_transport"] = _flag(home["lon"], home["lat"])
-            enriched += 1
-        for act in identity.get("activities", []):
-            loc = act.get("location")
-            if loc and loc.get("lon") is not None:
-                loc["public_transport"] = _flag(loc["lon"], loc["lat"])
-                enriched += 1
+    tmp_path = workdir_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.rename(tmp_path, workdir_path)
+    logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
 
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    logger.info(f"[enrich] Enriched {enriched} locations in {json_path}")
-    return json_path
+    load_route_cache(data)
+    return workdir_path
 
 # Set working directory from environment if specified
 workdir = os.environ.get("APP_WORKDIR", "")
@@ -248,6 +357,11 @@ class LoopContainer:
                         break
                     pending.pop(0)
                     sent += 1
+                    _pl = PipelineLogger.get()
+                    if _pl is not None:
+                        _person_id = payload.get("person_id")
+                        if _person_id:
+                            _pl.complete(_person_id)
 
                 if sent > 0:
                     logger.info(f"WebSocket loop sent {sent} message(s) to {self.action_topic}")
@@ -305,6 +419,9 @@ async def startup_event():
 async def shutdown_event():
     """FastAPI shutdown event handler - closes WebSocket connections."""
     await loop_container.websocket_client.stop()
+    _pl = PipelineLogger.get()
+    if _pl is not None:
+        _pl.close()
 
 @app.get(
     "/",
@@ -347,20 +464,26 @@ async def init(request: WorldInitRequest):
     INIT_REQUESTS.inc()
     _N_STEPS = 5
 
-    logger.info(f"INITIALISATION 1/{_N_STEPS} Génération de la population eqasim (taille demandée : {request.population_size or 'défaut'}) — sim_time={humanize_date(request.timestamp)}")
-    await loop_container.send_log(f"[1/{_N_STEPS}] Génération de la population eqasim...")
+    logger.info(f"INITIALISATION 1/{_N_STEPS} Préparation de la population — sim_time={humanize_date(request.timestamp)}")
+    await loop_container.send_log(f"[1/{_N_STEPS}] Préparation de la population (génération + enrichissement)...")
 
     effective_population_size = request.population_size or settings.data.population_size
-    await _trigger_eqasim_generation(effective_population_size, bbox=TOULOUSE_OSM_ROUTES_30K_BBOX)
-
-    logger.info(f"INITIALISATION 2/{_N_STEPS} Enrichissement des données de transport en commun")
-    await loop_container.send_log(f"[2/{_N_STEPS}] Enrichissement des données de transport en commun...")
-
     stops_df = static_data.gtfs_data.stops[['stop_lat', 'stop_lon']].dropna()
     stop_coords = stops_df.values.astype(float)
-    population_json_path = _enrich_population_with_transit(stop_coords)
-    # if population_json_path:
-    #     await _precheck_otp_linkability(population_json_path)
+    population_json_path = await _prepare_population(
+        population_size=effective_population_size,
+        stop_coords=stop_coords,
+        sim_base_timestamp=request.timestamp,
+        bbox=TOULOUSE_OSM_ROUTES_30K_BBOX,
+    )
+    if population_json_path is None:
+        raise RuntimeError(
+            f"[population] Impossible de préparer la population ({effective_population_size} agents) — "
+            "vérifier les logs eqasim et le répertoire eqasim-output."
+        )
+
+    logger.info(f"INITIALISATION 2/{_N_STEPS} Population prête — {population_json_path}")
+    await loop_container.send_log(f"[2/{_N_STEPS}] Population prête.")
 
     logger.info(f"INITIALISATION 3/{_N_STEPS} Initialisation du scénario et chargement des agents")
     await loop_container.send_log(f"[3/{_N_STEPS}] Initialisation du scénario...")
@@ -373,6 +496,11 @@ async def init(request: WorldInitRequest):
         long_term_self_reflect_enabled=request.long_term_self_reflect_enabled,
     )
     loop_container.set_scenario(scenario)
+
+    if settings.app.pipeline_log_enabled:
+        from pathlib import Path
+        PipelineLogger.init(Path(settings.app.pipeline_log_file))
+        logger.info(f"Pipeline timing log enabled → {settings.app.pipeline_log_file}")
 
     logger.info(f"INITIALISATION 4/{_N_STEPS} Pré-calcul du premier itinéraire pour chaque agent (bootstrap)")
     await loop_container.send_log(f"[4/{_N_STEPS}] Pré-calcul des premiers itinéraires...")
@@ -464,8 +592,9 @@ async def sync(raw: Request):
     """
     global _last_sync_wall_time, _sim_step_count, _last_logical_time
     now = time.time()
-    if _last_sync_wall_time > 0:
-        SIM_STEP_INTERVAL.set(now - _last_sync_wall_time)
+    real_delta = now - _last_sync_wall_time if _last_sync_wall_time > 0 else 0.0
+    if real_delta > 0:
+        SIM_STEP_INTERVAL.set(real_delta)
     _last_sync_wall_time = now
     _sim_step_count += 1
     SIM_STEP_COUNT.set(_sim_step_count)
@@ -485,11 +614,12 @@ async def sync(raw: Request):
     except Exception as e:
         logger.error(f"[/sync] JSON parsing error: {e}")
         return ORJSONResponse(status_code=422, content={"detail": str(e)})
+    _t_parse_end = time.time()
 
     logger.info(f"Synchronizing world at timestamp: {request.timestamp} ({humanize_date(request.timestamp)})")
 
     if loop_container.scenario:
-        await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people)
+        await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people, _t_sync=now, _t_parse=_t_parse_end)
         try:
             people = loop_container.scenario.population.get_people_list()
             inactive = sum(1 for p in people if p.state.last_location is None)
@@ -501,7 +631,10 @@ async def sync(raw: Request):
             AGENT_STATES.labels(state='active').set(active)
             SIM_LOGICAL_TIME.set(request.timestamp)
             if _last_logical_time > 0 and request.timestamp > _last_logical_time:
-                SIM_STEP_LOGICAL_DURATION.set(request.timestamp - _last_logical_time)
+                sim_delta = request.timestamp - _last_logical_time
+                SIM_STEP_LOGICAL_DURATION.set(sim_delta)
+                if real_delta > 0:
+                    SIM_WALL_CLOCK_RATIO.set(sim_delta / real_delta)
         except Exception:
             pass
         _last_logical_time = request.timestamp

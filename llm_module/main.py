@@ -13,6 +13,7 @@ Le flux est 100% non-bloquant :
 """
 
 from __future__ import annotations
+import asyncio
 import json
 import hashlib
 import os
@@ -27,10 +28,11 @@ from llm_module.broker.redis_broker import (
     get_task_async, save_task_async, add_task_to_batch_async,
     scan_worker_metrics, get_worker_metric, WORKER_METRIC_PREFIX,
     get_sync_redis, is_provider_disabled, is_in_cooldown, DISABLED_KEY_PREFIX,
+    get_async_redis, task_done_channel, get_active_workers,
 )
 from llm_module.load_balancer.router import load_balancer
-from llm_module.settings.models import LLMRequest, Task, TaskStatusResponse
-from llm_module.tasks.config import settings, get_batch_max_agents, _load_provider_defaults
+from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
+from llm_module.tasks.llm_config import settings, get_batch_max_agents, _load_provider_defaults
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
 from prometheus_client.metrics_core import CounterMetricFamily, GaugeMetricFamily
@@ -265,6 +267,30 @@ class WorkerMetricsCollector:
             disable_ttl_fam.add_metric([provider], ttl if ttl > 0 else 0)
         yield disable_ttl_fam
 
+        # ── Profondeur des files de batch Redis (tâches PENDING par batch_key) ─
+        queue_fam = GaugeMetricFamily(
+            'llm_task_queue_depth',
+            'Tâches en attente dans les files de batch Redis (clés batch:*)',
+            labels=['batch_key'],
+        )
+        for key in r.scan_iter("batch:*"):
+            depth = r.llen(key)
+            if depth > 0:
+                queue_fam.add_metric([key.decode() if isinstance(key, bytes) else key], depth)
+        yield queue_fam
+
+        # ── Taux d'utilisation workers Celery par provider ────────────────────
+        util_fam = GaugeMetricFamily(
+            'celery_worker_utilization_ratio',
+            'active_workers / concurrency_limit par provider (1.0 = saturation)',
+            labels=['provider'],
+        )
+        for provider, cfg in settings.providers.items():
+            active = get_active_workers(provider)
+            limit = cfg.concurrency_limit
+            util_fam.add_metric([provider], active / limit if limit > 0 else 0.0)
+        yield util_fam
+
         # ── Info statique providers (modèle, adapter) ──────────────────────────
         info_fam = GaugeMetricFamily(
             'llm_provider_info',
@@ -338,10 +364,11 @@ async def create_task(request: LLMRequest) -> dict:
     
     # Si c'est le 1er élément du lot, on accorde un court délai (1s) pour en accumuler d'autres.
     batch_limit = get_batch_max_agents(request.force_provider)
+    loop = asyncio.get_event_loop()
     if queue_size == 1:
-        process_batch_task.apply_async(args=[batch_key, request.force_provider], countdown=settings.batch_delay_seconds)
+        await loop.run_in_executor(None, lambda: process_batch_task.apply_async(args=[batch_key, request.force_provider], countdown=settings.batch_delay_seconds))
     elif queue_size >= batch_limit:
-        process_batch_task.delay(batch_key, request.force_provider)  # Optimisation: on traite immédiatement si on est plein
+        await loop.run_in_executor(None, lambda: process_batch_task.delay(batch_key, request.force_provider))
 
     logger.info(f"Tâche créée et enqueued | task_id={task.task_id} category={request.category}")
 
@@ -386,6 +413,60 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
         provider_used=task.provider_used,
         latency_ms=task.latency_ms,
     )
+
+
+@app.get(
+    "/tasks/{task_id}/wait",
+    response_model=TaskStatusResponse,
+    summary="Attendre la fin d'une tâche (long-poll Redis Pub/Sub)",
+    description=(
+        "Bloque jusqu'à ce que la tâche atteigne un état terminal (success/failed) "
+        "ou que le timeout expire. Latence de notification ~10ms via Redis Pub/Sub."
+    ),
+)
+async def wait_for_task(task_id: str, timeout: float = 120.0) -> TaskStatusResponse:
+    timeout = min(max(timeout, 1.0), 300.0)
+    channel = task_done_channel(task_id)
+
+    pubsub = get_async_redis().pubsub()
+    await pubsub.subscribe(channel)
+    try:
+        # Subscribe first, then check — avoids missing a publish that arrives between
+        # the status check and the subscribe call.
+        task = await get_task_async(task_id)
+        if task is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail=f"Tâche '{task_id}' introuvable ou expirée.")
+
+        if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
+            return TaskStatusResponse(
+                task_id=task.task_id, status=task.status,
+                created_at=task.created_at, updated_at=task.updated_at,
+                result=task.result, error=task.error,
+                provider_used=task.provider_used, latency_ms=task.latency_ms,
+                timing_p5=task.timing_p5,
+            )
+
+        async def _recv() -> str:
+            async for msg in pubsub.listen():
+                if msg["type"] == "message":
+                    return msg["data"]
+
+        try:
+            raw = await asyncio.wait_for(_recv(), timeout=timeout)
+            task = Task.model_validate_json(raw)
+        except asyncio.TimeoutError:
+            task = await get_task_async(task_id) or task
+
+        return TaskStatusResponse(
+            task_id=task.task_id, status=task.status,
+            created_at=task.created_at, updated_at=task.updated_at,
+            result=task.result, error=task.error,
+            provider_used=task.provider_used, latency_ms=task.latency_ms,
+        )
+    finally:
+        await pubsub.unsubscribe(channel)
+        await pubsub.aclose()
 
 
 @app.get(

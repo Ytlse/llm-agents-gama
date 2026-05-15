@@ -8,6 +8,12 @@ from utils import square_distance, random_uuid
 from settings import settings
 from loguru import logger
 import asyncio
+from prometheus_client import Gauge
+
+TRIP_CACHE_HIT_RATIO = Gauge(
+    'trip_cache_hit_ratio',
+    'Ratio cache hits / total du CachedTripHelper (0-1)',
+)
 
 class CachedTripHelper(TripHelper):
     def __init__(self, 
@@ -75,13 +81,19 @@ class CachedTripHelper(TripHelper):
         ]
         return len(set(keys)) < len(keys)  # if there are duplicates, it's circular
     
-    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False) -> list[TravelPlan]:
+    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False, _pipeline_rec=None) -> list[TravelPlan]:
+        import time as _time
         max_transfers = self.max_transfers
         time_step = settings.world.time_step
         departure_time = departure_time // time_step * time_step  # round down to the nearest time step
+
+        otp_ranges = settings.gtfs.trip_query_range
+        otp_sinks = [{} for _ in otp_ranges] if _pipeline_rec is not None else [None] * len(otp_ranges)
+        direct_sink: dict | None = {} if _pipeline_rec is not None else None
+
         tasks = []
         # Transit only across the 3 time windows (bus schedules differ by time)
-        for i in settings.gtfs.trip_query_range:
+        for idx, i in enumerate(otp_ranges):
             adjusted_time = departure_time + i * 60
             tasks.append(
                 self.trip_helper.get_itineraries(
@@ -91,6 +103,7 @@ class CachedTripHelper(TripHelper):
                     include_car=include_car,
                     max_transfers=max_transfers,
                     include_direct=False,
+                    _timing_sink=otp_sinks[idx],
                 )
             )
         # Direct routes once only: foot/bicycle are time-independent, car congestion
@@ -103,11 +116,28 @@ class CachedTripHelper(TripHelper):
                 include_car=include_car,
                 max_transfers=max_transfers,
                 include_transit=False,
+                _timing_sink=direct_sink,
             )
         )
         results = await asyncio.gather(*tasks)
 
-        # Get max candidates from all results
+        # Map OTP sink results to pipeline record (positional: index 0/1/2 → P3A-2/4/6, P3A-3/5/7)
+        if _pipeline_rec is not None:
+            _otp_fields = [
+                ("P3A_2_ms", "P3A_3_ms"),
+                ("P3A_4_ms", "P3A_5_ms"),
+                ("P3A_6_ms", "P3A_7_ms"),
+            ]
+            for idx, sink in enumerate(otp_sinks):
+                if sink and idx < len(_otp_fields):
+                    sem_f, req_f = _otp_fields[idx]
+                    setattr(_pipeline_rec, sem_f, sink.get("sem_ms"))
+                    setattr(_pipeline_rec, req_f, sink.get("req_ms"))
+            if direct_sink:
+                _pipeline_rec.P3B_2_ms = direct_sink.get("osmnx_ms")
+
+        # Deduplication across all results
+        _t_dedup = _time.monotonic()
         bl = set()
         rs = []
         for plan in [plan for plans in results for plan in plans]:
@@ -116,6 +146,8 @@ class CachedTripHelper(TripHelper):
                 continue
             bl.add(code)
             rs.append(plan)
+        if _pipeline_rec is not None:
+            _pipeline_rec.P3B_3_ms = (_time.monotonic() - _t_dedup) * 1000
 
         itineraries = rs
         return itineraries
@@ -124,7 +156,8 @@ class CachedTripHelper(TripHelper):
                                origin: Location,
                                destination: Location,
                                departure_time: int,
-                               include_car: bool = False) -> list[TravelPlan]:
+                               include_car: bool = False,
+                               _pipeline_rec=None) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         recursion_search_depth = self.recursion_search_depth
         itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers)
@@ -194,8 +227,11 @@ class CachedTripHelper(TripHelper):
                               origin: Location,
                               destination: Location,
                               departure_time: int,
-                              include_car: bool = False
+                              include_car: bool = False,
+                              _pipeline_rec=None,
                               ) -> list[TravelPlan]:
+        import time as _time
+        _t_cache = _time.monotonic()
 
         grid_origin = self.world_grid.get_location_grid(origin)
         grid_destination = self.world_grid.get_location_grid(destination)
@@ -222,8 +258,12 @@ class CachedTripHelper(TripHelper):
         cache_hit = cache_hit and (key not in self.cache or len(self.cache[key]) < self.cache_size_per_grid)
         cache_hit = cache_hit and (bl_key not in self.blacklist)
 
+        if _pipeline_rec is not None:
+            _pipeline_rec.P3_1_ms = (_time.monotonic() - _t_cache) * 1000
+            _pipeline_rec.P3_cache_hit = cache_hit
+
         if not cache_hit:
-            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car)
+            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, _pipeline_rec=_pipeline_rec)
             if itineraries:
                 # identify each itinerary with a unique id
                 for it in itineraries:
@@ -243,6 +283,9 @@ class CachedTripHelper(TripHelper):
         else:
             self._stats_cache_hit = (self._stats_cache_hit[0] + 1, self._stats_cache_hit[1] + 1)
             # logger.debug(f"[CachedTripHelper]: Cache hit for key {key}, ratio: {self._stats_cache_hit[0] / self._stats_cache_hit[1]:.2f}")
+        _hits, _total = self._stats_cache_hit
+        if _total > 0:
+            TRIP_CACHE_HIT_RATIO.set(_hits / _total)
 
         # Dump cache if needed
         if self._stats_new_cache >= self._dump_cache_after:

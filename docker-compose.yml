@@ -3,12 +3,13 @@ x-shared-env: &shared-env
   OTP_ENDPOINTS: http://otp:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3
   OSMNX_ENDPOINTS: http://osmnx1:8090/route,http://osmnx2:8090/route,http://osmnx3:8090/route
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  TZ: Europe/Paris
 
 x-osmnx-service: &osmnx-service
   build:
     context: ./llm-agents
     dockerfile: Dockerfile
-  command: uvicorn osmnx_server:app --host 0.0.0.0 --port 8090
+  command: uvicorn osmnx_server:app --host 0.0.0.0 --port 8090 --log-level warning
   restart: "no"
   stop_grace_period: 5s
   volumes:
@@ -107,7 +108,7 @@ services:
     image: eclipse-temurin:21-jre-jammy
     ports:
       - "8080:8080"
-    mem_limit: 5g
+    mem_limit: 6g
     volumes:
       - ./otp-toulouse/bin:/otp/bin:ro
       - ./otp-toulouse/toulouse:/var/otp/toulouse:ro
@@ -123,7 +124,7 @@ services:
     image: eclipse-temurin:21-jre-jammy
     ports:
       - "8081:8080"
-    mem_limit: 5g
+    mem_limit: 6g
     volumes:
       - ./otp-toulouse/bin:/otp/bin:ro
       - ./otp-toulouse/toulouse:/var/otp/toulouse:ro
@@ -178,7 +179,7 @@ services:
     build:
       context: ./llm_module
       dockerfile: Dockerfile
-    command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload --log-level warning
     ports:
       - "8000:8000"
     env_file: ./.env
@@ -323,6 +324,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_LOG_LEVEL=warn
     volumes:
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources

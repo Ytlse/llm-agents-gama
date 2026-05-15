@@ -80,7 +80,7 @@ global {
 	string _cfg_ltm  <- first(_cfg_lines where (each index_of "long_term_memory_enabled:" = 0));
 	string _cfg_ltsr <- first(_cfg_lines where (each index_of "long_term_self_reflect_enabled:" = 0));
 
-	int population_size <- 9;
+	int population_size <- 100;
 	float part_of_llm_based_agents <- 1.0;
 	bool long_term_memory_enabled <- false;
 	bool long_term_self_reflect_enabled <- false;

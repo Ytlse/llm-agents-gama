@@ -19,7 +19,7 @@ import redis.asyncio as aioredis
 import redis as sync_redis
 
 from llm_module.settings.models import Task, TaskStatus
-from llm_module.tasks.config import settings
+from llm_module.tasks.llm_config import settings
 
 
 # ---------------------------------------------------------------------------
@@ -447,3 +447,19 @@ def increment_worker_error_by_type(provider: str, error_type: str) -> None:
     get_sync_redis().incrby(
         f"{WORKER_METRIC_PREFIX}llm_errors_by_type:{provider}:{error_type}", 1
     )
+
+
+# ---------------------------------------------------------------------------
+# Pub/Sub — notification de fin de tâche (latence ~10ms vs polling)
+# ---------------------------------------------------------------------------
+
+TASK_DONE_CHANNEL_PREFIX = "task_done:"
+
+
+def task_done_channel(task_id: str) -> str:
+    return f"{TASK_DONE_CHANNEL_PREFIX}{task_id}"
+
+
+def publish_task_done_sync(task_id: str, payload: str) -> None:
+    """Publie le JSON de la tâche terminée sur son channel dédié."""
+    get_sync_redis().publish(task_done_channel(task_id), payload)

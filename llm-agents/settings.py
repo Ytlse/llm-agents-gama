@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
 import shutil
 from loguru import logger
-from pydantic import BaseModel, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 
 import yaml
@@ -53,6 +53,64 @@ class WorkdirPathResolutionMixin:
                 if value is not None and not Path(value).is_absolute():
                     resolved_path = workdir / value
                     setattr(self, field_name, str(resolved_path))
+
+
+def _find_providers_yaml() -> Optional[Path]:
+    candidates = [
+        Path(base_dir) / ".." / "llm_module" / "config" / "providers.yaml",
+        Path("/opt/llm_module/config/providers.yaml"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.resolve()
+    return None
+
+
+class ProviderConfig(BaseModel):
+    api_key:           SecretStr = SecretStr("")
+    rpm_limit:         int
+    base_url:          str
+    default_model:     str
+    weight:            float = 1.0
+    batch_max_agents:  int   = 5
+    concurrency_limit: int   = 2
+    disable_timeout:   int   = 180
+    adapter:           str   = ""
+
+
+class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
+    model_config = SettingsConfigDict(env_nested_delimiter='__')
+
+    redis_url:                 str   = "redis://localhost:6379/0"
+    celery_broker_url:         str   = "redis://localhost:6379/1"
+    celery_result_backend:     str   = "redis://localhost:6379/2"
+    circuit_breaker_threshold: float = 0.95
+    max_retries:               int   = 50
+    backoff_base_seconds:      float = 1.0
+    batch_max_agents:          int   = 5
+    batch_delay_seconds:       float = 1.0
+
+    # Clés API lues depuis l'env : PROVIDER_KEYS__groq=gsk-...
+    provider_keys: Dict[str, SecretStr] = {}
+
+    # Construit après validation depuis providers.yaml + provider_keys
+    providers: Dict[str, ProviderConfig] = {}
+
+    @model_validator(mode="after")
+    def build_providers(self) -> "LlmConfig":
+        yaml_path = _find_providers_yaml()
+        if yaml_path is None:
+            return self
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f)
+        defaults = data.get("providers", {})
+        result = {}
+        for name, entry in defaults.items():
+            adapter_name = entry.get("adapter", name)
+            key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+            result[name] = ProviderConfig(api_key=key, **entry)
+        self.providers = result
+        return self
 
 
 class ServerConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -171,7 +229,7 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file"]
+    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file", "pipeline_log_file"]
 
     # Simulation history log (HistoryStreamLog)
     history_file_v2: str = "history_stream_log.jsonl"
@@ -183,6 +241,10 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     log_file: str = "app.log"
     log_level: str = "DEBUG"
 
+    # Pipeline timing CSV log (T0 → Fin, LLM agents only)
+    pipeline_log_enabled: bool = False
+    pipeline_log_file: str = "pipeline_timing.csv"
+
 
 class Settings(BaseSettings):
     app: AppConfig = AppConfig()
@@ -191,6 +253,7 @@ class Settings(BaseSettings):
     world: WorldConfig = WorldConfig()
     gtfs: GTFSConfig = GTFSConfig()
     agent: AgentConfig = AgentConfig()
+    llm: LlmConfig = LlmConfig()
 
     # Directory settings
     workdir: Path = Path.cwd()

@@ -16,7 +16,7 @@ from trip_helper.osmnx_direct import get_direct_plan
 from utils import random_uuid
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 import math
 import numpy as np
 
@@ -32,7 +32,12 @@ OTP_REQUESTS_ERR = Counter(
 OTP_REQUEST_LATENCY = Histogram(
     'otp_request_duration_seconds',
     'Durée des requêtes OTP réussies',
+    ['instance'],
     buckets=[0.1, 0.25, 0.5, 1, 2, 5, 10],
+)
+OTP_REQUESTS_INFLIGHT = Gauge(
+    'otp_requests_inflight',
+    'Requêtes OTP transit en cours (agents attendant la réponse OTP)',
 )
 
 
@@ -402,7 +407,8 @@ class OTPTripHelper(TripHelper):
                               search_window_m: int=30,
                               include_car: bool=False,
                               include_direct: bool=True,
-                              include_transit: bool=True) -> List[TravelPlan]:
+                              include_transit: bool=True,
+                              _timing_sink: dict | None = None) -> List[TravelPlan]:
         """
         Retrieve travel itineraries from OpenTripPlanner (OTP) and direct routes.
 
@@ -484,7 +490,8 @@ class OTPTripHelper(TripHelper):
                     response.raise_for_status()
                     result = await response.json()
                 OTP_REQUESTS_OK.inc()
-                OTP_REQUEST_LATENCY.observe(time.monotonic() - _t0)
+                _instance = otp_url.split("//")[-1].split("/")[0]
+                OTP_REQUEST_LATENCY.labels(instance=_instance).observe(time.monotonic() - _t0)
                 return result
             except asyncio.TimeoutError:
                 OTP_REQUESTS_ERR.labels(reason='timeout').inc()
@@ -515,32 +522,20 @@ class OTPTripHelper(TripHelper):
             else self._has_reachable_stop(destination.lon, destination.lat)
         )
 
-        _SLOW_THRESHOLD = 20.0
-
         async def _timed_otp(coro):
             t0 = time.monotonic()
             result = await coro
             d = time.monotonic() - t0
-            if d > _SLOW_THRESHOLD:
-                logger.warning(
-                    f"[otp] Slow transit query | "
-                    f"from=({origin.lon:.5f},{origin.lat:.5f}) "
-                    f"to=({destination.lon:.5f},{destination.lat:.5f}) "
-                    f"duration={d:.2f}s"
-                )
+            if _timing_sink is not None:
+                _timing_sink["transit_end"] = time.time()
             return result
 
         async def _timed_osmnx(coro, mode: str):
             t0 = time.monotonic()
             result = await coro
             d = time.monotonic() - t0
-            if d > _SLOW_THRESHOLD:
-                logger.warning(
-                    f"[osmnx] Slow direct plan | mode={mode} "
-                    f"from=({origin.lon:.5f},{origin.lat:.5f}) "
-                    f"to=({destination.lon:.5f},{destination.lat:.5f}) "
-                    f"duration={d:.2f}s"
-                )
+            if _timing_sink is not None:
+                _timing_sink["osmnx_end"] = max(_timing_sink.get("osmnx_end", 0), time.time())
             return result
 
         if include_transit:
@@ -551,8 +546,14 @@ class OTPTripHelper(TripHelper):
                 #     f"to=({destination.lon:.7f},{destination.lat:.7f})"
                 # )
                 async def _transit_semaphored():
-                    async with self._semaphore:
-                        return await make_request(transit_payload)
+                    OTP_REQUESTS_INFLIGHT.inc()
+                    try:
+                        async with self._semaphore:
+                            if _timing_sink is not None:
+                                _timing_sink["transit_sem_end"] = time.time()
+                            return await make_request(transit_payload)
+                    finally:
+                        OTP_REQUESTS_INFLIGHT.dec()
 
                 task_names.append("transit")
                 coros.append(_timed_otp(_transit_semaphored()))
@@ -567,14 +568,17 @@ class OTPTripHelper(TripHelper):
         if include_direct:
             task_names.append("foot")
             coros.append(_timed_osmnx(get_direct_plan(origin, destination, "foot",
-                                            int(departure_time), congestion_dt), "foot"))
+                                            int(departure_time), congestion_dt,
+                                            _timing_sink=_timing_sink), "foot"))
             task_names.append("bicycle")
             coros.append(_timed_osmnx(get_direct_plan(origin, destination, "bicycle",
-                                            int(departure_time), congestion_dt), "bicycle"))
+                                            int(departure_time), congestion_dt,
+                                            _timing_sink=_timing_sink), "bicycle"))
             if include_car:
                 task_names.append("car")
                 coros.append(_timed_osmnx(get_direct_plan(origin, destination, "car",
-                                             int(departure_time), congestion_dt), "car"))
+                                             int(departure_time), congestion_dt,
+                                             _timing_sink=_timing_sink), "car"))
 
         if not coros:
             return []

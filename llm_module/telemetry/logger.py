@@ -119,6 +119,6 @@ def log_llm_exchange(
 
     try:
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+            f.write(json.dumps(entry, ensure_ascii=False, default=str, indent=2) + "\n")
     except OSError as e:
         logger.warning(f"Impossible d'écrire dans {log_file}: {e}")

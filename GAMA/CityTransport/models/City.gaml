@@ -98,7 +98,7 @@ experiment e type: gui {
 
     // Simulation scenario parameters — sent to the Python controller at /init
     // Values are persisted to/from GAMA/CityTransport/config/sim_params.yaml
-    parameter "Population size" category: "Simulation" var: population_size min: 0 max: 10000;
+    parameter "Population size" category: "Simulation" var: population_size min: 0 max: 2000 step: 100;
     parameter "Part of LLM-based agents" category: "Simulation" var: part_of_llm_based_agents <-1.0 min: 0.0 max: 1.0;
     parameter "Long-term memory" category: "Simulation" var: long_term_memory_enabled <- false;
     parameter "Long-term self-reflection" category: "Simulation" var: long_term_self_reflect_enabled <- false;

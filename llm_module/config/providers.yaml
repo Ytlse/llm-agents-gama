@@ -109,7 +109,7 @@ providers:
     concurrency_limit: 3
     disable_timeout:   120
 
-  groq_openai:
+  groq_openai_120:
     adapter:           groq
     rpm_limit:         10
     base_url:          https://api.groq.com/openai/v1
@@ -118,3 +118,68 @@ providers:
     batch_max_agents:  1
     concurrency_limit: 3
     disable_timeout:   120
+
+  groq_openai_20:
+    adapter:           groq
+    rpm_limit:         10
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     openai/gpt-oss-20b
+    weight:            1.0
+    batch_max_agents:  1
+    concurrency_limit: 3
+    disable_timeout:   120
+
+
+  # ----  (DISABLED: `max_tokens` must be less than or equal to `512`). --- 
+  # groq_meta1:
+  #   adapter:           groq
+  #   rpm_limit:         10
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     meta-llama/llama-prompt-guard-2-22m
+  #   weight:            1.0
+  #   batch_max_agents:  1
+  #   concurrency_limit: 3
+  #   disable_timeout:   120
+
+  # ----  (DISABLED: `max_tokens` must be less than or equal to `512`). --- 
+  # groq_meta2:
+  #   adapter:           groq
+  #   rpm_limit:         10
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     meta-llama/llama-prompt-guard-2-86m
+  #   weight:            1.0
+  #   batch_max_agents:  1
+  #   concurrency_limit: 3
+  #   disable_timeout:   120
+
+  # Error parsing
+  # groq_allam:
+  #   adapter:           groq
+  #   rpm_limit:         15
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     allam-2-7b
+  #   weight:            1.0
+  #   batch_max_agents:  1
+  #   concurrency_limit: 3
+  #   disable_timeout:   120
+
+  cerebras_llama31_8b:
+    adapter:           cerebras
+    rpm_limit:         30
+    base_url:          https://api.cerebras.ai/v1
+    default_model:     llama3.1-8b
+    weight:            1.0
+    batch_max_agents:  4
+    concurrency_limit: 4
+    disable_timeout:   120
+
+  cerebras_qwen3:
+    adapter:           cerebras
+    rpm_limit:         1
+    base_url:          https://api.cerebras.ai/v1
+    default_model:     qwen-3-235b-a22b-instruct-2507
+    weight:            1.0
+    batch_max_agents:  1
+    concurrency_limit: 1
+    disable_timeout:   120
+

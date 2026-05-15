@@ -68,17 +68,17 @@ class BaseAdapter(ABC):
 
     def _resolve_model(self, request: InternalRequest) -> str:
         """Retourne le modèle spécifié ou le défaut du provider."""
-        from llm_module.tasks.config import settings
+        from llm_module.tasks.llm_config import settings
         if request.model:
             return request.model
         return settings.providers[self._instance_name].default_model
 
     def _get_api_key(self) -> str:
-        from llm_module.tasks.config import settings
+        from llm_module.tasks.llm_config import settings
         return settings.providers[self._instance_name].api_key
 
     def _get_base_url(self) -> str:
-        from llm_module.tasks.config import settings
+        from llm_module.tasks.llm_config import settings
         return settings.providers[self._instance_name].base_url
 
     def _parse_output(self, raw: str) -> LLMOutput:
@@ -116,16 +116,25 @@ class BaseAdapter(ABC):
             raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
 
         # Step 2 — extract "agents" list
-        if "agents" not in data:
+        agents_raw = None
+        if "agents" in data:
+            agents_raw = data["agents"]
+        else:
+            # Fallback : on cherche la première clé qui contient une liste
+            for k, v in data.items():
+                if isinstance(v, list):
+                    agents_raw = v
+                    break
+                    
+        if agents_raw is None:
             _base_logger.warning(
-                f"_parse_output FAILED: missing 'agents' key | provider={provider} "
+                f"_parse_output FAILED: missing 'agents' key (et aucune liste alternative trouvée) | provider={provider} "
                 f"top_level_keys={list(data.keys())} raw_preview={raw[:500]!r}"
             )
             raise ProviderParseError(
                 provider, raw,
                 f"KeyError: 'agents' absent, clés présentes: {list(data.keys())}"
             )
-        agents_raw = data["agents"]
         if not isinstance(agents_raw, list):
             _base_logger.warning(
                 f"_parse_output FAILED: 'agents' is not a list | provider={provider} "
@@ -257,7 +266,7 @@ def get_adapter(provider_name: str) -> BaseAdapter:
     Raises:
         KeyError si le fournisseur n'est pas enregistré.
     """
-    from llm_module.tasks.config import settings
+    from llm_module.tasks.llm_config import settings
 
     # Résolution de la classe : champ `adapter` ou nom du provider directement
     cfg = settings.providers.get(provider_name)
@@ -287,6 +296,7 @@ def _load_adapters() -> None:
         "google":   "llm_module.adapters.google_adapter",
         "mistral":  "llm_module.adapters.mistral_adapter",
         "groq":     "llm_module.adapters.groq_adapter",
+        "cerebras": "llm_module.adapters.cerebras_adapter",
     }
 
     for name, module_path in _known_adapters.items():

@@ -162,13 +162,21 @@ class WorldPopulation:
         if os.path.exists(file_name):
             logger.info(f"Loading population from {file_name}")
             with open(file_name, "r", encoding="utf-8") as f:
-                people = json.load(f)
-                all_people = [Person.model_validate(p) for p in people]
-                filtered = [p for p in all_people if self._is_within_bbox(p, world_bbox)]
-                excluded = len(all_people) - len(filtered)
+                data = json.load(f)
+            if data and "name" not in data[0].get("identity", {}):
+                # Eqasim format written by _prepare_population
+                from inputs.population.eqasim_loader import EqasimJSONPopulationLoader
+                all_people = EqasimJSONPopulationLoader().load_population_from_data(
+                    data, max_size=settings.data.population_size, bbox=world_bbox,
+                )
+            else:
+                # Legacy Pydantic format
+                all_people = [Person.model_validate(p) for p in data]
+                all_people = [p for p in all_people if self._is_within_bbox(p, world_bbox)]
+                excluded = len(data) - len(all_people)
                 if excluded > 0:
                     logger.warning(f"{excluded} agent(s) excluded from cache: home outside world bbox")
-                self.people = {p.person_id: p for p in filtered}
+            self.people = {p.person_id: p for p in all_people}
             return
         
         people = self.population_loader.load_population(

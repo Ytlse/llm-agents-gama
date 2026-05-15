@@ -24,6 +24,7 @@ from settings import settings
 from typing import Dict, Any
 from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
+from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from llama_index.core.llms import ChatMessage, ChatResponse
 import time
 from world.population import PersonScheduler
@@ -265,7 +266,13 @@ class LlmAgent:
 
         history = []
         if settings.agent.long_term_memory_enabled:
+            _pl = PipelineLogger.get()
+            _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
+            if _rec is not None:
+                _rec.T_ltm_start = time.time()
             history = await self.query_past_experiences_for_travel(context, options)
+            if _rec is not None:
+                _rec.T_ltm_end = time.time()
 
         # Utilisation d'une compréhension de liste pour la performance et la clarté
         trajectories = [
@@ -309,9 +316,23 @@ class LlmAgent:
         random.shuffle(shuffled_options)
         payload = await self.build_travel_plan_payload(context, shuffled_options, destination)
 
+        _pl = PipelineLogger.get()
+        _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
+
         try:
+            if _rec is not None:
+                _rec.T_llm_start = time.time()
             response_data = await self.llm_client.execute_async(payload)
+            _t_after_llm = time.time()
             provider_used = response_data.get("provider_used", "")
+
+            if _rec is not None:
+                _post_ms = response_data.get("_post_ms") or 0
+                _rec.T_llm_sent = _rec.T_llm_start + _post_ms / 1000
+                _rec.T_llm_result = _t_after_llm
+                _timing_p5 = response_data.get("timing_p5")
+                if _timing_p5 and _pl is not None:
+                    _pl.apply_timing_p5(context.person.person_id, _timing_p5)
 
             if response_data.get("status") == "success" and response_data.get("result"):
                 agent_result = response_data["result"][0]
@@ -319,7 +340,7 @@ class LlmAgent:
 
                 # L'index retourné par Structured Output correspond à la position dans shuffled_options
                 if isinstance(index, int) and 0 <= index < len(shuffled_options):
-                    reason = agent_result.get("reason", "Pas de justification fournie.")
+                    reason = agent_result.get("reason") or "Pas de justification fournie."
 
                     # Normalisation de la raison (alignement avec aplan_trip_old)
                     if "is chosen because it" in reason:
@@ -331,8 +352,14 @@ class LlmAgent:
                     stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> chosen by gateway LLM.\n{plan_summary}\nReasoning: {reason}"
                     self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
 
+                    original_index = options.index(chosen_plan)
+                    if _rec is not None:
+                        _rec.T_extract_end = time.time()
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
-                    return options.index(chosen_plan), reason, provider_used
+                    return original_index, reason, provider_used
+
+                if _rec is not None:
+                    _rec.T_extract_end = time.time()
 
             error_msg = response_data.get("error", "Format de réponse invalide ou timeout.")
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")

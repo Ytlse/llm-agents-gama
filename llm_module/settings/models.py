@@ -69,6 +69,8 @@ class Task(BaseModel):
     latency_ms: Optional[float] = None
     tokens_in: Optional[int] = None
     tokens_out: Optional[int] = None
+    # Pipeline timing segments measured inside the worker (P4_4, P5_1, P5_3, P5_4, P5_5)
+    timing_p5: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +110,7 @@ class TaskStatusResponse(BaseModel):
     # Métriques exposées au client (utile pour debug / monitoring)
     provider_used: Optional[str] = None
     latency_ms: Optional[float] = None
+    timing_p5: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------

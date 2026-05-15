@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import httpx
 from loguru import logger
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 TASKS_IN_PROGRESS = Gauge('llm_tasks_in_progress', 'Number of tasks currently in progress')
 TASKS_SENT = Counter('llm_tasks_sent_total', 'Total number of tasks sent')
@@ -13,6 +13,12 @@ TASKS_RESPONSES_SUCCESS = Counter('llm_tasks_responses_success_total', 'Total nu
 TASKS_RESPONSES_FAILURE = Counter('llm_tasks_responses_failure_total', 'Total number of failed task responses')
 MODE_CHOSEN = Counter('llm_mode_chosen_total', 'Distribution of chosen modes', ['mode'])
 INDEX_CHOSEN = Counter('llm_index_chosen_total', 'Distribution of chosen plan indices', ['index'])
+LLM_TASK_E2E_DURATION = Histogram(
+    'llm_task_e2e_duration_seconds',
+    'Durée totale POST /tasks → réponse finale (côté controller), par catégorie',
+    ['category'],
+    buckets=[1, 2, 5, 10, 30, 60, 120],
+)
 
 
 class LLMClient:
@@ -129,12 +135,12 @@ class LLMClient:
         """
         import asyncio
         category = payload.get("category", "unknown")
-        agents_count = len(payload.get("agents", []))
 
-        _TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError)
+        _TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, httpx.ReadTimeout)
 
         TASKS_SENT.inc()
         TASKS_IN_PROGRESS.inc()
+        _e2e_start = time.monotonic()
         try:
             # Submit task — retry up to 3 times on transient network errors
             task_id: str | None = None
@@ -164,56 +170,65 @@ class LLMClient:
                     )
                     await asyncio.sleep(wait)
 
-            # Poll for result — fresh client avoids stale keep-alive connections
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            _post_ms = (time.monotonic() - _e2e_start) * 1000
+
+            # Wait for result via long-poll (Redis Pub/Sub server-side, ~10ms latency)
+            http_timeout = httpx.Timeout(self.poll_timeout + 30)
+            async with httpx.AsyncClient(timeout=http_timeout) as client:
                 poll_start = time.monotonic()
-                deadline = poll_start + self.poll_timeout
-                _last_status_log = poll_start
-                while time.monotonic() < deadline:
-                    try:
-                        resp = await client.get(f"{self.base_url}/tasks/{task_id}")
-                    except _TRANSIENT:
-                        await asyncio.sleep(self.poll_interval)
-                        continue
-                    data = resp.json()
-                    if data["status"] in ("success", "failed"):
-                        wait_s = time.monotonic() - poll_start
-                        self.log_dialogue(payload, data)
-                        TASKS_RESPONSES.inc()
-                        if data.get("status") == "success" and data.get("result"):
-                            TASKS_RESPONSES_SUCCESS.inc()
-                            results = data.get("result", [])
-                            for agent in results:
-                                mode = agent.get("mode")
-                                if mode:
-                                    MODE_CHOSEN.labels(mode=mode).inc()
-                                chosen_index = agent.get("chosen_index")
-                                if chosen_index is not None:
-                                    INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
-                        else:
-                            TASKS_RESPONSES_FAILURE.inc()
-                            error_detail = data.get("error", "No error detail")
-                            logger.error(
-                                f"Task failed | task_id={task_id} category={category} "
-                                f"wait={wait_s:.1f}s error={error_detail}"
-                            )
-                        return data
-                    # Log a waiting heartbeat every 30s so we can see the task is alive
-                    now = time.monotonic()
-                    if now - _last_status_log >= 30.0:
-                        waited = now - poll_start
+
+                async def _heartbeat():
+                    while True:
+                        await asyncio.sleep(30.0)
                         logger.warning(
                             f"Task still pending | task_id={task_id} category={category} "
-                            f"waited={waited:.0f}s task_status={data.get('status')} "
-                            f"provider={data.get('provider_used', 'unassigned')}"
+                            f"waited={time.monotonic() - poll_start:.0f}s"
                         )
-                        _last_status_log = now
-                    await asyncio.sleep(self.poll_interval)
+
+                heartbeat = asyncio.create_task(_heartbeat())
+                try:
+                    try:
+                        resp = await client.get(
+                            f"{self.base_url}/tasks/{task_id}/wait",
+                            params={"timeout": self.poll_timeout},
+                        )
+                    except _TRANSIENT as e:
+                        logger.error(f"LLM gateway wait request failed | task_id={task_id} error={e}")
+                        return {"status": "timeout", "error": "Timeout expiré"}
+                finally:
+                    heartbeat.cancel()
+
+                _wait_ms = (time.monotonic() - poll_start) * 1000
+                data = resp.json()
+
+                if data["status"] in ("success", "failed"):
+                    self.log_dialogue(payload, data)
+                    TASKS_RESPONSES.inc()
+                    LLM_TASK_E2E_DURATION.labels(category=category).observe(time.monotonic() - _e2e_start)
+                    if data.get("status") == "success" and data.get("result"):
+                        TASKS_RESPONSES_SUCCESS.inc()
+                        for agent in data.get("result", []):
+                            mode = agent.get("mode")
+                            if mode:
+                                MODE_CHOSEN.labels(mode=mode).inc()
+                            chosen_index = agent.get("chosen_index")
+                            if chosen_index is not None:
+                                INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
+                    else:
+                        TASKS_RESPONSES_FAILURE.inc()
+                        logger.error(
+                            f"Task failed | task_id={task_id} category={category} "
+                            f"wait={_wait_ms/1000:.1f}s error={data.get('error', 'No error detail')}"
+                        )
+                    data["_post_ms"] = round(_post_ms, 2)
+                    data["_wait_ms"] = round(_wait_ms, 2)
+                    return data
+
                 TASKS_RESPONSES_FAILURE.inc()
-                waited = time.monotonic() - poll_start
+                LLM_TASK_E2E_DURATION.labels(category=category).observe(time.monotonic() - _e2e_start)
                 logger.warning(
                     f"Task timed out | task_id={task_id} category={category} "
-                    f"waited={waited:.0f}s timeout={self.poll_timeout}s"
+                    f"waited={_wait_ms/1000:.0f}s timeout={self.poll_timeout}s"
                 )
                 return {"status": "timeout", "error": "Timeout expiré"}
         finally:

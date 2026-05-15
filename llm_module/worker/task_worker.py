@@ -22,7 +22,7 @@ from datetime import datetime
 
 from celery import Celery
 
-from llm_module.tasks.config import settings
+from llm_module.tasks.llm_config import settings
 from llm_module.settings.models import InternalRequest, Task, TaskStatus
 from llm_module.adapters.base import (
     ProviderClientError,
@@ -31,7 +31,6 @@ from llm_module.adapters.base import (
     get_adapter,
 )
 from llm_module.broker.redis_broker import (
-    get_task_sync,
     save_task_sync,
     mark_cooldown,
     pop_tasks_from_batch_sync,
@@ -46,6 +45,7 @@ from llm_module.broker.redis_broker import (
     decrement_rpm,
     increment_active_worker,
     decrement_active_worker,
+    publish_task_done_sync,
 )
 from llm_module.load_balancer.router import load_balancer
 from llm_module.prompts.manager import prompt_manager
@@ -87,24 +87,26 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
     Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
     """
-    # Sélectionner le provider en premier pour utiliser sa limite de batch.
-    # Si tous les providers sont saturés, RuntimeError est levée ici, avant
-    # de dépiler les tâches (elles restent en file pour le prochain retry).
-    try:
-        provider_name = load_balancer.select_provider(force=force_provider)
-    except RuntimeError as e:
-        delay = 5.0
-        # logger.warning(
-        #     f"Fournisseurs saturés ou en cooldown, retry planifié | "
-        #     f"task_id={batch_key} retry_in={delay:.1f}s attempt={self.request.retries + 1}"
-        # )
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=e, countdown=delay)
-        else:
-            tasks = pop_tasks_from_batch_sync(batch_key, 100)
-            for t in tasks:
-                _fail_task(t, f"Max retries ({self.max_retries}) dépassé : Tous les fournisseurs sont saturés ou en cooldown.")
-        return
+    # Attendre un slot provider en boucle locale plutôt que via self.retry().
+    # self.retry() crée un nouveau message Celery + round-trips Redis à chaque tentative ;
+    # un simple time.sleep() dans le même worker est bien moins coûteux.
+    _MAX_PROVIDER_WAIT_SECS = 60
+    _PROVIDER_POLL_SECS = 2.0
+    deadline = time.monotonic() + _MAX_PROVIDER_WAIT_SECS
+    provider_name: str | None = None
+    _p5_provider_wait_start = time.monotonic()
+    while True:
+        try:
+            provider_name = load_balancer.select_provider(force=force_provider)
+            break
+        except RuntimeError:
+            if time.monotonic() >= deadline:
+                tasks = pop_tasks_from_batch_sync(batch_key, 100)
+                for t in tasks:
+                    _fail_task(t, f"Providers saturés ou indisponibles après {_MAX_PROVIDER_WAIT_SECS}s")
+                return
+            time.sleep(_PROVIDER_POLL_SECS)
+    _p5_provider_wait_ms = (time.monotonic() - _p5_provider_wait_start) * 1000
 
     # ------------------------------------------------------------------
     # Début du tracking d'occupation du provider
@@ -136,7 +138,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
         batch_id = f"batch_{tasks[0].task_id[:8]}_{len(tasks)}"
     
         try:
-            _execute_batch(tasks, batch_id, provider_name)
+            _execute_batch(tasks, batch_id, provider_name, _p5_provider_wait_ms, self.request.retries)
     
         except ProviderServerError as e:
             # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
@@ -176,23 +178,9 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
                     _fail_task(t, str(e))
     
         except RuntimeError as e:
-            if "Tous les fournisseurs" in str(e) or "indisponible" in str(e):
-                # Tous les LLM sont bloqués : on attend 5s par retry
-                delay = 5.0
-                logger.warning(
-                    f"Fournisseurs saturés ou en cooldown, retry planifié | "
-                    f"task_id={batch_id} retry_in={delay:.1f}s attempt={self.request.retries + 1}"
-                )
-                if self.request.retries < self.max_retries:
-                    requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
-                    raise self.retry(exc=e, countdown=delay)
-                else:
-                    for t in tasks:
-                        _fail_task(t, f"Max retries dépassé({self.max_retries}) : Tous les fournisseurs indisponibles.")
-            else:
-                logger.exception(f"RuntimeError inattendue dans le worker | task_id={batch_id}")
-                for t in tasks:
-                    _fail_task(t, f"RuntimeError interne : {str(e)}")
+            logger.exception(f"RuntimeError inattendue dans le worker | task_id={batch_id}")
+            for t in tasks:
+                _fail_task(t, f"RuntimeError interne : {str(e)}")
     
         except ProviderParseError as e:
             logger.exception(
@@ -222,19 +210,21 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
 # Logique métier
 # ---------------------------------------------------------------------------
 
-def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str) -> None:
+def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_provider_wait_ms: float = 0.0, retries: int = 0) -> None:
     base_req = tasks[0].request
     merged_agents = []
     for t in tasks:
         merged_agents.extend(t.request.agents)
 
     # 2. Construction du prompt
+    _t_prompt = time.monotonic()
     messages = prompt_manager.render(
         category=base_req.category,
         agents=merged_agents,
         parameters=base_req.parameters,
     )
     schema = prompt_manager.get_output_schema(base_req.category)
+    p5_prompt_ms = (time.monotonic() - _t_prompt) * 1000
 
     # 3. Assemblage de la requête interne
     internal_req = InternalRequest(
@@ -298,6 +288,7 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str) -> None
     #logger.debug(f"LLM output reçu | agents_count={len(llm_output.agents)}")
 
     latency_ms = (time.monotonic() - start_ts) * 1000
+    p5_llm_ms = latency_ms
 
     # Métriques: appel réussi + batching (agents reçus → 1 prompt envoyé)
     increment_worker_metric(f"llm_calls_ok_total:{provider_name}")
@@ -332,6 +323,8 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str) -> None
     )
 
     # 7. Démultiplexage et Persistance des résultats
+    # P5_5: demux computation time (dict build + result extraction, before Redis saves)
+    _t_demux = time.monotonic()
     results_by_agent = {}
     for a in llm_output.agents:
         aid = a.get("agent_id") if isinstance(a, dict) else getattr(a, "agent_id", None)
@@ -342,18 +335,42 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str) -> None
     base_in,  rem_in  = divmod(tokens_in,  n)
     base_out, rem_out = divmod(tokens_out, n)
 
+    # Build per-task results before saves so P5_5 is measured once
+    task_bundles = []
     for i, t in enumerate(tasks):
         t_agent_ids = [a.agent_id for a in t.request.agents]
-        t_results = [results_by_agent[aid] for aid in t_agent_ids if aid in results_by_agent]
+        t_results   = [results_by_agent[aid] for aid in t_agent_ids if aid in results_by_agent]
+        t_tokens_in  = base_in  + (rem_in  if i == n - 1 else 0)
+        t_tokens_out = base_out + (rem_out if i == n - 1 else 0)
+        task_bundles.append((t, t_results, t_tokens_in, t_tokens_out))
+
+    p5_5_ms = (time.monotonic() - _t_demux) * 1000
+
+    for t, t_results, t_tokens_in, t_tokens_out in task_bundles:
+        # P4_4: micro-batch wait = elapsed since task creation minus all worker phases
+        elapsed_since_create = (time.monotonic() - t.created_at.timestamp()) * 1000
+        p4_4_ms = max(0.0, elapsed_since_create - p5_provider_wait_ms - p5_prompt_ms - p5_llm_ms - p5_5_ms)
 
         t.status        = TaskStatus.SUCCESS
         t.result        = t_results
         t.provider_used = provider_name
         t.latency_ms    = latency_ms
-        t.tokens_in     = base_in  + (rem_in  if i == n - 1 else 0)
-        t.tokens_out    = base_out + (rem_out if i == n - 1 else 0)
+        t.tokens_in     = t_tokens_in
+        t.tokens_out    = t_tokens_out
         t.updated_at    = datetime.utcnow()
+        t.timing_p5     = {
+            "P4_4_ms":    round(p4_4_ms, 2),
+            "P5_1_ms":    round(p5_provider_wait_ms, 2),
+            "P5_3_ms":    round(p5_prompt_ms, 2),
+            "P5_4_ms":    round(p5_llm_ms, 2),
+            "P5_5_ms":    round(p5_5_ms, 2),
+            "provider":   provider_name,
+            "retries":    retries,
+            "tokens_in":  t_tokens_in,
+            "tokens_out": t_tokens_out,
+        }
         save_task_sync(t)
+        publish_task_done_sync(t.task_id, t.model_dump_json())
 
     logger.info(
         f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
@@ -366,6 +383,7 @@ def _fail_task(task: Task, error_msg: str) -> None:
     task.error      = error_msg
     task.updated_at = datetime.utcnow()
     save_task_sync(task)
+    publish_task_done_sync(task.task_id, task.model_dump_json())
     logger.error(f"Tâche échouée | task_id={task.task_id} error={error_msg}")
 
 

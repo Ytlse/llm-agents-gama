@@ -28,8 +28,9 @@ from world.population import WorldPopulation
 from world.world_data import WorldModel
 from settings import settings
 
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 from urban_mobility_agents.utils.move_logger import MoveLogger
+from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 
 history_logger = HistoryStreamLog.get_instance()
 
@@ -39,6 +40,22 @@ ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
 PLANNING_LATE = Counter('controller_planning_late_total', 'Agents dont la date de départ était déjà passée lors de la planification')
 ITINERARY_100_COMPLETION = Gauge('agent_itinerary_100_completion_seconds', 'Durée réelle (secondes) pour traiter 100 itinéraires réussis consécutifs')
 BOOTSTRAP_DURATION = Gauge('agent_bootstrap_duration_seconds', 'Durée réelle (secondes) du bootstrap_all_agents (calcul initial des itinéraires au /init)')
+
+# Métriques goulots d'étranglement
+AGENT_SCHEDULING_LAG = Histogram(
+    'agent_scheduling_lag_seconds',
+    'δ entre scheduled_start_time et envoi de l\'action à GAMA (positif = en retard)',
+    buckets=[10, 60, 300, 1800, float('inf')],
+)
+CONTROLLER_SCHEDULING_IN_PROGRESS = Gauge(
+    'controller_scheduling_in_progress',
+    'Nombre d\'agents en attente de décision LLM (scheduling_in_progress=True)',
+)
+AGENT_LATE_DEPARTURE = Histogram(
+    'agent_late_departure_seconds',
+    'Retard des agents (sim_time - scheduled_start_time) lors du skip d\'activité',
+    buckets=[60, 300, 1800, 7200, float('inf')],
+)
 
 
 def _estimate_fallback_duration(origin, destination) -> int:
@@ -120,7 +137,7 @@ class SimulationLoopV1(BaseScenario):
     def world_bbox(self) -> BBox:
         return self.model.bbox
 
-    async def sync(self, timestamp: int, idle_people: list[WorldSyncIdlePeople] = None):
+    async def sync(self, timestamp: int, idle_people: list[WorldSyncIdlePeople] = None, _t_sync: float | None = None, _t_parse: float | None = None):
         _sync_start = time.monotonic()
         all_people = self.population.get_people_list()
         currently_idle = [p for p in all_people if p.state.heading_to is None]
@@ -168,7 +185,7 @@ class SimulationLoopV1(BaseScenario):
 
         # --- Phase 3 : scheduling (toujours fire-and-forget) ---
         # Le bootstrap initial est géré dans /init, pas ici.
-        _task = asyncio.create_task(self.schedule_person_move(timestamp=timestamp))
+        _task = asyncio.create_task(self.schedule_person_move(timestamp=timestamp, _t_sync=_t_sync, _t_parse=_t_parse))
         _task.add_done_callback(
             lambda t: logger.error(f"[schedule_move] task error: {t.exception()}") if not t.cancelled() and t.exception() else None
         )
@@ -347,60 +364,57 @@ class SimulationLoopV1(BaseScenario):
         BOOTSTRAP_DURATION.set(_bootstrap_duration)
         logger.info(f"[bootstrap] done — {total} itineraries computed in {_bootstrap_duration:.2f}s")
 
-    async def schedule_person_move(self, timestamp: int):
+    async def schedule_person_move(self, timestamp: int, _t_sync: float | None = None, _t_parse: float | None = None):
         all_people = self.population.get_people_list()
 
         # Step 1: filter and flag synchronously — no await before the flag,
         # so no two sync() calls can double-schedule the same agent.
-        _flag_start = time.monotonic()
         _, _time24h = to_24h_timestamp_full(timestamp)
         eligible: list[tuple[Person, Activity]] = []
+        _pre_schedule = max(settings.agent.pre_schedule_duration, 0)
         for person in all_people:
             if person.state.heading_to is not None or person.state.scheduling_in_progress:
                 continue
-            sched = self.population.get_person_default_scheduler(person)
-            next_act = sched.next_activity(timestamp)
 
-            # Advance past any activities whose scheduled departure has already passed.
-            # next_activity() uses a circular sort and does not track last_activity_index,
-            # so we bound the loop to avoid cycling indefinitely on the same activity.
-            _seen = set()
-            while next_act is not None and next_act.scheduled_start_time < _time24h:
-                if id(next_act) in _seen:
-                    next_act = None  # all remaining activities are in the past
-                    break
-                _seen.add(id(next_act))
-                self._late_count += 1
-                PLANNING_LATE.inc()
-                _late_s = _time24h - next_act.scheduled_start_time
-                logger.warning(
-                    f"[schedule_move] LATE — skipping | person={person.person_id} "
-                    f"activity={next_act.purpose} "
-                    f"scheduled={humanize_time(next_act.scheduled_start_time)} "
-                    f"sim_time={humanize_time(_time24h)} "
-                    f"late={humanize_duration(_late_s)}"
-                )
-                sched.start_on_activity(next_act)
-                sched.finish_activity()
-                next_act = sched.next_activity(timestamp)
-
-            if next_act is None:
+            # Circular 24h look-ahead: always find the nearest activity within the next 24h.
+            # Activities repeat daily so there is always a result (no last_activity_index
+            # filtering). The +86400 modulus naturally handles cross-midnight wraps and
+            # daily recurrence without any index reset.
+            moved_activities = [
+                act for act in person.identity.activities
+                if act.start_time is not None and act.start_time >= 0
+            ]
+            if not moved_activities:
                 continue
+            for act in moved_activities:
+                if act.scheduled_start_time is None or act.scheduled_start_time < 0:
+                    act.scheduled_start_time = act.start_time - _pre_schedule
+            ordered = sorted(moved_activities, key=lambda a: (int(a.start_time) - _time24h) % 86400)
+            next_act = ordered[0]
+
             person.state.scheduling_in_progress = True
             person.state.scheduling_started_at = _time24h
             eligible.append((person, next_act))
-        _flag_duration = time.monotonic() - _flag_start
+        _t_flag = time.time()
 
         if not eligible:
             return
 
         # Most urgent departures first
-        eligible.sort(key=lambda x: x[1].scheduled_start_time)
+        eligible.sort(key=lambda x: x[1].start_time)
+
+        # Pipeline timing: begin a record for each eligible LLM agent
+        _pl = PipelineLogger.get()
+        if _pl is not None:
+            for person, _ in eligible:
+                if person.is_llm_based:
+                    _pl.begin(person.person_id, timestamp, t0=_t_sync, t_parse=_t_parse, t_flag=_t_flag)
 
         in_progress_count = sum(1 for p in all_people if p.state.scheduling_in_progress)
+        CONTROLLER_SCHEDULING_IN_PROGRESS.set(in_progress_count)
         logger.info(
             f"[schedule_move] START sim_time={humanize_date(timestamp)} "
-            f"eligible={len(eligible)} flag_duration={_flag_duration*1000:.1f}ms "
+            f"eligible={len(eligible)} "
             f"scheduling_in_progress={in_progress_count}"
         )
 
@@ -415,12 +429,33 @@ class SimulationLoopV1(BaseScenario):
                 )
 
     async def _schedule_one(self, person: Person, next_activity: Activity, timestamp: int):
+        _pl = PipelineLogger.get()
+        _pipeline_rec = _pl.get_record(person.person_id) if _pl is not None else None
         try:
             PROCESS_PERSON_CALLS.inc()
-            move, _ = await self._compute_move_for_activity(person, next_activity, timestamp)
+            move, _ = await self._compute_move_for_activity(person, next_activity, timestamp, _pipeline_rec=_pipeline_rec)
+
+            # LATE check: warn if the planned departure (already +86400-corrected in
+            # expected_arrive_at) is in the past when the OTP/LLM response arrives.
+            # Using move.expected_arrive_at avoids false positives for tomorrow's activities
+            # that were correctly scheduled with actual_departure_time += 86400.
+            if move and move.expected_arrive_at < timestamp:
+                _, _time24h = to_24h_timestamp_full(timestamp)
+                _late_s = timestamp - move.expected_arrive_at
+                self._late_count += 1
+                PLANNING_LATE.inc()
+                AGENT_LATE_DEPARTURE.observe(_late_s)
+                logger.warning(
+                    f"[schedule_move] LATE — response after departure | "
+                    f"person={person.person_id} activity={next_activity.purpose} "
+                    f"scheduled={humanize_time(next_activity.start_time)} "
+                    f"sim_time={humanize_time(_time24h)} late={humanize_duration(_late_s)}"
+                )
 
             if move:
                 ACTIONS_CREATED.inc()
+                _, _send_time24h = to_24h_timestamp_full(timestamp)
+                AGENT_SCHEDULING_LAG.observe(_send_time24h - next_activity.start_time)
                 self._itinerary_success_count += 1
                 if self._itinerary_success_count >= 100:
                     ITINERARY_100_COMPLETION.set(time.monotonic() - self._itinerary_window_start)
@@ -430,6 +465,8 @@ class SimulationLoopV1(BaseScenario):
                     person_id=person.person_id,
                     action=move.model_dump(exclude_none=False)
                 ))
+                if _pl is not None and person.is_llm_based:
+                    _pl.mark_enqueued(person.person_id)
                 # logger.info(
                 #     f"[schedule_move] person={person.person_id} action_queued "
                 #     f"sim_time={humanize_date(timestamp)} "
@@ -453,6 +490,7 @@ class SimulationLoopV1(BaseScenario):
         person: Person,
         next_activity: Activity,
         timestamp: int,
+        _pipeline_rec=None,
     ) -> Tuple[Optional[PersonMove], Optional[str]]:
         # logger.info(
         #     f"[schedule_move] person={person.person_id} "
@@ -469,6 +507,8 @@ class SimulationLoopV1(BaseScenario):
             target_24h_timestamp=next_activity.start_time,
             based_on=timestamp,
         )
+        if actual_departure_time < timestamp:
+            actual_departure_time += 86400  # activity is tomorrow's occurrence
         include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
 
         same_location = (
@@ -479,12 +519,23 @@ class SimulationLoopV1(BaseScenario):
         if same_location:
             itineraries = []
         else:
+            _timing_sink: dict | None = {} if _pipeline_rec is not None else None
+            if _pipeline_rec is not None:
+                _pipeline_rec.T_otp_start = time.time()
             itineraries = await self.trip_helper.get_itineraries(
                 origin=from_location,
                 destination=next_activity.location,
                 departure_time=actual_departure_time,
-                include_car=include_car
+                include_car=include_car,
+                _timing_sink=_timing_sink,
             )
+            if _pipeline_rec is not None:
+                _pipeline_rec.T_otp_end = time.time()
+                if _timing_sink:
+                    _pipeline_rec.T_transit_sem = _timing_sink.get("transit_sem_end")
+                    _pipeline_rec.T_transit_end = _timing_sink.get("transit_end")
+                    _pipeline_rec.T_osmnx_sem   = _timing_sink.get("osmnx_sem_end")
+                    _pipeline_rec.T_osmnx_end   = _timing_sink.get("osmnx_end")
         # Populate purpose
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
@@ -578,16 +629,17 @@ class SimulationLoopV1(BaseScenario):
             id=random_uuid(),
             person_id=person.person_id,
             current_time=timestamp,
-            expected_arrive_at=to_timestamp_based_on_day(
-                target_24h_timestamp=next_activity.start_time,
-                based_on=timestamp,
-            ),
+            expected_arrive_at=actual_departure_time,
             prepare_before_seconds=0,
             purpose=next_activity.purpose,
             target_location=next_activity.location,
             for_activity=next_activity,
             plan=plan,
         )
+
+        if _pipeline_rec is not None:
+            _pipeline_rec.plan_selected_index = plan_index
+            _pipeline_rec.selection_method = selection_method
 
         await MoveLogger.get_instance().log_move(
             person=person,

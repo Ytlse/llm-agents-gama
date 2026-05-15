@@ -16,7 +16,7 @@ from __future__ import annotations
 import threading
 from typing import Dict, List, Optional
 
-from llm_module.tasks.config import settings
+from llm_module.tasks.llm_config import settings
 from llm_module.broker.redis_broker import (
     get_rpm, is_in_cooldown, is_provider_disabled, try_reserve_rpm_smoothed,
     reset_all_rpm_counters, get_active_workers,

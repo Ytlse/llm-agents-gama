@@ -1,5 +1,6 @@
 import json
 from functools import partial
+from pathlib import Path
 from typing import Optional
 from settings import settings
 
@@ -49,5 +50,6 @@ class HistoryStreamLog:
             "data": data or {}
         }
         file_path = self.file_path or settings.app.history_file_v2
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")

@@ -1,18 +1,9 @@
 """
-adapters/openai_adapter.py — Traducteur pour l'API OpenAI (et compatibles).
-
-Format cible :
-  POST /v1/chat/completions
-  {
-    "model": "...",
-    "messages": [{"role": "...", "content": "..."}],
-    "response_format": {"type": "json_schema", "json_schema": {...}}
-  }
-
-OpenAI supporte nativement le Structured Output via response_format.
+adapters/cerebras_adapter.py — Adaptateur pour l'API Cerebras.
 """
 
 from __future__ import annotations
+import json
 from typing import Tuple
 
 import httpx
@@ -25,33 +16,27 @@ from llm_module.adapters.base import (
     register_adapter,
 )
 from llm_module.settings.models import InternalRequest, LLMOutput
+from llm_module.telemetry.logger import get_logger
 
+logger = get_logger(__name__)
 
 @register_adapter
-class OpenAIAdapter(BaseAdapter):
-    provider_name = "openai"
+class CerebrasAdapter(BaseAdapter):
+    provider_name = "cerebras"
 
     def call(self, request: InternalRequest) -> Tuple[LLMOutput, int, int]:
         api_key = self._get_api_key()
         model   = self._resolve_model(request)
 
+        # Injection du schéma JSON strict dans le message system
+        messages = self._inject_schema_in_system(request)
+
         payload = {
             "model": model,
-            "messages": [
-                {"role": m.role, "content": m.content}
-                for m in request.messages
-            ],
+            "messages": messages,
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
-            # Structured Output OpenAI
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "agents_output",
-                    "strict": True,
-                    "schema": request.response_schema,
-                },
-            },
+            "stream": False,
         }
 
         base_url = self._get_base_url()
@@ -70,10 +55,28 @@ class OpenAIAdapter(BaseAdapter):
 
         data = response.json()
         raw_content = data["choices"][0]["message"]["content"]
-        tokens_in   = data.get("usage", {}).get("prompt_tokens", 0)
-        tokens_out  = data.get("usage", {}).get("completion_tokens", 0)
+        
+        usage      = data.get("usage", {})
+        tokens_in  = usage.get("prompt_tokens", 0)
+        tokens_out = usage.get("completion_tokens", 0)
 
         return self._parse_output(raw_content), tokens_in, tokens_out
+
+    def _inject_schema_in_system(self, request: InternalRequest) -> list[dict]:
+        schema_instruction = (
+            f"\nTu dois répondre UNIQUEMENT en JSON valide, sans markdown, "
+            f"en respectant ce schéma : {json.dumps(request.response_schema, ensure_ascii=False)}"
+        )
+
+        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        for msg in messages:
+            if msg["role"] == "system":
+                msg["content"] += schema_instruction
+                return messages
+
+        messages.insert(0, {"role": "system", "content": schema_instruction.strip()})
+        return messages
 
     def ping(self) -> bool:
         from llm_module.tasks.llm_config import settings
@@ -107,4 +110,3 @@ class OpenAIAdapter(BaseAdapter):
                 self.provider_name, response.status_code, response.text,
                 error_type=extract_error_type(response.text, response.status_code),
             )
-

@@ -81,7 +81,7 @@ def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
     if modes & _CAR_MODES:
         return "Voiture Privée"
     if modes & _BUS_MODES:
-        return "Bus"
+        return "Transports_collectifs"
     if modes & _RAIL_MODES:
         return "Train"
     if modes & _BIKE_MODES:
@@ -107,7 +107,6 @@ class MoveLogger:
         self._path: Optional[Path] = None
         self._lock = asyncio.Lock()
         self._counter = itertools.count(1)
-        self._initialized = False
 
     @classmethod
     def get_instance(cls) -> "MoveLogger":
@@ -119,15 +118,13 @@ class MoveLogger:
         return Path(settings.app.log_file).parent / "moves.csv"
 
     def _ensure_header(self):
-        if self._initialized:
-            return
         path = self._resolve_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
+        needs_header = not path.exists()
+        self._path = path
+        if needs_header:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(CSV_HEADERS)
-        self._path = path
-        self._initialized = True
 
     async def log_move(
         self,

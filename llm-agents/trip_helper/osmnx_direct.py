@@ -31,7 +31,7 @@ import osmnx as ox
 import pandas as pd
 import yaml
 from loguru import logger
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 from shapely.geometry import Point
 
 from models import Location, Transit, TransitLocation, TravelPlan
@@ -83,6 +83,11 @@ OSMNX_LAT = Histogram(
     ["mode"],
     buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5],
 )
+OSMNX_INFLIGHT = Gauge(
+    "osmnx_requests_inflight",
+    "Requêtes OSMnx en cours par mode (agents attendant la réponse)",
+    ["mode"],
+)
 
 # ── Route markers (make each direct mode's get_code() unique) ─────────────────
 
@@ -91,6 +96,34 @@ DIRECT_ROUTE_MARKER = {
     "bicycle":  "__DIRECT_BICYCLE__",
     "car":      "__DIRECT_CAR__",
 }
+
+# ── Pre-computed route cache (populated from population JSON at startup) ───────
+# key: (lat_from, lon_from, lat_to, lon_to, mode) → {"duration_s": int, "distance_m": float} | None
+# None means the route was pre-computed and found impossible.
+
+_DIRECT_ROUTE_CACHE: dict[tuple, Optional[dict]] = {}
+
+
+def load_route_cache(population_data: list) -> None:
+    """Populate the in-memory direct-route cache from a pre-enriched population list."""
+    global _DIRECT_ROUTE_CACHE
+    _DIRECT_ROUTE_CACHE.clear()
+    loaded = 0
+    for entry in population_data:
+        activities = entry.get("identity", {}).get("activities", [])
+        for i in range(1, len(activities)):
+            prev_loc = activities[i - 1].get("location", {})
+            act = activities[i]
+            act_loc = act.get("location", {})
+            routes = act.get("transfert_from_previous_location")
+            if not routes or not prev_loc or not act_loc:
+                continue
+            for mode, data in routes.items():
+                key = (round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
+                       round(act_loc["lat"], 7),  round(act_loc["lon"], 7), mode)
+                _DIRECT_ROUTE_CACHE[key] = data
+                loaded += 1
+    logger.info(f"[osmnx-cache] {loaded} pre-computed routes loaded from population JSON")
 
 # ── OSMnx network_type mapping ────────────────────────────────────────────────
 
@@ -413,8 +446,10 @@ async def _get_direct_plan_http(
     destination: Location,
     trip_mode: str,
     congestion_dt: datetime,
+    _timing_sink: dict | None = None,
 ) -> Optional[dict]:
     """POST to the next osmnx replica in the round-robin cycle."""
+    import time as _wtime
     url = next(_osmnx_endpoint_iter)
     payload = {
         "origin":       {"lat": origin.lat,      "lon": origin.lon},
@@ -425,19 +460,15 @@ async def _get_direct_plan_http(
     t_wait = _time.monotonic()
     async with _OSMNX_HTTP_SEMAPHORE:
         wait_s = _time.monotonic() - t_wait
-        if wait_s > 2.0:
-            logger.warning(
-                f"[osmnx-http] semaphore_wait={wait_s:.1f}s  mode={trip_mode}  "
-                f"url={url}"
+        if _timing_sink is not None:
+            # Keep the latest semaphore acquisition across all parallel OSMnx calls
+            _timing_sink["osmnx_sem_end"] = max(
+                _timing_sink.get("osmnx_sem_end", 0), _wtime.time()
             )
-        t_http = _time.monotonic()
         async with aiohttp.ClientSession(timeout=_OSMNX_HTTP_TIMEOUT) as session:
             async with session.post(url, json=payload) as resp:
                 resp.raise_for_status()
                 result = await resp.json()
-        # logger.debug(
-        #     f"[osmnx-http] http={_time.monotonic()-t_http:.3f}s  wait={wait_s:.1f}s  mode={trip_mode}"
-        # )
         return result
 
 
@@ -449,8 +480,42 @@ async def get_direct_plan(
     congestion_dt:  datetime, # Real calendar date+time for congestion lookup
     city: str = "Toulouse, France",
     dist: int = TOULOUSE_CENTER_DIST_M,
+    _timing_sink: dict | None = None,
 ) -> Optional[TravelPlan]:
     """Async OSMnx direct route. Returns a one-leg TravelPlan or None on failure."""
+    # Cache hit: return pre-computed result without calling OSMnx.
+    _cache_key = (round(origin.lat, 7), round(origin.lon, 7),
+                  round(destination.lat, 7), round(destination.lon, 7), trip_mode)
+    if _cache_key in _DIRECT_ROUTE_CACHE:
+        cached = _DIRECT_ROUTE_CACHE[_cache_key]
+        if cached is None:
+            return None
+        duration_s = cached["duration_s"]
+        distance_m = cached["distance_m"]
+        loc_start = TransitLocation(stop="", lat=origin.lat,      lon=origin.lon)
+        loc_end   = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
+        leg = Transit(
+            start_time=departure_time,
+            end_time=departure_time + duration_s,
+            duration=duration_s,
+            distance=distance_m,
+            mode=trip_mode,
+            start_location=loc_start,
+            end_location=loc_end,
+            is_transfer=False,
+            transit_route=DIRECT_ROUTE_MARKER[trip_mode],
+        )
+        return TravelPlan(
+            id=random_uuid(),
+            start_location=origin,
+            end_location=destination,
+            start_time=departure_time,
+            end_time=departure_time + duration_s,
+            duration=duration_s,
+            distance=distance_m,
+            legs=[leg],
+        )
+
     # Fast reject: skip routing when the straight-line distance exceeds the mode's threshold.
     straight_m = _crow_flies_m(origin, destination)
     if trip_mode == "foot" and straight_m > _MAX_FOOT_M:
@@ -460,11 +525,12 @@ async def get_direct_plan(
 
     osmnx_mode = _MODE_TO_OSMNX[trip_mode]
     t0 = _time.monotonic()
-
+    OSMNX_INFLIGHT.labels(mode=trip_mode).inc()
     try:
         if _osmnx_endpoint_list:
             # HTTP mode: delegate to a remote osmnx microservice replica.
-            result = await _get_direct_plan_http(origin, destination, trip_mode, congestion_dt)
+            result = await _get_direct_plan_http(origin, destination, trip_mode, congestion_dt,
+                                                 _timing_sink=_timing_sink)
         else:
             # Local mode: compute in-process (thread or process pool depending on daemon status).
             graphs, boundary = await _GraphStore.get(city, dist)
@@ -494,6 +560,8 @@ async def get_direct_plan(
         OSMNX_ERR.labels(mode=trip_mode, reason=type(exc).__name__).inc()
         logger.exception(f"OSMnx {trip_mode} routing error: {exc}")
         return None
+    finally:
+        OSMNX_INFLIGHT.labels(mode=trip_mode).dec()
 
     if result is None:
         OSMNX_ERR.labels(mode=trip_mode, reason="no_route").inc()
