@@ -26,7 +26,7 @@ global {
 	bool show_always_show_gtfs_routes <- true;
 	float show_label_density <- 1.0;
 	
-	bool pt_verbose <- false;
+	bool pt_verbose <- true;
 	
 	// global
 	map<string, stop> ALL_STOPS <- map([]);
@@ -46,6 +46,8 @@ global {
 			route_type::float(get("route_type"))
 		];
 		
+		//create building from: shape_file_buildings with: [type::read ("NATURE")];
+
 		ask stop {
 			ALL_STOPS <+ self.stop_id::self;
 		}
@@ -98,6 +100,10 @@ species travel_agent_factory {
 		string date_str <- string(current_date, "yyyyMMdd");
 		if GTFS_FIXED_DATE != nil {
 			date_str <- string(GTFS_FIXED_DATE, "yyyyMMdd");
+		}
+		if !(date_str in trip_dates_map.keys) {
+			warn "is_trip_available_today: date " + date_str + " is outside the GTFS calendar range — no trips will be scheduled";
+			return false;
 		}
 		int date_index <- trip_dates_map[date_str];
 		return !even(trip_calendar_map[service_id] div BITWISE_BIT_VAL[date_index]);
@@ -184,6 +190,18 @@ species travel_agent_factory {
 	}
 	
 }
+
+//species building {
+//	string type; 
+//	rgb color <- #gray  ;
+	
+//	aspect base {
+//		if show_buildings {
+//			draw shape color: color border: #darkgray;
+//		}
+//	}
+//}
+
 
 species route {
 	// attributes

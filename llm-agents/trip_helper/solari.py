@@ -24,8 +24,8 @@ class SolariTripHelper(TripHelper):
                 _d["transit_route"] = self.gtfs_data.get_route_id_by_name(_d["transit_route"])
                 _d["shape_id"] = self.gtfs_data.get_shape_id_from_route_info(
                     route_id=_d["transit_route"],
-                    from_stop_name=_d["start_location"]["stop"],
-                    to_stop_name=_d["end_location"]["stop"],
+                    from_stop_id=self.gtfs_data.get_stop_id_by_name(_d["start_location"]["stop"]),
+                    to_stop_id=self.gtfs_data.get_stop_id_by_name(_d["end_location"]["stop"]),
                 )
             transits.append(Transit(**_d, is_transfer="transfer" in it))
         return TravelPlan(
@@ -37,7 +37,7 @@ class SolariTripHelper(TripHelper):
             legs=transits,
         )
 
-    async def get_itineraries(self, origin: Location, destination: Location, departure_time: int, max_transfers: int=6) -> List[TravelPlan]:
+    async def get_itineraries(self, origin: Location, destination: Location, departure_time: int, max_transfers: int=6, include_car: bool = False, include_direct: bool = True, include_transit: bool = True) -> List[TravelPlan]:
         async with aiohttp.ClientSession() as session:
             start_at_ms = departure_time * 1000
             payload = {
@@ -57,7 +57,6 @@ class SolariTripHelper(TripHelper):
                     except Exception as e:
                         logger.error(f"Error parsing travel plan: {e}, body: {item}")
                 plans = list(filter(lambda x: x.legs, plans))
-                logger.debug(f"Payload: {payload}, found {len(plans)} itineraries")
                 return plans
 
 

@@ -1,6 +1,7 @@
+from collections import deque
 from typing import List, Optional, TypeAlias
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 """ Base models
 """
@@ -14,6 +15,7 @@ class LocationType(str, Enum):
 class Location(BaseModel):
     lon: float
     lat: float
+    public_transport: Optional[bool] = None
 
 
 class BBox(BaseModel):
@@ -46,8 +48,6 @@ class Activity(BaseModel):
     end_time: float
     purpose: ActivityPurpose
     location: Optional[Location] = None
-    # TODO: how to populate this from location?
-    # location_name: Optional[str] = None
 
 
 """ Travel plan
@@ -64,6 +64,7 @@ class TransitLocation(Location):
     """
 
     stop: str
+    stop_id: Optional[str] = None
     lat: float
     lon: float
 
@@ -210,6 +211,14 @@ class PersonState(BaseModel):
     last_activity_index: Optional[int] = 0
     cache_current_activity: Optional[Activity] = None  # current activity
     heading_to: Optional[str] = None  # purpose of the next activity
+    scheduling_in_progress: bool = False  # itinerary computation in flight
+    scheduling_started_at: Optional[int] = None  # sim 24h-timestamp when scheduling was flagged
+    # Async pre-computation: non-None = état PLANNED (trajet calculé, prêt à envoyer à GAMA)
+    # None = état IDLE (pas encore calculé, ou cycle précédent terminé via feedback d'arrivée)
+    next_planned_move: Optional["PersonMove"] = None
+    # Queue of pre-computed moves for future activities (N+2, N+3, ...) built during bootstrap.
+    # Drained at each arrival to avoid runtime scheduling congestion during peak hours.
+    precomputed_moves: deque["PersonMove"] = Field(default_factory=deque)
 
 
 class Person(BaseModel):
@@ -217,4 +226,4 @@ class Person(BaseModel):
     identity: PersonalIdentity
     state: PersonState = PersonState()
     # hybrid technique
-    is_llm_based: bool = False
+    is_llm_based: bool = True

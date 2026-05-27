@@ -1,0 +1,5 @@
+outs:
+- md5: 06099055aa7b5ec8e378b60940e67238
+  size: 64473423
+  hash: md5
+  path: Toulouse.osm.pbf

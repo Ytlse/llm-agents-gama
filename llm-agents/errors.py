@@ -1,4 +1,3 @@
-from typing import TypeAlias
 from models import PersonId
 from enum import Enum
 

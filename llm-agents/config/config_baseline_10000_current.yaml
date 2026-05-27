@@ -1,0 +1,16 @@
+gtfs:
+  cache_enabled: false
+  mode: OTP
+
+agent:
+  reschedule_activity_departure_time: false
+  quantify_time_window: false
+  long_term_reflect_interval: 86400
+  pre_schedule_duration: 3600
+
+llm:
+  batch_delay_seconds: 4.0
+
+
+app:
+  pipeline_log_enabled: true

@@ -1,0 +1,6 @@
+outs:
+- md5: 33bc00c5ee85a17d1961074b06a5d028.dir
+  size: 73691132
+  nfiles: 11
+  hash: md5
+  path: gtfs

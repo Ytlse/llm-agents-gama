@@ -30,64 +30,83 @@ class PersonScheduler:
         state.cache_current_activity = None
         state.heading_to = None
 
+    MAX_RESCHEDULE_PER_STEP = 30 * 60  # 30 minutes max adjustment per arrival
+
     def reschedule_activity(self, activity: Activity, delta: int):
+        delta = min(delta, self.MAX_RESCHEDULE_PER_STEP)
         logger.debug(f"Adjusting activity <{activity.purpose}> of person {self.person.person_id} scheduled start time based on arrival duration: {delta}")
-        # _new_time = max(0, activity.scheduled_start_time - delta)
-        # _new_time = min(_new_time, 24*3600)
         activities = self.person.identity.activities
-        prev_idx = activities.index(activity) - 1
-        next_idx = prev_idx + 2
-        min_time = activities[prev_idx].scheduled_start_time + 1 if prev_idx > 0 else 4.5*3600 # public transport start from 4h30
-        max_time = activities[next_idx].scheduled_start_time - 1 if next_idx < len(activities) else 24*3600 - 30*60
-        _new_time = max(min_time, activity.scheduled_start_time - delta)
+        n = len(activities)
+        curr_idx = activities.index(activity)
+        # Cyclic indexing: act[0]'s previous is the last activity, not -1
+        prev_idx = (curr_idx - 1) % n
+        next_idx = (curr_idx + 1) % n
+        current_target = activity.scheduled_start_time if activity.scheduled_start_time is not None else activity.start_time
+
+        prev_act = activities[prev_idx]
+        # Floor = when the previous activity ends (= departure time toward current activity).
+        # scheduled_start_time[k] == prev_act.end_time, so the person cannot leave earlier.
+        min_time = prev_act.end_time % 86400
+
+        next_act = activities[next_idx]
+        next_target = (next_act.scheduled_start_time or next_act.start_time) % 86400
+        # Next activity wraps around midnight (its 24h time is earlier than current's)
+        max_time = (86400 - 30 * 60) if next_target <= current_target else (next_target - 1)
+
+        _new_time = max(min_time, current_target - delta)
         _new_time = min(_new_time, max_time)
         activity.scheduled_start_time = _new_time
 
-    def next_activity(self, 
-                      timestamp: int, 
-                      pre_schedule_duration: Optional[int] = None
-            ) -> Optional[Activity]:
-        if pre_schedule_duration is None:
-            pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
+    def next_activity(self, timestamp: int) -> Optional[Activity]:
+        """
+        Determines the next activity of the person based on the current time.
+        Uses scheduled_start_time as the target arrival time when set, otherwise start_time.
+        """
+        _, current_day_time = to_24h_timestamp_full(timestamp)
+        day24h_seconds = 86400
 
-        state = self.person.state
-        day_of_week, time24h = to_24h_timestamp_full(timestamp)
-        day24h_seconds = 24 * 60 * 60
-        activities = self.person.identity.activities
+        moved_activities = [act for act in self.person.identity.activities if act.start_time is not None]
 
-        # Find the latest activity that starts before the current time
-        selected_activity = None
-        for i in range(len(activities)):
-            activity = activities[i]
-            next_activity = None if i + 1 >= len(activities) else activities[i + 1]
+        if not moved_activities:
+            logger.warning(f"No valid activities for person {self.person.person_id}")
+            return None
 
-            # TODO: possible bug: if activity.start_time - pre_schedule_duration < 0?
-            # Filter data: activity.start_time > 2h and < 24h
-            # All activity.start_time in ascending order
-            # filter out the home activity
-            if activity.start_time < 0:
-                continue
-            if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
-                activity.scheduled_start_time = activity.start_time - pre_schedule_duration
-            start_journey_time = activity.scheduled_start_time
-            next_end_time = None if next_activity is None else next_activity.start_time
+        def _target(act: Activity) -> float:
+            return act.scheduled_start_time if act.scheduled_start_time is not None else act.start_time
 
-            if start_journey_time > day24h_seconds or (next_end_time or -1) > day24h_seconds:
-                time24h += day24h_seconds
+        ordered_activities = sorted(moved_activities, key=lambda act: (_target(act) - current_day_time) % day24h_seconds)
+        return ordered_activities[0] if ordered_activities else None
 
-            if (start_journey_time > 0 and start_journey_time <= time24h) and \
-               (next_end_time is None or next_end_time == -1 or time24h <= next_end_time):
-                selected_activity = activity
-                break
 
-        # validate activity is done
-        if selected_activity:
-            selected_index = self.person.identity.activities.index(selected_activity)
-            if selected_index == state.last_activity_index:
-                return None
-        
-        return selected_activity
     
+    def next_upcoming_activity(self, timestamp: int) -> Optional[Activity]:
+        """Return the nearest upcoming activity (circular 24h look-ahead).
+        Uses modular arithmetic so activities after midnight are found correctly
+        even when their 24h timestamp is numerically smaller than the current time."""
+        _, time24h = to_24h_timestamp_full(timestamp)
+        activities = self.person.identity.activities
+        moved = [a for a in activities if a.start_time is not None]
+        if not moved:
+            return None
+        return min(moved, key=lambda a: (int(a.scheduled_start_time or a.start_time) - time24h) % 86400)
+
+    def get_current_activity(self, timestamp: int) -> Optional[Activity]:
+        """Retourne l'activité en cours à l'heure donnée, en gérant le wrap minuit.
+        Si start_time > end_time, l'activité s'étend sur deux jours (passe minuit)."""
+        _, time24h = to_24h_timestamp_full(timestamp)
+        for act in self.person.identity.activities:
+            if act.start_time is None or act.end_time is None or act.location is None:
+                continue
+            start = act.start_time % 86400
+            end = act.end_time % 86400
+            if start <= end:
+                if start <= time24h < end:
+                    return act
+            else:  # wrap minuit
+                if time24h >= start or time24h < end:
+                    return act
+        return None
+
     def get_home_location(self) -> Optional[Location]:
         if self.person.identity.home:
             return self.person.identity.home
@@ -110,6 +129,14 @@ class WorldPopulation:
             }
         return self
     
+    def dump_population_snapshot(self, path: str) -> None:
+        """Write the full population (with current scheduled_start_time) to path atomically."""
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump([p.model_dump() for p in self.get_people_list()], f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+        logger.info(f"[checkpoint] Population snapshot written → {path}")
+
     def dump_population_state(self):
         file_path = settings.data.state_file
         d = [
@@ -136,28 +163,48 @@ class WorldPopulation:
             for act in p.identity.activities:
                 if act.id in m:
                     (scheduled_start_time, ) = m[act.id]
+                    if scheduled_start_time is not None and scheduled_start_time < 0:
+                        scheduled_start_time = None  # stale sentinel from old format, force reinit
                     act.scheduled_start_time = scheduled_start_time
-                    logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
+                    #logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
+
+    @staticmethod
+    def _is_within_bbox(person: Person, bbox: BBox) -> bool:
+        home = PersonScheduler(person).get_home_location()
+        if home is None:
+            return False
+        return bbox.min_lon <= home.lon <= bbox.max_lon and bbox.min_lat <= home.lat <= bbox.max_lat
 
     def load_population(self, world_bbox: BBox):
-        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_max_size}_{settings.data.number_of_llm_based_agents}.json"
+        file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}.json"
         if os.path.exists(file_name):
             logger.info(f"Loading population from {file_name}")
             with open(file_name, "r", encoding="utf-8") as f:
-                people = json.load(f)
-                self.people = {
-                    person["person_id"]: Person.model_validate(person)
-                    for person in people
-                }
+                data = json.load(f)
+            if data and "name" not in data[0].get("identity", {}):
+                # Eqasim format written by _prepare_population
+                from inputs.population.eqasim_loader import EqasimJSONPopulationLoader
+                all_people = EqasimJSONPopulationLoader().load_population_from_data(
+                    data, max_size=settings.data.population_size, bbox=world_bbox,
+                )
+            else:
+                # Legacy Pydantic format
+                all_people = [Person.model_validate(p) for p in data]
+                all_people = [p for p in all_people if self._is_within_bbox(p, world_bbox)]
+                excluded = len(data) - len(all_people)
+                if excluded > 0:
+                    logger.warning(f"{excluded} agent(s) excluded from cache: home outside world bbox")
+            self.people = {p.person_id: p for p in all_people}
             return
         
         people = self.population_loader.load_population(
-            max_size=settings.data.population_max_size,
+            max_size=settings.data.population_size,
             bbox=world_bbox,
         )
 
-        n_llm_based = settings.data.number_of_llm_based_agents
+        n_llm_based = min(len(people), settings.data.number_of_llm_based_agents)
         if n_llm_based > 0:
+            logger.info(f"Random {n_llm_based} out of {len(people)}")
             llm_based_persons = random.sample(
                 list(people),
                 n_llm_based,

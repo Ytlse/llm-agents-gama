@@ -1,6 +1,9 @@
 gtfs-kit
 shapely
 geopandas
+osmnx
 python-dotenv
 dash
 plotly
+openai
+matplotlib

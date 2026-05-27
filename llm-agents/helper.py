@@ -1,21 +1,11 @@
-import json
 import sys
 from typing import Tuple
 # from decorator import decorator
 import datetime
-import time
 from loguru import logger
 import humanize
-from settings import Settings, settings
+from settings import Settings
 
-
-# @decorator
-# def time_it(func, *args, **kwargs):
-#     start = time.perf_counter()
-#     result = func(*args, **kwargs)
-#     end = time.perf_counter()
-#     print(f"Function '{func.__name__}' executed in {end - start:.6f} seconds")
-#     return result
 
 
 def to_24h_timestamp(timestamp: int) -> int:
@@ -183,57 +173,42 @@ def lower_first_char(s: str) -> str:
     return s[0].lower() + s[1:]
 
 
-def create_json_logger():
-    # Remove default stdout sink
-    logger.remove()
+def setup_logging(settings: Settings = None):
+    """
+    Configure loguru : stdout + fichier dans workdir.
+    Remplace create_json_logger() et l'ancienne setup_logging().
+    """
+    from settings import settings as _default_settings
+    s = settings or _default_settings
 
-    NOT_SYSTEM_LOG = ["history"]
+    logger.remove()  # Supprime le handler par défaut
 
-    # STDOUT: only show system logs
+    log_level = s.app.log_level
+
+    # Console (stdout)
     logger.add(
-        sink=sys.stdout,
-        filter=lambda record: record["extra"].get("log_type") not in NOT_SYSTEM_LOG,
-        level=settings.app.log_level,
+        sys.stdout,
+        level=log_level,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan> - <level>{message}</level>",
     )
 
-    # log system log to file
-    logger.add(
-        sink=settings.app.log_file,
-        filter=lambda record: record["extra"].get("log_type") not in NOT_SYSTEM_LOG,
-        level=settings.app.log_level,
-    )
-
-    # log history to file
-    def json_sink(message):
-        with open(settings.app.history_file, "a") as f:
-            f.write(json.dumps({
-                "time": message.record["time"].isoformat(),
-                "message": message.record["message"],
-                **message.record["extra"]
-            }, ensure_ascii=False) + "\n")
-
-    logger.add(
-        sink=json_sink,
-        filter=lambda record: record["extra"].get("log_type") == "history",
-    )
-
-
-def setup_logging(settings: Settings):
-    """Configure loguru logging based on settings."""
-    logger.remove()  # Remove default handler
-    
-    # Add console handler
-    logger.add(
-        sys.stderr,
-        level=settings.app.log_level,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
-    )
-    
-    # Add file handler if log_file is specified
-    if settings.app.log_file:
+    # Fichier dans workdir avec rotation
+    if s.app.log_file:
         logger.add(
-            settings.app.log_file,
-            level=settings.app.log_level,
+            s.app.log_file,
+            level=log_level,
             rotation="10 MB",
-            retention="7 days"
+            retention="7 days",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
+        )
+        #  logs into gama_results to be used by analysis tools
+        from pathlib import Path as _Path
+        gama_results_log = _Path(s.app.log_file).parent / "gama_results" / "controller.log"
+        gama_results_log.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            str(gama_results_log),
+            level=log_level,
+            rotation="10 MB",
+            retention="7 days",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
         )

@@ -1,8 +1,6 @@
 {
-  "port": 8080,
-  "securePort": 8081,
-  "router": [
-    "toulouse"
-  ],
-  "requestLogFile": "./logs/requests.log"
+  "otpFeatures": {
+    "APIBikeRental": false,
+    "APIServerInfo": true
+  }
 }

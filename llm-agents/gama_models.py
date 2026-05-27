@@ -32,20 +32,21 @@ class BaseRequest(BaseModel):
 """ World Initialization
 """
 class WorldInitRequest(BaseRequest):
-    pass
-
-class WorldSyncIdlePeople(BaseModel):
-    person_id: PersonId
-    location: Location
+    population_size: Optional[int] = None
+    part_of_llm_based_agents: Optional[float] = None
+    long_term_memory_enabled: Optional[bool] = None
+    long_term_self_reflect_enabled: Optional[bool] = None
 
 class WorldSyncRequest(BaseRequest):
-    idle_people: Optional[list[WorldSyncIdlePeople]] = None
+    ready_count: Optional[int] = None
+    active_count: Optional[int] = None
+    inactive_count: Optional[int] = None
 
 class GamaPersonData(BaseModel):
     person_id: PersonId
     name: str
     location: Location
-    is_llm_based: bool = False
+    is_llm_based: bool = True
 
 
 class WorldInitResponse(BaseModel):

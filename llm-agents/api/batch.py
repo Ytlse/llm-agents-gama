@@ -2,14 +2,10 @@ import traceback
 from typing import Any
 import asyncio
 
-from loguru import logger
 from errors import MoveNotFoundExeption
-from models import Person, PersonId, PersonMove
-from gama_models import \
-    DailyCronRequest, GamaPersonData, MessageResponse, \
-    MessageType, ObservationBatchUpdateRequest, ObservationUpdateRequest, PeopleBatchNextMoveRequest, \
-    PeopleNextMoveRequest, WorldInitRequest, WorldInitResponse
-from agents.events import EventType
+from models import PersonMove
+from gama_models import MessageResponse, \
+    MessageType, ObservationBatchUpdateRequest, PeopleBatchNextMoveRequest
 from api.application import app, simulation
 
 

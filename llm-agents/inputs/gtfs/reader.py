@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel
 from models import BBox, Location
 # from scipy.spatial import KDTree
@@ -94,7 +94,7 @@ class GTFSData:
         for _, row in stops.iterrows():
             if row['shape_id'] not in m[row['route_id']]:
                 m[row['route_id']][row['shape_id']] = {}
-            m[row['route_id']][row['shape_id']][row['stop_name']] = row['stop_sequence']
+            m[row['route_id']][row['shape_id']][row['stop_id']] = row['stop_sequence']
         self.route_id_shape_lookup_map = m
 
     def load_world_bounding_box(self) -> BBox:
@@ -107,20 +107,18 @@ class GTFSData:
             max_lat=max_lat + buffer,
         )
 
-    def get_shape_id_from_route_info(self, route_id: str, from_stop_name: str, to_stop_name: str) -> list[str]:
+    def get_shape_id_from_route_info(self, route_id: str, from_stop_id: Optional[str], to_stop_id: Optional[str]) -> list[str]:
+        if not from_stop_id or not to_stop_id:
+            return []
         if route_id not in self.route_id_shape_lookup_map:
-            raise ValueError(f"Route {route_id} not found")
-        
+            return []
+
         results = []
         for shape_id, stops in self.route_id_shape_lookup_map[route_id].items():
-            if from_stop_name not in stops or to_stop_name not in stops:
+            if from_stop_id not in stops or to_stop_id not in stops:
                 continue
-            from_stop_seq = stops[from_stop_name]
-            to_stop_seq = stops[to_stop_name]
-            if from_stop_seq < to_stop_seq:
+            if stops[from_stop_id] < stops[to_stop_id]:
                 results.append(shape_id)
-        if not results:
-            raise ValueError(f"Route {route_id} not found for stops {from_stop_name} and {to_stop_name}")
         return results
 
     def get_route_id_by_name(self, route_name: str) -> str:
@@ -153,6 +151,12 @@ class GTFSData:
     #     stops = [Stop.model_validate(row) for row in nearest_stops.to_dict(orient="records")]
     #     return stops, distances
     
+    def get_stop_id_by_name(self, stop_name: str) -> Optional[str]:
+        match = self.stops[self.stops['stop_name'] == stop_name]
+        if match.empty:
+            return None
+        return str(match.iloc[0]['stop_id'])
+
     def get_stop(self, stop_id: str) -> Stop:
         stop = self.stops[self.stops['stop_id'] == stop_id]
         if stop.empty:
@@ -289,7 +293,7 @@ class GTFSData:
 
 
 if __name__ == '__main__':
-    gtfs = GTFSData.from_gtfs_files("../data/gtfs/")
+    gtfs = GTFSData.from_gtfs_files("../data/gtfs/tisseo_gtfs/")
 
     output_dir = "../data/exports/gtfs/"
     os.makedirs(output_dir, exist_ok=True)

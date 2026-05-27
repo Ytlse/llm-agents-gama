@@ -1,3 +1,4 @@
 *.txt
 *.pbf
 *.tar
+/gtfs

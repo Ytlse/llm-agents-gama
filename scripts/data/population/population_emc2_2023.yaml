@@ -1,0 +1,244 @@
+# Caractéristiques de la population interrogée
+# Source : Enquête Mobilité Certifiée CEREMA-EMC² 2023 - Bassin de vie toulousain
+# Période d'enquête : 20 septembre 2022 - 18 février 2023
+
+enquete:
+  nom: "Enquête Mobilité Certifiée CEREMA - EMC²"
+  annee: 2023
+  periode_enquete:
+    debut: "2022-09-20"
+    fin: "2023-02-18"
+    hors_vacances_scolaires: true
+    contexte_sanitaire: "normalisé"
+#   methodologie:
+#     type: "EMC² (méthode nationale Cerema)"
+#     selection: "tirage aléatoire des ménages"
+#     modes_passation:
+#       face_a_face: 0.50
+#       telephone: 0.50
+#     age_minimum_enquete: 5  # ans
+#     populations_exclues:
+#       - "touristes / visiteurs"
+#       - "populations spécifiques (EHPAD...)"
+#       - "flux de marchandises"
+#     redressement:
+#       effectue_par: "CEREMA"
+#       etapes:
+#         - "redressement de la non-réponse (fichier des Propriétés Bâties)"
+#         - "redressement sur données RP2019"
+#       variables_redressement:
+#         - "taille des ménages"
+#         - "motorisation"
+#         - "âge"
+#         - "occupation principale"
+#         - "sexe"
+
+# echantillon:
+#   menages_enquetes: 10783
+#   personnes_interrogees: 15775   # de 5 ans et +
+#   deplacements_recenses: 54785
+#   communes_couvertes: 453
+#   secteurs_de_tirage: 88
+#   personnes_min_par_secteur: 160
+
+# territoire:
+#   perimetre_2023:
+#     nom: "aire urbaine toulousaine"
+#     communes: 453
+#     superficie_km2: 5400
+#     densite_hab_km2: 260
+#   perimetres_analyse:
+#     perimetre_2023:
+#       communes: 453
+#       habitants: 1400000
+#       usage: "données globales enquête 2023"
+#     perimetre_2013:
+#       communes: 178
+#       habitants: 1200000
+#       usage: "comparaison évolutions sur 10 ans"
+#   decoupage_concentrique:
+#     - nom: "Toulouse"
+#       communes: 1
+#     - nom: "1ère couronne"
+#       communes: 68
+#     - nom: "2ème couronne"
+#       communes: 109
+#     - nom: "3ème couronne"
+#       communes: 275
+
+# population:
+#   totaux_perimetre_2023:
+#     habitants: 1400000
+#     habitants_5_ans_et_plus: 1320000   # population cible de l'enquête
+#     nombre_menages: 674000
+#     taille_moyenne_menage: 2.08
+#   repartition_par_territoire:
+#     toulouse:
+#       communes: 1
+#       menages: 288000
+#       habitants: 507000
+#       habitants_5_ans_et_plus: 480000
+#       densite_hab_km2: 4290
+#       part_population_5_plus: 0.36
+#       taille_moyenne_menage: 1.75
+#     premiere_couronne:
+#       communes: 68
+#       menages: 215000
+#       habitants: 479000
+#       habitants_5_ans_et_plus: 450000
+#       densite_hab_km2: 720
+#       part_population_5_plus: 0.34
+#       taille_moyenne_menage: 2.23
+#     deuxieme_couronne:
+#       communes: 109
+#       menages: 80000
+#       habitants: 200000
+#       habitants_5_ans_et_plus: 187000
+#       densite_hab_km2: 150
+#       part_population_5_plus: 0.14
+#       taille_moyenne_menage: 2.48
+#     troisieme_couronne:
+#       communes: 275
+#       menages: 90000
+#       habitants: 215000
+#       habitants_5_ans_et_plus: 203000
+#       densite_hab_km2: 65
+#       part_population_5_plus: 0.15
+#       taille_moyenne_menage: 2.39
+#   concentration:
+#     coeur_agglomeration_toulouse_plus_1ere_couronne: 0.70   # 70 % des habitants 5+ ans
+
+  repartition_par_classe_age:
+    "5-17_ans": 16
+    "18-24_ans": 13
+    "25-34_ans": 14
+    "35-49_ans": 22
+    "50-64_ans": 19
+    "65_ans_et_plus": 16
+
+  repartition_par_occupation_principale:
+    scolaires_jusqu_au_bac: 17
+    etudiants: 9
+    actifs_temps_plein: 39
+    actifs_temps_partiel: 5
+    en_recherche_emploi: 7
+    retraites: 18
+    autres: 5
+
+menages_equipement_voiture:
+  perimetre_2023:
+    voitures_par_menage_moyen: 1.25
+    repartition_motorisation:    # en %
+      sans_voiture: 19
+      une_voiture: 45
+      deux_voitures_et_plus: 35
+  par_territoire:
+    toulouse:
+      voitures_par_menage: 0.82
+      sans_voiture_pct: 35
+      une_voiture_pct: 49
+      deux_voitures_plus_pct: 16
+    premiere_couronne:
+      voitures_par_menage: 1.47
+      sans_voiture_pct: 9
+      une_voiture_pct: 46
+      deux_voitures_plus_pct: 45
+    deuxieme_couronne:
+      voitures_par_menage: 1.71
+      sans_voiture_pct: 5
+      une_voiture_pct: 38
+      deux_voitures_plus_pct: 58
+    troisieme_couronne:
+      voitures_par_menage: 1.66
+      sans_voiture_pct: 6
+      une_voiture_pct: 38
+      deux_voitures_plus_pct: 55
+
+# menages_equipement_velo:
+#   part_menages_equipes_velo: 0.54
+#   velos_par_menage_moyen: 1.22
+#   part_menages_avec_VAE: 0.08
+#   part_menages_avec_stationnement_securise_domicile: 0.76
+#   repartition_par_type_habitat:    # en %, distribution du nb de vélos
+#     habitat_individuel_isole:
+#       pas_equipe: 29
+#       "1_velo": 15
+#       "2_velos": 23
+#       "3_velos": 13
+#       "4_velos": 20
+#     habitat_individuel_accole:
+#       pas_equipe: 35
+#       "1_velo": 19
+#       "2_velos": 21
+#       "3_velos": 13
+#       "4_velos": 11
+#     petit_habitat_collectif:
+#       pas_equipe: 59
+#       "1_velo": 23
+#       "2_velos": 12
+#       "3_velos": 4
+#       "4_velos": 3
+#     grand_habitat_collectif:
+#       pas_equipe: 62
+#       "1_velo": 23
+#       "2_velos": 9
+#       "3_velos": 3
+#       "4_velos": 3
+#     perimetre_2023:
+#       pas_equipe: 46
+#       "1_velo": 20
+#       "2_velos": 16
+#       "3_velos": 8
+#       "4_velos": 10
+
+# stationnement_domicile:
+#   part_menages_avec_place_attachee_logement:    # selon type d'habitat
+#     habitat_individuel_isole: 0.94
+#     habitat_individuel_accole: 0.78
+#     petit_habitat_collectif: 0.65
+#     grand_habitat_collectif: 0.56
+#     ensemble: 0.75
+#   toulouse_specifique:
+#     part_menages_avec_place_attachee: 0.61
+
+# actifs_emploi:
+#   effectifs_perimetre_2023:
+#     actifs_ayant_travaille_jour_enquete: 479000
+#     actifs_n_ayant_pas_travaille: 105000   # congé, temps partiel, maladie, grève
+#   situation_jour_enquete:    # en %, parmi actifs ayant travaillé
+#     travail_hors_domicile: 87
+#     travail_a_domicile_habituel: 5
+#     teletravail: 9
+#   teletravail_global:
+#     part_actifs_teletravail_regulier: 0.26
+#     part_actifs_jamais_teletravail: 0.66
+#     part_actifs_teletravail_min_1j_semaine: 0.22
+#     part_jour_semaine_teletravail: 0.07
+#     part_actifs_travail_domicile_permanent: 0.04
+#   frequence_teletravail_par_territoire:    # en %
+#     toulouse:
+#       oui_un_ou_plusieurs_j_semaine: 22
+#       oui_plusieurs_j_mois: 5
+#       oui_occasionnellement: 10
+#       non_jamais: 63
+#     premiere_couronne:
+#       oui_un_ou_plusieurs_j_semaine: 24
+#       oui_plusieurs_j_mois: 4
+#       oui_occasionnellement: 8
+#       non_jamais: 65
+#     deuxieme_couronne:
+#       oui_un_ou_plusieurs_j_semaine: 21
+#       oui_plusieurs_j_mois: 5
+#       oui_occasionnellement: 8
+#       non_jamais: 66
+#     troisieme_couronne:
+#       oui_un_ou_plusieurs_j_semaine: 15
+#       oui_plusieurs_j_mois: 4
+#       oui_occasionnellement: 7
+#       non_jamais: 74
+#     perimetre_2023:
+#       oui_un_ou_plusieurs_j_semaine: 22
+#       oui_plusieurs_j_mois: 4
+#       oui_occasionnellement: 8
+#       non_jamais: 66
+

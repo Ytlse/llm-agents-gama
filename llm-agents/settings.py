@@ -1,91 +1,17 @@
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional
+import shutil
 from loguru import logger
-from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 
 import yaml
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
-
-class VLLMSettings(BaseSettings):
-    """Settings for VLLM server."""
-    vllm_endpoint: str = os.getenv("VLLM_ENDPOINT", "")
-
-
-class LLMServerSettings(BaseSettings):
-    vllm: VLLMSettings = VLLMSettings()
-
-    MODELS: list[dict[str, Any]] = [
-        {
-            "code": "mistral-7B-instruct-v0.3",
-            "model": "RedHatAI/Mistral-7B-Instruct-v0.3-GPTQ-4bit",
-            # "model": "mistralai/Mistral-7B-Instruct-v0.3",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("VLLM_API_KEY", "EMPTY"),
-            "api_url": os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:1234/v1"),
-            "metadata": {
-                "context_window": 32768,
-            }
-        },
-        {
-            "code": "meta-llama-3-8b-instruct",
-            # "model": "QuantFactory/Meta-Llama-3-8B-Instruct-GGUF",
-            "model": "meta-llama/Meta-Llama-3-8B-Instruct",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("VLLM_API_KEY", "EMPTY"),
-            "api_url": os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:1234/v1"),
-            "metadata": {
-                "context_window": 32768,
-            }
-        },
-        {
-            "code": "gpt-4",
-            "model": "gpt-4",
-            "llm_provider": "openai",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            # "base_url": "https://api.openai.com/v1",
-            "api_url": None,
-        },
-        {
-            "code": "llama3-8b-8192",
-            "model": "llama3-8b-8192",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "qwen/qwen3-32b",
-            "model": "qwen/qwen3-32b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "openai/gpt-oss-120b",
-            "model": "openai/gpt-oss-120b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "deepseek-r1-distill-llama-70b",
-            "model": "deepseek-r1-distill-llama-70b",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-        {
-            "code": "llama-3.3-70b-versatile",
-            "model": "llama-3.3-70b-versatile",
-            "llm_provider": "vllm",
-            "api_key": os.getenv("GROQ_API_KEY"),
-            "api_url": "https://api.groq.com/openai/v1",
-        },
-    ]
 
 def merge_configs(*config_paths: str) -> Dict[str, Any]:
     """Merge multiple YAML files, with later files overriding earlier ones."""
@@ -129,6 +55,64 @@ class WorkdirPathResolutionMixin:
                     setattr(self, field_name, str(resolved_path))
 
 
+def _find_providers_yaml() -> Optional[Path]:
+    candidates = [
+        Path(base_dir) / ".." / "llm_module" / "config" / "providers.yaml",
+        Path("/opt/llm_module/config/providers.yaml"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.resolve()
+    return None
+
+
+class ProviderConfig(BaseModel):
+    api_key:           SecretStr = SecretStr("")
+    rpm_limit:         int
+    base_url:          str
+    default_model:     str
+    weight:            float = 1.0
+    batch_max_agents:  int   = 5
+    concurrency_limit: int   = 2
+    disable_timeout:   int   = 180
+    adapter:           str   = ""
+
+
+class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
+    model_config = SettingsConfigDict(env_nested_delimiter='__')
+
+    redis_url:                 str   = "redis://localhost:6379/0"
+    celery_broker_url:         str   = "redis://localhost:6379/1"
+    celery_result_backend:     str   = "redis://localhost:6379/2"
+    circuit_breaker_threshold: float = 0.95
+    max_retries:               int   = 50
+    backoff_base_seconds:      float = 1.0
+    batch_max_agents:          int   = 5
+    batch_delay_seconds:       float = 1.0
+
+    # Clés API lues depuis l'env : PROVIDER_KEYS__groq=gsk-...
+    provider_keys: Dict[str, SecretStr] = {}
+
+    # Construit après validation depuis providers.yaml + provider_keys
+    providers: Dict[str, ProviderConfig] = {}
+
+    @model_validator(mode="after")
+    def build_providers(self) -> "LlmConfig":
+        yaml_path = _find_providers_yaml()
+        if yaml_path is None:
+            return self
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f)
+        defaults = data.get("providers", {})
+        result = {}
+        for name, entry in defaults.items():
+            adapter_name = entry.get("adapter", name)
+            key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+            result[name] = ProviderConfig(api_key=key, **entry)
+        self.providers = result
+        return self
+
+
 class ServerConfig(BaseSettings, WorkdirPathResolutionMixin):
     # HTTP settings
     http_host: str = "localhost"
@@ -145,6 +129,15 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Grid settings
     grid_size: int = 1000 # 1km
     time_step: int = 900 # 15 minutes
+    # Dynamic throttling: min_interval = n*(n - a) / b  where n = agents scheduling_in_progress.
+    # Tune a (inflection point) and b (scale) to shape the throttle curve.
+    min_internal_coeff_a: float = 85.0
+    min_internal_coeff_b: float = 2100.0
+    # Number of concurrent Worker coroutines consuming the activity queue.
+    # Each worker independently picks items from the same asyncio.Queue, so up to
+    # worker_concurrency LLM+OTP computations run in parallel (matching the old
+    # fire-and-forget asyncio.create_task approach).
+    worker_concurrency: int = 10
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -153,7 +146,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     mode: str = "SOLARI" # SOLARI or OTP
 
     # GTFS settings
-    gtfs_file: str = os.path.join(base_dir, "../data/gtfs/")
+    gtfs_file: str = os.path.join(base_dir, "../data/gtfs/tisseo_gtfs/")
     gtfs_modality_name_map: dict[str, str] = {
         "0": "T1/Tram",
         "1": "Metro",
@@ -167,13 +160,18 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OTP provider settings
     otp_endpoint: str = "http://localhost:8080/otp/transmodel/v3"
+    otp_max_concurrent: int = 15  # max simultaneous get_itineraries calls
+
+    # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
+    osmnx_cache_dir: str = "/app/osmnx_cache"
 
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
     cache_enabled: bool = True
     recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
-    trip_query_range: list[int] = [0, 15, -15]  # in minutes, relative to the departure time
-    max_trip_candidates: int = 5 # maximum number of trip candidates to be selected
+    search_window_m: int = 30
+    transit_access_egress_modes: list[str] = ["foot"]
+    max_trip_candidates: int = 6 # maximum number of trip candidates to be selected
     fixed_day: Optional[str] = None
 
 
@@ -181,14 +179,16 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["population_cache_prefix", "state_file"]
 
     # Agent settings
-    population_max_size: Optional[int] = 100 + 20 # buffer 20 agents
+    population_size: Optional[int] = 1
     population_cache_prefix: str = "./population_"
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
 
-    # Synthesis settings
-    synthetic_dir: str = os.path.join(base_dir, "../data/po_toulouse.big")
+    # Eqasim settings
     synthetic_file_prefix: str = "toulouse_"
+    eqasim_output_dir: str = "/data/eqasim-output"
+    generate_personality_traits: bool = False
+
     # Debug
     debug_people_ids: Optional[list[str]] = None
 
@@ -196,7 +196,6 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
 class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["long_term_memory_storage_dir", "chat_log_dir"]
 
-    llm_model: str = "mistral-7B-instruct-v0.3"
     embedding_model: Optional[str] = None
     chat_log_dir: str = "chat_logs"
     long_term_memory_storage_dir: str = "long_term_memory"
@@ -234,34 +233,40 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     quantify_time_window: bool = True
     reflection_custom_guidelines: Optional[str] = None
-    travel_plan_custom_guidelines: Optional[str] = None
 
     # Remote LLM settings
-    remote_llm_max_concurrent_requests: Optional[int] = 20
+    remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file"]
-    
-    # History settings
-    history_file: str = "history.jsonl"
+    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file", "pipeline_log_file"]
+
+    # Simulation history log (HistoryStreamLog)
     history_file_v2: str = "history_stream_log.jsonl"
 
-    # Logging settings
+    # LLM exchange log (service, prompt, response, tokens)
+    llm_exchanges_file: str = "llm_exchanges.jsonl"
+
+    # Application log
     log_file: str = "app.log"
     log_level: str = "DEBUG"
 
+    # Pipeline timing CSV log (T0 → Fin, LLM agents only)
+    pipeline_log_enabled: bool = True
+    pipeline_log_file: str = "pipeline_timing.csv"
 
-class Settings(LLMServerSettings):
+
+class Settings(BaseSettings):
     app: AppConfig = AppConfig()
     server: ServerConfig = ServerConfig()
     data: DataConfig = DataConfig()
     world: WorldConfig = WorldConfig()
     gtfs: GTFSConfig = GTFSConfig()
     agent: AgentConfig = AgentConfig()
+    llm: LlmConfig = LlmConfig()
 
     # Directory settings
-    workdir: Path = Field(default_factory=lambda: Path.cwd())
+    workdir: Path = Path.cwd()
 
     # @field_validator('workdir', mode='before')
     # @classmethod
@@ -293,44 +298,92 @@ class Settings(LLMServerSettings):
     def from_yaml_files(cls, *yaml_paths: str, workdir: str = None) -> 'Settings':
         """Load and merge multiple YAML files."""
         merged_data = merge_configs(*yaml_paths)
+        # Remove workdir from YAML data — it is now derived from the config file name
+        merged_data.pop('workdir', None)
         if workdir:
             merged_data['workdir'] = Path(workdir).resolve()
-
-        # workdir = Path(yaml_paths[0]).parent.resolve()
-        # merged_data['workdir'] = workdir
-        assert 'workdir' in merged_data, f"Work directory must be specified in the configuration files. $yaml_paths={yaml_paths}"
-
-        _self = cls(**merged_data)
-        # _self.resolve_all_paths()
-        return _self
+        return cls(**merged_data)
 
 
 class FactorySettings:
     _instance: Optional[Settings] = None
+    _creation_time: Optional[datetime] = None
 
     @classmethod
-    def get(cls, workdir: str=None) -> Settings:
+    def get(cls) -> Settings:
         if cls._instance is not None:
             return cls._instance
-        
+
         base_config_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "config/config.yaml",
         )
         yaml_files = [base_config_path]
+        workdir = None
         config_file_path = os.environ.get("APP_CONFIG_PATH")
         if config_file_path and os.path.isfile(config_file_path):
             yaml_files.append(config_file_path)
 
+        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<HH_MM>_<stem>
+        if config_file_path and os.path.isfile(config_file_path):
+            now = datetime.now()
+            cls._creation_time = now
+            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
+            experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
+            workdir = str(experiments_dir / exp_name)
+
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
-        logger.info(f"Settings loaded from: {yaml_files}")
-        logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
+        # Create workdir, write the full config into it, and update "current" symlink
+        if config_file_path and os.path.isfile(config_file_path):
+            cls._instance.workdir.mkdir(parents=True, exist_ok=True)
+
+            cls.save_static_config()
+
+            current_link = experiments_dir / "current"
+            current_link.unlink(missing_ok=True)
+            current_link.symlink_to(cls._instance.workdir.name)
+
+            # Redirect GAMA results into this experiment's workdir.
+            # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
+            # project root (CityTransport → GAMA → project root), then down to experiments/.
+            gama_results_dir = cls._instance.workdir / "gama_results"
+            gama_results_dir.mkdir(parents=True, exist_ok=True)
+            gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
+            if gama_results_link.parent.exists():
+                exp_name = gama_results_dir.parent.name
+                relative_target = Path("../../experiments") / exp_name / "gama_results"
+                if gama_results_link.is_symlink():
+                    gama_results_link.unlink()
+                elif gama_results_link.exists():
+                    gama_results_link.rename(gama_results_link.parent / "results_legacy")
+                gama_results_link.symlink_to(relative_target)
+
+        # logger.info(f"Settings loaded from: {yaml_files}")
+        # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
         return cls._instance
     
+    @classmethod
+    def save_static_config(cls) -> None:
+        """
+        Sauvegarde l'état actuel de la configuration dans le fichier static_config.yaml.
+        À appeler après que la simulation GAMA ait surchargé les paramètres.
+        """
+        if cls._instance and cls._instance.workdir and cls._instance.workdir.exists():
+            static_config_path = cls._instance.workdir / "static_config.yaml"
+            with open(static_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    cls._instance.model_dump(mode="json"), 
+                    f, 
+                    default_flow_style=False, 
+                    allow_unicode=True,
+                    sort_keys=False
+                )
+            logger.info(f"Configuration statique mise à jour : {static_config_path}")
+
     def __getattribute__(self, name):
         # Handle special methods and private attributes directly
-        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths'):
+        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config'):
             return super().__getattribute__(name)
         
         # Delegate all other attributes to the Settings instance
@@ -343,11 +396,9 @@ class FactorySettings:
         return cls.get()
     
     @classmethod
-    def force_reload_paths(cls, workdir: str) -> Settings:
+    def force_reload_paths(cls) -> Settings:
         cls._instance = None
-        settings = cls.get(workdir=workdir)
-        return settings
+        return cls.get()
 
 
 settings = FactorySettings()
-

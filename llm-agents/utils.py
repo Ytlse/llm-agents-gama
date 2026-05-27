@@ -31,13 +31,3 @@ def square_distance(p1: Location, p2: Location) -> float:
     x1, y1 = world_projection(p1)
     x2, y2 = world_projection(p2)
     return (x1 - x2) ** 2 + (y1 - y2) ** 2    
-
-def get_json_part(text: str) -> str:
-    """
-    Extract the JSON part from a string
-    """
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1:
-        return None
-    return text[start:end + 1]

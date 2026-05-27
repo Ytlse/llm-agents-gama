@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1400" height="900" viewBox="0 0 1400 900" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Arial, sans-serif">
+
+  <!-- Background -->
+  <rect width="1400" height="900" fill="#0f1117"/>
+
+  <!-- Title -->
+  <text x="700" y="38" text-anchor="middle" fill="#e2e8f0" font-size="20" font-weight="bold">Architecture LLM-Agents GAMA — Simulation de mobilité urbaine</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ZONE: GAMA -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="20" y="60" width="210" height="480" rx="10" fill="#1a2e22" stroke="#4a7c59" stroke-width="2"/>
+  <text x="125" y="82" text-anchor="middle" fill="#6fcf97" font-size="13" font-weight="bold">GAMA (Java)</text>
+
+  <!-- LLMAgent.gaml -->
+  <rect x="35" y="95" width="180" height="100" rx="6" fill="#243b2d" stroke="#4a7c59" stroke-width="1.5"/>
+  <text x="125" y="113" text-anchor="middle" fill="#a8d5b5" font-size="11" font-weight="bold">LLMAgent.gaml</text>
+  <text x="45" y="132" fill="#8fbfa0" font-size="10">• llm_agent_sync</text>
+  <text x="45" y="148" fill="#8fbfa0" font-size="10">  POST /init, POST /sync</text>
+  <text x="45" y="164" fill="#8fbfa0" font-size="10">• llm_agent_async</text>
+  <text x="45" y="180" fill="#8fbfa0" font-size="10">  WebSocket :3001</text>
+
+  <!-- Inhabitant.gaml -->
+  <rect x="35" y="210" width="180" height="80" rx="6" fill="#243b2d" stroke="#4a7c59" stroke-width="1.5"/>
+  <text x="125" y="228" text-anchor="middle" fill="#a8d5b5" font-size="11" font-weight="bold">Inhabitant.gaml</text>
+  <text x="45" y="248" fill="#8fbfa0" font-size="10">• Exécute plans de déplacement</text>
+  <text x="45" y="264" fill="#8fbfa0" font-size="10">• is_llm_based flag</text>
+  <text x="45" y="280" fill="#8fbfa0" font-size="10">• Routing multimodal</text>
+
+  <!-- Config / Population -->
+  <rect x="35" y="305" width="180" height="70" rx="6" fill="#243b2d" stroke="#4a7c59" stroke-width="1.5"/>
+  <text x="125" y="323" text-anchor="middle" fill="#a8d5b5" font-size="11" font-weight="bold">Population</text>
+  <text x="45" y="343" fill="#8fbfa0" font-size="10">• population.json</text>
+  <text x="45" y="359" fill="#8fbfa0" font-size="10">• Agents LLM + Rule-based</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ZONE: DOCKER COMPOSE -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="255" y="60" width="870" height="760" rx="10" fill="#111827" stroke="#374151" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="690" y="82" text-anchor="middle" fill="#9ca3af" font-size="12" font-weight="bold">Docker Compose Stack</text>
+
+  <!-- ─── Controller ─── -->
+  <rect x="270" y="95" width="240" height="220" rx="8" fill="#1e1535" stroke="#7c3aed" stroke-width="2"/>
+  <text x="390" y="116" text-anchor="middle" fill="#c4b5fd" font-size="12" font-weight="bold">Controller · :8002</text>
+  <text x="390" y="132" text-anchor="middle" fill="#8b5cf6" font-size="10">Hypercorn / ASGI</text>
+
+  <rect x="283" y="142" width="214" height="55" rx="5" fill="#2d1f4e" stroke="#6d28d9" stroke-width="1"/>
+  <text x="390" y="158" text-anchor="middle" fill="#ddd6fe" font-size="10" font-weight="bold">application.py</text>
+  <text x="293" y="174" fill="#c4b5fd" font-size="9">• POST /init · POST /sync</text>
+  <text x="293" y="188" fill="#c4b5fd" font-size="9">• GET /metrics</text>
+
+  <rect x="283" y="207" width="214" height="55" rx="5" fill="#2d1f4e" stroke="#6d28d9" stroke-width="1"/>
+  <text x="390" y="224" text-anchor="middle" fill="#ddd6fe" font-size="10" font-weight="bold">websocket.py</text>
+  <text x="293" y="240" fill="#c4b5fd" font-size="9">• WS Client → GAMA:3001</text>
+  <text x="293" y="254" fill="#c4b5fd" font-size="9">• publish_loop · reconnect 5s</text>
+
+  <rect x="283" y="272" width="214" height="35" rx="5" fill="#2d1f4e" stroke="#6d28d9" stroke-width="1"/>
+  <text x="390" y="289" text-anchor="middle" fill="#ddd6fe" font-size="10" font-weight="bold">SimulationLoopV1</text>
+  <text x="293" y="303" fill="#c4b5fd" font-size="9">Orchestration · Sémaphore (×20)</text>
+
+  <!-- ─── API Gateway ─── -->
+  <rect x="530" y="95" width="240" height="220" rx="8" fill="#0f2540" stroke="#1d6ba5" stroke-width="2"/>
+  <text x="650" y="116" text-anchor="middle" fill="#93c5fd" font-size="12" font-weight="bold">API Gateway · :8000</text>
+  <text x="650" y="132" text-anchor="middle" fill="#3b82f6" font-size="10">FastAPI / Uvicorn</text>
+
+  <rect x="543" y="142" width="214" height="75" rx="5" fill="#172d4a" stroke="#1e5a8a" stroke-width="1"/>
+  <text x="650" y="160" text-anchor="middle" fill="#bfdbfe" font-size="10" font-weight="bold">main.py</text>
+  <text x="553" y="178" fill="#93c5fd" font-size="9">• POST /tasks → batch + enqueue</text>
+  <text x="553" y="193" fill="#93c5fd" font-size="9">• GET /tasks/{id} → poll result</text>
+  <text x="553" y="208" fill="#93c5fd" font-size="9">• GET /health · GET /metrics</text>
+
+  <rect x="543" y="227" width="214" height="75" rx="5" fill="#172d4a" stroke="#1e5a8a" stroke-width="1"/>
+  <text x="650" y="245" text-anchor="middle" fill="#bfdbfe" font-size="10" font-weight="bold">Micro-batching</text>
+  <text x="553" y="263" fill="#93c5fd" font-size="9">• batch_key = md5(cat:params)</text>
+  <text x="553" y="278" fill="#93c5fd" font-size="9">• Delay 1s · Max 20 agents</text>
+  <text x="553" y="293" fill="#93c5fd" font-size="9">• Trigger si batch complet</text>
+
+  <!-- ─── Celery Worker ─── -->
+  <rect x="270" y="340" width="500" height="220" rx="8" fill="#2a1509" stroke="#c2410c" stroke-width="2"/>
+  <text x="520" y="361" text-anchor="middle" fill="#fb923c" font-size="12" font-weight="bold">Celery Worker (concurrency: 4)</text>
+
+  <rect x="283" y="372" width="220" height="80" rx="5" fill="#3b1a08" stroke="#9a3412" stroke-width="1"/>
+  <text x="393" y="390" text-anchor="middle" fill="#fed7aa" font-size="10" font-weight="bold">process_batch_task()</text>
+  <text x="293" y="408" fill="#fb923c" font-size="9">• Pop ≤20 agents du batch</text>
+  <text x="293" y="422" fill="#fb923c" font-size="9">• Render prompt (template)</text>
+  <text x="293" y="436" fill="#fb923c" font-size="9">• Démux résultats</text>
+
+  <rect x="520" y="372" width="235" height="80" rx="5" fill="#3b1a08" stroke="#9a3412" stroke-width="1"/>
+  <text x="637" y="390" text-anchor="middle" fill="#fed7aa" font-size="10" font-weight="bold">LoadBalancer</text>
+  <text x="530" y="408" fill="#fb923c" font-size="9">• Weighted Round-Robin</text>
+  <text x="530" y="422" fill="#fb923c" font-size="9">• Circuit Breaker (≥95% RPM)</text>
+  <text x="530" y="436" fill="#fb923c" font-size="9">• Cooldown 60s si erreur 5xx</text>
+
+  <!-- Adapters -->
+  <rect x="283" y="462" width="470" height="85" rx="5" fill="#3b1a08" stroke="#9a3412" stroke-width="1"/>
+  <text x="520" y="480" text-anchor="middle" fill="#fed7aa" font-size="10" font-weight="bold">Adapters LLM</text>
+
+  <rect x="293" y="490" width="100" height="47" rx="4" fill="#4a2210" stroke="#7c2d12" stroke-width="1"/>
+  <text x="343" y="508" text-anchor="middle" fill="#fdba74" font-size="9" font-weight="bold">OpenAI</text>
+  <text x="343" y="523" text-anchor="middle" fill="#fb923c" font-size="8">rpm:15 w:1.0</text>
+  <text x="343" y="535" text-anchor="middle" fill="#fb923c" font-size="8">gpt-4o</text>
+
+  <rect x="403" y="490" width="100" height="47" rx="4" fill="#4a2210" stroke="#7c2d12" stroke-width="1"/>
+  <text x="453" y="508" text-anchor="middle" fill="#fdba74" font-size="9" font-weight="bold">Mistral</text>
+  <text x="453" y="523" text-anchor="middle" fill="#fb923c" font-size="8">rpm:100 w:2.0</text>
+  <text x="453" y="535" text-anchor="middle" fill="#fb923c" font-size="8">mistral-large</text>
+
+  <rect x="513" y="490" width="100" height="47" rx="4" fill="#4a2210" stroke="#7c2d12" stroke-width="1"/>
+  <text x="563" y="508" text-anchor="middle" fill="#fdba74" font-size="9" font-weight="bold">Google</text>
+  <text x="563" y="523" text-anchor="middle" fill="#fb923c" font-size="8">rpm:15 w:1.0</text>
+  <text x="563" y="535" text-anchor="middle" fill="#fb923c" font-size="8">gemini-pro</text>
+
+  <rect x="623" y="490" width="120" height="47" rx="4" fill="#4a2210" stroke="#7c2d12" stroke-width="1"/>
+  <text x="683" y="508" text-anchor="middle" fill="#fdba74" font-size="9" font-weight="bold">Groq</text>
+  <text x="683" y="523" text-anchor="middle" fill="#fb923c" font-size="8">rpm:30 w:1.0</text>
+  <text x="683" y="535" text-anchor="middle" fill="#fb923c" font-size="8">llama3-70b</text>
+
+  <!-- ─── Redis ─── -->
+  <rect x="790" y="95" width="200" height="220" rx="8" fill="#2a0a0a" stroke="#b91c1c" stroke-width="2"/>
+  <text x="890" y="116" text-anchor="middle" fill="#fca5a5" font-size="12" font-weight="bold">Redis · :6379</text>
+
+  <rect x="803" y="130" width="174" height="45" rx="5" fill="#3b0e0e" stroke="#991b1b" stroke-width="1"/>
+  <text x="890" y="148" text-anchor="middle" fill="#fecaca" font-size="10" font-weight="bold">DB 0</text>
+  <text x="813" y="165" fill="#fca5a5" font-size="9">Task status/results · RPM</text>
+
+  <rect x="803" y="185" width="174" height="45" rx="5" fill="#3b0e0e" stroke="#991b1b" stroke-width="1"/>
+  <text x="890" y="203" text-anchor="middle" fill="#fecaca" font-size="10" font-weight="bold">DB 1</text>
+  <text x="813" y="220" fill="#fca5a5" font-size="9">Celery broker queue</text>
+
+  <rect x="803" y="240" width="174" height="45" rx="5" fill="#3b0e0e" stroke="#991b1b" stroke-width="1"/>
+  <text x="890" y="258" text-anchor="middle" fill="#fecaca" font-size="10" font-weight="bold">DB 2</text>
+  <text x="813" y="275" fill="#fca5a5" font-size="9">Celery results backend</text>
+
+  <!-- ─── OTP ─── -->
+  <rect x="790" y="340" width="200" height="135" rx="8" fill="#0a2520" stroke="#0d9488" stroke-width="2"/>
+  <text x="890" y="361" text-anchor="middle" fill="#5eead4" font-size="12" font-weight="bold">OpenTripPlanner · :8080</text>
+
+  <rect x="803" y="372" width="174" height="90" rx="5" fill="#0f312b" stroke="#0f766e" stroke-width="1"/>
+  <text x="890" y="390" text-anchor="middle" fill="#99f6e4" font-size="10" font-weight="bold">GraphQL / Transmodel v3</text>
+  <text x="813" y="408" fill="#5eead4" font-size="9">• Réseau Toulouse</text>
+  <text x="813" y="422" fill="#5eead4" font-size="9">• graph.obj (OSM + GTFS)</text>
+  <text x="813" y="436" fill="#5eead4" font-size="9">• 5 GB RAM · Port 8080</text>
+  <text x="813" y="450" fill="#5eead4" font-size="9">• Retry tenacity</text>
+
+  <!-- ─── Agents Layer ─── -->
+  <rect x="270" y="580" width="700" height="160" rx="8" fill="#1a1a0a" stroke="#a3a318" stroke-width="2"/>
+  <text x="620" y="601" text-anchor="middle" fill="#fde68a" font-size="12" font-weight="bold">Python Agents Layer</text>
+
+  <rect x="283" y="612" width="210" height="115" rx="5" fill="#28280f" stroke="#78780e" stroke-width="1"/>
+  <text x="388" y="630" text-anchor="middle" fill="#fef08a" font-size="10" font-weight="bold">LLMAgent</text>
+  <text x="293" y="648" fill="#fde68a" font-size="9">• State + mémoire CT/LT</text>
+  <text x="293" y="662" fill="#fde68a" font-size="9">• Perception → texte</text>
+  <text x="293" y="676" fill="#fde68a" font-size="9">• Réflexion (6h LT)</text>
+  <text x="293" y="690" fill="#fde68a" font-size="9">• ChromaDB (long-term)</text>
+  <text x="293" y="704" fill="#fde68a" font-size="9">• Choisit itinéraire</text>
+
+  <rect x="503" y="612" width="210" height="115" rx="5" fill="#28280f" stroke="#78780e" stroke-width="1"/>
+  <text x="608" y="630" text-anchor="middle" fill="#fef08a" font-size="10" font-weight="bold">TripHelper + OTP Client</text>
+  <text x="513" y="648" fill="#fde68a" font-size="9">• GraphQL → OTP:8080</text>
+  <text x="513" y="662" fill="#fde68a" font-size="9">• Cache par cellule grille</text>
+  <text x="513" y="676" fill="#fde68a" font-size="9">• Retry + métriques</text>
+  <text x="513" y="690" fill="#fde68a" font-size="9">• Transmodel v3 queries</text>
+
+  <!-- ─── Observability ─── -->
+  <rect x="270" y="760" width="720" height="50" rx="8" fill="#1a150a" stroke="#b45309" stroke-width="1.5"/>
+  <text x="630" y="779" text-anchor="middle" fill="#fcd34d" font-size="11" font-weight="bold">Observabilité</text>
+  <text x="310" y="799" fill="#fbbf24" font-size="9">Prometheus :9090 — scrape api:8000 + ctrl:8002 (5s)</text>
+  <text x="560" y="799" fill="#fbbf24" font-size="9">Grafana :3000 — Dashboards</text>
+  <text x="780" y="799" fill="#fbbf24" font-size="9">Flower :5555 — Celery UI</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ZONE: LLM PROVIDERS -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="1145" y="60" width="240" height="350" rx="10" fill="#0f1a2e" stroke="#374151" stroke-width="2"/>
+  <text x="1265" y="82" text-anchor="middle" fill="#9ca3af" font-size="12" font-weight="bold">LLM Providers (HTTPS)</text>
+
+  <rect x="1160" y="100" width="210" height="55" rx="6" fill="#1a2e4a" stroke="#3b5998" stroke-width="1.5"/>
+  <text x="1265" y="122" text-anchor="middle" fill="#93c5fd" font-size="11" font-weight="bold">OpenAI API</text>
+  <text x="1265" y="140" text-anchor="middle" fill="#60a5fa" font-size="9">gpt-4o · rpm: 15 · w: 1.0</text>
+
+  <rect x="1160" y="168" width="210" height="55" rx="6" fill="#1a3a2a" stroke="#166534" stroke-width="1.5"/>
+  <text x="1265" y="190" text-anchor="middle" fill="#86efac" font-size="11" font-weight="bold">Mistral API</text>
+  <text x="1265" y="208" text-anchor="middle" fill="#4ade80" font-size="9">mistral-large · rpm: 100 · w: 2.0</text>
+
+  <rect x="1160" y="236" width="210" height="55" rx="6" fill="#2a1a1a" stroke="#991b1b" stroke-width="1.5"/>
+  <text x="1265" y="258" text-anchor="middle" fill="#fca5a5" font-size="11" font-weight="bold">Google Gemini</text>
+  <text x="1265" y="276" text-anchor="middle" fill="#f87171" font-size="9">gemini-pro · rpm: 15 · w: 1.0</text>
+
+  <rect x="1160" y="304" width="210" height="55" rx="6" fill="#2a1a2a" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="1265" y="326" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="bold">Groq API</text>
+  <text x="1265" y="344" text-anchor="middle" fill="#a78bfa" font-size="9">llama3-70b · rpm: 30 · w: 1.0</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ARROWS -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- GAMA → Controller: HTTP POST /init /sync -->
+  <line x1="230" y1="150" x2="268" y2="180" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <rect x="138" y="152" width="95" height="22" rx="3" fill="#1e1535" stroke="#7c3aed" stroke-width="1"/>
+  <text x="185" y="167" text-anchor="middle" fill="#c4b5fd" font-size="9">HTTP POST :8002</text>
+
+  <!-- Controller → GAMA: WorldInitResponse -->
+  <line x1="268" y1="200" x2="230" y2="175" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-purple-dash)"/>
+
+  <!-- GAMA ↔ Controller: WebSocket -->
+  <line x1="230" y1="130" x2="268" y2="150" stroke="#a78bfa" stroke-width="2"/>
+  <line x1="268" y1="150" x2="230" y2="130" stroke="#a78bfa" stroke-width="2" marker-start="url(#arrow-purple-small)" marker-end="url(#arrow-purple-small)"/>
+  <rect x="116" y="116" width="108" height="22" rx="3" fill="#1e1535" stroke="#7c3aed" stroke-width="1"/>
+  <text x="170" y="131" text-anchor="middle" fill="#c4b5fd" font-size="9">WebSocket :3001</text>
+
+  <!-- Controller → API: HTTP /tasks -->
+  <line x1="510" y1="230" x2="528" y2="230" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <rect x="478" y="218" width="52" height="22" rx="3" fill="#0f2540" stroke="#1d6ba5" stroke-width="1"/>
+  <text x="504" y="233" text-anchor="middle" fill="#93c5fd" font-size="9">HTTP :8000</text>
+
+  <!-- API → Redis DB0 (save task) -->
+  <line x1="770" y1="180" x2="788" y2="165" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)"/>
+
+  <!-- API → Redis DB1 (celery) -->
+  <line x1="770" y1="220" x2="788" y2="210" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)"/>
+
+  <!-- Redis DB1 → Worker -->
+  <line x1="800" y1="230" x2="760" y2="400" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow-red)"/>
+  <rect x="755" y="300" width="60" height="22" rx="3" fill="#2a0a0a" stroke="#991b1b" stroke-width="1"/>
+  <text x="785" y="315" text-anchor="middle" fill="#fca5a5" font-size="9">Celery DB1</text>
+
+  <!-- Worker → Redis DB0 (save results) -->
+  <line x1="770" y1="460" x2="800" y2="260" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow-red)"/>
+
+  <!-- Worker (Adapters) → LLM Providers -->
+  <line x1="1010" y1="510" x2="1143" y2="350" stroke="#9ca3af" stroke-width="2" marker-end="url(#arrow-gray)"/>
+  <rect x="1020" y="415" width="100" height="22" rx="3" fill="#111827" stroke="#374151" stroke-width="1"/>
+  <text x="1070" y="430" text-anchor="middle" fill="#d1d5db" font-size="9">HTTPS :443</text>
+
+  <!-- TripHelper → OTP -->
+  <line x1="620" y1="612" x2="840" y2="475" stroke="#0d9488" stroke-width="2" marker-end="url(#arrow-teal)"/>
+  <rect x="680" y="530" width="100" height="22" rx="3" fill="#0a2520" stroke="#0d9488" stroke-width="1"/>
+  <text x="730" y="545" text-anchor="middle" fill="#5eead4" font-size="9">HTTP GraphQL :8080</text>
+
+  <!-- Controller → Agents Layer -->
+  <line x1="390" y1="560" x2="390" y2="578" stroke="#a3a318" stroke-width="1.5" marker-end="url(#arrow-yellow)"/>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- LEGEND -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <rect x="1145" y="430" width="240" height="380" rx="10" fill="#111827" stroke="#374151" stroke-width="1.5"/>
+  <text x="1265" y="452" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="bold">Légende</text>
+
+  <!-- Legend items -->
+  <rect x="1158" y="465" width="16" height="12" rx="2" fill="#1a2e22" stroke="#4a7c59" stroke-width="1.5"/>
+  <text x="1185" y="475" fill="#9ca3af" font-size="10">GAMA Simulation</text>
+
+  <rect x="1158" y="488" width="16" height="12" rx="2" fill="#1e1535" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="1185" y="498" fill="#9ca3af" font-size="10">Controller (ASGI)</text>
+
+  <rect x="1158" y="511" width="16" height="12" rx="2" fill="#0f2540" stroke="#1d6ba5" stroke-width="1.5"/>
+  <text x="1185" y="521" fill="#9ca3af" font-size="10">API Gateway (FastAPI)</text>
+
+  <rect x="1158" y="534" width="16" height="12" rx="2" fill="#2a1509" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="1185" y="544" fill="#9ca3af" font-size="10">Celery Worker</text>
+
+  <rect x="1158" y="557" width="16" height="12" rx="2" fill="#2a0a0a" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="1185" y="567" fill="#9ca3af" font-size="10">Redis (3 bases)</text>
+
+  <rect x="1158" y="580" width="16" height="12" rx="2" fill="#0a2520" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="1185" y="590" fill="#9ca3af" font-size="10">OpenTripPlanner</text>
+
+  <rect x="1158" y="603" width="16" height="12" rx="2" fill="#1a1a0a" stroke="#a3a318" stroke-width="1.5"/>
+  <text x="1185" y="613" fill="#9ca3af" font-size="10">Agents Python Layer</text>
+
+  <line x1="1158" y1="634" x2="1174" y2="634" stroke="#9ca3af" stroke-width="2" marker-end="url(#arrow-gray)"/>
+  <text x="1185" y="638" fill="#9ca3af" font-size="10">Communication sync</text>
+
+  <line x1="1158" y1="656" x2="1174" y2="656" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-gray)"/>
+  <text x="1185" y="660" fill="#9ca3af" font-size="10">Communication async</text>
+
+  <line x1="1158" y1="678" x2="1174" y2="678" stroke="#9ca3af" stroke-width="2" marker-start="url(#arrow-gray-small)" marker-end="url(#arrow-gray)"/>
+  <text x="1185" y="682" fill="#9ca3af" font-size="10">Bidirectionnel (WS)</text>
+
+  <!-- Patterns box -->
+  <rect x="1155" y="700" width="218" height="98" rx="5" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+  <text x="1264" y="717" text-anchor="middle" fill="#e2e8f0" font-size="10" font-weight="bold">Patterns clés</text>
+  <text x="1165" y="733" fill="#9ca3af" font-size="9">• Micro-batching (≤20 agents/appel LLM)</text>
+  <text x="1165" y="748" fill="#9ca3af" font-size="9">• Circuit Breaker (≥95% RPM → cooldown)</text>
+  <text x="1165" y="763" fill="#9ca3af" font-size="9">• Weighted Round-Robin (Mistral w:2.0)</text>
+  <text x="1165" y="778" fill="#9ca3af" font-size="9">• Async submit + polling (task_id)</text>
+  <text x="1165" y="793" fill="#9ca3af" font-size="9">• Adapter Pattern (4 providers)</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ARROW MARKERS -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <defs>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-purple-dash" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrow-purple-small" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/>
+    </marker>
+    <marker id="arrow-gray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#9ca3af"/>
+    </marker>
+    <marker id="arrow-gray-small" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto-start-reverse">
+      <path d="M0,0 L0,6 L6,3 z" fill="#9ca3af"/>
+    </marker>
+    <marker id="arrow-teal" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#0d9488"/>
+    </marker>
+    <marker id="arrow-yellow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#a3a318"/>
+    </marker>
+  </defs>
+
+</svg>

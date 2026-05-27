@@ -1,7 +1,7 @@
 # scalable_memory.py - Scalable long-term memory system optimized for 1000+ users
-import os
 import json
 import gc
+import time
 from datetime import datetime, timedelta
 import string
 import traceback
@@ -13,8 +13,13 @@ from settings import settings
 
 from loguru import logger
 import numpy as np
+from prometheus_client import Histogram
 
-from helper import time_to_bucket_text
+LTM_QUERY_DURATION = Histogram(
+    'ltm_query_duration_seconds',
+    'Durée des appels aquery_user_memories (ChromaDB)',
+    buckets=[0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10],
+)
 
 @dataclass
 class MemorySearchResult:
@@ -361,6 +366,7 @@ class MultiUserLongTermMemory:
 
     async def aquery_user_memories(self, person_id: str, query: str, top_k: int = 8, max_past_days: int = 30, query_at: Optional[int] = None) -> List[MemorySearchResult]:
         """Query memories with namespace filtering"""
+        _t0 = time.monotonic()
         self.ensure_user_initialized(person_id)
         self.metrics["queries"] += 1
         query_at_datetime = datetime.fromtimestamp(query_at) if query_at else None
@@ -401,9 +407,12 @@ class MultiUserLongTermMemory:
             scores = self.rank_nodes(query, query_at, user_results)
             # get topk user_results by scores
             top_k_indices = np.argsort(scores)[-top_k:][::-1]
-            return [user_results[i] for i in top_k_indices]
+            result = [user_results[i] for i in top_k_indices]
+            LTM_QUERY_DURATION.observe(time.monotonic() - _t0)
+            return result
 
         except Exception as e:
+            LTM_QUERY_DURATION.observe(time.monotonic() - _t0)
             traceback.print_exc()
             print(f"Error querying memories for user {person_id}: {e}")
             return []
@@ -420,18 +429,18 @@ class MultiUserLongTermMemory:
 
         # similarity score
         _sim_score = np.array([n.score for n in nodes])
-        logger.debug(f"Sim score debug: {_sim_score.min()}, {_sim_score.max()}, {_sim_score.mean()}")
+        # logger.debug(f"Sim score debug: {_sim_score.min()}, {_sim_score.max()}, {_sim_score.mean()}")
         # importance score based on keywords, use bleu score with the query
         keyword_only = [(n.metadata.get("tags", "") or "") for n in nodes]
         _imp_score = np.array([
             self._bleu_score(query, kw) if kw else default_reflection_importance_score for kw in keyword_only
         ])
-        logger.debug(f"Importance score debug: {_imp_score.min()}, {_imp_score.max()}, {_imp_score.mean()}")
+        # logger.debug(f"Importance score debug: {_imp_score.min()}, {_imp_score.max()}, {_imp_score.mean()}")
         # time decay score
         _time_decay_score = np.array([
             self._time_decay_score(n.metadata.get("timestamp"), query_at) for n in nodes
         ])
-        logger.debug(f"Time decay score debug: {_time_decay_score.min()}, {_time_decay_score.max()}, {_time_decay_score.mean()}")
+        # logger.debug(f"Time decay score debug: {_time_decay_score.min()}, {_time_decay_score.max()}, {_time_decay_score.mean()}")
 
         # Normalize all the score first
         _sim_score = self._normalize_score(_sim_score)
