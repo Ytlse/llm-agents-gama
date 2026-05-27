@@ -71,30 +71,16 @@ species llm_agent_sync skills:[network] {
 	}
 
 	/**
-	 * Synchronisation périodique - envoie des données de population inactive vec leurs localisations toutes les 60 minutes
-	 * Toutes les 15 minutes envoit le timestamp
+	 * Synchronisation périodique - envoie les compteurs de population toutes les 15 minutes
+	 * Les fins d'activité sont gérées via les observations WebSocket (submit_obseration)
 	 */
 	reflex sync when: every(15#mn) and cycle > 1 {
-		list<unknown> idle_people <- [];
-		if every(60#mn) {
-			loop p over: inhabitant where (each.is_idle) {
-				point ploc <- point(p.location CRS_transform(POPULATION_CRS));
-				idle_people << [
-					"person_id"::p.person_id,
-					"location"::[
-						"lon"::ploc.x,
-				    	"lat"::ploc.y
-					]
-				];
-			}
-		}
+		int nb_ready    <- length(inhabitant where (each.is_ready));
+		int nb_active   <- length(inhabitant where (each.is_active));
+		int nb_inactive <- length(inhabitant) - nb_ready - nb_active;
 
-		string json_body;
-		if length(idle_people) > 0 {
-			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP, "idle_people"::idle_people]);
-		} else {
-			json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP]);
-		}
+		string json_body <- to_json(["timestamp"::CURRENT_TIMESTAMP,
+			"ready_count"::nb_ready, "active_count"::nb_active, "inactive_count"::nb_inactive]);
 		do send to: "/sync" contents: [
 			"POST",
 			json_body,
@@ -166,7 +152,7 @@ species llm_agent_async skills:[network] {
 	 * Soumission des observations - envoie les observations collectées par les agents habitants
 	 * Toutes les 5 minutes, transmet les données d'observation pour l'apprentissage du LLM
 	 */
-	reflex submit_obseration when: send_to !=nil and every(5#mn) {
+	reflex submit_obseration when: send_to !=nil and every(1#cycle) {
 		loop p over: (inhabitant where (length(each.OB_LIST) > 0)) {
 			list<map<string, unknown>> ob_list <- p.OB_LIST;
 			p.OB_LIST <- [];
@@ -232,8 +218,8 @@ species llm_agent_async skills:[network] {
 				// Appliquer l'action à l'agent trouvé
 				ask person {
 					
-					// Moving ID
-					self.moving_id <- string(data["move_id"]);
+					// Moving ID (serialized as "id" by PersonMove.model_dump())
+					self.moving_id <- string(data["id"]);
 					
 					// Objectif du déplacement (ex: aller travaillier de 9h à 18h)
 					map<string, unknown> for_activity <- map<string, unknown>(data["for_activity"]);
@@ -242,6 +228,16 @@ species llm_agent_async skills:[network] {
 					self.expected_arrive_at <- int(data["expected_arrive_at"]);
 					int prepare_before_seconds <- int(data["prepare_before_seconds"]);
 					self.schedule_at <- self.expected_arrive_at - prepare_before_seconds;
+					//  write "[Plan] Person " + person_id + " purpose=" + string(data["purpose"]) + " expected_arrive_at=" + self.expected_arrive_at + " prepare_before_seconds=" + prepare_before_seconds + " schedule_at=" + self.schedule_at + " (now=" + CURRENT_TIMESTAMP + ")";
+					if CURRENT_TIMESTAMP > self.schedule_at {
+						int sched_h <- int((self.schedule_at mod SECONDS_IN_24H) / 3600);
+						int sched_m <- int(((self.schedule_at mod SECONDS_IN_24H) mod 3600) / 60);
+						string formatted_sched <- "" + sched_h + "h" + (sched_m < 10 ? "0" : "") + sched_m;
+						int now_h <- int(CURRENT_TIMESTAMP_24H / 3600);
+						int now_m <- int((CURRENT_TIMESTAMP_24H mod 3600) / 60);
+						string formatted_now <- "" + now_h + "h" + (now_m < 10 ? "0" : "") + now_m;
+						write "⚠️ Late order: Person " + person_id + " received order to start trajet at " + formatted_sched + " when current time is " + formatted_now;
+					}
 					//	self.moving_description <- string(data["description"]);
 						
 					// Définition du plan de déplacement

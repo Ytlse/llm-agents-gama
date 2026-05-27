@@ -1,0 +1,65 @@
+"""Worker module for parallel OSMnx route computation in ProcessPoolExecutor.
+
+This module must be importable as a top-level module (not a nested function)
+for the spawn-based ProcessPoolExecutor to work on macOS.
+"""
+import gc
+import os
+import pickle
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+_graphs = None
+_boundary = None
+
+
+def _osmnx_mode(trip_mode: str) -> str:
+    return {"foot": "walk", "bicycle": "bike", "car": "drive"}[trip_mode]
+
+
+def init_worker(llmagents_path: str, osmnx_cache_dir: str, cache_key: str) -> None:
+    """Called once per worker process to pre-load OSMnx graphs."""
+    global _graphs, _boundary
+
+    if llmagents_path not in sys.path:
+        sys.path.insert(0, llmagents_path)
+
+    cache = Path(osmnx_cache_dir)
+    t0 = time.monotonic()
+    with (cache / f"graphs_{cache_key}.pkl").open("rb") as f:
+        _graphs = pickle.load(f)
+    gc.collect()
+    with (cache / f"boundary_{cache_key}.pkl").open("rb") as f:
+        _boundary = pickle.load(f)
+
+    pid = os.getpid()
+    elapsed = time.monotonic() - t0
+    print(f"[worker pid={pid}] graphs loaded in {elapsed:.1f}s", flush=True)
+
+
+def compute_route_worker(args: tuple) -> tuple:
+    """
+    Compute one route.
+
+    args: (origin_lat, origin_lon, dest_lat, dest_lon, trip_mode, hour_of_day)
+
+    Returns: (args, {"duration_s": int, "distance_m": float} | None)
+    """
+    global _graphs, _boundary
+
+    origin_lat, origin_lon, dest_lat, dest_lon, trip_mode, hour_of_day = args
+
+    from models import Location
+    from trip_helper.osmnx_direct import _route_sync
+
+    osmnx_mode = _osmnx_mode(trip_mode)
+    origin = Location(lat=origin_lat, lon=origin_lon)
+    dest = Location(lat=dest_lat, lon=dest_lon)
+    hour = min(int(hour_of_day), 23)
+    minute = int((hour_of_day % 1) * 60)
+    cdt = datetime(2024, 1, 3, hour, minute)  # Wednesday for realistic congestion
+
+    result = _route_sync(_graphs[osmnx_mode], _boundary, origin, dest, osmnx_mode, cdt)
+    return args, result

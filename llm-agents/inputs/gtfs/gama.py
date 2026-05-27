@@ -229,8 +229,8 @@ class GamaGTFS:
                             break
                     shape_segments.append(seg[-1])
 
-                assert shape_segments[-1] == len(shape_dist_traveled_list) - 1, \
-                    f"Shape segments do not match for trip {trip_id} with shape {shape_id}, calculated end at {seg[-1]}, expected {len(shape_dist_traveled_list) - 1}"
+                # Force the last segment to cover any trailing shape points beyond the last stop
+                shape_segments[-1] = len(shape_dist_traveled_list) - 1
                     
                 if use_cache:
                     shape_segments_list.append(shape_segments)
@@ -292,7 +292,7 @@ if __name__ == '__main__':
     and exports the result as a JSON file for use in the simulation platform.
     """
     # Example usage
-    gtfs = GTFSData.from_gtfs_files("../data/gtfs/")
+    gtfs = GTFSData.from_gtfs_files("../data/gtfs/tisseo_gtfs/")
     gama_gtfs = GamaGTFS(gtfs)
     trip_data = gama_gtfs.build_data(use_cache=False)
     trip_data['trip_list'] = [trip.model_dump() for trip in trip_data['trip_list']]

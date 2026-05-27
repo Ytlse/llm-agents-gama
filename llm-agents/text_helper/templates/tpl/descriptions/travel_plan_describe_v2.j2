@@ -1,4 +1,7 @@
-Expected starting in {{ plan.start_in | humanize_duration }}.
+{%- if plan.start_in < 0 %}Expected starting {{ plan.start_in | abs | humanize_duration }} ago.
+{%- elif plan.start_in == 0 %}Expected starting now.
+{%- else %}Expected starting in {{ plan.start_in | humanize_duration }}.
+{%- endif %}
 Total walking: Time: {{ plan.walking_time | duration_to_bucket_text }}; Distance: {{ plan.walking_distance | humanize_distance }}.
 Legs:
 {%- for leg in plan.legs %}{%- if not leg.is_transfer %}

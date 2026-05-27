@@ -13,6 +13,7 @@ import json
 import os
 import re
 from typing import Optional
+from loguru import logger
 
 import numpy as np
 
@@ -56,9 +57,12 @@ class EqasimJSONPopulationLoader(PopulationLoader):
     @staticmethod
     def _parse_activity(act: dict) -> Activity:
         loc = act.get("location")
+        scheduled_start_time = act.get("scheduled_start_time")
+        if act.get("scheduled_start_time") is None:
+            scheduled_start_time = act["start_time"] - 15 * 60
         return Activity(
             id=act["id"],
-            scheduled_start_time=act.get("scheduled_start_time"),
+            scheduled_start_time=scheduled_start_time,
             start_time=float(act["start_time"]),
             end_time=float(act["end_time"]),
             purpose=act["purpose"],
@@ -84,7 +88,6 @@ class EqasimJSONPopulationLoader(PopulationLoader):
             activities = [
                 self._parse_activity(act)
                 for act in identity_data.get("activities", [])
-                if act.get("purpose") != "other"
             ]
 
             home_raw = identity_data.get("home")
@@ -188,7 +191,6 @@ class EqasimJSONPopulationLoader(PopulationLoader):
             activities = [
                 self._parse_activity(act)
                 for act in identity_data.get("activities", [])
-                if act.get("purpose") != "other"
             ]
             home_raw = identity_data.get("home")
             home = Location(

@@ -171,8 +171,10 @@ species passenger parent: in_transfer virtual: true {
             }
         }
 
-        // Activer l'agent et stocker les données de trajet
-        is_ready <- true;
+        // Activer l'agent seulement s'il y a un plan à suivre.
+        // legs=[] = même localisation : pas de déplacement possible, is_ready reste false
+        // pour éviter le deadlock (agent bloqué "ready" sans jamais générer d'"arrival").
+        is_ready <- length(legs) > 0;
         raw_trip <- raw;
 
         // Réinitialiser l'état du voyage et les métriques
@@ -411,6 +413,9 @@ species passenger parent: in_transfer virtual: true {
 					on_vehicle_capacity_utilization <- on_vehicle.capacity_utilization;
 				}
 			}
+			else {
+				write "Route id" + route_id + " not in route_vehicle_map.keys";
+			}
 		}
 	}
 }
@@ -448,24 +453,41 @@ species inhabitant parent: passenger {
      * Journalise la fin et pourrait notifier l'agent LLM
      */
     action on_finish_plan {
-    	
+
     	// Calcul de la durée absolue en secondes
 	    float diff_seconds <- float(abs(CURRENT_TIMESTAMP - expected_arrive_at));
-	    
+		// Ramener les timestamps Unix au temps de la journée (mod 24h) avant formatage
+		float expected_arrive_at_seconds <- float(expected_arrive_at mod SECONDS_IN_24H);
+		float schedule_at_seconds <- float(schedule_at mod SECONDS_IN_24H);
+
 	    // Extraction des unités
-	    int h <- int(diff_seconds / 3600);
-	    int m <- int((diff_seconds mod 3600) / 60);
-	    int s <- int(diff_seconds mod 60);
-	    
-	    string formatted_time <- "" + h + "h " + m + "m " + s + "s";
-	
+	    int diff_h <- int(diff_seconds / 3600);
+	    int diff_m <- int((diff_seconds mod 3600) / 60);
+	    string formatted_diff_time <- "" + diff_h + "h" + (diff_m < 10 ? "0" : "") + diff_m;
+
+		int expected_arrive_h <- int(expected_arrive_at_seconds / 3600);
+	    int expected_arrive_m <- int((expected_arrive_at_seconds mod 3600) / 60);
+	    string formatted_expected_arrive_time <- "" + expected_arrive_h + "h" + (expected_arrive_m < 10 ? "0" : "") + expected_arrive_m;
+
+		int schedule_h <- int(schedule_at_seconds / 3600);
+	    int schedule_m <- int((schedule_at_seconds mod 3600) / 60);
+	    string formatted_schedule_time <- "" + schedule_h + "h" + (schedule_m < 10 ? "0" : "") + schedule_m;
+
+	    int current_h <- int(CURRENT_TIMESTAMP_24H / 3600);
+	    int current_m <- int((CURRENT_TIMESTAMP_24H mod 3600) / 60);
+	    string formatted_current_time <- "" + current_h + "h" + (current_m < 10 ? "0" : "") + current_m;
+
+		string delay_msg <- ": traject schedule at="+formatted_schedule_time+ " expected arrive at=" + formatted_expected_arrive_time + " current time is " + formatted_current_time;
 	    if (CURRENT_TIMESTAMP <= expected_arrive_at) {
-	        write "Hura 😊, Person " + person_id + " finished the plan with " + formatted_time + " in advance";
-	    } else {
-	        write "Too late 😡, Person " + person_id + " finished the plan " + formatted_time + " late";
+	        write "Hura 😊, Person " + person_id + " finished the plan with " + formatted_diff_time + " in advance"+delay_msg; 
+	    } 
+	    else if (diff_seconds <= 60*15) {
+	        write "Too late 😡, Person " + person_id + " finished the plan " + formatted_diff_time + " late"+delay_msg; 
+	    }
+	    else {
+	        write "Too late 🤬, Person " + person_id + " finished the plan " + formatted_diff_time + " very late"+delay_msg; 
 	    }
 
-        
     }
 	
 	/**
@@ -585,7 +607,7 @@ species inhabitant parent: passenger {
 		}
 		// Vérifié en priorité : si l'agent est physiquement dans un véhicule TC → vert garanti
 		if on_vehicle != nil {
-			return #lightgray;
+			return #green;
 		}
 		if is_ready {
 			return #gray;
@@ -600,8 +622,8 @@ species inhabitant parent: passenger {
 			return #orange;
 		}
 
-		// Line or train
-		return #green;
+		// Others
+		return #yellow;
 	}
 
 	/**
@@ -626,7 +648,7 @@ species inhabitant parent: passenger {
 				color: agent_color
 				border: true;
 		}
-		if show_name and is_idle = false {
+		if show_name and is_idle = false and is_ready = false {
 			draw (get_action_emoji()) at: location + {-3,1.5} anchor: #bottom_center color: agent_color font: font('Default', (is_llm_based ? 18 : 16), #bold);
 			draw (person_id) at: location + {-3,1.5} anchor: #top_left color: agent_color font: font('Default', (is_llm_based ? 10 : 8), #bold);
 		}

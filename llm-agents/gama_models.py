@@ -37,12 +37,10 @@ class WorldInitRequest(BaseRequest):
     long_term_memory_enabled: Optional[bool] = None
     long_term_self_reflect_enabled: Optional[bool] = None
 
-class WorldSyncIdlePeople(BaseModel):
-    person_id: PersonId
-    location: Location
-
 class WorldSyncRequest(BaseRequest):
-    idle_people: Optional[list[WorldSyncIdlePeople]] = None
+    ready_count: Optional[int] = None
+    active_count: Optional[int] = None
+    inactive_count: Optional[int] = None
 
 class GamaPersonData(BaseModel):
     person_id: PersonId

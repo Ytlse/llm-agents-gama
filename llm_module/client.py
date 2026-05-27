@@ -180,11 +180,10 @@ class LLMClient:
                 async def _heartbeat():
                     while True:
                         await asyncio.sleep(30.0)
-                        logger.warning(
-                            f"Task still pending | task_id={task_id} category={category} "
-                            f"waited={time.monotonic() - poll_start:.0f}s"
-                        )
-
+                        # logger.warning(
+                        #     f"Task still pending | task_id={task_id} category={category} "
+                        #     f"waited={time.monotonic() - poll_start:.0f}s"
+                        # )
                 heartbeat = asyncio.create_task(_heartbeat())
                 try:
                     try:

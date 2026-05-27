@@ -95,13 +95,17 @@ purge_cache:
 # Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: tests burst
+.PHONY: tests burst analysis
 
 tests:
 	python llm_module/tests/test_main.py
 
 burst:
 	python llm_module/tests/test_e2e.py --scenario 1 --burst 80
+
+## Run all analysis notebooks. Usage: make analysis [LOG_DIR=../../experiments/my_exp/]
+analysis:
+	python scripts/analysis/run_analysis.py $(if $(LOG_DIR),--log-dir $(LOG_DIR),)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # GAMA

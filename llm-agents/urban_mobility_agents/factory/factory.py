@@ -104,6 +104,7 @@ def _save_scenario_params(
 
 def init_dynamic_scenario(
     static_data: StaticWorldData,
+    sim_base_timestamp: int = 0,
     population_size: int = None,
     part_of_llm_agents: float = None,
     long_term_memory_enabled: bool = None,
@@ -151,10 +152,10 @@ def init_dynamic_scenario(
         EqasimJSONPopulationLoader(filters=[])
     ).init(world_bbox=world_bbox)
 
-    # Set all people start from home
     for person in population.get_people_list():
-        home_location = PersonScheduler(person).get_home_location()
-        person.state.last_location = home_location
+        scheduler = PersonScheduler(person)
+        current_act = scheduler.get_current_activity(sim_base_timestamp) if sim_base_timestamp else None
+        person.state.last_location = current_act.location if current_act else scheduler.get_home_location()
 
     world_model = WorldModel(
         world_grid=world_grid,

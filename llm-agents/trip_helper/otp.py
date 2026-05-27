@@ -354,8 +354,8 @@ class OTPTripHelper(TripHelper):
             is_car = leg.mode == "car"
 
             transit = Transit(
-                start_time=_ptime(leg.expectedStartTime),
-                end_time=_ptime(leg.expectedEndTime),
+                start_time=_ptime(leg.expectedStartTime) * 1000,
+                end_time=_ptime(leg.expectedEndTime) * 1000,
                 duration=leg.duration,
                 distance=leg.distance,
                 mode=leg.mode,
@@ -378,8 +378,8 @@ class OTPTripHelper(TripHelper):
             id=random_uuid(),
             start_location=start_location,
             end_location=end_location,
-            start_time=_ptime(obj.expectedStartTime),
-            end_time=_ptime(obj.expectedEndTime),
+            start_time=_ptime(obj.expectedStartTime) * 1000,
+            end_time=_ptime(obj.expectedEndTime) * 1000,
             duration=obj.duration,
             distance=obj.distance,
             legs=transits,
@@ -404,10 +404,12 @@ class OTPTripHelper(TripHelper):
                               origin: Location,
                               destination: Location,
                               departure_time: int,
-                              search_window_m: int=30,
+                              search_window_m: int = None,
+                              access_egress_mode: str = "foot",
                               include_car: bool=False,
                               include_direct: bool=True,
                               include_transit: bool=True,
+                              arrive_by: bool=False,
                               _timing_sink: dict | None = None) -> List[TravelPlan]:
         """
         Retrieve travel itineraries from OpenTripPlanner (OTP) and direct routes.
@@ -420,13 +422,19 @@ class OTPTripHelper(TripHelper):
         Args:
             origin: Starting location.
             destination: Ending location.
-            departure_time: Unix timestamp for departure.
+            departure_time: Unix timestamp. When arrive_by=False (default) this is the
+                departure time; when arrive_by=True this is the target arrival time.
             search_window_m: Search window in minutes (default 30).
             include_car: Whether to include car routes.
+            arrive_by: When True OTP searches for itineraries that arrive by departure_time
+                instead of departing at departure_time.
 
         Returns:
             List of TravelPlan objects representing itineraries.
         """
+        if search_window_m is None:
+            search_window_m = settings.gtfs.search_window_m
+
         # ── Fixed-day remapping ───────────────────────────────────────────────
         # Adjust departure time to a fixed day for consistent OTP queries,
         # while keeping the real day for congestion-aware routing.
@@ -453,6 +461,7 @@ class OTPTripHelper(TripHelper):
             "from": {"coordinates": {"latitude": origin.lat, "longitude": origin.lon}},
             "to":   {"coordinates": {"latitude": destination.lat, "longitude": destination.lon}},
             "dateTime": start_at,
+            "arriveBy": arrive_by,
             "itineraryFilters": {"debug": "limitToNumOfItineraries"},
             "numTripPatterns": settings.gtfs.max_trip_candidates,
             "searchWindow": search_window_m,
@@ -460,14 +469,14 @@ class OTPTripHelper(TripHelper):
 
         # Define transit modes for OTP query (bus, metro, tram, cableway)
         transit_modes = {
-            "accessMode": "foot",
+            "accessMode": access_egress_mode,
             "transportModes": [
                 {"transportMode": "bus"},
                 {"transportMode": "metro"},
                 {"transportMode": "tram"},
                 {"transportMode": "cableway"},
             ],
-            "egressMode": "foot",
+            "egressMode": access_egress_mode,
         }
         # Build the payload for transit itinerary request
         transit_payload = {
@@ -618,14 +627,16 @@ class OTPTripHelper(TripHelper):
                             end_location=destination,
                             real_day=real_day,
                         )
-                        # Calculate delay from requested departure
-                        p.start_in = max(0, p.start_time - real_departure_time)
+                        # Calculate delay from requested departure (start_time is ms, real_departure_time is s)
+                        # Negative = plan departs before query time; intentional, used by LLM to rank options.
+                        p.start_in = p.start_time // 1000 - real_departure_time
                         plans.append(p)
                     except Exception as e:
                         parse_errors += 1
                         logger.error(f"Error parsing travel plan: {e}, body: {item}")
 
         # ── Add OSMnx direct plans ────────────────────────────────────────────
+        # Convert osmnx times from seconds to milliseconds to match OTP transit format.
         for mode in ("foot", "bicycle", "car"):
             if mode not in named:
                 continue
@@ -633,6 +644,11 @@ class OTPTripHelper(TripHelper):
             if isinstance(plan, Exception):
                 logger.error(f"OSMnx {mode} plan failed: {plan}")
             elif plan is not None:
+                plan.start_time *= 1000
+                plan.end_time   *= 1000
+                for leg in plan.legs:
+                    leg.start_time *= 1000
+                    leg.end_time   *= 1000
                 plan.start_in = 0  # Direct plans start immediately
                 plans.append(plan)
 

@@ -81,33 +81,37 @@ class CachedTripHelper(TripHelper):
         ]
         return len(set(keys)) < len(keys)  # if there are duplicates, it's circular
     
-    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False, _pipeline_rec=None) -> list[TravelPlan]:
+    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False, arrive_by: bool = False, _pipeline_rec=None) -> list[TravelPlan]:
         import time as _time
         max_transfers = self.max_transfers
         time_step = settings.world.time_step
         departure_time = departure_time // time_step * time_step  # round down to the nearest time step
 
-        otp_ranges = settings.gtfs.trip_query_range
-        otp_sinks = [{} for _ in otp_ranges] if _pipeline_rec is not None else [None] * len(otp_ranges)
+        access_egress_modes = settings.gtfs.transit_access_egress_modes
+        otp_sinks = [{} for _ in access_egress_modes] if _pipeline_rec is not None else [None] * len(access_egress_modes)
         direct_sink: dict | None = {} if _pipeline_rec is not None else None
 
         tasks = []
-        # Transit only across the 3 time windows (bus schedules differ by time)
-        for idx, i in enumerate(otp_ranges):
-            adjusted_time = departure_time + i * 60
+        # One OTP call per access/egress mode; all queries use the same departure_time T.
+        # arrive_by is forwarded so OTP searches backwards from the target arrival time.
+        for idx, mode in enumerate(access_egress_modes):
             tasks.append(
                 self.trip_helper.get_itineraries(
                     origin=origin,
                     destination=destination,
-                    departure_time=adjusted_time,
+                    departure_time=departure_time,
                     include_car=include_car,
                     max_transfers=max_transfers,
                     include_direct=False,
+                    arrive_by=arrive_by,
+                    access_egress_mode=mode,
                     _timing_sink=otp_sinks[idx],
                 )
             )
         # Direct routes once only: foot/bicycle are time-independent, car congestion
         # barely differs across ±15 min so one query at T is sufficient.
+        # Direct routes are always computed departure-based; when arrive_by=True the
+        # caller is responsible for shifting their times after the fact.
         tasks.append(
             self.trip_helper.get_itineraries(
                 origin=origin,
@@ -116,12 +120,13 @@ class CachedTripHelper(TripHelper):
                 include_car=include_car,
                 max_transfers=max_transfers,
                 include_transit=False,
+                arrive_by=False,
                 _timing_sink=direct_sink,
             )
         )
         results = await asyncio.gather(*tasks)
 
-        # Map OTP sink results to pipeline record (positional: index 0/1/2 → P3A-2/4/6, P3A-3/5/7)
+        # Map OTP sink results to pipeline record (positional: mode index 0/1/2 → P3A-2/4/6, P3A-3/5/7)
         if _pipeline_rec is not None:
             _otp_fields = [
                 ("P3A_2_ms", "P3A_3_ms"),
@@ -135,6 +140,19 @@ class CachedTripHelper(TripHelper):
                     setattr(_pipeline_rec, req_f, sink.get("req_ms"))
             if direct_sink:
                 _pipeline_rec.P3B_2_ms = direct_sink.get("osmnx_ms")
+
+        # When arrive_by=True, shift direct plans (last task result) so their end_time
+        # equals the target arrival time instead of departure_time + duration.
+        if arrive_by and results:
+            direct_plans = results[-1]
+            target_ms = departure_time * 1000
+            for plan in direct_plans:
+                duration_ms = plan.end_time - plan.start_time
+                plan.end_time = target_ms
+                plan.start_time = target_ms - duration_ms
+                for leg in plan.legs:
+                    leg.end_time = leg.end_time - duration_ms
+                    leg.start_time = leg.start_time - duration_ms
 
         # Deduplication across all results
         _t_dedup = _time.monotonic()
@@ -157,10 +175,11 @@ class CachedTripHelper(TripHelper):
                                destination: Location,
                                departure_time: int,
                                include_car: bool = False,
+                               arrive_by: bool = False,
                                _pipeline_rec=None) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         recursion_search_depth = self.recursion_search_depth
-        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers)
+        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers, arrive_by=arrive_by)
         if not itineraries:
             return []
         
@@ -228,6 +247,7 @@ class CachedTripHelper(TripHelper):
                               destination: Location,
                               departure_time: int,
                               include_car: bool = False,
+                              arrive_by: bool = False,
                               _pipeline_rec=None,
                               ) -> list[TravelPlan]:
         import time as _time
@@ -250,8 +270,8 @@ class CachedTripHelper(TripHelper):
             # logger.debug(f"[CachedTripHelper]: Blacklist cleared for new hour {day_and_hour}")
         self._notfound_cache_last_hour = day_and_hour
 
-        # include_car is part of the key: a car-owning household gets different routes
-        key = "_".join([str(it) for it in (*grid_origin, *grid_destination, time_slot, day_and_hour, int(include_car))])
+        # include_car and arrive_by are part of the key: they produce different itineraries
+        key = "_".join([str(it) for it in (*grid_origin, *grid_destination, time_slot, day_and_hour, int(include_car), int(arrive_by))])
         bl_key = (origin.lon, origin.lat, destination.lon, destination.lat)
 
         cache_hit = self.cache_enabled
@@ -263,7 +283,7 @@ class CachedTripHelper(TripHelper):
             _pipeline_rec.P3_cache_hit = cache_hit
 
         if not cache_hit:
-            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, _pipeline_rec=_pipeline_rec)
+            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, arrive_by=arrive_by, _pipeline_rec=_pipeline_rec)
             if itineraries:
                 # identify each itinerary with a unique id
                 for it in itineraries:

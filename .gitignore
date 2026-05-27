@@ -52,3 +52,7 @@ cache/*
 scripts/general/travel_time.py
 otp-toulouse/toulouse/*
 otp-toulouse/source/*
+data/archives/gtfs/*
+scripts/data/gtfs/*
+GAMA/CityTransport/results_legacy/*
+GAMA/CityTransport/results

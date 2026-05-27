@@ -30,73 +30,81 @@ class PersonScheduler:
         state.cache_current_activity = None
         state.heading_to = None
 
+    MAX_RESCHEDULE_PER_STEP = 30 * 60  # 30 minutes max adjustment per arrival
+
     def reschedule_activity(self, activity: Activity, delta: int):
+        delta = min(delta, self.MAX_RESCHEDULE_PER_STEP)
         logger.debug(f"Adjusting activity <{activity.purpose}> of person {self.person.person_id} scheduled start time based on arrival duration: {delta}")
-        # _new_time = max(0, activity.scheduled_start_time - delta)
-        # _new_time = min(_new_time, 24*3600)
         activities = self.person.identity.activities
-        prev_idx = activities.index(activity) - 1
-        next_idx = prev_idx + 2
-        min_time = activities[prev_idx].scheduled_start_time + 1 if prev_idx > 0 else 4.5*3600 # public transport start from 4h30
-        max_time = activities[next_idx].scheduled_start_time - 1 if next_idx < len(activities) else 24*3600 - 30*60
-        _new_time = max(min_time, activity.scheduled_start_time - delta)
+        n = len(activities)
+        curr_idx = activities.index(activity)
+        # Cyclic indexing: act[0]'s previous is the last activity, not -1
+        prev_idx = (curr_idx - 1) % n
+        next_idx = (curr_idx + 1) % n
+        current_target = activity.scheduled_start_time if activity.scheduled_start_time is not None else activity.start_time
+
+        prev_act = activities[prev_idx]
+        # Floor = when the previous activity ends (= departure time toward current activity).
+        # scheduled_start_time[k] == prev_act.end_time, so the person cannot leave earlier.
+        min_time = prev_act.end_time % 86400
+
+        next_act = activities[next_idx]
+        next_target = (next_act.scheduled_start_time or next_act.start_time) % 86400
+        # Next activity wraps around midnight (its 24h time is earlier than current's)
+        max_time = (86400 - 30 * 60) if next_target <= current_target else (next_target - 1)
+
+        _new_time = max(min_time, current_target - delta)
         _new_time = min(_new_time, max_time)
         activity.scheduled_start_time = _new_time
 
-    def next_activity(self, 
-                      timestamp: int, 
-                      pre_schedule_duration: Optional[int] = None
-            ) -> Optional[Activity]:
+    def next_activity(self, timestamp: int) -> Optional[Activity]:
         """
         Determines the next activity of the person based on the current time.
-        
-        Args:
-            timestamp: The current simulation time.
-            pre_schedule_duration: The anticipation time (in seconds) required for the journey or
-                                   preparation before the actual start of the activity.
+        Uses scheduled_start_time as the target arrival time when set, otherwise start_time.
         """
-        # Use the default configured anticipation duration if none is provided
-        if pre_schedule_duration is None:
-            pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
-        
-        # Get the time as seconds elapsed since midnight (time24h)
-        day_of_week, current_day_time = to_24h_timestamp_full(timestamp)
-        day24h_seconds = 86400  # 24 * 60 * 60
+        _, current_day_time = to_24h_timestamp_full(timestamp)
+        day24h_seconds = 86400
 
-        moved_activities = [act for act in self.person.identity.activities if act.start_time>=0]
+        moved_activities = [act for act in self.person.identity.activities if act.start_time is not None]
 
         if not moved_activities:
-            logger.warning(f"No valid activities with non-negative start time for person {self.person.person_id}")
+            logger.warning(f"No valid activities for person {self.person.person_id}")
             return None
 
-        for activity in moved_activities:
-            if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
-                activity.scheduled_start_time = activity.start_time - pre_schedule_duration
+        def _target(act: Activity) -> float:
+            return act.scheduled_start_time if act.scheduled_start_time is not None else act.start_time
 
-        ordered_activities = sorted(moved_activities, key=lambda act: (act.scheduled_start_time - current_day_time)% day24h_seconds)
+        ordered_activities = sorted(moved_activities, key=lambda act: (_target(act) - current_day_time) % day24h_seconds)
         return ordered_activities[0] if ordered_activities else None
 
 
     
     def next_upcoming_activity(self, timestamp: int) -> Optional[Activity]:
-        """Return the earliest activity after last_activity_index whose scheduled
-        departure is in the future, regardless of whether we are in its time window.
-        Used at bootstrap to pre-compute itineraries for agents not yet in any window."""
+        """Return the nearest upcoming activity (circular 24h look-ahead).
+        Uses modular arithmetic so activities after midnight are found correctly
+        even when their 24h timestamp is numerically smaller than the current time."""
         _, time24h = to_24h_timestamp_full(timestamp)
-        pre_schedule_duration = max(settings.agent.pre_schedule_duration, self.DEFAULT_PRE_SCHEDULE_DURATION)
-        state = self.person.state
         activities = self.person.identity.activities
+        moved = [a for a in activities if a.start_time is not None]
+        if not moved:
+            return None
+        return min(moved, key=lambda a: (int(a.scheduled_start_time or a.start_time) - time24h) % 86400)
 
-        for i, activity in enumerate(activities):
-            if i <= state.last_activity_index:
+    def get_current_activity(self, timestamp: int) -> Optional[Activity]:
+        """Retourne l'activité en cours à l'heure donnée, en gérant le wrap minuit.
+        Si start_time > end_time, l'activité s'étend sur deux jours (passe minuit)."""
+        _, time24h = to_24h_timestamp_full(timestamp)
+        for act in self.person.identity.activities:
+            if act.start_time is None or act.end_time is None or act.location is None:
                 continue
-            if activity.start_time < 0:
-                continue
-            if activity.scheduled_start_time is None or activity.scheduled_start_time == -1:
-                activity.scheduled_start_time = activity.start_time - pre_schedule_duration
-            if activity.scheduled_start_time >= time24h:
-                return activity
-
+            start = act.start_time % 86400
+            end = act.end_time % 86400
+            if start <= end:
+                if start <= time24h < end:
+                    return act
+            else:  # wrap minuit
+                if time24h >= start or time24h < end:
+                    return act
         return None
 
     def get_home_location(self) -> Optional[Location]:
@@ -121,6 +129,14 @@ class WorldPopulation:
             }
         return self
     
+    def dump_population_snapshot(self, path: str) -> None:
+        """Write the full population (with current scheduled_start_time) to path atomically."""
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump([p.model_dump() for p in self.get_people_list()], f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+        logger.info(f"[checkpoint] Population snapshot written → {path}")
+
     def dump_population_state(self):
         file_path = settings.data.state_file
         d = [
@@ -147,6 +163,8 @@ class WorldPopulation:
             for act in p.identity.activities:
                 if act.id in m:
                     (scheduled_start_time, ) = m[act.id]
+                    if scheduled_start_time is not None and scheduled_start_time < 0:
+                        scheduled_start_time = None  # stale sentinel from old format, force reinit
                     act.scheduled_start_time = scheduled_start_time
                     #logger.debug(f"Loaded activity {act.id} of person {p.person_id} with scheduled_start_time {scheduled_start_time}")
 

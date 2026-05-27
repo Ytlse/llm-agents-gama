@@ -7,12 +7,15 @@ world initialization, synchronization, and real-time observation/action exchange
 """
 
 import asyncio
+import csv
 import json
 import math
 import os
+import re
 import orjson
 import time
 from datetime import datetime
+from pathlib import Path
 import httpx
 import numpy as np
 import uvicorn
@@ -24,7 +27,7 @@ from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings, FactorySettings
 import traceback
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
 from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
@@ -44,9 +47,10 @@ SIM_STEP_COUNT             = Gauge('gama_sim_step_count', 'Numéro du pas de tem
 SIM_STEP_LOGICAL_DURATION  = Gauge('gama_sim_step_logical_duration_seconds', 'Durée logique GAMA d\'un pas de temps (écart entre deux timestamps consécutifs en secondes de temps simulé)')
 AGENT_STATES               = Gauge('gama_agent_states', 'Nombre d\'agents par état (inactive/ready/active)', ['state'])
 SIM_WALL_CLOCK_RATIO       = Gauge('sim_wall_clock_ratio', 'Ratio temps simulé / temps réel entre deux /sync (accélération effective)')
-_last_sync_wall_time: float  = 0.0
-_sim_init_wall_time: float   = 0.0
-_sim_step_count: int         = 0
+_last_sync_wall_time: float          = 0.0
+_last_sync_response_wall_time: float = 0.0   # timestamp of the last /sync response sent
+_sim_init_wall_time: float           = 0.0
+_sim_step_count: int                 = 0
 _last_logical_time: int      = 0
 
 # eqasim service URL — set via EQASIM_SERVICE_URL env var (default: http://eqasim:8003)
@@ -65,7 +69,6 @@ async def _trigger_eqasim_generation(population_size: int, bbox: tuple[float, fl
     synpp to the communes intersecting this zone so generated profiles stay
     within the simulation area.
     """
-    from fastapi import HTTPException
     url = f"{_EQASIM_SERVICE_URL}/generate"
     payload: dict = {"population_size": population_size}
     if bbox is not None:
@@ -95,7 +98,6 @@ def _find_population_json(population_size: int | None = None) -> str | None:
     ``{prefix}population_{population_size}.json`` and returns None if absent.
     If population_size is None, falls back to the largest available file.
     """
-    import re
     output_dir = settings.data.eqasim_output_dir
     prefix = settings.data.synthetic_file_prefix
     if population_size is not None:
@@ -170,16 +172,30 @@ async def _prepare_population(
         with open(raw_json_path, encoding="utf-8") as f:
             raw_data = json.load(f)
 
-        # Bbox filter then random sample to exactly population_size
+        # Bbox filter then random sample to exactly population_size.
+        # All locations (home + every activity) must be within the OSMnx graph area
+        # so that routing never falls back to the "orig == dest" out-of-graph path.
         if bbox is not None:
             min_lon, min_lat, max_lon, max_lat = bbox
-            raw_data = [
-                entry for entry in raw_data
-                if (home := entry.get("identity", {}).get("home")) is not None
-                and home.get("lon") is not None
-                and min_lon <= home["lon"] <= max_lon
-                and min_lat <= home["lat"] <= max_lat
-            ]
+            def _all_locs_in_bbox(entry: dict) -> bool:
+                identity = entry.get("identity", {})
+                home = identity.get("home")
+                if not home or home.get("lon") is None:
+                    return False
+                if not (min_lon <= home["lon"] <= max_lon and min_lat <= home["lat"] <= max_lat):
+                    return False
+                for act in identity.get("activities", []):
+                    loc = act.get("location")
+                    if loc and loc.get("lon") is not None:
+                        if not (min_lon <= loc["lon"] <= max_lon and min_lat <= loc["lat"] <= max_lat):
+                            return False
+                return True
+            before = len(raw_data)
+            raw_data = [e for e in raw_data if _all_locs_in_bbox(e)]
+            logger.info(
+                f"[population] Bbox filter: {before} → {len(raw_data)} agents "
+                f"(dropped {before - len(raw_data)} with home or activity outside OSMnx area)"
+            )
         if population_size < len(raw_data):
             raw_data = _random.sample(raw_data, population_size)
         data = raw_data
@@ -206,7 +222,18 @@ async def _prepare_population(
                     pt_count += 1
         logger.info(f"[population] {pt_count} locations flagged with public_transport")
 
-    # Pass 2: OSMnx pre-computed routes
+    # Pass 2: OSMnx pre-computed routes for all consecutive activity pairs.
+    # Skip if the raw data already carries transfert_from_previous_location for all activities.
+    if not _needs_osmnx_enrichment(data):
+        logger.info("[population] OSMnx routes already present in raw data — skipping Pass 2")
+        logger.info(f"[population] Pass 3: {n_adj} schedules adjusted")
+        tmp_path = workdir_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.rename(tmp_path, workdir_path)
+        logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
+        load_route_cache(data)
+        return workdir_path
     tasks_meta = []
     coros = []
     for entry in data:
@@ -222,7 +249,8 @@ async def _prepare_population(
                 continue
             origin = Location(lat=prev_loc["lat"], lon=prev_loc["lon"])
             destination = Location(lat=act_loc["lat"], lon=act_loc["lon"])
-            departure_unix = to_timestamp_based_on_day(int(act["start_time"]), sim_base_timestamp)
+            origin_end = activities[i - 1].get("end_time") or 0
+            departure_unix = to_timestamp_based_on_day(int(origin_end) if origin_end > 0 else int(act["start_time"]), sim_base_timestamp)
             congestion_dt = datetime.fromtimestamp(departure_unix)
             for mode in (["foot", "bicycle"] + (["car"] if has_car else [])):
                 tasks_meta.append((act, mode))
@@ -234,7 +262,15 @@ async def _prepare_population(
                     congestion_dt=congestion_dt,
                 ))
 
-    results = await asyncio.gather(*coros, return_exceptions=True)
+    logger.info(f"[population] Pass 2 OSMnx: {len(coros)} routes à calculer ({len(data)} agents)…")
+
+    BATCH = 200
+    results = []
+    for i in range(0, len(coros), BATCH):
+        batch_results = await asyncio.gather(*coros[i:i + BATCH], return_exceptions=True)
+        results.extend(batch_results)
+        logger.info(f"[population] Pass 2 OSMnx: {min(i + BATCH, len(coros))}/{len(coros)} routes calculées")
+
     osmnx_ok = 0
     for (act, mode), result in zip(tasks_meta, results):
         if "transfert_from_previous_location" not in act:
@@ -290,13 +326,28 @@ class LoopContainer:
     def __init__(self):
         self.client = None
         self.scenario = None
+        self._worker_task: asyncio.Task | None = None
         # Initialize WebSocket client for GAMA communication
         self.websocket_client = WebSocketClient(settings.server.gama_ws_url)
         self.websocket_client.on_message = self.handle_message
 
     def set_scenario(self, scenario: BaseScenario):
-        """Set the active simulation scenario."""
+        """Set the active simulation scenario, inject push_fn and start the Worker."""
+        # Cancel the previous Worker if still running (e.g. successive /test/init calls)
+        if self._worker_task and not self._worker_task.done():
+            self._worker_task.cancel()
+
         self.scenario = scenario
+
+        # Injecter la fonction de push WebSocket direct dans le scénario
+        async def _direct_push(action):
+            await self.websocket_client.send_json({
+                "topic": self.action_topic,
+                "payload": action.model_dump(),
+            })
+
+        scenario.set_push_fn(_direct_push)
+        self._worker_task = asyncio.create_task(scenario.start_worker())
 
     async def greeting(self):
         """Send a greeting message to the WebSocket server"""
@@ -397,6 +448,35 @@ class LoopContainer:
             traceback.print_exc()
             logger.error(f"Error processing observation: {e}")
 
+class _AgentStateLog:
+    """Append-only CSV recording agent state counts per simulation step."""
+
+    _HEADERS = ["step", "sim_timestamp", "sim_time", "inactive", "ready", "active", "total"]
+
+    def __init__(self):
+        self._path: Path | None = None
+        self._initialized = False
+
+    def _ensure_file(self) -> Path:
+        if self._path is None:
+            self._path = settings.workdir / "gama_results" / "agent_states.csv"
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        if not self._initialized:
+            self._initialized = True
+            if not self._path.exists():
+                with open(self._path, "w", newline="", encoding="utf-8") as f:
+                    csv.writer(f).writerow(self._HEADERS)
+        return self._path
+
+    def record(self, step: int, sim_timestamp: int, inactive: int, ready: int, active: int):
+        path = self._ensure_file()
+        sim_time = datetime.fromtimestamp(sim_timestamp).strftime("%H:%M:%S") if sim_timestamp > 0 else ""
+        with open(path, "a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow([step, sim_timestamp, sim_time, inactive, ready, active, inactive + ready + active])
+
+
+_agent_state_log = _AgentStateLog()
+
 # Global loop container instance
 loop_container = LoopContainer()
 # Initialisation des données statiques (chargement GTFS, OTP...) au démarrage du serveur
@@ -490,6 +570,7 @@ async def init(request: WorldInitRequest):
 
     scenario = init_dynamic_scenario(
         static_data,
+        sim_base_timestamp=request.timestamp,
         population_size=request.population_size,
         part_of_llm_agents=request.part_of_llm_based_agents if request.part_of_llm_based_agents is not None else 1.0,
         long_term_memory_enabled=request.long_term_memory_enabled,
@@ -544,6 +625,67 @@ async def init(request: WorldInitRequest):
     )
 
 @app.post(
+    "/test/init",
+    summary="[TEST] Initialiser le scénario sans GAMA",
+    description=(
+        "Initialise le scénario directement depuis le fichier de population, sans connexion WebSocket GAMA. "
+        "Réservé aux tests de charge et de performance. Ne lance pas le bootstrap des itinéraires."
+    ),
+    tags=["Test"],
+)
+async def test_init(population_size: int = None, timestamp: int = 1_775_800_000):
+    """Initialize the scenario from the population file without a GAMA WebSocket connection."""
+    if population_size is None:
+        # Fallback to the largest available file; do NOT use settings (can default to 1)
+        largest = _find_population_json(population_size=None)
+        if largest is None:
+            raise HTTPException(status_code=404, detail="No population file found. Pass population_size explicitly.")
+        m = re.search(r"population_(\d+)\.json$", largest)
+        effective_size = int(m.group(1)) if m else settings.data.population_size
+    else:
+        effective_size = population_size
+
+    stops_df = static_data.gtfs_data.stops[['stop_lat', 'stop_lon']].dropna()
+    stop_coords = stops_df.values.astype(float)
+
+    population_json_path = await _prepare_population(
+        population_size=effective_size,
+        stop_coords=stop_coords,
+        sim_base_timestamp=timestamp,
+        bbox=TOULOUSE_OSM_ROUTES_30K_BBOX,
+    )
+    if population_json_path is None:
+        return MessageResponse(success=False, error="Population preparation failed")
+
+    scenario = init_dynamic_scenario(
+        static_data,
+        sim_base_timestamp=timestamp,
+        population_size=effective_size,
+        long_term_memory_enabled=False,
+        long_term_self_reflect_enabled=False,
+    )
+    loop_container.set_scenario(scenario)
+
+    people = scenario.population.get_people_list()
+    logger.info(f"[test/init] Scénario initialisé — {len(people)} agents, timestamp={timestamp}")
+    return MessageResponse(success=True, data={"num_people": len(people), "population_file": str(population_json_path)})
+
+
+@app.get(
+    "/test/queue_depth",
+    summary="[TEST] Nombre d'agents en cours de scheduling",
+    tags=["Test"],
+)
+async def queue_depth():
+    """Return the number of agents currently waiting for an LLM/OTP response."""
+    if not loop_container.scenario:
+        return {"scheduling_in_progress": 0, "total_agents": 0}
+    people = loop_container.scenario.population.get_people_list()
+    in_progress = sum(1 for p in people if p.state.scheduling_in_progress)
+    return {"scheduling_in_progress": in_progress, "total_agents": len(people)}
+
+
+@app.post(
     "/reflect",
     summary="Déclencher la réflexion forcée des agents",
     description=(
@@ -562,7 +704,7 @@ async def reflect(request: WorldSyncRequest):
     logger.info(f"Reflecting world at timestamp: {request.timestamp}")
 
     if loop_container.scenario:
-        await loop_container.scenario.reflect_all(request.timestamp)
+        await loop_container.scenario.trigger_short_term_reflection_for_all(request.timestamp)
         return MessageResponse(
             data="reflected",
             success=True,
@@ -590,7 +732,7 @@ async def sync(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
-    global _last_sync_wall_time, _sim_step_count, _last_logical_time
+    global _last_sync_wall_time, _last_sync_response_wall_time, _sim_step_count, _last_logical_time
     now = time.time()
     real_delta = now - _last_sync_wall_time if _last_sync_wall_time > 0 else 0.0
     if real_delta > 0:
@@ -619,16 +761,18 @@ async def sync(raw: Request):
     logger.info(f"Synchronizing world at timestamp: {request.timestamp} ({humanize_date(request.timestamp)})")
 
     if loop_container.scenario:
-        await loop_container.scenario.sync(request.timestamp, idle_people=request.idle_people, _t_sync=now, _t_parse=_t_parse_end)
         try:
-            people = loop_container.scenario.population.get_people_list()
-            inactive = sum(1 for p in people if p.state.last_location is None)
-            ready    = sum(1 for p in people if p.state.last_location is not None
-                          and p.state.heading_to is None and not p.state.scheduling_in_progress)
-            active   = sum(1 for p in people if p.state.scheduling_in_progress or p.state.heading_to is not None)
+            ready    = request.ready_count
+            active   = request.active_count
+            inactive = request.inactive_count
             AGENT_STATES.labels(state='inactive').set(inactive)
             AGENT_STATES.labels(state='ready').set(ready)
             AGENT_STATES.labels(state='active').set(active)
+            _agent_state_log.record(_sim_step_count, request.timestamp, inactive, ready, active)
+        except Exception:
+            pass
+        await loop_container.scenario.sync(request.timestamp, _t_sync=now, _t_parse=_t_parse_end)
+        try:
             SIM_LOGICAL_TIME.set(request.timestamp)
             if _last_logical_time > 0 and request.timestamp > _last_logical_time:
                 sim_delta = request.timestamp - _last_logical_time
@@ -638,6 +782,16 @@ async def sync(raw: Request):
         except Exception:
             pass
         _last_logical_time = request.timestamp
+        in_progress_count = loop_container.scenario.activities_to_compute_count
+        _a = settings.world.min_internal_coeff_a
+        _b = settings.world.min_internal_coeff_b
+        min_interval = max(0.0, in_progress_count * (in_progress_count - _a) / _b)
+        logger.info(f"Activités à calculer: {in_progress_count} — applying min_interval={min_interval:.2f}s")
+        if min_interval > 0 and _last_sync_response_wall_time > 0:
+            remaining = min_interval - (time.time() - _last_sync_response_wall_time)
+            if remaining > 0:
+                await asyncio.sleep(remaining)
+        _last_sync_response_wall_time = time.time()
         return MessageResponse(data="synchronized", success=True)
     else:
         return MessageResponse(success=False, error="Scenario not set")

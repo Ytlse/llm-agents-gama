@@ -129,6 +129,15 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Grid settings
     grid_size: int = 1000 # 1km
     time_step: int = 900 # 15 minutes
+    # Dynamic throttling: min_interval = n*(n - a) / b  where n = agents scheduling_in_progress.
+    # Tune a (inflection point) and b (scale) to shape the throttle curve.
+    min_internal_coeff_a: float = 85.0
+    min_internal_coeff_b: float = 2100.0
+    # Number of concurrent Worker coroutines consuming the activity queue.
+    # Each worker independently picks items from the same asyncio.Queue, so up to
+    # worker_concurrency LLM+OTP computations run in parallel (matching the old
+    # fire-and-forget asyncio.create_task approach).
+    worker_concurrency: int = 10
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -137,7 +146,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     mode: str = "SOLARI" # SOLARI or OTP
 
     # GTFS settings
-    gtfs_file: str = os.path.join(base_dir, "../data/gtfs/")
+    gtfs_file: str = os.path.join(base_dir, "../data/gtfs/tisseo_gtfs/")
     gtfs_modality_name_map: dict[str, str] = {
         "0": "T1/Tram",
         "1": "Metro",
@@ -160,8 +169,9 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     n_trip_in_grid: int = 5
     cache_enabled: bool = True
     recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
-    trip_query_range: list[int] = [0, 15, -15]  # in minutes, relative to the departure time
-    max_trip_candidates: int = 3 # maximum number of trip candidates to be selected
+    search_window_m: int = 30
+    transit_access_egress_modes: list[str] = ["foot"]
+    max_trip_candidates: int = 6 # maximum number of trip candidates to be selected
     fixed_day: Optional[str] = None
 
 
@@ -242,7 +252,7 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     log_level: str = "DEBUG"
 
     # Pipeline timing CSV log (T0 → Fin, LLM agents only)
-    pipeline_log_enabled: bool = False
+    pipeline_log_enabled: bool = True
     pipeline_log_file: str = "pipeline_timing.csv"
 
 
@@ -333,6 +343,21 @@ class FactorySettings:
             current_link = experiments_dir / "current"
             current_link.unlink(missing_ok=True)
             current_link.symlink_to(cls._instance.workdir.name)
+
+            # Redirect GAMA results into this experiment's workdir.
+            # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
+            # project root (CityTransport → GAMA → project root), then down to experiments/.
+            gama_results_dir = cls._instance.workdir / "gama_results"
+            gama_results_dir.mkdir(parents=True, exist_ok=True)
+            gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
+            if gama_results_link.parent.exists():
+                exp_name = gama_results_dir.parent.name
+                relative_target = Path("../../experiments") / exp_name / "gama_results"
+                if gama_results_link.is_symlink():
+                    gama_results_link.unlink()
+                elif gama_results_link.exists():
+                    gama_results_link.rename(gama_results_link.parent / "results_legacy")
+                gama_results_link.symlink_to(relative_target)
 
         # logger.info(f"Settings loaded from: {yaml_files}")
         # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")

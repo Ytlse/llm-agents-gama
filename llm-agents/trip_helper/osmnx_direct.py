@@ -110,7 +110,11 @@ def load_route_cache(population_data: list) -> None:
     _DIRECT_ROUTE_CACHE.clear()
     loaded = 0
     for entry in population_data:
-        activities = entry.get("identity", {}).get("activities", [])
+        all_activities = entry.get("identity", {}).get("activities", [])
+        activities = all_activities
+        if not activities:
+            continue
+        # Activities 1..N-1: route from act[i-1] to act[i]
         for i in range(1, len(activities)):
             prev_loc = activities[i - 1].get("location", {})
             act = activities[i]
@@ -123,6 +127,19 @@ def load_route_cache(population_data: list) -> None:
                        round(act_loc["lat"], 7),  round(act_loc["lon"], 7), mode)
                 _DIRECT_ROUTE_CACHE[key] = data
                 loaded += 1
+        # Cyclic: act[last] → act[0] (transfert_from_previous_location of act[0])
+        if len(activities) >= 2:
+            first_act = activities[0]
+            last_act  = activities[-1]
+            prev_loc  = last_act.get("location", {})
+            act_loc   = first_act.get("location", {})
+            routes    = first_act.get("transfert_from_previous_location")
+            if routes and prev_loc and act_loc:
+                for mode, data in routes.items():
+                    key = (round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
+                           round(act_loc["lat"], 7),  round(act_loc["lon"], 7), mode)
+                    _DIRECT_ROUTE_CACHE[key] = data
+                    loaded += 1
     logger.info(f"[osmnx-cache] {loaded} pre-computed routes loaded from population JSON")
 
 # ── OSMnx network_type mapping ────────────────────────────────────────────────
@@ -393,14 +410,14 @@ def _route_sync(
     orig = ox.distance.nearest_nodes(G, origin.lon, origin.lat)
     dest = ox.distance.nearest_nodes(G, destination.lon, destination.lat)
 
-    # Both points map to the same graph node: distance is too short for OSMnx routing.
-    # Fall back to Euclidean distance + walking speed regardless of mode.
+    # Both points map to the same graph node — either too close or outside the graph area.
+    # Use 70 km/h as a highway-speed approximation (typical for out-of-zone long-distance trips).
     if orig == dest:
         dlat = (destination.lat - origin.lat) * 111_320
         dlon = (destination.lon - origin.lon) * 111_320 * math.cos(math.radians(origin.lat))
         dist_m = math.hypot(dlat, dlon)
-        walk_ms = _FALLBACKS["walk"] * 1000 / 3600  # 5 km/h → m/s
-        return {"duration_s": max(1, int(dist_m / walk_ms)), "distance_m": dist_m}
+        speed_ms = 70 * 1000 / 3600  # 70 km/h
+        return {"duration_s": max(1, int(dist_m / speed_ms)), "distance_m": dist_m}
 
     # Compute the fastest route using edge travel times as weights.
     route = ox.routing.shortest_path(G, orig, dest, weight="travel_time")

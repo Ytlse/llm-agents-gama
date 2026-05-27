@@ -2,6 +2,7 @@ import asyncio
 import csv
 import itertools
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,7 @@ _PURPOSE_FR = {
 CSV_HEADERS = [
     "Référence",
     "Trajet",
+    "ID Trajet",
     "Mode de transport Choisi",
     "Plus rapide",
     "Lieu de résidence",
@@ -46,6 +48,9 @@ CSV_HEADERS = [
     "Filtre de perception",
     "Traits de personnalité",
     "Raisonnement",
+    "Retard planification (s)",
+    "Heure de calcul",
+    "Temps simulé",
 ]
 
 
@@ -100,6 +105,38 @@ def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
     return str(round(total / 1000, 2))
 
 
+class GamaArrivalsLogger:
+    _instance: Optional["GamaArrivalsLogger"] = None
+
+    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s"]
+
+    def __init__(self):
+        self._path: Optional[Path] = None
+        self._lock = asyncio.Lock()
+
+    @classmethod
+    def get_instance(cls) -> "GamaArrivalsLogger":
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def _ensure_header(self):
+        path = Path(settings.app.log_file).parent / "gama_results" / "gama_arrivals.csv"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        needs_header = not path.exists()
+        self._path = path
+        if needs_header:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow(self._HEADERS)
+
+    async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int):
+        async with self._lock:
+            self._ensure_header()
+            delay_s = arrive_at - expected_arrive_at
+            with open(self._path, "a", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s])
+
+
 class MoveLogger:
     _instance: Optional["MoveLogger"] = None
 
@@ -135,9 +172,13 @@ class MoveLogger:
         provider_model: str,
         faster_itinerary: Optional[TravelPlan],
         reasoning: str,
+        late_s: int = 0,
+        move_id: str = "",
+        simulated_time: Optional[int] = None,
     ):
         async with self._lock:
             self._ensure_header()
+            computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             trip_id = next(self._counter)
             traits = person.identity.traits_json
             home = person.identity.home
@@ -150,6 +191,7 @@ class MoveLogger:
             row = [
                 settings.workdir.name,
                 trip_id,
+                move_id,
                 _plan_transport_mode(plan),
                 _plan_transport_mode(faster_itinerary),
                 _residence_zone(home.lat if home else None, home.lon if home else None),
@@ -167,6 +209,9 @@ class MoveLogger:
                 settings.agent.long_term_memory_filter_by_datetime,
                 "personality" in traits,
                 reasoning,
+                late_s,
+                computed_at,
+                simulated_time if simulated_time is not None else "",
             ]
 
             with open(self._path, "a", newline="", encoding="utf-8") as f:

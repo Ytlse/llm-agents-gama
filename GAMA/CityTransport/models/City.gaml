@@ -133,7 +133,7 @@ experiment e type: gui {
         }
         // Record active trips with transport mode
         ask inhabitant {
-            if self.on_vehicle != nil and self.target_location != nil {
+            if self.on_vehicle != nil and !dead(self.on_vehicle) and self.target_location != nil {
                 save [gama.machine_time,CURRENT_TIMESTAMP,person_id,self.on_vehicle.route_type,self.moving_id] to: evaluate_modality_choices_file
                     format:"csv" rewrite: false;
             }

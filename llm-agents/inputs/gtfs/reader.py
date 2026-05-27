@@ -293,7 +293,7 @@ class GTFSData:
 
 
 if __name__ == '__main__':
-    gtfs = GTFSData.from_gtfs_files("../data/gtfs/")
+    gtfs = GTFSData.from_gtfs_files("../data/gtfs/tisseo_gtfs/")
 
     output_dir = "../data/exports/gtfs/"
     os.makedirs(output_dir, exist_ok=True)

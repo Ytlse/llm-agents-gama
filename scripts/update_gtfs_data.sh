@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ROOT_DIR=$(dirname "$(realpath "$0")")/..
-GTFS_DIR="$ROOT_DIR/data/gtfs"
+GTFS_DIR="$ROOT_DIR/data/gtfs/tisseo_gtfs"
 EXPORT_DIR="$ROOT_DIR/data/exports/gtfs"
 GAMA_DIR="$ROOT_DIR/GAMA/CityTransport"
 
@@ -11,9 +11,9 @@ if [ ! -d "$EXPORT_DIR" ]; then
 fi
 
 # Extract GTFS data
-echo "Extracting GTFS data..."
+echo "==> Extracting GTFS data..."
 cd "$GTFS_DIR"
-unzip -o -d "$GTFS_DIR" *.zip
+# unzip -o -d "$GTFS_DIR" *.zip
 
 # Generate Shape and copy to GAMA folder
 echo "Generating GTFS shape files and trip info data..."

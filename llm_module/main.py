@@ -493,7 +493,9 @@ async def metrics():
     
     logger.info("Call to /metrics received.")
     
-    content = generate_latest(REGISTRY)
+    loop = asyncio.get_event_loop()
+    # generate_latest lit Redis de manière synchrone, on l'isole dans un thread
+    content = await loop.run_in_executor(None, generate_latest, REGISTRY)
         
     return Response(content=content, media_type=CONTENT_TYPE_LATEST)
 

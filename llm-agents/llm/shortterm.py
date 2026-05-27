@@ -21,7 +21,7 @@ class UserShortTermMemory:
         """Add a chat message to short-term memory"""
         self.last_activity = datetime.now()
 
-        logger.info(f"User {self.person_id} added message at {self.last_activity} for activity: {activity_id}")
+        #logger.info(f"User {self.person_id} added message at {self.last_activity} for activity: {activity_id}")
 
         # Create memory entry
         entry = MemoryEntry(

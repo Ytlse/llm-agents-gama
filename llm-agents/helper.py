@@ -201,3 +201,14 @@ def setup_logging(settings: Settings = None):
             retention="7 days",
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
         )
+        #  logs into gama_results to be used by analysis tools
+        from pathlib import Path as _Path
+        gama_results_log = _Path(s.app.log_file).parent / "gama_results" / "controller.log"
+        gama_results_log.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(
+            str(gama_results_log),
+            level=log_level,
+            rotation="10 MB",
+            retention="7 days",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
+        )

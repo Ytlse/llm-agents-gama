@@ -1,6 +1,7 @@
+from collections import deque
 from typing import List, Optional, TypeAlias
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 """ Base models
 """
@@ -212,6 +213,12 @@ class PersonState(BaseModel):
     heading_to: Optional[str] = None  # purpose of the next activity
     scheduling_in_progress: bool = False  # itinerary computation in flight
     scheduling_started_at: Optional[int] = None  # sim 24h-timestamp when scheduling was flagged
+    # Async pre-computation: non-None = état PLANNED (trajet calculé, prêt à envoyer à GAMA)
+    # None = état IDLE (pas encore calculé, ou cycle précédent terminé via feedback d'arrivée)
+    next_planned_move: Optional["PersonMove"] = None
+    # Queue of pre-computed moves for future activities (N+2, N+3, ...) built during bootstrap.
+    # Drained at each arrival to avoid runtime scheduling congestion during peak hours.
+    precomputed_moves: deque["PersonMove"] = Field(default_factory=deque)
 
 
 class Person(BaseModel):
