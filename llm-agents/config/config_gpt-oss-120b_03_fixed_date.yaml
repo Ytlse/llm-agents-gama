@@ -1,6 +1,6 @@
 
 gtfs:
-  cache_enabled: false
+  otp_cache_enabled: false
   mode: OTP
   max_trip_candidates: 5
   fixed_day: "20250305"
@@ -8,7 +8,6 @@ gtfs:
 agent:
   reschedule_activity_departure_time: true
   reschedule_transition_ratio: 0.75
-  pre_schedule_duration: 1800
   quantify_time_window: false
   long_term_reflect_interval: 86400
   long_term_max_entries_query: 12

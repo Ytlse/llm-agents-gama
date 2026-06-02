@@ -2414,6 +2414,395 @@
         "x": 0,
         "y": 105
       }
+    },
+    {
+      "id": 109,
+      "type": "row",
+      "title": "Cache LLM Sémantique",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 167
+      }
+    },
+    {
+      "id": 301,
+      "type": "stat",
+      "title": "Cache Hits (total)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(llm_cache_hits_total)",
+          "legendFormat": "Hits"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 168
+      }
+    },
+    {
+      "id": 302,
+      "type": "stat",
+      "title": "Cache Misses (total)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(llm_cache_misses_total)",
+          "legendFormat": "Misses"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 168
+      }
+    },
+    {
+      "id": 303,
+      "type": "gauge",
+      "title": "Taux de hit cache (%)",
+      "description": "Ratio hits / (hits + misses). Un taux élevé réduit les appels LLM réels.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(llm_cache_hits_total) / clamp_min(sum(llm_cache_hits_total) + sum(llm_cache_misses_total), 1)",
+          "legendFormat": "Hit rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "orange", "value": 30 },
+              { "color": "green", "value": 60 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "showThresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 168
+      }
+    },
+    {
+      "id": 304,
+      "type": "bargauge",
+      "title": "Misses par raison",
+      "description": "Distribution des cache misses selon la raison (no_result, below_threshold, etc.).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (llm_cache_misses_total)",
+          "legendFormat": "{{reason}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "showUnfilled": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 12,
+        "y": 168
+      }
+    },
+    {
+      "id": 305,
+      "type": "timeseries",
+      "title": "Débit hits vs misses cache LLM (req/min)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(llm_cache_hits_total[1m]) * 60",
+          "legendFormat": "Hits / min"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (reason) (rate(llm_cache_misses_total[1m]) * 60)",
+          "legendFormat": "Misses — {{reason}} / min"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hits / min"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": { "fixedColor": "green", "mode": "fixed" }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 172
+      }
+    },
+    {
+      "id": 306,
+      "type": "timeseries",
+      "title": "Hits par activity_purpose (req/min)",
+      "description": "Débit de cache hits ventilé par type d'activité. Identifie quelles catégories bénéficient le plus du cache.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (activity_purpose) (rate(llm_cache_hits_total[1m]) * 60)",
+          "legendFormat": "{{activity_purpose}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 172
+      }
+    },
+    {
+      "id": 307,
+      "type": "timeseries",
+      "title": "Latences cache LLM — p50 / p95 (s)",
+      "description": "Latence p50 et p95 des trois phases : lookup total (embed + Qdrant), embed seul, insert Qdrant.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "ffj2fwnh387pce"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, rate(llm_cache_lookup_seconds_bucket[5m]))",
+          "legendFormat": "lookup p95"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, rate(llm_cache_lookup_seconds_bucket[5m]))",
+          "legendFormat": "lookup p50"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.95, rate(llm_cache_embed_seconds_bucket[5m]))",
+          "legendFormat": "embed p95"
+        },
+        {
+          "refId": "D",
+          "expr": "histogram_quantile(0.50, rate(llm_cache_embed_seconds_bucket[5m]))",
+          "legendFormat": "embed p50"
+        },
+        {
+          "refId": "E",
+          "expr": "histogram_quantile(0.95, rate(llm_cache_insert_seconds_bucket[5m]))",
+          "legendFormat": "insert p95"
+        },
+        {
+          "refId": "F",
+          "expr": "histogram_quantile(0.50, rate(llm_cache_insert_seconds_bucket[5m]))",
+          "legendFormat": "insert p50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 180
+      }
     }
   ]
 }

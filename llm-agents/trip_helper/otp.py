@@ -629,7 +629,7 @@ class OTPTripHelper(TripHelper):
                         )
                         # Calculate delay from requested departure (start_time is ms, real_departure_time is s)
                         # Negative = plan departs before query time; intentional, used by LLM to rank options.
-                        p.start_in = p.start_time // 1000 - real_departure_time
+                        p.start_in = int(p.start_time // 1000 - real_departure_time)
                         plans.append(p)
                     except Exception as e:
                         parse_errors += 1

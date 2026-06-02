@@ -1,15 +1,12 @@
 {%- if plan.start_in < 0 %}Expected starting {{ plan.start_in | abs | humanize_duration }} ago.
 {%- elif plan.start_in == 0 %}Expected starting now.
 {%- else %}Expected starting in {{ plan.start_in | humanize_duration }}.
+{%- endif -%}
+{%- if plan.legs | length == 0 %} Estimated duration: {{ ((plan.end_time | to_timestamp) - (plan.start_time | to_timestamp)) | duration_to_bucket_text }}.
+{%- elif plan.legs | length == 1 and plan.legs[0].transit_route and '__DIRECT' in plan.legs[0].transit_route %}{%- set leg = plan.legs[0] %} Estimated duration: {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}. Distance: {{ leg.distance | humanize_distance }}.
+{%- else %} Walking: {{ plan.walking_time | duration_to_bucket_text }} / {{ plan.walking_distance | humanize_distance }}.
+{%- set ns = namespace(prev_transfer_walk=false) %}
+{%- for leg in plan.legs %}{%- if leg.is_transfer %}{%- if leg.start_location.stop and leg.start_location.stop == leg.end_location.stop %}{%- set ns.prev_transfer_walk = true %}{%- else %}{%- set ns.prev_transfer_walk = false %}
+- Walk{% if leg.end_location.stop %} to '{{ leg.end_location.stop }}'{% elif plan.purpose %} to '{{ plan.purpose }}'{% endif %}: {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}.{%- endif %}{%- else %}
+- {% if ns.prev_transfer_walk %}[change] {% endif %}{{ leg.transit_route | get_transit_route_type }} '{{ leg.transit_route | format_route_id }}' to '{{ leg.end_location.stop }}': {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}.{%- set ns.prev_transfer_walk = false %}{%- endif %}{%- endfor %}
 {%- endif %}
-Total walking: Time: {{ plan.walking_time | duration_to_bucket_text }}; Distance: {{ plan.walking_distance | humanize_distance }}.
-Legs:
-{%- for leg in plan.legs %}{%- if not leg.is_transfer %}
-- Transit; {{ leg.transit_route | get_transit_route_type }} '{{ leg.transit_route | format_route_id }}'; From '{{ leg.start_location.stop }}'; To '{{ leg.end_location.stop }}'; Estimated duration: {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}.
-    {%- else %}
-- Walk; 
-    {%- if leg.start_location.stop %}From '{{ leg.start_location.stop }}';{%- endif %}
-    {%- if leg.end_location.stop %} To '{{ leg.end_location.stop }}'; 
-    {%- else %}To '{{ plan.purpose }}';{%- endif %}Estimated duration: {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}.
-{%- endif %}
-{%- endfor %}

@@ -21,6 +21,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status, Response
+import redis.exceptions as redis_exc
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -31,7 +32,7 @@ from llm_module.broker.redis_broker import (
     get_async_redis, task_done_channel, get_active_workers,
 )
 from llm_module.load_balancer.router import load_balancer
-from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse
+from llm_module.settings.models import LLMRequest, Task, TaskStatus, TaskStatusResponse, _FALLBACK_PRIORITY_SCORE
 from llm_module.tasks.llm_config import settings, get_batch_max_agents, _load_provider_defaults
 from llm_module.telemetry.logger import get_logger
 from llm_module.worker.task_worker import process_batch_task
@@ -274,7 +275,7 @@ class WorkerMetricsCollector:
             labels=['batch_key'],
         )
         for key in r.scan_iter("batch:*"):
-            depth = r.llen(key)
+            depth = r.zcard(key)
             if depth > 0:
                 queue_fam.add_metric([key.decode() if isinstance(key, bytes) else key], depth)
         yield queue_fam
@@ -348,7 +349,10 @@ async def create_task(request: LLMRequest) -> dict:
     4. Enqueues le task_id dans Celery
     5. Retourne immédiatement
     """
-    task = Task(request=request)
+    scores = [a.departure_timestamp for a in request.agents if a.departure_timestamp is not None]
+    priority_score = min(scores) if scores else _FALLBACK_PRIORITY_SCORE
+
+    task = Task(request=request, priority_score=priority_score)
 
     AGENTS_RECEIVED.labels(category=request.category).inc(len(request.agents))
     await save_task_async(task)
@@ -359,8 +363,8 @@ async def create_task(request: LLMRequest) -> dict:
     hash_str = hashlib.md5(f"{request.category}:{params_str}:{request.force_provider}".encode()).hexdigest()
     batch_key = f"{request.category}:{hash_str}"
 
-    # Ajout à la file d'attente du batch
-    queue_size = await add_task_to_batch_async(batch_key, task.task_id)
+    # Ajout à la file d'attente du batch (trié par departure_time)
+    queue_size = await add_task_to_batch_async(batch_key, task.task_id, priority_score)
     
     # Si c'est le 1er élément du lot, on accorde un court délai (1s) pour en accumuler d'autres.
     batch_limit = get_batch_max_agents(request.force_provider)
@@ -455,7 +459,7 @@ async def wait_for_task(task_id: str, timeout: float = 120.0) -> TaskStatusRespo
         try:
             raw = await asyncio.wait_for(_recv(), timeout=timeout)
             task = Task.model_validate_json(raw)
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, redis_exc.TimeoutError):
             task = await get_task_async(task_id) or task
 
         return TaskStatusResponse(

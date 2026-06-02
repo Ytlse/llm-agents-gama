@@ -32,6 +32,7 @@ class AgentSpec(BaseModel):
     perception: str
     destination: Optional[str] = None
     departure_time: Optional[str] = None
+    departure_timestamp: Optional[float] = None  # raw Unix timestamp for priority scoring
     current_time: Optional[str] = None
     context: Optional[str] = None
     history: List[str] = Field(default_factory=list)
@@ -55,6 +56,9 @@ class LLMRequest(BaseModel):
 # Tâche interne (API → Broker → Worker)
 # ---------------------------------------------------------------------------
 
+_FALLBACK_PRIORITY_SCORE: float = 9_999_999_999.0
+
+
 class Task(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     status: TaskStatus = TaskStatus.PENDING
@@ -63,6 +67,8 @@ class Task(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     result: Optional[List[AgentResponse]] = None
     error: Optional[str] = None
+    # Unix timestamp of earliest agent departure — lower score = higher priority
+    priority_score: float = _FALLBACK_PRIORITY_SCORE
 
     # Métriques de télémétrie (remplies par le Worker)
     provider_used: Optional[str] = None

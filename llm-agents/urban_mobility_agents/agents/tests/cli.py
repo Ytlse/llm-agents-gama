@@ -27,7 +27,7 @@ import asyncio
 
 settings.data.number_of_llm_based_agents = 1
 settings.data.population_size = 1
-settings.gtfs.cache_enabled = False
+settings.gtfs.otp_cache_enabled = False
 
 sim = bootstrap()
 agent = sim.agent

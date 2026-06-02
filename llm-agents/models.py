@@ -216,9 +216,15 @@ class PersonState(BaseModel):
     # Async pre-computation: non-None = état PLANNED (trajet calculé, prêt à envoyer à GAMA)
     # None = état IDLE (pas encore calculé, ou cycle précédent terminé via feedback d'arrivée)
     next_planned_move: Optional["PersonMove"] = None
-    # Queue of pre-computed moves for future activities (N+2, N+3, ...) built during bootstrap.
-    # Drained at each arrival to avoid runtime scheduling congestion during peak hours.
+    # Queue of pre-computed moves for future activities (N+2, N+3, ...).
+    # Initialisée au bootstrap (24h complètes), puis maintenue en horizon glissant :
+    # chaque popleft() déclenche le calcul de l'activité suivante pour refaire le plein.
     precomputed_moves: deque["PersonMove"] = Field(default_factory=deque)
+    # Horizon du refill glissant : dernière activité/timestamp déjà présents dans precomputed_moves.
+    # Permet à _precompute_one de savoir d'où repartir sans parcourir la queue.
+    precompute_in_progress: bool = False
+    precomputed_horizon_act: Optional["Activity"] = None
+    precomputed_horizon_ts: Optional[int] = None
 
 
 class Person(BaseModel):

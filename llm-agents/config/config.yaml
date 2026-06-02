@@ -1,0 +1,6 @@
+# Ce fichier définit les overrides de base communs à toutes les expériences.
+# La section "cache" n'est pas incluse ici : elle est disabled par défaut (CacheConfig.enabled=False).
+# Pour activer le cache LLM dans une expérience, ajouter dans le yaml d'expérience :
+#   cache:
+#     enabled: true
+#     cache_dir: /app/cache/llm_cache

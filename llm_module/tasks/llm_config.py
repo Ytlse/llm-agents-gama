@@ -19,15 +19,16 @@ def _load_provider_defaults() -> Dict[str, dict]:
 
 
 class ProviderConfig(BaseModel):
-    api_key:           SecretStr = SecretStr("")
+    api_key:           SecretStr    = SecretStr("")
     rpm_limit:         int
+    tpm_limit:         Optional[int] = None
     base_url:          str
     default_model:     str
-    weight:            float = 1.0
-    batch_max_agents:  int   = 5
-    concurrency_limit: int   = 2   # nb workers Celery simultanés autorisés pour ce provider
-    disable_timeout:   int   = 180  # secondes de désactivation automatique après N erreurs consécutives
-    adapter:           str   = ""   # nom de la classe d'adapter ; vide = utiliser le nom du provider
+    weight:            float        = 1.0
+    batch_max_agents:  int          = 1   # calculé par Settings.build_providers — ne pas définir manuellement
+    concurrency_limit: int          = 2   # nb workers Celery simultanés autorisés pour ce provider
+    disable_timeout:   int          = 180
+    adapter:           str          = ""
 
     def __repr__(self) -> str:
         return (
@@ -46,8 +47,10 @@ class Settings(BaseSettings):
     circuit_breaker_threshold:  float = 0.95
     max_retries:                int   = 50
     backoff_base_seconds:       float = 1.0
-    batch_max_agents:           int   = 5
+    batch_max_agents:           int   = 5     # fallback si aucun provider configuré
     batch_delay_seconds:        float = 1.0
+    assumed_prompt_tokens:      int   = 2200  # tokens_in max par agent (historique +10% de marge)
+    max_batch_agents:           int   = 20    # plafond absolu du calcul automatique de batch_max_agents
 
     # Les api_key viennent de l'env : PROVIDER_KEYS__groq=gsk-...
     provider_keys: Dict[str, SecretStr] = {}
@@ -58,11 +61,19 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def build_providers(self) -> "Settings":
         defaults = _load_provider_defaults()
+        tokens_per_agent = self.assumed_prompt_tokens + 4096
         result = {}
         for name, entry in defaults.items():
-            # L'api_key est lue via le nom de l'instance ou du provider de base (champ adapter)
             adapter_name = entry.get("adapter", name)
             key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+            tpm = entry.get("tpm_limit")
+            rpm = entry.get("rpm_limit", 1)
+            tpm_bound = int(tpm / tokens_per_agent) if tpm else rpm
+            entry["batch_max_agents"] = max(1, min(tpm_bound, rpm, self.max_batch_agents))
+            logger.info(
+                f"Provider '{name}' — batch_max_agents={entry['batch_max_agents']} "
+                f"(tpm={tpm}, rpm={rpm}, cap={self.max_batch_agents})"
+            )
             result[name] = ProviderConfig(api_key=key, **entry)
         self.providers = result
         return self

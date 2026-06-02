@@ -2,8 +2,9 @@
 # Définition des fournisseurs LLM disponibles.
 #
 # Champs obligatoires : rpm_limit, base_url, default_model
-# Champs optionnels   : weight (défaut 1.0), batch_max_agents (défaut 5),
-#                       disable_timeout (défaut 180s), adapter (défaut = nom du provider)
+# Champs optionnels   : tpm_limit, weight (défaut 1.0), disable_timeout (défaut 180s),
+#                       adapter (défaut = nom du provider)
+# batch_max_agents est calculé automatiquement : max(1, min(tpm_limit/tokens_per_agent, rpm_limit, max_batch_agents))
 #
 # Pour plusieurs instances d'un même fournisseur,
 # utilisez des noms distincts et renseignez le champ `adapter` avec le nom du fournisseur
@@ -16,10 +17,11 @@ providers:
   #
   openai:
     rpm_limit:         15
+    tpm_limit:         200000 # TBC
+    tpd_limit:         2000000 # TBC
     base_url:          https://api.openai.com/v1
     default_model:     gpt-4o-mini
     weight:            1.0
-    batch_max_agents:  10
     concurrency_limit: 3   # 3 × 10 agents = 30 évalués simultanément, RPM=15 contrôle la cadence
 
   #
@@ -27,10 +29,11 @@ providers:
   #
   mistral:
     rpm_limit:         90
+    tpm_limit:         500000 # TBC
+    tpd_limit:         2000000 # TBC
     base_url:          https://api.mistral.ai/v1
     default_model:     mistral-small-latest
     weight:            1.0
-    batch_max_agents:  10
     concurrency_limit: 5   # 100 RPM laisse de la marge pour 5 workers parallèles
 
   #
@@ -39,30 +42,33 @@ providers:
   google_gemini31:
     adapter:           google
     rpm_limit:         15
+    tpm_limit:         250000
+    tpd_limit:         null
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemini-3.1-flash-lite-preview
     weight:            2.0
-    batch_max_agents:  40
     concurrency_limit: 2   # batches de 40 agents = déjà très dense, inutile d'augmenter
     disable_timeout:   120
 
   google_gemma42:
     adapter:           google
-    rpm_limit:         5
+    rpm_limit:         15
+    tpm_limit:         null # Illimité
+    tpd_limit:         null
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-26b-a4b-it
     weight:            2.0
-    batch_max_agents:  2
     concurrency_limit: 2
     disable_timeout:   120
 
   google_gemma43:
     adapter:           google
     rpm_limit:         15
+    tpm_limit:         null # Illimité
+    tpd_limit:         null
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-31b-it
     weight:            2.0
-    batch_max_agents:  2
     concurrency_limit: 3
     disable_timeout:   120
 
@@ -80,61 +86,67 @@ providers:
 
   groq_llama3:
     adapter:           groq
-    rpm_limit:         25
+    rpm_limit:         30
+    tpm_limit:         12000
+    tpd_limit:         100000
     base_url:          https://api.groq.com/openai/v1
     default_model:     llama-3.3-70b-versatile
     weight:            1.0
-    batch_max_agents:  1 #12K
     concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
     disable_timeout:   120
 
   groq_llama4:
     adapter:           groq
-    rpm_limit:         25
+    rpm_limit:         30
+    tpm_limit:         30000
+    tpd_limit:         500000
     base_url:          https://api.groq.com/openai/v1
     default_model:     meta-llama/llama-4-scout-17b-16e-instruct
     weight:            1.0
-    batch_max_agents:  4 #30K
     concurrency_limit: 4
     disable_timeout:   120
 
   groq_qwen:
     adapter:           groq
-    rpm_limit:         10
+    rpm_limit:         60
+    tpm_limit:         6000
+    tpd_limit:         500000
     base_url:          https://api.groq.com/openai/v1
     default_model:     qwen/qwen3-32b
     weight:            1.0
-    batch_max_agents:  1 #6K
     concurrency_limit: 3
     disable_timeout:   120
 
   groq_llama31:
     adapter:           groq
-    rpm_limit:         10
+    rpm_limit:         30
+    tpm_limit:         6000
+    tpd_limit:         500000
     base_url:          https://api.groq.com/openai/v1
     default_model:     llama-3.1-8b-instant
     weight:            1.0
-    batch_max_agents:  1
     concurrency_limit: 3
     disable_timeout:   120
 
   groq_openai_120:
     adapter:           groq
-    rpm_limit:         10
+    rpm_limit:         30
+    tpm_limit:         8000
+    tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-120b
     weight:            1.0
-    batch_max_agents:  1
     concurrency_limit: 3
     disable_timeout:   120
 
   groq_openai_20:
     adapter:           groq
-    rpm_limit:         10
+    rpm_limit:         30
+    tpm_limit:         8000
+    tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-20b
     weight:            1.0
-    batch_max_agents:  1
     concurrency_limit: 3
     disable_timeout:   120
 
@@ -176,30 +188,32 @@ providers:
   cerebras_gpt-oss-120b:
     adapter:           cerebras
     rpm_limit:         5
+    tpm_limit:         30000
+    tpd_limit:         1000000
     base_url:          https://api.cerebras.ai/v1
     default_model:     gpt-oss-120b
     weight:            1.0
-    batch_max_agents:  4
     concurrency_limit: 4
     disable_timeout:   120
 
-  cerebras_llama31_8b:
-    adapter:           cerebras
-    rpm_limit:         5
-    base_url:          https://api.cerebras.ai/v1
-    default_model:     llama3.1-8b
-    weight:            1.0
-    batch_max_agents:  4
-    concurrency_limit: 4
-    disable_timeout:   120
+  # cerebras_llama31_8b:
+  #   adapter:           cerebras
+  #   rpm_limit:         5
+  #   tpm_limit:         30000
+  #   tpd_limit:         1000000
+  #   base_url:          https://api.cerebras.ai/v1
+  #   default_model:     llama3.1-8b
+  #   weight:            1.0
+  #   concurrency_limit: 4
+  #   disable_timeout:   120
 
-  cerebras_qwen3:
+  cerebras_zai-glm-4.7:
     adapter:           cerebras
     rpm_limit:         5
+    tpm_limit:         30000
+    tpd_limit:         1000000
     base_url:          https://api.cerebras.ai/v1
-    default_model:     qwen-3-235b-a22b-instruct-2507
+    default_model:     zai-glm-4.7
     weight:            1.0
-    batch_max_agents:  1
     concurrency_limit: 1
     disable_timeout:   120
-

@@ -373,26 +373,30 @@ def get_active_workers(provider: str) -> int:
 # Micro-Batching (sync / async)
 # ---------------------------------------------------------------------------
 
-async def add_task_to_batch_async(batch_key: str, task_id: str) -> int:
-    """Ajoute une tâche au bout de la file de batch et retourne la taille de la file."""
+async def add_task_to_batch_async(batch_key: str, task_id: str, score: float) -> int:
+    """Ajoute une tâche au Sorted Set de batch (trié par score = departure_time) et retourne la taille."""
     r = get_async_redis()
     key = _batch_queue_key(batch_key)
-    await r.rpush(key, task_id)
+    await r.zadd(key, {task_id: score})
     await r.expire(key, 3600)
-    return await r.llen(key)
+    return await r.zcard(key)
 
 
 def pop_tasks_from_batch_sync(batch_key: str, max_agents: int) -> list[Task]:
-    """Dépile les tâches de la file de batch jusqu'à atteindre la limite d'agents."""
+    """Dépile les tâches les plus urgentes (score min) jusqu'à atteindre la limite d'agents."""
     r = get_sync_redis()
     key = _batch_queue_key(batch_key)
     selected_tasks = []
     current_agents_count = 0
 
     while True:
-        task_id = r.lpop(key)
-        if not task_id:
+        result = r.zpopmin(key, count=1)
+        if not result:
             break
+
+        task_id = result[0][0]
+        if isinstance(task_id, bytes):
+            task_id = task_id.decode()
 
         task = get_task_sync(task_id)
         if not task:
@@ -400,8 +404,8 @@ def pop_tasks_from_batch_sync(batch_key: str, max_agents: int) -> list[Task]:
 
         agents_in_task = len(task.request.agents)
         if current_agents_count + agents_in_task > max_agents and current_agents_count > 0:
-            # Dépasse la limite et on a déjà des tâches : on remet la tâche en tête de file
-            r.lpush(key, task_id)
+            # Dépasse la limite : on remet la tâche avec son score d'origine
+            r.zadd(key, {task_id: task.priority_score})
             break
 
         selected_tasks.append(task)
@@ -410,12 +414,13 @@ def pop_tasks_from_batch_sync(batch_key: str, max_agents: int) -> list[Task]:
     return selected_tasks
 
 
-def requeue_tasks_sync(batch_key: str, task_ids: list[str]) -> None:
-    """En cas d'erreur de réseau (retry), replace les tâches en tête de file."""
-    if not task_ids:
+def requeue_tasks_sync(batch_key: str, tasks: list[Task]) -> None:
+    """En cas d'erreur (retry), replace les tâches dans le Sorted Set avec leur score d'origine."""
+    if not tasks:
         return
     r = get_sync_redis()
-    r.lpush(_batch_queue_key(batch_key), *task_ids)
+    mapping = {t.task_id: t.priority_score for t in tasks}
+    r.zadd(_batch_queue_key(batch_key), mapping)
 
 
 # ---------------------------------------------------------------------------

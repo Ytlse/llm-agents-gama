@@ -10,6 +10,7 @@ NOTEBOOKS = [
     "current_stats.ipynb",
     "llm_traffic_analyse.ipynb",
     "pipeline_delays.ipynb",
+    "delays.ipynb",
 ]
 
 SCRIPT_DIR = Path(__file__).parent

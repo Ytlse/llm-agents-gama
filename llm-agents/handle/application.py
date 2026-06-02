@@ -33,6 +33,7 @@ from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATE
 from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from geography import TOULOUSE_OSM_ROUTES_30K_BBOX
+from population_utils import fix_activities, merge_consecutive_activities, ajuster_planning
 
 # Compteurs des endpoints du contrôleur
 SYNC_REQUESTS = Counter('controller_sync_requests_total', 'Total requêtes /sync reçues de GAMA')
@@ -128,9 +129,17 @@ async def _prepare_population(
     format it is used as-is (no re-generation, no re-enrichment).
     """
     import random as _random
-    from trip_helper.osmnx_direct import get_direct_plan, load_route_cache
+    from trip_helper.osmnx_direct import get_direct_plan, load_route_cache, init_persistent_cache
 
     workdir_path = f"{settings.data.population_cache_prefix}{population_size}.json"
+
+    def _init_osmnx_cache() -> None:
+        if not settings.gtfs.osmnx_cache_enabled:
+            return
+        population_name = f"{settings.data.synthetic_file_prefix}population_{population_size}"
+        cache_dir = os.path.join(settings.gtfs.osmnx_persistent_cache_dir, population_name)
+        init_persistent_cache(cache_dir)
+
 
     def _is_eqasim_format(data: list) -> bool:
         # Eqasim identity has no "name" key; Pydantic PersonalIdentity dump does
@@ -153,6 +162,7 @@ async def _prepare_population(
         elif not _needs_osmnx_enrichment(data):
             logger.info(f"[population] File exists and fully enriched: {workdir_path}")
             load_route_cache(data)
+            _init_osmnx_cache()
             return workdir_path
         else:
             logger.info(f"[population] File exists but missing OSMnx routes — enriching")
@@ -201,6 +211,15 @@ async def _prepare_population(
         data = raw_data
         logger.info(f"[population] Selected {len(data)} agents from eqasim output")
 
+        # Step 2: fix activity sequences + merge consecutive same-purpose/same-location
+        fix_count = 0
+        for i, person in enumerate(data):
+            data[i], fixes = fix_activities(person)
+            if fixes:
+                fix_count += 1
+        n_merged = merge_consecutive_activities(data)
+        logger.info(f"[population] Step 2: {fix_count} persons fixed, {n_merged} activities merged")
+
         # Pass 1: public_transport flag
         MAX_WALK_M = 1_500
         def _flag(lon: float, lat: float) -> bool:
@@ -226,13 +245,13 @@ async def _prepare_population(
     # Skip if the raw data already carries transfert_from_previous_location for all activities.
     if not _needs_osmnx_enrichment(data):
         logger.info("[population] OSMnx routes already present in raw data — skipping Pass 2")
-        logger.info(f"[population] Pass 3: {n_adj} schedules adjusted")
         tmp_path = workdir_path + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.rename(tmp_path, workdir_path)
         logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
         load_route_cache(data)
+        _init_osmnx_cache()
         return workdir_path
     tasks_meta = []
     coros = []
@@ -285,6 +304,22 @@ async def _prepare_population(
             osmnx_ok += 1
     logger.info(f"[population] OSMnx pre-computed {osmnx_ok}/{len(tasks_meta)} routes")
 
+    # Step 5: adjust scheduled_start_time to absorb real travel durations
+    sched_errors = 0
+    for entry in data:
+        acts = entry.get("identity", {}).get("activities", [])
+        try:
+            entry["identity"]["activities"] = ajuster_planning(
+                workdir_path, entry.get("person_id", "?"), acts, raise_error=True
+            )
+        except ValueError as exc:
+            sched_errors += 1
+            logger.warning("[population] ajuster_planning: %s", exc)
+    if sched_errors:
+        logger.warning("[population] Step 5: %d person(s) with unresolved schedule conflicts", sched_errors)
+    else:
+        logger.info("[population] Step 5: all schedules adjusted successfully")
+
     tmp_path = workdir_path + ".tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -292,6 +327,7 @@ async def _prepare_population(
     logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
 
     load_route_cache(data)
+    _init_osmnx_cache()
     return workdir_path
 
 # Set working directory from environment if specified

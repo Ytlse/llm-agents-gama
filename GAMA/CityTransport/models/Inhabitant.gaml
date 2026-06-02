@@ -560,6 +560,7 @@ species inhabitant parent: passenger {
 			"duration"::trip_duration,
 			"plan_duration"::plan_duration,
 			"started_at"::CURRENT_TIMESTAMP-trip_duration,
+			"schedule_at"::schedule_at,
 			"arrive_at"::CURRENT_TIMESTAMP,
 			"expected_arrive_at"::expected_arrive_at,
 			"prepare_before_seconds"::raw_trip["prepare_before_seconds"],

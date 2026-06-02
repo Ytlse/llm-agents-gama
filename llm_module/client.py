@@ -198,7 +198,18 @@ class LLMClient:
                     heartbeat.cancel()
 
                 _wait_ms = (time.monotonic() - poll_start) * 1000
-                data = resp.json()
+                if resp.status_code >= 500:
+                    logger.error(
+                        f"LLM gateway wait returned HTTP {resp.status_code} | task_id={task_id} body={resp.text[:300]}"
+                    )
+                    return {"status": "failed", "error": f"Gateway error {resp.status_code}"}
+                try:
+                    data = resp.json()
+                except json.JSONDecodeError:
+                    logger.error(
+                        f"LLM gateway returned non-JSON response | task_id={task_id} status={resp.status_code} body={resp.text[:300]}"
+                    )
+                    return {"status": "failed", "error": f"Réponse gateway non-JSON (HTTP {resp.status_code})"}
 
                 if data["status"] in ("success", "failed"):
                     self.log_dialogue(payload, data)

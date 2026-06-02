@@ -56,6 +56,7 @@ class WorkdirPathResolutionMixin:
 
 
 def _find_providers_yaml() -> Optional[Path]:
+    """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
     candidates = [
         Path(base_dir) / ".." / "llm_module" / "config" / "providers.yaml",
         Path("/opt/llm_module/config/providers.yaml"),
@@ -98,6 +99,7 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     @model_validator(mode="after")
     def build_providers(self) -> "LlmConfig":
+        """Fusionne les entrées de providers.yaml avec les clés API issues de l'env pour construire les ProviderConfig."""
         yaml_path = _find_providers_yaml()
         if yaml_path is None:
             return self
@@ -137,7 +139,7 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Each worker independently picks items from the same asyncio.Queue, so up to
     # worker_concurrency LLM+OTP computations run in parallel (matching the old
     # fire-and-forget asyncio.create_task approach).
-    worker_concurrency: int = 10
+    worker_concurrency: int = 25
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -160,14 +162,23 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OTP provider settings
     otp_endpoint: str = "http://localhost:8080/otp/transmodel/v3"
-    otp_max_concurrent: int = 15  # max simultaneous get_itineraries calls
+    otp_max_concurrent: int = 30  # max simultaneous get_itineraries calls
 
     # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
     osmnx_cache_dir: str = "/app/osmnx_cache"
+    # Active le cache en mémoire des itinéraires pré-calculés au démarrage depuis le JSON population
+    # (lookup O(1) par coordonnées arrondies — court-circuite le calcul OSMnx à chaque requête)
+    osmnx_precomputed_cache_enabled: bool = True
+    # Active le cache persistant des graphes OSMnx sur disque entre les redémarrages
+    # (évite de re-télécharger/reconstruire les graphes ville+distance à chaque démarrage)
+    osmnx_cache_enabled: bool = True
+    # Répertoire racine du cache persistant ; un sous-dossier par population y est créé
+    osmnx_persistent_cache_dir: str = "/app/data/osmnx_cache"
 
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
-    cache_enabled: bool = True
+    otp_cache_enabled: bool = True
+    otp_persistent_cache_dir: str = "/app/data/otp_cache"
     recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
     search_window_m: int = 30
     transit_access_egress_modes: list[str] = ["foot"]
@@ -238,6 +249,15 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
 
 
+class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
+    _in_workdir_path_fields: ClassVar[List[str]] = []
+
+    enabled: bool = True
+    cache_dir: str = "/app/data/llm_cache"
+    semantic_threshold: float = 0.95
+    embed_model_name: str = "all-MiniLM-L6-v2"
+
+
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file", "pipeline_log_file"]
 
@@ -264,6 +284,7 @@ class Settings(BaseSettings):
     gtfs: GTFSConfig = GTFSConfig()
     agent: AgentConfig = AgentConfig()
     llm: LlmConfig = LlmConfig()
+    cache: CacheConfig = CacheConfig()
 
     # Directory settings
     workdir: Path = Path.cwd()
@@ -275,7 +296,8 @@ class Settings(BaseSettings):
     #     return Path(v).resolve()
     
     @model_validator(mode='after')
-    def resolve_all_paths(self): 
+    def resolve_all_paths(self):
+        """Résout tous les chemins relatifs des sous-configs par rapport à workdir après validation Pydantic."""
         # This will only be triggered if you instantiate Settings via pydantic's validation process,
         # e.g., Settings(**data), not when you subclass or access attributes directly.
         # If you use Settings.from_yaml_files or FactorySettings, it will be triggered.
@@ -311,6 +333,7 @@ class FactorySettings:
 
     @classmethod
     def get(cls) -> Settings:
+        """Retourne le singleton Settings, en le créant depuis les fichiers YAML au premier appel."""
         if cls._instance is not None:
             return cls._instance
 
@@ -324,13 +347,13 @@ class FactorySettings:
         if config_file_path and os.path.isfile(config_file_path):
             yaml_files.append(config_file_path)
 
-        # Derive workdir from config file name: experiments/<YYYY-MM-DD>_<HH_MM>_<stem>
+        # Derive workdir from config file name: experiments/archive/<YYYY-MM-DD>_<HH_MM>
         if config_file_path and os.path.isfile(config_file_path):
             now = datetime.now()
             cls._creation_time = now
             exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
             experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
-            workdir = str(experiments_dir / exp_name)
+            workdir = str(experiments_dir / "archive" / exp_name)
 
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
@@ -342,7 +365,7 @@ class FactorySettings:
 
             current_link = experiments_dir / "current"
             current_link.unlink(missing_ok=True)
-            current_link.symlink_to(cls._instance.workdir.name)
+            current_link.symlink_to(Path("archive") / cls._instance.workdir.name)
 
             # Redirect GAMA results into this experiment's workdir.
             # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
@@ -352,7 +375,7 @@ class FactorySettings:
             gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
             if gama_results_link.parent.exists():
                 exp_name = gama_results_dir.parent.name
-                relative_target = Path("../../experiments") / exp_name / "gama_results"
+                relative_target = Path("../../experiments") / "archive" / exp_name / "gama_results"
                 if gama_results_link.is_symlink():
                     gama_results_link.unlink()
                 elif gama_results_link.exists():
@@ -382,6 +405,7 @@ class FactorySettings:
             logger.info(f"Configuration statique mise à jour : {static_config_path}")
 
     def __getattribute__(self, name):
+        """Délègue tous les accès d'attributs au singleton Settings sous-jacent."""
         # Handle special methods and private attributes directly
         if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config'):
             return super().__getattribute__(name)
@@ -397,6 +421,7 @@ class FactorySettings:
     
     @classmethod
     def force_reload_paths(cls) -> Settings:
+        """Force le rechargement complet des settings (alias de force_reload)."""
         cls._instance = None
         return cls.get()
 

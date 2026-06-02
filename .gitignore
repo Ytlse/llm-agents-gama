@@ -47,6 +47,9 @@ data/osmnx_cache/*
 llm-agents/cache/*
 otp-toulouse/toulouse/gtfs/*
 cache/*
+llm-agents/data/osmnx_cache/*
+llm_cache/
+data/llm_cache/
 
 # Temp
 scripts/general/travel_time.py
@@ -56,3 +59,6 @@ data/archives/gtfs/*
 scripts/data/gtfs/*
 GAMA/CityTransport/results_legacy/*
 GAMA/CityTransport/results
+data/weather/*
+scripts/data/population/Temp/*
+

@@ -17,8 +17,9 @@ Retry avec backoff exponentiel sur les erreurs 5xx :
 """
 
 from __future__ import annotations
+import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from celery import Celery
 
@@ -116,18 +117,10 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
         batch_limit = settings.providers[provider_name].batch_max_agents
     
         r = get_sync_redis()
-        queue_depth_before = r.llen(_batch_queue_key(batch_key))
         tasks = pop_tasks_from_batch_sync(batch_key, batch_limit)
         if not tasks:
             return
     
-        queue_depth_after = r.llen(_batch_queue_key(batch_key))
-        agents_count = sum(len(t.request.agents) for t in tasks)
-        logger.info(
-            f"[worker] Batch démarré | batch_key={batch_key} tasks={len(tasks)} "
-            f"agents={agents_count} provider={provider_name} batch_limit={batch_limit} "
-            f"queue_before={queue_depth_before} queue_after={queue_depth_after}"
-        )
     
         # Marquer comme en cours
         for task in tasks:
@@ -150,7 +143,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
                 f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
             )
             if self.request.retries < self.max_retries:
-                requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
+                requeue_tasks_sync(batch_key, tasks)
                 raise self.retry(exc=e, countdown=delay)
             else:
                 for t in tasks:
@@ -158,16 +151,18 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
     
         except ProviderClientError as e:
             if e.status_code == 429:
-                # Rate limit (Too Many Requests) → exclusion temporaire et retry
-                mark_cooldown(e.provider, timeout=60)
+                # Rate limit (Too Many Requests) → cooldown calé sur x-ratelimit-reset si disponible
+                cooldown_secs = _parse_ratelimit_reset_seconds(getattr(e, "ratelimit_reset", None))
+                mark_cooldown(e.provider, timeout=cooldown_secs)
                 delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
                 logger.warning(
                     f"Rate limit (429) atteint, provider en cooldown, retry planifié | "
                     f"task_id={batch_id} provider={e.provider} "
+                    f"cooldown={cooldown_secs}s ratelimit_reset={getattr(e, 'ratelimit_reset', None)} "
                     f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
                 )
                 if self.request.retries < self.max_retries:
-                    requeue_tasks_sync(batch_key, [t.task_id for t in tasks])
+                    requeue_tasks_sync(batch_key, tasks)
                     raise self.retry(exc=e, countdown=delay)
                 else:
                     for t in tasks:
@@ -199,7 +194,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
         else:
             # Succès complet : relancer un worker s'il reste des éléments dans cette file
             r = get_sync_redis()
-            if r.llen(_batch_queue_key(batch_key)) > 0:
+            if r.zcard(_batch_queue_key(batch_key)) > 0:
                 process_batch_task.delay(batch_key, force_provider)
     finally:
         # Quoi qu'il arrive (succès, échec, retry, timeout...), on libère le slot !
@@ -253,6 +248,7 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_prov
             error_type=error_type,
             error_message=str(exc),
             http_status=http_status,
+            ratelimit_reset=getattr(exc, "ratelimit_reset", None),
         )
         increment_worker_error_by_type(provider_name, error_type)
         consecutive = increment_consecutive_errors(provider_name)
@@ -300,6 +296,15 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_prov
     increment_worker_metric(f"tokens_out_total:{provider_name}", amount=tokens_out)
     increment_worker_metric("tokens_in_total:__all__", amount=tokens_in)
     increment_worker_metric("tokens_out_total:__all__", amount=tokens_out)
+
+    tokens_in_per_agent = tokens_in / len(merged_agents) if merged_agents else tokens_in
+    if tokens_in_per_agent > settings.assumed_prompt_tokens:
+        logger.warning(
+            f"[worker] tokens_in dépasse assumed_prompt_tokens | "
+            f"tokens_in_per_agent={tokens_in_per_agent:.0f} "
+            f"assumed={settings.assumed_prompt_tokens} "
+            f"provider={provider_name} batch_id={batch_id}"
+        )
 
     # 6. Log de l'échange LLM (prompt + réponse + tokens) dans workdir/llm_exchanges.jsonl
     log_llm_exchange(
@@ -399,19 +404,19 @@ def _extract_primary_mode(mode: str) -> str:
     if not mode or mode == "unknown":
         return "unknown"
     parts = {m.strip().lower() for m in mode.split(",")}
-    if "rail" in parts or "train" in parts:
+    if "rail" in parts or "train" in parts or "ter" in parts or "intercités" in parts:
         return "train"
     if "metro" in parts or "subway" in parts:
         return "metro"
     if "tram" in parts or "tramway" in parts:
         return "tram"
-    if "bus" in parts:
+    if "bus" in parts or "tc" in parts or "transports en commun" in parts or "transport en commun" in parts:
         return "bus"
-    if "car" in parts or "driving" in parts:
+    if "car" in parts or "driving" in parts or "voiture" in parts:
         return "car"
-    if "bicycle" in parts or "bike" in parts or "cycling" in parts:
+    if "bicycle" in parts or "bike" in parts or "cycling" in parts or "vélo" in parts or "velo" in parts:
         return "cycling"
-    if parts <= {"foot", "walk", "walking"}:
+    if parts <= {"foot", "walk", "walking", "marche", "à pied", "a pied", "pied"}:
         return "walking"
     logger.error(f"Mode de transport inconnu ou non standard dans la réponse LLM | mode={mode}")
     return "other"
@@ -432,3 +437,36 @@ def _get_distance_bracket(distance_m: float) -> str:
     if distance_m < 50_000:
         return "20-50km"
     return ">50km"
+
+
+def _parse_ratelimit_reset_seconds(value: str | None, default: int = 60) -> int:
+    """Parse x-ratelimit-reset-requests en secondes jusqu'au reset.
+
+    Formats supportés :
+      - Groq : "59m17.087999999s", "6m0s", "45s"
+      - OpenAI : ISO 8601 "2026-05-28T17:01:00Z"
+
+    Retourne `default` si la valeur est absente ou non parseable.
+    Valeur retournée clampée à [10, 3600].
+    """
+    if not value:
+        return default
+
+    # Format durée : "Xm Y.Zs" ou "Xs" (Groq)
+    m = re.fullmatch(r'(?:(\d+)m)?(\d+(?:\.\d+)?)s', value.strip())
+    if m:
+        minutes = int(m.group(1) or 0)
+        seconds = float(m.group(2))
+        total = int(minutes * 60 + seconds) + 2  # +2s de marge
+        return max(10, min(total, 3600))
+
+    # Format ISO 8601 timestamp (OpenAI)
+    try:
+        reset_dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        delta = (reset_dt - datetime.now(timezone.utc)).total_seconds()
+        total = int(delta) + 2
+        return max(10, min(total, 3600))
+    except (ValueError, TypeError):
+        pass
+
+    return default

@@ -39,6 +39,7 @@ from settings import settings
 
 from prometheus_client import Counter, Gauge, Histogram
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
+from urban_mobility_agents.utils.weather_loader import get_weather
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 
 history_logger = HistoryStreamLog.get_instance()
@@ -259,6 +260,54 @@ class SimulationLoopV1(BaseScenario):
         ))
         return True
 
+    def _refill_precomputed_queue(self, person: Person) -> None:
+        """Déclenche le calcul de la prochaine activité au-delà de l'horizon courant.
+
+        Appelé après chaque popleft() sur precomputed_moves pour maintenir la queue
+        en horizon glissant 24h. Non-bloquant : lance _precompute_one comme tâche asyncio.
+        """
+        if person.state.precompute_in_progress:
+            return
+        horizon_act = person.state.precomputed_horizon_act
+        horizon_ts = person.state.precomputed_horizon_ts
+        if horizon_act is None or horizon_ts is None:
+            return
+        activities = person.identity.activities
+        if not activities or len(activities) <= 1:
+            return
+        try:
+            curr_idx = next(i for i, a in enumerate(activities) if a.id == horizon_act.id)
+        except StopIteration:
+            return
+        next_idx = (curr_idx + 1) % len(activities)
+        next_act = activities[next_idx]
+        if next_act.location is None or horizon_act.location is None:
+            return
+        person.state.precompute_in_progress = True
+        asyncio.create_task(self._precompute_one(person, horizon_act, horizon_ts, next_act))
+
+    async def _precompute_one(self, person: Person, from_act: Activity, from_arrive_ts: int, to_act: Activity) -> None:
+        """Calcule un move de refill sous le sémaphore et l'appende à precomputed_moves."""
+        try:
+            from_act_end_ts = to_timestamp_based_on_day(int(from_act.end_time), from_arrive_ts)
+            if from_act_end_ts < from_arrive_ts:
+                from_act_end_ts += 86400
+            async with self._worker_sem:
+                move, _ = await self._compute_move_for_activity(
+                    person, to_act, from_act_end_ts,
+                    from_location_override=from_act.location,
+                )
+            if move:
+                person.state.precomputed_moves.append(move)
+                person.state.precomputed_horizon_act = to_act
+                person.state.precomputed_horizon_ts = move.expected_arrive_at
+            else:
+                logger.warning(f"[refill] No move for {person.person_id}/{to_act.purpose}")
+        except Exception as e:
+            logger.warning(f"[refill] Error for {person.person_id}/{to_act.purpose}: {e}")
+        finally:
+            person.state.precompute_in_progress = False
+
     def _try_schedule_person(self, person: Person, timestamp: int) -> bool:
         """Tente de planifier un agent de façon atomique (pas d'await).
 
@@ -322,6 +371,7 @@ class SimulationLoopV1(BaseScenario):
                 # Consommer d'abord la queue pré-calculée (évite un recalcul inutile)
                 if person.state.precomputed_moves:
                     person.state.next_planned_move = person.state.precomputed_moves.popleft()
+                    self._refill_precomputed_queue(person)
                     idle_precomputed.append(person)
                     continue
 
@@ -356,6 +406,16 @@ class SimulationLoopV1(BaseScenario):
                     )
                     self._try_schedule_next_after(person, current_act, timestamp)
                     moving_fallback_count += 1
+
+            # Détection refill silencieusement échoué : horizon défini, queue vide, pas de tâche en vol.
+            if (person.state.precomputed_horizon_act is not None
+                    and not person.state.precomputed_moves
+                    and not person.state.precompute_in_progress):
+                logger.warning(
+                    f"[worker] ANOMALIE refill — person={person.person_id} "
+                    f"horizon défini mais queue vide → refill forcé"
+                )
+                self._refill_precomputed_queue(person)
 
         for person in idle_precomputed:
             asyncio.create_task(self._push_planned_move(person))
@@ -476,11 +536,12 @@ class SimulationLoopV1(BaseScenario):
                 person.state.cache_current_activity = None
                 return False
 
-        # Charger le prochain move depuis la queue pré-calculée au bootstrap si disponible,
-        # sinon déclencher un calcul à la volée (comportement historique).
+        # Charger le prochain move depuis la queue pré-calculée si disponible et déclencher
+        # le refill horizon glissant ; sinon calcul réactif à la volée.
         if activity is not None:
             if person.state.precomputed_moves:
                 person.state.next_planned_move = person.state.precomputed_moves.popleft()
+                self._refill_precomputed_queue(person)
             else:
                 self._try_schedule_next_after(person, activity, self._current_sim_timestamp)
 
@@ -614,11 +675,15 @@ class SimulationLoopV1(BaseScenario):
         )
 
         if observation.env_ob_code == "arrival":
+            _started_at = observation.data.get("started_at")
+            _schedule_at = observation.data.get("schedule_at")
             await GamaArrivalsLogger.get_instance().log_arrival(
                 move_id=str(observation.data.get("moving_id", "")),
                 person_id=observation.person_id,
                 arrive_at=int(observation.data.get("arrive_at", observation.timestamp)),
                 expected_arrive_at=int(observation.data.get("expected_arrive_at", observation.timestamp)),
+                started_at=int(_started_at) if _started_at is not None else None,
+                schedule_at=int(_schedule_at) if _schedule_at is not None else None,
             )
             if person.state.cache_current_activity:
                 activity = person.state.cache_current_activity
@@ -899,6 +964,16 @@ class SimulationLoopV1(BaseScenario):
 
             wave += 1
 
+        # Initialiser l'horizon glissant pour chaque agent à partir des résultats du bootstrap.
+        # person_last_planned_act/ts contiennent la dernière activité calculée par les vagues.
+        for person, act_N in eligible:
+            pid = person.person_id
+            last_act = person_last_planned_act.get(pid)
+            last_ts = person_last_planned_ts.get(pid)
+            if last_act is not None and last_ts is not None:
+                person.state.precomputed_horizon_act = last_act
+                person.state.precomputed_horizon_ts = last_ts
+
         n_precomputed = sum(len(p.state.precomputed_moves) for p in all_people)
         logger.info(f"[bootstrap] all activities pre-planning tasks done ({n_precomputed} future moves pre-cached across {wave - 2} additional wave(s))")
 
@@ -933,6 +1008,7 @@ class SimulationLoopV1(BaseScenario):
             target_24h_timestamp=target_24h,
             based_on=timestamp,
         )
+        planning_late_s = max(0, timestamp - departure_time)
         if departure_time < timestamp:
             departure_time += 86400  # activité du lendemain (bouclage J+1)
         include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
@@ -1031,6 +1107,7 @@ class SimulationLoopV1(BaseScenario):
                     context=context,
                     options=itineraries,
                     destination=next_activity.purpose,
+                    departure_time=departure_time,
                 )
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     selection_method = "LLM"
@@ -1064,6 +1141,7 @@ class SimulationLoopV1(BaseScenario):
             _pipeline_rec.plan_selected_index = plan_index
             _pipeline_rec.selection_method = selection_method
 
+        _weather = get_weather(timestamp)
         await MoveLogger.get_instance().log_move(
             person=person,
             plan=plan,
@@ -1072,9 +1150,13 @@ class SimulationLoopV1(BaseScenario):
             provider_model=provider_info or "",
             faster_itinerary=faster_itinerary,
             reasoning=reasoning,
-            late_s=max(0, timestamp - departure_time),
+            weather_temp=_weather["temperature"] if _weather else None,
+            weather_condition=_weather["weather_label"] if _weather else None,
+            weather_precip_mm=_weather["precip_mm"] if _weather else None,
+            late_s=planning_late_s,
             move_id=move.id,
             simulated_time=timestamp,
+            start_time=plan.start_time if plan is not None else None,
         )
 
         history_logger.log_query_travel_plan(

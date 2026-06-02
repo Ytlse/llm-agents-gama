@@ -65,6 +65,7 @@ def log_llm_error(
     error_type: str,
     error_message: str,
     http_status: int | None = None,
+    ratelimit_reset: str | None = None,
 ) -> None:
     """
     Enregistre une erreur LLM dans workdir/llm_errors.jsonl.
@@ -80,6 +81,8 @@ def log_llm_error(
         "error_message": error_message,
         "http_status": http_status,
     }
+    if ratelimit_reset is not None:
+        entry["ratelimit_reset"] = ratelimit_reset
 
     try:
         with open(log_file, "a", encoding="utf-8") as f:

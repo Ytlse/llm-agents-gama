@@ -25,10 +25,12 @@ from typing import Dict, Any
 from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
+from urban_mobility_agents.utils.weather_loader import get_weather, weather_to_natural_language
 from llama_index.core.llms import ChatMessage, ChatResponse
 import time
 from world.population import PersonScheduler
 from loguru import logger
+from llm.cache import LlmSemanticCache
 
 
 history_log = HistoryStreamLog.get_instance()
@@ -60,6 +62,53 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
 
     return file_name
 
+
+def _build_profile_narrative(traits: dict) -> str:
+    name = traits.get("name", "")
+    first_name = name.split()[0] if name else ""
+    age = traits.get("age", "")
+    occupation = traits.get("main_occupation") or traits.get("professional_activity", "")
+    household = traits.get("household_size")
+    _income_map = {
+        "Very Low": "très faible", "Low": "faible", "Medium": "moyen",
+        "Medium-Low": "moyen-bas", "Medium-High": "moyen-élevé", "High": "élevé", "Very High": "très élevé",
+    }
+    income = _income_map.get(traits.get("income") or "", (traits.get("income") or "").lower())
+
+    extras = []
+    if household == 1:
+        extras.append("seul(e)")
+    elif household:
+        extras.append(f"famille de {household} pers.")
+    if income:
+        extras.append(f"revenu {income}")
+    line1 = f"{first_name}, {age} ans, {occupation}"
+    if extras:
+        line1 += f" ({', '.join(extras)})"
+
+    car_avail = traits.get("car_availability", "none")
+    has_license = traits.get("has_driving_license", False)
+    has_pt = traits.get("has_pt_subscription", False)
+
+    if car_avail == "all" and has_license:
+        car_str = "conducteur·trice, voiture toujours dispo"
+    elif car_avail == "all" and not has_license:
+        car_str = "voiture dispo (sans permis — peut être conduite par un tiers)"
+    elif car_avail == "some" and has_license:
+        car_str = "peut conduire, voiture à partager dans le foyer, conditionné par la nécessité"
+    elif car_avail == "some" and not has_license:
+        car_str = "sans permis, voiture à partager dans le foyer, conditionné par la nécessité"
+    elif car_avail == "none" and has_license:
+        car_str = "permis mais sans voiture"
+    else:
+        car_str = "sans voiture ni permis"
+
+    pt_str = "abonné·e TC" if has_pt else "sans abonnement TC"
+    line2 = f"Mobilité : {car_str} | {pt_str}"
+
+    return "\n".join([line1, line2])
+
+
 class LlmAgent:
     DEFAULT_IDENTITY = ""
 
@@ -79,6 +128,17 @@ class LlmAgent:
         # Instance du client LLM (Singleton naturel pour cet Agent)
         self.llm_client = LLMClient(base_url=os.getenv("LLM_API_URL", "http://localhost:8000"), poll_timeout=settings.agent.remote_llm_poll_timeout)
         self.prompt_manager = PromptManager(os.path.join(os.path.dirname(__file__), "prompts"))
+
+        if settings.cache.enabled:
+            population_name = f"{settings.data.synthetic_file_prefix}population_{settings.data.population_size}"
+            cache_dir = os.path.join(settings.cache.cache_dir, population_name)
+            self.llm_cache = LlmSemanticCache(
+                cache_dir=cache_dir,
+                semantic_threshold=settings.cache.semantic_threshold,
+                embed_model_name=settings.cache.embed_model_name,
+            )
+        else:
+            self.llm_cache = None
 
     def get_short_term_memory(self, user_id: str) -> UserShortTermMemory:
         if user_id not in self.short_term_memory:
@@ -186,9 +246,7 @@ class LlmAgent:
         return None, response.strip()
 
     def get_person_identity_description(self, person: Person) -> str:
-        i = person.identity
-        text = json.dumps(i.traits_json, ensure_ascii=False, indent=2)
-        return text
+        return _build_profile_narrative(person.identity.traits_json)
 
     async def query_past_experiences_for_travel(self, context: Context, options: list[TravelPlan]) -> list[str]:
         def get_plan_text(plan: TravelPlan) -> str:
@@ -257,12 +315,12 @@ class LlmAgent:
         identity_description = self.get_person_identity_description(person)
         return self.prompt_manager.get_prompt(PromptName.PERSONAL_SYSTEM, identity_description=identity_description)
     
-    async def build_travel_plan_payload(self, context: Context, options: list[TravelPlan], destination: str) -> Dict[str, Any]:
+    async def build_travel_plan_payload(self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0) -> Dict[str, Any]:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
         constraints = "None" #TODO To be replaced by real constraints from persona
         current_time = humanize_time(context.timestamp)
-        city_context = "None" #TODO To be replaced by real context from GAMA (ex meteo)
+        city_context = weather_to_natural_language(get_weather(context.timestamp)) or "None"
 
         history = []
         if settings.agent.long_term_memory_enabled:
@@ -297,6 +355,8 @@ class LlmAgent:
                     "agent_id": agent_id,
                     "perception": f"{perception} Contraintes : {constraints}",
                     "destination": destination,
+                    "departure_time": humanize_time(departure_time) if departure_time else None,
+                    "departure_timestamp": float(departure_time) if departure_time else None,
                     "current_time": current_time,
                     "history": history,
                     "trajectories": trajectories
@@ -308,13 +368,41 @@ class LlmAgent:
             }
         }
 
-    async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str) -> tuple[int, str, str]:
+    async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0) -> tuple[int, str, str]:
         assert options, "No travel options provided for planning trip."
 
-        # shuffle options to avoid position bias — work on a copy to ne pas muter la liste du caller
+        # Ordre déterministe pour les clés de cache (indépendant du shuffle)
+        sorted_options = sorted(options, key=lambda p: p.get_code() or "")
+        # Shuffle séparé pour le payload LLM (évite le biais de position)
         shuffled_options = list(options)
         random.shuffle(shuffled_options)
-        payload = await self.build_travel_plan_payload(context, shuffled_options, destination)
+        payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
+
+        # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
+        memory_text = json.dumps(payload["agents"][0].get("history", []), ensure_ascii=False)
+        activity_purpose = options[0].purpose or ""
+        weather = get_weather(context.timestamp)
+
+        # --- Cache lookup (avant l'appel LLM) ---
+        if self.llm_cache is not None:
+            cache_hit = await self.llm_cache.lookup(
+                agent_id=context.person.person_id,
+                activity_id=context.activity_id,
+                timestamp=context.timestamp,
+                options=sorted_options,
+                memory_text=memory_text,
+                weather=weather,
+                activity_purpose=activity_purpose,
+            )
+            if cache_hit is not None:
+                chosen_plan = sorted_options[cache_hit["index"]]
+                original_index = options.index(chosen_plan)
+                reason = "Décision récupérée depuis le cache sémantique LLM."
+                plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
+                stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> served from LLM cache.\n{plan_summary}\nReasoning: {reason}"
+                self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
+                logger.debug(f"Cache hit for person {context.person.person_id}, activity {context.activity_id}, returning cached plan with reason: {reason}")
+                return original_index, reason, f"cache:{cache_hit.get('mode', '')}"
 
         _pl = PipelineLogger.get()
         _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
@@ -355,6 +443,25 @@ class LlmAgent:
                     original_index = options.index(chosen_plan)
                     if _rec is not None:
                         _rec.T_extract_end = time.time()
+
+                    # --- Insertion asynchrone dans le cache (fire-and-forget) ---
+                    if self.llm_cache is not None:
+                        mode = ",".join([str(leg.mode) for leg in chosen_plan.legs]) if chosen_plan.legs else ""
+                        _cache_task = asyncio.create_task(self.llm_cache.store(
+                            agent_id=context.person.person_id,
+                            activity_id=context.activity_id,
+                            timestamp=context.timestamp,
+                            options=sorted_options,
+                            memory_text=memory_text,
+                            chosen_plan_code=chosen_plan.get_code(),
+                            mode=mode,
+                            weather=weather,
+                        ))
+                        _cache_task.add_done_callback(
+                            lambda t: logger.warning(f"Cache store failed: {t.exception()}") if not t.cancelled() and t.exception() else None
+                        )
+                        logger.debug(f"Cache store task created for person {context.person.person_id}, activity {context.activity_id}, chosen plan mode: {mode}")
+
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
                     return original_index, reason, provider_used
 

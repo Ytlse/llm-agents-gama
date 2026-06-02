@@ -142,6 +142,53 @@ def load_route_cache(population_data: list) -> None:
                     loaded += 1
     logger.info(f"[osmnx-cache] {loaded} pre-computed routes loaded from population JSON")
 
+
+# ── Persistent SQLite cache (optional, enabled via settings) ──────────────────
+
+_persistent_cache = None  # type: Optional["OsmnxPersistentCache"]
+
+
+def init_persistent_cache(cache_dir: str) -> None:
+    global _persistent_cache
+    from trip_helper.osmnx_persistent_cache import OsmnxPersistentCache
+    _persistent_cache = OsmnxPersistentCache(cache_dir)
+    logger.info(f"[osmnx-cache] Persistent cache enabled at {cache_dir}")
+
+
+def _make_travel_plan(
+    origin: Location,
+    destination: Location,
+    trip_mode: str,
+    departure_time: int,
+    duration_s: int,
+    distance_m: float,
+) -> TravelPlan:
+    end_s = departure_time + duration_s
+    loc_start = TransitLocation(stop="", lat=origin.lat, lon=origin.lon)
+    loc_end = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
+    leg = Transit(
+        start_time=departure_time,
+        end_time=end_s,
+        duration=duration_s,
+        distance=distance_m,
+        mode=trip_mode,
+        start_location=loc_start,
+        end_location=loc_end,
+        is_transfer=False,
+        transit_route=DIRECT_ROUTE_MARKER[trip_mode],
+    )
+    return TravelPlan(
+        id=random_uuid(),
+        start_location=origin,
+        end_location=destination,
+        start_time=departure_time,
+        end_time=end_s,
+        duration=duration_s,
+        distance=distance_m,
+        legs=[leg],
+    )
+
+
 # ── OSMnx network_type mapping ────────────────────────────────────────────────
 
 _OSMNX_MODES = ("walk", "bike", "drive")
@@ -500,38 +547,16 @@ async def get_direct_plan(
     _timing_sink: dict | None = None,
 ) -> Optional[TravelPlan]:
     """Async OSMnx direct route. Returns a one-leg TravelPlan or None on failure."""
-    # Cache hit: return pre-computed result without calling OSMnx.
-    _cache_key = (round(origin.lat, 7), round(origin.lon, 7),
-                  round(destination.lat, 7), round(destination.lon, 7), trip_mode)
-    if _cache_key in _DIRECT_ROUTE_CACHE:
-        cached = _DIRECT_ROUTE_CACHE[_cache_key]
-        if cached is None:
-            return None
-        duration_s = cached["duration_s"]
-        distance_m = cached["distance_m"]
-        loc_start = TransitLocation(stop="", lat=origin.lat,      lon=origin.lon)
-        loc_end   = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
-        leg = Transit(
-            start_time=departure_time,
-            end_time=departure_time + duration_s,
-            duration=duration_s,
-            distance=distance_m,
-            mode=trip_mode,
-            start_location=loc_start,
-            end_location=loc_end,
-            is_transfer=False,
-            transit_route=DIRECT_ROUTE_MARKER[trip_mode],
-        )
-        return TravelPlan(
-            id=random_uuid(),
-            start_location=origin,
-            end_location=destination,
-            start_time=departure_time,
-            end_time=departure_time + duration_s,
-            duration=duration_s,
-            distance=distance_m,
-            legs=[leg],
-        )
+    # Pre-computed route cache (populated from population JSON at startup).
+    if settings.gtfs.osmnx_precomputed_cache_enabled:
+        _cache_key = (round(origin.lat, 7), round(origin.lon, 7),
+                      round(destination.lat, 7), round(destination.lon, 7), trip_mode)
+        if _cache_key in _DIRECT_ROUTE_CACHE:
+            cached = _DIRECT_ROUTE_CACHE[_cache_key]
+            if cached is None:
+                return None
+            return _make_travel_plan(origin, destination, trip_mode, departure_time,
+                                     cached["duration_s"], cached["distance_m"])
 
     # Fast reject: skip routing when the straight-line distance exceeds the mode's threshold.
     straight_m = _crow_flies_m(origin, destination)
@@ -539,6 +564,21 @@ async def get_direct_plan(
         return None
     if trip_mode == "bicycle" and straight_m > _MAX_BIKE_M:
         return None
+
+    # Persistent cache lookup (after fast reject to avoid caching trivial misses).
+    _p_key = _p_date = _p_dow = _p_bucket = None
+    if _persistent_cache is not None:
+        _p_key, _p_date, _p_dow, _p_bucket = _persistent_cache.__class__.make_key(
+            congestion_dt, trip_mode,
+            round(origin.lat, 5), round(origin.lon, 5),
+            round(destination.lat, 5), round(destination.lon, 5),
+        )
+        entry = await _persistent_cache.lookup_async(_p_key)
+        if entry.found:
+            if entry.result is None:
+                return None
+            return _make_travel_plan(origin, destination, trip_mode, departure_time,
+                                     entry.result["duration_s"], entry.result["distance_m"])
 
     osmnx_mode = _MODE_TO_OSMNX[trip_mode]
     t0 = _time.monotonic()
@@ -582,42 +622,28 @@ async def get_direct_plan(
 
     if result is None:
         OSMNX_ERR.labels(mode=trip_mode, reason="no_route").inc()
+        if _persistent_cache is not None and _p_key is not None:
+            asyncio.create_task(_persistent_cache.store_async(
+                _p_key, _p_date, _p_dow, _p_bucket, trip_mode,
+                round(origin.lat, 5), round(origin.lon, 5),
+                round(destination.lat, 5), round(destination.lon, 5),
+                None,
+            ))
         return None
 
     OSMNX_OK.labels(mode=trip_mode).inc()
     OSMNX_LAT.labels(mode=trip_mode).observe(_time.monotonic() - t0)
 
-    duration_s = result["duration_s"]
-    distance_m = result["distance_m"]
-    start_s    = departure_time
-    end_s      = departure_time + duration_s
+    if _persistent_cache is not None and _p_key is not None:
+        asyncio.create_task(_persistent_cache.store_async(
+            _p_key, _p_date, _p_dow, _p_bucket, trip_mode,
+            round(origin.lat, 5), round(origin.lon, 5),
+            round(destination.lat, 5), round(destination.lon, 5),
+            result,
+        ))
 
-    loc_start = TransitLocation(stop="", lat=origin.lat,      lon=origin.lon)
-    loc_end   = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
-
-    #logger.info(f"OSMnx success {trip_mode} route: {origin} → {destination}  ({duration_s}s, {distance_m:.1f}m)")
-
-    leg = Transit(
-        start_time=start_s,
-        end_time=end_s,
-        duration=duration_s,
-        distance=distance_m,
-        mode=trip_mode,
-        start_location=loc_start,
-        end_location=loc_end,
-        is_transfer=False,
-        transit_route=DIRECT_ROUTE_MARKER[trip_mode],
-    )
-    return TravelPlan(
-        id=random_uuid(),
-        start_location=origin,
-        end_location=destination,
-        start_time=start_s,
-        end_time=end_s,
-        duration=duration_s,
-        distance=distance_m,
-        legs=[leg],
-    )
+    return _make_travel_plan(origin, destination, trip_mode, departure_time,
+                             result["duration_s"], result["distance_m"])
 
 
 async def warmup(city: str = "Toulouse, France", dist: int = TOULOUSE_CENTER_DIST_M) -> None:

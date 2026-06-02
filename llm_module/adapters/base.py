@@ -81,6 +81,28 @@ class BaseAdapter(ABC):
         from llm_module.tasks.llm_config import settings
         return settings.providers[self._instance_name].base_url
 
+    def _raise_for_status(self, response: "httpx.Response") -> None:
+        """Lève une ProviderError si le status HTTP indique une erreur.
+
+        Capture le header x-ratelimit-reset (présent sur les 429 Groq/OpenAI)
+        et l'attache à l'exception pour qu'il apparaisse dans llm_errors.jsonl.
+        """
+        if response.status_code < 400:
+            return
+        ratelimit_reset = response.headers.get("x-ratelimit-reset-requests") or response.headers.get("x-ratelimit-reset")
+        error_type = extract_error_type(response.text, response.status_code)
+        if response.status_code >= 500:
+            raise ProviderServerError(
+                self._instance_name, response.status_code, response.text,
+                error_type=error_type,
+                ratelimit_reset=ratelimit_reset,
+            )
+        raise ProviderClientError(
+            self._instance_name, response.status_code, response.text,
+            error_type=error_type,
+            ratelimit_reset=ratelimit_reset,
+        )
+
     def _parse_output(self, raw: str) -> LLMOutput:
         provider = self._instance_name
 
@@ -169,10 +191,11 @@ class BaseAdapter(ABC):
 
 class ProviderError(Exception):
     """Base."""
-    def __init__(self, provider: str, status_code: int, message: str, error_type: str = "unknown"):
+    def __init__(self, provider: str, status_code: int, message: str, error_type: str = "unknown", ratelimit_reset: str | None = None):
         self.provider = provider
         self.status_code = status_code
         self.error_type = error_type
+        self.ratelimit_reset = ratelimit_reset
         super().__init__(f"[{provider}] HTTP {status_code}: {message}")
 
 

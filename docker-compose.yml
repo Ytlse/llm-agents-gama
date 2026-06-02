@@ -233,6 +233,9 @@ services:
       - ./experiments:/app/experiments
       - ./data/eqasim_output:/data/eqasim-output:rw
       - ./data/osmnx_cache:/app/osmnx_cache
+      - ./data/llm_cache:/app/data/llm_cache
+      - ./data/weather:/app/data/weather
+      - ./data/weather:/data/weather
       - ./GAMA:/GAMA
     depends_on:
       api:

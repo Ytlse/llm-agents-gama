@@ -1,5 +1,7 @@
-List of transits:
-{%- for leg in plan.legs %}{%- if not leg.is_transfer %}
+{%- if plan.legs | length == 1 and plan.legs[0].transit_route and '__DIRECT' in plan.legs[0].transit_route %}{%- set leg = plan.legs[0] %}Direct {{ leg.mode or 'trip' }}; Duration: {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}; Distance: {{ leg.distance | humanize_distance }}.
+{%- else %}List of transits:
+{%- for leg in plan.legs %}{%- if not leg.is_transfer and not (leg.transit_route and '__DIRECT' in leg.transit_route) %}
 - {{ leg.transit_route | get_transit_route_type }} {{ leg.transit_route | format_route_id }} from '{{ leg.start_location.stop }}' to '{{ leg.end_location.stop }}';
 {%- endif %}
 {%- endfor %}
+{%- endif %}

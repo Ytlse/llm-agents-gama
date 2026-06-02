@@ -28,7 +28,14 @@ env.filters['get_transit_route_long_name'] = get_transit_route_name
 env.filters['format_route_id'] = get_transit_route_short_name
 env.filters['duration_to_bucket_text'] = duration_to_bucket_text if settings.agent.quantify_time_window else humanize_duration
 env.filters['time_to_bucket_text'] = time_to_bucket_text
-env.filters['humanize_distance'] = lambda distance: f"{distance} meters" if distance else "Unknown distance"
+def humanize_distance(distance):
+    if not distance:
+        return "Unknown distance"
+    if distance >= 1000:
+        return f"{distance / 1000:.1f} km"
+    return f"{round(distance)} m"
+
+env.filters['humanize_distance'] = humanize_distance
 
 
 tpl_describe_the_travel_plan = env.get_template('descriptions/travel_plan_describe_v2.j2')

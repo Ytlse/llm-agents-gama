@@ -1,5 +1,5 @@
 gtfs:
-  cache_enabled: false
+  otp_cache_enabled: false
   mode: OTP
 
 agent:

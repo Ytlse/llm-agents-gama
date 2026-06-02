@@ -47,10 +47,14 @@ CSV_HEADERS = [
     "Mémoire à long terme",
     "Filtre de perception",
     "Traits de personnalité",
+    "Météo Température (°C)",
+    "Météo Condition",
+    "Météo Précipitations (mm)",
     "Raisonnement",
     "Retard planification (s)",
     "Heure de calcul",
     "Temps simulé",
+    "Heure de départ",
 ]
 
 
@@ -108,7 +112,7 @@ def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
 class GamaArrivalsLogger:
     _instance: Optional["GamaArrivalsLogger"] = None
 
-    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s"]
+    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s", "started_at", "schedule_at", "departure_delay_s"]
 
     def __init__(self):
         self._path: Optional[Path] = None
@@ -129,12 +133,15 @@ class GamaArrivalsLogger:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(self._HEADERS)
 
-    async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int):
+    async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
+                          started_at: Optional[int] = None, schedule_at: Optional[int] = None):
         async with self._lock:
             self._ensure_header()
             delay_s = arrive_at - expected_arrive_at
+            departure_delay_s = (started_at - schedule_at) if started_at is not None and schedule_at is not None else None
             with open(self._path, "a", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s])
+                csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s,
+                                        started_at, schedule_at, departure_delay_s])
 
 
 class MoveLogger:
@@ -172,9 +179,13 @@ class MoveLogger:
         provider_model: str,
         faster_itinerary: Optional[TravelPlan],
         reasoning: str,
+        weather_temp: Optional[float] = None,
+        weather_condition: Optional[str] = None,
+        weather_precip_mm: Optional[float] = None,
         late_s: int = 0,
         move_id: str = "",
         simulated_time: Optional[int] = None,
+        start_time: Optional[int] = None,
     ):
         async with self._lock:
             self._ensure_header()
@@ -188,11 +199,12 @@ class MoveLogger:
 
             purpose_fr = _PURPOSE_FR.get((purpose or "").lower(), purpose or "")
 
+            no_move = selection_method == "Pas de déplacement (même localisation)"
             row = [
                 settings.workdir.name,
                 trip_id,
                 move_id,
-                _plan_transport_mode(plan),
+                "Aucun" if no_move else _plan_transport_mode(plan),
                 _plan_transport_mode(faster_itinerary),
                 _residence_zone(home.lat if home else None, home.lon if home else None),
                 gender,
@@ -208,10 +220,14 @@ class MoveLogger:
                 settings.agent.long_term_memory_enabled,
                 settings.agent.long_term_memory_filter_by_datetime,
                 "personality" in traits,
+                weather_temp if weather_temp is not None else "",
+                weather_condition if weather_condition is not None else "",
+                weather_precip_mm if weather_precip_mm is not None else "",
                 reasoning,
                 late_s,
                 computed_at,
                 simulated_time if simulated_time is not None else "",
+                datetime.fromtimestamp(start_time / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if start_time is not None else "",
             ]
 
             with open(self._path, "a", newline="", encoding="utf-8") as f:

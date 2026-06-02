@@ -1,10 +1,26 @@
-from collections import defaultdict
-import os
-import pickle
+"""
+CachedTripHelper — Décorateur de cache pour TripHelper.
+
+Enveloppe un TripHelper sous-jacent (ex. OTP) en ajoutant :
+- Un cache persistant sur disque (OtpPersistentCache) pour éviter les appels
+  répétés au moteur de routage pour un même couple origine/destination/heure.
+  Les résultats mis en cache sont réutilisés à d'autres heures de départ par
+  simple décalage temporel (delta_ms).
+- Une liste noire (blacklist) des paires O/D sans itinéraire connu, afin de
+  court-circuiter immédiatement les requêtes vouées à l'échec.
+- Deux stratégies de recherche sélectionnables via la config :
+    v1 (recursion_search_depth > 0) : recherche récursive qui ré-interroge OTP
+      depuis les points de correspondance pour explorer des combinaisons alternatives.
+    v2 (défaut) : requêtes parallèles par mode d'accès/sortie (pied, vélo, …)
+      sur un seul créneau horaire, avec déduplication finale.
+- Un indicateur Prometheus (trip_cache_hit_ratio) mesurant le taux de cache hit.
+"""
+
 from trip_helper import TripHelper
+from trip_helper.otp_persistent_cache import OtpPersistentCache
 from models import Location, TravelPlan
 from world import WorldModel
-from utils import square_distance, random_uuid
+from utils import random_uuid
 from settings import settings
 from loguru import logger
 import asyncio
@@ -16,38 +32,26 @@ TRIP_CACHE_HIT_RATIO = Gauge(
 )
 
 class CachedTripHelper(TripHelper):
-    def __init__(self, 
+    def __init__(self,
                  world_model: WorldModel,
                  trip_helper: TripHelper):
         super().__init__()
         self.trip_helper = trip_helper
-        self.world_grid = world_model.world_grid
-        self.time_grid = world_model.time_grid
-        self.cache_size_per_grid = settings.gtfs.n_trip_in_grid  # max number of results per grid cell
-        # cache top k results for each origin-destination pair
-        if settings.gtfs.solari_cache_file and os.path.exists(settings.gtfs.solari_cache_file):
-            with open(settings.gtfs.solari_cache_file, 'rb') as f:
-                self.cache = pickle.load(f)
-        else:
-            self.cache = defaultdict(list)
+        self._world_model = None
+        if world_model is not None:
+            self.world_model = world_model
         self.recursion_search_depth = settings.gtfs.recursion_search_depth
         self.max_transfers = 5
-        # blacklist pair of (orig, dest) if no route is found, avoid to spam the GTFS server
-        self.blacklist = set()
-        # cache statistics
-        self.cache_enabled = settings.gtfs.cache_enabled
+        self.otp_cache_enabled = settings.gtfs.otp_cache_enabled
         self._stats_cache_hit = (0, 0)
-        self._stats_new_cache = 0
-        self._dump_cache_after = 10000
-        self._cache_last_hour = None
-        self._cache_duration = 900 # 15 minutes cache duration
-        self._notfound_cache_last_hour = None
-        self._notfound_cache_duration = 1800  # 30 minutes cache duration for not found itineraries
 
-        if not self.cache_enabled:
+        if self.otp_cache_enabled:
+            self.persistent_cache = OtpPersistentCache(settings.gtfs.otp_persistent_cache_dir)
+            logger.info(f"[CachedTripHelper]: Persistent cache enabled at {settings.gtfs.otp_persistent_cache_dir}")
+        else:
+            self.persistent_cache = None
             logger.warning("[CachedTripHelper]: Cache is disabled, all requests will go to the trip_helper directly.")
 
-        # choose the strategy based on settings
         if settings.gtfs.recursion_search_depth > 0:
             logger.warning(f"[CachedTripHelper]: Using recursive search strategy with depth {settings.gtfs.recursion_search_depth}")
             self.do_get_iteraries = self.do_get_iteraries_v1
@@ -55,8 +59,16 @@ class CachedTripHelper(TripHelper):
             logger.warning(f"[CachedTripHelper]: Using time-range expanded based search strategy")
             self.do_get_iteraries = self.do_get_iteraries_v2
 
-    def dump_cache_to_file(self):
-        pass
+    @property
+    def world_model(self):
+        return self._world_model
+
+    @world_model.setter
+    def world_model(self, value: WorldModel):
+        self._world_model = value
+        if value is not None:
+            self.world_grid = value.world_grid
+            self.time_grid = value.time_grid
 
     def get_unique_itineraries(self, itineraries: list[TravelPlan]) -> list[TravelPlan]:
         """
@@ -253,83 +265,52 @@ class CachedTripHelper(TripHelper):
         import time as _time
         _t_cache = _time.monotonic()
 
-        grid_origin = self.world_grid.get_location_grid(origin)
-        grid_destination = self.world_grid.get_location_grid(destination)
-        time_slot = self.time_grid.get_time_slot(departure_time)
+        if self.otp_cache_enabled:
+            key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by)
+            bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
+            is_blacklisted = await self.persistent_cache.is_blacklisted_async(bl_key)
+            cached = None if is_blacklisted else await self.persistent_cache.lookup_async(key)
+        else:
+            key = bl_key = None
+            is_blacklisted = False
+            cached = None
 
-        # Only save cache for the current hour, because the GTFS data is updated hourly
-        day_and_hour = departure_time // self._cache_duration # e.g. 15 minutes cache duration
-        if self._cache_last_hour is None or self._cache_last_hour != day_and_hour:
-            self.cache.clear()
-            # logger.debug(f"[CachedTripHelper]: Cache cleared for new hour {day_and_hour}")
-        self._cache_last_hour = day_and_hour
-
-        day_and_hour = departure_time // self._notfound_cache_duration  # e.g. 30 minutes cache duration for not found itineraries
-        if self._notfound_cache_last_hour is None or self._notfound_cache_last_hour != day_and_hour:
-            self.blacklist.clear()
-            # logger.debug(f"[CachedTripHelper]: Blacklist cleared for new hour {day_and_hour}")
-        self._notfound_cache_last_hour = day_and_hour
-
-        # include_car and arrive_by are part of the key: they produce different itineraries
-        key = "_".join([str(it) for it in (*grid_origin, *grid_destination, time_slot, day_and_hour, int(include_car), int(arrive_by))])
-        bl_key = (origin.lon, origin.lat, destination.lon, destination.lat)
-
-        cache_hit = self.cache_enabled
-        cache_hit = cache_hit and (key not in self.cache or len(self.cache[key]) < self.cache_size_per_grid)
-        cache_hit = cache_hit and (bl_key not in self.blacklist)
+        cache_hit = cached is not None or is_blacklisted
 
         if _pipeline_rec is not None:
             _pipeline_rec.P3_1_ms = (_time.monotonic() - _t_cache) * 1000
             _pipeline_rec.P3_cache_hit = cache_hit
 
-        if not cache_hit:
+        if is_blacklisted:
+            return []
+
+        if cached is not None:
+            self._stats_cache_hit = (self._stats_cache_hit[0] + 1, self._stats_cache_hit[1] + 1)
+            itineraries, stored_departure_time = cached
+            # shift all times to match the actual requested departure_time
+            delta_ms = (departure_time - stored_departure_time) * 1000
+            for itinerary in itineraries:
+                itinerary.start_location = origin
+                itinerary.end_location = destination
+                itinerary.start_time += delta_ms
+                itinerary.end_time += delta_ms
+                for leg in itinerary.legs:
+                    leg.start_time += delta_ms
+                    leg.end_time += delta_ms
+        else:
             itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, arrive_by=arrive_by, _pipeline_rec=_pipeline_rec)
+            self._stats_cache_hit = (self._stats_cache_hit[0], self._stats_cache_hit[1] + 1)
             if itineraries:
-                # identify each itinerary with a unique id
                 for it in itineraries:
                     it.id = random_uuid()
-                self.cache[key].append({
-                    'id': random_uuid(),
-                    'origin': origin,
-                    'destination': destination,
-                    'departure_time': departure_time,
-                    'itineraries': itineraries,
-                })
-                self.cache[key] = self.cache[key][:self.cache_size_per_grid]
-                self._stats_cache_hit = (self._stats_cache_hit[0], self._stats_cache_hit[1] + 1)
-                self._stats_new_cache += 1
+                if self.otp_cache_enabled:
+                    asyncio.create_task(self.persistent_cache.store_async(key, itineraries, departure_time))
             else:
-                self.blacklist.add(bl_key)
-        else:
-            self._stats_cache_hit = (self._stats_cache_hit[0] + 1, self._stats_cache_hit[1] + 1)
-            # logger.debug(f"[CachedTripHelper]: Cache hit for key {key}, ratio: {self._stats_cache_hit[0] / self._stats_cache_hit[1]:.2f}")
+                if self.otp_cache_enabled:
+                    asyncio.create_task(self.persistent_cache.blacklist_add_async(bl_key))
+
         _hits, _total = self._stats_cache_hit
         if _total > 0:
             TRIP_CACHE_HIT_RATIO.set(_hits / _total)
-
-        # Dump cache if needed
-        if self._stats_new_cache >= self._dump_cache_after:
-            self._stats_new_cache = 0
-            self.dump_cache_to_file()
-
-        # Find the closest itinerary to the origin and destination
-        candidates = self.cache.get(key, [])
-        if not candidates:
-            return []
-        candidates = sorted(candidates, key=lambda x: (square_distance(x['origin'], origin), square_distance(x['destination'], destination)))
-        itineraries = candidates[0]['itineraries']
-
-        # Modify the start and end location of the itinerary
-        for itinerary in itineraries:
-            itinerary.start_location = origin
-            itinerary.end_location = destination
-            # patch the all time values
-            departure_time_ms = departure_time * 1000
-            dt = departure_time_ms - itinerary.start_time
-            itinerary.start_time = departure_time_ms
-            itinerary.end_time = itinerary.end_time + dt
-            for leg in itinerary.legs:
-                leg.start_time = leg.start_time + dt
-                leg.end_time = leg.end_time + dt
 
         return itineraries
