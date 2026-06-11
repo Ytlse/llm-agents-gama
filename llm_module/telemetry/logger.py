@@ -14,11 +14,21 @@ log_llm_exchange() écrit un JSONL dans workdir/llm_exchanges.jsonl :
 from __future__ import annotations
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
+# Configure loguru once at import time. The default handler is DEBUG — replace it
+# with one that respects LOG_LEVEL (defaults to INFO).
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+)
 
 
 def get_logger(name: str):
@@ -98,6 +108,7 @@ def log_llm_exchange(
     response: Any,
     tokens_in: int,
     tokens_out: int,
+    category: str = "",
 ) -> None:
     """
     Enregistre un échange complet avec le LLM dans un fichier JSONL.
@@ -114,6 +125,7 @@ def log_llm_exchange(
         "time": datetime.now(timezone.utc).isoformat(),
         "task_id": task_id,
         "provider": provider,
+        "category": category,
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
         "messages": messages,

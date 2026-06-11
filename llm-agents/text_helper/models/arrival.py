@@ -20,11 +20,8 @@ class EnvObArrival(EnvOb):
     def is_late(self) -> bool:
         return self.late > 0
 
-    def describe(self) -> str:
-        # Describe the trip feedback observation in a human-readable format
-        return tpl_describe_the_ob_trip_feedback.render(
-            ob=self,
-        )
+    def describe(self, weather=None) -> str:
+        return tpl_describe_the_ob_trip_feedback.render(ob=self, weather=weather)
     
 
 if __name__ == "__main__":

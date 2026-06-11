@@ -51,8 +51,15 @@ class CerebrasAdapter(BaseAdapter):
         self._raise_for_status(response)
 
         data = response.json()
-        raw_content = data["choices"][0]["message"]["content"]
-        
+        message = data["choices"][0]["message"]
+        # GLM-4.7 et modèles "thinking" retournent parfois content=null avec
+        # le raisonnement dans reasoning_content — on fallback sur ce champ.
+        raw_content = (
+            message.get("content")
+            or message.get("reasoning_content")
+            or ""
+        )
+
         usage      = data.get("usage", {})
         tokens_in  = usage.get("prompt_tokens", 0)
         tokens_out = usage.get("completion_tokens", 0)

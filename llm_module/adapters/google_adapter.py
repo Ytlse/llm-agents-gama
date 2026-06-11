@@ -97,6 +97,18 @@ class GoogleAdapter(BaseAdapter):
 
         raw_content = candidate["content"]["parts"][0]["text"]
 
+        finish_reason = candidate.get("finishReason", "STOP")
+        if finish_reason == "MAX_TOKENS":
+            _logger.warning(
+                f"Réponse tronquée (MAX_TOKENS) — possible boucle de répétition | "
+                f"model={model} raw_preview={raw_content[:200]!r}"
+            )
+            raise ProviderServerError(
+                self._instance_name, 503,
+                f"Output truncated at MAX_TOKENS limit (possible repetition loop)",
+                error_type="max_tokens_truncation",
+            )
+
         usage      = data.get("usageMetadata", {})
         tokens_in  = usage.get("promptTokenCount", 0)
         tokens_out = usage.get("candidatesTokenCount", 0)

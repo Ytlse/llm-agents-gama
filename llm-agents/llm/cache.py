@@ -36,10 +36,45 @@ LLM_CACHE_INSERT_SECONDS = Histogram(
     "Latence d'écriture Qdrant locale pour le cache LLM",
 )
 
+# Compteurs process-wide hits/lookups pour reporting du taux de cache LLM dans les logs.
+_LLM_CACHE_HITS = 0
+_LLM_CACHE_LOOKUPS = 0
+# Répartition des miss par raison (no_candidates, below_threshold, code_not_in_options,
+# lookup_error) pour diagnostiquer le taux d'échec sans dépendre de Prometheus.
+_LLM_MISS_REASONS: dict[str, int] = {}
+
+
+def _record_llm_miss(reason: str) -> None:
+    _LLM_MISS_REASONS[reason] = _LLM_MISS_REASONS.get(reason, 0) + 1
+
+
+def get_llm_cache_stats() -> tuple[int, int]:
+    """Retourne (hits, lookups) cumulés du cache sémantique LLM depuis le démarrage."""
+    return _LLM_CACHE_HITS, _LLM_CACHE_LOOKUPS
+
+
+def get_llm_miss_breakdown() -> dict[str, int]:
+    """Retourne la répartition cumulée des miss du cache LLM par raison."""
+    return dict(_LLM_MISS_REASONS)
+
+
+_instances: dict[str, "LlmSemanticCache"] = {}
+_instances_lock = threading.Lock()
+
 
 class LlmSemanticCache:
+    def __new__(cls, cache_dir: str, semantic_threshold: float, embed_model_name: str):
+        with _instances_lock:
+            if cache_dir not in _instances:
+                instance = super().__new__(cls)
+                instance._initialized = False
+                _instances[cache_dir] = instance
+            return _instances[cache_dir]
+
     def __init__(self, cache_dir: str, semantic_threshold: float, embed_model_name: str):
         """Charge le modèle d'embedding et ouvre la base Qdrant locale dans cache_dir."""
+        if self._initialized:
+            return
         from qdrant_client import QdrantClient
         from sentence_transformers import SentenceTransformer
 
@@ -49,6 +84,7 @@ class LlmSemanticCache:
         self._embed_lock = threading.Lock()
         self._client = QdrantClient(path=cache_dir)
         self._ensure_collection()
+        self._initialized = True
         logger.info(f"LlmSemanticCache initialisé — répertoire: {cache_dir}, seuil: {semantic_threshold}")
 
     def _ensure_collection(self):
@@ -111,7 +147,11 @@ class LlmSemanticCache:
             ]
         )
 
-        # Recherche sans score_threshold pour distinguer no_candidates de below_threshold
+        # Le filtre (agent_id + activity_id + time_slice + state_hash) identifie déjà
+        # de façon déterministe le contexte de décision. memory_text sert à classer
+        # les candidats quand il en existe plusieurs, mais on ne rejette plus sur le score :
+        # la long-term memory évolue entre les runs, ce qui ferait chuter la similarité
+        # sous le seuil alors que la décision mise en cache reste valide.
         candidates = self._client.query_points(
             collection_name=COLLECTION_NAME,
             query=self._embed(memory_text),
@@ -193,6 +233,8 @@ class LlmSemanticCache:
         Recherche dans le cache. Retourne un dict {index, mode, score} sur hit,
         None sur miss. L'index correspond à la position dans `options` tel que fourni.
         """
+        global _LLM_CACHE_HITS, _LLM_CACHE_LOOKUPS
+        _LLM_CACHE_LOOKUPS += 1
         t0 = time.perf_counter()
         try:
             result, miss_reason = await asyncio.to_thread(
@@ -201,27 +243,32 @@ class LlmSemanticCache:
         except Exception as e:
             logger.warning(f"LLM cache lookup error: {e}")
             LLM_CACHE_MISSES.labels(reason="lookup_error").inc()
+            _record_llm_miss("lookup_error")
             return None
         finally:
             LLM_CACHE_LOOKUP_SECONDS.observe(time.perf_counter() - t0)
 
         if result is None:
             LLM_CACHE_MISSES.labels(reason=miss_reason).inc()
+            _record_llm_miss(miss_reason or "unknown")
             return None
 
         chosen_code = result.get("chosen_plan_code")
         if not chosen_code:
             LLM_CACHE_MISSES.labels(reason="no_candidates").inc()
+            _record_llm_miss("no_candidates")
             return None
 
         # Retrouve l'index du plan dans la liste courante (potentiellement mélangée)
         for i, opt in enumerate(options):
             if opt.get_code() == chosen_code:
                 LLM_CACHE_HITS.labels(activity_purpose=activity_purpose).inc()
+                _LLM_CACHE_HITS += 1
                 return {"index": i, "mode": result["mode"], "score": result["score"]}
 
         # Le code était en cache mais n'existe plus dans les options courantes (itinéraire modifié)
         LLM_CACHE_MISSES.labels(reason="code_not_in_options").inc()
+        _record_llm_miss("code_not_in_options")
         return None
 
     async def store(

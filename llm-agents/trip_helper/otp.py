@@ -407,6 +407,7 @@ class OTPTripHelper(TripHelper):
                               search_window_m: int = None,
                               access_egress_mode: str = "foot",
                               include_car: bool=False,
+                              include_bike: bool=True,
                               include_direct: bool=True,
                               include_transit: bool=True,
                               arrive_by: bool=False,
@@ -579,10 +580,11 @@ class OTPTripHelper(TripHelper):
             coros.append(_timed_osmnx(get_direct_plan(origin, destination, "foot",
                                             int(departure_time), congestion_dt,
                                             _timing_sink=_timing_sink), "foot"))
-            task_names.append("bicycle")
-            coros.append(_timed_osmnx(get_direct_plan(origin, destination, "bicycle",
-                                            int(departure_time), congestion_dt,
-                                            _timing_sink=_timing_sink), "bicycle"))
+            if include_bike:
+                task_names.append("bicycle")
+                coros.append(_timed_osmnx(get_direct_plan(origin, destination, "bicycle",
+                                                int(departure_time), congestion_dt,
+                                                _timing_sink=_timing_sink), "bicycle"))
             if include_car:
                 task_names.append("car")
                 coros.append(_timed_osmnx(get_direct_plan(origin, destination, "car",

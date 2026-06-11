@@ -8,7 +8,8 @@ Ce document décrit le cycle de planification d'un agent dans le controller, dep
 
 Un agent entre en phase de planification quand :
 - Il est déclaré **IDLE** (arrivé à destination, aucun déplacement en cours)
-- Il reçoit un **feedback d'arrivée** de GAMA qui invalide son plan courant
+- Il reçoit un **feedback d'arrivée** de GAMA (`arrival`) qui invalide son plan courant
+- Il reçoit un **feedback de timeout TC** de GAMA (`tc_timeout`) — l'agent a attendu un véhicule TC plus de 30 min sans succès, a été téléporté à sa destination finale et son plan a été abandonné
 
 ---
 
@@ -44,8 +45,8 @@ La décision calculée est envoyée à GAMA via deux chemins possibles selon l'�
 **Point 1 — Fin de calcul synchrone**
 L'agent est immobile (IDLE) quand le LLM valide. La décision est immédiatement poussée au topic GAMA `action/data`.
 
-**Point 2 — Feedback d'arrivée**
-L'agent est encore en transit. La décision reste en attente dans `next_planned_move` et est exécutée de manière déterministe dès réception de la notification d'arrivée, en tenant compte du feedback pour replanifier l'activité suivante.
+**Point 2 — Feedback d'arrivée / timeout TC**
+L'agent est encore en transit. La décision reste en attente dans `next_planned_move` et est exécutée de manière déterministe dès réception de la notification `arrival` ou `tc_timeout`, en tenant compte du feedback pour replanifier l'activité suivante. En cas de `tc_timeout`, le rescheduling de retard n'est pas déclenché (l'agent n'est pas arrivé en retard, il n'est simplement jamais arrivé).
 
 **Cas Bootstrap** (pendant l'initialisation)
 Avant la fin de l'init, les décisions sont placées dans une file globale `_messages` vidée périodiquement (fréquence 1s).
@@ -107,6 +108,21 @@ Les deux chemins de calcul sont indépendants et peuvent se chevaucher par agent
 |---|---|---|
 | `scheduling_in_progress` | Réactif N+1 (`_plan_one`) | `next_planned_move` |
 | `precompute_in_progress` | Refill glissant (`_precompute_one`) | `precomputed_moves` |
+
+---
+
+## Contexte météo dans les observations GAMA
+
+Chaque observation reçue de GAMA est enrichie avec les données météo du timestamp concerné avant d'être stockée en mémoire court terme. La granularité est journalière (4 tranches horaires : nuit / matin / midi / soir).
+
+| Type d'observation | Données météo injectées |
+|---|---|
+| `transfer` | Température, condition, précipitations (mm) si > 0 |
+| `wait_in_stop` | Température, condition, précipitations (mm) si > 0 |
+| `transit` | Température, condition |
+| `arrival` | Température, condition, précipitations (mm) si > 0 |
+
+Les précipitations ne sont affichées que si `precip_mm > 0` afin de ne pas alourdir les observations par temps sec. Pour `transfer` et `wait_in_stop`, l'info pluie est particulièrement utile pour que le LLM infère un inconfort lors de la marche ou de l'attente exposée.
 
 ---
 

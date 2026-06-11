@@ -1,5 +1,4 @@
 gtfs:
-  otp_cache_enabled: false
   mode: OTP
   max_trip_candidates: 3
   # fixed_day: "20250305"

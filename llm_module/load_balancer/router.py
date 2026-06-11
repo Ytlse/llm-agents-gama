@@ -100,7 +100,7 @@ class LoadBalancer:
     # Sélection du fournisseur
     # ------------------------------------------------------------------
 
-    def select_provider(self, force: Optional[str] = None) -> str:
+    def select_provider(self, force: Optional[str] = None, min_tpm: Optional[int] = None) -> str:
         """
         Retourne le nom du fournisseur à utiliser et réserve atomiquement un slot RPM.
 
@@ -109,13 +109,15 @@ class LoadBalancer:
         vérification et l'incrément.
 
         Args:
-            force: Si fourni, bypasse la rotation et utilise ce fournisseur.
+            force:   Si fourni, bypasse la rotation et utilise ce fournisseur.
+            min_tpm: Si fourni, exclut les providers dont tpm_limit < min_tpm
+                     (les providers sans limite TPM, tpm_limit=None, restent éligibles).
 
         Raises:
             RuntimeError: Si tous les fournisseurs sont saturés ou indisponibles.
         """
         if force:
-            if self._try_reserve(force):
+            if self._try_reserve(force, min_tpm=min_tpm):
                 return force
             raise RuntimeError(
                 f"Fournisseur forcé '{force}' indisponible (quota atteint ou désactivé)."
@@ -129,7 +131,7 @@ class LoadBalancer:
                 candidate = self._sequence[self._cursor % seq_len]
                 self._cursor += 1
 
-            if self._try_reserve(candidate):
+            if self._try_reserve(candidate, min_tpm=min_tpm):
                 active = get_active_workers(candidate)
                 # logger.debug(f"\n[Provider sélectionné] | provider={candidate} cursor={self._cursor} active_tasks={active}\n")
                 return candidate
@@ -149,7 +151,7 @@ class LoadBalancer:
             "Réessayez dans quelques secondes."
         )
 
-    def _try_reserve(self, provider: str) -> bool:
+    def _try_reserve(self, provider: str, min_tpm: Optional[int] = None) -> bool:
         """
         Vérifie les pré-conditions (désactivé, cooldown, quota dépassé) puis
         tente de réserver atomiquement un slot RPM via un script Lua Redis.
@@ -163,6 +165,9 @@ class LoadBalancer:
         cfg = settings.providers.get(provider)
         if cfg is None:
             logger.warning(f"Provider inconnu dans la config | provider={provider}")
+            return False
+
+        if min_tpm is not None and cfg.tpm_limit is not None and cfg.tpm_limit < min_tpm:
             return False
 
         if is_provider_disabled(provider):

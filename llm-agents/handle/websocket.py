@@ -1,4 +1,3 @@
-import traceback
 from typing import List, Optional, Callable
 
 from fastapi import WebSocket
@@ -102,8 +101,7 @@ class WebSocketClient:
                     break
                     
                 except Exception as e:
-                    traceback.print_exc()
-                    logger.error(f"Listen error: {e}")
+                    logger.exception(f"Listen error: {e}")
                     break
                     
         except Exception as e:
@@ -112,15 +110,12 @@ class WebSocketClient:
     async def run_with_reconnect(self):
         """Chạy client với auto reconnect"""
         self.running = True
-        
+
         while self.running:
             try:
-                # Thử kết nối
                 if await self.connect():
-                    # Nếu kết nối thành công, bắt đầu listen
                     await self.listen()
-                
-                # Nếu đến đây có nghĩa là kết nối bị đứt
+
                 if self.running and self.reconnect_attempts < self.max_reconnect_attempts:
                     self.reconnect_attempts += 1
                     logger.info(f"Reconnecting in {self.reconnect_delay}s... (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
@@ -128,7 +123,9 @@ class WebSocketClient:
                 elif self.reconnect_attempts >= self.max_reconnect_attempts:
                     logger.error("Max reconnect attempts reached. Stopping.")
                     break
-                    
+
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 logger.error(f"Run loop error: {e}")
                 if self.running:

@@ -33,6 +33,7 @@ CSV_HEADERS = [
     "ID Trajet",
     "Mode de transport Choisi",
     "Plus rapide",
+    "Modes proposés au LLM",
     "Lieu de résidence",
     "Genre",
     "Âge",
@@ -100,6 +101,12 @@ def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
     return "Autres modes"
 
 
+def _available_modes_summary(options: Optional[list]) -> str:
+    if not options:
+        return ""
+    return " | ".join(_plan_transport_mode(opt) for opt in options)
+
+
 def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
     if plan is None:
         return ""
@@ -112,7 +119,7 @@ def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
 class GamaArrivalsLogger:
     _instance: Optional["GamaArrivalsLogger"] = None
 
-    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s", "started_at", "schedule_at", "departure_delay_s"]
+    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s", "started_at", "schedule_at", "departure_delay_s", "timed_out"]
 
     def __init__(self):
         self._path: Optional[Path] = None
@@ -134,14 +141,15 @@ class GamaArrivalsLogger:
                 csv.writer(f).writerow(self._HEADERS)
 
     async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
-                          started_at: Optional[int] = None, schedule_at: Optional[int] = None):
+                          started_at: Optional[int] = None, schedule_at: Optional[int] = None,
+                          timed_out: bool = False):
         async with self._lock:
             self._ensure_header()
             delay_s = arrive_at - expected_arrive_at
             departure_delay_s = (started_at - schedule_at) if started_at is not None and schedule_at is not None else None
             with open(self._path, "a", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s,
-                                        started_at, schedule_at, departure_delay_s])
+                                        started_at, schedule_at, departure_delay_s, timed_out])
 
 
 class MoveLogger:
@@ -186,6 +194,7 @@ class MoveLogger:
         move_id: str = "",
         simulated_time: Optional[int] = None,
         start_time: Optional[int] = None,
+        available_options: Optional[list] = None,
     ):
         async with self._lock:
             self._ensure_header()
@@ -206,6 +215,7 @@ class MoveLogger:
                 move_id,
                 "Aucun" if no_move else _plan_transport_mode(plan),
                 _plan_transport_mode(faster_itinerary),
+                _available_modes_summary(available_options),
                 _residence_zone(home.lat if home else None, home.lon if home else None),
                 gender,
                 traits.get("age", ""),

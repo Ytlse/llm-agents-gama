@@ -1,0 +1,6 @@
+outs:
+- md5: 68b9abeb6423718477bb43b4a8ec91ed.dir
+  size: 13412700
+  nfiles: 8
+  hash: md5
+  path: eqasim_output

@@ -1,6 +1,6 @@
-from enum import Enum
+from enum import StrEnum
 
-class PromptName(str, Enum):
+class PromptName(StrEnum):
     """Enum for prompt names to avoid using string literals."""
     QUERY_EXPERIENCES = "query_experiences"
     PERSONAL_SYSTEM = "personal_system"

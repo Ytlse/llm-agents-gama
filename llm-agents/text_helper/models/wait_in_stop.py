@@ -6,11 +6,8 @@ class EnvObWaitInStop(EnvOb):
     stop_name: str = None
     by_vehicle_route_id: str = None
 
-    def describe(self) -> str:
-        # Describe the wait in stop observation in a human-readable format
-        return tpl_describe_the_ob_wait_in_stop.render(
-            ob=self,
-        )
+    def describe(self, weather=None) -> str:
+        return tpl_describe_the_ob_wait_in_stop.render(ob=self, weather=weather)
     
 
 if __name__ == "__main__":

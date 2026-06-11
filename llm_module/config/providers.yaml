@@ -3,7 +3,8 @@
 #
 # Champs obligatoires : rpm_limit, base_url, default_model
 # Champs optionnels   : tpm_limit, weight (défaut 1.0), disable_timeout (défaut 180s),
-#                       adapter (défaut = nom du provider)
+#                       adapter (défaut = nom du provider),
+#                       max_tokens_per_request (exclu si < settings.min_tokens_per_request)
 # batch_max_agents est calculé automatiquement : max(1, min(tpm_limit/tokens_per_agent, rpm_limit, max_batch_agents))
 #
 # Pour plusieurs instances d'un même fournisseur,
@@ -107,26 +108,28 @@ providers:
     disable_timeout:   120
 
   groq_qwen:
-    adapter:           groq
-    rpm_limit:         60
-    tpm_limit:         6000
-    tpd_limit:         500000
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     qwen/qwen3-32b
-    weight:            1.0
-    concurrency_limit: 3
-    disable_timeout:   120
+    adapter:                 groq
+    rpm_limit:               60
+    tpm_limit:               6000
+    tpd_limit:               500000
+    max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
+    base_url:                https://api.groq.com/openai/v1
+    default_model:           qwen/qwen3-32b
+    weight:                  1.0
+    concurrency_limit:       3
+    disable_timeout:         120
 
   groq_llama31:
-    adapter:           groq
-    rpm_limit:         30
-    tpm_limit:         6000
-    tpd_limit:         500000
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     llama-3.1-8b-instant
-    weight:            1.0
-    concurrency_limit: 3
-    disable_timeout:   120
+    adapter:                 groq
+    rpm_limit:               30
+    tpm_limit:               6000
+    tpd_limit:               500000
+    max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
+    base_url:                https://api.groq.com/openai/v1
+    default_model:           llama-3.1-8b-instant
+    weight:                  1.0
+    concurrency_limit:       3
+    disable_timeout:         120
 
   groq_openai_120:
     adapter:           groq
@@ -214,6 +217,6 @@ providers:
     tpd_limit:         1000000
     base_url:          https://api.cerebras.ai/v1
     default_model:     zai-glm-4.7
-    weight:            1.0
+    weight:            0.3
     concurrency_limit: 1
     disable_timeout:   120

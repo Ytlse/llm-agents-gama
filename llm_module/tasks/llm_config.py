@@ -19,16 +19,17 @@ def _load_provider_defaults() -> Dict[str, dict]:
 
 
 class ProviderConfig(BaseModel):
-    api_key:           SecretStr    = SecretStr("")
-    rpm_limit:         int
-    tpm_limit:         Optional[int] = None
-    base_url:          str
-    default_model:     str
-    weight:            float        = 1.0
-    batch_max_agents:  int          = 1   # calculé par Settings.build_providers — ne pas définir manuellement
-    concurrency_limit: int          = 2   # nb workers Celery simultanés autorisés pour ce provider
-    disable_timeout:   int          = 180
-    adapter:           str          = ""
+    api_key:                  SecretStr    = SecretStr("")
+    rpm_limit:                int
+    tpm_limit:                Optional[int] = None
+    max_tokens_per_request:   Optional[int] = None  # capacité max d'une requête unique (tokens) ; exclu si < batch_max_agents * assumed_prompt_tokens + min_output_tokens
+    base_url:                 str
+    default_model:            str
+    weight:                   float        = 1.0
+    batch_max_agents:         int          = 1   # calculé par Settings.build_providers — ne pas définir manuellement
+    concurrency_limit:        int          = 2   # nb workers Celery simultanés autorisés pour ce provider
+    disable_timeout:          int          = 180
+    adapter:                  str          = ""
 
     def __repr__(self) -> str:
         return (
@@ -51,6 +52,7 @@ class Settings(BaseSettings):
     batch_delay_seconds:        float = 1.0
     assumed_prompt_tokens:      int   = 2200  # tokens_in max par agent (historique +10% de marge)
     max_batch_agents:           int   = 20    # plafond absolu du calcul automatique de batch_max_agents
+    min_output_tokens:          int   = 512   # budget output minimal acceptable par requête
 
     # Les api_key viennent de l'env : PROVIDER_KEYS__groq=gsk-...
     provider_keys: Dict[str, SecretStr] = {}
@@ -101,11 +103,21 @@ def get_batch_max_agents(force_provider: Optional[str] = None) -> int:
 def filter_providers_without_api_key(settings: Settings) -> Dict[str, ProviderConfig]:
     valid = {}
     for name, provider in settings.providers.items():
-        if provider.api_key.get_secret_value():
-            valid[name] = provider
-            logger.info(f"Fournisseur '{name}' inclus : {provider}")
-        else:
+        if not provider.api_key.get_secret_value():
             logger.warning(f"Fournisseur '{name}' exclu : clé API manquante.")
+            continue
+        if provider.max_tokens_per_request is not None:
+            min_needed = provider.batch_max_agents * settings.assumed_prompt_tokens + settings.min_output_tokens
+            if provider.max_tokens_per_request < min_needed:
+                logger.warning(
+                    f"Fournisseur '{name}' exclu : capacité insuffisante "
+                    f"(max_tokens_per_request={provider.max_tokens_per_request} < "
+                    f"batch_max_agents={provider.batch_max_agents} × assumed_prompt_tokens={settings.assumed_prompt_tokens} "
+                    f"+ min_output_tokens={settings.min_output_tokens} = {min_needed})."
+                )
+                continue
+        valid[name] = provider
+        logger.info(f"Fournisseur '{name}' inclus : {provider}")
     return valid
 
 

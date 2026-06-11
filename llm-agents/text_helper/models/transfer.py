@@ -13,11 +13,8 @@ class EnvObTransfer(EnvOb):
     def is_arrival(self) -> bool:
         return self.destination_name in ["home", "education", "work", "leisure", "shop"]
 
-    def describe(self) -> str:
-        # Describe the transfer observation in a human-readable format
-        return tpl_describe_the_ob_transfer.render(
-            ob=self,
-        )
+    def describe(self, weather=None) -> str:
+        return tpl_describe_the_ob_transfer.render(ob=self, weather=weather)
 
 if __name__ == "__main__":
     # Example usage

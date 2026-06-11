@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import uuid
 
 
@@ -49,6 +49,8 @@ class LLMRequest(BaseModel):
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Paramètres additionnels pour le prompt")
     # Optionnel : forcer un fournisseur spécifique (contourne le load balancer)
     force_provider: Optional[str] = None
+    # Optionnel : TPM minimum requis — le load balancer exclut les providers en dessous de ce seuil
+    min_tpm_required: Optional[int] = None
     context: Optional[str] = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")
 
 
@@ -85,6 +87,8 @@ class Task(BaseModel):
 
 class AgentResponse(BaseModel):
     """Un élément du tableau JSON retourné par le LLM."""
+    model_config = ConfigDict(extra="allow")
+
     agent_id: Union[str, int]
     chosen_index: Optional[int] = None
     mode: Optional[str] = None

@@ -38,5 +38,53 @@
     },
     "required": ["agents"],
     "additionalProperties": false
+  },
+  "stm_reflection": {
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agent_id": { "type": "string" },
+            "reflection": { "type": "string", "description": "Réflexion narrative sur la journée, 200 mots max" },
+            "concepts": {
+              "type": "array",
+              "description": "0-5 concepts pour la mémoire à long terme, chacun sous la forme [contenu, mots_clés, portée_spatiale, portée_temporelle, objectif]",
+              "items": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 5,
+                "maxItems": 5
+              }
+            }
+          },
+          "required": ["agent_id", "reflection", "concepts"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["agents"],
+    "additionalProperties": false
+  },
+  "ltm_self_reflection": {
+    "type": "object",
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "agent_id": { "type": "string" },
+            "reflection": { "type": "string", "description": "Synthèse des patterns et habitudes observés sur plusieurs jours, 200 mots max" }
+          },
+          "required": ["agent_id", "reflection"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["agents"],
+    "additionalProperties": false
   }
 }

@@ -9,17 +9,20 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 ```
 [Événements de simulation et décisions]
 └── Mémoire Court Terme (Python RAM — isolation par activity_id)
-    └── Vidage périodique (toutes les 6h de temps simulé)
-        └── Inférence de synthèse LLM
-            └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
-                └── Index partagé / partitionnement logique par person_id
+    └── Seuil atteint (stm_reflection_min_entries entrées dans le buffer)
+        └── Appel gateway llm_module (catégorie stm_reflection)
+            └── Réflexion narrative + concepts extraits
+                └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
+                    └── Index partagé / partitionnement logique par person_id
+                        └── Self-reflection multi-jours (intervalle temps : long_term_self_reflect_interval_days)
+                            └── Appel gateway llm_module (catégorie ltm_self_reflection)
 ```
 
 ### Court terme (STM)
 
 - Stockée en RAM Python dans une liste ordonnée de `MemoryEntry`
 - Isolation par `activity_id` : chaque activité a sa propre fenêtre contextuelle
-- Purgée toutes les **6h de temps simulé**, déclenchant une synthèse vers la LTM
+- Purgée quand le buffer atteint **`stm_reflection_min_entries`** entrées (seuil configurable) — déclenchement par volume, pas par intervalle de temps
 - Implémentation : `llm-agents/llm/shortterm.py`
 
 ### Long terme (LTM — ChromaDB)
@@ -64,7 +67,31 @@ Le vecteur de lookup encode les **options de transport disponibles**, l'**histor
 
 ## Cache des itinéraires (CachedTripHelper)
 
-En mode `SOLARI` (mode historique, alternatif à OTP), un cache d'itinéraires pré-calculés est utilisé via `CachedTripHelper`. En mode `OTP` (mode courant), les itinéraires sont calculés dynamiquement sans cache d'itinéraires.
+Le cache persistant d'itinéraires (`OtpPersistentCache`, SQLite) mémorise les itinéraires
+par couple origine/destination/heure (`gtfs.otp_cache_enabled`, défaut `true`), les réutilise
+à une heure de départ proche par décalage temporel, et blackliste les paires O/D sans
+itinéraire ; la base est persistée par population dans `llm-agents/data/otp_cache/<population>/`.
+
+Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache` :
+
+- **Mode `OTP` (principal)** : la factory enrobe `OTPTripHelper` dans **`OtpCachedTripHelper`**,
+  un décorateur **fin** qui **ne change pas** la stratégie de recherche — sur un miss il
+  délègue l'appel verbatim à OTP, puis stocke. Le cache s'intercale à la frontière
+  appelant → helper (`_compute_move_for_activity`), où les requêtes utilisent toujours les
+  paramètres par défaut. Le cache est initialisé par population dans `handle.application`
+  (`init_otp_persistent_cache`).
+- **Mode `SOLARI` (historique)** : `CachedTripHelper` enrobe `SolariTripHelper` et applique
+  en plus une stratégie de recherche élargie sur un miss (`do_get_iteraries_v2` : expansion
+  multi-mode accès/sortie + dédup).
+
+> ⚠️ **Approximation temporelle** : la clé bucketise l'heure de départ par tranches de
+> 10 min et un itinéraire stocké est réutilisé à une heure proche par décalage des
+> timestamps. Pour les segments TC, cela décale les horaires planifiés de ≤ 10 min (les
+> mêmes que ceux du cache SOLARI historique). Si une reprise strictement exacte est requise,
+> passer la clé sur l'heure exacte (sans décalage).
+
+Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
+**toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`).
 
 ---
 
@@ -79,5 +106,24 @@ Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis Op
 | Cache | Technologie | Persistance | Clé |
 |-------|-------------|------------|-----|
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
-| Cache sémantique LLM | Disque local | Disque | Vecteur (options + historique + purpose) |
+| Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
+| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | date + bucket 10 min + coords + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | coords + mode (+ date/heure pour la voiture) |
 | Graphes OSMnx | Fichiers pickle | Volume Docker | Zone géographique + mode |
+
+---
+
+## Observabilité du taux de cache
+
+Les trois caches de décision/routage exposent un **taux de hit** sous deux formes :
+
+- **Logs** : une ligne `[cache] OTP X% (h/n) · OSMnx Y% (h/n) · LLM Z% (h/n)` est émise à la
+  fin du warm-up (`bootstrap_all_agents`) et à chaque `[sync] START`. Une source affiche
+  `off` quand elle n'a reçu aucune requête (cache désactivé ou non sollicité). Format
+  construit par `_format_cache_hit_rates()` (`simulation_controller.py`), à partir des
+  accesseurs `get_otp_cache_stats()`, `get_osmnx_cache_stats()`, `get_llm_cache_stats()`.
+- **Prometheus** : gauges `trip_cache_hit_ratio` (OTP), `osmnx_cache_hit_ratio` (OSMnx)
+  et compteurs `llm_cache_hits_total` / `llm_cache_misses_total` (LLM).
+
+Les compteurs hits/lookups sont **process-wide** et cumulés depuis le démarrage : les
+pourcentages convergent donc vers le taux global de la session.

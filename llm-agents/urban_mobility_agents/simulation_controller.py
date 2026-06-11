@@ -44,6 +44,50 @@ from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 
 history_logger = HistoryStreamLog.get_instance()
 
+
+def _format_cache_hit_rates() -> str:
+    """Ligne de log unifiée du taux de cache des trois sources de routage/décision.
+
+    OTP, OSMnx et LLM sont des caches process-wide indépendants. Pour chacun on affiche
+    hits/lookups (%) ; 'off' quand la source n'a reçu aucune requête (cache désactivé ou
+    non encore sollicité)."""
+    from trip_helper.cached_triphelper import get_otp_cache_stats
+    from trip_helper.osmnx_direct import get_osmnx_cache_stats
+    try:
+        from llm.cache import get_llm_cache_stats, get_llm_miss_breakdown
+        llm_stats = get_llm_cache_stats()
+        llm_misses = get_llm_miss_breakdown()
+    except Exception:
+        llm_stats = (0, 0)
+        llm_misses = {}
+
+    # OTP : 'off' ambigu → préciser pourquoi le compteur est à 0.
+    otp_hits, otp_total = get_otp_cache_stats()
+    if otp_total == 0:
+        if not settings.gtfs.otp_cache_enabled:
+            otp_str = "OTP off (désactivé)"
+        else:
+            otp_str = "OTP off (aucune requête)"
+    else:
+        otp_str = f"OTP {100 * otp_hits // otp_total}% ({otp_hits}/{otp_total})"
+
+    def _fmt(name: str, stats: tuple[int, int]) -> str:
+        hits, total = stats
+        if total == 0:
+            return f"{name} off"
+        return f"{name} {100 * hits // total}% ({hits}/{total})"
+
+    llm_str = _fmt("LLM", llm_stats)
+    if llm_misses:
+        _breakdown = ", ".join(f"{r}={n}" for r, n in sorted(llm_misses.items(), key=lambda kv: -kv[1]))
+        llm_str += f" [miss: {_breakdown}]"
+
+    return " · ".join([
+        otp_str,
+        _fmt("OSMnx", get_osmnx_cache_stats()),
+        llm_str,
+    ])
+
 PROCESS_PERSON_CALLS = Counter('gama_process_person_calls_total', 'Total calls to process_person')
 EVALUATE_PLAN_CALLS = Counter('gama_evaluate_plan_calls_total', 'Total calls to evaluate_and_choose_travel_plan')
 ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
@@ -143,10 +187,8 @@ class SimulationLoopV1(BaseScenario):
         self.model = world_model
         self.trip_helper = trip_helper
         self.agent = agent
-        # schedule next reflection
-        self.reflect_period = settings.agent.long_term_reflect_interval
-        self.next_reflection_at = None
         self.next_self_reflection_at = None
+        self._stm_reflecting: set[str] = set()  # person_ids with an in-flight STM reflection task
 
         # Worker
         # _worker_sem  : limite la concurrence LLM+OTP (initialisé dans start_worker)
@@ -302,9 +344,9 @@ class SimulationLoopV1(BaseScenario):
                 person.state.precomputed_horizon_act = to_act
                 person.state.precomputed_horizon_ts = move.expected_arrive_at
             else:
-                logger.warning(f"[refill] No move for {person.person_id}/{to_act.purpose}")
+                logger.debug(f"[refill] No move for {person.person_id}/{to_act.purpose}")
         except Exception as e:
-            logger.warning(f"[refill] Error for {person.person_id}/{to_act.purpose}: {e}")
+            logger.debug(f"[refill] Error for {person.person_id}/{to_act.purpose}: {e}")
         finally:
             person.state.precompute_in_progress = False
 
@@ -583,6 +625,7 @@ class SimulationLoopV1(BaseScenario):
             f"planned={n_planned} sched_in_progress={n_sched_in_progress} unscheduled_idle={n_unscheduled_idle} "
             f"late_since_last_sync={self._late_count}"
         )
+        logger.info(f"[cache] {_format_cache_hit_rates()}")
         self._late_count = 0
 
         # Avancer le timestamp de référence du Worker
@@ -602,13 +645,30 @@ class SimulationLoopV1(BaseScenario):
             and p.state.next_planned_move is None
         )
 
-        # --- Phase 2 : reflection (peu fréquente) ---
-        if not self.next_reflection_at:
-            self.next_reflection_at = timestamp + self.reflect_period
-        elif timestamp >= self.next_reflection_at:
-            logger.info(f"[timestamp: {humanize_date(timestamp)}] Reflecting the state of the world")
-            await self.trigger_short_term_reflection_for_all(timestamp=timestamp)
-            self.next_reflection_at = timestamp + self.reflect_period
+        # --- Phase 2 : réflexion STM déclenchée par volume d'entrées ---
+        # Les réflexions sont lancées en tâches de fond (create_task) pour ne pas bloquer
+        # le retour du sync — un await ici laisserait les tâches worker se terminer pendant
+        # l'attente, faisant tomber activities_to_compute_count à 0 et annulant le backpressure.
+        if settings.agent.long_term_memory_enabled and settings.agent.stm_reflection_min_entries > 0:
+            people_to_reflect = [
+                p for p in all_people
+                if p.is_llm_based
+                and p.person_id not in self._stm_reflecting
+                and len(self.agent.get_short_term_memory(p.person_id).recent_entries) >= settings.agent.stm_reflection_min_entries
+            ]
+            if people_to_reflect:
+                logger.info(f"[timestamp: {humanize_date(timestamp)}] STM reflection for {len(people_to_reflect)} agents (>= {settings.agent.stm_reflection_min_entries} entries)")
+                for _p in people_to_reflect:
+                    self._stm_reflecting.add(_p.person_id)
+
+                async def _reflect_and_release(_people=people_to_reflect):
+                    try:
+                        await self.agent.trigger_short_term_reflection_for_all_people(timestamp=timestamp, people=_people)
+                    finally:
+                        for _p in _people:
+                            self._stm_reflecting.discard(_p.person_id)
+
+                asyncio.create_task(_reflect_and_release())
 
         if settings.agent.long_term_self_reflect_enabled:
             if not self.next_self_reflection_at:
@@ -618,8 +678,8 @@ class SimulationLoopV1(BaseScenario):
                 _duration_days = settings.agent.long_term_self_reflect_window_days
                 from_date = datetime.datetime.fromtimestamp(timestamp) - datetime.timedelta(days=_duration_days)
                 from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
-                await self.agent.trigger_long_term_reflection_for_all_people(timestamp=timestamp, from_date=from_date, people=self.population.get_people_list())
                 self.next_self_reflection_at = timestamp + settings.agent.long_term_self_reflect_interval_days*24*3600
+                asyncio.create_task(self.agent.trigger_long_term_reflection_for_all_people(timestamp=timestamp, from_date=from_date, people=self.population.get_people_list()))
 
         _sync_duration = time.monotonic() - _sync_start
         logger.info(
@@ -628,19 +688,15 @@ class SimulationLoopV1(BaseScenario):
         )
 
     async def trigger_short_term_reflection_for_all(self, timestamp: int):
-        idle_people = [
-            p for p in self.population.get_people_list()
-            if p.is_llm_based and p.state.heading_to is None
-        ]
+        people = [p for p in self.population.get_people_list() if p.is_llm_based]
 
-        # Borner la concurrence pour éviter de saturer ChromaDB ou les LLMs
         sem = asyncio.Semaphore(100)
 
         async def reflect_person(person):
             async with sem:
                 await self.agent.trigger_short_term_reflection_for_all_people(timestamp=timestamp, people=[person])
 
-        tasks = [reflect_person(person) for person in idle_people]
+        tasks = [reflect_person(person) for person in people]
         await asyncio.gather(*tasks)
 
     async def trigger_long_term_reflection_for_all(self, timestamp: int):
@@ -672,11 +728,13 @@ class SimulationLoopV1(BaseScenario):
             code=observation.env_ob_code,
             ob=observation.data,
             purpose=on_purpose,
+            weather=get_weather(observation.timestamp),
         )
 
-        if observation.env_ob_code == "arrival":
+        if observation.env_ob_code in ("arrival", "tc_timeout"):
             _started_at = observation.data.get("started_at")
             _schedule_at = observation.data.get("schedule_at")
+            _timed_out = observation.env_ob_code == "tc_timeout"
             await GamaArrivalsLogger.get_instance().log_arrival(
                 move_id=str(observation.data.get("moving_id", "")),
                 person_id=observation.person_id,
@@ -684,8 +742,9 @@ class SimulationLoopV1(BaseScenario):
                 expected_arrive_at=int(observation.data.get("expected_arrive_at", observation.timestamp)),
                 started_at=int(_started_at) if _started_at is not None else None,
                 schedule_at=int(_schedule_at) if _schedule_at is not None else None,
+                timed_out=_timed_out,
             )
-            if person.state.cache_current_activity:
+            if observation.env_ob_code == "arrival" and person.state.cache_current_activity:
                 activity = person.state.cache_current_activity
                 ob = parse_ob(code=observation.env_ob_code, ob=observation.data)
                 if settings.agent.reschedule_activity_departure_time:
@@ -820,6 +879,7 @@ class SimulationLoopV1(BaseScenario):
             transient=False,
         ) as progress:
             task_id = progress.add_task("bootstrap", total=total)
+            _cache_stats = {"hits": 0, "misses": 0}
 
             async def _bootstrap_one(person: Person, act: Activity):
                 _dispatched_act = None
@@ -827,7 +887,13 @@ class SimulationLoopV1(BaseScenario):
                     _pl = PipelineLogger.get()
                     _pipeline_rec = _pl.begin(person.person_id, timestamp) if (_pl is not None and person.is_llm_based) else None
                     PROCESS_PERSON_CALLS.inc()
-                    move, _ = await self._compute_move_for_activity(person, act, timestamp, _pipeline_rec=_pipeline_rec)
+                    move, _reason = await self._compute_move_for_activity(person, act, timestamp, _pipeline_rec=_pipeline_rec)
+                    if "cache sémantique" in (_reason or ""):
+                        _cache_stats["hits"] += 1
+                        logger.info(f"[bootstrap] cache hit — {person.person_id} / {act.purpose}")
+                    elif person.is_llm_based:
+                        _cache_stats["misses"] += 1
+                        logger.info(f"[bootstrap] cache miss — {person.person_id} / {act.purpose}")
                     if move:
                         self._itinerary_success_count += 1
                         if self._itinerary_success_count >= 100:
@@ -845,7 +911,7 @@ class SimulationLoopV1(BaseScenario):
                             _pl.mark_enqueued(person.person_id)
                         _dispatched_act = act
                 except Exception as _e:
-                    logger.warning(f"[bootstrap] Error for {person.person_id}/{act.purpose}: {_e}")
+                    logger.debug(f"[bootstrap] Error for {person.person_id}/{act.purpose}: {_e}")
                 finally:
                     person.state.scheduling_in_progress = False
                     person.state.scheduling_started_at = None
@@ -864,7 +930,12 @@ class SimulationLoopV1(BaseScenario):
                     pass
                 completed += 1
                 if completed % log_interval == 0 or completed == total:
-                    logger.info(f"[bootstrap] progress {completed}/{total} ({100*completed//total}%)")
+                    _llm_total = _cache_stats["hits"] + _cache_stats["misses"]
+                    _hit_pct = int(100 * _cache_stats["hits"] / _llm_total) if _llm_total else 0
+                    logger.info(
+                        f"[bootstrap] progress {completed}/{total} ({100*completed//total}%) "
+                        f"— cache hits: {_cache_stats['hits']}/{_llm_total} ({_hit_pct}%)"
+                    )
 
         # Attendre que tous les act[N+1] lancés par _try_schedule_next_after soient calculés
         # avant de retourner, pour que GAMA démarre sans backpressure au premier /sync.
@@ -914,7 +985,7 @@ class SimulationLoopV1(BaseScenario):
                     person_last_planned_act.pop(person.person_id, None)
                     person_last_planned_ts.pop(person.person_id, None)
             except Exception as _e:
-                logger.warning(f"[bootstrap/wave] Error for {person.person_id}/{to_act.purpose}: {_e}")
+                logger.debug(f"[bootstrap/wave] Error for {person.person_id}/{to_act.purpose}: {_e}")
                 person_last_planned_act.pop(person.person_id, None)
                 person_last_planned_ts.pop(person.person_id, None)
 
@@ -981,6 +1052,7 @@ class SimulationLoopV1(BaseScenario):
         BOOTSTRAP_DURATION.set(_bootstrap_duration)
         _planned = sum(1 for p in all_people if p.state.heading_to is not None)
         logger.info(f"[bootstrap] done — {total} itineraries computed in {_bootstrap_duration:.2f}s")
+        logger.info(f"[cache] {_format_cache_hit_rates()}")
         _rich_console.print(
             f"\n[bold green]✓ Bootstrap terminé[/bold green] — "
             f"[cyan]{_planned}/{total}[/cyan] agents planifiés en "
@@ -1012,6 +1084,7 @@ class SimulationLoopV1(BaseScenario):
         if departure_time < timestamp:
             departure_time += 86400  # activité du lendemain (bouclage J+1)
         include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
+        include_bike = (person.identity.traits_json.get("personal_bike", "vélo normal").lower() != "pas de vélo")
 
         same_location = (
             from_location is not None and next_activity.location is not None
@@ -1029,6 +1102,7 @@ class SimulationLoopV1(BaseScenario):
                 destination=next_activity.location,
                 departure_time=departure_time,
                 include_car=include_car,
+                include_bike=include_bike,
                 arrive_by=False,
                 _timing_sink=_timing_sink,
             )
@@ -1039,6 +1113,9 @@ class SimulationLoopV1(BaseScenario):
                     _pipeline_rec.T_transit_end = _timing_sink.get("transit_end")
                     _pipeline_rec.T_osmnx_sem   = _timing_sink.get("osmnx_sem_end")
                     _pipeline_rec.T_osmnx_end   = _timing_sink.get("osmnx_end")
+
+        if not include_bike:
+            itineraries = [it for it in itineraries if _primary_mode(it) != "bike"]
 
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
@@ -1115,7 +1192,7 @@ class SimulationLoopV1(BaseScenario):
                     plan_index = 0
                     provider_info = ""
                     selection_method = "LLM Error (Default index)"
-                    logger.warning(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
+                    logger.debug(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose
@@ -1157,29 +1234,8 @@ class SimulationLoopV1(BaseScenario):
             move_id=move.id,
             simulated_time=timestamp,
             start_time=plan.start_time if plan is not None else None,
+            available_options=itineraries,
         )
 
-        history_logger.log_query_travel_plan(
-            timestamp=timestamp,
-            person_id=person.person_id,
-            message=f"Querying travel plan for {next_activity.purpose}",
-            data={
-                "purpose": next_activity.purpose,
-                "activity_id": next_activity.id,
-                "itineraries": [itin.get_code() for itin in itineraries],
-                "selected_plan_index": plan_index,
-            }
-        )
-
-        history_logger.log_travel_plan(
-            timestamp=timestamp,
-            person_id=person.person_id,
-            message=f"Planning trip for {next_activity.purpose}",
-            data={
-                "purpose": next_activity.purpose,
-                "activity_id": next_activity.id,
-                "plan_code": plan.get_code(),
-            }
-        )
 
         return move, reasoning

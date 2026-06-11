@@ -83,7 +83,7 @@ celery_app.conf.update(
     bind=True,
     max_retries=settings.max_retries,
 )
-def process_batch_task(self, batch_key: str, force_provider: str | None = None) -> None:
+def process_batch_task(self, batch_key: str, force_provider: str | None = None, min_tpm_required: int | None = None) -> None:
     """
     Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
@@ -91,20 +91,28 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None) 
     # Attendre un slot provider en boucle locale plutôt que via self.retry().
     # self.retry() crée un nouveau message Celery + round-trips Redis à chaque tentative ;
     # un simple time.sleep() dans le même worker est bien moins coûteux.
-    _MAX_PROVIDER_WAIT_SECS = 60
+    _MAX_PROVIDER_WAIT_SECS = 10
     _PROVIDER_POLL_SECS = 2.0
+    _MAX_SATURATION_RETRIES = 2  # 2 retries × (10s wait + 25s countdown) = 81s < 90s client timeout
     deadline = time.monotonic() + _MAX_PROVIDER_WAIT_SECS
     provider_name: str | None = None
     _p5_provider_wait_start = time.monotonic()
     while True:
         try:
-            provider_name = load_balancer.select_provider(force=force_provider)
+            provider_name = load_balancer.select_provider(force=force_provider, min_tpm=min_tpm_required)
             break
         except RuntimeError:
             if time.monotonic() >= deadline:
+                if self.request.retries < _MAX_SATURATION_RETRIES:
+                    logger.warning(
+                        f"Providers saturés depuis {_MAX_PROVIDER_WAIT_SECS}s, "
+                        f"retry dans 25s | batch_key={batch_key} "
+                        f"attempt={self.request.retries + 1}/{_MAX_SATURATION_RETRIES}"
+                    )
+                    raise self.retry(countdown=25)
                 tasks = pop_tasks_from_batch_sync(batch_key, 100)
                 for t in tasks:
-                    _fail_task(t, f"Providers saturés ou indisponibles après {_MAX_PROVIDER_WAIT_SECS}s")
+                    _fail_task(t, f"Providers saturés ou indisponibles après {_MAX_PROVIDER_WAIT_SECS}s ({_MAX_SATURATION_RETRIES} retries épuisés)")
                 return
             time.sleep(_PROVIDER_POLL_SECS)
     _p5_provider_wait_ms = (time.monotonic() - _p5_provider_wait_start) * 1000
@@ -222,12 +230,16 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_prov
     p5_prompt_ms = (time.monotonic() - _t_prompt) * 1000
 
     # 3. Assemblage de la requête interne
+    max_tokens = base_req.parameters.get("max_tokens", 4096)
+    provider_cfg = settings.providers.get(provider_name)
+    if provider_cfg and provider_cfg.max_tokens_per_request:
+        max_tokens = min(max_tokens, provider_cfg.max_tokens_per_request - settings.assumed_prompt_tokens)
     internal_req = InternalRequest(
         provider=provider_name,
         messages=messages,
         response_schema=schema,
         temperature=base_req.parameters.get("temperature", 0.7),
-        max_tokens=base_req.parameters.get("max_tokens", 4096),
+        max_tokens=max_tokens,
     )
 
     # 4. Appel LLM via l'adapter approprié
@@ -265,21 +277,23 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_prov
     reset_consecutive_errors(provider_name)
 
     # ── Métriques métier : mode de transport et tranche de distance ──────────
-    agent_specs_by_id = {a.agent_id: a for a in merged_agents}
-    for agent_resp in llm_output.agents:
-        primary_mode = _extract_primary_mode(agent_resp.mode or "unknown")
-        increment_worker_metric(f"transport_mode_chosen:{primary_mode}")
-        increment_worker_metric(f"mode_by_provider:{primary_mode}:{provider_name}")
+    _REFLECTION_CATEGORIES = frozenset(("stm_reflection", "ltm_self_reflection"))
+    if base_req.category not in _REFLECTION_CATEGORIES:
+        agent_specs_by_id = {a.agent_id: a for a in merged_agents}
+        for agent_resp in llm_output.agents:
+            primary_mode = _extract_primary_mode(agent_resp.mode or "unknown")
+            increment_worker_metric(f"transport_mode_chosen:{primary_mode}")
+            increment_worker_metric(f"mode_by_provider:{primary_mode}:{provider_name}")
 
-        spec = agent_specs_by_id.get(agent_resp.agent_id)
-        if spec and agent_resp.chosen_index is not None and spec.trajectories:
-            idx = agent_resp.chosen_index
-            if 0 <= idx < len(spec.trajectories):
-                dist_m = float(spec.trajectories[idx].get("total_distance_m") or 0)
-                bracket = _get_distance_bracket(dist_m)
-                increment_worker_metric(f"trip_distance_bracket:{bracket}")
-                increment_worker_metric(f"mode_by_distance:{primary_mode}:{bracket}")
-                increment_worker_metric(f"chosen_index:{idx}")
+            spec = agent_specs_by_id.get(agent_resp.agent_id)
+            if spec and agent_resp.chosen_index is not None and spec.trajectories:
+                idx = agent_resp.chosen_index
+                if 0 <= idx < len(spec.trajectories):
+                    dist_m = float(spec.trajectories[idx].get("total_distance_m") or 0)
+                    bracket = _get_distance_bracket(dist_m)
+                    increment_worker_metric(f"trip_distance_bracket:{bracket}")
+                    increment_worker_metric(f"mode_by_distance:{primary_mode}:{bracket}")
+                    increment_worker_metric(f"chosen_index:{idx}")
 
     #logger.debug(f"LLM output reçu | agents_count={len(llm_output.agents)}")
 
@@ -314,6 +328,7 @@ def _execute_batch(tasks: list[Task], batch_id: str, provider_name: str, p5_prov
         response=[a.model_dump() if hasattr(a, "model_dump") else a for a in llm_output.agents],
         tokens_in=tokens_in,
         tokens_out=tokens_out,
+        category=base_req.category,
     )
 
     # 7. Télémétrie métriques

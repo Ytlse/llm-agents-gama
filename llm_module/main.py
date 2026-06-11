@@ -17,6 +17,7 @@ import asyncio
 import json
 import hashlib
 import os
+import time
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -360,19 +361,19 @@ async def create_task(request: LLMRequest) -> dict:
     # Création d'une clé de batch basée sur le contexte et les paramètres globaux.
     # Cela garantit qu'on ne merge que des tâches parfaitement compatibles !
     params_str = json.dumps(request.parameters, sort_keys=True)
-    hash_str = hashlib.md5(f"{request.category}:{params_str}:{request.force_provider}".encode()).hexdigest()
+    hash_str = hashlib.md5(f"{request.category}:{params_str}:{request.force_provider}:{request.min_tpm_required}".encode()).hexdigest()
     batch_key = f"{request.category}:{hash_str}"
 
     # Ajout à la file d'attente du batch (trié par departure_time)
     queue_size = await add_task_to_batch_async(batch_key, task.task_id, priority_score)
-    
+
     # Si c'est le 1er élément du lot, on accorde un court délai (1s) pour en accumuler d'autres.
     batch_limit = get_batch_max_agents(request.force_provider)
     loop = asyncio.get_event_loop()
     if queue_size == 1:
-        await loop.run_in_executor(None, lambda: process_batch_task.apply_async(args=[batch_key, request.force_provider], countdown=settings.batch_delay_seconds))
+        await loop.run_in_executor(None, lambda: process_batch_task.apply_async(args=[batch_key, request.force_provider, request.min_tpm_required], countdown=settings.batch_delay_seconds))
     elif queue_size >= batch_limit:
-        await loop.run_in_executor(None, lambda: process_batch_task.delay(batch_key, request.force_provider))
+        await loop.run_in_executor(None, lambda: process_batch_task.delay(batch_key, request.force_provider, request.min_tpm_required))
 
     logger.info(f"Tâche créée et enqueued | task_id={task.task_id} category={request.category}")
 
@@ -425,52 +426,69 @@ async def get_task_status(task_id: str) -> TaskStatusResponse:
     summary="Attendre la fin d'une tâche (long-poll Redis Pub/Sub)",
     description=(
         "Bloque jusqu'à ce que la tâche atteigne un état terminal (success/failed) "
-        "ou que le timeout expire. Latence de notification ~10ms via Redis Pub/Sub."
+        "ou que le timeout expire. Latence de notification ~10ms via Redis Pub/Sub. "
+        "Se reconnecte automatiquement si la socket pubsub est interrompue avant la fin du timeout."
     ),
 )
 async def wait_for_task(task_id: str, timeout: float = 120.0) -> TaskStatusResponse:
     timeout = min(max(timeout, 1.0), 300.0)
     channel = task_done_channel(task_id)
+    deadline = time.monotonic() + timeout
 
-    pubsub = get_async_redis().pubsub()
-    await pubsub.subscribe(channel)
-    try:
-        # Subscribe first, then check — avoids missing a publish that arrives between
-        # the status check and the subscribe call.
-        task = await get_task_async(task_id)
-        if task is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Tâche '{task_id}' introuvable ou expirée.")
+    task = await get_task_async(task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Tâche '{task_id}' introuvable ou expirée.")
 
-        if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
-            return TaskStatusResponse(
-                task_id=task.task_id, status=task.status,
-                created_at=task.created_at, updated_at=task.updated_at,
-                result=task.result, error=task.error,
-                provider_used=task.provider_used, latency_ms=task.latency_ms,
-                timing_p5=task.timing_p5,
-            )
-
-        async def _recv() -> str:
-            async for msg in pubsub.listen():
-                if msg["type"] == "message":
-                    return msg["data"]
-
-        try:
-            raw = await asyncio.wait_for(_recv(), timeout=timeout)
-            task = Task.model_validate_json(raw)
-        except (asyncio.TimeoutError, redis_exc.TimeoutError):
-            task = await get_task_async(task_id) or task
-
+    if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
         return TaskStatusResponse(
             task_id=task.task_id, status=task.status,
             created_at=task.created_at, updated_at=task.updated_at,
             result=task.result, error=task.error,
             provider_used=task.provider_used, latency_ms=task.latency_ms,
+            timing_p5=task.timing_p5,
         )
-    finally:
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
+
+    # Retry loop: re-subscribe if the pubsub socket times out before the task completes.
+    while time.monotonic() < deadline:
+        remaining = deadline - time.monotonic()
+        pubsub = get_async_redis().pubsub()
+        await pubsub.subscribe(channel)
+        try:
+            # Re-check after subscribe to close the race between task completion and subscribe.
+            task = await get_task_async(task_id) or task
+            if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
+                break
+
+            async def _recv() -> str:
+                async for msg in pubsub.listen():
+                    if msg["type"] == "message":
+                        return msg["data"]
+
+            try:
+                raw = await asyncio.wait_for(_recv(), timeout=remaining)
+                task = Task.model_validate_json(raw)
+                break
+            except asyncio.TimeoutError:
+                # Full budget exhausted — fetch final state and return.
+                task = await get_task_async(task_id) or task
+                break
+            except redis_exc.TimeoutError:
+                # Pubsub socket dropped before task completed; retry if time remains.
+                task = await get_task_async(task_id) or task
+                if task.status in (TaskStatus.SUCCESS, TaskStatus.FAILED):
+                    break
+        finally:
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+
+    return TaskStatusResponse(
+        task_id=task.task_id, status=task.status,
+        created_at=task.created_at, updated_at=task.updated_at,
+        result=task.result, error=task.error,
+        provider_used=task.provider_used, latency_ms=task.latency_ms,
+        timing_p5=task.timing_p5,
+    )
 
 
 @app.get(
@@ -494,9 +512,6 @@ async def health() -> dict:
 )
 async def metrics():
     """Prometheus metrics endpoint."""
-    
-    logger.info("Call to /metrics received.")
-    
     loop = asyncio.get_event_loop()
     # generate_latest lit Redis de manière synchrone, on l'isole dans un thread
     content = await loop.run_in_executor(None, generate_latest, REGISTRY)

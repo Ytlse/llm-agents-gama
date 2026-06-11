@@ -81,7 +81,7 @@ L'événement `ratelimit_reset` est tracé dans `llm_errors.jsonl`.
 
 ## Polling côté controller
 
-Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../../pipeline.md)).
+Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Si la socket pubsub est interrompue (`redis.exceptions.TimeoutError`) avant la fin du timeout, le serveur se reconnecte automatiquement et reprend l'attente jusqu'à épuisement du budget de temps — évitant les faux-timeouts (`waited=Xs timeout=90s`) lorsque la socket Redis se déconnecte brièvement. Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../../pipeline.md)).
 
 ---
 

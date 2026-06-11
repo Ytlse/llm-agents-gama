@@ -52,10 +52,10 @@ ps:
 	docker compose ps
 
 error:
-	grep "| ERROR    | " ./experiments/current/app.log || true
+	python3 scripts/errors.py $(if $(LOG),$(LOG),experiments/current/app.log)
 
 warning:
-	grep "| WARNING  | " ./experiments/current/app.log || true
+	python3 scripts/warnings.py $(if $(LOG),$(LOG),experiments/current/app.log)
 
 ## Remove containers, volumes and images
 clean:
@@ -76,17 +76,17 @@ clean_all:
 purge_cache:
 	@echo "🗑️  Cache Docker builder..."
 	docker builder prune -a -f
-	@echo "🗑️  Cache OSMnx graphs (data/osmnx_cache)..."
-	rm -f data/osmnx_cache/*.pkl
+	@echo "🗑️  Cache OSMnx graphs (data/cache/osmnx)..."
+	rm -f data/cache/osmnx/*.pkl
 	@echo "🗑️  Cache OSMnx local (llm-agents/osmnx_cache)..."
 	rm -f llm-agents/osmnx_cache/*.pkl
 	@echo "🗑️  Cache scripts OSMnx (scripts/general/cache)..."
 	rm -f scripts/general/cache/*.pkl
 	@echo "🗑️  Cache pipeline eqasim (eqasim-toulouse/cache)..."
 	rm -rf eqasim-toulouse/cache/*.cache
-	@echo "🗑️  Cache eqasim (data/eqasim_cache, data/eqasim_output)..."
-	rm -rf data/eqasim_cache/*.cache
-	rm -f data/eqasim_output/*.json
+	@echo "🗑️  Cache eqasim (data/cache/eqasim) + population générée (data/population)..."
+	rm -rf data/cache/eqasim/*.cache
+	rm -f data/population/*.json
 	@echo "🗑️  Cache RAPTOR/Solari..."
 	rm -f llm-agents/raptor_cache.pickle
 	@echo "✅ Tous les caches purgés."

@@ -124,6 +124,10 @@ species passenger parent: in_transfer virtual: true {
     action submit_ob_transit(float segment_duration, float dist, int ob_step_idx, float capacity) virtual: true;
     action submit_ob_tripfeedback(float trip_duration) virtual: true;
     action submit_vehicle_wait_time(float wait_duration, int ob_step_idx) virtual: true;
+    action submit_ob_tc_timeout(float wait_duration, int ob_step_idx) virtual: true;
+
+    // Identifiant lisible de la personne (ex: "519453")
+    string person_id <- "";
 
     // Compteur d'activités
     int total_activities <- 0;
@@ -394,6 +398,8 @@ species passenger parent: in_transfer virtual: true {
 		}
 		/* Cas transport en COMMUN */
 		else {
+			int MAX_VEHICLE_WAIT <- 30 * 60;
+			int wait_so_far <- CURRENT_TIMESTAMP - step_started_at;
 
 			if route_id in route_vehicle_map.keys {
 				// TODO: considérer la capacité du véhicule
@@ -411,10 +417,26 @@ species passenger parent: in_transfer virtual: true {
 
 					// métriques
 					on_vehicle_capacity_utilization <- on_vehicle.capacity_utilization;
+				} else {
+					if wait_so_far > MAX_VEHICLE_WAIT {
+						do submit_ob_tc_timeout(float(wait_so_far), step_idx);
+						location <- target_location;
+						do passenger_reset_plan();
+						do on_finish_plan();
+						activity_id <- nil;
+						is_active <- false;
+					}
 				}
 			}
 			else {
-				write "Route id" + route_id + " not in route_vehicle_map.keys";
+				if wait_so_far > MAX_VEHICLE_WAIT {
+					do submit_ob_tc_timeout(float(wait_so_far), step_idx);
+					location <- target_location;
+					do passenger_reset_plan();
+					do on_finish_plan();
+					activity_id <- nil;
+					is_active <- false;
+				}
 			}
 		}
 	}
@@ -428,7 +450,6 @@ species passenger parent: in_transfer virtual: true {
 species inhabitant parent: passenger {
     // Attributs d'identité et personnels
     string person_name;                    // Nom complet
-    string person_id;                      // Identifiant unique
     bool is_llm_based <- false;            // Si cet agent utilise LLM pour les décisions
 
     // État d'activité
@@ -569,6 +590,21 @@ species inhabitant parent: passenger {
 		OB_LIST << ob;
 	}
 	
+	action submit_ob_tc_timeout(float wait_duration, int ob_step_idx) {
+		map<string,unknown> ob <- [
+			"type"::"tc_timeout",
+			"timestamp"::CURRENT_TIMESTAMP,
+			"moving_id"::moving_id,
+			"activity_id"::activity_id,
+			"wait_duration"::wait_duration,
+			"route_id"::list_route_id[ob_step_idx],
+			"stop_name"::list_destination_stop_name[ob_step_idx],
+			"schedule_at"::schedule_at,
+			"expected_arrive_at"::expected_arrive_at
+		];
+		OB_LIST << ob;
+	}
+
 	/**
 	 * Obtenir la représentation emoji de l'action/état actuel
 	 * Utilisé pour l'affichage visuel de l'activité de l'agent
@@ -596,11 +632,13 @@ species inhabitant parent: passenger {
 	
 	/**
 	 * Couleur selon l'état de déplacement :
-	 *   gris clair → inactif (pas de trajet)
-	 *   lightblue   → prêt, en attente avant départ
-	 *   vert   → en transport en commun (dans le véhicule ou attente à l'arrêt)
-	 *   orange → à pied
+	 *   blanc  → inactif (pas de trajet)
+	 *   gris   → prêt/en attente avant départ, ou plan sans déplacement (même localisation)
+	 *   vert   → en transport en commun (dans le véhicule)
+	 *   jaune  → en attente d'un véhicule TC à un arrêt
+	 *   cyan   → à pied
 	 *   rouge  → en voiture
+	 *   violet → en vélo / train
 	 */
 	rgb get_agent_color {
 		if is_idle {
@@ -613,6 +651,10 @@ species inhabitant parent: passenger {
 		if is_ready {
 			return #gray;
 		}
+		// main_mode="" = plan reçu sans legs (même localisation) : attente sur place → gris
+		if main_mode = "" {
+			return #gray;
+		}
 		if main_mode = _BIKE_ {
 			return #purple;
 		}
@@ -620,10 +662,10 @@ species inhabitant parent: passenger {
 			return #red;
 		}
 		if main_mode = _WALK_ {
-			return #orange;
+			return #cyan;
 		}
 
-		// Others
+		// Others (transit en attente de véhicule)
 		return #yellow;
 	}
 

@@ -106,6 +106,12 @@ class LLMClient:
             elif category == "perception_filter":
                 if not agent.get("summary") or len(agent.get("summary", "")) < 10:
                     return False
+            elif category == "stm_reflection":
+                if not agent.get("reflection"):
+                    return False
+            elif category == "ltm_self_reflection":
+                if not agent.get("reflection"):
+                    return False
         return True
 
     def log_dialogue(self, payload: Dict[str, Any], response: Dict[str, Any], log_file: str = "prompt_dialogue.log") -> None:
@@ -226,9 +232,11 @@ class LLMClient:
                                 INDEX_CHOSEN.labels(index=str(chosen_index)).inc()
                     else:
                         TASKS_RESPONSES_FAILURE.inc()
-                        logger.error(
+                        error_msg = data.get('error') or 'No error detail'
+                        _log = logger.warning if "saturés" in error_msg or "indisponibles" in error_msg else logger.error
+                        _log(
                             f"Task failed | task_id={task_id} category={category} "
-                            f"wait={_wait_ms/1000:.1f}s error={data.get('error', 'No error detail')}"
+                            f"wait={_wait_ms/1000:.1f}s error={error_msg}"
                         )
                     data["_post_ms"] = round(_post_ms, 2)
                     data["_wait_ms"] = round(_wait_ms, 2)

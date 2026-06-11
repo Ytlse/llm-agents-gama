@@ -4,7 +4,6 @@ import gc
 import time
 from datetime import datetime, timedelta
 import string
-import traceback
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 import hashlib
@@ -157,6 +156,10 @@ class MultiUserLongTermMemory:
 
     def _init_shared_index(self, use_async: bool = False):
         """Initialize single shared vector store index"""
+        from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+        Settings.embed_model = HuggingFaceEmbedding(model_name="all-MiniLM-L6-v2")
+        Settings.llm = None
+
         if self.vector_store:
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
             try:
@@ -413,8 +416,7 @@ class MultiUserLongTermMemory:
 
         except Exception as e:
             LTM_QUERY_DURATION.observe(time.monotonic() - _t0)
-            traceback.print_exc()
-            print(f"Error querying memories for user {person_id}: {e}")
+            logger.exception(f"Error querying memories for user {person_id}: {e}")
             return []
 
     def rank_nodes(self, query: str, query_at: Optional[int], nodes: List[MemorySearchResult]) -> np.ndarray:

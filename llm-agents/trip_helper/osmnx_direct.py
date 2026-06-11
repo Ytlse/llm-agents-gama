@@ -88,6 +88,10 @@ OSMNX_INFLIGHT = Gauge(
     "Requêtes OSMnx en cours par mode (agents attendant la réponse)",
     ["mode"],
 )
+OSMNX_CACHE_HIT_RATIO = Gauge(
+    "osmnx_cache_hit_ratio",
+    "Ratio hits / lookups du cache persistant OSMnx (0-1)",
+)
 
 # ── Route markers (make each direct mode's get_code() unique) ─────────────────
 
@@ -97,55 +101,18 @@ DIRECT_ROUTE_MARKER = {
     "car":      "__DIRECT_CAR__",
 }
 
-# ── Pre-computed route cache (populated from population JSON at startup) ───────
-# key: (lat_from, lon_from, lat_to, lon_to, mode) → {"duration_s": int, "distance_m": float} | None
-# None means the route was pre-computed and found impossible.
-
-_DIRECT_ROUTE_CACHE: dict[tuple, Optional[dict]] = {}
-
-
-def load_route_cache(population_data: list) -> None:
-    """Populate the in-memory direct-route cache from a pre-enriched population list."""
-    global _DIRECT_ROUTE_CACHE
-    _DIRECT_ROUTE_CACHE.clear()
-    loaded = 0
-    for entry in population_data:
-        all_activities = entry.get("identity", {}).get("activities", [])
-        activities = all_activities
-        if not activities:
-            continue
-        # Activities 1..N-1: route from act[i-1] to act[i]
-        for i in range(1, len(activities)):
-            prev_loc = activities[i - 1].get("location", {})
-            act = activities[i]
-            act_loc = act.get("location", {})
-            routes = act.get("transfert_from_previous_location")
-            if not routes or not prev_loc or not act_loc:
-                continue
-            for mode, data in routes.items():
-                key = (round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
-                       round(act_loc["lat"], 7),  round(act_loc["lon"], 7), mode)
-                _DIRECT_ROUTE_CACHE[key] = data
-                loaded += 1
-        # Cyclic: act[last] → act[0] (transfert_from_previous_location of act[0])
-        if len(activities) >= 2:
-            first_act = activities[0]
-            last_act  = activities[-1]
-            prev_loc  = last_act.get("location", {})
-            act_loc   = first_act.get("location", {})
-            routes    = first_act.get("transfert_from_previous_location")
-            if routes and prev_loc and act_loc:
-                for mode, data in routes.items():
-                    key = (round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
-                           round(act_loc["lat"], 7),  round(act_loc["lon"], 7), mode)
-                    _DIRECT_ROUTE_CACHE[key] = data
-                    loaded += 1
-    logger.info(f"[osmnx-cache] {loaded} pre-computed routes loaded from population JSON")
-
-
 # ── Persistent SQLite cache (optional, enabled via settings) ──────────────────
 
 _persistent_cache = None  # type: Optional["OsmnxPersistentCache"]
+
+# Compteurs process-wide hits/lookups pour reporting du taux de cache dans les logs.
+_OSMNX_CACHE_HITS = 0
+_OSMNX_CACHE_LOOKUPS = 0
+
+
+def get_osmnx_cache_stats() -> tuple[int, int]:
+    """Retourne (hits, lookups) cumulés du cache persistant OSMnx depuis le démarrage."""
+    return _OSMNX_CACHE_HITS, _OSMNX_CACHE_LOOKUPS
 
 
 def init_persistent_cache(cache_dir: str) -> None:
@@ -547,17 +514,6 @@ async def get_direct_plan(
     _timing_sink: dict | None = None,
 ) -> Optional[TravelPlan]:
     """Async OSMnx direct route. Returns a one-leg TravelPlan or None on failure."""
-    # Pre-computed route cache (populated from population JSON at startup).
-    if settings.gtfs.osmnx_precomputed_cache_enabled:
-        _cache_key = (round(origin.lat, 7), round(origin.lon, 7),
-                      round(destination.lat, 7), round(destination.lon, 7), trip_mode)
-        if _cache_key in _DIRECT_ROUTE_CACHE:
-            cached = _DIRECT_ROUTE_CACHE[_cache_key]
-            if cached is None:
-                return None
-            return _make_travel_plan(origin, destination, trip_mode, departure_time,
-                                     cached["duration_s"], cached["distance_m"])
-
     # Fast reject: skip routing when the straight-line distance exceeds the mode's threshold.
     straight_m = _crow_flies_m(origin, destination)
     if trip_mode == "foot" and straight_m > _MAX_FOOT_M:
@@ -574,11 +530,16 @@ async def get_direct_plan(
             round(destination.lat, 5), round(destination.lon, 5),
         )
         entry = await _persistent_cache.lookup_async(_p_key)
+        global _OSMNX_CACHE_HITS, _OSMNX_CACHE_LOOKUPS
+        _OSMNX_CACHE_LOOKUPS += 1
         if entry.found:
+            _OSMNX_CACHE_HITS += 1
+            OSMNX_CACHE_HIT_RATIO.set(_OSMNX_CACHE_HITS / _OSMNX_CACHE_LOOKUPS)
             if entry.result is None:
                 return None
             return _make_travel_plan(origin, destination, trip_mode, departure_time,
                                      entry.result["duration_s"], entry.result["distance_m"])
+        OSMNX_CACHE_HIT_RATIO.set(_OSMNX_CACHE_HITS / _OSMNX_CACHE_LOOKUPS)
 
     osmnx_mode = _MODE_TO_OSMNX[trip_mode]
     t0 = _time.monotonic()

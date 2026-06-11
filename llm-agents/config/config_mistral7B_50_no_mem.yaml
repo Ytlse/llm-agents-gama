@@ -1,7 +1,6 @@
 
 gtfs:
   recursion_search_depth: 0
-  otp_cache_enabled: false
 
 agent:
   reschedule_activity_departure_time: false

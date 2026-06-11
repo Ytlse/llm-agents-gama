@@ -79,23 +79,26 @@ global {
 	string _cfg_llm  <- first(_cfg_lines where (each index_of "part_of_llm_based_agents:" = 0));
 	string _cfg_ltm  <- first(_cfg_lines where (each index_of "long_term_memory_enabled:" = 0));
 	string _cfg_ltsr <- first(_cfg_lines where (each index_of "long_term_self_reflect_enabled:" = 0));
+	string _cfg_days <- first(_cfg_lines where (each index_of "simulation_max_days:" = 0));
 
 	int population_size <- 100;
 	float part_of_llm_based_agents <- 1.0;
-	bool long_term_memory_enabled <- false;
-	bool long_term_self_reflect_enabled <- false;
-	
+	bool long_term_memory_enabled <- true;
+	bool long_term_self_reflect_enabled <- true;
+	int simulation_max_days <- 7;
+
 	action save_sim_config {
 		write "Save config";
 		if (population_size>0){
 			string content <- "population_size: " + string(population_size) + "\n"
 				+ "part_of_llm_based_agents: " + string(part_of_llm_based_agents) + "\n"
 				+ "long_term_memory_enabled: " + string(long_term_memory_enabled) + "\n"
-				+ "long_term_self_reflect_enabled: " + string(long_term_self_reflect_enabled);
+				+ "long_term_self_reflect_enabled: " + string(long_term_self_reflect_enabled) + "\n"
+				+ "simulation_max_days: " + string(simulation_max_days);
 			save content to: SIM_CONFIG_PATH format: "text" rewrite: true;
 		}
 	}
-	
+
 	action load_sim_config {
 		// Simulation scenario parameters — sent to the Python controller at /init
 		write "Load config";
@@ -103,6 +106,7 @@ global {
 		part_of_llm_based_agents <- (_cfg_llm != nil) ? float(string((_cfg_llm split_with ":")[1]) replace(" ", "")) : 1.0;
 		long_term_memory_enabled <- (_cfg_ltm != nil) ? ((_cfg_ltm split_with ":")[1] contains "true") : false;
 		long_term_self_reflect_enabled <- (_cfg_ltsr != nil) ? (string((_cfg_ltsr split_with ":")[1]) contains "true") : false;
+		simulation_max_days <- (_cfg_days != nil) ? int(string((_cfg_days split_with ":")[1]) replace(" ", "")) : 7;
 	}
 
 	reflex auto_save_sim_config when: cycle = 2 {

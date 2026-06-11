@@ -11,6 +11,11 @@ import re
 from abc import ABC, abstractmethod
 from typing import Tuple
 
+try:
+    import demjson3 as _demjson
+except ImportError:
+    _demjson = None
+
 from pydantic import ValidationError
 
 from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
@@ -127,15 +132,46 @@ class BaseAdapter(ABC):
             f"raw_preview={raw_clean[:300]!r}"
         )
 
-        # Step 1 — JSON decode
+        # Guard: detect repetition loops (same token repeated > 15 times consecutively)
+        words = raw_clean.split()
+        if len(words) > 20:
+            max_consecutive = 1
+            consecutive = 1
+            for i in range(1, len(words)):
+                if words[i] == words[i - 1]:
+                    consecutive += 1
+                    max_consecutive = max(max_consecutive, consecutive)
+                else:
+                    consecutive = 1
+            if max_consecutive > 15:
+                raise ProviderParseError(
+                    provider, raw,
+                    f"Repetition loop detected ({max_consecutive} consecutive identical tokens)"
+                )
+
+        # Step 1 — JSON decode (with demjson3 fallback for malformed output)
         try:
             data = json.loads(raw_clean)
         except json.JSONDecodeError as e:
-            _base_logger.warning(
-                f"_parse_output FAILED at json.loads | provider={provider} "
-                f"error={e} raw_preview={raw_clean[:500]!r}"
-            )
-            raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
+            if _demjson is not None:
+                try:
+                    data = _demjson.decode(raw_clean)
+                    _base_logger.warning(
+                        f"_parse_output: json.loads failed, repaired with demjson3 | "
+                        f"provider={provider} original_error={e}"
+                    )
+                except Exception:
+                    _base_logger.warning(
+                        f"_parse_output FAILED at json.loads and demjson3 | provider={provider} "
+                        f"error={e} raw_preview={raw_clean[:500]!r}"
+                    )
+                    raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
+            else:
+                _base_logger.warning(
+                    f"_parse_output FAILED at json.loads | provider={provider} "
+                    f"error={e} raw_preview={raw_clean[:500]!r}"
+                )
+                raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
 
         # Step 2 — extract "agents" list
         agents_raw = None
@@ -170,6 +206,12 @@ class BaseAdapter(ABC):
         # Step 3 — build AgentResponse objects
         agents = []
         for idx, item in enumerate(agents_raw):
+            if not isinstance(item, dict):
+                _base_logger.warning(
+                    f"_parse_output: skipping non-dict item at agents[{idx}] | provider={provider} "
+                    f"type={type(item).__name__} value={item!r}"
+                )
+                continue
             try:
                 agents.append(AgentResponse(**item))
             except (TypeError, ValidationError) as e:

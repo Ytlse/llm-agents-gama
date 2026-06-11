@@ -561,7 +561,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -576,7 +576,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -591,7 +591,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -621,7 +621,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -636,7 +636,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -651,7 +651,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -726,7 +726,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -741,7 +741,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -756,7 +756,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -786,7 +786,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -801,7 +801,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -816,7 +816,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -891,7 +891,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -906,7 +906,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -921,7 +921,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -951,7 +951,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -966,7 +966,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -981,7 +981,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1056,7 +1056,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -1071,7 +1071,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1086,7 +1086,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -1116,7 +1116,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1131,7 +1131,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1146,7 +1146,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1221,7 +1221,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -1236,7 +1236,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1251,7 +1251,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -1281,7 +1281,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1296,7 +1296,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1311,7 +1311,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1386,7 +1386,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "orange",
+                  "fixedColor": "red",
                   "mode": "fixed"
                 }
               }
@@ -1401,7 +1401,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "light-green",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1416,7 +1416,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "yellow",
+                  "fixedColor": "cyan",
                   "mode": "fixed"
                 }
               }
@@ -1446,7 +1446,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "blue",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1461,7 +1461,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "purple",
+                  "fixedColor": "green",
                   "mode": "fixed"
                 }
               }
@@ -1476,7 +1476,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "red",
+                  "fixedColor": "purple",
                   "mode": "fixed"
                 }
               }
@@ -1556,7 +1556,113 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "car"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cycling"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "walking"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "cyan",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bus"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "metro"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tram"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rail"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "displayLabels": [

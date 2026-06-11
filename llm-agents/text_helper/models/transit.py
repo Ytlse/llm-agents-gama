@@ -14,11 +14,8 @@ class EnvObTransit(EnvOb):
     # waiting_trip_count: Optional[int] = None
     by_vehicle_route_id: str
 
-    def describe(self) -> str:
-        # Describe the transit observation in a human-readable format
-        return tpl_describe_the_ob_transit.render(
-            ob=self,
-        )
+    def describe(self, weather=None) -> str:
+        return tpl_describe_the_ob_transit.render(ob=self, weather=weather)
 
 
 if __name__ == "__main__":

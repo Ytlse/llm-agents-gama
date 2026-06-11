@@ -26,7 +26,6 @@ from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from urban_mobility_agents.utils.weather_loader import get_weather, weather_to_natural_language
-from llama_index.core.llms import ChatMessage, ChatResponse
 import time
 from world.population import PersonScheduler
 from loguru import logger
@@ -104,7 +103,15 @@ def _build_profile_narrative(traits: dict) -> str:
         car_str = "sans voiture ni permis"
 
     pt_str = "abonné·e TC" if has_pt else "sans abonnement TC"
-    line2 = f"Mobilité : {car_str} | {pt_str}"
+
+    personal_bike = traits.get("personal_bike", "")
+    if personal_bike == "VAE":
+        bike_str = "possède un VAE (vélo à assistance électrique)"
+    elif personal_bike == "vélo normal":
+        bike_str = "possède un vélo classique"
+    else:
+        bike_str = "sans vélo personnel"
+    line2 = f"Mobilité : {car_str} | {pt_str} | {bike_str}"
 
     return "\n".join([line1, line2])
 
@@ -113,8 +120,6 @@ class LlmAgent:
     DEFAULT_IDENTITY = ""
 
     def __init__(self):
-        self.llm = None
-        
         self.short_term_memory: dict[str, UserShortTermMemory] = {}
         if settings.agent.long_term_memory_enabled:
             self.long_term_memory = MultiUserLongTermMemory(
@@ -168,55 +173,6 @@ class LlmAgent:
             message=msg.content,
             data=context.data,
         )
-
-    async def execute_llm_chat(self, context: Context, prompt: str, system_prompt: Optional[str] = None, params: Optional[dict] = None, type: Optional[str] = None) -> str:
-        """
-        Central method to send asynchronous chat requests to the LLM with built-in retries, logging, and metrics.
-
-        Args:
-            context (Context): The simulation context containing the person, current time, and shared data.
-            prompt (str): The main instruction/query for the LLM.
-            system_prompt (Optional[str], optional): The system prompt defining the agent's persona and rules.
-            params (Optional[dict], optional): Additional generation parameters (e.g., temperature) to pass to the LLM.
-            type (Optional[str], optional): Optional chat type identifier (mostly managed via context.data['type']).
-
-        Returns:
-            str: The stripped text content of the LLM's response.
-
-        Raises:
-            AssertionError: If the LLM call fails after exhausting all retries.
-        """
-        params = params or settings.agent.llm_params
-        start_time = time.time()
-        response = None
-        for _ in range(settings.agent.llm_retry_count):
-            try:
-                # Use the LLM's chat method to get a response
-                messages = [] if not system_prompt else [ChatMessage(role="system", content=system_prompt)]
-                messages.append(ChatMessage(role="user", content=prompt))
-                response: ChatResponse = await self.llm.achat(messages, **(params or {}))
-                break  # Exit loop if successful
-            except Exception as e:
-                logger.error(f"LLM chat failed: {e}")
-                await asyncio.sleep(settings.agent.llm_retry_delay)
-
-        assert response is not None, "LLM chat response is None after retries."
-
-        duration = time.time() - start_time
-
-        # Try to get token usage stats if available
-        total_tokens = getattr(response, "usage", {}).get("total_tokens", None)
-
-        stats = {
-            "duration": duration,
-            "total_tokens": total_tokens,
-        }
-        context.data = context.data or {}
-        context.data["llm_stats"] = stats
-
-        combine_prompt = f"***** ------------------ System Prompt ------------------ :\n{system_prompt}\n***** ------------------ User Prompt ------------------ :\n{prompt}"
-        log_chat(combine_prompt, response, context)
-        return response.message.content.strip()
 
     def parse_response_json(self, response: str) -> Tuple[Optional[dict], str]:
         try:
@@ -297,10 +253,12 @@ class LlmAgent:
         ts = []
         for entry in hist:
             if str(entry.metadata["memory_type"]) == str(MemoryType.REFLECTION.value):
-                resp.append([entry.content, datetime.strftime(datetime.fromisoformat(entry.metadata['timestamp']), '%A, %B %d')])
+                date_str = datetime.strftime(datetime.fromisoformat(entry.metadata['timestamp']), '%A, %B %d')
+                resp.append(f"[{date_str}] {entry.content}")
                 ts.append(datetime.fromisoformat(entry.metadata['timestamp']).timestamp())
             elif str(entry.metadata["memory_type"]) == str(MemoryType.CONCEPT.value):
-                resp.append(json.loads(entry.content))
+                concept = json.loads(entry.content)
+                resp.append(f"[Concept] {concept[0]}" if concept else "")
                 ts.append(datetime.fromisoformat(entry.metadata['timestamp']).timestamp())
             else:
                 logger.debug(f"Unknown memory type for entry: {entry.metadata['memory_type']}")
@@ -476,45 +434,6 @@ class LlmAgent:
             logger.exception(f"Erreur lors de l'appel à l'API Gateway LLM: {e}")
             return -1, str(e), ""
 
-    def get_reflection_prompt(self, context: Context) -> tuple[str, list[MemoryEntry]]:
-        mem = self.get_short_term_memory(context.person.person_id)
-        group_messages, all_messages = mem.get_all_message_and_group()
-
-        if not all_messages:
-            return "", []
-
-        exp = []
-        for group in group_messages:
-            if group:
-                activity = PersonScheduler(context.person).get_activity(group[0].activity_id) if group[0].activity_id else None
-                exp.append({
-                    "purpose": activity.purpose if activity else None,
-                    "observations": [msg.content for msg in group],
-                })
-        experiences_text = json.dumps(exp, indent=2, ensure_ascii=False)
-
-        custom_guidelines_text = f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}" if settings.agent.reflection_custom_guidelines else ""
-        
-        prompt_text = self.prompt_manager.get_prompt(
-            PromptName.REFLECTION,
-            experiences_text=experiences_text if experiences_text else "[]",
-            custom_guidelines=custom_guidelines_text
-        )
-        return prompt_text, all_messages
-
-    def get_longterm_memory_reflection_prompt(self, context: Context, from_date: datetime):
-        all_entries = self.long_term_memory.get_last_user_memories(
-            person_id=context.person.person_id,
-            from_date=from_date,
-        )
-        if not all_entries:
-            return None, []
-
-        entries_text = "\n".join(f"- Time {humanize_date(entry.timestamp.timestamp())}: {entry.content}" for entry in all_entries)
-
-        prompt = self.prompt_manager.get_prompt(PromptName.LONGTERM_REFLECTION, entries_text=entries_text)
-        return prompt, all_entries
-    
     async def trigger_short_term_reflection_for_all_people(self, timestamp: int, people: list[Person]):
         """
         Reflect on all short-term memories of all people at the given timestamp.
@@ -524,13 +443,16 @@ class LlmAgent:
             logger.info("Long-term memory is disabled, skipping reflection.")
             return
         
-        for person in people:
-            context = Context(
-                person=person,
-                timestamp=timestamp,
-                data={"type": "reflection"}
-            )
-            await self.reflect_on_short_term_memory(context)
+        import asyncio
+
+        sem = asyncio.Semaphore(10)
+
+        async def _reflect_one(person):
+            async with sem:
+                context = Context(person=person, timestamp=timestamp, data={"type": "reflection"})
+                await self.reflect_on_short_term_memory(context)
+
+        await asyncio.gather(*[_reflect_one(p) for p in people])
 
     async def trigger_long_term_reflection_for_all_people(self, timestamp: int, from_date: datetime, people: list[Person]):
         if settings.agent.long_term_memory_enabled is False or settings.agent.long_term_self_reflect_enabled is False:
@@ -549,16 +471,40 @@ class LlmAgent:
         if settings.agent.long_term_memory_enabled is False:
             logger.info("Long-term memory is disabled, skipping reflection.")
             return
-        
-        prompt, all_entries = self.get_longterm_memory_reflection_prompt(context, from_date)
+
+        all_entries = self.long_term_memory.get_last_user_memories(
+            person_id=context.person.person_id,
+            from_date=from_date,
+        )
         if not all_entries:
             logger.info(f"No long-term memory available for reflection for {context.person.person_id}")
             return
-        system_prompt = self.get_personal_system_prompt(context.person)
-        response_text = await self.execute_llm_chat(context, prompt, system_prompt=system_prompt)
-        resp, fallback = self.parse_response_json(response_text)
+
+        entries_text = "\n".join(
+            f"- Time {humanize_date(entry.timestamp.timestamp())}: {entry.content}"
+            for entry in all_entries
+        )
+        identity_description = self.get_person_identity_description(context.person)
+
+        payload = {
+            "category": "ltm_self_reflection",
+            "agents": [{
+                "agent_id": context.person.person_id,
+                "perception": identity_description,
+                "context": entries_text,
+                "departure_timestamp": float(context.timestamp),
+            }],
+            "parameters": {**settings.agent.llm_params},
+        }
+
+        response_data = await self.llm_client.execute_async(payload)
+        results = response_data.get("result", [])
+        if not results:
+            logger.error(f"LTM self-reflection gateway returned no result for {context.person.person_id}")
+            return
+
         try:
-            reflection = resp["reflection"]
+            reflection = results[0].get("reflection", "")
             entry = MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,
@@ -567,32 +513,59 @@ class LlmAgent:
             )
             await self.aadd_long_term_memory(context, entry)
         except Exception as e:
-            logger.error(f"Failed to parse reflection response for person {context.person.person_id}, err: {e}")
-            return
+            logger.error(f"Failed to store LTM self-reflection for person {context.person.person_id}, err: {e}")
 
     async def reflect_on_short_term_memory(self, context: Context):
-        prompt, all_messages = self.get_reflection_prompt(context)
+        mem = self.get_short_term_memory(context.person.person_id)
+        group_messages, all_messages = mem.get_all_message_and_group()
+
         if not all_messages:
             logger.info("No short-term memory available for reflection.")
             return
-        
-        system_prompt = self.get_personal_system_prompt(context.person)
-        response_text = await self.execute_llm_chat(context, prompt, system_prompt=system_prompt)
-        #TODO: hotfix - avoid null in the list
-        response_text = response_text.replace("\nnull", "").replace("null\n", "").replace("\nnull\n", "")
-        resp, fallback = self.parse_response_json(response_text)
 
-        # remove all messages from short-term memory
+        exp = []
+        for group in group_messages:
+            if group:
+                activity = PersonScheduler(context.person).get_activity(group[0].activity_id) if group[0].activity_id else None
+                exp.append({
+                    "purpose": activity.purpose if activity else None,
+                    "observations": [msg.content for msg in group],
+                })
+        experiences_text = json.dumps(exp, indent=2, ensure_ascii=False)
+
+        identity_description = self.get_person_identity_description(context.person)
+        custom_guidelines = f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}" if settings.agent.reflection_custom_guidelines else ""
+
+        payload = {
+            "category": "stm_reflection",
+            "min_tpm_required": settings.agent.stm_reflection_min_tpm,
+            "agents": [{
+                "agent_id": context.person.person_id,
+                "perception": identity_description,
+                "context": experiences_text,
+                "departure_timestamp": float(context.timestamp),
+            }],
+            "parameters": {
+                "custom_guidelines": custom_guidelines,
+                **settings.agent.llm_params,
+            },
+        }
+
+        response_data = await self.llm_client.execute_async(payload)
+        results = response_data.get("result", [])
+        if not results:
+            logger.error(f"STM reflection gateway returned no result for {context.person.person_id}")
+            return
+
+        agent_result = results[0]
+
         self.get_short_term_memory(context.person.person_id).remove_batch(all_messages)
-        # TODO: Add to long-term memory
         start_timestamp = all_messages[0].timestamp
 
-
-        # add new memory to long-term memory
         entries = []
         try:
-            reflection = resp.get("reflection", "").strip() if resp else ""
-            concepts = resp.get("concepts", [])
+            reflection = (agent_result.get("reflection", "") or "").strip()
+            concepts = agent_result.get("concepts", [])
 
             entries.append(MemoryEntry(
                 person_id=context.person.person_id,
@@ -610,8 +583,7 @@ class LlmAgent:
                     tags=",".join(concept[1:] if isinstance(concept, list) and len(concept) > 1 else [])
                 ))
         except Exception as e:
-            traceback.print_exc()
-            logger.error(f"Failed to parse reflection response: {e}")
+            logger.exception(f"Failed to parse STM reflection response: {e}")
 
         for entry in entries:
             await self.aadd_long_term_memory(context, entry)

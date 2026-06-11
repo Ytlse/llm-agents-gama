@@ -13,7 +13,7 @@ x-osmnx-service: &osmnx-service
   restart: "no"
   stop_grace_period: 5s
   volumes:
-    - ./data/osmnx_cache:/app/osmnx_cache
+    - ./data/cache/osmnx:/app/osmnx_cache
     - ./llm-agents/config:/app/config:ro
   environment:
     APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
@@ -89,8 +89,8 @@ services:
       - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
-      - ./data/eqasim_cache:/eqasim-cache:rw
-      - ./data/eqasim_output:/eqasim-output:rw
+      - ./data/cache/eqasim:/eqasim-cache:rw
+      - ./data/population:/eqasim-output:rw
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
       interval: 5s
@@ -231,9 +231,10 @@ services:
       - ./llm_module:/opt/llm_module
       - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
       - ./experiments:/app/experiments
-      - ./data/eqasim_output:/data/eqasim-output:rw
-      - ./data/osmnx_cache:/app/osmnx_cache
-      - ./data/llm_cache:/app/data/llm_cache
+      - ./data/population:/data/eqasim-output:rw
+      - ./data/cache/osmnx:/app/osmnx_cache
+      - ./data/cache/llm:/app/data/llm_cache
+      - ./data/cache/otp:/app/data/cache/otp
       - ./data/weather:/app/data/weather
       - ./data/weather:/data/weather
       - ./GAMA:/GAMA
@@ -255,7 +256,7 @@ services:
     build:
       context: ./llm_module
       dockerfile: Dockerfile
-    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=8
+    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=25 -P threads
     env_file: ./.env
     environment:
       <<: *shared-env

@@ -26,7 +26,6 @@ from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitR
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
 from settings import settings, FactorySettings
-import traceback
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import ORJSONResponse
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST, REGISTRY
@@ -52,7 +51,9 @@ _last_sync_wall_time: float          = 0.0
 _last_sync_response_wall_time: float = 0.0   # timestamp of the last /sync response sent
 _sim_init_wall_time: float           = 0.0
 _sim_step_count: int                 = 0
-_last_logical_time: int      = 0
+_last_logical_time: int              = 0
+_last_backpressure_in_progress: int  = 0     # in_progress_count used for the previous sync's sleep
+_last_backpressure_min_interval: float = 0.0 # min_interval computed for the previous sync's sleep
 
 # eqasim service URL — set via EQASIM_SERVICE_URL env var (default: http://eqasim:8003)
 _EQASIM_SERVICE_URL = os.environ.get("EQASIM_SERVICE_URL", "http://eqasim:8003")
@@ -129,28 +130,28 @@ async def _prepare_population(
     format it is used as-is (no re-generation, no re-enrichment).
     """
     import random as _random
-    from trip_helper.osmnx_direct import get_direct_plan, load_route_cache, init_persistent_cache
+    from trip_helper.osmnx_direct import get_direct_plan, init_persistent_cache
+    from population_utils import scheduling_mode as _sched_mode, _activity_index_pairs
 
     workdir_path = f"{settings.data.population_cache_prefix}{population_size}.json"
 
     def _init_osmnx_cache() -> None:
-        if not settings.gtfs.osmnx_cache_enabled:
-            return
         population_name = f"{settings.data.synthetic_file_prefix}population_{population_size}"
-        cache_dir = os.path.join(settings.gtfs.osmnx_persistent_cache_dir, population_name)
-        init_persistent_cache(cache_dir)
-
+        if settings.gtfs.osmnx_cache_enabled:
+            cache_dir = os.path.join(settings.gtfs.osmnx_persistent_cache_dir, population_name)
+            init_persistent_cache(cache_dir)
+            
+        if settings.gtfs.mode == "OTP" and settings.gtfs.otp_cache_enabled:
+            from trip_helper.cached_triphelper import init_otp_persistent_cache
+            otp_cache_dir = os.path.join(settings.gtfs.otp_persistent_cache_dir, population_name)
+            logger.warning(f"[trace][app._init_osmnx_cache] calling init_otp_persistent_cache({otp_cache_dir})")
+            init_otp_persistent_cache(otp_cache_dir)
+        else:
+            logger.warning("[trace][app._init_osmnx_cache] OTP cache init SKIPPED (condition false)")
 
     def _is_eqasim_format(data: list) -> bool:
         # Eqasim identity has no "name" key; Pydantic PersonalIdentity dump does
         return bool(data) and "name" not in data[0].get("identity", {})
-
-    def _needs_osmnx_enrichment(data: list) -> bool:
-        for entry in data:
-            for act in entry.get("identity", {}).get("activities", [])[1:]:
-                if "transfert_from_previous_location" in act:
-                    return False
-        return True
 
     data = None
     if os.path.exists(workdir_path):
@@ -159,13 +160,10 @@ async def _prepare_population(
         if not _is_eqasim_format(data):
             logger.info(f"[population] File in old Pydantic format — regenerating: {workdir_path}")
             data = None
-        elif not _needs_osmnx_enrichment(data):
-            logger.info(f"[population] File exists and fully enriched: {workdir_path}")
-            load_route_cache(data)
+        else:
+            logger.info(f"[population] File exists — reusing: {workdir_path}")
             _init_osmnx_cache()
             return workdir_path
-        else:
-            logger.info(f"[population] File exists but missing OSMnx routes — enriching")
 
     if data is None:
         # Ensure raw eqasim output exists for the exact requested size
@@ -241,76 +239,73 @@ async def _prepare_population(
                     pt_count += 1
         logger.info(f"[population] {pt_count} locations flagged with public_transport")
 
-    # Pass 2: OSMnx pre-computed routes for all consecutive activity pairs.
-    # Skip if the raw data already carries transfert_from_previous_location for all activities.
-    if not _needs_osmnx_enrichment(data):
-        logger.info("[population] OSMnx routes already present in raw data — skipping Pass 2")
-        tmp_path = workdir_path + ".tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.rename(tmp_path, workdir_path)
-        logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
-        load_route_cache(data)
-        _init_osmnx_cache()
-        return workdir_path
-    tasks_meta = []
+    # Pass 2: compute scheduling-mode travel times (car for car owners, bicycle otherwise)
+    # and adjust scheduled_start_time via ajuster_planning.
+    # Always executed when generating a new file.
+    # Build one scheduling-mode route per activity pair, then call ajuster_planning.
+    tasks_meta: list[tuple] = []   # (person_index, prev_i, curr_i)
     coros = []
-    for entry in data:
+    for p_idx, entry in enumerate(data):
         activities = entry["identity"].get("activities", [])
-        has_car = entry["identity"].get("traits_json", {}).get("number_of_cars", 0) > 0
-        for i in range(1, len(activities)):
-            prev_loc = activities[i - 1].get("location", {})
-            act = activities[i]
-            act_loc = act.get("location", {})
-            if not prev_loc or not act_loc:
-                continue
-            if prev_loc.get("lon") is None or act_loc.get("lon") is None:
-                continue
-            origin = Location(lat=prev_loc["lat"], lon=prev_loc["lon"])
-            destination = Location(lat=act_loc["lat"], lon=act_loc["lon"])
-            origin_end = activities[i - 1].get("end_time") or 0
-            departure_unix = to_timestamp_based_on_day(int(origin_end) if origin_end > 0 else int(act["start_time"]), sim_base_timestamp)
-            congestion_dt = datetime.fromtimestamp(departure_unix)
-            for mode in (["foot", "bicycle"] + (["car"] if has_car else [])):
-                tasks_meta.append((act, mode))
-                coros.append(get_direct_plan(
-                    origin=origin,
-                    destination=destination,
-                    trip_mode=mode,
-                    departure_time=departure_unix,
-                    congestion_dt=congestion_dt,
-                ))
+        has_car    = entry["identity"].get("traits_json", {}).get("number_of_cars", 0) > 0
+        mode       = _sched_mode(entry)
 
-    logger.info(f"[population] Pass 2 OSMnx: {len(coros)} routes à calculer ({len(data)} agents)…")
+        for prev_i, curr_i, _ in _activity_index_pairs(activities, has_car):
+            prev_act = activities[prev_i]
+            curr_act = activities[curr_i]
+            prev_loc = prev_act.get("location", {})
+            curr_loc = curr_act.get("location", {})
+            if not prev_loc or not curr_loc:
+                continue
+            if prev_loc.get("lon") is None or curr_loc.get("lon") is None:
+                continue
+            origin      = Location(lat=prev_loc["lat"], lon=prev_loc["lon"])
+            destination = Location(lat=curr_loc["lat"], lon=curr_loc["lon"])
+            origin_end  = prev_act.get("end_time") or 0
+            departure_unix = to_timestamp_based_on_day(
+                int(origin_end) if origin_end > 0 else int(curr_act.get("start_time", 0)),
+                sim_base_timestamp,
+            )
+            congestion_dt = datetime.fromtimestamp(departure_unix)
+            tasks_meta.append((p_idx, prev_i, curr_i))
+            coros.append(get_direct_plan(
+                origin=origin,
+                destination=destination,
+                trip_mode=mode,
+                departure_time=departure_unix,
+                congestion_dt=congestion_dt,
+            ))
+
+    logger.info(f"[population] Pass 2 OSMnx scheduling: {len(coros)} routes ({len(data)} agents)…")
 
     BATCH = 200
     results = []
     for i in range(0, len(coros), BATCH):
         batch_results = await asyncio.gather(*coros[i:i + BATCH], return_exceptions=True)
         results.extend(batch_results)
-        logger.info(f"[population] Pass 2 OSMnx: {min(i + BATCH, len(coros))}/{len(coros)} routes calculées")
+        logger.info(f"[population] Pass 2: {min(i + BATCH, len(coros))}/{len(coros)} routes calculées")
 
+    # Build per-person travel_times dict from results
+    person_travel_times: list[dict] = [{} for _ in data]
     osmnx_ok = 0
-    for (act, mode), result in zip(tasks_meta, results):
-        if "transfert_from_previous_location" not in act:
-            act["transfert_from_previous_location"] = {}
+    for (p_idx, prev_i, curr_i), result in zip(tasks_meta, results):
         if isinstance(result, Exception) or result is None:
-            act["transfert_from_previous_location"][mode] = None
-        else:
-            act["transfert_from_previous_location"][mode] = {
-                "duration_s": result.duration,
-                "distance_m": result.distance,
-            }
-            osmnx_ok += 1
-    logger.info(f"[population] OSMnx pre-computed {osmnx_ok}/{len(tasks_meta)} routes")
+            continue
+        person_travel_times[p_idx][(prev_i, curr_i)] = result.duration
+        osmnx_ok += 1
+    logger.info(f"[population] Pass 2: {osmnx_ok}/{len(tasks_meta)} scheduling routes computed")
 
-    # Step 5: adjust scheduled_start_time to absorb real travel durations
+    # Adjust schedules
     sched_errors = 0
-    for entry in data:
+    for p_idx, entry in enumerate(data):
         acts = entry.get("identity", {}).get("activities", [])
         try:
             entry["identity"]["activities"] = ajuster_planning(
-                workdir_path, entry.get("person_id", "?"), acts, raise_error=True
+                workdir_path,
+                entry.get("person_id", "?"),
+                acts,
+                travel_times=person_travel_times[p_idx],
+                raise_error=True,
             )
         except ValueError as exc:
             sched_errors += 1
@@ -324,9 +319,8 @@ async def _prepare_population(
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.rename(tmp_path, workdir_path)
-    logger.info(f"[population] Enriched population written to {workdir_path} ({len(data)} agents)")
+    logger.info(f"[population] Population written to {workdir_path} ({len(data)} agents)")
 
-    load_route_cache(data)
     _init_osmnx_cache()
     return workdir_path
 
@@ -452,6 +446,8 @@ class LoopContainer:
 
                 if sent > 0:
                     logger.info(f"WebSocket loop sent {sent} message(s) to {self.action_topic}")
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 logger.error(f"WebSocket publish loop error: {e}")
                 await asyncio.sleep(self.reconnect_interval)
@@ -465,8 +461,7 @@ class LoopContainer:
             await self.process_observation(self.observation_topic, text)
 
         except Exception as e:
-            traceback.print_exc()
-            logger.error(f"Error handling message: {e}")
+            logger.exception(f"Error handling message: {e}")
 
     async def process_observation(self, topic: str, payload: str):
         """
@@ -481,8 +476,7 @@ class LoopContainer:
             observation = Observation(**data["payload"])
             await self.scenario.handle_observation(observation)
         except Exception as e:
-            traceback.print_exc()
-            logger.error(f"Error processing observation: {e}")
+            logger.exception(f"Error processing observation: {e}")
 
 class _AgentStateLog:
     """Append-only CSV recording agent state counts per simulation step."""
@@ -579,6 +573,7 @@ async def init(request: WorldInitRequest):
     """
     INIT_REQUESTS.inc()
     _N_STEPS = 5
+    _t_init_start = time.time()
 
     logger.info(f"INITIALISATION 1/{_N_STEPS} Préparation de la population — sim_time={humanize_date(request.timestamp)}")
     await loop_container.send_log(f"[1/{_N_STEPS}] Préparation de la population (génération + enrichissement)...")
@@ -639,8 +634,13 @@ async def init(request: WorldInitRequest):
         AGENT_STATES.labels(state=_state).set(0)
     AGENT_STATES.labels(state='inactive').set(len(people))
 
-    logger.info(f"INITIALISATION 5/{_N_STEPS} Démarrage de la simulation — {len(people)} agents envoyés à GAMA")
-    await loop_container.send_log(f"[5/{_N_STEPS}] Démarrage de la simulation — {len(people)} agents envoyés à GAMA.")
+    _init_duration = time.time() - _t_init_start
+    from urban_mobility_agents.simulation_controller import _format_cache_hit_rates
+    _cache_str = _format_cache_hit_rates()
+    logger.info(f"INITIALISATION 5/{_N_STEPS} Démarrage de la simulation — {len(people)} agents envoyés à GAMA (init={_init_duration:.0f}s)")
+    await loop_container.send_log(
+        f"[5/{_N_STEPS}] Démarrage de la simulation — {len(people)} agents | init: {_init_duration:.0f}s | caches: {_cache_str}"
+    )
 
     person_response = [
         GamaPersonData(
@@ -746,10 +746,8 @@ async def reflect(request: WorldSyncRequest):
             success=True,
         )
     else:
-        return MessageResponse(
-            success=False,
-            error="Scenario not set"
-        )
+        logger.debug("[/reflect] Scenario not ready yet — init still in progress, skipping")
+        return MessageResponse(data="not_ready", success=True)
 
 @app.post(
     "/sync",
@@ -768,7 +766,7 @@ async def sync(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
-    global _last_sync_wall_time, _last_sync_response_wall_time, _sim_step_count, _last_logical_time
+    global _last_sync_wall_time, _last_sync_response_wall_time, _sim_step_count, _last_logical_time, _last_backpressure_in_progress, _last_backpressure_min_interval
     now = time.time()
     real_delta = now - _last_sync_wall_time if _last_sync_wall_time > 0 else 0.0
     if real_delta > 0:
@@ -807,6 +805,7 @@ async def sync(raw: Request):
             _agent_state_log.record(_sim_step_count, request.timestamp, inactive, ready, active)
         except Exception:
             pass
+        in_progress_before_sync = loop_container.scenario.activities_to_compute_count
         await loop_container.scenario.sync(request.timestamp, _t_sync=now, _t_parse=_t_parse_end)
         try:
             SIM_LOGICAL_TIME.set(request.timestamp)
@@ -819,18 +818,29 @@ async def sync(raw: Request):
             pass
         _last_logical_time = request.timestamp
         in_progress_count = loop_container.scenario.activities_to_compute_count
-        _a = settings.world.min_internal_coeff_a
-        _b = settings.world.min_internal_coeff_b
-        min_interval = max(0.0, in_progress_count * (in_progress_count - _a) / _b)
+        if real_delta > 5.0:
+            await loop_container.send_log(
+                f"[⚠ sync lent] {real_delta:.1f}s depuis le dernier sync — "
+                f"tâches utilisées pour le sleep précédent : {_last_backpressure_in_progress} "
+                f"(sleep calculé : {_last_backpressure_min_interval:.2f}s)"
+            )
+        _scale = settings.world.min_internal_coeff_scale
+        _k     = settings.world.min_internal_coeff_k
+        _cap   = settings.world.min_internal_coeff_cap
+        dynamic_scale = _scale * (settings.data.population_size / 100.0)
+        min_interval = min(_cap, (in_progress_count / dynamic_scale) ** _k)
         logger.info(f"Activités à calculer: {in_progress_count} — applying min_interval={min_interval:.2f}s")
         if min_interval > 0 and _last_sync_response_wall_time > 0:
             remaining = min_interval - (time.time() - _last_sync_response_wall_time)
             if remaining > 0:
                 await asyncio.sleep(remaining)
+        _last_backpressure_in_progress = in_progress_count
+        _last_backpressure_min_interval = min_interval
         _last_sync_response_wall_time = time.time()
         return MessageResponse(data="synchronized", success=True)
     else:
-        return MessageResponse(success=False, error="Scenario not set")
+        logger.debug("[/sync] Scenario not ready yet — init still in progress, skipping")
+        return MessageResponse(data="not_ready", success=True)
 
 
 if __name__ == "__main__":

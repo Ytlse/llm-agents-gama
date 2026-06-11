@@ -131,15 +131,18 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Grid settings
     grid_size: int = 1000 # 1km
     time_step: int = 900 # 15 minutes
-    # Dynamic throttling: min_interval = n*(n - a) / b  where n = agents scheduling_in_progress.
-    # Tune a (inflection point) and b (scale) to shape the throttle curve.
-    min_internal_coeff_a: float = 85.0
-    min_internal_coeff_b: float = 2100.0
+    # Dynamic throttling: min_interval = min(cap, (n / scale)^k)  where n = itineraries in progress.
+    # scale : n at which delay reaches 1 s.
+    # k     : convexity exponent (>1 — higher = steeper curve at high load).
+    # cap   : hard ceiling in seconds (keeps delay below GAMA's HTTP read timeout).
+    min_internal_coeff_scale: float = 120.0
+    min_internal_coeff_k: float = 3.7
+    min_internal_coeff_cap: float = 30.0
     # Number of concurrent Worker coroutines consuming the activity queue.
     # Each worker independently picks items from the same asyncio.Queue, so up to
     # worker_concurrency LLM+OTP computations run in parallel (matching the old
     # fire-and-forget asyncio.create_task approach).
-    worker_concurrency: int = 25
+    worker_concurrency: int = 20
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -166,9 +169,6 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
     osmnx_cache_dir: str = "/app/osmnx_cache"
-    # Active le cache en mémoire des itinéraires pré-calculés au démarrage depuis le JSON population
-    # (lookup O(1) par coordonnées arrondies — court-circuite le calcul OSMnx à chaque requête)
-    osmnx_precomputed_cache_enabled: bool = True
     # Active le cache persistant des graphes OSMnx sur disque entre les redémarrages
     # (évite de re-télécharger/reconstruire les graphes ville+distance à chaque démarrage)
     osmnx_cache_enabled: bool = True
@@ -178,7 +178,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
     otp_cache_enabled: bool = True
-    otp_persistent_cache_dir: str = "/app/data/otp_cache"
+    otp_persistent_cache_dir: str = "/app/data/cache/otp"
     recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
     search_window_m: int = 30
     transit_access_egress_modes: list[str] = ["foot"]
@@ -211,10 +211,11 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     chat_log_dir: str = "chat_logs"
     long_term_memory_storage_dir: str = "long_term_memory"
     long_term_memory_filter_by_datetime: bool = False
-    long_term_memory_enabled: bool = True
+    long_term_memory_enabled: bool = True #surchargé par la valeur GAMA
     long_term_max_entries_query: int = 10
     long_term_max_days_query: int = 30
-    long_term_reflect_interval: int = 6 * 3600  # 6 hours
+    long_term_reflect_interval: int = 6 * 3600  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
+    stm_reflection_min_entries: int = 10        # déclenche la réflexion STM dès que N entrées accumulées
 
     long_term_retrieval__sim_weight: float = 0.4
     long_term_retrieval__keyword_weight: float = 0.3
@@ -222,7 +223,7 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     long_term_retrieval__default_reflection_importance_score: float = 0.2
     long_term_retrieval__time_decay: float = 0.7
 
-    long_term_self_reflect_enabled: bool = False
+    long_term_self_reflect_enabled: bool = True #surchargé par la valeur GAMA
     long_term_self_reflect_interval_days: int = 3
     long_term_self_reflect_window_days: int = 5
 
@@ -247,6 +248,7 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # Remote LLM settings
     remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
+    stm_reflection_min_tpm: Optional[int] = 30000  # exclut les providers sous ce seuil TPM pour la STM reflection
 
 
 class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -259,17 +261,18 @@ class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["history_file_v2", "log_file", "llm_exchanges_file", "pipeline_log_file"]
+    _in_workdir_path_fields: ClassVar[List[str]] = ["agent_memory_events_jsonl", "agent_memory_events_csv", "log_file", "llm_exchanges_file", "pipeline_log_file"]
 
-    # Simulation history log (HistoryStreamLog)
-    history_file_v2: str = "history_stream_log.jsonl"
+    # Agent memory events log (STM + LTM observations, reflections, concepts)
+    agent_memory_events_jsonl: str = "agent_memory_events.jsonl"
+    agent_memory_events_csv: str = "agent_memory_events.csv"
 
     # LLM exchange log (service, prompt, response, tokens)
     llm_exchanges_file: str = "llm_exchanges.jsonl"
 
     # Application log
     log_file: str = "app.log"
-    log_level: str = "DEBUG"
+    log_level: str = "INFO"
 
     # Pipeline timing CSV log (T0 → Fin, LLM agents only)
     pipeline_log_enabled: bool = True
