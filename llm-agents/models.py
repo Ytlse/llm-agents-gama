@@ -16,6 +16,7 @@ class Location(BaseModel):
     lon: float
     lat: float
     public_transport: Optional[bool] = None
+    zone: Optional[str] = None
 
 
 class BBox(BaseModel):

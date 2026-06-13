@@ -306,6 +306,8 @@ class LlmAgent:
             for i, opt in enumerate(options)
         ]
 
+        dest_zone = options[0].end_location.zone if options and options[0].end_location else None
+
         return {
             "category": "itinary_multi_agent",
             "agents": [
@@ -313,6 +315,7 @@ class LlmAgent:
                     "agent_id": agent_id,
                     "perception": f"{perception} Contraintes : {constraints}",
                     "destination": destination,
+                    "destination_zone": dest_zone,
                     "departure_time": humanize_time(departure_time) if departure_time else None,
                     "departure_timestamp": float(departure_time) if departure_time else None,
                     "current_time": current_time,

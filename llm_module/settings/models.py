@@ -31,6 +31,7 @@ class AgentSpec(BaseModel):
     agent_id: str
     perception: str
     destination: Optional[str] = None
+    destination_zone: Optional[str] = None
     departure_time: Optional[str] = None
     departure_timestamp: Optional[float] = None  # raw Unix timestamp for priority scoring
     current_time: Optional[str] = None

@@ -43,14 +43,13 @@ data/population/*
 
 # Cache
 scripts/general/cache/*
-data/cache/osmnx/*
 llm-agents/cache/*
 otp-toulouse/toulouse/gtfs/*
 cache/*
 llm-agents/data/osmnx_cache/*
 llm-agents/data/otp_cache/*
 llm_cache/
-data/cache/llm/
+data/cache/*
 
 # Temp
 scripts/general/travel_time.py
@@ -65,3 +64,7 @@ scripts/analysis/*.png
 scripts/models_influence/results*
 
 docs/tickets/*
+data/insee/*
+
+#script
+scripts/models_influence/calibration_results/*

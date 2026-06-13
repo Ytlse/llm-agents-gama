@@ -114,7 +114,6 @@ experiment e type: gui {
 
     reflex stop_after_max_days when: simulation_max_days > 0 and int(current_date - starting_date) >= simulation_max_days * 86400 {
         write "Simulation stopped after " + simulation_max_days + " simulated day(s).";
-        do halt;
     }
 
     // Save arrival time metrics every 10 minutes
