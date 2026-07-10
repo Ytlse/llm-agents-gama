@@ -29,13 +29,13 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 | [docs/arch/llm-inference.md](docs/arch/llm-inference.md) | Batching, SWRR, circuit breaker, load balancing LLM |
 | [docs/arch/routing.md](docs/arch/routing.md) | OTP (transit) et OSMnx (marche/vélo/voiture) |
 | [docs/arch/cache-memory.md](docs/arch/cache-memory.md) | Mémoire court/long terme, cache sémantique LLM |
+| [docs/arch/llm-module-package-refactor.md](docs/arch/llm-module-package-refactor.md) | CR (implémenté) : restructuration de llm_module en package (ports, injection, pyproject) |
 
 ### Observabilité et mesure
 
 | Document | Description |
 |----------|-------------|
-| [observability.md](observability.md) | Métriques Prometheus / Grafana |
-| [pipeline.md](pipeline.md) | Points de mesure du pipeline de planification |
+| [docs/arch/monitoring.md](docs/arch/monitoring.md) | Métriques Prometheus, dashboards Grafana 01→08, alarmes & alertes |
 
 ---
 

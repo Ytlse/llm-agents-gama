@@ -46,6 +46,22 @@ def ensure_timestamp_in_seconds(timestamp: int) -> int:
     return timestamp
 
 
+def shift_weekend_departure_to_monday(timestamp: int) -> int:
+    """
+    Si le timestamp de départ tombe un samedi ou un dimanche, le reporter au
+    lundi suivant à la même heure (samedi -> +2 jours, dimanche -> +1 jour).
+    Les départs en semaine sont inchangés.
+    :param timestamp: Le timestamp Unix (secondes) du départ.
+    :return: Le timestamp reporté au lundi si week-end, sinon inchangé.
+    """
+    weekday = datetime.datetime.fromtimestamp(timestamp).weekday()  # 0=Lundi .. 6=Dimanche
+    if weekday == 5:      # Samedi
+        return timestamp + 2 * 24 * 60 * 60
+    if weekday == 6:      # Dimanche
+        return timestamp + 1 * 24 * 60 * 60
+    return timestamp
+
+
 def get_weekday_category(timestamp: int) -> int:
     """
     Get the weekday category based on the timestamp.
@@ -148,6 +164,28 @@ def humanize_duration(seconds: int) -> str:
     duration = datetime.timedelta(seconds=seconds)
     # The duration shoule be like 1 hour, 15 minutes and 16 seconds, we drop the seconds
     return humanize.precisedelta(duration).split("and")[0].strip()
+
+
+SIM_TIMING_TAG = "[SIM_TIMING]"
+
+
+def format_sim_timing(event: str, **fields) -> str:
+    """Ligne de log unifiée pour le suivi temporel de la simulation.
+
+    Toutes les lignes partagent le tag ``[SIM_TIMING]`` et un champ ``event=...``
+    pour faciliter la recherche (ex: ``grep '\\[SIM_TIMING\\]'`` ou
+    ``grep 'event=SIM_DAY'``). Le champ ``real_time`` est l'heure réelle (horloge
+    murale) au moment du log ; les autres champs sont passés en ``key=value``.
+
+    Événements émis :
+      - ``SIM_START``  : réception de /init (lancement de la simu)
+      - ``INIT_DONE``  : fin de la phase d'init (bootstrap terminé)
+      - ``SIM_DAY``    : franchissement de chaque tranche de 24h de temps simulé
+    """
+    real_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    parts = [f"{SIM_TIMING_TAG} event={event}", f"real_time={real_time}"]
+    parts += [f"{k}={v}" for k, v in fields.items()]
+    return " ".join(parts)
 
 
 def time_window_generalize(timestamp: int) -> str:

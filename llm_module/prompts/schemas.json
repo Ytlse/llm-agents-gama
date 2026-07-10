@@ -7,7 +7,7 @@
         "items": {
           "type": "object",
           "properties": {
-            "agent_id": { "type": "string" },
+            "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." },
             "chosen_index": { "type": "integer" },
             "mode": { "type": "string" },
             "reason": { "type": "string" }

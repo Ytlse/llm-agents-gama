@@ -10,48 +10,74 @@ LLM multi-provider : il expose une API FastAPI qui reçoit des requêtes batch d
 - 📝 **Moteur de Prompts Jinja2** : Séparation claire entre la logique Python et le texte des prompts (`.md.j2`), avec validation stricte de la sortie via des JSON Schemas configurables (`schemas.json`).
 - 📊 **Télémétrie structurée** : Logs au format JSON (structlog) avec rotation des fichiers, extraction précise de la latence et du coût en tokens.
 
-## Structure
+## Structure (architecture ports & adapters)
+
+Règle de dépendance (vérifiée par import-linter, cf. `pyproject.toml`) :
+`api / worker → core + ports` ; `infra → ports + core` ; **`core` n'importe rien du reste**.
 
 ```
 llm_module/
-├── main.py                        # API Gateway FastAPI (POST /tasks, GET /tasks/{id})
-├── config.py                      # Configuration centralisée (pydantic-settings + .env)
-├── models.py                      # Modèles Pydantic partagés
+├── pyproject.toml                 # Package installable (pip install .) — deps runtime minimales
+├── config.py                      # Settings pydantic — construits explicitement (get_settings())
+├── main.py                        # Point d'entrée uvicorn : app = create_app()
+├── sdk.py                         # SDK client typé (LLMGatewayClient → TaskResult)
 │
-├── broker/
-│   └── redis_broker.py            # Connexion Redis, CRUD tâches, compteurs RPM
+├── core/                          # Domaine pur — AUCUN I/O, aucun import redis/celery/httpx
+│   ├── models.py                  # Task, LLMRequest, AgentSpec, AgentResponse…
+│   ├── batching.py                # Clé de batch, score de priorité
+│   └── selection.py               # Algorithme SWRR pur (séquence pondérée)
+│
+├── ports/                         # Les interfaces (Protocol) — le contrat du module
+│   ├── task_store.py              # TaskStore / SyncTaskStore
+│   ├── rate_limiter.py            # RateLimiter (RPM, circuit breaker, concurrence)
+│   ├── batch_queue.py             # BatchQueue (micro-batching)
+│   ├── metrics.py                 # MetricsSink (compteurs worker)
+│   └── llm_adapter.py             # LLMAdapter (call/close)
+│
+├── infra/
+│   ├── redis/                     # RedisTaskStore, RedisRateLimiter (Lua), RedisBatchQueue,
+│   │                              # RedisMetricsSink (hash wmetrics, 1 HGETALL/scrape)
+│   └── memory/                    # InMemory* — tests unitaires sans Redis
+│
+├── api/                           # FastAPI — couche transport uniquement
+│   ├── app.py                     # create_app(config) : composition + lifespan (reset RPM ICI)
+│   ├── routes.py                  # POST /tasks, GET /tasks/{id}[/wait], /health, /metrics
+│   ├── deps.py                    # GatewayDeps + build_deps()
+│   └── metrics.py                 # Collecteur Prometheus des compteurs worker
 │
 ├── worker/
-│   └── task_worker.py             # Worker Celery + retry backoff exponentiel
+│   ├── app.py                     # create_celery_app(config)
+│   ├── runtime.py                 # WorkerRuntime (composition sync)
+│   └── task_worker.py             # process_batch_task + retry backoff exponentiel
 │
 ├── load_balancer/
-│   └── router.py                  # Weighted Round-Robin + Circuit Breaker
+│   └── router.py                  # LoadBalancer(providers, limiter) — sans effet de bord
 │
 ├── adapters/
-│   ├── base.py                    # Interface commune (Adapter Pattern) + registre
+│   ├── base.py                    # BaseAdapter + registre + cache d'instances (httpx partagé)
 │   ├── openai_adapter.py          # Traducteur OpenAI (Structured Output natif)
 │   ├── mistral_adapter.py         # Traducteur Mistral (json_object + schema en system)
-│   └── google_adapter.py          # Traducteur Google Gemini (format contents/parts)
+│   ├── google_adapter.py          # Traducteur Google Gemini (clé en header x-goog-api-key)
+│   ├── groq_adapter.py            # Traducteur Groq (compatible OpenAI)
+│   └── cerebras_adapter.py        # Traducteur Cerebras
 │
 ├── prompts/
-│   ├── manager.py                 # Moteur Jinja2, split system/user
+│   ├── manager.py                 # Moteur Jinja2, split system/user (singleton paresseux)
+│   ├── prompts.yaml               # Source unique des prompts système (active/prompts)
 │   ├── schemas.json               # Définition des schémas de sortie (Structured Output)
-│   └── templates/
-│       ├── itinary_multi_agent.md.j2  # Choix modal avec justifications
-│       └── perception_filter.md.j2    # Génération d'histoires à la première personne
+│   └── templates/*.md.j2
 │
 ├── telemetry/
-│   └── logger.py                  # Logging structuré (structlog, JSON en prod)
+│   └── logger.py                  # loguru — configure_logging() explicite
 │
-├── requirements.txt
-└── .env.example
+└── settings/, tasks/              # Shims de compatibilité (notebooks) → core.models / config
 ```
 
 ## Démarrage rapide
 
 ```bash
-# 1. Dépendances
-pip install -r requirements.txt
+# 1. Dépendances (package installable)
+pip install .            # ou : pip install -r requirements.txt
 
 # 2. Configuration
 cp .env.example .env
@@ -117,10 +143,22 @@ Réponse quand terminé :
 }
 ```
 
+### SDK typé (consommateurs Python : controller GAMA, notebooks)
+
+```python
+from llm_module.sdk import LLMGatewayClient
+
+client = LLMGatewayClient(base_url="http://localhost:8000", wait_timeout=90.0)
+result = await client.execute(payload)      # dict ou LLMRequest → TaskResult
+if result.ok:
+    print(result.agents[0].chosen_index, result.provider_used, result.timing.wait_ms)
+await client.aclose()
+```
+
 ### Ajouter un nouveau fournisseur LLM
 
 1. Créer `adapters/mon_provider_adapter.py` avec `@register_adapter`
 2. Implémenter `call()` selon le format de l'API cible
-3. Ajouter la config dans `.env` et `config.py`
+3. Ajouter la config dans `config/providers.yaml` et la clé API dans `.env`
 
 Le LoadBalancer et le Worker le prendront en compte automatiquement.

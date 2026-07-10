@@ -1,17 +1,12 @@
 FROM python:3.12-slim
- 
+
 WORKDIR /app
- 
-# Dépendances système minimales
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
- 
-# Dépendances Python
+
+# Couche de cache pip : les dépendances ne sont réinstallées que si requirements.txt change.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
- 
-# Code source — copié en tant que package llm_module
-COPY . ./llm_module/
 
- 
+# Code source — copié en tant que package llm_module, puis installé (métadonnées +
+# package-data) sans re-résoudre les dépendances.
+COPY . ./llm_module/
+RUN pip install --no-cache-dir --no-deps ./llm_module

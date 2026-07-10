@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import demjson3
 import os
@@ -17,7 +17,8 @@ from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
 from llm.shortterm import UserShortTermMemory
 from models import Person, TravelPlan
-from llm_module.client import LLMClient
+from llm_module.sdk import LLMGatewayClient
+from llm_module.prompts.manager import prompt_manager as llm_module_prompt_manager
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from text_helper import env_ob_to_text
 from settings import settings
@@ -27,12 +28,38 @@ from urban_mobility_agents.agents.prompt_types import PromptName
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from urban_mobility_agents.utils.weather_loader import get_weather, weather_to_natural_language
 import time
+from utils import create_background_task
 from world.population import PersonScheduler
 from loguru import logger
 from llm.cache import LlmSemanticCache
 
 
 history_log = HistoryStreamLog.get_instance()
+
+
+def log_llm_cache_hit(agent_id: str, activity_id: Optional[str], sim_ts: float, mode: str,
+                      category: str = "itinary_multi_agent") -> None:
+    """Trace une décision servie par le cache sémantique dans workdir/llm_cache_hits.jsonl.
+
+    Un hit ne déclenche aucun appel LLM (donc aucune ligne dans llm_exchanges.jsonl) : ce log
+    permet de compter les appels économisés et de ventiler l'économie par jour de simulation
+    (sim_day). La valeur en tokens économisés est estimée côté analyse via le coût moyen par
+    agent des appels réellement effectués pour la même catégorie."""
+    try:
+        entry = {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "sim_ts": sim_ts,
+            # sim_day en UTC pour s'aligner avec llm_exchanges.jsonl (cf. logger.log_llm_exchange)
+            "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d") if sim_ts else None,
+            "agent_id": str(agent_id),
+            "activity_id": str(activity_id or ""),
+            "category": category,
+            "mode": mode,
+        }
+        with open(settings.app.llm_cache_hits_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+    except OSError as e:
+        logger.warning(f"Impossible d'écrire le cache hit LLM : {e}")
 
 
 class Context(BaseModel):
@@ -125,18 +152,30 @@ class LlmAgent:
             self.long_term_memory = MultiUserLongTermMemory(
                 storage_dir=settings.agent.long_term_memory_storage_dir,
                 long_term_memory_filter_by_datetime=settings.agent.long_term_memory_filter_by_datetime,
+                max_loaded_metadata=settings.agent.long_term_max_loaded_metadata,
             )
         else:
             self.long_term_memory = None
             logger.info("Long-term memory disabled — ChromaDB initialization skipped")
         
-        # Instance du client LLM (Singleton naturel pour cet Agent)
-        self.llm_client = LLMClient(base_url=os.getenv("LLM_API_URL", "http://localhost:8000"), poll_timeout=settings.agent.remote_llm_poll_timeout)
+        # Instance du client LLM (Singleton naturel pour cet Agent) — SDK typé
+        # (AsyncClient httpx réutilisé entre les appels, résultats TaskResult)
+        self.llm_client = LLMGatewayClient(
+            base_url=os.getenv("LLM_API_URL", "http://localhost:8000"),
+            wait_timeout=settings.agent.remote_llm_poll_timeout,
+            backpressure_max_inflight=settings.world.worker_concurrency,
+            backpressure_release_ratio=settings.agent.remote_llm_backpressure_ratio,
+        )
         self.prompt_manager = PromptManager(os.path.join(os.path.dirname(__file__), "prompts"))
 
         if settings.cache.enabled:
             population_name = f"{settings.data.synthetic_file_prefix}population_{settings.data.population_size}"
-            cache_dir = os.path.join(settings.cache.cache_dir, population_name)
+            # Isolation du cache par version de prompt système : si le prompt actif
+            # (llm_module/prompts/prompts.yaml) change, le checksum change et le cache
+            # repart à neuf au lieu de réutiliser des décisions obsolètes.
+            prompt_checksum = llm_module_prompt_manager.active_prompt_checksum()
+            cache_dir = os.path.join(settings.cache.cache_dir, prompt_checksum, population_name)
+            logger.info(f"LLM cache isolé par prompt — checksum={prompt_checksum}, dir={cache_dir}")
             self.llm_cache = LlmSemanticCache(
                 cache_dir=cache_dir,
                 semantic_threshold=settings.cache.semantic_threshold,
@@ -337,14 +376,26 @@ class LlmAgent:
         # Shuffle séparé pour le payload LLM (évite le biais de position)
         shuffled_options = list(options)
         random.shuffle(shuffled_options)
-        payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
 
-        # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
-        memory_text = json.dumps(payload["agents"][0].get("history", []), ensure_ascii=False)
         activity_purpose = options[0].purpose or ""
         weather = get_weather(context.timestamp)
 
-        # --- Cache lookup (avant l'appel LLM) ---
+        # --- Cache hybride (avant l'appel LLM) ---
+        # Sans souvenir, la décision ne dépend que des conditions factuelles : correspondance
+        # exacte, et le payload — donc la requête LTM — n'est construit qu'en cas de miss.
+        # Avec des souvenirs, le vécu de l'agent pèse sur la décision : on doit construire le
+        # payload d'abord pour comparer la LTM courante à celle qui a produit la décision cachée.
+        has_memories = (
+            self.long_term_memory is not None
+            and self.long_term_memory.has_memories(context.person.person_id)
+        )
+        payload = None
+        memory_text = None
+        if has_memories:
+            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
+            # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
+            memory_text = json.dumps(payload["agents"][0].get("history", []), ensure_ascii=False)
+
         if self.llm_cache is not None:
             cache_hit = await self.llm_cache.lookup(
                 agent_id=context.person.person_id,
@@ -363,7 +414,19 @@ class LlmAgent:
                 stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> served from LLM cache.\n{plan_summary}\nReasoning: {reason}"
                 self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
                 logger.debug(f"Cache hit for person {context.person.person_id}, activity {context.activity_id}, returning cached plan with reason: {reason}")
+                # Écriture jsonl déportée hors de l'event loop (open/write bloquants)
+                await asyncio.to_thread(
+                    log_llm_cache_hit,
+                    agent_id=context.person.person_id,
+                    activity_id=context.activity_id,
+                    sim_ts=float(context.timestamp),
+                    mode=cache_hit.get("mode", ""),
+                )
                 return original_index, reason, f"cache:{cache_hit.get('mode', '')}"
+
+        # Cache miss sur la branche « mémoire vide » : le payload reste à construire.
+        if payload is None:
+            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
 
         _pl = PipelineLogger.get()
         _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
@@ -371,25 +434,25 @@ class LlmAgent:
         try:
             if _rec is not None:
                 _rec.T_llm_start = time.time()
-            response_data = await self.llm_client.execute_async(payload)
+            llm_result = await self.llm_client.execute(payload)
             _t_after_llm = time.time()
-            provider_used = response_data.get("provider_used", "")
+            provider_used = llm_result.provider_used or ""
 
             if _rec is not None:
-                _post_ms = response_data.get("_post_ms") or 0
+                _post_ms = (llm_result.timing.post_ms if llm_result.timing else 0) or 0
                 _rec.T_llm_sent = _rec.T_llm_start + _post_ms / 1000
                 _rec.T_llm_result = _t_after_llm
-                _timing_p5 = response_data.get("timing_p5")
+                _timing_p5 = llm_result.timing.timing_p5 if llm_result.timing else None
                 if _timing_p5 and _pl is not None:
                     _pl.apply_timing_p5(context.person.person_id, _timing_p5)
 
-            if response_data.get("status") == "success" and response_data.get("result"):
-                agent_result = response_data["result"][0]
-                index = agent_result.get("chosen_index")
+            if llm_result.ok:
+                agent_result = llm_result.agents[0]
+                index = agent_result.chosen_index
 
                 # L'index retourné par Structured Output correspond à la position dans shuffled_options
                 if isinstance(index, int) and 0 <= index < len(shuffled_options):
-                    reason = agent_result.get("reason") or "Pas de justification fournie."
+                    reason = agent_result.reason or "Pas de justification fournie."
 
                     # Normalisation de la raison (alignement avec aplan_trip_old)
                     if "is chosen because it" in reason:
@@ -408,7 +471,7 @@ class LlmAgent:
                     # --- Insertion asynchrone dans le cache (fire-and-forget) ---
                     if self.llm_cache is not None:
                         mode = ",".join([str(leg.mode) for leg in chosen_plan.legs]) if chosen_plan.legs else ""
-                        _cache_task = asyncio.create_task(self.llm_cache.store(
+                        _cache_task = create_background_task(self.llm_cache.store(
                             agent_id=context.person.person_id,
                             activity_id=context.activity_id,
                             timestamp=context.timestamp,
@@ -429,7 +492,7 @@ class LlmAgent:
                 if _rec is not None:
                     _rec.T_extract_end = time.time()
 
-            error_msg = response_data.get("error", "Format de réponse invalide ou timeout.")
+            error_msg = llm_result.error or "Format de réponse invalide ou timeout."
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")
             return -1, error_msg, provider_used
 
@@ -500,14 +563,16 @@ class LlmAgent:
             "parameters": {**settings.agent.llm_params},
         }
 
-        response_data = await self.llm_client.execute_async(payload)
-        results = response_data.get("result", [])
+        llm_result = await self.llm_client.execute(payload)
+        results = llm_result.agents
         if not results:
             logger.error(f"LTM self-reflection gateway returned no result for {context.person.person_id}")
             return
 
         try:
-            reflection = results[0].get("reflection", "")
+            # AgentResponse accepte les champs hors schéma (extra=allow) —
+            # "reflection" est porté par la catégorie ltm_self_reflection.
+            reflection = getattr(results[0], "reflection", "") or ""
             entry = MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,
@@ -554,8 +619,8 @@ class LlmAgent:
             },
         }
 
-        response_data = await self.llm_client.execute_async(payload)
-        results = response_data.get("result", [])
+        llm_result = await self.llm_client.execute(payload)
+        results = llm_result.agents
         if not results:
             logger.error(f"STM reflection gateway returned no result for {context.person.person_id}")
             return
@@ -567,8 +632,10 @@ class LlmAgent:
 
         entries = []
         try:
-            reflection = (agent_result.get("reflection", "") or "").strip()
-            concepts = agent_result.get("concepts", [])
+            # AgentResponse accepte les champs hors schéma (extra=allow) —
+            # "reflection"/"concepts" sont portés par la catégorie stm_reflection.
+            reflection = (getattr(agent_result, "reflection", "") or "").strip()
+            concepts = getattr(agent_result, "concepts", []) or []
 
             entries.append(MemoryEntry(
                 person_id=context.person.person_id,

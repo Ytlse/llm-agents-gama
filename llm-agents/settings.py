@@ -88,6 +88,9 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     circuit_breaker_threshold: float = 0.95
     max_retries:               int   = 50
     backoff_base_seconds:      float = 1.0
+    # Cooldown court du provider fautif lors d'un basculement (parse error / 4xx) :
+    # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
+    provider_switch_cooldown_seconds: int = 30
     batch_max_agents:          int   = 5
     batch_delay_seconds:       float = 1.0
 
@@ -131,18 +134,75 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Grid settings
     grid_size: int = 1000 # 1km
     time_step: int = 900 # 15 minutes
-    # Dynamic throttling: min_interval = min(cap, (n / scale)^k)  where n = itineraries in progress.
-    # scale : n at which delay reaches 1 s.
-    # k     : convexity exponent (>1 — higher = steeper curve at high load).
-    # cap   : hard ceiling in seconds (keeps delay below GAMA's HTTP read timeout).
-    min_internal_coeff_scale: float = 120.0
-    min_internal_coeff_k: float = 3.7
+    # Dynamic throttling: min_interval = cap * min(1, n / population)^k
+    # where n = itineraries in progress (backlog). Threshold relative to the
+    # population so the cap is always reachable (n can never exceed population).
+    # k   : convexity exponent (>1 — higher = later and steeper braking).
+    #       With k=1.5, cap=30: ~1s at 10%, ~2.7s at 20%, ~5s at 30%, ~7.6s at 40%,
+    #       ~10.6s at 50%, ~21.5s at 80% (where drain mode takes over and holds at
+    #       cap until the backlog is back below drain_release_ratio), 30s at 100%.
+    # cap : hard ceiling in seconds (keeps delay below GAMA's HTTP read timeout).
+    min_internal_coeff_k: float = 1.5
     min_internal_coeff_cap: float = 30.0
+    # Drain mode (hysteresis on top of the progressive brake): once the backlog
+    # reaches drain_trigger_ratio of the population, every /sync response is held
+    # up to `cap` seconds (GAMA's HTTP read timeout is the hard limit per response)
+    # until the backlog falls back below drain_release_ratio — i.e. the pile must
+    # be ~80% drained (release=0.2) before control returns to GAMA at full speed.
+    # The backlog alarm ([ALARME]) fires/clears on the same thresholds.
+    # drain_trigger_ratio <= 0 disables the mechanism.
+    drain_trigger_ratio: float = 0.8
+    drain_release_ratio: float = 0.2
+    # Backlog re-sampling period (seconds) while holding a /sync response in drain mode.
+    drain_poll_interval: float = 1.0
     # Number of concurrent Worker coroutines consuming the activity queue.
     # Each worker independently picks items from the same asyncio.Queue, so up to
     # worker_concurrency LLM+OTP computations run in parallel (matching the old
     # fire-and-forget asyncio.create_task approach).
-    worker_concurrency: int = 20
+    worker_concurrency: int = 8
+
+    # Concurrence du bootstrap (/init) : au démarrage, ~N agents lancent leur premier
+    # itinéraire quasi simultanément. Sans plafond, cette rafale sature les quotas
+    # RPM/TPM des providers et déclenche une cascade de 429/5xx → fallbacks massifs.
+    # Ce sémaphore borne les pipelines OTP+LLM en vol et étale la charge en vagues.
+    bootstrap_concurrency: int = 30
+
+    # --- Ticket 003 : ordonnancement EDF et contre-pression prédictive ---
+    # Dispatcher EDF (Earliest Deadline First) : les tâches de planification sont
+    # servies par échéance croissante (heure de départ simulée) via une file de
+    # priorité consommée par worker_concurrency tâches, au lieu du sémaphore FIFO.
+    # false = comportement historique (spawn direct + sémaphore, ordre d'arrivée).
+    edf_enabled: bool = True
+    # Contre-pression prédictive : ne retenir le /sync que si le temps estimé de
+    # résolution de la file menace une échéance (test de faisabilité EDF), au lieu
+    # du frein progressif cap·ratio^k. false = frein progressif historique.
+    # Le mode drainage à hystérésis (drain_*) reste le filet de sécurité ultime.
+    predictive_backpressure_enabled: bool = True
+    # Constante de temps (s) de l'EWMA du débit de complétion D (tâches/s).
+    # Assez court pour réagir à un effondrement de quota provider (par minute).
+    throughput_ewma_tau_s: float = 90.0
+    # Plancher de D (tâches/s) : évite un T_estimé = ∞ quand aucune complétion récente.
+    throughput_floor_per_s: float = 0.05
+    # Marge multiplicative du test de faisabilité EDF : rétention si T_k·marge > slack_k.
+    predictive_margin: float = 1.4
+    # Rétention prédictive cumulée (s) sur un /sync au-delà de laquelle GAMA est
+    # notifié du régime dégradé (topic system/throttle, front montant).
+    throttle_notify_threshold_s: float = 5.0
+    # Période (s) de rafraîchissement du message system/throttle tant que le régime
+    # dégradé persiste (évite le spam à chaque /sync).
+    throttle_notify_refresh_s: float = 30.0
+
+    # Cockpit : un agent est "bloqué" s'il n'a obtenu aucune planification réussie
+    # depuis plus que ce nombre d'heures de temps SIMULÉ (métrique controller_agents_stuck).
+    stuck_agent_threshold_hours: float = 20.0
+
+    # Watchdog arrivées perdues : un agent "en déplacement" dont l'arrivée attendue
+    # (expected_arrive_at du move poussé) est dépassée de plus que cette marge (heures
+    # de temps SIMULÉ) est considéré perdu (move jamais reçu par GAMA, ex. coupure
+    # WebSocket) : [ALARME] + reprise forcée du cycle par le scan de fallback.
+    # 0 désactive le watchdog. La marge doit rester supérieure aux retards légitimes
+    # dans GAMA (attente de véhicule TC, congestion).
+    arrival_watchdog_hours: float = 1.0
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -192,6 +252,10 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Agent settings
     population_size: Optional[int] = 1
     population_cache_prefix: str = "./population_"
+    # Seed déterministe pour l'échantillonnage aléatoire des agents depuis la sortie
+    # eqasim : garantit le même sous-ensemble d'agents (donc les mêmes trajets) d'un run
+    # à l'autre → le cache OSMnx est réutilisable au rejeu.
+    population_sample_seed: int = 42
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
 
@@ -212,8 +276,13 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     long_term_memory_storage_dir: str = "long_term_memory"
     long_term_memory_filter_by_datetime: bool = False
     long_term_memory_enabled: bool = True #surchargé par la valeur GAMA
-    long_term_max_entries_query: int = 10
+    long_term_max_entries_query: int = 3
     long_term_max_days_query: int = 30
+    # Plafond du cache LRU des métadonnées LTM. Doit rester au-dessus du nombre
+    # d'agents : en dessous, chaque décision provoque une éviction (relecture +
+    # réécriture disque) puisque les agents sont parcourus en round-robin.
+    # Les métadonnées pèsent ~3 Ko/agent, donc 5 000 agents ≈ 15 Mo en mémoire.
+    long_term_max_loaded_metadata: int = 5000
     long_term_reflect_interval: int = 6 * 3600  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
     stm_reflection_min_entries: int = 10        # déclenche la réflexion STM dès que N entrées accumulées
 
@@ -243,12 +312,22 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     max_reschedule_amount: int = 3600  # 1 hour
     pre_schedule_duration: int = 0
 
+    # Aucun déplacement ne démarre le week-end : un départ tombant un samedi ou un
+    # dimanche est reporté au lundi suivant à la même heure.
+    no_weekend_departures: bool = True
+
     quantify_time_window: bool = True
     reflection_custom_guidelines: Optional[str] = None
 
     # Remote LLM settings
-    remote_llm_poll_timeout: float = 90.0  # timeout (secondes) d'une tâche LLM
+    # 120s laisse au worker le temps d'absorber un cooldown 5xx (120s) + backoff et de
+    # basculer sur un autre provider AVANT que le client abandonne (sinon fallback).
+    remote_llm_poll_timeout: float = 120.0  # timeout (secondes) d'une tâche LLM
     stm_reflection_min_tpm: Optional[int] = 30000  # exclut les providers sous ce seuil TPM pour la STM reflection
+    # Backpressure : quand le client SDK lève l'alarme (N échecs consécutifs), il
+    # bloque les nouvelles soumissions jusqu'à ce que la pile in-flight retombe
+    # sous ce ratio de worker_concurrency (0.2 = 20 %). 0 désactive la backpressure.
+    remote_llm_backpressure_ratio: float = 0.2
 
 
 class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -261,7 +340,7 @@ class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["agent_memory_events_jsonl", "agent_memory_events_csv", "log_file", "llm_exchanges_file", "pipeline_log_file"]
+    _in_workdir_path_fields: ClassVar[List[str]] = ["agent_memory_events_jsonl", "agent_memory_events_csv", "log_file", "llm_exchanges_file", "llm_cache_hits_file", "pipeline_log_file"]
 
     # Agent memory events log (STM + LTM observations, reflections, concepts)
     agent_memory_events_jsonl: str = "agent_memory_events.jsonl"
@@ -269,6 +348,10 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # LLM exchange log (service, prompt, response, tokens)
     llm_exchanges_file: str = "llm_exchanges.jsonl"
+
+    # LLM cache hit log (décisions servies depuis le cache sémantique → aucun appel LLM,
+    # donc absentes de llm_exchanges.jsonl ; nécessaire pour mesurer l'économie de tokens)
+    llm_cache_hits_file: str = "llm_cache_hits.jsonl"
 
     # Application log
     log_file: str = "app.log"

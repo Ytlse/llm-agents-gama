@@ -20,7 +20,7 @@ from trip_helper import TripHelper
 from trip_helper.otp_persistent_cache import OtpPersistentCache
 from models import Location, TravelPlan
 from world import WorldModel
-from utils import random_uuid
+from utils import create_background_task, random_uuid
 from settings import settings
 from loguru import logger
 import asyncio
@@ -211,11 +211,12 @@ class CachedTripHelper(TripHelper):
                                destination: Location,
                                departure_time: int,
                                include_car: bool = False,
+                               include_bike: bool = True,
                                arrive_by: bool = False,
                                _pipeline_rec=None) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         recursion_search_depth = self.recursion_search_depth
-        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers, arrive_by=arrive_by)
+        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, include_bike=include_bike, max_transfers=max_transfers, arrive_by=arrive_by)
         if not itineraries:
             return []
         
@@ -291,7 +292,7 @@ class CachedTripHelper(TripHelper):
         _t_cache = _time.monotonic()
 
         if self.otp_cache_enabled:
-            key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by)
+            key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
             bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
             is_blacklisted = await self.persistent_cache.is_blacklisted_async(bl_key)
             cached = None if is_blacklisted else await self.persistent_cache.lookup_async(key)
@@ -335,10 +336,10 @@ class CachedTripHelper(TripHelper):
                 for it in itineraries:
                     it.id = random_uuid()
                 if self.otp_cache_enabled:
-                    asyncio.create_task(self.persistent_cache.store_async(key, itineraries, departure_time))
+                    create_background_task(self.persistent_cache.store_async(key, itineraries, departure_time))
             else:
                 if self.otp_cache_enabled:
-                    asyncio.create_task(self.persistent_cache.blacklist_add_async(bl_key))
+                    create_background_task(self.persistent_cache.blacklist_add_async(bl_key))
 
         _hits, _total = self._stats_cache_hit
         if _total > 0:
@@ -364,32 +365,27 @@ class OtpCachedTripHelper(TripHelper):
     def __init__(self, trip_helper: TripHelper):
         super().__init__()
         self.trip_helper = trip_helper
-        self._trace_logged = False  # [trace] à retirer
-        logger.warning("[trace][OtpCachedTripHelper] instancié (wrapper OTP actif)")
 
     async def get_itineraries(self,
                               origin: Location,
                               destination: Location,
                               departure_time: int,
                               include_car: bool = False,
+                              include_bike: bool = True,
                               arrive_by: bool = False,
                               _timing_sink: dict | None = None,
                               **kwargs) -> list[TravelPlan]:
         global _OTP_CACHE_HITS, _OTP_CACHE_LOOKUPS
         cache = _otp_persistent_cache
 
-        # [trace] — premier appel : état du singleton de cache (à retirer)
-        if not self._trace_logged:
-            self._trace_logged = True
-            logger.warning(f"[trace][OtpCachedTripHelper] premier get_itineraries — _otp_persistent_cache is {'None (pass-through!)' if cache is None else 'SET'}")
-
         # Cache non encore initialisé (ex. avant setup population) → pass-through.
         if cache is None:
             return await self.trip_helper.get_itineraries(
                 origin, destination, departure_time,
-                include_car=include_car, arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
+                include_car=include_car, include_bike=include_bike,
+                arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
 
-        key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by)
+        key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
         bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
         is_blacklisted = await cache.is_blacklisted_async(bl_key)
         cached = None if is_blacklisted else await cache.lookup_async(key)
@@ -408,21 +404,22 @@ class OtpCachedTripHelper(TripHelper):
             for itinerary in itineraries:
                 itinerary.start_location = origin
                 itinerary.end_location = destination
-                itinerary.start_time += delta_ms
-                itinerary.end_time += delta_ms
+                itinerary.start_time = int(itinerary.start_time + delta_ms)
+                itinerary.end_time = int(itinerary.end_time + delta_ms)
                 for leg in itinerary.legs:
-                    leg.start_time += delta_ms
-                    leg.end_time += delta_ms
+                    leg.start_time = int(leg.start_time + delta_ms)
+                    leg.end_time = int(leg.end_time + delta_ms)
             return itineraries
 
         # Miss : appel OTP verbatim (aucune modification de la stratégie de recherche).
         itineraries = await self.trip_helper.get_itineraries(
             origin, destination, departure_time,
-            include_car=include_car, arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
+            include_car=include_car, include_bike=include_bike,
+            arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
         if itineraries:
             for it in itineraries:
                 it.id = random_uuid()
-            asyncio.create_task(cache.store_async(key, itineraries, departure_time))
+            create_background_task(cache.store_async(key, itineraries, departure_time))
         else:
-            asyncio.create_task(cache.blacklist_add_async(bl_key))
+            create_background_task(cache.blacklist_add_async(bl_key))
         return itineraries

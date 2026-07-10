@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-gateway"
+version = "1.0.0"
+description = "Gateway asynchrone multi-fournisseur LLM avec micro-batching, load balancing SWRR et circuit breaker."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<0.116",
+    "uvicorn>=0.34",
+    "celery>=5.4",
+    "redis>=5.0",
+    "httpx>=0.27",
+    "jinja2>=3.1.4",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.9,<3",
+    "loguru>=0.7,<0.8",
+    "prometheus-client>=0.20",
+    "PyYAML>=6.0",
+    "demjson3>=3.0.6,<4.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-asyncio>=0.24", "fakeredis>=2.23"]
+monitoring = ["flower>=2.0"]
+
+# Le package s'appelle llm_module et son code vit à la racine de ce répertoire
+# (les imports `llm_module.*` des consommateurs — docker-compose, GAMA, notebooks —
+# restent inchangés).
+[tool.setuptools]
+package-dir = { "llm_module" = "." }
+packages = [
+    "llm_module",
+    "llm_module.adapters",
+    "llm_module.api",
+    "llm_module.core",
+    "llm_module.infra",
+    "llm_module.infra.memory",
+    "llm_module.infra.redis",
+    "llm_module.load_balancer",
+    "llm_module.ports",
+    "llm_module.prompts",
+    "llm_module.settings",
+    "llm_module.tasks",
+    "llm_module.telemetry",
+    "llm_module.worker",
+]
+
+[tool.setuptools.package-data]
+llm_module = [
+    "config/*.yaml",
+    "prompts/*.yaml",
+    "prompts/*.json",
+    "prompts/templates/*.j2",
+]
+
+# ---------------------------------------------------------------------------
+# Frontières d'architecture (phase 5 du CR) — vérifiables avec :
+#   pip install import-linter && lint-imports --config llm_module/pyproject.toml
+# ---------------------------------------------------------------------------
+[tool.importlinter]
+root_package = "llm_module"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "core reste pur (aucun import infra/api/worker/redis/celery/httpx)"
+type = "forbidden"
+source_modules = ["llm_module.core"]
+forbidden_modules = [
+    "llm_module.infra",
+    "llm_module.api",
+    "llm_module.worker",
+    "llm_module.broker",
+    "llm_module.adapters",
+    "redis",
+    "celery",
+    "httpx",
+    "fastapi",
+]
+
+[[tool.importlinter.contracts]]
+name = "ports ne dependent que de core"
+type = "forbidden"
+source_modules = ["llm_module.ports"]
+forbidden_modules = [
+    "llm_module.infra",
+    "llm_module.api",
+    "llm_module.worker",
+    "redis",
+    "celery",
+    "httpx",
+]

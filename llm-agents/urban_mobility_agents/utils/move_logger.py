@@ -56,6 +56,8 @@ CSV_HEADERS = [
     "Heure de calcul",
     "Temps simulé",
     "Heure de départ",
+    "ID Personne",
+    "ID Activité",
 ]
 
 
@@ -140,16 +142,23 @@ class GamaArrivalsLogger:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(self._HEADERS)
 
+    def _write_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
+                       started_at: Optional[int], schedule_at: Optional[int], timed_out: bool):
+        self._ensure_header()
+        delay_s = arrive_at - expected_arrive_at
+        departure_delay_s = (started_at - schedule_at) if started_at is not None and schedule_at is not None else None
+        with open(self._path, "a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s,
+                                    started_at, schedule_at, departure_delay_s, timed_out])
+
     async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
                           started_at: Optional[int] = None, schedule_at: Optional[int] = None,
                           timed_out: bool = False):
+        # Écriture déportée hors de l'event loop (open/write bloquants) ; le lock asyncio
+        # garantit l'ordre des lignes et l'unicité de l'écriture d'en-tête.
         async with self._lock:
-            self._ensure_header()
-            delay_s = arrive_at - expected_arrive_at
-            departure_delay_s = (started_at - schedule_at) if started_at is not None and schedule_at is not None else None
-            with open(self._path, "a", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s,
-                                        started_at, schedule_at, departure_delay_s, timed_out])
+            await asyncio.to_thread(self._write_arrival, move_id, person_id, arrive_at,
+                                    expected_arrive_at, started_at, schedule_at, timed_out)
 
 
 class MoveLogger:
@@ -195,9 +204,9 @@ class MoveLogger:
         simulated_time: Optional[int] = None,
         start_time: Optional[int] = None,
         available_options: Optional[list] = None,
+        activity_id: Optional[str] = None,
     ):
         async with self._lock:
-            self._ensure_header()
             computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             trip_id = next(self._counter)
             traits = person.identity.traits_json
@@ -238,7 +247,14 @@ class MoveLogger:
                 computed_at,
                 simulated_time if simulated_time is not None else "",
                 datetime.fromtimestamp(start_time / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if start_time is not None else "",
+                person.person_id,
+                activity_id if activity_id is not None else "",
             ]
 
-            with open(self._path, "a", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow(row)
+            # Écriture déportée hors de l'event loop (open/write bloquants)
+            await asyncio.to_thread(self._write_row, row)
+
+    def _write_row(self, row: list):
+        self._ensure_header()
+        with open(self._path, "a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(row)

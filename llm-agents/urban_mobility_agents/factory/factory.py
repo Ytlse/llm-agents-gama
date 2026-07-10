@@ -64,11 +64,6 @@ def init_static_data() -> StaticWorldData:
     gtfs_data = GTFSData.DEFAULT()
     
     trip_helper = None
-    # [trace] — diagnostic câblage cache OTP (à retirer)
-    logger.warning(
-        f"[trace][factory] mode={settings.gtfs.mode} | "
-        f"otp_cache_enabled={settings.gtfs.otp_cache_enabled}"
-    )
     if settings.gtfs.mode == "OTP":
         logger.info("Using OTP trip helper")
         wait_for_all_otp()

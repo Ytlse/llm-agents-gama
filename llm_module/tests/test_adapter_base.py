@@ -21,6 +21,7 @@ from llm_module.adapters.base import (
     ProviderParseError,
     ProviderServerError,
     extract_error_type,
+    extract_retry_delay_from_body,
     register_adapter,
 )
 from llm_module.settings.models import InternalRequest, InternalMessage
@@ -168,6 +169,37 @@ class TestRaiseForStatus:
             adapter._raise_for_status(self._mock_response(429, "Too Many Requests", headers))
         assert exc_info.value.ratelimit_reset == "45s"
 
+    def test_429_falls_back_to_body_when_no_header(self, adapter):
+        # Gemini ne renvoie pas de header : le délai est dans le corps JSON.
+        body = json.dumps({"error": {
+            "code": 429,
+            "message": "You exceeded your quota. Please retry in 11.103190523s.",
+            "status": "RESOURCE_EXHAUSTED",
+        }})
+        with pytest.raises(ProviderClientError) as exc_info:
+            adapter._raise_for_status(self._mock_response(429, body))
+        assert exc_info.value.ratelimit_reset == "11.103190523s"
+
+    def test_429_header_takes_precedence_over_body(self, adapter):
+        headers = {"x-ratelimit-reset-requests": "45s"}
+        body = json.dumps({"error": {"message": "Please retry in 11s."}})
+        with pytest.raises(ProviderClientError) as exc_info:
+            adapter._raise_for_status(self._mock_response(429, body, headers))
+        assert exc_info.value.ratelimit_reset == "45s"
+
+    def test_429_retry_after_header_takes_precedence(self, adapter):
+        headers = {"retry-after": "13", "x-ratelimit-reset-requests": "45s"}
+        with pytest.raises(ProviderClientError) as exc_info:
+            adapter._raise_for_status(self._mock_response(429, "Too Many Requests", headers))
+        assert exc_info.value.ratelimit_reset == "13"
+
+    def test_429_reset_tokens_over_reset_requests(self, adapter):
+        # Les 429 Groq portent sur les tokens (TPM/TPD) : reset-tokens est la bonne fenêtre.
+        headers = {"x-ratelimit-reset-tokens": "1.14s", "x-ratelimit-reset-requests": "45s"}
+        with pytest.raises(ProviderClientError) as exc_info:
+            adapter._raise_for_status(self._mock_response(429, "Too Many Requests", headers))
+        assert exc_info.value.ratelimit_reset == "1.14s"
+
     def test_503_raises_server_error(self, adapter):
         with pytest.raises(ProviderServerError):
             adapter._raise_for_status(self._mock_response(503, "Service Unavailable"))
@@ -191,6 +223,47 @@ class TestExtractErrorType:
     def test_invalid_json_fallback(self):
         result = extract_error_type("not json", 500)
         assert result == "http 500"
+
+
+# ---------------------------------------------------------------------------
+# extract_retry_delay_from_body
+# ---------------------------------------------------------------------------
+
+class TestExtractRetryDelayFromBody:
+    def test_gemini_retryinfo_structured(self):
+        body = json.dumps({"error": {"details": [
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "7s"},
+        ]}})
+        assert extract_retry_delay_from_body(body) == "7s"
+
+    def test_gemini_message_text(self):
+        body = json.dumps({"error": {"message": "Please retry in 11.103190523s."}})
+        assert extract_retry_delay_from_body(body) == "11.103190523s"
+
+    def test_groq_try_again_in_seconds(self):
+        body = json.dumps({"error": {"message": "Rate limit reached. Please try again in 1.14s. Need more tokens?"}})
+        assert extract_retry_delay_from_body(body) == "1.14s"
+
+    def test_groq_try_again_in_composite(self):
+        body = json.dumps({"error": {"message": "Please try again in 16m7.68s."}})
+        assert extract_retry_delay_from_body(body) == "16m7.68s"
+
+    def test_groq_try_again_in_hours(self):
+        # Quota journalier (TPD) : le délai peut être en heures
+        body = json.dumps({"error": {"message": "Please try again in 2h37m12.5s."}})
+        assert extract_retry_delay_from_body(body) == "2h37m12.5s"
+
+    def test_groq_try_again_in_millis(self):
+        body = json.dumps({"error": {"message": "Please try again in 140ms."}})
+        assert extract_retry_delay_from_body(body) == "140ms"
+
+    def test_no_delay_returns_none(self):
+        body = json.dumps({"error": {"message": "Invalid API key provided"}})
+        assert extract_retry_delay_from_body(body) is None
+
+    def test_empty_returns_none(self):
+        assert extract_retry_delay_from_body("") is None
+        assert extract_retry_delay_from_body("not json") is None
 
     def test_empty_message_fallback(self):
         body = json.dumps({"error": {"message": ""}})
@@ -225,3 +298,29 @@ class TestExceptionAttributes:
         assert e.provider == "mistral"
         assert e.raw == '{"bad": "json"}'
         assert "mistral" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# _check_openai_finish_reason — détection de troncature à max_tokens
+# ---------------------------------------------------------------------------
+
+class TestCheckOpenAIFinishReason:
+    def test_finish_reason_length_raises_truncation(self, adapter):
+        data = {
+            "choices": [{"message": {"content": '{"agents": ['}, "finish_reason": "length"}],
+            "usage": {"completion_tokens": 4096},
+        }
+        with pytest.raises(ProviderServerError) as exc_info:
+            adapter._check_openai_finish_reason(data)
+        assert exc_info.value.error_type == "max_tokens_truncation"
+
+    def test_finish_reason_stop_passes(self, adapter):
+        data = {"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}]}
+        adapter._check_openai_finish_reason(data)  # ne lève pas
+
+    def test_missing_finish_reason_passes(self, adapter):
+        adapter._check_openai_finish_reason({"choices": [{"message": {"content": "{}"}}]})
+
+    def test_empty_choices_passes(self, adapter):
+        adapter._check_openai_finish_reason({"choices": []})
+        adapter._check_openai_finish_reason({})

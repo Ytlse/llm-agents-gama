@@ -35,6 +35,10 @@ class BaseScenario:
         """Start the background async Worker that consumes the activity queue."""
         raise NotImplementedError("This method should be overridden by subclasses")
 
+    def stop_worker(self) -> None:
+        """Cancel the background Worker loop when the scenario is replaced."""
+        raise NotImplementedError("This method should be overridden by subclasses")
+
     @property
     def worker_in_progress_count(self) -> int:
         """Return the number of activities currently queued or being computed by the Worker."""

@@ -2,10 +2,23 @@
 # Définition des fournisseurs LLM disponibles.
 #
 # Champs obligatoires : rpm_limit, base_url, default_model
-# Champs optionnels   : tpm_limit, weight (défaut 1.0), disable_timeout (défaut 180s),
-#                       adapter (défaut = nom du provider),
-#                       max_tokens_per_request (exclu si < settings.min_tokens_per_request)
+# Champs optionnels   : tpm_limit, rpd_limit, tpd_limit, weight (défaut 1.0),
+#                       disable_timeout (défaut 180s), adapter (défaut = nom du provider),
+#                       max_tokens_per_request (exclu si < settings.min_tokens_per_request),
+#                       max_output_tokens (plafond de complétion du modèle — le param
+#                       max_tokens envoyé au provider est borné par cette valeur ; absent =
+#                       fallback settings.max_output_tokens. AUTO-AJUSTÉ : si le provider
+#                       répond HTTP 400 "`max_tokens` must be less than or equal to N",
+#                       le worker apprend N, met à jour ce fichier et retente le batch.
+#                       Le load balancer écarte aussi les providers dont max_output_tokens
+#                       < budget de sortie d'une tâche.)
 # batch_max_agents est calculé automatiquement : max(1, min(tpm_limit/tokens_per_agent, rpm_limit, max_batch_agents))
+#
+# QUOTAS JOURNALIERS : rpd_limit (requêtes/jour) et tpd_limit (tokens/jour) sont
+# APPLIQUÉS (cf. infra/*/rate_limiter.py). Dès qu'un provider atteint son quota,
+# il est écarté de la rotation jusqu'à minuit UTC (fenêtre journalière UTC), au
+# lieu d'être re-sollicité toutes les disable_timeout secondes. rpm_limit et
+# tpm_limit (fenêtre glissante 60 s) restent appliqués en parallèle.
 #
 # Pour plusieurs instances d'un même fournisseur,
 # utilisez des noms distincts et renseignez le champ `adapter` avec le nom du fournisseur
@@ -22,6 +35,7 @@ providers:
     tpd_limit:         2000000 # TBC
     base_url:          https://api.openai.com/v1
     default_model:     gpt-4o-mini
+    max_output_tokens: 16384  # limite de complétion gpt-4o-mini
     weight:            1.0
     concurrency_limit: 3   # 3 × 10 agents = 30 évalués simultanément, RPM=15 contrôle la cadence
 
@@ -44,7 +58,7 @@ providers:
     adapter:           google
     rpm_limit:         15
     tpm_limit:         250000
-    tpd_limit:         null
+    rpd_limit:         500    # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemini-3.1-flash-lite-preview
     weight:            2.0
@@ -55,23 +69,25 @@ providers:
     adapter:           google
     rpm_limit:         15
     tpm_limit:         null # Illimité
-    tpd_limit:         null
+    rpd_limit:         1500   # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-26b-a4b-it
+    max_output_tokens: 8192   # limite de complétion des modèles Gemma
     weight:            2.0
-    concurrency_limit: 2
-    disable_timeout:   120
+    concurrency_limit: 1
+    disable_timeout:   180
 
   google_gemma43:
     adapter:           google
     rpm_limit:         15
     tpm_limit:         null # Illimité
-    tpd_limit:         null
+    rpd_limit:         1500   # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-31b-it
+    max_output_tokens: 8192   # limite de complétion des modèles Gemma
     weight:            2.0
-    concurrency_limit: 3
-    disable_timeout:   120
+    concurrency_limit: 1
+    disable_timeout:   180
 
   # google_gemma3n:
   #   adapter:          google
@@ -92,6 +108,7 @@ providers:
     tpd_limit:         100000
     base_url:          https://api.groq.com/openai/v1
     default_model:     llama-3.3-70b-versatile
+    max_output_tokens: 32768
     weight:            1.0
     concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
     disable_timeout:   120
@@ -103,31 +120,38 @@ providers:
     tpd_limit:         500000
     base_url:          https://api.groq.com/openai/v1
     default_model:     meta-llama/llama-4-scout-17b-16e-instruct
+    max_output_tokens: 8192   # HTTP 400 au-delà : "`max_tokens` must be less than or equal to `8192`"
     weight:            1.0
     concurrency_limit: 4
     disable_timeout:   120
 
   groq_qwen:
     adapter:                 groq
-    rpm_limit:               60
+    # TPM free tier = 6 000. Une requête ≈ 2 500–3 000 tokens (in+out) → ~2 req/min
+    # soutenables. rpm_limit aligné sur ce plafond car le rate-limiter applique aussi
+    # une réservation TPM glissante (cf. infra/redis/rate_limiter.py) ; weight réduit
+    # pour déprioriser au profit des providers à gros TPM.
+    rpm_limit:               2
     tpm_limit:               6000
     tpd_limit:               500000
     max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
     base_url:                https://api.groq.com/openai/v1
     default_model:           qwen/qwen3-32b
-    weight:                  1.0
+    max_output_tokens:       40960
+    weight:                  0.5
     concurrency_limit:       3
     disable_timeout:         120
 
   groq_llama31:
     adapter:                 groq
-    rpm_limit:               30
+    # Même contrainte que groq_qwen : TPM free tier = 6 000 → ~2 req/min soutenables.
+    rpm_limit:               2
     tpm_limit:               6000
     tpd_limit:               500000
     max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
     base_url:                https://api.groq.com/openai/v1
     default_model:           llama-3.1-8b-instant
-    weight:                  1.0
+    weight:                  0.5
     concurrency_limit:       3
     disable_timeout:         120
 
@@ -138,6 +162,7 @@ providers:
     tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-120b
+    max_output_tokens: 65536
     weight:            1.0
     concurrency_limit: 3
     disable_timeout:   120
@@ -149,6 +174,7 @@ providers:
     tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-20b
+    max_output_tokens: 65536
     weight:            1.0
     concurrency_limit: 3
     disable_timeout:   120

@@ -188,7 +188,8 @@ services:
       <<: *shared-env
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      #APP_WORKDIR: /app/workdir
+      APP_WORKDIR: /app/experiments/current
+      SERVICE_NAME: api
       GAMA_WS_URL: ws://host.docker.internal:3001
     volumes:
       - ./llm_module:/app/llm_module
@@ -263,6 +264,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       APP_WORKDIR: /app/experiments/current
+      SERVICE_NAME: worker
     volumes:
       - ./llm_module:/app/llm_module
       - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
@@ -314,6 +316,22 @@ services:
       - '--path.rootfs=/rootfs'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
 
+  # CPU/RAM/réseau PAR CONTENEUR (api, worker, otp, redis, qdrant…) — node_exporter
+  # ne voit que le total de la VM Docker Desktop. Alimente le dashboard 08_systeme.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -333,9 +351,12 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_LOG_LEVEL=warn
+      # Plugin datasource JSON pour le panneau "Dernières erreurs LLM" du cockpit
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
     volumes:
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/alerting:/etc/grafana/provisioning/alerting
       - grafana_data:/var/lib/grafana
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:

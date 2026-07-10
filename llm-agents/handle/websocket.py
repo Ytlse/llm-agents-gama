@@ -26,10 +26,15 @@ class WebSocketClient:
         try:
             logger.info(f"Connecting to {self.uri}...")
             
+            # ping_timeout doit tolérer les blocages ponctuels de l'event loop (calculs
+            # CPU, réflexions STM) : à 10s, un stall de ~15s suffisait à fermer la
+            # socket (1006) et une rafale de push partait dans le vide (run 2026-07-08 :
+            # 339 agents récupérés par le watchdog). 60s ne retarde la détection d'une
+            # vraie coupure que d'~1 min, déjà couverte par le watchdog d'arrivée.
             self.websocket = await websockets.connect(
                 self.uri,
                 ping_interval=20,
-                ping_timeout=10,
+                ping_timeout=60,
                 close_timeout=20,
                 max_size=10**7,  # 10MB max message size
                 compression=None  # Tắt compression để tăng performance

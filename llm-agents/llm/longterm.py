@@ -1,6 +1,6 @@
 # scalable_memory.py - Scalable long-term memory system optimized for 1000+ users
+import asyncio
 import json
-import gc
 import time
 from datetime import datetime, timedelta
 import string
@@ -59,7 +59,7 @@ class VectorStoreFactory:
             return ChromaVectorStore(chroma_collection=chroma_collection)
             
         except ImportError:
-            print("ChromaDB not available, falling back to simple storage")
+            logger.warning("ChromaDB not available, falling back to simple storage")
             return None
     
     # @staticmethod
@@ -111,7 +111,7 @@ class MultiUserLongTermMemory:
                  storage_dir: str = "/tmp/memory_storage",
                  vector_store_type: str = "chroma",
                  vector_store_config: Dict = None,
-                 max_loaded_metadata: int = 200,
+                 max_loaded_metadata: int = 5000,
                  use_async: bool = False,
                  long_term_memory_filter_by_datetime: bool = True):
         
@@ -131,6 +131,11 @@ class MultiUserLongTermMemory:
         # LRU cache for user metadata
         self.user_metadata: Dict[str, Dict[str, Any]] = {}
         self.metadata_access_times: Dict[str, datetime] = {}
+
+        # Écriture différée des métadonnées : les agents modifiés sont marqués dirty
+        # et flushés par rafale (debounce) au lieu d'une réécriture disque par entrée.
+        self._dirty: set = set()
+        self._flush_task: Optional[asyncio.Task] = None
         
         # Performance metrics
         self.metrics = {
@@ -141,7 +146,7 @@ class MultiUserLongTermMemory:
         }
 
         self._init_shared_index(use_async=self.use_async)
-        print(f"Initialized scalable memory with {vector_store_type} vector store")
+        logger.info(f"Initialized scalable memory with {vector_store_type} vector store")
     
     def _create_vector_store(self) -> Optional[BasePydanticVectorStore]:
         """Create vector store based on type"""
@@ -164,10 +169,10 @@ class MultiUserLongTermMemory:
             storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
             try:
                 self.shared_index = load_index_from_storage(storage_context, use_async=use_async)
-                print("Loaded existing shared vector index")
+                logger.info("Loaded existing shared vector index")
             except:
                 self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
-                print("Created new shared vector index")
+                logger.info("Created new shared vector index")
         else:
             # Fallback to simple index
             index_path = self.storage_dir / "shared_index"
@@ -175,15 +180,15 @@ class MultiUserLongTermMemory:
                 try:
                     storage_context = StorageContext.from_defaults(persist_dir=str(index_path))
                     self.shared_index = load_index_from_storage(storage_context, use_async=use_async)
-                    print("Loaded simple vector index")
-                except:
-                    self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
-                    self._persist_shared_index()
-                    print("Created new simple vector index")
-            else:
-                self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
-                self._persist_shared_index()
-                print("Created new simple vector index")
+                    logger.info("Loaded simple vector index")
+                    return
+                except Exception as e:
+                    logger.warning(f"Simple vector index unreadable ({e}) — recreating")
+            # Aucun index existant (ou index illisible) : repartir d'un StorageContext neuf
+            storage_context = StorageContext.from_defaults()
+            self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
+            self._persist_shared_index()
+            logger.info("Created new simple vector index")
     
     def _persist_shared_index(self):
         """Persist shared index (only for simple storage)"""
@@ -211,12 +216,18 @@ class MultiUserLongTermMemory:
             try:
                 with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
-                    metadata['entries'] = [MemoryEntry.from_dict(entry) for entry in metadata.get('entries', [])]
+                    # Ignore les entrées non-dict (fichiers écrits par l'ancien format
+                    # bogué qui sérialisait les MemoryEntry en chaînes via default=str)
+                    metadata['entries'] = [
+                        MemoryEntry.from_dict(entry)
+                        for entry in metadata.get('entries', [])
+                        if isinstance(entry, dict)
+                    ]
                     self.metadata_access_times[person_id] = datetime.now()
                     self.metrics["cache_misses"] += 1
                     return metadata
             except Exception as e:
-                print(f"Error loading metadata for user {person_id}: {e}")
+                logger.error(f"Error loading metadata for user {person_id}: {e}")
         
         # Default metadata for new user
         metadata = {
@@ -238,50 +249,78 @@ class MultiUserLongTermMemory:
             return
             
         metadata_path = self._get_user_metadata_path(person_id)
-        
+
         try:
-            # Calculate memory usage
-            metadata_json = json.dumps(self.user_metadata[person_id], default=str, ensure_ascii=False)
-            metadata_size = len(metadata_json.encode('utf-8'))
-            self.user_metadata[person_id]["memory_usage_mb"] = metadata_size / (1024 * 1024)
-            self.user_metadata[person_id]["total_entries"] = len(self.user_metadata[person_id]["entries"])
-            
+            metadata = self.user_metadata[person_id]
+            metadata["total_entries"] = len(metadata["entries"])
+            # Les entrées sont des MemoryEntry : sérialisation explicite via to_dict().
+            # (json.dumps(default=str) les écrirait comme des chaînes "[date]: contenu",
+            # irrécupérables par from_dict au rechargement → mémoire perdue au restart.)
+            serializable = {
+                **metadata,
+                "entries": [entry.to_dict() for entry in metadata["entries"]],
+            }
+            # Sérialisation unique : le memory_usage_mb écrit dans le fichier est celui
+            # de la sauvegarde précédente (valeur purement indicative, décalée d'un save).
+            metadata_json = json.dumps(serializable, indent=2, default=str, ensure_ascii=False)
+            metadata["memory_usage_mb"] = len(metadata_json.encode('utf-8')) / (1024 * 1024)
+
             with open(metadata_path, 'w', encoding='utf-8') as f:
-                json.dump(self.user_metadata[person_id], f, indent=2, default=str, ensure_ascii=False)
+                f.write(metadata_json)
             self.metadata_access_times[person_id] = datetime.now()
-            
+
         except Exception as e:
-            print(f"Error saving metadata for user {person_id}: {e}")
-    
+            logger.error(f"Error saving metadata for user {person_id}: {e}")
+
+    _FLUSH_DELAY_S = 30.0
+
+    def _schedule_flush(self) -> None:
+        """Programme un flush différé des métadonnées dirty (une seule tâche en vol)."""
+        if self._flush_task is None or self._flush_task.done():
+            self._flush_task = asyncio.create_task(self._flush_after_delay())
+
+    async def _flush_after_delay(self) -> None:
+        await asyncio.sleep(self._FLUSH_DELAY_S)
+        await self.aflush_dirty()
+
+    async def aflush_dirty(self) -> None:
+        """Écrit sur disque les métadonnées de tous les agents marqués dirty (hors event loop)."""
+        dirty = list(self._dirty)
+        self._dirty.clear()
+        for person_id in dirty:
+            if person_id in self.user_metadata:
+                await asyncio.to_thread(self._save_user_metadata, person_id)
+
     def _cleanup_metadata_cache(self):
         """LRU eviction for metadata cache"""
         if len(self.user_metadata) <= self.max_loaded_metadata:
             return
-        
+
         # Sort by access time and remove oldest
         sorted_users = sorted(
             self.metadata_access_times.items(),
             key=lambda x: x[1]
         )
-        
+
         users_to_remove = len(self.user_metadata) - self.max_loaded_metadata
         removed_count = 0
-        
+
         for person_id, _ in sorted_users[:users_to_remove]:
             if person_id in self.user_metadata:
-                # Save before removing from cache
+                # Save before removing from cache (flush garanti même si un debounce était en attente)
                 self._save_user_metadata(person_id)
+                self._dirty.discard(person_id)
                 del self.user_metadata[person_id]
                 if person_id in self.metadata_access_times:
                     del self.metadata_access_times[person_id]
                 removed_count += 1
-        
-        # Force garbage collection
-        gc.collect()
+
+        # Pas de gc.collect() ici : appelé depuis l'event loop via
+        # ensure_user_initialized(), il gelait la boucle ~110 ms par éviction.
         self.metrics["memory_cleanups"] += 1
-        
+
         if removed_count > 0:
-            print(f"Cleaned up metadata cache: removed {removed_count} users from memory")
+            logger.info(f"Cleaned up metadata cache: removed {removed_count} users from memory")
     
     def ensure_user_initialized(self, person_id: str):
         """Ensure user metadata is loaded with cache management"""
@@ -292,6 +331,16 @@ class MultiUserLongTermMemory:
             # Update access time for LRU
             self.metadata_access_times[person_id] = datetime.now()
             self.metrics["cache_hits"] += 1
+
+    def has_memories(self, person_id: str) -> bool:
+        """L'agent a-t-il au moins un souvenir long terme ?
+
+        Lit le cache LRU des métadonnées (en RAM) — aucune requête au vector store.
+        Sert au cache sémantique LLM à choisir entre la branche exacte (mémoire vide)
+        et la branche par similarité (mémoire remplie).
+        """
+        self.ensure_user_initialized(person_id)
+        return bool(self.user_metadata[person_id]["entries"])
 
     def get_last_user_memories(self, person_id: str, from_date: datetime) -> List[MemoryEntry]:
         """Get last user memories from a specific date"""
@@ -327,11 +376,15 @@ class MultiUserLongTermMemory:
 
         # Memory limits per user
         if len(self.user_metadata[person_id]["entries"]) > 10000:
-            print(f"User {person_id} exceeds memory limit, triggering cleanup")
+            logger.warning(f"User {person_id} exceeds memory limit, triggering cleanup")
             self.cleanup_user_memories(person_id, days_threshold=7)
-        
-        self._save_user_metadata(person_id)
-        
+
+        # Écriture différée : les réflexions arrivent par rafales (plusieurs entrées par
+        # agent) — le debounce regroupe chaque rafale en une seule écriture disque,
+        # exécutée hors de l'event loop. Flush garanti aussi à l'éviction LRU.
+        self._dirty.add(person_id)
+        self._schedule_flush()
+
         # Periodic persistence for simple storage
         if not self.vector_store and len(self.user_metadata[person_id]["entries"]) % 10 == 0:
             self._persist_shared_index()
@@ -385,16 +438,21 @@ class MultiUserLongTermMemory:
                 return self._filter_memory_by_past_days(msg_datetime, query_at_datetime, max_past_days)
             return True
         
+        from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters
+
         try:
-            # Query with extra results for filtering
+            # Filtrage par person_id délégué au vector store (traduit en `where` Chroma) :
+            # évite de rapatrier jusqu'à 500 nœuds globaux pour n'en garder que quelques-uns.
+            # La marge ×5 laisse de quoi re-ranker (décroissance temporelle, mots-clés).
             retriever = self.shared_index.as_retriever(
-                similarity_top_k=min(top_k * 100, 500)
+                similarity_top_k=min(max(top_k * 5, 32), 100),
+                filters=MetadataFilters(filters=[MetadataFilter(key="person_id", value=person_id)]),
             )
-            
+
             nodes = await retriever.aretrieve(query)
-            print(f"Retrieved {len(nodes)} raw nodes for user {person_id}")
-            
-            # Filter by user
+            logger.debug(f"Retrieved {len(nodes)} raw nodes for user {person_id}")
+
+            # Défense en profondeur : re-vérifie person_id côté Python
             user_results = []
             for node in nodes:
                 if (node.metadata.get("person_id") == person_id and \
@@ -510,22 +568,19 @@ class MultiUserLongTermMemory:
         
         cutoff_date = datetime.now() - timedelta(days=days_threshold)
         original_count = len(self.user_metadata[person_id]["entries"])
-        
-        # Filter entries by date and importance
+
+        # Filter entries by date and type (entries are MemoryEntry objects)
         filtered_entries = []
-        for entry_dict in self.user_metadata[person_id]["entries"]:
+        for entry in self.user_metadata[person_id]["entries"]:
             try:
-                entry_date = datetime.fromisoformat(entry_dict["timestamp"])
-                
-                # Keep if recent, important, or special type
-                if (entry_date > cutoff_date or 
-                    entry_dict.get("importance_score", 0) > 0.7 or
-                    entry_dict.get("memory_type") in ["reflection", "summary"]):
-                    filtered_entries.append(entry_dict)
-                    
-            except (ValueError, KeyError) as e:
-                # Keep entries with malformed dates to be safe
-                filtered_entries.append(entry_dict)
+                # Keep if recent or special type
+                if (entry.timestamp > cutoff_date or
+                        str(entry.memory_type) in ("reflection", "summary")):
+                    filtered_entries.append(entry)
+
+            except (TypeError, AttributeError):
+                # Keep malformed entries to be safe
+                filtered_entries.append(entry)
         
         # Update metadata
         self.user_metadata[person_id]["entries"] = filtered_entries
@@ -534,7 +589,7 @@ class MultiUserLongTermMemory:
         
         removed_count = original_count - len(filtered_entries)
         if removed_count > 0:
-            print(f"Cleaned up {removed_count} old memories for user {person_id}")
+            logger.info(f"Cleaned up {removed_count} old memories for user {person_id}")
     
     def batch_cleanup_users(self, user_ids: List[str], days_threshold: int = 30):
         """Batch cleanup for multiple users"""
@@ -549,9 +604,9 @@ class MultiUserLongTermMemory:
                     self._cleanup_metadata_cache()
                     
             except Exception as e:
-                print(f"Error cleaning up user {person_id}: {e}")
+                logger.error(f"Error cleaning up user {person_id}: {e}")
         
-        print(f"Batch cleanup completed for {cleaned_count} users")
+        logger.info(f"Batch cleanup completed for {cleaned_count} users")
     
     def get_all_users(self) -> List[str]:
         """Get all users efficiently by scanning shard directories"""
@@ -581,14 +636,13 @@ class MultiUserLongTermMemory:
         recent_7d = 0
         now = datetime.now()
         
-        for entry_dict in metadata["entries"]:
+        for entry in metadata["entries"]:
             try:
-                entry_time = datetime.fromisoformat(entry_dict["timestamp"])
-                if now - entry_time < timedelta(hours=24):
+                if now - entry.timestamp < timedelta(hours=24):
                     recent_24h += 1
-                if now - entry_time < timedelta(days=7):
+                if now - entry.timestamp < timedelta(days=7):
                     recent_7d += 1
-            except (ValueError, KeyError):
+            except (TypeError, AttributeError):
                 continue
         
         return {
@@ -621,7 +675,7 @@ class MultiUserLongTermMemory:
     def force_cleanup_all_users(self, days_threshold: int = 30):
         """Force cleanup for all users (maintenance operation)"""
         all_users = self.get_all_users()
-        print(f"Starting cleanup for {len(all_users)} users...")
+        logger.info(f"Starting cleanup for {len(all_users)} users...")
         
         # Process in batches to manage memory
         batch_size = 50
@@ -630,14 +684,14 @@ class MultiUserLongTermMemory:
             self.batch_cleanup_users(batch, days_threshold)
             
             # Progress update
-            print(f"Cleanup progress: {min(i + batch_size, len(all_users))}/{len(all_users)} users")
+            logger.info(f"Cleanup progress: {min(i + batch_size, len(all_users))}/{len(all_users)} users")
         
         # Final cleanup
         self._cleanup_metadata_cache()
         if not self.vector_store:
             self._persist_shared_index()
         
-        print("Force cleanup completed for all users")
+        logger.info("Force cleanup completed for all users")
     
     def get_memory_usage_breakdown(self) -> Dict[str, Any]:
         """Get detailed memory usage breakdown"""
@@ -664,10 +718,9 @@ class MultiUserLongTermMemory:
         
         if person_id not in self.user_metadata:
             return []
-        
-        # Convert stored entries to MemoryEntry objects
-        entries = self.user_metadata[person_id]["entries"]
-        return [MemoryEntry.from_dict(entry) for entry in entries]
+
+        # Entries are already MemoryEntry objects (converted at load time)
+        return list(self.user_metadata[person_id]["entries"])
 
     async def aexport_user_data(self, person_id: str) -> Dict[str, Any]:
         """Export all data for a specific user"""

@@ -147,3 +147,71 @@ class TestRender:
         )
         all_content = " ".join(m.content for m in messages if m.content)
         assert "heavy_rain_today" in all_content
+
+
+# ---------------------------------------------------------------------------
+# get_system_prompt — source unique des prompts système (prompts.yaml)
+# ---------------------------------------------------------------------------
+
+class TestSystemPrompt:
+    def test_active_category_returns_prompt(self, manager):
+        # itinary_multi_agent est mappé dans active: → un prompt non vide
+        sp = manager.get_system_prompt("itinary_multi_agent")
+        assert sp and len(sp) > 50
+
+    def test_schema_block_stripped(self, manager):
+        # Le bloc "Schéma JSON attendu : {...}" est retiré (réinjecté via {{ schema }})
+        sp = manager.get_system_prompt("itinary_multi_agent")
+        assert "Schéma JSON attendu" not in sp
+
+    def test_inactive_category_returns_none(self, manager):
+        # Catégorie absente de active: → le template garde son SYSTEM en dur
+        assert manager.get_system_prompt("perception_filter") is None
+
+    def test_render_injects_active_system_prompt(self, manager):
+        agent = AgentSpec(
+            agent_id="a1",
+            perception="38y, engineer",
+            trajectories=[{"mode": "bus", "total_distance_m": 5000}],
+        )
+        messages = manager.render("itinary_multi_agent", [agent], {})
+        sys_msg = next(m for m in messages if m.role == "system")
+        # Le schéma n'apparaît qu'une fois, injecté par le template (pas dupliqué)
+        assert sys_msg.content.count("Schéma JSON attendu") == 1
+        assert '"agent_id"' in sys_msg.content  # schéma bien injecté
+
+
+# ---------------------------------------------------------------------------
+# active_prompt_checksum — isolation du cache LLM par version de prompt
+# ---------------------------------------------------------------------------
+
+class TestPromptChecksum:
+    def test_checksum_is_stable(self, manager):
+        assert manager.active_prompt_checksum() == manager.active_prompt_checksum()
+
+    def test_checksum_length(self, manager):
+        assert len(manager.active_prompt_checksum(length=8)) == 8
+
+    def test_checksum_changes_when_prompt_changes(self, manager, tmp_path):
+        import yaml
+        from llm_module.prompts.manager import PromptManager
+
+        base = manager.active_prompt_checksum("itinary_multi_agent")
+        # Store alternatif avec un contenu de prompt différent → checksum différent
+        alt = tmp_path / "prompts.yaml"
+        alt.write_text(yaml.safe_dump({
+            "active": {"itinary_multi_agent": "v"},
+            "prompts": {"v": {"content": "Un prompt système totalement différent."}},
+        }), encoding="utf-8")
+        other = PromptManager(prompts_file=alt).active_prompt_checksum("itinary_multi_agent")
+        assert base != other
+
+    def test_checksum_empty_when_no_active(self, tmp_path):
+        import yaml
+        from llm_module.prompts.manager import PromptManager
+
+        empty = tmp_path / "prompts.yaml"
+        empty.write_text(yaml.safe_dump({"active": {}, "prompts": {}}), encoding="utf-8")
+        # Aucune catégorie active → empreinte du vide, mais déterministe et non vide
+        cs = PromptManager(prompts_file=empty).active_prompt_checksum()
+        assert isinstance(cs, str) and len(cs) == 12

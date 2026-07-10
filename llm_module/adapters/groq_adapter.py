@@ -28,7 +28,7 @@ from llm_module.adapters.base import (
     BaseAdapter,
     register_adapter,
 )
-from llm_module.settings.models import InternalRequest, LLMOutput
+from llm_module.core.models import InternalRequest, LLMOutput
 
 from llm_module.telemetry.logger import get_logger
 logger = get_logger(__name__)
@@ -52,19 +52,19 @@ class GroqAdapter(BaseAdapter):
             "response_format": {"type": "json_object"},
         }
 
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                url,
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key.get_secret_value()}",
-                },
-                json=payload,
-            )
+        response = self._http().post(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key.get_secret_value()}",
+            },
+            json=payload,
+        )
 
         self._raise_for_status(response)
 
         data = response.json()
+        self._check_openai_finish_reason(data)
         raw_content = data["choices"][0]["message"]["content"]
 
         usage      = data.get("usage", {})
@@ -84,9 +84,9 @@ class GroqAdapter(BaseAdapter):
         ]
 
     def ping(self) -> bool:
-        from llm_module.tasks.llm_config import settings
+        from llm_module.config import get_settings
         try:
-            model = settings.providers[self._instance_name].default_model
+            model = get_settings().providers[self._instance_name].default_model
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     f"{self._get_base_url()}/chat/completions",

@@ -77,7 +77,6 @@ species activity_loc {
 experiment e type: gui {
     // Simulation time step (2 minutes)
     float step <- 120 #s;
-   
 
     // GTFS visualization parameters
     parameter "Vehicle Size" category:"GTFS" var: vehicle_display_size <- 20.0 among: [5.0, 10.0, 20.0, 30.0, 40.0];
@@ -98,7 +97,7 @@ experiment e type: gui {
 
     // Simulation scenario parameters — sent to the Python controller at /init
     // Values are persisted to/from GAMA/CityTransport/config/sim_params.yaml
-    parameter "Population size" category: "Simulation" var: population_size min: 0 max: 10000 step: 100;
+    parameter "Population size" category: "Simulation" var: population_size min: 0 max: 1000 step: 100;
     parameter "Part of LLM-based agents" category: "Simulation" var: part_of_llm_based_agents <-1.0 min: 0.0 max: 1.0;
     parameter "Long-term memory" category: "Simulation" var: long_term_memory_enabled <- true;
     parameter "Long-term self-reflection" category: "Simulation" var: long_term_self_reflect_enabled <- true;
@@ -114,6 +113,7 @@ experiment e type: gui {
 
     reflex stop_after_max_days when: simulation_max_days > 0 and int(current_date - starting_date) >= simulation_max_days * 86400 {
         write "Simulation stopped after " + simulation_max_days + " simulated day(s).";
+        //do halt;
     }
 
     // Save arrival time metrics every 10 minutes
@@ -178,7 +178,7 @@ experiment e type: gui {
             // Real-time information overlay
             graphics Strings {
                 // Current simulation date
-                draw "Date: " + string(current_date)
+                draw "Date: " + string(display_time_info)
                     at: {10, -2000} 
                     anchor: #top_left
                     border: #black font: font("Geneva", 20)

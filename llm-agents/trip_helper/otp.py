@@ -32,7 +32,9 @@ OTP_REQUESTS_ERR = Counter(
 OTP_REQUEST_LATENCY = Histogram(
     'otp_request_duration_seconds',
     'Durée des requêtes OTP réussies',
-    ['instance'],
+    # 'instance' est réservé par Prometheus (cible de scrape) : un label applicatif
+    # homonyme serait renommé exported_instance et casserait les requêtes Grafana.
+    ['otp_instance'],
     buckets=[0.1, 0.25, 0.5, 1, 2, 5, 10],
 )
 OTP_REQUESTS_INFLIGHT = Gauge(
@@ -501,7 +503,7 @@ class OTPTripHelper(TripHelper):
                     result = await response.json()
                 OTP_REQUESTS_OK.inc()
                 _instance = otp_url.split("//")[-1].split("/")[0]
-                OTP_REQUEST_LATENCY.labels(instance=_instance).observe(time.monotonic() - _t0)
+                OTP_REQUEST_LATENCY.labels(otp_instance=_instance).observe(time.monotonic() - _t0)
                 return result
             except asyncio.TimeoutError:
                 OTP_REQUESTS_ERR.labels(reason='timeout').inc()
@@ -646,11 +648,11 @@ class OTPTripHelper(TripHelper):
             if isinstance(plan, Exception):
                 logger.error(f"OSMnx {mode} plan failed: {plan}")
             elif plan is not None:
-                plan.start_time *= 1000
-                plan.end_time   *= 1000
+                plan.start_time = int(plan.start_time * 1000)
+                plan.end_time   = int(plan.end_time * 1000)
                 for leg in plan.legs:
-                    leg.start_time *= 1000
-                    leg.end_time   *= 1000
+                    leg.start_time = int(leg.start_time * 1000)
+                    leg.end_time   = int(leg.end_time * 1000)
                 plan.start_in = 0  # Direct plans start immediately
                 plans.append(plan)
 

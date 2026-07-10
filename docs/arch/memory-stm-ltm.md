@@ -147,7 +147,7 @@ len(stm.recent_entries) >= settings.agent.stm_reflection_min_entries   # défaut
             "departure_timestamp": <timestamp>
           }]
         }
-└── llm_client.execute_async()           → prompt : stm_reflection.md.j2
+└── llm_client.execute()  # SDK typé           → prompt : stm_reflection.md.j2
     ← {
         "reflection": "Aujourd'hui j'ai alterné...",
         "concepts": [
@@ -205,7 +205,7 @@ plus longs demandent un buffer de 5‑10 minutes.
 
 ### Organisation des données
 
-Un seul index ChromaDB est partagé entre tous les agents (une seule collection `memory_collection`). ChromaDB ne supporte pas de filtre pré-retrieval sur les métadonnées dans cette configuration, donc l'isolation est purement **post-retrieval** : le retriever demande `min(top_k × 100, 500)` candidats globaux, puis on filtre manuellement par `person_id`. Conséquence : plus la LTM est peuplée d'agents, plus les 500 candidats bruts sont dilués — la qualité du recall par agent diminue si le nombre d'entrées total est très élevé. L'isolation se fait via le champ `person_id` dans les métadonnées du document :
+Un seul index ChromaDB est partagé entre tous les agents (une seule collection `memory_collection`). L'isolation par agent est déléguée au vector store : le retriever passe un `MetadataFilters(person_id=...)` (traduit en clause `where` Chroma), avec `similarity_top_k = min(max(top_k × 5, 32), 100)` — la marge sert uniquement au re-ranking (décroissance temporelle, mots-clés). Un re-filtrage `person_id` côté Python est conservé en défense en profondeur. Le recall par agent ne dépend donc plus du peuplement global de l'index. Le champ d'isolation dans les métadonnées du document :
 
 ```python
 Document(
@@ -221,7 +221,11 @@ Document(
 )
 ```
 
-Les métadonnées JSON par agent (liste des entrées, dates de cleanup/réflexion) sont shardées :
+Les métadonnées JSON par agent (liste des entrées, dates de cleanup/réflexion) sont shardées.
+Les entrées sont sérialisées via `MemoryEntry.to_dict()` (timestamp ISO, `memory_type` en valeur
+chaîne) et relues via `MemoryEntry.from_dict()` — le round-trip garantit que la mémoire épisodique
+survit aux redémarrages du contrôleur ; les entrées d'un ancien format non relisible sont ignorées
+au chargement plutôt que d'invalider tout le fichier :
 
 ```
 long_term_memory/

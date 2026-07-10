@@ -37,7 +37,7 @@ from shapely.geometry import Point
 from models import Location, Transit, TransitLocation, TravelPlan
 from geography import TOULOUSE_CENTER_DIST_M
 from settings import settings
-from utils import random_uuid
+from utils import create_background_task, random_uuid
 
 # ── HTTP client mode (OSMNX_ENDPOINTS) ───────────────────────────────────────
 # When set, get_direct_plan() delegates to remote osmnx microservice replicas
@@ -471,6 +471,20 @@ def _route_sync(
 
 _OSMNX_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=800)
 
+# Session HTTP partagée entre toutes les requêtes vers les réplicas osmnx
+# (keep-alive : évite le coût création session + handshake TCP à chaque requête).
+_osmnx_http_session: Optional[aiohttp.ClientSession] = None
+
+
+async def _get_osmnx_session() -> aiohttp.ClientSession:
+    global _osmnx_http_session
+    if _osmnx_http_session is None or _osmnx_http_session.closed:
+        _osmnx_http_session = aiohttp.ClientSession(
+            timeout=_OSMNX_HTTP_TIMEOUT,
+            connector=aiohttp.TCPConnector(limit=50),
+        )
+    return _osmnx_http_session
+
 
 async def _get_direct_plan_http(
     origin: Location,
@@ -488,18 +502,16 @@ async def _get_direct_plan_http(
         "mode":         trip_mode,
         "congestion_dt": congestion_dt.isoformat(),
     }
-    t_wait = _time.monotonic()
     async with _OSMNX_HTTP_SEMAPHORE:
-        wait_s = _time.monotonic() - t_wait
         if _timing_sink is not None:
             # Keep the latest semaphore acquisition across all parallel OSMnx calls
             _timing_sink["osmnx_sem_end"] = max(
                 _timing_sink.get("osmnx_sem_end", 0), _wtime.time()
             )
-        async with aiohttp.ClientSession(timeout=_OSMNX_HTTP_TIMEOUT) as session:
-            async with session.post(url, json=payload) as resp:
-                resp.raise_for_status()
-                result = await resp.json()
+        session = await _get_osmnx_session()
+        async with session.post(url, json=payload) as resp:
+            resp.raise_for_status()
+            result = await resp.json()
         return result
 
 
@@ -584,7 +596,7 @@ async def get_direct_plan(
     if result is None:
         OSMNX_ERR.labels(mode=trip_mode, reason="no_route").inc()
         if _persistent_cache is not None and _p_key is not None:
-            asyncio.create_task(_persistent_cache.store_async(
+            create_background_task(_persistent_cache.store_async(
                 _p_key, _p_date, _p_dow, _p_bucket, trip_mode,
                 round(origin.lat, 5), round(origin.lon, 5),
                 round(destination.lat, 5), round(destination.lon, 5),
@@ -596,7 +608,7 @@ async def get_direct_plan(
     OSMNX_LAT.labels(mode=trip_mode).observe(_time.monotonic() - t0)
 
     if _persistent_cache is not None and _p_key is not None:
-        asyncio.create_task(_persistent_cache.store_async(
+        create_background_task(_persistent_cache.store_async(
             _p_key, _p_date, _p_dow, _p_bucket, trip_mode,
             round(origin.lat, 5), round(origin.lon, 5),
             round(destination.lat, 5), round(destination.lon, 5),

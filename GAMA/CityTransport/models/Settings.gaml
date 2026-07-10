@@ -24,14 +24,32 @@ global {
 	date GTFS_FIXED_DATE <- nil;
 	
 	// config
-	date starting_date <- date([2026,3,16,5,0,0]);
+	date starting_date <- date([2026,3,16,5,0,0]); // Lundi 5h
 	
 	// Global helper variables
 	date UTC_START_DATE <- date([1970,1,1,0,0,0]);
+	// Contre-pression prédictive (ticket 003) : état poussé par Python via le topic
+	// system/throttle. Permet d'afficher le régime dégradé dans l'UI de l'expérience.
+	bool THROTTLE_ACTIVE <- false;      // true = simulation bridée par le contrôle prédictif
+	float LLM_RATE_PER_MIN <- 0.0;      // débit de complétion LLM+OTP réel (tâches/min)
+	float SIM_RATIO_PYTHON <- 0.0;      // vitesse de simulation vue par Python (s sim / s réel)
+
 	int CURRENT_TIMESTAMP -> int(current_date - UTC_START_DATE);
 	int SECONDS_IN_24H <- 24*3600;
 	int CURRENT_TIMESTAMP_24H -> (int(current_date - UTC_START_DATE)) mod SECONDS_IN_24H;
 	
+	// Variables helpers pour l'affichage (Jour de la semaine et temps écoulé)
+	map<int, string> DAYS_OF_WEEK <- [1::"Lundi", 2::"Mardi", 3::"Mercredi", 4::"Jeudi", 5::"Vendredi", 6::"Samedi", 7::"Dimanche"];
+	string current_day_name -> DAYS_OF_WEEK[current_date.day_of_week]; // day_of_week va de 1 (Lundi) à 7 (Dimanche)
+	
+	int elapsed_seconds -> int(current_date - starting_date);
+	int elapsed_days -> elapsed_seconds div SECONDS_IN_24H;
+	int elapsed_hours -> (elapsed_seconds mod SECONDS_IN_24H) div 3600;
+	int elapsed_minutes -> (elapsed_seconds mod 3600) div 60;
+	
+	// Chaîne formatée prête à être affichée (ex: "Lundi | Écoulé : 2j 4h 30m")
+	string display_time_info -> current_day_name + " " + current_date+ " | Écoulé : " + (elapsed_days > 0 ? string(elapsed_days) + "j " : "") + string(elapsed_hours) + "h " + string(elapsed_minutes) + "m";
+
 	// Shape
 	file routes0_shape_file <- shape_file("../includes/routes.shp");
 	//file shape_file_buildings <- file("../includes/building.shp");

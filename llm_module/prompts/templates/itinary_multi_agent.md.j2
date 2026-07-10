@@ -1,20 +1,9 @@
 {# template: itinary_multi_agent.md.j2 #}
+{# Le texte système n'est plus codé en dur ici : il provient de la variante active   #}
+{# dans prompts.yaml (clé active.itinary_multi_agent), injectée via `system_prompt`.  #}
+{# Le schéma JSON reste injecté depuis schemas.json via `schema`.                     #}
 <!-- SYSTEM -->
-Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
-1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-- Gain de temps VS confort.
-- Friction d'accès brute (temps d'approche, stationnement, correspondances).
-- Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-- Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-- Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, etc.).
-3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
-
-[Instructions de sortie]
-1) Analyse le profil via ce prisme.
-2) Sélectionne l'index de l'option optimale.
-3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-4) Justifie la recommandation en une phrase concise, en précisent si c'est le cas pourquoi la marche n'est pas le meilleur choix et si tu as hésité.
+{{ system_prompt }}
 
 Schéma JSON attendu :
 {{ schema }}
@@ -27,7 +16,7 @@ Schéma JSON attendu :
 {% endif %}
 
 {% for agent in agents %}
---- PERSONA {{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
+--- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
 
 {{ agent.perception }}
 
@@ -46,3 +35,4 @@ Schéma JSON attendu :
 {% endfor %}
 
 Réponds avec l'objet JSON final contenant les recommandations pour {{ agents | length }} persona(s).
+Pour chaque persona, recopie son `agent_id` **exactement** tel que fourni ci-dessus (identifiant numérique uniquement, sans le mot « PERSONA » ni le nom du persona).

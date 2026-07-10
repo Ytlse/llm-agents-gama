@@ -40,11 +40,13 @@ class OtpPersistentCache:
             conn.commit()
 
     @staticmethod
-    def make_key(departure_time: int, origin: Location, destination: Location, include_car: bool, arrive_by: bool) -> str:
+    def make_key(departure_time: int, origin: Location, destination: Location, include_car: bool, arrive_by: bool, include_bike: bool = True) -> str:
+        # include_bike fait partie de la clé : sans lui, un résultat calculé pour un
+        # agent sans vélo (aucune option vélo) serait resservi à un agent avec vélo.
         dt = datetime.fromtimestamp(departure_time)
         date_str = dt.strftime('%Y-%m-%d')
         time_bucket = f"{dt.hour:02d}:{(dt.minute // 10) * 10:02d}"
-        raw = f"{date_str}|{time_bucket}|{origin.lat:.5f}|{origin.lon:.5f}|{destination.lat:.5f}|{destination.lon:.5f}|{int(include_car)}|{int(arrive_by)}"
+        raw = f"{date_str}|{time_bucket}|{origin.lat:.5f}|{origin.lon:.5f}|{destination.lat:.5f}|{destination.lon:.5f}|{int(include_car)}|{int(arrive_by)}|{int(include_bike)}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @staticmethod
