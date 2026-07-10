@@ -556,6 +556,64 @@ def section_arrivals(run: Path, out: list[str], alarms: list[str]) -> None:
         )
 
 
+def section_quotas(run: Path, out: list[str], alarms: list[str]) -> None:
+    """Intègre la validation des quotas RPM/TPM depuis quota_validator."""
+    import subprocess
+
+    quota_script = Path(__file__).resolve().parent / "quota_validator.py"
+    if not quota_script.exists():
+        return
+
+    try:
+        result = subprocess.run(
+            ["python3", str(quota_script), str(run)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return
+
+        # Parser les sorties pour en extraire le tableau et résumé
+        lines = result.stdout.split("\n")
+
+        # Chercher le tableau récapitulatif
+        table_start = -1
+        for i, line in enumerate(lines):
+            if "TABLEAU RÉCAPITULATIF" in line:
+                table_start = i + 3  # Passer les lignes d'en-tête
+                break
+
+        if table_start < 0:
+            return
+
+        out.append("\n## 💾 Validation des Quotas RPM/TPM\n")
+        out.append("```")
+
+        # Ajouter le tableau
+        for i in range(table_start, len(lines)):
+            line = lines[i]
+            if "ANALYSE DU MICRO-BATCHING" in line or "════" in line:
+                break
+            if line.strip():
+                out.append(line)
+
+        out.append("```\n")
+
+        # Ajouter le résumé des violations
+        for i, line in enumerate(lines):
+            if "🚨 ALERTE" in line or "✅ SUCCÈS" in line:
+                if "ALERTE" in line:
+                    out.append("⚠️ **Violations détectées** — voir le tableau ci-dessus\n")
+                    alarms.append("Violations de quotas RPM/TPM — vérifier provider_config")
+                else:
+                    out.append("✅ **Tous les quotas respectés** — aucune violation\n")
+                break
+
+    except Exception:
+        pass  # Silencieusement ignorer les erreurs de quota_validator
+
+
 def section_alarms(out: list[str], alarms: list[str]) -> None:
     banner = ["\n## 🚨 ALARMES\n"]
     if not alarms:
@@ -601,6 +659,7 @@ def main() -> int:
     section_decisions(run, out, alarms)
     section_activity_coverage(run, out, alarms)
     section_arrivals(run, out, alarms)
+    section_quotas(run, out, alarms)
     section_alarms(out, alarms)  # doit rester en dernier (insère en tête)
 
     report = "\n".join(out).rstrip() + "\n"

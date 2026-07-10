@@ -72,6 +72,40 @@ def load_llm_exchanges(run_dir):
     return exchanges
 
 
+def calculate_batch_metrics(exchanges, provider):
+    """Calcule les statistiques de batching pour un provider."""
+    provider_exchanges = [
+        e for e in exchanges
+        if e.get("provider") == provider and e.get("tokens_in") is not None
+    ]
+
+    if not provider_exchanges:
+        return None
+
+    # Grouper par task_id (batch)
+    batches = {}
+    for ex in provider_exchanges:
+        task_id = ex.get("task_id", "unknown")
+        if task_id not in batches:
+            batches[task_id] = []
+        batches[task_id].append(ex)
+
+    batch_sizes = [len(batch) for batch in batches.values()]
+
+    if not batch_sizes:
+        return None
+
+    return {
+        "batch_count": len(batches),
+        "total_exchanges": len(provider_exchanges),
+        "batch_min": min(batch_sizes),
+        "batch_max": max(batch_sizes),
+        "batch_mean": statistics.mean(batch_sizes),
+        "batch_median": statistics.median(batch_sizes),
+        "utilization": (len(provider_exchanges) / len(batches)) if len(batches) > 0 else 0,
+    }
+
+
 def calculate_sliding_window_metrics(exchanges, provider, window_seconds=60):
     """
     Calcule les métriques RPM/TPM sur des fenêtres glissantes de 60s.
@@ -243,6 +277,7 @@ def generate_report(run_dir):
         tpm_limit = config["tpm_limit"]
         metrics = all_metrics.get(provider, {})
         violations = all_violations.get(provider, [])
+        batch_metrics = calculate_batch_metrics(exchanges, provider)
 
         if not metrics:
             table_data.append({
@@ -255,6 +290,9 @@ def generate_report(run_dir):
                 "tpm_mean": 0,
                 "rpm_usage": 0,
                 "tpm_usage": 0,
+                "batch_count": 0,
+                "batch_mean": 0,
+                "batch_util": 0,
                 "violations": "—",
                 "violation_details": [],
             })
@@ -277,6 +315,10 @@ def generate_report(run_dir):
             violation_details = violations
             violation_str = f"🚨 OUI ({len(violations)})"
 
+        batch_count = batch_metrics.get("batch_count", 0) if batch_metrics else 0
+        batch_mean = batch_metrics.get("batch_mean", 0) if batch_metrics else 0
+        batch_util = batch_metrics.get("utilization", 0) if batch_metrics else 0
+
         table_data.append({
             "provider": provider,
             "rpm_limit": rpm_limit,
@@ -287,32 +329,71 @@ def generate_report(run_dir):
             "tpm_mean": tpm_mean,
             "rpm_usage": rpm_usage,
             "tpm_usage": tpm_usage,
+            "batch_count": batch_count,
+            "batch_mean": batch_mean,
+            "batch_util": batch_util,
             "violations": violation_str,
             "violation_details": violation_details,
         })
 
     # Afficher le tableau
-    print(f"{'Provider':<30} {'RPM':<20} {'TPM':<25} {'Utilisé':<25} {'Violations':<15}")
-    print(f"{'':<30} {'Max/Limit/Moy':<20} {'Max/Limit/Moy':<25} {'RPM%/TPM%':<25} {'':<15}")
-    print("─" * 115)
+    print(f"{'Provider':<25} {'RPM':<18} {'TPM':<23} {'Batch':<20} {'Utilisé':<20} {'Violations':<12}")
+    print(f"{'':<25} {'Max/L/Moy':<18} {'Max/L/Moy':<23} {'Nbre/Moyen':<20} {'RPM%/TPM%':<20} {'':<12}")
+    print("─" * 130)
 
     for row in table_data:
-        provider = row["provider"][:28]
+        provider = row["provider"][:24]
 
         rpm_info = f"{row['rpm_max']}/{row['rpm_limit']}/{row['rpm_mean']:.1f}"
 
         if row["tpm_limit"] == float('inf'):
             tpm_info = f"{row['tpm_max']}/∞/{row['tpm_mean']:.0f}"
-            tpm_usage = "∞%"
+            tpm_usage = "∞"
         else:
             tpm_info = f"{row['tpm_max']}/{row['tpm_limit']}/{row['tpm_mean']:.0f}"
-            tpm_usage = f"{row['tpm_usage']:.0f}%"
+            tpm_usage = f"{row['tpm_usage']:.0f}"
 
-        rpm_usage = f"{row['rpm_usage']:.0f}%"
-        usage_str = f"{rpm_usage:>6} / {tpm_usage:>6}"
+        rpm_usage = f"{row['rpm_usage']:.0f}"
+
+        batch_info = f"{row['batch_count']}/{row['batch_mean']:.1f}"
+        usage_str = f"{rpm_usage:>5}% / {tpm_usage:>5}%"
         violations_str = row["violations"]
 
-        print(f"{provider:<30} {rpm_info:<20} {tpm_info:<25} {usage_str:<25} {violations_str:<15}")
+        print(f"{provider:<25} {rpm_info:<18} {tpm_info:<23} {batch_info:<20} {usage_str:<20} {violations_str:<12}")
+
+    print()
+
+    # Analyse de batching
+    print(f"\n{'='*80}")
+    print("🧩 ANALYSE DU MICRO-BATCHING")
+    print(f"{'='*80}\n")
+
+    print(f"{'Provider':<25} {'Batches':<12} {'Agents/Batch':<18} {'Utilisation':<15}")
+    print("─" * 70)
+
+    total_batches = 0
+    total_exchanges = 0
+    for row in table_data:
+        if row["batch_count"] == 0:
+            continue
+
+        provider = row["provider"][:24]
+        batch_count = row["batch_count"]
+        batch_mean = row["batch_mean"]
+        batch_util = row["batch_util"]
+
+        total_batches += batch_count
+        total_exchanges += int(batch_mean * batch_count)
+
+        util_bar = "▓" * int(batch_util * 20) + "░" * (20 - int(batch_util * 20))
+        print(f"{provider:<25} {batch_count:<12} {batch_mean:<18.2f} {util_bar} {batch_util:.1f}")
+
+    if total_batches > 0:
+        avg_batch_size = total_exchanges / total_batches
+        print(f"\n📊 Statistiques globales batching:")
+        print(f"   Total batches: {total_batches}")
+        print(f"   Taille moyenne: {avg_batch_size:.2f} agents/batch")
+        print(f"   Efficacité: {(avg_batch_size / 10 * 100):.1f}% (vs batch_max_agents=10)")
 
     print()
 
