@@ -3,6 +3,7 @@
 Valide les limites RPM/TPM sur chaque minute isolée (fenêtres glissantes 60s).
 Pour chaque provider, vérifie que les quotas ne sont jamais franchis,
 sinon diagnostic des seuils violés et timestamps problématiques.
+Inclut aussi comptage des cooldowns (erreurs 5xx/429).
 """
 
 import json
@@ -70,6 +71,28 @@ def load_llm_exchanges(run_dir):
                 current_obj = ""
 
     return exchanges
+
+
+def count_cooldowns(exchanges):
+    """Compte les cooldowns par provider (erreurs 5xx et 429 qui déclenchent disable_timeout)."""
+    cooldowns = defaultdict(int)
+
+    for exchange in exchanges:
+        provider = exchange.get("provider")
+        if not provider:
+            continue
+
+        # Un cooldown est déclenché par une erreur HTTP
+        error = exchange.get("error") or exchange.get("error_message")
+        status = exchange.get("http_status")
+
+        # Cooldown sur 5xx (erreurs serveur) et 429 (rate limit)
+        if error and any(code in str(error) for code in ["500", "503", "429"]):
+            cooldowns[provider] += 1
+        elif status and str(status) in ["429", "500", "503"]:
+            cooldowns[provider] += 1
+
+    return dict(cooldowns)
 
 
 def calculate_batch_metrics(exchanges, provider):
@@ -193,9 +216,9 @@ def calculate_sliding_window_metrics(exchanges, provider, window_seconds=60):
 
 def generate_report(run_dir):
     """Génère le rapport de validation des quotas."""
-    print("=" * 80)
+    print("=" * 90)
     print("📊 VALIDATION DES QUOTAS RPM/TPM (fenêtres glissantes 60s)")
-    print("=" * 80)
+    print("=" * 90)
 
     exchanges = load_llm_exchanges(run_dir)
 
@@ -208,6 +231,16 @@ def generate_report(run_dir):
     # Grouper par provider
     providers_in_log = set(e.get("provider") for e in exchanges if e.get("provider"))
     print(f"Providers dans les logs: {sorted(providers_in_log)}\n")
+
+    # Compter les cooldowns
+    cooldowns = count_cooldowns(exchanges)
+    total_cooldowns = sum(cooldowns.values())
+    if total_cooldowns > 0:
+        print(f"⚠️  Cooldowns détectés: {total_cooldowns} total")
+        for provider, count in sorted(cooldowns.items(), key=lambda x: x[1], reverse=True):
+            if count > 0:
+                print(f"   {provider}: {count}")
+        print()
 
     all_violations = {}
     all_metrics = {}
@@ -224,7 +257,7 @@ def generate_report(run_dir):
         rpm_limit = config["rpm_limit"]
         tpm_limit = config["tpm_limit"]
 
-        print(f"\n{'='*80}")
+        print(f"\n{'='*90}")
         print(f"🔹 Provider: {provider}")
         print(f"   Limites: RPM={rpm_limit}, TPM={'∞' if tpm_limit == float('inf') else tpm_limit}")
 
@@ -238,8 +271,6 @@ def generate_report(run_dir):
 
         print(f"\n   Statistiques RPM (requêtes/minute):")
         print(f"     • Min: {min(rpm_values)}, Max: {max(rpm_values)}, Moy: {statistics.mean(rpm_values):.1f}")
-        if max(rpm_values) > rpm_limit:
-            print(f"     ⚠️  DÉPASSEMENT MAX: {max(rpm_values)} > {rpm_limit}")
 
         print(f"\n   Statistiques TPM (tokens/minute):")
         if tpm_limit == float('inf'):
@@ -247,24 +278,25 @@ def generate_report(run_dir):
             print(f"     • Quota illimité (pas de plafond TPM)")
         else:
             print(f"     • Min: {min(tpm_values)}, Max: {max(tpm_values)}, Moy: {statistics.mean(tpm_values):.1f}")
-            if max(tpm_values) > tpm_limit:
-                print(f"     ⚠️  DÉPASSEMENT MAX: {max(tpm_values)} > {tpm_limit}")
+
+        if cooldowns.get(provider, 0) > 0:
+            print(f"\n   ⚠️  Cooldowns: {cooldowns[provider]} (provider écartée {cooldowns[provider]}x)")
 
         if violations:
             print(f"\n   🚨 VIOLATIONS DÉTECTÉES: {len(violations)}")
 
-            for v in violations[:10]:  # Top 10
+            for v in violations[:5]:  # Top 5
                 print(f"     • {v['type']:3s} @ {v['minute']}: {v['value']:5d} / {v['limit']:5d} (excess: +{v['excess']})")
 
-            if len(violations) > 10:
-                print(f"     ... et {len(violations) - 10} autres violations")
+            if len(violations) > 5:
+                print(f"     ... et {len(violations) - 5} autres violations")
         else:
             print(f"   ✅ AUCUNE VIOLATION (quotas respectés)")
 
     # Tableau récapitulatif complet
-    print(f"\n{'='*80}")
+    print(f"\n{'='*90}")
     print("📊 TABLEAU RÉCAPITULATIF - TOUS LES PROVIDERS")
-    print(f"{'='*80}\n")
+    print(f"{'='*90}\n")
 
     # Préparer les données
     table_data = []
@@ -282,19 +314,14 @@ def generate_report(run_dir):
         if not metrics:
             table_data.append({
                 "provider": provider,
-                "rpm_limit": rpm_limit,
-                "tpm_limit": tpm_limit,
                 "rpm_max": 0,
                 "tpm_max": 0,
                 "rpm_mean": 0,
                 "tpm_mean": 0,
-                "rpm_usage": 0,
-                "tpm_usage": 0,
                 "batch_count": 0,
                 "batch_mean": 0,
-                "batch_util": 0,
+                "cooldown_count": 0,
                 "violations": "—",
-                "violation_details": [],
             })
             continue
 
@@ -306,40 +333,30 @@ def generate_report(run_dir):
         rpm_mean = statistics.mean(rpm_values)
         tpm_mean = statistics.mean(tpm_values)
 
-        rpm_usage = (rpm_max / rpm_limit * 100) if rpm_limit > 0 else 0
-        tpm_usage = (tpm_max / tpm_limit * 100) if tpm_limit != float('inf') else 0
-
-        violation_str = "✅ NON"
-        violation_details = []
-        if violations:
-            violation_details = violations
-            violation_str = f"🚨 OUI ({len(violations)})"
-
         batch_count = batch_metrics.get("batch_count", 0) if batch_metrics else 0
         batch_mean = batch_metrics.get("batch_mean", 0) if batch_metrics else 0
-        batch_util = batch_metrics.get("utilization", 0) if batch_metrics else 0
+
+        violation_str = "✅" if not violations else f"🚨 {len(violations)}"
+        cooldown_count = cooldowns.get(provider, 0)
 
         table_data.append({
             "provider": provider,
-            "rpm_limit": rpm_limit,
-            "tpm_limit": tpm_limit,
             "rpm_max": rpm_max,
+            "rpm_limit": rpm_limit,
             "tpm_max": tpm_max,
+            "tpm_limit": tpm_limit,
             "rpm_mean": rpm_mean,
             "tpm_mean": tpm_mean,
-            "rpm_usage": rpm_usage,
-            "tpm_usage": tpm_usage,
             "batch_count": batch_count,
             "batch_mean": batch_mean,
-            "batch_util": batch_util,
+            "cooldown_count": cooldown_count,
             "violations": violation_str,
-            "violation_details": violation_details,
         })
 
     # Afficher le tableau
-    print(f"{'Provider':<25} {'RPM':<18} {'TPM':<23} {'Batch':<20} {'Utilisé':<20} {'Violations':<12}")
-    print(f"{'':<25} {'Max/L/Moy':<18} {'Max/L/Moy':<23} {'Nbre/Moyen':<20} {'RPM%/TPM%':<20} {'':<12}")
-    print("─" * 130)
+    print(f"{'Provider':<25} {'RPM':<16} {'TPM':<20} {'Batch':<12} {'Cooldown':<12} {'Violations':<12}")
+    print(f"{'':<25} {'Max/L/Moy':<16} {'Max/L/Moy':<20} {'Nbre/Moy':<12} {'':<12} {'':<12}")
+    print("─" * 127)
 
     for row in table_data:
         provider = row["provider"][:24]
@@ -348,132 +365,32 @@ def generate_report(run_dir):
 
         if row["tpm_limit"] == float('inf'):
             tpm_info = f"{row['tpm_max']}/∞/{row['tpm_mean']:.0f}"
-            tpm_usage = "∞"
         else:
             tpm_info = f"{row['tpm_max']}/{row['tpm_limit']}/{row['tpm_mean']:.0f}"
-            tpm_usage = f"{row['tpm_usage']:.0f}"
-
-        rpm_usage = f"{row['rpm_usage']:.0f}"
 
         batch_info = f"{row['batch_count']}/{row['batch_mean']:.1f}"
-        usage_str = f"{rpm_usage:>5}% / {tpm_usage:>5}%"
+        cooldown_info = f"{row['cooldown_count']}" if row['cooldown_count'] > 0 else "—"
         violations_str = row["violations"]
 
-        print(f"{provider:<25} {rpm_info:<18} {tpm_info:<23} {batch_info:<20} {usage_str:<20} {violations_str:<12}")
-
-    print()
-
-    # Analyse de batching
-    print(f"\n{'='*80}")
-    print("🧩 ANALYSE DU MICRO-BATCHING")
-    print(f"{'='*80}\n")
-
-    print(f"{'Provider':<25} {'Batches':<12} {'Agents/Batch':<18} {'Utilisation':<15}")
-    print("─" * 70)
-
-    total_batches = 0
-    total_exchanges = 0
-    for row in table_data:
-        if row["batch_count"] == 0:
-            continue
-
-        provider = row["provider"][:24]
-        batch_count = row["batch_count"]
-        batch_mean = row["batch_mean"]
-        batch_util = row["batch_util"]
-
-        total_batches += batch_count
-        total_exchanges += int(batch_mean * batch_count)
-
-        util_bar = "▓" * int(batch_util * 20) + "░" * (20 - int(batch_util * 20))
-        print(f"{provider:<25} {batch_count:<12} {batch_mean:<18.2f} {util_bar} {batch_util:.1f}")
-
-    if total_batches > 0:
-        avg_batch_size = total_exchanges / total_batches
-        print(f"\n📊 Statistiques globales batching:")
-        print(f"   Total batches: {total_batches}")
-        print(f"   Taille moyenne: {avg_batch_size:.2f} agents/batch")
-        print(f"   Efficacité: {(avg_batch_size / 10 * 100):.1f}% (vs batch_max_agents=10)")
+        print(f"{provider:<25} {rpm_info:<16} {tpm_info:<20} {batch_info:<12} {cooldown_info:<12} {violations_str:<12}")
 
     print()
 
     # Résumé global
-    print(f"\n{'='*80}")
+    print(f"\n{'='*90}")
     print("📋 RÉSUMÉ GLOBAL")
-    print(f"{'='*80}")
+    print(f"{'='*90}")
 
     total_violations = sum(len(v) for v in all_violations.values())
     providers_violated = [p for p, v in all_violations.items() if v]
 
     if total_violations == 0:
         print("✅ SUCCÈS: Aucune violation de quota détectée")
-        print("   → Les limites RPM/TPM sont respectées sur chaque minute isolée")
-        print("\n💡 Implications:")
-        print("   • Les providers Gemma à quota illimité n'ont pas été rejetés pour dépassement")
-        print("   • Les erreurs 500 observées sont indépendantes des quotas RPM/TPM")
-        print("   • À investiguer: problèmes serveur transitoires, versions de modèles instables")
     else:
         print(f"🚨 ALERTE: {total_violations} violations détectées")
-        print(f"   Providers affectés: {', '.join(providers_violated)}")
 
-        # Diagnostic
-        print("\n📌 DIAGNOSTIC:")
-        for provider in providers_violated:
-            violations = all_violations[provider]
-            print(f"\n   {provider}:")
-
-            rpm_violations = [v for v in violations if v["type"] == "RPM"]
-            tpm_violations = [v for v in violations if v["type"] == "TPM"]
-
-            if rpm_violations:
-                max_rpm_excess = max(v["excess"] for v in rpm_violations)
-                print(f"     • RPM: {len(rpm_violations)} minutes hors limites (max excess: +{max_rpm_excess})")
-                for v in rpm_violations[:3]:
-                    print(f"       - {v['minute']}: {v['value']} req (limit: {v['limit']})")
-
-            if tpm_violations:
-                max_tpm_excess = max(v["excess"] for v in tpm_violations)
-                print(f"     • TPM: {len(tpm_violations)} minutes hors limites (max excess: +{max_tpm_excess})")
-                for v in tpm_violations[:3]:
-                    print(f"       - {v['minute']}: {v['value']} tokens (limit: {v['limit']})")
-
-    # Analyse de marge et recommandations
-    print("\n" + "=" * 80)
-    print("📈 ANALYSE DE MARGE ET RECOMMANDATIONS")
-    print("=" * 80)
-
-    providers_with_high_usage = []
-    providers_with_low_usage = []
-
-    for row in table_data:
-        if row["rpm_limit"] == float('inf') or row["rpm_max"] == 0:
-            continue
-
-        rpm_usage = row["rpm_usage"]
-        if rpm_usage >= 70:
-            providers_with_high_usage.append((row["provider"], rpm_usage))
-        elif rpm_usage < 20:
-            providers_with_low_usage.append((row["provider"], rpm_usage))
-
-    if providers_with_high_usage:
-        print("\n⚠️  PROVIDERS AVEC FORTE UTILISATION (>70% du quota RPM):")
-        for provider, usage in sorted(providers_with_high_usage, key=lambda x: x[1], reverse=True):
-            print(f"   • {provider}: {usage:.0f}% du quota")
-        print("   → Considérez augmenter RPM_limit ou répartir sur d'autres providers")
-
-    if providers_with_low_usage:
-        print("\n💚 PROVIDERS AVEC UTILISATION BASSE (<20% du quota RPM):")
-        for provider, usage in sorted(providers_with_low_usage, key=lambda x: x[1]):
-            print(f"   • {provider}: {usage:.0f}% du quota (marge de sécurité: {100-usage:.0f}%)")
-
-    print("\n✅ RECOMMANDATION GLOBALE:")
-    if total_violations == 0:
-        print("   → Quotas RPM/TPM correctement dimensionnés")
-        print("   → Les fallbacks ne proviennent pas de dépassements de quota")
-        print("   → Focus sur saturation concurrente et timeout provider")
-    else:
-        print("   → Ajuster les limites RPM/TPM pour éviter futures violations")
-        print("   → Réduire worker_concurrency si violations persisten")
+    if total_cooldowns > 0:
+        print(f"⚠️  {total_cooldowns} cooldowns detectés (errors 5xx/429)")
 
     print()
 
