@@ -52,10 +52,22 @@ ps:
 	docker compose ps
 
 error:
-	grep "| ERROR    | " ./experiments/current/app.log || true
+	python3 scripts/errors.py $(if $(LOG),$(LOG),experiments/current/app.log)
 
 warning:
-	grep "| WARNING  | " ./experiments/current/app.log || true
+	python3 scripts/warnings.py $(if $(LOG),$(LOG),experiments/current/app.log)
+
+## Rapport de santé « agent-ready » du dernier run. Usage: make report [RUN=experiments/archive/<date>] [OUT=rapport.md]
+report:
+	python3 scripts/debug/run_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
+
+## Analyse débit vs capacité LLM du dernier run. Usage: make capacity [RUN=… OUT=…]
+capacity:
+	python3 scripts/debug/llm_capacity.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
+
+## Analyse de la phase d'init : timeline des étapes, réchauffage des caches (OTP/OSMnx/LLM), bugs de démarrage. Usage: make init [RUN=… OUT=…]
+init:
+	python3 scripts/debug/init_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
 
 ## Remove containers, volumes and images
 clean:
@@ -76,17 +88,17 @@ clean_all:
 purge_cache:
 	@echo "🗑️  Cache Docker builder..."
 	docker builder prune -a -f
-	@echo "🗑️  Cache OSMnx graphs (data/osmnx_cache)..."
-	rm -f data/osmnx_cache/*.pkl
+	@echo "🗑️  Cache OSMnx graphs (data/cache/osmnx)..."
+	rm -f data/cache/osmnx/*.pkl
 	@echo "🗑️  Cache OSMnx local (llm-agents/osmnx_cache)..."
 	rm -f llm-agents/osmnx_cache/*.pkl
 	@echo "🗑️  Cache scripts OSMnx (scripts/general/cache)..."
 	rm -f scripts/general/cache/*.pkl
 	@echo "🗑️  Cache pipeline eqasim (eqasim-toulouse/cache)..."
 	rm -rf eqasim-toulouse/cache/*.cache
-	@echo "🗑️  Cache eqasim (data/eqasim_cache, data/eqasim_output)..."
-	rm -rf data/eqasim_cache/*.cache
-	rm -f data/eqasim_output/*.json
+	@echo "🗑️  Cache eqasim (data/cache/eqasim) + population générée (data/population)..."
+	rm -rf data/cache/eqasim/*.cache
+	rm -f data/population/*.json
 	@echo "🗑️  Cache RAPTOR/Solari..."
 	rm -f llm-agents/raptor_cache.pickle
 	@echo "✅ Tous les caches purgés."
@@ -155,18 +167,14 @@ wait-ready:
 ## Start all services then launch the GAMA experiment
 ## Usage: make run [CONFIG=my_config.yaml] [EXPERIMENT_NAME=e]
 run:
-	@read -p "Voulez-vous supprimer l'historique Prometheus/Grafana ? (y/N) : " ans; \
-	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || [ "$$ans" = "yes" ] || [ "$$ans" = "YES" ]; then \
-		echo "🗑️  Arrêt de Grafana et Prometheus..."; \
-		docker compose stop grafana prometheus 2>/dev/null || true; \
-		docker compose rm -f grafana prometheus 2>/dev/null || true; \
-		echo "🗑️  Suppression des données Grafana et Prometheus..."; \
-		rm -rf data/grafana_data data/prometheus_data; \
-		echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
-		docker compose exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r docker compose exec -T redis redis-cli del 2>/dev/null || true; \
-	else \
-		echo "⏩ Conservation des données existantes."; \
-	fi
+	echo "🗑️  Arrêt de Grafana et Prometheus..."; \
+	docker compose stop grafana prometheus 2>/dev/null || true; \
+	docker compose rm -f grafana prometheus 2>/dev/null || true; \
+	echo "🗑️  Suppression des données Grafana et Prometheus..."; \
+	rm -rf data/grafana_data data/prometheus_data; \
+	echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
+	docker compose exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r docker compose exec -T redis redis-cli del 2>/dev/null || true; \
+
 	@$(MAKE) up
 	@$(MAKE) wait-ready
 	@if pgrep -f "$(GAMA_BIN)" > /dev/null; then \

@@ -17,7 +17,7 @@ if __name__ == "__main__":
         settings = settings.force_reload()  # workdir dérivé + dossier créé + config copié
 
     # Backup important files
-    backup_file_if_exists(settings.app.history_file_v2)
+    backup_file_if_exists(settings.app.agent_memory_events_jsonl)
 
     # Set up logging
     setup_logging(settings)

@@ -9,17 +9,20 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 ```
 [Événements de simulation et décisions]
 └── Mémoire Court Terme (Python RAM — isolation par activity_id)
-    └── Vidage périodique (toutes les 6h de temps simulé)
-        └── Inférence de synthèse LLM
-            └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
-                └── Index partagé / partitionnement logique par person_id
+    └── Seuil atteint (stm_reflection_min_entries entrées dans le buffer)
+        └── Appel gateway llm_module (catégorie stm_reflection)
+            └── Réflexion narrative + concepts extraits
+                └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
+                    └── Index partagé / partitionnement logique par person_id
+                        └── Self-reflection multi-jours (intervalle temps : long_term_self_reflect_interval_days)
+                            └── Appel gateway llm_module (catégorie ltm_self_reflection)
 ```
 
 ### Court terme (STM)
 
 - Stockée en RAM Python dans une liste ordonnée de `MemoryEntry`
 - Isolation par `activity_id` : chaque activité a sa propre fenêtre contextuelle
-- Purgée toutes les **6h de temps simulé**, déclenchant une synthèse vers la LTM
+- Purgée quand le buffer atteint **`stm_reflection_min_entries`** entrées (seuil configurable) — déclenchement par volume, pas par intervalle de temps
 - Implémentation : `llm-agents/llm/shortterm.py`
 
 ### Long terme (LTM — ChromaDB)
@@ -44,27 +47,114 @@ Les souvenirs récents et pertinents remontent dans le contexte LLM de l'agent.
 
 Le cache sémantique est **orthogonal à la mémoire cognitive** : il évite d'appeler le LLM quand une situation de mobilité similaire a déjà été évaluée, sans chercher à reproduire un raisonnement narratif.
 
+Le cache est **hybride** : il se comporte différemment selon que l'agent a déjà vécu quelque chose ou non.
+
 ```
 [Évaluation d'un itinéraire]
-└── Lookup : similarité cosinus sur le vecteur (options + historique + purpose)
-    ├── Score ≥ semantic_threshold → retourne l'index de décision sans appel LLM
-    │                                 (mode = "cache:<modes>")
-    └── Score < threshold → appel LLM puis store asynchrone dans le cache
+│
+├── Filtre déterministe des conditions factuelles (toujours appliqué) :
+│     agent_id + activity_id + catégorie de jour + tranche 10 min + hash(options, météo)
+│   Toute différence ⇒ le cache est ignoré.
+│
+├── LTM vide (typiquement : tout le bootstrap)
+│   └── Correspondance exacte (`scroll` clé-valeur, ~0,1 ms, aucun embedding)
+│       ├── Trouvé → décision resservie
+│       └── Sinon  → appel LLM, puis store avec `memory_empty=True`
+│
+└── LTM remplie
+    └── Embedding de la LTM courante, puis similarité cosinus (`query_points`)
+        contre les LTM des décisions stockées aux mêmes conditions
+        ├── score ≥ `cache.semantic_threshold` → décision resservie
+        └── score <  seuil (ou aucun candidat)  → appel LLM avec la LTM,
+                                                   puis store avec `memory_empty=False`
 ```
 
-- Stockage : disque local dans `data/llm_cache/<population_name>/`
+Sans souvenir, deux décisions prises dans les mêmes conditions factuelles sont nécessairement identiques : l'embedding serait du calcul pur perte. Dès que l'agent a un vécu, ce vécu pèse sur sa décision, et le cache ne la resert que si la mémoire courante est proche de celle qui l'avait produite — **c'est ce qui permet à l'agent d'apprendre** au lieu de rejouer indéfiniment sa première décision.
+
+Les deux familles de points sont **étanches** (`memory_empty` fait partie du filtre) : une décision prise sans souvenir n'est jamais resservie à un agent qui en a, et réciproquement.
+
+- Stockage : disque local dans `data/llm_cache/<checksum_prompt>/<population_name>/`
 - Activation : `cache.enabled: true` dans la config d'expérience
 - Le store post-inférence est **fire-and-forget** (n'alourdit pas le chemin critique)
+- **Le payload LLM — et donc la requête ChromaDB de mémoire long terme — n'est construit
+  que si l'agent a des souvenirs**, ou à défaut sur un miss. Le bootstrap (LTM vide) ne paie
+  donc ni requête LTM ni embedding sur le chemin nominal.
+- Les points `memory_empty=True` portent un vecteur neutre : ils ne sont relus que par filtre.
+- **Accès sérialisé** : le client Qdrant embarqué (`QdrantClient(path=...)`) n'est pas
+  thread-safe ; toutes les opérations base (`scroll`, `query_points`, `upsert`) passent sous
+  un verrou dédié (`_db_lock`). Sans ce verrou, les lookups/stores concurrents lancés via
+  `asyncio.to_thread` corrompent l'index (erreurs "operands could not be broadcast",
+  erreurs SQLite) et le cache ne sert plus rien.
+- **Alarme corruption** : après 5 erreurs Qdrant consécutives, une ligne
+  `[ALARME] Cache LLM` (niveau ERROR, visible via `make error`) signale que la base est
+  probablement corrompue et qu'il faut supprimer le répertoire de cache.
 
 ### Quand le cache est-il pertinent ?
 
-Le vecteur de lookup encode les **options de transport disponibles**, l'**historique récent** et le **but du déplacement**. Deux agents avec les mêmes options de transport, le même profil d'historique et le même but de déplacement reçoivent la même décision sans appel LLM supplémentaire.
+La clé de lookup encode l'**agent**, l'**activité**, la **catégorie de jour** (semaine/week-end), la **tranche de 10 minutes**, les **options de transport disponibles** et la **météo** — plus, sur la branche sémantique, la **mémoire long terme** de l'agent. Un même agent replacé dans le même contexte de décision *et* avec un vécu comparable reçoit la même décision sans appel LLM supplémentaire.
+
+Corollaire : le cache est réutilisable d'un run à l'autre pour un scénario donné, mais une réflexion LTM qui change significativement le vécu d'un agent invalide ses décisions cachées — par construction.
+
+> ⚠️ Le filtre inclut désormais `weekday` et `memory_empty`. Les caches produits avant cette
+> évolution ne portent pas ces champs et ne seront jamais retrouvés : supprimer
+> `data/llm_cache/` pour repartir proprement.
+
+### Cache LRU des métadonnées LTM
+
+`MultiUserLongTermMemory` garde en mémoire les métadonnées des agents (`~3 Ko`/agent), plafonnées par `agent.long_term_max_loaded_metadata` (défaut **5000**). Ce plafond **doit rester au-dessus du nombre d'agents** : en dessous, le parcours round-robin des agents provoque une éviction — donc une relecture et une réécriture disque — à chaque décision. Aucun `gc.collect()` n'est déclenché à l'éviction (`_cleanup_metadata_cache` est appelé depuis l'event loop).
 
 ---
 
 ## Cache des itinéraires (CachedTripHelper)
 
-En mode `SOLARI` (mode historique, alternatif à OTP), un cache d'itinéraires pré-calculés est utilisé via `CachedTripHelper`. En mode `OTP` (mode courant), les itinéraires sont calculés dynamiquement sans cache d'itinéraires.
+Le cache persistant d'itinéraires (`OtpPersistentCache`, SQLite) mémorise les itinéraires
+par couple origine/destination/heure (`gtfs.otp_cache_enabled`, défaut `true`), les réutilise
+à une heure de départ proche par décalage temporel, et blackliste les paires O/D sans
+itinéraire ; la base est persistée par population dans `llm-agents/data/otp_cache/<population>/`.
+La clé de cache inclut les modes disponibles pour l'agent (`include_car` **et** `include_bike`) :
+deux agents avec des équipements différents (avec/sans vélo) ne partagent jamais une entrée,
+sinon l'option vélo pourrait manquer silencieusement dans les choix proposés au LLM.
+
+Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache` :
+
+- **Mode `OTP` (principal)** : la factory enrobe `OTPTripHelper` dans **`OtpCachedTripHelper`**,
+  un décorateur **fin** qui **ne change pas** la stratégie de recherche — sur un miss il
+  délègue l'appel verbatim à OTP, puis stocke. Le cache s'intercale à la frontière
+  appelant → helper (`_compute_move_for_activity`), où les requêtes utilisent toujours les
+  paramètres par défaut. Le cache est initialisé par population dans `handle.application`
+  (`init_otp_persistent_cache`).
+- **Mode `SOLARI` (historique)** : `CachedTripHelper` enrobe `SolariTripHelper` et applique
+  en plus une stratégie de recherche élargie sur un miss (`do_get_iteraries_v2` : expansion
+  multi-mode accès/sortie + dédup).
+
+> ⚠️ **Approximation temporelle** : la clé bucketise l'heure de départ par tranches de
+> 10 min et un itinéraire stocké est réutilisé à une heure proche par décalage des
+> timestamps. Pour les segments TC, cela décale les horaires planifiés de ≤ 10 min (les
+> mêmes que ceux du cache SOLARI historique). Si une reprise strictement exacte est requise,
+> passer la clé sur l'heure exacte (sans décalage).
+
+> ⚠️ **Limitation connue — `fixed_day` et date absolue** : la clé du cache OTP inclut la
+> **date simulée réelle** (`YYYY-MM-DD`), calculée avant le remapping `gtfs.fixed_day`
+> effectué dans `OTPTripHelper`. Avec `fixed_day` actif, deux dates simulées différentes
+> envoient pourtant la même requête à OTP (mêmes horaires GTFS) mais génèrent des clés
+> distinctes : un cache réchauffé pour le jour J est donc **intégralement raté** pour une
+> simulation au jour J+1. TODO (voir `OtpPersistentCache.make_key`) : baser la partie date
+> de la clé sur la date fixe (ou le jour de semaine) quand `fixed_day` est actif, à l'image
+> de la clé weekday d'`OsmnxPersistentCache`.
+
+Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
+**toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`). La clé voiture
+inclut le **jour de la semaine + tranche horaire** (granularité du facteur de congestion) mais
+**pas la date absolue** : deux runs à des dates calendaires différentes mais même weekday
+réutilisent les mêmes trajets. Marche/vélo sont indépendants du temps (coords + mode).
+Combiné à la seed déterministe d'échantillonnage des agents
+(`data.population_sample_seed`, défaut 42), rejouer une simulation retire exactement les mêmes
+agents → mêmes trajets → hits de cache au lieu de recalculs.
+
+Le cache est initialisé dans `_prepare_population` (`handle.application`) **avant** toute
+opération de routage, si bien que le Pass 2 de génération de population (calcul des temps de
+trajet pour l'ajustement des plannings) en bénéficie aussi : une régénération du fichier
+population réutilise les routes déjà calculées au lieu de tout recalculer via OSMnx.
 
 ---
 
@@ -79,5 +169,61 @@ Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis Op
 | Cache | Technologie | Persistance | Clé |
 |-------|-------------|------------|-----|
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
-| Cache sémantique LLM | Disque local | Disque | Vecteur (options + historique + purpose) |
+| Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
+| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | date + bucket 10 min + coords + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | coords + mode (+ jour-de-semaine/heure pour la voiture) |
 | Graphes OSMnx | Fichiers pickle | Volume Docker | Zone géographique + mode |
+
+---
+
+## Observabilité du taux de cache
+
+Les trois caches de décision/routage exposent un **taux de hit** sous deux formes :
+
+- **Logs** : une ligne `[cache] OTP X% (h/n) · OSMnx Y% (h/n) · LLM Z% (h/n)` est émise à la
+  fin du warm-up (`bootstrap_all_agents`) et à chaque `[sync] START`. Une source affiche
+  `off` quand elle n'a reçu aucune requête (cache désactivé ou non sollicité). Format
+  construit par `_format_cache_hit_rates()` (`simulation_controller.py`), à partir des
+  accesseurs `get_otp_cache_stats()`, `get_osmnx_cache_stats()`, `get_llm_cache_stats()`.
+- **Prometheus** : gauges `trip_cache_hit_ratio` (OTP), `osmnx_cache_hit_ratio` (OSMnx)
+  et compteurs `llm_cache_hits_total` / `llm_cache_misses_total` (LLM).
+
+Les compteurs hits/lookups sont **process-wide** et cumulés depuis le démarrage : les
+pourcentages convergent donc vers le taux global de la session.
+
+- **Log par décision** : chaque hit du cache sémantique LLM est aussi tracé ligne par ligne
+  dans `workdir/llm_cache_hits.jsonl` (`agent_id`, `activity_id`, `sim_ts`, `sim_day`, `mode`,
+  `category`), via `log_llm_cache_hit()` (`agents/llm_agent.py`). Un hit ne déclenchant aucun
+  appel LLM, il n'apparaît pas dans `llm_exchanges.jsonl` ; ce fichier permet donc de compter
+  les appels économisés et de ventiler l'économie de tokens par jour de simulation. La valeur
+  en tokens économisés est estimée côté analyse au coût moyen par agent des appels réels.
+
+> Les échanges LLM (`llm_exchanges.jsonl`) portent désormais `sim_ts`/`sim_day` (timestamp
+> simulé issu de `AgentSpec.departure_timestamp`), ce qui permet de bucketiser la
+> consommation de tokens par jour *simulé* et non par horloge murale.
+
+### Couverture du cache LLM et diagnostic des miss
+
+Un hit rate bas à l'init **n'est pas un problème de taille** (Qdrant embarqué n'a pas de
+plafond) mais de **couverture** : le chemin exact utilisé par le bootstrap
+(`memory_empty=True`) ne sert une décision que si le contexte (`agent_id`, `activity_id`,
+`weekday`, `time_slice`, `state_hash`) a déjà été **stocké lors d'un run précédent**. Or
+le `store` n'a lieu que si l'appel LLM réussit (`llm_result.ok`) : si la gateway sature
+pendant le run de peuplement, les décisions échouées ne sont jamais mises en cache et
+manquent au run suivant — un déficit **auto-entretenu** tant qu'un run n'a pas réussi
+à 100 %.
+
+Deux traces, ajoutées pour objectiver la couverture sans rejouer un run :
+
+- **Au démarrage** (`LlmSemanticCache.log_coverage()`), une ligne
+  `[cache] couverture LLM au démarrage : N points (E exact/bootstrap, A agents couverts,
+  S obsolètes weekday=None)` + les gauges `llm_cache_points_total`,
+  `llm_cache_points_exact`, `llm_cache_agents_covered`, `llm_cache_points_stale` — affichées
+  dans les dashboards Grafana `02_init_bootstrap` (instantané + % de couverture population)
+  et `06_cache_llm` (tendance inter-runs). Les points
+  `weekday=None` proviennent d'un **schéma antérieur** (avant l'ajout du champ `weekday`) et
+  ne matcheront jamais le filtre courant : au-delà de 30 % un `[ALARME]` invite à repurger.
+- **Sur miss** `no_candidates` du chemin exact (borné aux ~30 premiers), une ligne classe la
+  cause : *agent ABSENT du cache* (trou de couverture) vs *clé différente*
+  (météo/créneau/state_hash) — l'ensemble `_exact_agents` renseigné au démarrage évite toute
+  requête DB supplémentaire.

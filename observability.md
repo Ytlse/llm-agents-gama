@@ -134,6 +134,36 @@ depuis la soumission jusqu'à la réponse.
 
 ---
 
+## Observations GAMA → Controller
+
+Les agents GAMA émettent des observations via MQTT (`observation/data`). Chaque observation porte un `env_ob_code` qui détermine son traitement.
+
+| Code | Émis quand | Effet Python |
+|------|-----------|--------------|
+| `transfer` | L'agent termine un segment de marche de correspondance | Ajouté à la mémoire court terme de l'agent LLM |
+| `transit` | L'agent termine un segment en véhicule TC | Ajouté à la mémoire court terme |
+| `wait_in_stop` | L'agent monte dans un véhicule TC (durée d'attente) | Ajouté à la mémoire court terme |
+| `arrival` | L'agent atteint sa destination finale | Log dans `gama_arrivals.csv`, transition ACTIVE → IDLE, planification activité suivante |
+| `tc_timeout` | L'agent a attendu un véhicule TC > 30 min — téléporté à destination, plan abandonné | Log dans `gama_arrivals.csv` avec `timed_out=True`, transition ACTIVE → IDLE, planification activité suivante (sans rescheduling de retard) |
+
+### Fichier `gama_arrivals.csv`
+
+Un fichier par run — une ligne par arrivée (normale ou timeout).
+
+| Colonne | Description |
+|---------|-------------|
+| `move_id` | Identifiant du déplacement |
+| `person_id` | Identifiant de l'agent |
+| `arrive_at` | Timestamp d'arrivée réelle (Unix, secondes simulation) |
+| `expected_arrive_at` | Timestamp d'arrivée prévu par le plan OTP |
+| `delay_s` | `arrive_at - expected_arrive_at` (négatif = en avance) |
+| `started_at` | Timestamp de départ effectif |
+| `schedule_at` | Timestamp de départ prévu |
+| `departure_delay_s` | `started_at - schedule_at` |
+| `timed_out` | `True` si le trip a été abandonné par timeout TC — l'agent n'est jamais arrivé normalement |
+
+---
+
 ## Vue d'ensemble du flux de données
 
 ```

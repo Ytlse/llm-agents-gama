@@ -6,7 +6,7 @@ from settings import settings
 from inputs.gtfs.reader import GTFSData
 from world import *
 from trip_helper.base import TripHelper
-from trip_helper.cached_triphelper import CachedTripHelper
+from trip_helper.cached_triphelper import CachedTripHelper, OtpCachedTripHelper
 from trip_helper.otp import OTPTripHelper
 from inputs.population import EqasimJSONPopulationLoader, PersonCloseToTheStopFilter
 from trip_helper import SolariTripHelper
@@ -68,6 +68,14 @@ def init_static_data() -> StaticWorldData:
         logger.info("Using OTP trip helper")
         wait_for_all_otp()
         trip_helper = OTPTripHelper(gtfs_data=gtfs_data)
+        # Cache persistant OTP en mode principal : décorateur FIN qui ne change pas la
+        # stratégie de recherche (délègue verbatim sur miss). Le cache lui-même est
+        # initialisé par population dans handle.application (init_otp_persistent_cache).
+        if settings.gtfs.otp_cache_enabled:
+            trip_helper = OtpCachedTripHelper(trip_helper)
+            logger.info("[cache] OTP itinerary cache wired (OtpCachedTripHelper)")
+        else:
+            logger.warning("[cache] OTP itinerary cache disabled (gtfs.otp_cache_enabled=false)")
     else:
         logger.info("Using Solari trip helper")
         trip_helper = CachedTripHelper(

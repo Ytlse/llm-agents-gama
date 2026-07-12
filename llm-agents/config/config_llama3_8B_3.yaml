@@ -1,6 +1,5 @@
 
 gtfs:
-  otp_cache_enabled: false
   mode: OTP
   max_trip_candidates: 3
 

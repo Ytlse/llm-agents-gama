@@ -21,7 +21,7 @@ from llm_module.adapters.base import (
     BaseAdapter,
     register_adapter,
 )
-from llm_module.settings.models import InternalRequest, LLMOutput
+from llm_module.core.models import InternalRequest, LLMOutput
 
 
 @register_adapter
@@ -53,19 +53,19 @@ class OpenAIAdapter(BaseAdapter):
 
         base_url = self._get_base_url()
 
-        with httpx.Client(timeout=120.0) as client:
-            response = client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key.get_secret_value()}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
+        response = self._http().post(
+            f"{base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key.get_secret_value()}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
 
         self._raise_for_status(response)
 
         data = response.json()
+        self._check_openai_finish_reason(data)
         raw_content = data["choices"][0]["message"]["content"]
         tokens_in   = data.get("usage", {}).get("prompt_tokens", 0)
         tokens_out  = data.get("usage", {}).get("completion_tokens", 0)
@@ -73,9 +73,9 @@ class OpenAIAdapter(BaseAdapter):
         return self._parse_output(raw_content), tokens_in, tokens_out
 
     def ping(self) -> bool:
-        from llm_module.tasks.llm_config import settings
+        from llm_module.config import get_settings
         try:
-            model = settings.providers[self._instance_name].default_model
+            model = get_settings().providers[self._instance_name].default_model
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     f"{self._get_base_url()}/chat/completions",

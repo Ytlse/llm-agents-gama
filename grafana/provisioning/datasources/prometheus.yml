@@ -8,3 +8,14 @@ datasources:
     access: proxy
     isDefault: true
     editable: true
+
+  # Datasource JSON (plugin Infinity) pour le panneau "Dernières erreurs LLM"
+  # du cockpit — Prometheus ne stockant que du numérique, les messages d'erreur
+  # sont servis en JSON par l'endpoint GET /errors/recent de la gateway.
+  - name: Infinity
+    type: yesoreyeram-infinity-datasource
+    uid: infinity1
+    access: proxy
+    url: http://api:8000
+    isDefault: false
+    editable: true

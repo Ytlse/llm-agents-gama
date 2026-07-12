@@ -3,4 +3,8 @@
 # Pour activer le cache LLM dans une expérience, ajouter dans le yaml d'expérience :
 #   cache:
 #     enabled: true
-#     cache_dir: /app/cache/llm_cache
+#     cache_dir: /app/data/llm_cache
+#
+# Le cache de routage persistant OTP (gtfs.otp_cache_enabled) n'est volontairement
+# surchargé dans AUCUNE config : la valeur par défaut de settings.py (True) fait foi
+# partout, pour éviter qu'une config d'expérience le désactive par inadvertance.

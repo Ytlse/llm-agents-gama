@@ -49,9 +49,9 @@ En mode **Solari + CachedTripHelper**, `T_otp_start / T_otp_end` capturent le ca
 |-----------|--------|-------------|
 | `T_ltm_start` | Avant la requête ChromaDB | Début de la requête vectorielle mémoire long terme. Absent (`null`) si LTM désactivée. |
 | `T_ltm_end` | Après la requête ChromaDB | `T_ltm_end - T_ltm_start` ≈ durée requête LTM. |
-| `T_llm_start` | Avant `execute_async()` | Début du POST `/tasks` vers le gateway LLM. |
-| `T_llm_sent` | `T_llm_start + _post_ms / 1000` | Fin du POST (tâche créée, `task_id` reçu). `T_llm_sent - T_llm_start` ≈ durée HTTP POST création tâche. |
-| `T_llm_result` | Après retour de `execute_async()` | Fin du long-poll Pub/Sub. `T_llm_result - T_llm_sent` ≈ attente résultat LLM (micro-batch + worker + publish). |
+| `T_llm_start` | Avant `LLMGatewayClient.execute()` | Début du POST `/tasks` vers le gateway LLM. |
+| `T_llm_sent` | `T_llm_start + timing.post_ms / 1000` | Fin du POST (tâche créée, `task_id` reçu). `T_llm_sent - T_llm_start` ≈ durée HTTP POST création tâche. |
+| `T_llm_result` | Après retour de `execute()` | Fin du long-poll Pub/Sub. `T_llm_result - T_llm_sent` ≈ attente résultat LLM (micro-batch + worker + publish). |
 
 ---
 
@@ -96,7 +96,7 @@ Un fichier par run de simulation — une ligne = un agent LLM par cycle de sched
 | `T_otp_end` | float | Timestamp Unix — après `trip_helper.get_itineraries()` |
 | `T_ltm_start` | float\|null | Timestamp Unix — avant ChromaDB (null si LTM désactivée) |
 | `T_ltm_end` | float\|null | Timestamp Unix — après ChromaDB |
-| `T_llm_start` | float | Timestamp Unix — avant `execute_async()` |
+| `T_llm_start` | float | Timestamp Unix — avant `LLMGatewayClient.execute()` |
 | `T_llm_sent` | float | Timestamp Unix — après POST tâche soumise |
 | `T_llm_result` | float | Timestamp Unix — après retour long-poll |
 | `T_extract_end` | float | Timestamp Unix — après extraction + remapping résultat |

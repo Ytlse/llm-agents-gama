@@ -201,7 +201,22 @@ species llm_agent_async skills:[network] {
 				write "[Python] " + string(log_payload["message"]);
 				continue;
 			}
-			
+
+			/**
+			 *   --------   THROTTLE (contre-pression prédictive, ticket 003)   --------------
+			 * Régime dégradé signalé par Python : débit LLM réel et vitesse de simulation.
+			 * Le champ `message` reste autoporteur (traité comme un log) ; les globales
+			 * alimentent l'UI de l'expérience (monitor/overlay).
+			 */
+			if topic = "system/throttle" {
+				map<string, unknown> t <- map<string, unknown>(payload_data["payload"]);
+				THROTTLE_ACTIVE  <- bool(t["active"]);
+				LLM_RATE_PER_MIN <- float(t["llm_rate_per_min"]);
+				SIM_RATIO_PYTHON <- float(t["sim_ratio"]);
+				write "[Python][throttle] " + string(t["message"]);
+				continue;
+			}
+
 			/** 
 			 *   --------   ACTION/DATA   --------------
 			 */

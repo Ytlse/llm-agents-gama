@@ -20,7 +20,7 @@ from trip_helper import TripHelper
 from trip_helper.otp_persistent_cache import OtpPersistentCache
 from models import Location, TravelPlan
 from world import WorldModel
-from utils import random_uuid
+from utils import create_background_task, random_uuid
 from settings import settings
 from loguru import logger
 import asyncio
@@ -30,6 +30,29 @@ TRIP_CACHE_HIT_RATIO = Gauge(
     'trip_cache_hit_ratio',
     'Ratio cache hits / total du CachedTripHelper (0-1)',
 )
+
+# Compteurs process-wide hits/lookups pour reporting du taux de cache OTP dans les logs.
+# Un hit = itinéraire servi depuis le cache OU paire O/D blacklistée (aucun appel OTP).
+_OTP_CACHE_HITS = 0
+_OTP_CACHE_LOOKUPS = 0
+
+
+def get_otp_cache_stats() -> tuple[int, int]:
+    """Retourne (hits, lookups) cumulés du cache OTP depuis le démarrage."""
+    return _OTP_CACHE_HITS, _OTP_CACHE_LOOKUPS
+
+
+# Singleton process-wide du cache persistant OTP, utilisé par OtpCachedTripHelper en mode
+# OTP. Initialisé par population (init_otp_persistent_cache), comme le cache OSMnx.
+_otp_persistent_cache: "OtpPersistentCache | None" = None
+
+
+def init_otp_persistent_cache(cache_dir: str) -> None:
+    """Initialise le cache persistant OTP partagé (un sous-dossier par population)."""
+    global _otp_persistent_cache
+    _otp_persistent_cache = OtpPersistentCache(cache_dir)
+    logger.info(f"[otp-cache] Persistent cache enabled at {cache_dir}")
+
 
 class CachedTripHelper(TripHelper):
     def __init__(self,
@@ -93,7 +116,7 @@ class CachedTripHelper(TripHelper):
         ]
         return len(set(keys)) < len(keys)  # if there are duplicates, it's circular
     
-    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False, arrive_by: bool = False, _pipeline_rec=None) -> list[TravelPlan]:
+    async def do_get_iteraries_v2(self, origin: Location, destination: Location, departure_time: int, include_car: bool = False, include_bike: bool = True, arrive_by: bool = False, _pipeline_rec=None) -> list[TravelPlan]:
         import time as _time
         max_transfers = self.max_transfers
         time_step = settings.world.time_step
@@ -130,6 +153,7 @@ class CachedTripHelper(TripHelper):
                 destination=destination,
                 departure_time=departure_time,
                 include_car=include_car,
+                include_bike=include_bike,
                 max_transfers=max_transfers,
                 include_transit=False,
                 arrive_by=False,
@@ -187,11 +211,12 @@ class CachedTripHelper(TripHelper):
                                destination: Location,
                                departure_time: int,
                                include_car: bool = False,
+                               include_bike: bool = True,
                                arrive_by: bool = False,
                                _pipeline_rec=None) -> list[TravelPlan]:
         max_transfers = self.max_transfers
         recursion_search_depth = self.recursion_search_depth
-        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, max_transfers=max_transfers, arrive_by=arrive_by)
+        itineraries: list[TravelPlan] = await self.trip_helper.get_itineraries(origin, destination, departure_time, include_car=include_car, include_bike=include_bike, max_transfers=max_transfers, arrive_by=arrive_by)
         if not itineraries:
             return []
         
@@ -259,6 +284,7 @@ class CachedTripHelper(TripHelper):
                               destination: Location,
                               departure_time: int,
                               include_car: bool = False,
+                              include_bike: bool = True,
                               arrive_by: bool = False,
                               _pipeline_rec=None,
                               ) -> list[TravelPlan]:
@@ -266,7 +292,7 @@ class CachedTripHelper(TripHelper):
         _t_cache = _time.monotonic()
 
         if self.otp_cache_enabled:
-            key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by)
+            key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
             bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
             is_blacklisted = await self.persistent_cache.is_blacklisted_async(bl_key)
             cached = None if is_blacklisted else await self.persistent_cache.lookup_async(key)
@@ -276,6 +302,12 @@ class CachedTripHelper(TripHelper):
             cached = None
 
         cache_hit = cached is not None or is_blacklisted
+
+        if self.otp_cache_enabled:
+            global _OTP_CACHE_HITS, _OTP_CACHE_LOOKUPS
+            _OTP_CACHE_LOOKUPS += 1
+            if cache_hit:
+                _OTP_CACHE_HITS += 1
 
         if _pipeline_rec is not None:
             _pipeline_rec.P3_1_ms = (_time.monotonic() - _t_cache) * 1000
@@ -298,19 +330,96 @@ class CachedTripHelper(TripHelper):
                     leg.start_time += delta_ms
                     leg.end_time += delta_ms
         else:
-            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, arrive_by=arrive_by, _pipeline_rec=_pipeline_rec)
+            itineraries = await self.do_get_iteraries(origin, destination, departure_time, include_car=include_car, include_bike=include_bike, arrive_by=arrive_by, _pipeline_rec=_pipeline_rec)
             self._stats_cache_hit = (self._stats_cache_hit[0], self._stats_cache_hit[1] + 1)
             if itineraries:
                 for it in itineraries:
                     it.id = random_uuid()
                 if self.otp_cache_enabled:
-                    asyncio.create_task(self.persistent_cache.store_async(key, itineraries, departure_time))
+                    create_background_task(self.persistent_cache.store_async(key, itineraries, departure_time))
             else:
                 if self.otp_cache_enabled:
-                    asyncio.create_task(self.persistent_cache.blacklist_add_async(bl_key))
+                    create_background_task(self.persistent_cache.blacklist_add_async(bl_key))
 
         _hits, _total = self._stats_cache_hit
         if _total > 0:
             TRIP_CACHE_HIT_RATIO.set(_hits / _total)
 
+        return itineraries
+
+
+class OtpCachedTripHelper(TripHelper):
+    """Décorateur de cache persistant FIN pour le mode OTP (mode principal).
+
+    Contrairement à CachedTripHelper (mode SOLARI), il **ne change pas** la stratégie de
+    recherche : sur un miss il délègue l'appel verbatim au TripHelper sous-jacent
+    (OTPTripHelper), puis stocke le résultat. Le cache s'intercale uniquement à la
+    frontière appelant → helper (controller._compute_move_for_activity), où les requêtes
+    utilisent toujours les paramètres par défaut — les sous-appels internes d'OTP restent
+    non cachés et inchangés.
+
+    Clé/blacklist/décalage temporel : Un itinéraire stocké est réutilisé à une heure de départ proche par simple décalage des
+    timestamps (delta_ms), approximation déjà admise par le cache historique.
+    """
+
+    def __init__(self, trip_helper: TripHelper):
+        super().__init__()
+        self.trip_helper = trip_helper
+
+    async def get_itineraries(self,
+                              origin: Location,
+                              destination: Location,
+                              departure_time: int,
+                              include_car: bool = False,
+                              include_bike: bool = True,
+                              arrive_by: bool = False,
+                              _timing_sink: dict | None = None,
+                              **kwargs) -> list[TravelPlan]:
+        global _OTP_CACHE_HITS, _OTP_CACHE_LOOKUPS
+        cache = _otp_persistent_cache
+
+        # Cache non encore initialisé (ex. avant setup population) → pass-through.
+        if cache is None:
+            return await self.trip_helper.get_itineraries(
+                origin, destination, departure_time,
+                include_car=include_car, include_bike=include_bike,
+                arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
+
+        key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
+        bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
+        is_blacklisted = await cache.is_blacklisted_async(bl_key)
+        cached = None if is_blacklisted else await cache.lookup_async(key)
+
+        _OTP_CACHE_LOOKUPS += 1
+        if cached is not None or is_blacklisted:
+            _OTP_CACHE_HITS += 1
+        TRIP_CACHE_HIT_RATIO.set(_OTP_CACHE_HITS / _OTP_CACHE_LOOKUPS)
+
+        if is_blacklisted:
+            return []
+
+        if cached is not None:
+            itineraries, stored_departure_time = cached
+            delta_ms = (departure_time - stored_departure_time) * 1000
+            for itinerary in itineraries:
+                itinerary.start_location = origin
+                itinerary.end_location = destination
+                itinerary.start_time = int(itinerary.start_time + delta_ms)
+                itinerary.end_time = int(itinerary.end_time + delta_ms)
+                for leg in itinerary.legs:
+                    leg.start_time = int(leg.start_time + delta_ms)
+                    leg.end_time = int(leg.end_time + delta_ms)
+            return itineraries
+
+        # Miss : appel OTP verbatim (aucune modification de la stratégie de recherche).
+        itineraries = await self.trip_helper.get_itineraries(
+            origin, destination, departure_time,
+            include_car=include_car, include_bike=include_bike,
+            arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
+        if itineraries:
+            for it in itineraries:
+                it.id = random_uuid()
+            create_background_task(cache.store_async(key, itineraries, departure_time))
+        else:
+            create_background_task(cache.blacklist_add_async(bl_key))
         return itineraries

@@ -30,7 +30,7 @@ from llm_module.adapters.base import (
     extract_error_type,
     register_adapter,
 )
-from llm_module.settings.models import InternalRequest, LLMOutput
+from llm_module.core.models import InternalRequest, LLMOutput
 from llm_module.telemetry.logger import get_logger
 
 _logger = get_logger(__name__)
@@ -39,6 +39,9 @@ _logger = get_logger(__name__)
 @register_adapter
 class GoogleAdapter(BaseAdapter):
     provider_name = "google"
+
+    # Gemini peut être lent sur les gros batchs structurés.
+    request_timeout = 240.0
 
     # Mapping des rôles OpenAI → rôles Gemini
     ROLE_MAP = {
@@ -69,33 +72,51 @@ class GoogleAdapter(BaseAdapter):
             }
 
         base_url = self._get_base_url()
-        url = f"{base_url}/models/{model}:generateContent?key={api_key.get_secret_value()}"
+        # Clé API en header x-goog-api-key (jamais en query string : les URLs
+        # finissent dans les logs et les traces d'erreur).
+        url = f"{base_url}/models/{model}:generateContent"
 
         try:
-            with httpx.Client(timeout=240.0) as client:
-                response = client.post(
-                    url,
-                    headers={"Content-Type": "application/json"},
-                    json=payload,
-                )
+            response = self._http().post(
+                url,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key.get_secret_value(),
+                },
+                json=payload,
+            )
             self._raise_for_status(response)
         except httpx.TimeoutException as exc:
             _logger.warning(f"Timeout de l'API Google | model={model} error={exc}")
             # 504 correspond à Gateway Timeout, éligible au mécanisme de Retry de votre worker
-            raise ProviderServerError(self.provider_name, 504, f"Request timeout: {exc}", error_type="timeout")
+            # _instance_name (ex: "google_gemma42") et non provider_name ("google") :
+            # le cooldown est indexé sur le nom d'instance configuré dans providers.yaml.
+            raise ProviderServerError(self._instance_name, 504, f"Request timeout: {exc}", error_type="timeout")
 
         data = response.json()
         
         candidates = data.get("candidates", [])
         if not candidates:
-            raise ProviderClientError(self.provider_name, 400, f"Aucun candidat retourné. Data: {data}")
+            raise ProviderClientError(self._instance_name, 400, f"Aucun candidat retourné. Data: {data}")
             
         candidate = candidates[0]
         if "content" not in candidate or "parts" not in candidate["content"]:
             finish_reason = candidate.get("finishReason", "UNKNOWN")
-            raise ProviderClientError(self.provider_name, 400, f"Réponse bloquée ou vide. Raison: {finish_reason}")
+            raise ProviderClientError(self._instance_name, 400, f"Réponse bloquée ou vide. Raison: {finish_reason}")
 
         raw_content = candidate["content"]["parts"][0]["text"]
+
+        finish_reason = candidate.get("finishReason", "STOP")
+        if finish_reason == "MAX_TOKENS":
+            _logger.warning(
+                f"Réponse tronquée (MAX_TOKENS) — possible boucle de répétition | "
+                f"model={model} raw_preview={raw_content[:200]!r}"
+            )
+            raise ProviderServerError(
+                self._instance_name, 503,
+                f"Output truncated at MAX_TOKENS limit (possible repetition loop)",
+                error_type="max_tokens_truncation",
+            )
 
         usage      = data.get("usageMetadata", {})
         tokens_in  = usage.get("promptTokenCount", 0)
@@ -139,15 +160,18 @@ class GoogleAdapter(BaseAdapter):
         return schema
 
     def ping(self) -> bool:
-        from llm_module.tasks.llm_config import settings
+        from llm_module.config import get_settings
         try:
-            model = settings.providers[self._instance_name].default_model
+            model = get_settings().providers[self._instance_name].default_model
             api_key = self._get_api_key().get_secret_value()
-            url = f"{self._get_base_url()}/models/{model}:generateContent?key={api_key}"
+            url = f"{self._get_base_url()}/models/{model}:generateContent"
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
                     url,
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key,
+                    },
                     json={
                         "contents": [{"parts": [{"text": "Hello"}]}],
                         "generationConfig": {"maxOutputTokens": 5},

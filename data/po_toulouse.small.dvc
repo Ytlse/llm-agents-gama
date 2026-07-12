@@ -1,0 +1,6 @@
+outs:
+- md5: 3fb246a167fbf9c8a3f2ed656a4567b6.dir
+  size: 38056917
+  nfiles: 17
+  hash: md5
+  path: po_toulouse.small

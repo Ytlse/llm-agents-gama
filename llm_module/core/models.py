@@ -1,0 +1,147 @@
+"""
+core/models.py — Modèles de données Pydantic partagés entre tous les modules.
+
+Domaine pur : aucun I/O, aucun import redis/celery/httpx/fastapi.
+"""
+
+from __future__ import annotations
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+import uuid
+
+
+# ---------------------------------------------------------------------------
+# Énumérations
+# ---------------------------------------------------------------------------
+
+class TaskStatus(str, Enum):
+    PENDING   = "pending"
+    RUNNING   = "running"
+    SUCCESS   = "success"
+    FAILED    = "failed"
+
+
+# ---------------------------------------------------------------------------
+# Requête entrante (client → API Gateway)
+# ---------------------------------------------------------------------------
+
+class AgentSpec(BaseModel):
+    """Décrit un agent individuel inclus dans le prompt batch."""
+    agent_id: str
+    perception: str
+    destination: Optional[str] = None
+    destination_zone: Optional[str] = None
+    departure_time: Optional[str] = None
+    departure_timestamp: Optional[float] = None  # raw Unix timestamp for priority scoring
+    current_time: Optional[str] = None
+    context: Optional[str] = None
+    history: List[str] = Field(default_factory=list)
+    trajectories: List[Dict[str, Any]] = Field(default_factory=list)
+    goal: Optional[str] = None
+    constraints: Optional[str] = None
+    feeling: Optional[str] = None
+
+
+class LLMRequest(BaseModel):
+    """Corps de la requête POST /tasks."""
+    category: str = Field(..., description="Catégorie de la requête (selection itinéraire, ...)")
+    agents: List[AgentSpec] = Field(..., min_length=1, description="Liste des agents à simuler")
+    parameters: Dict[str, Any] = Field(default_factory=dict, description="Paramètres additionnels pour le prompt")
+    # Optionnel : forcer un fournisseur spécifique (contourne le load balancer)
+    force_provider: Optional[str] = None
+    # Optionnel : TPM minimum requis — le load balancer exclut les providers en dessous de ce seuil
+    min_tpm_required: Optional[int] = None
+    context: Optional[str] = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")
+
+
+# ---------------------------------------------------------------------------
+# Tâche interne (API → Broker → Worker)
+# ---------------------------------------------------------------------------
+
+_FALLBACK_PRIORITY_SCORE: float = 9_999_999_999.0
+
+
+class Task(BaseModel):
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    status: TaskStatus = TaskStatus.PENDING
+    request: LLMRequest
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    result: Optional[List[AgentResponse]] = None
+    error: Optional[str] = None
+    # Unix timestamp of earliest agent departure — lower score = higher priority
+    priority_score: float = _FALLBACK_PRIORITY_SCORE
+
+    # Métriques de télémétrie (remplies par le Worker)
+    provider_used: Optional[str] = None
+    latency_ms: Optional[float] = None
+    tokens_in: Optional[int] = None
+    tokens_out: Optional[int] = None
+    # Pipeline timing segments measured inside the worker (P4_4, P5_1, P5_3, P5_4, P5_5)
+    timing_p5: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# Sortie structurée (LLM → Worker)
+# ---------------------------------------------------------------------------
+
+class AgentResponse(BaseModel):
+    """Un élément du tableau JSON retourné par le LLM."""
+    model_config = ConfigDict(extra="allow")
+
+    agent_id: Union[str, int]
+    chosen_index: Optional[int] = None
+    mode: Optional[str] = None
+    reason: Optional[str] = None
+    summary: Optional[str] = None
+
+    @field_validator("agent_id")
+    @classmethod
+    def cast_agent_id_to_str(cls, v):
+        return str(v)
+
+
+class LLMOutput(BaseModel):
+    """Enveloppe validée à la réception de la réponse LLM."""
+    agents: List[AgentResponse]
+
+
+# ---------------------------------------------------------------------------
+# Réponse API (Worker → client via polling)
+# ---------------------------------------------------------------------------
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: TaskStatus
+    created_at: datetime
+    updated_at: datetime
+    result: Optional[List[AgentResponse]] = None
+    error: Optional[str] = None
+    # Métriques exposées au client (utile pour debug / monitoring)
+    provider_used: Optional[str] = None
+    latency_ms: Optional[float] = None
+    timing_p5: Optional[Dict[str, Any]] = None
+
+
+# ---------------------------------------------------------------------------
+# Interface commune entre modules (adapters ↔ load_balancer ↔ worker)
+# ---------------------------------------------------------------------------
+
+class InternalMessage(BaseModel):
+    """Format normalisé transmis aux adapters."""
+    role: str   # "system" | "user" | "assistant"
+    content: Optional[str] = None
+    trajectories: List[Dict[str, Any]] = [] 
+    history: List[str] = [] 
+
+
+class InternalRequest(BaseModel):
+    """Ce que le Worker passe à l'Adapter sélectionné."""
+    provider: str
+    model: Optional[str] = None          # Si None, utilise le default du provider
+    messages: List[InternalMessage]
+    response_schema: Dict[str, Any]      # JSON Schema injecté pour Structured Output
+    temperature: float = 0.7
+    max_tokens: int = 4096

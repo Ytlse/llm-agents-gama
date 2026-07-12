@@ -38,18 +38,18 @@ GAMA/CityTransport/config/sim_params.yaml
 # Dossier EQUASIM Toulouse — géré dans un repo git séparé
 eqasim-toulouse/
 GAMA/CityTransport/models/false
-data/eqasim_cache/*
-data/eqasim_output/*
+data/cache/eqasim/*
+data/population/*
 
 # Cache
 scripts/general/cache/*
-data/osmnx_cache/*
 llm-agents/cache/*
 otp-toulouse/toulouse/gtfs/*
 cache/*
 llm-agents/data/osmnx_cache/*
+llm-agents/data/otp_cache/*
 llm_cache/
-data/llm_cache/
+data/cache/*
 
 # Temp
 scripts/general/travel_time.py
@@ -59,6 +59,13 @@ data/archives/gtfs/*
 scripts/data/gtfs/*
 GAMA/CityTransport/results_legacy/*
 GAMA/CityTransport/results
-data/weather/*
 scripts/data/population/Temp/*
+scripts/analysis/*.png
+scripts/models_influence/results*
 
+docs/tickets/*
+data/insee/*
+
+#script
+scripts/models_influence/calibration_results/*
+llm_module/llm_gateway.egg-info/SOURCES.txt

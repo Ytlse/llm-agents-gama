@@ -39,53 +39,117 @@ def _activity_index_pairs(activities: list, has_car: bool) -> list[tuple]:
     return pairs
 
 
-def check_enrichment(data: list) -> dict:
+def scheduling_mode(person: dict) -> str:
+    """Return the scheduling mode for a person: 'car' if they own one, 'bicycle' otherwise."""
+    has_car = person.get("identity", {}).get("traits_json", {}).get("number_of_cars", 0) > 0
+    return "car" if has_car else "bicycle"
+
+
+def collect_scheduling_pairs(data: list) -> set:
+    """Return (lat1, lon1, lat2, lon2, mode, hour|None) for the scheduling mode of each person.
+
+    mode = 'car' for car owners (hour = actual departure hour),
+           'bicycle' for others (hour = None, time-independent).
+    Coordinates are rounded to 5 decimal places to match OsmnxPersistentCache precision.
     """
-    Retourne des compteurs de complétude pour une liste de personnes :
-      - total_people     : nombre de personnes
-      - total_pairs      : paires d'activités consécutives, y compris la paire cyclique last→first
-      - missing_pt       : localisations sans champ public_transport
-      - missing_routes   : paires sans transfert_from_previous_location
-      - missing_any_mode : paires présentes mais incomplètes (au moins un mode manquant)
+    pairs: set = set()
+    for entry in data:
+        identity   = entry.get("identity", {})
+        activities = identity.get("activities", [])
+        has_car    = identity.get("traits_json", {}).get("number_of_cars", 0) > 0
+        mode       = "car" if has_car else "bicycle"
+
+        for prev_i, curr_i, _ in _activity_index_pairs(activities, has_car):
+            prev_loc = activities[prev_i].get("location")
+            curr_loc = activities[curr_i].get("location")
+            if not prev_loc or not curr_loc:
+                continue
+            if prev_loc.get("lat") is None or curr_loc.get("lat") is None:
+                continue
+            departure_hour = int((activities[prev_i].get("end_time") or 0) / 3600) % 24
+            pairs.add((
+                round(prev_loc["lat"], 5), round(prev_loc["lon"], 5),
+                round(curr_loc["lat"], 5), round(curr_loc["lon"], 5),
+                mode,
+                departure_hour if mode == "car" else None,
+            ))
+    return pairs
+
+
+def collect_warmup_pairs(data: list) -> set:
+    """Return all (lat1, lon1, lat2, lon2, mode, hour|None) for a full SQLite warm-up.
+
+    - foot + bicycle: 1 entry each per unique O-D pair (time-independent, hour=None).
+    - car: 24 hourly entries per O-D pair where at least one person owns a car.
+    Coordinates rounded to 5 decimal places (matches OsmnxPersistentCache.make_key).
     """
-    total_people   = len(data)
-    total_pairs    = 0
-    missing_pt     = 0
-    missing_routes = 0
-    missing_any    = 0
+    od_all: set = set()
+    od_car: set = set()
 
     for entry in data:
         identity   = entry.get("identity", {})
         activities = identity.get("activities", [])
-        traits     = identity.get("traits_json", {})
-        has_car    = traits.get("number_of_cars", 0) > 0
-        expected_modes = set(TRIP_MODES) if has_car else {"foot", "bicycle"}
+        has_car    = identity.get("traits_json", {}).get("number_of_cars", 0) > 0
 
-        home = identity.get("home")
-        if home and "public_transport" not in home:
-            missing_pt += 1
+        for prev_i, curr_i, _ in _activity_index_pairs(activities, True):
+            prev_loc = activities[prev_i].get("location")
+            curr_loc = activities[curr_i].get("location")
+            if not prev_loc or not curr_loc:
+                continue
+            if prev_loc.get("lat") is None or curr_loc.get("lat") is None:
+                continue
+            pair = (
+                round(prev_loc["lat"], 5), round(prev_loc["lon"], 5),
+                round(curr_loc["lat"], 5), round(curr_loc["lon"], 5),
+            )
+            od_all.add(pair)
+            if has_car:
+                od_car.add(pair)
 
-        for act in activities:
-            loc = act.get("location")
-            if loc and "public_transport" not in loc:
-                missing_pt += 1
+    result: set = set()
+    for lat1, lon1, lat2, lon2 in od_all:
+        result.add((lat1, lon1, lat2, lon2, "foot",    None))
+        result.add((lat1, lon1, lat2, lon2, "bicycle", None))
+    for lat1, lon1, lat2, lon2 in od_car:
+        for h in range(24):
+            result.add((lat1, lon1, lat2, lon2, "car", h))
+    return result
+
+
+def build_travel_times(data: list, route_cache: dict) -> list[dict]:
+    """Build per-person travel-time dicts from a pre-computed route cache.
+
+    Returns list[i] = {(prev_i, curr_i): duration_s} for person data[i].
+    route_cache key: (lat1, lon1, lat2, lon2, mode, hour|None) — 5-decimal precision.
+    Missing or None routes default to 0 (no travel time).
+    """
+    result = []
+    for entry in data:
+        identity   = entry.get("identity", {})
+        activities = identity.get("activities", [])
+        has_car    = identity.get("traits_json", {}).get("number_of_cars", 0) > 0
+        mode       = "car" if has_car else "bicycle"
+        person_tt: dict[tuple, int] = {}
 
         for prev_i, curr_i, _ in _activity_index_pairs(activities, has_car):
-            total_pairs += 1
-            routes = activities[curr_i].get("transfert_from_previous_location")
-            if not routes:
-                missing_routes += 1
-            else:
-                if not expected_modes.issubset(set(routes.keys())):
-                    missing_any += 1
-
-    return {
-        "total_people":   total_people,
-        "total_pairs":    total_pairs,
-        "missing_pt":     missing_pt,
-        "missing_routes": missing_routes,
-        "missing_any":    missing_any,
-    }
+            prev_loc = activities[prev_i].get("location")
+            curr_loc = activities[curr_i].get("location")
+            if not prev_loc or not curr_loc:
+                continue
+            if prev_loc.get("lat") is None or curr_loc.get("lat") is None:
+                continue
+            departure_hour = int((activities[prev_i].get("end_time") or 0) / 3600) % 24
+            key = (
+                round(prev_loc["lat"], 5), round(prev_loc["lon"], 5),
+                round(curr_loc["lat"], 5), round(curr_loc["lon"], 5),
+                mode,
+                departure_hour if mode == "car" else None,
+            )
+            route = route_cache.get(key)
+            if route and route.get("duration_s"):
+                person_tt[(prev_i, curr_i)] = int(route["duration_s"])
+        result.append(person_tt)
+    return result
 
 
 # ── Activity validation ───────────────────────────────────────────────────────
@@ -336,110 +400,11 @@ def enrich_public_transport(data: list, stop_lats, stop_lons, max_pt_dist_m: flo
     return updated
 
 
-# ── Route collection and injection ───────────────────────────────────────────
-
-def collect_pairs_for_file(data: list) -> set:
-    """
-    For each person, iterate ALL consecutive activity pairs (including "other")
-    and the cyclic pair (last → first).
-    Return a set of (lat1, lon1, lat2, lon2, mode, hour) tuples where the route is missing.
-    hour = departure hour (0-23) from prev_act.end_time for car (congestion-dependent).
-    hour = None for foot/bicycle (time-independent; collapses duplicate pairs at different hours).
-    """
-    pairs = set()
-    for entry in data:
-        identity   = entry.get("identity", {})
-        activities = identity.get("activities", [])
-        traits     = entry["identity"].get("traits_json", {})
-        has_car    = traits.get("number_of_cars", 0) > 0
-
-        for prev_i, curr_i, modes in _activity_index_pairs(activities, has_car):
-            prev_act = activities[prev_i]
-            curr_act = activities[curr_i]
-            prev_loc = prev_act.get("location")
-            curr_loc = curr_act.get("location")
-            if not prev_loc or not curr_loc:
-                continue
-            if prev_loc.get("lat") is None or curr_loc.get("lat") is None:
-                continue
-            departure_hour = int((prev_act.get("end_time") or 0) / 3600) % 24
-            routes = curr_act.get("transfert_from_previous_location") or {}
-            for mode in modes:
-                if mode not in routes:
-                    pairs.add((
-                        round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
-                        round(curr_loc["lat"], 7), round(curr_loc["lon"], 7),
-                        mode,
-                        departure_hour if mode == "car" else None,
-                    ))
-    return pairs
-
-
-def apply_routes(data: list, cache: dict) -> int:
-    """
-    Write computed routes into each activity's transfert_from_previous_location,
-    including the cyclic last→first pair (act[0]).
-    Only fills in missing modes — existing routes are left untouched.
-    Returns the number of (activity, mode) entries written.
-    """
-    written = 0
-    for entry in data:
-        identity = entry.get("identity", {})
-        all_acts = identity.get("activities", [])
-        traits   = identity.get("traits_json", {})
-        has_car  = traits.get("number_of_cars", 0) > 0
-
-        for prev_i, curr_i, modes in _activity_index_pairs(all_acts, has_car):
-            prev_act = all_acts[prev_i]
-            curr     = all_acts[curr_i]
-            prev_loc = prev_act.get("location")
-            curr_loc = curr.get("location")
-            if not prev_loc or not curr_loc:
-                continue
-            if prev_loc.get("lat") is None or curr_loc.get("lat") is None:
-                continue
-
-            if not curr.get("transfert_from_previous_location"):
-                curr["transfert_from_previous_location"] = {}
-
-            departure_hour = int((prev_act.get("end_time") or 0) / 3600) % 24
-            for mode in modes:
-                key = (
-                    round(prev_loc["lat"], 7), round(prev_loc["lon"], 7),
-                    round(curr_loc["lat"], 7), round(curr_loc["lon"], 7),
-                    mode,
-                    departure_hour if mode == "car" else None,
-                )
-                if key in cache and mode not in curr["transfert_from_previous_location"]:
-                    curr["transfert_from_previous_location"][mode] = cache[key]
-                    written += 1
-    return written
-
-
 # ── Scheduling ────────────────────────────────────────────────────────────────
 
 def calculer_duree(start: int, end: int) -> int:
     """Calcule la durée absolue d'une plage horaire sur un cycle de 24h."""
     return (end - start + 86400) % 86400
-
-
-def get_travel_time(act_to) -> int:
-    """Fastest available mode travel time (car > bicycle > foot)."""
-    tf = act_to.get('transfert_from_previous_location') or {}
-    min_duration = None
-    for mode in ('car', 'bicycle', 'foot'):
-        v = tf.get(mode)
-        if v and v.get('duration_s', 0) > 0:
-            duration = int(v['duration_s'])
-            if min_duration is None or duration < min_duration:
-                min_duration = duration
-    if min_duration is not None and min_duration < 0:
-        _logger.warning(
-            "Negative travel time %d for activity '%s' — treating as 0",
-            min_duration, act_to.get('purpose'),
-        )
-        min_duration = 0
-    return min_duration if min_duration is not None else 0
 
 
 def get_priority(act) -> int:
@@ -479,20 +444,17 @@ def verifier_topologie_initiale(person_id, activities) -> bool:
     return True
 
 
-def get_activity_constraints(act, index) -> tuple[int, int, int, int, int]:
+def get_activity_constraints(travel_s_raw: int, scheduled_start_time: int, end_time: int, index: int) -> tuple[int, int, int, int, int]:
+    """Compute scheduling constraints for one activity.
+
+    travel_s_raw: pre-computed travel time in seconds (0 if unknown).
+    Returns (travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree).
     """
-    Calcule les contraintes d'une activité donnée :
-      - travel_s : temps de trajet requis pour atteindre l'activité
-      - duree : durée brute de l'activité (end_time - scheduled_start_time)
-      - espace_dispo : marge disponible pour compresser l'activité sans violer la durée minimale
-      - ajustement_activity_duration_pour_garantir_min : ajustement nécessaire pour garantir la durée minimale
-      - conflit_local : temps total à compenser ou déplacer pour respecter les contraintes
-    """
-    travel_s = get_travel_time(act) + _SCHED_MARGIN
-    duree = calculer_duree(act["scheduled_start_time"], act["end_time"])
+    travel_s = travel_s_raw + _SCHED_MARGIN
+    duree = calculer_duree(scheduled_start_time, end_time)
 
     espace_dispo = max(0, duree - travel_s - MIN_ACTIVITY_DELAY)
-    ajustement_duree_min = max(0, MIN_ACTIVITY_DELAY - (duree - travel_s))
+    ajustement_duree_min = max(0, MIN_ACTIVITY_DELAY - (duree))
     conflit_local = travel_s + ajustement_duree_min
 
     if is_verbose:
@@ -524,7 +486,7 @@ def check_and_print_summary(fname, person_id, population, ajustements, nb_act, r
 
         # 2. Continuité cyclique : end_time[i-1] == scheduled_start_time[i]
         end_prev = prev["end_time"]
-        if abs(end_prev - sched) > 1:  # tolérance 1s pour flottants
+        if abs(end_prev - sched) > 1:  # tolérance 1s pour 
             errors.append(f"[{i}] Rupture de continuité : end[{(i-1)%nb_act}]={end_prev:.0f} != sched[{i}]={sched:.0f}")
 
         # 3. Marge de trajet : écart(sched, start) >= _SCHED_MARGIN
@@ -562,6 +524,7 @@ def check_and_print_summary(fname, person_id, population, ajustements, nb_act, r
     ]
     if is_verbose or errors:
         if _HAS_TABULATE:
+            print(_tabulate(table_data, headers=headers, tablefmt="grid"))
             _logger.debug(_tabulate(table_data, headers=headers, tablefmt="grid"))
         else:
             _logger.debug("Schedule table (install tabulate for grid view): %s", table_data)
@@ -573,12 +536,27 @@ def check_and_print_summary(fname, person_id, population, ajustements, nb_act, r
             raise ValueError(f"{fname} : person_id {person_id} — {len(errors)} erreur(s) détectée(s) => {errors[0]}")
 
 
-def ajuster_planning(fname, person_id, activities: list, raise_error: bool = True) -> list:
+def ajuster_planning(
+    fname,
+    person_id,
+    activities: list,
+    travel_times: "dict[tuple[int,int], int] | None" = None,
+    raise_error: bool = True,
+) -> list:
+    """Adjust scheduled_start_time for each activity to absorb real travel durations.
+
+    travel_times: {(prev_i, curr_i): duration_s} from collect_scheduling_pairs /
+                  build_travel_times.  Defaults to {} (all trips treated as instant).
+    """
     n = len(activities)
     if n == 0:
         return activities
 
+    if travel_times is None:
+        travel_times = {}
+
     population = copy.deepcopy(activities)
+    _tt = lambda idx: travel_times.get(((idx - 1) % n, idx), 0)
 
     # ==========================================
     # 0. SANITIZATION & CONTINUITÉ INITIALE
@@ -606,7 +584,9 @@ def ajuster_planning(fname, person_id, activities: list, raise_error: bool = Tru
     act_pivot = population[pivot_index]
 
     if is_verbose: print(f"\n[TRACE] PIVOT LOCK -> Act[{pivot_index}] '{act_pivot.get('purpose')}'")
-    travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(act_pivot, pivot_index)
+    travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(
+        _tt(pivot_index), act_pivot["scheduled_start_time"], act_pivot["end_time"], pivot_index
+    )
 
     ajustements[pivot_index].update({
         "travel_s": travel_s,
@@ -637,7 +617,9 @@ def ajuster_planning(fname, person_id, activities: list, raise_error: bool = Tru
         act_courante = population[i]
         temps_requis = -ajustements[i]["shift_gauche"]
 
-        travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(act_courante, i)
+        travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(
+            _tt(i), act_courante["scheduled_start_time"], act_courante["end_time"], i
+        )
 
         total_besoin = temps_requis + conflit_local
         compression = min(total_besoin, espace_dispo)
@@ -680,7 +662,9 @@ def ajuster_planning(fname, person_id, activities: list, raise_error: bool = Tru
         temps_requis = ajustements[i]["shift_droite"]
 
         if not ajustements[i]["is_computed"]:
-            travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(act_courante, i)
+            travel_s, espace_dispo, ajustement_duree_min, conflit_local, duree = get_activity_constraints(
+                _tt(i), act_courante["scheduled_start_time"], act_courante["end_time"], i
+            )
             total_besoin = temps_requis + conflit_local
         else:
             travel_s = ajustements[i]["travel_s"]
@@ -856,7 +840,9 @@ def tester_logique_rebond():
     for name, activities in test_cases.items():
         print(f"\n\n{'#'*60}\nExécution du {name}\n{'#'*60}")
         try:
-            ajuster_planning("TEST_USER", "test", activities)
+            n = len(activities)
+            tt = {((i - 1) % n, i): activities[i].get("travel_time", 0) for i in range(n)}
+            ajuster_planning("TEST_USER", "test", activities, travel_times=tt)
             print("\n>> Test réussi : Le planning a convergé.")
         except ValueError as e:
             print(f"\n>> Échec de validation : {e}")

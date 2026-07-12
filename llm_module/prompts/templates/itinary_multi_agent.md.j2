@@ -1,15 +1,11 @@
 {# template: itinary_multi_agent.md.j2 #}
+{# Le texte système n'est plus codé en dur ici : il provient de la variante active   #}
+{# dans prompts.yaml (clé active.itinary_multi_agent), injectée via `system_prompt`.  #}
+{# Le schéma JSON reste injecté depuis schemas.json via `schema`.                     #}
 <!-- SYSTEM -->
-Tu es un expert en mobilité urbaine à Toulouse, France. Ta mission est de recommander le meilleur mode de transport pour chaque persona en fonction de son profil, ses contraintes, ses sensibilités et son historique.
+{{ system_prompt }}
 
-**PRIORITÉ ABSOLUE :** Les **sensibilités** (ex. bruit, coût, météo, effort physique, statut social, confort). Le trajet choisi doit être aligné avec ces sensibilités avant tout.
-
-**Instructions :**
-1. Analyse les détails, l'historique et les options de trajet propres à chaque persona.
-2. Sélectionne la **meilleure option** (par son index) dans la liste spécifique à ce persona.
-3. Retourne uniquement un **objet JSON** — pas de markdown, pas de texte supplémentaire.
-
-**Schéma JSON attendu :**
+Schéma JSON attendu :
 {{ schema }}
 
 <!-- USER -->
@@ -20,7 +16,7 @@ Tu es un expert en mobilité urbaine à Toulouse, France. Ta mission est de reco
 {% endif %}
 
 {% for agent in agents %}
---- PERSONA {{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
+--- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
 
 {{ agent.perception }}
 
@@ -39,3 +35,4 @@ Tu es un expert en mobilité urbaine à Toulouse, France. Ta mission est de reco
 {% endfor %}
 
 Réponds avec l'objet JSON final contenant les recommandations pour {{ agents | length }} persona(s).
+Pour chaque persona, recopie son `agent_id` **exactement** tel que fourni ci-dessus (identifiant numérique uniquement, sans le mot « PERSONA » ni le nom du persona).

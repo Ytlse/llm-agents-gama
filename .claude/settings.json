@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat > /tmp/claude-checklist.txt << 'EOF'\n✅ 3-STEP MODIFICATION CHECKLIST\n\n1️⃣  MAINTAIN DOCUMENTATION\n   Update docs/ files that describe modified behavior\n   → README.md → docs/setup/ → docs/arch/\n\n2️⃣  UPDATE CHANGELOG\n   Add entry to docs/changelog.md (top of file)\n   Format: ## [YYYY-MM-DD] Functional title\n\n3️⃣  TRACE BLOCKERS & ALARMS\n   Instrument potential bottlenecks\n   → Log [ALARME] in ERROR on confirmed issues\n\nSee .claude/CLAUDE.md for full details.\nEOF\ncat /tmp/claude-checklist.txt && echo ''",
+            "statusMessage": "Reminding about modification checklist...",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

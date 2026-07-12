@@ -1,46 +1,36 @@
+import csv
 import json
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Optional
 from settings import settings
 
 
+_CSV_COLUMNS = ["context", "timestamp", "datetime", "person_id", "activity_id", "message"]
+
+
 class HistoryStreamLog:
     """
-    A class to represent a log of history stream events. 
-    This will log to the file in jsonl format.
-    Lazy flushing is used to ensure that logs are written to the file immediately.
-    The file is created if it does not exist.
-    The file is opened in append mode, so new logs are added to the end of the file.
+    Logs agent memory events (STM + LTM) in two parallel formats:
+    - JSONL (agent_memory_events.jsonl): full payload including data dict
+    - CSV (agent_memory_events.csv): flat columns for easy analysis
     """
     _instance = None
 
     @classmethod
     def get_instance(cls):
-        """
-        Get the singleton instance of HistoryStreamLog.
-        If it does not exist, create it with the specified file path.
-        :return: The singleton instance of HistoryStreamLog.
-        """
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
-    
+
     def __init__(self, file_path: str = None):
         self.file_path = file_path
 
         self.log_shortterm_memory = partial(self.log, context="shortterm_memory")
         self.log_longterm_memory = partial(self.log, context="longterm_memory")
-        self.log_travel_plan = partial(self.log, context="travel_plan")
-        self.log_query_travel_plan = partial(self.log, context="query_travel_plan")
 
     def log(self, context: str, timestamp: int, person_id: str, message: str, activity_id: Optional[str] = None, data: Optional[dict] = None):
-        """
-        Log a message with the specified person ID, message, and optional data.
-        :param person_id: The ID of the person.
-        :param message: The message to log.
-        :param data: Optional additional data to log.
-        """
         log_entry = {
             "context": context,
             "timestamp": timestamp,
@@ -49,7 +39,18 @@ class HistoryStreamLog:
             "activity_id": activity_id,
             "data": data or {}
         }
-        file_path = self.file_path or settings.app.history_file_v2
-        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, "a", encoding="utf-8") as f:
+
+        jsonl_path = self.file_path or settings.app.agent_memory_events_jsonl
+        Path(jsonl_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(jsonl_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+        csv_path = settings.app.agent_memory_events_csv
+        Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
+        csv_exists = Path(csv_path).exists() and Path(csv_path).stat().st_size > 0
+        dt_str = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S") if timestamp else ""
+        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if not csv_exists:
+                writer.writerow(_CSV_COLUMNS)
+            writer.writerow([context, timestamp, dt_str, person_id, activity_id or "", message])

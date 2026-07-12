@@ -1,4 +1,3 @@
-import traceback
 from typing import List, Optional, Callable
 
 from fastapi import WebSocket
@@ -27,10 +26,15 @@ class WebSocketClient:
         try:
             logger.info(f"Connecting to {self.uri}...")
             
+            # ping_timeout doit tolérer les blocages ponctuels de l'event loop (calculs
+            # CPU, réflexions STM) : à 10s, un stall de ~15s suffisait à fermer la
+            # socket (1006) et une rafale de push partait dans le vide (run 2026-07-08 :
+            # 339 agents récupérés par le watchdog). 60s ne retarde la détection d'une
+            # vraie coupure que d'~1 min, déjà couverte par le watchdog d'arrivée.
             self.websocket = await websockets.connect(
                 self.uri,
                 ping_interval=20,
-                ping_timeout=10,
+                ping_timeout=60,
                 close_timeout=20,
                 max_size=10**7,  # 10MB max message size
                 compression=None  # Tắt compression để tăng performance
@@ -102,8 +106,7 @@ class WebSocketClient:
                     break
                     
                 except Exception as e:
-                    traceback.print_exc()
-                    logger.error(f"Listen error: {e}")
+                    logger.exception(f"Listen error: {e}")
                     break
                     
         except Exception as e:
@@ -112,15 +115,12 @@ class WebSocketClient:
     async def run_with_reconnect(self):
         """Chạy client với auto reconnect"""
         self.running = True
-        
+
         while self.running:
             try:
-                # Thử kết nối
                 if await self.connect():
-                    # Nếu kết nối thành công, bắt đầu listen
                     await self.listen()
-                
-                # Nếu đến đây có nghĩa là kết nối bị đứt
+
                 if self.running and self.reconnect_attempts < self.max_reconnect_attempts:
                     self.reconnect_attempts += 1
                     logger.info(f"Reconnecting in {self.reconnect_delay}s... (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
@@ -128,7 +128,9 @@ class WebSocketClient:
                 elif self.reconnect_attempts >= self.max_reconnect_attempts:
                     logger.error("Max reconnect attempts reached. Stopping.")
                     break
-                    
+
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 logger.error(f"Run loop error: {e}")
                 if self.running:

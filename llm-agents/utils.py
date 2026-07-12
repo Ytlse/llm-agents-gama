@@ -1,9 +1,25 @@
+import asyncio
+from typing import Coroutine
+
 from faker import Faker
 from pyproj import Transformer
 from models import Location
 from settings import settings
 
 fake = Faker("fr_FR")
+
+# Références fortes sur les tâches fire-and-forget : l'event loop ne garde que des
+# weakrefs sur les tasks, une tâche non référencée peut être garbage-collectée avant
+# (ou pendant) son exécution. Le set garde la référence jusqu'à complétion.
+_background_tasks: set = set()
+
+
+def create_background_task(coro: Coroutine) -> "asyncio.Task":
+    """asyncio.create_task en conservant une référence jusqu'à la fin de la tâche."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 def random_name():
     return fake.name()

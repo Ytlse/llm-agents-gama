@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 
 NOTEBOOKS = [
-    "current_stats.ipynb",
+    "selected_mode_stats.ipynb",
     "llm_traffic_analyse.ipynb",
-    "pipeline_delays.ipynb",
+    "pipeline.ipynb",
     "delays.ipynb",
 ]
 

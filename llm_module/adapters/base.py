@@ -8,12 +8,20 @@ Le Worker ne connaît que BaseAdapter — il reste découplé des SDKs tiers.
 from __future__ import annotations
 import json
 import re
+import threading
 from abc import ABC, abstractmethod
 from typing import Tuple
 
+try:
+    import demjson3 as _demjson
+except ImportError:
+    _demjson = None
+
+import httpx
 from pydantic import ValidationError
 
-from llm_module.settings.models import AgentResponse, InternalRequest, LLMOutput
+from llm_module.config import get_settings
+from llm_module.core.models import AgentResponse, InternalRequest, LLMOutput
 from llm_module.telemetry.logger import get_logger
 
 _base_logger = get_logger(__name__)
@@ -31,10 +39,35 @@ class BaseAdapter(ABC):
 
     provider_name: str  # Doit être défini dans chaque sous-classe (nom de la classe d'adapter)
 
+    # Timeout des appels LLM — surchargeable par adapter (Google : 240s).
+    request_timeout: float = 120.0
+
     def __init__(self):
         # Par défaut, l'instance name = le nom de la classe d'adapter.
         # get_adapter() le remplace par le nom de l'instance configurée (ex: "groq_1").
         self._instance_name: str = self.provider_name
+        self._client: httpx.Client | None = None
+        self._client_lock = threading.Lock()
+
+    def _http(self) -> httpx.Client:
+        """Client httpx partagé de l'instance (keep-alive entre appels).
+
+        httpx.Client est thread-safe : les workers Celery (-P threads) peuvent
+        l'utiliser concurremment. Évite le handshake TCP/TLS à chaque appel
+        (~100-300 ms gagnées par appel LLM).
+        """
+        if self._client is None:
+            with self._client_lock:
+                if self._client is None:
+                    self._client = httpx.Client(timeout=self.request_timeout)
+        return self._client
+
+    def close(self) -> None:
+        """Libère le client httpx partagé (port LLMAdapter)."""
+        with self._client_lock:
+            if self._client is not None:
+                self._client.close()
+                self._client = None
 
     @abstractmethod
     def call(self, request: InternalRequest) -> Tuple[LLMOutput, int, int]:
@@ -68,28 +101,38 @@ class BaseAdapter(ABC):
 
     def _resolve_model(self, request: InternalRequest) -> str:
         """Retourne le modèle spécifié ou le défaut du provider."""
-        from llm_module.tasks.llm_config import settings
         if request.model:
             return request.model
-        return settings.providers[self._instance_name].default_model
+        return get_settings().providers[self._instance_name].default_model
 
-    def _get_api_key(self) -> str:
-        from llm_module.tasks.llm_config import settings
-        return settings.providers[self._instance_name].api_key
+    def _get_api_key(self):
+        return get_settings().providers[self._instance_name].api_key
 
     def _get_base_url(self) -> str:
-        from llm_module.tasks.llm_config import settings
-        return settings.providers[self._instance_name].base_url
+        return get_settings().providers[self._instance_name].base_url
 
     def _raise_for_status(self, response: "httpx.Response") -> None:
         """Lève une ProviderError si le status HTTP indique une erreur.
 
-        Capture le header x-ratelimit-reset (présent sur les 429 Groq/OpenAI)
-        et l'attache à l'exception pour qu'il apparaisse dans llm_errors.jsonl.
+        Capture le délai de retry sur les 429 — header x-ratelimit-reset
+        (Groq/OpenAI) ou, à défaut, corps JSON (Google Gemini) — et l'attache
+        à l'exception pour qu'il apparaisse dans llm_errors.jsonl.
         """
         if response.status_code < 400:
             return
-        ratelimit_reset = response.headers.get("x-ratelimit-reset-requests") or response.headers.get("x-ratelimit-reset")
+        # Ordre de priorité : retry-after (standard HTTP, exact) puis reset-tokens
+        # (les 429 Groq portent sur les limites TPM/TPD, pas sur les requêtes),
+        # puis les variantes requests/génériques.
+        ratelimit_reset = (
+            response.headers.get("retry-after")
+            or response.headers.get("x-ratelimit-reset-tokens")
+            or response.headers.get("x-ratelimit-reset-requests")
+            or response.headers.get("x-ratelimit-reset")
+        )
+        # Repli : certains providers (Google Gemini) mettent le délai de retry
+        # dans le corps JSON plutôt que dans un header.
+        if not ratelimit_reset and response.status_code == 429:
+            ratelimit_reset = extract_retry_delay_from_body(response.text)
         error_type = extract_error_type(response.text, response.status_code)
         if response.status_code >= 500:
             raise ProviderServerError(
@@ -102,6 +145,28 @@ class BaseAdapter(ABC):
             error_type=error_type,
             ratelimit_reset=ratelimit_reset,
         )
+
+    def _check_openai_finish_reason(self, data: dict) -> None:
+        """Détecte une sortie tronquée à max_tokens (format OpenAI /chat/completions).
+
+        finish_reason == "length" signifie que la génération a été coupée avant la
+        fin → le JSON est incomplet et json.loads échouerait avec un message
+        trompeur (Expecting ',' delimiter...). On lève à la place une erreur typée
+        max_tokens_truncation, éligible au retry (même pattern que google_adapter
+        avec finishReason == MAX_TOKENS).
+        """
+        choices = data.get("choices") or [{}]
+        finish_reason = choices[0].get("finish_reason")
+        if finish_reason == "length":
+            _base_logger.warning(
+                f"Réponse tronquée (finish_reason=length) | provider={self._instance_name} "
+                f"completion_tokens={data.get('usage', {}).get('completion_tokens')}"
+            )
+            raise ProviderServerError(
+                self._instance_name, 503,
+                "Output truncated at max_tokens limit (finish_reason=length)",
+                error_type="max_tokens_truncation",
+            )
 
     def _parse_output(self, raw: str) -> LLMOutput:
         provider = self._instance_name
@@ -127,15 +192,46 @@ class BaseAdapter(ABC):
             f"raw_preview={raw_clean[:300]!r}"
         )
 
-        # Step 1 — JSON decode
+        # Guard: detect repetition loops (same token repeated > 15 times consecutively)
+        words = raw_clean.split()
+        if len(words) > 20:
+            max_consecutive = 1
+            consecutive = 1
+            for i in range(1, len(words)):
+                if words[i] == words[i - 1]:
+                    consecutive += 1
+                    max_consecutive = max(max_consecutive, consecutive)
+                else:
+                    consecutive = 1
+            if max_consecutive > 15:
+                raise ProviderParseError(
+                    provider, raw,
+                    f"Repetition loop detected ({max_consecutive} consecutive identical tokens)"
+                )
+
+        # Step 1 — JSON decode (with demjson3 fallback for malformed output)
         try:
             data = json.loads(raw_clean)
         except json.JSONDecodeError as e:
-            _base_logger.warning(
-                f"_parse_output FAILED at json.loads | provider={provider} "
-                f"error={e} raw_preview={raw_clean[:500]!r}"
-            )
-            raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
+            if _demjson is not None:
+                try:
+                    data = _demjson.decode(raw_clean)
+                    _base_logger.warning(
+                        f"_parse_output: json.loads failed, repaired with demjson3 | "
+                        f"provider={provider} original_error={e}"
+                    )
+                except Exception:
+                    _base_logger.warning(
+                        f"_parse_output FAILED at json.loads and demjson3 | provider={provider} "
+                        f"error={e} raw_preview={raw_clean[:500]!r}"
+                    )
+                    raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
+            else:
+                _base_logger.warning(
+                    f"_parse_output FAILED at json.loads | provider={provider} "
+                    f"error={e} raw_preview={raw_clean[:500]!r}"
+                )
+                raise ProviderParseError(provider, raw, f"JSONDecodeError: {e}")
 
         # Step 2 — extract "agents" list
         agents_raw = None
@@ -170,6 +266,12 @@ class BaseAdapter(ABC):
         # Step 3 — build AgentResponse objects
         agents = []
         for idx, item in enumerate(agents_raw):
+            if not isinstance(item, dict):
+                _base_logger.warning(
+                    f"_parse_output: skipping non-dict item at agents[{idx}] | provider={provider} "
+                    f"type={type(item).__name__} value={item!r}"
+                )
+                continue
             try:
                 agents.append(AgentResponse(**item))
             except (TypeError, ValidationError) as e:
@@ -265,11 +367,50 @@ def extract_error_type(response_text: str, status_code: int) -> str:
     return f"http {status_code}"
 
 
+def extract_retry_delay_from_body(response_text: str) -> str | None:
+    """Extrait le délai de retry du corps d'une réponse 429.
+
+    Utilisé en repli quand le provider ne renvoie pas le délai dans un header
+    (cas Google Gemini, qui le place dans le JSON). Cherche, dans l'ordre :
+      1. Le champ structuré google.rpc.RetryInfo : error.details[].retryDelay
+      2. Le texte du message : "Please retry in 11.103190523s." (Gemini) ou
+         "Please try again in 16m7.68s" / "in 140ms" (Groq)
+
+    Retourne la chaîne de durée telle quelle (ex: "16m7.68s", parsable par
+    _parse_ratelimit_reset_seconds), ou None si rien n'est trouvé.
+    """
+    if not response_text:
+        return None
+
+    # 1. Champ structuré google.rpc.RetryInfo
+    try:
+        data = json.loads(response_text)
+        for detail in data.get("error", {}).get("details", []):
+            retry_delay = detail.get("retryDelay")
+            if retry_delay:
+                return str(retry_delay)  # ex: "11s"
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        pass
+
+    # 2. Repli sur le texte du message — couvre "retry in" (Gemini) et
+    #    "try again in" (Groq), formats composés h/m/s/ms inclus.
+    m = re.search(r"(?:re)?try(?: again)? in ((?:\d+(?:\.\d+)?(?:h|ms|m|s))+)", response_text)
+    if m:
+        return m.group(1)
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Registre des adapters (auto-découverte par nom de fournisseur)
 # ---------------------------------------------------------------------------
 
 _REGISTRY: dict[str, type[BaseAdapter]] = {}
+
+# Instances mises en cache par nom de provider : le client httpx partagé
+# (keep-alive) survit d'un appel à l'autre au lieu d'être recréé à chaque batch.
+_INSTANCES: dict[str, BaseAdapter] = {}
+_INSTANCES_LOCK = threading.Lock()
 
 
 def register_adapter(cls: type[BaseAdapter]) -> type[BaseAdapter]:
@@ -280,7 +421,7 @@ def register_adapter(cls: type[BaseAdapter]) -> type[BaseAdapter]:
 
 def get_adapter(provider_name: str) -> BaseAdapter:
     """
-    Instancie et retourne l'adapter correspondant au fournisseur.
+    Retourne l'adapter (mis en cache) correspondant au fournisseur.
 
     Pour les providers multi-instances (ex: groq_1, groq_2), résout la classe
     via le champ `adapter` de ProviderConfig, puis attache l'instance name
@@ -289,10 +430,12 @@ def get_adapter(provider_name: str) -> BaseAdapter:
     Raises:
         KeyError si le fournisseur n'est pas enregistré.
     """
-    from llm_module.tasks.llm_config import settings
+    inst = _INSTANCES.get(provider_name)
+    if inst is not None:
+        return inst
 
     # Résolution de la classe : champ `adapter` ou nom du provider directement
-    cfg = settings.providers.get(provider_name)
+    cfg = get_settings().providers.get(provider_name)
     adapter_key = (cfg.adapter or provider_name) if cfg else provider_name
 
     if adapter_key not in _REGISTRY:
@@ -304,9 +447,21 @@ def get_adapter(provider_name: str) -> BaseAdapter:
             f"Adapters disponibles : {list(_REGISTRY.keys())}"
         )
 
-    inst = _REGISTRY[adapter_key]()
-    inst._instance_name = provider_name  # pointe vers la bonne entrée dans settings.providers
+    with _INSTANCES_LOCK:
+        inst = _INSTANCES.get(provider_name)
+        if inst is None:
+            inst = _REGISTRY[adapter_key]()
+            inst._instance_name = provider_name  # pointe vers la bonne entrée dans settings.providers
+            _INSTANCES[provider_name] = inst
     return inst
+
+
+def close_all_adapters() -> None:
+    """Ferme les clients httpx partagés de toutes les instances (arrêt du worker)."""
+    with _INSTANCES_LOCK:
+        for inst in _INSTANCES.values():
+            inst.close()
+        _INSTANCES.clear()
 
 
 def _load_adapters() -> None:

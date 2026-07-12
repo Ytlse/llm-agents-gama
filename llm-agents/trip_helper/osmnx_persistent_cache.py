@@ -62,7 +62,11 @@ class OsmnxPersistentCache:
     ) -> tuple[str, Optional[str], Optional[int], Optional[str]]:
         """Returns (key, date_str, day_of_week, time_bucket).
 
-        car   → time-aware key: date + day_of_week + 1h bucket (matches _congestion_factor granularity).
+        car   → time-aware key: day_of_week + 1h bucket (matches _congestion_factor
+                granularity, which depends only on weekday + hour, not the absolute date).
+                The absolute date is still stored in the `date` column for reference but is
+                intentionally excluded from the key so runs on different calendar dates reuse
+                the same cached routes.
         foot/bicycle → time-independent key: coordinates + mode only.
         """
         if mode == "car":
@@ -70,7 +74,7 @@ class OsmnxPersistentCache:
             day_of_week = congestion_dt.weekday()
             time_bucket = f"{congestion_dt.hour:02d}:00"
             raw = (
-                f"{date_str}|{day_of_week}|{time_bucket}|{mode}"
+                f"{day_of_week}|{time_bucket}|{mode}"
                 f"|{lat_from:.5f}|{lon_from:.5f}|{lat_to:.5f}|{lon_to:.5f}"
             )
         else:

@@ -2,3 +2,6 @@
 *.pbf
 *.tar
 /gtfs
+/population
+/population_samples
+/po_toulouse.small

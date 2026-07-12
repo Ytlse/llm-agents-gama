@@ -1,24 +1,76 @@
 """
 telemetry/logger.py — Logging unifié via loguru.
 
-Chaque log contient automatiquement :
-  - timestamp
-  - niveau
-  - module source (via {name} loguru)
-  - message
+La configuration du handler est un geste explicite des entrypoints
+(create_app, worker Celery) via configure_logging() — plus jamais un effet
+de bord d'import de ce module.
 
-log_llm_exchange() écrit un JSONL dans workdir/llm_exchanges.jsonl :
+log_llm_exchange() écrit un JSONL dans le fichier désigné par la variable
+d'environnement LLM_EXCHANGES_FILE, ou à défaut APP_WORKDIR/llm_exchanges.jsonl :
   - time, task_id, provider, tokens_in, tokens_out, messages (input), response (output)
 """
 
 from __future__ import annotations
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
+_configured = False
+
+
+def configure_logging(level: str | None = None) -> None:
+    """
+    Remplace le handler loguru par défaut (DEBUG) par un handler qui respecte
+    LOG_LEVEL (défaut INFO). Idempotent — appelé par les entrypoints.
+
+    Si la variable d'environnement SERVICE_NAME est définie, ajoute en plus un
+    sink fichier `APP_WORKDIR/<SERVICE_NAME>.log` (format aligné sur app.log du
+    controller) afin que les logs de chaque conteneur (api, worker, …) soient
+    centralisés dans le dossier du run et agrégeables par les outils de debug.
+    """
+    global _configured
+    if _configured:
+        return
+    _configured = True
+    lvl = level or os.environ.get("LOG_LEVEL", "INFO")
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=lvl,
+        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+    )
+    _add_service_file_sink(lvl)
+
+
+def _add_service_file_sink(level: str) -> None:
+    """Sink fichier par service dans APP_WORKDIR, activé si SERVICE_NAME est défini.
+
+    Format identique aux logs du controller (`app.log`) pour que la même regex
+    d'agrégation fonctionne. Tolérant : toute erreur (workdir absent, droits) est
+    silencieuse — le logging console reste opérationnel.
+    """
+    service = os.environ.get("SERVICE_NAME")
+    if not service:
+        return
+    try:
+        workdir = _workdir()
+        if not workdir.exists():
+            return
+        logger.add(
+            str(workdir / f"{service}.log"),
+            level=level,
+            rotation="10 MB",
+            retention="7 days",
+            enqueue=True,  # écritures thread/process-safe (worker multi-threads)
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
+        )
+    except OSError:
+        pass
 
 
 def get_logger(name: str):
@@ -56,8 +108,11 @@ def log_llm_call(
 
 # ---------------------------------------------------------------------------
 # Log des échanges LLM (prompt envoyé + réponse + tokens)
-# Écrit dans workdir/llm_exchanges.jsonl
 # ---------------------------------------------------------------------------
+
+def _workdir() -> Path:
+    return Path(os.environ.get("APP_WORKDIR", "."))
+
 
 def log_llm_error(
     task_id: str,
@@ -68,10 +123,9 @@ def log_llm_error(
     ratelimit_reset: str | None = None,
 ) -> None:
     """
-    Enregistre une erreur LLM dans workdir/llm_errors.jsonl.
+    Enregistre une erreur LLM dans APP_WORKDIR/llm_errors.jsonl.
     """
-    workdir = Path(os.environ.get("APP_WORKDIR", "."))
-    log_file = workdir / "llm_errors.jsonl"
+    log_file = _workdir() / "llm_errors.jsonl"
 
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),
@@ -98,22 +152,26 @@ def log_llm_exchange(
     response: Any,
     tokens_in: int,
     tokens_out: int,
+    category: str = "",
+    sim_ts: float | None = None,
 ) -> None:
     """
     Enregistre un échange complet avec le LLM dans un fichier JSONL.
-    Le fichier est placé dans APP_WORKDIR (env var), ou dans le répertoire courant par défaut.
+    Chemin : LLM_EXCHANGES_FILE (env), sinon APP_WORKDIR/llm_exchanges.jsonl.
+
+    sim_ts : timestamp Unix *simulé* (heure du monde GAMA) de la décision, pour pouvoir
+    ventiler la consommation par jour de simulation (l'horloge murale `time` ne le permet pas).
     """
-    try:
-        from settings import settings
-        log_file = Path(settings.app.llm_exchanges_file)
-    except ImportError:
-        workdir = Path(os.environ.get("APP_WORKDIR", "."))
-        log_file = workdir / "llm_exchanges.jsonl"
+    override = os.environ.get("LLM_EXCHANGES_FILE")
+    log_file = Path(override) if override else _workdir() / "llm_exchanges.jsonl"
 
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),
+        "sim_ts": sim_ts,
+        "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d") if sim_ts else None,
         "task_id": task_id,
         "provider": provider,
+        "category": category,
         "tokens_in": tokens_in,
         "tokens_out": tokens_out,
         "messages": messages,

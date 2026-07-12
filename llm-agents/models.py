@@ -16,6 +16,7 @@ class Location(BaseModel):
     lon: float
     lat: float
     public_transport: Optional[bool] = None
+    zone: Optional[str] = None
 
 
 class BBox(BaseModel):
@@ -225,6 +226,14 @@ class PersonState(BaseModel):
     precompute_in_progress: bool = False
     precomputed_horizon_act: Optional["Activity"] = None
     precomputed_horizon_ts: Optional[int] = None
+    # Cockpit : timestamp de sim de la dernière planification réussie (plan/queue non vides).
+    # Sert à détecter les agents bloqués (aucun plan depuis > seuil d'heures simulées).
+    last_successful_plan_sim_ts: Optional[int] = None
+    # Watchdog arrivées : expected_arrive_at du move poussé à GAMA (None hors déplacement).
+    # Si le temps sim dépasse cette échéance de plus de world.arrival_watchdog_hours,
+    # l'observation d'arrivée est considérée perdue (move jamais reçu par GAMA) et le
+    # scan de fallback force la reprise du cycle de l'agent.
+    heading_expected_arrive_at: Optional[int] = None
 
 
 class Person(BaseModel):
