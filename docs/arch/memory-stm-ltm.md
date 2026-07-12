@@ -132,6 +132,31 @@ La consolidation est **volumétrique**, pas temporelle. Elle se déclenche dans 
 len(stm.recent_entries) >= settings.agent.stm_reflection_min_entries   # défaut : 10
 ```
 
+### Ordonnancement : file EDF avec échéance simulée
+
+Les réflexions ne partent plus en fire-and-forget vers le gateway : chaque agent
+éligible est soumis à la **file EDF** du dispatcher (kind `reflect`) avec une échéance
+en temps simulé :
+
+```
+deadline_sim = timestamp_déclenchement + settings.agent.stm_reflection_deadline_sim_s   # défaut : 12 h
+```
+
+Conséquences :
+
+- **Dépriorisation naturelle** : EDF sert d'abord les planifications de trajets
+  (échéances = heures de départ, proches) ; les réflexions passent quand il y a du mou,
+  puis remontent mécaniquement en priorité à l'approche de leur échéance.
+- **Garantie < 12 h simulées** : les échéances `reflect` sont incluses dans le test de
+  faisabilité EDF de la contre-pression prédictive (`edf_snapshot_deadlines()`). Si le
+  débit LLM ne permet plus de les tenir, le `/sync` est retenu — le temps simulé se fige
+  pendant que la file se draine.
+- **Échéance conservée entre retentatives** : en cas d'échec gateway (timeout, providers
+  saturés), les entrées STM restent en place et le sync suivant re-soumet la réflexion
+  avec sa deadline d'origine (`_stm_reflect_due`) — jamais repoussée.
+- **Alarme** : si une réflexion reste pendante au-delà de son échéance simulée, un
+  `[ALARME]` est loggé en ERROR (front montant, visible via `make error`).
+
 ### Pipeline de réflexion
 
 ```text

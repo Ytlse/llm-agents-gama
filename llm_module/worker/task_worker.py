@@ -39,6 +39,23 @@ from llm_module.worker.runtime import WorkerRuntime, get_worker_runtime
 
 logger = get_logger(__name__)
 
+
+class ProviderCapacityError(Exception):
+    """Prompt rendu trop volumineux pour la capacité par requête du provider.
+
+    Levée AVANT l'appel HTTP : le 413 « request too large » est évité, le slot
+    RPM/TPM est restitué et le batch est rejoué sur un autre modèle (rotation).
+    """
+
+    def __init__(self, provider: str, prompt_tokens_est: int, max_tokens_per_request: int):
+        self.provider = provider
+        self.prompt_tokens_est = prompt_tokens_est
+        self.max_tokens_per_request = max_tokens_per_request
+        super().__init__(
+            f"Prompt ≈{prompt_tokens_est} tokens estimés > capacité par requête "
+            f"({max_tokens_per_request} tokens, sortie minimale comprise) de {provider}"
+        )
+
 # ---------------------------------------------------------------------------
 # Application Celery — instance module-level requise par le CLI :
 #   celery -A llm_module.worker.task_worker.celery_app worker …
@@ -118,6 +135,9 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
         rt.queue.clear_scheduled(batch_key)
         tasks = rt.queue.pop(batch_key, batch_limit)
         if not tasks:
+            # Aucune requête ne partira : restituer le slot RPM + TPM réservé
+            # par select_provider (sinon il reste consommé 60s pour rien).
+            rt.limiter.release_slot(provider_name)
             return
 
         # Marquer comme en cours
@@ -130,6 +150,18 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
 
         try:
             _execute_batch(rt, tasks, batch_id, provider_name, _p5_provider_wait_ms, self.request.retries)
+
+        except ProviderCapacityError as e:
+            # Détectée avant l'appel HTTP (et avant le recalage TPM) : le slot
+            # RPM/TPM réservé par select_provider n'a servi à rien, on le restitue.
+            rt.limiter.release_slot(provider_name)
+            rt.metrics.incr(f"capacity_reroute_total:{provider_name}")
+            _switch_provider_or_fail(
+                self, rt, tasks, batch_key, e, provider_name,
+                reason="Prompt trop volumineux pour la capacité par requête",
+                min_tpm_required=min_tpm_required,
+                min_output_required=min_output_required,
+            )
 
         except ProviderServerError as e:
             # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
@@ -261,8 +293,16 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     provider_cfg = settings.providers.get(provider_name)
     if provider_cfg and provider_cfg.max_output_tokens:
         max_tokens = min(max_tokens, provider_cfg.max_output_tokens)
-    if provider_cfg and provider_cfg.max_tokens_per_request:
-        max_tokens = min(max_tokens, provider_cfg.max_tokens_per_request - settings.assumed_prompt_tokens)
+    # Garde-fou 413 : la capacité par requête est confrontée à la taille RÉELLE du
+    # prompt rendu, pas à assumed_prompt_tokens — les prompts stm_reflection font
+    # ~2× l'estimation statique et partaient condamnés vers les providers à petit
+    # quota (38 HTTP 413 sur le run 2026-07-11). Si même la sortie minimale ne
+    # tient plus dans le budget, on rejoue ailleurs AVANT de brûler l'appel.
+    prompt_chars = sum(len(m.content or "") for m in messages)
+    prompt_tokens_est = int(prompt_chars / settings.token_chars_ratio)
+    max_tokens = _fit_request_budget(
+        provider_cfg, prompt_tokens_est, max_tokens, settings.min_output_tokens, provider_name
+    )
     internal_req = InternalRequest(
         provider=provider_name,
         messages=messages,
@@ -271,6 +311,24 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         max_tokens=max_tokens,
     )
 
+    # ── Recalage de la réservation TPM sur la taille réelle du batch ────────
+    # select_provider() a réservé l'estimation statique tpm_estimate_per_request
+    # (forfait batch plein) AVANT de connaître le contenu du batch. Maintenant que
+    # le prompt est rendu, on corrige la fenêtre glissante : un petit batch rend
+    # du headroom aux autres workers, un batch de réflexions (~4 500 tokens_in/agent)
+    # réserve son vrai coût au lieu du forfait 2 200 — c'est ce sous-comptage qui
+    # faisait dépasser le TPM réel des providers à petit quota (429).
+    reserved_tokens: int | None = None
+    if provider_cfg and provider_cfg.tpm_limit:
+        reserved_tokens = (
+            prompt_tokens_est
+            + len(merged_agents) * settings.assumed_output_tokens
+        )
+        rt.limiter.adjust_tokens(
+            provider_name,
+            reserved_tokens - (provider_cfg.tpm_estimate_per_request or 0),
+        )
+
     # 4. Appel LLM via l'adapter approprié
     adapter = get_adapter(provider_name)
     start_ts = time.monotonic()
@@ -278,7 +336,8 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     try:
         llm_output, tokens_in, tokens_out = adapter.call(internal_req)
     except Exception as exc:
-        rt.limiter.release_slot(provider_name)
+        # Restitue le montant effectivement réservé (recalé ci-dessus), pas le forfait.
+        rt.limiter.release_slot(provider_name, reserved_tokens)
         logger.error(f"Error with provider | task_id={batch_id} provider={provider_name}")
         rt.metrics.incr(f"llm_calls_err_total:{provider_name}")
         error_type = getattr(exc, "error_type", "unknown")
@@ -313,6 +372,19 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         raise
 
     rt.limiter.record_success(provider_name)
+
+    # ── Recalage final : la fenêtre TPM reflète la consommation réelle ──────
+    if reserved_tokens is not None:
+        actual_total = (tokens_in or 0) + (tokens_out or 0)
+        if actual_total > 0:
+            rt.limiter.adjust_tokens(provider_name, actual_total - reserved_tokens)
+            if actual_total > reserved_tokens * 1.25:
+                logger.warning(
+                    f"Estimation TPM sous-évaluée de {actual_total - reserved_tokens} tokens "
+                    f"(réservé={reserved_tokens}, réel={actual_total}) — vérifier "
+                    f"token_chars_ratio/assumed_output_tokens | provider={provider_name} "
+                    f"category={base_req.category} batch={len(merged_agents)} agents"
+                )
 
     # ── Réalignement des agent_id renvoyés par le LLM ────────────────────────
     # Le modèle renvoie parfois un agent_id mal formé ("PERSONA 446264", voire le
@@ -472,6 +544,27 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
         f"provider={provider_name} latency_ms={latency_ms:.1f} agents_count={len(llm_output.agents)}"
     )
+
+
+def _fit_request_budget(
+    provider_cfg,
+    prompt_tokens_est: int,
+    max_tokens: int,
+    min_output_tokens: int,
+    provider_name: str,
+) -> int:
+    """Confronte le prompt rendu à la capacité par requête du provider.
+
+    Retourne max_tokens, éventuellement rogné pour tenir sous max_tokens_per_request
+    (les providers groq free tier comptent prompt + max_tokens dans la limite 413).
+    Lève ProviderCapacityError si même min_output_tokens ne tient plus dans le budget.
+    """
+    if not (provider_cfg and provider_cfg.max_tokens_per_request):
+        return max_tokens
+    output_budget = provider_cfg.max_tokens_per_request - prompt_tokens_est
+    if output_budget < min_output_tokens:
+        raise ProviderCapacityError(provider_name, prompt_tokens_est, provider_cfg.max_tokens_per_request)
+    return min(max_tokens, output_budget)
 
 
 def _switch_provider_or_fail(

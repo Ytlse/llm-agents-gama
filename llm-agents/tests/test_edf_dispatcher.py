@@ -118,6 +118,45 @@ def test_snapshot_exclut_les_push():
     assert depth == 3
 
 
+def test_snapshot_inclut_les_reflexions():
+    async def _scenario():
+        loop = _make_loop()
+
+        async def _noop():
+            return None
+
+        loop._dispatch(deadline_sim=300.0, kind="plan", make_coro=_noop, person_id="p")
+        loop._dispatch(deadline_sim=43_200.0, kind="reflect", make_coro=_noop, person_id="p")
+        loop._dispatch(deadline_sim=0.0, kind="push", make_coro=_noop, person_id="p")
+        return loop.edf_snapshot_deadlines()
+
+    # Les réflexions STM comptent dans le test de faisabilité prédictive (c'est lui
+    # qui garantit leur échéance sim), les push restent exclus.
+    assert asyncio.run(_scenario()) == [300.0, 43_200.0]
+
+
+def test_reflexion_lointaine_passe_apres_les_plans_proches():
+    async def _scenario():
+        loop = _make_loop()
+        executed: list[str] = []
+
+        def _job(tag):
+            async def _run():
+                executed.append(tag)
+            return _run
+
+        loop._dispatch(deadline_sim=43_200.0, kind="reflect", make_coro=_job("reflect"), person_id="p")
+        loop._dispatch(deadline_sim=600.0, kind="plan", make_coro=_job("plan"), person_id="p")
+        loop._dispatch(deadline_sim=86_400.0, kind="refill", make_coro=_job("refill_lointain"), person_id="p")
+
+        await _drain(loop, n_consumers=1)
+        return executed
+
+    # EDF pur : la réflexion cède la place aux planifs urgents mais passe devant
+    # les échéances plus lointaines qu'elle.
+    assert asyncio.run(_scenario()) == ["plan", "reflect", "refill_lointain"]
+
+
 def test_edf_desactive_utilise_le_spawn_direct():
     async def _scenario():
         loop = _make_loop(edf_enabled=False)

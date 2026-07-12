@@ -43,14 +43,29 @@ La clé de hachage est : `MD5(Catégorie + Paramètres + Fournisseur_Forcé)` �
 [POST /tasks reçu]
 └── Calcul priority_score = min(departure_time)
     └── Insertion dans Sorted Set batch:{batch_key}
-        ├── Si taille ≥ batch_limit → déclenchement immédiat
-        └── Sinon → armement d'un compte à rebours Celery (1s),
+        ├── Si taille ≥ seuil de dispatch → déclenchement immédiat
+        └── Sinon → armement d'un compte à rebours Celery (batch_delay_seconds, 3s),
             dédupliqué par un flag SETNX `batch_sched:{batch_key}`
 ```
 
 Le flag `batch_sched:{batch_key}` (SETNX + TTL) garantit qu'exactement un dispatch différé est armé par cycle de batch : sans lui, deux requêtes simultanées sur une file vide pouvaient chacune observer une taille > 1 et aucune n'armait le compte à rebours (tâches bloquées jusqu'au timeout client). Le worker libère le flag juste avant de dépiler la file ; le TTL sert de filet de sécurité si le message Celery se perd.
 
-`batch_max_agents` est calculé au démarrage : `max(1, min(tpm_limit / tokens_per_agent, rpm_limit, max_batch_agents))`
+#### Seuil de dispatch vs capacité de pop
+
+Deux limites distinctes gouvernent le batching :
+
+- **Seuil de dispatch** (`Settings.get_dispatch_threshold`, côté API) : taille de file
+  qui déclenche un dispatch immédiat. Provider forcé → sa capacité exacte ; provider
+  dynamique → `batch_target_agents` (10), borné par la capacité du plus gros provider.
+  Historiquement ce seuil était le **min** des providers, soit 1 à cause des petits
+  TPM Groq : chaque tâche partait immédiatement, la fenêtre d'accumulation ne jouait
+  jamais et le ratio agents/prompt plafonnait à ~2 (batching accidentel par backlog).
+- **Capacité de pop** (`batch_max_agents` par provider, côté worker) : une fois le
+  provider sélectionné, le worker dépile jusqu'à sa capacité réelle.
+
+`batch_max_agents` est calculé au démarrage : `max(1, min(tpm_limit / tokens_per_agent, rpm_limit, max_batch_agents))`,
+avec `tokens_per_agent = assumed_prompt_tokens + assumed_output_tokens` (3 000 — calé
+sur les ~1 600 tokens/agent mesurés + 25 % de marge).
 
 #### Budget de sortie (max_tokens) proportionnel au batch
 
@@ -58,10 +73,34 @@ Le `max_tokens` envoyé par le client (défaut 4096) est un budget **par tâche*
 Le worker le multiplie par le nombre d'agents fusionnés dans le batch, borné par
 `settings.max_output_tokens` (16 384, plafond global) puis par le
 `max_output_tokens` **du provider** (plafond de complétion du modèle, déclaré dans
-`providers.yaml`) puis par `max_tokens_per_request - assumed_prompt_tokens` du provider.
+`providers.yaml`) puis par le budget de capacité par requête (voir ci-dessous).
 Sans ce scaling, un batch `stm_reflection` de 10 agents (~500-1800 tokens de sortie
 chacun) saturait le plafond de 4096 : le JSON était coupé en plein milieu et échouait
 en `JSONDecodeError` à offset constant (~13-14k chars ≈ 4096 tokens).
+
+#### Capacité par requête (max_tokens_per_request) — garde-fou 413
+
+Le free tier groq rejette en **HTTP 413** toute requête unique dont
+`prompt + max_tokens` dépasse le TPM du modèle. Chaque provider groq déclare donc
+`max_tokens_per_request` (= son `tpm_limit`) dans `providers.yaml` — un test de config
+l'exige. Trois protections s'articulent (`_fit_request_budget` dans
+`worker/task_worker.py`) :
+
+1. **Dimensionnement du batch** : `max_tokens_per_request` borne `batch_max_agents`
+   au même titre que le TPM — un batch qui ne tient pas dans une requête n'est
+   jamais constitué.
+2. **Clamp dynamique de max_tokens** : après rendu du prompt, le worker confronte
+   sa taille **réelle** (`prompt_chars / token_chars_ratio`) à la capacité et rogne
+   `max_tokens` au budget restant. L'ancien clamp statique
+   (`cap - assumed_prompt_tokens`) sous-estimait d'un facteur 2 les prompts
+   `stm_reflection` (~4 500 tokens vs 2 200 supposés) : sur le run 2026-07-11,
+   38 des 63 erreurs LLM étaient des 413 et `groq_openai_120` n'a servi qu'un
+   batch sur tout le run.
+3. **Reroutage préventif** : si même `min_output_tokens` (512) ne tient plus dans
+   le budget, le worker lève `ProviderCapacityError` **avant l'appel HTTP** : slot
+   RPM/TPM restitué, cooldown court du provider, batch rejoué sur un autre modèle
+   via la rotation (même chemin que les 4xx non récupérables). Compteur Prometheus :
+   `llm_capacity_reroute_total{provider}`.
 
 #### Plafond de complétion par provider (max_output_tokens) — auto-appris
 
@@ -144,6 +183,14 @@ anciens répertoires de cache sont conservés (retour arrière possible).
 
 L'algorithme **Smooth Weighted Round Robin** distribue les requêtes entre providers actifs proportionnellement à leur `weight`. Un provider avec `weight: 2.0` reçoit deux fois plus de requêtes qu'un provider à `weight: 1.0`.
 
+**Convention de poids** (depuis 2026-07-10) : `weight = min(rpm_limit, tpm_limit / 3000) / 15`,
+où 3 000 ≈ tokens (in+out) d'une requête moyenne et 15 = RPM de référence. Le poids reflète
+ainsi la **capacité effective** : pour les providers à petit TPM (flotte Groq free tier),
+c'est le TPM qui borne le débit réel, pas le RPM affiché. Avant ce recalage, les poids
+étaient décorrélés des quotas — mistral (47 % de la capacité totale) ne recevait que ~8 %
+du trafic pendant que les petits providers Groq saturaient (429, violations TPM). À
+recalculer à chaque changement de `rpm_limit`/`tpm_limit` (cf. en-tête de `providers.yaml`).
+
 À chaque sélection :
 1. Vérification du Circuit Breaker (provider exclu ?)
 2. Vérification du **quota journalier** (RPD/TPD) : provider écarté jusqu'à minuit UTC si épuisé
@@ -170,8 +217,23 @@ de **429**. Désormais :
   ne pas sur-freiner ;
 - les providers sans `tpm_limit` (`tpm_limit: null`, ex. Gemma) ne sont pas bridés.
 
-C'est une **estimation** (garde-fou de débit), distincte du comptage a posteriori des tokens
-réels qui alimente le quota journalier `tpd_limit`.
+**Recalage à la taille réelle** (depuis 2026-07-10) : le forfait statique est corrigé en
+deux temps par le worker (`adjust_tokens`) :
+
+1. **Après rendu du prompt** — la réservation devient
+   `len(prompt en caractères) / token_chars_ratio + n_agents × assumed_output_tokens`.
+   Le ratio `token_chars_ratio = 3.0` a été mesuré sur un run réel (427 échanges,
+   prompts français + JSON : p50 = 3,24 chars/token, p10 = 3,05 → ~8 % de marge).
+   Un petit batch rend immédiatement du headroom aux autres workers ; un batch de
+   réflexions STM (~4 500 tokens_in/agent, soit 2× le forfait) réserve son vrai coût —
+   c'est ce sous-comptage qui faisait dépasser le TPM réel des petits providers.
+2. **Après la réponse** — la réservation est recalée sur `tokens_in + tokens_out`
+   facturés. Si le réel dépasse l'estimation de +25 %, un WARNING signale une dérive
+   du ratio (`token_chars_ratio` / `assumed_output_tokens` à revoir).
+
+Le forfait statique ne sert plus qu'à la réservation initiale (avant que le contenu du
+batch soit connu) et reste distinct du comptage a posteriori des tokens réels qui
+alimente le quota journalier `tpd_limit`.
 
 ### Quotas journaliers (RPD / TPD)
 

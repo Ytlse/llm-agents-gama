@@ -133,6 +133,15 @@ Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache`
 > mêmes que ceux du cache SOLARI historique). Si une reprise strictement exacte est requise,
 > passer la clé sur l'heure exacte (sans décalage).
 
+> ⚠️ **Limitation connue — `fixed_day` et date absolue** : la clé du cache OTP inclut la
+> **date simulée réelle** (`YYYY-MM-DD`), calculée avant le remapping `gtfs.fixed_day`
+> effectué dans `OTPTripHelper`. Avec `fixed_day` actif, deux dates simulées différentes
+> envoient pourtant la même requête à OTP (mêmes horaires GTFS) mais génèrent des clés
+> distinctes : un cache réchauffé pour le jour J est donc **intégralement raté** pour une
+> simulation au jour J+1. TODO (voir `OtpPersistentCache.make_key`) : baser la partie date
+> de la clé sur la date fixe (ou le jour de semaine) quand `fixed_day` est actif, à l'image
+> de la clé weekday d'`OsmnxPersistentCache`.
+
 Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
 **toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`). La clé voiture
 inclut le **jour de la semaine + tranche horaire** (granularité du facteur de congestion) mais

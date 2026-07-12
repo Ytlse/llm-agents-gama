@@ -49,7 +49,7 @@ class InMemoryRateLimiter:
             self._rpm[provider] = 0
             self._tpm[provider] = 0
 
-    def try_reserve(self, provider: str) -> bool:
+    def try_reserve(self, provider: str, est_tokens: int | None = None) -> bool:
         cfg = self._providers.get(provider)
         if cfg is None:
             return False
@@ -71,7 +71,8 @@ class InMemoryRateLimiter:
             return False
 
         # Garde-fou TPM glissant (mêmes règles que le limiter Redis).
-        est_tokens = cfg.tpm_estimate_per_request or 0
+        if est_tokens is None:
+            est_tokens = cfg.tpm_estimate_per_request or 0
         if cfg.tpm_limit and est_tokens and self._tpm[provider] + est_tokens > cfg.tpm_limit:
             return False
 
@@ -109,13 +110,20 @@ class InMemoryRateLimiter:
     def is_quota_exhausted(self, provider: str) -> bool:
         return time.time() < self._quota_exhausted_until.get(provider, 0.0)
 
-    def release_slot(self, provider: str) -> None:
+    def release_slot(self, provider: str, est_tokens: int | None = None) -> None:
         if self._rpm[provider] > 0:
             self._rpm[provider] -= 1
-        cfg = self._providers.get(provider)
-        est_tokens = cfg.tpm_estimate_per_request if cfg else None
+        if est_tokens is None:
+            cfg = self._providers.get(provider)
+            est_tokens = cfg.tpm_estimate_per_request if cfg else None
         if est_tokens:
             self._tpm[provider] = max(0, self._tpm[provider] - est_tokens)
+
+    def adjust_tokens(self, provider: str, delta: int) -> None:
+        cfg = self._providers.get(provider)
+        if cfg is None or not cfg.tpm_limit or delta == 0:
+            return
+        self._tpm[provider] = max(0, self._tpm[provider] + delta)
 
     def current_rpm(self, provider: str) -> int:
         self._maybe_reset_window(provider)
@@ -138,6 +146,10 @@ class InMemoryRateLimiter:
 
     def is_in_cooldown(self, provider: str) -> bool:
         return time.time() < self._cooldown_until.get(provider, 0.0)
+
+    def cooldown_ttl(self, provider: str) -> int:
+        remaining = self._cooldown_until.get(provider, 0.0) - time.time()
+        return int(remaining) if remaining > 0 else 0
 
     def disable(self, provider: str, seconds: int) -> None:
         self._disabled_until[provider] = time.time() + seconds

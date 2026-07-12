@@ -71,9 +71,23 @@ class Settings(BaseSettings):
     # 4xx non récupérable) : force la rotation à choisir un AUTRE modèle au réessai.
     provider_switch_cooldown_seconds: int = 30
     batch_max_agents:           int   = 5     # fallback si aucun provider configuré
-    batch_delay_seconds:        float = 1.0
+    # Fenêtre d'accumulation du micro-batching : une requête qui n'atteint pas le
+    # seuil de dispatch attend ce délai pour être fusionnée avec les suivantes.
+    # Calé sur l'inter-arrivée mesurée des prompts (run 2026-07-10 : p50 = 1,4s,
+    # p90 du débit = 40 prompts/min) — 1s ne captait quasiment rien.
+    batch_delay_seconds:        float = 3.0
+    # Seuil de dispatch immédiat (cf. get_dispatch_threshold) : taille de file à
+    # partir de laquelle on n'attend plus batch_delay_seconds. Découplé du min
+    # des providers, qui vaut 1 à cause des petits TPM Groq et court-circuitait
+    # toute accumulation (ratio agents/prompt ≈ 1 hors backlog).
+    batch_target_agents:        int   = 10
     assumed_prompt_tokens:      int   = 2200  # tokens_in max par agent (historique +10% de marge)
     assumed_output_tokens:      int   = 800   # tokens_out estimés par agent — sert (avec assumed_prompt_tokens) à dimensionner la réservation TPM glissante
+    # Estimation tokens_in depuis la taille du prompt rendu : tokens ≈ chars / ratio.
+    # Mesuré sur le run 2026-07-10 (427 échanges, prompts FR + JSON) : p50 = 3,24,
+    # p10 = 3,05 → 3,0 laisse ~8 % de marge. Sert à recaler la réservation TPM
+    # glissante sur la taille réelle de chaque requête (cf. worker/task_worker.py).
+    token_chars_ratio:          float = 3.0
     max_batch_agents:           int   = 20    # plafond absolu du calcul automatique de batch_max_agents
     min_output_tokens:          int   = 512   # budget output minimal acceptable par requête
     max_output_tokens:          int   = 16384 # plafond du max_tokens envoyé au provider (16 384 = limite de complétion gpt-4o-mini, le plus contraint des providers configurés)
@@ -87,7 +101,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def build_providers(self) -> "Settings":
         defaults = load_provider_defaults()
-        tokens_per_agent = self.assumed_prompt_tokens + 4096
+        # Coût tokens (in+out) d'un agent dans un batch — dimensionne batch_max_agents.
+        # Mesuré sur le run 2026-07-10 : 1 282 in + 320 out ≈ 1 600/agent (p90 ≈ 2 400) ;
+        # assumed_prompt_tokens + assumed_output_tokens = 3 000 garde ~25 % de marge.
+        # (Historique : un 4096 codé en dur donnait 6 296/agent et écrasait à 1 le
+        # batch_max_agents des providers à petit TPM.)
+        tokens_per_agent = self.assumed_prompt_tokens + self.assumed_output_tokens
         result = {}
         for name, entry in defaults.items():
             adapter_name = entry.get("adapter", name)
@@ -95,7 +114,11 @@ class Settings(BaseSettings):
             tpm = entry.get("tpm_limit")
             rpm = entry.get("rpm_limit", 1)
             tpm_bound = int(tpm / tokens_per_agent) if tpm else rpm
-            entry["batch_max_agents"] = max(1, min(tpm_bound, rpm, self.max_batch_agents))
+            # Capacité par requête unique (HTTP 413 au-delà) : borne le batch au même
+            # titre que le TPM — un batch qui ne tient pas dans une requête ne part jamais.
+            req_cap = entry.get("max_tokens_per_request")
+            req_bound = int(req_cap / tokens_per_agent) if req_cap else self.max_batch_agents
+            entry["batch_max_agents"] = max(1, min(tpm_bound, req_bound, rpm, self.max_batch_agents))
             # Estimation de la consommation tokens (in+out) d'une requête pleine —
             # garde-fou TPM glissant appliqué par le rate-limiter (None si pas de tpm_limit).
             if tpm:
@@ -128,6 +151,29 @@ class Settings(BaseSettings):
             return min(p.batch_max_agents for p in self.providers.values())
 
         return self.batch_max_agents
+
+    def get_dispatch_threshold(self, force_provider: Optional[str] = None) -> int:
+        """
+        Taille de file (en tâches) déclenchant un dispatch immédiat côté API.
+        En dessous, le dispatch est différé de batch_delay_seconds pour laisser
+        le micro-batching accumuler des tâches compatibles.
+
+        - Provider forcé : sa capacité exacte (attendre au-delà ne sert à rien).
+        - Provider dynamique : batch_target_agents, borné par la capacité du plus
+          gros provider. Surtout PAS le min des providers (contrairement à
+          get_batch_max_agents, utilisé par le worker au pop) : les providers à
+          petit TPM ont batch_max_agents = 1, le seuil serait toujours atteint et
+          la fenêtre d'accumulation ne jouerait jamais.
+        """
+        if force_provider:
+            provider_cfg = self.providers.get(force_provider)
+            if provider_cfg:
+                return provider_cfg.batch_max_agents
+
+        if self.providers:
+            return min(self.batch_target_agents, max(p.batch_max_agents for p in self.providers.values()))
+
+        return self.batch_target_agents
 
 
 def filter_providers_without_api_key(settings: Settings) -> Dict[str, ProviderConfig]:

@@ -30,11 +30,22 @@ dans `/debug-run` (`make report / capacity / init`).
 | 04 | `04_llm_gateway.json` / `llm-gateway` | Les providers suivent-ils ? À quel coût en tokens ? |
 | 05 | `05_routing.json` / `routing-otp-osmnx` | Le calcul d'itinéraire (OTP/OSMnx) est-il un goulot ? |
 | 06 | `06_cache_llm.json` / `cache-llm` | Le cache sémantique évite-t-il des appels LLM ? |
-| 07 | `07_metier_mobilite.json` / `metier-mobilite` | Que choisissent les agents ? (parts modales, distance, motif, biais d'index, états) |
+| 07 | `07_metier_mobilite.json` / `metier-mobilite` | Que choisissent les agents ? (parts modales, distance, motif, biais d'index, états, ponctualité des départs) |
 | 08 | `08_systeme.json` / `systeme` | La machine encaisse-t-elle ? (global VM + par conteneur via cAdvisor) |
 
 Le dashboard 07 applique la **palette officielle des modes** (CLAUDE.md) :
 voiture rouge, vélo/train violet, TC vert, marche cyan, moto magenta.
+
+Les graphiques temporels du dashboard 07 (parts modales, trajets par motif,
+états des agents) sont indexés sur l'**heure simulée**, pas l'heure réelle :
+chaque panel interroge en plus `gama_sim_logical_time_seconds * 1000` puis une
+chaîne de transformations Grafana (`joinByField` sur Time → `convertFieldType`
+du champ `__sim_time` en temps → `organize` qui masque le Time réel) fait de
+l'heure simulée l'axe X. Lire « à 8h les agents prennent la voiture » signifie
+donc 8h *dans la simulation*. Conséquences : la fenêtre temporelle sélectionnée
+en haut de Grafana reste en temps réel (elle borne les échantillons Prometheus),
+et si la plage couvre plusieurs runs, l'axe X repart en arrière à chaque /init —
+restreindre la plage au run courant pour une lecture propre.
 
 ## Alarmes
 
@@ -57,7 +68,10 @@ Deux mécanismes complémentaires :
 ## Métriques notables
 
 **Gateway** (`llm_module/api/metrics.py`) : appels/erreurs/tokens par provider
-(`__all__` = agrégat), `llm_provider_state/…_limit/…_today`, files de batch,
+(`__all__` = agrégat), `llm_provider_state/…_limit/…_today`,
+`llm_provider_disable_ttl_seconds` (secondes avant réactivation — couvre la
+désactivation temporaire **et** le cooldown 429/5xx, valeur = max des deux
+TTL), files de batch,
 workers Celery, métriques métier worker (`llm_transport_mode_chosen_total`,
 `llm_mode_by_distance_total` — 7 tranches jusqu'à `>50km`,
 `llm_mode_by_provider_total`, `llm_chosen_index_total`), `alarme_total` (part worker).
@@ -69,8 +83,24 @@ GAMA↔controller), `controller_event_loop_lag_seconds`,
 compté au push du trajet vers GAMA — couvre décisions LLM **et** cache
 sémantique **et** mono-choix, contrairement aux `llm_mode_by_*` de la gateway),
 couverture du cache Qdrant (`llm_cache_points_total/exact/stale`,
-`llm_cache_agents_covered`), latence OTP par instance (label **`otp_instance`**
-— `instance` est réservé par Prometheus pour la cible de scrape).
+`llm_cache_agents_covered`), `agent_bootstrap_wave_moves{wave,status}` (détail par vague du bootstrap,
+vague 1 comprise — status `planned`/`done`/`ok`/`cache_hit`/`cache_miss` ;
+le dashboard 02 affiche 8 lignes « progression / traités / cache hit », une
+par vague ; le nombre réel de vagues est dynamique, les lignes au-delà
+restent vides),
+latence OTP par instance (label **`otp_instance`**
+— `instance` est réservé par Prometheus pour la cible de scrape),
+famille **ponctualité des départs** (row dédiée du dashboard 07, phase live
+uniquement — le bootstrap pré-calcule au /init et n'est pas un vrai départ) :
+`agent_departures_punctuality_total{status=on_time|late}` (à l'heure = action
+poussée vers GAMA au plus 60 s après l'heure prévue),
+`agent_departure_delay_seconds` (histogramme des seuls retards, sum/count =
+retard moyen), `agent_departure_delay_max_seconds` (pire retard du run),
+complétée par `controller_planning_late_total` (départs « ratés » : la
+planification — typiquement la réponse LLM — est arrivée après que même
+l'heure d'arrivée prévue soit passée) et
+`agent_activity_decisions_total{outcome="llm_fallback", phase="live"}`
+(parti sur l'itinéraire par défaut faute de réponse LLM).
 
 Le coût est suivi **en tokens** (pas de conversion €) : totaux in/out,
 tokens/heure simulée, tokens économisés par le cache (estimation

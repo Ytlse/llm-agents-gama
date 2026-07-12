@@ -68,3 +68,4 @@ data/insee/*
 
 #script
 scripts/models_influence/calibration_results/*
+llm_module/llm_gateway.egg-info/SOURCES.txt

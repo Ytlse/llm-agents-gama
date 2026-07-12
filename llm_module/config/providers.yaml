@@ -23,6 +23,15 @@
 # Pour plusieurs instances d'un même fournisseur,
 # utilisez des noms distincts et renseignez le champ `adapter` avec le nom du fournisseur
 # de base. La clé API est héritée automatiquement via PROVIDER_KEYS__<adapter>.
+#
+# CONVENTION DE POIDS (weight) : proportionnel à la capacité effective du provider,
+#   weight = min(rpm_limit, tpm_limit / 3000) / 15
+# où 3000 ≈ tokens (in+out) d'une requête moyenne et 15 = RPM de référence (weight 1.0).
+# Pour les providers à petit TPM, c'est le TPM qui borne le débit réel, pas le RPM
+# (ex : groq_openai_120 à 30 RPM mais 8 000 TPM ne soutient que ~2,7 req/min).
+# Recalculer le weight à chaque changement de rpm_limit/tpm_limit.
+# (Recalé le 2026-07-10 : les poids historiques étaient décorrélés des quotas —
+# mistral, 47 % de la capacité totale, ne recevait que ~8 % du trafic.)
 
 providers:
 
@@ -36,7 +45,7 @@ providers:
     base_url:          https://api.openai.com/v1
     default_model:     gpt-4o-mini
     max_output_tokens: 16384  # limite de complétion gpt-4o-mini
-    weight:            1.0
+    weight:            1.0   # min(15, 200000/3000)/15 = 1.0
     concurrency_limit: 3   # 3 × 10 agents = 30 évalués simultanément, RPM=15 contrôle la cadence
 
   #
@@ -48,8 +57,11 @@ providers:
     tpd_limit:         2000000 # TBC
     base_url:          https://api.mistral.ai/v1
     default_model:     mistral-small-latest
-    weight:            1.0
-    concurrency_limit: 5   # 100 RPM laisse de la marge pour 5 workers parallèles
+    weight:            6.0   # min(90, 500000/3000)/15 = 6.0
+    # 3 (et non 5) : 5 workers se disputaient la file et la vidaient en pops de
+    # 1 tâche (run 2026-07-10 : 2,06 agents/prompt pour un plafond de 20). Moins
+    # de workers = pops plus gros, même débit (le RPM 90 est loin d'être saturé).
+    concurrency_limit: 3
 
   #
   # ── Google ───────────────────────────────────────────────
@@ -61,7 +73,7 @@ providers:
     rpd_limit:         500    # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemini-3.1-flash-lite-preview
-    weight:            2.0
+    weight:            1.0   # min(15, 250000/3000)/15 = 1.0
     concurrency_limit: 2   # batches de 40 agents = déjà très dense, inutile d'augmenter
     disable_timeout:   120
 
@@ -73,7 +85,7 @@ providers:
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-26b-a4b-it
     max_output_tokens: 8192   # limite de complétion des modèles Gemma
-    weight:            2.0
+    weight:            1.0   # min(15, ∞)/15 = 1.0 — concurrency 1 borne déjà le débit réel
     concurrency_limit: 1
     disable_timeout:   180
 
@@ -85,7 +97,7 @@ providers:
     base_url:          https://generativelanguage.googleapis.com/v1beta
     default_model:     gemma-4-31b-it
     max_output_tokens: 8192   # limite de complétion des modèles Gemma
-    weight:            2.0
+    weight:            1.0   # min(15, ∞)/15 = 1.0 — concurrency 1 borne déjà le débit réel
     concurrency_limit: 1
     disable_timeout:   180
 
@@ -105,11 +117,12 @@ providers:
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         12000
+    max_tokens_per_request: 12000  # TPM free tier = 12000 → requête unique > 12000 tokens → HTTP 413
     tpd_limit:         100000
     base_url:          https://api.groq.com/openai/v1
     default_model:     llama-3.3-70b-versatile
     max_output_tokens: 32768
-    weight:            1.0
+    weight:            0.25  # min(30, 12000/3000)/15 = 0.27 — borné par le TPM
     concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
     disable_timeout:   120
 
@@ -117,11 +130,12 @@ providers:
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         30000
+    max_tokens_per_request: 30000  # TPM free tier = 30000 → requête unique > 30000 tokens → HTTP 413
     tpd_limit:         500000
     base_url:          https://api.groq.com/openai/v1
     default_model:     meta-llama/llama-4-scout-17b-16e-instruct
     max_output_tokens: 8192   # HTTP 400 au-delà : "`max_tokens` must be less than or equal to `8192`"
-    weight:            1.0
+    weight:            0.65  # min(30, 30000/3000)/15 = 0.67 — borné par le TPM
     concurrency_limit: 4
     disable_timeout:   120
 
@@ -138,7 +152,7 @@ providers:
     base_url:                https://api.groq.com/openai/v1
     default_model:           qwen/qwen3-32b
     max_output_tokens:       40960
-    weight:                  0.5
+    weight:                  0.15  # min(2, 6000/3000)/15 = 0.13 — borné par le TPM
     concurrency_limit:       3
     disable_timeout:         120
 
@@ -151,7 +165,7 @@ providers:
     max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
     base_url:                https://api.groq.com/openai/v1
     default_model:           llama-3.1-8b-instant
-    weight:                  0.5
+    weight:                  0.15  # min(2, 6000/3000)/15 = 0.13 — borné par le TPM
     concurrency_limit:       3
     disable_timeout:         120
 
@@ -159,11 +173,12 @@ providers:
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         8000
+    max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
     tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-120b
     max_output_tokens: 65536
-    weight:            1.0
+    weight:            0.2   # min(30, 8000/3000)/15 = 0.18 — borné par le TPM
     concurrency_limit: 3
     disable_timeout:   120
 
@@ -171,11 +186,12 @@ providers:
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         8000
+    max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
     tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-20b
     max_output_tokens: 65536
-    weight:            1.0
+    weight:            0.2   # min(30, 8000/3000)/15 = 0.18 — borné par le TPM
     concurrency_limit: 3
     disable_timeout:   120
 
@@ -221,7 +237,7 @@ providers:
     tpd_limit:         1000000
     base_url:          https://api.cerebras.ai/v1
     default_model:     gpt-oss-120b
-    weight:            1.0
+    weight:            0.35  # min(5, 30000/3000)/15 = 0.33 — borné par le RPM
     concurrency_limit: 4
     disable_timeout:   120
 
@@ -243,6 +259,6 @@ providers:
     tpd_limit:         1000000
     base_url:          https://api.cerebras.ai/v1
     default_model:     zai-glm-4.7
-    weight:            0.3
+    weight:            0.35  # min(5, 30000/3000)/15 = 0.33 — borné par le RPM
     concurrency_limit: 1
     disable_timeout:   120

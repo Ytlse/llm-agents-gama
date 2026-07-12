@@ -13,11 +13,44 @@ import pytest
 from datetime import datetime, timezone, timedelta
 
 from llm_module.worker.task_worker import (
+    ProviderCapacityError,
     _extract_primary_mode,
+    _fit_request_budget,
     _get_distance_bracket,
     _parse_max_tokens_limit,
     _parse_ratelimit_reset_seconds,
 )
+
+
+# ---------------------------------------------------------------------------
+# _fit_request_budget — garde-fou 413 (capacité par requête vs prompt rendu)
+# ---------------------------------------------------------------------------
+
+class _Cfg:
+    def __init__(self, max_tokens_per_request):
+        self.max_tokens_per_request = max_tokens_per_request
+
+
+class TestFitRequestBudget:
+    def test_sans_capacite_max_tokens_inchange(self):
+        assert _fit_request_budget(_Cfg(None), 5000, 4096, 512, "p") == 4096
+        assert _fit_request_budget(None, 5000, 4096, 512, "p") == 4096
+
+    def test_prompt_petit_max_tokens_inchange(self):
+        # 8000 - 2000 = 6000 de budget > 4096 demandés
+        assert _fit_request_budget(_Cfg(8000), 2000, 4096, 512, "p") == 4096
+
+    def test_gros_prompt_rogne_max_tokens(self):
+        # Prompt réflexion ~4500 tokens sur un provider à 8000 : 3500 de budget
+        assert _fit_request_budget(_Cfg(8000), 4500, 8192, 512, "p") == 3500
+
+    def test_prompt_trop_gros_leve_capacity_error(self):
+        # Même la sortie minimale ne tient plus → rejouer sur un autre provider
+        with pytest.raises(ProviderCapacityError) as exc:
+            _fit_request_budget(_Cfg(6000), 5800, 4096, 512, "groq_qwen")
+        assert exc.value.provider == "groq_qwen"
+        assert exc.value.prompt_tokens_est == 5800
+        assert exc.value.max_tokens_per_request == 6000
 
 
 # ---------------------------------------------------------------------------

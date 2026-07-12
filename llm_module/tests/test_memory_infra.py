@@ -29,10 +29,17 @@ def _task(agents_count: int = 1, priority: float = 100.0) -> Task:
     return Task(request=request, priority_score=priority)
 
 
-def _provider(rpm: int = 100, concurrency: int = 2) -> ProviderConfig:
+def _provider(
+    rpm: int = 100,
+    concurrency: int = 2,
+    tpm: int | None = None,
+    tpm_estimate: int | None = None,
+) -> ProviderConfig:
     return ProviderConfig(
         api_key=SecretStr("k"),
         rpm_limit=rpm,
+        tpm_limit=tpm,
+        tpm_estimate_per_request=tpm_estimate,
         base_url="http://x",
         default_model="m",
         concurrency_limit=concurrency,
@@ -179,6 +186,12 @@ class TestInMemoryRateLimiter:
         assert limiter.is_in_cooldown("p") is True
         assert limiter.try_reserve("p") is False
 
+    def test_cooldown_reports_ttl(self):
+        limiter = InMemoryRateLimiter({"p": _provider()})
+        assert limiter.cooldown_ttl("p") == 0
+        limiter.cooldown("p", seconds=60)
+        assert 0 < limiter.cooldown_ttl("p") <= 60
+
     def test_disable_blocks_and_reports_ttl(self):
         limiter = InMemoryRateLimiter({"p": _provider()})
         limiter.disable("p", seconds=120)
@@ -211,6 +224,48 @@ class TestInMemoryRateLimiter:
         limiter.try_reserve("p")
         limiter.reset_windows()
         assert limiter.current_rpm("p") == 0
+
+    # ── Réservation TPM à la taille réelle ──────────────────────────────
+
+    def test_reserve_with_explicit_est_tokens(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100, tpm=10_000, tpm_estimate=3_000)})
+        assert limiter.try_reserve("p", est_tokens=8_000) is True
+        assert limiter.current_tpm("p") == 8_000
+        # La fenêtre ne peut plus accueillir la 2e requête de 8 000 tokens.
+        limiter._last_req["p"] = 0.0  # neutralise le lissage
+        assert limiter.try_reserve("p", est_tokens=8_000) is False
+
+    def test_reserve_falls_back_to_static_estimate(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100, tpm=10_000, tpm_estimate=3_000)})
+        limiter.try_reserve("p")
+        assert limiter.current_tpm("p") == 3_000
+
+    def test_adjust_tokens_up_and_down(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100, tpm=10_000, tpm_estimate=3_000)})
+        limiter.try_reserve("p")
+        limiter.adjust_tokens("p", 2_500)   # requête réelle plus grosse que le forfait
+        assert limiter.current_tpm("p") == 5_500
+        limiter.adjust_tokens("p", -4_000)  # consommation réelle plus petite
+        assert limiter.current_tpm("p") == 1_500
+
+    def test_adjust_tokens_clamps_at_zero(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100, tpm=10_000, tpm_estimate=3_000)})
+        limiter.try_reserve("p")
+        limiter.adjust_tokens("p", -9_999)
+        assert limiter.current_tpm("p") == 0
+
+    def test_adjust_tokens_noop_without_tpm_limit(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100)})
+        limiter.adjust_tokens("p", 5_000)
+        assert limiter.current_tpm("p") == 0
+
+    def test_release_slot_with_explicit_est_tokens(self):
+        limiter = InMemoryRateLimiter({"p": _provider(rpm=100, tpm=10_000, tpm_estimate=3_000)})
+        limiter.try_reserve("p")
+        limiter.adjust_tokens("p", 2_000)          # réservation recalée à 5 000
+        limiter.release_slot("p", est_tokens=5_000)
+        assert limiter.current_rpm("p") == 0
+        assert limiter.current_tpm("p") == 0
 
     # ── Quotas journaliers (RPD / TPD) ──────────────────────────────────
 

@@ -128,10 +128,12 @@ class RedisRateLimiter:
     # Réservation RPM
     # ------------------------------------------------------------------
 
-    def try_reserve(self, provider: str) -> bool:
+    def try_reserve(self, provider: str, est_tokens: int | None = None) -> bool:
         """
         Vérifie les pré-conditions (désactivé, cooldown, concurrence, quota)
         puis réserve atomiquement un slot RPM (Lua, avec lissage temporel).
+        `est_tokens` surcharge l'estimation TPM statique quand la taille réelle
+        de la requête est connue.
         """
         cfg = self._providers.get(provider)
         if cfg is None:
@@ -158,9 +160,11 @@ class RedisRateLimiter:
         limit = cfg.rpm_limit
         min_interval = RPM_WINDOW_SECONDS / limit if limit > 0 else 0.0
         # Garde-fou TPM : n'est armé que si le provider déclare un tpm_limit ET une
-        # estimation par requête (calculée au build). Sinon tpm_limit=0 → script ignore.
+        # estimation (fournie par l'appelant, sinon statique calculée au build).
+        # Sinon tpm_limit=0 → script ignore.
         tpm_limit = cfg.tpm_limit or 0
-        est_tokens = cfg.tpm_estimate_per_request or 0
+        if est_tokens is None:
+            est_tokens = cfg.tpm_estimate_per_request or 0
         result = self._r.eval(
             _TRY_RESERVE_RPM_SMOOTHED_SCRIPT,
             3,
@@ -234,21 +238,40 @@ class RedisRateLimiter:
     def is_quota_exhausted(self, provider: str) -> bool:
         return self._r.exists(f"{QUOTA_EXHAUSTED_PREFIX}{provider}") > 0
 
-    def release_slot(self, provider: str) -> None:
+    def release_slot(self, provider: str, est_tokens: int | None = None) -> None:
         """Restitue les slots RPM + TPM réservés lorsque l'appel LLM échoue.
-        Évite que les erreurs consomment du quota sans appel réussi."""
+        Évite que les erreurs consomment du quota sans appel réussi.
+        `est_tokens` doit valoir le montant effectivement réservé (après un
+        éventuel adjust_tokens) ; défaut = estimation statique."""
         key = _rpm_key(provider)
         # On décrémente seulement si la clé existe (sinon DECR créerait -1)
         if self._r.exists(key):
             self._r.decr(key)
         # Restitution symétrique de la réservation TPM estimée (sinon la fenêtre
         # glissante enfle à chaque échec et sur-freine le provider).
-        cfg = self._providers.get(provider)
-        est_tokens = cfg.tpm_estimate_per_request if cfg else None
+        if est_tokens is None:
+            cfg = self._providers.get(provider)
+            est_tokens = cfg.tpm_estimate_per_request if cfg else None
         if est_tokens:
-            tpm_key = _tpm_key(provider)
-            if self._r.exists(tpm_key):
-                self._r.decrby(tpm_key, est_tokens)
+            self.adjust_tokens(provider, -est_tokens)
+
+    def adjust_tokens(self, provider: str, delta: int) -> None:
+        """Corrige la réservation TPM de la fenêtre glissante courante (delta
+        signé). Clampe à 0 pour ne jamais laisser la fenêtre négative (la clé
+        a pu expirer entre la réservation et l'ajustement)."""
+        if delta == 0:
+            return
+        cfg = self._providers.get(provider)
+        if cfg is None or not cfg.tpm_limit:
+            return
+        tpm_key = _tpm_key(provider)
+        if delta < 0:
+            if self._r.exists(tpm_key) and int(self._r.decrby(tpm_key, -delta)) < 0:
+                self._r.set(tpm_key, 0, keepttl=True)
+        else:
+            if int(self._r.incrby(tpm_key, delta)) == delta:
+                # Clé créée par cet INCRBY → poser le TTL de la fenêtre.
+                self._r.expire(tpm_key, RPM_WINDOW_SECONDS)
 
     def current_rpm(self, provider: str) -> int:
         val = self._r.get(_rpm_key(provider))
@@ -275,6 +298,10 @@ class RedisRateLimiter:
 
     def is_in_cooldown(self, provider: str) -> bool:
         return self._r.exists(f"{COOLDOWN_KEY_PREFIX}{provider}") > 0
+
+    def cooldown_ttl(self, provider: str) -> int:
+        ttl = self._r.ttl(f"{COOLDOWN_KEY_PREFIX}{provider}")
+        return ttl if ttl > 0 else 0
 
     def disable(self, provider: str, seconds: int) -> None:
         """Désactivation temporaire — à l'expiration du TTL, Redis supprime la

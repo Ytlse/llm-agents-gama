@@ -80,13 +80,16 @@ async def create_task(payload: LLMRequest, request: Request) -> dict:
     batch_key = compute_batch_key(payload)
     queue_size = await deps.queue.add(batch_key, task.task_id, priority_score)
 
-    # Batch plein → dispatch immédiat. Sinon, on accorde un court délai pour
-    # accumuler d'autres tâches ; le flag SETNX garantit qu'exactement un dispatch
-    # différé est planifié par cycle de batch, quel que soit l'ordre d'arrivée
-    # des requêtes concurrentes (queue_size seul ne suffit pas : deux requêtes
-    # simultanées peuvent toutes deux observer queue_size == 2).
+    # File au seuil → dispatch immédiat. Sinon, on accorde un court délai
+    # (batch_delay_seconds) pour accumuler d'autres tâches ; le flag SETNX garantit
+    # qu'exactement un dispatch différé est planifié par cycle de batch, quel que
+    # soit l'ordre d'arrivée des requêtes concurrentes (queue_size seul ne suffit
+    # pas : deux requêtes simultanées peuvent toutes deux observer queue_size == 2).
+    # Le seuil vient de get_dispatch_threshold (cible de batch, PAS le min des
+    # providers qui vaut 1 et rendrait le dispatch toujours immédiat) ; le worker
+    # replafonnera au pop selon le batch_max_agents du provider sélectionné.
     settings = deps.settings
-    batch_limit = settings.get_batch_max_agents(payload.force_provider)
+    batch_limit = settings.get_dispatch_threshold(payload.force_provider)
     # Budget de sortie d'une tâche : le load balancer écarte les providers dont
     # le plafond de complétion (max_output_tokens) ne peut pas servir une seule tâche.
     min_output_required = payload.parameters.get("max_tokens")

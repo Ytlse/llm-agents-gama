@@ -1,3 +1,188 @@
+## [2026-07-11] Fin des HTTP 413 groq : capacité par requête vérifiée avant l'envoi
+
+Sur le run du 2026-07-11, 38 des 63 erreurs LLM étaient des 413 « request too large »
+sur les providers groq : le free tier rejette toute requête unique dont
+`prompt + max_tokens` dépasse le TPM, et deux providers (`groq_openai_120/20`,
+plafond 8 000) partaient sans aucun clamp — `groq_openai_120` n'a servi qu'un seul
+batch sur tout le run malgré 30 RPM de quota disponible.
+
+- Tous les providers groq déclarent désormais `max_tokens_per_request` (= leur TPM),
+  qui borne aussi la taille des batchs constitués.
+- Le `max_tokens` envoyé est rogné d'après la taille **réelle** du prompt rendu
+  (l'estimation statique sous-évaluait les prompts de réflexion d'un facteur 2).
+- Si même la sortie minimale ne tient plus, le batch est rerouté vers un autre
+  modèle **avant** l'appel HTTP (nouveau compteur `llm_capacity_reroute_total`).
+
+**Avant :** requêtes condamnées envoyées quand même — 413, retries brûlés, cascades
+« providers saturés », capacité groq quasi inutilisée
+**Après :** zéro 413 évitable, la capacité groq (~90 RPM cumulés) redevient
+exploitable pour résorber le backlog de planification
+
+---
+
+## [2026-07-11] Réflexions STM ordonnancées en EDF avec garantie < 12 h simulées
+
+Les réflexions STM partaient en fire-and-forget vers le gateway dès leur déclenchement
+et se battaient avec les planifications de trajets aux heures de pointe : sur le run du
+2026-07-11, 219 réflexions perdues (timeouts 120 s, providers saturés) et l'essentiel
+des 411 ERROR du log. Elles passent désormais par la file EDF avec une échéance en
+temps simulé de 12 h (`stm_reflection_deadline_sim_s`).
+
+- Les planifs urgentes passent d'abord ; les réflexions remplissent les creux et
+  remontent en priorité à l'approche de leur échéance.
+- La contre-pression prédictive compte leurs échéances : si le débit LLM ne permet
+  plus de les tenir, le `/sync` est retenu et le temps simulé se fige le temps de
+  drainer — la garantie 12 h simulées est structurelle.
+- Un échec gateway ne repousse pas l'échéance : la re-soumission au sync suivant
+  garde la deadline d'origine, donc la priorité monte à chaque retentative.
+- Nouvelle alarme `[ALARME]` (visible via `make error`) si une réflexion dépasse
+  quand même son échéance simulée.
+
+**Avant :** réflexions en concurrence frontale avec les planifs, échecs massifs
+silencieusement retentés sans limite de retard
+**Après :** réflexions servies dans les creux de charge, avec échéance simulée
+garantie de 12 h et alarme en cas de dépassement
+
+---
+
+## [2026-07-11] Micro-batching réellement exploité : le ratio agents/prompt décolle
+
+Le micro-batching regroupait très peu (2,4 agents/prompt sur le run du 2026-07-10,
+57 % des prompts partaient avec un seul agent) alors que Mistral, qui porte 64 % du
+trafic, plafonne à 20 agents/prompt. Quatre correctifs s'attaquent à la cause :
+
+- **Seuil de dispatch découplé du plus petit provider** : le dispatch immédiat se
+  déclenchait dès 1 tâche en file (min des providers, tiré vers 1 par les petits TPM
+  Groq), court-circuitant la fenêtre d'accumulation. Le seuil est désormais une cible
+  de batch (`batch_target_agents`, 10) ; en dessous, la fenêtre d'accumulation joue.
+- **Fenêtre d'accumulation élargie** : 1 s → 3 s, calée sur l'inter-arrivée mesurée
+  des prompts (p50 = 1,4 s).
+- **Capacités de batch recalibrées sur les tokens réels** : le calcul supposait
+  6 296 tokens/agent alors que le mesuré est ~1 600 ; avec 3 000 (marge 25 %), les
+  providers bornés par le TPM acceptent des batchs 2 à 4× plus gros
+  (groq_llama4 : 4 → 10, groq_llama3 : 1 → 4, cerebras : 4 → 5).
+- **Concurrence Mistral réduite (5 → 3 workers)** : cinq workers se disputaient la
+  file et la vidaient en pops d'une tâche ; moins de workers = pops plus gros, même
+  débit (RPM 90 loin d'être saturé).
+
+**Avant :** ~2,4 agents/prompt (médiane 1), batching accidentel uniquement quand le
+backlog s'accumulait ; system prompt (~900 tokens) dupliqué dans chaque requête.
+**Après :** les tâches compatibles s'accumulent jusqu'à 3 s ou 10 tâches avant envoi,
+puis le worker remplit le batch à la capacité réelle du provider — moins de requêtes,
+moins de tokens dupliqués, plus de marge RPM pour les pics (moins de 429/fallbacks).
+Contrepartie : +3 s de latence max par décision, négligeable devant l'appel LLM (2-10 s).
+
+À surveiller au prochain run : le panneau « Ratio batching (agents/prompt) » du
+dashboard LLM Gateway, et les `ProviderParseError` sur les gros batchs (un batch
+de 20 en échec = 20 agents à rejouer).
+
+---
+
+## [2026-07-11] Limitation documentée : cache OTP raté d'un jour simulé à l'autre
+
+La clé du cache OTP persistant inclut la date simulée absolue, calculée avant le
+remapping `gtfs.fixed_day`. Conséquence : même avec `fixed_day` actif (requêtes OTP
+identiques d'un jour à l'autre), un cache réchauffé au jour J est intégralement raté
+au jour J+1. La limitation est maintenant documentée dans `docs/arch/cache-memory.md`
+et un TODO est posé dans `OtpPersistentCache.make_key` (aligner la partie date de la
+clé sur la date fixe ou le jour de semaine, comme le cache OSMnx). Aucun changement
+de comportement pour l'instant.
+
+---
+
+## [2026-07-10] Dashboard Métier Mobilité : ponctualité des départs
+
+Nouvelle row « Ponctualité des départs (phase live) » dans le dashboard
+« 07 · Métier Mobilité » : elle répond d'un coup d'œil à « les agents
+partent-ils à l'heure ? » :
+
+- **Départs à l'heure** vs **en retard** (seuil : action poussée vers GAMA
+  plus de 60 s après l'heure prévue), avec le **% de départs à l'heure** ;
+- pour les retardataires : **retard moyen** et **retard max** du run ;
+- **départs ratés** : la planification (réponse LLM) est arrivée si tard que
+  même l'heure d'arrivée prévue était déjà passée ;
+- **sans réponse LLM** : activités parties sur l'itinéraire par défaut faute
+  de réponse à temps (saturation/timeout) ;
+- un graphique temporel « à l'heure / en retard / ratés » par tranche de 10 min.
+
+Le bootstrap (/init) est exclu : il pré-calcule les itinéraires et ne mesure
+pas de vrais départs.
+
+**Before :** la ponctualité se reconstruisait après coup via `/debug-run`
+(logs LATE) ; aucun indicateur live de retard moyen/max ni de départs ratés.
+**After :** l'état de ponctualité des agents est visible en continu dans le
+dashboard métier, seuils colorés (orange dès 10 retards ou 5 min de retard moyen).
+
+---
+
+## [2026-07-10] Dashboard LLM Gateway : panneaux providers lisibles et « Réactivation dans (s) » réparé
+
+Trois lisibilités corrigées sur le dashboard « 04 · LLM Gateway » :
+
+- **État des providers** : chaque tuile affiche maintenant le nom du provider
+  au-dessus de son état (Actif, Cooldown, …) — plus besoin de deviner quelle
+  tuile correspond à quel provider.
+- **Réactivation dans (s)** : le panneau restait à 0 même quand un provider
+  était en cooldown, car la métrique ne couvrait que la désactivation
+  temporaire (erreurs consécutives), pas le cooldown 429/5xx — de loin le cas
+  le plus fréquent. La métrique expose désormais le TTL restant quel que soit
+  le mécanisme.
+- **Tokens cumulés par provider & modèle** : les barres étaient légendées avec
+  le jeu de labels Prometheus brut (`{instance=…, job=…, model=…, provider=…}`) ;
+  elles affichent maintenant `provider · modèle` (ex. `google_gemini31 ·
+  gemini-3.1-flash-lite-preview`).
+
+**Before :** un provider en cooldown affichait « Réactivation dans 0 s » ;
+états et tokens illisibles sans survoler chaque série.
+**After :** le compte à rebours de réactivation est correct pour cooldown et
+désactivation ; provider identifiable d'un coup d'œil sur les trois panneaux.
+
+---
+
+## [2026-07-10] Dashboard Métier Mobilité : graphiques en heure simulée
+
+Les trois graphiques temporels du dashboard Grafana « 07 · Métier Mobilité »
+(parts modales dans le temps, trajets par motif, états des agents) affichent
+désormais l'**heure de la simulation** sur l'axe X, au lieu de l'heure réelle.
+La lecture métier devient directe : un pic voiture à 8h correspond bien à 8h
+du matin *vécu par les agents*, quelle que soit la vitesse d'exécution du run.
+
+**Before :** l'axe X montrait l'heure réelle du poste ; avec une simulation
+accélérée (ou ralentie par le backpressure), impossible de relier un pic modal
+à un moment de la journée simulée.
+**After :** l'axe X suit `gama_sim_logical_time_seconds` — les courbes se lisent
+en heures de la journée simulée. La plage temporelle sélectionnée en haut de
+Grafana reste en temps réel ; restreindre la plage au run courant si plusieurs
+runs sont couverts (l'axe repartirait en arrière à chaque /init).
+
+---
+
+## [2026-07-10] Répartition LLM proportionnelle à la capacité réelle et réservation TPM à la taille exacte
+
+Le load balancer distribue désormais les requêtes proportionnellement à la capacité
+**effective** de chaque provider (`min(RPM, TPM/3000)`), et la fenêtre TPM glissante est
+recalée sur la taille réelle de chaque requête (prompt mesuré en caractères / 3, puis
+tokens facturés) au lieu d'un forfait fixe de 3 000 tokens.
+
+Ce que ça débloque :
+- **Les gros providers absorbent enfin leur part** : mistral passe de ~8 % à ~49 % de la
+  rotation (il détient 47 % de la capacité totale) ; la flotte Groq bridée à 6-12k TPM
+  descend à 1-2 % chacun au lieu de saturer.
+- **Fin du sous-comptage des grosses requêtes** : une réflexion STM (~4 500 tokens_in/agent,
+  2× le forfait) réserve son vrai coût — c'est ce sous-comptage qui produisait des
+  violations TPM (groq_qwen mesuré à 122 % de son quota) et des 429.
+- **Les petites requêtes rendent leur headroom** : un batch plus léger que le forfait
+  libère immédiatement la différence pour les autres workers.
+- Un WARNING signale toute requête dont le coût réel dépasse l'estimation de +25 %
+  (dérive du ratio caractères/tokens, mesuré à 3,05-3,50 sur run réel).
+
+**Before :** mistral utilisé à 7 %, groq_qwen à 122 % de son TPM, 29 % des minutes actives
+avec des 429, réflexions STM abandonnées en masse (« providers saturés »).
+**After :** rotation alignée sur les quotas ; la fenêtre TPM reflète la consommation réelle
+requête par requête.
+
+---
+
 ## [2026-07-10] Réduction des fallbacks LLM : throttling de concurrence et timeouts étendus
 
 Baisse drastique du fallback LLM (6.8% → ~0%) via throttling de la concurrence et tolérance accrue aux 5xx.
@@ -31,6 +216,9 @@ Ce que la refonte débloque :
   (`trip_mode_by_purpose_total`, couvre LLM + cache + mono-choix), les 7 tranches de distance
   (les trajets 10-20 km et 20-50 km étaient invisibles), palette officielle des modes appliquée.
 - **CPU/RAM par conteneur** via cAdvisor (dashboard 08) — on voit désormais *qui* consomme.
+- **Toutes les vagues du bootstrap sont visibles** (`agent_bootstrap_wave_moves{wave,status}`,
+  dashboard 02) : 8 lignes, une par vague, chacune avec progression, agents traités/obtenus/
+  planifiés et cache hit % — seule la vague 1 était détaillée auparavant.
 - Panneaux cassés corrigés : PromQL invalide sur les tokens par modèle, latence OTP par instance
   (label `instance` → `otp_instance`, il était écrasé par Prometheus), famille EDF/backpressure
   et OSMnx (ok/err/latence) enfin affichées.

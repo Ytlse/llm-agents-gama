@@ -104,6 +104,16 @@ class WorkerMetricsCollector:
                 err_type_fam.add_metric(parts, val)
         yield err_type_fam
 
+        # ── Reroutages capacité (413 évités) ─────────────────────────────────
+        reroute_fam = CounterMetricFamily(
+            'llm_capacity_reroute_total',
+            'Batchs rejoués sur un autre provider car le prompt rendu dépasse la capacité par requête (HTTP 413 évité)',
+            labels=['provider'],
+        )
+        for provider, val in _by_prefix(counters, "capacity_reroute_total:").items():
+            reroute_fam.add_metric([provider], val)
+        yield reroute_fam
+
         # ── Mode de transport choisi ──────────────────────────────────────────
         mode_fam = CounterMetricFamily(
             'llm_transport_mode_chosen_total',
@@ -186,14 +196,18 @@ class WorkerMetricsCollector:
                 state_fam.add_metric([provider], 3)
         yield state_fam
 
-        # ── TTL restant désactivation temporaire ───────────────────────────────
+        # ── TTL restant avant réactivation (désactivation temporaire OU cooldown) ─
         disable_ttl_fam = GaugeMetricFamily(
             'llm_provider_disable_ttl_seconds',
             'Secondes avant réactivation automatique du provider (0 si actif)',
             labels=['provider'],
         )
         for provider in settings.providers:
-            disable_ttl_fam.add_metric([provider], deps.limiter.disabled_ttl(provider))
+            ttl = max(
+                deps.limiter.disabled_ttl(provider),
+                deps.limiter.cooldown_ttl(provider),
+            )
+            disable_ttl_fam.add_metric([provider], ttl)
         yield disable_ttl_fam
 
         # ── Profondeur des files de batch Redis (tâches PENDING par batch_key) ─

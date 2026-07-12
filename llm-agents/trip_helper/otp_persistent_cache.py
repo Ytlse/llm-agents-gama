@@ -43,6 +43,16 @@ class OtpPersistentCache:
     def make_key(departure_time: int, origin: Location, destination: Location, include_car: bool, arrive_by: bool, include_bike: bool = True) -> str:
         # include_bike fait partie de la clé : sans lui, un résultat calculé pour un
         # agent sans vélo (aucune option vélo) serait resservi à un agent avec vélo.
+        #
+        # NOTE fixed_day : la clé inclut la date absolue (YYYY-MM-DD) du departure_time
+        # simulé, calculée AVANT le remapping fixed_day fait dans OTPTripHelper
+        # (otp.py). Quand gtfs.fixed_day est actif, deux dates simulées différentes
+        # produisent pourtant la même requête OTP (mêmes horaires GTFS), mais des clés
+        # de cache différentes → le cache réchauffé au jour J est intégralement raté
+        # au jour J+1.
+        # TODO: quand fixed_day est actif, remplacer date_str par la date fixe (ou le
+        # jour de semaine) pour partager le cache entre dates simulées, comme le fait
+        # déjà OsmnxPersistentCache (clé weekday, pas date absolue).
         dt = datetime.fromtimestamp(departure_time)
         date_str = dt.strftime('%Y-%m-%d')
         time_bucket = f"{dt.hour:02d}:{(dt.minute // 10) * 10:02d}"

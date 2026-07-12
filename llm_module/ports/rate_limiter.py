@@ -8,18 +8,29 @@ Regroupe tout l'état « santé provider » partagé entre workers :
 """
 
 from __future__ import annotations
-from typing import Protocol
+from typing import Optional, Protocol
 
 
 class RateLimiter(Protocol):
     # ── Réservation RPM ──────────────────────────────────────────────────
-    def try_reserve(self, provider: str) -> bool:
+    def try_reserve(self, provider: str, est_tokens: Optional[int] = None) -> bool:
         """Réserve atomiquement un slot RPM (vérifie désactivation, cooldown,
-        concurrence, quota + lissage). True si le slot est acquis."""
+        concurrence, quota + lissage). True si le slot est acquis.
+        `est_tokens` surcharge l'estimation TPM statique (tpm_estimate_per_request)
+        quand la taille réelle de la requête est connue."""
         ...
 
-    def release_slot(self, provider: str) -> None:
-        """Restitue les slots RPM + TPM réservés quand l'appel LLM échoue."""
+    def release_slot(self, provider: str, est_tokens: Optional[int] = None) -> None:
+        """Restitue les slots RPM + TPM réservés quand l'appel LLM échoue.
+        `est_tokens` doit valoir le montant effectivement réservé (après un
+        éventuel adjust_tokens) ; défaut = estimation statique."""
+        ...
+
+    def adjust_tokens(self, provider: str, delta: int) -> None:
+        """Corrige la réservation TPM de la fenêtre glissante courante :
+        delta > 0 quand la requête réelle dépasse l'estimation posée à la
+        réservation, delta < 0 quand elle est plus petite (libère du headroom).
+        Sans effet si le provider n'a pas de tpm_limit."""
         ...
 
     def current_rpm(self, provider: str) -> int: ...
@@ -51,6 +62,10 @@ class RateLimiter(Protocol):
     def cooldown(self, provider: str, seconds: int) -> None: ...
 
     def is_in_cooldown(self, provider: str) -> bool: ...
+
+    def cooldown_ttl(self, provider: str) -> int:
+        """Secondes avant fin du cooldown (0 si pas en cooldown)."""
+        ...
 
     def disable(self, provider: str, seconds: int) -> None: ...
 

@@ -92,7 +92,7 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
     provider_switch_cooldown_seconds: int = 30
     batch_max_agents:          int   = 5
-    batch_delay_seconds:       float = 1.0
+    batch_delay_seconds:       float = 3.0  # miroir de llm_module.config (fenêtre d'accumulation du micro-batching)
 
     # Clés API lues depuis l'env : PROVIDER_KEYS__groq=gsk-...
     provider_keys: Dict[str, SecretStr] = {}
@@ -285,6 +285,12 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     long_term_max_loaded_metadata: int = 5000
     long_term_reflect_interval: int = 6 * 3600  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
     stm_reflection_min_entries: int = 10        # déclenche la réflexion STM dès que N entrées accumulées
+    # Échéance (temps SIMULÉ) d'une réflexion STM : soumise en file EDF avec
+    # deadline = trigger + ce délai. EDF la sert quand il y a du mou, la priorise
+    # à l'approche de l'échéance, et la contre-pression prédictive retient le /sync
+    # si le débit ne permet plus de la tenir. L'échéance est conservée entre les
+    # retentatives (échec gateway → re-soumission au sync suivant, même deadline).
+    stm_reflection_deadline_sim_s: int = 12 * 3600
 
     long_term_retrieval__sim_weight: float = 0.4
     long_term_retrieval__keyword_weight: float = 0.3

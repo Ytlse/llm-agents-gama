@@ -119,6 +119,20 @@ BOOTSTRAP_CACHE_HITS    = Gauge('agent_bootstrap_cache_hits', 'Premiers itinéra
 BOOTSTRAP_CACHE_MISSES  = Gauge('agent_bootstrap_cache_misses', 'Premiers itinéraires calculés via LLM (cache miss) pendant le bootstrap')
 BOOTSTRAP_WAVE          = Gauge('agent_bootstrap_wave', 'Vague d\'anticipation courante (1 = premier itinéraire, ≥2 = act[N+k] pré-calculés)')
 BOOTSTRAP_FUTURE_MOVES  = Gauge('agent_bootstrap_future_moves', 'Trajets futurs (act[N+k]) pré-cachés cumulés pendant le bootstrap')
+# Détail par vague (1 = premiers itinéraires, ≥2 = anticipation act[N+k]).
+# status : planned = candidats de la vague, done = traités (succès ou non),
+#          ok = itinéraires obtenus, cache_hit/cache_miss = cache LLM (agents LLM seulement).
+BOOTSTRAP_WAVE_MOVES    = Gauge('agent_bootstrap_wave_moves', 'Trajets par vague du bootstrap', ['wave', 'status'])
+_WAVE_COUNTED_STATUSES  = ("done", "ok", "cache_hit", "cache_miss")
+
+
+def _wave_metrics(wave: int, planned: int) -> dict:
+    """Initialise et retourne les compteurs par statut d'une vague de bootstrap."""
+    BOOTSTRAP_WAVE_MOVES.labels(wave=str(wave), status="planned").set(planned)
+    counters = {s: BOOTSTRAP_WAVE_MOVES.labels(wave=str(wave), status=s) for s in _WAVE_COUNTED_STATUSES}
+    for c in counters.values():
+        c.set(0)
+    return counters
 
 # Issue de la décision de mobilité par activité planifiée. outcome ∈
 #   llm           : plan choisi par le LLM
@@ -159,6 +173,28 @@ AGENT_LATE_DEPARTURE = Histogram(
     'Retard des agents (sim_time - scheduled_start_time) lors du skip d\'activité',
     buckets=[60, 300, 1800, 7200, float('inf')],
 )
+
+# Ponctualité des départs (dashboard 07 · Métier Mobilité). Un départ est « à l'heure »
+# si l'action part vers GAMA au plus LATE_DEPARTURE_TOLERANCE_S après l'heure prévue
+# (même lag que AGENT_SCHEDULING_LAG). Phase live uniquement : le bootstrap pré-calcule
+# au /init et ne mesure pas un vrai départ.
+LATE_DEPARTURE_TOLERANCE_S = 60
+DEPARTURE_PUNCTUALITY = Counter(
+    'agent_departures_punctuality_total',
+    'Départs poussés vers GAMA (phase live) par ponctualité : on_time (lag ≤ 60 s) ou late',
+    ['status'],
+)
+DEPARTURE_DELAY = Histogram(
+    'agent_departure_delay_seconds',
+    'Retard (s) des seuls départs en retard (lag > 60 s) — sum/count = retard moyen',
+    buckets=[120, 300, 900, 1800, 3600, float('inf')],
+)
+DEPARTURE_DELAY_MAX = Gauge(
+    'agent_departure_delay_max_seconds',
+    'Retard maximal (s) observé sur un départ depuis le démarrage du contrôleur',
+)
+for _status in ('on_time', 'late'):
+    DEPARTURE_PUNCTUALITY.labels(status=_status)
 
 
 _POPULATION_CHECKPOINT_HOUR = 2 * 3600  # 2:00 AM simulation time
@@ -257,6 +293,7 @@ class SimulationLoopV1(BaseScenario):
         self.MAX_ADJUST_START_TIME = settings.agent.max_reschedule_amount or self.MAX_ADJUST_START_TIME
         self._messages = []
         self._late_count = 0
+        self._max_departure_delay_s = 0.0  # pire retard observé, alimente DEPARTURE_DELAY_MAX
         self._itinerary_success_count = 0
         self._itinerary_window_start = time.monotonic()
         # True pendant bootstrap_all_agents : distingue les décisions de pré-calcul (/init)
@@ -267,6 +304,12 @@ class SimulationLoopV1(BaseScenario):
         self.agent = agent
         self.next_self_reflection_at = None
         self._stm_reflecting: set[str] = set()  # person_ids with an in-flight STM reflection task
+        # Échéance EDF (temps SIM) de la réflexion STM en attente, par person_id.
+        # Posée au premier déclenchement et CONSERVÉE entre les retentatives : un
+        # échec gateway laisse les entrées STM en place, le sync suivant re-soumet
+        # avec la deadline d'origine → la priorité EDF monte à chaque retry.
+        self._stm_reflect_due: dict[str, float] = {}
+        self._stm_overdue_alarm_on = False  # front montant de l'alarme réflexions en retard
 
         # Worker
         # _worker_sem  : limite la concurrence LLM+OTP (initialisé dans start_worker)
@@ -418,6 +461,10 @@ class SimulationLoopV1(BaseScenario):
         self._edf_heap = []
         if _queued:
             logger.info(f"[edf] {_queued} queued job(s) discarded (scenario replaced)")
+        # Les jobs "reflect" en file sont détruits sans exécuter leur finally :
+        # purger l'état de suivi pour que le prochain scénario reparte propre.
+        self._stm_reflecting.clear()
+        self._stm_reflect_due.clear()
         cancelled = 0
         for task in list(self._inflight_tasks):
             if not task.done():
@@ -510,13 +557,16 @@ class SimulationLoopV1(BaseScenario):
         return len(self._edf_heap)
 
     def edf_snapshot_deadlines(self) -> list[float]:
-        """Snapshot trié des échéances (temps SIM) des tâches plan/refill en file.
+        """Snapshot trié des échéances (temps SIM) des tâches plan/refill/reflect en file.
 
         Exclut les push (sentinelle 0 : déjà calculés, drainés en ms — les inclure
         fausserait le test de faisabilité en simulant une échéance déjà expirée).
+        Les réflexions STM (kind "reflect", échéance +12h sim) sont incluses : c'est
+        la contre-pression prédictive qui garantit leur échéance en retenant le /sync
+        si le débit courant ne permet plus de les servir à temps.
         """
         return sorted(
-            job.deadline_sim for _, _, job in self._edf_heap if job.kind in ("plan", "refill")
+            job.deadline_sim for _, _, job in self._edf_heap if job.kind in ("plan", "refill", "reflect")
         )
 
     # -------------------------------------------------------------------------
@@ -894,6 +944,15 @@ class SimulationLoopV1(BaseScenario):
                 # 00:05 pour une cible 23:55 vaut +600 s, pas -85 800 s).
                 _lag_s = ((_send_time24h - _target_24h + 43200) % 86400) - 43200
                 AGENT_SCHEDULING_LAG.observe(_lag_s)
+                if not self._in_bootstrap:
+                    if _lag_s > LATE_DEPARTURE_TOLERANCE_S:
+                        DEPARTURE_PUNCTUALITY.labels(status='late').inc()
+                        DEPARTURE_DELAY.observe(_lag_s)
+                        if _lag_s > self._max_departure_delay_s:
+                            self._max_departure_delay_s = float(_lag_s)
+                            DEPARTURE_DELAY_MAX.set(_lag_s)
+                    else:
+                        DEPARTURE_PUNCTUALITY.labels(status='on_time').inc()
 
                 # Stocker comme Planned
                 person.state.next_planned_move = move
@@ -1056,9 +1115,11 @@ class SimulationLoopV1(BaseScenario):
             self._next_population_checkpoint_at += 86400
 
         # --- Phase 2 : réflexion STM déclenchée par volume d'entrées ---
-        # Les réflexions sont lancées en tâches de fond (create_task) pour ne pas bloquer
-        # le retour du sync — un await ici laisserait les tâches worker se terminer pendant
-        # l'attente, faisant tomber activities_to_compute_count à 0 et annulant le backpressure.
+        # Chaque réflexion part en file EDF (kind "reflect") avec une échéance sim de
+        # +stm_reflection_deadline_sim_s : servie quand il y a du mou, priorisée à
+        # l'approche de l'échéance, comptée par la contre-pression prédictive. En cas
+        # d'échec gateway, les entrées STM restent en place → re-soumission au sync
+        # suivant avec la deadline d'ORIGINE (_stm_reflect_due), jamais repoussée.
         if settings.agent.long_term_memory_enabled and settings.agent.stm_reflection_min_entries > 0:
             people_to_reflect = [
                 p for p in all_people
@@ -1068,17 +1129,37 @@ class SimulationLoopV1(BaseScenario):
             ]
             if people_to_reflect:
                 logger.info(f"[timestamp: {humanize_date(timestamp)}] STM reflection for {len(people_to_reflect)} agents (>= {settings.agent.stm_reflection_min_entries} entries)")
+                _default_due = timestamp + settings.agent.stm_reflection_deadline_sim_s
                 for _p in people_to_reflect:
                     self._stm_reflecting.add(_p.person_id)
+                    _due = self._stm_reflect_due.setdefault(_p.person_id, _default_due)
 
-                async def _reflect_and_release(_people=people_to_reflect):
-                    try:
-                        await self.agent.trigger_short_term_reflection_for_all_people(timestamp=timestamp, people=_people)
-                    finally:
-                        for _p in _people:
-                            self._stm_reflecting.discard(_p.person_id)
+                    def _make_reflect_coro(_person=_p, _ts=timestamp):
+                        async def _reflect_one():
+                            try:
+                                await self.agent.trigger_short_term_reflection_for_all_people(timestamp=_ts, people=[_person])
+                                _mem = self.agent.get_short_term_memory(_person.person_id)
+                                if len(_mem.recent_entries) < settings.agent.stm_reflection_min_entries:
+                                    # Lot consommé → réflexion aboutie, l'échéance est levée.
+                                    self._stm_reflect_due.pop(_person.person_id, None)
+                            finally:
+                                self._stm_reflecting.discard(_person.person_id)
+                        return _reflect_one()
 
-                self._spawn(_reflect_and_release())
+                    self._dispatch(_due, "reflect", _make_reflect_coro, _p.person_id)
+
+            # Alarme (front montant) : réflexions toujours pendantes au-delà de leur
+            # échéance simulée — la garantie « réflexion < 12h sim » n'est plus tenue.
+            _overdue = sum(1 for _d in self._stm_reflect_due.values() if timestamp > _d)
+            if _overdue and not self._stm_overdue_alarm_on:
+                logger.error(
+                    f"[ALARME] {_overdue} réflexion(s) STM au-delà de l'échéance de "
+                    f"{settings.agent.stm_reflection_deadline_sim_s / 3600:.0f}h simulées — "
+                    f"file EDF surchargée ou providers saturés (voir make capacity)"
+                )
+                self._stm_overdue_alarm_on = True
+            elif _overdue == 0:
+                self._stm_overdue_alarm_on = False
 
         if settings.agent.long_term_self_reflect_enabled:
             if not self.next_self_reflection_at:
@@ -1254,6 +1335,7 @@ class SimulationLoopV1(BaseScenario):
         BOOTSTRAP_CACHE_MISSES.set(0)
         BOOTSTRAP_WAVE.set(1)
         BOOTSTRAP_FUTURE_MOVES.set(0)
+        BOOTSTRAP_WAVE_MOVES.clear()  # purge les vagues d'un éventuel /init précédent
 
         all_people = self.population.get_people_list()
         _, _time24h = to_24h_timestamp_full(timestamp)
@@ -1272,6 +1354,7 @@ class SimulationLoopV1(BaseScenario):
 
         total = len(eligible)
         BOOTSTRAP_TOTAL.set(total)
+        _w1 = _wave_metrics(1, total)
         logger.info(
             f"[bootstrap] sim_time={humanize_date(timestamp)} "
             f"computing itineraries for {total}/{len(all_people)} agents — GAMA blocked"
@@ -1321,12 +1404,15 @@ class SimulationLoopV1(BaseScenario):
                     if "cache sémantique" in (_reason or ""):
                         _cache_stats["hits"] += 1
                         BOOTSTRAP_CACHE_HITS.set(_cache_stats["hits"])
+                        _w1["cache_hit"].inc()
                         logger.info(f"[bootstrap] cache hit — {person.person_id} / {act.purpose}")
                     elif person.is_llm_based:
                         _cache_stats["misses"] += 1
                         BOOTSTRAP_CACHE_MISSES.set(_cache_stats["misses"])
+                        _w1["cache_miss"].inc()
                         logger.info(f"[bootstrap] cache miss — {person.person_id} / {act.purpose}")
                     if move:
+                        _w1["ok"].inc()
                         self._itinerary_success_count += 1
                         if self._itinerary_success_count >= 100:
                             ITINERARY_100_COMPLETION.set(time.monotonic() - self._itinerary_window_start)
@@ -1351,6 +1437,7 @@ class SimulationLoopV1(BaseScenario):
                     progress.advance(task_id, 1)
                     _cache_stats["done"] += 1
                     BOOTSTRAP_COMPLETED.set(_cache_stats["done"])
+                    _w1["done"].inc()
                     if total:
                         BOOTSTRAP_PROGRESS.set(_cache_stats["done"] / total)
                 # Pré-planifier act[N+1] avec act[N].location comme origin dès la fin du bootstrap
@@ -1401,8 +1488,12 @@ class SimulationLoopV1(BaseScenario):
             from_act: Activity,
             from_arrive_ts: int,
             to_act: Activity,
+            wm: dict,
         ) -> None:
-            """Calcule un trajet de vague bootstrap sous le sémaphore de concurrence."""
+            """Calcule un trajet de vague bootstrap sous le sémaphore de concurrence.
+
+            `wm` : compteurs agent_bootstrap_wave_moves de la vague (cf. _wave_metrics).
+            """
             try:
                 # Compute when from_act ends: its end_time is a 24h offset, and may
                 # be on the next calendar day relative to when the person arrives.
@@ -1410,11 +1501,16 @@ class SimulationLoopV1(BaseScenario):
                 if from_act_end_ts < from_arrive_ts:
                     from_act_end_ts += 86400
                 async with self._worker_sem:
-                    move, _ = await self._compute_move_for_activity(
+                    move, _reason = await self._compute_move_for_activity(
                         person, to_act, from_act_end_ts,
                         from_location_override=from_act.location,
                     )
+                if "cache sémantique" in (_reason or ""):
+                    wm["cache_hit"].inc()
+                elif person.is_llm_based:
+                    wm["cache_miss"].inc()
                 if move:
+                    wm["ok"].inc()
                     person.state.precomputed_moves.append(move)
                     person_last_planned_act[person.person_id] = to_act
                     person_last_planned_ts[person.person_id] = move.expected_arrive_at
@@ -1425,6 +1521,8 @@ class SimulationLoopV1(BaseScenario):
                 logger.debug(f"[bootstrap/wave] Error for {person.person_id}/{to_act.purpose}: {_e}")
                 person_last_planned_act.pop(person.person_id, None)
                 person_last_planned_ts.pop(person.person_id, None)
+            finally:
+                wm["done"].inc()
 
         wave = 2
         while person_last_planned_act:
@@ -1460,9 +1558,10 @@ class SimulationLoopV1(BaseScenario):
 
             logger.info(f"[bootstrap] pre-computing {len(wave_batch)} act[N+{wave}] itineraries (wave {wave})...")
             BOOTSTRAP_WAVE.set(wave)
+            _wm = _wave_metrics(wave, len(wave_batch))
 
             wave_tasks = [
-                asyncio.create_task(_compute_future_wave_move(p, fa, fa_ts, ta))
+                asyncio.create_task(_compute_future_wave_move(p, fa, fa_ts, ta, _wm))
                 for p, fa, fa_ts, ta in wave_batch
             ]
             for coro in asyncio.as_completed(wave_tasks):
