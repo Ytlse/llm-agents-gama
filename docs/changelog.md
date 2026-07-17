@@ -1,3 +1,614 @@
+## [2026-07-17] Calibration : lancement sur une VM Google gratuite (guide clé en main)
+
+La campagne de calibration de prompt peut désormais tourner **toute seule sur une machine
+Google Cloud gratuite** (offre « Always Free » `e2-micro`), sans quitter le poste des yeux.
+Un dossier `scripts/prompt_calibration/cloud/` fournit tout le nécessaire :
+
+- **`README_CLOUD.md`** — un guide pas à pas « pour les nuls » (création de la VM, upload
+  des données, clé API, automatisation), pensé pour quelqu'un qui n'a jamais touché à
+  Google Cloud.
+- **`config/cloud.yaml`** — la configuration de campagne côté cloud (chemins relatifs du
+  dépôt, quota free tier Gemini).
+- **`setup_vm.sh`** / **`run_daily.sh`** — installation en une commande, puis un réveil
+  `cron` quotidien qui reprend la campagne là où le quota du jour l'avait arrêtée.
+- **`data_to_upload.tar.gz`** — les jeux gelés `v1` (hors Git) prêts à envoyer à la VM.
+
+**Coût : 0 €.** La campagne s'étale sur plusieurs jours (500 requêtes Gemini/jour en
+gratuit), mais la reprise du store SQLite fait qu'il n'y a rien à surveiller : elle avance
+un peu chaque nuit jusqu'à la fin.
+
+**Avant :** la calibration ne se lançait qu'en local (poste de dev) ou via l'IHM GAMA.
+**Après :** un déploiement cloud gratuit, autonome et reprenable, documenté de bout en bout.
+
+---
+
+## [2026-07-17] Calibration : le mutateur voit du concret (matrice bloc × mode, exemples réels, snippets entiers)
+
+Le mutateur de prompt ne raisonnait que sur des agrégats (distributions, écarts,
+contributions par dimension). Trois évolutions lui donnent du concret — **sans aucun
+appel LLM supplémentaire** (données déjà persistées, uniquement calcul et formatage) :
+
+- **Matrice bloc × mode** : la table de contribution gagne une colonne « modes poussés »
+  (ex. `vélo+4 voit-3`) — l'effet de la présence de chaque bloc sur les parts modales,
+  décomposé par Shapley sur les mêmes évals. Le mutateur sait *quel mode* un bloc favorise
+  ou freine, au lieu de deviner la corrélation depuis les dimensions.
+- **Exemples réels de décisions à corriger** (hard negatives) : jusqu'à 4 décisions
+  individuelles du prompt courant (persona → mode choisi) issues des pires strates
+  sur-représentées, ex. `Femme, 30 ans, actif, travail, 1-2km → voiture (+70 pts vs cible)`.
+  Réglable via `hard_negatives_k` (0 → désactivé).
+- **Bibliothèque d'arguments fournie en entier** : les snippets n'étaient montrés que sur
+  110 caractères — tronqués en plein argument, le mutateur devait halluciner la fin.
+  Contenu complet désormais (cap de sécurité à 300).
+
+**Avant :** le mutateur devinait la relation bloc → mode et n'avait jamais vu une erreur concrète.
+**Après :** chaque tour montre qui pousse quoi, et à quoi ressemble une décision aberrante type.
+
+---
+
+## [2026-07-17] Calibration : attribution Shapley globale à chaque acceptation (fin du leave-one-out)
+
+La contribution de chaque bloc au score est désormais **recalculée par attribution de
+crédit Shapley après *chaque* mutation acceptée** (et à l'initialisation), sur le jeu de
+screening. L'ancienne ablation *leave-one-out* (retrait d'un bloc à la fois) est
+entièrement supprimée : elle supposait les blocs indépendants et se trompait sur les
+blocs **redondants** (jugés inutiles à tort) et **synergiques** (crédit compté deux
+fois). Shapley répartit exactement le gain entre les blocs, ces deux cas compris.
+
+**Avant :** ablation locale rapide (leave-one-out) du seul bloc touché après chaque
+acceptation, et recalcul Shapley global seulement toutes les 5 acceptations — la carte
+de contribution montrée au mutateur pouvait être partiellement périmée entre deux
+recalculs globaux.
+**Après :** carte de contribution Shapley **complète et à jour à chaque acceptation**.
+Le coût reste maîtrisé : le cache adressé par contenu du store rend gratuites les
+coalitions déjà évaluées (entre permutations, entre acceptations, entre runs).
+
+Options de configuration retirées : `shapley_enabled`, `shapley_every`,
+`global_ablation_every` (le comportement est désormais unique). `shapley_permutations`
+(=25) et `shapley_truncation_tol` (=0.5) restent réglables.
+
+---
+
+## [2026-07-17] Calibration : le mutateur apprend de ses rejets (mémoire de leçons)
+
+Le mutateur de prompt **synthétise désormais les raisons récurrentes de ses rejets**
+avant de proposer, et cette synthèse est mémorisée puis réinjectée au tour suivant.
+Objectif : rompre la boucle où le mutateur re-cible sans fin le même bloc parce que le
+contexte affiché ne bougeait pas entre deux rejets.
+
+Chaque rejet de l'historique est aussi **étiqueté par catégorie** : `[fond]` (une vraie
+leçon existe — ne pas y retourner) vs `[bruit]`/`[seuil]`/`[doublon]` (l'idée n'est pas
+invalidée, juste non significative — la reformuler). Ce garde-fou évite que le mutateur
+abandonne à tort une piste correcte rejetée pour simple non-significativité statistique.
+
+**Avant :** les causes brutes (`Δ=+0.30@n=25`, `motif +12`) étaient affichées mais jamais
+généralisées ni distinguées ; le mutateur re-proposait souvent des variantes déjà écartées.
+**Après :** une mémoire de leçons roulante (bornée, persistée, reprise gratuite) guide chaque
+proposition vers un changement réellement distinct, en tenant compte de la nature du rejet.
+
+La synthèse est produite dans le même appel que la proposition (coût quasi nul, aucun appel
+LLM supplémentaire). Réglable via `reflection_enabled` / `lessons_max_chars` (désactivable
+pour comparaison A/B).
+
+**Garde-fou dur associé** : « ne resoumets jamais le même texte ni une variante triviale »
+n'est plus qu'une consigne — c'est appliqué en code **quelle que soit la config**. Une
+proposition sans changement réel, ou quasi identique à un rejet récent, est écartée **sans
+aucune éval** (dans le chemin single-candidat par défaut comme dans l'entonnoir). Une
+ré-soumission triviale redevient permise une fois le contexte changé (tenure du tabu).
+
+---
+
+## [2026-07-17] Calibration : évaluation des itinéraires sur Gemini
+
+La campagne de calibration (`run.yaml`) évalue désormais les itinéraires avec
+**Gemini** (`google_gemini31` / `gemini-3.1-flash-lite-preview`) au lieu de Mistral.
+Le prompt calibré sera donc spécifique à Gemini — le modèle réellement servi en
+production pour la décision d'itinéraire.
+
+**Avant :** éval sur `mistral-small-latest`, mutations sur Gemini.
+**Après :** éval **et** mutations sur Gemini `gemini-3.1-flash-lite-preview`.
+
+⚠ Éval et mutation partagent maintenant le même quota provider Gemini. Si ce quota
+devient contraignant, basculer `mutation_model` sur un autre modèle (ex.
+`google_gemma42`) rétablit la séparation.
+
+> Reprendre une campagne existante depuis un store calibré sur Mistral n'est pas
+> valide (le cache d'éval Mistral ne s'applique pas à Gemini) : repartir d'un store
+> neuf. `run2.yaml` reste volontairement sur Mistral pour comparaison.
+
+---
+
+## [2026-07-17] Calibration : retour à un essai unique avec paliers 25/50/75 %
+
+La calibration de prompt (`scripts/prompt_calibration/`) évalue de nouveau **un seul
+essai par itération** au lieu de quatre candidats en parallèle. Cet unique essai passe
+par des **paliers progressifs à 25 %, 50 % puis 75 %** du jeu d'entraînement : dès qu'un
+palier **n'améliore pas** le composite du prompt courant sur le même sous-échantillon,
+l'essai est **abandonné immédiatement** (verdict `rejected_race`), sans jamais payer
+l'évaluation complète ni les paliers suivants.
+
+**Avant :** 4 candidats proposés par appel de mutation, départagés par racing/screening,
+le meilleur passant l'éval complète.
+**Après :** 1 candidat, filtré par arrêt précoce à 25/50/75 % — moins d'appels LLM
+gaspillés sur des essais non prometteurs, trajectoire plus simple à suivre.
+
+Nouveaux défauts : `n_candidates: 1`, `racing_enabled: true`,
+`racing_rungs: [0.25, 0.50, 0.75]`. Le racing multi-candidats (gate de strate +
+successive halving) reste disponible en remontant `n_candidates`.
+
+---
+
+## [2026-07-16] Calibration : racing ciblé par strate (successive halving)
+
+Nouvelle stratégie de sélection des candidats dans l'entonnoir de
+`scripts/prompt_calibration/`, **désactivée par défaut** (`racing_enabled: false`).
+Elle remplace le *screening one-shot* — une seule mesure bruitée, jugée sur le
+composite global — par un **racing multi-tours** précédé d'un **gate de strate**.
+
+- **Gate strate.** Une itération sur `racing_target_every`, les candidats sont d'abord
+  évalués **uniquement** sur la strate la plus mal représentée (ex. `genre[femme]`) ;
+  ceux qui n'améliorent pas son écart sont éliminés d'emblée (`rejected_gate`). Si la
+  strate est trop petite ou si le gate vide la liste, **repli global** — l'itération
+  n'est jamais bloquée.
+- **Successive halving.** Les survivants passent des paliers de train **croissants**
+  (`racing_rungs`, ex. 15 % → 35 % → 70 % → 100 %) ; à chaque palier on ne garde que la
+  meilleure moitié. Le budget d'éval se concentre sur les candidats qui tiennent.
+- **Garde-fou statistique.** On ne départage jamais deux candidats trop proches
+  (`racing_min_gap`) ou dont l'IC bootstrap chevauche — évite d'éliminer par malchance
+  un candidat qui aurait gagné sur le train complet (`rejected_race` sinon).
+- **Cache respecté.** Chaque palier passe par le store content-addressed ; seule la
+  fraction complète réutilise le label `train`, donc l'éval complète du gagnant est
+  servie par le cache quand la boucle la refait — le racing ne « repaie » pas l'historique.
+
+**Avant :** un seul tirage de screening (~20 % du train) sur le composite global
+désigne le gagnant ; les strates en échec ne sont jamais ciblées.
+**Après (opt-in) :** budget concentré sur les candidats prometteurs et sur la pire
+strate ; verdicts `rejected_gate` / `rejected_race` visibles au dashboard.
+
+---
+
+## [2026-07-16] Calibration : contexte mutateur plus lisible + diversité des blocs ciblés
+
+Quatre améliorations du contexte fourni au mutateur de `scripts/prompt_calibration/`,
+suite à une revue du rapport de mutation.
+
+- **Légende unique dans le prompt système.** Les abréviations des dimensions
+  (`ag=âge`, `oc=occupation`…) et les **conventions de signe** sont désormais
+  définies une seule fois dans le prompt système du mutateur (`LEGEND_AND_SIGNS`),
+  au lieu d'apparaître de façon conditionnelle et dispersée dans chaque section.
+- **Signes explicités, en termes d'écart.** Le composite est une **perte à
+  minimiser** ; un **Δ>0 = bloc utile**. Dans les colonnes, « + » = le bloc
+  **rapproche de la cible EMC²** (réduit l'écart), « − » = il **creuse l'écart** —
+  même orientation que Δ tot.
+- **Table de contribution bloc × dimension, autoportante.** L'« analyse d'ablation »
+  en crochets compacts est remplacée par une **table markdown** (`format_contrib_table`) :
+  une ligne par bloc, une colonne par dimension (en-têtes explicites « nom (abrév) »,
+  ex. `occupation (oc)`), + Δ total, triée par utilité. Une **légende de lecture des
+  signes** est imprimée juste au-dessus de la table (dans le message utilisateur, pas
+  seulement dans le prompt système) → lisible sans avoir à remonter à la légende
+  globale. Le diagnostic textuel n'est conservé que pour les blocs nuisibles (canal mode).
+- **Diversité des blocs ciblés.** Le mutateur avait tendance à toujours retoucher le
+  même bloc (souvent le premier bullet). Le prompt rappelle maintenant les blocs
+  récemment modifiés (`_recent_blocks`) et exige, en multi-candidats, un **bloc-cible
+  distinct** par candidat ; l'entonnoir écarte sans éval les doublons de bloc (nouveau
+  verdict `rejected_dup_block`), un `insert` restant distinct d'un `modify` du même ancrage.
+
+Tests : 189 verts (`calibration/tests/`). La piste plus ambitieuse (racing ciblé par
+strate + successive halving) est spécifiée dans `docs/racing-cible-strate.md`, à
+implémenter ultérieurement.
+
+**Avant :** légende parfois absente, signes ambigus, contribution en crochets denses,
+mutations concentrées sur un seul bloc.
+**Après :** légende + conventions de signe systématiques, table lisible, recherche
+répartie sur des blocs variés.
+
+---
+
+## [2026-07-16] Makefile calibration : lancer un essai et l'interface en une commande
+
+`scripts/prompt_calibration/` dispose désormais d'un Makefile. `make run essai3`
+lance (ou relance/reprend au point d'arrêt) l'essai 3 dans sa propre branche isolée
+du store, et `make ui` ouvre le dashboard Streamlit. Autres raccourcis : `status`,
+`export`, `finalize`, `backtest`, `datasets`, `test`. Plusieurs essais peuvent
+évoluer en parallèle sans se marcher dessus.
+
+**Avant :** il fallait retenir et taper la ligne complète `../../llm-agents/.venv/bin/python
+-m calibration.cli run --config … --branch …`
+**Après :** `make run essai3` / `make ui` — la branche et la config (`runN.yaml`,
+sinon `run.yaml`) sont résolues automatiquement à partir du nom d'essai
+
+---
+
+## [2026-07-16] Dashboard calibration : filtre d'expérience global et persistant
+
+Le dashboard de calibration gagne un filtre **Expérience** unique dans la barre
+latérale (menu de gauche) : on choisit une branche/îlot (ou « Toutes les branches »)
+et **toutes les vues** s'y restreignent d'un coup — Timeline, DAG, Distribution,
+Comparaison, Pareto, Run et Maintenance. Surtout, la sélection **reste en place quand
+on change de page** : plus besoin de refiltrer à chaque vue.
+
+**Avant :** le filtre de branche était local à la vue Timeline et repartait sur
+« toutes les branches » à chaque changement de page ; les autres vues n'avaient aucun
+filtre d'expérience
+**Après :** un filtre unique en barre latérale, appliqué à toutes les vues et
+mémorisé d'une page à l'autre
+
+---
+
+## [2026-07-15] Dashboard calibration : vue Comparaison vs vérité terrain + carte d'ablation détaillée
+
+Le dashboard de calibration gagne une vue **Comparaison** : des graphiques en barres
+confrontent les parts modales de plusieurs prompts (par défaut le prompt de départ et
+le meilleur trouvé) à la **vérité terrain EMC²**, en global ou strate par strate
+(âge, occupation, genre, motif, distance — un graphique par catégorie, avec les
+effectifs). On voit d'un coup d'œil où un prompt calibré colle à l'enquête et où il
+dévie encore, sans aucun réappel LLM (tout est reconstruit des décisions stockées).
+
+La carte d'ablation de la vue DAG affiche désormais le **détail par dimension** de
+chaque bloc (une colonne par dimension, dégradé vert/rouge), avec un garde-fou : un
+détail incohérent avec le Δ du bloc (évals legacy partielles) est masqué plutôt
+qu'affiché faux.
+
+**Avant :** la vue Distribution ne montrait qu'un seul nœud, en global uniquement ;
+l'ablation n'affichait qu'un Δ par bloc
+**Après :** comparaison multi-prompts vs EMC² par strate ; ablation décomposée par
+dimension
+
+Corrige au passage : sélection du nœud seed dans la vue DAG (plantait sur le parent
+manquant), et choix de l'éval de référence quand un nœud porte plusieurs évals train
+(les artefacts sans décisions brutes sont ignorés).
+
+---
+
+## [2026-07-15] Calibration : impact de chaque bloc détaillé par dimension (âge, motif, …)
+
+La carte d'ablation/Shapley fournie au mutateur ne dit plus seulement qu'un bloc est
+utile ou nuisible : elle indique **sur quelles dimensions** il agit, en points de
+composite, avec une légende des abréviations. Le mutateur peut ainsi réécrire un bloc
+pour conserver sa dimension forte tout en corrigeant son effet secondaire, au lieu de
+choisir entre le garder et le supprimer.
+
+Cette décomposition est **gratuite** : le score composite étant une somme pondérée des
+dimensions, les mêmes évaluations de coalitions (Shapley) ou d'ablation (LOO) suffisent
+— zéro appel LLM supplémentaire. Les contributions sous ±1 pt sont masquées (bruit).
+
+**Avant :** `• bloc_meteo (Δ=+4.2) : Par beau temps, envisage la marche…`
+**Après :** `• bloc_meteo (Δ=+4.2) [mo+3 ag+2 | oc-2] : Par beau temps, envisage la marche…`
+(légende : g=global, ab=modes absents, ag=âge, oc=occupation, ge=genre, mo=motif,
+di=distance, lg=longueur — le bloc aide motif et âge, dégrade légèrement occupation)
+
+Le détail est persisté dans le store (`ablations.scores_json` pour les lignes
+`shapley`) et la légende est aussi rappelée dans l'historique des mutations.
+
+**Rétro-compat :** à la reprise d'une campagne lancée avant cette évolution, le
+détail est reconstitué automatiquement depuis le store (zéro éval) — le mutateur
+voit les crochets dès la première itération reprise. Les prompts de mutation déjà
+stockés (vue Timeline) restent figés tels qu'ils ont été générés.
+
+---
+
+## [2026-07-15] Calibration : finalisation et publication du prompt calibré
+
+La calibration de prompt (`scripts/prompt_calibration/`) sait désormais **conclure une
+campagne en une commande** : `calibrate finalize` désigne le meilleur prompt trouvé,
+mesure sa qualité sur le jeu de test réservé, et le publie.
+
+**Le chiffre publiable.** Le meilleur prompt (toutes branches d'îlots confondues) est
+évalué **une seule fois** sur le jeu `test` — un jeu gelé que la boucle d'optimisation
+n'a jamais vu, donc une mesure honnête et non surajustée. Le prompt de départ est
+évalué sur le même jeu pour donner une comparaison **avant/après** immédiate.
+
+**Le bilan.** La commande imprime, pour le seed et le meilleur : le score par jeu
+(entraînement / validation / test) et son évolution, le détail par dimension sur le
+test, le nombre de mots du prompt (avant/après), le nombre d'évaluations LLM consommées
+et la durée approximative de la campagne.
+
+**La publication.** Par défaut la commande est un **essai à blanc** (rien n'est écrit).
+Avec `--write`, le prompt calibré est ajouté à `prompts.yaml` sous une clé horodatée
+`calibrated_…` (aucune entrée existante n'est modifiée) ; `--activate` le rend actif.
+
+**Before :** conclure une campagne demandait de retrouver le meilleur prompt à la main,
+de l'évaluer et de le recopier dans `prompts.yaml` — sans mesure de test standardisée.
+**After :** une seule commande produit le score de test publiable, le bilan avant/après
+et l'écriture (optionnelle et explicite) du prompt calibré.
+
+---
+
+## [2026-07-15] Calibration : îlots parallèles, merge et archive de Pareto
+
+La calibration de prompt (`scripts/prompt_calibration/`) peut désormais explorer
+**plusieurs pistes en parallèle** plutôt qu'une seule trajectoire, et capitaliser les
+arguments qui marchent — ce qui augmente les chances de trouver un meilleur prompt à
+budget d'évaluation comparable.
+
+**Îlots parallèles.** `calibrate run --islands 3` fait évoluer 3 branches
+indépendantes dans le même historique, chacune avec sa propre boucle reprenable. Elles
+avancent à tour de rôle sous le même budget de requêtes ; toutes les quelques
+itérations, le meilleur prompt d'un îlot est **proposé** (jamais imposé) à l'îlot
+voisin — il n'est adopté que s'il améliore vraiment ce dernier. On évite ainsi qu'une
+seule mauvaise piste condamne toute la campagne.
+
+**Merge (crossover).** Deux prompts **complémentaires** — l'un bon sur l'âge, l'autre
+sur le motif — peuvent être fusionnés par le modèle de mutation en un prompt enfant qui
+combine leurs forces, puis évalué comme n'importe quel candidat (deux bons parents ne
+font pas toujours un bon enfant : aucun merge n'est gardé sans mesure).
+
+**Archive de Pareto.** Le score composite écrase six dimensions en un seul chiffre ;
+deux prompts au même score peuvent en réalité être forts sur des dimensions
+différentes. L'archive conserve désormais tous les prompts **non dominés** (ceux
+qu'aucun autre ne bat sur toutes les dimensions à la fois) — matière première des
+départs d'îlots diversifiés et des parents de merge. Une nouvelle vue **Pareto** du
+dashboard la rend visible (nuage de compromis + bibliothèque d'arguments).
+
+**Bibliothèque d'arguments.** Chaque bloc ajouté ou réécrit qui apporte un gain net est
+capitalisé (taggé par le mode qu'il a aidé) et resservi au modèle de mutation comme
+matière à réutiliser — les îlots se fertilisent ainsi mutuellement, et une future
+campagne peut démarrer avec cette banque.
+
+**Before :** une seule trajectoire d'optimisation ; un prompt au score équivalent mais
+au profil complémentaire était perdu ; les bons arguments trouvés n'étaient pas réutilisés.
+**After :** plusieurs îlots explorent en parallèle, échangent leurs meilleurs prompts et
+peuvent les fusionner ; les compromis non dominés sont archivés et les arguments
+gagnants capitalisés.
+
+---
+
+## [2026-07-14] Calibration : attribution de crédit par valeur de Shapley
+
+La calibration de prompt (`scripts/prompt_calibration/`) mesure désormais **plus
+justement** ce que chaque bloc du prompt apporte au score, ce qui oriente mieux les
+mutations et les suppressions.
+
+**Le problème de l'ancienne mesure.** Jusqu'ici, l'importance d'un bloc était estimée
+en le retirant seul et en regardant la variation du score (« ablation un-bloc-à-la-fois »).
+Cette mesure se trompe dès que les blocs interagissent : deux blocs qui disent la même
+chose paraissent chacun **inutiles** (l'autre compense) — au risque de supprimer les
+deux ; deux blocs qui n'agissent qu'**ensemble** se voient chacun attribuer tout le
+mérite, gonflant artificiellement leur importance.
+
+**La correction : la valeur de Shapley.** Chaque bloc est vu comme un « joueur » dont
+la contribution est moyennée sur de nombreux ordres d'ajout possibles. Le mérite total
+est ainsi réparti **exactement** entre les blocs, redondances et synergies comprises.
+Le calcul reste économe : échantillonnage aléatoire tronqué (on s'arrête dès que le
+prompt complet est reconstitué), mené sur un petit échantillon (~20 % des trajets), et
+les combinaisons déjà évaluées sont resservies gratuitement par le cache.
+
+**Before :** l'importance d'un bloc = effet de son retrait isolé → deux blocs
+redondants semblent inutiles, deux blocs synergiques semblent tous deux indispensables.
+**After :** l'importance = contribution moyenne équitable → la carte des blocs utiles /
+nuisibles reflète les interactions réelles, et guide mieux réécritures et compactions.
+
+---
+
+## [2026-07-14] Calibration : entonnoir de mutation, opérateurs riches et compaction du prompt
+
+La boucle de calibration de prompt (`scripts/prompt_calibration/`) dépense désormais
+beaucoup moins d'évaluations LLM pour progresser davantage, et sait **raccourcir** le
+prompt sans dégrader le score.
+
+**Un entonnoir au lieu d'une mutation à l'aveugle.** À chaque tour, le modèle de
+mutation propose maintenant **plusieurs pistes en un seul appel**. Elles franchissent
+un entonnoir qui n'évalue au prix fort que ce qui le mérite :
+- **Tabu** — une piste quasi identique à une modification déjà tentée et rejetée est
+  écartée immédiatement, sans aucune évaluation. Elle redevient tentable plus tard,
+  une fois que le prompt a suffisamment évolué.
+- **Pré-sélection rapide** — les pistes restantes sont comparées sur un petit
+  échantillon (~20 % des trajets) ; seule la meilleure passe l'évaluation complète et
+  le test statistique.
+
+**La boucle apprend quels leviers marchent.** Un bandit choisit l'opérateur à
+privilégier (réécrire, supprimer, insérer, déplacer, fusionner, condenser, scinder un
+bloc) en fonction de ce qui a été accepté jusqu'ici — visible au dashboard.
+
+**Le prompt est activement raccourci.** Périodiquement et en fin de campagne, une passe
+de **compaction** retire les blocs qui n'apportent rien, à condition de prouver
+statistiquement que le score ne se dégrade pas. Comme le prompt calibré est envoyé à
+chaque décision d'itinéraire en production, chaque mot économisé est payé des millions
+de fois.
+
+**Before :** chaque itération = une mutation évaluée sur tout le train, prompt qui ne
+fait que grossir.
+**After :** plusieurs candidats filtrés à bas coût par tour, opérateurs arbitrés
+automatiquement, et un prompt qui se raccourcit tant que le score tient.
+
+---
+
+## [2026-07-14] Calibration : loss ordinale (EMD/JSD) et acceptation statistique
+
+La calibration de prompt (`scripts/prompt_calibration/`) mesure et accepte désormais
+plus juste.
+
+**Loss v2 (`emd_jsd`, au choix via `loss:` dans la config).** L'ancienne loss L1
+traitait toutes les tranches comme interchangeables : rendre les 15-19 ans un peu trop
+adeptes du bus vers les 20-24 ans coûtait autant que vers les 50-54 ans. La nouvelle
+loss respecte l'ordre des tranches — âge et distance sont mesurés par **EMD** (coût de
+déplacement le long de l'axe), un décalage vers une tranche voisine coûte moins qu'un
+décalage lointain. Les critères sans ordre (occupation, genre, motif, global) passent
+à la **divergence de Jensen-Shannon**, et chaque strate compte désormais au prorata de
+son effectif au lieu d'être ignorée sous 5 individus.
+
+**Acceptation statistique (bootstrap).** Une mutation n'est retenue que si son gain est
+**significatif** : un rééchantillonnage des agents (bootstrap apparié) estime si
+l'amélioration tient au-delà du bruit d'échantillon. Le recuit assouplit l'exigence de
+significativité en début de campagne (exploration) mais **jamais le signe** — une
+mutation qui dégrade le score n'est plus jamais acceptée. Les rejets « pour bruit » sont
+tracés (`rejected_stat`) et renvoyés au mutateur.
+
+**Backtest sans réappel LLM.** `calibrate backtest --metrics l1_composite,emd_jsd`
+recalcule n'importe quelle loss sur tout l'historique déjà stocké (les décisions brutes
+sont conservées) et compare les trajectoires — on choisit la loss en connaissance de
+cause avant de basculer une campagne.
+
+**Avant :** score L1 aveugle à l'ordre des tranches ; une mutation acceptée dès que le
+composite baissait, même d'un poil sous le bruit.
+
+**Après :** l'erreur reflète la distance réelle entre tranches ; seules les
+améliorations statistiquement solides sont conservées, et toute loss est rejouable
+rétroactivement sur l'historique.
+
+---
+
+## [2026-07-13] Dashboard de calibration : l'historique d'une campagne, explorable en direct
+
+Le moteur de calibration de prompt (`scripts/prompt_calibration/`) a désormais un
+**dashboard Streamlit**, lecteur pur du store SQLite, rafraîchissable pendant qu'une
+campagne tourne. On y explore toute l'histoire d'une campagne sans notebook :
+
+- **Timeline** : chaque mutation depuis l'origine avec son verdict et son score
+  composite *et* par dimension, filtrable, avec la courbe du meilleur score ;
+- **DAG** : le graphe de lignée des prompts coloré par score — un clic sur un nœud
+  ouvre son prompt, le diff avec son parent, ses scores et sa carte d'ablation ;
+- **Distribution** : parts modales actuelles vs cible EMC² et pires croisements
+  strate × mode, reconstruits depuis les décisions brutes (aucun appel LLM) ;
+- **Run** : itération, meilleur score, modèles/températures, volumétrie d'éval ;
+- **Maintenance** : lance les commandes `status` / `export` / `import` directement
+  depuis la page — statut lisible, export téléchargeable, et import d'un ancien run
+  (protégé par une confirmation, car il écrit dans l'historique).
+
+Lancement : `calibrate dashboard --config run.yaml`. Chaque vue a son lien
+partageable (`?view=DAG`). Au passage, `--config`/`--branch` s'acceptent désormais
+aussi bien avant qu'après la sous-commande (`calibrate dashboard --config run.yaml`
+fonctionne, avant il fallait `calibrate --config run.yaml dashboard`).
+
+**Avant :** l'historique d'une campagne se lisait au mieux via l'export CSV/Markdown
+ou en rejouant le notebook ; la progression d'un run se suivait dans les logs.
+
+**Après :** une page web unique montre chaque mutation moins de 30 s après son
+verdict et rend tout l'historique d'un run terminé explorable (timeline, DAG,
+distributions) sans rien recalculer.
+
+---
+
+## [2026-07-13] Météo par persona : les lots LLM mélangent enfin les conditions
+
+La météo (et le contexte trafic) est désormais **attachée à chaque persona** au lieu
+d'un unique préambule commun en tête de requête. Conséquence directe : des demandes
+de **météos différentes peuvent maintenant être fusionnées dans un même appel LLM**,
+chaque persona gardant sa propre météo dans le prompt.
+
+**Avant :** la météo était un paramètre de la requête ; comme le regroupement en lots
+ne fusionne que des requêtes de paramètres identiques, deux agents sous des météos
+différentes partaient dans des appels LLM séparés. Le micro-batching était bridé par
+la météo, d'où des lots plus petits et plus d'appels.
+
+**Après :** la météo voyage dans le bloc de l'agent. Le regroupement ne la voit plus,
+donc il fusionne des agents quelle que soit leur météo ; le prompt affiche
+`**Contexte :** …` sous l'en-tête de chaque persona (sa météo propre). Lots plus
+pleins, moins d'appels, pour un débit et une pression de rate-limit meilleurs.
+
+- **Décisions inchangées** : chaque persona voit exactement la même météo qu'avant,
+  juste attachée à son bloc plutôt qu'en préambule — seul le **remplissage des lots**
+  change.
+- **Fidélité de calibration** : le pipeline de calibration applique le même format
+  d'injection par persona, donc la mesure reflète le prompt réellement envoyé.
+
+---
+
+## [2026-07-13] Lancer la calibration du prompt depuis l'IHM GAMA
+
+Un bouton **« Lancer la calibration du prompt »** apparaît dans l'interface GAMA
+(catégorie *Calibration* des paramètres de l'expérience `e`). Il déclenche une
+campagne de calibration en tâche de fond dans le contrôleur, sans quitter la
+simulation ni la ligne de commande. Un paramètre **« Calibration - cycles
+(itérations) »** (1–200) règle le nombre d'itérations de la boucle.
+
+**Avant :** la calibration ne se lançait qu'en ligne de commande, depuis l'hôte
+(`python -m calibration.cli run --iterations N` dans `scripts/prompt_calibration`).
+
+**Après :** on règle le nombre de cycles dans l'IHM puis on clique sur le bouton.
+GAMA envoie `POST /calibrate {iterations}` au contrôleur, qui lance la campagne en
+sous-processus détaché (un seul run à la fois) et répond immédiatement. La console
+GAMA affiche l'accusé de démarrage (pid, cycles, chemin du journal) ; la sortie de
+la campagne est journalisée dans `experiments/current/calibration.log`.
+
+- **Non bloquant** : la simulation continue, le contrôleur exécute la calibration
+  en arrière-plan. Une seconde demande pendant qu'un run tourne est refusée
+  proprement (message `calibration_busy`).
+- **Prérequis** : les jeux gelés (`calibration_datasets/<version>/`) doivent exister
+  et les clés API des providers être présentes dans `.env` — sinon la campagne
+  s'arrête avec une erreur explicite dans `calibration.log`.
+
+---
+
+## [2026-07-13] Calibration de prompt : phase 1 livrée — moteur reprenable + store SQLite
+
+Le moteur de calibration devient un **package Python testé et reprenable à tout
+moment**, piloté par une CLI, avec un historique persistant interrogeable.
+Fini le notebook monolithique à globals : `scripts/prompt_calibration/calibration/`
+(models, blocks, metrics, evaluation, mutation, loop, store, cli) — 65 tests verts.
+
+- **Reprise sans recalcul** : l'historique complet (prompts, mutations, évals,
+  ablations) vit dans un unique store SQLite `calibration.db` où chaque prompt est
+  un nœud d'un DAG identifié par le hash de son texte (comme un commit git). Tuer
+  le process en pleine itération puis relancer `calibrate resume` repart
+  exactement à l'itération suivante — les évals déjà calculées sont servies par le
+  cache, les mutations déjà jouées rejouées à l'identique : **zéro appel LLM
+  redondant**. L'init (run initial + ablation) n'est refaite que si on part de zéro.
+- **Décisions brutes conservées** : chaque éval stocke ses choix modaux
+  `(agent_id, mode)`, donc toute métrique future (loss v2 en phase 3) est
+  recalculable rétroactivement sans réappel LLM.
+- **CLI** : `calibrate run | resume | status | export | import`. `export` produit
+  une vue lisible (`nodes.csv`, `mutations.csv`, `history.md`) ; `import` récupère
+  les anciens runs (`mutations.jsonl` + historique) dans le nouveau store.
+- **Configuration par fichier** : tout paramètre passe par un `RunConfig` (YAML),
+  plus aucun global mutable.
+- **Jeux val/test nettoyés de la mémoire** (fin de phase 0) : la section
+  `**Historique :**` (souvenirs STM/LTM, spécifique au run source et non
+  reproductible) est retirée des personas des jeux val et test à leur génération —
+  la mesure de référence ne dépend plus que du profil, de la météo et des options
+  de trajet. Le train la conserve (il ne sert qu'à la boucle).
+
+**Avant :** calibration dans un notebook (état invisible, non testable) ; une
+interruption imposait de relancer depuis un checkpoint approximatif ; historique
+éparpillé en CSV/JSONL non reliés
+**Après :** moteur importable et testé, reprise exacte au point d'arrêt via un
+store SQLite, historique complet requêtable en SQL et exportable
+
+---
+
+## [2026-07-13] Calibration de prompt : phase 0 livrée — mesure fiabilisée
+
+La refonte de l'outil de calibration démarre dans un nouveau package,
+`scripts/prompt_calibration/` (l'ancienne version notebook est conservée intacte
+dans `scripts/models_influence/`). La phase 0 du ticket 004 est livrée : la mesure
+sur laquelle toute l'optimisation repose est désormais fiable.
+
+- **Métadonnées exactes** : les attributs de scoring (genre, âge, occupation,
+  taille du ménage) proviennent de la jointure `agent_id → population_N.json`,
+  plus du parsing du texte. Le genre vient de `traits_json.gender` — fin de
+  l'inférence par prénom et de ses erreurs connues.
+- **Dérive de format résorbée** : les deux formats d'en-tête de logs
+  (`--- agent_id=… ---` courant et `--- PERSONA … ---` legacy) sont parsés,
+  et le journal est lu correctement même en JSON pretty-printed concaténé.
+- **Jeux gelés train/val/test** : affectation stable par `sha256(agent_id)`,
+  versions figées avec manifest (hash des sources, effectifs par strate) et
+  rapport de couverture des marginales Cerema (strate manquante = warning).
+- **Température d'évaluation minimale** (`EVAL_TEMP = 0.0`).
+
+**Avant :** genre parfois faux (heuristique prénom), logs récents non parsables
+(0 % de rattachement), jeux rééchantillonnés à chaque run
+**Après :** 100 % des 720 sections de `experiments/current` rattachées à leurs
+métadonnées exactes (vérifié par `check_phase0.py`), jeux reproductibles et gelés
+
+---
+
+## [2026-07-13] Calibration de prompt : documentation et plan d'industrialisation
+
+Le module de calibration de prompt (`scripts/models_influence/prompt_calibration.ipynb`)
+dispose désormais d'une documentation d'architecture (`docs/arch/prompt_calibration.md`)
+et d'un plan de refonte en 8 phases (`docs/tickets/ticket_004_prompt_calibration_industrialisation.md`) :
+mesure fiabilisée (métadonnées structurées, jeux gelés train/val/test), store SQLite
+git-like reprenable, dashboard Streamlit, loss ordinale EMD/JSD, acceptation
+statistique, attribution de crédit Shapley, branches parallèles avec merge,
+minimisation du prompt à score constant (économie de tokens en production), et revue
+de littérature scorée (GEPA, HiveMind, MAPGD, MASS, MARS, RePrompt…).
+
+Deux anomalies documentées au passage : le genre des personas est inféré du prénom
+alors qu'il existe dans `traits_json.gender` de la population générée, et le format
+d'en-tête des logs récents (`--- agent_id=… ---`) ne correspond plus au regex de la
+lib (`--- PERSONA … ---`) — corrections planifiées en phase 0 du ticket.
+
+---
+
 ## [2026-07-11] Fin des HTTP 413 groq : capacité par requête vérifiée avant l'envoi
 
 Sur le run du 2026-07-11, 38 des 63 erreurs LLM étaient des 413 « request too large »
