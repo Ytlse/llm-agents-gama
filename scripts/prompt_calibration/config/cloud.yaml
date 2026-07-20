@@ -69,6 +69,8 @@ shapley_enabled: true
 shapley_every: 5
 shapley_permutations: 25
 shapley_truncation_tol: 0.5
+shapley_addon_per_accept: 5    # permutations fraîches par acceptation (0 = historique : ré-échantillonnage complet)
+shapley_max_permutations: 50   # plafond du cumul — modifiable en cours de campagne (relu à la reprise)
 
 # Phase 6 — Îlots parallèles (1 = mono-branche ; surchargeable par --islands)
 n_islands: 1

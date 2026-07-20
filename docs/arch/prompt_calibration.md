@@ -367,6 +367,25 @@ comprises.
 - **Cache** : une coalition = un prompt = un nœud content-addressed → les évals
   passent par le cache du store (et un mémo local par calcul) ; les coalitions
   répétées (entre permutations, entre runs) sont gratuites.
+- **Échantillonnage cumulatif à graine fixe (2026-07-20)** — deux régimes selon
+  `shapley_addon_per_accept` :
+  - **historique** (`0`, défaut du code) : ré-échantillonnage complet à chaque
+    recalcul (graine = nb d'acceptations), M constant — estimation renouvelée,
+    mais peu de cache hits après mutation (les permutations changent) ;
+  - **cumulatif** (`> 0`, activé dans `run.yaml`/`cloud.yaml`) : **graine fixe**
+    → le socle de `shapley_permutations` permutations est rejoué à l'identique à
+    chaque passe. Les permutations sont **stables par préfixe** (un RNG séquentiel,
+    un `shuffle` par tour) : après un `modify`, toute coalition sans le bloc muté
+    a le même texte → **cache hit, zéro token** ; on ne paie que les coalitions
+    contenant du contenu nouveau (+ la frange de troncature mobile). S'y ajoutent
+    `addon × acceptations` permutations fraîches, plafonnées à
+    `shapley_max_permutations` — la précision de φ croît au fil de la campagne
+    (common random numbers : les Δφ entre prompts successifs sont appariés, donc
+    peu bruités), pour un coût par passe borné. Le **plafond est modifiable en
+    cours de campagne** (relu du YAML à chaque reprise ; hausse = extension de la
+    séquence, baisse = préfixe — jamais d'invalidation de cache). Rien n'est
+    persisté : le plan `(m, graine)` est recalculé de `(config, accepted)` à
+    chaque passe (`planned_permutations`, pure et testée).
 - **Jeu de screening** : les évals Shapley tournent sur le jeu `screen` (~20 %),
   pas sur le train complet (repli sur `train` si aucun jeu de screening).
 - **Fréquence** : recalcul **global** de tous les blocs dans `_update_ablation`

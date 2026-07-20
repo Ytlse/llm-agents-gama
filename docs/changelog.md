@@ -1,3 +1,52 @@
+## [2026-07-20] Calibration : Shapley 6× moins cher (jeu screen restauré) + console lisible
+
+Trois corrections issues du diagnostic d'une campagne réelle :
+
+- **Jeu `screen` ajouté aux jeux gelés v1** : gelés avant la phase 4, ils n'avaient
+  pas le sous-échantillon de screening — Shapley et le screening se repliaient **en
+  silence** sur le train complet (99 lots ≈ 100 requêtes par coalition). Le jeu
+  (83 personas, filtre déterministe `in_screen` sur le train gelé — identique à ce
+  que le générateur aurait produit) ramène chaque coalition à ~17 lots : **~6× moins
+  de requêtes**, ~25-30 coalitions/jour sous quota gratuit au lieu de ~5.
+- **Alarme sur le repli** : si le jeu `screen` manque, le lancement affiche désormais
+  `[ALARME]` avec le surcoût et le remède, au lieu de dégrader silencieusement.
+- **Console désambiguïsée** : le libellé Shapley porte le hash de la coalition
+  (`shapley[2b:0640c803]`) — deux coalitions de même taille ne se confondent plus ;
+  chaque coalition déjà payée affiche `✓ cache : …` à la reprise, et chaque passe se
+  conclut par un bilan `N payée(s), M servie(s) par le cache`.
+
+**Avant :** à la reprise, impossible de distinguer un recalcul payant d'un cache hit ;
+Shapley consommait ~100 requêtes par coalition sans signal.
+**Après :** la console montre ce qui est resservi gratuitement, et Shapley tourne sur
+le jeu de screening prévu par l'architecture.
+
+---
+
+## [2026-07-20] Calibration : Shapley cumulatif à graine fixe — mêmes tokens, plus de précision
+
+Le recalcul Shapley après chaque mutation acceptée re-tirait des permutations
+aléatoires neuves : la plupart des coalitions évaluées ne retombaient jamais sur le
+cache, et chaque passe repayait des évaluations qui n'apportaient pas d'information
+nouvelle. Nouveau régime **cumulatif** (activé dans les configs de campagne) :
+
+- **Socle à graine fixe** : les mêmes permutations sont rejouées à chaque passe.
+  Après une réécriture de bloc, toutes les coalitions sans ce bloc sont servies par
+  le cache (zéro appel LLM) — on ne paie que ce qui contient du contenu nouveau.
+- **Addon plafonné** : quelques permutations fraîches s'ajoutent à chaque mutation
+  acceptée (`shapley_addon_per_accept`, plafond `shapley_max_permutations`) — la
+  précision de l'attribution de crédit augmente au fil de la campagne, au moment où
+  les décisions (compaction, publication) en dépendent le plus.
+- **Plafond ajustable en cours de campagne** : modifier le YAML suffit, pris en
+  compte à la reprise suivante sans invalider le moindre calcul déjà payé.
+
+**Avant :** chaque recalcul Shapley repayait ~toutes ses coalitions ; précision constante.
+**Après :** un recalcul après réécriture ne paie que les coalitions touchant le bloc
+modifié ; la précision croît (25 → 50 permutations) pour un coût par passe borné.
+
+L'ancien comportement reste disponible (`shapley_addon_per_accept: 0`).
+
+---
+
 ## [2026-07-17] Calibration : lancement sur une VM Google gratuite (guide clé en main)
 
 La campagne de calibration de prompt peut désormais tourner **toute seule sur une machine
