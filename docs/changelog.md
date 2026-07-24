@@ -1,3 +1,256 @@
+## [2026-07-24] Calibration : notifications Discord détaillées (« où en est la campagne »)
+
+Les notifications du daemon de calibration disaient **qu'il** travaillait, jamais **où il
+en était** : entre « Daemon démarré » et « Quota épuisé », des heures de silence, sans
+savoir s'il en était à la dixième ou à la deux-centième coalition Shapley. Le salon
+Discord suit désormais la campagne **étape par étape**.
+
+Au **démarrage** de chaque passe, un message « d'où l'on part » : itération de reprise et
+cible, meilleur composite connu, prompt courant (score, nombre de mots, blocs mutables),
+tailles des jeux train/val/screening, modèle d'éval et nombre de coalitions Shapley
+attendues. À l'**arrêt** (quota épuisé ou budget atteint), le message symétrique : l'étape
+exactement interrompue, le travail de la passe (itérations, acceptées/rejetées, évals
+payées vs servies par le cache, appels LLM, durée) et le gain de composite obtenu.
+
+Entre les deux, les **étapes principales** sont annoncées (éval initiale, proposition de
+mutation, gate de strate, screening, paliers de racing, éval complète, attribution
+Shapley, validation, compaction), chaque **itération** publie sa mutation puis son verdict
+(composite, Δ, cause de rejet), et un **battement de cœur** (toutes les 15 min par défaut)
+donne l'avancement *à l'intérieur* d'une étape longue — c'est lui qui répond à « il en est
+où, sur ses 250 valeurs de Shapley ? ».
+
+**Avant :** « 🟢 Daemon démarré » … 6 h de silence … « ⏸️ Quota épuisé — reprise demain 07:00 »
+**Après :** « ▶️ Passe démarrée — itération 11 → 50, best 36.80 » … « 🔷 Shapley (init) 253
+coalitions attendues » … « ⏳ Avancement — Shapley 124/253 (49 %), 87 payées, 37 cache » …
+« ⚖️ Itération 12 → accepted, composite 34.20 (Δ=-2.60) » … « ⏸️ Quota épuisé pendant :
+attribution Shapley après acceptation #5 · 168/253 (66 %) — 3 itérations, 412 évals payées »
+
+Réglable dans la config du run (`notify_stages`, `notify_iterations`,
+`notify_heartbeat_seconds`, `notify_min_interval_seconds`) ; sans webhook Discord, rien ne
+change et rien n'est envoyé.
+
+---
+
+## [2026-07-23] Calibration : notifications Discord & digest quotidien
+
+Le daemon de calibration autonome peut désormais **remonter son état sur un salon
+Discord**, pour suivre une campagne cloud sans SSH. Un webhook (pas de bot) reçoit
+**uniquement les transitions d'état** : démarrage, quota épuisé → mise en veille (avec
+l'heure de reprise), reprise après reset, **nouveau meilleur prompt**, fin de campagne.
+Deux ajouts qui ciblent des angles morts : une alerte **⚠️ quand un 429 n'est pas
+identifié « per day »** (le cooldown retombe alors sur un délai court — signe que le
+libellé Gemini a peut-être changé), et une alerte **☠️ « daemon mort »** portée par
+systemd (`OnFailure=`), seul moyen de prévenir en cas de crash/OOM où plus aucun message
+applicatif ne peut partir.
+
+Nouveau `calibrate digest` (timer systemd quotidien) : un **récapitulatif lisible**
+(itération, meilleur composite, évals payées et mutations acceptées sur 24 h, veille en
+cours) **reformulé par Mistral** — modèle distinct du quota d'éval Gemini, donc **sans
+entamer le budget** de la campagne ; repli sur un texte brut si Mistral est indisponible.
+
+Le tout est **best-effort et opt-in** : sans `DISCORD_WEBHOOK_URL` dans `~/calib.env`,
+aucune notification n'est émise (no-op) ; un envoi qui échoue n'interrompt jamais la
+campagne (le store SQLite reste la source de vérité). Aucun contenu de prompt ni clé
+n'est transmis — seulement des métriques agrégées.
+
+**Before :** campagne cloud silencieuse — il fallait `journalctl -u calib` en SSH pour
+savoir si elle avançait, dormait ou était morte.
+**After :** l'essentiel arrive sur Discord (veille/reprise/best/fin/échec) + un digest
+quotidien ; la supervision SSH devient optionnelle.
+
+---
+
+## [2026-07-23] Calibration : daemon autonome & cooldown quota (24h/reset)
+
+La calibration de prompt peut désormais tourner **entièrement seule sur le cloud** et
+exploiter au mieux le quota journalier (RPD/TPD). À l'épuisement du quota, les requêtes
+LLM sont **mises en veille jusqu'à la réouverture du quota** — la durée est lue dans le
+429 du provider, avec une subtilité : pour un quota **journalier** (marqueur `PerDay`),
+le délai renvoyé par Gemini sous-estime le temps réel jusqu'au reset, donc on vise le
+**prochain minuit Pacific** (`quota_reset_tz`, DST géré) pour reprendre pile sur le quota
+frais. Le cooldown est **persisté dans le store** (portée globale), donc il survit à un
+redémarrage.
+
+Nouveau mode `calibrate run --loop` : un **daemon** qui dort pendant le cooldown
+(heartbeat `💤` dans les logs) puis reprend seul — plus besoin de cron. Une unité systemd
+(`cloud/calib.service`) le maintient en vie (démarrage au boot, redémarrage après crash).
+Le lancement cron one-shot reste supporté et bénéficie de la même **garde de démarrage**
+(il sort proprement si un cooldown est encore actif au lieu de re-solliciter l'API).
+
+**Avant :** quota épuisé → le run s'arrêtait ; il fallait un cron externe pour rejouer,
+et une relance trop tôt re-tapait l'API avant le reset.
+**Après :** `run --loop` sous systemd → la campagne consomme le quota du jour, se rendort
+jusqu'au reset, reprend, et progresse jusqu'à `max_iterations` sans supervision.
+Réglages : `quota_reset_tz`, `cooldown_fallback_seconds`, `cooldown_max_seconds`,
+`daemon_sleep_chunk_seconds`.
+
+---
+
+## [2026-07-22] Calibration : arrêt propre à l'épuisement du quota
+
+La boucle de calibration de prompt peut désormais s'arrêter proprement quand le quota
+journalier du provider d'éval est épuisé, au lieu de marteler l'API en boucle sur des
+coalitions vouées à l'échec. Un coupe-circuit compte les échecs de lot **consécutifs**
+(paramètre `eval_max_consecutive_errors`, défaut 3) : tout succès remet le compteur à
+zéro, donc une coupure réseau transitoire isolée ne l'arrête pas — seule une salve
+franche (quota mort) le fait. À l'arrêt, le cache est intact : relancer le run reprend
+exactement à la première coalition non payée.
+
+**Avant :** quota épuisé → le run continuait des heures, chaque coalition rejouant 5
+retries × N lots en pure perte, jusqu'au `Ctrl-C` manuel (trace Python en prime).
+**Après :** au 3ᵉ échec consécutif, message `🛑 … quota probablement épuisé`, arrêt
+propre sans trace, reprise gratuite au run suivant. `eval_max_consecutive_errors: 0`
+rétablit l'ancien comportement.
+
+---
+
+## [2026-07-21] Quotas Gemma corrigés : +90 % de budget journalier, TPM enfin borné
+
+Les deux providers Gemma (`google_gemma42` / `google_gemma43`) étaient déclarés avec des quotas
+free tier erronés. Relevé sur le dashboard AI Studio, le réel est **RPM 30 · TPM 16 000 · RPD
+14 400** par modèle — la config annonçait `rpm 15`, `tpm null` (« illimité ») et `rpd 1500`.
+
+Deux effets concrets :
+- **Budget journalier** : chaque Gemma passe de 1 500 à 14 400 requêtes/jour. À eux deux ils offrent
+  désormais ~28 800 req/j, de loin le plus gros pourvoyeur free tier (vs 500/j pour gemini-3.1-flash-lite).
+- **Anti-saturation** : le TPM était déclaré illimité, donc le load-balancer envoyait de gros batchs
+  aux Gemma alors qu'ils plafonnent à 16 000 tokens/min (≈ 5 agents de 3k tokens). Le TPM réel est
+  maintenant renseigné : les batchs s'auto-dimensionnent et un `max_tokens_per_request` évite les
+  HTTP 413. Le `weight` tombe de 1.0 à 0.36 (les Gemma sont bornés par le TPM, comme Groq).
+
+**Avant :** Gemma bridés à 1 500 req/j et réputés à TPM illimité → budget gâché + risque de saturation.
+**Après :** Gemma exploités à 14 400 req/j chacun, débit tokens correctement borné.
+
+---
+
+## [2026-07-22] Calibration : poids du composite auditables (sensibilité, zéro LLM)
+
+Les poids du composite étaient posés à la main (`global 1.0, âge 0.5, genre 0.3…`) et
+mélangeaient l'**échelle** d'un terme (une L1 sur 15 tranches d'âge et une JSD n'ont pas
+la même magnitude) et son **importance**. Deux ajouts, sans aucun appel modèle :
+
+- Les losses acceptent désormais des **poids par instance** (`weights=`) ; le composite
+  reste linéaire (Shapley/backtest inchangés).
+- Nouvelle commande **`calibrate weights`** : reclasse les prompts déjà évalués sous
+  plusieurs schémas de pondération — `uniform`, `informativity` (dérivés du pouvoir
+  discriminant de chaque axe dans EMC²), `scaled` (**normalisation d'échelle** par le
+  prompt seed), `strat_x2` / `strat_half` — et dit si le **meilleur prompt reste le
+  meilleur** (stabilité + corrélation de rang). Répond de façon chiffrée à « pourquoi
+  0.3 pour le genre ? ».
+
+**Avant :** impossible de savoir si le classement des prompts tenait aux poids choisis.
+**Après :** `calibrate weights` le vérifie en une commande, sur les décisions déjà
+stockées (zéro token). *(Sur la campagne actuelle : classement STABLE, corrélations de
+rang 0.96–1.0 — le gagnant ne dépend pas de la pondération.)*
+
+---
+
+## [2026-07-21] Calibration : mise en page du message de mutation resserrée
+
+Le message envoyé au modèle de mutation est réordonné pour coller à sa lecture naturelle :
+- La **Mémoire des leçons** passe **après** l'« Historique des mutations » (en-tête renommé
+  « Historique des mutations et enseignements »), dont elle est le prolongement — au lieu d'être
+  intercalée avant.
+- Le rappel `💡 Opérateur à privilégier ce tour` **clôt** désormais le message (juste après la
+  consigne JSON), au lieu d'être noyé entre le prompt complet et l'instruction.
+- La section « ⚖️ Diversité des cibles » est **supprimée** : le garde-fou anti-resoumission
+  (tabu + prescreen) empêche déjà de re-toucher trivialement le même bloc, la consigne faisait
+  doublon.
+
+**Avant :** leçons avant l'historique, rappel d'opérateur au milieu du message, section diversité
+en plus.
+**Après :** historique → enseignements, prompt complet, instruction, puis opérateur suggéré en
+dernière ligne ; message plus court et plus lisible.
+
+---
+
+## [2026-07-21] Calibration : liste des opérateurs et coût-mot rappelés dans la consigne de mutation
+
+La consigne finale envoyée au modèle de mutation (`build_mutation_user_msg`) rappelle désormais
+explicitement, juste avant le JSON attendu : (1) les **7 actions possibles** (`modify`, `delete`,
+`insert`, `condense`, `reorder`, `merge_blocks`, `split`) avec un résumé d'une ligne chacune ;
+(2) le **coût de longueur** — chaque mot du prompt ajoute 0.05 pt d'écart (`length_penalty`), donc
+à effet égal la formulation la plus courte est préférée. Vaut pour les deux chemins (candidat
+unique et multi-candidats).
+
+**Avant :** la palette d'opérateurs n'apparaissait que dans le prompt système ; la consigne finale
+ne mentionnait que « modify » (l'exemple de JSON), et l'incitation à la concision n'était pas rappelée
+au moment de proposer.
+**Après :** le mutateur voit la liste complète des actions et le coût-mot à l'endroit où il rédige sa
+proposition — il exploite mieux `condense`/`delete`/`merge_blocks` et raccourcit à effet égal.
+
+---
+
+## [2026-07-21] Calibration : `emd_jsd` devient la loss par défaut
+
+La métrique par défaut d'une campagne de calibration est désormais `emd_jsd` (EMD ordinal
+sur âge/distance + JSD nominal sur global/occupation/genre/motif + pondération continue par
+effectif), y compris quand aucun `loss` n'est précisé. Tous les fichiers de config
+l'utilisaient déjà ; seul le défaut codé dans `RunConfig` restait sur l'ancienne `l1_composite`.
+
+**Avant :** une campagne lancée sans `loss` explicite tombait sur `l1_composite` (toutes les
+catégories traitées comme interchangeables — un glissement d'âge adjacent coûtait autant qu'un
+glissement lointain).
+**Après :** défaut `emd_jsd`, qui respecte l'ordre des dimensions ordinales. `l1_composite`
+reste sélectionnable et recalculable rétroactivement en backtest.
+
+---
+
+## [2026-07-21] Calibration : contexte du mutateur refondu (« ingénieur prompt »)
+
+Le message envoyé au modèle de mutation (calibration du prompt) a été réécrit pour aller à
+l'essentiel, parler d'**écart** (et non de « score composite »), et présenter le prompt de
+façon plus lisible :
+
+- **Phrase d'intro** : le message s'ouvre sur la mission (« Tu es ingénieur prompt : ta mission
+  est d'optimiser le prompt système ci-dessous… »).
+- En-tête `Distribution LLM actuelle :` **sans** le compte de décisions.
+- **Hard negatives supprimés** (exemples individuels persona → mode) et bloc **« DEUX leviers
+  prioritaires » supprimé** : redondants avec les « pires écarts strate × mode », désormais en
+  **top 10** (au lieu de 6) et **sans** l'effectif `n=`.
+- Ligne `Score composite actuel` retirée ; partout on parle d'**écart**. L'historique affiche
+  `écart total=… (par dimension : global …, âge …, occupation …, …)`, **en toutes lettres**.
+- **Historique** borné aux **5 dernières** tentatives.
+- **Mémoire de leçons** : jusqu'aux **5 dernières** synthèses de rejet (au lieu d'une seule),
+  numérotées.
+- **Présentation unifiée du prompt** : chaque bloc est donné **dans l'ordre**, avec son **contenu
+  entier** et sa contribution (Δ écart, dimensions aidées/dégradées, effet sur les modes) **sans
+  abréviations**, **blocs fixes inclus**. Cette vue remplace l'ancienne table + le dump séparé des
+  blocs modifiables.
+- Le rappel d'opérateur ne suggère « garde de la diversité » qu'en **multi-candidats**.
+
+**Before :** contexte long et abrégé (compte de décisions, deux leviers, hard negatives, score
+composite, table markdown + dump des blocs, abréviations `g/ag/oc`, `voit`, une seule leçon).
+**After :** contexte focalisé et lisible (top 10 sans effectif, 5 tentatives, 5 leçons, prompt
+présenté bloc par bloc en toutes lettres avec sa contribution), plus clair pour le mutateur.
+
+---
+
+## [2026-07-21] Sources réorganisées en trois dépôts git + calibration en dépôt autonome
+
+Le code est désormais réparti en **trois dépôts git** aux responsabilités claires :
+
+- **`llm-agents-gama`** — le projet principal (pipeline LLM, GAMA, docker, docs).
+- **`prompt_calibration`** — l'outil de calibration de prompt, extrait dans son propre
+  dépôt (`github.com/Ytlse/prompt_calibration`), cloné à la racine sous
+  `prompt_calibration/` (auparavant `scripts/prompt_calibration/`).
+- **`eqasim-llm-toulouse`** — la génération de population eqasim (`eqasim-toulouse/`).
+
+Les deux derniers sont imbriqués à la racine du projet mais **ignorés** par le dépôt
+principal (comme `eqasim-toulouse/` l'était déjà). Tous les liens vers l'ancien chemin
+`scripts/prompt_calibration/` ont été réparés : montage Docker, endpoint `/calibrate`,
+skill `prompt_calib_context`, doc d'architecture, scripts de déploiement cloud, et le
+`Makefile`/configs internes du dépôt de calibration (venv, jeux gelés, ressources
+partagées). La suite de tests de calibration (209 tests) repasse au vert.
+
+**Before :** la calibration vivait dans `scripts/prompt_calibration/` ; après son
+déplacement, le lancement depuis l'IHM GAMA (`POST /calibrate`) et `make test` étaient
+cassés (chemins morts, venv introuvable, imports périmés).
+**After :** `prompt_calibration/` est un dépôt autonome monté dans le conteneur
+`controller` sous `/app/prompt_calibration` ; `/calibrate` et `make test` fonctionnent.
+
+---
+
 ## [2026-07-20] Calibration : Shapley 6× moins cher (jeu screen restauré) + console lisible
 
 Trois corrections issues du diagnostic d'une campagne réelle :

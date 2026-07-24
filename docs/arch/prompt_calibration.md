@@ -4,12 +4,20 @@ Documentation du module de calibration automatique du prompt système `itinary_m
 qui optimise le texte du prompt pour rapprocher la distribution des choix modaux produits
 par le LLM de la référence **EMC² 2023 Toulouse** (`scripts/data/population/cerema_values.yaml`).
 
+> **Dépôt autonome.** Le code de calibration vit désormais dans un dépôt git séparé,
+> `github.com/Ytlse/prompt_calibration`, cloné à la racine du projet sous
+> `prompt_calibration/` (ignoré par le dépôt principal `llm-agents-gama`). Les chemins
+> `prompt_calibration/…` ci-dessous désignent ce dépôt ; les ressources partagées
+> (`llm_module/`, `scripts/data/`, `experiments/`) restent dans le dépôt principal et sont
+> référencées via `../../llm-agents-gama/…` depuis les configs, ou remappées dans le
+> conteneur GAMA (cf. §lancement IHM). Le paquet s'importe en `prompt_calibration.calibration.*`.
+
 **Fichiers :**
 
 | Fichier | Rôle |
 |---|---|
-| `scripts/prompt_calibration/` | **Nouvelle version** (ticket 004, décision DN) — phases 0-7 livrées : package `calibration/` (models, blocks, metrics, stats, backtest, evaluation, mutation, loop, store, cli, export, importer, dashboard, tabu, bandit, shapley, pareto, islands, **publish**) + tests |
-| `scripts/prompt_calibration/calibration/store.py` | Store SQLite : DAG content-addressed (nœuds/mutations/évals/ablations) — la fondation reprenable |
+| `prompt_calibration/` | **Nouvelle version** (ticket 004, décision DN) — phases 0-7 livrées : package `calibration/` (models, blocks, metrics, stats, backtest, evaluation, mutation, loop, store, cli, export, importer, dashboard, tabu, bandit, shapley, pareto, islands, **publish**) + tests |
+| `prompt_calibration/calibration/store.py` | Store SQLite : DAG content-addressed (nœuds/mutations/évals/ablations) — la fondation reprenable |
 | `calibration_results/calibration.db` | Store d'une campagne (nouvelle version) |
 | `scripts/models_influence/prompt_calibration.ipynb` | Ancienne version (conservée intacte) : orchestration + visualisation |
 | `scripts/models_influence/prompt_calibration_lib.py` | Ancienne version (conservée intacte) : moteur |
@@ -103,6 +111,23 @@ verbeux, acceptées sous test de non-infériorité (le score ne doit pas se dég
 significativement). Le prompt calibré étant envoyé à chaque décision d'itinéraire en
 production, chaque mot compte.
 
+**Poids : échelle vs importance, et analyse de sensibilité (2026-07-22)**. Les poids
+ci-dessus sont posés à la main et **confondent deux choses** : l'*échelle* d'un terme
+(une L1 sur 15 tranches d'âge, une JSD, une EMD n'ont pas la même magnitude — surtout
+en loss `emd_jsd`) et son *importance* (le poids qu'on veut lui donner). Deux outils,
+sans aucun appel LLM (le store conserve les décisions brutes) :
+
+- **Poids injectables** : `L1Composite` / `EMDJSDComposite` acceptent `weights=` par
+  instance (défaut = `WEIGHTS`). Le composite reste **linéaire** (`weighted_composite`),
+  donc Shapley et backtest sont inchangés.
+- **`calibrate weights`** (`backtest.weight_sensitivity`) reclasse les nœuds évalués
+  sous plusieurs schémas — `current`, `uniform`, `informativity` (poids stratifiés
+  dérivés du pouvoir discriminant de l'axe dans EMC²), `scaled` (**normalisation
+  d'échelle** par le prompt seed : `w'_d = w_d / L1_seed(dim)`, chaque terme part à
+  ~1.0), `strat_x2` / `strat_half` — et indique si le **meilleur prompt reste le
+  meilleur** (stabilité + corrélation de rang de Spearman). Réponse chiffrée à
+  « pourquoi 0.3 pour le genre ? » avant de figer un jeu de poids en production.
+
 **Garde-fous de la boucle** (en plus du score) :
 
 - **Veto collatéral** : mutation refusée si une dimension non-globale se dégrade de
@@ -121,9 +146,10 @@ bus des 15-19 ans vers les 20-24 ans coûte autant que la déplacer vers les 50-
 Les dimensions **ordinales** (âge, distance) doivent utiliser une métrique qui
 respecte l'ordre des catégories.
 
-**État (2026-07-14)** : la loss `emd_jsd` est livrée (`calibration/metrics.py`) et
-sélectionnable par `RunConfig.loss` (`get_metric`) ; `l1_composite` reste
-disponible pour comparaison. Composition :
+**État (2026-07-21)** : la loss `emd_jsd` est livrée (`calibration/metrics.py`) et
+sélectionnable par `RunConfig.loss` (`get_metric`) ; c'est désormais le **défaut**
+(code et YAML). `l1_composite` reste disponible pour comparaison (backtest).
+Composition :
 
 | Dimension | Métrique | Fonction |
 |---|---|---|
@@ -252,34 +278,57 @@ que le levier dominant ne bougeait pas. Deux mécanismes y remédient (activés 
 
 2. **Mémoire de leçons roulante** — à chaque tour, le mutateur renseigne un champ `reflection`
    (2-3 phrases) synthétisant les raisons **récurrentes** de rejet + ce qu'il change en
-   conséquence. Cette synthèse est **absorbée** dans `state["lessons"]` (`_absorb_reflection`
-   dans `loop.py`), **bornée** à `lessons_max_chars` (anti-ancrage), **persistée** dans
-   `run_state` (reprise gratuite) et **réinjectée** au tour suivant (`format_lessons` →
-   `build_mutation_user_msg`). La synthèse est produite dans le **même appel** que la proposition
+   conséquence. Cette synthèse est **empilée** dans `state["lessons"]` (`_absorb_reflection`
+   dans `loop.py`) — une **liste roulante des 5 dernières** synthèses (chacune bornée à
+   `lessons_max_chars`, anti-ancrage), **persistée** dans `run_state` (reprise gratuite) et
+   **réinjectée** numérotée au tour suivant (`format_lessons` → `build_mutation_user_msg`).
+   *(Rétro-compat : un `run_state` snapshoté avec une leçon unique — ancien format chaîne — est
+   repris comme liste d'un élément.)* La synthèse est produite dans le **même appel** que la proposition
    (coût quasi nul, pas d'appel LLM dédié) ; sur le chemin entonnoir, elle est commune aux
    candidats et suit celui qui est retenu. Au rejeu depuis le store (reprise), la mutation
    reconstruite n'a pas de champ `reflection` → l'absorption est un no-op (aucune leçon fantôme).
 
-#### 2.4.3 Contexte concret pour le mutateur : hard negatives & snippets entiers — **implémenté**
+#### 2.4.3 Contexte concret pour le mutateur : snippets entiers & matrice bloc × mode — **implémenté**
 
 Le mutateur raisonnait uniquement sur des **agrégats** (distributions, écarts, contributions) ;
-trois évolutions lui donnent du **concret**, sans aucun appel LLM supplémentaire (données déjà
+deux évolutions lui donnent du **concret**, sans aucun appel LLM supplémentaire (données déjà
 persistées, uniquement du calcul et du formatage) :
 
-1. **Hard negatives** (`format_hard_negatives`, `hard_negatives_k`, défaut 4, 0 → désactivé) —
-   pour les pires croisements strate × mode **sur-représentés**, le contexte montre jusqu'à `k`
-   décisions **individuelles réelles** du prompt courant (persona → mode choisi), ex.
-   `Femme, 30 ans, actif_temps_plein, travail, 1-2km → voiture (genre[Femme] : +70 pts vs cible)`.
-   Le mutateur voit à quoi ressemble une erreur type et corrige le schéma comportemental de
-   manière ciblée. Sélection **déterministe** (ordre du df) → reprenable sans variance.
+> **Note (2026-07-21) — allègement et réécriture du contexte du mutateur.** Le message envoyé
+> au mutateur a été refondu pour aller à l'essentiel et parler le langage « ingénieur prompt » :
+> - **Phrase d'intro** : le message s'ouvre sur la mission (« Tu es ingénieur prompt : ta mission
+>   est d'optimiser le prompt système ci-dessous… »).
+> - Le bloc *hard negatives* (exemples individuels persona → mode) est **retiré** (redondant avec
+>   les « pires écarts strate × mode ») ; le bloc « DEUX leviers prioritaires » (mode global le plus
+>   mal prédit à renforcer/atténuer) est aussi retiré (info portée par les écarts strate × mode et
+>   la consigne système).
+> - En-tête `Distribution LLM actuelle :` **sans** le compte de décisions ; **top 10** des pires
+>   écarts (au lieu de 6) **sans** l'effectif `n=` ; suppression de la ligne `Score composite actuel`.
+> - **Terminologie « écart »** partout (au lieu de « composite »/« score ») : l'historique affiche
+>   `écart total=… (par dimension : global …, âge …, occupation …, …)`, **en toutes lettres**.
+> - **Présentation unifiée du prompt** (`format_prompt_with_contrib`) : les blocs sont donnés **dans
+>   leur ordre d'application**, chacun avec son **contenu entier** ET sa contribution (`Δ écart`,
+>   dimensions aidées/dégradées, effet sur les modes — **sans abréviations**), **blocs fixes inclus**
+>   (signalés non modifiables). Cette présentation **remplace** l'ancienne table markdown + le dump
+>   séparé « Blocs modifiables » (seule subsiste la liste des cibles valides près de la consigne JSON).
+> - **Mémoire de leçons** : jusqu'aux **5 dernières** synthèses de rejet, numérotées (cf. §2.4.2),
+>   placées **juste après** l'« Historique des mutations » (en-tête « Historique des mutations et
+>   enseignements ») dont elles sont le prolongement.
+> - Le rappel d'opérateur ne suggère « garde de la diversité » qu'en **multi-candidats**. La ligne
+>   `💡 Opérateur à privilégier ce tour` clôt le message (juste après la consigne JSON).
+> - La section « Diversité des cibles » (rappel anti-fixation listant les blocs récemment modifiés)
+>   a été **retirée** : le garde-fou anti-resoumission (tabu + prescreen, §2.4.2) couvre déjà la
+>   ré-application triviale sur le même bloc.
 
-2. **Snippets fournis en entier** (`SNIPPET_MAX_CHARS` = 300, cap de sécurité) — la bibliothèque
+1. **Snippets fournis en entier** (`SNIPPET_MAX_CHARS` = 300, cap de sécurité) — la bibliothèque
    d'arguments (DL) est un *matériau de réécriture* : tronquée à 110 caractères comme avant, elle
    forçait le mutateur à halluciner la fin des arguments. Le contenu est désormais fourni en
    entier (ellipse seulement au-delà du cap).
 
-3. **Matrice bloc × mode** — colonne « modes poussés » de la table de contribution
+2. **Matrice bloc × mode** — ligne « effet sur les modes » de la présentation par bloc
    (cf. §2.5, décomposition Shapley par part modale) : quel mode chaque bloc favorise ou freine.
+   La présentation par bloc fournit aussi le **contenu entier** de chaque bloc, dans l'ordre,
+   blocs fixes compris.
 
 #### 2.4.0 Paliers progressifs sur un essai unique — **défaut actuel** (`n_candidates=1`)
 
@@ -366,7 +415,19 @@ comprises.
   marginal ≈ 0 et **ne sont pas évalués**.
 - **Cache** : une coalition = un prompt = un nœud content-addressed → les évals
   passent par le cache du store (et un mémo local par calcul) ; les coalitions
-  répétées (entre permutations, entre runs) sont gratuites.
+  répétées (entre permutations, entre runs) sont gratuites. Une coalition n'est
+  mise en cache que si son df d'éval est **non vide** : un lot noyé d'erreurs
+  réseau (df vide) n'est jamais persisté → il est recalculé à la reprise. C'est
+  pourquoi un run relancé après épuisement de quota reprend exactement à la
+  première coalition non payée (les précédentes étant servies par le cache).
+- **Coupe-circuit d'épuisement de quota** (`eval_max_consecutive_errors`, défaut 3)
+  — l'`Evaluator` compte les échecs de lot **consécutifs** dans l'ordre
+  d'achèvement, cumulés d'une coalition à l'autre ; tout succès remet le compteur
+  à zéro (une erreur réseau transitoire isolée ne déclenche donc pas). Au seuil,
+  les lots en attente sont annulés et `EvaluationAborted` est levée, interceptée
+  par `cmd_run` pour un **arrêt propre** (message clair, aucune trace, cache
+  intact). But : exploiter le quota journalier jusqu'à la première salve d'erreurs
+  franche, puis s'arrêter sans marteler l'API. `0` désactive le garde-fou.
 - **Échantillonnage cumulatif à graine fixe (2026-07-20)** — deux régimes selon
   `shapley_addon_per_accept` :
   - **historique** (`0`, défaut du code) : ré-échantillonnage complet à chaque
@@ -497,7 +558,7 @@ devient une piste d'évaluation *a posteriori* si l'on veut déléguer îlots+Pa
 
 Chaque décision LLM est rattachée aux attributs du persona pour le scoring par strate.
 **La cible est implémentée** (phase 0, 2026-07-13) dans
-`scripts/prompt_calibration/calibration/metadata.py` — l'ancienne lib garde son
+`prompt_calibration/calibration/metadata.py` — l'ancienne lib garde son
 comportement historique :
 
 | Attribut | Ancienne lib (conservée) | Nouvelle version (implémentée) |
@@ -544,7 +605,7 @@ dans le même store, avec migration en anneau et merge produisant des nœuds à 
 parents (`parent2`).
 
 ```
-scripts/prompt_calibration/calibration/
+prompt_calibration/calibration/
   models.py       # RunConfig (YAML) + pydantic (Block, Mutation, Scores, EvalResult)
   blocks.py       # decompose_prompt / blocks_to_prompt (purs, testés)
   metrics.py      # Metric pluggable : L1Composite + EMDJSDComposite (v2, phase 3)
@@ -568,10 +629,11 @@ scripts/prompt_calibration/calibration/
   dashboard.py       # dashboard Streamlit (rendu seul) — phase 2
 ```
 
-**CLI** (venv du projet, depuis `scripts/prompt_calibration/`) :
+**CLI** (venv du projet, depuis `prompt_calibration/`) :
 
 ```bash
 calibrate run --config run.yaml       # lance/reprend une campagne (sur une branche)
+calibrate run --config cloud.yaml --loop  # daemon autonome : dort au quota, reprend seul (§7)
 calibrate run --islands 3             # k îlots parallèles dans le même store (phase 6)
 calibrate resume --config run.yaml    # reprise explicite (= run)
 calibrate status --config run.yaml    # meilleur nœud, itération, #évals
@@ -583,7 +645,7 @@ calibrate finalize --write --activate # publie le prompt calibré dans prompts.y
 calibrate dashboard --config run.yaml # dashboard Streamlit (lecteur pur du store)
 ```
 
-(remplacer `calibrate` par `../../llm-agents/.venv/bin/python -m calibration.cli`)
+(remplacer `calibrate` par `../../llm-agents-gama/llm-agents/.venv/bin/python -m calibration.cli`)
 
 **Dashboard (phase 2, implémenté 2026-07-13)** : lecteur **pur** du store
 (aucune écriture ; lecture WAL concurrente pendant un run), lancé par
@@ -688,7 +750,7 @@ llm_agent_sync.launch_calibration  (LLMAgent.gaml)
    │  POST /calibrate {"iterations": calibration_cycles}
    ▼
 controller  (handle/application.py, port 8002)
-   │  subprocess détaché, cwd = /app/scripts/prompt_calibration :
+   │  subprocess détaché, cwd = /app/prompt_calibration :
    │  python -m calibration.cli --config config/gama_container.yaml run --iterations N
    ▼
 campagne en tâche de fond → journal experiments/current/calibration.log
@@ -705,7 +767,7 @@ campagne en tâche de fond → journal experiments/current/calibration.log
 | Prérequis | Jeux gelés `calibration_datasets/<version>/` générés et clés providers dans `.env`. À défaut, la campagne s'arrête avec une erreur explicite dans le journal. |
 
 Le lancement CLI historique (`python -m calibration.cli run --iterations N` depuis
-`scripts/prompt_calibration`, avec le venv du projet) reste inchangé.
+`prompt_calibration`, avec le venv du projet) reste inchangé.
 
 ---
 
@@ -714,7 +776,7 @@ Le lancement CLI historique (`python -m calibration.cli run --iterations N` depu
 La campagne peut tourner en autonomie sur une **VM Google Cloud « Always Free »**
 (`e2-micro`), sans stack GAMA/controller/Redis : c'est un simple process batch
 reprenable (`python -m calibration.cli run`). Tout le nécessaire est dans
-`scripts/prompt_calibration/cloud/` :
+`prompt_calibration/cloud/` :
 
 | Élément | Rôle |
 |---|---|
@@ -724,18 +786,124 @@ reprenable (`python -m calibration.cli run`). Tout le nécessaire est dans
 | `cloud/run_daily.sh` | Lance/reprend la campagne ; appelé par un `cron` quotidien |
 | `cloud/env.example` | Gabarit du fichier de clé (`PROVIDER_KEYS__google_gemini31`) |
 | `cloud/data_to_upload.tar.gz` | Jeux gelés `v1` (gitignorés, donc absents du clone) à envoyer à la VM |
+| `cloud/calib.service` | **Unité systemd** du daemon autonome (`run --loop`) |
 
 **Principe de reprise / quota** : le free tier Gemini plafonne à **500 requêtes/jour**.
-Quand le quota est épuisé, l'éval lève un 429 dont le délai de reset dépasse
-`max_retry_wait` (300 s) → le process s'arrête ; les `try/except` de mutation de
-`loop.py` **ne persistent pas** `state["iteration"]`, donc la reprise repart de la
-dernière itération réellement travaillée. Le `cron` relance chaque nuit et la campagne
-progresse « un peu par jour » jusqu'à `max_iterations`. Aucune surveillance requise.
+Quand le quota est épuisé, l'éval lève des 429 ; au bout de `eval_max_consecutive_errors`
+échecs de lot consécutifs, le coupe-circuit lève `EvaluationAborted` (arrêt propre, cache
+intact). Les `try/except` de mutation de `loop.py` **ne persistent pas**
+`state["iteration"]`, donc la reprise repart de la dernière itération réellement
+travaillée jusqu'à `max_iterations`.
+
+**Cooldown quota & lancement autonome (2026-07-23)** — deux modes, tous deux pilotés par
+un **cooldown persisté** (`cooldown` dans le store, portée *globale* : le quota provider
+est partagé entre branches/îlots) :
+
+- À l'abort, `cli._resume_after` calcule l'instant de reprise autorisé et
+  `store.set_cooldown` le persiste. La durée vient du **429 lui-même**
+  (`classify_quota_error` extrait le `retryDelay` et détecte le marqueur *journalier*
+  `PerDay`). Nuance clé : le `retryDelay` de Gemini est fiable pour le **RPM** (quelques
+  secondes) mais **pas** pour le quota **journalier** (il sous-estime le temps jusqu'au
+  reset). Donc, si le 429 est identifié `is_daily_quota`, on vise le **prochain minuit
+  local** (`quota_reset_tz`, défaut `America/Los_Angeles`, DST géré par `zoneinfo`) au
+  lieu du délai annoncé — c'est ce qui maximise le RPD : on reprend pile à l'ouverture du
+  quota frais. Repli (`cooldown_fallback_seconds`, court) si aucun délai exploitable ;
+  plafond `cooldown_max_seconds` anti-veille infinie.
+- **Daemon (`run --loop`, recommandé cloud)** : le process ne s'arrête pas — il dort par
+  tranches (`daemon_sleep_chunk_seconds`, heartbeat `💤`) jusqu'au `resume_after`, puis
+  reprend. `cloud/calib.service` le maintient en vie (`systemctl enable --now calib` :
+  redémarrage au boot + après crash, back-off `StartLimitBurst` contre la boucle sur clé
+  invalide). Supervision réduite à `journalctl -u calib`. C'est le mode qui exploite au
+  mieux RPD/TPD sans ordonnanceur externe.
+- **Cron one-shot (`run_daily.sh`, alternative)** : inchangé, mais bénéficie de la même
+  garde — `cmd_run` sort proprement si un cooldown est encore actif, au lieu de re-taper
+  l'API. Ne pas activer daemon *et* cron simultanément.
 
 **Contrainte dimensionnante** : le poste rare est le **quota LLM**, pas le CPU/RAM
 (travail I/O-bound). Une `e2-micro` gratuite suffit ; passer l'API Gemini en payant est
 le seul levier pour terminer en heures plutôt qu'en jours (coût de l'ordre de quelques
 dollars pour une campagne, `gemini-flash-lite`).
+
+---
+
+## 8 · Notifications Discord (supervision du daemon cloud)
+
+Le daemon `run --loop` tourne sans surveillance sur la VM. Un module de
+notification **best-effort** remonte les transitions d'état sur un salon Discord,
+pour savoir « où en est la campagne » sans se connecter en SSH.
+
+**Transport** (`calibration/notify.py`) : POST d'un embed sur un **webhook
+Discord** (pas de bot), en `urllib` stdlib (zéro dépendance), sous timeout court.
+Tout échec d'envoi est **avalé** — une notification perdue n'influe jamais sur la
+campagne ; le store SQLite reste la seule source de vérité et `journalctl -u
+calib` garde la trace complète.
+
+**Interrupteur** : l'URL est lue de l'environnement `DISCORD_WEBHOOK_URL` (un
+**secret** — dans `~/calib.env`, jamais en config ni journalisé). Absente →
+`notify` est un **no-op silencieux** (runs locaux et tests ne notifient rien).
+
+**Événements de transition d'état** (le heartbeat `💤` de veille n'est **jamais**
+notifié : anti-spam) :
+
+| Événement | Déclencheur (`cli.py`) | Niveau |
+|---|---|---|
+| 🟢 `daemon_start` | démarrage du daemon — **d'où l'on part** : itération de reprise, best connu, acceptées, veille en cours le cas échéant | info |
+| ⏸️ `quota_paused` | quota épuisé → cooldown : heure de reprise, raison, **étape interrompue** et bilan de la passe | warn |
+| ⚠️ `quota_marker` | abort quota **sans** marqueur « per day » → cooldown court (détection dégradée : le libellé Gemini a peut-être changé, cf. `_DAILY_QUOTA_RE`) | warn |
+| 🟢 `resume` | réveil effectif après une veille quota | good |
+| 🏆 `new_best` | le meilleur composite a baissé pendant la passe (une fois **par passe**, pas par itération) | good |
+| ✅ `campaign_done` | budget d'itérations atteint (+ bilan de la passe) | good |
+| ☠️ `daemon_failed` | **process mort** (crash / OOM / clé invalide → back-off systemd) — via `OnFailure=` (voir plus bas) | error |
+| 📊 `digest` | digest quotidien (voir plus bas) | info |
+
+### 8.1 · Suivi d'avancement (`calibration/progress.py`)
+
+Les transitions ci-dessus disent **que** le daemon travaille, pas **où il en
+est** : entre « Daemon démarré » et « Quota épuisé », six heures de silence. Un
+tracker **in-process** (singleton `progress.session()`) tient l'étape courante et
+les compteurs de la **passe** (un réveil du daemon), alimenté par toutes les
+couches du moteur — `loop.py` pour les étapes, `run_shapley` pour les coalitions,
+`Evaluator.evaluate` pour les évals payées/servies par le cache et les lots.
+
+| Événement | Déclencheur | Contenu |
+|---|---|---|
+| ▶️ `pass_start` | moteur assemblé, avant la 1ʳᵉ requête | itération de départ → cible, best, prompt courant (composite, mots, blocs mutables), tailles des jeux, modèle d'éval, coalitions Shapley attendues |
+| 🔹 `stage` | changement d'étape principale | éval initiale, reprise, proposition de mutation, gate de strate, screening, palier de racing, éval complète, validation, compaction |
+| ⏳ `progress` | battement de cœur intra-étape (`notify_heartbeat_seconds`, 15 min) | « attribution Shapley (init, jeu screen) · 124/253 (49 %) · 87 payée(s) · 37 cache · depuis 2 h 10 » + compteurs de passe |
+| 🔁 `iteration` / ⚖️ `verdict` | début et issue de chaque itération | opérateur, bloc ciblé, rationale, T° / verdict, composite, Δ, cause de rejet |
+| 🔷 `shapley_done` | fin d'une passe Shapley | coalitions payées vs cache, blocs les plus / moins utiles, durée |
+| 📊 `validation` / ✂️ `compaction` | éval de validation, passe de compaction | composite val + compteur d'early stopping / blocs retirés et mots gagnés |
+
+**Pourquoi un singleton** : les couches profondes (`Evaluator`) comptent leurs
+appels sans qu'on fasse circuler un objet de plus dans toutes les signatures, et
+le tracker survit à la remontée de `EvaluationAborted` — c'est ce qui permet au
+message de veille de dire *à quelle étape et à quel point de cette étape* le
+quota s'est éteint (le quota s'éteint rarement sur une frontière propre).
+
+**Réglages** (`RunConfig`) : `notify_stages` (étapes), `notify_iterations`
+(itérations), `notify_heartbeat_seconds` (0 = pas de battement de cœur),
+`notify_min_interval_seconds` (anti-rafale sur les seuls messages d'étape — les
+jalons passent toujours). Sans webhook, tout cela reste des compteurs mémoire.
+
+**Cas « process mort » (hors Python)** : une notification in-process ne peut pas
+partir si le process est mort. C'est couvert **au niveau systemd** :
+`calib.service` porte `OnFailure=calib-notify-fail.service`, qui exécute
+`cloud/notify_fail.sh` (un simple `curl` du webhook). C'est le seul chemin qui
+survit à un OOM de l'`e2-micro` (1 Go).
+
+**Digest quotidien** (`calibrate digest`, timer `calib-digest.timer`) : lit le
+store (itération, meilleur composite, évals payées et mutations acceptées sur
+24 h, cooldown en cours — **zéro éval LLM**), fait reformuler le récapitulatif
+par **Mistral** (`digest_provider`/`digest_model`, modèle **distinct** du quota
+d'éval Gemini → n'entame pas le budget de la campagne), et poste un message. Si
+Mistral est indisponible, repli sur un **texte templaté** (chiffres bruts) ; si
+le webhook est absent, le digest s'affiche sur stdout.
+
+**Limites assumées** : livraison best-effort (message perdu si VM/Discord hors
+ligne — jamais rejoué) ; le webhook est un secret partageable (dans `calib.env`,
+`chmod 600`) ; aucun contenu de prompt ni clé n'est envoyé (uniquement des
+métriques agrégées). Installation des unités : `cloud/setup_vm.sh` (étape C) et
+en-têtes des fichiers `cloud/calib-*.service` / `.timer`.
 
 ---
 
