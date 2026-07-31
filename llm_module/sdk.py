@@ -12,7 +12,9 @@ Usage :
     client = LLMGatewayClient(base_url="http://api:8000", wait_timeout=90.0)
     result = await client.execute(payload)          # dict ou LLMRequest
     if result.ok:
-        chosen = result.agents[0].chosen_index
+        # itinary_multi_agent renvoie une distribution ; le tirage se fait via
+        # llm_module.core.mode_choice (normalize_option_probabilities + draw_index).
+        probabilities = result.agents[0].probabilities
     await client.aclose()
 """
 

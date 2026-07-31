@@ -87,11 +87,43 @@ class Task(BaseModel):
 # Sortie structurée (LLM → Worker)
 # ---------------------------------------------------------------------------
 
+class OptionProbability(BaseModel):
+    """Probabilité, pour une option de trajet, que le persona la retienne.
+
+    Le LLM note **toutes** les options proposées (somme = 100) au lieu d'en choisir
+    une : c'est un tirage aléatoire dans cette distribution qui produit la décision
+    (cf. llm_module.core.mode_choice). `probability` est accepté en % comme en
+    fraction — la normalisation aval rend l'échelle indifférente.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    index: Optional[int] = None
+    mode: Optional[str] = None
+    probability: Optional[float] = None
+
+    @field_validator("probability", mode="before")
+    @classmethod
+    def coerce_probability(cls, v):
+        """Tolère « 40 % » ou « 0,4 » : certains modèles habillent leurs nombres."""
+        if isinstance(v, str):
+            cleaned = v.strip().replace("%", "").replace(",", ".")
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return v
+
+
 class AgentResponse(BaseModel):
     """Un élément du tableau JSON retourné par le LLM."""
     model_config = ConfigDict(extra="allow")
 
     agent_id: Union[str, int]
+    # Distribution sur les options proposées — format courant pour la catégorie
+    # itinary_multi_agent.
+    probabilities: Optional[List[OptionProbability]] = None
+    # `chosen_index`/`mode` : ancien format (le LLM choisissait une option). Conservés
+    # pour rester capable de relire une réponse ou un cache produits avant la bascule.
     chosen_index: Optional[int] = None
     mode: Optional[str] = None
     reason: Optional[str] = None

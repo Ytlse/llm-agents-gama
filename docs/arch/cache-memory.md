@@ -73,6 +73,28 @@ Sans souvenir, deux décisions prises dans les mêmes conditions factuelles sont
 
 Les deux familles de points sont **étanches** (`memory_empty` fait partie du filtre) : une décision prise sans souvenir n'est jamais resservie à un agent qui en a, et réciproquement.
 
+### Ce qui est mis en cache : une distribution, pas une décision
+
+Le LLM ne renvoie plus un itinéraire choisi mais une **probabilité par option**
+(cf. `docs/arch/llm-inference.md`). C'est ce vecteur qui est persisté, dans le champ
+`probabilities` du point Qdrant (`[{code, mode, p}, …]`, indexé par code de plan et non
+par position).
+
+Conséquence : **un hit ne resert pas une décision figée, il rejoue un tirage**. La graine
+dérive de `(agent.mode_draw_seed, agent_id, activity_id, jour simulé)` — un même agent,
+replacé dans le même contexte un autre jour, peut donc changer de mode sans qu'aucun appel
+LLM ait lieu. Le cache économise l'inférence, pas la variabilité des comportements.
+
+Deux cas particuliers :
+
+- **options disparues** — les codes de plan absents des options courantes sont écartés et
+  la masse restante est renormalisée ; s'il ne reste rien de tirable, le hit devient un
+  miss (`code_not_in_options`) et le LLM est rappelé ;
+- **points hérités** — les points écrits avant cette bascule ne portent que
+  `chosen_plan_code` : ils sont resservis tels quels, sans tirage. En pratique, changer le
+  prompt système change aussi le checksum d'isolation du cache, donc ces points vivent dans
+  un répertoire distinct.
+
 - Stockage : disque local dans `data/llm_cache/<checksum_prompt>/<population_name>/`
 - Activation : `cache.enabled: true` dans la config d'expérience
 - Le store post-inférence est **fire-and-forget** (n'alourdit pas le chemin critique)
@@ -91,7 +113,7 @@ Les deux familles de points sont **étanches** (`memory_empty` fait partie du fi
 
 ### Quand le cache est-il pertinent ?
 
-La clé de lookup encode l'**agent**, l'**activité**, la **catégorie de jour** (semaine/week-end), la **tranche de 10 minutes**, les **options de transport disponibles** et la **météo** — plus, sur la branche sémantique, la **mémoire long terme** de l'agent. Un même agent replacé dans le même contexte de décision *et* avec un vécu comparable reçoit la même décision sans appel LLM supplémentaire.
+La clé de lookup encode l'**agent**, l'**activité**, la **catégorie de jour** (semaine/week-end), la **tranche de 10 minutes**, les **options de transport disponibles** et la **météo** — plus, sur la branche sémantique, la **mémoire long terme** de l'agent. Un même agent replacé dans le même contexte de décision *et* avec un vécu comparable reçoit la même **distribution** sans appel LLM supplémentaire — le mode effectif, lui, est retiré au sort.
 
 Corollaire : le cache est réutilisable d'un run à l'autre pour un scénario donné, mais une réflexion LTM qui change significativement le vécu d'un agent invalide ses décisions cachées — par construction.
 

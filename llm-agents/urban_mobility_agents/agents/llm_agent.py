@@ -17,6 +17,11 @@ from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
 from llm.shortterm import UserShortTermMemory
 from models import Person, TravelPlan
+from llm_module.core.mode_choice import (
+    draw_index,
+    mode_distribution,
+    normalize_option_probabilities,
+)
 from llm_module.sdk import LLMGatewayClient
 from llm_module.prompts.manager import prompt_manager as llm_module_prompt_manager
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
@@ -60,6 +65,17 @@ def log_llm_cache_hit(agent_id: str, activity_id: Optional[str], sim_ts: float, 
             f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
     except OSError as e:
         logger.warning(f"Impossible d'écrire le cache hit LLM : {e}")
+
+
+def _format_distribution(distribution: dict) -> str:
+    """« car 60% · public_transport 30% · walking 10% » — modes à 0 % omis du texte.
+
+    Le dictionnaire complet (modes à 0 % inclus) reste la source pour les métriques :
+    ce format n'est destiné qu'aux traces lisibles (mémoire court terme, logs).
+    """
+    parts = [f"{mode} {pct * 100:.0f}%" for mode, pct in
+             sorted(distribution.items(), key=lambda kv: -kv[1]) if pct > 0]
+    return " · ".join(parts) or "aucune"
 
 
 class Context(BaseModel):
@@ -358,17 +374,31 @@ class LlmAgent:
                     "departure_time": humanize_time(departure_time) if departure_time else None,
                     "departure_timestamp": float(departure_time) if departure_time else None,
                     "current_time": current_time,
+                    # Météo/trafic propre à l'agent (et non plus au niveau requête) :
+                    # la clé de batch hache `parameters`, donc en sortant la météo des
+                    # parameters, des demandes de météos différentes peuvent fusionner
+                    # dans un même appel LLM — chaque persona garde la sienne dans le
+                    # prompt (cf. itinary_multi_agent.md.j2, injection par bloc).
+                    "context": city_context,
                     "history": history,
                     "trajectories": trajectories
                 }
             ],
             "parameters": {
-                "context": city_context,
                 **settings.agent.llm_params
             }
         }
 
-    async def evaluate_and_choose_travel_plan(self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0) -> tuple[int, str, str]:
+    async def evaluate_and_choose_travel_plan(
+        self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0,
+    ) -> tuple[int, str, str, dict]:
+        """Choisit un itinéraire et renvoie (index, justification, provider, répartition).
+
+        La répartition est la distribution de probabilité par mode canonique qui a servi
+        au tirage (modes non proposés inclus, à 0) — vide si la décision n'en vient pas
+        (réponse à l'ancien format, point de cache hérité, erreur). Elle est tracée
+        telle quelle dans `moves.csv`.
+        """
         assert options, "No travel options provided for planning trip."
 
         # Ordre déterministe pour les clés de cache (indépendant du shuffle)
@@ -379,6 +409,16 @@ class LlmAgent:
 
         activity_purpose = options[0].purpose or ""
         weather = get_weather(context.timestamp)
+
+        # Graine du tirage : le jour simulé en fait partie, donc un même contexte
+        # rejoué le lendemain retire un autre mode (y compris sur un cache hit),
+        # tandis qu'un run relancé à l'identique reproduit exactement les mêmes trajets.
+        seed_parts = (
+            settings.agent.mode_draw_seed,
+            context.person.person_id,
+            context.activity_id,
+            datetime.fromtimestamp(context.timestamp, tz=timezone.utc).strftime("%Y-%m-%d"),
+        )
 
         # --- Cache hybride (avant l'appel LLM) ---
         # Sans souvenir, la décision ne dépend que des conditions factuelles : correspondance
@@ -405,11 +445,18 @@ class LlmAgent:
                 memory_text=memory_text,
                 weather=weather,
                 activity_purpose=activity_purpose,
+                seed_parts=seed_parts,
             )
             if cache_hit is not None:
                 chosen_plan = sorted_options[cache_hit["index"]]
                 original_index = options.index(chosen_plan)
-                reason = "Décision récupérée depuis le cache sémantique LLM."
+                if cache_hit.get("distribution"):
+                    reason = (
+                        "Mode tiré au sort dans la distribution mise en cache : "
+                        + _format_distribution(cache_hit["distribution"])
+                    )
+                else:
+                    reason = "Décision récupérée depuis le cache sémantique LLM."
                 plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                 stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> served from LLM cache.\n{plan_summary}\nReasoning: {reason}"
                 self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
@@ -422,7 +469,8 @@ class LlmAgent:
                     sim_ts=float(context.timestamp),
                     mode=cache_hit.get("mode", ""),
                 )
-                return original_index, reason, f"cache:{cache_hit.get('mode', '')}"
+                return (original_index, reason, f"cache:{cache_hit.get('mode', '')}",
+                        cache_hit.get("distribution") or {})
 
         # Cache miss sur la branche « mémoire vide » : le payload reste à construire.
         if payload is None:
@@ -448,18 +496,54 @@ class LlmAgent:
 
             if llm_result.ok:
                 agent_result = llm_result.agents[0]
-                index = agent_result.chosen_index
+                # Le LLM note toutes les options (somme = 100) ; le mode effectif est
+                # tiré au sort dans cette distribution. Les poids sont ré-alignés sur
+                # `sorted_options` (ordre déterministe par code) pour que le tirage ne
+                # dépende pas du mélange anti-biais de position appliqué au prompt.
+                weights = None
+                if agent_result.probabilities:
+                    # Modes tels qu'ils ont été envoyés dans le prompt : ils permettent de
+                    # réaligner une réponse dont les index sont hors bornes (le modèle a
+                    # renuméroté les options) au lieu d'en perdre la masse.
+                    sent_modes = [t.get("mode") for t in payload["agents"][0]["trajectories"]]
+                    shuffled_weights = normalize_option_probabilities(
+                        agent_result.probabilities, len(shuffled_options),
+                        modes=sent_modes,
+                        context=f"agent={context.person.person_id} activity={context.activity_id}",
+                    )
+                    position_in_sorted = {id(opt): i for i, opt in enumerate(sorted_options)}
+                    weights = [0.0] * len(sorted_options)
+                    for opt, w in zip(shuffled_options, shuffled_weights):
+                        weights[position_in_sorted[id(opt)]] += w
+                    index = draw_index(weights, *seed_parts)
+                    decision_list = sorted_options
+                else:
+                    # Réponse à l'ancien format (un index choisi) — repli sans tirage.
+                    index = agent_result.chosen_index
+                    decision_list = shuffled_options
 
-                # L'index retourné par Structured Output correspond à la position dans shuffled_options
-                if isinstance(index, int) and 0 <= index < len(shuffled_options):
+                if isinstance(index, int) and 0 <= index < len(decision_list):
                     reason = agent_result.reason or "Pas de justification fournie."
 
                     # Normalisation de la raison (alignement avec aplan_trip_old)
                     if "is chosen because it" in reason:
                         reason = f"This plan {reason.split('is chosen because it', 1)[1].strip()}"
 
+                    chosen_plan = decision_list[index]
+
+                    distribution = {}
+                    if weights is not None:
+                        modes = [
+                            ",".join(str(leg.mode) for leg in opt.legs) if opt.legs else ""
+                            for opt in sorted_options
+                        ]
+                        distribution = mode_distribution(weights, modes)
+                        reason = (
+                            f"{reason} [Répartition estimée : "
+                            f"{_format_distribution(distribution)} — mode tiré au sort.]"
+                        )
+
                     # Écriture de la décision en short-term memory pour alimenter la réflexion journalière
-                    chosen_plan = shuffled_options[index]
                     plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                     stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> chosen by gateway LLM.\n{plan_summary}\nReasoning: {reason}"
                     self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
@@ -469,6 +553,8 @@ class LlmAgent:
                         _rec.T_extract_end = time.time()
 
                     # --- Insertion asynchrone dans le cache (fire-and-forget) ---
+                    # C'est la distribution qui est mise en cache, pas la décision : au
+                    # prochain hit, un nouveau tirage aura lieu sur ces mêmes probabilités.
                     if self.llm_cache is not None:
                         mode = ",".join([str(leg.mode) for leg in chosen_plan.legs]) if chosen_plan.legs else ""
                         _cache_task = create_background_task(self.llm_cache.store(
@@ -480,6 +566,7 @@ class LlmAgent:
                             chosen_plan_code=chosen_plan.get_code(),
                             mode=mode,
                             weather=weather,
+                            probabilities=weights,
                         ))
                         _cache_task.add_done_callback(
                             lambda t: logger.warning(f"Cache store failed: {t.exception()}") if not t.cancelled() and t.exception() else None
@@ -487,18 +574,18 @@ class LlmAgent:
                         logger.debug(f"Cache store task created for person {context.person.person_id}, activity {context.activity_id}, chosen plan mode: {mode}")
 
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
-                    return original_index, reason, provider_used
+                    return original_index, reason, provider_used, distribution
 
                 if _rec is not None:
                     _rec.T_extract_end = time.time()
 
             error_msg = llm_result.error or "Format de réponse invalide ou timeout."
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")
-            return -1, error_msg, provider_used
+            return -1, error_msg, provider_used, {}
 
         except Exception as e:
             logger.exception(f"Erreur lors de l'appel à l'API Gateway LLM: {e}")
-            return -1, str(e), ""
+            return -1, str(e), "", {}
 
     async def trigger_short_term_reflection_for_all_people(self, timestamp: int, people: list[Person]):
         """

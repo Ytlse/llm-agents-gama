@@ -168,6 +168,100 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
 - Les catégories absentes de `active:` (ex. `perception_filter`) conservent leur section
   `<!-- SYSTEM -->` en dur dans leur template.
 
+#### Sortie du LLM : une distribution, pas un choix
+
+Pour la catégorie `itinary_multi_agent`, le LLM **ne choisit plus** d'itinéraire : il
+attribue à *chaque* option proposée la probabilité (en %) que le persona la retienne, la
+somme valant 100. Le schéma (`llm_module/prompts/schemas.json`) exige donc un tableau
+`probabilities` de `{index, mode, probability}` — une entrée par option, `0` pour une
+option jugée impossible — en lieu et place de l'ancien `chosen_index`.
+
+Le post-traitement vit dans `llm_module/core/mode_choice.py`, partagé par tous les
+consommateurs pour qu'ils appliquent la **même** politique de décision :
+
+| Étape | Fonction | Rôle |
+|---|---|---|
+| Normalisation | `normalize_option_probabilities` | Doublons, valeurs négatives, somme ≠ 100, index renumérotés : le vecteur brut est ramené à une distribution sur les options réellement proposées (repli sur l'uniforme si rien n'est exploitable, tracé en `[ALARME]`) |
+| Répartition | `mode_distribution` | Agrège les options par **mode canonique** (`walking`, `cycling`, `car`, `public_transport`, `train`, `motorbike`). Un mode qu'aucune option ne propose — la marche quand le trajet est trop long — reste présent à **0 %**, ce qui rend deux répartitions comparables |
+| Tirage | `draw_index` | Tire une option proportionnellement à sa probabilité, avec une graine dérivée de `(agent.mode_draw_seed, agent_id, activity_id, jour simulé)` |
+
+Le tirage a lieu **côté simulation** (`llm-agents`), sur la liste triée par code de plan :
+il ne dépend donc pas du mélange anti-biais-de-position appliqué au prompt. Conséquences :
+
+- **rejouabilité** — à graine égale, un run relancé reproduit exactement les mêmes trajets ;
+- **variabilité réaliste** — le jour simulé entrant dans la graine, un même agent placé
+  deux jours de suite dans le même contexte peut prendre sa voiture puis le bus ;
+- **exploration gratuite** — changer `agent.mode_draw_seed` explore un autre tirage sans
+  réappeler le LLM.
+
+La répartition ayant servi au tirage est tracée **par demande d'itinéraire** dans
+`moves.csv`, à raison d'**une colonne par mode** : `P(Marche) %`, `P(Vélo) %`,
+`P(Voiture Privée) %`, `P(Transports_collectifs) %`, `P(Train) %`,
+`P(Deux-roues motorisé) %`, `P(Autres modes) %` (somme = 100, directement agrégeables).
+Distinguer deux cas à la lecture : **`0`** = le LLM a explicitement écarté ce mode ;
+**cellule vide** = la décision n'a pas produit de répartition (mono-choix, absence
+d'itinéraire, erreur LLM, point de cache hérité).
+
+Le worker, lui, ne tire pas : il alimente `llm_transport_mode_chosen_total` et
+`llm_chosen_index_total` avec l'option **la plus probable**, et cumule la masse de
+probabilité par mode dans `llm_mode_probability_pct_total` (répartition *attendue*, que le
+tirage reproduit en espérance). Une réponse à l'ancien format (`chosen_index`) reste
+acceptée partout : elle est traitée sans tirage.
+
+##### Une ligne « - [n] » = une option
+
+Les options sont rendues en puces `- [n] mode: description`, et la description d'un
+itinéraire détaille ses étapes. Ces étapes étaient rendues en puces `- ` de **même niveau**
+que la ligne d'option : plusieurs modèles (mistral, llama 3.1, gemma) les lisaient comme
+des options supplémentaires et renumérotaient le bloc entier — index `0..35` pour 6 options,
+donc masse de probabilité placée **hors bornes** et décision perdue. Deux garde-fous :
+
+1. **Rendu** (`itinary_multi_agent.md.j2`) — les étapes deviennent des sous-puces indentées
+   « · », l'en-tête annonce le nombre d'options et la plage d'index, et la consigne finale
+   rappelle que seules les lignes `- [n]` sont des options et que les index repartent de 0
+   dans chaque bloc persona.
+2. **Réalignement** (`normalize_option_probabilities(…, modes=…)`) — une entrée hors bornes
+   est replacée sur l'option que **son libellé de mode** désigne (égalité de chaîne, puis
+   égalité de mode canonique) ; si plusieurs options partagent ce mode, la masse est
+   répartie entre elles — indéterminé quant à l'itinéraire, fidèle à la part modale.
+   Sans `modes`, ou libellé non reconnu, la masse est écartée (tracée) plutôt que placée
+   sur la mauvaise option. Les entrées hors bornes à probabilité nulle sont ignorées en
+   `DEBUG` : elles ne coûtent rien et noyaient les vraies pertes.
+
+Les deux appelants de production passent les modes **envoyés** (source de vérité) :
+`llm_agent.py` depuis le payload rendu, `task_worker.py` depuis `spec.trajectories`. Rejoué
+sur le run du 2026-07-29 (36 agents touchés), le réalignement ramène les replis uniformes de
+12 à 1 et l'écart de part modale à l'intention du modèle de 0,41 à 0,02.
+
+Le pipeline de calibration applique **le même** traitement à ses jeux gelés — rendu et
+réalignement — sous le drapeau `prod_option_handling` (cf. `docs/arch/prompt_calibration.md`) :
+sans lui, la mesure porterait sur un prompt que la production n'envoie plus.
+
+Témoin complémentaire déjà en place : `llm_mode_label_mismatch_total` / `llm_mode_label_checked_total`
+(mode annoncé ≠ mode de l'option, cf. `docs/arch/monitoring.md`) — même symptôme vu depuis
+les index restés *dans* les bornes.
+
+#### Contexte (météo/trafic) réinjecté par persona
+
+Dans `itinary_multi_agent.md.j2`, le contexte factuel (météo, trafic) est rendu **à
+l'intérieur de chaque bloc persona** (`**Contexte :** …` juste sous l'en-tête `--- agent_id=… ---`),
+et non plus une seule fois en préambule commun au lot. La source par persona est
+`agent.context` si elle est fournie, sinon le contexte partagé de la requête
+(`request.context` puis `parameters.context`).
+
+La météo est donc **portée par l'agent** (`AgentSpec.context`), plus par les `parameters`
+de la requête : c'est `build_travel_plan_payload` (côté `llm-agents`) qui la place dans le
+bloc agent. Comme la clé de batch (`compute_batch_key`) ne hache que `request.parameters`
+(catégorie, params LLM, provider forcé, min-TPM), la météo n'y intervient plus : **des
+demandes de météos différentes peuvent désormais être fusionnées dans un même appel LLM**,
+chaque persona conservant la sienne dans le prompt. Le worker fusionne les agents des tâches
+compatibles (`_execute_batch`) et rend le lot avec les `parameters` communs — corrects
+puisque identiques par construction de la clé.
+
+Le pipeline de calibration applique le **même format** d'injection
+(`calibration/evaluation.py::inject_context`), pour que la mesure reflète exactement le
+prompt de production.
+
 #### Isolation du cache LLM par version de prompt
 
 Le cache sémantique LLM (`data/cache/llm/`) est partitionné par empreinte du prompt système
@@ -284,6 +378,62 @@ un pipeline LLM qui ne draine plus :
   de la population, donne le `min_interval` appliqué et les coefficients
   `min_internal_coeff_*` ; elle est aussi poussée vers la console GAMA et se réarme
   quand le backlog repasse sous `drain_release_ratio` (défaut 20 %).
+
+### Instrumentation d'un appel Google (Gemini)
+
+Un appel structuré peut échouer de trois façons qui se ressemblent toutes de
+l'extérieur — « ça n'avance plus » — et se soignent différemment. L'adaptateur Google
+relève donc **trois grandeurs sur chaque appel**, avant toute levée d'exception :
+
+| Grandeur | Ce qu'elle tranche |
+|---|---|
+| **Tokens de complétion** (`candidatesTokenCount` + `thoughtsTokenCount`) | Plafond `maxOutputTokens` sous-dimensionné, ou non |
+| **`finishReason`** | `STOP` (le modèle a fini) vs `MAX_TOKENS` (tronqué) vs `SAFETY` (bloqué) |
+| **Latence** de l'appel | Génération réellement longue vs échec instantané |
+
+Elles sont tracées en DEBUG à chaque appel, et **rappelées dans le message de chaque
+exception** — un timeout dit combien de temps il a attendu et quel budget il demandait,
+une troncature dit combien de tokens ont été produits pour quel plafond.
+
+> **Les tokens de raisonnement comptent dans la sortie.** `thoughtsTokenCount` est
+> facturé **et** décompté du plafond `maxOutputTokens`. Il est donc additionné aux
+> tokens de complétion dans le `tokens_out` renvoyé au worker : l'ignorer sous-estimait
+> la consommation réelle et masquait la cause d'une troncature sur les modèles à
+> raisonnement.
+
+**Alarme de troncature.** Une troncature isolée est un aléa (WARNING). Au-delà de
+**3 troncatures `MAX_TOKENS` consécutives** sur la même instance de provider,
+l'adaptateur lève une ERREUR `[ALARME]` — sur **front montant** : une seule par
+épisode, réarmée par la première complétion propre. Sans ce signal, le retry de
+l'appelant rejoue la même troncature à l'identique jusqu'à épuisement (le décodage
+étant quasi-déterministe à température 0), sans qu'aucune ligne ne le dise.
+
+**Le timeout de 240 s n'est pas la contrainte usuelle.** Mesuré le 2026-07-31 sur
+`gemini-3.1-flash-lite-preview`, lots de 15 personas avec distribution complète par
+persona : **3,6 à 8,8 s** par appel et **2 742 tokens** de complétion au pire. Deux
+ordres de grandeur de marge. Ne pas le rallonger sans mesure : un appel réellement
+bloqué doit finir par rendre la main.
+
+### Réponse valide mais incomplète
+
+Un piège propre aux appels **multi-agents** : le modèle peut rendre un JSON
+parfaitement valide, conforme au schéma, `finishReason=STOP`, très en deçà du plafond
+de tokens — et pourtant **amputé d'une partie des agents demandés**. Mesuré le
+2026-07-31 sur `gemini-3.1-flash-lite-preview` : sur 12 lots de 15 personas, **4 lots
+n'ont rendu que 5 à 8 décisions sur 15** (dont un à 1 287 tokens de complétion pour
+4 096 autorisés).
+
+**Réduire la taille du lot atténue le phénomène mais ne l'élimine pas.** Sur un rejeu
+complet à 8 personas par lot (372 requêtes de base), les lots incomplets restent
+courants — jusqu'à un lot ne rendant qu'**1 persona sur 8**. La taille de lot est donc
+un levier de coût, pas une garantie de complétude.
+
+Aucune des défenses habituelles ne voit ce cas : ce n'est ni une erreur HTTP, ni une
+troncature, ni un défaut de schéma. **C'est à l'appelant de comparer ce qu'il a demandé
+à ce qu'il a reçu** — le nombre d'agents envoyés contre le nombre de décisions rendues —
+puis de redemander les manquants dans une requête plus petite. Voir
+[prompt_calibration.md](prompt_calibration.md) pour la façon dont le moteur de
+calibration s'en protège (re-tir par moitiés, puis garde de couverture).
 
 ### Backpressure /sync
 

@@ -133,9 +133,30 @@ species llm_agent_sync skills:[network] {
 						INHABITANT_MAP[self.person_id] <- self;
 					}
 				}
-			} 
+			} else if messageType = "calibration_started" {
+				// Accusé de démarrage de la calibration du prompt
+				map<string, unknown> data <- json["data"];
+				write "[CALIBRATION] Démarrée (pid=" + string(data["pid"])
+					+ ", cycles=" + string(data["iterations"])
+					+ ") — journal : " + string(data["log"]);
+			}
 		}
-		
+
+	}
+
+	/**
+	 * Lance la calibration du prompt côté contrôleur (POST /calibrate).
+	 * Non bloquant : le contrôleur exécute la campagne en tâche de fond.
+	 * Le nombre de cycles (itérations de la boucle) provient du paramètre
+	 * global `calibration_cycles`, réglable depuis l'IHM.
+	 */
+	action launch_calibration {
+		write "[CALIBRATION] Requête de lancement — " + calibration_cycles + " cycle(s)...";
+		do send to: "/calibrate" contents: [
+			"POST",
+			to_json(["iterations"::calibration_cycles]),
+			["Content-Type"::"application/json"]
+		];
 	}
 }
 

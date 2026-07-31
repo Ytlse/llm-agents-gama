@@ -43,7 +43,8 @@ métadonnées persona                                  micro-batches (≤ EVAL_B
 prompt seed ──► décomposition en BLOCS (1 phrase = 1 bloc, schéma JSON verrouillé)
         │
         ▼
-run initial + ATTRIBUTION SHAPLEY (contribution de chaque bloc au score)
+run initial + ATTRIBUTION DE CRÉDIT (contribution de chaque bloc au score —
+                                     omission N+1 par défaut, Shapley en option)
         │
         ▼
 BOUCLE (recuit simulé, ≤ 50 itérations) — entonnoir phase 4 :
@@ -54,13 +55,51 @@ BOUCLE (recuit simulé, ≤ 50 itérations) — entonnoir phase 4 :
    ──► application ──► éval train (Mistral) ──► score composite
    ──► veto collatéral ──► accepter / rejeter (bootstrap) ──► récompense bandit
    ──► rejet → entrée tabu (tenure)
-   ──► à CHAQUE acceptation : attribution de crédit Shapley globale (jeu screen)
+   ──► à CHAQUE acceptation : attribution de crédit globale (jeu screen)
    ──► toutes les 5 itérations : éval validation + early stopping
    ──► toutes les COMPACT_EVERY acceptations (+ fin de run) : passe de COMPACTION
         │
         ▼
 checkpoint best_checkpoint.yaml ──► publication dans prompts.yaml + diff git-like
 ```
+
+### Comptages pondérés : mesurer une population, pas simuler un individu
+
+Depuis la bascule du prompt de production vers les **probabilités par option** (cf.
+`docs/arch/llm-inference.md`), une réponse d'éval contient, pour chaque persona, la
+probabilité de chaque option (somme = 100).
+
+En production, l'agent **tire au sort** dans cette distribution : c'est ce qui rend la
+ville vivante. Ici, on ne simule pas un individu, on mesure une population — et tirer au
+sort n'ajouterait que du **bruit d'échantillonnage autour d'une moyenne déjà connue**.
+Sur ~800 personas, un tirage disperse chaque part modale de ±1,7 point : de quoi noyer
+une amélioration réelle du prompt, ou faire accepter une mutation neutre par chance.
+
+`decisions_from_agents()` (`calibration/evaluation.py`) produit donc des décisions
+**pondérées** `(agent_id, mode, poids)` : chaque persona verse sa masse de probabilité à
+chaque mode qui lui est accessible, pour un total de **1 par persona**. Les métriques
+somment ces poids (`metrics.mode_counts`) au lieu de compter des lignes.
+
+| | Avant (tirage) | Après (poids) |
+|---|---|---|
+| Un persona 60/40 | 1 décision, voiture *ou* bus | 2 lignes, 0.6 et 0.4 |
+| Deux évals du même prompt | scores différents (±1,7 pt/mode) | score identique au chiffre près |
+| Requêtes par éval `train` | `nb_lots` | `nb_lots` (inchangé) |
+
+Trois points d'attention :
+
+- **`n` reste un effectif de personas** (`metrics.stratum_size`), jamais un nombre de
+  lignes ni une masse. Un persona hésitant entre trois modes produit trois lignes : c'est
+  **une** personne. Les seuils (`min_count`) portent donc sur des personnes — à valeur
+  égale, ils sont plus exigeants qu'avant, où ils comptaient des lignes.
+- **`eval_samples` n'a plus d'effet** : sans tirage, il n'y a rien à ré-échantillonner. Le
+  champ reste dans `RunConfig` pour ne pas casser les YAML existants, mais il ne figure
+  plus dans `eval_params_key()`.
+- **Rétrocompatibilité** : les décisions historiques sont des paires `(agent_id, mode)`,
+  relues avec un poids de 1 (décision ferme). Tout backtest reste exact sur l'ancien
+  comme sur le nouveau format. En revanche `eval_params_key()` porte `policy=weighted` :
+  les évals antérieures, où le modèle élisait un mode, ne sont pas comparables et ne sont
+  pas réutilisées.
 
 ### Rôles des modèles (décision d'architecture)
 
@@ -256,7 +295,22 @@ que le levier dominant ne bougeait pas. Deux mécanismes y remédient (activés 
      `rejected_tabu`) → l'idée **n'est pas invalidée sur le fond** : garder le **levier**, mais
      **ne jamais resoumettre le même texte ni une variante triviale** (même verdict, essai
      gaspillé) — la proposition concrète doit **différer matériellement** (renforcer l'argument,
-     changer de bloc-cible, combiner), **sans inventer** de leçon de fond.
+     changer de bloc-cible, combiner), **sans inventer** de leçon de fond ;
+   - `[dégrade]` (**requalification par magnitude**, 2026-07-28) → le candidat **aggrave
+     nettement** l'écart : le **levier lui-même est réfuté**, pas seulement sa formulation.
+     Consigne inverse de `[bruit]` : abandonner le levier, ne pas le reformuler.
+
+   ⚠ **Le défaut que corrige `[dégrade]`.** L'étiquetage initial classait en `[bruit]` *tout*
+   rejet portant un `Δ=`, quelle que soit son ampleur : un `Δ=+9.89` sur un composite de 42.7
+   (soit −23 % de qualité, mesuré dès le palier à 25 %) recevait la même étiquette qu'un
+   `Δ=+0.30`, donc la même consigne — « l'idée n'est pas invalidée, garde le levier ». La boucle
+   **ordonnait au mutateur de persévérer sur une piste que la mesure venait de réfuter**. En
+   campagne 7, cinq itérations consécutives ont ainsi reformulé le même levier sur `consigne_s3`.
+   La requalification compare désormais le Δ ponctuel à `_DEGRADE_REL_TOL` (10 %) du composite
+   courant — seuil calibré sur les rejets réels de cette campagne (+2.22 → +9.89), qui sépare les
+   dégradations franches des Δ marginaux encore dans le bruit d'un palier partiel. L'intervalle
+   de confiance de `rejected_stat` (`IC90 Δ=[…]`) est volontairement ignoré : ce n'est pas un
+   point, et une amélioration non significative n'est pas une dégradation.
 
 3. **Garde-fou dur anti-resoumission (toute config)** — la règle « ne resoumets jamais le même
    texte ni une variante triviale » n'est pas qu'une consigne : elle est **appliquée en code** dans
@@ -391,15 +445,34 @@ persistés comme les autres (colorés au dashboard) pour le diagnostic. `racing_
 | `racing_min_gap` | `1.0` | Écart composite mini pour départager |
 | `racing_min_n` | `8` | Taille mini de la strate cible (sinon gate sauté) |
 
-### 2.5 Attribution de crédit Shapley — **implémentée** (phase 5, DB)
+### 2.5 Attribution de crédit aux blocs — **implémentée** (phase 5, DB)
 
-Mesurer `score(prompt − bloc_i) − score(prompt)` (retrait bloc-à-bloc) suppose les
-blocs **indépendants** et se trompe dans deux cas : **redondance** (deux blocs
-équivalents paraissent chacun inutile pris isolément alors qu'en retirer les deux
-coûte) et **synergie** (le retrait depuis le prompt complet attribue *toute* la
+Après chaque acceptation (et à l'init), la contribution de chaque bloc au score est
+recalculée sur le jeu `screen`. Deux méthodes, réglées par **`attribution_method`** :
+
+| Méthode | Coût par passe | Ce qu'elle donne |
+|---|---|---|
+| **`omission`** (défaut) | **`N+1` coalitions** | Retrait bloc-à-bloc : `score(prompt − bloc) − score(prompt)`. Budget fixe et prévisible ; suffit à **classer** les blocs — tout ce dont le ciblage a besoin. |
+| `shapley` (option) | ≈ `2 + M·N` coalitions (~25×) | Répartition **exacte** du gain, redondances et synergies comprises. |
+
+Les deux écrivent dans `ablations` au même format (`method` les distingue) et
+**partagent le cache content-addressed** : basculer de l'une à l'autre ne jette aucune
+éval, les coalitions « complet moins un bloc » étant communes.
+
+**Pourquoi l'omission ne suffit pas toujours** — mesurer `score(prompt − bloc_i)`
+suppose les blocs **indépendants** et se trompe dans deux cas : **redondance** (deux
+blocs équivalents paraissent chacun inutile pris isolément, alors qu'en retirer les
+deux coûte) et **synergie** (le retrait depuis le prompt complet attribue *toute* la
 synergie à *chaque* bloc → la somme dépasse le gain réel). La **valeur de Shapley**
-répartit exactement le gain total entre les blocs, redondances et synergies
-comprises.
+répartit exactement le gain total entre les blocs, redondances et synergies comprises.
+
+**Pourquoi l'omission est malgré tout le défaut** — le recalcul global après chaque
+acceptation est le poste qui consomme le quota LLM journalier (campagne 7 : « RPD
+reached » après 27 itérations sur 200). Un classement correct à `N+1` évals fait
+avancer la boucle ; une attribution exacte à 25× le prix l'arrête. Shapley reste
+disponible pour une passe d'analyse ponctuelle, hors boucle.
+
+Le reste de cette section décrit l'implémentation Shapley, la plus riche des deux.
 
 **Implémentation** (`calibration/shapley.py`, pure et testée ; câblage
 `run_shapley` dans `loop.py`) :
@@ -554,6 +627,85 @@ devient une piste d'évaluation *a posteriori* si l'on veut déléguer îlots+Pa
 
 ---
 
+### 2.8 Mutation décomposée : cibler / diagnostiquer / rédiger — **implémentée** (phase 8)
+
+Un appel unique demandait au mutateur d'être **simultanément** analyste de ses échecs,
+sélecteur de cible et rédacteur, avec tout le contexte servi d'un bloc (carte des 11
+blocs annotés, historique, leçons, bibliothèque). La proposition est désormais scindée
+en trois étages, chacun ne voyant que ce qui le concerne.
+
+**Étage A — ciblage (code, 0 appel LLM, `calibration/targeting.py`).**
+`select_target()` désigne le bloc et le levier par `argmax` sur des grandeurs **déjà
+mesurées** : nocivité Shapley (−Δ), désalignement modal (le bloc pousse-t-il un mode
+déjà sur-représenté ?), pires strates. *Pourquoi en code :* faire relire une table à un
+LLM pour qu'il en renvoie le maximum dépense un appel à reproduire un calcul, avec le
+risque qu'il se trompe. Deux garde-fous s'y greffent :
+
+- **Cooldown par bloc** (`target_cooldown_rejects`, `target_cooldown_span`) : après *k*
+  rejets **consécutifs**, un bloc sort du jeu des cibles pour *n* itérations. Le tabu ne
+  filtrait que la similarité **textuelle** d'une proposition, jamais l'**acharnement sur
+  une cible** — d'où les cinq itérations consécutives sur `consigne_s3` en campagne 7.
+  Une acceptation remet le compteur à zéro. Si *tous* les blocs sont en cooldown, le
+  meilleur est conservé : une itération sans cible serait une itération perdue.
+- **Leviers réfutés** : les rationales des rejets `[dégrade]` du bloc sont réinjectées
+  comme interdits explicites.
+
+Effet de bord voulu : le prompt perd la carte de contribution des blocs **non ciblés**
+(`format_prompt_with_contrib(..., focus=...)`), qui n'a plus d'objet une fois la cible
+choisie. Les autres blocs gardent leur **contenu** — indispensable pour ne pas créer de
+redite ou de contradiction. Mesuré sur les branches du store : −6 à −19 % de caractères.
+
+**Étages B/C — diagnostic puis rédaction (`decomposed_mutation`, défaut `false`).**
+B reçoit le seul bloc-cible, son levier, les échecs **sur ce bloc** et (à venir) les
+justifications verbatim ; il sort du **JSON contraint** `{mecanisme, directive,
+interdits}` et **ne rédige pas**. C reçoit le prompt complet *sans appareil analytique*,
+plus la directive, et écrit. Mesuré sur la campagne 7 : le plus long des deux appels
+tombe de 15 586 à 6 782 caractères (**−56 %**), et la **somme** des deux vaut 0,57× le
+monolithique — la décomposition est donc moins chère en tokens *malgré* l'appel
+supplémentaire.
+
+Coût : +1 appel sur le seau `mutation_provider`, **distinct** de celui de l'éval (le
+quota journalier Gemini est *par modèle*) — donc sans effet sur le facteur limitant.
+`diagnosis_model` permet de placer un modèle plus capable sur B, le maillon dont
+l'erreur se propage à la rédaction.
+
+Garde-fous de la chaîne : un diagnostic **sans directive** court-circuite l'étage C
+(on ne fait pas rédiger sans consigne) et fait **retomber sur le chemin monolithique**
+dans la même itération ; un rédacteur qui répond hors cible est **refusé sans éval**
+(`_single_prescreen`) plutôt que réétiqueté — réétiqueter appliquerait à un bloc un
+texte rédigé pour un autre.
+
+`targeting_enabled: false` / `decomposed_mutation: false` restaurent le comportement
+historique : ce sont les **bras témoins** de l'ablation *mutation décomposée vs
+monolithique, à budget d'éval égal*.
+
+#### 2.8.1 Garde-fou : aucune règle à seuil chiffré — **implémenté**
+
+La contrainte « jamais de seuil chiffré ni de table distance→mode » n'existait que
+comme **consigne en langage naturel** dans `_MUTATION_SYSTEM` : rien ne l'appliquait.
+Conséquence mesurée dans le store : un bloc « privilégie les modes actifs […] pour tout
+déplacement **inférieur à 2 km** » avait été accepté, **capitalisé en snippet** (gain
+134.4, taggé `marche`) puis **réinjecté à chaque itération** comme exemple à imiter — le
+pipeline enseignait la règle qu'il interdit.
+
+`find_numeric_threshold()` (`mutation.py`) applique la règle en code, à trois points :
+validation du candidat **avant éval** (chemins single et entonnoir), **capture** de
+snippet, et **service** des snippets — ce dernier neutralisant les snippets pollués des
+campagnes antérieures **sans migration du store**.
+
+Ce qui est visé, c'est la **règle** (comparateur + quantité), pas la mention d'un
+nombre : « moins de 2 km » est bloqué, « la règle des 48 heures » passe. Les variantes
+en toutes lettres (« sous deux kilomètres ») et les parts modales explicites (`26 %`,
+« 26 pour cent ») sont couvertes. *Pourquoi cette règle est structurante :* un seuil
+chiffré transforme le choix modal en **automatisme déterministe** — le prompt cesse de
+simuler un raisonnement comportemental et encode directement la réponse attendue, ce qui
+détruit la validité de la calibration hors du jeu d'évaluation (cf. la limite « matcher
+les marginales ≠ faire raisonner juste » du `TODO.md`). Une règle sur la distance est en
+outre **structurellement incapable** de corriger les plus gros écarts de la campagne 7,
+qui sont des écarts de **genre** (`genre[Femme]·marche −21.7`).
+
+---
+
 ## 3 · Extraction des métadonnées persona
 
 Chaque décision LLM est rattachée aux attributs du persona pour le scoring par strate.
@@ -574,6 +726,29 @@ d'en-tête (`--- agent_id=… | Destination : … ---` courant et
 ou en objets JSON pretty-printed concaténés (format réel des logs courants).
 Critère d'acceptation vérifié : 100 % des sections de `experiments/current`
 rattachées (`check_phase0.py`).
+
+**Parité du traitement des options (2026-07-30)** — `prod_option_handling`, défaut `true`.
+Les jeux gelés rendent les étapes d'un itinéraire (« - Marche jusqu'à 'work' ») en puces de
+**même niveau** que la ligne d'option `- [n] mode: …` : plusieurs modèles les comptent alors
+comme des options, renumérotent tout le bloc et placent leurs probabilités hors bornes
+(cf. `docs/arch/llm-inference.md`). La mesure portait donc, pour une part des personas, sur
+une répartition **uniforme** qu'aucun prompt n'avait produite. Deux alignements sur la
+production, sous un seul drapeau :
+
+- `render_option_substeps()` ré-indente les étapes en sous-puces « · » et annonce le nombre
+  d'options, **au moment de bâtir le lot** — comme `inject_context` réinjecte la météo. Le
+  jeu sur disque n'est pas modifié : transformation idempotente, lignes d'option intactes
+  (`parse_option_modes` et l'extraction de distance lisent la même chose avant/après —
+  vérifié sur les 803 records de `v1`). Coût : +3 à +6 % de caractères par section.
+- `decisions_from_agents(realign_out_of_range=True)` réaligne une probabilité hors bornes sur
+  l'option que son libellé de mode désigne, au lieu de l'écarter.
+
+Le drapeau entre dans `eval_params_key()` (`opt=prod` / `opt=legacy`) : le prompt envoyé
+**et** la masse comptée changeant tous les deux, les évals des deux régimes ne se mélangent
+jamais dans le store. Le passer à `false` restaure le régime historique — c'est ce qu'il
+faut faire pour reprendre une campagne sur ses évals déjà payées. Au moment du correctif la
+question ne se posait pas : les deux stores ne contenaient **aucune** éval sous
+`policy=weighted` (toutes antérieures, en `samples=3`), donc rien à re-payer.
 
 **Mémoire STM/LTM exclue des jeux val/test** : la section `**Historique :**` d'un
 persona (souvenirs datés + concepts `[Concept]`) est spécifique au run source et
@@ -604,6 +779,147 @@ alimente le dashboard temps réel (phase 2). Branches parallèles et merges
 dans le même store, avec migration en anneau et merge produisant des nœuds à deux
 parents (`parent2`).
 
+### 4.1 Régime de mesure : ce qu'un composite stocké permet de comparer
+
+Un store accumule les **régimes de mesure**, et un composite n'est comparable
+qu'aux composites du même régime. Trois choses le définissent, toutes portées par
+`eval_params_key()` (`prov | model | temp | policy`) :
+
+| Ce qui change | Effet | Réparable après coup ? |
+|---|---|---|
+| la **loss** (L1 → EMD/JSD) | le score, pas les décisions | **oui** — `backtest` / `rescore`, zéro LLM (les décisions brutes sont conservées) |
+| le **modèle** d'éval (mistral → gemini) | les décisions | **non** — il faut réinterroger |
+| la **politique** de décision (mode élu → masse de probabilité) | les décisions | **non** — idem |
+
+D'où la lecture du store actuel : le prompt seed vaut **176,7** sous
+`mistral-small-latest` et **25,9** sous `gemini-3.1-flash-lite-preview`, pour le
+*même texte*. Ramener les deux à la loss courante réduit l'écart — il venait pour
+l'essentiel de losses différentes — mais ne réconcilie pas les décisions. Une
+trajectoire tracée à travers les régimes mesure donc autant le changement
+d'instrument que l'effet du prompt.
+
+**`calibrate reeval`** (`calibration/reeval.py`) rejoue pour cette raison une
+**lignée entière** — la chaîne des mutations acceptées, de la graine à la feuille —
+sous la clé de la config courante :
+
+```bash
+calibrate reeval --config run.yaml --branch essai2 --dry-run   # plan + coût
+calibrate reeval --config run.yaml --branch essai2 --workers 8 # mesure
+```
+
+| Option | Rôle |
+|---|---|
+| `--node <préfixe>` | feuille explicite ; défaut = dernier nœud **accepté** de la branche |
+| `--dataset` | jeu gelé (défaut `train`) |
+| `--batch N` | personas par requête. **Mettre 8** : à 15 (capacité déduite du TPM), le modèle omet des personas de sa réponse — voir ci-dessous. N'entre pas dans `eval_params_key()`, donc ne change pas la mesure, seulement le nombre d'appels. |
+| `--workers N` | requêtes en vol. Le facteur limitant d'un rejeu est la **latence**, pas le RPM : à 2 requêtes en vol pour ~2 min de génération, on ne consomme qu'~1 req/min sur les 15 autorisées. N'entre pas dans `eval_params_key()` — la mesure est inchangée. |
+| `--provider` | seconde clé (`google2`), pour finir une lignée quand le RPD de la clé 1 est épuisé. La page de synthèse regroupe les régimes par **modèle · politique**, pas par `params_key` : deux clés sur le même modèle restent **une seule courbe**. Le cache, lui, est bien distinct (le provider entre dans `eval_params_key()`) — les nœuds déjà payés sur la clé 1 seront donc **repayés** sur la clé 2. |
+
+#### Le lot incomplet : ce que l'instrumentation a montré (2026-07-31, action A10)
+
+Sous la politique pondérée, une éval de lignée « n'avançait plus » sans qu'aucune erreur
+ne remonte. L'hypothèse consignée ici — sortie ~5× plus longue → dépassement du timeout
+de 240 s de l'adaptateur Google — **était fausse**. Les trois grandeurs relevées sur des
+lots réels du jeu `train`, prompt de la feuille `0fc427e7`, modèle
+`gemini-3.1-flash-lite-preview` :
+
+| Lot | Latence | `finishReason` | Tokens de complétion | Décisions rendues |
+|---|---|---|---|---|
+| 3 personas | 2,6 s | `STOP` | 762 | 3/3 |
+| 8 personas | 5,0 s | `STOP` | 1 637 | 8/8 |
+| 15 personas (lot 0) | 7,2 s | `STOP` | 2 737 | 15/15 |
+| 15 personas (lot 3) | **3,8 s** | **`STOP`** | **1 287** | **6/15** |
+| 15 personas (lot 8) | 3,6 s | `STOP` | 1 200 | **5/15** |
+
+- **Ni timeout** : 3,6 à 8,8 s pour une limite de 240 s — deux ordres de grandeur de marge.
+- **Ni troncature** : `finishReason=STOP` partout, 2 742 tokens de complétion au pire pour
+  un plafond de 4 096 (`InternalRequest.max_tokens`). Le chemin `MAX_TOKENS` n'a jamais
+  été emprunté.
+- **Le modèle omet des personas.** Il rend un JSON valide, conforme au schéma, complet de
+  son point de vue — mais qui ne contient que 5 à 8 des 15 personas demandés. Sur
+  12 lots de 15, **4 étaient amputés** (33 personas perdus sur 180, soit 18 % de la
+  population). Un échantillon de 10 lots de 8 était complet — mais le rejeu entier de la
+  lignée a montré que **les lots incomplets à 8 restent courants** (jusqu'à 1 persona
+  rendu sur 8). La taille de lot atténue, elle ne garantit pas.
+
+Rien dans la chaîne ne voyait ce cas : ce n'est ni une erreur HTTP, ni une troncature, ni
+un défaut de schéma. Le lot passait pour un **succès**, remettait à zéro le compteur
+d'échecs consécutifs du coupe-circuit, et l'éval était calculée puis **mise en cache** sur
+une sous-population — indistinguable en base d'une mesure complète.
+
+*(À noter aussi : la clé `google_gemini31` avait son RPD de 500 épuisé. Un quota mort
+produit un 429 explicite, correctement traité — ce n'était pas la cause du silence.)*
+
+#### Les trois défenses ajoutées
+
+1. **Comparaison demandé/reçu, à chaque lot.** `make_provider_call` confronte les
+   `agent_id` envoyés à ceux rendus. C'est la seule défense possible : le défaut est
+   invisible à tous les autres étages.
+2. **Re-tir par moitiés** (`split_entry`). Redemander le même lot à température 0 redonne
+   le même résultat : il faut **réduire la demande**. Le lot incomplet est coupé en deux
+   et rappelé, récursivement. Mesuré en conditions réelles : un lot à 5/15 revient à
+   **15/15 en 3 appels**. Le découpage n'entre pas dans `eval_params_key()` — il ne change
+   **pas la mesure**, seulement le nombre d'appels.
+3. **Garde de couverture** (`eval_min_coverage`, défaut 0,98). Si, malgré le rattrapage,
+   l'éval n'a pas couvert assez de personas, elle lève `InsufficientCoverage` **avant**
+   toute écriture. Le store ne conserve pas le nombre de personas vus : un score calculé
+   sur 60 % du jeu y entrerait indistinguable d'un score complet et fausserait toute la
+   trajectoire. Mieux vaut un nœud « manquant », qui est vrai.
+
+Enfin, l'**échec silencieux** proprement dit est refermé : la boucle de retry de
+`call_with_retry` rendait une **liste vide** en sortie de boucle, que l'appelant prenait
+pour un lot légitimement sans décision. Elle lève désormais `RetriesExhausted` avec une
+ERREUR `[ALARME]`.
+
+> **Choix de lot recommandé** : `--batch 8`. Il ne supprime pas les lots incomplets — le
+> rattrapage reste le filet — mais il en déclenche assez peu pour que le surcoût reste
+> modeste. Mesuré sur le rejeu complet de la lignée `essai2` (6 nœuds × 62 lots) :
+> **40 lots incomplets sur 372**, tous rattrapés, pour **432 appels** au lieu de 372 —
+> soit **+16 %**.
+
+#### Ce que le rejeu a produit (2026-07-31)
+
+```bash
+calibrate reeval --config run.yaml --branch essai2 --provider google2 --batch 8 --workers 4
+```
+
+432 appels, ~25 min, sur la **seconde clé** Google (le RPD de la première était épuisé).
+Trajectoire sur `train`, sous `gemini-3.1-flash-lite-preview · masse de probabilité` —
+composites tels que stockés par le moteur (loss `emd_jsd`, poids de la campagne) :
+
+| # | Nœud | Branche | Composite | Δ graine |
+|---|---|---|---|---|
+| 0 | `4c2ea89428` | main | 23,58 | — |
+| 1 | `00ea9b077a` | main | 24,99 | +1,41 |
+| 2 | `2663e10eb9` | essai2 | 22,02 | −1,56 |
+| 3 | `6b39f690a9` | essai2 | 20,62 | −2,96 |
+| 4 | `d1c9508f68` | essai2 | 22,18 | −1,40 |
+| 5 | `0fc427e7b5` | essai2 | **21,40** | **−2,18** (−9,2 %) |
+
+La page de synthèse recalcule ces composites avec ses propres poids « comparables »
+(`length_penalty` neutralisée), d'où des niveaux légèrement différents — 24,35 → 22,24,
+gain 2,12 — pour la même trajectoire.
+
+**Les deux régimes s'accordent.** Sous `mistral-small-latest · mode élu`, la même lignée
+gagne 7,60 points (24,9 % du niveau de la graine) ; sous le régime de production, 2,12
+points (8,7 %). Près de trois fois moins en part, mais **dans le même sens** : le gain de
+la calibration n'est pas un artefact de l'instrument qui l'a guidée. Son ampleur, en
+revanche, ne se transporte pas — c'est le chiffre du régime de production qui fait foi.
+
+Deux points de conception :
+
+- **La lignée est reconstruite par les arêtes de mutation, pas par la seule
+  colonne `parent`.** Les nœuds étant adressés par contenu, un prompt déjà produit
+  sur une autre branche est réutilisé tel quel, avec le `parent` de sa *première*
+  création — souvent aucun. C'est le cas du deuxième nœud de la lignée `essai2`,
+  apparu sur `main` trois jours plus tôt : chaîner par `parent` seul s'arrête là et
+  **perd la graine**, c'est-à-dire la référence à laquelle toute la trajectoire se
+  compare. `lineage_chain` replie donc sur `mutations(node_to → node_from)`.
+- **Le rejeu est reprenable sans réflexion.** Une éval n'est mise en cache qu'une
+  fois complète ; relancer la commande après un épuisement de quota repart au
+  premier nœud non payé, les précédents étant servis par le cache. Un abort quota
+  écrit le cooldown comme `run`, et la commande refuse de démarrer tant qu'il court.
+
 ```
 prompt_calibration/calibration/
   models.py       # RunConfig (YAML) + pydantic (Block, Mutation, Scores, EvalResult)
@@ -622,9 +938,10 @@ prompt_calibration/calibration/
   publish.py      # finalisation : éval test unique, bilan avant/après, publication — phase 7
   loop.py         # boucle reprenable : entonnoir (tabu→screening→best), bandit, compaction, Shapley, snippets
   store.py        # RunStore SQLite (nœuds / mutations / évals / ablations / tabu / bandit / snippets)
+  reeval.py       # rejeu d'une lignée sous un régime d'éval unique (§4.1)
   export.py       # export lisible (nodes.csv, mutations.csv, history.md)
   importer.py     # import one-shot des artefacts de l'ancienne version
-  cli.py          # run / resume / status / export / import / backtest / dashboard
+  cli.py          # run / resume / status / export / import / backtest / reeval / dashboard
   dashboard_data.py  # requêtes de lecture du store (pures, testées) — phase 2
   dashboard.py       # dashboard Streamlit (rendu seul) — phase 2
 ```
@@ -640,6 +957,8 @@ calibrate status --config run.yaml    # meilleur nœud, itération, #évals
 calibrate export --config run.yaml    # vue lisible du store
 calibrate import <legacy_dir> --config run.yaml   # récupère un ancien run
 calibrate backtest --metrics l1_composite,emd_jsd # recalcule des losses (zéro LLM)
+calibrate reeval --branch essai2       # rejoue une lignée sous le modèle d'éval épinglé (§4.1)
+calibrate reeval --node 0fc427e7 --dry-run  # plan + coût en appels, sans rien payer
 calibrate finalize --config run.yaml  # éval test unique + bilan avant/après (dry-run)
 calibrate finalize --write --activate # publie le prompt calibré dans prompts.yaml
 calibrate dashboard --config run.yaml # dashboard Streamlit (lecteur pur du store)

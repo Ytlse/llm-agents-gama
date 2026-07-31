@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 
 from llm_module.worker.task_worker import (
     ProviderCapacityError,
+    _count_mode_mismatches,
     _extract_primary_mode,
     _fit_request_budget,
     _get_distance_bracket,
@@ -358,3 +359,90 @@ class TestLearnProviderMaxOutputTokens:
     def test_invalid_limit_returns_false(self, monkeypatch, tmp_path):
         config_mod, _, _ = self._setup(monkeypatch, tmp_path)
         assert config_mod.learn_provider_max_output_tokens("groq_llama4", 0) is False
+
+
+# ---------------------------------------------------------------------------
+# _count_mode_mismatches — le LLM note-t-il bien l'option qu'il croit noter ?
+# ---------------------------------------------------------------------------
+
+class _Metrics:
+    """MetricsSink minimal (compteurs en mémoire)."""
+
+    def __init__(self):
+        self.counters = {}
+
+    def incr(self, name, amount=1):
+        self.counters[name] = self.counters.get(name, 0) + amount
+
+    def get(self, name):
+        return self.counters.get(name, 0)
+
+
+class _Rt:
+    def __init__(self):
+        self.metrics = _Metrics()
+
+
+class _Prob:
+    def __init__(self, index, mode):
+        self.index = index
+        self.mode = mode
+
+
+class _Resp:
+    def __init__(self, probabilities):
+        self.agent_id = "a1"
+        self.probabilities = probabilities
+
+
+TRAJ = ["foot", "foot,bus,foot", "car"]
+
+
+class TestCountModeMismatches:
+
+    def _run(self, entries, traj=TRAJ, rt=None):
+        rt = rt or _Rt()
+        _count_mode_mismatches(rt, _Resp(entries), traj, "provider_x")
+        return rt.metrics.counters
+
+    def test_etiquettes_correctes_aucun_desaccord(self):
+        c = self._run([_Prob(0, "foot"), _Prob(1, "foot,bus,foot"), _Prob(2, "car")])
+        assert c["mode_label_checked"] == 3
+        assert "mode_label_mismatch" not in c
+
+    def test_libelle_different_mais_meme_mode_canonique(self):
+        """« BUS » pour « foot,bus,foot » n'est pas un désaccord : même mode canonique."""
+        c = self._run([_Prob(1, "BUS"), _Prob(2, "voiture")])
+        assert c["mode_label_checked"] == 2
+        assert "mode_label_mismatch" not in c
+
+    def test_option_confondue_detectee(self):
+        """Le LLM annonce « car » sur l'index 1, qui est un bus → il note une autre option."""
+        c = self._run([_Prob(0, "foot"), _Prob(1, "car")])
+        assert c["mode_label_checked"] == 2
+        assert c["mode_label_mismatch"] == 1
+
+    def test_entrees_sans_etiquette_ou_hors_bornes_ignorees(self):
+        c = self._run([_Prob(0, None), _Prob(9, "car"), _Prob("x", "car"), _Prob(0, "foot")])
+        assert c["mode_label_checked"] == 1
+        assert "mode_label_mismatch" not in c
+
+    def test_aucune_entree_ne_compte_rien(self):
+        assert self._run([]) == {}
+
+    def test_alarme_sous_le_seuil_d_echantillon(self):
+        """Quelques désaccords isolés ne déclenchent rien : sous 200 options, c'est du bruit."""
+        rt = _Rt()
+        for _ in range(50):
+            self._run([_Prob(1, "car")], rt=rt)
+        assert rt.metrics.get("mode_label_mismatch") == 50
+        assert rt.metrics.get("alarme:mode_label_mismatch") == 0
+
+    def test_alarme_au_dela_du_seuil(self):
+        rt = _Rt()
+        for _ in range(100):
+            self._run([_Prob(0, "foot"), _Prob(1, "car"), _Prob(2, "car")], rt=rt)
+        assert rt.metrics.get("mode_label_checked") == 300
+        assert rt.metrics.get("mode_label_mismatch") == 100      # 33 % > seuil 5 %
+        # Front montant : une seule alarme malgré 100 lots.
+        assert rt.metrics.get("alarme:mode_label_mismatch") == 1

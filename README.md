@@ -28,6 +28,7 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 | [docs/arch/agents-lifecycle.md](docs/arch/agents-lifecycle.md) | Cycle de planification des agents, bootstrap, WebSocket |
 | [docs/arch/llm-inference.md](docs/arch/llm-inference.md) | Batching, SWRR, circuit breaker, load balancing LLM |
 | [docs/arch/routing.md](docs/arch/routing.md) | OTP (transit) et OSMnx (marche/vélo/voiture) |
+| [docs/arch/vehicle-chain.md](docs/arch/vehicle-chain.md) | Cohérence de chaîne vélo/voiture : le véhicule reste où l'agent l'a garé |
 | [docs/arch/cache-memory.md](docs/arch/cache-memory.md) | Mémoire court/long terme, cache sémantique LLM |
 | [docs/arch/llm-module-package-refactor.md](docs/arch/llm-module-package-refactor.md) | CR (implémenté) : restructuration de llm_module en package (ports, injection, pyproject) |
 
@@ -36,6 +37,7 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 | Document | Description |
 |----------|-------------|
 | [docs/arch/monitoring.md](docs/arch/monitoring.md) | Métriques Prometheus, dashboards Grafana 01→08, alarmes & alertes |
+| [docs/arch/score-synthesis.md](docs/arch/score-synthesis.md) | Page de synthèse `make synthesis` : simulation, calibration et modèle PROGEDO face à l'enquête EMC². `make common-set-eval` produit la mesure du volet calibration sur le jeu commun et `make heldout-eval` son score de généralisation sur le jeu de test gelé — **les deux seules cibles qui consomment du quota LLM** (chiffrer d'abord : `DRY_RUN=1`) ; `make common-set-predict` produit celle du volet modèle, hors ligne et déterministe |
 
 ---
 

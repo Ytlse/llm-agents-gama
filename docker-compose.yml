@@ -230,6 +230,9 @@ services:
     volumes:
       - ./llm-agents:/app
       - ./llm_module:/opt/llm_module
+      - ./scripts:/app/scripts
+      # Dépôt autonome prompt_calibration (endpoint POST /calibrate → CALIBRATION_DIR)
+      - ./prompt_calibration:/app/prompt_calibration
       - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
       - ./experiments:/app/experiments
       - ./data/population:/data/eqasim-output:rw

@@ -302,6 +302,14 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     long_term_self_reflect_interval_days: int = 3
     long_term_self_reflect_window_days: int = 5
 
+    # Le LLM ne choisit plus un itinéraire : il attribue une probabilité à chaque
+    # option, et le mode effectif est tiré au sort dans cette distribution (y compris
+    # à chaque relecture du cache sémantique). La graine du tirage est dérivée de
+    # (cette valeur, agent, activité, jour simulé) : à graine égale, un run rejoué
+    # reproduit exactement les mêmes trajets ; la changer explore un autre tirage
+    # sans réappeler le LLM.
+    mode_draw_seed: int = 42
+
     llm_params: dict[str, Any] = {
         "temperature": 0,
         "top_p": 1.0,
@@ -321,6 +329,23 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Aucun déplacement ne démarre le week-end : un départ tombant un samedi ou un
     # dimanche est reporté au lundi suivant à la même heure.
     no_weekend_departures: bool = True
+
+    # --- Cohérence de chaîne des véhicules personnels (vélo, voiture) ---
+    # Un véhicule est un lieu : il reste garé où l'agent l'a laissé, n'est proposé comme
+    # mode que depuis cette position, et est ramené au domicile en fin de boucle.
+    # False rétablit le comportement historique (possession = disponibilité partout),
+    # utile pour mesurer l'effet du correctif sur les parts modales à population égale.
+    vehicle_chain_enabled: bool = True
+    # Verrou de retour : un trajet vers le domicile au départ d'un lieu où un véhicule est
+    # garé est restreint aux itinéraires de ce mode (l'agent ramène son vélo / sa voiture).
+    vehicle_return_home_lock: bool = True
+    # Rattrapage des véhicules laissés à une étape intermédiaire : ramenés au domicile
+    # quand l'agent y rentre. Sans lui, un agent perd sa voiture pour tous les jours suivants.
+    vehicle_orphan_reset_at_home: bool = True
+    # Alarme [ALARME] si la part des retours au domicile laissant un véhicule orphelin
+    # dépasse ce ratio (sur au moins N retours observés, pour éviter le bruit de démarrage).
+    vehicle_orphan_alarm_ratio: float = 0.05
+    vehicle_orphan_alarm_min_returns: int = 200
 
     quantify_time_window: bool = True
     reflection_custom_guidelines: Optional[str] = None

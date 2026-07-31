@@ -105,6 +105,10 @@ global {
 	bool long_term_self_reflect_enabled <- true;
 	int simulation_max_days <- 7;
 
+	// Nombre de cycles (itérations de la boucle) pour la calibration du prompt,
+	// lancée à la demande depuis l'IHM (bouton "Lancer la calibration du prompt").
+	int calibration_cycles <- 20;
+
 	action save_sim_config {
 		write "Save config";
 		if (population_size>0){

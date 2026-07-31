@@ -31,6 +31,12 @@ from llm_module.adapters.base import (
     get_adapter,
 )
 from llm_module.config import get_settings, learn_provider_max_output_tokens
+from llm_module.core.mode_choice import (
+    argmax_index,
+    canonical_mode,
+    mode_distribution,
+    normalize_option_probabilities,
+)
 from llm_module.core.models import InternalRequest, Task, TaskStatus
 from llm_module.prompts.manager import get_prompt_manager
 from llm_module.telemetry.logger import get_logger, log_llm_call, log_llm_error, log_llm_exchange
@@ -417,23 +423,48 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
             )
 
     # ── Métriques métier : mode de transport et tranche de distance ──────────
+    # Le LLM renvoie une distribution sur les options, pas un choix : les compteurs
+    # historiques (mode/index « choisis ») sont alimentés par l'option la plus probable,
+    # tandis que `mode_probability_pct` accumule la masse de probabilité par mode. Le
+    # tirage effectif a lieu côté simulation (llm-agents), le worker ne le connaît pas.
     _REFLECTION_CATEGORIES = frozenset(("stm_reflection", "ltm_self_reflection"))
     if base_req.category not in _REFLECTION_CATEGORIES:
         agent_specs_by_id = {a.agent_id: a for a in merged_agents}
         for agent_resp in llm_output.agents:
-            primary_mode = _extract_primary_mode(agent_resp.mode or "unknown")
+            spec = agent_specs_by_id.get(agent_resp.agent_id)
+            trajectories = spec.trajectories if spec else []
+            idx = agent_resp.chosen_index  # repli : réponse à l'ancien format
+
+            if agent_resp.probabilities and trajectories:
+                # Les modes viennent des trajectoires envoyées (source de vérité),
+                # pas de ceux recopiés par le LLM. Ils servent aussi à réaligner les
+                # index hors bornes d'un modèle qui a renuméroté les options.
+                traj_modes = [t.get("mode") for t in trajectories]
+                weights = normalize_option_probabilities(
+                    agent_resp.probabilities, len(trajectories),
+                    modes=traj_modes,
+                    context=f"agent={agent_resp.agent_id} provider={provider_name}",
+                )
+                for mode, mass in mode_distribution(weights, traj_modes).items():
+                    rt.metrics.incr(f"mode_probability_pct:{mode}", amount=round(mass * 100))
+                idx = argmax_index(weights)
+                _count_mode_mismatches(rt, agent_resp, traj_modes, provider_name)
+
+            raw_mode = (
+                trajectories[idx].get("mode")
+                if (idx is not None and trajectories and 0 <= idx < len(trajectories))
+                else agent_resp.mode
+            )
+            primary_mode = _extract_primary_mode(raw_mode or "unknown")
             rt.metrics.incr(f"transport_mode_chosen:{primary_mode}")
             rt.metrics.incr(f"mode_by_provider:{primary_mode}:{provider_name}")
 
-            spec = agent_specs_by_id.get(agent_resp.agent_id)
-            if spec and agent_resp.chosen_index is not None and spec.trajectories:
-                idx = agent_resp.chosen_index
-                if 0 <= idx < len(spec.trajectories):
-                    dist_m = float(spec.trajectories[idx].get("total_distance_m") or 0)
-                    bracket = _get_distance_bracket(dist_m)
-                    rt.metrics.incr(f"trip_distance_bracket:{bracket}")
-                    rt.metrics.incr(f"mode_by_distance:{primary_mode}:{bracket}")
-                    rt.metrics.incr(f"chosen_index:{idx}")
+            if idx is not None and trajectories and 0 <= idx < len(trajectories):
+                dist_m = float(trajectories[idx].get("total_distance_m") or 0)
+                bracket = _get_distance_bracket(dist_m)
+                rt.metrics.incr(f"trip_distance_bracket:{bracket}")
+                rt.metrics.incr(f"mode_by_distance:{primary_mode}:{bracket}")
+                rt.metrics.incr(f"chosen_index:{idx}")
 
     latency_ms = (time.monotonic() - start_ts) * 1000
     p5_llm_ms = latency_ms
@@ -624,6 +655,66 @@ def _fail_task(rt: WorkerRuntime, task: Task, error_msg: str) -> None:
 # ---------------------------------------------------------------------------
 # Helpers métriques métier
 # ---------------------------------------------------------------------------
+
+# Au-delà de ce taux d'options mal étiquetées sur la fenêtre observée, on lève une
+# alarme : ce n'est plus du bruit, le modèle ne lit plus la liste qu'on lui envoie.
+_MODE_MISMATCH_ALARM_RATIO = 0.05
+_MODE_MISMATCH_MIN_SAMPLE = 200
+
+
+def _count_mode_mismatches(rt, agent_resp, traj_modes: list, provider_name: str) -> None:
+    """Compare le mode recopié par le LLM à celui de l'option, index par index.
+
+    Ce champ est redondant côté production (le mode réel vient des trajectoires), mais
+    c'est justement ce qui en fait un témoin : un désaccord ne signale pas un libellé
+    approximatif, il signale que **le modèle a lu une autre option que celle qu'il
+    croit noter** — ses probabilités sont alors attribuées aux mauvais index, et la
+    distribution est fausse sans que rien d'autre ne le montre.
+
+    La comparaison se fait sur le mode canonique (« BUS » vs « foot,bus,foot » n'est pas
+    un désaccord), et seules les entrées portant une étiquette sont comparées.
+    """
+    total = mismatched = 0
+    for entry in agent_resp.probabilities or ():
+        announced = getattr(entry, "mode", None)
+        if not announced:
+            continue
+        try:
+            i = int(getattr(entry, "index", None))
+        except (TypeError, ValueError):
+            continue
+        if not 0 <= i < len(traj_modes):
+            continue
+        total += 1
+        if canonical_mode(announced) != canonical_mode(traj_modes[i]):
+            mismatched += 1
+            logger.warning(
+                f"Mode annoncé par le LLM ≠ mode de l'option | index={i} "
+                f"annoncé={announced!r} réel={traj_modes[i]!r} "
+                f"agent={agent_resp.agent_id} provider={provider_name}"
+            )
+
+    if not total:
+        return
+    rt.metrics.incr("mode_label_checked", amount=total)
+    if mismatched:
+        rt.metrics.incr("mode_label_mismatch", amount=mismatched)
+
+    checked = rt.metrics.get("mode_label_checked") or 0
+    bad = rt.metrics.get("mode_label_mismatch") or 0
+    if checked >= _MODE_MISMATCH_MIN_SAMPLE and bad / checked > _MODE_MISMATCH_ALARM_RATIO:
+        # Front montant : l'alarme ne part qu'une fois (pas de spam à chaque lot).
+        # Le worker n'expose pas de /metrics : elle transite par Redis et ressort en
+        # alarme_total{source} via WorkerMetricsCollector.
+        if not rt.metrics.get("alarme:mode_label_mismatch"):
+            rt.metrics.incr("alarme:mode_label_mismatch")
+            logger.error(
+                f"[ALARME] Étiquettes de mode incohérentes : {bad}/{checked} "
+                f"({100 * bad // checked} %) des options notées portent un mode qui n'est "
+                f"pas celui de l'option. Le modèle confond les options : les probabilités "
+                f"sont attribuées aux mauvais index et la répartition modale est fausse."
+            )
+
 
 def _extract_primary_mode(mode: str) -> str:
     """

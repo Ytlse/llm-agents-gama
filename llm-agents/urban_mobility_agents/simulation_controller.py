@@ -103,6 +103,17 @@ TRIP_MODE_BY_PURPOSE = Counter(
     'Trajets poussés vers GAMA par mode principal et motif d\'activité',
     ['mode', 'purpose'],
 )
+# Cohérence de chaîne des véhicules personnels (vélo, voiture). event ∈
+#   unavailable   : mode écarté des options — véhicule garé ailleurs qu'au point de départ
+#   forced_return : trajet de retour au domicile restreint à ce mode (l'agent ramène son véhicule)
+#   return_failed : verrou de retour inapplicable (aucun itinéraire dans ce mode) → options rendues
+#   orphaned      : agent rentré au domicile, véhicule resté ailleurs (cas résiduel du modèle)
+#   reset_home    : véhicule orphelin ramené au domicile par le rattrapage de fin de boucle
+VEHICLE_CHAIN = Counter(
+    'agent_vehicle_chain_total',
+    'Événements de cohérence de chaîne des véhicules personnels, par mode et type',
+    ['mode', 'event'],
+)
 EVALUATE_PLAN_CALLS = Counter('gama_evaluate_plan_calls_total', 'Total calls to evaluate_and_choose_travel_plan')
 ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
 PLANNING_LATE = Counter('controller_planning_late_total', 'Agents dont la date de départ était déjà passée lors de la planification')
@@ -241,6 +252,133 @@ def _primary_mode(plan: TravelPlan) -> str:
     return "transit"
 
 
+# ── Cohérence de chaîne des véhicules personnels ──────────────────────────────
+# Un véhicule est un LIEU : il reste où son propriétaire l'a garé. Trois règles,
+# appliquées à l'identique au vélo et à la voiture (cf. docs/arch/vehicle-chain.md) :
+#   1. verrou de sortie  — le mode n'est proposé que si le véhicule est au point de départ ;
+#   2. stationnement     — après le choix, le véhicule suit l'agent s'il l'a utilisé, sinon il reste ;
+#   3. verrou de retour  — sur un trajet vers le domicile, si un véhicule est garé au point
+#                          de départ, l'agent le ramène (candidats restreints à ce mode).
+# Clés = sorties de `_primary_mode`, pour comparer directement au mode d'un plan.
+_VEHICLE_MODES: Tuple[str, ...] = ("bike", "car")
+
+
+def _owns_bike(traits: dict) -> bool:
+    """L'agent possède-t-il un vélo ? Champ absent ⇒ oui (rétrocompatibilité assumée)."""
+    return traits.get("personal_bike", "vélo normal").lower() != "pas de vélo"
+
+
+def _owns_car(traits: dict) -> bool:
+    """L'agent dispose-t-il d'une voiture dans son ménage ?"""
+    return (traits.get("number_of_cars", 0) or 0) > 0
+
+
+def _owns_vehicle(traits: dict, mode: str) -> bool:
+    return _owns_bike(traits) if mode == "bike" else _owns_car(traits)
+
+
+def _same_place(a: Optional[Location], b: Optional[Location]) -> bool:
+    """Deux points désignent-ils le même stationnement ?
+
+    Tolérance en degrés plutôt qu'en mètres : les lieux d'activité proviennent tous du
+    même jeu de données (eqasim) et se comparent à l'identique ; la marge absorbe les
+    arrondis de sérialisation, pas une vraie distance de marche.
+    """
+    if a is None or b is None:
+        return False
+    return abs(a.lat - b.lat) < 1e-6 and abs(a.lon - b.lon) < 1e-6
+
+
+def _vehicle_position(person: Person, mode: str) -> Optional[Location]:
+    """Où est garé le véhicule `mode` ? Clé absente ⇒ au domicile (état initial)."""
+    parked = person.state.planning_vehicle_at.get(mode)
+    return parked if parked is not None else person.identity.home
+
+
+def _vehicle_available(person: Person, mode: str, from_location: Optional[Location]) -> bool:
+    """Le mode véhiculé peut-il être proposé pour un trajet partant de `from_location` ?
+
+    Deux conditions, et pas seulement la possession : l'agent doit aussi avoir son
+    véhicule **là où il se trouve**. Sans la seconde, un agent parti travailler en bus
+    retrouvait son vélo pour repartir — sur un run de référence, 352 des 1086 trajets à
+    vélo (5,9 points de part modale) reposaient sur ce vélo fantôme. La voiture, elle,
+    n'avait aucune contrainte de position du tout.
+    """
+    if not _owns_vehicle(person.identity.traits_json, mode):
+        return False
+    if not settings.agent.vehicle_chain_enabled:
+        return True
+    parked_at = _vehicle_position(person, mode)
+    if parked_at is None:
+        # Population sans domicile connu (le loader eqasim les écarte dès qu'une bbox est
+        # posée) : on ne sait pas où est le véhicule. Dégrader vers l'ancien comportement
+        # vaut mieux que priver l'agent de tout mode véhiculé pour toute la simulation.
+        VEHICLE_CHAIN.labels(mode=mode, event="no_home").inc()
+        return True
+    return _same_place(parked_at, from_location)
+
+
+def _vehicles_parked_at(person: Person, location: Optional[Location]) -> set[str]:
+    """Véhicules possédés garés en `location`, **hors domicile**.
+
+    Sert au verrou de retour : ce sont les véhicules que l'agent doit ramener quand il
+    rentre chez lui. Un véhicule déjà au domicile n'a rien à ramener.
+    """
+    if _same_place(location, person.identity.home):
+        return set()
+    return {
+        mode for mode in _VEHICLE_MODES
+        if _owns_vehicle(person.identity.traits_json, mode)
+        and _same_place(_vehicle_position(person, mode), location)
+    }
+
+
+def _park_vehicles(
+    person: Person,
+    plan: Optional[TravelPlan],
+    from_location: Optional[Location],
+    destination: Optional[Location],
+) -> None:
+    """Met à jour la position des véhicules après le choix d'un plan.
+
+    Le véhicule utilisé suit l'agent jusqu'à la destination ; les autres restent garés
+    où ils étaient. Aucun retour implicite au domicile : c'était le dernier vestige de
+    téléportation de la version booléenne (un vélo laissé au bureau était réputé
+    retrouvé à la maison le soir).
+    """
+    if plan is None or destination is None:
+        return
+    mode = _primary_mode(plan)
+    if mode not in _VEHICLE_MODES:
+        return
+    # Défensif : le verrou de sortie a déjà écarté les plans dont le véhicule est
+    # ailleurs — on ne déplace un véhicule que depuis sa position réelle.
+    if not _same_place(_vehicle_position(person, mode), from_location):
+        return
+    if _same_place(destination, person.identity.home):
+        # Retour au domicile : on retire la clé plutôt que de mémoriser le domicile, pour
+        # préserver l'invariant « clé absente ⇒ véhicule au domicile ».
+        person.state.planning_vehicle_at.pop(mode, None)
+    else:
+        person.state.planning_vehicle_at[mode] = destination
+
+
+def _orphaned_vehicles(person: Person) -> set[str]:
+    """Véhicules garés ailleurs qu'au domicile alors que l'agent y est rentré.
+
+    Cas résiduel assumé du modèle simple : domicile → travail en voiture, travail →
+    sport à pied, sport → domicile en bus. Le verrou de retour ne s'applique qu'aux
+    véhicules garés au point de DÉPART du trajet de retour ; celui-ci est resté au
+    travail. Mesuré (agent_vehicle_chain_total{event="orphaned"}) et, par défaut,
+    rattrapé au domicile pour ne pas priver l'agent de sa voiture les jours suivants.
+    """
+    return {
+        mode for mode in _VEHICLE_MODES
+        if _owns_vehicle(person.identity.traits_json, mode)
+        and not _same_place(_vehicle_position(person, mode), person.identity.home)
+    }
+
+
 def _select_candidates(itineraries: list[TravelPlan], max_n: int) -> list[TravelPlan]:
     """Cap to max_n itineraries, keeping the fastest plan per mode group first."""
     by_duration = sorted(itineraries, key=lambda p: p.duration or float("inf"))
@@ -310,6 +448,13 @@ class SimulationLoopV1(BaseScenario):
         # avec la deadline d'origine → la priorité EDF monte à chaque retry.
         self._stm_reflect_due: dict[str, float] = {}
         self._stm_overdue_alarm_on = False  # front montant de l'alarme réflexions en retard
+        # Cohérence de chaîne des véhicules : dénominateur (retours au domicile planifiés)
+        # et numérateur (retours laissant un véhicule ailleurs) du taux d'orphelins, plus
+        # le front montant de l'alarme associée. Un taux élevé signale que le verrou de
+        # retour ne suffit pas et que le rattrapage au domicile porte un biais notable.
+        self._vehicle_home_returns = 0
+        self._vehicle_orphan_returns = 0
+        self._vehicle_orphan_alarm_on = False
 
         # Worker
         # _worker_sem  : limite la concurrence LLM+OTP (initialisé dans start_worker)
@@ -1604,6 +1749,51 @@ class SimulationLoopV1(BaseScenario):
     # Trip computation (partagé bootstrap + Worker)
     # -------------------------------------------------------------------------
 
+    def _settle_vehicles_at_home(self, person: Person, arrived_at: Activity) -> None:
+        """Solde la boucle quand un trajet planifié ramène l'agent au domicile.
+
+        Le verrou de retour couvre les véhicules garés au point de départ du trajet de
+        retour, pas ceux laissés à une étape intermédiaire (domicile → travail en
+        voiture, travail → sport à pied, sport → domicile en bus : la voiture dort au
+        travail). Ces orphelins sont comptés, et par défaut ramenés au domicile : sans
+        ce rattrapage, l'agent perdrait définitivement sa voiture pour tous les jours
+        suivants — un biais bien pire que la téléportation qu'on corrige ici.
+        """
+        if (arrived_at.purpose or "").lower() != "home":
+            return
+        self._vehicle_home_returns += 1
+        orphans = _orphaned_vehicles(person)
+        if not orphans:
+            return
+
+        self._vehicle_orphan_returns += 1
+        for mode in sorted(orphans):
+            VEHICLE_CHAIN.labels(mode=mode, event="orphaned").inc()
+            if settings.agent.vehicle_orphan_reset_at_home:
+                person.state.planning_vehicle_at.pop(mode, None)
+                VEHICLE_CHAIN.labels(mode=mode, event="reset_home").inc()
+
+        # Alarme à front montant : le rattrapage est une approximation acceptable tant
+        # qu'il reste marginal. Au-delà du seuil, il pilote une part significative des
+        # trajets et la mesure des parts modales en dépend.
+        ratio = self._vehicle_orphan_returns / max(1, self._vehicle_home_returns)
+        threshold = settings.agent.vehicle_orphan_alarm_ratio
+        if (
+            self._vehicle_home_returns >= settings.agent.vehicle_orphan_alarm_min_returns
+            and ratio > threshold
+            and not self._vehicle_orphan_alarm_on
+        ):
+            self._vehicle_orphan_alarm_on = True
+            logger.error(
+                f"[ALARME] Véhicules orphelins au retour au domicile : "
+                f"{self._vehicle_orphan_returns}/{self._vehicle_home_returns} retours "
+                f"({100 * ratio:.1f}% > {100 * threshold:.1f}%) — le rattrapage implicite "
+                f"au domicile porte une part notable des trajets véhiculés"
+            )
+            fire_alarme("vehicule_orphelin")
+        elif self._vehicle_orphan_alarm_on and ratio < threshold / 2:
+            self._vehicle_orphan_alarm_on = False
+
     async def _compute_move_for_activity(
         self,
         person: Person,
@@ -1635,8 +1825,15 @@ class SimulationLoopV1(BaseScenario):
                     f"reporté de {humanize_date(departure_time)} à {humanize_date(shifted)} (lundi)"
                 )
                 departure_time = shifted
-        include_car = (person.identity.traits_json.get("number_of_cars", 0) > 0)
-        include_bike = (person.identity.traits_json.get("personal_bike", "vélo normal").lower() != "pas de vélo")
+        # Verrou de sortie : un véhicule ne se conduit que là où il est garé.
+        include_car = _vehicle_available(person, "car", from_location)
+        include_bike = _vehicle_available(person, "bike", from_location)
+        for _mode, _owned, _included in (
+            ("car", _owns_car(person.identity.traits_json), include_car),
+            ("bike", _owns_bike(person.identity.traits_json), include_bike),
+        ):
+            if _owned and not _included:
+                VEHICLE_CHAIN.labels(mode=_mode, event="unavailable").inc()
 
         same_location = (
             from_location is not None and next_activity.location is not None
@@ -1666,8 +1863,39 @@ class SimulationLoopV1(BaseScenario):
                     _pipeline_rec.T_osmnx_sem   = _timing_sink.get("osmnx_sem_end")
                     _pipeline_rec.T_osmnx_end   = _timing_sink.get("osmnx_end")
 
-        if not include_bike:
-            itineraries = [it for it in itineraries if _primary_mode(it) != "bike"]
+        # Post-filtre : OTP/OSMnx renvoient parfois un mode qu'on n'a pas demandé.
+        _blocked = {m for m, ok in (("bike", include_bike), ("car", include_car)) if not ok}
+        if _blocked:
+            itineraries = [it for it in itineraries if _primary_mode(it) not in _blocked]
+
+        # Verrou de retour : on ne laisse pas un véhicule dormir sur place quand l'agent
+        # rentre chez lui. Si le vélo ou la voiture est garé au point de départ et que ce
+        # trajet ramène au domicile, les options sont restreintes à ces modes — l'agent
+        # ramène son véhicule. Aucun appel LLM supplémentaire : c'est un filtre sur les
+        # options, le choix (entre vélo et voiture s'ils sont tous deux là) reste au LLM.
+        if (
+            settings.agent.vehicle_chain_enabled
+            and settings.agent.vehicle_return_home_lock
+            and itineraries
+            and (next_activity.purpose or "").lower() == "home"
+        ):
+            _to_bring_back = _vehicles_parked_at(person, from_location)
+            if _to_bring_back:
+                _kept = [it for it in itineraries if _primary_mode(it) in _to_bring_back]
+                for _mode in sorted(_to_bring_back):
+                    VEHICLE_CHAIN.labels(
+                        mode=_mode, event="forced_return" if _kept else "return_failed"
+                    ).inc()
+                if _kept:
+                    itineraries = _kept
+                else:
+                    # Aucun itinéraire dans le mode du véhicule (OTP muet, distance hors
+                    # portée vélo…) : on rend la main plutôt que de bloquer l'agent — il
+                    # rentre par un autre mode et le véhicule devient orphelin.
+                    logger.debug(
+                        f"[vehicle] Retour au domicile impossible en {'/'.join(sorted(_to_bring_back))} "
+                        f"pour {person.person_id} — véhicule laissé sur place"
+                    )
 
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
@@ -1676,6 +1904,9 @@ class SimulationLoopV1(BaseScenario):
         provider_info = ""
         reasoning = ""
         faster_itinerary = None
+        # Répartition par mode estimée par le LLM avant tirage — vide pour les décisions
+        # qui n'en produisent pas (mono-choix, absence d'itinéraire, erreur LLM).
+        mode_probabilities: dict = {}
 
         if not itineraries:
             estimated_duration = _estimate_fallback_duration(from_location, next_activity.location)
@@ -1732,7 +1963,7 @@ class SimulationLoopV1(BaseScenario):
                     data={"type": "travel_plan"},
                 )
                 EVALUATE_PLAN_CALLS.inc()
-                plan_index, reasoning, provider_info = await self.agent.evaluate_and_choose_travel_plan(
+                plan_index, reasoning, provider_info, mode_probabilities = await self.agent.evaluate_and_choose_travel_plan(
                     context=context,
                     options=itineraries,
                     destination=next_activity.purpose,
@@ -1743,11 +1974,19 @@ class SimulationLoopV1(BaseScenario):
                 else:
                     plan_index = 0
                     provider_info = ""
+                    mode_probabilities = {}
                     selection_method = "LLM Error (Default index)"
                     logger.debug(f"[timestamp: {humanize_date(timestamp)}] No suitable plan found for person {person.person_id} to {next_activity.location}")
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose
+
+        # Cohérence de chaîne : le véhicule utilisé suit l'agent, les autres restent garés
+        # où ils sont. Le cas « pas de déplacement » est exclu — l'agent n'a pas bougé,
+        # ses véhicules non plus.
+        if not same_location and settings.agent.vehicle_chain_enabled:
+            _park_vehicles(person, plan, from_location, next_activity.location)
+            self._settle_vehicles_at_home(person, next_activity)
 
         plan_duration_s = max(0, (plan.end_time - plan.start_time) // 1000) if plan is not None else 0
         prepare_before_seconds = max(plan_duration_s, settings.world.time_step)
@@ -1796,6 +2035,7 @@ class SimulationLoopV1(BaseScenario):
             start_time=plan.start_time if plan is not None else None,
             available_options=itineraries,
             activity_id=next_activity.id,
+            mode_probabilities=mode_probabilities,
         )
 
 

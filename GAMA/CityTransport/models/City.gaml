@@ -107,7 +107,20 @@ experiment e type: gui {
     parameter "Public Transport - Dump stop arrival diff time" category:"Features" var: ft_public_transport_eval <- false;
     parameter "Evaluate - Multimodal Choices" category:"Evaluation" var: ft_evaluate_modality_choices <- true;
 
-    
+    // Prompt calibration — launched on demand via the button below
+    parameter "Calibration - cycles (itérations)" category: "Calibration" var: calibration_cycles min: 1 max: 200 step: 1;
+
+    // GUI button: triggers a background prompt-calibration run in the controller
+    // (POST /calibrate) with the configured number of cycles.
+    user_command "Lancer la calibration du prompt" category: "Calibration" {
+        ask simulation {
+            ask llm_agent_sync {
+                do launch_calibration;
+            }
+        }
+    }
+
+
     // Building
     //parameter "Shapefile for the buildings:" var: shape_file_buildings category: "GIS";
 

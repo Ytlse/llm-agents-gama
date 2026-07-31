@@ -234,6 +234,17 @@ class PersonState(BaseModel):
     # l'observation d'arrivée est considérée perdue (move jamais reçu par GAMA) et le
     # scan de fallback force la reprise du cycle de l'agent.
     heading_expected_arrive_at: Optional[int] = None
+    # Cohérence de chaîne des véhicules personnels : où sont garés le vélo et la voiture
+    # de l'agent ? Clés = modes de `_primary_mode` ("bike", "car"), valeur = lieu de
+    # stationnement. **Clé absente ⇒ véhicule au domicile** : la journée commence au
+    # domicile, où l'agent gare les véhicules qu'il possède, donc le dict vide est l'état
+    # initial. Ce champ ne dit rien de la possession, testée en amont : un agent sans
+    # voiture n'a pas une voiture garée au domicile, il n'a pas de voiture du tout.
+    # Un mode véhiculé n'est proposé que si son véhicule est là où l'agent se trouve, et
+    # il ne se déplace que si l'agent l'utilise (cf. _vehicle_available / _park_vehicles).
+    # C'est un état de **planification** : le plan court devant l'exécution, ce champ suit
+    # la chaîne planifiée, pas la position réelle de l'agent dans GAMA.
+    planning_vehicle_at: dict[str, Location] = Field(default_factory=dict)
 
 
 class Person(BaseModel):

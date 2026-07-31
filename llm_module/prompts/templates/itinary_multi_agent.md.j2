@@ -9,20 +9,28 @@ Schéma JSON attendu :
 {{ schema }}
 
 <!-- USER -->
-{% if context and context != 'None' %}
-**Contexte :** {{ context }}
-{% elif parameters and parameters.context and parameters.context != 'None' %}
-**Contexte :** {{ parameters.context }}
-{% endif %}
-
+{# Contexte partagé (météo/trafic) éventuel au niveau de la requête. #}
+{%- set shared_context = None %}
+{%- if context and context != 'None' %}{% set shared_context = context %}{%- elif parameters and parameters.context and parameters.context != 'None' %}{% set shared_context = parameters.context %}{%- endif %}
 {% for agent in agents %}
+{#- La météo est réinjectée DANS chaque bloc persona (météo propre à l'agent si
+    fournie, sinon contexte partagé de la requête) : un lot peut ainsi mélanger
+    des contextes différents sans qu'un préambule commun ne les écrase. #}
+{%- set agent_context = agent.context if (agent.context and agent.context != 'None') else shared_context %}
 --- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
-
+{% if agent_context %}**Contexte :** {{ agent_context }}
+{% endif %}
 {{ agent.perception }}
 
-**Options de trajet :**
+**Options de trajet** ({{ agent.trajectories | length }} options, indices 0 à {{ agent.trajectories | length - 1 }}) :
+{# Les étapes d'un itinéraire (« - Marche jusqu'à… », « - Bus '401' vers… ») sont
+   ré-indentées en sous-puces « · » : rendues comme des puces « - » de même niveau
+   que la ligne d'option, elles se lisaient comme des options supplémentaires et
+   plusieurs modèles renumérotaient alors tout le bloc (index 0..35 pour 6 options),
+   ce qui envoyait leurs probabilités hors bornes. Une seule règle désormais : une
+   ligne « - [n] » = une option. #}
 {% for traj in agent.trajectories %}
-- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description }}
+- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description | replace('\n- ', '\n    · ') }}
 {% endfor %}
 
 {% if agent.history %}
@@ -36,3 +44,5 @@ Schéma JSON attendu :
 
 Réponds avec l'objet JSON final contenant les recommandations pour {{ agents | length }} persona(s).
 Pour chaque persona, recopie son `agent_id` **exactement** tel que fourni ci-dessus (identifiant numérique uniquement, sans le mot « PERSONA » ni le nom du persona).
+Pour chaque persona, note **toutes** ses options — une entrée `probabilities` par option, avec son `index` et son `mode` recopiés tels quels — et fais en sorte que les `probability` somment à 100. Une option que ce persona ne prendrait jamais reçoit 0.
+Seules les lignes `- [n]` sont des options : les sous-puces « · » détaillent les étapes d'une option et ne reçoivent jamais d'entrée `probabilities`. Les index repartent de 0 dans chaque bloc persona — n'utilise que ceux affichés entre crochets dans le bloc du persona que tu notes, jamais une numérotation continue d'un persona à l'autre.

@@ -1,0 +1,92 @@
+# Manifeste des sources de la page de synthèse des scores.
+#
+# Chaque chemin est relatif à la racine du dépôt. Une source absente n'est jamais
+# une erreur : elle produit une carte « Données manquantes » dans la page, avec
+# l'action à mener pour la remplir (cf. docs/arch/score-synthesis.md).
+
+output:
+  html: docs/synthesis/index.html
+  json: docs/synthesis/data.json
+
+# Référence EMC² 2023 (parts modales cibles, toutes dimensions).
+cerema: scripts/data/population/cerema_values.yaml
+
+# ── Jeu d'évaluation commun ──────────────────────────────────────────────────
+# Substrat partagé par les trois volets : un run de simulation fournit les
+# personas, les jeux de choix OTP et les attributs socio-démographiques.
+common_set:
+  # Chemin d'archive explicite, et non experiments/current : le symlink bouge à
+  # chaque run, la page doit rester reproductible. Pour évaluer un autre run :
+  # make synthesis RUN=experiments/archive/<run>, puis épingler ici si adopté.
+  run: experiments/archive/2026-07-29_18_34
+  moves: moves.csv                # relatif au run
+  population: null                # null → auto-détection de population_*.json
+  # Lignes sans décision modale : exclues du scoring.
+  exclude_selection_methods:
+    - "Pas de déplacement (même localisation)"
+    - "Pas de solution de déplacement"
+
+# ── Définition du score ──────────────────────────────────────────────────────
+score:
+  metric: emd_jsd                 # loss principale (défaut du moteur de calibration)
+  secondary: l1_composite         # loss lisible en points de %, affichée en regard
+  # Composite « comparable » : length_penalty neutralisée (pas de prompt dans les
+  # volets simulation et modèle). Les autres poids sont ceux du moteur.
+  weights:
+    global: 1.0
+    absent_penalty: 1.0
+    age: 0.5
+    occupation: 0.5
+    genre: 0.3
+    motif: 0.5
+    distance: 0.3
+    length_penalty: 0.0
+
+# ── Volets ───────────────────────────────────────────────────────────────────
+arms:
+  simulation:
+    enabled: true
+
+  calibration:
+    repo: prompt_calibration
+    stores:
+      - id: cloud
+        label: Campagne cloud
+        path: prompt_calibration/calibration_results/calibration_cloud.db
+      - id: local
+        label: Campagne locale
+        path: prompt_calibration/calibration_results/calibration.db
+    datasets: prompt_calibration/calibration_datasets/v1
+    prompts_yaml: llm_module/prompts/prompts.yaml
+    # Verdicts retenus pour la trajectoire « prompts non rejetés ».
+    keep_verdicts: [accepted, imported]
+    # Lignée mesurée sous un régime unique (action A5). Épinglée pour la même
+    # raison que le run du jeu commun : une reconstruction automatique changerait
+    # de sujet à chaque campagne, sans que la page le signale.
+    #   leaf   : feuille de la chaîne d'acceptations (la remonter donne le seed)
+    #   regime : régime de mesure attendu ; null → celui qui couvre le plus de
+    #            nœuds de cette lignée
+    # Produire la mesure : depuis prompt_calibration/,
+    #   calibrate reeval --config run.yaml --branch essai2
+    lineage:
+      leaf: 0fc427e7b55243bf
+      regime: gemini-3.1-flash-lite-preview · masse de probabilité
+    # Ré-évaluation des prompts retenus sur le jeu commun — à produire.
+    common_set_eval: scripts/synthesis/data/calibration_on_common_set.jsonl
+    # Jeu gelé servant de RETENUE (action A4) : le seul que la boucle n'ait jamais
+    # vu. `val` sert à l'arrêt anticipé — elle a donc influencé la sélection des
+    # prompts — et `screen` est un sous-ensemble strict du `train` : ni l'un ni
+    # l'autre ne peut porter un score de généralisation.
+    # Produire la mesure (elle vit dans le store, pas dans un fichier) :
+    #   make heldout-eval PROVIDER=google2      # chiffrer d'abord : DRY_RUN=1
+    heldout_dataset: test
+
+  model:
+    feature_spec: scripts/progedo_logit/feature_spec.json
+    dataset: scripts/progedo_logit/progedo_mode_choice_v2.parquet
+    policy: scripts/progedo_logit/mode_choice_policy.json
+    predictions: scripts/synthesis/data/progedo_on_common_set.parquet
+    # Couche de zones fines du résolveur (action A7) : c'est elle qui rend les six
+    # variables géographiques calculables sur le jeu commun. Hors dépôt comme sa
+    # source PROGEDO — régénérable avec `make zones`.
+    zones: llm_module/data/zf_zones.gpkg

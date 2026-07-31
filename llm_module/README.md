@@ -25,7 +25,13 @@ llm_module/
 ├── core/                          # Domaine pur — AUCUN I/O, aucun import redis/celery/httpx
 │   ├── models.py                  # Task, LLMRequest, AgentSpec, AgentResponse…
 │   ├── batching.py                # Clé de batch, score de priorité
-│   └── selection.py               # Algorithme SWRR pur (séquence pondérée)
+│   ├── selection.py               # Algorithme SWRR pur (séquence pondérée)
+│   ├── mode_choice.py             # Probabilités LLM → mode tiré (politique partagée)
+│   └── zone_resolver.py           # Point → zone fine EMC² et variables géo du choix modal
+│                                  # I/O confiné à ZoneResolver.load() ; extra 'geo' (geopandas)
+│
+├── data/                          # Ressources de données — hors dépôt, cf. .gitignore
+│   └── zf_zones.gpkg              # Couche des 785 zones fines, produite par `make zones`
 │
 ├── ports/                         # Les interfaces (Protocol) — le contrat du module
 │   ├── task_store.py              # TaskStore / SyncTaskStore
@@ -151,7 +157,9 @@ from llm_module.sdk import LLMGatewayClient
 client = LLMGatewayClient(base_url="http://localhost:8000", wait_timeout=90.0)
 result = await client.execute(payload)      # dict ou LLMRequest → TaskResult
 if result.ok:
-    print(result.agents[0].chosen_index, result.provider_used, result.timing.wait_ms)
+    # itinary_multi_agent : une probabilité par option (somme = 100) — le mode est
+    # ensuite tiré via llm_module.core.mode_choice.draw_index()
+    print(result.agents[0].probabilities, result.provider_used, result.timing.wait_ms)
 await client.aclose()
 ```
 

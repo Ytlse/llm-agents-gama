@@ -16,6 +16,7 @@ import statistics
 # Providers configuration
 PROVIDERS_CONFIG = {
     "google_gemini31": {"rpm_limit": 15, "tpm_limit": 250000},
+    "google_gemini35": {"rpm_limit": 15, "tpm_limit": 250000},
     "google_gemma42": {"rpm_limit": 15, "tpm_limit": float('inf')},
     "google_gemma43": {"rpm_limit": 15, "tpm_limit": float('inf')},
     "groq_llama3": {"rpm_limit": 30, "tpm_limit": 12000},

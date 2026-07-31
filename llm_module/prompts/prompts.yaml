@@ -45,21 +45,37 @@ prompts:
       \ la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle\
       \ une dette technique (fatigue, coût) soutenable si le trajet est répété sur\
       \ deux jours ?\n\n[Instructions de sortie]\n1) Analyse le profil via ce prisme.\n\
-      2) Sélectionne l'index de l'option optimale.\n3) Retourne uniquement un objet\
-      \ JSON valide — pas de markdown, pas de texte supplémentaire.\n4) Justifie la\
-      \ recommandation en une phrase concise, en précisent si c'est le cas pourquoi\
-      \ la marche n'est pas le meilleur choix et si tu as hésité.\n\nSchéma JSON attendu\
-      \ :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n  \
-      \    \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\"\
-      ,\n        \"properties\": {\n          \"agent_id\": {\n            \"type\"\
-      : \"string\"\n          },\n          \"chosen_index\": {\n            \"type\"\
-      : \"integer\"\n          },\n          \"mode\": {\n            \"type\": \"\
-      string\"\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index,\
+      \ la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle\
+      \ lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement\
+      \ 100.\n3) Retourne uniquement un objet JSON valide — pas de markdown, pas de\
+      \ texte supplémentaire.\n4) Justifie la répartition en une phrase concise, en\
+      \ précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.\n\
+      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
+      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
+      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
+      \            \"type\": \"string\",\n            \"description\": \"Recopie exactement\
+      \ l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans\
+      \ préfixe ni nom).\"\n          },\n          \"probabilities\": {\n       \
+      \     \"type\": \"array\",\n            \"description\": \"Une entrée par option\
+      \ proposée à ce persona, sans exception. La somme des `probability` doit valoir\
+      \ exactement 100.\",\n            \"items\": {\n              \"type\": \"object\"\
+      ,\n              \"properties\": {\n                \"index\": {\n         \
+      \         \"type\": \"integer\",\n                  \"description\": \"Index\
+      \ de l'option, tel qu'affiché entre crochets.\"\n                },\n      \
+      \          \"mode\": {\n                  \"type\": \"string\",\n          \
+      \        \"description\": \"Mode de l'option, recopié depuis l'option.\"\n \
+      \               },\n                \"probability\": {\n                  \"\
+      type\": \"number\",\n                  \"description\": \"Probabilité en % (0\
+      \ à 100) que ce persona retienne cette option. 0 si l'option lui est impossible.\"\
+      \n                }\n              },\n              \"required\": [\n     \
+      \           \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
       \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
-      \          \"chosen_index\",\n          \"mode\",\n          \"reason\"\n  \
-      \      ],\n        \"additionalProperties\": false\n      }\n    }\n  },\n \
-      \ \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\": false\n\
-      }"
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
     _calibration:
       seed: expert
       iterations: 29
@@ -87,21 +103,37 @@ prompts:
       \ la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle\
       \ une dette technique (fatigue, coût) soutenable si le trajet est répété sur\
       \ deux jours ?\n\n[Instructions de sortie]\n1) Analyse le profil via ce prisme.\n\
-      2) Sélectionne l'index de l'option optimale.\n3) Retourne uniquement un objet\
-      \ JSON valide — pas de markdown, pas de texte supplémentaire.\n4) Justifie la\
-      \ recommandation en une phrase concise, en précisent si c'est le cas pourquoi\
-      \ la marche n'est pas le meilleur choix et si tu as hésité.\n\nSchéma JSON attendu\
-      \ :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n  \
-      \    \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\"\
-      ,\n        \"properties\": {\n          \"agent_id\": {\n            \"type\"\
-      : \"string\"\n          },\n          \"chosen_index\": {\n            \"type\"\
-      : \"integer\"\n          },\n          \"mode\": {\n            \"type\": \"\
-      string\"\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index,\
+      \ la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle\
+      \ lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement\
+      \ 100.\n3) Retourne uniquement un objet JSON valide — pas de markdown, pas de\
+      \ texte supplémentaire.\n4) Justifie la répartition en une phrase concise, en\
+      \ précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.\n\
+      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
+      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
+      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
+      \            \"type\": \"string\",\n            \"description\": \"Recopie exactement\
+      \ l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans\
+      \ préfixe ni nom).\"\n          },\n          \"probabilities\": {\n       \
+      \     \"type\": \"array\",\n            \"description\": \"Une entrée par option\
+      \ proposée à ce persona, sans exception. La somme des `probability` doit valoir\
+      \ exactement 100.\",\n            \"items\": {\n              \"type\": \"object\"\
+      ,\n              \"properties\": {\n                \"index\": {\n         \
+      \         \"type\": \"integer\",\n                  \"description\": \"Index\
+      \ de l'option, tel qu'affiché entre crochets.\"\n                },\n      \
+      \          \"mode\": {\n                  \"type\": \"string\",\n          \
+      \        \"description\": \"Mode de l'option, recopié depuis l'option.\"\n \
+      \               },\n                \"probability\": {\n                  \"\
+      type\": \"number\",\n                  \"description\": \"Probabilité en % (0\
+      \ à 100) que ce persona retienne cette option. 0 si l'option lui est impossible.\"\
+      \n                }\n              },\n              \"required\": [\n     \
+      \           \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
       \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
-      \          \"chosen_index\",\n          \"mode\",\n          \"reason\"\n  \
-      \      ],\n        \"additionalProperties\": false\n      }\n    }\n  },\n \
-      \ \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\": false\n\
-      }"
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
   persona_v1:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.\n\
       À chaque fois, tu te comportes de manière réaliste, y compris en faisant des\
@@ -118,17 +150,35 @@ prompts:
       - L'effort cognitif (stress vs temps de repos/lecture dans les transports en\
       \ commun).\n\nInstructions :\n1. Analyse les détails, l'historique et les options\
       \ de trajet propres à chaque persona en appliquant les filtres de frictions\
-      \ urbaines.\n2. Sélectionne la meilleure option (par son index) dans la liste\
-      \ spécifique à ce persona.\n3. Retourne uniquement un objet JSON — pas de markdown,\
-      \ pas de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\": \"object\"\
-      ,\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\",\n    \
-      \  \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n\
-      \          \"agent_id\":     {\"type\": \"string\"},\n          \"chosen_index\"\
-      : {\"type\": \"integer\"},\n          \"mode\":         {\"type\": \"string\"\
-      },\n          \"reason\":       {\"type\": \"string\"}\n        },\n       \
-      \ \"required\": [\"agent_id\", \"chosen_index\", \"mode\", \"reason\"],\n  \
-      \      \"additionalProperties\": false\n      }\n    }\n  },\n  \"required\"\
-      : [\"agents\"],\n  \"additionalProperties\": false\n}\n"
+      \ urbaines.\n2. N'élimine aucune option : attribue à chaque option de la liste\
+      \ spécifique à ce persona, par son index, la probabilité en % qu'il la retienne\
+      \ (0 si elle lui est impossible). La somme doit valoir exactement 100.\n3. Retourne\
+      \ uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
+      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
+      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
+      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
+      \            \"type\": \"string\",\n            \"description\": \"Recopie exactement\
+      \ l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans\
+      \ préfixe ni nom).\"\n          },\n          \"probabilities\": {\n       \
+      \     \"type\": \"array\",\n            \"description\": \"Une entrée par option\
+      \ proposée à ce persona, sans exception. La somme des `probability` doit valoir\
+      \ exactement 100.\",\n            \"items\": {\n              \"type\": \"object\"\
+      ,\n              \"properties\": {\n                \"index\": {\n         \
+      \         \"type\": \"integer\",\n                  \"description\": \"Index\
+      \ de l'option, tel qu'affiché entre crochets.\"\n                },\n      \
+      \          \"mode\": {\n                  \"type\": \"string\",\n          \
+      \        \"description\": \"Mode de l'option, recopié depuis l'option.\"\n \
+      \               },\n                \"probability\": {\n                  \"\
+      type\": \"number\",\n                  \"description\": \"Probabilité en % (0\
+      \ à 100) que ce persona retienne cette option. 0 si l'option lui est impossible.\"\
+      \n                }\n              },\n              \"required\": [\n     \
+      \           \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
   persona_v2:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.\n\
       À chaque fois, tu te comportes de manière réaliste, y compris en faisant des\
@@ -149,18 +199,36 @@ prompts:
       - Le coût économique réel (carburant, parking vs ticket de transport).\n- L'effort\
       \ cognitif (stress vs temps de repos/lecture dans les transports en commun).\n\
       \nInstructions :\n1. Analyse les détails, l'historique et les options de trajet\
-      \ propres à chaque persona en appliquant ces pondérations.\n2. Sélectionne la\
-      \ meilleure option (par son index) dans la liste spécifique à ce persona.\n\
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}\"\"\"\n"
+      \ propres à chaque persona en appliquant ces pondérations.\n2. N'élimine aucune\
+      \ option : attribue à chaque option de la liste spécifique à ce persona, par\
+      \ son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible).\
+      \ La somme doit valoir exactement 100.\n3. Retourne uniquement un objet JSON\
+      \ — pas de markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n\
+      {\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"\
+      type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n    \
+      \    \"properties\": {\n          \"agent_id\": {\n            \"type\": \"\
+      string\",\n            \"description\": \"Recopie exactement l'agent_id fourni\
+      \ pour ce persona (identifiant numérique uniquement, sans préfixe ni nom).\"\
+      \n          },\n          \"probabilities\": {\n            \"type\": \"array\"\
+      ,\n            \"description\": \"Une entrée par option proposée à ce persona,\
+      \ sans exception. La somme des `probability` doit valoir exactement 100.\",\n\
+      \            \"items\": {\n              \"type\": \"object\",\n           \
+      \   \"properties\": {\n                \"index\": {\n                  \"type\"\
+      : \"integer\",\n                  \"description\": \"Index de l'option, tel\
+      \ qu'affiché entre crochets.\"\n                },\n                \"mode\"\
+      : {\n                  \"type\": \"string\",\n                  \"description\"\
+      : \"Mode de l'option, recopié depuis l'option.\"\n                },\n     \
+      \           \"probability\": {\n                  \"type\": \"number\",\n  \
+      \                \"description\": \"Probabilité en % (0 à 100) que ce persona\
+      \ retienne cette option. 0 si l'option lui est impossible.\"\n             \
+      \   }\n              },\n              \"required\": [\n                \"index\"\
+      ,\n                \"mode\",\n                \"probability\"\n            \
+      \  ],\n              \"additionalProperties\": false\n            }\n      \
+      \    },\n          \"reason\": {\n            \"type\": \"string\"\n       \
+      \   }\n        },\n        \"required\": [\n          \"agent_id\",\n      \
+      \    \"probabilities\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
+      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"\
+      additionalProperties\": false\n}"
   persona_v3:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.\n\
       À chaque fois, tu te comportes de manière réaliste, y compris en faisant des\
@@ -183,18 +251,36 @@ prompts:
       \ économique réel (carburant, parking vs ticket de transport).\n- L'effort cognitif\
       \ (stress vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant ces pondérations.\n2. Sélectionne la meilleure\
-      \ option (par son index) dans la liste spécifique à ce persona.\n3. Retourne\
-      \ uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}\"\"\"\n"
+      \ chaque persona en appliquant ces pondérations.\n2. N'élimine aucune option\
+      \ : attribue à chaque option de la liste spécifique à ce persona, par son index,\
+      \ la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme\
+      \ doit valoir exactement 100.\n3. Retourne uniquement un objet JSON — pas de\
+      \ markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\"\
+      : \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\"\
+      ,\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\"\
+      : {\n          \"agent_id\": {\n            \"type\": \"string\",\n        \
+      \    \"description\": \"Recopie exactement l'agent_id fourni pour ce persona\
+      \ (identifiant numérique uniquement, sans préfixe ni nom).\"\n          },\n\
+      \          \"probabilities\": {\n            \"type\": \"array\",\n        \
+      \    \"description\": \"Une entrée par option proposée à ce persona, sans exception.\
+      \ La somme des `probability` doit valoir exactement 100.\",\n            \"\
+      items\": {\n              \"type\": \"object\",\n              \"properties\"\
+      : {\n                \"index\": {\n                  \"type\": \"integer\",\n\
+      \                  \"description\": \"Index de l'option, tel qu'affiché entre\
+      \ crochets.\"\n                },\n                \"mode\": {\n           \
+      \       \"type\": \"string\",\n                  \"description\": \"Mode de\
+      \ l'option, recopié depuis l'option.\"\n                },\n               \
+      \ \"probability\": {\n                  \"type\": \"number\",\n            \
+      \      \"description\": \"Probabilité en % (0 à 100) que ce persona retienne\
+      \ cette option. 0 si l'option lui est impossible.\"\n                }\n   \
+      \           },\n              \"required\": [\n                \"index\",\n\
+      \                \"mode\",\n                \"probability\"\n              ],\n\
+      \              \"additionalProperties\": false\n            }\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
+      \      },\n        \"required\": [\n          \"agent_id\",\n          \"probabilities\"\
+      ,\n          \"reason\"\n        ],\n        \"additionalProperties\": false\n\
+      \      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
+      : false\n}"
   persona_v4:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.\n\
       À chaque fois, tu te comportes de manière réaliste, y compris en faisant des\
@@ -218,18 +304,36 @@ prompts:
       \ réel (carburant, parking vs ticket de transport).\n- L'effort cognitif (stress\
       \ vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant ces pondérations.\n2. Sélectionne la meilleure\
-      \ option (par son index) dans la liste spécifique à ce persona.\n3. Retourne\
-      \ uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}\"\"\"\n"
+      \ chaque persona en appliquant ces pondérations.\n2. N'élimine aucune option\
+      \ : attribue à chaque option de la liste spécifique à ce persona, par son index,\
+      \ la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme\
+      \ doit valoir exactement 100.\n3. Retourne uniquement un objet JSON — pas de\
+      \ markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\"\
+      : \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\"\
+      ,\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\"\
+      : {\n          \"agent_id\": {\n            \"type\": \"string\",\n        \
+      \    \"description\": \"Recopie exactement l'agent_id fourni pour ce persona\
+      \ (identifiant numérique uniquement, sans préfixe ni nom).\"\n          },\n\
+      \          \"probabilities\": {\n            \"type\": \"array\",\n        \
+      \    \"description\": \"Une entrée par option proposée à ce persona, sans exception.\
+      \ La somme des `probability` doit valoir exactement 100.\",\n            \"\
+      items\": {\n              \"type\": \"object\",\n              \"properties\"\
+      : {\n                \"index\": {\n                  \"type\": \"integer\",\n\
+      \                  \"description\": \"Index de l'option, tel qu'affiché entre\
+      \ crochets.\"\n                },\n                \"mode\": {\n           \
+      \       \"type\": \"string\",\n                  \"description\": \"Mode de\
+      \ l'option, recopié depuis l'option.\"\n                },\n               \
+      \ \"probability\": {\n                  \"type\": \"number\",\n            \
+      \      \"description\": \"Probabilité en % (0 à 100) que ce persona retienne\
+      \ cette option. 0 si l'option lui est impossible.\"\n                }\n   \
+      \           },\n              \"required\": [\n                \"index\",\n\
+      \                \"mode\",\n                \"probability\"\n              ],\n\
+      \              \"additionalProperties\": false\n            }\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
+      \      },\n        \"required\": [\n          \"agent_id\",\n          \"probabilities\"\
+      ,\n          \"reason\"\n        ],\n        \"additionalProperties\": false\n\
+      \      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
+      : false\n}"
   persona_v5:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France\
       \ qui en suporte pas le vélo et la voiture et adore le vélo.\nÀ chaque fois,\
@@ -254,18 +358,36 @@ prompts:
       \ réel (carburant, parking vs ticket de transport).\n- L'effort cognitif (stress\
       \ vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant ces pondérations.\n2. Sélectionne la meilleure\
-      \ option (par son index) dans la liste spécifique à ce persona.\n3. Retourne\
-      \ uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}\"\"\""
+      \ chaque persona en appliquant ces pondérations.\n2. N'élimine aucune option\
+      \ : attribue à chaque option de la liste spécifique à ce persona, par son index,\
+      \ la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme\
+      \ doit valoir exactement 100.\n3. Retourne uniquement un objet JSON — pas de\
+      \ markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\"\
+      : \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\"\
+      ,\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\"\
+      : {\n          \"agent_id\": {\n            \"type\": \"string\",\n        \
+      \    \"description\": \"Recopie exactement l'agent_id fourni pour ce persona\
+      \ (identifiant numérique uniquement, sans préfixe ni nom).\"\n          },\n\
+      \          \"probabilities\": {\n            \"type\": \"array\",\n        \
+      \    \"description\": \"Une entrée par option proposée à ce persona, sans exception.\
+      \ La somme des `probability` doit valoir exactement 100.\",\n            \"\
+      items\": {\n              \"type\": \"object\",\n              \"properties\"\
+      : {\n                \"index\": {\n                  \"type\": \"integer\",\n\
+      \                  \"description\": \"Index de l'option, tel qu'affiché entre\
+      \ crochets.\"\n                },\n                \"mode\": {\n           \
+      \       \"type\": \"string\",\n                  \"description\": \"Mode de\
+      \ l'option, recopié depuis l'option.\"\n                },\n               \
+      \ \"probability\": {\n                  \"type\": \"number\",\n            \
+      \      \"description\": \"Probabilité en % (0 à 100) que ce persona retienne\
+      \ cette option. 0 si l'option lui est impossible.\"\n                }\n   \
+      \           },\n              \"required\": [\n                \"index\",\n\
+      \                \"mode\",\n                \"probability\"\n              ],\n\
+      \              \"additionalProperties\": false\n            }\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
+      \      },\n        \"required\": [\n          \"agent_id\",\n          \"probabilities\"\
+      ,\n          \"reason\"\n        ],\n        \"additionalProperties\": false\n\
+      \      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
+      : false\n}"
   calibrated_20260611_1902:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.\n\
       À chaque fois, tu te comportes de manière réaliste, y compris en faisant des\
@@ -282,17 +404,35 @@ prompts:
       \n- L'effort cognitif (stress vs temps de repos/lecture dans les transports\
       \ en commun).\n\nInstructions :\n1. Analyse les détails, l'historique et les\
       \ options de trajet propres à chaque persona en appliquant les filtres de frictions\
-      \ urbaines.\n2. Sélectionne la meilleure option (par son index) dans la liste\
-      \ spécifique à ce persona.\n3. Retourne uniquement un objet JSON — pas de markdown,\
-      \ pas de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\": \"object\"\
-      ,\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\",\n    \
-      \  \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n\
-      \          \"agent_id\":     {\"type\": \"string\"},\n          \"chosen_index\"\
-      : {\"type\": \"integer\"},\n          \"mode\":         {\"type\": \"string\"\
-      },\n          \"reason\":       {\"type\": \"string\"}\n        },\n       \
-      \ \"required\": [\"agent_id\", \"chosen_index\", \"mode\", \"reason\"],\n  \
-      \      \"additionalProperties\": false\n      }\n    }\n  },\n  \"required\"\
-      : [\"agents\"],\n  \"additionalProperties\": false\n}"
+      \ urbaines.\n2. N'élimine aucune option : attribue à chaque option de la liste\
+      \ spécifique à ce persona, par son index, la probabilité en % qu'il la retienne\
+      \ (0 si elle lui est impossible). La somme doit valoir exactement 100.\n3. Retourne\
+      \ uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
+      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
+      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
+      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
+      \            \"type\": \"string\",\n            \"description\": \"Recopie exactement\
+      \ l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans\
+      \ préfixe ni nom).\"\n          },\n          \"probabilities\": {\n       \
+      \     \"type\": \"array\",\n            \"description\": \"Une entrée par option\
+      \ proposée à ce persona, sans exception. La somme des `probability` doit valoir\
+      \ exactement 100.\",\n            \"items\": {\n              \"type\": \"object\"\
+      ,\n              \"properties\": {\n                \"index\": {\n         \
+      \         \"type\": \"integer\",\n                  \"description\": \"Index\
+      \ de l'option, tel qu'affiché entre crochets.\"\n                },\n      \
+      \          \"mode\": {\n                  \"type\": \"string\",\n          \
+      \        \"description\": \"Mode de l'option, recopié depuis l'option.\"\n \
+      \               },\n                \"probability\": {\n                  \"\
+      type\": \"number\",\n                  \"description\": \"Probabilité en % (0\
+      \ à 100) que ce persona retienne cette option. 0 si l'option lui est impossible.\"\
+      \n                }\n              },\n              \"required\": [\n     \
+      \           \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
     _calibration:
       seed: persona_v1
       iterations: 50
@@ -319,18 +459,36 @@ prompts:
       \ fréquents et des trottoirs parfois encombrés ou dégradés.\n\n- L'effort cognitif\
       \ (stress vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. Sélectionne\
-      \ la meilleure option (par son index) dans la liste spécifique à ce persona.\n\
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}"
+      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. N'élimine\
+      \ aucune option : attribue à chaque option de la liste spécifique à ce persona,\
+      \ par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible).\
+      \ La somme doit valoir exactement 100.\n3. Retourne uniquement un objet JSON\
+      \ — pas de markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n\
+      {\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"\
+      type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n    \
+      \    \"properties\": {\n          \"agent_id\": {\n            \"type\": \"\
+      string\",\n            \"description\": \"Recopie exactement l'agent_id fourni\
+      \ pour ce persona (identifiant numérique uniquement, sans préfixe ni nom).\"\
+      \n          },\n          \"probabilities\": {\n            \"type\": \"array\"\
+      ,\n            \"description\": \"Une entrée par option proposée à ce persona,\
+      \ sans exception. La somme des `probability` doit valoir exactement 100.\",\n\
+      \            \"items\": {\n              \"type\": \"object\",\n           \
+      \   \"properties\": {\n                \"index\": {\n                  \"type\"\
+      : \"integer\",\n                  \"description\": \"Index de l'option, tel\
+      \ qu'affiché entre crochets.\"\n                },\n                \"mode\"\
+      : {\n                  \"type\": \"string\",\n                  \"description\"\
+      : \"Mode de l'option, recopié depuis l'option.\"\n                },\n     \
+      \           \"probability\": {\n                  \"type\": \"number\",\n  \
+      \                \"description\": \"Probabilité en % (0 à 100) que ce persona\
+      \ retienne cette option. 0 si l'option lui est impossible.\"\n             \
+      \   }\n              },\n              \"required\": [\n                \"index\"\
+      ,\n                \"mode\",\n                \"probability\"\n            \
+      \  ],\n              \"additionalProperties\": false\n            }\n      \
+      \    },\n          \"reason\": {\n            \"type\": \"string\"\n       \
+      \   }\n        },\n        \"required\": [\n          \"agent_id\",\n      \
+      \    \"probabilities\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
+      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"\
+      additionalProperties\": false\n}"
     _calibration:
       seed: persona_v1
       iterations: 50
@@ -359,18 +517,36 @@ prompts:
       \ des objets volumineux ou des enfants en sécurité à vélo.\n\n- L'effort cognitif\
       \ (stress vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. Sélectionne\
-      \ la meilleure option (par son index) dans la liste spécifique à ce persona.\n\
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}"
+      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. N'élimine\
+      \ aucune option : attribue à chaque option de la liste spécifique à ce persona,\
+      \ par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible).\
+      \ La somme doit valoir exactement 100.\n3. Retourne uniquement un objet JSON\
+      \ — pas de markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n\
+      {\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"\
+      type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n    \
+      \    \"properties\": {\n          \"agent_id\": {\n            \"type\": \"\
+      string\",\n            \"description\": \"Recopie exactement l'agent_id fourni\
+      \ pour ce persona (identifiant numérique uniquement, sans préfixe ni nom).\"\
+      \n          },\n          \"probabilities\": {\n            \"type\": \"array\"\
+      ,\n            \"description\": \"Une entrée par option proposée à ce persona,\
+      \ sans exception. La somme des `probability` doit valoir exactement 100.\",\n\
+      \            \"items\": {\n              \"type\": \"object\",\n           \
+      \   \"properties\": {\n                \"index\": {\n                  \"type\"\
+      : \"integer\",\n                  \"description\": \"Index de l'option, tel\
+      \ qu'affiché entre crochets.\"\n                },\n                \"mode\"\
+      : {\n                  \"type\": \"string\",\n                  \"description\"\
+      : \"Mode de l'option, recopié depuis l'option.\"\n                },\n     \
+      \           \"probability\": {\n                  \"type\": \"number\",\n  \
+      \                \"description\": \"Probabilité en % (0 à 100) que ce persona\
+      \ retienne cette option. 0 si l'option lui est impossible.\"\n             \
+      \   }\n              },\n              \"required\": [\n                \"index\"\
+      ,\n                \"mode\",\n                \"probability\"\n            \
+      \  ],\n              \"additionalProperties\": false\n            }\n      \
+      \    },\n          \"reason\": {\n            \"type\": \"string\"\n       \
+      \   }\n        },\n        \"required\": [\n          \"agent_id\",\n      \
+      \    \"probabilities\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
+      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"\
+      additionalProperties\": false\n}"
     _calibration:
       seed: persona_v1
       iterations: 10
@@ -397,17 +573,35 @@ prompts:
       \ sur de longues distances.\n\n- L'effort cognitif (stress vs temps de repos/lecture\
       \ dans les transports en commun).\n\nInstructions :\n1. Analyse les détails,\
       \ l'historique et les options de trajet propres à chaque persona en appliquant\
-      \ les filtres de frictions urbaines.\n2. Sélectionne la meilleure option (par\
-      \ son index) dans la liste spécifique à ce persona.\n3. Retourne uniquement\
-      \ un objet JSON — pas de markdown, pas de texte supplémentaire.\n\nSchéma JSON\
-      \ attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\"\
-      : {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\"\
-      ,\n        \"properties\": {\n          \"agent_id\":     {\"type\": \"string\"\
-      },\n          \"chosen_index\": {\"type\": \"integer\"},\n          \"mode\"\
-      :         {\"type\": \"string\"},\n          \"reason\":       {\"type\": \"\
-      string\"}\n        },\n        \"required\": [\"agent_id\", \"chosen_index\"\
-      , \"mode\", \"reason\"],\n        \"additionalProperties\": false\n      }\n\
-      \    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\": false\n\
+      \ les filtres de frictions urbaines.\n2. N'élimine aucune option : attribue\
+      \ à chaque option de la liste spécifique à ce persona, par son index, la probabilité\
+      \ en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir\
+      \ exactement 100.\n3. Retourne uniquement un objet JSON — pas de markdown, pas\
+      \ de texte supplémentaire.\n\nSchéma JSON attendu :\n{\n  \"type\": \"object\"\
+      ,\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\",\n    \
+      \  \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n\
+      \          \"agent_id\": {\n            \"type\": \"string\",\n            \"\
+      description\": \"Recopie exactement l'agent_id fourni pour ce persona (identifiant\
+      \ numérique uniquement, sans préfixe ni nom).\"\n          },\n          \"\
+      probabilities\": {\n            \"type\": \"array\",\n            \"description\"\
+      : \"Une entrée par option proposée à ce persona, sans exception. La somme des\
+      \ `probability` doit valoir exactement 100.\",\n            \"items\": {\n \
+      \             \"type\": \"object\",\n              \"properties\": {\n     \
+      \           \"index\": {\n                  \"type\": \"integer\",\n       \
+      \           \"description\": \"Index de l'option, tel qu'affiché entre crochets.\"\
+      \n                },\n                \"mode\": {\n                  \"type\"\
+      : \"string\",\n                  \"description\": \"Mode de l'option, recopié\
+      \ depuis l'option.\"\n                },\n                \"probability\": {\n\
+      \                  \"type\": \"number\",\n                  \"description\"\
+      : \"Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option\
+      \ lui est impossible.\"\n                }\n              },\n             \
+      \ \"required\": [\n                \"index\",\n                \"mode\",\n \
+      \               \"probability\"\n              ],\n              \"additionalProperties\"\
+      : false\n            }\n          },\n          \"reason\": {\n            \"\
+      type\": \"string\"\n          }\n        },\n        \"required\": [\n     \
+      \     \"agent_id\",\n          \"probabilities\",\n          \"reason\"\n  \
+      \      ],\n        \"additionalProperties\": false\n      }\n    }\n  },\n \
+      \ \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\": false\n\
       }"
     _calibration:
       seed: persona_v1
@@ -440,18 +634,36 @@ prompts:
       \ cumulent santé et praticité sans compromis lourd.\n\n- L'effort cognitif (stress\
       \ vs temps de repos/lecture dans les transports en commun).\n\nInstructions\
       \ :\n1. Analyse les détails, l'historique et les options de trajet propres à\
-      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. Sélectionne\
-      \ la meilleure option (par son index) dans la liste spécifique à ce persona.\n\
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.\n\
-      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
-      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\":    \
-      \ {\"type\": \"string\"},\n          \"chosen_index\": {\"type\": \"integer\"\
-      },\n          \"mode\":         {\"type\": \"string\"},\n          \"reason\"\
-      :       {\"type\": \"string\"}\n        },\n        \"required\": [\"agent_id\"\
-      , \"chosen_index\", \"mode\", \"reason\"],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\"agents\"],\n  \"additionalProperties\"\
-      : false\n}"
+      \ chaque persona en appliquant les filtres de frictions urbaines.\n2. N'élimine\
+      \ aucune option : attribue à chaque option de la liste spécifique à ce persona,\
+      \ par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible).\
+      \ La somme doit valoir exactement 100.\n3. Retourne uniquement un objet JSON\
+      \ — pas de markdown, pas de texte supplémentaire.\n\nSchéma JSON attendu :\n\
+      {\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n      \"\
+      type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n    \
+      \    \"properties\": {\n          \"agent_id\": {\n            \"type\": \"\
+      string\",\n            \"description\": \"Recopie exactement l'agent_id fourni\
+      \ pour ce persona (identifiant numérique uniquement, sans préfixe ni nom).\"\
+      \n          },\n          \"probabilities\": {\n            \"type\": \"array\"\
+      ,\n            \"description\": \"Une entrée par option proposée à ce persona,\
+      \ sans exception. La somme des `probability` doit valoir exactement 100.\",\n\
+      \            \"items\": {\n              \"type\": \"object\",\n           \
+      \   \"properties\": {\n                \"index\": {\n                  \"type\"\
+      : \"integer\",\n                  \"description\": \"Index de l'option, tel\
+      \ qu'affiché entre crochets.\"\n                },\n                \"mode\"\
+      : {\n                  \"type\": \"string\",\n                  \"description\"\
+      : \"Mode de l'option, recopié depuis l'option.\"\n                },\n     \
+      \           \"probability\": {\n                  \"type\": \"number\",\n  \
+      \                \"description\": \"Probabilité en % (0 à 100) que ce persona\
+      \ retienne cette option. 0 si l'option lui est impossible.\"\n             \
+      \   }\n              },\n              \"required\": [\n                \"index\"\
+      ,\n                \"mode\",\n                \"probability\"\n            \
+      \  ],\n              \"additionalProperties\": false\n            }\n      \
+      \    },\n          \"reason\": {\n            \"type\": \"string\"\n       \
+      \   }\n        },\n        \"required\": [\n          \"agent_id\",\n      \
+      \    \"probabilities\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
+      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"\
+      additionalProperties\": false\n}"
     _calibration:
       seed: persona_v1
       iterations: 10
@@ -520,21 +732,38 @@ prompts:
       \ : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique\
       \ ou financier : l'option choisie génère-t-elle une dette technique (fatigue,\
       \ coût) soutenable si le trajet est répété sur deux jours ?\n\n[Instructions\
-      \ de sortie]\n1) Analyse le profil via ce prisme.\n2) Sélectionne l'index de\
-      \ l'option optimale.\n3) Retourne uniquement un objet JSON valide — pas de markdown,\
-      \ pas de texte supplémentaire.\n4) Justifie la recommandation en une phrase\
-      \ concise, en précisent si c'est le cas pourquoi la marche n'est pas le meilleur\
-      \ choix et si tu as hésité.\n\nSchéma JSON attendu :\n{\n  \"type\": \"object\"\
-      ,\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\",\n    \
-      \  \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n\
-      \          \"agent_id\": {\n            \"type\": \"string\"\n          },\n\
-      \          \"chosen_index\": {\n            \"type\": \"integer\"\n        \
-      \  },\n          \"mode\": {\n            \"type\": \"string\"\n          },\n\
-      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
-      \      },\n        \"required\": [\n          \"agent_id\",\n          \"chosen_index\"\
-      ,\n          \"mode\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
-      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"\
-      additionalProperties\": false\n}"
+      \ de sortie]\n1) Analyse le profil via ce prisme.\n2) N'élimine aucune option\
+      \ : attribue à CHAQUE option proposée, par son index, la probabilité en % que\
+      \ ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si\
+      \ elle lui est impossible. La somme doit valoir exactement 100.\n3) Retourne\
+      \ uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.\n\
+      4) Justifie la répartition en une phrase concise, en précisant si c'est le cas\
+      \ pourquoi la marche n'obtient pas la plus forte probabilité.\n\nSchéma JSON\
+      \ attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\"\
+      : {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\"\
+      ,\n        \"properties\": {\n          \"agent_id\": {\n            \"type\"\
+      : \"string\",\n            \"description\": \"Recopie exactement l'agent_id\
+      \ fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni\
+      \ nom).\"\n          },\n          \"probabilities\": {\n            \"type\"\
+      : \"array\",\n            \"description\": \"Une entrée par option proposée\
+      \ à ce persona, sans exception. La somme des `probability` doit valoir exactement\
+      \ 100.\",\n            \"items\": {\n              \"type\": \"object\",\n \
+      \             \"properties\": {\n                \"index\": {\n            \
+      \      \"type\": \"integer\",\n                  \"description\": \"Index de\
+      \ l'option, tel qu'affiché entre crochets.\"\n                },\n         \
+      \       \"mode\": {\n                  \"type\": \"string\",\n             \
+      \     \"description\": \"Mode de l'option, recopié depuis l'option.\"\n    \
+      \            },\n                \"probability\": {\n                  \"type\"\
+      : \"number\",\n                  \"description\": \"Probabilité en % (0 à 100)\
+      \ que ce persona retienne cette option. 0 si l'option lui est impossible.\"\n\
+      \                }\n              },\n              \"required\": [\n      \
+      \          \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
     _calibration:
       seed: expert
       iterations: 25
@@ -564,18 +793,35 @@ prompts:
       \ des 48 heures pour évaluer la viabilité de l'effort physique ou financier\
       \ : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable\
       \ si le trajet est répété sur deux jours ?\n\n[Instructions de sortie]\n1) Analyse\
-      \ le profil via ce prisme.\n2) Sélectionne l'index de l'option optimale.\n3)\
-      \ Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.\n\
-      4) Justifie la recommandation en une phrase concise, en précisent si c'est le\
-      \ cas pourquoi la marche n'est pas le meilleur choix et si tu as hésité.\n\n\
-      Schéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n   \
-      \ \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
-      \            \"type\": \"string\"\n          },\n          \"chosen_index\"\
-      : {\n            \"type\": \"integer\"\n          },\n          \"mode\": {\n\
-      \            \"type\": \"string\"\n          },\n          \"reason\": {\n \
-      \           \"type\": \"string\"\n          }\n        },\n        \"required\"\
-      : [\n          \"agent_id\",\n          \"chosen_index\",\n          \"mode\"\
+      \ le profil via ce prisme.\n2) N'élimine aucune option : attribue à CHAQUE option\
+      \ proposée, par son index, la probabilité en % que ce persona la retienne —\
+      \ d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible.\
+      \ La somme doit valoir exactement 100.\n3) Retourne uniquement un objet JSON\
+      \ valide — pas de markdown, pas de texte supplémentaire.\n4) Justifie la répartition\
+      \ en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient\
+      \ pas la plus forte probabilité.\n\nSchéma JSON attendu :\n{\n  \"type\": \"\
+      object\",\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\"\
+      ,\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\"\
+      : {\n          \"agent_id\": {\n            \"type\": \"string\",\n        \
+      \    \"description\": \"Recopie exactement l'agent_id fourni pour ce persona\
+      \ (identifiant numérique uniquement, sans préfixe ni nom).\"\n          },\n\
+      \          \"probabilities\": {\n            \"type\": \"array\",\n        \
+      \    \"description\": \"Une entrée par option proposée à ce persona, sans exception.\
+      \ La somme des `probability` doit valoir exactement 100.\",\n            \"\
+      items\": {\n              \"type\": \"object\",\n              \"properties\"\
+      : {\n                \"index\": {\n                  \"type\": \"integer\",\n\
+      \                  \"description\": \"Index de l'option, tel qu'affiché entre\
+      \ crochets.\"\n                },\n                \"mode\": {\n           \
+      \       \"type\": \"string\",\n                  \"description\": \"Mode de\
+      \ l'option, recopié depuis l'option.\"\n                },\n               \
+      \ \"probability\": {\n                  \"type\": \"number\",\n            \
+      \      \"description\": \"Probabilité en % (0 à 100) que ce persona retienne\
+      \ cette option. 0 si l'option lui est impossible.\"\n                }\n   \
+      \           },\n              \"required\": [\n                \"index\",\n\
+      \                \"mode\",\n                \"probability\"\n              ],\n\
+      \              \"additionalProperties\": false\n            }\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
+      \      },\n        \"required\": [\n          \"agent_id\",\n          \"probabilities\"\
       ,\n          \"reason\"\n        ],\n        \"additionalProperties\": false\n\
       \      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
       : false\n}"
@@ -630,21 +876,37 @@ prompts:
       \ la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle\
       \ une dette technique (fatigue, coût) soutenable si le trajet est répété sur\
       \ deux jours ?\n\n[Instructions de sortie]\n1) Analyse le profil via ce prisme.\n\
-      2) Sélectionne l'index de l'option optimale.\n3) Retourne uniquement un objet\
-      \ JSON valide — pas de markdown, pas de texte supplémentaire.\n4) Justifie la\
-      \ recommandation en une phrase concise, en précisent si c'est le cas pourquoi\
-      \ la marche n'est pas le meilleur choix et si tu as hésité.\n\nSchéma JSON attendu\
-      \ :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n  \
-      \    \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\"\
-      ,\n        \"properties\": {\n          \"agent_id\": {\n            \"type\"\
-      : \"string\"\n          },\n          \"chosen_index\": {\n            \"type\"\
-      : \"integer\"\n          },\n          \"mode\": {\n            \"type\": \"\
-      string\"\n          },\n          \"reason\": {\n            \"type\": \"string\"\
+      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index,\
+      \ la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle\
+      \ lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement\
+      \ 100.\n3) Retourne uniquement un objet JSON valide — pas de markdown, pas de\
+      \ texte supplémentaire.\n4) Justifie la répartition en une phrase concise, en\
+      \ précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.\n\
+      \nSchéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n \
+      \   \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
+      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
+      \            \"type\": \"string\",\n            \"description\": \"Recopie exactement\
+      \ l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans\
+      \ préfixe ni nom).\"\n          },\n          \"probabilities\": {\n       \
+      \     \"type\": \"array\",\n            \"description\": \"Une entrée par option\
+      \ proposée à ce persona, sans exception. La somme des `probability` doit valoir\
+      \ exactement 100.\",\n            \"items\": {\n              \"type\": \"object\"\
+      ,\n              \"properties\": {\n                \"index\": {\n         \
+      \         \"type\": \"integer\",\n                  \"description\": \"Index\
+      \ de l'option, tel qu'affiché entre crochets.\"\n                },\n      \
+      \          \"mode\": {\n                  \"type\": \"string\",\n          \
+      \        \"description\": \"Mode de l'option, recopié depuis l'option.\"\n \
+      \               },\n                \"probability\": {\n                  \"\
+      type\": \"number\",\n                  \"description\": \"Probabilité en % (0\
+      \ à 100) que ce persona retienne cette option. 0 si l'option lui est impossible.\"\
+      \n                }\n              },\n              \"required\": [\n     \
+      \           \"index\",\n                \"mode\",\n                \"probability\"\
+      \n              ],\n              \"additionalProperties\": false\n        \
+      \    }\n          },\n          \"reason\": {\n            \"type\": \"string\"\
       \n          }\n        },\n        \"required\": [\n          \"agent_id\",\n\
-      \          \"chosen_index\",\n          \"mode\",\n          \"reason\"\n  \
-      \      ],\n        \"additionalProperties\": false\n      }\n    }\n  },\n \
-      \ \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\": false\n\
-      }"
+      \          \"probabilities\",\n          \"reason\"\n        ],\n        \"\
+      additionalProperties\": false\n      }\n    }\n  },\n  \"required\": [\n   \
+      \ \"agents\"\n  ],\n  \"additionalProperties\": false\n}"
     _calibration:
       seed: expert
       iterations: 29
@@ -699,18 +961,35 @@ prompts:
       \ la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier\
       \ : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable\
       \ si le trajet est répété sur deux jours ?\n\n[Instructions de sortie]\n1) Analyse\
-      \ le profil via ce prisme.\n2) Sélectionne l'index de l'option optimale.\n3)\
-      \ Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.\n\
-      4) Justifie la recommandation en une phrase concise, en précisent si c'est le\
-      \ cas pourquoi la marche n'est pas le meilleur choix et si tu as hésité.\n\n\
-      Schéma JSON attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n   \
-      \ \"agents\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"\
-      type\": \"object\",\n        \"properties\": {\n          \"agent_id\": {\n\
-      \            \"type\": \"string\"\n          },\n          \"chosen_index\"\
-      : {\n            \"type\": \"integer\"\n          },\n          \"mode\": {\n\
-      \            \"type\": \"string\"\n          },\n          \"reason\": {\n \
-      \           \"type\": \"string\"\n          }\n        },\n        \"required\"\
-      : [\n          \"agent_id\",\n          \"chosen_index\",\n          \"mode\"\
+      \ le profil via ce prisme.\n2) N'élimine aucune option : attribue à CHAQUE option\
+      \ proposée, par son index, la probabilité en % que ce persona la retienne —\
+      \ d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible.\
+      \ La somme doit valoir exactement 100.\n3) Retourne uniquement un objet JSON\
+      \ valide — pas de markdown, pas de texte supplémentaire.\n4) Justifie la répartition\
+      \ en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient\
+      \ pas la plus forte probabilité.\n\nSchéma JSON attendu :\n{\n  \"type\": \"\
+      object\",\n  \"properties\": {\n    \"agents\": {\n      \"type\": \"array\"\
+      ,\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\"\
+      : {\n          \"agent_id\": {\n            \"type\": \"string\",\n        \
+      \    \"description\": \"Recopie exactement l'agent_id fourni pour ce persona\
+      \ (identifiant numérique uniquement, sans préfixe ni nom).\"\n          },\n\
+      \          \"probabilities\": {\n            \"type\": \"array\",\n        \
+      \    \"description\": \"Une entrée par option proposée à ce persona, sans exception.\
+      \ La somme des `probability` doit valoir exactement 100.\",\n            \"\
+      items\": {\n              \"type\": \"object\",\n              \"properties\"\
+      : {\n                \"index\": {\n                  \"type\": \"integer\",\n\
+      \                  \"description\": \"Index de l'option, tel qu'affiché entre\
+      \ crochets.\"\n                },\n                \"mode\": {\n           \
+      \       \"type\": \"string\",\n                  \"description\": \"Mode de\
+      \ l'option, recopié depuis l'option.\"\n                },\n               \
+      \ \"probability\": {\n                  \"type\": \"number\",\n            \
+      \      \"description\": \"Probabilité en % (0 à 100) que ce persona retienne\
+      \ cette option. 0 si l'option lui est impossible.\"\n                }\n   \
+      \           },\n              \"required\": [\n                \"index\",\n\
+      \                \"mode\",\n                \"probability\"\n              ],\n\
+      \              \"additionalProperties\": false\n            }\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n  \
+      \      },\n        \"required\": [\n          \"agent_id\",\n          \"probabilities\"\
       ,\n          \"reason\"\n        ],\n        \"additionalProperties\": false\n\
       \      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
       : false\n}"

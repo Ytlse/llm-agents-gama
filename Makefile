@@ -13,7 +13,9 @@ ifeq ($(wildcard $(_CONFIG_PATH)),)
 endif
 
 GAMA_BIN        = /Applications/GAMA.app/Contents/MacOS/GAMA
-WORKSPACE       = /Users/yvesb/Documents/llm-agents-gama/GAMA/CityTransport
+# Racine du dépôt, déduite de l'emplacement du Makefile (pas de chemin absolu en dur)
+PROJECT_ROOT   := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+WORKSPACE       = $(PROJECT_ROOT)/GAMA/CityTransport
 MODEL_PATH      = $(WORKSPACE)/models/City.gaml
 EXPERIMENT_NAME = e
 
@@ -118,6 +120,112 @@ burst:
 ## Run all analysis notebooks. Usage: make analysis [LOG_DIR=../../experiments/my_exp/]
 analysis:
 	python scripts/analysis/run_analysis.py $(if $(LOG_DIR),--log-dir $(LOG_DIR),)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Synthèse des scores
+# ──────────────────────────────────────────────────────────────────────────────
+
+.PHONY: synthesis synthesis-open common-set-eval heldout-eval
+
+# La synthèse importe pandas/numpy et le moteur de calibration : le python3 du
+# système ne suffit pas. On vise le venv du projet, surchargeable.
+SYNTHESIS_PYTHON ?= llm-agents/.venv/bin/python
+
+## Regenerate the score synthesis page. Usage: make synthesis [RUN=experiments/archive/2026-07-29_18_34]
+synthesis:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make synthesis SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.build $(if $(RUN),--run $(RUN),)
+
+## Regenerate then open the page in the default browser.
+synthesis-open: synthesis
+	open docs/synthesis/index.html
+
+## Re-evaluate the pinned prompt lineage's seed and leaf on the common set (action A3).
+## CONSOMME DU QUOTA LLM (~130 appels Gemini free tier). Chiffrez d'abord :
+##   make common-set-eval DRY_RUN=1
+## Reprise gratuite : les évals déjà payées sont servies par le cache du store.
+common-set-eval:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make common-set-eval SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.common_set_eval \
+	  $(if $(DRY_RUN),--dry-run,) $(if $(PROVIDER),--provider $(PROVIDER),) \
+	  $(if $(BATCH),--batch $(BATCH),)
+
+## Evaluate the pinned prompt lineage on a HELD-OUT frozen split (action A4).
+## C'est le seul score de la calibration qui ne porte pas sur le jeu ayant servi à
+## l'optimiser. CONSOMME DU QUOTA LLM (~100 appels Gemini free tier pour les 6 nœuds
+## de la lignée, ~35 pour les deux extrémités). Chiffrez d'abord :
+##   make heldout-eval DRY_RUN=1
+##   make heldout-eval NODES=all PROVIDER=google2     # toute la lignée
+## Reprise gratuite et par nœud : les évals déjà payées sont servies par le cache du
+## store. Le témoin d'effectif, lui, est calculé par `make synthesis` sans appel LLM.
+heldout-eval:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make heldout-eval SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.heldout_eval \
+	  $(if $(DRY_RUN),--dry-run,) $(if $(PROVIDER),--provider $(PROVIDER),) \
+	  $(if $(BATCH),--batch $(BATCH),) $(if $(NODES),--nodes $(NODES),) \
+	  $(if $(DATASET),--dataset $(DATASET),)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Modèle de choix modal (ticket 005)
+# ──────────────────────────────────────────────────────────────────────────────
+
+.PHONY: zones housing-type policy common-set-predict
+
+## Rebuild the fine-zone resource read by llm_module.core.zone_resolver.
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+zones:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_zone_layer
+
+## Rebuild the housing-type law read when enriching a synthetic population (action A2).
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## Puis, pour poser le trait sur une population (aucun appel LLM, déterministe) :
+##   llm-agents/.venv/bin/python -m scripts.data.population.enrich_housing_type \
+##     data/population/toulouse_population_1000.json
+housing-type:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_housing_type
+
+## Retrain the PROGEDO mode-choice policy → scripts/progedo_logit/mode_choice_policy.json
+## Le parquet d'entraînement est versionné : contrairement à `zones`, cette cible
+## n'exige PAS les données PROGEDO brutes. Résultat déterministe (graine fixée).
+policy:
+	@test -f scripts/progedo_logit/progedo_mode_choice_v2.parquet || { \
+	  echo "Jeu d'entraînement absent : scripts/progedo_logit/progedo_mode_choice_v2.parquet"; \
+	  echo "Il est versionné ; s'il manque, régénérez-le avec build_mode_choice_dataset.py"; \
+	  echo "(qui exige, lui, les données PROGEDO d'accès restreint)."; \
+	  exit 1; }
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make policy SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_policy
+
+## Apply the trained policy to the pinned common set, renormalised on the OTP offer
+## (action A8) → scripts/synthesis/data/progedo_on_common_set.parquet
+## Aucun appel LLM, aucun réseau, graine sans objet : le résultat est déterministe.
+## Exige la couche de zones (`make zones`) pour les six variables géographiques.
+##   make common-set-predict DRY_RUN=1   # périmètre et statuts, sans écrire
+common-set-predict:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make common-set-predict SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.model_on_common_set \
+	  $(if $(DRY_RUN),--dry-run,)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # GAMA

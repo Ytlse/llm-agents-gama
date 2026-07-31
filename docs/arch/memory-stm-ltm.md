@@ -463,7 +463,8 @@ evaluate_and_choose_travel_plan()
 │          "departure_time": "08:30"
 │        }]
 │      }
-│      ← {"chosen_index": 2, "reason": "..."}
+│      ← {"probabilities": [{index, mode, probability}, ...], "reason": "..."}
+│         puis tirage du mode dans cette distribution (mode_choice.draw_index)
 │
 ├─ 4. asyncio.create_task(cache.store(...))   ← fire-and-forget
 │

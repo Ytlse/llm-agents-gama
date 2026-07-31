@@ -370,22 +370,80 @@ def section_agents(run: Path, out: list[str], alarms: list[str]) -> None:
         )
 
 
+# Écart absolu maximal toléré (points de %) entre la part attendue d'un mode et sa
+# part réellement tirée, avant de considérer que le tirage dérive.
+TH_MODE_DRIFT_PTS = 8.0
+# En dessous de cet effectif, l'écart n'est que du bruit d'échantillonnage.
+TH_MODE_DRIFT_MIN_ROWS = 200
+
+
+def _decisions_expected_vs_drawn(expected: Counter, expected_rows: int,
+                                 modes: Counter, out: list[str], alarms: list[str]) -> None:
+    """Compare la répartition annoncée par le LLM à celle réellement tirée.
+
+    Le tirage doit reproduire la distribution en espérance. Un écart franc et durable
+    ne vient donc pas du modèle : il vient du tirage lui-même, du cache (options
+    disparues, points hérités resservis sans tirage) ou d'un biais de normalisation.
+    """
+    if not expected_rows:
+        return
+    out.append(
+        f"\n**Répartition attendue vs tirée** ({expected_rows} décisions probabilistes)\n")
+    out.append("| Mode | attendu | tiré | écart |")
+    out.append("|:--|--:|--:|--:|")
+    drawn_total = sum(modes.values()) or 1
+    worst = (0.0, "")
+    for mode, mass in expected.most_common():
+        exp_pct = 100.0 * mass / expected_rows
+        got_pct = 100.0 * modes.get(mode, 0) / drawn_total
+        delta = got_pct - exp_pct
+        if exp_pct == 0 and got_pct == 0:
+            continue
+        out.append(f"| {mode} | {exp_pct:.1f} % | {got_pct:.1f} % | {delta:+.1f} pts |")
+        if abs(delta) > worst[0]:
+            worst = (abs(delta), mode)
+    if expected_rows >= TH_MODE_DRIFT_MIN_ROWS and worst[0] > TH_MODE_DRIFT_PTS:
+        alarms.append(
+            f"🟠 Tirage modal dérivant : {worst[1]} s'écarte de {worst[0]:.1f} pts de la "
+            f"répartition annoncée par le LLM sur {expected_rows} décisions — vérifier le "
+            f"cache (points hérités resservis sans tirage) et la normalisation."
+        )
+
+
 def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
     path = run / "moves.csv"
     if not path.exists():
         return
     modes = Counter()
     methods = Counter()
+    # Somme des probabilités annoncées par le LLM, par mode : la répartition qu'il
+    # « voulait ». Les modes tirés doivent la reproduire en espérance — un écart
+    # persistant signale un biais du tirage ou du cache, pas du modèle.
+    expected = Counter()
+    expected_rows = 0
     total = 0
     fallbacks = 0
     with path.open(encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        prob_cols = [c for c in (reader.fieldnames or [])
+                     if c.startswith("P(") and c.endswith(") %")]
+        for row in reader:
             total += 1
             modes[row.get("Mode de transport Choisi", "?")] += 1
             method = row.get("Méthode de sélection", "?")
             methods[method] += 1
             if "Error" in method or "Default" in method:
                 fallbacks += 1
+            # Cellule vide = décision sans répartition (mono-choix, erreur, cache hérité) ;
+            # 0 = mode explicitement écarté. Seules les lignes renseignées comptent.
+            cells = {c: row.get(c, "") for c in prob_cols}
+            if any(v not in ("", None) for v in cells.values()):
+                expected_rows += 1
+                for col, val in cells.items():
+                    try:
+                        expected[col[2:-3]] += float(val) / 100.0
+                    except (TypeError, ValueError):
+                        pass
     if not total:
         return
     # Ratio « erreur définitive LLM » : fallbacks rapportés aux seules décisions
@@ -406,6 +464,8 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
         left = f"{ml[i][0]} | {ml[i][1]}" if i < len(ml) else " | "
         right = f"{sl[i][0][:32]} | {sl[i][1]}" if i < len(sl) else " | "
         out.append(f"| {left} | | {right} |")
+
+    _decisions_expected_vs_drawn(expected, expected_rows, modes, out, alarms)
     if fallbacks / total >= TH_FALLBACK_SHARE:
         alarms.append(
             f"🟠 {fallbacks}/{total} décisions ({fallbacks / total:.1%}) en fallback "

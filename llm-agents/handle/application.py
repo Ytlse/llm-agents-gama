@@ -12,6 +12,8 @@ import json
 import math
 import os
 import re
+import subprocess
+import sys
 import orjson
 import time
 from datetime import datetime
@@ -1183,6 +1185,104 @@ async def _sync_impl(raw: Request):
     else:
         logger.debug("[/sync] Scenario not ready yet — init still in progress, skipping")
         return MessageResponse(data="not_ready", success=True)
+
+
+# ── Calibration du prompt (déclenchée depuis l'IHM GAMA) ─────────────────────
+# Chemin du dépôt autonome prompt_calibration monté dans le conteneur (voir
+# docker-compose, volume ./prompt_calibration:/app/prompt_calibration). La
+# calibration lit ses chemins relativement à ce dossier (jeux gelés, store) et
+# via config/gama_container.yaml pour prompts.yaml / cerema_values.yaml.
+CALIBRATION_DIR = Path("/app/prompt_calibration")
+
+# Handle du sous-processus de calibration en cours (un seul à la fois), et
+# verrou pour rendre atomique la séquence vérification-puis-lancement (sans
+# lui, deux requêtes /calibrate concurrentes peuvent toutes deux passer le
+# check "déjà en cours" et lancer chacune leur campagne sur le même store).
+_calibration_proc: subprocess.Popen | None = None
+_calibration_lock = asyncio.Lock()
+
+
+@app.post(
+    "/calibrate",
+    summary="Lancer la calibration du prompt",
+    description=(
+        "Démarre une campagne de calibration du prompt système `itinary_multi_agent` "
+        "en tâche de fond, avec un nombre de cycles (itérations de la boucle) paramétrable. "
+        "L'appel est non bloquant : GAMA reçoit immédiatement l'accusé de démarrage, la "
+        "calibration se poursuit dans le conteneur `controller`. Un seul run à la fois."
+    ),
+    tags=["Calibration"],
+)
+async def calibrate(raw: Request):
+    """Lance `python -m calibration.cli run --iterations N` en sous-processus détaché."""
+    global _calibration_proc
+
+    # Corps lu en brut (client HTTP GAMA / h2c), tolérant au corps vide.
+    body = await raw.body()
+    iterations = 20
+    if body:
+        try:
+            payload = orjson.loads(body)
+            iterations = int(payload.get("iterations", iterations))
+        except Exception as exc:  # noqa: BLE001
+            return {"success": False, "message_type": "calibration_error",
+                    "error": f"Corps de requête invalide : {exc}"}
+
+    if iterations < 1:
+        return {"success": False, "message_type": "calibration_error",
+                "error": "Le nombre de cycles doit être >= 1"}
+
+    if not CALIBRATION_DIR.exists():
+        msg = (f"Package de calibration introuvable ({CALIBRATION_DIR}). "
+               f"Vérifier le montage ./prompt_calibration:/app/prompt_calibration "
+               f"dans docker-compose.yml.")
+        logger.error(f"[ALARME] /calibrate : {msg}")
+        return {"success": False, "message_type": "calibration_error", "error": msg}
+
+    async with _calibration_lock:
+        if _calibration_proc is not None and _calibration_proc.poll() is None:
+            logger.warning("[/calibrate] Une calibration est déjà en cours — requête ignorée")
+            return {"success": False, "message_type": "calibration_busy",
+                    "error": "Une calibration est déjà en cours.",
+                    "data": {"pid": _calibration_proc.pid}}
+
+        log_dir = Path("/app/experiments/current")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "calibration.log"
+        cmd = [sys.executable, "-m", "calibration.cli", "run", "--iterations", str(iterations)]
+        # Config adaptée à la disposition du conteneur (llm_module sous /opt, etc.).
+        container_config = CALIBRATION_DIR / "config" / "gama_container.yaml"
+        if container_config.exists():
+            cmd[3:3] = ["--config", str(container_config)]
+
+        log_file = open(log_path, "a", encoding="utf-8")
+        try:
+            log_file.write(
+                f"\n{'='*70}\n[{datetime.now().isoformat()}] "
+                f"Calibration lancée depuis GAMA — {iterations} cycle(s)\n{'='*70}\n")
+            log_file.flush()
+            _calibration_proc = subprocess.Popen(
+                cmd, cwd=str(CALIBRATION_DIR),
+                stdout=log_file, stderr=subprocess.STDOUT,
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"[ALARME] /calibrate : échec du lancement du sous-processus : {exc}")
+            return {"success": False, "message_type": "calibration_error", "error": str(exc)}
+        finally:
+            # Le sous-processus reçoit sa propre copie du descriptor au fork ;
+            # le parent doit fermer la sienne pour ne pas la garder ouverte
+            # pendant toute la durée de vie (potentiellement longue) du run.
+            log_file.close()
+
+    logger.info(f"[/calibrate] Calibration démarrée (pid={_calibration_proc.pid}, "
+                f"cycles={iterations}) — journal : {log_path}")
+    return {
+        "success": True,
+        "message_type": "calibration_started",
+        "data": {"pid": _calibration_proc.pid, "iterations": iterations,
+                 "log": str(log_path)},
+    }
 
 
 if __name__ == "__main__":

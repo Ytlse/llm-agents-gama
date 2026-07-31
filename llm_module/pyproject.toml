@@ -25,6 +25,11 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-asyncio>=0.24", "fakeredis>=2.23"]
 monitoring = ["flower>=2.0"]
+# core/zone_resolver.py — jointure point-dans-polygone du modèle de choix modal.
+# Hors dépendances de base : le gateway et le worker n'en ont pas besoin, et geopandas
+# alourdirait leur image pour rien. Le conteneur `controller`, lui, l'a déjà via
+# llm-agents/requirements.txt.
+geo = ["geopandas>=1.1,<2"]
 
 # Le package s'appelle llm_module et son code vit à la racine de ce répertoire
 # (les imports `llm_module.*` des consommateurs — docker-compose, GAMA, notebooks —

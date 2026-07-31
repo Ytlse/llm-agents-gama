@@ -1,3 +1,1105 @@
+## [2026-07-31] La voiture aussi reste là où on l'a garée
+
+Le vélo avait cessé de se téléporter la veille ; la voiture, elle, était toujours
+disponible partout et tout le temps. Il suffisait d'en posséder une pour pouvoir
+démarrer depuis n'importe quel point de la ville — y compris un bureau où on était
+arrivé en tram. C'était, sur le mode qui pèse le plus lourd dans les parts modales, le
+même véhicule fantôme que celui corrigé pour le vélo.
+
+**Le véhicule est désormais un lieu**, vélo et voiture traités à l'identique par trois
+règles :
+
+- **On ne conduit que ce qui est là.** Un mode véhiculé n'est proposé que si l'agent
+  possède le véhicule *et* qu'il est garé à son point de départ.
+- **Le véhicule suit celui qui l'utilise.** Il se déplace avec l'agent qui le prend, et
+  reste sur place sinon. Le vélo laissé au bureau n'est plus réputé retrouvé à la maison
+  le soir — c'était le dernier vestige de téléportation de la version précédente.
+- **On ramène son véhicule chez soi.** Sur un trajet de retour au domicile partant d'un
+  lieu où le vélo ou la voiture est garé, les options sont restreintes à ce mode. C'est
+  un filtre sur les itinéraires candidats, pas une décision : **aucun appel LLM
+  supplémentaire**, et si les deux véhicules sont là, le choix reste au LLM.
+
+Un agent qui part travailler à vélo n'a donc plus de voiture au bureau à midi, et il
+rentre à vélo le soir. Les deux véhicules ne peuvent plus être « quelque part » en même
+temps.
+
+**Avant :** posséder une voiture suffisait à pouvoir la prendre depuis n'importe où ;
+un vélo laissé au travail réapparaissait au domicile en fin de journée.
+**Après :** chaque véhicule a une position, qui contraint les modes offerts au départ et
+impose le retour en fin de boucle.
+
+**Ce qui reste approximé, et mesuré comme tel.** Une étape intermédiaire contourne le
+verrou de retour : domicile → travail en voiture, travail → sport à pied, sport →
+domicile en bus laisse la voiture au travail. Ces orphelins sont ramenés au domicile — un
+agent privé de sa voiture pour tout le reste de la simulation serait un biais bien pire —
+mais comptés, avec une alarme `[ALARME]` si le rattrapage dépasse 5 % des retours au
+domicile. Non traité non plus : la voiture est un bien du ménage mais sa position est
+suivie par personne, et le park-and-ride reste hors de portée du modèle par trajet.
+
+`vehicle_chain_enabled=false` rétablit l'ancien comportement, pour mesurer l'effet sur
+les parts modales à population égale.
+
+---
+
+## [2026-07-31] La calibration tient hors de son jeu d'entraînement (action A4)
+
+Le volet 2 n'avait jusqu'ici qu'un seul type de chiffre : celui mesuré sur le jeu qui a
+servi à **optimiser** les prompts. Un composite d'entraînement ne distingue pas un prompt
+qui a compris la population d'un prompt qui a mémorisé ses 298 personas — et le store ne
+portait strictement aucune évaluation sur le jeu de test. Vérifié avant de payer quoi que
+ce soit : zéro éval « test » dans les deux stores, et les trois évals « val » qui
+existaient dataient d'un autre modèle, donc inutilisables.
+
+La lignée épinglée est désormais mesurée **entière** — six nœuds sur six, pas seulement
+ses extrémités — sur les 106 décisions du jeu de test, sous le régime de production.
+
+**Ce que « généralisation » veut dire ici, et la page le dit en toutes lettres.** La
+question n'est pas rhétorique : un découpage par personne soutient « des individus jamais
+vus », un découpage par déplacement seulement « d'autres trajets des mêmes individus ».
+La réponse est établie sur les fichiers eux-mêmes, pas sur la foi de la règle déclarée :
+le découpage est **par personne**, et les 66 personnes du test n'apparaissent dans aucun
+des 298 personas du train. C'est bien l'affirmation forte. Au passage, le jeu de
+screening est au contraire entièrement inclus dans le train — ce qui lui interdit ce
+rôle, et explique qu'on ne l'ait pas utilisé.
+
+**Le résultat, et il aurait été lu à l'envers sans son témoin.** Lu brut, l'écart
+ressemble à du surapprentissage : la graine passe de 24,35 à 31,60, la feuille de 22,24 à
+24,06. Il n'en est rien. Les divergences par strate sont biaisées vers le haut à petits
+effectifs, et le train porte 298 personnes contre 66 pour le test. Le témoin le chiffre
+sans un seul appel LLM, en rejouant le score des décisions **déjà stockées** du train sur
+200 sous-ensembles de 66 personnes : 29,84 pour la graine, 26,90 pour la feuille. La
+seule réduction d'effectif coûte donc +5,49 et +4,66 points — du même ordre que les +5,02
+mesurés la veille sur la simulation. À effectif neutralisé, la feuille est **meilleure**
+sur le test que sur le train (−2,84), et les six nœuds tombent dans la bande du témoin :
+**aucun surapprentissage détectable**.
+
+**Le gain survit ; son amplification n'est pas démontrée, et la page ne la revendique
+pas.** Entre la graine et la feuille, la calibration gagne 2,12 points sur le train et
+7,54 sur le test. Tentant d'en conclure que le prompt calibré généralise mieux qu'il
+n'apprend — sauf qu'un second témoin, apparié celui-là (les deux prompts scorés sur les
+*mêmes* personnes tirées, donc bien moins bruyant), place le gain d'entraînement à +2,94
+sur une bande allant de −1,84 à +8,24. Les 7,54 y tombent. Ce qui est acquis, c'est que
+le gain **n'était pas un artefact du jeu qui a servi à l'obtenir** ; le reste demanderait
+plus de 66 personnes.
+
+**Une confusion résiduelle est publiée plutôt que tue.** Le moteur retire délibérément la
+section « Historique » — la mémoire du run source, non reproductible — des jeux de
+retenue, alors qu'elle couvre 86 % des records du train. Le prompt de test n'est donc pas
+seulement adressé à d'autres personnes : il est aussi plus court d'une section. Les deux
+effets sont mêlés, rien dans les données ne les sépare, et la page l'écrit.
+
+Ces chiffres ne rejoignent ni la trajectoire, ni la lignée, ni la matrice comparative : le
+jeu de retenue est un troisième substrat, et coller une colonne de 66 personnes à côté de
+colonnes de 881 rejouerait exactement la confusion corrigée la veille. La matrice y
+renvoie, elle ne l'absorbe pas.
+
+**Avant :** le volet 2 ne savait dire que ce que valaient ses prompts sur le jeu qui les
+avait produits — aucune manière de distinguer un progrès réel d'une mémorisation.
+**Après :** un score hors échantillon, sur des individus jamais vus, accompagné des deux
+témoins qui empêchent de le lire de travers et de l'aveu de ce qu'il mêle encore.
+
+Coût : 98 appels LLM pour les six nœuds (~34 pour les seules extrémités). Reprise par
+nœud, gratuite depuis le cache.
+
+---
+
+## [2026-07-31] Le gain de la calibration se transporte, son niveau non (action A3)
+
+La matrice « Synthèse comparative » alignait cinq colonnes comme si elles se comparaient. Elles
+ne se comparaient pas : la simulation était scorée sur le run épinglé, la calibration sur ses
+**personas gelés** — un sous-ensemble d'un run de deux semaines plus tôt. Deux mesures faites
+sur deux populations, présentées côte à côte, avec la même échelle de couleurs.
+
+La page l'avoue désormais colonne par colonne, au lieu de le noyer dans un paragraphe de bas de
+section : sous la matrice, chaque colonne déclare son substrat et, pour la calibration, le nœud
+et le régime de mesure exacts. Le volet 2 gagne aussi un tableau qui met les deux chiffres d'un
+même prompt face à face — son composite sur le jeu commun et son composite sur les personas
+gelés — parce que ce sont deux nombres différents et que le lecteur doit savoir lequel il lit.
+Le bloc « avant / après » historique porte maintenant son substrat dans son titre.
+
+La mesure est faite : `make common-set-eval` a rejoué la graine et la feuille de la lignée
+épinglée sur un échantillon **du run**, sous le régime épinglé, avec une couverture de 100 %
+(80 personnes sur 80). L'échantillon est gelé et reproductible — tirage par personne, jamais par
+trajet, sur un hachage stable de l'identifiant : 509 décisions, 80 personnes. C'est le plus petit
+tirage dont toutes les strates de l'enquête atteignent l'effectif minimal ; en dessous, des
+tranches d'âge se vident et le score cesse d'être comparable à celui de la simulation. Le
+hachage est volontairement dans un espace distinct de celui du découpage train/val/test, sans
+quoi l'échantillon n'aurait contenu que des personas ayant servi à optimiser la lignée.
+
+La commande ne redécoupe pas les lots elle-même : elle passe par l'évaluateur du moteur, donc par
+les défenses posées la veille contre les réponses amputées de personas. Bien lui en a pris —
+**29 lots sur 128 sont revenus incomplets**, jusqu'à 2 personas rendus sur 8, tous rattrapés par
+re-tir en moitiés. Une boucle de lotissement réécrite pour l'occasion aurait scoré sur une
+sous-population sans que rien ne le signale.
+
+**Le résultat, et il n'est pas flatteur.** Le gain de la calibration **se transporte** : entre la
+graine et la feuille, 2,13 points de composite sur le jeu commun contre 2,12 sur les personas
+gelés. Le progrès mesuré sur le jeu d'entraînement était donc réel, et pas un artefact de son
+propre instrument. Mais le **niveau**, lui, ne se transporte pas du tout : les deux prompts
+passent de 24,35 et 22,24 sur les personas gelés à **38,53 et 36,41** sur le jeu commun. Le même
+texte, mesuré par le même modèle sous la même politique, est ~14 points moins fidèle dès qu'on
+change de population.
+
+**Une partie de cet écart n'a rien à voir avec les prompts, et la page le chiffre au lieu de le
+supposer.** Les divergences par strate sont biaisées vers le haut quand les effectifs sont
+petits : mesurer sur 81 personnes n'est pas mesurer sur 881. Une nouvelle colonne, « Sim.
+(éch. V2) », restreint la simulation **aux mêmes 81 personnes** — sans un seul appel LLM — et
+montre que la simulation passe alors de 24,37 à 29,39. Soit **+5,02 points pour la seule
+réduction d'effectif**, à décisions inchangées. C'est à cette colonne que la calibration doit
+être comparée, et non à celle du run entier. Elle reste au-dessus : sur le même substrat et à
+effectif égal, le volet 2 est moins fidèle à l'enquête que la simulation.
+
+**Ce que le quota a appris.** Le seau journalier du free tier Google ne se réinitialise pas à
+minuit UTC mais à **minuit Pacific**. Plus retors : une sonde de quatre appels a réussi sur une
+clé pourtant épuisée avant que le compteur ne rattrape — l'application du quota journalier n'est
+pas exacte à la frontière, et aucun petit test ne dit de façon fiable si un seau est ouvert. La
+mesure a finalement coûté 175 appels sur la seconde clé.
+
+**Avant :** cinq colonnes d'apparence homogène, dont deux portaient en réalité sur une autre
+population, et un avertissement générique en fin de section.
+**Après :** sept colonnes, chacune annonçant sa population, son effectif et son régime de
+mesure — dont un témoin de taille qui rend l'écart du volet 2 lisible au lieu de le laisser
+attribuer au prompt.
+
+---
+
+## [2026-07-31] Le volet « modèle statistique » entre enfin dans la comparaison (action A8)
+
+La matrice de la page de synthèse portait une colonne « Modèle » entièrement vide. Le modèle
+existait pourtant, entraîné et sérialisé la veille — mais il n'avait jamais rencontré une seule
+décision du run qui sert de jeu commun. Il la remplit désormais, et il faut lire ce chiffre en
+sachant ce qu'il est.
+
+**Ce qui a été mesuré.** La politique statistique est appliquée aux 5 945 décisions du run
+épinglé — exactement le périmètre du volet 1, construit par le même code et les mêmes
+exclusions, sinon les colonnes ne se compareraient pas davantage qu'avant. Pour chaque
+déplacement, les 21 variables du contrat sont reconstruites depuis le persona, la chaîne
+d'activités et la géographie, puis le modèle prédit une distribution sur quatre modes.
+
+**La correction qui change tout : l'offre réellement proposée.** Le modèle prédit sur quatre
+modes sans savoir lesquels étaient disponibles ; la simulation, elle, ne choisit que parmi les
+itinéraires calculés pour ce trajet-là. Sans correction, on reprocherait au LLM de n'avoir pas
+choisi un mode qu'on ne lui a jamais offert. Chaque prédiction est donc restreinte aux modes
+proposés, puis ramenée à 100 %. L'effet n'est pas décoratif : 3,4 % de la masse prédite tombait
+en moyenne sur des modes indisponibles, la correction déplace le mode le plus probable sur 142
+décisions, et rapproche les parts modales de l'enquête de 17,9 à 14,1 points d'écart cumulé.
+
+**Deux lectures, et il faut les deux.** Comme pour la simulation, la page rapporte la masse de
+probabilité et le mode effectivement retenu. L'écart entre les deux est structurel : le modèle
+calibre bien le vélo en masse mais ne l'élit presque jamais. N'afficher que la première le
+flatterait, n'afficher que la seconde le condamnerait.
+
+**Le modèle écrase les deux autres volets, et c'est attendu.** Il est entraîné sur l'enquête qui
+sert ici de cible : sa victoire ne dit rien de la qualité relative du LLM, elle borne ce qu'un
+modèle purement statistique atteint sur ce jeu. L'avertissement est désormais posé juste
+au-dessus de la matrice, là où le lecteur voit le chiffre, et non trois sections plus loin.
+
+**Deux surprises, rapportées telles quelles.** Aucune décision n'a dû être écartée : on
+attendait environ 5 % de trajets hors du périmètre d'enquête, la population de ce run tombe
+intégralement dedans — les 5 % avaient été mesurés sur un autre tirage de population. Et 15,5 %
+des décisions n'ont pas de catégorie socioprofessionnelle : la population simulée utilise un
+libellé « Retired » que le recodage de l'enquête ne produit jamais. Il est laissé manquant
+plutôt que rapproché à l'aveugle d'une catégorie voisine — l'occupation principale, elle, porte
+bien « Retraité ».
+
+**Avant :** colonne « Modèle » entièrement « n. d. » ; rien dans la page ne situait le modèle
+face à la simulation ou à la calibration.
+**Après :** deux colonnes remplies sur les sept dimensions, mesurées sur le même run et avec la
+même loss que les autres, assorties du cadrage qui empêche de les surinterpréter.
+
+---
+
+## [2026-07-31] Le modèle oubliait des personas, et personne ne le voyait (action A10)
+
+Depuis la bascule vers les comptages pondérés, ré-évaluer une lignée de prompts « n'avançait
+plus ». Aucune erreur, aucun message : la commande tournait et rien ne progressait. La cause
+supposée — une sortie cinq fois plus longue qui dépasserait le délai d'attente de 240 s de
+l'appel Gemini — était fausse. Les mesures l'ont écartée en trois appels.
+
+Ce que l'instrumentation a montré, sur des lots réels : **3,6 à 8,8 secondes** par appel pour
+une limite de 240 s, **`finishReason=STOP`** partout, **2 742 tokens** de complétion au pire
+pour un plafond de 4 096. Ni lenteur, ni troncature. Le vrai défaut est ailleurs et bien plus
+gênant : à 15 personas par requête, **le modèle rend un JSON valide, conforme, complet de son
+point de vue — mais qui ne contient que 5 à 8 des 15 personas demandés.** Quatre lots sur
+douze étaient ainsi amputés, soit 18 % de la population perdue en silence.
+
+Aucune défense existante ne pouvait le voir : ce n'est ni une erreur réseau, ni une réponse
+tronquée, ni un JSON hors-schéma. Le lot passait pour un succès, le score était calculé sur
+la population restante, et **mis en cache comme s'il était complet**. Une mesure fausse, donc,
+plutôt qu'une mesure absente — le pire des deux.
+
+Trois défenses ont été posées :
+
+- **on compare désormais ce qui a été demandé à ce qui a été reçu**, persona par persona, à
+  chaque requête ;
+- **un lot incomplet est re-tiré par moitiés.** Redemander la même chose à un modèle réglé en
+  décodage déterministe redonne la même réponse : il faut réduire la demande, pas insister. Un
+  lot revenu à 5 personas sur 15 est ainsi complété à 15 sur 15 en trois appels ;
+- **une évaluation dont la couverture reste insuffisante est refusée**, pas stockée. La base ne
+  garde pas le nombre de personas réellement vus : un score calculé sur 60 % du jeu y serait
+  indiscernable d'un score complet et fausserait toute la trajectoire. Un nœud déclaré
+  « manquant » dit la vérité ; un score partiel, non.
+
+L'échec silencieux proprement dit est refermé au passage : la boucle de nouvelles tentatives
+rendait une liste vide quand elle s'épuisait, que l'appelant prenait pour un lot légitimement
+sans décision. Elle lève maintenant, avec une alarme. Et les trois grandeurs qui ont permis le
+diagnostic — tokens produits, raison d'arrêt, latence — sont tracées à chaque appel Gemini et
+rappelées dans le texte de chaque erreur, pour que la prochaine panne de ce genre se lise au
+lieu de se deviner. Une série de réponses tronquées lève désormais une alarme explicite, une
+seule par épisode.
+
+**Avant :** la lignée de prompts n'était lisible que sous `mistral-small-latest` et l'ancienne
+politique « mode élu » — ni le modèle de production, ni la politique courante. La page de
+synthèse le signalait par un avertissement, et la campagne de calibration ne pouvait pas
+reprendre.
+**Après :** les six nœuds de la lignée sont mesurés sous le régime épinglé —
+`gemini-3.1-flash-lite-preview` et la politique « masse de probabilité », c'est-à-dire le
+modèle et la politique de la production. L'avertissement de repli a disparu de la page, qui
+affiche désormais la lignée sous **deux** instruments en regard.
+
+Et cette double lecture dit quelque chose : **les deux régimes voient la lignée s'améliorer.**
+Sous l'ancien (mistral, mode élu), la calibration gagnait 7,60 points, soit 24,9 % du niveau
+de la graine ; sous le nouveau, 2,12 points, soit 8,7 %. Près de trois fois moins en part,
+mais **dans le même sens**. Le progrès n'était donc pas un artefact de l'instrument qui avait
+servi à l'optimiser — ce qu'on ne pouvait pas exclure jusqu'ici. Son *ampleur*, en revanche,
+ne se transporte pas : le chiffre à retenir est celui du régime de production.
+
+---
+
+## [2026-07-31] La référence statistique existe enfin (action A6)
+
+La page de synthèse compare trois façons de décider d'un mode de transport. La troisième —
+un modèle statistique entraîné sur l'enquête EMC² 2023 — n'était jusqu'ici qu'une
+intention : le jeu de données et le contrat de variables existaient, le modèle non. Il
+existe maintenant, il se rejoue en une commande (`make policy`), et il est reproductible à
+l'octet près.
+
+Ce que ce volet apporte, ce n'est pas un concurrent loyal : entraîné sur l'enquête qui sert
+aussi de cible, il est proche de l'oracle sur les parts modales, et c'est exactement son
+intérêt — il **borne** ce qu'un modèle purement statistique atteint, et situe les deux
+autres volets par rapport à cette borne. Sur son propre jeu de test (étanche au ménage,
+pondéré par les coefficients de redressement de l'enquête) : log-loss 0,5363, 79,5 %
+d'accuracy, et 2,1 points d'écart cumulé sur les parts modales — vélo, voiture, transports
+collectifs et marche tombent tous à moins de 1,1 point de l'observé.
+
+Trois pièges pouvaient produire un modèle spectaculaire et faux, tous refermés par une
+vérification explicite plutôt que par une intention :
+
+- **la distance déclarée trahit le mode.** Pour la marche, elle est une fonction affine de
+  la durée : l'utiliser, c'est donner la réponse. Les trois variables concernées sont
+  marquées « diagnostic » dans le contrat, et l'entraînement refuse de démarrer si l'une
+  d'elles entre dans le modèle ;
+- **le découpage train/test doit rester étanche au ménage** — les déplacements d'un même
+  foyer partagent son équipement automobile. Il est lu tel quel dans le jeu de données,
+  jamais retiré au hasard, et l'arrêt de l'entraînement se règle sur une part détourée
+  dans l'apprentissage, jamais sur le test ;
+- **les parts modales n'ont de sens que redressées.** La pondération de l'enquête pèse
+  l'entraînement et toutes les métriques rapportées.
+
+Le modèle est livré comme un artefact autoportant : il embarque l'ordre de ses variables,
+l'encodage de chaque modalité, l'ordre de ses classes, la version du contrat et ses propres
+métriques. Qui veut l'utiliser n'a rien à relire des micro-données d'enquête, ni rien à
+deviner.
+
+**Avant :** le volet 3 de la page de synthèse affichait « aucun modèle entraîné », et ses
+sept dimensions étaient vides.
+**Après :** la page montre le modèle, ses métriques de test et ses parts modales prédites
+face aux observées. Les sept dimensions **restent vides** : le modèle n'a encore été
+appliqué à aucune décision du jeu commun d'évaluation, et c'est l'action A8 qui produira
+ces prédictions. La comparaison des trois volets attend donc toujours.
+
+---
+
+## [2026-07-30] Un seul centre-ville pour toute la chaîne (action A9)
+
+Le projet portait deux centres de Toulouse distants de 820 m : celui que l'enquête EMC²
+publie dans le contrat de variables (centroïde des zones du secteur Capitole) et un second
+codé en dur dans le journal des déplacements. C'est ce dernier qui décidait si un agent
+habitait « Toulouse » ou en « 1re couronne ». Résultat : les agents de la bande
+intermédiaire changeaient de couronne selon qu'on les regardait par le journal ou par les
+variables du modèle statistique, et les deux lectures du lieu de résidence ne se
+comparaient plus.
+
+Le centre n'est plus déclaré nulle part au runtime : il est **lu** dans
+`feature_spec.json`, par le même point de lecture qui sert déjà au résolveur de zone fine
+à refuser une couche dont le centre diverge du modèle. Une définition, un seul endroit qui
+la lit — la divergence ne peut plus revenir par recopie.
+
+Le fichier de spécification vient des micro-données PROGEDO, d'accès restreint : sur un
+poste qui ne les a pas, il est simplement absent. Ce cas est prévu et tracé dans les logs,
+et le repli est la valeur publiée du spec recopiée en constante, jamais l'ancien centre
+abandonné. Un test échoue si le repli et le spec se mettent à diverger.
+
+**Avant :** les couronnes de résidence du journal étaient mesurées depuis 43.6047 / 1.4442,
+les distances au centre du modèle depuis 43.597347 / 1.444997.
+**Après :** les deux depuis 43.597347 / 1.444997, la valeur calculée sur les données de
+l'enquête.
+
+⚠ **Les runs déjà archivés ne bougent pas.** La couronne est calculée au moment où le
+déplacement est journalisé, puis écrite dans `moves.csv` ; la page de synthèse relit cette
+colonne, elle ne la recalcule pas. Le volet 1 affiche donc exactement les mêmes chiffres
+qu'avant sur le run épinglé. Seuls les runs postérieurs à ce changement porteront les
+couronnes du centre unifié.
+
+---
+
+## [2026-07-30] Le point sait dans quelle zone il tombe (action A7)
+
+Le modèle statistique de choix modal s'appuie sur quatre variables géographiques qui
+pèsent lourd dans ses décisions — distance origine-destination, densités, distances au
+centre. Toutes supposent de savoir dans **quelle zone fine** de l'enquête EMC² tombe un
+point. L'enquête le donne ; la simulation, elle, n'a que des coordonnées. Cette
+information manquait : le volet « modèle » de la page de synthèse ne pouvait pas être
+calculé, faute de pouvoir reconstituer ses propres variables d'entrée.
+
+Le rattachement existe maintenant, et il rejoue **la formule d'entraînement**, pas une
+approximation raisonnable. Deux pièges étaient sur le chemin :
+
+- **La distance.** En simulation on connaît les coordonnées exactes, donc la tentation est
+  de mesurer la distance à vol d'oiseau. Ce serait faux : à l'entraînement la distance est
+  mesurée entre **centroïdes de zones**, avec une valeur imputée pour les trajets qui
+  restent dans une seule zone. Mesuré sur la population : 1,29 km contre 0,65 km sur ces
+  trajets-là, soit un facteur 2 — et ce sont exactement les trajets courts où marche, vélo
+  et voiture se disputent la décision.
+- **Le centre-ville.** Le projet en portait deux définitions distantes de 820 m. Le
+  résolveur n'en redéclare aucune : il lit la distance au centre déjà calculée avec le
+  centre publié, et refuse de démarrer si la couche et le modèle n'en décrivent pas le
+  même (l'action A9 reste ouverte côté `move_logger.py`).
+
+Hors du périmètre d'enquête, rien n'est deviné. Les points concernés sont à 22,8 km en
+médiane de la zone la plus proche : ce sont des communes franchement extérieures, pas des
+cas limites. Le résolveur renvoie « pas de zone » et laisse l'appelant basculer sur sa
+politique de repli. Une alarme se déclenche si le taux hors couche s'envole au-delà de
+15 %, signe que la population ou la couche a changé de périmètre.
+
+**Avant :** les six variables géographiques du modèle n'étaient calculables qu'à
+l'entraînement ; en simulation, aucune.
+**Après :** calculables sur **95,1 %** des paires origine-destination de la population de
+référence (95,5 % des localisations), à l'identique de l'entraînement.
+
+⚠ **Ce que cela ne fait pas.** Rien ne prédit encore : le modèle lui-même reste à
+entraîner (A6) et à appliquer au jeu commun (A8), et rien n'est branché sur la simulation.
+A7 lève le préalable, elle ne produit aucun chiffre de choix modal.
+
+Une nuance à garder en tête pour la suite : 81 des 785 zones n'ont aucun ménage enquêté,
+donc pas de densité. Elles concernent 5,5 % des paires exploitables. La valeur est laissée
+**manquante**, jamais remplacée par zéro — « aucun ménage enquêté » et « zone déserte » ne
+sont pas la même information, et le modèle sait traiter une valeur absente.
+
+---
+
+## [2026-07-30] Le vélo ne se téléporte plus : cohérence de chaîne
+
+Un agent parti travailler en bus retrouvait son vélo pour repartir du bureau. Le vélo
+n'était filtré que sur la **possession** (`personal_bike`), jamais sur sa présence
+effective là où l'agent se trouve. Résultat : un vélo fantôme, disponible à chaque étape
+de la journée quel que soit le mode des trajets précédents.
+
+Le vélo est désormais proposé si l'agent en possède un **et** l'a avec lui : il le suit
+quand le trajet est fait à vélo, il est retrouvé au retour au domicile, il reste au point
+de départ sinon. Un agent qui n'a pas bougé (même localisation) garde son vélo.
+
+**Avant :** vélo proposé sur 3191 des 5956 trajets d'un run de référence, dont 352 avec un
+vélo laissé ailleurs → 18,2 % de part modale vélo (cible enquête EMC² 2023 : 4 %).
+**Après :** ces 352 trajets ne peuvent plus être faits à vélo, soit **−5,9 points** de part
+modale (18,2 % → 12,3 % en borne haute). Une partie du report devrait aller à la marche,
+sous-représentée à 7,7 % contre 26,8 % attendus — l'écart se corrige donc des deux côtés.
+
+Ce qui n'est **pas** traité, et reste à faire pour combler l'écart restant : le vélo est
+encore proposé sans plancher d'âge (45 % des moins de 11 ans « possèdent » un vélo, 18,2 %
+de leurs trajets se font à vélo) et jusqu'à 30 km à vol d'oiseau. Version simple assumée
+côté chaîne : un vélo laissé au travail est réputé retrouvé au domicile le soir.
+
+---
+
+## [2026-07-30] Une trajectoire de calibration lisible bout à bout (action A5, entamée)
+
+⚠ **A5 n'est pas terminée.** Ce qui suit outille la lecture d'une lignée sous un régime
+unique et l'affiche ; le **rejeu** que l'action demande n'a produit **aucune évaluation**
+(voir « ce qui reste bloqué » plus bas). La page marque donc l'action « partiellement
+faite », garde son coût et continue de la compter en attente — un nouvel état, introduit
+justement parce que livrer le code d'une mesure n'est pas produire la mesure.
+
+La page de synthèse traçait la calibration en facettant par **modèle d'évaluation**, et
+prévenait qu'on ne devait pas lire ces courbes bout à bout. C'était insuffisant sur deux
+points, et la page le dit maintenant autrement.
+
+**Un modèle ne suffit pas à définir un régime de mesure.** Le moteur a basculé du « mode
+élu par persona » à la masse de probabilité : sous cette politique, les décisions
+elles-mêmes changent, donc aucun recalcul de loss ne réconcilie deux évals qui ne la
+partagent pas. La page regroupe désormais par **modèle · politique** — deux clés d'API sur
+le même modèle restant, elles, une seule courbe. La plage de composite d'un store porte sur
+son seul régime de référence, au lieu de mélanger les instruments dans un même intervalle.
+
+**Une courbe chronologique ne dit pas qu'une calibration a progressé.** Elle mêle des
+branches et des nœuds sans parenté. La page affiche donc en plus une **lignée** — la chaîne
+des mutations acceptées, de la graine à la feuille, épinglée dans `sources.yaml` comme l'est
+le run du jeu commun. Sur les 6 nœuds de la lignée retenue, le composite descend de 30,52 à
+22,92, soit **−24,9 % d'écart à l'enquête EMC²**, sans changement d'instrument en cours de
+route. C'est la seule trajectoire de la page qui se lise comme l'effet du prompt.
+
+Ces 6 nœuds étaient **déjà** mesurés sous un régime unique, dans le store, depuis juillet :
+il n'a fallu aucun appel LLM pour le voir — seulement cesser de confondre « modèle » et
+« régime », et savoir reconstruire la chaîne. Le régime en question est cependant
+`mistral-small-latest` et l'ancienne politique « mode élu » : ni le modèle épinglé, ni la
+politique courante. C'est là que l'action reste ouverte.
+
+Reconstruire cette chaîne demandait un détour : les prompts étant adressés par contenu, un
+texte déjà produit sur une autre branche est réutilisé avec le parent de sa *première*
+création — souvent aucun. Chaîner par le seul champ `parent` s'arrêtait donc au deuxième
+nœud et **perdait la graine**, c'est-à-dire la référence à laquelle toute la trajectoire se
+compare. La lignée est maintenant reconstruite par les arêtes de mutation.
+
+Nouvelle commande `calibrate reeval` pour rejouer une lignée sous un régime unique : elle
+annonce son coût en appels avant de le payer (`--dry-run`), ne paie que les nœuds manquants,
+et reprend où elle s'est arrêtée après un épuisement de quota.
+
+**Ce qui reste bloqué (action A10).** Porter cette lignée sur le modèle d'évaluation
+*épinglé* n'a pas abouti : sous la politique pondérée, aucune éval ne termine. Les lots
+dépassent le timeout de 240 s de l'adaptateur Google et sont retentés cinq fois sans qu'une
+seule erreur ne remonte au journal. Réduire les lots de 15 à 8 personas n'a pas suffi. Le
+blocage ne concerne pas que cette mesure : **aucune campagne n'a encore tourné sous cette
+politique**, donc la prochaine reprise rencontrera le même mur.
+
+**Avant :** les courbes de calibration étaient facettées par modèle, avec l'avertissement de
+ne pas les lire bout à bout — et aucune trajectoire ne pouvait l'être
+**Après :** une lignée de 6 prompts se lit d'un bout à l'autre sous un régime unique, et le
+mélange des régimes est nommé pour ce qu'il est — mais sous un modèle qui n'est pas celui de
+la production, et l'action reste comptée en attente
+
+---
+
+## [2026-07-30] Le jeu commun de la page de synthèse est épinglé (action A1)
+
+La page de synthèse lisait son run de référence à travers `experiments/current`, un symlink
+qui bouge à chaque simulation. Deux régénérations pouvaient donc décrire deux substrats
+différents — mêmes titres, mêmes tuiles, chiffres incomparables — sans que rien ne l'indique.
+Le manifeste épingle désormais un chemin d'archive explicite
+(`experiments/archive/2026-07-29_18_34`). La tuile « Run » affiche l'état de l'épinglage et
+avertit si le chemin configuré se résout ailleurs.
+
+Épingler ne change aucun chiffre : la comparaison des deux `data.json` ne montre que la
+nouvelle information d'épinglage et l'horodatage. C'est bien le but — le run décrit était le
+bon, il n'était simplement pas garanti de le rester.
+
+Évaluer un autre run reste immédiat, sans toucher au manifeste :
+`make synthesis RUN=experiments/archive/<run>`.
+
+La liste d'actions en bas de page conserve maintenant ce qui a été fait : A1 y apparaît barrée
+et marquée « faite », avec ce que sa réalisation a produit, et le titre compte les huit actions
+restantes. Les identifiants ne sont jamais recyclés — les avertissements de la page et les
+tickets y renvoient par numéro. La version précédente de la page est archivée sous
+`docs/synthesis/archive/2026-07-30_1037/`.
+
+**Avant :** la page suivait le dernier run en date ; régénérer après une simulation changeait
+silencieusement le jeu d'évaluation
+**Après :** le run est nommé dans le manifeste et vérifiable par empreinte ; changer de jeu
+commun est un acte explicite
+
+---
+
+## [2026-07-30] Page de synthèse : les trois approches face à l'enquête EMC²
+
+Une page HTML autonome (`make synthesis`) rassemble pour la première fois au même endroit
+la fidélité des parts modales simulées à l'enquête CEREMA — globalement **et** dans chaque
+sous-catégorie : âge, genre, occupation, motif, distance, lieu de résidence. Elle compare
+trois approches : la simulation actuelle (le LLM donne des probabilités, la simulation tire
+au sort), la calibration de prompt, et le modèle statistique PROGEDO.
+
+Le point qui rend la comparaison possible : les trois volets sont ramenés à une même trame
+de décision, puis scorés par **la loss du moteur de calibration elle-même**, importée et non
+réécrite. Seule la pénalité de longueur de prompt est neutralisée — elle n'a pas de sens pour
+un volet sans prompt. Le substrat commun est un run de simulation, seul terrain qui porte à
+la fois les personas complets, les jeux de choix OTP et les coordonnées dont le modèle
+statistique a besoin.
+
+Deux constats sortent immédiatement des chiffres. La simulation **sous-estime massivement la
+marche** (7,5 % contre 26,8 % attendus) et surestime le vélo (18,8 % contre 4,1 %) : 47 points
+d'écart L1 cumulé, le plus gros gisement d'amélioration identifié à ce jour. Et le recalcul de
+l'historique de calibration montre que l'écart spectaculaire entre les scores archivés
+(~176 contre ~42) n'était **pas** un progrès : c'étaient deux loss différentes. Ramenés à la
+même mesure, les deux régimes se recouvrent.
+
+La page ne masque pas ce qui manque : chaque donnée absente devient une carte « Données
+manquantes » portant le chemin attendu et l'action qui la produirait. Le volet PROGEDO est
+aujourd'hui entièrement dans ce cas, et neuf actions chiffrées sont listées en bas de page.
+
+**Avant :** la fidélité à l'enquête se reconstituait à la main, notebook par notebook, sans
+score commun entre la simulation et la calibration
+**Après :** `make synthesis` produit la page complète et son JSON en quelques secondes, avec
+les sources tracées (chemin, date, empreinte)
+
+---
+
+## [2026-07-30] La calibration mesure à nouveau le prompt de production
+
+La calibration évalue les prompts sur des jeux gelés, extraits de vrais runs — donc rendus
+avec les étapes d'itinéraire en puces de même niveau que les options (cf. l'entrée
+suivante). Les 803 personas des jeux `v1` sont **tous** concernés : la mesure exposait donc
+le modèle juge à la même renumérotation, et une part des personas était comptée avec une
+répartition uniforme qu'aucun prompt n'avait produite. Autrement dit : du bruit qui
+pénalisait indifféremment toutes les variantes, et pouvait faire accepter une mutation
+neutre.
+
+Le traitement des options de la production est désormais appliqué à la mesure : étapes
+ré-indentées en sous-puces au moment de construire le lot (le jeu sur disque n'est pas
+touché, rien à re-geler) et probabilités hors bornes réalignées sur leur mode. Le drapeau
+`prod_option_handling` (défaut : activé) pilote les deux et entre dans la clé de cache
+d'éval : les deux régimes ne se mélangent jamais dans le store, et `false` restaure
+l'ancien comportement pour reprendre une campagne sur ses évals déjà payées.
+
+**Avant :** une part des personas notée « au hasard » par construction, mêmes prompts,
+scores bruités
+**Après :** la mesure porte sur le prompt réellement servi en simulation
+
+Bonne nouvelle de calendrier : aucune éval n'avait encore été payée sous le régime de
+comptage pondéré actuel — le changement de clé ne coûte donc pas un seul appel LLM.
+
+---
+
+## [2026-07-30] Les étapes d'un itinéraire ne sont plus lues comme des options
+
+Dans le prompt d'itinéraire, chaque option était suivie du détail de ses étapes (« Marche
+jusqu'à… », « Bus '401' vers… ») en puces de **même niveau** que la ligne d'option. Plusieurs
+modèles (mistral, llama 3.1, gemma) comptaient donc ces étapes comme des options
+supplémentaires et renumérotaient tout le bloc : 36 « options » là où 6 étaient proposées.
+Leurs probabilités partaient sur des index inexistants, silencieusement écartés — et quand
+tout le vecteur y passait, la décision du modèle était remplacée par un tirage **uniforme**
+entre les 6 itinéraires. Une voiture choisie à 100 % devenait « un mode au hasard ».
+
+Les étapes sont désormais des sous-puces indentées « · », l'en-tête annonce le nombre
+d'options et la plage d'index, et la consigne précise que seules les lignes `- [n]` sont des
+options — et que les index repartent de 0 pour chaque persona du lot. En second rideau, une
+entrée dont l'index est hors bornes est replacée sur l'option que **son libellé de mode**
+désigne au lieu d'être jetée ; si plusieurs options partagent ce mode, la masse est répartie
+entre elles (la part modale, qui est la mesure, reste exacte). Ce qui n'est pas rattrapable
+sort maintenant en `make error` sous `[ALARME]` au lieu de se fondre dans les warnings.
+
+**Avant :** 12 agents sur 36 touchés décidaient à l'uniforme ; part modale mesurée à 0,41
+d'écart de la décision réelle du modèle
+**Après :** 1 seul repli uniforme, écart ramené à 0,02 — rejoué sur le run du 2026-07-29
+
+Effet secondaire utile : moins de bruit dans les logs. Les entrées hors bornes à probabilité
+nulle — l'essentiel des 299 warnings du run de 5 h 40 du 2026-07-29 — passent en `DEBUG` ;
+ne restent visibles que les pertes de masse réelles.
+
+---
+
+## [2026-07-29] `make run` retrouve le modèle GAMA après le déplacement du dépôt
+
+Le dépôt a été déplacé sous `~/Documents/Projects/`, mais deux endroits pointaient encore
+sur l'ancien emplacement : le `Makefile` et le workspace GAMA lui-même. Résultat, `make run`
+lançait GAMA sur un dossier inexistant — l'IHM s'ouvrait sur un projet mort, et le lancement
+finissait en exception SWT.
+
+Le chemin en dur du `Makefile` est remplacé par une racine déduite de l'emplacement du
+`Makefile` : déplacer à nouveau le dépôt ne cassera plus rien. Le lien du projet
+`CityTransport` enregistré dans `~/Gama_Workspace` a été repointé sur le bon dossier.
+
+**Avant :** `make run` ouvrait GAMA sur un workspace inexistant, exception au démarrage
+**Après :** le modèle `City.gaml` se charge, plus aucune erreur au lancement
+
+---
+
+## [2026-07-29] Un jeu d'entraînement sain pour le choix modal — la distance ne trahit plus le mode
+
+Première brique d'une politique de choix modal statistique, destinée à servir de bras de
+comparaison face à l'agent LLM (les agents non-LLM se contentent aujourd'hui de prendre la
+première option proposée). Le jeu d'entraînement est construit depuis l'enquête EMC²
+Toulouse 2023, mais **sans la variable de distance de l'enquête**.
+
+Cette distance était contaminée : pour la marche, elle n'est pas mesurée mais recalculée
+depuis la durée déclarée du trajet (58 m/min, exactement). Un modèle entraîné dessus
+devinait donc le mode en connaissant déjà la réponse. Elle est remplacée par une distance
+entre zones, indépendante du mode, et calculable aussi bien dans l'enquête qu'en cours de
+simulation — là où, au moment du choix, il n'existe pas encore de « distance du trajet »
+mais plusieurs itinéraires candidats ayant chacun la sienne.
+
+**Avant :** prédiction quasi parfaite de la marche (PR-AUC 0.985) — signature d'une fuite
+**Après :** 0.804 sur une distance honnête, et un modèle utilisable en simulation
+
+Le jeu est pondéré par les coefficients de redressement de l'enquête, découpé par ménage
+(et non par déplacement, qui laisserait fuir un individu des deux côtés), et accompagné
+d'un contrat de features versionné : chaque variable retenue doit être calculable à
+l'instant de la décision en simulation, sinon elle est exclue quel que soit son pouvoir
+prédictif. Sur ce jeu, les parts modales prédites s'écartent de 3,3 points cumulés des
+parts observées, sans aucune repondération artificielle des classes.
+
+Domaine de validité déclaré : l'enquête ne couvre que les **jours ouvrés** et le seul
+périmètre où les deux zones du déplacement sont enquêtées.
+
+---
+
+## [2026-07-29] La calibration mesure la valeur des blocs par simple omission
+
+Savoir quel bloc du prompt porte le score se paie en évaluations. La campagne le faisait
+par **valeurs de Shapley** : des centaines de coalitions de blocs par passe, recalculées
+après chaque acceptation — le poste de dépense le plus lourd du quota journalier, pour un
+chiffre dont on n'utilise en pratique que le **classement**. Le réglage
+`attribution_method` revient au calcul simple : retirer chaque bloc à tour de rôle et
+mesurer ce qu'on perd. Shapley reste disponible en option, pour les moments où la
+répartition exacte du gain compte (blocs redondants ou synergiques).
+
+**Avant :** une passe d'attribution ≈ 2 + 25 × 11 = **277 coalitions** à évaluer
+**Après :** 1 + 11 = **12 coalitions** — soit ~23× moins, à budget de quota constant
+
+Aucune évaluation déjà payée n'est perdue : les deux méthodes partagent le même cache
+adressé par contenu, et les coalitions « prompt complet moins un bloc » leur sont
+communes. Repasser à `attribution_method: shapley` réutilise donc tout ce qui a été
+mesuré entre-temps.
+
+---
+
+## [2026-07-29] La calibration ne mesure plus le hasard
+
+Le score d'un prompt se calculait en tirant au sort une décision par persona, puis en
+comptant les résultats. Sur ~800 personas, ce tirage dispersait chaque part modale
+d'environ **±1,7 point** — assez pour noyer une amélioration réelle du prompt, ou pour
+faire accepter par chance une mutation sans effet, qui orientait ensuite toute la
+campagne.
+
+Le modèle annonçant désormais « voiture 60 %, bus 40 % », il n'y a plus rien à tirer :
+on compte directement 0,6 voiture et 0,4 bus. Le score devient **exactement** la
+prédiction du prompt, sans le moindre aléa. Deux évaluations du même prompt donnent le
+même chiffre.
+
+**Avant :** relancer une évaluation changeait le score de ±1,7 point par mode
+**Après :** score identique au chiffre près — un écart de 1 point est un vrai écart
+
+Le tirage au sort reste évidemment en place là où il a un sens : dans la simulation, où
+il fait qu'un habitant ne prend pas sa voiture 180 jours d'affilée. Utile pour simuler
+un individu, nuisible pour mesurer une population.
+
+Deux conséquences pratiques : `eval_samples` (le nombre de tirages destinés à lisser ce
+bruit) **n'a plus d'objet** et n'entre plus dans la clé de cache ; et les effectifs de
+strate comptent désormais des **personnes**, non des lignes — les seuils d'exclusion des
+petites strates sont donc mécaniquement plus exigeants. L'historique d'évaluations reste
+relisible : une décision d'avant la bascule vaut un poids de 1.
+
+---
+
+## [2026-07-29] Détecter le jour où le modèle confond ses options
+
+Le LLM recopie, à côté de chaque probabilité, le mode de l'option concernée. Cette
+redondance est maintenant vérifiée : si le modèle annonce « 80 % — la voiture » sur une
+option qui est en réalité un bus, ce n'est pas une faute d'étiquette, c'est le signe
+qu'il a mélangé les options — et que **tous** ses pourcentages sont attribués aux
+mauvaises lignes. Une simulation entière pouvait tourner sur des résultats faux sans que
+rien ne l'indique.
+
+Le taux d'incohérence est exposé dans Grafana (attendu : 0 %) et déclenche une alarme
+au-delà de 5 % sur 200 options observées. Côté calibration, le mode de chaque option est
+désormais lu dans le jeu d'évaluation lui-même plutôt que dans la réponse du modèle : la
+mesure ne dépend plus de ce qu'il déclare.
+
+Le dashboard mobilité gagne une section « répartition attendue vs tirée » : ce que le
+modèle voulait, ce que les agents ont fait, et l'écart entre les deux.
+
+---
+
+## [2026-07-29] La calibration ne s'arrête plus faute de quota au bout de 27 itérations
+
+Après chaque amélioration retenue, la boucle de calibration recalculait la contribution
+de **chaque** bloc du prompt par valeur de Shapley — une attribution exacte, mais qui
+consommait à elle seule le quota journalier : la campagne 7 s'est arrêtée après 27
+itérations sur 200 prévues.
+
+L'attribution se fait désormais par **omission** (retrait bloc à bloc, `N+1` évaluations
+au lieu de ~25 fois plus). C'est moins exact — deux blocs redondants y paraissent tous
+deux inutiles — mais le classement des blocs reste bon, et c'est tout ce que le ciblage
+des mutations utilise. Shapley reste disponible (`attribution_method: shapley`) pour une
+analyse ponctuelle hors boucle, et les deux méthodes partagent le même cache : basculer
+de l'une à l'autre ne jette aucune évaluation déjà payée.
+
+**Avant :** une passe d'attribution ≈ 25 × N évaluations → quota épuisé en une journée
+**Après :** N+1 évaluations, budget prévisible → la boucle tourne jusqu'au bout
+
+---
+
+## [2026-07-29] Les agents ne suivent plus l'avis du LLM, ils tirent leur mode au sort
+
+Le LLM ne désigne plus l'itinéraire optimal : il note **chaque** option proposée par la
+probabilité que ce persona la retienne (somme = 100), et l'agent tire son mode dans cette
+distribution. Un persona qui hésite entre voiture (60 %) et bus (40 %) ne prend plus
+systématiquement sa voiture : à l'échelle de la population, les 40 % de bus existent enfin.
+
+Le post-traitement projette ces probabilités sur une liste **fermée** de modes (marche,
+vélo, voiture, transports collectifs, train, deux-roues motorisé) : un mode qu'aucune
+option ne propose — la marche quand le trajet est trop long — apparaît explicitement à
+**0 %** au lieu de disparaître, ce qui rend les répartitions comparables d'un agent et
+d'un jour à l'autre.
+
+Le cache sémantique conserve désormais **la distribution, pas la décision**. Un cache hit
+rejoue donc un tirage : le même agent, replacé dans le même contexte un autre jour, peut
+prendre le bus là où il prenait sa voiture — sans le moindre appel LLM. La graine du
+tirage dérive de `(agent.mode_draw_seed, agent, activité, jour simulé)` : un run relancé
+reproduit exactement les mêmes trajets, et changer `mode_draw_seed` explore un autre
+tirage sans repayer d'inférence.
+
+Chaque demande d'itinéraire trace sa répartition dans `moves.csv`, **une colonne par
+mode** (`P(Marche) %`, `P(Voiture Privée) %`, …) : on peut comparer ligne à ligne ce que
+le LLM estimait et ce que l'agent a fait, et agréger les parts modales attendues sans
+reparser quoi que ce soit. Un `0` signifie « mode explicitement écarté », une cellule vide
+« décision sans répartition » (mono-choix, erreur LLM, cache hérité).
+
+Côté calibration de prompt, l'évaluation applique la même politique — et les
+`eval_samples` tirages proviennent maintenant d'un **seul** appel LLM : une éval `train`
+coûte 33 requêtes au lieu de 99, à nombre de décisions scorées identique.
+
+**Avant :** un persona = un mode figé ; un cache hit rejouait éternellement la même décision
+**Après :** un persona = une distribution ; chaque cache hit retire un mode, la répartition
+attendue est visible dans `llm_mode_probability_pct_total`
+
+⚠ Deux invalidations attendues : le texte des prompts système ayant changé, le **cache LLM
+repart d'un répertoire neuf** (il est isolé par empreinte de prompt), et les évaluations de
+calibration déjà payées ne sont plus réutilisables.
+
+---
+
+## [2026-07-28] La boucle cesse d'ordonner au mutateur de s'entêter
+
+Un rejet annoté `Δ=+9.89` — le candidat **aggrave** l'écart de 23 % — était classé
+« bruit statistique », catégorie dont la consigne associée est « l'idée n'est pas
+invalidée, garde le levier ». La boucle demandait donc de persévérer sur une piste que
+la mesure venait de réfuter. En campagne 7, cinq itérations consécutives ont reformulé
+le même levier sur le même bloc, pour rien.
+
+Les rejets sont désormais triés par **ampleur** : au-delà de 10 % du score courant, un
+échec devient `[dégrade]` et déclenche la consigne inverse — abandonner le levier, pas
+le reformuler. En dessous, rien ne change : une amélioration non significative reste une
+piste ouverte.
+
+**Avant :** `Δ=+9.89` et `Δ=+0.30` recevaient la même consigne
+**Après :** les dégradations franches disent « change d'hypothèse », les Δ marginaux
+disent toujours « reformule »
+
+---
+
+## [2026-07-28] Le prompt d'optimisation ne peut plus enseigner ce qu'il interdit
+
+La règle « jamais de seuil chiffré du type *marche si moins de 2 km* » n'était qu'une
+phrase adressée au modèle : rien ne l'appliquait. Un bloc contenant exactement cette
+règle avait donc été accepté, puis **capitalisé comme meilleur argument de la
+bibliothèque** (gain 134.4), puis re-servi à chaque itération comme exemple à imiter.
+
+La contrainte est maintenant appliquée en code, avant toute évaluation, et les arguments
+capitalisés qui la violent sont écartés — y compris ceux déjà stockés, sans avoir à
+toucher aux bases existantes. La *mention* d'un nombre reste permise : « la règle des
+48 heures » passe, « moins de 2 km » non.
+
+**Pourquoi ça compte :** un seuil chiffré fait du choix de mode un automatisme. Le
+prompt cesse alors de simuler un raisonnement de déplacement et encode la réponse
+attendue — il colle au jeu d'évaluation et ne vaut plus rien en simulation.
+
+---
+
+## [2026-07-28] Le bloc à modifier est choisi par calcul, plus par le modèle
+
+Désigner le bloc de prompt le plus nuisible n'est pas un jugement : c'est un maximum sur
+des grandeurs déjà mesurées (contribution Shapley, poussée modale, strates fautives).
+Ce choix est passé du modèle au code, ce qui libère de la place dans le prompt et rend
+la décision reproductible.
+
+Un bloc rejeté deux fois de suite sort maintenant du jeu des cibles pour trois
+itérations. L'ancien garde-fou ne bloquait que la répétition d'un **texte** proche,
+jamais l'acharnement sur une **cible** — c'est ce qui laissait un même bloc monopoliser
+la campagne pendant que des blocs nuisibles jamais essayés attendaient leur tour.
+
+**Avant :** cinq itérations d'affilée sur `consigne_s3`
+**Après :** ce bloc passe en cooldown et la cible bascule sur le bloc nuisible suivant
+
+---
+
+## [2026-07-28] Mutation en deux temps : diagnostiquer, puis rédiger
+
+Le prompt d'optimisation demandait au modèle d'analyser ses échecs, de choisir sa cible
+et d'écrire le texte dans le même souffle, avec tout le contexte servi d'un bloc. On
+peut désormais scinder : un premier appel diagnostique le bloc visé et produit une
+directive courte (il lui est interdit d'écrire le texte), un second rédige sous cette
+directive sans revoir l'appareil analytique.
+
+Chaque appel est nettement plus court : le plus long passe de 15 600 à 6 800 caractères,
+et les **deux réunis** coûtent moins que l'appel unique d'avant. L'appel supplémentaire
+se paie sur le quota du modèle de mutation, distinct de celui de l'évaluation.
+
+Désactivé par défaut (`decomposed_mutation`), pour être comparé au fonctionnement
+historique à budget d'évaluation égal plutôt que substitué en silence.
+
+**Avant :** un appel de ~15 600 caractères qui fait tout
+**Après :** deux appels spécialisés, 0,57× le coût en texte, ablatables séparément
+
+---
+
+## [2026-07-27] Le pré-tri par un second modèle est abandonné
+
+Mesure décisive : sur 23 mutations d'un même prompt, le modèle léger pressenti pour
+pré-trier les candidats **ne retrouve pas du tout le classement du juge de référence**
+(corrélation de rang −0,01, soit l'équivalent d'un tirage au sort). L'idée d'essayer
+plusieurs mutations par itération et de laisser un modèle bon marché désigner la
+meilleure est donc écartée.
+
+Ce résultat corrige une mesure antérieure encourageante (corrélation 0,76), obtenue
+sur des prompts très différents les uns des autres. Départager des variantes franches
+est facile ; départager des candidats **voisins** — la seule chose utile pour un
+pré-tri — ne fonctionne pas.
+
+**Avant :** on envisageait 3 ou 4 candidats par itération avec pré-sélection automatique
+**Après :** un seul candidat par itération, comme aujourd'hui ; le second modèle reste
+utile uniquement pour *générer* les mutations, ce qui libère déjà le quota du juge
+
+---
+
+## [2026-07-27] Nouvelle pénalité de longueur : tolérance puis coût exponentiel
+
+La pénalité de longueur peut désormais prendre une forme à seuil : **nulle jusqu'à
+une taille de prompt jugée acceptable** (350 mots par défaut), puis croissante de
+façon exponentielle au-delà. Dans la zone de tolérance, deux prompts ne sont plus
+départagés que par la qualité de leur prédiction ; au-delà, le coût devient vite
+prohibitif, ce qui empêche le prompt de s'allonger sans fin.
+
+Rejouée sur les 173 évaluations déjà en base, la correction remet le classement à
+l'endroit : le prompt vidé de ses instructions passe du 1ᵉʳ au 7ᵉ rang, et le
+meilleur devient un prompt de 7 blocs et 179 mots. La corrélation entre longueur et
+score tombe de 0,81 à 0,02 — la longueur cesse d'être un critère de sélection.
+
+**Avant :** un prompt de 335 mots encaissait 16,75 points de pénalité d'entrée
+**Après :** 0 point tant qu'il reste sous le seuil ; 2 points à 500 mots, 20 à 650
+
+L'ancienne forme linéaire reste disponible et reste le défaut ; la nouvelle
+s'active par `length_penalty_mode: exp_tolerance`. Le changement ne coûte aucun
+appel LLM et n'invalide aucune évaluation déjà payée.
+
+---
+
+## [2026-07-27] La calibration optimisait la brièveté plus que la justesse
+
+Le meilleur prompt du store s'est avéré être… le prompt vide. En décomposant la
+métrique, la cause est identifiée : la **pénalité de longueur** pèse autant que le
+terme de fidélité aux parts modales, et représente environ 40 % de la variation
+totale du score.
+
+Or la taille du prompt n'a **aucun effet mesurable sur la qualité de prédiction**
+(corrélation de rang −0,03 sur 173 évaluations, non significative) : les
+répartitions de modes prédites sont quasi identiques du prompt vide au prompt
+complet. Tout ce que le score retenait de la longueur venait de la pénalité.
+
+Recalculé sans elle, le classement s'inverse : le meilleur prompt passe de 1 bloc
+à 7 blocs, et les deux classements ne se ressemblent qu'à moitié.
+
+En revanche — et contrairement à ce qu'on pouvait attendre — ce n'est **pas** ce qui
+bloque la campagne en cours (19 mutations, 0 acceptée). Vérification faite sur les
+couples avant/après disponibles : toutes les mutations proposées *raccourcissent* le
+prompt, donc la pénalité les avantage, et toutes dégradent quand même la prédiction.
+Annuler la pénalité n'en sauverait aucune. Le blocage vient du générateur de
+mutations, qui ne produit que des candidats moins bons.
+
+**Avant :** le score récompensait surtout les prompts courts
+**Après :** le diagnostic est posé et chiffré ; le dosage de la pénalité reste à trancher
+
+Le réglage se teste **sans aucun appel LLM** (`make backtest`) : les décisions brutes
+sont conservées et le dosage de la pénalité n'entre pas dans la clé de cache.
+
+---
+
+## [2026-07-27] Analyse Shapley sur la marche — et une fuite de données dans ProGEDO
+
+Un troisième notebook, `scripts/progedo_logit/explore_progedo_walk_shapley.ipynb`, applique à
+la **marche** le protocole du notebook vélo. Il en ressort deux choses : un avertissement sur
+les données, et un diagnostic inverse de celui du vélo.
+
+### Deux variables ProGEDO sont inutilisables pour la marche
+
+Les premiers modèles atteignaient une PR-AUC de **0.98** contre un taux de base de 0.31 —
+aucun modèle de choix modal ne prédit un comportement social à ce niveau. La cause est
+identifiée : **`D11`, documentée comme distance à vol d'oiseau, n'est pas mesurée pour les
+déplacements à pied. Elle vaut exactement `durée déclarée × 58 m/min`.** Rapport constant à 58
+sur tous les quantiles, ~250 valeurs distinctes contre ~9 800 pour la voiture, corrélation avec
+la géographie réelle de 0.40 pour la marche contre 0.995 pour les autres modes. La variable
+n'encode pas une distance : elle encode la cible. `D12` (distance sur le réseau du mode
+utilisé) est contaminée pour la même raison.
+
+Le notebook les remplace par une distance reconstruite depuis le shapefile des zones fines,
+identique quel que soit le mode. La PR-AUC retombe alors à une valeur crédible.
+
+**Avant :** PR-AUC marche = 0.985, artefact de mesure
+**Après :** PR-AUC marche = 0.804 (baseline) à 0.855 (41 variables), sur une distance
+origine-destination mode-neutre
+
+⚠️ **Le notebook vélo utilise `D11` et est donc concerné** : sa PR-AUC de 0.410 est
+probablement surestimée, les trajets à pied y étant identifiables à coup sûr. Le classement
+SHAP reste vraisemblablement valide. Un rejeu avec la distance corrigée est à faire.
+
+### La marche est contrainte, le vélo est choisi
+
+Une fois la fuite corrigée, enrichir le persona n'apporte presque rien à la marche : **×1.06**
+contre ×1.78 pour le vélo. La marche est décidée par la géométrie du déplacement, et se
+modélise sans persona riche pourvu que l'agent dispose d'une distance origine-destination
+correcte.
+
+À 2 km ou moins — là où les quatre modes sont plausibles et où un levier a un sens — les
+déterminants apparaissent : le **motif** (le loisir pousse à marcher, le travail non), la
+**disponibilité d'une voiture** (même variable clé que pour le vélo, et même sens : les modes
+actifs se décident contre la voiture), le **nombre de voitures par titulaire du permis**, le
+**type d'habitat** (la maison isolée décourage la marche) et le **stationnement nocturne de la
+voiture** — quand la reprendre coûte une place au retour, on marche. L'âge joue en U : 72 % de
+marche chez les 17–25 ans, 70 % chez les 75 ans et plus, 57 % chez les 40–60 ans.
+
+Comme pour le vélo, la catégorie grossière `car_availability` ne pèse presque rien (0.021)
+quand le comptage fin en pèse dix fois plus : **l'agrégation en catégories détruit le signal**.
+
+### Conséquence pour la mémoire de l'agent
+
+Les habitudes déclarées ne captent que **11,1 % de l'importance SHAP** pour la marche, contre
+28,6 % pour le vélo. La lecture doit rester prudente — `P19`, la fréquence d'usage de la
+marche, est *intégralement vide* dans le fichier Toulouse 2023, donc l'habitude piétonne n'a
+pas été mesurée. Mais le fait solide tient : les variables exogènes **suffisent** pour la
+marche. La mémoire long terme est un levier pour le vélo, pas pour la marche — inutile de
+dépenser du budget de contexte à raconter l'historique piéton d'un agent.
+
+---
+
+## [2026-07-27] Un second modèle pourrait pré-trier les candidats — sous réserve
+
+Mesure : sur 27 versions de prompt déjà notées par le modèle juge, un second modèle
+plus léger retrouve **le même classement à 76 %** (corrélation de rang de 0,758).
+De quoi écarter l'hypothèse qu'il jugerait au hasard.
+
+Ce n'est pas encore une validation. L'intervalle de confiance va de 0,53 à 0,89 :
+il reste environ 30 % de chance que la vraie valeur soit sous le seuil retenu (0,70).
+Et le test portait sur des prompts très différents entre eux, alors que la tâche
+réelle consiste à départager des variantes proches — donc plus difficile. Le
+pré-tri automatique n'est pas activé ; une seconde mesure sur des mutations réelles
+tranchera.
+
+À noter aussi : les notes des deux modèles diffèrent de 3 points en moyenne, un
+écart comparable à leur dispersion. Le second modèle peut servir à *classer*, jamais
+à produire une note versée dans la campagne.
+
+La mesure n'a rien coûté au budget du juge (ses 27 notes venaient du cache) et n'a
+touché aucune évaluation existante.
+
+---
+
+## [2026-07-27] Le modèle d'évaluation restera sur son nom actuel
+
+Test direct sur l'API Google : le nom `…-flash-lite-preview` utilisé par la calibration
+et le nom `…-flash-lite` **désignent le même modèle** — Google redirige l'un vers
+l'autre. Renommer donnerait donc des résultats identiques tout en jetant toutes les
+évaluations déjà payées. L'opération est écartée : coût pur, bénéfice nul.
+
+La note de référence précise aussi que le jeu `screen` est un **échantillon gelé de 17 %
+de `train`**, et qu'il sert à deux phases différentes (attribution Shapley et tri des
+mutations) — une distinction qui manquait et qui rendait les chiffres d'activité de la
+campagne difficiles à interpréter.
+
+---
+
+## [2026-07-27] Note de référence sur les quotas, et check_phase0 réparé
+
+Une note `prompt_calibration/docs/quotas-et-modeles.md` chiffre ce que coûte
+réellement une journée de calibration : une évaluation complète mobilise 297 requêtes,
+soit **la totalité du quota quotidien d'un modèle**. C'est ce qui explique le rythme
+d'environ une évaluation complète par jour. Le document liste aussi les quatre réglages
+à ne jamais modifier sans précaution — ceux qui rendraient inutilisables toutes les
+évaluations déjà payées.
+
+Le script `check_phase0.py` ne démarrait plus depuis que la calibration est devenue un
+dépôt autonome : ses imports pointaient vers l'ancienne arborescence. Il retrouve aussi
+seul le répertoire d'expérience, que les deux dépôts soient imbriqués (poste de dev) ou
+côte à côte (VM cloud), et affiche un message clair au lieu d'une trace quand il ne
+trouve rien.
+
+**Avant :** `check_phase0.py` s'arrêtait sur `ModuleNotFoundError`
+**Après :** il tourne et confirme 100 % des sections rattachées (436 agents)
+
+---
+
+## [2026-07-27] Mutation et évaluation sur deux quotas Gemini séparés
+
+La calibration disposait de 500 requêtes Gemini par jour, partagées entre l'évaluation
+(le juge qui mesure la qualité d'un prompt) et la mutation (qui propose les variantes à
+tester). Chaque mutation mangeait donc du budget d'évaluation. La mutation bascule sur
+`gemini-3.5-flash-lite`, un modèle distinct doté de **son propre compteur de 500
+requêtes/jour** : le juge garde désormais son quota entier.
+
+Le modèle d'évaluation, lui, ne bouge pas — en changer invaliderait toutes les
+évaluations déjà payées et rendrait les scores incomparables. Le cache est intact
+(91 évaluations sur la base cloud, 194 en local, toutes toujours servies).
+
+Le plafond de débit passe aussi de 15 à 12 requêtes/minute : le tableau de bord Google
+montrait des pics à 18/min, donc des refus (429) en cours de campagne.
+
+**Avant :** 500 requêtes/jour pour évaluer *et* muter ; pics de débit en dépassement
+**Après :** 500 requêtes/jour dédiées à l'évaluation + 500 pour la mutation ; plus de dépassement
+
+---
+
+## [2026-07-25] Pourquoi le vélo est mal prédit : analyse Shapley sur ProGEDO élargi
+
+Un second notebook, `scripts/progedo_logit/explore_progedo_bike_shapley.ipynb`, cherche les
+variables qui expliquent réellement le choix du **vélo** — le mode que le modèle de choix
+modal prédisait le plus mal. Là où le notebook de production ne retient que les traits
+*communs* avec le persona LLM, celui-ci ratisse un maximum de variables ProGEDO et laisse
+une analyse de Shapley trancher. Le notebook de production reste inchangé et comparable.
+
+Le diagnostic est confirmé : le vélo souffrait de **variables manquantes**, pas seulement de
+sa faible part modale (3,9 %).
+
+**Avant :** 15 variables, PR-AUC vélo = 0.230
+**Après :** 42 variables exogènes, PR-AUC vélo = 0.410 — **×1.78 à modèle et protocole
+identiques**. 15 des 25 premières variables du classement SHAP étaient absentes du modèle.
+
+Ce qui pèse, par ordre d'importance : la **disponibilité d'une voiture pour le trajet
+domicile-travail** (le vélo se choisit contre la voiture), le **nombre de vélos par personne**
+du ménage (l'ancien booléen `has_bike` détruisait cette information), la **géographie**
+(densité et distance au centre, à l'origine comme à la destination — un axe totalement absent
+jusqu'ici), la **saison** (5,05 % de vélo en septembre contre 3,05 % en février) et le
+**niveau d'études** (de 0,17 % à 5,90 % de part vélo).
+
+Deux enseignements contre-intuitifs. Le stationnement vélo au domicile, déterminant canonique
+dans la littérature, finit 38ᵉ sur 42 : 79 % des ménages toulousains en disposent, la variable
+ne discrimine pas. Et le stationnement voiture au travail **s'inverse** une fois les autres
+variables contrôlées — son effet brut était porté par des corrélats, pas par lui-même.
+
+Enfin, un résultat qui porte sur l'architecture de l'agent plutôt que sur les données : en
+ajoutant les **habitudes déclarées** (fréquence d'usage du vélo, de la voiture, des TC), la
+PR-AUC monte à 0.601 et la fréquence d'usage du vélo devient la première variable du modèle,
+devant la distance. Cinq variables captent 28,6 % de l'importance totale. Une part
+substantielle du signal vélo n'est donc pas structurelle mais **habituelle** — elle réside
+dans l'historique de la personne, c'est-à-dire précisément ce que la mémoire long terme de
+l'agent est censée porter. Un agent sans mémoire des trajets passés a un plafond de
+performance sur le vélo, quelle que soit la richesse de son persona.
+
+Métrique employée : PR-AUC (et non l'accuracy, sans signification à 3,9 % de positifs),
+séparation train/test **par ménage** pour éviter qu'un même individu figure des deux côtés.
+
+---
+
+## [2026-07-25] Jeu ProGEDO prêt pour régression logistique (choix modal)
+
+Un notebook extrait de l'enquête ProGEDO 2023 (EMC² Toulouse) un CSV directement exploitable
+en **régression logistique multinomiale du choix modal**, en n'utilisant **que les paramètres
+communs** avec le persona du projet (`traits_json`) — ou rendus communs par recodage vers le
+même espace de valeurs. Une ligne = un déplacement (l'unité de décision de l'agent), la cible
+est le mode `car/bike/walk/transit` (aligné sur `_primary_mode`).
+
+Les features couvrent le persona statique (âge, sexe, taille du ménage, permis, abonnement TC,
+nombre de voitures, disponibilité voiture, présence de vélo, catégorie socioprofessionnelle,
+occupation, emploi/études) et le contexte de décision (motif, distance, heure de départ).
+`income` et `employment_sector` sont exclus (absents de ProGEDO) ; `personal_bike` est réduit à
+`has_bike` car les vélos électriques (M22) ne sont pas renseignés dans ce jeu.
+
+Le notebook fait import → merge (déplacement + personne + ménage) → recodage → nettoyage
+(modes hors champ, non-enquêtés, valeurs critiques manquantes) → séparation features/cible →
+export, et se termine par un contrôle sklearn qui ajuste le CSV tel quel.
+
+**Avant :** les CSV ProGEDO bruts (codes SAS, une table par niveau) n'étaient pas alignés sur
+le vocabulaire du persona ni structurés pour un modèle de choix modal.
+**Après :** `scripts/progedo_logit/progedo_mode_choice.csv` (~54 500 déplacements, 15 features +
+cible) prêt à charger, plus les variantes `_X.csv` / `_y.csv`.
+
+---
+
 ## [2026-07-24] Calibration : notifications Discord détaillées (« où en est la campagne »)
 
 Les notifications du daemon de calibration disaient **qu'il** travaillait, jamais **où il

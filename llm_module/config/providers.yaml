@@ -77,29 +77,91 @@ providers:
     concurrency_limit: 2   # batches de 40 agents = déjà très dense, inutile d'augmenter
     disable_timeout:   120
 
-  google_gemma42:
+  # Quotas relevés sur le dashboard AI Studio (free tier, 2026-07-27) : RPM 15 ·
+  # TPM 250 000 · RPD 500 — identiques à google_gemini31, mais comptabilisés dans
+  # un SEAU DE QUOTA DISTINCT. C'est tout l'intérêt : en dédiant gemini31 à
+  # l'évaluation et gemini35 à la mutation, la campagne dispose de 500 + 500
+  # requêtes/jour au lieu de 500 partagées.
+  # gemini-3.5-flash-lite est aussi le successeur annoncé de gemini-3.1-flash-lite
+  # (arrêt prévu 2027-05-07), donc la cible de migration à terme du modèle d'éval.
+  google_gemini35:
     adapter:           google
     rpm_limit:         15
-    tpm_limit:         null # Illimité
-    rpd_limit:         1500   # quota requêtes/jour (free tier)
+    tpm_limit:         250000
+    rpd_limit:         500    # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
-    default_model:     gemma-4-26b-a4b-it
-    max_output_tokens: 8192   # limite de complétion des modèles Gemma
-    weight:            1.0   # min(15, ∞)/15 = 1.0 — concurrency 1 borne déjà le débit réel
-    concurrency_limit: 1
-    disable_timeout:   180
+    default_model:     gemini-3.5-flash-lite
+    weight:            1.0   # min(15, 250000/3000)/15 = 1.0
+    concurrency_limit: 2
+    disable_timeout:   120
+
+  # ── Seconde clé Google (PROVIDER_KEYS__google2) ───────────────────────────
+  # Quotas free tier comptés PAR PROJET ET PAR MODÈLE (quotaId
+  # "GenerateRequestsPerDayPerProjectPerModel-FreeTier") : une clé rattachée à un
+  # autre projet dispose donc de ses propres 500 requêtes/jour par modèle.
+  #
+  # USAGE RÉSERVÉ AUX MESURES HORS CAMPAGNE (pré-tests, étalonnages). Ne pas
+  # basculer la campagne dessus : eval_provider entre dans eval_params_key(), donc
+  # changer de provider — même à modèle identique — repart d'un cache vide.
+  #
+  # La résolution de clé est `provider_keys[nom_instance] or provider_keys[adapter]`
+  # (llm_module/config.py). Le nom d'instance DOIT donc correspondre à la variable
+  # d'env, sinon on retombe silencieusement sur PROVIDER_KEYS__google (clé 1).
+  google2:
+    adapter:           google
+    rpm_limit:         15
+    tpm_limit:         250000
+    rpd_limit:         500
+    base_url:          https://generativelanguage.googleapis.com/v1beta
+    default_model:     gemini-3.1-flash-lite-preview
+    weight:            1.0
+    concurrency_limit: 2
+    disable_timeout:   120
+
+  # Même clé 2, modèle 3.5 : le quota étant PAR MODÈLE, c'est un second seau de
+  # 500. Alimenté par PROVIDER_KEYS__google2_35, à exporter au lancement depuis
+  # PROVIDER_KEYS__google2 (ne pas dupliquer le secret dans un fichier).
+  google2_35:
+    adapter:           google
+    rpm_limit:         15
+    tpm_limit:         250000
+    rpd_limit:         500
+    base_url:          https://generativelanguage.googleapis.com/v1beta
+    default_model:     gemini-3.5-flash-lite
+    weight:            1.0
+    concurrency_limit: 2
+    disable_timeout:   120
+
+  # Quotas relevés sur le dashboard AI Studio (free tier, 2026-07-21) :
+  #   RPM 30 · TPM 16 000 · RPD 14 400. Le TPM (16k/min) EST la contrainte réelle,
+  #   pas le RPM ni le RPD — d'où weight = min(30, 16000/3000)/15 ≈ 0.36 et un
+  #   max_tokens_per_request calé sur le TPM (une requête > 16k tokens → HTTP 413).
+  #   batch_max_agents s'auto-borne alors à ~tpm/tokens_per_agent (≈ 5 agents).
+  google_gemma42:
+    adapter:                google
+    rpm_limit:              30
+    tpm_limit:              16000
+    max_tokens_per_request: 16000  # TPM free tier = 16 000 → requête unique > 16 000 tokens → HTTP 413
+    rpd_limit:              14400   # quota requêtes/jour (free tier) — dashboard AI Studio
+    base_url:               https://generativelanguage.googleapis.com/v1beta
+    default_model:          gemma-4-26b-a4b-it
+    max_output_tokens:      8192   # limite de complétion des modèles Gemma
+    weight:                 0.36   # min(30, 16000/3000)/15 = 5.33/15 — borné par le TPM
+    concurrency_limit:      1
+    disable_timeout:        180
 
   google_gemma43:
-    adapter:           google
-    rpm_limit:         15
-    tpm_limit:         null # Illimité
-    rpd_limit:         1500   # quota requêtes/jour (free tier)
-    base_url:          https://generativelanguage.googleapis.com/v1beta
-    default_model:     gemma-4-31b-it
-    max_output_tokens: 8192   # limite de complétion des modèles Gemma
-    weight:            1.0   # min(15, ∞)/15 = 1.0 — concurrency 1 borne déjà le débit réel
-    concurrency_limit: 1
-    disable_timeout:   180
+    adapter:                google
+    rpm_limit:              30
+    tpm_limit:              16000
+    max_tokens_per_request: 16000  # TPM free tier = 16 000 → requête unique > 16 000 tokens → HTTP 413
+    rpd_limit:              14400   # quota requêtes/jour (free tier) — dashboard AI Studio
+    base_url:               https://generativelanguage.googleapis.com/v1beta
+    default_model:          gemma-4-31b-it
+    max_output_tokens:      8192   # limite de complétion des modèles Gemma
+    weight:                 0.36   # min(30, 16000/3000)/15 = 5.33/15 — borné par le TPM
+    concurrency_limit:      1
+    disable_timeout:        180
 
   # google_gemma3n:
   #   adapter:          google
@@ -113,7 +175,7 @@ providers:
   # ── Groq — trois instances pointant sur des modèles différents ──────────────
   # L'API key partagée est lue depuis PROVIDER_KEYS__groq dans l'environnement.
 
-  groq_llama3:
+  groq_llama3: #August 16, 2026
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         12000
@@ -126,35 +188,35 @@ providers:
     concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
     disable_timeout:   120
 
-  groq_llama4:
-    adapter:           groq
-    rpm_limit:         30
-    tpm_limit:         30000
-    max_tokens_per_request: 30000  # TPM free tier = 30000 → requête unique > 30000 tokens → HTTP 413
-    tpd_limit:         500000
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     meta-llama/llama-4-scout-17b-16e-instruct
-    max_output_tokens: 8192   # HTTP 400 au-delà : "`max_tokens` must be less than or equal to `8192`"
-    weight:            0.65  # min(30, 30000/3000)/15 = 0.67 — borné par le TPM
-    concurrency_limit: 4
-    disable_timeout:   120
+  # groq_llama4: 
+  #   adapter:           groq
+  #   rpm_limit:         30
+  #   tpm_limit:         30000
+  #   max_tokens_per_request: 30000  # TPM free tier = 30000 → requête unique > 30000 tokens → HTTP 413
+  #   tpd_limit:         500000
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     meta-llama/llama-4-scout-17b-16e-instruct
+  #   max_output_tokens: 8192   # HTTP 400 au-delà : "`max_tokens` must be less than or equal to `8192`"
+  #   weight:            0.65  # min(30, 30000/3000)/15 = 0.67 — borné par le TPM
+  #   concurrency_limit: 4
+  #   disable_timeout:   120
 
-  groq_qwen:
-    adapter:                 groq
-    # TPM free tier = 6 000. Une requête ≈ 2 500–3 000 tokens (in+out) → ~2 req/min
-    # soutenables. rpm_limit aligné sur ce plafond car le rate-limiter applique aussi
-    # une réservation TPM glissante (cf. infra/redis/rate_limiter.py) ; weight réduit
-    # pour déprioriser au profit des providers à gros TPM.
-    rpm_limit:               2
-    tpm_limit:               6000
-    tpd_limit:               500000
-    max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
-    base_url:                https://api.groq.com/openai/v1
-    default_model:           qwen/qwen3-32b
-    max_output_tokens:       40960
-    weight:                  0.15  # min(2, 6000/3000)/15 = 0.13 — borné par le TPM
-    concurrency_limit:       3
-    disable_timeout:         120
+  # groq_qwen:
+  #   adapter:                 groq
+  #   # TPM free tier = 6 000. Une requête ≈ 2 500–3 000 tokens (in+out) → ~2 req/min
+  #   # soutenables. rpm_limit aligné sur ce plafond car le rate-limiter applique aussi
+  #   # une réservation TPM glissante (cf. infra/redis/rate_limiter.py) ; weight réduit
+  #   # pour déprioriser au profit des providers à gros TPM.
+  #   rpm_limit:               2
+  #   tpm_limit:               6000
+  #   tpd_limit:               500000
+  #   max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
+  #   base_url:                https://api.groq.com/openai/v1
+  #   default_model:           qwen/qwen3-32b
+  #   max_output_tokens:       40960
+  #   weight:                  0.15  # min(2, 6000/3000)/15 = 0.13 — borné par le TPM
+  #   concurrency_limit:       3
+  #   disable_timeout:         120
 
   groq_llama31:
     adapter:                 groq
@@ -182,18 +244,18 @@ providers:
     concurrency_limit: 3
     disable_timeout:   120
 
-  groq_openai_20:
-    adapter:           groq
-    rpm_limit:         30
-    tpm_limit:         8000
-    max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
-    tpd_limit:         200000
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     openai/gpt-oss-20b
-    max_output_tokens: 65536
-    weight:            0.2   # min(30, 8000/3000)/15 = 0.18 — borné par le TPM
-    concurrency_limit: 3
-    disable_timeout:   120
+  # groq_openai_20: KO
+  #   adapter:           groq
+  #   rpm_limit:         30
+  #   tpm_limit:         8000
+  #   max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
+  #   tpd_limit:         200000
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     openai/gpt-oss-20b
+  #   max_output_tokens: 65536
+  #   weight:            0.2   # min(30, 8000/3000)/15 = 0.18 — borné par le TPM
+  #   concurrency_limit: 3
+  #   disable_timeout:   120
 
 
   # ----  (DISABLED: `max_tokens` must be less than or equal to `512`). --- 

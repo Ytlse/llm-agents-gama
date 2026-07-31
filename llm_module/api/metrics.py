@@ -124,6 +124,35 @@ class WorkerMetricsCollector:
             mode_fam.add_metric([mode], val)
         yield mode_fam
 
+        # ── Masse de probabilité par mode ─────────────────────────────────────
+        # Le LLM note toutes les options (somme = 100) : ce compteur cumule les
+        # centièmes de probabilité attribués à chaque mode canonique, y compris les
+        # modes non proposés (0). À la différence de llm_transport_mode_chosen_total
+        # (option la plus probable), il donne la répartition *attendue* — celle que
+        # le tirage côté simulation reproduit en espérance.
+        mode_prob_fam = CounterMetricFamily(
+            'llm_mode_probability_pct_total',
+            'Somme des probabilités (en %) attribuées par le LLM à chaque mode',
+            labels=['mode'],
+        )
+        for mode, val in _by_prefix(counters, "mode_probability_pct:").items():
+            mode_prob_fam.add_metric([mode], val)
+        yield mode_prob_fam
+
+        # ── Intégrité des étiquettes de mode ──────────────────────────────────
+        # Le LLM recopie le mode de chaque option à côté de sa probabilité. Un
+        # désaccord avec le mode réel de l'option signale qu'il note une AUTRE option
+        # que celle qu'il croit : ses probabilités partent alors sur les mauvais index.
+        # Ratio à surveiller : mismatch / checked (attendu ≈ 0).
+        for name, metric in (("mode_label_checked", 'llm_mode_label_checked_total'),
+                             ("mode_label_mismatch", 'llm_mode_label_mismatch_total')):
+            fam = CounterMetricFamily(
+                metric,
+                'Options notées par le LLM : étiquettes de mode vérifiées / en désaccord',
+            )
+            fam.add_metric([], counters.get(name, 0))
+            yield fam
+
         # ── Tranches de distance ──────────────────────────────────────────────
         dist_fam = CounterMetricFamily(
             'llm_trip_distance_bracket_total',

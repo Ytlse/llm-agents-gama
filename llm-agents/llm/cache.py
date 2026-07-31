@@ -10,6 +10,7 @@ from typing import Optional
 from loguru import logger
 from prometheus_client import Counter, Gauge, Histogram
 
+from llm_module.core.mode_choice import draw_index, mode_distribution
 from llm_module.telemetry.alarms import fire_alarme
 
 COLLECTION_NAME = "llm_decisions"
@@ -291,6 +292,7 @@ class LlmSemanticCache:
         payload = best.payload or {}
         return {
             "chosen_plan_code": payload.get("chosen_plan_code"),
+            "probabilities": payload.get("probabilities"),
             "mode": payload.get("mode", ""),
             "score": None,
         }, None
@@ -329,6 +331,7 @@ class LlmSemanticCache:
         payload = best.payload or {}
         return {
             "chosen_plan_code": payload.get("chosen_plan_code"),
+            "probabilities": payload.get("probabilities"),
             "mode": payload.get("mode", ""),
             "score": best.score,
         }, None
@@ -350,11 +353,17 @@ class LlmSemanticCache:
         chosen_plan_code: str,
         mode: str,
         weather: Optional[dict],
+        probabilities: Optional[list[float]] = None,
     ):
         """Insère (upsert) un point Qdrant avec les métadonnées de la décision.
 
         `memory_text=None` signale une décision prise sans souvenir : le point est marqué
         `memory_empty=True` et porte un vecteur neutre (il ne sera relu que par filtre).
+
+        `probabilities` (aligné sur `options`) est la distribution produite par le LLM :
+        c'est elle qui est rejouée à chaque hit — la décision cachée n'est pas figée,
+        elle est retirée au sort. `chosen_plan_code`/`mode` conservent le tirage d'origine
+        (diagnostic, et relecture par les lecteurs antérieurs à la bascule).
         """
         from qdrant_client.models import PointStruct
         from datetime import datetime as _dt
@@ -367,6 +376,16 @@ class LlmSemanticCache:
             {"code": opt.get_code(), "mode": ",".join(str(l.mode) for l in opt.legs) if opt.legs else "", "duration_ms": opt.duration or 0}
             for opt in options
         ]
+
+        # Distribution persistée par code de plan : au relecture, les options peuvent
+        # avoir changé (itinéraire disparu) — l'appariement se fait sur le code, pas
+        # sur la position.
+        probability_payload = None
+        if probabilities is not None:
+            probability_payload = [
+                {"code": traj["code"], "mode": traj["mode"], "p": float(p)}
+                for traj, p in zip(trajectories, probabilities)
+            ]
 
         memory_empty = memory_text is None
         vector = self._empty_memory_vector() if memory_empty else self._embed(memory_text)
@@ -388,6 +407,7 @@ class LlmSemanticCache:
                 "weather_label": weather.get("weather_label") if weather else None,
                 "precip_mm": weather.get("precip_mm") if weather else None,
                 "trajectories": trajectories,
+                "probabilities": probability_payload,
                 "chosen_plan_code": chosen_plan_code,
                 "mode": mode,
                 "stored_at": time.time(),
@@ -395,6 +415,48 @@ class LlmSemanticCache:
         )
         with self._db_lock:
             self._client.upsert(collection_name=COLLECTION_NAME, points=[point])
+
+    @staticmethod
+    def _redraw_from_cached(
+        cached_probabilities: list,
+        options: list,
+        seed_parts: tuple,
+    ) -> Optional[dict]:
+        """Rejoue un tirage sur la distribution cachée, restreinte aux options actuelles.
+
+        Un hit ne rend pas une décision figée : la distribution est retirée au sort à
+        chaque fois, avec une graine dérivée du contexte (agent, activité, jour) — le
+        même agent peut donc prendre sa voiture un jour et le bus le lendemain sans
+        appel LLM, tout en gardant un run rejouable à l'identique.
+
+        Les options disparues depuis l'écriture sont écartées et la masse restante est
+        renormalisée par le tirage. Renvoie None s'il ne reste rien de tirable (le
+        cache est alors considéré comme un miss → nouvel appel LLM).
+        """
+        p_by_code = {}
+        for entry in cached_probabilities or ():
+            code = (entry or {}).get("code")
+            if code is None:
+                continue
+            try:
+                p_by_code[code] = max(0.0, float(entry.get("p") or 0.0))
+            except (TypeError, ValueError):
+                continue
+
+        weights = [p_by_code.get(opt.get_code(), 0.0) for opt in options]
+        if sum(weights) <= 0:
+            return None
+
+        index = draw_index(weights, *seed_parts)
+        modes = [",".join(str(l.mode) for l in opt.legs) if opt.legs else "" for opt in options]
+        return {
+            "index": index,
+            "mode": modes[index],
+            "weights": weights,
+            "distribution": mode_distribution(
+                [w / sum(weights) for w in weights], modes
+            ),
+        }
 
     async def lookup(
         self,
@@ -405,6 +467,7 @@ class LlmSemanticCache:
         memory_text: Optional[str] = None,
         weather: Optional[dict] = None,
         activity_purpose: str = "",
+        seed_parts: tuple = (),
     ) -> Optional[dict]:
         """
         Recherche hybride dans le cache. Retourne un dict {index, mode, score} sur hit,
@@ -413,6 +476,10 @@ class LlmSemanticCache:
         `memory_text=None` (mémoire long terme vide) → correspondance exacte sur les
         conditions factuelles, sans embedding. Sinon → recherche par similarité sémantique
         sur la LTM, à conditions factuelles égales, avec rejet sous le seuil de confiance.
+
+        Sur hit, un point porteur d'une distribution de probabilités est **retiré au
+        sort** (cf. `_redraw_from_cached`), `seed_parts` fournissant la graine du tirage.
+        Les points antérieurs à la bascule (décision figée) rendent leur option d'origine.
         """
         global _LLM_CACHE_HITS, _LLM_CACHE_LOOKUPS
         _LLM_CACHE_LOOKUPS += 1
@@ -453,13 +520,25 @@ class LlmSemanticCache:
                 )
             return None
 
+        # Point porteur d'une distribution : nouveau tirage à chaque hit.
+        if result.get("probabilities"):
+            drawn = self._redraw_from_cached(result["probabilities"], options, seed_parts)
+            if drawn is not None:
+                LLM_CACHE_HITS.labels(activity_purpose=activity_purpose).inc()
+                _LLM_CACHE_HITS += 1
+                return {**drawn, "score": result.get("score")}
+            # Plus aucune option cachée ne survit dans la liste courante.
+            LLM_CACHE_MISSES.labels(reason="code_not_in_options").inc()
+            _record_llm_miss("code_not_in_options")
+            return None
+
         chosen_code = result.get("chosen_plan_code")
         if not chosen_code:
             LLM_CACHE_MISSES.labels(reason="no_candidates").inc()
             _record_llm_miss("no_candidates")
             return None
 
-        # Retrouve l'index du plan dans la liste courante (potentiellement mélangée)
+        # Point hérité (décision figée) : on rend l'option d'origine, sans tirage.
         for i, opt in enumerate(options):
             if opt.get_code() == chosen_code:
                 LLM_CACHE_HITS.labels(activity_purpose=activity_purpose).inc()
@@ -481,10 +560,12 @@ class LlmSemanticCache:
         chosen_plan_code: str,
         mode: str,
         weather: Optional[dict] = None,
+        probabilities: Optional[list[float]] = None,
     ):
         """Wrapper async de _store_sync : persiste la décision dans Qdrant et enregistre la latence d'écriture.
 
         `memory_text=None` → décision prise sans souvenir (point `memory_empty=True`).
+        `probabilities` (aligné sur `options`) → distribution rejouée à chaque hit.
         """
         t0 = time.perf_counter()
         try:
@@ -498,6 +579,7 @@ class LlmSemanticCache:
                 chosen_plan_code,
                 mode,
                 weather,
+                probabilities,
             )
         except Exception as e:
             logger.warning(f"LLM cache store error: {e}")

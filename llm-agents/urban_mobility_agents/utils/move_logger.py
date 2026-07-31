@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from llm_module.core.geo_reference import hypercenter
+from llm_module.core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
 from models import Person, TravelPlan
 from settings import settings
-
-_TOULOUSE_CENTER_LAT = 43.6047
-_TOULOUSE_CENTER_LON = 1.4442
 
 _BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular"}
 _RAIL_MODES = {"rail"}
@@ -27,6 +26,24 @@ _PURPOSE_FR = {
     "accompany": "Accompagnement",
 }
 
+# Modes canoniques (llm_module.core.mode_choice) → libellés des colonnes, alignés sur
+# le vocabulaire de « Mode de transport Choisi ». L'ordre fixe les colonnes du CSV.
+_CANONICAL_FR = {
+    "walking": "Marche",
+    "cycling": "Vélo",
+    "car": "Voiture Privée",
+    "public_transport": "Transports_collectifs",
+    "train": "Train",
+    "motorbike": "Deux-roues motorisé",
+    "other": "Autres modes",
+}
+
+# Une colonne par mode : la répartition estimée par le LLM avant tirage (somme = 100).
+# Un mode non proposé vaut 0 (et non vide) — c'est ce qui distingue « était possible mais
+# jugé nul » de « décision sans répartition » (mono-choix, erreur LLM, cache hérité), où
+# toutes ces colonnes sont vides.
+MODE_PROBABILITY_HEADERS = [f"P({label}) %" for label in _CANONICAL_FR.values()]
+
 CSV_HEADERS = [
     "Référence",
     "Trajet",
@@ -34,6 +51,7 @@ CSV_HEADERS = [
     "Mode de transport Choisi",
     "Plus rapide",
     "Modes proposés au LLM",
+    *MODE_PROBABILITY_HEADERS,
     "Lieu de résidence",
     "Genre",
     "Âge",
@@ -73,7 +91,8 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _residence_zone(home_lat: Optional[float], home_lon: Optional[float]) -> str:
     if home_lat is None or home_lon is None:
         return ""
-    d = _haversine_km(_TOULOUSE_CENTER_LAT, _TOULOUSE_CENTER_LON, home_lat, home_lon)
+    center_lat, center_lon = hypercenter()
+    d = _haversine_km(center_lat, center_lon, home_lat, home_lon)
     if d < 8:
         return "Toulouse"
     elif d < 20:
@@ -81,6 +100,24 @@ def _residence_zone(home_lat: Optional[float], home_lon: Optional[float]) -> str
     elif d < 40:
         return "2eme couronne"
     return "3eme couronne"
+
+
+def _housing_type(traits: dict) -> str:
+    """Type de logement du persona, aux modalités de la référence EMC².
+
+    Le trait est posé à la génération de population (`scripts/data/population/
+    enrich_housing_type.py`) : il est **imputé** depuis la loi que l'enquête observe
+    dans la zone fine du domicile, jamais tiré ici. Ce module ne fait que le recopier.
+
+    Vide quand le persona n'en porte pas — population générée avant l'action A2, ou
+    domicile hors de la couche de zones fines, où l'on ne devine pas. Vide n'est donc
+    pas une modalité, exactement comme une cellule de probabilité vide n'est pas un 0.
+    Une valeur hors référentiel est ramenée à vide plutôt que journalisée : la page de
+    synthèse joint cette colonne sur les libellés EMC², une valeur exotique y
+    disparaîtrait sans être comptée.
+    """
+    label = str(traits.get(HOUSING_TRAIT_KEY) or "").strip()
+    return label if key_for(label) else ""
 
 
 def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
@@ -107,6 +144,17 @@ def _available_modes_summary(options: Optional[list]) -> str:
     if not options:
         return ""
     return " | ".join(_plan_transport_mode(opt) for opt in options)
+
+
+def _mode_probability_cells(distribution: Optional[dict]) -> list:
+    """Ventile la répartition par mode sur une colonne par mode (ordre `_CANONICAL_FR`).
+
+    Sans répartition (mono-choix, erreur LLM, point de cache hérité), toutes les cellules
+    sont vides — à distinguer d'un 0, qui signifie « le LLM a explicitement écarté ce mode ».
+    """
+    if not distribution:
+        return [""] * len(_CANONICAL_FR)
+    return [round(distribution.get(mode, 0.0) * 100, 1) for mode in _CANONICAL_FR]
 
 
 def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
@@ -205,6 +253,7 @@ class MoveLogger:
         start_time: Optional[int] = None,
         available_options: Optional[list] = None,
         activity_id: Optional[str] = None,
+        mode_probabilities: Optional[dict] = None,
     ):
         async with self._lock:
             computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -225,11 +274,12 @@ class MoveLogger:
                 "Aucun" if no_move else _plan_transport_mode(plan),
                 _plan_transport_mode(faster_itinerary),
                 _available_modes_summary(available_options),
+                *_mode_probability_cells(mode_probabilities),
                 _residence_zone(home.lat if home else None, home.lon if home else None),
                 gender,
                 traits.get("age", ""),
                 traits.get("main_occupation", ""),
-                "",  # Type de logement — not available in traits_json
+                _housing_type(traits),
                 purpose_fr,
                 _plan_distance_km(plan),
                 selection_method,

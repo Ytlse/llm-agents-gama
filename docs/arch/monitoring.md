@@ -36,6 +36,28 @@ dans `/debug-run` (`make report / capacity / init`).
 Le dashboard 07 applique la **palette officielle des modes** (CLAUDE.md) :
 voiture rouge, vélo/train violet, TC vert, marche cyan, moto magenta.
 
+**Row « Répartition attendue vs tirée »** (depuis le choix probabiliste) : le LLM
+annonce une distribution, l'agent tire dedans — deux camemberts côte à côte
+(`llm_mode_probability_pct_total` vs `trip_mode_by_purpose_total`), l'écart en points
+de %, et un bandeau d'intégrité des étiquettes de mode. Trois clés de lecture :
+
+- les deux vocabulaires sont ramenés à un socle commun par `label_replace`
+  (marche/vélo/voiture/TC) — le **train est fondu dans les TC**, comme côté contrôleur ;
+- l'écart est **structurellement non nul** : les décisions mono-choix et les points de
+  cache hérités arrivent dans « tiré » sans exister dans « attendu ». C'est la
+  **tendance** qui compte, pas la valeur absolue ;
+- le bandeau `llm_mode_label_mismatch_total / llm_mode_label_checked_total` doit rester
+  à **0 %**. Non nul = le modèle note une autre option que celle qu'il croit, donc ses
+  probabilités partent sur les mauvais index et toute la répartition est fausse
+  (alarme `mode_label_mismatch` au-delà de 5 % sur 200 options observées).
+
+Le symptôme jumeau se lit dans les logs plutôt que dans Grafana : un modèle qui
+**renumérote les options** place sa masse sur des index inexistants. Le réalignement par
+libellé de mode la rattrape (cf. `docs/arch/llm-inference.md`) ; ce qui reste sort en
+`make error` sous `[ALARME] Vecteur de probabilités inexploitable` — la décision du modèle
+a été remplacée par une distribution uniforme, la part modale du run en porte la trace.
+`make warning | grep "hors bornes"` donne le détail (masse réalignée ou perdue).
+
 Les graphiques temporels du dashboard 07 (parts modales, trajets par motif,
 états des agents) sont indexés sur l'**heure simulée**, pas l'heure réelle :
 chaque panel interroge en plus `gama_sim_logical_time_seconds * 1000` puis une
@@ -54,7 +76,7 @@ Deux mécanismes complémentaires :
 1. **Compteur `alarme_total{source}`** — chaque log ERROR `[ALARME]` incrémente
    le compteur (module `llm_module/telemetry/alarms.py`, `fire_alarme(source)`).
    Sources : `backlog`, `event_loop`, `arrivee_perdue`, `cache_llm_stale`,
-   `cache_llm_qdrant`, `gateway_llm` (controller) et `providers_satures`
+   `cache_llm_qdrant`, `gateway_llm`, `vehicule_orphelin` (controller) et `providers_satures`
    (worker, via Redis `alarme:{source}` relu par `WorkerMetricsCollector`).
    Ne pas importer `alarms.py` dans le processus API : la famille y est déjà
    émise par le collecteur Redis. Les deux sites `[ALARME]` de
@@ -75,6 +97,12 @@ TTL), files de batch,
 workers Celery, métriques métier worker (`llm_transport_mode_chosen_total`,
 `llm_mode_by_distance_total` — 7 tranches jusqu'à `>50km`,
 `llm_mode_by_provider_total`, `llm_chosen_index_total`), `alarme_total` (part worker).
+Depuis que le LLM renvoie une **distribution** de probabilités (cf.
+`docs/arch/llm-inference.md`), `llm_transport_mode_chosen_total` et
+`llm_chosen_index_total` portent l'option **la plus probable** (le tirage a lieu côté
+contrôleur) ; `llm_mode_probability_pct_total{mode}` cumule la masse de probabilité par
+mode canonique — c'est la répartition *attendue*, dont `trip_mode_by_purpose_total`
+donne la réalisation tirée.
 
 **Contrôleur** (`llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
 (ticket 003), `controller_sync_duration_seconds` (latence du battement de cœur
@@ -82,6 +110,11 @@ GAMA↔controller), `controller_event_loop_lag_seconds`,
 `trip_mode_by_purpose_total{mode,purpose}` (mode principal × motif d'activité,
 compté au push du trajet vers GAMA — couvre décisions LLM **et** cache
 sémantique **et** mono-choix, contrairement aux `llm_mode_by_*` de la gateway),
+`agent_vehicle_chain_total{mode,event}` (cohérence de chaîne vélo/voiture :
+`unavailable` = mode écarté faute de véhicule sur place, `forced_return` /
+`return_failed` = verrou de retour au domicile, `orphaned` / `reset_home` =
+véhicule laissé à une étape intermédiaire puis rattrapé — cf.
+[vehicle-chain.md](vehicle-chain.md)),
 couverture du cache Qdrant (`llm_cache_points_total/exact/stale`,
 `llm_cache_agents_covered`), `agent_bootstrap_wave_moves{wave,status}` (détail par vague du bootstrap,
 vague 1 comprise — status `planned`/`done`/`ok`/`cache_hit`/`cache_miss` ;

@@ -1,71 +1,127 @@
+# ============================================================
+# Système / éditeurs
+# ============================================================
+.DS_Store
+
+# ============================================================
 # Environnements virtuels Python
+# ============================================================
 .venv/
 venv/
 env/
 
-# Fichiers de configuration locaux et secrets
+# ============================================================
+# Secrets et configuration locale
+# ============================================================
 .env
+GAMA/CityTransport/config/sim_params.yaml
 
-# Cache et fichiers temporaires macOS
-.DS_Store
+# Configuration Claude Code propre à la machine (non partagée).
+# Le reste de .claude/ (CLAUDE.md, settings.json, agents/, skills/) est
+# du contenu versionné : ne pas l'ignorer en bloc, sinon tout nouveau
+# fichier ajouté sans `git add -f` disparaît silencieusement.
+.claude/settings.local.json
 
-# Dossiers de résultats et d'export
-exports/
-results/
-samples/
-
-# Dossiers de données de monitoring
-grafana_data/
-prometheus_data/
-
-# Fichiers de logs et de cache Python
+# ============================================================
+# Logs et caches Python
+# ============================================================
 *.pyc
 *.log
 __pycache__/
 
-# Fichiers de données et de debug spécifiques
-llm-agents/debug.txt
-llm-agents/llm_exchanges.jsonl
-
-# Dossiers d'expérimentations
+# ============================================================
+# Dossiers de résultats, d'export et d'expérimentations
+# ============================================================
+exports/
+results/
+samples/
 experiments*/
+GAMA/CityTransport/results
+GAMA/CityTransport/results_legacy/*
+scripts/models_influence/results*
+scripts/analysis/*.png
 
-# Fichiers CSV dans un sous-dossier spécifique
-scripts/general/*.csv
-Divers/*
-GAMA/CityTransport/config/sim_params.yaml
+# Sorties générées de la synthèse (docs/synthesis/index.html, data.json,
+# archive/*) : produites par scripts/synthesis/build.py, ne pas versionner.
+docs/synthesis/*
+scripts/synthesis/data/*
+scripts/models_influence/calibration_results/*
 
-# Dossier EQUASIM Toulouse — géré dans un repo git séparé
-eqasim-toulouse/
-GAMA/CityTransport/models/false
-data/cache/eqasim/*
-data/population/*
+# Captures d'écran ponctuelles (monitoring, debug) déposées dans docs/capture/
+docs/capture/*.png
 
-# Cache
-scripts/general/cache/*
-llm-agents/cache/*
-otp-toulouse/toulouse/gtfs/*
+# ============================================================
+# Dossiers de données de monitoring (Grafana / Prometheus)
+# ============================================================
+grafana_data/
+prometheus_data/
+
+# ============================================================
+# Caches applicatifs
+# ============================================================
 cache/*
+llm_cache/
+llm-agents/cache/*
 llm-agents/data/osmnx_cache/*
 llm-agents/data/otp_cache/*
-llm_cache/
+scripts/general/cache/*
 data/cache/*
 
-# Temp
-scripts/general/travel_time.py
+# Build artefact non stable (régénéré à chaque `pip install -e`) ; le reste
+# du répertoire egg-info reste versionné.
+llm_module/llm_gateway.egg-info/SOURCES.txt
+
+# ============================================================
+# Données OTP / GTFS / réseau temporaires
+# ============================================================
 otp-toulouse/toulouse/*
 otp-toulouse/source/*
 data/archives/gtfs/*
 scripts/data/gtfs/*
-GAMA/CityTransport/results_legacy/*
-GAMA/CityTransport/results
 scripts/data/population/Temp/*
-scripts/analysis/*.png
-scripts/models_influence/results*
+scripts/general/travel_time.py
 
-docs/tickets/*
+# ============================================================
+# Données restreintes ProGEDO / EMC² / INSEE
+# ============================================================
+# Couche de zones fines dérivée de l'enquête EMC² (ProGEDO / lil-1750, accès
+# restreint). Même statut que sa source, qui n'est pas versionnée : on la
+# régénère avec `make zones` plutôt que de la committer.
+llm_module/data/zf_zones.gpkg
+llm_module/data/zf_zones.meta.json
+
+# Loi du type de logement par zone fine, dérivée de la même enquête (action A2).
+# Même statut, même raison : `make housing-type` la régénère.
+llm_module/data/zf_housing_type.json
+
 data/insee/*
+data/PROGEDO 2023/*
+data/population/*
+data/cache/eqasim/*
 
-#script
-scripts/models_influence/calibration_results/*
-llm_module/llm_gateway.egg-info/SOURCES.txt
+# Jeux de données ProGEDO Logit générés (exploration, fits, exports) : le
+# code (*.py, *.ipynb) reste versionné, les données dérivées non.
+scripts/progedo_logit/*.csv
+scripts/progedo_logit/*.json
+scripts/progedo_logit/*.parquet
+!scripts/progedo_logit/feature_spec.json
+
+# ============================================================
+# Fichiers de données et de debug spécifiques
+# ============================================================
+llm-agents/debug.txt
+llm-agents/llm_exchanges.jsonl
+scripts/general/*.csv
+Divers/*
+GAMA/CityTransport/models/false
+
+# ============================================================
+# Dépôts git externes / séparés (gérés indépendamment, ne pas versionner
+# leur contenu dans ce dépôt)
+# ============================================================
+# EQUASIM Toulouse
+eqasim-toulouse/
+# Calibration de prompt (github.com/Ytlse/prompt_calibration)
+prompt_calibration/
+# Assistant personnel — dépôt git autonome imbriqué
+assistant_perso/

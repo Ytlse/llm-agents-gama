@@ -187,10 +187,10 @@ class BaseAdapter(ABC):
         if match:
             raw_clean = match.group(0)
 
-        _base_logger.debug(
-            f"_parse_output start | provider={provider} raw_len={len(raw_clean)} "
-            f"raw_preview={raw_clean[:300]!r}"
-        )
+        # _base_logger.debug(
+        #     f"_parse_output start | provider={provider} raw_len={len(raw_clean)} "
+        #     f"raw_preview={raw_clean[:300]!r}"
+        # )
 
         # Guard: detect repetition loops (same token repeated > 15 times consecutively)
         words = raw_clean.split()

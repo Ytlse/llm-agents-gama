@@ -692,6 +692,352 @@
    }
   },
   {
+   "type": "row",
+   "id": 35,
+   "title": "Répartition attendue vs tirée (choix probabiliste)",
+   "collapsed": false,
+   "gridPos": {
+    "h": 1,
+    "w": 24,
+    "x": 0,
+    "y": 10
+   },
+   "panels": []
+  },
+  {
+   "type": "piechart",
+   "id": 36,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "ffj2fwnh387pce"
+   },
+   "title": "Attendu — probabilités annoncées par le LLM",
+   "description": "Somme des probabilités attribuées à chaque mode, y compris les modes proposés mais écartés (0 %). C'est la répartition que le tirage doit reproduire en espérance. Train fondu dans TC pour être comparable au vocabulaire du contrôleur.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 0,
+    "y": 11
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "100 * sum by (m) (label_replace(label_replace(label_replace(label_replace(label_replace(llm_mode_probability_pct_total, \"m\", \"marche\", \"mode\", \"walking\"), \"m\", \"velo\", \"mode\", \"cycling\"), \"m\", \"voiture\", \"mode\", \"car\"), \"m\", \"tc\", \"mode\", \"public_transport|train\"), \"m\", \"autres\", \"mode\", \"motorbike|other\")) / scalar(sum(llm_mode_probability_pct_total))",
+     "legendFormat": "{{m}}",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "marche"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#00CCCC"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "velo"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8F3BB8"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "voiture"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#E02F44"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "tc"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3EB15B"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "autres"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#FF9830"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "type": "piechart",
+   "id": 37,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "ffj2fwnh387pce"
+   },
+   "title": "Tiré — trajets réellement poussés vers GAMA",
+   "description": "Modes des trajets effectivement envoyés à la simulation (décisions LLM, cache et mono-choix confondus).",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 8,
+    "y": 11
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "100 * sum by (m) (label_replace(label_replace(label_replace(label_replace(sum by (mode) (trip_mode_by_purpose_total), \"m\", \"marche\", \"mode\", \"walk\"), \"m\", \"velo\", \"mode\", \"bike\"), \"m\", \"voiture\", \"mode\", \"car\"), \"m\", \"tc\", \"mode\", \"transit\")) / scalar(sum(trip_mode_by_purpose_total))",
+     "legendFormat": "{{m}}",
+     "instant": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "color": {
+      "mode": "palette-classic"
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "marche"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#00CCCC"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "velo"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#8F3BB8"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "voiture"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#E02F44"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "tc"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#3EB15B"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "autres"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#FF9830"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "type": "bargauge",
+   "id": 38,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "ffj2fwnh387pce"
+   },
+   "title": "Écart tiré − attendu (points de %)",
+   "description": "Le tirage reproduit la distribution en espérance : un écart franc et durable ne vient pas du modèle mais du tirage, du cache (points hérités resservis sans tirage) ou de la normalisation. Le mono-choix, absent des probabilités, décale mécaniquement l'écart — juger la tendance, pas la valeur.",
+   "gridPos": {
+    "h": 8,
+    "w": 8,
+    "x": 16,
+    "y": 11
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "(100 * sum by (m) (label_replace(label_replace(label_replace(label_replace(sum by (mode) (trip_mode_by_purpose_total), \"m\", \"marche\", \"mode\", \"walk\"), \"m\", \"velo\", \"mode\", \"bike\"), \"m\", \"voiture\", \"mode\", \"car\"), \"m\", \"tc\", \"mode\", \"transit\")) / scalar(sum(trip_mode_by_purpose_total))) - (100 * sum by (m) (label_replace(label_replace(label_replace(label_replace(label_replace(llm_mode_probability_pct_total, \"m\", \"marche\", \"mode\", \"walking\"), \"m\", \"velo\", \"mode\", \"cycling\"), \"m\", \"voiture\", \"mode\", \"car\"), \"m\", \"tc\", \"mode\", \"public_transport|train\"), \"m\", \"autres\", \"mode\", \"motorbike|other\")) / scalar(sum(llm_mode_probability_pct_total)))",
+     "legendFormat": "{{m}}",
+     "instant": true
+    }
+   ],
+   "options": {
+    "displayMode": "gradient",
+    "showUnfilled": true,
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "min": -20,
+     "max": 20,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": -8
+       },
+       {
+        "color": "green",
+        "value": -3
+       },
+       {
+        "color": "orange",
+        "value": 3
+       },
+       {
+        "color": "red",
+        "value": 8
+       }
+      ]
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
+   "type": "stat",
+   "id": 39,
+   "datasource": {
+    "type": "prometheus",
+    "uid": "ffj2fwnh387pce"
+   },
+   "title": "Étiquettes de mode incohérentes",
+   "description": "Part des options notées dont le mode annoncé par le LLM diffère du mode réel de l'option. Un taux non nul signale que le modèle note une AUTRE option que celle qu'il croit : ses probabilités partent sur les mauvais index et toute la répartition est fausse. Attendu : 0 %.",
+   "gridPos": {
+    "h": 4,
+    "w": 24,
+    "y": 19,
+    "x": 0
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "instant": true,
+     "expr": "100 * sum(llm_mode_label_mismatch_total) / clamp_min(sum(llm_mode_label_checked_total), 1)"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percent",
+     "decimals": 2,
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "orange",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 5
+       }
+      ]
+     }
+    },
+    "overrides": []
+   }
+  },
+  {
    "id": 4,
    "type": "row",
    "title": "Modes × motif d'activité (toutes décisions : LLM + cache + mono-choix)",
@@ -700,7 +1046,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 10
+    "y": 23
    }
   },
   {
@@ -756,7 +1102,7 @@
     "h": 9,
     "w": 8,
     "x": 0,
-    "y": 11
+    "y": 24
    },
    "transformations": [
     {
@@ -836,7 +1182,7 @@
     "h": 9,
     "w": 8,
     "x": 8,
-    "y": 11
+    "y": 24
    }
   },
   {
@@ -887,7 +1233,7 @@
     "h": 9,
     "w": 8,
     "x": 16,
-    "y": 11
+    "y": 24
    }
   },
   {
@@ -899,7 +1245,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 20
+    "y": 33
    }
   },
   {
@@ -1203,7 +1549,7 @@
     "h": 7,
     "w": 6,
     "x": 0,
-    "y": 21
+    "y": 34
    }
   },
   {
@@ -1507,7 +1853,7 @@
     "h": 7,
     "w": 6,
     "x": 6,
-    "y": 21
+    "y": 34
    }
   },
   {
@@ -1811,7 +2157,7 @@
     "h": 7,
     "w": 6,
     "x": 12,
-    "y": 21
+    "y": 34
    }
   },
   {
@@ -2115,7 +2461,7 @@
     "h": 7,
     "w": 6,
     "x": 18,
-    "y": 21
+    "y": 34
    }
   },
   {
@@ -2419,7 +2765,7 @@
     "h": 7,
     "w": 6,
     "x": 0,
-    "y": 28
+    "y": 41
    }
   },
   {
@@ -2723,7 +3069,7 @@
     "h": 7,
     "w": 6,
     "x": 6,
-    "y": 28
+    "y": 41
    }
   },
   {
@@ -3027,7 +3373,7 @@
     "h": 7,
     "w": 6,
     "x": 12,
-    "y": 28
+    "y": 41
    }
   },
   {
@@ -3071,7 +3417,7 @@
     "h": 7,
     "w": 6,
     "x": 18,
-    "y": 28
+    "y": 41
    }
   },
   {
@@ -3083,7 +3429,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 35
+    "y": 48
    }
   },
   {
@@ -3390,7 +3736,7 @@
     "h": 7,
     "w": 6,
     "x": 0,
-    "y": 36
+    "y": 49
    }
   },
   {
@@ -3402,7 +3748,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 43
+    "y": 56
    }
   },
   {
@@ -3450,7 +3796,7 @@
     "h": 8,
     "w": 8,
     "x": 0,
-    "y": 44
+    "y": 57
    }
   },
   {
@@ -3504,7 +3850,7 @@
     "h": 8,
     "w": 8,
     "x": 8,
-    "y": 44
+    "y": 57
    }
   },
   {
@@ -3557,7 +3903,7 @@
     "h": 8,
     "w": 8,
     "x": 16,
-    "y": 44
+    "y": 57
    }
   },
   {
@@ -3569,7 +3915,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 52
+    "y": 65
    }
   },
   {
@@ -3635,7 +3981,7 @@
     "h": 8,
     "w": 16,
     "x": 0,
-    "y": 53
+    "y": 66
    },
    "transformations": [
     {
@@ -3721,7 +4067,7 @@
     "h": 8,
     "w": 8,
     "x": 16,
-    "y": 53
+    "y": 66
    }
   },
   {
@@ -3733,7 +4079,7 @@
     "h": 1,
     "w": 24,
     "x": 0,
-    "y": 61
+    "y": 74
    }
   },
   {
@@ -3776,7 +4122,7 @@
     "h": 5,
     "w": 4,
     "x": 0,
-    "y": 62
+    "y": 75
    },
    "description": "Départs poussés vers GAMA au plus 60 s après l'heure prévue (cumul du run, bootstrap exclu)."
   },
@@ -3828,7 +4174,7 @@
     "h": 5,
     "w": 4,
     "x": 4,
-    "y": 62
+    "y": 75
    },
    "description": "Départs poussés vers GAMA plus de 60 s après l'heure prévue (cumul du run)."
   },
@@ -3881,7 +4227,7 @@
     "h": 5,
     "w": 4,
     "x": 8,
-    "y": 62
+    "y": 75
    },
    "description": "Retard moyen des seuls départs en retard (> 60 s), depuis le début du run."
   },
@@ -3934,7 +4280,7 @@
     "h": 5,
     "w": 4,
     "x": 12,
-    "y": 62
+    "y": 75
    },
    "description": "Pire retard observé sur un départ depuis le démarrage du contrôleur."
   },
@@ -3986,7 +4332,7 @@
     "h": 5,
     "w": 4,
     "x": 16,
-    "y": 62
+    "y": 75
    },
    "description": "Réponse LLM/planification arrivée si tard que même l'heure d'arrivée prévue était déjà passée (controller_planning_late_total). Détail du retard : agent_late_departure_seconds."
   },
@@ -4038,7 +4384,7 @@
     "h": 5,
     "w": 4,
     "x": 20,
-    "y": 62
+    "y": 75
    },
    "description": "Activités parties sur l'itinéraire par défaut faute de réponse LLM à temps (saturation/timeout), phase live uniquement."
   },
@@ -4146,7 +4492,7 @@
     "h": 8,
     "w": 16,
     "x": 0,
-    "y": 67
+    "y": 80
    },
    "transformations": [
     {
@@ -4234,7 +4580,7 @@
     "h": 8,
     "w": 8,
     "x": 16,
-    "y": 67
+    "y": 80
    }
   }
  ],

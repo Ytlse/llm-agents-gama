@@ -94,3 +94,47 @@ Après les appels OTP et OSMnx (parallèles), le controller :
 2. Déduplique les itinéraires identiques
 3. Mélange aléatoirement l'ordre de présentation au LLM (anti-biais de position)
 4. Transmet la liste au module de décision LLM
+
+---
+
+## Modes disponibles par agent
+
+Tous les modes ne sont pas interrogés pour tous les agents : le jeu d'options est
+restreint **avant** les appels de routage, dans `_compute_move_for_activity`
+(`urban_mobility_agents/simulation_controller.py`).
+
+| Mode | Condition | Source |
+|------|-----------|--------|
+| Voiture | `number_of_cars > 0` **et** la voiture est au point de départ | trait du ménage + état de chaîne |
+| Vélo | possède un vélo **et** le vélo est au point de départ | trait individuel + état de chaîne |
+| Marche, transports collectifs | toujours | — |
+
+`include_car` / `include_bike` conditionnent la requête OSMnx *et* un post-filtre sur les
+plans revenus (un motif OTP peut contenir un tronçon vélo). Ils alimentent aussi la clé du
+cache de routage persistant : un trajet calculé sans vélo ne pollue pas celui calculé avec.
+
+### Cohérence de chaîne des véhicules
+
+La possession seule ne suffit pas : un agent parti travailler en bus a laissé son vélo au
+domicile et ne peut pas repartir avec — et la même contrainte vaut pour la voiture.
+`PersonState.planning_vehicle_at` suit la **position** de chaque véhicule le long de la
+chaîne planifiée (clé absente ⇒ au domicile) :
+
+- **verrou de sortie** : le mode n'est proposé que si le véhicule est au point de départ ;
+- **stationnement** : le véhicule utilisé suit l'agent, les autres restent où ils sont ;
+- **verrou de retour** : un trajet vers le domicile partant d'un lieu où un véhicule est
+  garé est restreint à ce mode — l'agent le ramène, sans appel LLM supplémentaire ;
+- **« pas de déplacement »** (même localisation) : inchangé, l'agent n'a pas bougé.
+
+C'est un état de **planification** : le plan court devant l'exécution GAMA, le champ suit
+la chaîne planifiée et non la position réelle de l'agent. La séquentialité par agent est
+garantie — le pré-calcul par vagues fait avancer chaque agent d'une activité par vague,
+avec barrière avant la suivante (cf. `docs/arch/agents-lifecycle.md`).
+
+Détail complet, cas résiduels (véhicules orphelins), réglages et métriques :
+[vehicle-chain.md](vehicle-chain.md).
+
+**Effet mesuré (étape vélo).** Rejouée sur le run `2026-07-29_18_34`, la règle invalide
+352 des 1086 trajets à vélo, soit **5,9 points de part modale** (18,2 % → 12,3 % en borne
+haute, si tout se reporte hors vélo). Cible EMC² 2023 : 4 %. L'extension à la voiture n'a
+pas encore de mesure rejouée : `vehicle_chain_enabled=false` permet le run témoin.

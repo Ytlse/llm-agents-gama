@@ -8,11 +8,23 @@
           "type": "object",
           "properties": {
             "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." },
-            "chosen_index": { "type": "integer" },
-            "mode": { "type": "string" },
+            "probabilities": {
+              "type": "array",
+              "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": { "type": "integer", "description": "Index de l'option, tel qu'affiché entre crochets." },
+                  "mode": { "type": "string", "description": "Mode de l'option, recopié depuis l'option." },
+                  "probability": { "type": "number", "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible." }
+                },
+                "required": ["index", "mode", "probability"],
+                "additionalProperties": false
+              }
+            },
             "reason": { "type": "string" }
           },
-          "required": ["agent_id", "chosen_index", "mode", "reason"],
+          "required": ["agent_id", "probabilities", "reason"],
           "additionalProperties": false
         }
       }
