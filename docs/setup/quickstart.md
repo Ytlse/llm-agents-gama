@@ -3,14 +3,14 @@
 ## Prérequis
 
 - Docker + Docker Compose
-- GAMA Platform installé sur l'hôte (hors Docker)
+- GAMA Platform installé sur l'hôte (hors Docker) — **uniquement pour le mode IHM** ; le mode offline utilise l'image Docker officielle `gamaplatform/gama`
 - Données GTFS et graph OTP construits (voir [data-pipeline.md](data-pipeline.md))
 - Population EQUASIM configurée (voir [population.md](population.md))
 - Fichier `.env` avec les clés API (voir [llm-providers.md](llm-providers.md))
 
 ---
 
-## Ordre de démarrage
+## Ordre de démarrage (mode IHM)
 
 ```
 1. docker compose up      ← démarre tous les services Docker
@@ -19,6 +19,40 @@
 ```
 
 Le service `eqasim` génère (ou charge depuis le cache) la population synthétique. Le controller attend sa disponibilité avant de s'initialiser.
+
+---
+
+## Mode offline — GAMA headless en conteneur
+
+Tout démarre avec Docker, sans IHM GAMA ni intervention manuelle :
+
+```shell
+make run OFFLINE=1        # ou l'alias : make run-offline
+```
+
+(`make run --offline` n'est pas une syntaxe make valide — utiliser `OFFLINE=1`.)
+
+Options combinables :
+
+```shell
+make run OFFLINE=1 NO_GOOGLE=1   # campagne sans les modèles Google (gemini/gemma) :
+                                 # clés blanchies, instances google* hors rotation,
+                                 # cascade sur mistral/groq/cerebras
+```
+
+Ce que fait le mode offline :
+
+1. Démarre les services avec le profil compose `offline`, qui ajoute le service `gama` (image officielle `gamaplatform/gama:2025.06.4`, alignée sur la version validée des modèles) en mode **GAMA Server** (`-socket 6868`).
+2. Le controller et l'api reçoivent `GAMA_WS_URL=ws://gama:3001` (au lieu de `ws://host.docker.internal:3001`).
+3. Une fois les services prêts, le launcher `scripts/gama/launch_headless.py` (exécuté dans le conteneur controller) envoie `load` puis `play` au protocole GAMA Server, en injectant les paramètres `http_url`/`http_port` de l'expériment `e` pour que le modèle poste sur `http://controller:8002`.
+4. La console GAMA est relayée dans `experiments/current/gama_headless.log`.
+
+Points d'attention :
+
+- Le launcher **garde sa connexion WebSocket ouverte pendant tout le run** : GAMA Server arrête les expériences dont le client se déconnecte. L'arrêt propre passe par `make down` (ou `docker compose --profile offline down`).
+- À la pause de fin d'horizon (`simulation_max_days`), le controller **continue de drainer les réflexions STM en attente** (écritures LTM, utiles aux runs qui reprennent cette population). Si la LTM du run doit être réutilisée, attendre dans les logs controller le message `[drainage] Réflexions STM épuisées — LTM complète, arrêt sûr (make down)` avant d'arrêter les services.
+- Les paramètres de scénario (population, jours simulés…) restent lus depuis `GAMA/CityTransport/config/sim_params.yaml`, comme en mode IHM.
+- Sans display, l'observation passe par Grafana, vizpop (port 5050) et `make report`. Le protocole GAMA Server permet aussi d'évaluer des expressions GAML à chaud (port 6868 exposé sur l'hôte).
 
 ---
 

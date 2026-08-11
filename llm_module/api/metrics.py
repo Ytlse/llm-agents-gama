@@ -249,6 +249,23 @@ class WorkerMetricsCollector:
             queue_fam.add_metric([batch_key], depth)
         yield queue_fam
 
+        # ── Composition de la file par catégorie de prompt (ticket 010, A4) ───
+        # Le batch_key est `<catégorie>:<md5>` (cf. core/batching.compute_batch_key) :
+        # on agrège sur le préfixe pour lire d'un coup d'œil itinary_multi_agent vs
+        # stm_reflection — la donnée qui a permis le diagnostic du run 2026-08-03.
+        by_category_fam = GaugeMetricFamily(
+            'llm_task_queue_depth_by_category',
+            'Tâches en attente dans les files de batch, agrégées par catégorie de prompt',
+            labels=['category'],
+        )
+        by_category: dict[str, int] = {}
+        for batch_key, depth in deps.queue.depths().items():
+            category = batch_key.split(':', 1)[0]
+            by_category[category] = by_category.get(category, 0) + depth
+        for category, depth in by_category.items():
+            by_category_fam.add_metric([category], depth)
+        yield by_category_fam
+
         # ── Taux d'utilisation workers Celery par provider ────────────────────
         util_fam = GaugeMetricFamily(
             'celery_worker_utilization_ratio',

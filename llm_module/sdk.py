@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional, Union
 
 import httpx
 from loguru import logger
-from prometheus_client import Histogram
+from prometheus_client import Gauge, Histogram
 from pydantic import BaseModel
 
 from llm_module.core.models import AgentResponse, LLMRequest, TaskStatus
@@ -44,6 +44,17 @@ LLM_TASK_E2E_DURATION = Histogram(
     'Durée totale POST /tasks → réponse finale (côté controller), par catégorie',
     ['category'],
     buckets=[1, 2, 5, 10, 30, 60, 120],
+)
+
+LLM_GATEWAY_CIRCUIT_OPEN = Gauge(
+    'llm_gateway_circuit_open',
+    'Disjoncteur du client gateway LLM (1=ouvert : les soumissions sont suspendues '
+    'en attendant le rétablissement, une sonde re-teste périodiquement)',
+)
+
+LLM_GATEWAY_CIRCUIT_WAITERS = Gauge(
+    'llm_gateway_circuit_waiters',
+    'Soumissions LLM suspendues derrière le disjoncteur ouvert (en attente du rétablissement)',
 )
 
 _TRANSIENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.RemoteProtocolError, httpx.ReadTimeout)
@@ -96,6 +107,8 @@ class LLMGatewayClient:
         transport: httpx.AsyncBaseTransport | None = None,
         backpressure_max_inflight: int = 0,
         backpressure_release_ratio: float = 0.2,
+        circuit_failure_threshold: int = 10,
+        circuit_probe_interval: float = 60.0,
     ):
         self._base_url = base_url.rstrip("/")
         self._wait_timeout = wait_timeout
@@ -112,6 +125,25 @@ class LLMGatewayClient:
         self._backpressure_release_ratio = backpressure_release_ratio
         self._backpressure_active = False
         self._inflight = 0
+        # Disjoncteur : après N échecs consécutifs (panne durable — quotas épuisés,
+        # gateway/réseau down), les soumissions sont SUSPENDUES : chaque appelant
+        # attend tranquillement le rétablissement (renouvellement des quotas, retour
+        # du service) au lieu de brûler des tentatives vouées à l'échec et de dégrader
+        # les décisions en index par défaut. Une sonde demi-ouverte re-teste le
+        # gateway toutes les circuit_probe_interval secondes ; le premier succès
+        # referme le disjoncteur et tous les appels suspendus repartent sur le chemin
+        # nominal. circuit_failure_threshold=0 → disjoncteur désactivé.
+        self._circuit_failure_threshold = circuit_failure_threshold
+        self._circuit_probe_interval = circuit_probe_interval
+        self._circuit_open_since: Optional[float] = None
+        self._circuit_next_probe_at = 0.0
+        self._circuit_probe_inflight = False
+        self._circuit_waiters = 0
+
+    @property
+    def circuit_open(self) -> bool:
+        """True si le disjoncteur est ouvert (gateway LLM considéré en panne durable)."""
+        return self._circuit_open_since is not None
 
     async def _http(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -141,15 +173,47 @@ class LLMGatewayClient:
         payload = request.model_dump(exclude_none=True) if isinstance(request, LLMRequest) else request
         category = payload.get("category", "unknown")
 
+        # Disjoncteur ouvert : la soumission est SUSPENDUE jusqu'au rétablissement du
+        # gateway (aucune décision dégradée — on attend le renouvellement des quotas).
+        # L'un des appelants suspendus devient périodiquement la sonde (demi-ouvert)
+        # qui traverse pour tester si le gateway est rétabli.
+        is_probe = await self._circuit_gate()
+
         # Backpressure : si l'alarme gateway est active, on attend le drainage de
         # la pile in-flight avant de rendre la main (soumettre cette tâche).
-        if self._backpressure_active and self._backpressure_max_inflight > 0:
+        # La sonde ne s'y soumet pas : elle doit partir sans délai.
+        if not is_probe and self._backpressure_active and self._backpressure_max_inflight > 0:
             await self._await_backpressure_drain()
 
         self._inflight += 1
         _e2e_start = time.monotonic()
         try:
-            task_id = await self._submit(payload)
+            try:
+                task_id = await self._submit(payload)
+            except httpx.HTTPStatusError as e:
+                # 4xx = payload invalide (erreur de programmation) : on propage sans
+                # compter d'échec. 5xx = gateway malade : échec comptabilisé (alarme,
+                # backpressure, disjoncteur) puis rendu au caller comme TaskResult.
+                if e.response.status_code < 500:
+                    raise
+                result = TaskResult(
+                    status=TaskStatus.FAILED,
+                    error=f"Gateway error {e.response.status_code} à la soumission",
+                    timing=TaskTiming(),
+                )
+                self._observe(result, payload, category, _e2e_start, 0.0)
+                return result
+            except _TRANSIENT as e:
+                # Gateway injoignable (coupure réseau, service down) : sans ce
+                # comptage, une panne franche ne déclenchait NI l'alarme NI le
+                # disjoncteur (l'exception court-circuitait _observe).
+                result = TaskResult(
+                    status=TaskStatus.FAILED,
+                    error=f"Gateway LLM injoignable ({type(e).__name__})",
+                    timing=TaskTiming(),
+                )
+                self._observe(result, payload, category, _e2e_start, 0.0)
+                return result
             post_ms = (time.monotonic() - _e2e_start) * 1000
 
             wait_start = time.monotonic()
@@ -166,6 +230,42 @@ class LLMGatewayClient:
             return result
         finally:
             self._inflight -= 1
+            if is_probe:
+                self._circuit_probe_inflight = False
+
+    async def _circuit_gate(self) -> bool:
+        """Retient l'appelant tant que le disjoncteur est ouvert.
+
+        Retourne True si cet appel devient la sonde (il traverse pour tester le
+        gateway) ; False sinon — soit le disjoncteur était fermé, soit il vient de
+        se refermer (sonde d'un autre appelant réussie) et l'appel repart sur le
+        chemin nominal. Aucune tâche n'échoue ni n'est dégradée pendant l'attente :
+        la simulation attend le renouvellement des quotas / le retour du service.
+        """
+        if not self.circuit_open:
+            return False
+        waiting = False
+        try:
+            while self.circuit_open:
+                now = time.monotonic()
+                if now >= self._circuit_next_probe_at and not self._circuit_probe_inflight:
+                    self._circuit_probe_inflight = True
+                    logger.info(
+                        f"[circuit] Sonde vers le gateway LLM (disjoncteur demi-ouvert, "
+                        f"{self._circuit_waiters} soumission(s) en attente)"
+                    )
+                    return True
+                if not waiting:
+                    waiting = True
+                    self._circuit_waiters += 1
+                    LLM_GATEWAY_CIRCUIT_WAITERS.set(self._circuit_waiters)
+                    logger.debug("[circuit] Soumission suspendue en attente du rétablissement du gateway")
+                await asyncio.sleep(min(1.0, max(0.1, self._circuit_next_probe_at - now)))
+        finally:
+            if waiting:
+                self._circuit_waiters -= 1
+                LLM_GATEWAY_CIRCUIT_WAITERS.set(self._circuit_waiters)
+        return False
 
     async def _await_backpressure_drain(self) -> None:
         """Suspend la coroutine appelante tant que la pile in-flight dépasse
@@ -265,6 +365,14 @@ class LLMGatewayClient:
             self._consecutive_failures = 0
             # La gateway répond de nouveau → on désarme toute backpressure en cours.
             self._backpressure_active = False
+            if self.circuit_open:
+                downtime = time.monotonic() - self._circuit_open_since
+                self._circuit_open_since = None
+                LLM_GATEWAY_CIRCUIT_OPEN.set(0)
+                logger.info(
+                    f"[circuit] Gateway LLM rétabli après {downtime:.0f}s de disjoncteur ouvert — "
+                    f"reprise des {self._circuit_waiters} soumission(s) suspendue(s)"
+                )
         else:
             error_msg = result.error or "No error detail"
             _log = logger.warning if "saturés" in error_msg or "indisponibles" in error_msg else logger.error
@@ -285,6 +393,26 @@ class LLMGatewayClient:
                         f"Providers en rate-limit ou gateway indisponible : vérifier /health "
                         f"et docker logs llm_module."
                     )
+            now = time.monotonic()
+            if self.circuit_open:
+                # Sonde (ou requête en vol à l'ouverture) en échec : la prochaine
+                # sonde attendra un intervalle complet.
+                self._circuit_next_probe_at = now + self._circuit_probe_interval
+            elif (
+                self._circuit_failure_threshold > 0
+                and self._consecutive_failures >= self._circuit_failure_threshold
+            ):
+                self._circuit_open_since = now
+                self._circuit_next_probe_at = now + self._circuit_probe_interval
+                LLM_GATEWAY_CIRCUIT_OPEN.set(1)
+                fire_alarme("gateway_llm_circuit")
+                logger.error(
+                    f"[ALARME] Disjoncteur gateway LLM OUVERT après {self._consecutive_failures} échecs "
+                    f"consécutifs (dernier : {error_msg}). Les soumissions LLM sont SUSPENDUES — la "
+                    f"simulation attend le rétablissement (renouvellement des quotas / retour du service), "
+                    f"aucune décision n'est dégradée. Une sonde re-testera le gateway toutes les "
+                    f"{self._circuit_probe_interval:.0f}s ; la reprise est automatique."
+                )
 
     def _log_dialogue(self, payload: Dict[str, Any], result: TaskResult) -> None:
         """Enregistre la requête et la réponse sous forme de dialogue textuel détaillé."""

@@ -48,6 +48,31 @@ La possession seule ne suffit plus. Avant, un agent parti travailler en bus retr
 son vélo pour repartir du bureau ; la voiture, elle, n'avait aucune contrainte de
 position du tout et était disponible partout, tout le temps.
 
+La voiture ajoute une **condition de conducteur** : `_can_drive(traits)` exige le permis
+*et* 18 ans révolus. Les deux, parce qu'aucun ne suffit — une population générée avant
+les garde-fous eqasim distribue des permis à des enfants de neuf ans. C'est ici que le
+verrou est dur : le contrôleur ne s'en remet pas à la qualité de la population.
+
+### 1 bis. Mode passager — monter sans conduire
+
+Un agent qui ne peut pas conduire peut quand même **monter** dans la voiture du foyer.
+`_is_car_passenger(person)` : ne pas pouvoir conduire, avoir une voiture au foyer, et
+`household_size > 1` — il faut quelqu'un pour conduire. Un adulte sans permis vivant
+seul n'est donc pas passager.
+
+Pour lui, la voiture est proposée **sans test de position** : ce n'est pas sa voiture, un
+tiers l'amène. Et `_park_vehicles` sort immédiatement — la voiture ne se gare pas à
+destination, elle repart avec son conducteur. C'est ce qui empêche, à la règle 3, qu'un
+enfant de douze ans soit sommé de ramener la voiture de l'école : rien n'y étant garé,
+`_vehicles_parked_at` ne rend rien.
+
+Le mode reste `Voiture Privée` dans `moves.csv` — **EMC² compte le passager dans
+« voiture »**, la part modale reste donc comparable. La traçabilité passe par la colonne
+`Contrainte de chaîne` (valeur `passager`), pas par un septième mode.
+
+**Version 1, assumée** : le trajet d'accompagnement du parent n'est pas généré, et il n'y
+a pas de `household_id`. On rend la voiture accessible à l'enfant, rien de plus.
+
 ### 2. Stationnement — le véhicule suit celui qui l'utilise
 
 `_park_vehicles(person, plan, from_location, destination)` : le véhicule du mode retenu
@@ -66,6 +91,30 @@ C'est un filtre sur l'ensemble des options, pas une décision : **aucun appel LL
 supplémentaire**. Quand aucun itinéraire n'existe dans le mode attendu (OTP muet,
 distance hors portée vélo), on rend la main plutôt que de bloquer l'agent — il rentre
 autrement et le véhicule devient orphelin (voir plus bas).
+
+#### Seuil de distance : le verrou ne s'applique pas sous 1 km
+
+Sur le run de référence, 59,5 % des retours au domicile de **moins d'1 km** décidés
+automatiquement se faisaient en voiture et 7,6 % à pied — contre ~76 % de marche
+attendus par EMC². Le verrou obligeait l'agent à reprendre sa voiture pour deux cents
+mètres.
+
+En dessous de `RETURN_LOCK_MIN_DISTANCE_KM` (**1 km**, en dur dans
+`simulation_controller.py`, pas de réglage exposé), le verrou ne s'applique pas : tous
+les modes restent offerts. Si l'agent rentre autrement, le véhicule devient orphelin et
+sera rattrapé par `_settle_vehicles_at_home`. **C'est un compromis accepté : ce seuil
+augmente mécaniquement le taux d'orphelins**, et donc la pression sur l'alarme
+correspondante. Ne pas relever `vehicle_orphan_alarm_ratio` pour la faire taire — c'est
+le taux qu'il faut lire, pas le seuil qu'il faut déplacer.
+
+La distance est estimée **avant** l'appel à OTP (le verrou s'exécute avant le choix, donc
+`plan.distance` n'existe pas encore) : `_road_distance_km` = vol d'oiseau × 1,3, exactement
+la convention de `_estimate_fallback_duration`, avec laquelle le calcul est factorisé.
+
+> ⚠️ **Écart attendu et normal.** La colonne « Distance parcourue » de `moves.csv` porte la
+> distance du plan retenu (`_plan_distance_km`), pas cette estimation. Quelques trajets
+> près du seuil sont donc classés d'un côté par le verrou et de l'autre par les
+> statistiques. Ne pas chercher à les faire coïncider.
 
 ## Cas résiduel : les véhicules orphelins
 
@@ -119,6 +168,14 @@ en deux variantes de clé, et le taux de hit du cache OTP baisse légèrement.
 | `vehicle_orphan_alarm_ratio` | `0.05` | Seuil d'alarme sur la part des retours laissant un orphelin |
 | `vehicle_orphan_alarm_min_returns` | `200` | Retours observés avant que l'alarme puisse se déclencher |
 
+Deux valeurs sont **en dur**, et le restent volontairement : ce sont des conventions de
+modélisation documentées ici, pas des paramètres à explorer.
+
+| Constante (`simulation_controller.py`) | Valeur | Effet |
+|---|---|---|
+| `RETURN_LOCK_MIN_DISTANCE_KM` | `1.0` | En dessous, le verrou de retour ne s'applique pas |
+| `DRIVING_AGE` | `18` | Âge minimal pour conduire, en plus du permis |
+
 ## Métriques
 
 `agent_vehicle_chain_total{mode, event}` — `mode` ∈ `bike`/`car`, `event` ∈ :
@@ -126,6 +183,9 @@ en deux variantes de clé, et le taux de hit du cache OTP baisse légèrement.
 | `event` | Signification |
 |---------|---------------|
 | `unavailable` | Mode écarté des options : véhicule possédé mais garé ailleurs |
+| `no_driver` | Voiture écartée faute de conducteur (mineur, ou sans permis et sans personne pour l'emmener). Cause distincte de `unavailable`, qui reste réservé à la position |
+| `passenger` | Trajet en voiture retenu par un non-conducteur : un adulte du foyer conduit |
+| `short_return` | Verrou de retour non appliqué : trajet sous `RETURN_LOCK_MIN_DISTANCE_KM` |
 | `forced_return` | Trajet de retour restreint à ce mode (l'agent ramène son véhicule) |
 | `return_failed` | Verrou de retour inapplicable (aucun itinéraire dans ce mode) |
 | `orphaned` | Retour au domicile avec le véhicule resté ailleurs |
@@ -135,11 +195,35 @@ en deux variantes de clé, et le taux de hit du cache OTP baisse légèrement.
 Effet attendu sur les parts modales : `trip_mode_by_purpose_total{mode}` (voir
 [monitoring.md](monitoring.md)).
 
+## Traçabilité dans `moves.csv` : la colonne « Contrainte de chaîne »
+
+Placée juste après « Méthode de sélection », **une seule valeur par ligne** :
+
+| Valeur | Signification |
+|---|---|
+| *(vide)* | Aucune contrainte : le jeu de choix est celui d'OTP |
+| `retour_force` | Verrou de retour appliqué — options restreintes au mode du véhicule garé |
+| `passager` | Trajet en voiture conduite par un tiers du foyer |
+| `sortie_bloquee` | Un mode véhiculé possédé a été écarté faute de véhicule sur place |
+
+Priorité quand plusieurs s'appliquent : `passager` > `retour_force` > `sortie_bloquee`.
+
+**Ces lignes restent dans le scoring** : la colonne explique une décision, elle ne la
+disqualifie pas. La page de synthèse en publie la répartition dans son bilan de lecture,
+à côté des méthodes de sélection — une décision prise sur un jeu d'options déjà restreint
+ne mesure pas la même chose qu'un choix libre, et le lecteur doit savoir de quelle part
+il s'agit.
+
+Aucun consommateur ne lit `moves.csv` par index de colonne (`frames.read_moves` utilise
+`csv.DictReader`), l'ajout est donc sûr — `tests/test_move_logger_columns.py` vérifie
+l'alignement en-têtes/valeurs à chaque exécution.
+
 ## Tests
 
-`llm-agents/tests/test_vehicle_chain.py` — 52 tests sur les fonctions réelles du
-contrôleur (possession, position initiale, les trois règles, orphelins, chaînes de
-journée complètes, rattrapage au domicile).
+`llm-agents/tests/test_vehicle_chain.py` — 71 tests sur les fonctions réelles du
+contrôleur (possession, position initiale, les trois règles, mode passager, seuil de
+distance du verrou de retour, orphelins, chaînes de journée complètes, rattrapage au
+domicile).
 
 ```bash
 cd llm-agents && .venv/bin/python -m pytest tests/test_vehicle_chain.py -q

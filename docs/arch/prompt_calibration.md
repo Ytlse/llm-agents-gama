@@ -103,11 +103,25 @@ Trois points d'attention :
 
 ### Rôles des modèles (décision d'architecture)
 
-- **Un seul modèle d'évaluation** (`google_gemini31` / `gemini-3.1-flash-lite-preview`,
-  température minimale), pour le train, la validation et le test. *Pourquoi :* une
-  calibration est spécifique à un modèle donné — changer de modèle d'évaluation invalide
-  le prompt calibré et demande une recalibration (en repartant du prompt calibré d'un
-  modèle proche). La version du modèle doit être **épinglée** (pas d'alias `-latest`).
+- **Un seul modèle d'évaluation** (température minimale), pour le train, la validation et
+  le test. *Pourquoi :* une calibration est spécifique à un modèle donné — changer de modèle
+  d'évaluation invalide le prompt calibré et demande une recalibration (en repartant du prompt
+  calibré d'un modèle proche). La version du modèle doit être **épinglée** (pas d'alias
+  `-latest`, pas de `-preview` flottante).
+
+  **Version figée de la campagne de référence (2026-08-11)** : `google_gemini31_ga` /
+  **`gemini-3.1-flash-lite`** (version GA `3.1-flash-lite-05-2026`, confirmée via l'API
+  `ListModels` et par un appel réel). C'est le **même modèle** que la preview historique, mais
+  dans sa version **stable et datée** — la preview (`…-preview-03-2026`) est un alias flottant
+  qui peut dériver sans que la clé de cache ne change, ce qui ruine la reproductibilité.
+
+  ⚠️ **Découplage étiquette / modèle appelé.** Le modèle réellement envoyé à l'API est le
+  `default_model` du provider (`providers.yaml`) : `evaluation.py` ne passe **pas** de champ
+  `model` dans la requête. `RunConfig.eval_model` ne sert qu'à la **clé de cache**
+  (`eval_params_key()`) et à la métadonnée de résultat. `eval_provider` entre **aussi** dans
+  cette clé : l'entrée dédiée `google_gemini31_ga` a donc son **propre cache**, totalement
+  isolé de la campagne `ga1` (restée sur la preview) — aucune campagne en cours n'est
+  perturbée, et le quota Google étant compté **par modèle**, elle dispose d'un seau RPD distinct.
 - **Un modèle distinct pour les mutations** (`gemini-3.1-flash-lite-preview`),
   afin de ne pas consommer le quota de tokens du modèle d'évaluation, qui est la
   ressource rare de la boucle. ⚠ Depuis le passage de l'éval sur Gemini
@@ -135,20 +149,47 @@ Le composite agrège les dimensions avec des poids fixes :
 | Terme | Poids | Rôle |
 |---|---|---|
 | `global` | 1.0 | Distribution modale toutes strates confondues |
-| `absent_penalty` | 1.0 | 5 × part EMC² de chaque mode jamais choisi (mode « oublié ») |
 | `age` | 0.5 | L1 moyenne par tranche d'âge |
 | `occupation` | 0.5 | L1 moyenne par occupation |
 | `genre` | 0.3 | L1 moyenne Homme / Femme |
 | `motif` | 0.5 | L1 moyenne travail / études / achats |
 | `distance` | 0.3 | L1 moyenne par bucket de distance |
-| `length_penalty` | 1.0 | `0.05 × nb de mots` du prompt (incitation à la concision) |
+| `absent_penalty` | **0.0** | 5 × part EMC² de chaque mode jamais choisi — **calculé et stocké comme diagnostic, mais poids nul → n'entre plus dans le composite** (cf. ci-dessous) |
+| `length_penalty` | **0.0** | `0.05 × nb de mots` du prompt — **calculé et stocké pour transparence, mais poids nul → n'entre plus dans le composite** (cf. ci-dessous) |
 
-**Minimisation du prompt (cible)** : la `length_penalty` est une incitation faible ;
-le mécanisme principal d'économie de tokens est la **passe de compaction** (ticket 004
-§4.5) — suppression des blocs de contribution ≈ nulle et condensation des blocs
-verbeux, acceptées sous test de non-infériorité (le score ne doit pas se dégrader
-significativement). Le prompt calibré étant envoyé à chaque décision d'itinéraire en
-production, chaque mot compte.
+> **`absent_penalty` sort de la loss (2026-08-11) — même précédent que `length_penalty`.**
+> Quatre défauts, tous vérifiés. **Échelle** : `cerema_values.yaml` est libellé en
+> **pourcents** (voiture 55), donc un mode absent pesait `5 × 55 = 275` face à un terme
+> `global` borné à 200 et à des dimensions valant 2 à 25 — mesuré sur le store,
+> 130 points de pénalité sur un composite de 289, soit **45 % du score d'un nœud**. Ce
+> n'était pas un terme *de* la loss, c'**était** la loss. **Discontinuité** : l'indicatrice
+> sur le zéro strict rend la fonctionnelle non Hadamard-différentiable — le bootstrap
+> n'est donc pas consistant sur le terme dominant (loi du Δ bimodale, `{−20,3 ; 0}`).
+> **Redondance** : un mode à masse nulle dégrade déjà le terme `global`, la pénalité le
+> comptait une seconde fois, plus cher. **Constante arbitraire** : le `5` est indéfendable.
+>
+> Le critère légitime qu'il portait — « un prompt qui supprime un mode n'est pas
+> recevable » — survit **hors du score**, en tout-ou-rien : `metrics.is_admissible`
+> (§2.1.1). Le retrait est **rétro-applicable exactement** : le composite est linéaire et
+> `absent_penalty` est déjà stocké dans `scores_json`, donc
+> `composite' = composite − 1.0 × absent_penalty` (`metrics.rescale_composite`). **Aucune
+> éval à jeter, aucun appel LLM à repayer.**
+
+**Minimisation du prompt (cible)** : la `length_penalty` n'entre **plus** dans le
+composite (poids `0.0` dans `L1Composite.WEIGHTS`, propagé à `EMDJSDComposite`). Le terme
+reste **calculé et stocké** (`Scores.length_penalty`, suivi du nombre de mots), mais ne
+**réordonne plus** les candidats. Le mécanisme d'économie de tokens est donc **entièrement**
+porté par la **passe de compaction** (ticket 004 §4.5) — suppression des blocs de
+contribution ≈ nulle et condensation des blocs verbeux, sous test de non-infériorité.
+
+> **Pourquoi (plan arbitré du diagnostic, 2026-08-11) — « une seule loss de bout en bout ».**
+> La `length_penalty` linéaire était **distordante** (corrélation ρ=−0,03 avec la qualité) et,
+> surtout, créait une **incohérence sélection/reporting** : le champion était choisi sous un
+> composite *incluant* la pénalité, mais le chiffre publiable la *neutralisait* → le prompt
+> publié n'était pas l'argmin de la métrique rapportée. Poids nul ⇒ **sélection = reporting**.
+> Le changement est **gratuit et rétroactif** : ni le poids ni le mode de longueur n'entrent
+> dans `eval_params_key()` → aucune invalidation de cache, recalcul depuis les décisions
+> brutes stockées.
 
 **Poids : échelle vs importance, et analyse de sensibilité (2026-07-22)**. Les poids
 ci-dessus sont posés à la main et **confondent deux choses** : l'*échelle* d'un terme
@@ -166,6 +207,76 @@ sans aucun appel LLM (le store conserve les décisions brutes) :
   ~1.0), `strat_x2` / `strat_half` — et indique si le **meilleur prompt reste le
   meilleur** (stabilité + corrélation de rang de Spearman). Réponse chiffrée à
   « pourquoi 0.3 pour le genre ? » avant de figer un jeu de poids en production.
+
+### 2.1.1 « L'absence de donnée n'est pas une donnée » — mesurabilité & recevabilité (2026-08-11)
+
+Le composite est une **loss** : `0.0` est le score **parfait**. Toute branche qui
+renvoyait `0.0` faute de mesure offrait donc l'optimum à un candidat qu'on n'avait
+pas su mesurer — un biais **systématiquement orienté vers le flatteur**. Constaté sur
+le store : neuf évals importées sans décisions se recalculaient à `composite = 0.00`
+**pile**, et sept évals `screen` de 8 à 35 personas décrochaient un `age` (parfois
+aussi `motif`, `occupation`, `distance`) à `0.00` faute de strate assez peuplée — la
+plus petite d'entre elles, **8 personas et quatre dimensions offertes**, était
+l'**argmin** du jeu `screen` sous la loss L1.
+
+Deux règles, et **surtout pas la même** :
+
+| Contexte | Règle | Mise en œuvre |
+|---|---|---|
+| **Score** (une valeur à rendre) | **Échec pessimiste** — valeur mesurée, ou repli explicite vers la **perte maximale** de l'axe (`L1_MAX_DIM = 200`, `DIV_MAX_DIM = 100`) | `Metric.compute_detailed`, `_dim_mean_measured`, `jsd_nominal_dim_measured`, `emd_ordinal_dim_measured`, `jsd(∅)` |
+| **Critère d'élimination** (garder ou écarter un candidat) | **Abstention** — garder en lice, marquer `unmeasured`, alarmer. Éliminer un candidat qu'on n'a pas su mesurer remplacerait un biais optimiste par un biais pessimiste, plus difficile à voir | `stats.ci_overlaps_zero`, `stats.VERDICT_INSUFFICIENT_N` |
+
+**Invariant (test maître)** : `composite(entrée vide ou dégénérée) > composite(toute
+éval réelle)`. Vérifié en test *et* sur le store : 620 vs 415,8 au pire (L1), 310 vs
+63,5 (emd_jsd).
+
+**L'effectif voyage avec le score.** `Metric.compute_detailed` renvoie, à côté de
+`Scores`, un `Measurement` : effectif par dimension, **liste des dimensions non
+mesurées**, masse totale et masse `Autre`, modes absents. `Evaluator` le journalise à
+chaque éval (`📐 mesure « train » : n=608 personas · masse/persona=1.000 · Autre=0.4 %`)
+et lève une `[ALARME]` si une dimension n'a pas été mesurée.
+
+**Recevabilité, hors score** (`metrics.is_admissible`) — fonction **pure**, elle ne
+rejette rien elle-même :
+
+- un prompt attribuant une masse **exactement nulle** à un mode dont la part de
+  référence atteint 1 % (`ADMISSIBLE_REF_FLOOR`, sur la part *renormalisée* donc sans
+  unité) n'est **pas recevable** ;
+- option `check_autre` : la masse **non catégorisée** (`Autre`) est instrumentée
+  (`mass_report` : masse par persona, part `Autre`) et peut rendre une éval non
+  recevable. Motif : la loss `emd_jsd` **renormalise sur les modes** et fait donc
+  *disparaître* la masse `Autre`, tandis que la L1 l'inclut au dénominateur — un
+  candidat dont 100 % de la masse est non catégorisée obtient même un `global`
+  (100) **meilleur** qu'un candidat qui met tout sur le mauvais mode (jusqu'à 200).
+  Le seuil `AUTRE_SHARE_MAX` est **provisoire et non arbitré** ; il ne pilote aucun
+  rejet tant que la boucle ne le câble pas.
+
+**Le dernier trou : `Scores()` nu (2026-08-11).** `Metric.compute_detailed` avait bouché
+le chemin d'éval dégénérée, mais `Scores()` gardait `composite = 0.0` par défaut — donc
+**tout** code construisant un score nu (repli d'erreur, import sans scores, branche « on
+n'a rien pu mesurer ») fabriquait encore le score parfait et raflait les argmin. Le défaut
+est désormais `UNMEASURED_COMPOSITE = 1e6` : **fini** (JSON/SQLite le sérialisent et le
+trient normalement, contrairement à `inf`) et volontairement hors d'échelle — le pire
+composite *réel* possible vaut ≈ 620. Lire ce nombre dans un rapport, ce n'est pas lire un
+mauvais score, c'est lire « **rien n'a été mesuré ici** ».
+
+**Rétro-application de A5 (`calibrate rescore`).** Le retrait d'`absent_penalty` du composite
+est un changement de **poids** (1,0 → 0,0), pas de valeur. Le composite étant linéaire,
+`composite' = composite − 1,0 × absent_penalty` est **exact** (`metrics.rescale_composite`) :
+aucune éval à jeter, aucun appel LLM à repayer. `rescore` l'applique désormais en même temps
+que le recalcul de la pénalité de longueur. **Idempotence** : contrairement à la longueur —
+recalculable depuis le texte du prompt, donc auto-vérifiante — rien dans le score ne dirait
+qu'on a déjà retranché, et rejouer la commande soustrairait deux fois ; le poids appliqué est
+donc **gravé** dans `scores_json` (`absent_penalty_weight`), clé ignorée en lecture par
+`Scores`.
+
+**Où `is_admissible` est câblée — et où elle ne l'est pas encore.**
+
+| Point d'appel | État | Effet |
+|---|---|---|
+| `Evaluator._log_measurement` | câblé | ligne `[ALARME]` à chaque éval non recevable (aucun rejet) |
+| `publish.select_champion` | **câblé** (2026-08-11) | un candidat non recevable est **écarté du vivier** des finalistes — sans quoi rien ne l'écarterait, `absent_penalty` pesant 0,0 dans la loss. Filtre **levé et annoncé** s'il devait vider le vivier |
+| `loop.py` / `genetic.py` (acceptation d'une mutation) | **à faire** | **verdict `invalid`, pas `rejected_score`** : ce n'est pas un jugement de qualité mais un défaut de recevabilité. Câblage attendu : après l'éval de la mutation, `ok, motif = is_admissible(df, cerema)` (ou sur le `Measurement` renvoyé par `compute_detailed`, qui évite tout recalcul) ; si `not ok` → enregistrer la mutation avec `verdict="invalid"` et le motif, **ne pas** l'inscrire au tabu (ce n'est pas une idée réfutée), **ne pas** verser de récompense au bandit (une abstention, pas un `0` — punir un bras pour une non-recevabilité reproduirait le livelock), et journaliser en `[ALARME]` |
 
 **Garde-fous de la boucle** (en plus du score) :
 
@@ -192,9 +303,20 @@ Composition :
 
 | Dimension | Métrique | Fonction |
 |---|---|---|
-| `age`, `distance` (ordinales) | EMD du profil de chaque mode le long de l'axe (`Σ_k |ΔCDF|`, ×100/longueur d'axe, pondéré par effectif du mode) | `emd_ordinal_dim` / `emd_1d` |
+| `age`, `distance` (ordinales) | EMD du profil de chaque mode le long de l'axe (`Σ_k |ΔCDF|`, ×100/longueur d'axe, **pondéré par la masse de RÉFÉRENCE du mode**) | `emd_ordinal_dim` / `emd_1d` |
 | `global`, `occupation`, `genre`, `motif` (nominales) | JSD inter-modes (base 2, bornée), **pondérée en continu par effectif** (plus de seuil `n ≥ 5`) | `jsd_nominal_dim` / `jsd` |
-| `absent_penalty`, `length_penalty` | identiques à la L1 | — |
+| `absent_penalty`, `length_penalty` | identiques à la L1 (valeurs inchangées, **poids 0.0**) | — |
+
+> **L'EMD était auto-normalisée, donc jouable (corrigé le 2026-08-11).** Le poids de
+> chaque mode dans la moyenne était `counts_all[m]` — la masse que le **candidat**
+> accorde lui-même au mode. *La métrique était pondérée par la quantité qu'elle est
+> censée juger* : un candidat améliorait son score en **dégonflant** un mode qu'il place
+> mal, jusqu'à le faire disparaître de sa propre note, sans corriger une seule erreur.
+> Le poids est désormais la **masse de référence Cerema** du mode le long de l'axe,
+> invariante d'un candidat à l'autre. Effet chiffré sur les 325 évals réelles du store :
+> `age` médiane **+0,59** (−2,4 à +6,2), `distance` médiane **+0,71** (−0,7 à +4,1) ;
+> corrélation de rang avant/après **0,99**, champion inchangé sur `train`, `screen` et
+> `race:0.25`.
 
 Le composite réutilise les poids de dimension de la L1 (mêmes rôles) ; les échelles
 JSD/EMD sont ramenées en ×100 pour rester du même ordre de grandeur que les points
@@ -228,15 +350,77 @@ les agents avec remise, on recalcule le `Δcomposite` (prompt muté − prompt c
 chaque tirage des **mêmes** agents des deux côtés, d'où un IC à 90 % sur l'amélioration.
 Une mutation n'est conservée que si `p_improve ≥ seuil`.
 
-Le recuit (`significance_threshold`) n'assouplit que le **seuil de signification** — de
-0.90 à froid (IC 90 %) à 0.55 à chaud (exploration) — **jamais le signe** : une mutation
-qui dégrade le composite (`Δ ≥ 0`) est toujours rejetée (`rejected_score`), une
-amélioration non significative est rejetée `rejected_stat`, ce qui la distingue dans le
-store et nourrit le mutateur. La température d'évaluation minimale réduit la variance de
+Le seuil est **FIXE à `bootstrap_conf_max` (0,90)**, à toute température. Le **signe**
+prime toujours : une mutation qui dégrade le composite (`Δ ≥ 0`) est rejetée
+(`rejected_score`), une amélioration non significative est rejetée `rejected_stat`, ce
+qui la distingue dans le store et nourrit le mutateur. La température d'évaluation
+minimale réduit la variance de
 sampling du LLM ; le bootstrap couvre le bruit résiduel dû à la taille finie de
 l'échantillon de personas. Le rééchantillonnage porte sur les décisions brutes déjà
 stockées → aucun appel LLM. Le recuit simple (`accept_test: sa`, phase 1) reste
 disponible.
+
+**Le standard de preuve ne se recuit pas (2026-08-11).** Le seuil était **recuit** de
+`bootstrap_conf_max` (0,90, à froid) à `bootstrap_conf_min` (0,55, à chaud), soit
+**α = 0,45 en début de campagne** — c'est-à-dire quasiment aucun contrôle statistique
+là où la campagne écrit le plus. Ce que ce recuit assouplissait n'était pas l'**ampleur
+du déplacement toléré** (le vrai recuit, dont le signe est de toute façon verrouillé)
+mais le **standard de preuve**. Or dans ce codebase une acceptation n'est **jamais
+provisoire** : elle écrit dans **cinq registres persistants** — meilleur score,
+récompense du bandit, bibliothèque de snippets, borne d'expiration du tabu,
+déclenchement de la passe de compaction. On ne peut pas qualifier d'« exploratoire »
+une décision que le système enregistre comme un fait, et la règle du projet interdit
+par ailleurs tout repli assoupli. Le seuil est donc **fixe à `conf_max`** ;
+l'exploration reste possible mais à sa place, dans le **pas de Metropolis sur
+l'estimation ponctuelle** (`_anneal_accept`, `accept_test: sa`). `bootstrap_conf_min`
+n'est plus lu par la boucle (`stats.significance_threshold` reste dans le module, mais
+n'est plus appelée par `loop.py`).
+
+**Une seule estimande (2026-08-11).** `point` était calculé sur les df **complets**
+alors que l'IC et `p_improve` portaient sur l'**intersection appariée** des agents :
+dès que la couverture différait d'un côté, `bootstrap_verdict` décidait du **signe**
+sur une quantité et de la **significativité** sur une autre. Tout est désormais calculé
+sur l'intersection appariée, et le résumé remonte les effectifs (`n`, `n_sa`, `n_mut`).
+
+**Effectif minimal : `n ≥ 30` agents dans l'intersection appariée** (`MIN_PAIRED_AGENTS`).
+Le seuil porte sur l'**unité de rééchantillonnage** — des agents. ⚠ **Jamais des lignes** :
+le train compte 3 024 lignes pour 608 agents, et compter les lignes multiplierait
+l'effectif apparent par cinq en ignorant la corrélation intra-agent — « l'absence de
+donnée est indiscernable d'une donnée », version statistique. L'interdiction est gravée
+en commentaire dans `stats.py`. Effectifs réels : train 608 · val 127 · test 132 ·
+screen 115 · **rank 44** (point le plus serré) : **ce chemin est en principe
+inatteignable — c'est un fil de détente, pas une règle de trajectoire.**
+
+Sous le seuil, le verdict est **`rejected_insufficient_n`**, distinct de
+`rejected_stat` : *la mutation n'a pas été réfutée, elle n'a pas pu être mesurée*. Une
+`[ALARME]` part en **ERROR** (`make error`). Attendus côté boucle : **pas d'entrée au
+tabu**, **observation neutre pour le bandit** (surtout pas une récompense 0 — punir un
+bras pour une panne de données reproduirait le livelock). Le seuil `racing_min_n = 8`
+reste pour les gates **internes**, explicitement **heuristiques** : il ne doit jamais
+être rapporté comme un résultat statistique.
+
+**Le juge doit être bâti pareil des deux côtés (2026-08-11).** L'éval **payée**
+assemblait son df à partir du record **du lot** (donc du bon déplacement) tandis qu'un
+**cache hit** passait par `metadata_by_id`, qui ne retient qu'**un** record par agent —
+or 99 % des agents du train ont plusieurs déplacements, souvent de `motif` et de
+`dist_cat` différents. Dans le bootstrap d'acceptation, `sa_df` vient du **cache** et
+`mut_df` d'une **éval fraîche** : le biais était donc **dans le juge lui-même**, sur
+`motif` (poids 0,5) et `distance` (poids 0,3). Mesuré : le score **stocké** et le score
+**recalculé depuis les décisions** divergeaient sur 100 % des évals du store, de
+2,1 à 8,3 points médians selon la dimension et la loss.
+
+Les deux chemins passent désormais par `Evaluator.decisions_df` → `decisions_to_df`.
+Le grain retenu est le grain **agent** — dégradé, mais **identique des deux côtés**, ce
+qui est la seule chose qui compte pour un test apparié. Conséquence utile : le score
+écrit dans le store est **exactement** celui qu'un recalcul depuis les décisions
+redonne, donc `backtest` et `rescore` redeviennent reproductibles.
+
+⚠ **Perte irréversible sur l'existant** : l'identité du déplacement n'est pas dans les
+décisions déjà stockées (`(agent_id, mode, poids)`). `decisions_to_df` sait relire un
+**4ᵉ élément** (clé `agent_id#entry`, `evaluation.trip_key`) et retrouver le grain fin
+via `metadata_by_trip`, mais ce chemin reste **désactivé** : l'activer d'un seul côté
+recréerait l'asymétrie qu'on vient de supprimer. Il attend l'élargissement de
+`EvalResult.decisions` à un 4-uplet optionnel.
 
 ### 2.4 Rendement de la boucle : entonnoir, tabu, bandit, compaction — **implémenté** (phase 4)
 
@@ -256,10 +440,28 @@ loop.py`, `tabu.py`, `bandit.py`) :
    candidat → **embedding local** (feature hashing de n-grammes, `hash_embedding`,
    aucune dépendance, injectable). Similarité cosinus > `tabu_threshold` avec une
    mutation **rejetée non expirée** → rejet immédiat (`rejected_tabu`), **zéro éval
-   payée**. **Tenure** : une entrée expire après `tabu_tenure` acceptations
-   (`expires_after_accepted = accepted + tenure`) — la retentative redevient
-   légitime quand le contexte a changé. La cause du rejet (`reject_cause`) est
-   réinjectée dans l'historique fourni au mutateur.
+   payée**. **Tenure : `tabu_tenure` ITÉRATIONS** (`expires_after = iteration +
+   tenure`) — la retentative redevient légitime quand le contexte a changé. La cause
+   du rejet (`reject_cause`) est réinjectée dans l'historique fourni au mutateur.
+
+   > **Livelock du tabu — corrigé le 2026-08-11.** La tenure était comptée en
+   > mutations **acceptées** (`expires_after_accepted = accepted + tenure`). Or une
+   > entrée tabu naît à chaque **rejet**, tandis que `accepted` ne bouge qu'à une
+   > acceptation : tant que rien n'était accepté, **rien n'expirait**, pendant que
+   > l'archive grossissait — jusqu'à ce que toute proposition tombe en
+   > `rejected_tabu`, donc sans éval, donc sans acceptation possible. Boucle fermée.
+   > Mesuré sur la branche `7` : **36 entrées, toutes à `expires_after_accepted =
+   > 10`, avec `accepted = 0` après 38 itérations** — aucune ne pouvait expirer.
+   > L'horloge est désormais l'**itération**, un compteur qui progresse
+   > inconditionnellement (même principe que le cooldown de ciblage,
+   > `targeting.block_penalties`). L'archive atteint un régime stationnaire de
+   > `tabu_tenure` entrées actives au lieu de croître sans fin. Une **`[ALARME]`**
+   > part en ERROR après `TABU_LIVELOCK_STREAK` (5) rejets tabu consécutifs : plus
+   > aucune mutation n'est évaluée, donc aucune ne peut être acceptée.
+   > *Rétro-compatibilité* : la colonne `tabu.expires_after_accepted` (nom
+   > historique) porte désormais une borne d'itération ; les lignes de l'ancienne
+   > sémantique portent de petites valeurs et expirent d'elles-mêmes dès les
+   > premiers tours d'une reprise — pas de migration.
 4. **Screening (DD)** — les candidats survivants sont évalués sur le jeu **`screen`**
    (~20 % du train, gelé, sous-ensemble strict du train → cache partagé) ;
    seul le meilleur composite passe l'**éval complète + le test bootstrap**. Les
@@ -388,15 +590,58 @@ persistées, uniquement du calcul et du formatage) :
 
 Le mode par défaut évalue **un seul essai par itération** (pas de parallélisation de
 candidats). Cet essai est filtré par **arrêt précoce** le long des paliers `racing_rungs`
-(défaut `[0.25, 0.50, 0.75]`) : à chaque palier `f`, le composite de l'essai est comparé
-à celui du **prompt courant** (`sa_node`) sur **le même sous-échantillon** (`train[:f·N]`).
-Dès qu'un palier n'apporte **aucune amélioration** (`Δ = essai − courant ≥ 0`), l'essai
-est **abandonné** (`rejected_race`, `_rung_gate` dans `loop.py`), sans jamais payer l'éval
-complète ni les paliers suivants ; s'il franchit les trois paliers, la boucle enchaîne
-l'éval complète (`train`) puis le test bootstrap habituel. Les évals partielles ont leur
-propre label (`race:{f}`, distinct de `train`) et passent par le cache content-addressed :
-le baseline `sa_node` est mis en cache et réutilisé tant qu'aucune mutation n'est acceptée.
-`racing_enabled=False` retire les paliers (éval complète directe, comportement phase 3).
+(défaut `[0.25, 0.50, 0.75]`) : à chaque palier `f`, l'essai est comparé au **prompt
+courant** (`sa_node`) sur **le même sous-échantillon**, par **bootstrap apparié**
+(`stats.bootstrap_delta`). L'essai n'est abandonné (`rejected_race`, `_rung_gate` dans
+`loop.py`) que s'il est **manifestement désespéré** : `P(Δ < 0) < RUNG_P_MIN` (≈ 0,2).
+S'il franchit les trois paliers, la boucle enchaîne l'éval complète (`train`) puis le
+test bootstrap habituel. `racing_enabled=False` retire les paliers (éval complète
+directe, comportement phase 3).
+
+**Un palier filtre, il ne décide pas (2026-08-11).** Le critère était `Δ = essai −
+courant ≥ 0` : une comparaison **ponctuelle**, à seuil zéro, **sans aucun intervalle**,
+sur ~25 % du train — soit l'équivalent d'un seuil de 0,5 sans marge d'incertitude, là
+où le chemin multi-candidats du **même code** possédait déjà deux garde-fous
+(`racing_min_gap` et IC bootstrap chevauchant). Mesuré sur la branche `7` : **33 des 38
+mutations tuées au premier palier, dont 8 sur un Δ inférieur à `racing_min_gap`** — des
+candidats que l'autre chemin aurait explicitement conservés ; la campagne a payé 38
+mutations pour 3 mesures complètes. L'asymétrie des coûts est franche : une erreur de
+type I ne coûte que du calcul, une erreur de type II coûte une **amélioration perdue à
+jamais**. Trois garde-fous, tous du côté « on garde en lice » :
+
+- **abstention** (`stats.ci_overlaps_zero(..., on_doubt=True)`) — pas d'appariement
+  possible, ou effectif apparié sous `MIN_PAIRED_AGENTS` : on n'a pas **mesuré**, donc
+  on n'élimine pas ;
+- **IC couvrant 0** — les deux prompts sont indistinguables au niveau du palier ;
+- **niveau de l'IC accordé au seuil** (`ci = 1 − 2·p_min`), de sorte que « l'IC ne
+  couvre plus 0 » et « `p_improve` sous le seuil » soient la même frontière et non deux
+  règles concurrentes.
+
+Un essai qui améliore déjà l'estimation ponctuelle du palier (`Δ < 0`) est gardé sans
+lancer le bootstrap — aucune élimination n'était possible dans le sens permissif.
+
+**Sous-échantillon des paliers : permutation stratifiée + clé adressée par contenu
+(2026-08-11).** `train[:k]` était un **préfixe fixe** (aucun mélange nulle part) :
+toujours les mêmes personas en tête, à toutes les itérations, pour tous les candidats.
+Il est remplacé par une **permutation déterministe** fixée une fois par campagne
+(graine dérivée de la branche → reproductible, stable à la reprise) et **équilibrée sur
+les strates qu'agrège la métrique** (`stratified_agent_order`) : à chaque rang on
+promeut le persona dont les strates sont les plus sous-représentées dans le préfixe déjà
+constitué. Tout préfixe est donc proportionnel — mesuré sur une composition réaliste de
+608 personas, l'écart maximal d'une strate à sa part de population tombe de **6,4 pts
+(préfixe brut) à 0,3 pt**. Un tirage aléatoire *simple* ne suffirait pas : il peut vider
+une strate entière et faire comparer deux prompts sur des **compositions différentes**.
+Le tri porte sur le **persona**, jamais sur la ligne — c'est l'agent qui est l'unité du
+bootstrap apparié. *(La stratification est faite sur les strates **marginales**, pas sur
+la cellule jointe : le croisement des cinq dimensions produit presque autant de cellules
+que de personas — 378 pour 608 — et n'y porte plus aucune information.)*
+
+Le label de cache d'un palier devient **`race:{f:.2f}:{sha256(agent_ids)[:8]}`**
+(`rung_dataset_label`). L'ancien `race:{f:.2f}` nommait la **fraction**, pas
+l'**échantillon** : changer le sous-échantillon sans changer la clé rendait les lignes
+anciennes et nouvelles indiscernables, et le cache les servait comme comparables. Seule
+la fraction complète (`f ≥ 1.0`) garde le label `train` — l'éval complète du gagnant
+reste ainsi servie par le cache quand la boucle la refait.
 
 #### 2.4.1 Racing ciblé par strate (successive halving) — **implémenté** (phase 4.6, multi-candidats)
 
@@ -420,9 +665,11 @@ s'applique ; `_race_candidates` n'est appelé qu'à partir de deux survivants.)*
 2. **Racing (successive halving)** — pour chaque fraction croissante de `racing_rungs`
    (ex. `[0.15, 0.35, 0.70, 1.0]`), les survivants sont évalués sur les `f·|train|`
    premiers records ; on garde la meilleure moitié (`racing_keep_frac`). Le jeu partiel
-   a son propre label (`race:{f}`), et **seule** la fraction complète (`f≥1.0`) réutilise
-   le label `train` — l'éval complète du gagnant est ainsi **servie par le cache** quand
-   la boucle la refait. **Garde-fou statistique** : on ne départage jamais deux candidats
+   a son propre label adressé par contenu (`race:{f}:{sha8}`, cf. §2.4.0), et **seule**
+   la fraction complète (`f≥1.0`) réutilise le label `train` — l'éval complète du
+   gagnant est ainsi **servie par le cache** quand la boucle la refait. Le
+   sous-échantillon est la permutation **stratifiée** de campagne, la même que celle des
+   paliers. **Garde-fou statistique** : on ne départage jamais deux candidats
    à moins de `racing_min_gap` de composite, ni dont l'**IC bootstrap** du Δ chevauche 0
    (`stats.bootstrap_delta`) — sinon `rejected_race`.
 
@@ -439,6 +686,7 @@ persistés comme les autres (colorés au dashboard) pour le diagnostic. `racing_
 |---|---|---|
 | `racing_enabled` | `True` | Active les paliers (essai unique) / le racing (multi-candidats) |
 | `racing_rungs` | `[0.25, 0.50, 0.75]` | Fractions croissantes du train (paliers d'arrêt précoce) |
+| `RUNG_P_MIN` (constante `loop.py`) | `0.2` | (essai unique) `P(Δ<0)` sous laquelle un palier élimine — sous ce seuil seulement |
 | `racing_keep_frac` | `0.5` | (multi-candidats) part conservée à chaque palier (≥ 1 candidat) |
 | `racing_target_gate` | `True` | Tour 0 = gate sur la pire strate |
 | `racing_target_every` | `2` | 1 itération sur N en mode ciblé |
@@ -605,11 +853,61 @@ Le chemin **mono-branche** (`n_islands=1`) reproduit exactement les phases 1-5.
 La consolidation d'une campagne est outillée par `calibration/publish.py` et
 `calibrate finalize` :
 
-- **Éval test unique** : le meilleur prompt (plus faible composite `train`, **toutes
-  branches confondues**, `store.best_overall`) est évalué **une seule fois** sur le
-  jeu `test` gelé — jamais vu par la boucle, c'est le chiffre publiable. Le prompt
-  seed est évalué sur le même jeu → base de comparaison **avant/après**. Les évals
-  passent par le cache : une finalisation rejouée ne rappelle pas le LLM.
+- **Sélection du champion sur `val`** (plan arbitré du diagnostic, 2026-08-11) : le
+  meilleur prompt n'est plus l'argmin du composite `train` — sélectionner sur le jeu que la
+  boucle optimise est un **biais de sélection** (surapprentissage au jeu d'optimisation).
+  C'est `val` qui tranche. L'usage de `val` pour l'early-stopping intra-branche est inchangé.
+- **…mais en DEUX ÉTAGES, avec K = 3 pré-déclaré** (`publish.select_champion`, 2026-08-11).
+  *Le point le plus grave, découvert en dernier.* Une fois la sélection portée par `val`,
+  l'écart-type mesuré du composite sur ce jeu (**≈ 1,38**) rencontre le **biais du vainqueur** :
+  prendre l'argmin parmi K candidats surestime le gain d'environ `SE × √(2 ln K)`.
+
+  | K | biais attendu |
+  |---|---|
+  | 3 | ≈ 2,0 pt |
+  | 10 | ≈ 2,9 pt |
+  | **50** (argmin naïf sur tous les nœuds du store) | **≈ 3,9 pt** |
+
+  L'effet **recherché** vaut ≈ 2,12 pt. Autrement dit, avec une sélection naïve sur tous les
+  nœuds, **le champion retenu peut être intégralement du bruit**, et le chiffre publié
+  mesurerait la chance du tirage. D'où :
+
+  1. **Étage 1 — 3 finalistes** nommés sur `train` (repli `screen`). Gros effectifs, évals
+     **déjà payées** par la boucle : cet étage est gratuit, et son biais porte sur le jeu
+     qu'on a de toute façon optimisé.
+  2. **Étage 2 — `val` arbitre entre ces trois-là, et eux seuls**, ce qui borne le biais à
+     ≈ 2,0 pt.
+  3. **K = 3 est en dur et pré-déclaré**, pas un paramètre de `RunConfig` : un paramètre de
+     biais qu'on peut tourner après avoir vu les résultats n'est plus un garde-fou. Le
+     réduire rendrait l'étage 2 inopérant, l'augmenter ramènerait le biais au-dessus de
+     l'effet.
+
+  **Replis documentés**, toujours nommés dans le champ `mode` du résultat :
+  `fallback_single_stage` (moins de 3 candidats → sélection historique en un étage, où K est
+  mécaniquement plus petit), `fallback_stage1_only` (aucun finaliste n'a d'éval `val` →
+  vainqueur de l'étage 1, **et le bilan écrit que le biais n'est pas borné dans ce cas**).
+  Les candidats **non recevables** (mode de transport à masse nulle, `metrics.is_admissible`)
+  sont écartés du vivier — sauf si le filtre le viderait, auquel cas il est levé et **une
+  ligne `[ALARME]` le dit**. La course est de plus restreinte au **régime de mesure courant**
+  (`eval_params_key()`) : classer ensemble des composites mesurés sous deux régimes — et,
+  depuis que la version des jeux y figure, sous deux **populations** — ne compare pas des
+  prompts, ça compare des instruments. Restriction levée et **annoncée** sur un store hérité
+  d'un régime antérieur, plutôt qu'une finalisation qui échoue sans dire pourquoi.
+  La trace complète de la désignation (étage 1, finalistes, arbitre, notes) est exposée sous
+  `selection` et imprimée par `calibrate finalize`.
+- **Écart `val → test` du champion publié** (`champion_val_test_gap`) : `composite(test) −
+  composite(val)`. Le champion a été **choisi** sur `val` ; `test` ne l'a jamais vu. Un écart
+  nettement positif signe le **biais du vainqueur résiduel** — la sélection à deux étages le
+  borne, elle ne l'annule pas. C'est mesurable, donc c'est publié.
+- **Éval test unique** : le champion est évalué **une seule fois** sur le jeu `test` gelé —
+  jamais vu par la boucle, c'est le chiffre publiable. Le prompt seed est évalué sur le même
+  jeu → base de comparaison **avant/après**. Les évals passent par le cache : une finalisation
+  rejouée ne rappelle pas le LLM.
+- **IC bootstrap apparié sur le Δtest** (plan arbitré, 2026-08-11) : `finalize` ne rend plus un
+  simple point mais un **intervalle de confiance à 90 %** sur le `Δcomposite(test)` = champion −
+  seed (`stats.bootstrap_delta` sur les décisions test **déjà stockées**, zéro appel LLM),
+  exposé sous `comparison.test_delta_ci` (`{point, ci_lo, ci_hi, p_improve, b}`) et affiché par
+  `calibrate finalize`. Un chiffre principal sans dispersion n'est pas publiable.
 - **Bilan chiffré** (`campaign_report`, `build_comparison`) : composite par jeu
   (train/val/test) du seed et du meilleur + delta, détail test par dimension, nombre
   de mots avant/après, évals LLM consommées (par jeu + total), acceptées, durée
@@ -706,6 +1004,155 @@ qui sont des écarts de **genre** (`genre[Femme]·marche −21.7`).
 
 ---
 
+### 2.9 Calibration par algorithme génétique — **implémentée** (ticket 009)
+
+Un (μ+λ) élitiste (μ=5 survivants, λ=5 enfants) qui explore l'espace des
+**structures** de prompt, complémentaire du recuit (qui raffine une trajectoire).
+C'est un orchestrateur DE PLUS (`calibration/genetic.py`, au rang d'`islands.py`) :
+scoring, store, défenses d'éval, bootstrap, ablation, garde-fous et bandit sont
+consommés tels quels. État persisté sous la clé réservée `__ga__` de `run_state`
+(miroir de `__islands__`), machine à 8 étapes reprenables
+(populate → eval → cut → confirm → ablate → validate → report → breed) — un
+crash ou un quota en pleine ablation reprend à la première coalition non payée.
+
+- **Jeux** : la sélection ne voit que `rank` (**nouveau**, gelé par
+  `python -m calibration.datasets rank calibration_datasets v2` /
+  `make rank VERSION=v2` — v2 : 212 décisions / 44 agents, seuil 345/1000 dans
+  l'espace de hachage dédié `sha256("ga_rank_v2:"+agent_id)`, manifest séparé
+  `rank_manifest.yaml`). Emboîtement strict rank ⊂ screen ⊂ train ; champion et
+  challenger **confirmés sur `screen`** à chaque génération ; `val` ne décide que
+  l'arrêt (toutes les `ga_val_every` générations, stagnation
+  `ga_stall_generations`) ; `test` scellé jusqu'à `calibrate finalize`.
+  La règle de couverture de `rank` exige que toute strate bien peuplée de
+  `screen` (n ≥ 5) reste **représentée** (n ≥ 2) : exiger n ≥ 5 partout
+  forcerait ~70 % de screen (406 décisions, 3× le budget) — le classement
+  assume ce bruit, le champion étant confirmé sur `screen`.
+- **Génération 0** (`calibration/seeding.py`) : 1 élite (meilleure feuille du
+  store, sinon prompt seed) + 9 variants « expert » réécrits par le modèle de
+  mutation à `ga_seed_temp` (1.0), chacun sous un **axe imposé**
+  (identification, arbitrage, habitudes, météo, chaîne, socio-éco, démographie,
+  minimaliste, enquêteur). Blocs `json_schema` réattachés en code, validation
+  avant toute éval (`find_numeric_threshold`, longueur, dédoublonnage par hash),
+  3 essais puis population à N−1 (jamais bloquée) ; repli graines Pareto.
+- **Coupe** : classement `rank`, départage des positions frontières par
+  bootstrap apparié (IC chevauchant 0 **et** Δ < `racing_min_gap` → ancienneté
+  puis moins de mots), **crowding** (`ga_crowding_threshold` : deux survivants
+  quasi-clones → le premier individu distinct est promu). Élitisme strict : le
+  champion confirmé est toujours reconduit.
+  - **L'élitisme est une CONTRAINTE de la sélection, plus un écrasement muet
+    (2026-08-11).** Le champion prenait sa place par `survivors[-1] = champ`, deux
+    fois **indépendamment dans la même génération** (à la coupe, puis à la
+    confirmation) — évinçant à chaque fois un survivant choisi par le crowding
+    **sans aucune trace** : ni `record_mutation`, ni log. Dans une campagne GA,
+    l'opérateur de sélection est l'**objet d'étude** ; le corrompre en silence rend
+    la campagne indéfendable. Le champion est désormais passé à
+    `_crowded_selection(..., elite=…)` comme contrainte — **un seul point
+    d'application** — et la fonction rend `(survivants, évincés)`. Toute éviction
+    est journalisée (log `WARNING`, fiche de génération `elitism_evicted`) et
+    **distinguée dans le store** : `reject_cause = « évincé par l'élitisme
+    (champion …) »` au lieu du générique « éliminé à la coupe ». Le second
+    écrasement, à la confirmation, était de surcroît **inatteignable** (le champion
+    est choisi parmi `survivors[:2]`) et son seul effet possible était pathologique
+    — injecter `None` dans la population si aucun prétendant n'avait de composite
+    fini ; il est remplacé par une `[ALARME]` explicite.
+- **Reproduction** : **3 opérateurs stochastiques** en concurrence sous **bandit
+  UCB1** (branche dédiée `{branch}#ga`) — `ga_cross` (croisement LLM informé par
+  les cartes d'ablation, parents complémentaires via Pareto), `ga_mutate`
+  (ciblage `targeting.select_target` sur le pire bloc), `ga_explore` (levier
+  comportemental absent tiré d'un catalogue — sécurité perçue, normes sociales,
+  fatigue, fiabilité horaire, charge mentale, image de soi… — filtré contre le
+  contenu du prompt). Seuls les **φ dont l'IC bootstrap exclut 0** guident le
+  croisement (les autres sont transmis « indéterminés »). Anti-doublon
+  intra-prompt (paire de blocs cos > `tabu_threshold` → condensation en code
+  avant éval), tabu contre les éliminés, **immigrant aléatoire** si la diversité
+  moyenne passe sous `ga_min_diversity` **ou** si la reproduction n'a rien
+  produit à la dernière tentative.
+  - **Les tentatives de croisement ne rejouent plus la même paire (2026-08-11).**
+    `_parents_for_cross` était **déterministe** : toutes les tentatives d'une même
+    étape croisaient la paire complémentaire de Pareto sur des survivants figés —
+    mêmes entrées, même sortie, doublons garantis (`rejected_dup_block`) et
+    tentatives brûlées. Le numéro de tentative fait désormais **tourner** le choix
+    dans un catalogue de paires distinctes (la paire complémentaire reste la
+    première tentée, puis toutes les paires de survivants par qualité décroissante).
+    Efficacité pure : aucune incidence sur la validité des enfants, seulement sur
+    leur diversité. Le repli `ga_cross_greedy` garde `attempt=0` — le témoin
+    déterministe doit rester sur la paire canonique.
+  - **Contrat UCB1 : tout tirage produit une observation.** Le succès reste
+    récompensé à la coupe (« l'enfant a-t-il survécu ? ») ; un tirage qui
+    n'aboutit à aucun enfant accepté enregistre désormais un **pull de récompense
+    0**. Sans cela, un bras qui ne produit rien n'est jamais mis à jour, reste
+    « jamais tiré » (score `+inf`) et se fait rejouer indéfiniment — boucle
+    fermée, livelock.
+  - **`ga_cross_greedy` n'est plus un bras** (2026-08-11). Assemblage
+    déterministe au meilleur φ, c'est le **témoin sans LLM** du croisement : une
+    fonction pure, qui à survivants gelés rend toujours le même enfant. Un
+    optimiseur en ligne suppose des bras stochastiques ; l'y placer était une
+    erreur de catégorie. Il subsiste comme **repli explicite** (mutateur
+    indisponible, ou un seul survivant), **tenté au plus une fois par étape** —
+    le retenter serait du calcul mort.
+  - **Garde de stérilité** : une étape de reproduction qui rend 0 enfant alors
+    qu'on en attendait lève un `logger.error("[ALARME] …")` immédiat (génération,
+    tentatives, histogramme des verdicts, opérateur dominant) et incrémente
+    `sterile_generations` dans l'état. Corollaire méthodologique : **une
+    génération sans candidat nouveau n'incrémente pas `val_no_improve`** — c'est
+    une observation nulle, pas une preuve de convergence (sans challenger, le
+    champion est simplement re-mesuré à l'identique).
+  - **Erreurs du mutateur, classées** : un défaut **permanent** de configuration
+    (provider absent de `providers.yaml`, modèle inconnu, HTTP 401/403/404) lève
+    une `MutatorConfigError` et **arrête la campagne** ; seules les erreurs
+    **transitoires** (429, timeout) déclenchent le repli sans LLM. Complété par un
+    garde de démarrage (`cli.assert_known_providers`) qui refuse tout provider
+    référencé mais non déclaré dans `providers.yaml`.
+- **Ablation** : omission N+1 sur `rank` pour les `ga_ablate_top` survivants
+  entrants (3 en cloud — poste dominant du budget) ; cartes en cache pour les
+  anciens.
+- **Rapport de génération** (`calibration/ga_report.py`) : HTML autonome
+  `calibration_results/ga_reports/gen_NN.html` (SVG inline, stdlib pur,
+  **déterministe** — régénérable identique à l'octet), trajectoire du champion,
+  table de population avec lignée, prompt champion annoté phrase par phrase
+  (carte d'ablation en vert/rouge), parts modales vs EMC², pires strates,
+  budget + régime de mesure. Compte rendu Discord `generation_done` (reformulé
+  Mistral, repli templaté) avec le **rapport HTML joint au message** (décision
+  2026-08-04 : envoi multipart du webhook, `notify.py` — un clic pour le
+  télécharger, aucun identifiant requis ; fichier > ~9,5 Mo → embed seul). Le
+  canal **e-mail** subsiste en option (`calibration/notify_mail.py`, SMTP Gmail
+  SSL 465, secrets `SMTP_USER`/`SMTP_APP_PASSWORD` dans l'env, destinataire
+  `notify_mail_to` en config, best-effort) — inactif tant que les secrets SMTP
+  ne sont pas fournis.
+- **CLI / cloud** : `calibrate ga --config config/ga_cloud.yaml [--loop]`
+  (mêmes gardes quota/cooldown que `run`), `make ga`. Unités systemd :
+  `cloud/calib-ga.service` (daemon continu, option) et
+  `cloud/calib-weekly.{service,timer}` (bilan hebdomadaire
+  `calibrate digest --weekly` : fenêtre 7 j, événement Discord dédié avec le
+  dernier rapport de génération **joint au message Discord** — et par mail si
+  le canal SMTP est configuré ; les jours creux restent couverts par le digest
+  quotidien).
+- **Éval bi-clé matinale (2026-08-03)** : l'éval (épinglée
+  `gemini-3.5-flash-lite` depuis J+1 de campagne) se consomme sur les deux clés
+  Google — quota free tier compté par projet ET par modèle, soit 2 × 500 RPD.
+  Deux passes one-shot par jour (`cloud/run_ga_key.sh` +
+  `calib-ga-am.timer` 09h-11h Paris clé 1, `calib-ga-pm.timer` 11h-13h clé 2,
+  `RandomizedDelaySec=2h`) ; le provider reste `google_gemini35` quelle que
+  soit la clé (injectée dans `PROVIDER_KEYS__google_gemini35` au lancement) →
+  `eval_params_key` unique, cache partagé. `--clear-cooldown` accompagne chaque
+  bascule de clé (le cooldown du store est global, les seaux sont par clé).
+  `--override-stall` relance une campagne arrêtée sur stagnation ; la
+  **finalisation reste manuelle** (`calibrate finalize`, dry-run par défaut) —
+  attention : chaque nouveau champion finalisé paie un regard de plus sur
+  `test`, qui n'est un chiffre publiable qu'au premier regard.
+- **Clés `RunConfig`** : `ga_population` 10, `ga_survivors` 5, `ga_ablate_top`
+  5 (3 en cloud), `ga_rank_dataset`, `ga_seed_temp` 1.0, `ga_breed_temp` 0.9,
+  `ga_val_every` 2, `ga_stall_generations` 3, `ga_max_generations` 0 (0 =
+  budget), `ga_crowding_threshold` 0.92, `ga_min_diversity` 0.08,
+  `ga_report_dir`, `notify_mail_to`, `digest_mail`.
+
+Le recuit n'est pas supprimé : les deux orchestrateurs partagent le store, et
+une campagne peut enchaîner génétique (exploration) → recuit (raffinage du
+champion). Le bras témoin de l'AG est la lignée du recuit re-mesurée sous le
+même régime (`calibrate reeval`).
+
+---
+
 ## 3 · Extraction des métadonnées persona
 
 Chaque décision LLM est rattachée aux attributs du persona pour le scoring par strate.
@@ -757,6 +1204,146 @@ leur génération (`strip_memory_section`), pour que la mesure de référence ne
 dépende que du profil démographique, du contexte météo et des options de trajet.
 Le jeu **train** la conserve (il ne sert qu'à la boucle d'optimisation).
 
+### 3.1 Météo : tirée dans l'année climatique (jeux `v2`)
+
+**Le constat.** Les jeux gelés `v1` ne portent que **cinq valeurs météo, toutes « Ciel
+dégagé / Pas de précipitations »** (train : 6 °C ×349, 15 °C ×132, puis 12/3/13 °C sur 14
+records). Le prompt a donc été calibré dans un monde où il ne pleut jamais — alors que la
+météo est précisément l'un des leviers qu'il est censé peser.
+
+Ce n'est **pas** un bug de la simulation : `data/weather/meteo_toulouse_12_mois.csv`
+couvre 365 jours dont **155 avec précipitations** (max 15,6 mm). La fenêtre 16-18 mars
+2026 du run source est simplement sèche et ensoleillée (code 113).
+
+**Le correctif** (`calibration/weather.py`, `WeatherDeck`) : le champ `context` d'un
+record porte une météo **tirée dans l'année complète**, sur
+`sha256("<graine>:<agent_id>|<entry>") % 365`, lue au **créneau horaire de l'heure de
+départ du persona** — comme le fait la simulation. Deux régénérations produisent des
+fichiers identiques à l'octet ; la graine, la source et la part de jours pluvieux sont
+consignées dans le `manifest.yaml` du jeu gelé.
+
+La mise en forme est une **recopie** de `weather_to_natural_language`
+(`llm-agents/.../weather_loader.py`) : les deux dépôts sont disjoints et
+`urban_mobility_agents` n'est pas importable depuis `prompt_calibration`.
+`calibration/tests/test_weather.py` charge le module de production par chemin et compare
+les deux sorties sur des cas fabriqués **et** sur de vrais jours du CSV — si la copie
+dérive, la mesure ne porte plus sur le prompt de production, et le test échoue.
+
+> ⚠️ **Le piège, résolu.** Le format des échanges a changé : le préambule commun au lot
+> est désormais **vide**, et `**Contexte :** Météo…` se trouve **à l'intérieur de chaque
+> bloc persona**. Lire le contexte dans le seul préambule produisait `context == ""` sur
+> la totalité des records — et `inject_context` devenait un **no-op silencieux** : les
+> blocs seraient partis sans météo, et personne ne s'en serait aperçu avant d'avoir payé
+> une campagne. `strip_context_section` extrait donc la météo du bloc **et l'en retire**
+> (`context` en est l'unique porteur, `inject_context` la replace au rendu ; extraire puis
+> réinjecter rend le bloc d'origine à l'octet). En garde-fou, `build_datasets` **refuse de
+> geler** un jeu dont un seul record a un `context` vide — et refuse avant d'écrire quoi
+> que ce soit sur disque.
+
+Génération :
+
+```bash
+cd prompt_calibration && .venv/bin/python -m calibration.datasets \
+  ../experiments/current calibration_datasets v2
+# --weather-from-run  : rétablit le comportement v1 (météo du run)
+# --weather-seed      : change la graine du tirage
+```
+
+Le gel est strict : générer une version existante lève `FileExistsError`.
+
+**Ce que le passage v1 → v2 coûte.** La comparabilité des scores : un composite v1 et un
+composite v2 ne mesurent pas la même chose, et rien dans un chiffre nu ne le dit. C'est
+la décision D2 du ticket 008, assumée — la lignée retenue est **re-mesurée** sur v2, et le
+régime météo doit être **visible dans la page de synthèse**, faute de quoi un lecteur
+comparerait des scores hétérogènes sans le savoir.
+
+> **Volet 3 non concerné** : `feature_spec.json` ne porte aucune variable météo (persona,
+> géo, `purpose` / `departure_hour` / `od_km`). Ne pas chercher à y injecter la météo.
+
+### 3.2 Découpage des jeux : **50 / 20 / 30** (jeux `v3`, 2026-08-11)
+
+**Le constat.** Une analyse de puissance (archivée dans `docs/mesures/`) a établi que le
+dispositif `v1`/`v2` **ne peut pas conclure**. Le jeu `val` (127 agents) était un jumeau de
+taille du `test` (132) ; l'IC90 du Δ apparié champion − seed valait `[−2,005 ; +2,532]`, soit
+une demi-largeur de **2,268**. La plus petite différence détectable était donc **2,27** contre
+un effet attendu de **≈ 2,12** : une calibration *parfaite* aurait conclu « non significatif ».
+Passer à l'estimateur corrigé ne change rien (2,251 → 2,268) — **la sous-puissance est
+structurelle, elle tient à l'effectif.**
+
+**Pourquoi 70/15/15 était le mauvais réflexe ici.** Ce partage vient d'un monde où le jeu
+d'apprentissage est le facteur limitant de la qualité et où le test est bon marché. Dans une
+calibration de prompt, **c'est l'inverse** :
+
+| Jeu | Fréquence d'évaluation | Ce que son effectif commande |
+|---|---|---|
+| `train` | **chaque itération, chaque coalition d'ablation, chaque bras de racing** | la **facture** en appels LLM |
+| `val` | à chaque `val_every`, et **l'arbitrage final** (§2.7) | la **précision de la sélection** |
+| `test` | **une ou deux fois** dans la vie d'une campagne | la **puissance du chiffre publié** |
+
+Agrandir `test` est donc quasi gratuit, et **réduire `train` fait baisser la facture** :
+
+| Découpage | train | val | test | MDE | req/éval train |
+|---|---|---|---|---|---|
+| 70/15/15 (`v1`, `v2`) | 608 | 127 | 132 | **2,27** ❌ | ~62 |
+| **50/20/30 (`v3`)** | **430** | **178** | **259** | **≈ 1,62** ✅ | **~44** |
+
+**Effectifs réels gelés en `v3`** (population identique à `v2` : 867 personas, 4 286
+décisions) :
+
+| Jeu | Personas | Décisions | Note |
+|---|---|---|---|
+| `train` | 430 | 2 161 | −29 % d'effectif ⇒ −29 % de requêtes par éval |
+| `val` | 178 | 863 | +40 % ⇒ arbitrage plus précis (SE_val ↓) |
+| `test` | 259 | 1 262 | +96 % ⇒ MDE ≈ 1,62 < effet attendu 2,12 |
+| `screen` | 115 | 569 | **inchangé** (voir ci-dessous) |
+| `rank` | 39 | 212 | ≥ 30, plancher vérifié au gel |
+
+**`screen` ne bouge pas, sa *part* du train si.** Le jeu de screening est défini en buckets
+**absolus** (`sha256(agent_id) % 100 < 14`), pas en fraction du train : il contient donc
+**exactement les mêmes personas** sous 70/15/15 et sous 50/20/30 — son **coût est identique**
+— mais sa part du train monte mécaniquement de ~20 % à **27 %**. C'est ce qu'on veut :
+rétrécir le train ne devait pas renchérir les passes d'attribution.
+
+**Plancher statistique du jeu `rank`.** `rank ⊂ screen ⊂ train` sert au classement
+générationnel du génétique. En deçà de **30 personas** (`RANK_MIN_AGENTS`), classer n'est plus
+classer mais tirer au sort : `build_rank_subset` **refuse le gel** si aucun seuil de hachage ne
+tient à la fois la couverture des strates *et* ce plancher. La contrainte est maintenant
+**vérifiée**, plus seulement espérée.
+
+**Le découpage est versionné, jamais réécrit.** `config.splits_for_version()` fige
+`v1`/`v2` sur 70/15/15 **pour toujours** ; `v3` et toute version ultérieure prennent 50/20/30
+(une version inconnue reçoit le découpage **courant**, pour qu'une `v4` ne retombe pas en
+silence sur la règle abandonnée). `split_of(agent_id)` sans argument continue de répondre pour
+les jeux historiques.
+
+**Comment `v3` a été produit : repartitionnement, pas régénération.**
+
+```bash
+cd prompt_calibration && ../../llm-agents-gama/llm-agents/.venv/bin/python \
+  -m calibration.datasets resplit calibration_datasets v2 v3
+../../llm-agents-gama/llm-agents/.venv/bin/python \
+  -m calibration.datasets rank calibration_datasets v3
+```
+
+`resplit` relit les fichiers **gelés** de `v2` et applique les nouvelles bornes de hash :
+chaque persona reste dans son bucket, seule la frontière bouge. **Aucune donnée ajoutée,
+retirée ni modifiée.** C'était la condition pour que l'analyse de puissance — faite sur cette
+population-là — reste applicable au nouveau dispositif ; régénérer depuis
+`experiments/current`, répertoire volatil dont les empreintes ont déjà divergé de celles
+consignées au manifest `v2`, aurait changé les proportions **et** la population.
+
+Le manifest `v3` fige : proportions, bornes, règle de découpage, règle et part du `screen`,
+**sel de `rank`** (`ga_rank_v3`), plancher `rank`, hashes SHA-256 des fichiers sources `v2`,
+effectifs par jeu, rapport de couverture, tirage météo hérité, et un bloc `derived_from` /
+`memory_section`.
+
+> ⚠️ **Report assumé sur la mémoire STM/LTM.** Les records issus de `val`/`test` de `v2`
+> avaient déjà perdu leur section `**Historique :**` ; ceux qui rejoignent le `train` de `v3`
+> ne la retrouvent pas (1 163 records sur 4 286 la portent encore). L'hétérogénéité va donc
+> dans le sens qui **rapproche** le train du val/test, pas l'inverse. Consigné au manifest.
+
+**`v2` n'est pas détruit** — les jeux gelés ne le sont jamais.
+
 ---
 
 ## 4 · Reprise & persistance
@@ -782,14 +1369,30 @@ parents (`parent2`).
 ### 4.1 Régime de mesure : ce qu'un composite stocké permet de comparer
 
 Un store accumule les **régimes de mesure**, et un composite n'est comparable
-qu'aux composites du même régime. Trois choses le définissent, toutes portées par
-`eval_params_key()` (`prov | model | temp | policy`) :
+qu'aux composites du même régime. Quatre choses le définissent, toutes portées par
+`eval_params_key()` (`prov | model | temp | policy | opt | ds`) :
 
 | Ce qui change | Effet | Réparable après coup ? |
 |---|---|---|
 | la **loss** (L1 → EMD/JSD) | le score, pas les décisions | **oui** — `backtest` / `rescore`, zéro LLM (les décisions brutes sont conservées) |
 | le **modèle** d'éval (mistral → gemini) | les décisions | **non** — il faut réinterroger |
 | la **politique** de décision (mode élu → masse de probabilité) | les décisions | **non** — idem |
+| la **version des jeux** (`v2` → `v3`) | la **population** évaluée | **non** — ce ne sont pas les mêmes personas |
+
+> 🔴 **`dataset_version` entre dans la clé de cache (2026-08-11).** Elle n'y était pas : une
+> éval sur `v1/train` et une éval sur `v2/train` **partageaient la même clé** alors qu'elles
+> portent sur des populations différentes — le nom du jeu (`train`) est bien stocké, mais il
+> ne dit pas *de quelle version* il vient. Le défaut est resté latent tant que la population
+> ne bougeait pas ; avec `v3` (repartitionnement 50/20/30 : le `train` change de composition)
+> il devenait **certain**. C'est exactement le coût déjà nommé en §3.1 — « un composite v1 et
+> un composite v2 ne mesurent pas la même chose, et rien dans un chiffre nu ne le dit » —
+> désormais porté par la clé au lieu d'être laissé à la vigilance.
+>
+> ⚠️ **Conséquence assumée et actée : le cache existant est invalidé.** La clé change pour
+> toutes les évals déjà en base, qui deviennent inatteignables sous la nouvelle clé ; la
+> campagne repart sur un **store neuf**. Rien n'est détruit — les décisions brutes restent
+> lisibles, et `calibrate rescore --params-key <ancienne clé>` travaille toujours sur
+> l'historique.
 
 D'où la lecture du store actuel : le prompt seed vaut **176,7** sous
 `mistral-small-latest` et **25,9** sous `gemini-3.1-flash-lite-preview`, pour le
@@ -855,16 +1458,33 @@ produit un 429 explicite, correctement traité — ce n'était pas la cause du s
 1. **Comparaison demandé/reçu, à chaque lot.** `make_provider_call` confronte les
    `agent_id` envoyés à ceux rendus. C'est la seule défense possible : le défaut est
    invisible à tous les autres étages.
-2. **Re-tir par moitiés** (`split_entry`). Redemander le même lot à température 0 redonne
-   le même résultat : il faut **réduire la demande**. Le lot incomplet est coupé en deux
-   et rappelé, récursivement. Mesuré en conditions réelles : un lot à 5/15 revient à
-   **15/15 en 3 appels**. Le découpage n'entre pas dans `eval_params_key()` — il ne change
+2. **Re-tir ciblé des manquants** (`subset_entry`, 2026-08-03). Un lot **partiellement**
+   rendu est re-tiré en **un seul appel ne contenant que les personas manquants** —
+   strictement plus petit que le lot d'origine (la récursion termine toujours), et aucun
+   persona déjà rendu n'est re-payé. *Historique :* le rattrapage initial re-tirait **deux
+   moitiés complètes** (`split_entry`) — un lot de 8 avec 6 rendus re-payait 8 personas en
+   2 appels pour 2 manquants ; le 2026-08-03 (`gemini-3.5-flash-lite`, ~10 % de personas
+   omis par appel), ~la **moitié du quota RPD** de la journée est partie en rattrapage. Le
+   découpage en moitiés est conservé pour le seul cas du lot rendu **entièrement muet**
+   (redemander le même lot à température 0 redonne la même réponse : il faut réduire la
+   demande). Ni l'un ni l'autre n'entre dans `eval_params_key()` — le re-tir ne change
    **pas la mesure**, seulement le nombre d'appels.
 3. **Garde de couverture** (`eval_min_coverage`, défaut 0,98). Si, malgré le rattrapage,
    l'éval n'a pas couvert assez de personas, elle lève `InsufficientCoverage` **avant**
    toute écriture. Le store ne conserve pas le nombre de personas vus : un score calculé
    sur 60 % du jeu y entrerait indistinguable d'un score complet et fausserait toute la
    trajectoire. Mieux vaut un nœud « manquant », qui est vrai.
+4. **Réponse persona inexploitable = persona non rendu** (2026-08-03). Variante plus
+   sournoise du lot incomplet : l'entrée du persona **figure** dans la réponse, mais
+   **vide** — ni distribution de probabilités, ni mode. Son `agent_id` étant rendu, la
+   défense 1 ne la voyait pas (pas de re-tir) et `decisions_from_agents` fabriquait une
+   décision `mode=None`, qui faisait exploser la validation pydantic d'`EvalResult`
+   **après avoir payé tous les lots** (crash de la passe `calib-ga-pm` du 2026-08-03,
+   `_step_confirm` de la génération 0). Désormais une telle entrée ne produit **aucune
+   décision** : le persona apparaît non rendu → re-tir ciblé (défense 2), puis
+   garde de couverture (défense 3) s'il reste muet. Même traitement pour une option
+   sans étiquette de mode identifiable (sa masse est écartée, comme une option hors
+   bornes, au lieu d'être comptée sous un mode fantôme `""`).
 
 Enfin, l'**échec silencieux** proprement dit est refermé : la boucle de retry de
 `call_with_retry` rendait une **liste vide** en sortie de boucle, que l'appelant prenait
@@ -920,9 +1540,80 @@ Deux points de conception :
   premier nœud non payé, les précédents étant servis par le cache. Un abort quota
   écrit le cooldown comme `run`, et la commande refuse de démarrer tant qu'il court.
 
+### 4.2 L'instrument est-il vraiment figé ? Config close, régime, empreinte (LOT T1)
+
+Le régime de mesure (§4.1) ne suffit pas : encore faut-il que la config **soit
+celle qu'on croit**, qu'elle **reste** celle sous laquelle la campagne a démarré,
+et que chaque mutation dise **sous quel bras** elle a été produite. Trois défauts
+constatés par exécution, trois garde-fous.
+
+**1. La config est close (`extra="forbid"`).** `RunConfig` acceptait
+silencieusement toute clé inconnue : une config portant `eval_tmp: 0.0` (coquille
+pour `eval_temp`) **plus** une clé inventée passait sans un mot, et la campagne
+tournait sur les valeurs par défaut. Le fichier de config **est la spécification
+du protocole expérimental** : une coquille produit des mesures valides *en
+apparence*, sous un régime que personne n'a voulu. Toute clé inconnue est
+désormais refusée au chargement, avec un message qui **nomme la clé fautive et
+suggère le champ le plus proche** (distance d'édition) :
+
+```
+[ALARME] Clé(s) de configuration inconnue(s) dans run.yaml :
+  • 'clef_inventee' — aucun champ approchant dans RunConfig
+  • 'eval_tmp' — vouliez-vous dire 'eval_temp' ?
+```
+
+Corollaire : une clé orpheline en config bloque le lancement. L'audit des sept
+YAML livrés n'en a trouvé qu'une, `global_ablation_every` dans `config/cloud.yaml`
+(présente en config, **aucun champ, aucun lecteur**) — retirée. Un test
+paramétré charge les sept fichiers pour que le cas ne se reproduise pas.
+
+**2. Chaque mutation porte son régime d'ablation.** `targeting_enabled`,
+`decomposed_mutation` et `reflection_enabled` sont des **facteurs expérimentaux**,
+mais ils ne vivaient que dans une config globale et mutable : rien, dans la table
+`mutations`, ne disait sous quel bras une mutation avait été proposée. C'est la
+vraie raison pour laquelle l'ablation était déclarée « non interprétable » sur la
+campagne 7 — pas une fatalité, une colonne manquante. La colonne `mutations.regime`
+la comble, au format compact et parsable `tgt=1|dec=0|refl=1` (`RunConfig.regime()`
+écrit, `models.parse_regime()` relit). L'analyse regroupe alors par bras
+(`RunStore.regime_counts()`) au lieu de supposer.
+
+Migration **non destructive** (`RunStore._migrate()`, comme les colonnes ajoutées
+avant elle) : les lignes antérieures gardent `NULL`, qui se lit « régime inconnu »
+— et le dire est plus honnête que de leur prêter les valeurs par défaut du jour.
+
+**3. L'instrument complet est gravé, et sa dérive détectée.** Aucune table ne
+conservait la config sous laquelle une campagne avait tourné : éditer le YAML au
+jour 12 était indétectable au jour 13. La table `run_config` (branche, JSON de la
+config résolue, empreinte, horodatage) est **append-only** — une ligne n'est
+écrite que lorsque l'empreinte change, si bien que la table raconte exactement
+« à partir de quand la campagne a changé d'instrument ».
+
+| API (`store.py`) | Rôle |
+|---|---|
+| `record_run_config(config)` | grave la config résolue (idempotent tant que l'empreinte ne bouge pas) |
+| `config_drift(config)` | `None` ou le diff champ par champ vs la dernière config gravée |
+| `check_and_record_config(config, force=…)` | garde de reprise : lève `ConfigChanged` si l'empreinte a changé ; avec `force=True`, grave le nouvel instrument et renvoie le drift à tracer |
+| `last_run_config` / `run_config_history` | lecture de l'instrument courant / de son historique |
+
+L'empreinte (`RunConfig.config_hash()`) ne porte que les champs qui **changent la
+mesure**. En sont exclus les chemins (le layout diffère entre la VM et le poste
+local — un `make pull-cloud` ne doit pas déclencher le garde), les cadences et
+quotas (`eval_rpm`, `eval_workers`, retries, cooldowns) et la supervision
+(notifications, digest). Un garde qui crie pour un changement de webhook finit
+désarmé. Le **snapshot** stocké, lui, contient l'intégralité des champs : le hash
+choisit ce qui alarme, le JSON ne cache rien.
+
+**4. « Le registre doit croître ».** Deux compteurs de stérilité côté store —
+`nodes_created_since(t)` (a-t-on **engendré** ?) et `evals_created_since(t)`
+(a-t-on **payé** ? une ligne de `evals` = une mesure réellement calculée, un
+cache-hit n'écrit rien), plus `growth_since(t)` qui rend les deux. Dépenser sans
+engendrer et engendrer sans dépenser sont deux pathologies distinctes ; le
+diagnostic de santé (`health.py`) les consomme.
+
 ```
 prompt_calibration/calibration/
-  models.py       # RunConfig (YAML) + pydantic (Block, Mutation, Scores, EvalResult)
+  models.py       # RunConfig (YAML, close : extra=forbid) + empreinte d'instrument
+                  #   + pydantic (Block, Mutation, Scores, EvalResult) + régime d'ablation
   blocks.py       # decompose_prompt / blocks_to_prompt (purs, testés)
   metrics.py      # Metric pluggable : L1Composite + EMDJSDComposite (v2, phase 3)
   stats.py        # acceptation bootstrap appariée sur les agents (phase 3, DA)
@@ -937,7 +1628,8 @@ prompt_calibration/calibration/
   islands.py      # îlots parallèles + migration + merge/crossover — phase 6 (D7)
   publish.py      # finalisation : éval test unique, bilan avant/après, publication — phase 7
   loop.py         # boucle reprenable : entonnoir (tabu→screening→best), bandit, compaction, Shapley, snippets
-  store.py        # RunStore SQLite (nœuds / mutations / évals / ablations / tabu / bandit / snippets)
+  store.py        # RunStore SQLite (nœuds / mutations / évals / ablations / tabu /
+                  #   bandit / snippets / run_config : l'instrument gravé, §4.2)
   reeval.py       # rejeu d'une lignée sous un régime d'éval unique (§4.1)
   export.py       # export lisible (nodes.csv, mutations.csv, history.md)
   importer.py     # import one-shot des artefacts de l'ancienne version
@@ -1223,6 +1915,53 @@ ligne — jamais rejoué) ; le webhook est un secret partageable (dans `calib.en
 `chmod 600`) ; aucun contenu de prompt ni clé n'est envoyé (uniquement des
 métriques agrégées). Installation des unités : `cloud/setup_vm.sh` (étape C) et
 en-têtes des fichiers `cloud/calib-*.service` / `.timer`.
+
+### 8.2 · Supervision : détecter le travail qui ne produit rien (`health.py`)
+
+Détail complet : `prompt_calibration/docs/supervision.md`. Le principe, lui,
+vaut au-delà de la calibration.
+
+**Le problème que ça résout.** Une campagne a tourné **quatre jours sans rien
+produire** et s'apprêtait à déclarer une convergence. Les deux alarmes qui
+existaient alors étaient **structurellement incapables de se lever** sur ce mode
+de panne :
+
+- le détecteur de gel testait la **fraîcheur de `progress.json`** — que la boucle
+  en livelock réécrivait des dizaines de fois par heure. Il mesurait la vivacité
+  du *process*, pas le progrès du *travail* ;
+- l'alarme « aucune éval depuis 36 h » était **muselée tant qu'une passe était
+  active**, or une passe dure jusqu'à 7 h. Le garde anti-faux-positif avait été
+  taillé sur le mode de panne réel.
+
+**Le compteur de vérité est le registre, pas le heartbeat.** `no_registry_growth`
+compte ce qui a été **créé** (`nodes`, `evals`) sur une **fenêtre de 6 h
+glissantes** ; les deux à zéro alors que la campagne n'est pas arrêtée = alarme.
+On n'instrumente surtout pas `progress.json`, dont l'écriture est best-effort et
+avale ses `OSError` en silence : un compteur de vérité ne peut pas dépendre d'un
+fichier qui échoue sans bruit.
+
+**Règle de design, généralisable.** *On absorbe le bruit par la fenêtre
+temporelle, jamais par une condition d'état.* Une fenêtre retarde la détection
+d'une durée bornée ; une condition d'état peut l'annuler entièrement, et le fait
+invisiblement. D'où : détection et action **découplées** — le watchdog notifie
+dès le code 2, sans condition, et l'état « une passe tourne » ne conditionne plus
+que le `systemctl stop` ; un cooldown actif **enrichit** le message d'alarme, il
+ne le supprime jamais.
+
+**Corollaires implémentés** : `usage.jsonl` écrit sa ligne **même à zéro
+requête** (sinon le seul compteur capable de révéler une passe stérile est muet
+précisément dans ce cas) ; l'absence de `progress.json` lève un WARN au lieu de
+rendre le gel indétectable en silence ; une passe GA sort en **code non nul**
+quand elle se termine en état anormal, pour que `OnFailure=` puisse se
+déclencher.
+
+**Et la leçon de test.** La cause racine n'est pas qu'une alarme s'est mal
+levée : c'est que personne n'avait vérifié qu'elle **pouvait** se lever.
+`health.assess` est **pur** — il ne reçoit que des primitives —, donc testable
+sans store ni horloge : un test d'**armement** (l'alarme part avec un heartbeat
+frais, reproduction exacte de l'angle mort), un test de **silence** (une alarme
+qui hurle toujours vaut une alarme muette), et un test de **non-régression
+d'incident** rejouant l'état réel figé.
 
 ---
 

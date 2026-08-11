@@ -48,7 +48,18 @@ class LoadBalancer:
         if not self._providers:
             logger.error("Aucun provider disponible — séquence SWRR vide.")
             return []
-        sequence = build_swrr_sequence({name: cfg.weight for name, cfg in self._providers.items()})
+        # weight 0 = provider défini mais HORS ROTATION (build_swrr_sequence
+        # garantit ≥ 1 slot à chaque entrée, il faut donc filtrer ici). Reste
+        # utilisable via un `llm.provider` forcé dans la config d'expérience.
+        in_rotation = {name: cfg.weight for name, cfg in self._providers.items()
+                       if cfg.weight > 0}
+        excluded = sorted(set(self._providers) - set(in_rotation))
+        if excluded:
+            logger.info(f"Providers hors rotation (weight 0) : {excluded}")
+        if not in_rotation:
+            logger.error("Tous les providers sont à weight 0 — séquence SWRR vide.")
+            return []
+        sequence = build_swrr_sequence(in_rotation)
         logger.debug(f"Séquence WRR construite | sequence={sequence}")
         return sequence
 

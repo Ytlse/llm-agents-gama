@@ -100,6 +100,19 @@ def canonical_mode(raw: Optional[str]) -> str:
 # Normalisation du vecteur brut
 # ---------------------------------------------------------------------------
 
+class UniformFallback(list):
+    """Vecteur uniforme issu d'un repli (vecteur LLM absent ou de somme nulle).
+
+    Sous-classe de ``list`` : tout appelant le traite comme un vecteur normal
+    (tirage, métriques, égalité avec une liste simple). Mais ce n'est PAS une
+    décision du modèle — les appelants qui PERSISTENT une distribution (cache
+    LLM) doivent le tester (``isinstance``) et refuser l'écriture, sans quoi le
+    repli d'un run pollue les tirages de tous les runs suivants (constaté le
+    2026-08-03 : troncatures cerebras_zai-glm-4.7 → distributions uniformes
+    écrites en cache comme des décisions légitimes).
+    """
+
+
 def _entry_field(entry: Any, name: str) -> Any:
     """Lit un champ d'une entrée qu'elle soit dict ou modèle Pydantic."""
     if isinstance(entry, Mapping):
@@ -236,7 +249,7 @@ def normalize_option_probabilities(
             f"({'absent' if not seen else 'somme nulle'}) — repli sur une distribution "
             f"uniforme sur {n_options} option(s), la décision du modèle est perdue | {context}"
         )
-        return [1.0 / n_options] * n_options
+        return UniformFallback(1.0 / n_options for _ in range(n_options))
 
     return [w / total for w in weights]
 

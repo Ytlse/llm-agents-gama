@@ -121,6 +121,42 @@ Corollaire : le cache est réutilisable d'un run à l'autre pour un scénario do
 > évolution ne portent pas ces champs et ne seront jamais retrouvés : supprimer
 > `data/llm_cache/` pour repartir proprement.
 
+> Le cache n'a **aucun mode dégradé** : la clé de lookup est toujours appliquée dans son
+> intégralité. En cas de panne LLM durable, la simulation **attend** le rétablissement
+> (disjoncteur client, cf. `docs/arch/llm-inference.md` § « Panne durable ») plutôt que
+> de servir des décisions sous contraintes relâchées.
+
+> Le principe vaut aussi à l'**écriture** : un repli uniforme (vecteur LLM inexploitable,
+> typé `UniformFallback` par `normalize_option_probabilities`) sert le trajet en cours
+> mais n'est **jamais persisté** — `[cache] store refusé` dans les logs. Sans ce refus,
+> le hasard d'un run devenait la « décision » servie à tous les runs suivants (constaté
+> le 2026-08-03 ; assainissement : `scripts/cache/purge_uniform_fallback.py`).
+
+### Mémoïsation des réflexions STM/LTM (ticket 012)
+
+Les appels de **réflexion** obéissent à un régime distinct des décisions : le prompt
+contient le vécu unique de l'agent, donc tout rapprochement (sémantique, inter-agents)
+est interdit — mais un prompt **byte-identique** (re-run déterministe : décisions au
+cache, tirages seedés, météo rejouée) est une fonction pure déjà payée.
+`ReflectionMemoStore` (`llm/reflection_store.py`) mémoïse par SHA-256 du prompt
+effectif (agent, identité, vécu, consignes, horodatage, paramètres LLM) dans
+`reflections.sqlite`, à côté du cache de décisions — l'isolation par checksum de
+prompt système est héritée du répertoire.
+
+| | Décisions (`llm_decisions`) | Réflexions (`reflections.sqlite`) |
+|---|---|---|
+| Réutilisation | Contexte partagé (agent, activité, créneau, météo…) | **Exact uniquement**, jamais inter-agents |
+| Branche sémantique | Oui (seuil cosinus) | **Non — par construction** |
+| Contenu servi | Distribution → nouveau tirage | La réflexion telle que payée |
+| Repli persisté | Jamais (`UniformFallback`) | Jamais (réflexion vide refusée) |
+
+Un hit (`[reflection-memo] hit` dans les logs, compteur Prometheus
+`agent_reflection_memo_total`) a des effets strictement identiques à un appel réel :
+STM consommée, entrées REFLECTION/CONCEPT écrites en LTM. Désactivable via
+`cache.reflection_memo_enabled`. Le taux de hit attendu est ~0 % sur un scénario
+inédit et ~100 % sur le re-run d'un scénario épinglé — c'est la mesure de validation
+du ticket 012 (A3).
+
 ### Cache LRU des métadonnées LTM
 
 `MultiUserLongTermMemory` garde en mémoire les métadonnées des agents (`~3 Ko`/agent), plafonnées par `agent.long_term_max_loaded_metadata` (défaut **5000**). Ce plafond **doit rester au-dessus du nombre d'agents** : en dessous, le parcours round-robin des agents provoque une éviction — donc une relecture et une réécriture disque — à chaque décision. Aucun `gc.collect()` n'est déclenché à l'éviction (`_cleanup_metadata_cache` est appelé depuis l'event loop).

@@ -24,7 +24,7 @@ dans `/debug-run` (`make report / capacity / init`).
 
 | # | Fichier / uid | Question |
 |---|---------------|----------|
-| 01 | `01_cockpit.json` / `cockpit` | Le run va-t-il bien ? (feu santé, alarmes, agents bloqués, fallback %, quotas, caches, erreurs) |
+| 01 | `01_cockpit.json` / `cockpit` | Le run va-t-il bien ? (feu santé, alarmes, agents bloqués, fallback %, composition de la file LLM, quotas, caches, erreurs) |
 | 02 | `02_init_bootstrap.json` / `init-bootstrap` | L'init est-elle rapide, le cache Qdrant assez peuplé ? |
 | 03 | `03_pipeline_scheduling.json` / `pipeline-scheduling` | Le scheduler tient-il la cadence ? (lag, EDF, backpressure, retards, vitesse sim, /sync) |
 | 04 | `04_llm_gateway.json` / `llm-gateway` | Les providers suivent-ils ? À quel coût en tokens ? |
@@ -93,7 +93,9 @@ Deux mécanismes complémentaires :
 (`__all__` = agrégat), `llm_provider_state/…_limit/…_today`,
 `llm_provider_disable_ttl_seconds` (secondes avant réactivation — couvre la
 désactivation temporaire **et** le cooldown 429/5xx, valeur = max des deux
-TTL), files de batch,
+TTL), files de batch (`llm_task_queue_depth{batch_key}` et son agrégat
+`llm_task_queue_depth_by_category{category}` — ticket 010 : lit d'un coup d'œil
+`itinary_multi_agent` vs `stm_reflection`, la donnée du diagnostic du 2026-08-03),
 workers Celery, métriques métier worker (`llm_transport_mode_chosen_total`,
 `llm_mode_by_distance_total` — 7 tranches jusqu'à `>50km`,
 `llm_mode_by_provider_total`, `llm_chosen_index_total`), `alarme_total` (part worker).
@@ -105,7 +107,12 @@ mode canonique — c'est la répartition *attendue*, dont `trip_mode_by_purpose_
 donne la réalisation tirée.
 
 **Contrôleur** (`llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
-(ticket 003), `controller_sync_duration_seconds` (latence du battement de cœur
+(ticket 003), composition de la pile (ticket 010 :
+`controller_pending_reflections` = réflexions STM en file EDF ou en vol,
+`controller_overdue_decisions` = décisions plan/refill à échéance sim dépassée —
+le signal qui distingue une vraie saturation du drainage nocturne nominal ;
+panneau « Composition de la file LLM » du cockpit),
+`controller_sync_duration_seconds` (latence du battement de cœur
 GAMA↔controller), `controller_event_loop_lag_seconds`,
 `trip_mode_by_purpose_total{mode,purpose}` (mode principal × motif d'activité,
 compté au push du trajet vers GAMA — couvre décisions LLM **et** cache

@@ -1,3 +1,1158 @@
+## [2026-08-11] Calibration : la boucle recommence à avancer
+
+Trois mécanismes de la boucle de calibration se refermaient sur elle : elle consommait
+ses itérations sans jamais rien mesurer, tuait ses meilleures pistes avant de les
+regarder, et enregistrait comme des faits des décisions qu'elle disait exploratoires.
+La branche `7` en donne la mesure : **38 itérations, zéro acceptation, 3 mesures
+complètes payées sur 38 mutations proposées.**
+
+**L'archive des impasses ne se vidait jamais.** Une proposition trop proche d'une
+tentative déjà rejetée est écartée sans payer d'évaluation — c'est le bon réflexe, et
+l'entrée devait redevenir jouable « au bout d'un moment ». Sauf que « un moment » était
+compté en *acceptations*, alors qu'une entrée naît à chaque *rejet* : tant que rien
+n'était accepté, rien n'expirait, et l'archive n'a fait que grossir jusqu'à recouvrir
+tout l'espace des propositions. Plus une seule évaluation, donc plus une seule
+acceptation, donc plus aucune expiration. Le délai se compte désormais en itérations —
+un compteur qui avance quoi qu'il arrive — et une alarme part si cinq propositions
+d'affilée sont écartées ainsi.
+
+**Before :** 36 impasses mémorisées, toutes datées de la même échéance impossible ;
+plus rien n'était évalué après la première.
+**After :** l'archive se stabilise autour d'une dizaine d'entrées et se renouvelle ;
+une piste écartée redevient jouable après quelques tours.
+
+**Le pré-filtre éliminait 87 % des pistes sur un coup d'œil.** Pour ne pas payer
+l'évaluation complète d'une piste sans avenir, chaque essai est d'abord jugé sur un
+quart des personas. Le verdict tombait sur une comparaison ponctuelle, sans la moindre
+marge d'incertitude : « pas mieux » valait « éliminé ». Sur 38 mutations, **33 sont
+mortes là, dont 8 pour un écart si petit que l'autre chemin du même programme les
+aurait explicitement gardées**. Or les deux erreurs ne se valent pas : garder une piste
+médiocre coûte du calcul, jeter une bonne piste coûte une amélioration qu'on ne
+retrouvera jamais. Le pré-filtre n'écarte plus qu'une piste dont la probabilité d'être
+une amélioration tombe sous 20 %, et s'abstient franchement quand l'échantillon est
+trop petit pour trancher.
+
+**Before :** un essai à `−0,3` point du prompt courant sur un quart des personas était
+abandonné.
+**After :** il poursuit ; seul l'essai manifestement sans espoir s'arrête là.
+
+**Le quart de personas était toujours le même.** C'étaient littéralement les premiers de
+la liste, à toutes les itérations et pour tous les candidats — avec le risque qu'une
+catégorie entière (une tranche d'âge, un motif de déplacement) y soit sur- ou
+sous-représentée, et que deux prompts soient comparés sur des publics différents.
+L'échantillon est désormais tiré une fois par campagne, équilibré sur les mêmes
+catégories que celles que la note agrège : sur une population réaliste de 608 personas,
+l'écart maximal d'une catégorie à son poids réel tombe de **6,4 points à 0,3**. Les
+mesures partielles sont en outre archivées sous une clé qui nomme l'échantillon, pas
+seulement sa taille : une ancienne mesure ne peut plus être resservie comme comparable
+à une nouvelle.
+
+**Le niveau d'exigence baissait au début de la campagne.** Le seuil de preuve exigé
+pour retenir une amélioration était assoupli en début de course, au nom de
+l'exploration : de 90 % de confiance à **55 %** — quasiment plus de contrôle du tout,
+au moment précis où la campagne écrit le plus. Or une acceptation n'a jamais rien de
+provisoire ici : elle déplace le meilleur score, récompense l'opérateur qui l'a
+produite, entre en bibliothèque, décale les délais d'expiration et peut déclencher une
+passe de raccourcissement du prompt. Une décision que le système enregistre comme un
+fait ne peut pas être dite « exploratoire ». Le seuil est désormais **fixe à 90 %**.
+L'exploration reste possible, mais là où elle appartient : dans la tolérance au
+déplacement, pas dans le niveau de preuve.
+
+**Côté campagne génétique**, le champion sortant reprenait sa place en écrasant
+silencieusement un survivant — deux fois par génération, sans une ligne de journal.
+Quand l'objet même de l'étude est l'opérateur de sélection, le corrompre en silence
+rend la campagne indéfendable. Le champion est maintenant une contrainte donnée à la
+sélection, appliquée en un seul endroit, et toute éviction qui en découle est nommée
+dans le journal et distinguée dans l'historique. Enfin, les tentatives de croisement
+rejouaient toutes le même couple de parents, garantissant des doublons : elles
+parcourent désormais les couples disponibles.
+
+---
+
+## [2026-08-11] Calibration : un dispositif enfin capable de conclure
+
+Une analyse de puissance vient d'établir que la campagne de calibration **ne pouvait pas
+conclure**, quelle que soit la qualité du prompt trouvé. Le jeu de test comptait 132
+personas et le jeu de validation 127 — deux jumeaux trop petits. La plus petite différence
+que le dispositif savait détecter valait **2,27 points**, pour un effet attendu de **2,12**.
+Autrement dit : même une calibration parfaite aurait rendu « non significatif ». Le défaut
+tenait à l'effectif, pas au calcul — changer d'estimateur ne le corrigeait pas.
+
+Trois corrections, livrées ensemble parce qu'elles se tiennent.
+
+**Le découpage des jeux passe de 70/15/15 à 50/20/30.** Le partage 70/15/15 vient d'un monde
+où le jeu d'apprentissage commande la qualité et où mesurer coûte peu. Ici c'est l'inverse :
+le jeu d'entraînement est réévalué à chaque itération, chaque ablation, chaque essai — son
+effectif multiplie toute la facture — tandis que le jeu de test n'est évalué qu'une ou deux
+fois dans la vie d'une campagne. L'agrandir est donc quasi gratuit, et rétrécir
+l'entraînement **fait baisser le coût**. Les jeux `v3` sont gelés ; `v2` reste intact.
+
+**Avant :** entraînement 608 personas · validation 127 · test 132 → différence détectable
+**2,27** (> effet attendu), ~62 requêtes par évaluation d'entraînement
+**Après :** entraînement 430 · validation 178 · test 259 → différence détectable **≈ 1,62**
+(< effet attendu), ~44 requêtes par évaluation d'entraînement
+
+La population n'a pas changé d'un persona : les jeux `v3` sont un **repartitionnement** des
+fichiers gelés de `v2`, pas une régénération. C'était la condition pour que les chiffres de
+l'analyse de puissance restent valables. Le jeu de criblage, défini en tranches absolues,
+garde exactement les mêmes personas — son coût est inchangé. Et le petit jeu de classement du
+génétique doit désormais **prouver** qu'il conserve au moins 30 personas : en deçà, le gel est
+refusé, parce que classer sur moins que ça n'est plus classer mais tirer au sort.
+
+**Le champion n'est plus élu parmi cinquante candidats, mais parmi trois.** C'est le point le
+plus grave, découvert en dernier. Depuis que la sélection finale repose sur le jeu de
+validation, elle rencontre un piège classique : choisir le meilleur parmi K candidats
+surestime mécaniquement son mérite, d'autant plus que K est grand. Avec la dispersion mesurée
+sur ce jeu, désigner l'argmin parmi une cinquantaine de prompts gonfle le résultat d'environ
+**3,9 points** — presque le double de l'effet recherché. Le « champion » pouvait donc être
+intégralement du bruit.
+
+**Avant :** le meilleur score de validation sur l'ensemble du registre était publié
+**Après :** trois finalistes sont d'abord désignés sur l'entraînement (évaluations déjà
+payées, donc gratuit), puis la validation ne départage que ces trois-là — biais ramené à
+≈ 2,0 point. Le nombre de finalistes est **figé à trois dans le code** : un garde-fou qu'on
+peut desserrer après avoir vu les résultats n'est plus un garde-fou.
+
+Le bilan de fin de campagne dit maintenant **parmi combien** de candidats le champion a été
+élu, lesquels étaient en lice, et publie l'**écart entre son score de validation et son score
+de test** — le témoin honnête de ce qui reste de biais. Un prompt bien meilleur là où on l'a
+choisi qu'ailleurs, ça se voit et ça se dit. Les prompts qui ont purement **supprimé** un mode
+de transport sont par ailleurs écartés d'office de la course au titre.
+
+**La version des jeux entre dans la clé du cache d'évaluation.** Une évaluation sur
+`v1/train` et une évaluation sur `v2/train` partageaient jusqu'ici la même entrée de cache,
+alors qu'elles portent sur des populations différentes : le nom du jeu était mémorisé, sa
+version non. Le défaut restait latent tant que la population ne bougeait pas ; avec l'arrivée
+de `v3`, il devenait certain. **Conséquence assumée : le cache existant est invalidé et la
+campagne repart sur une base neuve.** Rien n'est détruit — les décisions brutes restent
+lisibles et rejouables.
+
+**Trois filets posés au passage.** Un score construit sans aucune mesure valait encore `0,00`,
+c'est-à-dire la note **parfaite** ; il vaut désormais la pire note possible, très au-delà de
+tout score réel — on ne peut plus gagner un classement en ne mesurant rien. Une décision peut
+enfin emporter jusqu'en base la **référence du déplacement** dont elle provient, ce qui ouvre
+la voie à un scoring au bon grain pour les personas qui font plusieurs trajets. Et un rejet
+« faute d'effectif suffisant » se distingue maintenant explicitement d'un rejet « faute de
+résultat » : ne pas avoir pu mesurer n'est pas avoir mesuré une absence d'effet.
+
+Enfin, `calibrate rescore` applique rétroactivement le retrait de la pénalité de mode absent
+sur tout l'historique — un simple calcul, zéro appel au modèle — et il est rejouable sans
+risque de soustraire deux fois.
+
+---
+
+## [2026-08-11] Calibration : ce que « meilleur » veut dire
+
+Le classement des prompts reposait sur une loss dans laquelle **l'absence de donnée
+était indiscernable d'une donnée** — et le biais penchait toujours du côté flatteur.
+Le composite est une perte : `0.00` est le score **parfait**. Or plusieurs chemins du
+code rendaient `0.00` non pas parce que la mesure était bonne, mais parce qu'il n'y
+avait rien à mesurer. Sur le store, neuf évaluations importées **sans aucune décision**
+se recalculaient à `0.00` pile. Sept évaluations de criblage portant sur 8 à 35
+personas décrochaient une note parfaite sur la tranche d'âge — aucune tranche n'était
+assez peuplée pour être regardée. La plus petite d'entre elles, **8 personas et quatre
+dimensions offertes**, était le **meilleur prompt du jeu de criblage**.
+
+Cinq corrections liées, livrées ensemble parce qu'elles se répondent : la valeur d'un
+échec change les effectifs, qui changent ce qu'on estime.
+
+**La pénalité de mode absent quitte le score.** Elle valait `5 × la part de référence`
+du mode oublié. Comme la référence est libellée en pourcents, un mode oublié coûtait
+jusqu'à 275 points, face à des dimensions de qualité valant 2 à 25. Mesuré sur le
+store : **130 points sur un composite de 289, soit 45 % de la note d'un prompt**. Ce
+n'était plus un terme de la loss, c'était la loss. Elle est désormais **calculée,
+stockée et affichée** — mais de poids nul, exactement comme la pénalité de longueur
+l'an dernier. Le jugement qu'elle portait légitimement devient un **critère de
+recevabilité** en tout ou rien : un prompt qui accorde une masse **exactement nulle** à
+un mode que la référence estime à 1 % ou plus n'est pas recevable, point. Aucune
+évaluation passée n'est à jeter : le nouveau score se déduit de l'ancien par une simple
+soustraction, sans rappeler le modèle une seule fois.
+
+**Une non-mesure devient la pire note, plus la meilleure.** Une dimension qu'on n'a pas
+pu mesurer — colonne manquante, aucune strate assez peuplée, référence absente — vaut
+désormais la **perte maximale** de son axe, et la liste des dimensions non mesurées
+voyage à côté du score, avec l'effectif de chacune. Le journal d'évaluation dit
+maintenant sur quoi il a compté (`n=608 personas · masse/persona=1.000 · Autre=0.4 %`)
+et lève une alarme dès qu'une dimension n'a pas été regardée.
+
+**Mais on n'élimine plus un candidat qu'on n'a pas su mesurer.** C'est la règle jumelle,
+et l'inverse de la précédente : sévère quand il faut produire une note, prudent quand il
+faut écarter quelqu'un. Sinon on remplace un biais optimiste par un biais pessimiste,
+plus difficile à voir.
+
+**Un test statistique exige au moins 30 agents appariés.** Le seuil porte sur les
+agents présents des deux côtés de la comparaison — jamais sur les lignes : le jeu
+d'entraînement compte 3 024 lignes pour 608 personnes, et compter les lignes
+fabriquerait une précision cinq fois trop belle. En dessous du seuil, le verdict est
+explicitement « **pas mesurable** » et non « rejeté » — la mutation n'a pas été
+réfutée, elle n'a pas pu être jugée — avec une alarme visible dans `make error`. Tous
+les jeux réels franchissent le seuil : c'est un fil de détente, pas une règle du jeu.
+
+**Le juge lui-même était biaisé.** Quand la boucle compare un prompt à son mutant, un
+côté vient du cache et l'autre d'une évaluation fraîche. Les deux n'étaient pas
+construits de la même façon : l'évaluation fraîche connaissait le déplacement exact de
+chaque personne, le cache retombait sur un seul déplacement par personne — or 99 % des
+gens en ont plusieurs, de motifs et de distances différents. L'écart se logeait
+précisément dans les deux dimensions les plus lourdes après le global. Les deux côtés
+suivent désormais le même chemin. Effet de bord bienvenu : le score écrit en base est
+enfin **exactement** celui qu'on retrouve en le recalculant.
+
+**Une métrique ne peut pas être pondérée par ce qu'elle juge.** Sur les axes ordonnés
+(âge, distance), le poids de chaque mode était la masse que le candidat lui accordait
+lui-même. Un prompt améliorait donc sa note en **dégonflant** un mode qu'il plaçait mal,
+jusqu'à le faire sortir de sa propre évaluation — sans corriger une seule erreur. Le
+poids est désormais celui de la référence, identique pour tout le monde.
+
+**Avant :** un prompt évalué sur 8 personnes, à qui quatre dimensions sur six avaient
+été offertes faute de données, était déclaré le meilleur du jeu de criblage ; une
+évaluation vide obtenait le score parfait ; un mode oublié pesait la moitié de la note ;
+et le juge d'acceptation penchait d'un côté avant même de juger.
+**Après :** la non-mesure est la pire note possible, jamais la meilleure ; le mode
+oublié est une question de recevabilité et non de points ; le test s'abstient au lieu
+d'éliminer ce qu'il n'a pas su mesurer ; et les deux côtés de la comparaison sont
+construits à l'identique.
+
+**Ce que ça déplace concrètement.** Recalcul des 334 évaluations du store, loss active
+(`emd_jsd`) : le composite bouge de **+0,5 point en médiane** (−1,2 à +2,9 hors cas
+dégénérés), la corrélation de rang avant/après est de **0,99**, et le meilleur prompt
+reste le même sur les trois jeux (`train`, `screen`, `race`). Le classement n'est donc
+pas bouleversé — sauf là où il l'était pour de mauvaises raisons : sous la loss L1, le
+champion du jeu de criblage change, l'ancien étant le prompt mesuré sur 8 personnes.
+Les évaluations dégénérées passent de `0.00` (parfait) à `310` / `620` selon la loss,
+au-dessus de la pire évaluation réelle jamais observée (63,5 / 415,8).
+
+---
+
+## [2026-08-11] Calibration : la supervision détecte enfin le travail qui ne produit rien
+
+Une campagne a tourné **quatre jours sans rien produire** et s'apprêtait à annoncer
+une convergence. Ce n'est pas qu'une alarme s'est mal levée : les deux alarmes qui
+existaient étaient **incapables de se lever** sur cette panne-là. L'une testait la
+fraîcheur du fichier d'avancement — que la boucle bloquée réécrivait des dizaines de
+fois par heure : elle mesurait que le programme était vivant, pas qu'il avançait.
+L'autre était **désactivée tant qu'une passe tournait**, or une passe dure jusqu'à
+sept heures : le garde-fou anti-fausse-alerte avait été taillé, sans le savoir, sur
+la panne réelle.
+
+La supervision compte désormais **ce qui a été réellement produit** — nouveaux
+prompts et évaluations enregistrés — sur une fenêtre de **6 heures glissantes**. Zéro
+production sur 6 heures alors que la campagne n'est pas arrêtée : alarme, même si
+tout a l'air de tourner. Six heures laissent passer quatre à six générations
+légitimes ; l'ancien seuil de 36 h est précisément celui qui a laissé filer
+l'incident.
+
+**Avant :** une passe pouvait brûler sept heures de calcul sans produire un seul
+candidat, avec un fichier d'avancement rafraîchi en permanence, un digest quotidien
+au ton rassurant et aucune alerte. Quatre jours plus tard, la campagne s'apprêtait à
+déclarer une convergence qui n'avait rien comparé.
+**Après :** l'alarme part sous 6 heures ; le chien de garde alerte **systématiquement**
+dès qu'un diagnostic sort en anomalie (l'état « une passe tourne » ne décide plus que
+de l'arrêt éventuel du calcul, plus jamais du silence) ; et une passe qui se termine
+en état anormal sort en erreur, ce qui déclenche l'alerte système.
+
+**Le digest quotidien dit d'abord l'essentiel.** Première ligne, toujours :
+« **Nouveauté depuis hier : OUI / NON** » — avec le nombre de jours écoulés si NON.
+C'est le signal qui aurait tout changé ; l'information était déjà là, noyée dans un ton
+neutre. Le score est désormais libellé « plus c'est bas, mieux c'est », et le
+rassurant « aucun blocage détecté » devient « aucun des problèmes surveillés détecté —
+cela ne garantit pas que tout va bien ».
+
+**Deux capteurs cessent de se taire.** La comptabilité d'usage LLM enregistre
+maintenant sa ligne **même à zéro requête** : une passe de sept heures sans le moindre
+appel ne laissait aucune trace, donc était indistinguable d'une passe qui n'avait pas
+tourné. Le digest signale en clair une clé qui a fait tourner une passe pour moins de
+100 requêtes. Et l'absence du fichier d'avancement lève désormais un avertissement, au
+lieu de rendre la détection de gel aveugle en silence.
+
+**Enfin, la leçon est mise sous test.** Trois tests verrouillent le dispositif : que
+l'alarme se lève avec un fichier d'avancement **frais** (la reproduction exacte de
+l'angle mort), qu'elle reste **silencieuse** quand la campagne produit (une alarme qui
+hurle toujours vaut une alarme muette), et un test de non-régression qui rejoue l'état
+réel du 7 août et exige le code d'erreur.
+
+---
+
+## [2026-08-11] Calibration : une coquille de config ne passe plus, et l'instrument de mesure est gravé dans le registre
+
+Le fichier de configuration d'une campagne **est la spécification du protocole
+expérimental**. Il était pourtant possible d'y écrire n'importe quoi : une coquille
+(`eval_tmp` au lieu de `eval_temp`) et même une clé entièrement inventée étaient
+acceptées **sans un mot**, et la campagne tournait alors sur les valeurs par défaut —
+des mesures valides en apparence, sous un régime que personne n'avait voulu. Toute clé
+inconnue est désormais refusée au lancement, avec un message qui nomme la clé fautive
+et propose le champ le plus proche (« `eval_tmp` — vouliez-vous dire `eval_temp` ? »).
+Corollaire assumé : une clé orpheline en configuration bloque le démarrage. L'audit
+des sept fichiers livrés en a trouvé exactement une, sans le moindre lecteur dans le
+code ; elle a été retirée, et un test vérifie désormais que toutes les configurations
+livrées chargent.
+
+**Les bras d'ablation cessent d'être des réglages volatils.** Le ciblage
+déterministe, la mutation décomposée et la mémoire de leçons sont des *facteurs
+expérimentaux*, mais ils ne vivaient que dans une configuration globale et modifiable :
+aucune mutation enregistrée ne disait sous quel bras elle avait été produite. C'était
+la vraie raison pour laquelle l'ablation de la campagne en cours était réputée
+« non interprétable » — pas une fatalité, une colonne manquante. Chaque mutation porte
+maintenant son régime, et l'analyse regroupe par bras au lieu de supposer. Les
+mutations déjà en base restent en « régime inconnu » : aucune ne se voit attribuer
+après coup un bras qu'elle n'a peut-être pas eu.
+
+**On sait enfin sous quel instrument une campagne a mesuré.** La configuration
+résolue est archivée dans le registre, empreintée et horodatée, à chaque changement.
+Reprendre une campagne dont l'instrument a changé est refusé, avec le détail des
+champs qui ont bougé, sauf à assumer explicitement le changement — qui est alors
+archivé lui aussi. Les réglages purement opérationnels (chemins, cadences, quotas,
+notifications) ne déclenchent rien : rapatrier la base pour la consulter en local
+reste anodin.
+
+**Avant :** une coquille de configuration lançait une campagne entière sur des valeurs
+par défaut sans le signaler ; rien ne permettait de savoir sous quel bras d'ablation
+une mutation avait été proposée, ni sous quelle configuration une campagne avait
+tourné — un fichier édité au douzième jour effaçait toute trace du premier.
+**Après :** la campagne refuse de démarrer sur une configuration douteuse et dit quoi
+corriger ; chaque mutation est attribuable à son bras expérimental ; le registre
+conserve l'historique horodaté des configurations, et la reprise sous un autre
+instrument doit être assumée.
+
+---
+
+## [2026-08-11] Calibration génétique : fin du blocage silencieux, une campagne ne peut plus « converger » sans rien engendrer
+
+La campagne génétique tournait sans produire le moindre individu : six générations
+d'affilée, chaque tentative de reproduction rejetée en doublon, aucun enfant, et un
+compteur de stagnation qui montait quand même. Elle s'apprêtait à s'arrêter en
+annonçant une convergence — alors qu'elle n'avait comparé le champion qu'à lui-même,
+re-mesuré à l'identique trois fois. Cinq correctifs ferment le piège.
+
+- **Le sélecteur d'opérateurs ne peut plus se verrouiller.** Toute tentative de
+  reproduction, réussie ou non, met désormais à jour les statistiques de l'opérateur
+  employé. Un opérateur qui ne produit rien était auparavant considéré comme « jamais
+  essayé », donc rejoué en boucle, indéfiniment.
+- **L'opérateur déterministe sort de la compétition.** Le croisement « greedy » est un
+  témoin sans appel de modèle : sur une population figée il rend toujours le même
+  enfant. Il reste disponible comme repli quand le rédacteur est indisponible, mais
+  n'est plus tenté qu'une fois par génération — le rejouer ne produit rien de neuf.
+- **Le filet d'exploration redevient atteignable.** L'immigrant aléatoire (un variant
+  frais, garde-fou anti-stagnation) était conditionné au « dernier enfant de la
+  génération » : une condition impossible à atteindre quand justement aucun enfant
+  n'était produit. Il se déclenche maintenant aussi en dernier recours.
+- **Une génération stérile lève une alarme et ne compte plus comme une preuve.**
+  Reproduction à zéro enfant → `[ALARME]` immédiate dans les logs, avec le détail des
+  rejets et l'opérateur en cause. Et surtout : une génération sans candidat nouveau
+  n'incrémente plus le compteur de stagnation, puisqu'aucun challenger n'a été opposé
+  au champion.
+- **Le diagnostic (`calibrate doctor`) teste la stérilité en premier.** Une campagne
+  arrêtée renvoyait « ✅ arrêtée » sans autre examen. Deux générations sans le moindre
+  candidat nouveau ni éval payée donnent maintenant 🚨 `sterile`, ou 🚨
+  `false_convergence` si l'arrêt a été prononcé pour stagnation.
+
+**Cause d'entrée corrigée au passage** : le rédacteur de mutations pointait sur un
+fournisseur **qui n'existe pas** dans le catalogue. Rien ne le signalait — la clé d'API
+était devinée par convention et les appels partaient quand même — si bien que chaque
+mutation échouait et que l'algorithme basculait en permanence sur son repli sans
+modèle. Désormais, un fournisseur inconnu est **refusé au démarrage** avec la liste de
+ceux qui existent, et une panne **permanente** de configuration (fournisseur ou modèle
+inconnu, clé refusée) arrête la campagne au lieu d'être confondue avec un simple quota
+épuisé. Le changement de fournisseur est gratuit : le modèle de mutation n'entre pas
+dans la clé de cache des évaluations, aucune mesure n'est invalidée.
+
+**Avant :** six générations sans un seul individu engendré, aucun message d'erreur, et
+une « convergence » sur le point d'être déclarée à partir de trois mesures du même
+prompt ; un fournisseur inexistant faisait tourner la campagne en mode dégradé pendant
+quatre jours sans le dire.
+**Après :** l'alarme part à la première génération stérile, la stagnation ne se compte
+que face à un vrai challenger, le diagnostic quotidien classe le cas en alarme, et une
+configuration fautive échoue à la seconde zéro avec un message qui dit quoi corriger.
+
+---
+
+## [2026-08-11] Calibration : loss unique, sélection du champion sur validation, IC sur le chiffre publiable
+
+Trois corrections de **rigueur scientifique** issues du diagnostic multi-angles du module
+de calibration (branche `feat/diag-plan-arbitre`), toutes **sans aucun appel LLM** (recalcul
+depuis les décisions déjà stockées, aucune invalidation de cache) :
+
+- **Une seule loss de bout en bout.** La pénalité de longueur (poids `1.0`) est mise à `0.0` :
+  elle est encore *mesurée* (suivi du nombre de mots) mais n'entre plus dans le composite. Le
+  prompt publié est désormais **l'argmin exact de la métrique rapportée** — avant, le champion
+  était choisi sous une pénalité que le chiffre publiable neutralisait. L'économie de mots reste
+  assurée par la passe de compaction.
+- **Champion sélectionné sur la validation, pas l'entraînement.** `finalize` prend le meilleur
+  composite sur `val` (repli sur `train` si absent), supprimant le biais de surapprentissage au
+  jeu que la boucle optimise.
+- **Intervalle de confiance sur le résultat.** `calibrate finalize` affiche désormais un IC à
+  90 % (bootstrap apparié) sur l'amélioration test seed→champion, au lieu d'un simple point.
+
+**Modèle d'évaluation figé** pour la campagne de référence : nouvelle entrée provider
+`google_gemini31_ga` sur `gemini-3.1-flash-lite` (version GA datée `05-2026`) au lieu de la
+preview flottante, qui pouvait changer sous nos pieds sans que rien ne le signale. La campagne
+en cours n'est pas touchée : le provider entrant dans la clé de cache, la version figée dispose
+de son propre cache et de son propre quota journalier.
+
+Ajout de garde-fous de fiabilité : un échec persistant du mutateur **arrête proprement** la
+campagne (`[ALARME]`) au lieu de la déclarer « terminée » à vide ; une campagne finissant sans
+aucune acceptation est signalée en **échec** ; le jeu de test est **verrouillé au démarrage**
+(disjonction vérifiée, fail-fast) ; un garde **refuse un modèle d'éval non épinglé sur un run
+neuf** (sans jamais bloquer la reprise d'une campagne en cours).
+
+**Avant :** prompt publié ≠ argmin de la métrique rapportée ; champion choisi sur `train` ;
+résultat test = un point sans dispersion ; un mutateur en panne pouvait produire une « campagne
+terminée » sans rien avoir calibré.
+**Après :** sélection = reporting ; champion choisi sur `val` ; résultat test = Δ + IC90 ;
+échec vacant détecté et signalé.
+
+---
+
+## [2026-08-04] Calibration : rapports HTML livrés sur Discord et suivi d'avancement lisible
+
+Les rapports de génération (`gen_NN.html`) et le bilan hebdomadaire arrivent
+désormais **en pièce jointe du message Discord** — un clic pour les télécharger,
+plus besoin de configurer un compte mail (le canal SMTP reste disponible en
+option). Le message d'avancement est réécrit pour se lire d'un coup d'œil.
+
+**Avant :** rapport joint uniquement au mail (inactif sans secrets SMTP) ;
+message : `attribution par omission (génération 0, jeu rank) · 5/7 (71 %) · ·
+5/7 ga ablation g0[6b:7b407ee7] lot 3/27` + `Itération 0/50 · 0 itér ·
+0 acceptée(s)` + `Appels LLM 252`
+**Après :** rapport téléchargeable dans Discord ; message : `attribution par
+omission (génération 0 · prompt candidat 2/3, jeu rank) · 5/7 (71 %) ·
+lot 3/27` + `Évals : 6 payée(s) (appels LLM) · 1 par le cache (0 appel)` +
+`Appels LLM : 252 / 500 (quota du jour de la clé)` + `Reste (étape) :
+~2 coalition(s) ≤ 90 appels` — les compteurs d'itération n'apparaissent que
+quand une boucle a réellement itéré.
+
+Même passe de lisibilité sur les deux autres familles de messages : le **digest
+quotidien** n'affiche plus `Itération : None` sur une campagne génétique et
+nomme l'étape GA en clair (`Étape GA : attribution par omission`) ; le
+**rapport de génération** dit « Champion : prompt candidat a1c20fb104 » et
+explique le budget (« évals accumulées, réutilisables gratuitement »).
+
+---
+
+## [2026-08-03] Calibration : le rattrapage des lots incomplets ne re-paye plus les personas déjà rendus
+
+Le modèle d'éval de la campagne génétique (`gemini-3.5-flash-lite`) omet ~10 % des
+personas de chaque lot. Le rattrapage re-tirait alors **deux moitiés complètes** du
+lot : un lot de 8 avec 6 rendus re-payait 8 personas en 2 appels pour 2 manquants.
+Sur la journée du 2026-08-03 (250 re-tirs), environ **la moitié du quota journalier
+bi-clé** (~1 000 requêtes) est partie en rattrapage au lieu de payer des évals.
+
+Le re-tir est désormais **ciblé** : un seul appel ne contenant que les personas
+manquants. Le découpage en moitiés ne subsiste que pour un lot rendu entièrement
+muet (le redemander à l'identique à température 0 redonnerait la même réponse).
+La mesure est inchangée (le re-tir n'entre pas dans la clé de cache d'éval).
+
+**Avant :** lot de 8 avec 2 manquants → 2 appels re-payant 8 personas (et récursion)
+**Après :** lot de 8 avec 2 manquants → 1 appel de 2 personas
+
+---
+
+## [2026-08-03] Drainage nocturne des réflexions STM : la vague du soir n'est plus une fausse alerte
+
+Les agents rentrent le soir avec leurs mémoires pleines et déclenchent tous leur
+réflexion STM dans la même fenêtre (run de référence : 247 réflexions pour
+13 décisions d'itinéraire en 30 min simulées). Ce stock est désormais traité pour
+ce qu'il est — une charge incompressible mais **sans urgence**, à servir pendant la
+nuit simulée où la capacité LLM est libre — et non comme une saturation du pipeline.
+
+- **Échéance au réveil** : chaque réflexion part en file EDF avec pour échéance le
+  réveil de son agent (première activité du lendemain), au lieu d'un délai fixe de
+  12 h. Les décisions du soir passent mécaniquement devant ; le stock se draine
+  toute la nuit dans l'ordre des réveils (lève-tôt d'abord). Aucune réflexion n'est
+  abandonnée ni tronquée : on déplace la charge dans le temps, on ne la réduit pas.
+- **Alarme backlog honnête** : `[ALARME] Backlog critique` ne crie plus que si des
+  décisions d'itinéraire souffrent réellement (départs en retard ou échéances
+  dépassées). Une pile dominée par les réflexions la nuit est loggée en INFO avec sa
+  composition (`N décisions + M réflexions`).
+- **Drainage post-pause visible** : à la fin d'horizon (`simulation_max_days`), le
+  controller continue d'écrire les réflexions restantes en LTM et le signale dans
+  les logs (`[drainage] … arrêt sûr (make down)` quand la file est vide).
+- **Cockpit** : nouveau panneau Grafana « Composition de la file LLM »
+  (`itinary_multi_agent` vs `stm_reflection`, décisions à échéance dépassée) — la
+  donnée qui a permis le diagnostic, lisible d'un coup d'œil.
+
+**Before :** la vague de réflexions du soir déclenchait `[ALARME] Backlog critique`
+et masquait la composition de la file (80 % de backlog alors que late=0, cache 99 %,
+providers sains)
+**After :** nuit simulée = drainage nominal tracé en INFO ; l'ERROR ne part que si
+des décisions d'itinéraire sont réellement en souffrance, et chaque réflexion est
+terminée avant le réveil de son agent
+
+---
+
+## [2026-08-03] Calibration : plus de crash sur une réponse persona vide, alertes Discord qui nomment la bonne unité
+
+La passe génétique du matin (`calib-ga-pm`, clé Google 2) s'est arrêtée net : le
+modèle d'éval a rendu, pour un persona, une entrée **vide** (ni distribution de
+probabilités, ni mode). L'entrée passait pour « rendue » (pas de re-tir), et la
+décision `mode=None` fabriquée en aval faisait exploser la validation d'`EvalResult`
+après avoir payé tous les lots de l'éval. Une telle entrée est désormais traitée
+comme un **persona non rendu** : re-tir par moitiés, puis garde de couverture s'il
+reste muet — mêmes défenses que le lot incomplet, aucune mesure dégradée. La passe
+interrompue a été relancée et a repris exactement à l'étape du crash (cache intact).
+
+Au passage, l'alerte Discord `OnFailure` annonçait « le service calib » en dur,
+quelle que soit l'unité morte — le diagnostic est parti sur la mauvaise unité.
+`calib-notify-fail` est maintenant une unité template : le message nomme l'unité
+réellement en échec et la bonne commande `journalctl`.
+
+**Before :** une réponse persona vide tuait toute la passe GA après avoir consommé
+le quota de l'éval ; l'alerte Discord pointait `journalctl -u calib` même quand
+c'était `calib-ga-pm` qui était mort
+**After :** le persona vide est re-tiré puis compté par la garde de couverture ;
+l'alerte nomme l'unité en échec et la commande de diagnostic exacte
+
+---
+
+## [2026-08-03] Dashboard : la campagne génétique en détail (population, scores, rapports)
+
+La section **Campagne génétique** de l'onglet 🧬 Calibration montre désormais ce
+qui se passe réellement sur la VM : génération et étape courante du cycle GA
+(8 étapes, de `populate` à `breed`), et surtout **la population individu par
+individu** — profil (élite reprise du recuit, axes semés « identification »,
+« météo », « minimaliste »…), opérateur d'origine, génération d'apparition, date
+de création, et les trois scores avec leur rôle : `rank` (le score de sélection,
+celui de la coupe), `screen` (confirmation du champion), `val` (early stopping).
+La progression intra-étape est visible (« population évaluée 1/10 »), ainsi que
+l'activité récente (dernière éval, évals sur 24 h) et l'historique
+`champion_par_génération`.
+
+Les rapports HTML par génération, générés sur la VM et jamais rapatriés
+jusqu'ici, se récupèrent d'un bouton (`make pull-reports`, nouvelle cible) et
+s'ouvrent depuis la page. Un mémo intégré explique comment activer les rapports
+par mail (adresse dans `config/ga_cloud.yaml`, secrets SMTP dans `~/calib.env`
+sur la VM).
+
+**Before :** l'état de la campagne GA se devinait via `make cloud-logs` ; les
+scores de la population et les rapports par génération restaient sur la VM
+**After :** population, scores et progression lisibles dans l'onglet, rapports
+rapatriables et consultables en un clic
+
+---
+
+## [2026-08-03] Dashboard : onglet Calibration avec supervision de la VM cloud, commandes contextuelles
+
+Le dashboard gagne un onglet **🧬 Calibration** : stores local/cloud (scores,
+branches), état de la **campagne génétique** (génération, étape, champion — lu
+dans la branche `__ga__` du store), veille quota, vivacité du daemon local
+(`progress.json`), et supervision de la VM `calib-vm` : `cloud-progress`,
+`cloud-status` et `cloud-logs` s'exécutent sur bouton avec la sortie affichée
+dans la page (chaque clic = un SSH, rien d'automatique), `pull-db` / `pause` /
+`start` en actions. Le sélecteur de campagne vise `config/ga_cloud.yaml`
+(ticket 009) par défaut et `cloud-logs` accepte désormais `UNIT=calib-ga`.
+
+Les commandes sont par ailleurs intégrées au plus près des métriques de chaque
+domaine : services Docker → `up`/`restart`/`down`, synthèse → `synthesis`/
+`synthesis-open`, en plus des actions déjà présentes dans Run GAMA et Providers.
+Le volet ▶ Commandes reste le catalogue complet.
+
+**Before :** la calibration ne montrait que les stores locaux ; l'état de la VM
+exigeait un terminal (`make cloud-progress`…), et `cloud-logs` restait câblé sur
+l'ancien daemon `calib`
+**After :** tout le pilotage calibration (y compris cloud/GA) dans un onglet,
+avec la sortie SSH rendue dans la page
+
+Côté `prompt_calibration` : nouvelle cible `make pull-db` (rapatrie le store
+sans ouvrir de dashboard, scriptable) et variable `UNIT` pour `cloud-logs`.
+
+---
+
+## [2026-08-03] Dashboard : vue d'ensemble, pilotage du run GAMA et des providers
+
+Le dashboard de pilotage (`make dashboard`) gagne trois volets qui répondent en
+un coup d'œil à « où en est le projet ? » et pilotent le run sans terminal :
+
+- **🏠 Vue d'ensemble** — six feux rafraîchis toutes les 10 s : services Docker,
+  run GAMA, providers LLM, calibration (avec la fraîcheur du store cloud
+  rapatrié), git et jobs en cours.
+- **🎮 Run GAMA** — état du run en direct (heartbeat, cycle, agents actifs,
+  backlog), courbe de progression inactifs/prêts/actifs, top des messages
+  d'erreur du log, hit rate du cache LLM et 429 ; boutons pour lancer un run
+  offline (choix du `CONFIG`, confirmation), l'arrêter proprement et générer le
+  rapport `make report` directement dans la page.
+- **🤖 Providers** — quotas et disponibilité temps réel vus par le load balancer
+  (RPM, requêtes/tokens du jour face aux RPD/TPD, cooldowns), avec repli sur
+  `providers.yaml` quand la pile est arrêtée ; boutons `make providers`
+  (bilan à blanc puis rafraîchissement réel).
+
+Deux nouvelles cibles make accompagnent le volet Run : `make status` (le run
+est-il actif ? sortie parsable) et `make stop-run` (arrête le launcher headless
+et le service `gama` sans couper le reste de la pile).
+
+**Before :** l'état du run, des providers et des caches se reconstituait au
+terminal (`make error`, `curl :8000/health`, `pgrep`…) ; aucun arrêt de run
+autre que `make down`
+**After :** un onglet par préoccupation, rafraîchi automatiquement, avec les
+actions à portée de bouton
+
+---
+
+## [2026-08-03] Les re-runs ne repayent plus les réflexions : mémoïsation exacte
+
+Les appels LLM de réflexion (STM et auto-réflexion LTM) sont désormais mémoïsés
+par empreinte exacte du prompt effectif (`ReflectionMemoStore`,
+`reflections.sqlite` à côté du cache de décisions). Sur un **re-run déterministe**
+(décisions au cache, tirages seedés, météo rejouée), le vécu des agents est
+byte-identique : chaque réflexion déjà payée est servie sans appel réseau, avec
+des effets identiques (STM consommée, LTM écrite). Les réflexions étaient le
+premier poste de quota d'une relance de run de référence (95 % des tâches LLM du
+pic du soir sur la campagne du 2026-08-03).
+
+**Before :** relancer le run de référence repayait toutes les réflexions
+**After :** re-run du même scénario → hits `[reflection-memo]`, zéro quota réflexion
+
+Garde-fous : correspondance exacte uniquement (jamais entre agents ni entre vécus
+différents — l'introspection d'un agent ne sert jamais à un autre), réflexions
+vides jamais persistées, invalidation automatique au changement de prompt système
+(répertoire par checksum). Désactivable via `cache.reflection_memo_enabled`.
+Compteurs Prometheus `agent_reflection_memo_total` (hit/miss/store). Sur un
+scénario inédit, comportement inchangé (~0 % de hit). La mesure de validation
+(re-run du scénario épinglé, hit attendu ≈ 100 %) reste à produire — ticket 012, A3.
+
+---
+
+## [2026-08-03] Le cache LLM n'apprend plus le hasard : replis uniformes non persistés
+
+Quand un provider renvoie un vecteur de probabilités inexploitable (troncature,
+somme nulle), le repli uniforme permet toujours au trajet en cours d'être tiré au
+sort — mais cette distribution n'est **plus écrite dans le cache persistant**.
+Avant, elle y entrait comme une décision légitime : tout run ultérieur touchant la
+clé tirait son mode à parts égales, en croyant servir le modèle (« le cache n'a
+aucun mode dégradé » était violé silencieusement).
+
+**Before :** repli uniforme → cache → les runs suivants héritent du hasard
+**After :** repli uniforme → trajet courant seulement, log `[cache] store refusé`,
+le prochain passage sur la clé redemande au LLM
+
+Découvert pendant la campagne NO_GOOGLE du 2026-08-03 : `cerebras_zai-glm-4.7`
+tronquait ~100 % de ses réponses (`finish_reason=length`) et a déposé 7 replis en
+cache. Le provider est **retiré de la cascade** (commenté dans providers.yaml avec
+les conditions de réactivation) et `scripts/cache/purge_uniform_fallback.py`
+retire les points uniformes du cache (dry-run par défaut, controller arrêté).
+
+---
+
+## [2026-08-03] NO_GOOGLE=1 : run sans les modèles Google
+
+`make run NO_GOOGLE=1` lance une campagne en excluant tous les modèles Google
+(gemini, gemma — clés 1 et 2) de la rotation LLM. Le mécanisme existant fait le
+travail : les clés sont blanchies dans les conteneurs et
+`filter_providers_without_api_key` retire les instances `google*` de la cascade,
+qui continue sur mistral/groq/cerebras. Combinable avec le mode headless :
+`make run OFFLINE=1 NO_GOOGLE=1`.
+
+Usage type : préserver les 500 requêtes/jour par modèle des clés Google pour les
+mesures (`common-set-eval`, `heldout-eval`) pendant qu'une campagne tourne.
+
+**Before :** exclure Google demandait de manipuler les variables `PROVIDER_KEYS__*`
+à la main (et la clé 2 restait injectée via `.env` quoi qu'il arrive)
+**After :** `make run NO_GOOGLE=1` — l'exclusion est visible au démarrage dans les
+logs (`Fournisseur 'google…' exclu : clé API manquante`)
+
+---
+
+## [2026-08-03] Mode offline : GAMA headless en conteneur, run 100 % Docker
+
+`make run OFFLINE=1` (alias `make run-offline`) lance désormais la simulation
+sans IHM GAMA : le service compose `gama` (image officielle
+`gamaplatform/gama:2025.06.4`, profil `offline`) démarre en mode GAMA Server et
+le launcher `scripts/gama/launch_headless.py` pilote `load` + `play` via le
+protocole WebSocket (port 6868). Le run devient entièrement scriptable — runs de
+nuit, relances automatiques de run de référence et lancements depuis la VM de
+calibration deviennent possibles sans poste avec GAMA installé.
+
+**Before :** `docker compose up`, puis ouvrir GAMA sur l'hôte et cliquer Play
+**After :** `make run OFFLINE=1` — tout démarre en conteneurs, console GAMA
+relayée dans `experiments/current/gama_headless.log`
+
+Le mode IHM reste inchangé (`make run` sans variable) : les défauts
+`localhost`/`host.docker.internal` sont conservés, le mode offline les surcharge
+via les nouveaux paramètres `http_url`/`http_port` de l'expériment `e` et la
+variable d'environnement `GAMA_WS_URL`.
+
+---
+
+## [2026-08-03] make providers : quotas réels auto-relevés, cycle de vie des modèles, garde-fou Mistral
+
+Nouvelle commande `make providers` (option `DRY_RUN=1`) : elle relève les quotas
+free tier **réels** de chaque provider et met à jour `providers.yaml` en préservant
+les commentaires. Sources : en-têtes `x-ratelimit-*` (Mistral/Groq/Cerebras, une
+requête sonde d'un token par instance) et API Cloud Quotas Google (la doc publique
+ne liste plus les quotas par modèle). Une sonde en échec laisse l'instance intacte
+et lève une `[ALARME]`.
+
+La commande gère aussi le **cycle de vie des modèles** : un nouveau modèle texte
+opérationnel est ajouté automatiquement avec ses quotas relevés — **en rotation**
+si son RPD free tier ≥ 100, sinon **hors rotation** (`weight: 0`, nouveau
+mécanisme : le load balancer exclut les weight 0 de la séquence SWRR, le provider
+restant utilisable en `llm.provider` forcé). Un `default_model` disparu de l'offre
+est **commenté avec la date** et signalé par `[ALARME]`. Garde-fous : jamais de
+ré-ajout d'un modèle déjà référencé (même commenté = décision humaine), pas
+d'ajout Google sur une famille de quota déjà exploitée (le stable et le -preview
+partagent le même seau), pas d'ajout Mistral (quota partagé par compte, aucun gain).
+
+Premier passage appliqué : les requêtes/jour manquaient au fichier (Groq 1 000/j
+sur llama-3.3 et gpt-oss-120b !, Cerebras 2 400/j) — le limiteur journalier les
+applique désormais au lieu de découvrir les 429 en cours de run. Les poids SWRR
+sont recalés sur la convention `min(rpm, tpm/3000)/15`. Deux nouveaux seaux
+rejoignent la rotation : `cerebras_gemma_4_31b` (2 400 req/j, indépendant du
+quota Google des Gemma) et `groq_qwen_qwen3_6_27b` (1 000 req/j) ; trois modèles
+Gemini récents (3-flash-preview, 3.5-flash, 3.6-flash — 20 req/j chacun) sont
+définis hors rotation pour les essais ciblés.
+
+**Garde-fou Mistral** : le free tier est plafonné à 1 Md de tokens/mois (invisible
+côté API). Pour qu'un run ne consomme pas le mois en une journée, `tpd_limit` est
+forcé à 3× le prorata journalier (100 M tokens/jour). Le RPM est aligné sur la
+cadence documentée (60, soit 1 req/s) au lieu du 90 historique.
+
+**Avant :** quotas et offre de modèles relevés à la main sur les dashboards, RPD absents, TPD Mistral « TBC »
+**Après :** `make providers` recale quotas et poids, active les nouveaux seaux, commente (daté) les modèles disparus — bilan en console en ~30 s
+
+---
+
+## [2026-08-03] Calibration génétique : éval bi-clé matinale sur Gemini 3.5 Flash Lite
+
+L'évaluation de la campagne génétique passe de `gemini-3.1-flash-lite-preview` à
+`gemini-3.5-flash-lite` (décision prise à J+1, ~2 évals en cache : seul moment où le
+changement de régime était gratuit) et se consomme désormais sur **les deux clés
+Google** : deux passes one-shot par jour, tirées au sort dans la matinée (clé 1 entre
+09h et 11h, clé 2 entre 11h et 13h, Europe/Paris). Le provider d'éval reste unique
+(la clé est injectée au lancement) → un seul régime de mesure, cache d'éval partagé.
+Le daemon continu est remplacé par ces deux timers.
+
+**Avant :** 500 appels/jour, campagne au fil de l'eau, ~1 génération tous les 2 jours
+**Après :** ~1 000 appels/jour concentrés le matin, ~1 génération par jour
+
+Nouveaux contrôles : `calibrate ga --clear-cooldown` (bascule de clé) et
+`--override-stall` (reprendre une campagne arrêtée sur stagnation si le champion ne
+convainc pas — la finalisation reste une commande manuelle, en dry-run par défaut).
+
+---
+
+## [2026-08-02] Calibration génétique : une population de prompts évolue seule sur le cloud
+
+La calibration du prompt `itinary_multi_agent` dispose d'un second orchestrateur
+(ticket 009) : un algorithme génétique (μ+λ) élitiste — 10 prompts en concurrence,
+coupe aux 5 meilleurs, 5 enfants par génération via 4 opérateurs (croisement informé
+par l'ablation, croisement greedy sans LLM, mutation ciblée, exploration par levier
+comportemental) mis en concurrence par le bandit UCB1. Il explore l'espace des
+structures de prompt là où le recuit raffine une trajectoire ; les deux partagent le
+même store et le jeu `test` reste scellé jusqu'à la finalisation.
+
+La campagne tourne en autonomie sur la VM cloud (`calibrate ga --loop`, service
+`calib-ga`) : elle consomme le quota du jour, dort jusqu'au reset, reprend seule.
+À chaque génération : rapport HTML autonome (trajectoire du champion, prompt annoté
+phrase par phrase, parts modales vs EMC²), compte rendu Discord et **e-mail avec le
+rapport joint**. Un **bilan hebdomadaire** (Discord + mail) part chaque lundi matin ;
+le digest quotidien Discord continue de couvrir les jours creux.
+
+**Avant :** une seule trajectoire de recuit, comptes rendus Discord uniquement.
+**Après :** population explorée en parallèle, sélection étanche (rank ⊂ screen ⊂ train),
+rapport de génération auto-portant envoyé par mail, bilan hebdo automatique.
+
+---
+
+## [2026-08-03] Pénurie de tokens ou coupure LLM de 24h : la simulation attend le renouvellement, sans dégrader aucune décision
+
+Face à une panne durable du gateway LLM (quotas journaliers de tous les providers
+épuisés, service ou réseau coupé), la simulation **se met en pause proprement et attend
+le rétablissement** — elle ne prend plus des heures de décisions dégradées.
+
+**Disjoncteur client.** Après 10 échecs consécutifs — y compris les coupures réseau
+franches, qui échappaient auparavant à toute alarme —, les soumissions LLM sont
+suspendues : aucune tâche ne part plus brûler son timeout (jusqu'à 120 s chacune),
+aucune décision n'est prise hors du chemin nominal (cache exact ou appel LLM). La
+contre-pression `/sync` existante retient GAMA : le temps simulé n'avance plus tant que
+les décisions ne reviennent pas. Une sonde re-teste le gateway toutes les 60 s ; au
+premier succès (renouvellement des quotas à minuit UTC, retour du service), toutes les
+soumissions suspendues repartent avec de vraies décisions LLM — reprise automatique,
+sans redémarrage ni intervention.
+
+**Avant :** une rupture de 24 h = des milliers de décisions dégradées en « premier
+itinéraire de la liste » (biais modal non maîtrisé dans `moves.csv`), chacune après
+48–120 s d'attente ; et une coupure réseau franche ne déclenchait même pas l'alarme
+gateway.
+**Après :** la simulation attend tranquillement, `moves.csv` ne contient que des
+décisions nominales, la panne est visible au cockpit (`[ALARME]`, gauges
+`llm_gateway_circuit_open` / `llm_gateway_circuit_waiters`), et tout repart seul à la
+première sonde réussie.
+
+Réglages : `agent.remote_llm_circuit_failure_threshold` (0 = désactivé, comportement
+historique) et `agent.remote_llm_circuit_probe_interval`.
+
+---
+
+## [2026-08-02] Un tableau de bord pour piloter le dépôt
+
+`make dashboard` ouvre une page qui rassemble les trois choses qu'on allait chercher
+ailleurs : les commandes, les tickets et les chiffres.
+
+**Les commandes.** Les cibles `make` de la racine, de `prompt_calibration` et
+d'`otp-toulouse` sont listées avec leur documentation — celle des commentaires `##` du
+Makefile —, groupées par thème et lançables d'un bouton. Les variables utiles
+(`CONFIG`, `RUN`, `ESSAI`, `DRY_RUN`…) se saisissent dans un tiroir, qui affiche aussi la
+ligne de commande équivalente. Chaque cible porte ce qu'il faut savoir avant de cliquer :
+elle ne rend pas la main ⏳, elle consomme du quota LLM 💸, elle détruit des données 🔥
+(case de confirmation obligatoire), elle pose une question au clavier ⌨️ (bouton
+désactivé, à lancer en terminal). La sortie défile en direct, le bouton « Stop » tue le
+groupe de processus — y compris les `docker compose` enfants — et chaque lancement laisse
+son log complet dans `experiments/.dashboard/`.
+
+**Les tickets.** Les huit tickets de `docs/tickets/` sont tableautés avec un statut déduit
+de leurs cases à cocher et de leur ligne `**État**`, une barre d'avancement et la date de
+dernière modification. La déduction se surcharge à la main dans
+`scripts/dashboard/tickets_status.yaml`.
+
+**Les chiffres.** Conteneurs Docker actifs ; erreurs, warnings et `[ALARME]` du run choisi ;
+trajets, agents, heures simulées, part décidée par le LLM et partage modal lus dans son
+`moves.csv` ; écarts au référentiel Cerema de la page de synthèse ; avancement des campagnes
+de calibration locale et cloud, branche par branche.
+
+**Avant :** trois terminaux, un `ls experiments/archive`, un `grep ERROR`, un `sqlite3` sur
+le store de calibration et une lecture de chaque ticket pour savoir où on en était.
+**Après :** `make dashboard`, une page.
+
+La liste des runs dédoublonne le lien `experiments/current` et l'archive vers laquelle il
+pointe : le run courant y figure une seule fois, en tête, marqué « (en cours) ».
+
+---
+
+## [2026-08-02] Plus d'erreur « metadata value too long » à l'ouverture des modèles
+
+L'éditeur GAMA refusait d'enregistrer les métadonnées de `Inhabitant.gaml` et affichait une
+erreur au démarrage. En cause : les accents dans la ligne `Tags:` de l'en-tête des modèles.
+GAMA sérialise ces tags dans une propriété persistante Eclipse, et à chaque aller-retour
+lecture/écriture un « é » se ré-encodait sur lui-même (`é` → `Ã©` → `ÃÂ©`…), doublant de
+taille à chaque session jusqu'à dépasser la limite de 2 Ko d'Eclipse.
+
+Les tags des modèles sont désormais en ASCII pur (`mobilite`, `reseau`). Le reste des
+en-têtes et des commentaires garde ses accents — seule la ligne `Tags:` est concernée.
+
+**Avant :** `Could not set property: gama.ui.application metadata. Value is too long.` à
+chaque ouverture, métadonnées du modèle jamais mises à jour
+**Après :** métadonnées enregistrées normalement, plus d'erreur
+
+---
+
+## [2026-08-02] La page de synthèse décrit un run de 24 h, et les trois volets s'y accordent
+
+Nouveau run épinglé : 24 heures simulées sur la population corrigée, cache LLM débrayé
+pour que chaque décision laisse une trace. Les trois volets portent enfin le **même**
+périmètre — même run, même jour, mêmes exclusions — et la page l'affiche au lieu de le
+laisser supposer.
+
+| | Décisions | Personnes |
+|---|---:|---:|
+| Volets 1 et 3 | 2 830 | 867 |
+| Volet 2 | 181 | 75 |
+
+**Avant :** 6 510 lignes lues sur 5 jours, replis d'erreur compris, et un volet 2 mesuré
+sur un autre run.
+**Après :** 1 656 lignes écartées par le filtre de jour, 400 par les méthodes sans
+décision, un jour unique (16 mars) annoncé par les trois volets.
+
+Ce que le run change, mesuré plutôt qu'espéré :
+
+- **plus aucun mineur ni sans-permis au volant** — 0 trajet contre 480 auparavant, dont
+  310 conduits par des moins de 14 ans. Les enfants se déplacent toujours en voiture
+  (69,6 % de leurs trajets), mais en passager : 608 trajets, marqués comme tels ;
+- **la marche revient sur les retours courts** — sur les retours au domicile de moins d'un
+  kilomètre décidés automatiquement, elle passe de 7,6 % à 42,9 %. Et ces décisions
+  automatiques s'effondrent de 158 à 14 : le verrou ne réduit plus le jeu de choix à un
+  seul mode, l'agent choisit vraiment ;
+- **0 scolaire en déplacement « Travail »**, contre 214.
+
+Deux alarmes sont **attendues et assumées**, pas masquées. Les véhicules orphelins passent
+à 5,1 % des retours (39 sur 767) et déclenchent l'alarme : c'est l'effet mécanique du seuil
+d'un kilomètre, et le seuil d'alarme n'a pas été relevé pour la faire taire. Les 39 alarmes
+de saturation LLM viennent du cache débrayé — toutes les décisions partent au modèle — et
+portent les replis d'erreur à 14,1 % du journal ; ils sont exclus du scoring, ce pour quoi
+cette exclusion existe.
+
+La lignée de prompts est re-mesurée sur les jeux `v2` : composite 23,36 pour la graine,
+24,04 pour le meilleur prompt sur le jeu de retenue. La page **prévient explicitement** que
+le score d'entraînement vient de `v1` (météo uniformément ensoleillée) et celui de retenue
+de `v2` (météo tirée dans l'année) : l'écart entre les deux ne mesure pas que la
+généralisation, et le témoin d'effectif ne neutralise pas cette part-là.
+
+---
+
+## [2026-08-02] Un run mesurable de bout en bout : cache LLM débrayable, clé Google dédiée
+
+Le premier run de 24 h a révélé un angle mort. Une décision servie par le **cache
+sémantique** ne laisse aucune trace dans `llm_exchanges.jsonl` — seulement une ligne dans
+`llm_cache_hits.jsonl`. Or ce journal est la seule source du volet 2 de la page de
+synthèse. Sur ce run, 2 325 décisions sont venues du cache : les volets 1 et 3 en
+portaient 3 084, le volet 2 en portait **23**, avec 27 strates sous le seuil d'effectif.
+Les trois volets ne mesuraient plus le même run — exactement ce que le contrôle de
+périmètre était censé empêcher, mais par un chemin qu'il ne couvrait pas.
+
+**Avant :** un run bien caché est un run bon marché… et un volet 2 vide, sans que rien ne
+l'annonce.
+**Après :** `make run CONFIG=config_baseline_1000_nocache.yaml` produit un run où chaque
+décision passe par un appel LLM réel, donc atterrit dans le journal. Le cache reste le
+défaut en production — il n'est débrayé que pour produire un run de référence.
+
+Dans la foulée, la simulation tourne désormais sur la **seconde clé Google**. Les quotas
+free tier Gemini se comptent par projet et par modèle : la simulation consomme ceux de la
+clé 2, pendant que les ré-évaluations de la page gardent les 500 requêtes/jour de la clé 1.
+La cascade multi-providers est intacte — mistral, groq et cerebras n'ont pas bougé.
+
+Enfin, un piège de plus a été fermé au passage : le store de calibration indexe une
+évaluation sur le nom du jeu, sans sa version. « test » désignant deux jeux différents en
+v1 et en v2, une mesure v1 aurait été resservie pour une demande v2 — zéro appel, et un
+chiffre étiqueté du mauvais régime météo. Le nom porte maintenant la version.
+
+---
+
+## [2026-08-02] Il pleut enfin dans les jeux de calibration
+
+Les jeux gelés qui servent à noter le prompt ne contenaient que **cinq valeurs météo,
+toutes ensoleillées** : le run source couvrait trois jours de mars 2026, et ces trois jours
+étaient secs. Le prompt était donc calibré dans un monde où il ne pleut jamais — alors que
+la météo est précisément l'un des leviers qu'on lui demande de peser.
+
+La source, elle, n'avait rien d'appauvri : l'année climatique de Toulouse compte 365 jours
+dont 155 avec précipitations. Une nouvelle version des jeux (`v2`) **tire la météo dans
+cette année complète**, au créneau horaire du départ du persona, avec une graine
+reproductible consignée dans le manifeste. Deux régénérations produisent des fichiers
+identiques à l'octet.
+
+**Avant :** 5 conditions météo, 5 températures, 0 % de jours pluvieux dans le train.
+**Après :** 16 conditions, 45 températures, 43,7 % de records avec précipitations — la
+distribution de l'année.
+
+La contrepartie est assumée : un score mesuré sur `v2` ne se compare pas à un score `v1`.
+La lignée retenue est donc re-mesurée sur `v2`, et le régime météo doit apparaître dans la
+page de synthèse — sans quoi un lecteur comparerait des chiffres qui ne mesurent pas la
+même chose.
+
+Un garde-fou accompagne le changement : le gel d'un jeu est **refusé** si un seul record a
+un contexte météo vide. Le format des échanges ayant changé (la météo se trouve maintenant
+dans chaque bloc persona, plus dans un préambule commun), une lecture naïve produisait des
+contextes vides sur la totalité des records — les blocs seraient partis sans météo, en
+silence, et personne ne l'aurait vu avant d'avoir payé une campagne entière.
+
+---
+
+## [2026-08-02] La page de synthèse dit enfin sur quoi elle porte
+
+Les trois volets de la page pouvaient mesurer trois sous-ensembles différents du même run
+sans que rien ne le signale. Deux coupes, désormais définies une fois et appliquées aux
+trois :
+
+- **Les replis d'erreur LLM sortent du scoring.** Quand le prompt ne répond pas, le
+  contrôleur prend l'itinéraire par défaut : sur le run de référence, 100 % de ces 431
+  lignes retenaient le plus rapide, soit 64,7 % de voiture. Les compter revenait à noter le
+  prompt sur un choix qu'il n'a pas fait.
+- **Un seul jour simulé**, le premier du run. Le bootstrap 24 h et l'horizon glissant de
+  planification font déborder le journal au-delà : 2 538 couples (personne, activité)
+  réapparaissaient un jour plus tard, avec le même mode dans 57,8 % des cas. Ce ne sont pas
+  des décisions supplémentaires, elles pèsent seulement deux fois dans les parts modales.
+
+**Avant :** 6 510 lignes lues, sur 5 jours, replis d'erreur compris — et le volet 2, qui
+lit un autre fichier, n'appliquait aucune de ces règles.
+**Après :** un périmètre unique, annoncé dans le bilan de lecture (jour retenu, lignes
+écartées par méthode, lignes écartées par jour), et vérifiable en comparant les effectifs
+des trois volets.
+
+La page ventile aussi la nouvelle colonne « Contrainte de chaîne » : elle dit quelle part
+des décisions a été prise sur un jeu d'options déjà restreint par la cohérence des
+véhicules. Ces lignes restent dans le score — c'est bien ce que la simulation a joué — mais
+le lecteur sait maintenant de combien il s'agit.
+
+---
+
+## [2026-08-02] Un run de 24 h s'arrête au bout de 24 h
+
+Le paramètre « nombre maximal de jours simulés » existait, s'affichait dans l'IHM… et
+n'arrêtait rien : l'instruction d'arrêt du reflex correspondant était commentée. Un run
+demandé sur 24 h en produisait trois, et personne ne pouvait le savoir après coup — la
+valeur n'était consignée nulle part dans le répertoire d'expérience.
+
+**Avant :** la simulation tournait jusqu'à ce qu'on l'interrompe à la main, et le run
+archivé ne disait pas sur quel horizon il était censé porter.
+**Après :** elle se met en pause d'elle-même à l'horizon demandé, et
+`scenario_params.yaml` le consigne.
+
+C'est une **pause**, pas une mort : l'horloge s'arrête, les agents et les sorties restent
+inspectables, et le contrôleur Python n'est pas interrompu — ses écritures en cours se
+terminent normalement. GAMA reste donc ouvert après l'arrêt ; les conteneurs se coupent à
+la main une fois le journal complet.
+
+L'instruction commentée l'était pour une raison qu'il a fallu redécouvrir : le reflex se
+trouvait dans le bloc `experiment`, où l'action n'existe pas — à cet endroit, il n'aurait
+jamais pu compiler. Il est désormais déclaré dans `global`, avec les agents dont il arrête
+l'horloge.
+
+---
+
+## [2026-08-02] Le journal de déplacements dit pourquoi le choix était contraint
+
+Nouvelle colonne **« Contrainte de chaîne »** dans `moves.csv`, juste après la méthode de
+sélection. Elle distingue quatre situations : aucun filtre, retour forcé (l'agent ramène
+son véhicule), trajet en passager, ou mode véhiculé écarté faute de véhicule sur place.
+
+**Avant :** un trajet en voiture au retour du bureau et un trajet en voiture librement
+choisi étaient indiscernables dans le journal.
+**Après :** on lit lequel des deux c'était, et la page de synthèse en publie la
+répartition.
+
+La colonne **explique, elle ne filtre pas** : ces lignes restent dans le scoring. Le mode
+d'un trajet passager reste « Voiture Privée » — l'enquête EMC² compte le passager dans
+« voiture », créer un septième mode casserait la comparaison.
+
+---
+
+## [2026-08-02] On ne reprend plus sa voiture pour rentrer de deux cents mètres
+
+Le verrou de retour — l'agent ramène chez lui le véhicule qu'il a garé quelque part —
+s'appliquait à toutes les distances. Sur les retours au domicile de moins d'un kilomètre,
+59,5 % se faisaient en voiture et 7,6 % à pied, contre environ 76 % de marche attendus par
+l'enquête EMC².
+
+**Avant :** un agent ayant garé sa voiture à 300 m de chez lui n'avait pas d'autre option
+que de la reprendre.
+**Après :** sous 1 km, tous les modes restent offerts. S'il rentre à pied, la voiture
+devient orpheline et le rattrapage de fin de boucle la ramène au domicile.
+
+C'est un compromis explicite : ce seuil **augmente mécaniquement le taux de véhicules
+orphelins**, donc la pression sur l'alarme correspondante. Le bon réflexe est de lire le
+taux, pas de relever le seuil d'alarme pour la faire taire.
+
+---
+
+## [2026-08-02] Les enfants vont à l'école en voiture — sans la conduire
+
+Un agent qui ne peut pas conduire peut désormais **monter** dans la voiture du foyer, à
+condition qu'il y ait une voiture et quelqu'un pour la conduire. Un adulte sans permis
+vivant seul n'est donc pas concerné.
+
+**Avant :** 480 trajets en voiture étaient conduits par des agents de moins de 18 ans,
+dont 310 par des moins de 14 ans, et 197 par des personnes sans permis. En prime, la
+voiture se garait à l'école, et l'enfant était ensuite sommé de la ramener.
+**Après :** plus personne ne conduit sans l'âge et le permis. L'enfant se déplace toujours
+en voiture — l'enquête EMC² compte le passager dans « voiture », la part modale reste donc
+comparable — mais la voiture ne se gare plus à destination : elle repart avec son
+conducteur, et aucun retour n'est forcé.
+
+Le persona décrit maintenant la situation telle qu'elle est (« se déplace en voiture
+uniquement en passager·ère, conduit·e par un adulte du foyer ») au lieu d'un vague
+« voiture dispo ».
+
+Version 1, assumée : le trajet d'accompagnement du parent n'est pas généré. On rend la
+voiture accessible à l'enfant, rien de plus.
+
+---
+
+## [2026-08-02] Les mineurs de la population synthétique n'ont plus le permis
+
+131 des 165 mineurs de la population de 1 000 personnes portaient un permis de conduire,
+dont 86 enfants de moins de 14 ans. Les agents « Scolaire » cumulaient des activités
+`work` là où on attendait `education`, et un écolier de neuf ans arrivait au modèle avec
+un motif de déplacement « Travail » et une journée domicile → travail → domicile → loisir.
+
+La cause est un appariement statistique qui perdait l'âge : le vivier de donneurs était
+réduit au seul département de la Haute-Garonne, les strates devenaient trop petites, et le
+critère d'âge était le premier abandonné. Un enfant héritait alors d'un donneur adulte —
+avec son permis et son emploi du temps. Un `bool(nan)` valant `True` en Python faisait le
+reste : toute personne non appariée recevait le permis.
+
+**Avant :** 131 mineurs avec permis, 50 activités `education` pour ~150 scolaires.
+**Après :** 0 mineur avec permis, 219 activités `education`.
+
+Deux livrables, parce que les deux sont nécessaires :
+
+- des **garde-fous dans la chaîne de génération** (vivier national restauré, âge placé en
+  tête des critères d'appariement, valeurs manquantes traitées comme « non », permis de
+  mineurs exclus du calcul de disponibilité de la voiture, pas de VAE avant 14 ans) — ils
+  ne prendront effet qu'à la prochaine régénération complète, qui exige des données hors
+  dépôt ;
+- un **correctif de surface** applicable tout de suite à une population existante, avec les
+  mêmes garanties d'usage que les autres scripts d'enrichissement : `--dry-run`, écriture
+  en place, idempotent.
+
+Ce que le correctif de surface ne fait pas, et qu'il redit à chaque exécution : les chaînes
+d'activités restent celles de donneurs adultes. Renommer `work` en `education` ne rapproche
+pas l'école du domicile.
+
+---
+
+## [2026-08-01] La campagne de calibration se met en pause — et le dit tous les matins
+
+La campagne de calibration de prompt (branche 7, itération 39/50, meilleur composite
+24,98) est **volontairement à l'arrêt** sur la VM cloud. Le daemon et le digest quotidien
+sont coupés, y compris au redémarrage de la machine : plus une seule éval, plus un seul
+jeton de quota Gemini consommé. Rien n'est perdu — le store SQLite garde la lignée
+complète et la reprise repartira exactement au point d'arrêt.
+
+Une pause silencieuse est une pause qu'on oublie. Un rappel Discord part donc **chaque
+matin à 10:00 (heure de Paris)** tant que la campagne est désactivée : « prompt
+calibration désactivé », avec la commande de reprise. Il n'appelle aucun modèle et ne lit
+pas le store, donc il ne coûte rien.
+
+**Avant :** couper la campagne, c'était couper aussi le seul canal qui donnait de ses
+nouvelles — au bout de trois jours plus personne ne savait si elle tournait encore.
+**Après :** l'arrêt est explicite et se rappelle à toi tous les matins jusqu'à ce que tu
+le lèves.
+
+Deux commandes suffisent, depuis le PC : **`make pause`** coupe la campagne et arme le
+rappel, **`make start`** coupe le rappel et relance la campagne. Les deux sont
+idempotentes, et `make pause` réinstalle au passage les unités systemd depuis le dépôt —
+il n'y a plus rien à copier à la main sur la VM.
+
+Reprendre ne coûte rien tant que le quota du jour est épuisé : le daemon relit le délai
+de reprise persisté dans le store et se rendort au lieu de taper l'API — vérifié au
+redémarrage (`💤 dodo 8.0 h`).
+
+`make cloud-deploy` respecte désormais la pause : il ne redémarre le daemon que si
+celui-ci est encore armé. Avant, sa recette faisait un `restart` inconditionnel, qui
+relance un service arrêté — déployer un correctif pendant une pause réveillait la
+campagne sans le dire.
+
+---
+
+## [2026-07-31] La page de synthèse change de run — et cesse de pouvoir mentir dessus
+
+La page décrit désormais le run du 31 juillet, celui qui tourne avec la cohérence de
+chaîne des véhicules et le trait de type de logement. Deux axes qui affichaient zéro
+depuis leur mise en place se remplissent enfin : la **ventilation par type de logement**
+(302 individuel isolé, 219 petit collectif, 211 grand collectif, 143 individuel accolé)
+et les **couronnes de résidence** mesurées depuis l'hypercentre unifié — à population
+identique, 30 personnes changent de couronne, dans les deux sens, ce qui est la signature
+d'un centre déplacé de 820 m et non d'un seuil bricolé.
+
+Changer le run de référence était jusqu'ici une manœuvre à laquelle on ne pouvait pas se
+fier. Le cache d'évaluations était indexé sur le nom du jeu et les paramètres du modèle,
+**sans le run** : épingler un nouveau run resservait donc la mesure du précédent, que le
+script réétiquetait avec le descriptif du nouveau. Aucun appel payé, des composites
+identiques au centième, et un fichier affirmant décrire 383 décisions d'un run tout en en
+portant 762 d'un autre. Rien, dans la page, ne l'aurait signalé.
+
+Deux verrous posés :
+
+- **la clé de cache porte l'empreinte de ce qui est réellement soumis au modèle** —
+  couples (personne, texte gelé de la requête). Deux runs ne peuvent plus partager une
+  entrée ; relancer sur le même run reste gratuit ;
+- **la page écarte une mesure faite sur un autre run que celui qu'elle épingle**, et sa
+  carte le dit en toutes lettres au lieu de la faire voisiner en silence avec les volets
+  calculés sur le bon substrat.
+
+Les évaluations déjà payées n'ont pas été perdues : elles ont été ré-indexées sur
+l'empreinte de leur run d'origine, si bien qu'un retour au run du 29 juillet ne coûte
+aucun appel.
+
+**Avant :** changer de run épinglé produisait une page d'apparence cohérente dont un
+volet sur trois décrivait un autre run, sans aucun signal
+**Après :** la mesure du volet 2 est refusée tant qu'elle ne porte pas sur le run épinglé,
+et le cache ne peut plus la resservir d'un run à l'autre
+
+État à ce jour : volets 1 (simulation, 6 333 décisions / 881 personnes) et 3 (modèle
+PROGEDO, 6 333 décisions scorées) régénérés sur le nouveau run ; volet 2 en attente de sa
+mesure — les deux clés Google ont épuisé leur quota journalier, reprise le 1er août à
+09:00 CEST avec `make common-set-eval` (≈ 111 appels), puis `make synthesis`.
+
+---
+
 ## [2026-07-31] La voiture aussi reste là où on l'a garée
 
 Le vélo avait cessé de se téléporter la veille ; la voiture, elle, était toujours

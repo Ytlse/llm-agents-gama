@@ -93,6 +93,45 @@ enregistre le `llm_exchanges.jsonl` et le `population_1000.json` d'origine.
 
 ## 4. Les trois volets
 
+### Périmètre commun aux trois volets
+
+Les trois volets doivent porter sur le **même** sous-ensemble du run, sans quoi la
+matrice comparerait trois substrats en les annonçant comme un seul. Deux coupes, définies
+une fois et appliquées à la source.
+
+**1. Lignes sans décision modale** — `common_set.exclude_selection_methods` dans
+`sources.yaml`, appliqué par `frames.read_moves` :
+
+| Méthode exclue | Pourquoi |
+|---|---|
+| `Pas de déplacement (même localisation)` | Aucun trajet |
+| `Pas de solution de déplacement` | Aucun mode ne relie l'OD |
+| `LLM Error (Default index)` | **Ce n'est pas une décision, c'est un repli.** Le prompt n'a pas répondu ; le contrôleur prend l'itinéraire d'index 0. Sur le run de référence, 100 % de ces lignes retenaient le plus rapide, soit 64,7 % de voiture. Les garder revenait à noter le prompt sur un choix qu'il n'a pas fait |
+
+**2. Un seul jour simulé** — le **premier** présent dans le run, jamais une date en dur.
+Même quand le run est censé s'arrêter à 24 h, le bootstrap et l'horizon glissant de
+planification font déborder le journal au-delà : sur le run de référence, 2 538 couples
+(personne, activité) réapparaissaient un jour plus tard, 2,17 fois en moyenne, avec le
+même mode dans 57,8 % des cas. Ces répétitions ne sont pas des décisions supplémentaires,
+elles pèsent seulement deux fois dans les parts modales.
+
+**Deux points d'entrée, pas un** — c'est le piège de cette coupe :
+
+| Volet | Source | Point d'intervention | Champ |
+|---|---|---|---|
+| 1 et 3 | `moves.csv` | `frames.read_moves` | colonne « Temps simulé » (via `frames.simulated_day`) |
+| 2 | `llm_exchanges.jsonl` | `common_set_eval.build_sample` | champ `sim_day` du journal |
+
+Le volet 2 ne lit pas `moves.csv` : il reconstruit son échantillon depuis le journal
+d'échanges. Oublier ce second point ferait porter aux trois volets des périmètres
+différents **sans que rien ne le signale**. Les deux emploient la même convention (date
+UTC de l'horodatage simulé), donc la même frontière de journée.
+
+La page publie le jour retenu et les deux comptes d'exclusion dans son bilan de lecture :
+un périmètre tu ferait passer un sous-ensemble du journal pour le journal entier. La
+vérification se fait en comparant les `n` affichés par les trois volets, pas en les
+supposant égaux.
+
 ### Volet 1 — Simulation (LLM + tirage)
 
 Source : `experiments/<run>/moves.csv`.
@@ -117,6 +156,13 @@ Conventions de correspondance appliquées :
   le résidu « autres » d'EMC² ; la masse écartée est mesurée et affichée ;
 - `Motifs de déplacement` mélange libellés traduits et bruts ; `home`, `leisure`
   et `other` n'ont pas d'équivalent EMC² et sortent de la dimension motif.
+
+La colonne **`Contrainte de chaîne`** (écrite depuis le ticket 008) est lue et
+**ventilée dans le bilan de lecture**, pas utilisée comme filtre : une décision prise sur
+un jeu d'options déjà restreint par la cohérence des véhicules reste ce que la simulation
+a joué, mais elle ne mesure pas la même chose qu'un choix libre entre tous les modes. Le
+détail des valeurs est dans [vehicle-chain.md](vehicle-chain.md). Sur un run antérieur à
+la colonne, le bloc disparaît de la page plutôt que d'afficher « 100 % aucune ».
 
 Le **lieu de résidence** (Toulouse / 1re / 2e / 3e couronne) n'est pas recalculé
 par la page : elle relit la colonne `Lieu de résidence` telle que le run l'a
@@ -208,8 +254,12 @@ Le fichier est déclaré dans le manifeste (`arms.calibration.common_set_eval`) 
 absent, la page se génère normalement et affiche sa carte « Données manquantes ».
 
 **L'échantillon est gelé.** Règle :
-`sha256("common_set_v1:" + agent_id) % 1000 < 99` → 509 décisions, 80 personnes.
-Trois propriétés, et chacune répond à un piège :
+`sha256("common_set_v1:" + agent_id) % 1000 < 99` → 80 personnes, et autant de
+décisions que le run leur en donne (509 sur le run du 29/07, 383 sur celui du
+31/07 — la règle ne bouge pas, c'est le run qui porte moins de décisions LLM
+depuis que la cohérence de chaîne des véhicules réduit les jeux de choix à une
+seule option sur nombre de trajets). Trois propriétés, et chacune répond à un
+piège :
 
 - **par personne, jamais par trajet** : tous les déplacements d'une personne
   retenue sont conservés. C'est la logique des jeux gelés du moteur
@@ -257,6 +307,31 @@ la frontière. Le seul diagnostic fiable est le 429 lui-même, lu dans le corps 
 réponse. À l'épuisement, le script persiste la date de reprise dans le store
 (cooldown) comme le fait `calibrate reeval`, et une relance repart du cache sans
 repayer.
+
+Le cooldown est de portée **globale**, alors que chaque clé (`google`, `google2`)
+a son propre seau : une clé épuisée bloque donc aussi la seconde, et il faut
+effacer la ligne `cooldown` du store pour basculer. C'est délibéré côté garde —
+elle refuse de deviner quel seau est ouvert — mais il faut le savoir avant de
+conclure qu'il n'y a plus de quota nulle part.
+
+**La clé de cache porte l'empreinte de l'échantillon.** Le store indexe une éval
+sur `(nœud × nom de jeu × params)`. Sous un nom de jeu fixe, le run n'entrait pas
+dans la clé : épingler un nouveau run resservait la mesure du run précédent, et le
+script la réétiquetait avec le descriptif du nouveau — zéro appel payé, composites
+identiques au centième, et un fichier affirmant décrire 383 décisions du nouveau
+run tout en en portant 762 de l'ancien. Le défaut était silencieux : rien, dans la
+page, ne compare `sample.run` au run épinglé. Le nom de jeu est donc
+`common_set_v1@<empreinte>`, où l'empreinte est un SHA-256 tronqué des couples
+(`agent_id`, texte `section`) réellement soumis au modèle — l'entrée même de la
+requête. Deux runs ne peuvent plus partager une entrée ; relancer sur le même run
+reste gratuit. Le suffixe reste hors de `train`/`val`/`test`, donc invisible pour
+les courbes de calibration.
+
+Conséquence pour le retour arrière : les évals payées avant ce changement vivaient
+sous le nom nu `common_set_v1`, dont rien ne dit de quel run il provient. Celles de
+l'action A3 ont été ré-indexées sur l'empreinte de leur run d'origine
+(`common_set_v1@95935e48c189`, run du 29/07) plutôt que supprimées — revenir à ce
+run ne coûte donc aucun appel.
 
 #### Ce que la mesure a donné, et le piège d'effectif
 

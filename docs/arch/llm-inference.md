@@ -374,10 +374,54 @@ un pipeline LLM qui ne draine plus :
   controller (timeouts gateway inclus). Cette alarme **arme la backpressure SDK**
   (ci-dessous).
 - **Backpressure `/sync`** (`handle/application.py`) : alignée sur les seuils du mode
-  drainage — se déclenche quand le backlog atteint `drain_trigger_ratio` (défaut 80 %)
-  de la population, donne le `min_interval` appliqué et les coefficients
-  `min_internal_coeff_*` ; elle est aussi poussée vers la console GAMA et se réarme
-  quand le backlog repasse sous `drain_release_ratio` (défaut 20 %).
+  drainage — armée quand le backlog atteint `drain_trigger_ratio` (défaut 80 %) de la
+  population, **mais ne crie que sur une vraie saturation de décisions** (ticket 010) :
+  départs servis en retard (`late_since_last_sync > 0`) ou tâches plan/refill dont
+  l'échéance sim est dépassée. Un backlog dominé par des réflexions STM ou des
+  pré-planifications à échéance lointaine pendant la nuit simulée est le **drainage
+  nominal** : log INFO avec composition (`N décisions (dont X à échéance dépassée) +
+  M réflexions STM`), pas ERROR — cf. run 2026-08-03 où l'alarme criait au feu sur un
+  embouteillage bénin (803 tâches, late=0, cache 99 %, providers sains). L'ERROR donne
+  la composition, le `min_interval` appliqué et les coefficients `min_internal_coeff_*` ;
+  elle est aussi poussée vers la console GAMA et se réarme quand le backlog repasse
+  sous `drain_release_ratio` (défaut 20 %). Logique pure et testée :
+  `backpressure.backlog_alarm_transition()`.
+
+### Panne durable — disjoncteur client : on attend le renouvellement
+
+Les mécanismes ci-dessus absorbent les incidents **courts** (un provider en cooldown,
+une rafale de 429). Une **panne durable** — pénurie de tokens (tous les quotas
+journaliers épuisés), gateway ou réseau coupé pendant des heures — posait deux
+problèmes distincts :
+
+1. **Gâchis** : chaque décision brûlait une tentative vouée à l'échec (8 s d'attente
+   de slot + retries worker, ou 120 s de poll timeout côté client) avant d'échouer.
+2. **Intégrité scientifique** : chaque échec dégénérait la décision en « premier
+   itinéraire de la liste » (`llm_fallback`) — sur 24 h de rupture, un biais modal
+   massif et non maîtrisé dans `moves.csv`.
+
+Le **disjoncteur client** (`llm_module/sdk.py`, réglages
+`agent.remote_llm_circuit_failure_threshold` / `remote_llm_circuit_probe_interval`)
+répond aux deux en choisissant **l'attente, pas la dégradation** : après N échecs
+consécutifs (défaut 10) — **erreurs réseau incluses** (gateway injoignable, 5xx à la
+soumission), qui échappaient auparavant au comptage — les soumissions LLM sont
+**suspendues**. Aucune tâche n'échoue, aucune décision n'est prise hors du chemin
+nominal (cache exact ou LLM) : les appelants attendent, et la contre-pression `/sync`
+existante retient GAMA en conséquence (le temps simulé n'avance plus tant que les
+décisions ne reviennent pas — cf. mode drainage). L'un des appelants suspendus devient
+périodiquement la **sonde** (demi-ouvert, toutes les `probe_interval` secondes, défaut
+60 s) : au premier succès — renouvellement des quotas à minuit UTC, retour du service —
+le disjoncteur se referme et **toutes les soumissions suspendues repartent**, avec de
+vraies décisions LLM. Aucun redémarrage, aucune intervention.
+
+Observabilité : `[ALARME]` sur front montant à l'ouverture
+(`alarme_total{source="gateway_llm_circuit"}`), gauges Prometheus
+`llm_gateway_circuit_open` et `llm_gateway_circuit_waiters` (soumissions en attente),
+log INFO à la fermeture avec la durée de la panne.
+
+`remote_llm_circuit_failure_threshold: 0` désactive le disjoncteur (comportement
+historique : chaque décision échoue après son timeout puis part sur l'index par
+défaut `llm_fallback`).
 
 ### Instrumentation d'un appel Google (Gemini)
 
@@ -461,7 +505,8 @@ agents ratent leurs heures de départ. Le **mode drainage** (`update_drain_mode(
 `backpressure.py`) ajoute une barrière à hystérésis :
 
 - **Enclenchement** : pile ≥ `world.drain_trigger_ratio` (défaut **80 %** — l'alarme
-  backlog `[ALARME]` se déclenche au même seuil).
+  backlog `[ALARME]` est armée au même seuil, mais ne passe en ERROR que si des
+  décisions sont réellement en souffrance, cf. « Alarmes de saturation »).
 - **Comportement** : chaque réponse `/sync` est retenue jusqu'à `cap` secondes (la
   limite dure par réponse reste le read timeout HTTP du client GAMA — on ne peut pas
   bloquer indéfiniment une seule réponse), en ré-échantillonnant la pile toutes les

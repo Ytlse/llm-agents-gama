@@ -6,6 +6,7 @@ import pytest
 
 from llm_module.core.mode_choice import (
     CANONICAL_MODES,
+    UniformFallback,
     argmax_index,
     canonical_mode,
     derive_seed,
@@ -66,6 +67,22 @@ class TestNormalizeOptionProbabilities:
         assert normalize_option_probabilities([], 2) == [0.5, 0.5]
         assert normalize_option_probabilities(
             [{"index": 0, "probability": 0}, {"index": 1, "probability": 0}], 2) == [0.5, 0.5]
+
+    def test_repli_uniforme_est_marque(self):
+        """Le repli est typé UniformFallback : les persisteurs (cache LLM) le refusent.
+
+        Un repli écrit en cache servirait une distribution uniforme — du hasard —
+        aux runs suivants comme si c'était une décision du modèle (2026-08-03).
+        """
+        assert isinstance(normalize_option_probabilities(None, 4), UniformFallback)
+        assert isinstance(normalize_option_probabilities([], 2), UniformFallback)
+        assert isinstance(normalize_option_probabilities(
+            [{"index": 0, "probability": 0}], 2), UniformFallback)
+        # Un vecteur légitime — même uniforme — n'est PAS marqué comme repli.
+        legit = normalize_option_probabilities(
+            [{"index": 0, "probability": 50}, {"index": 1, "probability": 50}], 2)
+        assert legit == [0.5, 0.5]
+        assert not isinstance(legit, UniformFallback)
 
     def test_sans_option_retourne_liste_vide(self):
         assert normalize_option_probabilities([{"index": 0, "probability": 100}], 0) == []

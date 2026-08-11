@@ -132,30 +132,69 @@ La consolidation est **volumétrique**, pas temporelle. Elle se déclenche dans 
 len(stm.recent_entries) >= settings.agent.stm_reflection_min_entries   # défaut : 10
 ```
 
-### Ordonnancement : file EDF avec échéance simulée
+### Mémoïsation des appels de réflexion (ticket 012)
+
+Avant l'appel LLM, `reflect_on_short_term_memory` (et `reflect_on_long_term_memory`)
+consulte `ReflectionMemoStore` : si le **prompt effectif exact** (agent, identité,
+vécu, consignes, horodatage, paramètres LLM) a déjà été payé — cas des re-runs
+déterministes — la réflexion stockée est servie sans appel réseau, avec des effets
+strictement identiques (STM consommée, entrées REFLECTION/CONCEPT en LTM). Aucun
+rapprochement : le moindre octet de différence est un miss. Voir
+`docs/arch/cache-memory.md` § « Mémoïsation des réflexions ».
+
+### Ordonnancement : file EDF, échéance = réveil de l'agent (ticket 010)
 
 Les réflexions ne partent plus en fire-and-forget vers le gateway : chaque agent
-éligible est soumis à la **file EDF** du dispatcher (kind `reflect`) avec une échéance
-en temps simulé :
+éligible est soumis à la **file EDF** du dispatcher (kind `reflect`) avec pour
+échéance le **réveil de son agent** — la prochaine occurrence de la première
+activité planifiée de la journée (`PersonScheduler.next_wakeup_ts()`) :
 
 ```
-deadline_sim = timestamp_déclenchement + settings.agent.stm_reflection_deadline_sim_s   # défaut : 12 h
+deadline_sim = prochain réveil de l'agent            # première activité du jour suivant
+# fallback si l'agent n'a aucune activité horodatée :
+deadline_sim = déclenchement + settings.agent.stm_reflection_deadline_sim_s   # 12 h
 ```
+
+C'est la seule échéance naturelle d'une réflexion : la LTM du matin doit intégrer la
+veille avant la première décision du lendemain. Les réflexions sont le poste LLM qui
+ne bénéficiera **jamais** d'aucun cache (le prompt contient le vécu réel de l'agent,
+unique et consommé après usage) : la seule variable d'ajustement est *quand* on les
+exécute, jamais *si* on les exécute.
 
 Conséquences :
 
-- **Dépriorisation naturelle** : EDF sert d'abord les planifications de trajets
-  (échéances = heures de départ, proches) ; les réflexions passent quand il y a du mou,
-  puis remontent mécaniquement en priorité à l'approche de leur échéance.
-- **Garantie < 12 h simulées** : les échéances `reflect` sont incluses dans le test de
-  faisabilité EDF de la contre-pression prédictive (`edf_snapshot_deadlines()`). Si le
-  débit LLM ne permet plus de les tenir, le `/sync` est retenu — le temps simulé se fige
-  pendant que la file se draine.
+- **Drainage nocturne** : les agents rentrent le soir avec leurs mémoires pleines et
+  déclenchent tous leur réflexion dans la même fenêtre (run 2026-08-03 : 247 réflexions
+  pour 13 décisions en 30 min simulées). Avec l'échéance au réveil, les décisions
+  d'itinéraire du soir passent mécaniquement devant, et le stock se draine toute la
+  nuit simulée — fenêtre presque sans décisions — dans l'ordre des réveils (lève-tôt
+  d'abord). Ce backlog nocturne est le fonctionnement **nominal**, pas une saturation
+  (cf. alarme backlog, `docs/arch/llm-inference.md`).
+- **Garantie « avant le réveil »** : les échéances `reflect` sont incluses dans le test
+  de faisabilité EDF de la contre-pression prédictive (`edf_snapshot_deadlines()`). Si
+  le débit LLM ne permet plus de les tenir, le `/sync` est retenu — le temps simulé se
+  fige pendant que la file se draine.
 - **Échéance conservée entre retentatives** : en cas d'échec gateway (timeout, providers
   saturés), les entrées STM restent en place et le sync suivant re-soumet la réflexion
   avec sa deadline d'origine (`_stm_reflect_due`) — jamais repoussée.
-- **Alarme** : si une réflexion reste pendante au-delà de son échéance simulée, un
-  `[ALARME]` est loggé en ERROR (front montant, visible via `make error`).
+- **Alarme** : si une réflexion reste pendante au-delà de son échéance (le réveil de son
+  agent est passé), un `[ALARME]` est loggé en ERROR (front montant, `make error`).
+
+### Drainage post-pause (fin d'horizon `simulation_max_days`)
+
+À la pause GAMA de fin d'horizon, le controller reste vivant et les consommateurs EDF
+continuent de servir les réflexions encore en file — elles écrivent en LTM, utile aux
+runs qui reprennent cette population. Rien n'interrompt ce drainage : seul `make down`
+tue le process. Le scan worker (30 s) rend l'état lisible dès que GAMA est silencieux
+depuis plus de 90 s :
+
+```
+[drainage] GAMA silencieux depuis 95s (pause ou fin de run) — 42 réflexion(s) STM encore en file, …
+[drainage] Réflexions STM épuisées — LTM complète, arrêt sûr (make down)
+```
+
+Attendre le message « épuisées » avant d'arrêter les services si la LTM du run doit
+être réutilisée.
 
 ### Pipeline de réflexion
 
@@ -480,6 +519,7 @@ La LTM est **lue** avant la décision (contexte historique pour le LLM) mais **�
 | Paramètre | Défaut | Effet |
 |-----------|--------|-------|
 | `stm_reflection_min_entries` | 10 | Seuil de déclenchement de la réflexion |
+| `stm_reflection_deadline_sim_s` | 12 h | Échéance EDF **fallback** (agent sans activité horodatée) — l'échéance normale est le réveil de l'agent |
 | `long_term_max_entries_query` | 10 | Top-K renvoyé au LLM |
 | `long_term_max_days_query` | 30 | Fenêtre de look-back en jours |
 | `long_term_retrieval__sim_weight` | 0.4 | Poids similarité cosine |
