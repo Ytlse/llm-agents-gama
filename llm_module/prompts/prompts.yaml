@@ -949,3 +949,24 @@ prompts:
       sha1_normalise: 2b630f9a4b3d
       mots: 335
       note: prompt humain d'origine, ANTERIEUR a toute calibration ; ne pas modifier
+  b_min:
+    content: "Pour chaque bloc ci-dessous, répartis 100 points de probabilité entre les options\
+      \ de trajet proposées, puis justifie brièvement dans le champ prévu.\n\nSchéma JSON\
+      \ attendu :\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agents\": {\n  \
+      \    \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n     \
+      \   \"properties\": {\n          \"agent_id\": {\n            \"type\": \"string\"\n\
+      \          },\n          \"chosen_index\": {\n            \"type\": \"integer\"\n  \
+      \        },\n          \"mode\": {\n            \"type\": \"string\"\n          },\n\
+      \          \"reason\": {\n            \"type\": \"string\"\n          }\n        },\n\
+      \        \"required\": [\n          \"agent_id\",\n          \"chosen_index\",\n   \
+      \       \"mode\",\n          \"reason\"\n        ],\n        \"additionalProperties\"\
+      : false\n      }\n    }\n  },\n  \"required\": [\n    \"agents\"\n  ],\n  \"additionalProperties\"\
+      : false\n}"
+    _provenance:
+      role: témoin de plancher (PROTOCOLE.md §2) — prompt système épuré
+      obtention: prompt courant dépouillé de toute consigne comportementale ; ne restent que
+        la tâche et le format
+      date: '2026-08-12'
+      sha1_normalise: 68229f00b026
+      mots: 81
+      note: commun a B_min et B_min+persona ; les deux ne different que par strip_persona
