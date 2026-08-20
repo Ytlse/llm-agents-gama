@@ -1,5 +1,5 @@
 active:
-  itinary_multi_agent: expert
+  itinary_multi_agent: expert_chaine
 prompts:
   expert_best:
     content: "Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est\
@@ -970,3 +970,80 @@ prompts:
       sha1_normalise: 68229f00b026
       mots: 81
       note: commun a B_min et B_min+persona ; les deux ne different que par strip_persona
+  expert_chaine:
+    content: |-
+      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
+      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
+      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
+      - Gain de temps VS confort.
+      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
+      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
+      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
+      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, etc.).
+      - Chaîne de la journée : en cas d'utilisation d'un véhicule personnel (vélo, trottinette, voiture…), pense au stationnement et aux déplacements du reste de la journée, jusqu'au retour au domicile.
+      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+
+      [Instructions de sortie]
+      1) Analyse le profil via ce prisme.
+      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
+      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
+      4) Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+
+      Schéma JSON attendu :
+      {
+        "type": "object",
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "agent_id": {
+                  "type": "string",
+                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                },
+                "probabilities": {
+                  "type": "array",
+                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "index": {
+                        "type": "integer",
+                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                      },
+                      "mode": {
+                        "type": "string",
+                        "description": "Mode de l'option, recopié depuis l'option."
+                      },
+                      "probability": {
+                        "type": "number",
+                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "mode",
+                      "probability"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "agent_id",
+                "probabilities",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "agents"
+        ],
+        "additionalProperties": false
+      }
