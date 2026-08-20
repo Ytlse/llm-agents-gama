@@ -19,7 +19,8 @@ from llm_module.core.geo_reference import (
     geo_reference,
     hypercenter,
 )
-from urban_mobility_agents.utils.move_logger import _haversine_km, _residence_zone
+from llm_module.core.geo_reference import haversine_km
+from urban_mobility_agents.utils.move_logger import _residence_zone
 
 FEATURE_SPEC = Path(__file__).resolve().parents[2] / "scripts/progedo_logit/feature_spec.json"
 
@@ -102,8 +103,8 @@ class TestCouronnesDeResidence:
         « Toulouse » pour le spec, « 1ere couronne » pour la constante abandonnée.
         """
         lat, lon = self._point_au_sud(7.99)
-        assert _haversine_km(*SPEC_CENTER, lat, lon) < 8
-        assert _haversine_km(*_LEGACY_CENTER, lat, lon) > 8
+        assert haversine_km(*SPEC_CENTER, lat, lon) < 8
+        assert haversine_km(*_LEGACY_CENTER, lat, lon) > 8
         assert _residence_zone(lat, lon) == "Toulouse"
 
     def test_domicile_inconnu_laisse_la_cellule_vide(self):

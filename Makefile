@@ -19,6 +19,41 @@ WORKSPACE       = $(PROJECT_ROOT)/GAMA/CityTransport
 MODEL_PATH      = $(WORKSPACE)/models/City.gaml
 EXPERIMENT_NAME = e
 
+# ── Mode offline : GAMA headless en conteneur ─────────────────────────────────
+# `make run OFFLINE=1` (ou l'alias `make run-offline`) : GAMA tourne dans le
+# service compose `gama` (profil "offline", image gamaplatform/gama) au lieu de
+# l'IHM locale. Le launcher scripts/gama/launch_headless.py pilote load/play
+# via le protocole GAMA Server (port 6868).
+# NB : `make run --offline` n'est pas une syntaxe make valide — utiliser OFFLINE=1.
+OFFLINE ?=
+ifneq ($(OFFLINE),)
+  export COMPOSE_PROFILES = offline
+  export GAMA_WS_URL = ws://gama:3001
+endif
+
+# ── Reprise à chaud ────────────────────────────────────────────────────────────
+# `make run OFFLINE=1 CONT=1` : reprend le run précédent au lieu d'en créer un
+# nouveau — le contrôleur réutilise le workdir pointé par experiments/current
+# (journaux appendés, state.json et checkpoints retrouvés) et les données
+# Grafana/Prometheus/Redis sont CONSERVÉES. La simulation GAMA repart à t0 du
+# jour simulé (pas de gel d'état côté GAMA, cf. ticket 002) ; les caches rendent
+# le rejeu quasi instantané. Arrêt à chaud préalable : `make stop-run`.
+CONT ?=
+ifneq ($(CONT),)
+  export CONTINUE_RUN = 1
+endif
+
+# ── Run sans modèles Google ───────────────────────────────────────────────────
+# `make run NO_GOOGLE=1` : blanchit les deux clés Google dans les conteneurs ;
+# les instances google* sont exclues de la rotation (« clé API manquante »)
+# et la cascade continue sur mistral/groq/cerebras. Pas de repli dégradé :
+# simplement moins de capacité LLM.
+NO_GOOGLE ?=
+ifneq ($(NO_GOOGLE),)
+  export SIM_PROVIDER_KEYS__google =
+  export PROVIDER_KEYS__google2 =
+endif
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Docker Compose
 # ──────────────────────────────────────────────────────────────────────────────
@@ -28,8 +63,10 @@ EXPERIMENT_NAME = e
 up:
 	docker compose up -d
 
+# --profile offline : inclut le service gama (mode headless) s'il tourne ;
+# sans effet quand il n'est pas lancé.
 down:
-	docker compose down
+	docker compose --profile offline down
 
 restart:
 	docker compose restart
@@ -70,6 +107,11 @@ capacity:
 ## Analyse de la phase d'init : timeline des étapes, réchauffage des caches (OTP/OSMnx/LLM), bugs de démarrage. Usage: make init [RUN=… OUT=…]
 init:
 	python3 scripts/debug/init_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
+
+## Met à jour llm_module/config/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
+.PHONY: providers
+providers:
+	python3 scripts/providers/refresh.py $(if $(DRY_RUN),--dry-run,)
 
 ## Remove containers, volumes and images
 clean:
@@ -117,22 +159,72 @@ tests:
 burst:
 	python llm_module/tests/test_e2e.py --scenario 1 --burst 80
 
+# Les notebooks tournent via papermill, installé dans le venv du projet : le
+# python du système ne suffit pas. Surchargeable comme les autres interpréteurs.
+ANALYSIS_PYTHON ?= llm-agents/.venv/bin/python
+
 ## Run all analysis notebooks. Usage: make analysis [LOG_DIR=../../experiments/my_exp/]
 analysis:
-	python scripts/analysis/run_analysis.py $(if $(LOG_DIR),--log-dir $(LOG_DIR),)
+	@test -x $(ANALYSIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(ANALYSIS_PYTHON)"; \
+	  echo "Surchargez-le : make analysis ANALYSIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(ANALYSIS_PYTHON) scripts/analysis/run_analysis.py $(if $(LOG_DIR),--log-dir $(LOG_DIR),)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Pilotage
+# ──────────────────────────────────────────────────────────────────────────────
+
+.PHONY: dashboard
+
+DASHBOARD_PYTHON ?= llm-agents/.venv/bin/python
+DASHBOARD_PORT   ?= 8503
+# Thème imposé (light|dark) : les graphes choisissent leurs pas de couleur
+# dessus. Le laisser vide ferait diverger l'UI et les couleurs de texte.
+DASHBOARD_THEME  ?= light
+
+## Tableau de bord de pilotage : cibles make, tickets, métriques de run.
+## Usage: make dashboard [DASHBOARD_THEME=dark] [DASHBOARD_PORT=8503] [DASHBOARD_PYTHON=/chemin/python]
+dashboard:
+	@test -x $(DASHBOARD_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(DASHBOARD_PYTHON)"; \
+	  echo "Surchargez-le : make dashboard DASHBOARD_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(DASHBOARD_PYTHON) -m streamlit run scripts/dashboard/app.py \
+	  --server.port $(DASHBOARD_PORT) --server.headless false \
+	  --theme.base $(DASHBOARD_THEME) --theme.primaryColor "#2a78d6"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Synthèse des scores
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: synthesis synthesis-open common-set-eval heldout-eval
+.PHONY: synthesis synthesis-open synthesis-pull-db common-set-eval heldout-eval \
+        model-compare model-compare-open
 
 # La synthèse importe pandas/numpy et le moteur de calibration : le python3 du
 # système ne suffit pas. On vise le venv du projet, surchargeable.
 SYNTHESIS_PYTHON ?= llm-agents/.venv/bin/python
 
-## Regenerate the score synthesis page. Usage: make synthesis [RUN=experiments/archive/2026-07-29_18_34]
-synthesis:
+# Rapatriement du store de la campagne cloud avant chaque synthèse (PULL=0 pour
+# sauter, p. ex. hors-ligne). La campagne tourne sur la VM : sans ce pull, la
+# colonne calibration de la page reflète un instantané local périmé.
+SYNTHESIS_PULL_DB := prompt_calibration/calibration_results/calibration_cloud.db
+PULL ?= 1
+
+## Rapatrie le store cloud utilisé par la page (calibration_cloud.db). Best-effort :
+## si la VM est injoignable, avertit et laisse la synthèse tourner sur l'instantané local.
+synthesis-pull-db:
+	@$(MAKE) -C prompt_calibration pull-db \
+	  LOCAL_DB=calibration_results/calibration_cloud.db \
+	|| { echo ""; \
+	  echo "⚠️  [ALARME] Rapatriement du store cloud impossible (VM éteinte ? gcloud absent ?)."; \
+	  echo "    La page va être générée sur l'instantané local :"; \
+	  ls -l $(SYNTHESIS_PULL_DB) 2>/dev/null || echo "    (aucun instantané local : $(SYNTHESIS_PULL_DB) manquant)"; \
+	  echo "    Pour ignorer ce pull explicitement : make synthesis PULL=0"; \
+	  echo ""; }
+
+## Regenerate the score synthesis page. Usage: make synthesis [RUN=experiments/archive/2026-07-29_18_34] [PULL=0]
+synthesis: $(if $(filter 0,$(PULL)),,synthesis-pull-db)
 	@test -x $(SYNTHESIS_PYTHON) || { \
 	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
 	  echo "Surchargez-le : make synthesis SYNTHESIS_PYTHON=/chemin/vers/python"; \
@@ -142,6 +234,27 @@ synthesis:
 ## Regenerate then open the page in the default browser.
 synthesis-open: synthesis
 	open docs/synthesis/index.html
+
+## Compare a run to its predecessors AND break its score down by LLM model.
+## Usage: make model-compare RUN=experiments/archive/<run> [BASELINE="a b"] [OUT=…]
+## Aucun appel LLM : tout est relu dans moves.csv, avec le lecteur et la loss de
+## `make synthesis`. À utiliser quand un run a fait tourner plusieurs modèles — la
+## page principale, qui agrège le run entier, ne peut pas les séparer. Sortie :
+## docs/synthesis/models/<run>/index.html
+model-compare:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make model-compare SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	@test -n "$(RUN)" || { \
+	  echo "RUN est obligatoire : make model-compare RUN=experiments/archive/<run>"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.model_compare --run $(RUN) \
+	  $(foreach b,$(BASELINE),--baseline $(b)) $(if $(OUT),--out $(OUT),)
+
+## Idem, puis ouvre la page.
+model-compare-open: model-compare
+	open docs/synthesis/models/$(notdir $(patsubst %/,%,$(RUN)))/index.html
 
 ## Re-evaluate the pinned prompt lineage's seed and leaf on the common set (action A3).
 ## CONSOMME DU QUOTA LLM (~130 appels Gemini free tier). Chiffrez d'abord :
@@ -273,8 +386,11 @@ wait-ready:
 	@echo "\n✅ Services prêts — lancement GAMA autorisé"
 
 ## Start all services then launch the GAMA experiment
-## Usage: make run [CONFIG=my_config.yaml] [EXPERIMENT_NAME=e]
+## Usage: make run [CONFIG=my_config.yaml] [EXPERIMENT_NAME=e] [OFFLINE=1]
+## OFFLINE=1 : GAMA headless en conteneur (service `gama`, profil compose "offline"),
+## piloté via GAMA Server — aucune IHM, tout démarre avec docker compose.
 run:
+ifeq ($(CONT),)
 	echo "🗑️  Arrêt de Grafana et Prometheus..."; \
 	docker compose stop grafana prometheus 2>/dev/null || true; \
 	docker compose rm -f grafana prometheus 2>/dev/null || true; \
@@ -283,11 +399,81 @@ run:
 	echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
 	docker compose exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r docker compose exec -T redis redis-cli del 2>/dev/null || true; \
 
+else
+	@echo "♻️  Reprise à chaud : workdir, métriques et compteurs conservés ($(shell readlink experiments/current))"
+endif
 	@$(MAKE) up
 	@$(MAKE) wait-ready
+ifneq ($(OFFLINE),)
+	@if pgrep -f "launch_headless.py" > /dev/null; then \
+		echo "⚠️  Un launcher GAMA headless tourne déjà. Lancement ignoré."; \
+	else \
+		echo "🚀 Lancement headless de l'expérience GAMA : $(EXPERIMENT_NAME) (GAMA Server, conteneur gama)..."; \
+		mkdir -p experiments/current; \
+		docker compose exec -T -e GAMA_EXPERIMENT=$(EXPERIMENT_NAME) controller \
+			python /app/scripts/gama/launch_headless.py \
+			>> experiments/current/gama_headless.log 2>&1 & \
+		echo "   Console GAMA → experiments/current/gama_headless.log"; \
+	fi
+else
 	@if pgrep -f "$(GAMA_BIN)" > /dev/null; then \
 		echo "⚠️  GAMA est déjà en cours d'exécution. Lancement ignoré."; \
 	else \
 		echo "🚀 Lancement de l'expérience GAMA : $(EXPERIMENT_NAME)..."; \
 		$(GAMA_BIN) -p $(WORKSPACE) -o $(MODEL_PATH) -e "$(EXPERIMENT_NAME)" & \
 	fi
+endif
+
+## Alias : make run-offline == make run OFFLINE=1
+.PHONY: run-offline
+run-offline:
+	@$(MAKE) run OFFLINE=1
+
+## Régénère la base de prompts d'itinéraire SANS simulation ni appel LLM (mode rapide).
+## ⛔ ABANDONNÉ POUR LA CALIBRATION (2026-08-17) : sans appel LLM, la chaîne de véhicules
+## n'est pas rejouable (savoir où est le vélo suppose de connaître le mode du trajet
+## précédent), le vélo est donc proposé partout — 34 % de part vélo sous 1 km contre ~9 %
+## sur un jeu issu d'une simulation. NE PAS geler un jeu de calibration depuis cette base :
+## voir l'en-tête de scripts/prompt_base/build.py et le §9 du ticket 013.
+## Reste utile pour : réchauffer les caches OTP/OSMnx d'un run à venir, éprouver le rendu
+## d'une option, chiffrer le coût de routage d'une population.
+## La pile doit être debout (make up) — le script tourne dans le conteneur controller.
+##
+## Usage : make prompt-base [POPULATION=...] [DAY=2026-03-17] [BASE=<nom>] [LIMIT=50]
+.PHONY: prompt-base
+POPULATION ?= /app/experiments/current/population_1000.json
+DAY ?= 2026-03-17
+BASE ?= $(DAY)
+prompt-base:
+	docker compose exec -T controller python /app/scripts/prompt_base/build.py \
+		--population $(POPULATION) \
+		--out /app/experiments/bases/$(BASE)/entries.jsonl \
+		--day $(DAY) \
+		$(if $(LIMIT),--limit $(LIMIT),)
+
+## Statut du run GAMA en cours. Sortie parsable clé=valeur :
+## run=actif|inactif, mode=offline|ihm, pid, current=<cible du symlink experiments/current>
+.PHONY: status
+status:
+	@if pgrep -f "launch_headless.py" > /dev/null; then \
+		echo "run=actif mode=offline pid=$$(pgrep -f launch_headless.py | head -1)"; \
+	elif pgrep -f "$(GAMA_BIN)" > /dev/null; then \
+		echo "run=actif mode=ihm pid=$$(pgrep -f "$(GAMA_BIN)" | head -1)"; \
+	else \
+		echo "run=inactif"; \
+	fi
+	@echo "current=$$(readlink experiments/current 2>/dev/null || echo '-')"
+
+## Arrête le run GAMA en cours SANS toucher au reste de la pile (api, worker, redis…).
+## Offline : tue le launcher dans le conteneur controller puis stoppe le service gama
+## (GAMA Server tue l'expérience dont le client s'est déconnecté). IHM : SIGTERM à GAMA.
+## Pour tout arrêter, y compris les services : make down.
+.PHONY: stop-run
+stop-run:
+	@if docker compose ps --status running controller 2>/dev/null | grep -q controller; then \
+		docker compose exec -T controller pkill -f launch_headless.py 2>/dev/null || true; \
+	fi
+	-@pkill -f "scripts/gama/launch_headless.py" 2>/dev/null || true
+	-@docker compose --profile offline stop gama 2>/dev/null || true
+	-@pkill -f "$(GAMA_BIN)" 2>/dev/null || true
+	@echo "✅ Run arrêté. Les services restent en place (make down pour tout couper)."

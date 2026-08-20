@@ -18,6 +18,7 @@ from llm.memory import MemoryEntry, MemoryType
 from llm.shortterm import UserShortTermMemory
 from models import Person, TravelPlan
 from llm_module.core.mode_choice import (
+    UniformFallback,
     draw_index,
     mode_distribution,
     normalize_option_probabilities,
@@ -37,6 +38,7 @@ from utils import create_background_task
 from world.population import PersonScheduler
 from loguru import logger
 from llm.cache import LlmSemanticCache
+from llm.reflection_store import ReflectionMemoStore
 
 
 history_log = HistoryStreamLog.get_instance()
@@ -129,19 +131,34 @@ def _build_profile_narrative(traits: dict) -> str:
         line1 += f" ({', '.join(extras)})"
 
     car_avail = traits.get("car_availability", "none")
-    has_license = traits.get("has_driving_license", False)
     has_pt = traits.get("has_pt_subscription", False)
 
-    if car_avail == "all" and has_license:
+    # Conduire suppose le permis **et** l'âge légal, exactement comme `_can_drive`
+    # du contrôleur : le narratif doit décrire le jeu d'options réellement proposé,
+    # sinon le LLM raisonne sur une voiture que l'agent n'a pas le droit de conduire.
+    age_val = age if isinstance(age, (int, float)) else 0
+    can_drive = bool(traits.get("has_driving_license", False)) and age_val >= 18
+    # Mode passager (ticket 008, A2) : il faut une voiture au foyer et quelqu'un
+    # d'autre pour la conduire. Le trajet du conducteur n'est pas modélisé (D5) —
+    # le narratif ne promet donc rien de plus qu'« un adulte du foyer m'emmène ».
+    can_be_driven = (not can_drive) and car_avail != "none" and (household or 0) > 1
+
+    if car_avail == "all" and can_drive:
         car_str = "conducteur·trice, voiture toujours dispo"
-    elif car_avail == "all" and not has_license:
-        car_str = "voiture dispo (sans permis — peut être conduite par un tiers)"
-    elif car_avail == "some" and has_license:
+    elif car_avail == "all" and can_be_driven:
+        car_str = ("ne conduit pas : se déplace en voiture uniquement en passager·ère, "
+                   "conduit·e par un adulte du foyer — voiture toujours disponible")
+    elif car_avail == "some" and can_drive:
         car_str = "peut conduire, voiture à partager dans le foyer, conditionné par la nécessité"
-    elif car_avail == "some" and not has_license:
-        car_str = "sans permis, voiture à partager dans le foyer, conditionné par la nécessité"
-    elif car_avail == "none" and has_license:
+    elif car_avail == "some" and can_be_driven:
+        car_str = ("ne conduit pas : se déplace en voiture uniquement en passager·ère, "
+                   "conduit·e par un adulte du foyer — voiture à partager dans le foyer")
+    elif car_avail == "none" and can_drive:
         car_str = "permis mais sans voiture"
+    elif not can_drive and car_avail != "none":
+        # Voiture au foyer, mais personne pour la conduire : adulte sans permis
+        # vivant seul. La voiture n'est pas une option de déplacement pour lui.
+        car_str = "sans permis et seul·e au foyer : la voiture n'est pas une option"
     else:
         car_str = "sans voiture ni permis"
 
@@ -181,6 +198,8 @@ class LlmAgent:
             wait_timeout=settings.agent.remote_llm_poll_timeout,
             backpressure_max_inflight=settings.world.worker_concurrency,
             backpressure_release_ratio=settings.agent.remote_llm_backpressure_ratio,
+            circuit_failure_threshold=settings.agent.remote_llm_circuit_failure_threshold,
+            circuit_probe_interval=settings.agent.remote_llm_circuit_probe_interval,
         )
         self.prompt_manager = PromptManager(os.path.join(os.path.dirname(__file__), "prompts"))
 
@@ -197,8 +216,15 @@ class LlmAgent:
                 semantic_threshold=settings.cache.semantic_threshold,
                 embed_model_name=settings.cache.embed_model_name,
             )
+            # Mémoïsation exacte des réflexions (ticket 012) — même répertoire que le
+            # cache de décisions : l'isolation par checksum de prompt est héritée.
+            self.reflection_memo = (
+                ReflectionMemoStore(cache_dir=cache_dir)
+                if settings.cache.reflection_memo_enabled else None
+            )
         else:
             self.llm_cache = None
+            self.reflection_memo = None
 
     def get_short_term_memory(self, user_id: str) -> UserShortTermMemory:
         if user_id not in self.short_term_memory:
@@ -328,7 +354,14 @@ class LlmAgent:
         identity_description = self.get_person_identity_description(person)
         return self.prompt_manager.get_prompt(PromptName.PERSONAL_SYSTEM, identity_description=identity_description)
     
-    async def build_travel_plan_payload(self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0) -> Dict[str, Any]:
+    async def build_travel_plan_payload(
+        self,
+        context: Context,
+        options: list[TravelPlan],
+        destination: str,
+        departure_time: int = 0,
+        anticipation: Optional[dict] = None,
+    ) -> Dict[str, Any]:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
         constraints = "None" #TODO To be replaced by real constraints from persona
@@ -349,7 +382,7 @@ class LlmAgent:
         trajectories = [
             {
                 "index": i,
-                "mode": ",".join([str(leg.mode) for leg in opt.legs]) if opt.legs else "unknown",
+                "mode": opt.mode_label() or "unknown",
                 "description": env_ob_to_text("travel_plan", opt.model_dump()),
                 # Distance totale du trajet (en mètres) — utilisée pour les métriques Prometheus
                 "total_distance_m": (
@@ -380,6 +413,14 @@ class LlmAgent:
                     # dans un même appel LLM — chaque persona garde la sienne dans le
                     # prompt (cf. itinary_multi_agent.md.j2, injection par bloc).
                     "context": city_context,
+                    # Anticipation de la chaîne (ticket 014) : météo des tranches
+                    # restantes de la journée et agenda glissant des trajets
+                    # restants — construits par le contrôleur (_build_anticipation),
+                    # rendus par bloc dans le gabarit. La position des véhicules
+                    # n'est plus énoncée (biais vélo mesuré) : la règle de chaîne
+                    # vit dans le prompt système (variante expert_chaine).
+                    "day_outlook": (anticipation or {}).get("outlook"),
+                    "agenda": (anticipation or {}).get("agenda") or [],
                     "history": history,
                     "trajectories": trajectories
                 }
@@ -391,6 +432,7 @@ class LlmAgent:
 
     async def evaluate_and_choose_travel_plan(
         self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0,
+        anticipation: Optional[dict] = None,
     ) -> tuple[int, str, str, dict]:
         """Choisit un itinéraire et renvoie (index, justification, provider, répartition).
 
@@ -398,8 +440,13 @@ class LlmAgent:
         au tirage (modes non proposés inclus, à 0) — vide si la décision n'en vient pas
         (réponse à l'ancien format, point de cache hérité, erreur). Elle est tracée
         telle quelle dans `moves.csv`.
+
+        `anticipation` (ticket 014) : contexte d'anticipation construit par le
+        contrôleur — injecté dans le prompt, et sa `signature` entre dans la clé du
+        cache de décisions (deux anticipations différentes = deux entrées distinctes).
         """
         assert options, "No travel options provided for planning trip."
+        anticipation_key = (anticipation or {}).get("signature", "")
 
         # Ordre déterministe pour les clés de cache (indépendant du shuffle)
         sorted_options = sorted(options, key=lambda p: p.get_code() or "")
@@ -432,7 +479,7 @@ class LlmAgent:
         payload = None
         memory_text = None
         if has_memories:
-            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
+            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time, anticipation)
             # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
             memory_text = json.dumps(payload["agents"][0].get("history", []), ensure_ascii=False)
 
@@ -446,6 +493,7 @@ class LlmAgent:
                 weather=weather,
                 activity_purpose=activity_purpose,
                 seed_parts=seed_parts,
+                extra_key=anticipation_key,
             )
             if cache_hit is not None:
                 chosen_plan = sorted_options[cache_hit["index"]]
@@ -474,7 +522,7 @@ class LlmAgent:
 
         # Cache miss sur la branche « mémoire vide » : le payload reste à construire.
         if payload is None:
-            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time)
+            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time, anticipation)
 
         _pl = PipelineLogger.get()
         _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
@@ -501,6 +549,7 @@ class LlmAgent:
                 # `sorted_options` (ordre déterministe par code) pour que le tirage ne
                 # dépende pas du mélange anti-biais de position appliqué au prompt.
                 weights = None
+                weights_are_fallback = False
                 if agent_result.probabilities:
                     # Modes tels qu'ils ont été envoyés dans le prompt : ils permettent de
                     # réaligner une réponse dont les index sont hors bornes (le modèle a
@@ -511,6 +560,10 @@ class LlmAgent:
                         modes=sent_modes,
                         context=f"agent={context.person.person_id} activity={context.activity_id}",
                     )
+                    # Repli uniforme (vecteur LLM inexploitable) : le tirage reste valable
+                    # pour CE trajet, mais la distribution n'est pas une décision du modèle
+                    # — elle ne doit jamais atteindre le cache persistant.
+                    weights_are_fallback = isinstance(shuffled_weights, UniformFallback)
                     position_in_sorted = {id(opt): i for i, opt in enumerate(sorted_options)}
                     weights = [0.0] * len(sorted_options)
                     for opt, w in zip(shuffled_options, shuffled_weights):
@@ -533,10 +586,7 @@ class LlmAgent:
 
                     distribution = {}
                     if weights is not None:
-                        modes = [
-                            ",".join(str(leg.mode) for leg in opt.legs) if opt.legs else ""
-                            for opt in sorted_options
-                        ]
+                        modes = [opt.mode_label() for opt in sorted_options]
                         distribution = mode_distribution(weights, modes)
                         reason = (
                             f"{reason} [Répartition estimée : "
@@ -555,8 +605,15 @@ class LlmAgent:
                     # --- Insertion asynchrone dans le cache (fire-and-forget) ---
                     # C'est la distribution qui est mise en cache, pas la décision : au
                     # prochain hit, un nouveau tirage aura lieu sur ces mêmes probabilités.
-                    if self.llm_cache is not None:
-                        mode = ",".join([str(leg.mode) for leg in chosen_plan.legs]) if chosen_plan.legs else ""
+                    # Jamais pour un repli uniforme : le cache n'a pas de mode dégradé,
+                    # un repli persisté servirait du hasard aux runs suivants.
+                    if self.llm_cache is not None and weights_are_fallback:
+                        logger.info(
+                            f"[cache] store refusé — distribution de repli uniforme non persistée | "
+                            f"agent={context.person.person_id} activity={context.activity_id}"
+                        )
+                    elif self.llm_cache is not None:
+                        mode = chosen_plan.mode_label()
                         _cache_task = create_background_task(self.llm_cache.store(
                             agent_id=context.person.person_id,
                             activity_id=context.activity_id,
@@ -567,6 +624,7 @@ class LlmAgent:
                             mode=mode,
                             weather=weather,
                             probabilities=weights,
+                            extra_key=anticipation_key,
                         ))
                         _cache_task.add_done_callback(
                             lambda t: logger.warning(f"Cache store failed: {t.exception()}") if not t.cancelled() and t.exception() else None
@@ -639,27 +697,53 @@ class LlmAgent:
         )
         identity_description = self.get_person_identity_description(context.person)
 
-        payload = {
-            "category": "ltm_self_reflection",
-            "agents": [{
-                "agent_id": context.person.person_id,
-                "perception": identity_description,
-                "context": entries_text,
-                "departure_timestamp": float(context.timestamp),
-            }],
-            "parameters": {**settings.agent.llm_params},
-        }
+        # Mémoïsation exacte (ticket 012) — même principe que la réflexion STM.
+        memo_key = None
+        reflection: Optional[str] = None
+        if self.reflection_memo is not None:
+            memo_key = ReflectionMemoStore.make_key(
+                person_id=context.person.person_id,
+                category="ltm_self_reflection",
+                identity=identity_description,
+                context_text=entries_text,
+                departure_timestamp=float(context.timestamp),
+                llm_params=settings.agent.llm_params,
+            )
+            hit = await asyncio.to_thread(self.reflection_memo.lookup, memo_key, "ltm_self_reflection")
+            if hit is not None:
+                reflection = hit["reflection"]
+                logger.info(
+                    f"[reflection-memo] hit LTM — auto-réflexion servie sans appel LLM | "
+                    f"person={context.person.person_id} (payée par {hit['provider'] or '?'})"
+                )
 
-        llm_result = await self.llm_client.execute(payload)
-        results = llm_result.agents
-        if not results:
-            logger.error(f"LTM self-reflection gateway returned no result for {context.person.person_id}")
-            return
+        if reflection is None:
+            payload = {
+                "category": "ltm_self_reflection",
+                "agents": [{
+                    "agent_id": context.person.person_id,
+                    "perception": identity_description,
+                    "context": entries_text,
+                    "departure_timestamp": float(context.timestamp),
+                }],
+                "parameters": {**settings.agent.llm_params},
+            }
 
-        try:
+            llm_result = await self.llm_client.execute(payload)
+            results = llm_result.agents
+            if not results:
+                logger.error(f"LTM self-reflection gateway returned no result for {context.person.person_id}")
+                return
             # AgentResponse accepte les champs hors schéma (extra=allow) —
             # "reflection" est porté par la catégorie ltm_self_reflection.
             reflection = getattr(results[0], "reflection", "") or ""
+            if self.reflection_memo is not None:
+                await asyncio.to_thread(
+                    self.reflection_memo.store, memo_key, context.person.person_id,
+                    "ltm_self_reflection", reflection, None, llm_result.provider_used or "",
+                )
+
+        try:
             entry = MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,
@@ -691,39 +775,70 @@ class LlmAgent:
         identity_description = self.get_person_identity_description(context.person)
         custom_guidelines = f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}" if settings.agent.reflection_custom_guidelines else ""
 
-        payload = {
-            "category": "stm_reflection",
-            "min_tpm_required": settings.agent.stm_reflection_min_tpm,
-            "agents": [{
-                "agent_id": context.person.person_id,
-                "perception": identity_description,
-                "context": experiences_text,
-                "departure_timestamp": float(context.timestamp),
-            }],
-            "parameters": {
-                "custom_guidelines": custom_guidelines,
-                **settings.agent.llm_params,
-            },
-        }
+        # Mémoïsation exacte (ticket 012) : même agent, même vécu, mêmes consignes
+        # ⇒ même introspection. Hit ⇒ appel LLM évité ; les effets (consommation
+        # STM, écritures LTM) restent strictement identiques à un appel réel.
+        memo_key = None
+        reflection: Optional[str] = None
+        concepts: list = []
+        if self.reflection_memo is not None:
+            memo_key = ReflectionMemoStore.make_key(
+                person_id=context.person.person_id,
+                category="stm_reflection",
+                identity=identity_description,
+                context_text=experiences_text,
+                guidelines=custom_guidelines,
+                departure_timestamp=float(context.timestamp),
+                llm_params=settings.agent.llm_params,
+            )
+            hit = await asyncio.to_thread(self.reflection_memo.lookup, memo_key, "stm_reflection")
+            if hit is not None:
+                reflection, concepts = hit["reflection"], hit["concepts"]
+                logger.info(
+                    f"[reflection-memo] hit STM — réflexion servie sans appel LLM | "
+                    f"person={context.person.person_id} (payée par {hit['provider'] or '?'})"
+                )
 
-        llm_result = await self.llm_client.execute(payload)
-        results = llm_result.agents
-        if not results:
-            logger.error(f"STM reflection gateway returned no result for {context.person.person_id}")
-            return
+        if reflection is None:
+            payload = {
+                "category": "stm_reflection",
+                "min_tpm_required": settings.agent.stm_reflection_min_tpm,
+                "agents": [{
+                    "agent_id": context.person.person_id,
+                    "perception": identity_description,
+                    "context": experiences_text,
+                    "departure_timestamp": float(context.timestamp),
+                }],
+                "parameters": {
+                    "custom_guidelines": custom_guidelines,
+                    **settings.agent.llm_params,
+                },
+            }
 
-        agent_result = results[0]
+            llm_result = await self.llm_client.execute(payload)
+            results = llm_result.agents
+            if not results:
+                logger.error(f"STM reflection gateway returned no result for {context.person.person_id}")
+                return
+
+            agent_result = results[0]
+            # AgentResponse accepte les champs hors schéma (extra=allow) —
+            # "reflection"/"concepts" sont portés par la catégorie stm_reflection.
+            reflection = (getattr(agent_result, "reflection", "") or "").strip()
+            concepts = getattr(agent_result, "concepts", []) or []
+
+            if self.reflection_memo is not None:
+                # Le store refuse le vide (D3) : un échec de génération ne se rejoue pas.
+                await asyncio.to_thread(
+                    self.reflection_memo.store, memo_key, context.person.person_id,
+                    "stm_reflection", reflection, concepts, llm_result.provider_used or "",
+                )
 
         self.get_short_term_memory(context.person.person_id).remove_batch(all_messages)
         start_timestamp = all_messages[0].timestamp
 
         entries = []
         try:
-            # AgentResponse accepte les champs hors schéma (extra=allow) —
-            # "reflection"/"concepts" sont portés par la catégorie stm_reflection.
-            reflection = (getattr(agent_result, "reflection", "") or "").strip()
-            concepts = getattr(agent_result, "concepts", []) or []
-
             entries.append(MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,

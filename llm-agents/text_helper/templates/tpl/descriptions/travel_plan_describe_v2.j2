@@ -1,4 +1,20 @@
+{#- Restitution d'une option d'itinéraire. Quatre cas, dans cet ordre :
+    1. plan vide → durée seule ;
+    2. plan à jambes NOMMÉES (voiture, vélo) → total + « dont … d'accès et de
+       stationnement » + sous-étapes. Le total est la SOMME des sous-étapes
+       affichées : garanti par `terminal_time._validate` qui refuse un temps
+       terminal non multiple de 60 s (sinon floor(somme) ≠ somme(floor)) ;
+    3. plan direct à jambe unique sans temps terminal (marche) → inchangé ;
+    4. plan multi-jambes routé (transports collectifs) → inchangé, au caractère.
+    La ligne `Distance` est CONSERVÉE au cas 2 : `dist_km` d'un record de
+    calibration est le minimum des distances affichées dans la section, et
+    13,5 % des records de v3 ne la tiennent que des lignes voiture/vélo. La
+    perdre ferait disparaître ces décisions de la strate distance de la mesure. -#}
 {%- if plan.legs | length == 0 %} Durée estimée : {{ ((plan.end_time | to_timestamp) - (plan.start_time | to_timestamp)) | duration_to_bucket_text }}.
+{%- elif plan.has_terminal_legs %} Temps de trajet : {{ ((plan.end_time | to_timestamp) - (plan.start_time | to_timestamp)) | duration_to_bucket_text }}, dont {{ plan.terminal_time | duration_to_bucket_text }} {{ plan.terminal_label }}. Distance : {{ plan.distance | humanize_distance }}.
+{%- for label, seconds in plan.described_steps %}
+- {{ label }} : {{ seconds | duration_to_bucket_text }}.
+{%- endfor %}
 {%- elif plan.legs | length == 1 and plan.legs[0].transit_route and '__DIRECT' in plan.legs[0].transit_route %}{%- set leg = plan.legs[0] %} Durée estimée : {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}. Distance : {{ leg.distance | humanize_distance }}.
 {%- else %} Temps de trajet : {{ ((plan.end_time | to_timestamp) - (plan.start_time | to_timestamp)) | duration_to_bucket_text }}, dont {{ plan.walking_time | duration_to_bucket_text }} de marche.
 {%- set ns = namespace(prev_transfer_walk=false) %}

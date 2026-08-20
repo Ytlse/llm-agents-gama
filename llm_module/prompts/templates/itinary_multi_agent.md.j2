@@ -20,7 +20,22 @@ Schéma JSON attendu :
 --- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
 {% if agent_context %}**Contexte :** {{ agent_context }}
 {% endif %}
+{#- Anticipation de la chaîne (ticket 014) : météo des tranches restantes de la
+    journée (tous les agents) et agenda glissant (agents ayant un véhicule à
+    chaîner). PAS de ligne de position des véhicules : « votre vélo est avec
+    vous » agissait comme une invitation (+5,5 pts de vélo mesurés) — la règle
+    de chaîne vit dans le prompt système (variante expert_chaine). Puces « · »
+    exprès : la consigne de sortie réserve les lignes « - [n] » aux options. #}
+{% if agent.day_outlook %}**Météo plus tard :** {{ agent.day_outlook }}.
+{% endif %}
 {{ agent.perception }}
+{% if agent.agenda %}
+
+**Trajets suivants prévus aujourd'hui :**
+{% for line in agent.agenda %}
+    · {{ line }}
+{% endfor %}
+{% endif %}
 
 **Options de trajet** ({{ agent.trajectories | length }} options, indices 0 à {{ agent.trajectories | length - 1 }}) :
 {# Les étapes d'un itinéraire (« - Marche jusqu'à… », « - Bus '401' vers… ») sont

@@ -44,6 +44,16 @@ class OtpPersistentCache:
         # include_bike fait partie de la clé : sans lui, un résultat calculé pour un
         # agent sans vélo (aucune option vélo) serait resservi à un agent avec vélo.
         #
+        # ⚠ La version des données d'itinéraire (`terminal_time.data_version()`) est
+        # dans la clé, et c'est ici qu'elle compte le plus des trois caches : ce cache
+        # ne mémorise pas des durées, il mémorise les **TravelPlan sérialisés**, options
+        # voiture et vélo comprises. Sans version, un cache chaud resservirait des plans
+        # à UNE SEULE jambe, portant l'ancien stationnement fondu dans la durée — c'est-
+        # à-dire la totalité du défaut du ticket 013, ressuscitée après sa correction, et
+        # sans qu'aucun log ne le signale. Bumper la version dans
+        # config/terminal_time.yaml rend les anciennes lignes inatteignables sans les
+        # détruire.
+        #
         # NOTE fixed_day : la clé inclut la date absolue (YYYY-MM-DD) du departure_time
         # simulé, calculée AVANT le remapping fixed_day fait dans OTPTripHelper
         # (otp.py). Quand gtfs.fixed_day est actif, deux dates simulées différentes
@@ -53,14 +63,23 @@ class OtpPersistentCache:
         # TODO: quand fixed_day est actif, remplacer date_str par la date fixe (ou le
         # jour de semaine) pour partager le cache entre dates simulées, comme le fait
         # déjà OsmnxPersistentCache (clé weekday, pas date absolue).
+        from trip_helper.terminal_time import data_version
+
         dt = datetime.fromtimestamp(departure_time)
         date_str = dt.strftime('%Y-%m-%d')
         time_bucket = f"{dt.hour:02d}:{(dt.minute // 10) * 10:02d}"
-        raw = f"{date_str}|{time_bucket}|{origin.lat:.5f}|{origin.lon:.5f}|{destination.lat:.5f}|{destination.lon:.5f}|{int(include_car)}|{int(arrive_by)}|{int(include_bike)}"
+        raw = (f"{data_version()}|{date_str}|{time_bucket}|{origin.lat:.5f}|{origin.lon:.5f}"
+               f"|{destination.lat:.5f}|{destination.lon:.5f}"
+               f"|{int(include_car)}|{int(arrive_by)}|{int(include_bike)}")
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @staticmethod
     def make_blacklist_key(origin: Location, destination: Location) -> str:
+        # PAS de version ici, et c'est délibéré : la liste noire dit « OTP ne relie pas
+        # ces deux points », un fait de topologie du réseau qui ne dépend d'aucun temps
+        # terminal. La versionner ferait re-interroger OTP pour rien sur les paires
+        # connues comme non reliées — la moitié des avertissements « No usable
+        # itinerary » d'un run.
         raw = f"{origin.lat:.5f}|{origin.lon:.5f}|{destination.lat:.5f}|{destination.lon:.5f}"
         return hashlib.sha256(raw.encode()).hexdigest()
 

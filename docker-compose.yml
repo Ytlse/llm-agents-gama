@@ -1,9 +1,49 @@
 x-shared-env: &shared-env
   REDIS_URL: redis://redis:6379/0
   OTP_ENDPOINTS: http://otp1:8080/otp/transmodel/v3,http://otp2:8080/otp/transmodel/v3,http://otp3:8080/otp/transmodel/v3
+  # Un seul réplica : `osmnx_direct` dimensionne sa concurrence à `nb_endpoints × 3`.
+  # En lister davantage suppose d'avoir activé osmnx2/osmnx3 — voir l'avertissement
+  # mesuré à leur définition avant de le faire.
   OSMNX_ENDPOINTS: http://osmnx1:8090/route
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  # Reprise à chaud (`make run CONT=1`) : le contrôleur réutilise le workdir
+  # pointé par experiments/current au lieu d'en créer un nouveau (settings.py).
+  CONTINUE_RUN: ${CONTINUE_RUN:-}
   TZ: Europe/Paris
+  # ── Clés Google de la SIMULATION (ticket 008) ──────────────────────────────
+  # Les quotas free tier Gemini se comptent par projet ET par modèle : chaque clé
+  # dispose de ses propres 500 requêtes/jour et par modèle. La simulation tourne sur
+  # la CLÉ 2, ce qui laisse intactes les 500 requêtes/jour de la clé 1 pour les
+  # mesures du lot C (`common-set-eval`, `heldout-eval`), qui interrogent
+  # `google_gemini31` — c'est-à-dire la clé 1.
+  #
+  # Un provider sans clé est simplement exclu de la rotation
+  # (`filter_providers_without_api_key`) : blanchir la clé 1 retire donc
+  # `google_gemini31` et `google_gemini35` de la cascade, sans toucher à mistral,
+  # groq ni cerebras — la cascade multi-providers reste en place (décision D4).
+  #
+  # Pour rendre la clé 1 à la simulation le temps d'un run :
+  #   SIM_PROVIDER_KEYS__google="$PROVIDER_KEYS__google" make run CONFIG=...
+  PROVIDER_KEYS__google: ${SIM_PROVIDER_KEYS__google:-}
+  # `google2_35` (clé 2, modèle 3.5) est un second seau de 500 requêtes/jour. Il
+  # n'a pas de secret propre : on le dérive de la clé 2 plutôt que de dupliquer le
+  # secret dans .env.
+  PROVIDER_KEYS__google2_35: ${PROVIDER_KEYS__google2:-}
+  # Redéclarée ici (et pas seulement via env_file) pour être surchargeable depuis
+  # le shell : `make run NO_GOOGLE=1` exporte PROVIDER_KEYS__google2="" et blanchit
+  # ainsi google2 ET google2_35 — toutes les instances google* sortent alors de la
+  # rotation (filter_providers_without_api_key). Sans surcharge, l'interpolation
+  # compose lit .env : comportement inchangé.
+  PROVIDER_KEYS__google2: ${PROVIDER_KEYS__google2:-}
+  # Même mécanique pour mistral/cerebras : redéclarées pour être blanchissables
+  # depuis le shell quand leurs crédits sont épuisés (HTTP 402). Un fournisseur
+  # mort laissé en rotation coûte des décisions dégradées : le balancer le
+  # re-sonde à l'expiration du retrait et des tâches y épuisent leurs relances
+  # (155 replis « Default index » sur le run 2026-08-19_11_01). Usage :
+  #   PROVIDER_KEYS__mistral="" PROVIDER_KEYS__cerebras="" make run CONFIG=...
+  # Sans surcharge, l'interpolation lit .env : comportement inchangé.
+  PROVIDER_KEYS__mistral: ${PROVIDER_KEYS__mistral:-}
+  PROVIDER_KEYS__cerebras: ${PROVIDER_KEYS__cerebras:-}
 
 x-osmnx-service: &osmnx-service
   build:
@@ -146,6 +186,25 @@ services:
     ports:
       - "8090:8090"
 
+  # ⚠ 2026-08-17 — activés puis REDÉSACTIVÉS le même jour, mesures à l'appui. À lire
+  # avant de retenter, parce que le raisonnement naturel est le mauvais ici.
+  #
+  # Le symptôme invite à scaler : sur la génération d'une base de prompts (ticket 013),
+  # `osmnx1` seul saturait à 343 % de CPU — un worker par mode, trois modes — pendant
+  # que les trois OTP tournaient à 1 %. La VM a 10 CPU : de la place, en apparence.
+  #
+  # Mesuré après passage à 3 réplicas : le débit est TOMBÉ de 0,5 à 0,2 trajet/s. La
+  # contrainte n'était pas le CPU mais la MÉMOIRE DE L'HÔTE — ~12 Mo libres avant le
+  # changement, swap à 12,5 Go sur 13,3, 95 millions de swapins. Ajouter 4,8 Go de
+  # conteneurs a acheté du parallélisme contre de la pagination.
+  #
+  # Tentative suivante, également mesurée : libérer la mémoire d'OTP (3 JVM × 1,5 Go
+  # pour 0,4 % de CPU) au profit des routeurs, en n'en gardant qu'une. Le débit est
+  # resté à 0,2 trajet/s. Sur cette machine, un seul réplica OSMnx est l'optimum.
+  #
+  # Donc : ne pas décommenter sans avoir vérifié la mémoire libre de l'hôte, et sans
+  # mesurer le débit AVANT/APRÈS sur la même tranche de travail. Le CPU seul induit en
+  # erreur.
   # osmnx2:
   #   <<: *osmnx-service
   #   ports:
@@ -190,7 +249,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       APP_WORKDIR: /app/experiments/current
       SERVICE_NAME: api
-      GAMA_WS_URL: ws://host.docker.internal:3001
+      # ws://gama:3001 en mode offline (make run OFFLINE=1), IHM sur l'hôte sinon
+      GAMA_WS_URL: ${GAMA_WS_URL:-ws://host.docker.internal:3001}
     volumes:
       - ./llm_module:/app/llm_module
       - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
@@ -225,7 +285,8 @@ services:
       LLM_API_URL: http://api:8000
       EQASIM_SERVICE_URL: http://eqasim:8003
       #APP_WORKDIR: /app/workdir
-      GAMA_WS_URL: ws://host.docker.internal:3001
+      # ws://gama:3001 en mode offline (make run OFFLINE=1), IHM sur l'hôte sinon
+      GAMA_WS_URL: ${GAMA_WS_URL:-ws://host.docker.internal:3001}
       PYTHONPATH: /app:/opt
     volumes:
       - ./llm-agents:/app
@@ -366,28 +427,43 @@ services:
       - prometheus
 
   # ─────────────────────────────────────────────
-  # GAMA Server — simulation multi-agents
-  # TODO: à configurer quand le Dockerfile GAMA sera prêt
+  # GAMA Server — simulation multi-agents headless (profil "offline")
+  #
+  # Image officielle alignée sur la version installée en local (2025-06-4) : les
+  # modèles GAML ne sont pas portables entre versions, ne pas changer le tag sans
+  # revalider les modèles.
+  #
+  # GAMA démarre en mode serveur (protocole WebSocket JSON sur 6868) et attend
+  # les commandes load/play du launcher `scripts/gama/launch_headless.py`, lancé
+  # par `make run OFFLINE=1` dans le conteneur controller. Le modèle ouvre
+  # ensuite son propre websocket_server sur 3001 (canal de données existant,
+  # LLMAgent.gaml) auquel le controller se connecte via GAMA_WS_URL=ws://gama:3001.
+  #
+  # En mode IHM (défaut, sans profil), ce service ne démarre pas et
+  # GAMA_WS_URL retombe sur ws://host.docker.internal:3001.
   # ─────────────────────────────────────────────
 
-  # gama:
-  #   build:
-  #     context: ./GAMA
-  #     dockerfile: Dockerfile
-  #   container_name: gama_container
-  #   environment:
-  #     - OTP_URL=http://otp:8080
-  #     - LLM_API_URL=http://api:8000
-  #   # Utilisation des arguments corrects pour charger l'expérience
-  #   command: >
-  #     /opt/gama-platform/headless/gama-headless.sh 
-  #     -m /path/to/CityTransport/models/City.gaml 
-  #     -e "e"
-  #   depends_on:
-  #     otp:
-  #       condition: service_healthy
-  #     api:
-  #       condition: service_started
+  gama:
+    image: gamaplatform/gama:2025.06.4
+    profiles: ["offline"]
+    command: ["-socket", "6868"]
+    ports:
+      - "6868:6868"
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      # rw : le modèle écrit ../results/*.csv et ../config/sim_params.yaml
+      - ./GAMA:/GAMA
+      # Le symlink GAMA/CityTransport/results → ../../experiments/archive/<run>/
+      # gama_results (repointé par le controller, settings.py) doit se résoudre
+      # dans ce conteneur comme sur l'hôte : /GAMA/CityTransport + ../../ = /
+      - ./experiments:/experiments
+    # 12g : l'OOM du 2026-08-19_11_01 a montré que 8g ne suffisent pas à un jour
+    # simulé de 1 000 agents en headless (VM Docker portée à 24 Go en regard).
+    mem_limit: 12g
+    depends_on:
+      controller:
+        condition: service_started
 
 volumes:
   redis_data:

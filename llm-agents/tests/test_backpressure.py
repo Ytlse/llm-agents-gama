@@ -9,6 +9,7 @@ import pytest
 
 from backpressure import (
     ThroughputEwma,
+    backlog_alarm_transition,
     compute_backpressure_interval,
     edf_feasibility,
     edf_hold_needed,
@@ -112,6 +113,46 @@ class TestDrainMode:
     def test_trigger_nul_desactive_le_mecanisme(self):
         assert update_drain_mode(True, 1.0, 0.0, self.RELEASE) is False
         assert update_drain_mode(False, 1.0, -1.0, self.RELEASE) is False
+
+
+class TestBacklogAlarmTransition:
+    """Ticket 010 (A2) : l'alarme backlog ne crie que sur une vraie saturation
+    de décisions — pas sur le drainage nocturne des réflexions STM."""
+
+    TRIGGER = 0.8
+    RELEASE = 0.2
+
+    def _t(self, active, ratio, late=0, overdue=0):
+        return backlog_alarm_transition(
+            active, ratio, self.TRIGGER, self.RELEASE,
+            late_count=late, overdue_decisions=overdue,
+        )
+
+    def test_profil_2026_08_03_pile_pleine_mais_rien_en_souffrance(self):
+        # 803 tâches (80% de la population), late=0, aucune échéance dépassée :
+        # drainage nocturne nominal → INFO (benign), plus d'ERROR à 13:52.
+        assert self._t(False, 0.80, late=0, overdue=0) == "benign"
+
+    def test_depart_en_retard_declenche_toujours(self):
+        assert self._t(False, 0.80, late=1, overdue=0) == "fire"
+
+    def test_echeance_de_decision_depassee_declenche_toujours(self):
+        assert self._t(False, 0.80, late=0, overdue=5) == "fire"
+
+    def test_sous_le_seuil_rien(self):
+        # Même avec des retards, l'alarme backlog reste liée au remplissage de
+        # la pile (les retards isolés ont leur propre compteur deadline_misses).
+        assert self._t(False, 0.5, late=3, overdue=2) == "none"
+
+    def test_hysteresis_alarme_active(self):
+        # Active : pas de re-déclenchement tant que la pile n'est pas résorbée…
+        assert self._t(True, 0.85, late=4, overdue=9) == "none"
+        assert self._t(True, 0.5) == "none"
+        # …et levée sous le seuil de relâchement.
+        assert self._t(True, 0.19) == "release"
+
+    def test_trigger_nul_desactive_le_mecanisme(self):
+        assert backlog_alarm_transition(False, 1.0, 0.0, self.RELEASE, 5, 5) == "none"
 
 
 # =============================================================================

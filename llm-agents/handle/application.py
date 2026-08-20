@@ -22,7 +22,7 @@ import httpx
 import numpy as np
 import uvicorn
 from loguru import logger
-from backpressure import compute_backpressure_interval, update_drain_mode, edf_feasibility, time_ewma
+from backpressure import backlog_alarm_transition, compute_backpressure_interval, update_drain_mode, edf_feasibility, time_ewma
 from helper import setup_logging, humanize_date, to_timestamp_based_on_day, format_sim_timing
 from models import Location
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
@@ -67,6 +67,8 @@ CTRL_T_ESTIMATE           = Gauge('controller_t_estimate_seconds', 'Pire T_k du 
 CTRL_MIN_SLACK            = Gauge('controller_min_slack_sim_seconds', 'Échéance la plus proche en file − temps sim courant (secondes de temps SIMULÉ)')
 CTRL_PREDICTIVE_HOLD      = Gauge('controller_predictive_hold_seconds', 'Rétention prédictive appliquée à la dernière réponse /sync (secondes)')
 CTRL_EDF_QUEUE_DEPTH      = Gauge('controller_edf_queue_depth', 'Profondeur de la file EDF (tâches en attente, hors tâches en cours d\'exécution)')
+CTRL_PENDING_REFLECTIONS  = Gauge('controller_pending_reflections', 'Réflexions STM en file EDF ou en cours d\'exécution (drainage nocturne, ticket 010)')
+CTRL_OVERDUE_DECISIONS    = Gauge('controller_overdue_decisions', 'Décisions d\'itinéraire (plan/refill) en file EDF dont l\'échéance sim est dépassée — signal de vraie saturation')
 CTRL_SYNC_DURATION        = Histogram(
     'controller_sync_duration_seconds',
     'Durée de traitement d\'une requête /sync (battement de cœur GAMA↔controller)',
@@ -82,6 +84,7 @@ _last_logical_time: int              = 0
 _last_backpressure_in_progress: int  = 0     # in_progress_count used for the previous sync's sleep
 _last_backpressure_min_interval: float = 0.0 # min_interval computed for the previous sync's sleep
 _backlog_alarm_active: bool          = False # évite de répéter l'alarme backlog à chaque sync (front montant)
+_backlog_benign_logged: bool         = False # front montant du log INFO « backlog bénin » (drainage nocturne, ticket 010)
 _drain_mode_active: bool             = False # mode drainage : /sync retenu tant que la pile n'est pas vidée sous le seuil de relâchement
 
 # Ticket 003 — état du contrôle prédictif (module-level, réinitialisé au /init)
@@ -719,6 +722,7 @@ async def init(request: WorldInitRequest):
         part_of_llm_agents=request.part_of_llm_based_agents if request.part_of_llm_based_agents is not None else 1.0,
         long_term_memory_enabled=request.long_term_memory_enabled,
         long_term_self_reflect_enabled=request.long_term_self_reflect_enabled,
+        simulation_max_days=request.simulation_max_days,
     )
     loop_container.set_scenario(scenario)
 
@@ -921,7 +925,7 @@ async def _sync_impl(raw: Request):
     which sends h2c upgrade headers that prevent uvicorn/h11 from reading
     the body. hypercorn handles h2c natively, so the body is always available.
     """
-    global _last_sync_wall_time, _last_sync_response_wall_time, _sim_step_count, _last_logical_time, _last_backpressure_in_progress, _last_backpressure_min_interval, _backlog_alarm_active, _drain_mode_active
+    global _last_sync_wall_time, _last_sync_response_wall_time, _sim_step_count, _last_logical_time, _last_backpressure_in_progress, _last_backpressure_min_interval, _backlog_alarm_active, _backlog_benign_logged, _drain_mode_active
     global _sim_ratio_ewma, _sim_ratio_ewma_time, _throttle_active, _throttle_last_notify_at
     now = time.time()
     real_delta = now - _last_sync_wall_time if _last_sync_wall_time > 0 else 0.0
@@ -964,8 +968,11 @@ async def _sync_impl(raw: Request):
             pass
         in_progress_before_sync = loop_container.scenario.activities_to_compute_count
         # Deadline misses (ticket 003) : _late_count est remis à 0 par sync() → le lire avant.
+        # Conservé dans _late_before_sync : c'est aussi un des deux signaux de vraie
+        # saturation de l'alarme backlog (ticket 010, A2).
+        _late_before_sync = loop_container.scenario.late_since_last_sync
         try:
-            CTRL_DEADLINE_MISSES.inc(loop_container.scenario.late_since_last_sync)
+            CTRL_DEADLINE_MISSES.inc(_late_before_sync)
         except Exception:
             pass
         await loop_container.scenario.sync(request.timestamp, _t_sync=now, _t_parse=_t_parse_end)
@@ -1018,28 +1025,55 @@ async def _sync_impl(raw: Request):
                 logger.debug(f"[digest] non envoyé: {e}")
 
         # Alarme backlog : alignée sur les seuils du mode drainage (front montant à
-        # drain_trigger_ratio, réarmée quand le backlog repasse sous drain_release_ratio) —
-        # au-delà du seuil, le pipeline LLM ne suit plus la cadence de la simulation.
+        # drain_trigger_ratio, réarmée quand le backlog repasse sous drain_release_ratio).
+        # Ticket 010 (A2) : le seuil seul ne suffit plus — un backlog de réflexions STM
+        # ou de pré-planifications à échéance lointaine pendant la nuit simulée est le
+        # drainage nominal (run 2026-08-03 : 803 tâches, late=0, cache 99 %, providers
+        # sains). L'ERROR n'est émise que si des décisions souffrent réellement :
+        # départs en retard (late_since_last_sync) ou échéances plan/refill dépassées.
         _backlog_ratio = in_progress_count / max(1, settings.data.population_size)
         CTRL_BACKLOG_FILL_RATIO.set(_backlog_ratio)
-        if _backlog_ratio >= settings.world.drain_trigger_ratio > 0 and not _backlog_alarm_active:
+        _n_reflections = loop_container.scenario.pending_reflections_count
+        _n_overdue = loop_container.scenario.overdue_decision_count(request.timestamp)
+        CTRL_PENDING_REFLECTIONS.set(_n_reflections)
+        CTRL_OVERDUE_DECISIONS.set(_n_overdue)
+        _composition = (
+            f"{in_progress_count} décisions d'itinéraire (dont {_n_overdue} à échéance dépassée) "
+            f"+ {_n_reflections} réflexions STM"
+        )
+        _transition = backlog_alarm_transition(
+            _backlog_alarm_active, _backlog_ratio,
+            settings.world.drain_trigger_ratio, settings.world.drain_release_ratio,
+            late_count=_late_before_sync, overdue_decisions=_n_overdue,
+        )
+        if _transition == "fire":
             _backlog_alarm_active = True
             fire_alarme("backlog")
             _alarm_msg = (
-                f"[ALARME] Backlog critique : {in_progress_count} activités en attente "
-                f"({_backlog_ratio:.0%} de la population) — le pipeline LLM ne draine plus. "
+                f"[ALARME] Backlog critique : {_composition} "
+                f"({_backlog_ratio:.0%} de la population), late_since_last_sync={_late_before_sync} "
+                f"— des décisions d'itinéraire sont en souffrance. "
                 f"Backpressure actuel min_interval={min_interval:.2f}s "
                 f"(coeffs k={_k} cap={_cap}). "
                 f"Vérifier les rate limits providers (make error) et le taux de hit du cache LLM."
             )
             logger.error(_alarm_msg)
             await loop_container.send_log(f"⛔ {_alarm_msg}")
-        elif _backlog_ratio < settings.world.drain_release_ratio and _backlog_alarm_active:
+        elif _transition == "release":
             _backlog_alarm_active = False
             logger.info(
                 f"[ALARME levée] Backlog résorbé : {in_progress_count} activités en attente "
                 f"({_backlog_ratio:.0%} de la population)"
             )
+        elif _transition == "benign" and not _backlog_benign_logged:
+            _backlog_benign_logged = True
+            logger.info(
+                f"[backlog] Pile à {_backlog_ratio:.0%} sans urgence en souffrance — "
+                f"composition : {_composition}, late_since_last_sync=0. "
+                f"Drainage nominal (nuit simulée) : la file se vide dans l'ordre des réveils."
+            )
+        if _backlog_ratio < settings.world.drain_release_ratio:
+            _backlog_benign_logged = False
         # Mode drainage (hystérésis, en plus du frein progressif) : dès que la pile
         # atteint drain_trigger_ratio, la réponse /sync est retenue jusqu'au cap
         # (limite dure : le read timeout HTTP du client GAMA, une réponse ne peut

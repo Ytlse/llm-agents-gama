@@ -12,16 +12,27 @@ from llm.cache import LlmSemanticCache
 @dataclass
 class _Leg:
     mode: str
+    is_terminal: bool = False
 
 
 @dataclass
 class _Plan:
-    """Substitut minimal de TravelPlan : le cache n'utilise que get_code() et legs."""
+    """Substitut minimal de TravelPlan : le cache n'utilise que get_code() et mode_label()."""
     code: str
     legs: list = field(default_factory=list)
 
     def get_code(self) -> str:
         return self.code
+
+    def mode_label(self) -> str:
+        """Reproduit le contrat du modèle : les jambes terminales sont exclues.
+
+        Depuis le ticket 013, un plan voiture porte trois jambes (accès, conduite,
+        diffusion) et seule celle du milieu a un mode. Le cache lit cette
+        étiquette, jamais ``legs`` directement.
+        """
+        legs = [leg for leg in self.legs if not leg.is_terminal]
+        return ",".join(str(leg.mode) for leg in legs) if legs else ""
 
 
 def _plan(code: str, *modes: str) -> _Plan:

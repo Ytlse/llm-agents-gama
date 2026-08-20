@@ -63,6 +63,50 @@ Les requêtes au-delà des coupures spatiales sont rejetées sans calcul Dijkstr
 
 Les itinéraires OSMnx ne supportent pas nativement `arriveBy`. Le système calcule le trajet à vitesse nominale, puis décale le résultat en arrière dans le temps pour aligner l'heure de fin sur `target_arrival_time`.
 
+### Temps terminal : accès et diffusion (ticket 013)
+
+Ce que renvoie le moteur OSMnx est du **temps de parcours réseau pur**. La part non
+conduite d'un trajet véhiculé — rejoindre le véhicule, chercher où le garer, marcher
+jusqu'à la destination — n'est plus fondue dans cette durée (`park_base` de
+`config/osmnx.yaml` est retiré, conservé commenté) : elle est portée par des **jambes
+nommées** que `_make_travel_plan` ajoute de part et d'autre du tronçon routé, et que le
+gabarit de rendu décompose ligne par ligne. Un plan voiture ou vélo compte donc **trois
+jambes**, pas une.
+
+| | Accès | Diffusion |
+|---|---|---|
+| Tarifé sur | couronne d'**origine** (où le véhicule est garé) | couronne de **destination** (où trouver une place) |
+| Voiture | 1 à 3 min | 1 à 7 min (stationnement + recherche) |
+| Vélo | 1 min (non spatialisé, non sourcé) | 1 min |
+| Marche | — (porte-à-porte) | — |
+| Transports collectifs | — (jambes de marche **déjà** routées par OTP) | — |
+
+Trois propriétés structurent le dispositif :
+
+- **Paramètre exogène**, valeurs et provenance dans `llm-agents/config/terminal_time.yaml`
+  (NCHRP 716, COMPASS, Shoup, Millard-Ball, Cerema) — jamais ajusté pour améliorer un score.
+- Les couronnes viennent de `llm_module.core.geo_reference.residence_zone`, **la même
+  définition** que la colonne « Lieu de résidence » du move-log : deux classements
+  divergents factureraient un stationnement de centre-ville à un agent que le journal dit
+  en 2ᵉ couronne.
+- Les jambes terminales portent `is_transfer=True` et un marqueur `__TERMINAL_*`, ce qui les
+  exclut de `TravelPlan.get_code()` et de `mode_label()` : **décomposer l'affichage d'une
+  option ne doit pas la faire passer pour une autre option** (le code est la clé du cache de
+  décisions, l'étiquette de mode alimente la loss de calibration).
+
+Deux versions distinctes en découlent, et la distinction n'est pas cosmétique :
+`version` (temps terminal) indexe les caches qui mémorisent des **plans** — itinéraires OTP,
+décisions LLM ; `routing_version` indexe le cache de routage OSMnx, qui ne mémorise que du
+temps réseau. Les confondre ferait recalculer des milliers de routes (~2 h pour 930
+personas) à chaque ajustement du stationnement. Détail dans
+[cache-memory.md](cache-memory.md).
+
+Une **grille de sensibilité** (`sensitivity:` du même fichier, `terminal_time.apply_variant`)
+met les valeurs à l'échelle par un facteur uniforme — 0,5 / 1 / 1,5 — pour savoir si une
+conclusion dépend du réglage. Le nom de la variante entre dans `data_version()`, donc les
+trois jeux ne partagent aucune clé de cache. ⚠ Cette grille n'a **pas encore de script qui
+la parcourt** : elle est appelable et testée, la mesure T6 reste à produire.
+
 ### Gestion du multi-processing
 
 Le GIL Python bloque l'exécution parallèle des algorithmes Dijkstra dans le même processus. L'architecture s'adapte selon l'environnement :

@@ -71,6 +71,40 @@ def update_drain_mode(
     return backlog_ratio >= trigger_ratio
 
 
+def backlog_alarm_transition(
+    alarm_active: bool,
+    backlog_ratio: float,
+    trigger_ratio: float,
+    release_ratio: float,
+    late_count: int,
+    overdue_decisions: int,
+) -> str:
+    """Transition de l'alarme ``[ALARME] Backlog critique`` (ticket 010, A2).
+
+    Un backlog au-dessus du seuil n'est une saturation que si des décisions
+    d'itinéraire souffrent réellement : départs servis en retard
+    (``late_count``) ou tâches plan/refill dont l'échéance sim est dépassée
+    (``overdue_decisions``). Sinon — pile dominée par des réflexions STM ou par
+    des pré-planifications à échéance lointaine, cas du drainage nocturne — le
+    fonctionnement est nominal : l'appelant logge la composition en INFO.
+
+    Retourne :
+      - ``"fire"``    : front montant de l'alarme (ERROR) ;
+      - ``"release"`` : alarme levée (backlog repassé sous ``release_ratio``) ;
+      - ``"benign"``  : pile au-dessus du seuil mais rien d'urgent en souffrance ;
+      - ``"none"``    : rien à faire.
+    """
+    if trigger_ratio <= 0:
+        return "none"
+    if alarm_active:
+        return "release" if backlog_ratio < release_ratio else "none"
+    if backlog_ratio < trigger_ratio:
+        return "none"
+    if late_count > 0 or overdue_decisions > 0:
+        return "fire"
+    return "benign"
+
+
 # =============================================================================
 # Contrôle prédictif piloté par les échéances (ticket 003)
 # =============================================================================

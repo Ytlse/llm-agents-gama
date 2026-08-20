@@ -58,10 +58,29 @@ penalties:
     crossing: 8
     mini_roundabout: 0
 
-park_base:
-  drive: 120
-  bike: 60
-  walk: 0
+# ⚠ RETIRÉ du moteur de routage par le ticket 013 — conservé ici commenté parce
+# que sa disparition silencieuse laisserait croire que le stationnement n'avait
+# jamais été modélisé. Il l'était : `_route_sync` ajoutait `park_base × 2` DANS la
+# durée du trajet, soit 4 min (voiture) et 2 min (vélo) invisibles, sans
+# provenance et sans décomposition affichée — alors que les options en transports
+# collectifs montrent chacune de leurs jambes de marche. Cette asymétrie
+# sur-représentait la voiture sur les trajets courts (+24,7 pts sur 0-1 km, mesuré
+# sur la campagne ref1).
+#
+# Le temps terminal est désormais un paramètre exogène documenté, avec sa
+# provenance et ses libellés de rendu : voir config/terminal_time.yaml.
+# park_base:
+#   drive: 120
+#   bike: 60
+#   walk: 0
+#
+# ⚠ DÉPLOIEMENT — ce fichier est monté depuis l'hôte dans les réplicas `osmnx`
+# (`./llm-agents/config:/app/config:ro`) alors que leur CODE est cuit dans
+# l'image. Modifier une clé lue par le code sans reconstruire l'image casse le
+# service au démarrage : c'est exactement ce qui s'est produit ici
+# (`KeyError: 'park_base'`). Le `controller`, lui, monte tout `./llm-agents` et
+# voit le code en direct — d'où une panne visible d'un seul côté.
+# Après toute modification de ce fichier : `docker compose build osmnx1`.
 
 # Congestion index: average speed in km/h per hour (rows) and day (cols: Mon→Sun).
 # free_flow is the maximum observed speed used as the reference for the congestion factor.

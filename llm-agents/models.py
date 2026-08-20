@@ -84,6 +84,7 @@ class Transit(BaseModel):
         duration: optional duration (seconds) of the segment.
         distance: optional distance (meters/kilometers) of the segment.
         mode: optional travel mode (walk, bus, subway, etc.).
+        step_label: optional ready-to-render label of the step (see below).
     """
 
     start_time: int
@@ -99,15 +100,31 @@ class Transit(BaseModel):
     distance: Optional[float] = None
     mode: Optional[str] = None
 
+    # Libellé de la sous-étape, posé à la CONSTRUCTION du scénario et non deviné
+    # au rendu (ticket 013, décision T3). Porté par les jambes d'accès /
+    # conduite / diffusion des plans directs ; `None` pour les jambes issues
+    # d'OTP, que le gabarit décrit déjà à partir du GTFS.
+    step_label: Optional[str] = None
+
     def get_duration(self) -> int:
         return self.duration or int((self.end_time - self.start_time) // 1000)
-    
+
     def get_distance(self) -> float:
         return self.distance or 100.0
 
     def get_code(self) -> str:
         return "^".join([self.transit_route, self.start_location.stop, self.end_location.stop])
-    
+
+    @property
+    def is_terminal(self) -> bool:
+        """Jambe d'accès ou de diffusion d'un trajet véhiculé (ticket 013).
+
+        Reconnue au marqueur de route, pas au mode : une jambe terminale n'a pas
+        de mode propre, précisément pour ne pas polluer l'étiquette de mode de
+        l'option (cf. :meth:`TravelPlan.mode_label`).
+        """
+        return bool(self.transit_route) and self.transit_route.startswith("__TERMINAL_")
+
 class TravelPlan(BaseModel):
     """TravelPlan represents a complete transportation itinerary for a person.
 
@@ -161,10 +178,28 @@ class TravelPlan(BaseModel):
         """
         Generate a code for the travel plan based on its attributes.
         This can be used to identify the plan in logs or messages.
+
+        ⚠ Les jambes terminales (accès / diffusion, ticket 013) portent
+        ``is_transfer=True`` et sont donc exclues d'ici. C'est un INVARIANT, pas
+        un effet de bord : ce code est la clé du cache de décisions LLM et de la
+        déduplication d'itinéraires — décomposer l'affichage d'une option ne doit
+        pas la faire passer pour une option différente.
         """
         return "+".join([
             leg.get_code() for leg in self.legs if not leg.is_transfer
         ])
+
+    def mode_label(self) -> str:
+        """Étiquette de mode de l'option (``"car"``, ``"foot,bus,foot"``…).
+
+        Les jambes terminales sont exclues : sans ça, une option voiture
+        s'annoncerait ``"None,car,None"`` et toute la chaîne de mesure suivrait —
+        ``parse_option_modes`` lit cette étiquette dans le texte du prompt, et
+        elle alimente ``categorize_mode``, donc la loss de calibration et les
+        parts modales de ``moves.csv``.
+        """
+        legs = [leg for leg in self.legs if not leg.is_terminal]
+        return ",".join(str(leg.mode) for leg in legs) if legs else ""
 
 
 """ Agent & Simulation

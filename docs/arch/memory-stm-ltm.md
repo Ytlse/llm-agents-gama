@@ -156,10 +156,13 @@ deadline_sim = déclenchement + settings.agent.stm_reflection_deadline_sim_s   #
 ```
 
 C'est la seule échéance naturelle d'une réflexion : la LTM du matin doit intégrer la
-veille avant la première décision du lendemain. Les réflexions sont le poste LLM qui
-ne bénéficiera **jamais** d'aucun cache (le prompt contient le vécu réel de l'agent,
-unique et consommé après usage) : la seule variable d'ajustement est *quand* on les
-exécute, jamais *si* on les exécute.
+veille avant la première décision du lendemain. Les réflexions ne bénéficient d'aucun
+cache **par rapprochement** : le prompt contient le vécu réel de l'agent, unique et
+consommé après usage, et servir à un agent l'introspection d'un autre serait une
+dégradation. La seule mémoïsation possible est donc **exacte**, au prompt byte-identique
+(`ReflectionMemoStore`, ticket 012), et elle ne se déclenche qu'au rejeu déterministe
+d'un run. Au premier passage, chaque réflexion est payée : à l'intérieur d'un run, la
+seule variable d'ajustement reste *quand* on les exécute, jamais *si* on les exécute.
 
 Conséquences :
 

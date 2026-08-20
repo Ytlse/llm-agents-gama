@@ -2,7 +2,7 @@
 * Nom: Personnes (Habitants)
 * Basé sur le modèle vide interne.
 * Auteur: dung
-* Tags: agents, mobilité, transport, passagers
+* Tags: agents, mobilite, transport, passagers
 *
 * Description: Agents humains (habitants) qui se déplacent dans la ville en utilisant les transports en commun.
 * Ce modèle définit le comportement des personnes naviguant dans le système de transport urbain,

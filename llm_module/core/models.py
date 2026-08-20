@@ -42,6 +42,10 @@ class AgentSpec(BaseModel):
     goal: Optional[str] = None
     constraints: Optional[str] = None
     feeling: Optional[str] = None
+    # Anticipation de la chaîne de la journée (ticket 014) — Pydantic ignore les
+    # champs inconnus : sans déclaration ici, le payload les perdrait en silence.
+    day_outlook: Optional[str] = None            # météo des tranches restantes du jour
+    agenda: List[str] = Field(default_factory=list)  # trajets restants (agenda glissant)
 
 
 class LLMRequest(BaseModel):

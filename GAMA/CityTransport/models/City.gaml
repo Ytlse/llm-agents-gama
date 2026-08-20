@@ -56,6 +56,24 @@ global {
         _gtfs_calendar_end_date <- date(_dates_str[length(_dates_str)-1]);
     }
 
+    // Arrêt effectif à l'horizon demandé (ticket 008, A5). L'instruction était
+    // commentée : le reflex écrivait un message et la simulation continuait, si bien
+    // que `simulation_max_days` n'arrêtait rien et qu'un run de 24 h en produisait trois.
+    //
+    // Ce reflex vit dans `global` et non dans `experiment` : `pause` est une action de
+    // l'agent SIMULATION, l'agent expérience ne l'expose pas (ni `pause` ni `halt` —
+    // le modèle ne compile pas si on l'y place). C'est aussi la forme qu'emploient les
+    // modèles livrés avec GAMA.
+    //
+    // `pause` et non `die` : l'horloge s'arrête sans tuer les agents, les sorties
+    // restent inspectables, et le contrôleur Python n'est pas interrompu — ses
+    // écritures en cours (moves.csv, llm_exchanges.jsonl) se terminent normalement.
+    // Un `die` les couperait net.
+    reflex stop_after_max_days when: simulation_max_days > 0 and int(current_date - starting_date) >= simulation_max_days * 86400 {
+        write "Simulation stopped after " + simulation_max_days + " simulated day(s).";
+        do pause;
+    }
+
 }
 
 // Species definitions
@@ -95,6 +113,13 @@ experiment e type: gui {
     // Verbose output controls
     parameter "Public Transport" category:"Verbose" var: pt_verbose <- false;
 
+    // Network — surchargés par le launcher headless (make run OFFLINE=1) pour
+    // pointer vers le controller Docker (http://controller:8002). Les défauts
+    // (localhost, LLMAgent.gaml) servent le mode IHM. Non persistés dans
+    // sim_params.yaml : l'injection au `load` reste donc effective.
+    parameter "Controller HTTP URL" category: "Network" var: http_url;
+    parameter "Controller HTTP port" category: "Network" var: http_port;
+
     // Simulation scenario parameters — sent to the Python controller at /init
     // Values are persisted to/from GAMA/CityTransport/config/sim_params.yaml
     parameter "Population size" category: "Simulation" var: population_size min: 0 max: 1000 step: 100;
@@ -124,10 +149,9 @@ experiment e type: gui {
     // Building
     //parameter "Shapefile for the buildings:" var: shape_file_buildings category: "GIS";
 
-    reflex stop_after_max_days when: simulation_max_days > 0 and int(current_date - starting_date) >= simulation_max_days * 86400 {
-        write "Simulation stopped after " + simulation_max_days + " simulated day(s).";
-        //do halt;
-    }
+    // L'arrêt à l'horizon `simulation_max_days` est déclaré dans le bloc `global`
+    // (ticket 008, A5) : `pause` est une action de l'agent simulation, pas de l'agent
+    // expérience.
 
     // Save arrival time metrics every 10 minutes
     reflex save_csv when: ft_public_transport_eval and every(10#mn) {

@@ -133,3 +133,53 @@ def hypercenter() -> tuple[float, float]:
     """Hypercentre `(lat, lon)` en WGS84 — la seule façon de l'obtenir au runtime."""
     center = geo_reference()["hypercenter"]
     return float(center["lat"]), float(center["lon"])
+
+
+# Bornes des couronnes, en km depuis l'hypercentre. Ce sont les modalités de
+# `lieu_residence` de la référence EMC² (`cerema_values.yaml`) : le classement doit
+# leur être identique, sinon les parts modales produites se comparent à des cibles
+# qui ne désignent pas les mêmes territoires.
+COURONNE_BOUNDS_KM: tuple[tuple[float, str], ...] = (
+    (8.0,  "Toulouse"),
+    (20.0, "1ere couronne"),
+    (40.0, "2eme couronne"),
+)
+COURONNE_OUTER = "3eme couronne"
+
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance orthodromique en kilomètres."""
+    import math
+
+    R = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = (math.sin(dphi / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2)
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def residence_zone(lat: Optional[float], lon: Optional[float]) -> str:
+    """Couronne d'un point : ``Toulouse`` / ``1ere`` / ``2eme`` / ``3eme couronne``.
+
+    Classement par distance à l'hypercentre, aux modalités d'EMC². Chaîne vide quand
+    le point est inconnu — vide n'est pas une modalité, exactement comme une cellule
+    de probabilité vide n'est pas un 0.
+
+    ⚠ **Définition unique, et c'est le point.** Elle vivait dans `move_logger` (colonne
+    « Lieu de résidence ») ; depuis le ticket 013 elle sert aussi à spatialiser le
+    temps terminal des trajets véhiculés (`trip_helper/terminal_time.py`), où le coût
+    d'accès dépend de la couronne d'ORIGINE et le coût de stationnement de celle de
+    DESTINATION. Deux classements divergents feraient facturer un stationnement de
+    centre-ville à un agent que le move-log dit en 2ᵉ couronne — une incohérence
+    invisible dans les logs et fatale à la lecture des parts modales par zone.
+    """
+    if lat is None or lon is None:
+        return ""
+    center_lat, center_lon = hypercenter()
+    d = haversine_km(center_lat, center_lon, lat, lon)
+    for bound, name in COURONNE_BOUNDS_KM:
+        if d < bound:
+            return name
+    return COURONNE_OUTER

@@ -97,6 +97,44 @@ def get_weather(timestamp: int) -> Optional[dict]:
     }
 
 
+# Ordre chronologique des tranches météo intra-journée et libellés français
+# pour la ligne « Météo du jour » (ticket 014 — anticipation).
+_BUCKET_ORDER = ("night", "morning", "noon", "evening")
+_BUCKET_FR = {"night": "nuit", "morning": "matin", "noon": "après-midi", "evening": "soirée"}
+
+
+def day_weather_outlook(timestamp: int) -> Optional[str]:
+    """Météo des tranches RESTANTES de la journée (après celle du timestamp).
+
+    Ticket 014 : au moment de choisir un mode, l'agent doit voir la météo à venir
+    (sortir le vélo le matin alors qu'il pleuvra le soir). Retourne par ex.
+    « après-midi 12°C, Ciel dégagé · soirée 13°C, Pluie » — ou None quand il ne
+    reste aucune tranche (départ en soirée) ou que les données manquent.
+    Déterministe (fonction du jour et de l'heure) : la chaîne participe à la clé
+    du cache de décisions via la signature d'anticipation.
+    """
+    _load()
+    if _load_error:
+        return None
+    dt = datetime.fromtimestamp(timestamp, tz=_TZ)
+    row = _weather_index.get((dt.month, dt.day))
+    if row is None:
+        return None
+
+    current = _time_bucket(dt.hour)
+    remaining = _BUCKET_ORDER[_BUCKET_ORDER.index(current) + 1:]
+    parts = []
+    for bucket in remaining:
+        try:
+            temp = int(float(row[_TEMP_COLS[bucket]]))
+            code = int(float(row[_CODE_COLS[bucket]]))
+        except (ValueError, KeyError):
+            continue
+        label = _code_labels.get(code, str(code))
+        parts.append(f"{_BUCKET_FR[bucket]} {temp}°C, {label}")
+    return " · ".join(parts) if parts else None
+
+
 def weather_to_natural_language(w: Optional[dict]) -> Optional[str]:
     """Format weather dict as a French natural-language sentence for the LLM prompt."""
     if w is None:

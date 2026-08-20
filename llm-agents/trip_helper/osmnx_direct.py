@@ -37,6 +37,8 @@ from shapely.geometry import Point
 from models import Location, Transit, TransitLocation, TravelPlan
 from geography import TOULOUSE_CENTER_DIST_M
 from settings import settings
+from trip_helper.terminal_time import (TERMINAL_ACCESS_ROUTE, TERMINAL_EGRESS_ROUTE,
+                                      data_version, terminal_profile)
 from utils import create_background_task, random_uuid
 
 # ── HTTP client mode (OSMNX_ENDPOINTS) ───────────────────────────────────────
@@ -122,6 +124,31 @@ def init_persistent_cache(cache_dir: str) -> None:
     logger.info(f"[osmnx-cache] Persistent cache enabled at {cache_dir}")
 
 
+def _terminal_leg(route_marker: str, at: Location, start_s: int,
+                  duration_s: int, step_label: str) -> Transit:
+    """Jambe d'accès ou de diffusion : du temps, pas de déplacement routé.
+
+    ``is_transfer=True`` est OBLIGATOIRE — c'est ce qui garde
+    ``TravelPlan.get_code()`` inchangé (cf. sa docstring). ``mode=None`` et
+    ``distance=None`` sont voulus aussi : la jambe ne porte pas de mode (sinon
+    l'étiquette de l'option deviendrait ``"None,car,None"``) et n'a pas de
+    distance réseau à déclarer.
+    """
+    loc = TransitLocation(stop="", lat=at.lat, lon=at.lon)
+    return Transit(
+        start_time=start_s,
+        end_time=start_s + duration_s,
+        duration=duration_s,
+        distance=None,
+        mode=None,
+        start_location=loc,
+        end_location=loc,
+        is_transfer=True,
+        transit_route=route_marker,
+        step_label=step_label,
+    )
+
+
 def _make_travel_plan(
     origin: Location,
     destination: Location,
@@ -130,12 +157,55 @@ def _make_travel_plan(
     duration_s: int,
     distance_m: float,
 ) -> TravelPlan:
-    end_s = departure_time + duration_s
+    """Assemble le plan direct : accès + trajet routé + diffusion.
+
+    ``duration_s`` est le temps de PARCOURS RÉSEAU pur (ticket 013) : le temps
+    d'accès et de stationnement n'est plus fondu dedans par ``_route_sync``, il
+    est porté par des jambes nommées que le gabarit sait décomposer. C'est la
+    décision T3 — le mensonge était en amont du gabarit, il se corrige en amont.
+
+    Marche et transports collectifs n'ont pas de profil terminal, donc pas de
+    jambe ajoutée : la marche est porte-à-porte, et les jambes de marche d'accès
+    des TC sont déjà routées par OTP (critère 4 : pas de double comptage).
+    """
+    # ⚠ Import PARESSEUX, et c'est nécessaire : les réplicas `osmnx` embarquent ce
+    # module dans leur image mais n'ont PAS `llm_module` sur leur path (ils ne montent
+    # que `config/`). Un import en tête de fichier les ferait mourir au démarrage dès
+    # la prochaine reconstruction de l'image — panne différée, déclenchée par un
+    # `docker compose build` sans rapport. En mode HTTP, le réplica ne calcule que la
+    # durée réseau et n'appelle jamais cette fonction : l'import n'a lieu que là où
+    # `llm_module` existe (controller, tests).
+    from llm_module.core.geo_reference import residence_zone
+
+    profile = terminal_profile(trip_mode)
     loc_start = TransitLocation(stop="", lat=origin.lat, lon=origin.lon)
     loc_end = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
-    leg = Transit(
-        start_time=departure_time,
-        end_time=end_s,
+
+    # Le temps terminal est SPATIALISÉ (ticket 013 §4.1) : l'accès se tarife sur la
+    # couronne d'ORIGINE — c'est là que le véhicule est garé — et le stationnement
+    # sur celle de DESTINATION, où il faut trouver une place. Un trajet 3ᵉ couronne
+    # → Toulouse paie donc un accès rural et un stationnement de centre-ville.
+    # Le classement vient de `geo_reference.residence_zone`, la même définition que
+    # la colonne « Lieu de résidence » du move-log : deux classements divergents
+    # feraient facturer un stationnement de centre à un agent que le journal dit en
+    # 2ᵉ couronne, incohérence invisible dans les logs.
+    origin_zone = residence_zone(origin.lat, origin.lon)
+    dest_zone = residence_zone(destination.lat, destination.lon)
+
+    legs: list[Transit] = []
+    cursor = departure_time
+
+    access_s = profile.access_s(origin_zone) if profile is not None else 0
+    egress_s = profile.egress_s(dest_zone) if profile is not None else 0
+
+    if access_s:
+        legs.append(_terminal_leg(TERMINAL_ACCESS_ROUTE, origin, cursor,
+                                  access_s, profile.labels["access"]))
+        cursor += access_s
+
+    legs.append(Transit(
+        start_time=cursor,
+        end_time=cursor + duration_s,
         duration=duration_s,
         distance=distance_m,
         mode=trip_mode,
@@ -143,16 +213,26 @@ def _make_travel_plan(
         end_location=loc_end,
         is_transfer=False,
         transit_route=DIRECT_ROUTE_MARKER[trip_mode],
-    )
+        step_label=profile.labels["main"] if profile is not None else None,
+    ))
+    cursor += duration_s
+
+    if egress_s:
+        # Le libellé garde son `{destination}` : `purpose` n'est posé sur le plan
+        # qu'après le routage, donc l'interpolation se fait au rendu.
+        legs.append(_terminal_leg(TERMINAL_EGRESS_ROUTE, destination, cursor,
+                                  egress_s, profile.labels["egress"]))
+        cursor += egress_s
+
     return TravelPlan(
         id=random_uuid(),
         start_location=origin,
         end_location=destination,
         start_time=departure_time,
-        end_time=end_s,
-        duration=duration_s,
+        end_time=cursor,
+        duration=cursor - departure_time,
         distance=distance_m,
-        legs=[leg],
+        legs=legs,
     )
 
 
@@ -166,7 +246,10 @@ _MODE_TO_OSMNX = {"foot": "walk", "bicycle": "bike", "car": "drive"}
 _SPEEDS    = _cfg["speeds"]
 _FALLBACKS = _cfg["fallbacks"]
 _PENALTIES = _cfg["penalties"]
-_PARK_BASE = _cfg["park_base"]
+# `park_base` n'est plus lu : le temps terminal a quitté le moteur de routage
+# pour `config/terminal_time.yaml` (ticket 013). La clé reste dans osmnx.yaml,
+# neutralisée et commentée, pour que la lecture du fichier ne laisse pas croire
+# que le stationnement n'a jamais été modélisé.
 
 # ── Congestion tables (TomTom Toulouse, loaded from config/osmnx.yaml) ────────
 
@@ -448,10 +531,14 @@ def _route_sync(
     # Add penalties for infrastructure types that are slower or less desirable.
     infra_s = _infra_penalty(G, route, osmnx_mode)
 
-    # Parking or retrieval time is applied for drive/bike legs only.
-    park_s = 0.0
-    if osmnx_mode in ("drive", "bike"):
-        park_s = _PARK_BASE[osmnx_mode] * 2  # park at destination and retrieve vehicle/bike
+    # ⚠ Aucun temps de stationnement ici (ticket 013). Ce qui sort de cette
+    # fonction est du temps de PARCOURS RÉSEAU pur. L'ancien
+    # `park_s = _PARK_BASE[mode] * 2` ajoutait 4 min (voiture) / 2 min (vélo)
+    # DANS cette durée : le total affiché contenait du stationnement sans que
+    # rien ne le dise, alors que les options en transports collectifs montrent
+    # chaque jambe de marche. Le temps terminal est désormais un paramètre
+    # exogène documenté (config/terminal_time.yaml), porté par des jambes nommées
+    # que le gabarit décompose — cf. `_make_travel_plan`.
 
     # Congestion only affects driving mode and is based on whether the trip is inside city limits.
     cong = 1.0
@@ -462,7 +549,7 @@ def _route_sync(
 
     # Round up to at least one second and apply all modifiers.
     return {
-        "duration_s": max(1, int(free_s * cong + infra_s + park_s)),
+        "duration_s": max(1, int(free_s * cong + infra_s)),
         "distance_m": dist_m,
     }
 

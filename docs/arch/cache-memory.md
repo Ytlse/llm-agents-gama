@@ -228,9 +228,51 @@ Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis Op
 |-------|-------------|------------|-----|
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
 | Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
-| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | date + bucket 10 min + coords + mode |
-| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | coords + mode (+ jour-de-semaine/heure pour la voiture) |
+| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | **version des données** + date + bucket 10 min + coords + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | **version des données** + coords + mode (+ jour-de-semaine/heure pour la voiture) |
 | Graphes OSMnx | Fichiers pickle | Volume Docker | Zone géographique + mode |
+
+### Version des données d'itinéraire dans les clés (ticket 013)
+
+**Trois** caches survivent aux runs et étaient **aveugles** à un changement de définition
+des durées d'itinéraire. Ils portent désormais tous les trois
+`trip_helper.terminal_time.data_version()`, lu du champ `version:` de
+`llm-agents/config/terminal_time.yaml` : **bumper cette version les invalide proprement**,
+sans rien détruire — les anciennes lignes restent lisibles pour audit.
+
+- **Routage OSMnx** — adressé par (mode, coordonnées, créneau). Le jour où le temps de
+  stationnement est sorti de `duration_s`, il aurait continué à servir des durées calculées
+  sous l'ancienne définition, indéfiniment.
+- **Itinéraires OTP** — le plus lourd des trois, parce qu'il ne mémorise pas des durées mais
+  les **`TravelPlan` sérialisés**, options voiture et vélo comprises (le cache s'intercale à
+  la frontière appelant → helper, donc après l'assemblage transit + direct). Un cache chaud
+  aurait resservi des plans à **une seule jambe**, portant l'ancien stationnement fondu dans
+  la durée : le défaut du ticket 013 en entier, ressuscité après sa correction.
+- **Décisions LLM** — le plus discret. `state_hash` est fait des `TravelPlan.get_code()`
+  triés, c'est-à-dire de routes et d'arrêts : **insensible aux durées par construction**.
+  Sans version, un run rejouerait tranquillement des décisions prises sur des options où la
+  voiture était plus rapide qu'elle ne l'est — et **rien ne l'aurait signalé dans les logs**,
+  puisque de son point de vue le contexte de décision est identique.
+
+> Même famille de piège, fermée au ticket 014 : le **contexte d'anticipation** injecté dans
+> le prompt (météo du jour, agenda glissant, position des véhicules) n'apparaît ni dans les
+> codes d'options ni dans la météo du moment. Sa signature déterministe entre donc dans le
+> `state_hash` via `extra_key` — deux agendas ou deux états de véhicules différents ne
+> peuvent pas se servir mutuellement une décision. `extra_key` vide (anticipation
+> désactivée) laisse le hash strictement identique à l'existant : le cache d'avant reste
+> lisible à flag éteint.
+
+> La **liste noire** d'`OtpPersistentCache` (`make_blacklist_key`) reste délibérément **non
+> versionnée** : « OTP ne relie pas ces deux points » est un fait de topologie du réseau, qui
+> ne dépend d'aucun temps terminal. La versionner ferait re-interroger OTP pour rien sur
+> toutes les paires connues comme non reliées.
+
+> ⚠️ Toute modification des valeurs de `terminal_time.yaml` **doit** bumper `version:`. Le
+> chargeur refuse une configuration sans version, mais il ne peut pas devenir qu'une valeur
+> a changé sans que la version suive.
+
+Le store de calibration, lui, était déjà correct : `RunConfig.eval_params_key()` contient
+`ds=<dataset_version>`, donc une éval sur `v4` ne peut pas lire le cache d'une éval sur `v3`.
 
 ---
 

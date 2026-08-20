@@ -90,6 +90,28 @@ class PersonScheduler:
             return None
         return min(moved, key=lambda a: (int(a.scheduled_start_time or a.start_time) - time24h) % 86400)
 
+    def next_wakeup_ts(self, timestamp: int) -> Optional[int]:
+        """Timestamp SIM du prochain « réveil » : prochaine occurrence de la
+        première activité planifiée de la journée (plus petit horaire 24h du
+        planning). Le soir, c'est le lever du lendemain ; juste après minuit,
+        c'est le lever du jour même.
+
+        Sert d'échéance EDF aux réflexions STM (ticket 010, D2) : la réflexion
+        doit être écrite en LTM avant la première décision du jour suivant de
+        l'agent — c'est sa seule échéance naturelle. Retourne None si l'agent
+        n'a aucune activité horodatée (fallback à la charge de l'appelant)."""
+        moved = [a for a in (self.person.identity.activities or []) if a.start_time is not None]
+        if not moved:
+            return None
+        wake24h = min(int(a.scheduled_start_time or a.start_time) % 86400 for a in moved)
+        _, time24h = to_24h_timestamp_full(timestamp)
+        # Déclenchée PILE à l'heure de réveil, la différence modulo vaut 0 et
+        # l'échéance serait « maintenant » — donc dépassée au sync suivant, alarme
+        # comprise. Le prochain réveil est alors celui du lendemain : c'est bien la
+        # première décision que cette réflexion doit précéder.
+        delta = (wake24h - time24h) % 86400
+        return timestamp + (delta or 86400)
+
     def get_current_activity(self, timestamp: int) -> Optional[Activity]:
         """Retourne l'activité en cours à l'heure donnée, en gérant le wrap minuit.
         Si start_time > end_time, l'activité s'étend sur deux jours (passe minuit)."""

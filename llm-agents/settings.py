@@ -285,11 +285,12 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     long_term_max_loaded_metadata: int = 5000
     long_term_reflect_interval: int = 6 * 3600  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
     stm_reflection_min_entries: int = 10        # déclenche la réflexion STM dès que N entrées accumulées
-    # Échéance (temps SIMULÉ) d'une réflexion STM : soumise en file EDF avec
-    # deadline = trigger + ce délai. EDF la sert quand il y a du mou, la priorise
-    # à l'approche de l'échéance, et la contre-pression prédictive retient le /sync
-    # si le débit ne permet plus de la tenir. L'échéance est conservée entre les
-    # retentatives (échec gateway → re-soumission au sync suivant, même deadline).
+    # Échéance FALLBACK (temps SIMULÉ) d'une réflexion STM, utilisée seulement si
+    # l'agent n'a aucune activité horodatée. Depuis le ticket 010, l'échéance EDF
+    # normale est le RÉVEIL de l'agent (première activité planifiée du jour
+    # suivant) : les décisions du soir passent devant et le stock se draine
+    # pendant la nuit simulée. L'échéance est conservée entre les retentatives
+    # (échec gateway → re-soumission au sync suivant, même deadline).
     stm_reflection_deadline_sim_s: int = 12 * 3600
 
     long_term_retrieval__sim_weight: float = 0.4
@@ -330,6 +331,16 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # dimanche est reporté au lundi suivant à la même heure.
     no_weekend_departures: bool = True
 
+    # --- Anticipation de la chaîne de la journée (ticket 014) ---
+    # Le bloc persona du prompt de choix modal est enrichi de trois éléments :
+    # la météo des tranches restantes de la journée (tous les agents), l'agenda
+    # glissant des trajets restants et la position des véhicules personnels
+    # (uniquement les agents qui ont quelque chose à chaîner : conducteurs avec
+    # voiture, possesseurs de vélo — jamais les passagers). Le choix reste trajet
+    # par trajet ; les verrous de chaîne restent le filet de sécurité.
+    # False rétablit le prompt myope, pour l'A/B contre un run de référence.
+    agenda_anticipation_enabled: bool = True
+
     # --- Cohérence de chaîne des véhicules personnels (vélo, voiture) ---
     # Un véhicule est un lieu : il reste garé où l'agent l'a laissé, n'est proposé comme
     # mode que depuis cette position, et est ramené au domicile en fin de boucle.
@@ -359,6 +370,17 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # bloque les nouvelles soumissions jusqu'à ce que la pile in-flight retombe
     # sous ce ratio de worker_concurrency (0.2 = 20 %). 0 désactive la backpressure.
     remote_llm_backpressure_ratio: float = 0.2
+    # Disjoncteur du client gateway : après N échecs consécutifs (pénurie de tokens,
+    # gateway/réseau down), les soumissions LLM sont SUSPENDUES : la simulation attend
+    # tranquillement le rétablissement (renouvellement des quotas, retour du service)
+    # au lieu de brûler des tentatives vouées à l'échec (120 s de timeout chacune) et
+    # de dégrader les décisions en index par défaut. Aucune décision n'est prise hors
+    # du chemin nominal (cache exact ou LLM) pendant l'attente. Une sonde re-teste le
+    # gateway périodiquement ; le premier succès referme le disjoncteur et tout repart
+    # automatiquement. 0 désactive le disjoncteur (comportement historique : chaque
+    # décision échoue après son timeout et part sur l'index par défaut).
+    remote_llm_circuit_failure_threshold: int = 10
+    remote_llm_circuit_probe_interval: float = 60.0  # secondes entre deux sondes
 
 
 class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -368,6 +390,10 @@ class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
     cache_dir: str = "/app/data/llm_cache"
     semantic_threshold: float = 0.95
     embed_model_name: str = "all-MiniLM-L6-v2"
+    # Mémoïsation exacte des réflexions STM/LTM (ticket 012) : sert la réflexion
+    # déjà payée quand le prompt effectif est byte-identique (re-runs déterministes).
+    # Correspondance exacte uniquement — jamais de rapprochement inter-agents.
+    reflection_memo_enabled: bool = True
 
 
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
@@ -468,9 +494,26 @@ class FactorySettings:
         if config_file_path and os.path.isfile(config_file_path):
             now = datetime.now()
             cls._creation_time = now
-            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
             experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
-            workdir = str(experiments_dir / "archive" / exp_name)
+            # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
+            # workdir du run précédent (cible du symlink experiments/current) au lieu
+            # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
+            # en-tête, app.log continue), state.json et les checkpoints de population
+            # y sont retrouvés par les chemins _in_workdir_path_fields. La simulation
+            # GAMA, elle, repart à t0 du jour simulé (pas de gel d'état côté GAMA,
+            # cf. ticket 002) — les caches rendent le rejeu quasi instantané.
+            _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in ("1", "true", "yes")
+            _current_link = experiments_dir / "current"
+            if _resume and _current_link.is_symlink() and _current_link.resolve().is_dir():
+                workdir = str(_current_link.resolve())
+            else:
+                if _resume:
+                    logger.warning(
+                        "CONTINUE_RUN demandé mais experiments/current ne pointe vers aucun "
+                        "run existant — démarrage d'un run neuf."
+                    )
+                exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
+                workdir = str(experiments_dir / "archive" / exp_name)
 
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
@@ -493,11 +536,16 @@ class FactorySettings:
             if gama_results_link.parent.exists():
                 exp_name = gama_results_dir.parent.name
                 relative_target = Path("../../experiments") / "archive" / exp_name / "gama_results"
+                # Plusieurs workers hypercorn importent ce module en parallèle :
+                # unlink/symlink doivent tolérer qu'un autre worker soit passé avant.
                 if gama_results_link.is_symlink():
-                    gama_results_link.unlink()
+                    gama_results_link.unlink(missing_ok=True)
                 elif gama_results_link.exists():
                     gama_results_link.rename(gama_results_link.parent / "results_legacy")
-                gama_results_link.symlink_to(relative_target)
+                try:
+                    gama_results_link.symlink_to(relative_target)
+                except FileExistsError:
+                    pass
 
         # logger.info(f"Settings loaded from: {yaml_files}")
         # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")

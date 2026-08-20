@@ -90,9 +90,12 @@ GAMA's Java 21 HTTP client automatically adds `Upgrade: h2c` headers to all requ
 
 **Why:** All LLM services are now containerized. The controller WebSocket client reconnects indefinitely, so it waits for GAMA as long as needed.
 
+**Offline mode (headless, no GUI):** `make run OFFLINE=1` (alias `make run-offline`) runs GAMA in the `gama` compose service (profile `offline`, image `gamaplatform/gama:2025.06.4` — keep the tag pinned to the locally validated GAMA version). **Hot stop/resume:** `make stop-run` stops the simulation (GAMA + launcher) leaving the stack up; `make run OFFLINE=1 CONT=1` resumes in the SAME experiment dir (logs appended, state.json/checkpoints reloaded, Grafana/Prometheus/Redis kept). GAMA restarts at t0 of the sim day (no mid-trip state freeze, cf. ticket 002); caches make the replay near-instant. The launcher `scripts/gama/launch_headless.py` drives load/play via GAMA Server (port 6868) and MUST keep its WebSocket open for the whole run (GAMA Server kills experiments whose client disconnects). `GAMA_WS_URL` switches to `ws://gama:3001`. See `docs/setup/quickstart.md`.
+
 **If agents don't move:**
 - Check Docker services started before GAMA
-- Check WebSocket logs in controller show successful connection to `ws://host.docker.internal:3001`
+- Check WebSocket logs in controller show successful connection to `ws://host.docker.internal:3001` (GUI mode) or `ws://gama:3001` (offline mode)
+- Offline mode: check `experiments/current/gama_headless.log` for load/play errors
 
 **Relevant file:** `handle/websocket.py` (WebSocket reconnect loop)
 

@@ -1,12 +1,11 @@
 import asyncio
 import csv
 import itertools
-import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.geo_reference import hypercenter
+from llm_module.core.geo_reference import residence_zone
 from llm_module.core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
 from models import Person, TravelPlan
 from settings import settings
@@ -44,6 +43,23 @@ _CANONICAL_FR = {
 # toutes ces colonnes sont vides.
 MODE_PROBABILITY_HEADERS = [f"P({label}) %" for label in _CANONICAL_FR.values()]
 
+# Valeurs admises de « Contrainte de chaîne » (ticket 008, A4) — une seule par ligne :
+#   ""              aucune contrainte, le jeu de choix est celui d'OTP ;
+#   retour_force    verrou de retour appliqué, options restreintes au mode du véhicule garé ;
+#   passager        trajet en voiture conduite par un tiers du foyer ;
+#   sortie_bloquee  un mode véhiculé possédé a été écarté faute de véhicule sur place.
+# La colonne **explique**, elle ne filtre pas : ces lignes restent dans le scoring, et
+# la page de synthèse en affiche la répartition à côté des méthodes de sélection.
+CHAIN_CONSTRAINTS = ("", "retour_force", "passager", "sortie_bloquee")
+
+# Valeurs admises de « Anticipation » (ticket 014) — ce que le prompt de CE trajet
+# contenait comme contexte d'anticipation :
+#   ""        décision sans prompt (cache, mono-option) ou anticipation désactivée ;
+#   agenda    bloc complet — agenda glissant + position des véhicules (+ météo du jour) ;
+#   meteo     météo du jour seule (agent sans véhicule à chaîner).
+# Indispensable pour segmenter l'A/B avant/après : les non-motorisés n'ont pas le bloc.
+ANTICIPATION_VALUES = ("", "agenda", "meteo")
+
 CSV_HEADERS = [
     "Référence",
     "Trajet",
@@ -60,6 +76,8 @@ CSV_HEADERS = [
     "Motifs de déplacement",
     "Distance parcourue",
     "Méthode de sélection",
+    "Contrainte de chaîne",
+    "Anticipation",
     "Fournisseur & Modèle",
     "Température",
     "Mémoire à court terme",
@@ -79,27 +97,16 @@ CSV_HEADERS = [
 ]
 
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    R = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlam = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
-    return 2 * R * math.asin(math.sqrt(a))
-
-
 def _residence_zone(home_lat: Optional[float], home_lon: Optional[float]) -> str:
-    if home_lat is None or home_lon is None:
-        return ""
-    center_lat, center_lon = hypercenter()
-    d = _haversine_km(center_lat, center_lon, home_lat, home_lon)
-    if d < 8:
-        return "Toulouse"
-    elif d < 20:
-        return "1ere couronne"
-    elif d < 40:
-        return "2eme couronne"
-    return "3eme couronne"
+    """Couronne de résidence — délègue à la définition PARTAGÉE (ticket 013).
+
+    Le classement vivait ici. Il est monté dans `llm_module.core.geo_reference`, qui
+    porte déjà l'hypercentre et se déclare seul point de lecture, parce qu'un second
+    consommateur est apparu : le temps terminal spatialisé des trajets véhiculés.
+    Deux classements divergents feraient facturer un stationnement de centre-ville à
+    un agent que cette colonne dit en 2ᵉ couronne.
+    """
+    return residence_zone(home_lat, home_lon)
 
 
 def _housing_type(traits: dict) -> str:
@@ -244,6 +251,8 @@ class MoveLogger:
         provider_model: str,
         faster_itinerary: Optional[TravelPlan],
         reasoning: str,
+        chain_constraint: str = "",
+        anticipation: str = "",
         weather_temp: Optional[float] = None,
         weather_condition: Optional[str] = None,
         weather_precip_mm: Optional[float] = None,
@@ -283,6 +292,8 @@ class MoveLogger:
                 purpose_fr,
                 _plan_distance_km(plan),
                 selection_method,
+                chain_constraint if chain_constraint in CHAIN_CONSTRAINTS else "",
+                anticipation if anticipation in ANTICIPATION_VALUES else "",
                 provider_model,
                 settings.agent.llm_params.get("temperature", ""),
                 True,

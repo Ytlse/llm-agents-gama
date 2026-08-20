@@ -2,7 +2,7 @@
 * Nom: LLMAgent
 * Basé sur le modèle vide interne.
 * Auteur: dung
-* Tags: LLM, agents intelligents, communication réseau
+* Tags: LLM, agents intelligents, communication reseau
 *
 * Description: Module d'intégration des agents alimentés par LLM (Large Language Models).
 * Définit les agents qui communiquent avec des systèmes d'IA externes via HTTP et WebSocket
@@ -55,7 +55,8 @@ species llm_agent_sync skills:[network] {
 		write "Paramètres envoyés : population=" + population_size
 			+ " part_of_llm=" + part_of_llm_based_agents
 			+ " ltm=" + long_term_memory_enabled
-			+ " self_reflect=" + long_term_self_reflect_enabled;
+			+ " self_reflect=" + long_term_self_reflect_enabled
+			+ " max_days=" + simulation_max_days;
 
 		do send to: "/init" contents: [
 			"POST",
@@ -64,7 +65,11 @@ species llm_agent_sync skills:[network] {
 				"population_size"::population_size,
 				"part_of_llm_based_agents"::part_of_llm_based_agents,
 				"long_term_memory_enabled"::long_term_memory_enabled,
-				"long_term_self_reflect_enabled"::long_term_self_reflect_enabled
+				"long_term_self_reflect_enabled"::long_term_self_reflect_enabled,
+				// Horizon d'arrêt (ticket 008, A5) : transmis pour être consigné dans
+				// le scenario_params.yaml du run. Sans lui, rien dans le répertoire
+				// d'expérience ne dit sur combien de jours le run était censé porter.
+				"simulation_max_days"::simulation_max_days
 			]),
 			["Content-Type"::"application/json"]
 		];

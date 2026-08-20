@@ -45,7 +45,7 @@ from settings import settings
 from prometheus_client import Counter, Gauge, Histogram
 from llm_module.telemetry.alarms import fire_alarme
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
-from urban_mobility_agents.utils.weather_loader import get_weather
+from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 
 history_logger = HistoryStreamLog.get_instance()
@@ -105,6 +105,11 @@ TRIP_MODE_BY_PURPOSE = Counter(
 )
 # Cohérence de chaîne des véhicules personnels (vélo, voiture). event ∈
 #   unavailable   : mode écarté des options — véhicule garé ailleurs qu'au point de départ
+#   no_driver     : voiture écartée faute de conducteur (mineur, ou sans permis) — cause
+#                   distincte de `unavailable`, qui reste réservé à la position du véhicule
+#   passenger     : trajet en voiture retenu pour un non-conducteur — un adulte du foyer
+#                   conduit, la voiture ne se gare pas à destination
+#   short_return  : verrou de retour non appliqué, trajet sous le seuil de distance
 #   forced_return : trajet de retour au domicile restreint à ce mode (l'agent ramène son véhicule)
 #   return_failed : verrou de retour inapplicable (aucun itinéraire dans ce mode) → options rendues
 #   orphaned      : agent rentré au domicile, véhicule resté ailleurs (cas résiduel du modèle)
@@ -220,17 +225,30 @@ def _next_checkpoint_ts(after_ts: int, hour_24h: int = _POPULATION_CHECKPOINT_HO
     return candidate
 
 
-def _estimate_fallback_duration(origin, destination) -> int:
-    """Estimate travel time in seconds from crow-flies distance at 30 km/h with 1.3 detour factor."""
+def _road_distance_km(origin, destination) -> Optional[float]:
+    """Distance routière estimée (km) : vol d'oiseau × 1,3.
+
+    Seule estimation disponible **avant** l'appel à OTP — `plan.distance` n'existe
+    qu'une fois un itinéraire choisi. Le facteur 1,3 est la convention historique de
+    `_estimate_fallback_duration` ; la factoriser ici évite que le verrou de retour
+    (A3) et l'estimation de durée divergent un jour.
+    """
     if origin is None or destination is None:
-        return 30 * 60
+        return None
     lat1, lon1 = math.radians(origin.lat), math.radians(origin.lon)
     lat2, lon2 = math.radians(destination.lat), math.radians(destination.lon)
     a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
     distance_m = 2 * 6_371_000 * math.asin(math.sqrt(a))
-    road_distance_m = distance_m * 1.3
+    return distance_m * 1.3 / 1000.0
+
+
+def _estimate_fallback_duration(origin, destination) -> int:
+    """Estimate travel time in seconds from crow-flies distance at 30 km/h with 1.3 detour factor."""
+    road_distance_km = _road_distance_km(origin, destination)
+    if road_distance_km is None:
+        return 30 * 60
     speed_ms = 30_000 / 3600  # 30 km/h
-    return max(5 * 60, int(road_distance_m / speed_ms))
+    return max(5 * 60, int(road_distance_km * 1000 / speed_ms))
 
 
 def _record_trip_mode(move: PersonMove, activity: Optional[Activity]) -> None:
@@ -261,6 +279,51 @@ def _primary_mode(plan: TravelPlan) -> str:
 #                          de départ, l'agent le ramène (candidats restreints à ce mode).
 # Clés = sorties de `_primary_mode`, pour comparer directement au mode d'un plan.
 _VEHICLE_MODES: Tuple[str, ...] = ("bike", "car")
+
+# Seuil sous lequel le verrou de retour ne s'applique pas (A3). Sur le run de
+# référence, 59,5 % des retours au domicile de moins d'1 km se faisaient en voiture
+# et 7,6 % à pied, contre ~76 % de marche attendus par EMC² : le verrou obligeait
+# l'agent à reprendre sa voiture pour deux cents mètres. En dessous du seuil, tous
+# les modes restent offerts — au prix de quelques véhicules orphelins de plus,
+# rattrapés par `_settle_vehicles_at_home`. Valeur en dur et non exposée dans
+# `settings.py` : c'est une convention de modélisation documentée, pas un réglage.
+RETURN_LOCK_MIN_DISTANCE_KM = 1.0
+
+# Âge légal du permis. La population corrigée (ticket 008, A1) ne porte plus de
+# permis de mineur, mais le contrôleur ne s'en remet pas à elle : c'est ici que le
+# verrou est dur.
+DRIVING_AGE = 18
+
+
+def _can_drive(traits: dict) -> bool:
+    """L'agent peut-il **conduire** une voiture ?
+
+    Permis ET âge légal. Les deux, parce qu'aucun des deux ne suffit : une
+    population générée avant les garde-fous A1 distribue des permis à des enfants
+    de neuf ans, et un `has_driving_license` absent n'est pas une autorisation.
+    """
+    return bool(traits.get("has_driving_license", False)) and (traits.get("age", 0) or 0) >= DRIVING_AGE
+
+
+def _is_car_passenger(person: Person) -> bool:
+    """L'agent peut-il **monter** dans la voiture du foyer sans la conduire ?
+
+    Trois conditions : ne pas pouvoir conduire, que le foyer ait une voiture, et
+    qu'il y ait quelqu'un d'autre pour la conduire (`household_size > 1`). Un adulte
+    sans permis vivant seul n'est donc pas passager — personne ne l'emmène.
+
+    C'est le mode « enfant conduit à l'école » (v1, décision D5) : sans modélisation
+    du ménage, on ne génère pas le trajet d'accompagnement du parent, on se contente
+    de rendre la voiture accessible à l'enfant. EMC² compte le passager dans
+    « voiture », donc la part modale reste comparable ; ce qui change, c'est que la
+    voiture ne se gare plus à l'école et que l'enfant n'a pas à la ramener.
+    """
+    traits = person.identity.traits_json
+    return (
+        not _can_drive(traits)
+        and _owns_car(traits)
+        and (traits.get("household_size", 0) or 0) > 1
+    )
 
 
 def _owns_bike(traits: dict) -> bool:
@@ -303,9 +366,17 @@ def _vehicle_available(person: Person, mode: str, from_location: Optional[Locati
     retrouvait son vélo pour repartir — sur un run de référence, 352 des 1086 trajets à
     vélo (5,9 points de part modale) reposaient sur ce vélo fantôme. La voiture, elle,
     n'avait aucune contrainte de position du tout.
+
+    La voiture ajoute une condition de **conducteur** (A2) : un agent qui ne peut pas
+    conduire ne se voit proposer la voiture que s'il peut y monter en passager — et
+    dans ce cas la position du véhicule ne compte pas, puisque ce n'est pas lui qui
+    l'a garé. Sinon le mode est refusé sans appel : c'est le verrou dur qui garantit
+    qu'aucun mineur ni sans-permis ne conduit.
     """
     if not _owns_vehicle(person.identity.traits_json, mode):
         return False
+    if mode == "car" and not _can_drive(person.identity.traits_json):
+        return _is_car_passenger(person)
     if not settings.agent.vehicle_chain_enabled:
         return True
     parked_at = _vehicle_position(person, mode)
@@ -351,6 +422,11 @@ def _park_vehicles(
     mode = _primary_mode(plan)
     if mode not in _VEHICLE_MODES:
         return
+    if mode == "car" and _is_car_passenger(person):
+        # Ce n'est pas sa voiture : un adulte du foyer l'a conduit et repart avec.
+        # Ne rien garer à destination est ce qui empêche, plus loin, le verrou de
+        # retour d'obliger un enfant de douze ans à ramener la voiture de l'école.
+        return
     # Défensif : le verrou de sortie a déjà écarté les plans dont le véhicule est
     # ailleurs — on ne déplace un véhicule que depuis sa position réelle.
     if not _same_place(_vehicle_position(person, mode), from_location):
@@ -376,6 +452,101 @@ def _orphaned_vehicles(person: Person) -> set[str]:
         mode for mode in _VEHICLE_MODES
         if _owns_vehicle(person.identity.traits_json, mode)
         and not _same_place(_vehicle_position(person, mode), person.identity.home)
+    }
+
+
+# ── Anticipation de la chaîne de la journée (ticket 014) ─────────────────────
+# Le choix reste trajet par trajet, mais le bloc persona du prompt est enrichi :
+# météo des tranches restantes (tous les agents), agenda glissant des trajets
+# restants et position des véhicules (agents qui ont quelque chose à chaîner).
+# Les verrous de chaîne restent le filet de sécurité — ce bloc informe, il ne
+# contraint pas. La signature déterministe de ces textes entre dans la clé du
+# cache de décisions (extra_key) : deux anticipations différentes ne peuvent
+# pas se servir mutuellement une décision.
+
+def _chain_stake_modes(person: Person) -> list[str]:
+    """Modes véhiculés dont la position engage la chaîne de CE persona.
+
+    La voiture ne compte que pour un conducteur (un passager n'a pas de voiture
+    positionnelle — cf. `_vehicle_available`, ticket 008 A2) ; le vélo, dès
+    qu'il est possédé, passager compris (son vélo suit les règles normales).
+    """
+    traits = person.identity.traits_json
+    modes = []
+    if _owns_car(traits) and _can_drive(traits):
+        modes.append("car")
+    if _owns_bike(traits):
+        modes.append("bike")
+    return modes
+
+
+def _agenda_lines(person: Person, next_activity: Activity, departure_time: int) -> list[str]:
+    """Trajets restants de la journée APRÈS le trajet courant (agenda glissant).
+
+    Une ligne par activité future localisée : heure planifiée, motif, distance
+    estimée depuis l'étape précédente (vol d'oiseau × 1,3, la convention de
+    `_road_distance_km`), et la météo prévue quand elle diffère de celle du
+    départ. S'arrête au bouclage J+1 : l'agenda décrit LA journée, pas la
+    suivante. Ne montre jamais les trajets passés — le contexte factuel d'un
+    trajet ne doit pas dépendre de l'historique (stabilité de la clé de cache).
+    """
+    acts = person.identity.activities or []
+    idx = next((i for i, a in enumerate(acts) if a.id == next_activity.id), None)
+    if idx is None:
+        return []
+    now_weather = get_weather(departure_time)
+    now_label = now_weather["weather_label"] if now_weather else None
+    lines: list[str] = []
+    prev = next_activity
+    for act in acts[idx + 1:]:
+        if act.location is None:
+            prev = act
+            continue
+        target_24h = act.scheduled_start_time if act.scheduled_start_time is not None else act.end_time
+        ts = to_timestamp_based_on_day(int(target_24h), departure_time)
+        if ts <= departure_time:  # heure 24h déjà passée ⇒ activité du lendemain
+            break
+        line = f"{humanize_time(ts)} → {act.purpose}"
+        km = _road_distance_km(prev.location, act.location)
+        if km:
+            line += f" (≈{km:.1f} km)"
+        w = get_weather(ts)
+        if w and now_label and w["weather_label"] != now_label:
+            line += f" — {w['weather_label'].lower()} prévu"
+        lines.append(line)
+        prev = act
+    return lines
+
+
+def _build_anticipation(
+    person: Person,
+    next_activity: Activity,
+    departure_time: int,
+) -> Optional[dict]:
+    """Contexte d'anticipation du prompt (ticket 014) — None si rien à montrer.
+
+    `outlook` est produit pour tous les agents ; `agenda` uniquement pour ceux
+    qui ont un véhicule à chaîner. La position des véhicules n'est PLUS énoncée
+    dans le prompt : la formulation (« votre vélo est avec vous ») agissait
+    comme une invitation et a gonflé la part vélo de +5,5 points (mesure EMC²,
+    run 2026-08-19_13_17). La règle de chaîne vit désormais dans le prompt
+    système (variante `expert_chaine`), et l'information de disponibilité reste
+    portée par le jeu d'options via les verrous. `signature` est la
+    concaténation déterministe des textes : elle entre dans la clé du cache de
+    décisions. `trace` alimente la colonne « Anticipation » de moves.csv
+    ("agenda" = agenda glissant présent, "meteo" = météo du jour seule).
+    """
+    outlook = day_weather_outlook(departure_time)
+    agenda: list[str] = []
+    if _chain_stake_modes(person):
+        agenda = _agenda_lines(person, next_activity, departure_time)
+    if not outlook and not agenda:
+        return None
+    return {
+        "outlook": outlook,
+        "agenda": agenda,
+        "signature": " | ".join([outlook or "", *agenda]),
+        "trace": "agenda" if agenda else "meteo",
     }
 
 
@@ -487,6 +658,10 @@ class SimulationLoopV1(BaseScenario):
         self._sim_start_ts: Optional[int] = None       # premier timestamp simulé observé
         self._sim_real_start: Optional[float] = None   # heure réelle (monotonic) correspondante
         self._next_day_log_at: Optional[int] = None     # prochaine borne 24h à logger
+        # Drainage post-pause (ticket 010, A3) : heure réelle du dernier /sync et
+        # dernier compte de réflexions loggé pendant le drainage silencieux.
+        self._last_sync_wall: Optional[float] = None
+        self._post_pause_drain_seen: int = 0
 
         if settings.agent.reschedule_activity__version == 2:
             self.reschedule_amount_function = self.reschedule_amount_v2
@@ -706,12 +881,31 @@ class SimulationLoopV1(BaseScenario):
 
         Exclut les push (sentinelle 0 : déjà calculés, drainés en ms — les inclure
         fausserait le test de faisabilité en simulant une échéance déjà expirée).
-        Les réflexions STM (kind "reflect", échéance +12h sim) sont incluses : c'est
-        la contre-pression prédictive qui garantit leur échéance en retenant le /sync
-        si le débit courant ne permet plus de les servir à temps.
+        Les réflexions STM (kind "reflect", échéance = réveil de l'agent, ticket 010)
+        sont incluses : c'est la contre-pression prédictive qui garantit leur échéance
+        en retenant le /sync si le débit courant ne permet plus de les servir à temps.
         """
         return sorted(
             job.deadline_sim for _, _, job in self._edf_heap if job.kind in ("plan", "refill", "reflect")
+        )
+
+    @property
+    def pending_reflections_count(self) -> int:
+        """Réflexions STM en file EDF ou en cours d'exécution (ticket 010).
+
+        C'est la composante « incompressible mais sans urgence » de la pile : un
+        backlog dominé par ces tâches pendant la nuit simulée est le drainage
+        nominal, pas une saturation (cf. alarme backlog, handle/application.py).
+        """
+        return len(self._stm_reflecting)
+
+    def overdue_decision_count(self, now_sim: float) -> int:
+        """Décisions d'itinéraire (plan/refill) en file EDF dont l'échéance sim est
+        dépassée — le signal d'une VRAIE saturation : un agent attend son départ.
+        Les push (sentinelle 0) et les réflexions sont hors du compte."""
+        return sum(
+            1 for _, _, job in self._edf_heap
+            if job.kind in ("plan", "refill") and job.deadline_sim < now_sim
         )
 
     # -------------------------------------------------------------------------
@@ -728,8 +922,41 @@ class SimulationLoopV1(BaseScenario):
             try:
                 await asyncio.sleep(self._WORKER_SCAN_INTERVAL)
                 await self._scan_and_plan_all_idle()
+                self._log_post_pause_drainage()
             except Exception as e:
                 logger.error(f"[worker] Unexpected scan error: {e}")
+
+    # Sans /sync depuis ce délai → GAMA en pause (fin d'horizon simulation_max_days)
+    # ou à l'arrêt : le drainage silencieux des réflexions devient observable.
+    _PAUSE_QUIET_S = 90.0
+
+    def _log_post_pause_drainage(self) -> None:
+        """Visibilité du drainage des réflexions après la pause GAMA (ticket 010, A3).
+
+        À la pause de fin d'horizon (`simulation_max_days`), le controller reste
+        vivant et les consommateurs EDF continuent de servir les réflexions STM en
+        file — elles écrivent en LTM, utile aux runs qui reprennent cette population.
+        Rien n'interrompt ce drainage : seul `make down` tue le process. Ces logs
+        rendent l'état lisible pour ne pas arrêter les services trop tôt.
+        """
+        if self._last_sync_wall is None:
+            return
+        quiet_s = time.monotonic() - self._last_sync_wall
+        if quiet_s < self._PAUSE_QUIET_S:
+            self._post_pause_drain_seen = 0
+            return
+        pending = len(self._stm_reflecting)
+        if pending:
+            if pending != self._post_pause_drain_seen:
+                logger.info(
+                    f"[drainage] GAMA silencieux depuis {quiet_s:.0f}s (pause ou fin de run) — "
+                    f"{pending} réflexion(s) STM encore en file, écriture LTM en cours : "
+                    f"attendre « réflexions épuisées » avant make down"
+                )
+                self._post_pause_drain_seen = pending
+        elif self._post_pause_drain_seen:
+            logger.info("[drainage] Réflexions STM épuisées — LTM complète, arrêt sûr (make down)")
+            self._post_pause_drain_seen = 0
 
     # -------------------------------------------------------------------------
     # MODÈLE D'HORIZON (pré-planification glissante)
@@ -1213,6 +1440,7 @@ class SimulationLoopV1(BaseScenario):
 
     async def sync(self, timestamp: int, _t_sync: float | None = None, _t_parse: float | None = None):
         _sync_start = time.monotonic()
+        self._last_sync_wall = _sync_start
         all_people = self.population.get_people_list()
         currently_idle = [p for p in all_people if p.state.heading_to is None]
         currently_moving = [p for p in all_people if p.state.heading_to is not None]
@@ -1260,11 +1488,13 @@ class SimulationLoopV1(BaseScenario):
             self._next_population_checkpoint_at += 86400
 
         # --- Phase 2 : réflexion STM déclenchée par volume d'entrées ---
-        # Chaque réflexion part en file EDF (kind "reflect") avec une échéance sim de
-        # +stm_reflection_deadline_sim_s : servie quand il y a du mou, priorisée à
-        # l'approche de l'échéance, comptée par la contre-pression prédictive. En cas
-        # d'échec gateway, les entrées STM restent en place → re-soumission au sync
-        # suivant avec la deadline d'ORIGINE (_stm_reflect_due), jamais repoussée.
+        # Chaque réflexion part en file EDF (kind "reflect") avec pour échéance le
+        # RÉVEIL de son agent (ticket 010, D2) : la LTM doit intégrer la veille avant
+        # la première décision du lendemain, c'est la seule échéance naturelle. Les
+        # décisions d'itinéraire du soir passent mécaniquement devant, et le stock se
+        # draine toute la nuit simulée dans l'ordre des réveils (lève-tôt d'abord).
+        # En cas d'échec gateway, les entrées STM restent en place → re-soumission au
+        # sync suivant avec la deadline d'ORIGINE (_stm_reflect_due), jamais repoussée.
         if settings.agent.long_term_memory_enabled and settings.agent.stm_reflection_min_entries > 0:
             people_to_reflect = [
                 p for p in all_people
@@ -1274,10 +1504,12 @@ class SimulationLoopV1(BaseScenario):
             ]
             if people_to_reflect:
                 logger.info(f"[timestamp: {humanize_date(timestamp)}] STM reflection for {len(people_to_reflect)} agents (>= {settings.agent.stm_reflection_min_entries} entries)")
-                _default_due = timestamp + settings.agent.stm_reflection_deadline_sim_s
                 for _p in people_to_reflect:
                     self._stm_reflecting.add(_p.person_id)
-                    _due = self._stm_reflect_due.setdefault(_p.person_id, _default_due)
+                    _wake_ts = self.population.get_person_default_scheduler(_p).next_wakeup_ts(timestamp)
+                    if _wake_ts is None:  # aucune activité horodatée : fallback +12h sim
+                        _wake_ts = timestamp + settings.agent.stm_reflection_deadline_sim_s
+                    _due = self._stm_reflect_due.setdefault(_p.person_id, _wake_ts)
 
                     def _make_reflect_coro(_person=_p, _ts=timestamp):
                         async def _reflect_one():
@@ -1294,12 +1526,13 @@ class SimulationLoopV1(BaseScenario):
                     self._dispatch(_due, "reflect", _make_reflect_coro, _p.person_id)
 
             # Alarme (front montant) : réflexions toujours pendantes au-delà de leur
-            # échéance simulée — la garantie « réflexion < 12h sim » n'est plus tenue.
+            # échéance simulée — la garantie « réflexion terminée avant le réveil de
+            # son agent » (ticket 010, D2) n'est plus tenue.
             _overdue = sum(1 for _d in self._stm_reflect_due.values() if timestamp > _d)
             if _overdue and not self._stm_overdue_alarm_on:
                 logger.error(
-                    f"[ALARME] {_overdue} réflexion(s) STM au-delà de l'échéance de "
-                    f"{settings.agent.stm_reflection_deadline_sim_s / 3600:.0f}h simulées — "
+                    f"[ALARME] {_overdue} réflexion(s) STM au-delà de leur échéance "
+                    f"(réveil de l'agent) — la LTM du matin n'intègre pas la veille : "
                     f"file EDF surchargée ou providers saturés (voir make capacity)"
                 )
                 self._stm_overdue_alarm_on = True
@@ -1825,15 +2058,32 @@ class SimulationLoopV1(BaseScenario):
                     f"reporté de {humanize_date(departure_time)} à {humanize_date(shifted)} (lundi)"
                 )
                 departure_time = shifted
-        # Verrou de sortie : un véhicule ne se conduit que là où il est garé.
+        # Verrou de sortie : un véhicule ne se conduit que là où il est garé — et la
+        # voiture, que par quelqu'un qui a l'âge et le permis (A2).
+        _traits = person.identity.traits_json
+        _is_passenger = _is_car_passenger(person)
         include_car = _vehicle_available(person, "car", from_location)
         include_bike = _vehicle_available(person, "bike", from_location)
+        # Contrainte de chaîne appliquée à ce trajet, journalisée dans moves.csv (A4).
+        # Une seule valeur par ligne ; `passager` prime, puis `retour_force`, puis
+        # `sortie_bloquee`. Ces lignes restent dans le scoring : la colonne explique,
+        # elle ne filtre pas.
+        chain_constraint = ""
+        # Anticipation (ticket 014) : construit seulement si la décision atteint le
+        # LLM — les chemins cache/mono-option n'affichent aucun prompt.
+        anticipation: Optional[dict] = None
         for _mode, _owned, _included in (
-            ("car", _owns_car(person.identity.traits_json), include_car),
-            ("bike", _owns_bike(person.identity.traits_json), include_bike),
+            ("car", _owns_car(_traits), include_car),
+            ("bike", _owns_bike(_traits), include_bike),
         ):
             if _owned and not _included:
-                VEHICLE_CHAIN.labels(mode=_mode, event="unavailable").inc()
+                if _mode == "car" and not _can_drive(_traits):
+                    # Cause « pas de conducteur », distincte d'un véhicule mal garé :
+                    # les confondre ferait exploser `unavailable` sans rien dire.
+                    VEHICLE_CHAIN.labels(mode="car", event="no_driver").inc()
+                else:
+                    VEHICLE_CHAIN.labels(mode=_mode, event="unavailable").inc()
+                    chain_constraint = "sortie_bloquee"
 
         same_location = (
             from_location is not None and next_activity.location is not None
@@ -1880,6 +2130,15 @@ class SimulationLoopV1(BaseScenario):
             and (next_activity.purpose or "").lower() == "home"
         ):
             _to_bring_back = _vehicles_parked_at(person, from_location)
+            # A3 — sous le seuil, le verrou ne s'applique pas : on ne fait pas
+            # reprendre sa voiture à un agent pour rentrer de deux cents mètres. Le
+            # véhicule devient alors orphelin s'il rentre autrement ; c'est le
+            # compromis accepté, et `_settle_vehicles_at_home` le rattrape.
+            _od_km = _road_distance_km(from_location, next_activity.location)
+            if _to_bring_back and _od_km is not None and _od_km < RETURN_LOCK_MIN_DISTANCE_KM:
+                for _mode in sorted(_to_bring_back):
+                    VEHICLE_CHAIN.labels(mode=_mode, event="short_return").inc()
+                _to_bring_back = set()
             if _to_bring_back:
                 _kept = [it for it in itineraries if _primary_mode(it) in _to_bring_back]
                 for _mode in sorted(_to_bring_back):
@@ -1888,6 +2147,7 @@ class SimulationLoopV1(BaseScenario):
                     ).inc()
                 if _kept:
                     itineraries = _kept
+                    chain_constraint = "retour_force"
                 else:
                     # Aucun itinéraire dans le mode du véhicule (OTP muet, distance hors
                     # portée vélo…) : on rend la main plutôt que de bloquer l'agent — il
@@ -1963,11 +2223,14 @@ class SimulationLoopV1(BaseScenario):
                     data={"type": "travel_plan"},
                 )
                 EVALUATE_PLAN_CALLS.inc()
+                if settings.agent.agenda_anticipation_enabled:
+                    anticipation = _build_anticipation(person, next_activity, departure_time)
                 plan_index, reasoning, provider_info, mode_probabilities = await self.agent.evaluate_and_choose_travel_plan(
                     context=context,
                     options=itineraries,
                     destination=next_activity.purpose,
                     departure_time=departure_time,
+                    anticipation=anticipation,
                 )
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     selection_method = "LLM"
@@ -1980,6 +2243,14 @@ class SimulationLoopV1(BaseScenario):
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose
+
+        # Trajet en voiture retenu par un non-conducteur : c'est un trajet passager
+        # (A2). Le mode reste « Voiture Privée » dans moves.csv — EMC² compte le
+        # passager dans « voiture » — et la traçabilité passe par la colonne
+        # « Contrainte de chaîne ».
+        if plan is not None and _is_passenger and _primary_mode(plan) == "car":
+            VEHICLE_CHAIN.labels(mode="car", event="passenger").inc()
+            chain_constraint = "passager"
 
         # Cohérence de chaîne : le véhicule utilisé suit l'agent, les autres restent garés
         # où ils sont. Le cas « pas de déplacement » est exclu — l'agent n'a pas bougé,
@@ -2023,6 +2294,8 @@ class SimulationLoopV1(BaseScenario):
             plan=plan,
             purpose=next_activity.purpose,
             selection_method=selection_method,
+            chain_constraint=chain_constraint,
+            anticipation=(anticipation or {}).get("trace", ""),
             provider_model=provider_info or "",
             faster_itinerary=faster_itinerary,
             reasoning=reasoning,

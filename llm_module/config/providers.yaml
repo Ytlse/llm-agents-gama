@@ -175,19 +175,20 @@ providers:
   # ── Groq — trois instances pointant sur des modèles différents ──────────────
   # L'API key partagée est lue depuis PROVIDER_KEYS__groq dans l'environnement.
 
-  groq_llama3: #August 16, 2026
-    adapter:           groq
-    rpm_limit:         30
-    tpm_limit:         12000
-    rpd_limit:         1000   # quota requêtes/jour (en-têtes x-ratelimit)
-    max_tokens_per_request: 12000  # TPM free tier = 12000 → requête unique > 12000 tokens → HTTP 413
-    tpd_limit:         100000
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     llama-3.3-70b-versatile
-    max_output_tokens: 32768
-    weight:            0.27   # min(30, 12000/3000)/15 = 0.27 — maj 2026-08-03
-    concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
-    disable_timeout:   120
+  # [obsolète 2026-08-18] default_model 'llama-3.3-70b-versatile' absent de /models
+  # groq_llama3: #August 16, 2026
+  #   adapter:           groq
+  #   rpm_limit:         30
+  #   tpm_limit:         12000
+  #   rpd_limit:         1000   # quota requêtes/jour (en-têtes x-ratelimit)
+  #   max_tokens_per_request: 12000  # TPM free tier = 12000 → requête unique > 12000 tokens → HTTP 413
+  #   tpd_limit:         100000
+  #   base_url:          https://api.groq.com/openai/v1
+  #   default_model:     llama-3.3-70b-versatile
+  #   max_output_tokens: 32768
+  #   weight:            0.27   # min(30, 12000/3000)/15 = 0.27 — maj 2026-08-03
+  #   concurrency_limit: 4   # petits batches → plus de workers pour absorber la file
+  #   disable_timeout:   120
 
   # groq_llama4: 
   #   adapter:           groq
@@ -219,19 +220,20 @@ providers:
   #   concurrency_limit:       3
   #   disable_timeout:         120
 
-  groq_llama31:
-    adapter:                 groq
-    # Même contrainte que groq_qwen : TPM free tier = 6 000 → ~2 req/min soutenables.
-    rpm_limit:               2
-    tpm_limit:               6000
-    rpd_limit:               14400  # quota requêtes/jour (en-têtes x-ratelimit)
-    tpd_limit:               500000
-    max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
-    base_url:                https://api.groq.com/openai/v1
-    default_model:           llama-3.1-8b-instant
-    weight:                  0.13   # min(2, 6000/3000)/15 = 0.13 — maj 2026-08-03
-    concurrency_limit:       3
-    disable_timeout:         120
+  # [obsolète 2026-08-18] default_model 'llama-3.1-8b-instant' absent de /models
+  # groq_llama31:
+  #   adapter:                 groq
+  #   # Même contrainte que groq_qwen : TPM free tier = 6 000 → ~2 req/min soutenables.
+  #   rpm_limit:               2
+  #   tpm_limit:               6000
+  #   rpd_limit:               14400  # quota requêtes/jour (en-têtes x-ratelimit)
+  #   tpd_limit:               500000
+  #   max_tokens_per_request:  6000  # TPM free tier = 6 000 → requête unique > 6 000 tokens → HTTP 413
+  #   base_url:                https://api.groq.com/openai/v1
+  #   default_model:           llama-3.1-8b-instant
+  #   weight:                  0.13   # min(2, 6000/3000)/15 = 0.13 — maj 2026-08-03
+  #   concurrency_limit:       3
+  #   disable_timeout:         120
 
   groq_openai_120:
     adapter:           groq
@@ -395,6 +397,18 @@ providers:
     rpd_limit:          20  # quota requêtes/jour (free tier)
     base_url:           https://generativelanguage.googleapis.com/v1beta
     default_model:      gemini-3.6-flash
+    weight:             0.0  # HORS ROTATION : RPD free tier 20/j < 100 — llm.provider forcé uniquement
+    concurrency_limit:  2
+    disable_timeout:    120
+
+  # Ajouté par make providers le 2026-08-18 — quotas free tier relevés
+  google_gemini_3_7_flash:
+    adapter:            google
+    rpm_limit:          5
+    tpm_limit:          250000
+    rpd_limit:          20  # quota requêtes/jour (free tier)
+    base_url:           https://generativelanguage.googleapis.com/v1beta
+    default_model:      gemini-3.7-flash
     weight:             0.0  # HORS ROTATION : RPD free tier 20/j < 100 — llm.provider forcé uniquement
     concurrency_limit:  2
     disable_timeout:    120

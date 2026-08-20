@@ -28,11 +28,15 @@ from models import (
     TravelPlan,
 )
 from urban_mobility_agents.simulation_controller import (
+    RETURN_LOCK_MIN_DISTANCE_KM,
+    _can_drive,
+    _is_car_passenger,
     _orphaned_vehicles,
     _owns_bike,
     _owns_car,
     _park_vehicles,
     _primary_mode,
+    _road_distance_km,
     _same_place,
     _vehicle_available,
     _vehicle_position,
@@ -42,6 +46,9 @@ from urban_mobility_agents.simulation_controller import (
 HOME = Location(lat=43.6000, lon=1.4400)
 WORK = Location(lat=43.6100, lon=1.4500)
 GYM = Location(lat=43.6200, lon=1.4600)
+# ~250 m du domicile à vol d'oiseau : sous le seuil du verrou de retour (A3), même
+# après le facteur de détour 1,3.
+SHOP = Location(lat=43.6020, lon=1.4415)
 
 
 def _plan(*modes: str, start: Location = HOME, end: Location = WORK) -> TravelPlan:
@@ -62,8 +69,16 @@ def _plan(*modes: str, start: Location = HOME, end: Location = WORK) -> TravelPl
 
 
 def _person(**traits) -> Person:
-    """Agent au domicile, véhicules garés au domicile (dict d'état vide)."""
-    base = {"personal_bike": "vélo normal", "number_of_cars": 1}
+    """Agent au domicile, véhicules garés au domicile (dict d'état vide).
+
+    Par défaut : **adulte titulaire du permis, vivant seul**. Depuis le mode
+    passager (ticket 008, A2), conduire suppose l'âge et le permis — un persona
+    muet sur ces deux traits ne se verrait plus jamais proposer la voiture, et les
+    tests des trois règles porteraient sur un agent incapable de conduire. Vivant
+    seul, il n'est pas non plus passager : les cas passager sont explicites.
+    """
+    base = {"personal_bike": "vélo normal", "number_of_cars": 1,
+            "has_driving_license": True, "age": 40, "household_size": 1}
     base.update(traits)
     return Person(
         person_id="p1",
@@ -315,6 +330,123 @@ class TestChaineJournee:
         assert _vehicles_parked_at(person, GYM) == set()  # pas de verrou : rien de garé ici
         _park_vehicles(person, _plan("foot", "bus", "foot", start=GYM, end=HOME), GYM, HOME)
         assert _orphaned_vehicles(person) == {"car"}  # cas résiduel, rattrapé au domicile
+
+
+# ── Mode passager : l'enfant va à l'école en voiture (ticket 008, A2) ─────────
+
+def _child(**traits) -> Person:
+    """Enfant de 12 ans, foyer de 4 personnes avec 3 voitures — passager type."""
+    base = {"age": 12, "has_driving_license": False, "household_size": 4,
+            "number_of_cars": 3}
+    base.update(traits)
+    return _person(**base)
+
+
+class TestPeutConduire:
+    def test_adulte_avec_permis(self):
+        assert _can_drive({"age": 40, "has_driving_license": True}) is True
+
+    def test_mineur_meme_avec_permis(self):
+        """Verrou dur : une population mal générée distribue des permis à des
+        enfants de neuf ans (ticket 008, A1). L'âge tranche."""
+        assert _can_drive({"age": 12, "has_driving_license": True}) is False
+
+    def test_adulte_sans_permis(self):
+        assert _can_drive({"age": 40, "has_driving_license": False}) is False
+
+    def test_traits_muets(self):
+        assert _can_drive({}) is False
+
+
+class TestPassager:
+    def test_enfant_du_foyer_motorise(self):
+        assert _is_car_passenger(_child()) is True
+
+    def test_enfant_sans_voiture_au_foyer(self):
+        assert _is_car_passenger(_child(number_of_cars=0)) is False
+
+    def test_adulte_sans_permis_vivant_seul(self):
+        """Personne pour l'emmener : ce n'est pas un passager."""
+        p = _person(age=40, has_driving_license=False, household_size=1)
+        assert _is_car_passenger(p) is False
+
+    def test_adulte_sans_permis_en_famille(self):
+        p = _person(age=40, has_driving_license=False, household_size=3)
+        assert _is_car_passenger(p) is True
+
+    def test_conducteur_n_est_pas_passager(self):
+        assert _is_car_passenger(_person(household_size=4)) is False
+
+    def test_voiture_proposee_sans_test_de_position(self):
+        """Ce n'est pas sa voiture : peu importe où le foyer l'a laissée."""
+        child = _child()
+        child.state.planning_vehicle_at["car"] = GYM
+        assert _vehicle_available(child, "car", HOME) is True
+        assert _vehicle_available(child, "car", WORK) is True
+
+    def test_non_conducteur_non_passager_jamais_de_voiture(self):
+        """Le verrou dur : plus aucun mineur ni sans-permis ne conduit."""
+        seul = _person(age=40, has_driving_license=False, household_size=1)
+        assert _vehicle_available(seul, "car", HOME) is False
+        enfant_sans_voiture = _child(number_of_cars=0)
+        assert _vehicle_available(enfant_sans_voiture, "car", HOME) is False
+
+    def test_le_velo_reste_ouvert_aux_mineurs(self):
+        """Le permis ne conditionne que la voiture."""
+        assert _vehicle_available(_child(), "bike", HOME) is True
+
+    def test_la_voiture_ne_se_gare_pas_a_destination(self):
+        """Un tiers conduit et repart : la voiture ne dort pas à l'école."""
+        child = _child()
+        _park_vehicles(child, _plan("car", start=HOME, end=WORK), HOME, WORK)
+        assert child.state.planning_vehicle_at == {}
+        assert _vehicle_position(child, "car") == HOME
+
+    def test_pas_de_retour_force_pour_le_passager(self):
+        """Le point le plus facile à casser : l'enfant déposé à l'école ne doit
+        pas être sommé de ramener la voiture. Rien n'y étant garé, il n'y a rien
+        à ramener — c'est la conséquence directe du test précédent."""
+        child = _child()
+        _park_vehicles(child, _plan("car", start=HOME, end=WORK), HOME, WORK)
+        assert _vehicles_parked_at(child, WORK) == set()
+        assert _orphaned_vehicles(child) == set()
+
+    def test_le_conducteur_ne_change_pas_de_comportement(self):
+        """Non-régression : pour un adulte avec permis, les trois règles sont
+        strictement celles d'avant le mode passager."""
+        adulte = _person(household_size=4, number_of_cars=3)
+        assert _vehicle_available(adulte, "car", HOME) is True
+        _park_vehicles(adulte, _plan("car"), HOME, WORK)
+        assert _vehicle_position(adulte, "car") == WORK
+        assert _vehicle_available(adulte, "car", HOME) is False
+        assert _vehicles_parked_at(adulte, WORK) == {"car"}
+
+    def test_velo_du_passager_suit_normalement(self):
+        """Seule la voiture est concernée : son vélo, lui, reste où il le laisse."""
+        child = _child()
+        _park_vehicles(child, _plan("bicycle"), HOME, WORK)
+        assert _vehicle_position(child, "bike") == WORK
+        assert _vehicles_parked_at(child, WORK) == {"bike"}
+
+
+# ── Seuil de distance du verrou de retour (ticket 008, A3) ────────────────────
+
+class TestSeuilRetourCourt:
+    def test_distance_routiere_facteur_de_detour(self):
+        """Vol d'oiseau × 1,3, la convention de `_estimate_fallback_duration`."""
+        assert _road_distance_km(HOME, HOME) == 0.0
+        assert _road_distance_km(HOME, None) is None
+        assert 0.2 < _road_distance_km(HOME, SHOP) < RETURN_LOCK_MIN_DISTANCE_KM
+
+    def test_trajet_long_au_dessus_du_seuil(self):
+        assert _road_distance_km(HOME, WORK) > RETURN_LOCK_MIN_DISTANCE_KM
+
+    def test_le_verrou_reste_pertinent_au_dela_du_seuil(self):
+        """Le seuil ne désarme pas la règle 3 : au-delà, le véhicule est à ramener."""
+        person = _person()
+        person.state.planning_vehicle_at["car"] = WORK
+        assert _vehicles_parked_at(person, WORK) == {"car"}
+        assert _road_distance_km(WORK, HOME) > RETURN_LOCK_MIN_DISTANCE_KM
 
 
 # ── Rattrapage au domicile (méthode du contrôleur) ────────────────────────────

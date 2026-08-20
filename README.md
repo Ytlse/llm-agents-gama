@@ -36,8 +36,9 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 
 | Document | Description |
 |----------|-------------|
+| [docs/arch/dashboard.md](docs/arch/dashboard.md) | Tableau de bord `make dashboard` : vue d'ensemble du projet, pilotage du run GAMA (lancement/arrêt, progression, top erreurs), providers LLM (quotas temps réel, `make providers`), cibles `make` des sous-projets, tickets et métriques (Docker, run, synthèse, calibration) |
 | [docs/arch/monitoring.md](docs/arch/monitoring.md) | Métriques Prometheus, dashboards Grafana 01→08, alarmes & alertes |
-| [docs/arch/score-synthesis.md](docs/arch/score-synthesis.md) | Page de synthèse `make synthesis` : simulation, calibration et modèle PROGEDO face à l'enquête EMC². `make common-set-eval` produit la mesure du volet calibration sur le jeu commun et `make heldout-eval` son score de généralisation sur le jeu de test gelé — **les deux seules cibles qui consomment du quota LLM** (chiffrer d'abord : `DRY_RUN=1`) ; `make common-set-predict` produit celle du volet modèle, hors ligne et déterministe |
+| [docs/arch/score-synthesis.md](docs/arch/score-synthesis.md) | Page de synthèse `make synthesis` : simulation, calibration et modèle PROGEDO face à l'enquête EMC². `make common-set-eval` produit la mesure du volet calibration sur le jeu commun et `make heldout-eval` son score de généralisation sur le jeu de test gelé — **les deux seules cibles qui consomment du quota LLM** (chiffrer d'abord : `DRY_RUN=1`) ; `make common-set-predict` produit celle du volet modèle, hors ligne et déterministe. `make model-compare RUN=…` ventile le score d'un run **modèle par modèle** (page dédiée sous `docs/synthesis/models/<run>/`), sans appel LLM |
 
 ---
 

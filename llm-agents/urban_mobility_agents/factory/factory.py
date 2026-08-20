@@ -15,6 +15,7 @@ from urban_mobility_agents.core.scenario import BaseScenario
 from urban_mobility_agents.agents.llm_agent import LlmAgent
 from loguru import logger
 from dataclasses import dataclass
+from typing import Optional
 
 
 def _otp_endpoints_to_wait() -> list[str]:
@@ -93,6 +94,7 @@ def _save_scenario_params(
     llm_agents: int,
     long_term_memory_enabled: bool,
     long_term_self_reflect_enabled: bool,
+    simulation_max_days: Optional[int] = None,
 ) -> None:
     """Persiste les paramètres effectifs du scénario GAMA dans le répertoire d'expérience."""
     workdir = getattr(settings, 'workdir', None)
@@ -104,6 +106,11 @@ def _save_scenario_params(
         'long_term_memory_enabled': long_term_memory_enabled,
         'long_term_self_reflect_enabled': long_term_self_reflect_enabled,
     }
+    # Horizon d'arrêt : consigné dès que GAMA le transmet (ticket 008, A5). Absent
+    # des runs antérieurs — ne pas écrire de valeur par défaut, qui laisserait croire
+    # à un périmètre connu.
+    if simulation_max_days is not None:
+        params['simulation_max_days'] = simulation_max_days
     scenario_file = workdir / 'scenario_params.yaml'
     with open(scenario_file, 'w') as f:
         yaml.dump(params, f, default_flow_style=False, allow_unicode=True)
@@ -116,7 +123,8 @@ def init_dynamic_scenario(
     population_size: int = None,
     part_of_llm_agents: float = None,
     long_term_memory_enabled: bool = None,
-    long_term_self_reflect_enabled: bool = None
+    long_term_self_reflect_enabled: bool = None,
+    simulation_max_days: Optional[int] = None,
 ) -> BaseScenario:
     """Initialise un nouveau run de simulation avec ses agents dynamiques."""
     logger.info("Création d'un nouveau scénario dynamique...")
@@ -137,6 +145,7 @@ def init_dynamic_scenario(
         llm_agents=settings.data.number_of_llm_based_agents,
         long_term_memory_enabled=settings.agent.long_term_memory_enabled,
         long_term_self_reflect_enabled=settings.agent.long_term_self_reflect_enabled,
+        simulation_max_days=simulation_max_days,
     )
 
     min_lon, min_lat, max_lon, max_lat = gtfs_data.get_bounding_box()

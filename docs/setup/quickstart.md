@@ -38,7 +38,21 @@ Options combinables :
 make run OFFLINE=1 NO_GOOGLE=1   # campagne sans les modèles Google (gemini/gemma) :
                                  # clés blanchies, instances google* hors rotation,
                                  # cascade sur mistral/groq/cerebras
+
+make stop-run                    # arrêt à chaud : stoppe GAMA et le launcher,
+                                 # laisse le reste de la pile en place
+make run OFFLINE=1 CONT=1        # reprise : réutilise le workdir du run précédent
+                                 # (experiments/current) — journaux appendés,
+                                 # state.json et checkpoints retrouvés, métriques
+                                 # Grafana/Prometheus/Redis conservées
 ```
+
+Sémantique de la reprise (`CONT=1`) : le contrôleur reprend **le même répertoire
+d'expérience** ; la simulation GAMA, elle, repart à `t0` du jour simulé — GAMA ne
+sait pas geler son état en plein trajet (ticket 002). Les caches (décisions LLM,
+OTP, OSMnx) et `state.json` rendent ce rejeu quasi instantané et déterministe :
+en pratique, la simulation « rattrape » le point d'interruption en quelques
+minutes sans re-consommer de quota LLM.
 
 Ce que fait le mode offline :
 

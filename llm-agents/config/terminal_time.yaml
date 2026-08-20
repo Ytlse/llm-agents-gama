@@ -1,0 +1,175 @@
+# Temps terminal par mode — la part NON-CONDUITE à chaque bout d'un trajet
+# véhiculé : rejoindre le véhicule, chercher où le garer, marcher jusqu'à la
+# destination.
+#
+# ⚠ Paramètre EXOGÈNE (ticket 013, décision T2). Il vient d'une source externe,
+# il est documenté ici avec sa provenance, et il n'est JAMAIS ajusté pour
+# améliorer un score de calibration. L'ajuster sur la cible reviendrait à régler
+# l'instrument pour qu'il donne la réponse attendue.
+#
+# Vocabulaire : « terminal time » de la modélisation à quatre étapes — un
+# paramètre tabulé par type de zone, exprimé PAR BOUT DE TRAJET.
+#   NCHRP Report 716, Travel Demand Forecasting: Parameters and Techniques
+#   https://nap.nationalacademies.org/catalog/14665/travel-demand-forecasting-parameters-and-techniques
+#
+# Avant ce fichier, ce temps existait déjà mais était invisible : `park_base` de
+# config/osmnx.yaml ajoutait 2 × 120 s (voiture) et 2 × 60 s (vélo) DANS la durée
+# de conduite, sans provenance et sans décomposition affichée. Le modèle voyait
+# un total sans savoir qu'il contenait du stationnement, alors qu'il voit chaque
+# jambe de marche des transports collectifs détaillée pas à pas. C'est cette
+# asymétrie que le ticket 013 corrige.
+
+# Version des données d'itinéraire. Elle entre dans les clés de cache (routage
+# OSMnx persistant ET cache de décisions LLM) : la bumper INVALIDE les deux, ce
+# qui est le comportement voulu — sans elle, un run rejouerait des décisions
+# prises sur des durées différentes de celles qu'on affiche maintenant.
+# Toute modification des valeurs ci-dessous DOIT bumper cette version.
+version: tt2   # tt2 : temps terminal SPATIALISÉ par couronne (avant : constante globale)
+
+# Version du ROUTAGE — distincte, et la distinction n'est pas cosmétique. Le cache
+# OSMnx persistant ne mémorise plus que du temps de parcours RÉSEAU, qui ne dépend
+# d'aucun temps terminal : le versionner par `version` ci-dessus ferait recalculer à
+# froid des milliers de routes à chaque ajustement du stationnement — mesuré à ~2 h
+# pour une population de 930 personas. À bumper uniquement quand la durée réseau
+# elle-même change (vitesses, pénalités d'infrastructure, congestion, ou le retrait
+# du stationnement du moteur — ce dernier a produit `r1`).
+#
+# Les caches qui mémorisent des PLANS, eux, restent indexés sur `version` : le cache
+# OTP stocke les TravelPlan sérialisés avec leurs jambes terminales, et le cache de
+# décisions LLM porte sur des options dont les durées ont changé.
+routing_version: r1
+
+# ⚠ Les temps doivent être des multiples de 60 s, et c'est structurel, pas
+# cosmétique : le rendu affiche chaque composante en minutes tronquées
+# (`humanize_duration`), et `floor(a + k×60) == floor(a) + k`. C'est ce qui
+# garantit que le total affiché est EXACTEMENT la somme des sous-étapes
+# affichées (critère d'acceptation 2 du ticket 013). Une valeur non multiple de
+# 60 casserait l'égalité une fois sur deux, et le chargeur la refuse.
+modes:
+
+  car:
+    # ── SPATIALISÉ par couronne (ticket 013 §4.1) ─────────────────────────────
+    # Le §4.1 annonçait la constante globale comme provisoire : « le paramètre
+    # devrait dépendre du lieu de résidence / destination (le stationnement n'a pas
+    # le même coût à Toulouse intra-rocade et en 3ᵉ couronne) ». C'est fait ici.
+    #
+    # Les couronnes sont celles de `lieu_residence` d'EMC²
+    # (`llm_module.core.geo_reference.residence_zone`, distance à l'hypercentre) —
+    # PAS un zonage inventé pour l'occasion : les parts modales produites se
+    # comparent à des cibles définies sur ces mêmes territoires.
+    #
+    # `access_s` dépend de la couronne d'ORIGINE (où est garé le véhicule),
+    # `egress_s` de celle de DESTINATION (où il faut trouver une place). Les deux
+    # bouts d'un même trajet peuvent donc être tarifés différemment — un trajet
+    # 3ᵉ couronne → Toulouse paie un accès rural et un stationnement de centre.
+    #
+    # ⚠ ARRONDI À LA MINUTE, assumé et documenté : la table COMPASS donne des
+    # demi-minutes (périurbain 1,5–2,5) que le rendu ne peut pas afficher — il est
+    # en minutes tronquées, et l'invariant « total = somme des sous-étapes » exige
+    # des multiples de 60 s. L'arrondi va au plus proche ; il n'a JAMAIS été choisi
+    # pour améliorer un score (T2), et la grille de sensibilité couvre ce qu'il
+    # laisse d'arbitraire.
+
+    # Rejoindre le véhicule — terminal time au bout ORIGINE, table COMPASS par type
+    # de zone (rural 1 / périurbain 1,5–2,5 / urbain 2 / frange de centre 2,5 /
+    # centre-ville 3 / parking en ouvrage 4 min).
+    #   https://compassidaho.org/wp-content/uploads/FinalRegionalTravelDemandModelCalibration.pdf
+    access_s:
+      Toulouse:        180   # centre-ville : véhicule garé loin, souvent en ouvrage
+      1ere couronne:   120   # urbain
+      2eme couronne:   120   # périurbain (1,5–2,5 arrondi à 2)
+      3eme couronne:    60   # rural : véhicule devant la porte
+      default:         120   # zone inconnue → valeur urbaine, la plus fréquente
+
+    # Stationnement et marche terminale — terminal time au bout DESTINATION (même
+    # table) + recherche de place. La recherche est encadrée par trois sources :
+    #   - borne haute : Shoup (2006), Transport Policy 13(6), méta-analyse de 16
+    #     études — moyenne 8,1 min, étendue 3,5–13,9. Hyper-centres, stationnement
+    #     sur voirie saturé : c'est un MAJORANT pour Toulouse, pas une moyenne.
+    #       http://shoup.bol.ucla.edu/Cruising.pdf
+    #   - borne basse : Millard-Ball, Hampshire & Weinberger (2020), Land Use Policy
+    #     91:103918 — distance de recherche mesurée au GPS, 32,1 m en moyenne : la
+    #     recherche est quasi nulle hors zones tendues.
+    #   - contexte français : Cerema, « Les enquêtes de stationnement : guide
+    #     méthodologique » — temps de recherche < 5 min en centre-bourg.
+    #       https://doc.cerema.fr/Default/doc/SYRACUSE/16709/les-enquetes-de-stationnement-guide-methodologique
+    # Retenu : 4 min de recherche à Toulouse (sous la moyenne Shoup, cohérent avec
+    # le majorant Cerema), 2 min en 1ʳᵉ couronne, 1 min en 2ᵉ, 0 en 3ᵉ.
+    egress_s:
+      Toulouse:        420   # 3 (centre) + 4 (recherche)
+      1ere couronne:   240   # 2 (urbain) + 2
+      2eme couronne:   180   # 2 (périurbain) + 1
+      3eme couronne:    60   # 1 (rural) + 0 : on se gare devant
+      default:         240
+    provenance: sourced
+    spatialise: true
+    labels:
+      access: "Rejoindre la voiture"
+      main: "Conduite"
+      egress: "Stationnement et marche jusqu'à '{destination}'"
+      egress_sans_destination: "Stationnement et marche jusqu'à la destination"
+      terminal: "d'accès et de stationnement"
+
+  bicycle:
+    # ⚠ NON SOURCÉ, et c'est écrit ici plutôt que masqué. Aucune valeur publiée
+    # trouvée pour le temps terminal d'un vélo PERSONNEL (sortir le vélo, le
+    # déverrouiller / l'attacher à l'arrivée). Le guide Cerema ci-dessus ne
+    # traite que du stationnement automobile. Les chiffres disponibles portent
+    # sur le vélo en libre-service (accès/diffusion médian ≈ 6 min, qui est le
+    # temps de MARCHER jusqu'à la station) et ne sont pas transférables.
+    #
+    # Valeur retenue = celle que le code appliquait déjà avant le ticket 013
+    # (`park_base: bike: 60` par bout, config/osmnx.yaml) : la reprendre évite
+    # d'introduire un changement de durée non mesuré en même temps que le
+    # changement de rendu. Contrainte T5 respectée — même nature de coût que la
+    # voiture, valeur nettement inférieure.
+    #
+    # Cohérent avec le seul résultat pertinent trouvé : les cyclistes sont plus
+    # de deux fois plus sensibles à la distance à pied qu'au détour cyclable
+    # (donc une diffusion terminale courte), sans chiffrage en minutes.
+    #   https://easychair.org/publications/preprint/vXDX/open
+    # NON spatialisé, faute de source : rien ne documente que déverrouiller un vélo
+    # coûte plus cher en centre-ville qu'en couronne. Une variation inventée serait
+    # de l'ajustement déguisé.
+    access_s: {default: 60}
+    egress_s: {default: 60}
+    provenance: unsourced
+    spatialise: false
+    labels:
+      access: "Déverrouiller le vélo"
+      main: "Trajet à vélo"
+      egress: "Attacher le vélo à '{destination}'"
+      egress_sans_destination: "Attacher le vélo à l'arrivée"
+      terminal: "d'accès et d'attache"
+
+  # foot : nul par construction — la marche est porte-à-porte (§4.1).
+  # transports collectifs : DÉJÀ compté par les jambes de marche routées d'OTP.
+  #   Y ajouter un temps terminal serait un double comptage, et le critère
+  #   d'acceptation 4 du ticket l'interdit explicitement. Ces deux modes sont
+  #   donc absents de `modes:` — absence qui vaut « aucune composante ».
+
+# Grille de sensibilité — ticket 013, décision T6. Les parts modales par tranche
+# de distance sont recalculées pour chacune de ces valeurs et l'écart à EMC² est
+# rapporté. Le but n'est PAS de choisir la meilleure (ce serait violer T2), c'est
+# de savoir si la conclusion dépend du réglage.
+sensitivity:
+  # ⚠ Une variante applique un FACTEUR uniforme sur toutes les couronnes, pas une
+  # valeur unique : remplacer la table par une constante ferait varier « spatialisé
+  # ou non » EN MÊME TEMPS que l'ampleur du temps terminal, et la sensibilité
+  # mesurerait deux choses à la fois. Les facteurs sont arrondis à la minute.
+  low:
+    car: {factor: 0.5}
+    rationale: >
+      Moitié des valeurs retenues — lecture Millard-Ball et al. (2020), où la
+      recherche de place mesurée au GPS est quasi nulle.
+  central:
+    car: {factor: 1.0}
+    rationale: >
+      Valeurs retenues : terminal times COMPASS par type de zone + recherche de
+      place encadrée par Cerema (< 5 min en centre-bourg) et Shoup (8,1 min en
+      hyper-centre, majorant).
+  high:
+    car: {factor: 1.5}
+    rationale: >
+      Une fois et demie les valeurs retenues — approche la moyenne Shoup de 8,1 min
+      de recherche de place sur les zones les plus tendues.

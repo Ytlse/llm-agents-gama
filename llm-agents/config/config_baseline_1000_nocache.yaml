@@ -1,0 +1,33 @@
+# Run de référence 1 000 agents, CACHE SÉMANTIQUE LLM DÉSACTIVÉ (ticket 008, lot B).
+#
+# Pourquoi ce fichier existe : sur le run du 2026-08-02, 2 325 décisions d'itinéraire
+# ont été servies depuis le cache sémantique. Une décision servie par le cache ne laisse
+# AUCUNE trace dans `llm_exchanges.jsonl` (seulement une ligne dans
+# `llm_cache_hits.jsonl`) — or c'est ce journal, et lui seul, que le volet 2 de la page
+# de synthèse relit pour reconstruire son échantillon. Résultat : 3 084 décisions dans
+# les volets 1 et 3, contre 23 dans le volet 2. Les trois volets ne mesuraient plus le
+# même run, et 27 strates du volet 2 passaient sous le seuil d'effectif.
+#
+# Le cache reste le bon réglage en production : il divise le coût LLM d'un run par
+# plusieurs. Il n'est désactivé QUE pour produire un run de référence mesurable de bout
+# en bout. Ne pas en faire le défaut.
+#
+# Usage :
+#   make run CONFIG=config_baseline_1000_nocache.yaml
+#
+# Conséquence à anticiper : chaque décision part au LLM. Le run est plus lent, consomme
+# beaucoup plus de quota, et les alarmes de backlog / 429 seront plus nombreuses que sur
+# un run caché. C'est le prix d'un volet 2 interprétable.
+
+gtfs:
+  mode: OTP
+
+agent:
+  reschedule_activity_departure_time: false
+  quantify_time_window: false
+  long_term_reflect_interval: 86400
+
+cache:
+  # Cache sémantique des décisions d'itinéraire. `false` = chaque décision passe par un
+  # appel LLM réel, et atterrit donc dans llm_exchanges.jsonl.
+  enabled: false

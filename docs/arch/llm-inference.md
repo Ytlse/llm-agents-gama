@@ -262,6 +262,39 @@ Le pipeline de calibration applique le **même format** d'injection
 (`calibration/evaluation.py::inject_context`), pour que la mesure reflète exactement le
 prompt de production.
 
+#### Anticipation de la chaîne de la journée (ticket 014)
+
+Le choix reste **trajet par trajet**, mais le bloc persona est enrichi de trois éléments
+construits par le contrôleur (`_build_anticipation`, `simulation_controller.py`) et rendus
+par `itinary_multi_agent.md.j2` :
+
+- `**Météo plus tard :**` — la météo des tranches restantes de la journée
+  (`day_weather_outlook`, tranches matin/après-midi/soirée du CSV météo), pour **tous**
+  les agents : sortir le vélo le matin quand il pleuvra le soir devient un choix informé ;
+- `**Trajets suivants prévus aujourd'hui :**` — l'agenda **glissant** des trajets restants
+  (heure planifiée, motif, distance vol d'oiseau × 1,3, météo prévue si différente), en
+  puces « · » pour ne jamais ressembler à une ligne d'option `- [n]`.
+
+L'agenda n'est généré que pour les agents qui ont **quelque chose à chaîner**
+(conducteurs possédant une voiture, possesseurs de vélo — jamais les passagers, dont la
+voiture n'est pas positionnelle). Les trois verrous de chaîne (ticket 008) restent
+inchangés : le bloc informe, il ne contraint pas.
+
+**La position des véhicules n'est volontairement PAS énoncée dans le prompt.** La
+première version portait une ligne « Vos véhicules : votre vélo est au domicile, avec
+vous » : mesurée sur le run `2026-08-19_13_17`, elle a gonflé la part vélo de +5,5 points
+(écart EMC² +13,8 → +19,6) — le libellé agissait comme une invitation, pas comme une
+information, et la disponibilité réelle est déjà portée par le jeu d'options via les
+verrous. La règle de chaîne vit désormais dans le **prompt système** (variante
+`expert_chaine` de `prompts.yaml`, seed `expert`) : « en cas d'utilisation d'un véhicule
+personnel (vélo, trottinette, voiture…), pense au stationnement et aux déplacements du
+reste de la journée, jusqu'au retour au domicile ». Cette phrase est un **segment
+calibrable** (à couvrir par le catalogue de mutations), pas une constante. La colonne `Anticipation` de `moves.csv`
+trace ce que le prompt de chaque trajet contenait (`agenda` / `meteo` / vide), et la
+**signature** déterministe des textes entre dans la clé du cache de décisions (cf.
+`docs/arch/cache-memory.md`). Flag : `settings.agent.agenda_anticipation_enabled`
+(défaut `True` ; `False` rétablit le prompt myope pour l'A/B).
+
 #### Isolation du cache LLM par version de prompt
 
 Le cache sémantique LLM (`data/cache/llm/`) est partitionné par empreinte du prompt système

@@ -68,20 +68,37 @@ class OsmnxPersistentCache:
                 intentionally excluded from the key so runs on different calendar dates reuse
                 the same cached routes.
         foot/bicycle → time-independent key: coordinates + mode only.
+
+        ⚠ La clé est préfixée par ``terminal_time.routing_version()`` — la version du
+        ROUTAGE, pas celle du temps terminal. Sans version, ce cache resservirait des
+        durées calculées sous une autre définition du temps réseau : il est adressé par
+        (mode, coordonnées, créneau) et n'a aucun moyen de savoir que la sémantique de
+        ``duration_s`` a changé le jour où le stationnement en est sorti.
+
+        Mais la version doit être la BONNE : ce cache ne mémorise que du temps réseau,
+        indépendant du temps terminal. L'indexer sur ``data_version()`` ferait
+        recalculer à froid des milliers de routes à chaque ajustement du stationnement
+        — mesuré à ~2 h pour 930 personas — pour un résultat identique. Les caches qui
+        mémorisent des PLANS (OTP, décisions LLM) restent, eux, sur ``data_version()``.
         """
+        from trip_helper.terminal_time import routing_version
+
+        # `routing_version`, PAS `data_version` : ce cache mémorise du temps réseau pur.
+        version = routing_version()
         if mode == "car":
             date_str = congestion_dt.strftime('%Y-%m-%d')
             day_of_week = congestion_dt.weekday()
             time_bucket = f"{congestion_dt.hour:02d}:00"
             raw = (
-                f"{day_of_week}|{time_bucket}|{mode}"
+                f"{version}|{day_of_week}|{time_bucket}|{mode}"
                 f"|{lat_from:.5f}|{lon_from:.5f}|{lat_to:.5f}|{lon_to:.5f}"
             )
         else:
             date_str = None
             day_of_week = None
             time_bucket = None
-            raw = f"{mode}|{lat_from:.5f}|{lon_from:.5f}|{lat_to:.5f}|{lon_to:.5f}"
+            raw = (f"{version}|{mode}"
+                   f"|{lat_from:.5f}|{lon_from:.5f}|{lat_to:.5f}|{lon_to:.5f}")
         key = hashlib.sha256(raw.encode()).hexdigest()
         return key, date_str, day_of_week, time_bucket
 

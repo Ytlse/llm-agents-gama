@@ -36,6 +36,11 @@ class WorldInitRequest(BaseRequest):
     part_of_llm_based_agents: Optional[float] = None
     long_term_memory_enabled: Optional[bool] = None
     long_term_self_reflect_enabled: Optional[bool] = None
+    # Horizon d'arrêt côté GAMA, en jours simulés (0 = illimité). Le contrôleur ne
+    # s'en sert pas pour piloter la simulation — c'est GAMA qui halt — mais il le
+    # consigne dans scenario_params.yaml : sans lui, le périmètre temporel d'un run
+    # archivé n'est plus reconstituable (ticket 008, A5).
+    simulation_max_days: Optional[int] = None
 
 class WorldSyncRequest(BaseRequest):
     ready_count: Optional[int] = None

@@ -11,6 +11,7 @@ import pytest
 
 from models import Location, PersonalIdentity, Person
 from urban_mobility_agents.utils.move_logger import (
+    CHAIN_CONSTRAINTS,
     CSV_HEADERS,
     MODE_PROBABILITY_HEADERS,
     MoveLogger,
@@ -80,3 +81,44 @@ class TestRowAlignment:
         # Les colonnes voisines n'ont pas glissé.
         assert row["ID Personne"] == "42"
         assert row["Méthode de sélection"] == "LLM"
+
+
+class TestContrainteDeChaine:
+    """Colonne « Contrainte de chaîne » (ticket 008, A4).
+
+    Elle explique une décision, elle ne la filtre pas : sa seule exigence est
+    d'arriver dans la bonne colonne avec une valeur du vocabulaire fermé.
+    """
+
+    def _row(self, monkeypatch, **kwargs) -> dict:
+        captured = {}
+        logger = MoveLogger()
+        monkeypatch.setattr(logger, "_write_row",
+                            lambda row: captured.setdefault("row", row))
+        asyncio.run(logger.log_move(
+            person=_person(), plan=None, purpose="work", selection_method="LLM",
+            provider_model="p/m", faster_itinerary=None, reasoning="parce que",
+            **kwargs))
+        return dict(zip(CSV_HEADERS, captured["row"]))
+
+    def test_colonne_presente_apres_la_methode_de_selection(self):
+        i = CSV_HEADERS.index("Méthode de sélection")
+        assert CSV_HEADERS[i + 1] == "Contrainte de chaîne"
+
+    def test_absente_par_defaut(self, monkeypatch):
+        """Un trajet sans contrainte laisse la cellule vide — pas de modalité
+        fourre-tout, comme pour les probabilités."""
+        assert self._row(monkeypatch)["Contrainte de chaîne"] == ""
+
+    @pytest.mark.parametrize("value", [v for v in CHAIN_CONSTRAINTS if v])
+    def test_valeurs_du_vocabulaire(self, monkeypatch, value):
+        row = self._row(monkeypatch, chain_constraint=value)
+        assert row["Contrainte de chaîne"] == value
+        assert row["Fournisseur & Modèle"] == "p/m"  # la colonne suivante n'a pas glissé
+
+    def test_valeur_hors_vocabulaire_ramenee_a_vide(self, monkeypatch):
+        """Une valeur inattendue ne doit pas se retrouver dans le journal : la page
+        de synthèse ventile cette colonne, une modalité exotique y fausserait la
+        répartition sans être signalée."""
+        assert self._row(monkeypatch, chain_constraint="n_importe_quoi"
+                         )["Contrainte de chaîne"] == ""
