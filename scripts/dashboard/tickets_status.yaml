@@ -1,0 +1,134 @@
+# Statut des tickets de `docs/tickets/` — SOURCE DE VÉRITÉ.
+#
+# Le dashboard sait déduire un statut du contenu d'un ticket (cases à cocher, ligne
+# `**État**`), mais cette déduction ment dans le mauvais sens : au 2026-08-20 elle
+# donnait « à faire 0/15 » pour le ticket 008 dont les actions A1–A7 sont livrées,
+# et « sans statut » pour 9 tickets sur 15 — dont 013, livré et documenté au
+# changelog. La raison est structurelle : un ticket dont les cases sont des
+# CRITÈRES D'ACCEPTATION (006, 007, 008) n'a pas de case cochée tant que le run de
+# validation n'a pas eu lieu, ce qui n'a rien à voir avec l'avancement du travail.
+# Le statut est donc porté ici, et pas dans l'en-tête des tickets : un `**Statut**`
+# recopié dans chaque `.md` se périme en silence et il y en a quinze à tenir.
+#
+# Clé   : le NOM DE FICHIER COMPLET sans extension.
+#         ⚠ Ne pas utiliser la forme courte (`ticket_005`, `005`) : deux tickets
+#         DISTINCTS partagent le numéro 005 (choix modal probabiliste / politique
+#         PROGEDO) et deux autres le 014 (anticipation / annexe). La résolution
+#         courte de `tickets.py` (`overrides.get(f"ticket_{number}")`) appliquerait
+#         alors un seul statut aux deux.
+# status: à faire | en cours | terminé | bloqué | abandonné
+# note  : ce sur quoi le statut s'appuie, et ce qui reste. Affiché dans le tableau.
+
+tickets:
+
+  ticket_002_snapshot_plan_24h:
+    status: à faire
+    note: >-
+      Rien n'est persisté : `state.precomputed_moves` est reconstruit à chaque
+      `/init`, aucun snapshot indexé sur le hash de population. L'urgence est
+      retombée — la reprise à chaud (`make run CONT=1`) réutilise le workdir et les
+      caches OTP/OSMnx/LLM rendent le rejeu quasi instantané — mais le warm-up
+      lui-même est toujours repayé.
+
+  ticket_003_edf_predictive_backpressure:
+    status: terminé
+    note: >-
+      File EDF, contrôle prédictif par échéance et mode drainage en production
+      (`backpressure.py`, `handle/application.py`, tests). Étendu depuis par le
+      ticket 010 (échéance des réflexions au réveil de l'agent).
+
+  ticket_004_prompt_calibration_industrialisation:
+    status: en cours
+    note: >-
+      Phases 0 à 7 livrées, 57 des 60 cases cochées. Le module vit dans son dépôt
+      autonome `prompt_calibration/`.
+
+  ticket_005_choix_modal_probabiliste:
+    status: terminé
+    note: >-
+      Bascule du 2026-07-29 : le LLM rend une distribution, le tirage est seedé, et
+      c'est la distribution — non la décision — qui est mise en cache. Un repli
+      uniforme n'est jamais persisté.
+
+  ticket_005_mode_choice_model:
+    status: terminé
+    note: >-
+      Bras de comparaison non-LLM livré (`scripts/progedo_logit/`, politique
+      entraînée + prédictions sur le jeu commun) ; il figure comme volet 3 dans la
+      page de synthèse (`arms.model` à `ok`).
+
+  ticket_006_relance_run_reference:
+    status: en cours
+    note: >-
+      La relance a eu lieu (runs du 2026-08-19) et les trois traits de population
+      attendus sont produits. Ses six cases sont des critères d'acceptation à
+      vérifier sur ce run : à cocher ou à démentir, ticket par ticket.
+
+  ticket_007_procedure_nouveau_run:
+    status: terminé
+    note: >-
+      La procédure est écrite et suivie. Ses neuf cases sont une CHECKLIST À
+      REJOUER à chaque run, pas une barre d'avancement — elles resteront vides
+      entre deux runs, c'est normal.
+
+  ticket_008_run_24h_mesures_synthese:
+    status: terminé
+    note: >-
+      A1 à A7 livrés : âge et permis corrigés, mode passager, seuil de retour
+      court, colonne « Contrainte de chaîne », `simulation_max_days` consigné,
+      replis d'erreur LLM exclus du scoring, jeux gelés `v2` (météo tirée dans
+      l'année). Ses quinze cases sont des critères d'acceptation non cochés.
+
+  ticket_009_calibration_genetique:
+    status: en cours
+    note: >-
+      G1 à G3 livrés ; G4 déployé — le service tourne en autonomie sur la VM Google
+      Cloud, cadence hebdomadaire active. Reste la configuration SMTP des rapports.
+
+  ticket_010_drainage_nocturne_reflexions:
+    status: en cours
+    note: >-
+      A1 à A4 implémentés le 2026-08-03 (échéance au réveil de l'agent, alarme
+      backlog conditionnée à ce qui souffre réellement, drainage post-pause tracé,
+      panneau cockpit). Les runs 24 h du 2026-08-19 fournissent le matériau : les
+      critères d'acceptation restent à valider dessus.
+
+  ticket_011_arrivees_perdues_gama:
+    status: à faire
+    note: >-
+      La cause amont n'est pas comprise et l'accusé de réception (A2) n'est pas
+      écrit — aucune trace d'ACK dans `LLMAgent.gaml`. Seul le filet de sécurité
+      préexistant opère : le watchdog force la reprise ~1 h simulée après l'arrivée
+      attendue. À traiter avant le premier run à 10 000 agents.
+
+  ticket_012_memoisation_reflexions:
+    status: en cours
+    note: >-
+      A1, A2 et A4 livrés (`llm/reflection_store.py`, branchement STM + LTM,
+      compteur `agent_reflection_memo_total`, tests). Reste A3, la mesure : rejouer
+      deux fois le scénario épinglé et publier le taux de hit. Le compteur n'est
+      d'ailleurs lu par aucun dashboard Grafana — sa place est dans 06_cache_llm.
+
+  ticket_013_temps_terminal_itineraires:
+    status: en cours
+    note: >-
+      Le correctif est livré : accès et diffusion portés par des jambes nommées,
+      temps terminal exogène et spatialisé par couronne, trois caches versionnés,
+      rendu décomposé, tests. Reste T6 — la grille de sensibilité est appelable et
+      testée, mais aucun script ne la parcourt : la mesure n'existe pas.
+
+  ticket_014_anticipation_chaine_journee:
+    status: en cours
+    note: >-
+      Option 1 livrée et mesurée (météo du jour + agenda glissant dans le prompt,
+      derrière `agenda_anticipation_enabled`, signature dans la clé de cache,
+      colonne « Anticipation »). La ligne de position des véhicules a été retirée
+      après mesure (+5,5 pts de vélo) : la règle vit au prompt système. Options 2
+      (prompt-journée) et 3 (ancre de boucle) restent des conceptions.
+
+  ticket_014_annexe_prompt_journee:
+    status: terminé
+    note: >-
+      Annexe de démonstration au ticket 014 : transformation d'une journée réelle
+      (agent 514467) vers le format prompt-journée de l'option 2. Le matériau est
+      produit ; il ne porte pas de travail à faire.

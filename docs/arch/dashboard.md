@@ -167,26 +167,39 @@ tue pas, arrêter `make dashboard` les tue.
 
 ## 3 · Volet « Tickets »
 
-Les tickets de [`docs/tickets/`](../tickets/) n'ont pas de champ de statut
-normalisé. Le dashboard le **déduit**, dans cet ordre :
-
-1. les cases à cocher : aucune cochée → *à faire*, toutes cochées → *terminé*,
-   sinon *en cours* ;
-2. à défaut, la ligne `**État**` / `**État d'avancement**` du ticket, par
-   repérage de tournures (« aucune correction engagée », « livrée », « bloqué »…) ;
-3. sinon *sans statut*.
-
-La colonne « Source » indique lequel des trois a parlé. Cette déduction est
-indicative : **la source de vérité, dès qu'elle est renseignée, est
-[`scripts/dashboard/tickets_status.yaml`](../../scripts/dashboard/tickets_status.yaml)**,
-qui permet de forcer un statut et d'y joindre une note.
+Le statut d'un ticket est porté par
+[`scripts/dashboard/tickets_status.yaml`](../../scripts/dashboard/tickets_status.yaml),
+**seule source de vérité**, et par rien d'autre — surtout pas par un `**Statut**`
+recopié dans l'en-tête de chaque `.md`, qui se périme en silence et qu'il faudrait
+tenir à jour quinze fois.
 
 ```yaml
 tickets:
-  ticket_006:
-    status: bloqué
-    note: en attente de l'accès aux données eqasim
+  ticket_011_arrivees_perdues_gama:
+    status: à faire
+    note: la cause amont n'est pas comprise, l'accusé de réception n'est pas écrit
 ```
+
+⚠ **Clé = nom de fichier complet.** Les formes courtes (`ticket_005`, `005`) sont
+acceptées par `tickets.py`, mais deux tickets distincts partagent le numéro 005
+(choix modal probabiliste / politique PROGEDO) et deux autres le 014 (anticipation /
+annexe) : une clé courte appliquerait un seul statut aux deux.
+
+À défaut d'entrée, le dashboard **déduit** un statut — repli, pas régime nominal :
+
+1. les cases à cocher : aucune cochée → *à faire*, toutes cochées → *terminé*,
+   sinon *en cours* ;
+2. à défaut, la ligne `**État**` / `**État d'avancement**`, par repérage de
+   tournures (« aucune correction engagée », « livrée », « bloqué »…) ;
+3. sinon *sans statut*.
+
+La colonne « Source » dit lequel a parlé. Pourquoi ce repli ne suffit pas : au
+2026-08-20 il donnait « à faire, 0/15 » pour le ticket 008 dont les actions A1–A7
+sont livrées, et *sans statut* pour 9 tickets sur 15. La raison est structurelle —
+quand les cases d'un ticket sont ses **critères d'acceptation** (006, 007, 008), elles
+restent vides jusqu'au run de validation, ce qui ne dit rien de l'avancement du
+travail. Une ligne « Source : cases » est donc à lire comme une entrée manquante dans
+la conf.
 
 ## 4 · Volet « Métriques »
 

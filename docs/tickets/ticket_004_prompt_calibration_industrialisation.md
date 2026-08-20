@@ -8,7 +8,10 @@ issu du brainstorming du 2026-07-13. Documentation associée :
 robuste, reprenable à tout moment, multi-branches, avec une mesure fiable et un
 tableau de bord persistant.
 
-**État d'avancement** : Phases 0-7 livrées (0-5 les 2026-07-13/14 ; 6 et outillage 7
+> Statut dans `scripts/dashboard/tickets_status.yaml` (source de vérité). Ci-dessous,
+> ce qui est **dans le code**.
+
+**Ce qui est livré** : phases 0-7 (0-5 les 2026-07-13/14 ; 6 et outillage 7
 le 2026-07-15) dans le nouveau package `scripts/prompt_calibration/` (voir DN
 ci-dessous). Reste opérationnel : lancer la campagne de validation complète et publier
 le prompt gagnant (l'outillage `calibrate finalize` est prêt).

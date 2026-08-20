@@ -1,6 +1,9 @@
 # Ticket 009 — Calibration par algorithme génétique (population de prompts)
 
-**Statut : implémenté (G1–G3 livrés, G4 déploiement cloud en cours)** — code dans
+> Statut dans `scripts/dashboard/tickets_status.yaml` (source de vérité). Ci-dessous,
+> ce qui est **dans le code**.
+
+**Ce qui est livré** : G1–G3, et G4 (déploiement cloud) — code dans
 `prompt_calibration/` (`calibration/genetic.py`, `seeding.py`, `ga_report.py`,
 `notify_mail.py`, CLI `calibrate ga --loop`, `config/ga_cloud.yaml`,
 `cloud/calib-ga.service`, `cloud/calib-weekly.{service,timer}`), jeu `rank` v2 gelé

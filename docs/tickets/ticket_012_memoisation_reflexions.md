@@ -1,6 +1,9 @@
 # Ticket 012 — Mémoïsation exacte des réflexions STM/LTM
 
-> **État (2026-08-03)** : A1, A2 et A4 implémentés (`llm/reflection_store.py`,
+> Statut dans `scripts/dashboard/tickets_status.yaml` (source de vérité). Ci-dessous,
+> ce qui est **dans le code**.
+>
+> **Livré (2026-08-03)** : A1, A2 et A4 (`llm/reflection_store.py`,
 > branchement STM + LTM, compteurs `agent_reflection_memo_total`, docs, 14 tests).
 > **Reste A3** : la mesure de validation — rejouer deux fois le scénario épinglé et
 > publier le taux de hit (attendu ≈ 100 % au 2ᵉ passage) ; un taux bas révèle des

@@ -1,3 +1,731 @@
+## [2026-08-20] Le statut des tickets vit dans la conf, plus dans les tickets
+
+Le tableau de bord annonçait « à faire, 0/15 » pour le ticket 008 dont les sept actions
+sont livrées, et « sans statut » pour 9 tickets sur 15 — dont le 013, livré et documenté.
+La déduction automatique en était la cause, et c'est structurel : quand les cases d'un
+ticket sont ses **critères d'acceptation**, elles restent vides jusqu'au run de validation,
+ce qui ne dit rien de l'avancement du travail.
+
+Les quinze tickets ont désormais un statut explicite dans
+`scripts/dashboard/tickets_status.yaml`, avec la note de ce sur quoi il s'appuie et de ce
+qui reste. La déduction devient un repli, et une ligne « Source : cases » se lit comme une
+entrée manquante dans la conf.
+
+Les en-têtes de tickets ne portent plus de `**Statut**` : un statut recopié dans quinze
+fichiers se périme en silence — c'est précisément ce qui était arrivé au ticket 014, qui
+affirmait « réflexion ouverte, aucune décision » alors que son option 1 tournait en
+production sous drapeau, mesurée, testée, avec le biais vélo déjà corrigé. Les tickets
+gardent le récit de ce qui est **dans le code**, vérifiable fichier par fichier ; la conf
+porte l'état.
+
+**Avant :** 0 ticket « terminé », 9 « sans statut », un ticket livré affiché comme à faire.
+**Après :** 6 terminés, 7 en cours, 2 à faire, 0 sans statut — et chacun dit pourquoi.
+
+Piège fermé au passage : deux tickets distincts partagent le numéro 005 (choix modal
+probabiliste / politique PROGEDO) et deux autres le 014 (anticipation / annexe). La clé de
+surcharge doit être le **nom de fichier complet** — une clé courte appliquerait un seul
+statut aux deux.
+
+---
+
+## [2026-08-20] Le détail par sous-catégorie, lisible sans dérouler toute la synthèse
+
+Le sous-chapitre « Détail par sous-catégorie » des volets 1 (simulation LLM + tirage) et 3
+(arbre de régression PROGEDO) existe désormais aussi en page autonome : les sept
+dimensions à la suite — âge, distance, genre, occupation, motif, lieu de résidence, type de
+logement — en pleine largeur, sans colonne de navigation à gauche. On peut ouvrir, envoyer
+ou imprimer les profils modaux d'un seul volet sans embarquer les trois autres chapitres de
+la synthèse.
+
+La page de synthèse **garde** ses deux sous-chapitres : les nouvelles pages en sont un
+extrait, pas un déplacement. Chaque sous-chapitre y renvoie vers sa page dédiée, et le
+sommaire gagne un groupe « Pages dédiées ». Les cellules sont produites par le même code
+de rendu que la page complète : un chiffre affiché sur une page dédiée est, par
+construction, celui du volet dont elle est extraite.
+
+**Avant :** un seul document de 216 ko ; montrer le détail âge × mode de la simulation
+supposait de faire défiler la calibration et le modèle statistique.
+**Après :** `docs/synthesis/detail_simulation.html` et `docs/synthesis/detail_progedo.html`
+(65 ko chacune), régénérées par `make synthesis` à côté de `index.html` inchangée.
+
+---
+
+## [2026-08-20] Relecture : la grille de sensibilité ne se mesurait pas deux fois de suite
+
+Sept défauts trouvés en relisant le travail non poussé, dont trois qui faussaient une
+mesure ou un fichier de configuration.
+
+**La grille de sensibilité du temps terminal donnait des valeurs inventées.** Enchaîner
+deux variantes dans le même processus — ce que fait une boucle sur `low`, `central`,
+`high` — multipliait leurs facteurs : après `high` puis `low`, la voiture payait 0,75 fois
+son temps terminal au lieu de 0,5. L'étiquette de variante, elle, était juste, si bien que
+la mesure T6 aurait rapporté un écart sous un nom de variante qui ne le décrivait pas.
+La mise à l'échelle repart désormais des valeurs centrales, et un test enchaîne les
+bascules dans les deux sens.
+
+**`make providers` abîmait `providers.yaml`.** En commentant un modèle disparu de l'API, il
+re-commentait au passage les blocs déjà commentés qui le suivaient (`# # groq_llama4:`) —
+or un bloc commenté est une décision humaine, pas un brouillon. Les 28 lignes touchées le
+2026-08-18 sont ramenées à un seul niveau de commentaire. Le fichier garde aussi ses droits
+d'origine, au lieu de passer en 600 à chaque rafraîchissement.
+
+**Deux avertissements à chaque `make`.** La cible `stop-run` était déclarée deux fois ; la
+première recette, morte, est supprimée.
+
+**Autres corrections.** Un plan voiture ne déclare plus « 10 min de marche » et 200 m de
+distance de marche venus d'un repli interne — chercher une place n'est pas marcher. Une
+réflexion STM déclenchée pile à l'heure de réveil de son agent n'a plus une échéance déjà
+dépassée. La page de synthèse relève la version du jeu de train dans le store au lieu de la
+supposer `v1` : quand la campagne rangera ses évals sous `train@v2`, la colonne train
+n'aura pas disparu sans un mot, et les évals ainsi écartées sont désormais annoncées. La
+page par modèle dédoublonne les tentatives comme la page principale, garde-fou compris.
+
+**Ce que le correctif de population sait maintenant dire.** `fix_minor_traits` reconstitue
+les ménages par coordonnées du domicile, mais la population exportée est un échantillon :
+121 des 547 ménages y comptent moins de membres que ne l'annonce leur `household_size`. Les
+permis des absents ne sont donc pas comptés et `car_availability` penche vers « voiture
+toujours disponible ». 16 ménages ont même une voiture et aucun conducteur présent, alors
+que leurs non-conducteurs restent éligibles au mode passager. Le script mesure et affiche
+ces deux comptes au lieu de les laisser passer ; la correction de fond demande un
+`household_id` à la génération.
+
+**Notebooks.** `pipeline.ipynb` était committé dans l'état d'un `papermill` en échec —
+bannière rouge « An Exception was encountered » et sorties perdues. Les artefacts d'échec
+sont retirés ; il ne reste du diff que la vraie correction, la tolérance à l'absence de
+`gama_arrivals.csv`.
+
+---
+
+## [2026-08-20] Jeux de calibration `v5` : un seul jour par prompt, doublons écartés
+
+Les jeux gelés de la calibration sont régénérés depuis le run de 24 h du 2026-08-19, avec
+deux corrections de fond sur ce que le modèle lit.
+
+**La météo ne se contredit plus dans un même prompt.** Depuis les jeux `v2`, la météo du
+départ est tirée dans l'année climatique complète pour ne plus calibrer dans un monde sans
+pluie. Mais le bloc persona porte deux autres énoncés météo — l'horizon des créneaux
+restants de la journée (« Météo plus tard : après-midi 12 °C… ») et les annotations de
+l'agenda glissant (« — pluie prévue ») — qui restaient, eux, ceux du jour du run. Un prompt
+pouvait annoncer 18 °C et des averses au départ, puis un après-midi ensoleillé : le modèle
+voyait deux jours à la fois. Les trois énoncés viennent désormais du même jour tiré.
+
+**Les répétitions de décisions ne comptent plus deux fois.** Un run de 24 h rejoue les mêmes
+trajets le jour simulé suivant, et une reprise à chaud les rejoue une troisième fois. 323
+répétitions sur 2 514 décisions ont été écartées au gel ; le manifeste en publie le compte.
+
+**Avant :** 0 % de précipitations en `v1`, puis en `v2`–`v4` une météo de départ pluvieuse
+sur un horizon de journée resté sec, et des personas pesant deux fois dans les strates.
+**Après :** 44 % des décisions portent des précipitations, l'horizon du jour et l'agenda
+suivent le même jour, et chaque décision ne pèse qu'une fois.
+
+La campagne repart sur une branche neuve `ref2`, semée par le prompt système de production
+(`expert_chaine`) et non par le prompt naïf d'origine : elle mesure ce que la calibration
+gagne **encore** à partir du prompt déjà retenu. Le protocole pré-enregistré est amendé en
+conséquence (A8), effectifs et perte de comparabilité compris.
+
+**Le lancement a révélé un troisième défaut, corrigé.** L'état de la boucle génétique
+(génération, population, champion, compteur de stagnation) était rangé sous une clé
+**globale**, partagée par toutes les campagnes d'un même store. La première passe de `ref2`
+a donc repris la trajectoire de `ref1` — génération 11, ses neuf individus, son champion —
+sans jamais semer la graine déclarée, et à une mesure de val d'une convergence héritée. La
+clé porte désormais la branche, un store portant l'ancienne refuse de démarrer jusqu'à ce
+qu'on lui dise à quelle campagne elle appartient, et les rapports de génération sont rangés
+par branche au lieu de s'écraser. Amendement A9.
+
+---
+
+## [2026-08-20] La page de synthèse reconnaît un run repris à chaud
+
+La page principale comptait deux fois les décisions d'un run relancé avec
+`make run OFFLINE=1 CONT=1`. La reprise rejoue le jour simulé depuis t0 **dans le même
+dossier d'expérience** : `moves.csv` porte alors deux lignes par décision, une par
+tentative, toutes deux datées du même jour simulé — la coupe au premier jour simulé ne
+les sépare donc pas. Le jeu d'évaluation commun ne retient plus que la tentative la
+plus récente, et la page annonce qu'elle a lu un run repris ainsi que le nombre de
+lignes écartées, comme elle le faisait déjà pour la coupe au jour simulé. La page par
+modèle appliquait déjà cette lecture ; les deux sont désormais d'accord.
+
+Le dédoublonnage se fait sur le triplet (personne, activité, **jour simulé**). Sans le
+jour, la décision du jour 1 et sa répétition du jour 2 — celles que la coupe au premier
+jour simulé est là pour écarter — passeraient pour deux tentatives de la même décision,
+et la décision disparaîtrait du score au lieu d'y entrer une fois.
+
+Aucun chiffre publié ne bouge : le run épinglé n'a pas été repris, et la régénération
+donne un `data.json` identique à la virgule près.
+
+**Avant :** un run repris affichait 24,43 — 1 469 lignes en doublon, 282 décisions
+comptées deux fois — sans que rien sur la page ne le signale.
+**Après :** le même run affiche 24,09, et la page dit qu'elle a écarté 1 469 lignes de
+reprise. L'écart de 0,34 point est du même ordre que les gains que la calibration
+cherche à mesurer.
+
+---
+
+## [2026-08-20] Le score d'un run se ventile par modèle
+
+Un run qui fait tourner plusieurs modèles produisait un seul score : la page de
+synthèse agrège le run entier et ne regarde pas quel fournisseur a décidé quoi.
+`make model-compare RUN=…` publie désormais une page par run
+(`docs/synthesis/models/<run>/`) qui reprend la loss et le lecteur de la page
+principale, mais découpe le journal modèle par modèle, isole les trajets à
+itinéraire unique, et affiche la santé du run à côté de son score. Aucun appel LLM :
+tout est relu dans `moves.csv`.
+
+Trois garde-fous accompagnent le découpage. Un **test de permutation** dit si l'écart
+entre deux modèles survit au bruit de découpage — un sous-ensemble plus petit gonfle
+mécaniquement les divergences par strate. Un **contrôle de comparabilité** vérifie que
+les modèles ont reçu des personas semblables (âge, distance, genre, occupation, motif,
+nombre de modes proposés). Et la **reprise à chaud** est reconnue : un run repris avec
+`CONT=1` porte deux fois les mêmes décisions, la page mesure la tentative la plus
+récente et publie les deux lectures côte à côte.
+
+**Avant :** « ce run est à 24,1 » — sans moyen de savoir que deux modèles s'y
+partageaient les décisions avec 5 points d'écart entre eux.
+**Après :** le classement des modèles est mesuré, testé contre le bruit, et la part des
+décisions qui n'a jamais atteint un modèle est affichée en regard du score.
+
+---
+
+## [2026-08-19] La règle de chaîne passe au prompt système, la ligne « Vos véhicules » disparaît
+
+Mesuré sur le premier run avec anticipation : la ligne « votre vélo est au domicile,
+avec vous » agissait comme une invitation et gonflait la part vélo de +5,5 points
+(écart à la référence EMC² : +13,8 → +19,6). La ligne est supprimée du bloc persona ;
+la règle de chaîne vit désormais dans le prompt système (nouvelle variante
+`expert_chaine`, seed `expert`, promue via `active:`) : « en cas d'utilisation d'un
+véhicule personnel, pense au stationnement et aux déplacements du reste de la journée,
+jusqu'au retour au domicile ». L'agenda glissant et la météo du jour restent dans le
+bloc persona ; la disponibilité des véhicules reste portée par le jeu d'options (verrous).
+
+**Avant :** le prompt énonçait la position des véhicules par persona, avec un effet
+de saillance mesurable sur le vélo.
+**Après :** consigne de chaîne générique côté système, zéro mention de véhicule dans
+le bloc persona ; le changement de variante isole automatiquement le cache de décisions
+(nouveau checksum).
+
+---
+
+## [2026-08-19] Arrêt à chaud et reprise d'un run : `make stop-run` / `make run CONT=1`
+
+Un run interrompu (plantage, arrêt volontaire, machine éteinte) repartait toujours
+de zéro : nouveau répertoire d'expérience, journaux et métriques repartis à vide.
+`make stop-run` arrête proprement la simulation (GAMA + launcher headless) en
+laissant la pile en place, et `make run OFFLINE=1 CONT=1` reprend **dans le même
+répertoire** : moves.csv et app.log s'appendent, state.json et les checkpoints de
+population sont retrouvés, les données Grafana/Prometheus/Redis sont conservées.
+La simulation repart à t0 du jour simulé (GAMA ne gèle pas son état en plein
+trajet) mais les caches rendent le rattrapage quasi instantané et sans quota LLM.
+
+**Avant :** après l'OOM GAMA du run 2026-08-19_11_01, la relance a créé un
+nouveau run et re-déroulé la journée dans un répertoire vierge.
+**Après :** `make run OFFLINE=1 CONT=1` aurait repris dans le même répertoire,
+journaux et métriques continus.
+
+---
+
+## [2026-08-19] Les agents anticipent leur journée au moment du choix de mode
+
+Le choix modal restait myope : au départ du matin, l'agent ignorait ses déplacements
+de l'après-midi — partir à pied le privait de voiture toute la journée sans qu'il ait
+pu le peser. Le bloc persona du prompt contient désormais l'agenda glissant des trajets
+restants (heure, motif, distance), la position de ses véhicules (« votre vélo est avec
+vous et devra être revenu au domicile ce soir »), et la météo des tranches restantes de
+la journée. Le choix reste trajet par trajet et les trois verrous de chaîne (ticket 008)
+restent le filet de sécurité — le bloc informe, il ne contraint pas.
+
+Le bloc agenda/véhicules n'est généré que pour les agents qui ont un véhicule à
+chaîner (jamais pour les passagers) ; la météo du jour est montrée à tous. La colonne
+`Anticipation` de `moves.csv` trace ce que chaque prompt contenait (segmentation A/B),
+et la signature du bloc entre dans la clé du cache de décisions : deux anticipations
+différentes ne peuvent pas se servir mutuellement une décision. Désactivable par
+`agenda_anticipation_enabled: false` (rétablit le prompt myope à l'identique, cache
+compris). Référence « avant » : run sain `2026-08-19_09_40` — 25,8 % des journées-agents
+y subissaient un verrou de sortie sur un trajet > 2 km (mesure ticket 014, à faire baisser).
+
+**Avant :** l'agent choisissait chaque trajet sans voir la suite de sa journée ; les
+conséquences (vélo resté au bureau, voiture indisponible) étaient subies aux trajets suivants.
+**Après :** le LLM voit l'agenda restant, la position des véhicules et la météo à venir
+au moment de chaque choix.
+
+---
+
+## [2026-08-19] `make synthesis` rapatrie le store cloud avant de générer la page
+
+La page de synthèse se générait sur une copie locale de `calibration_cloud.db` qui
+n'était rafraîchie qu'à la main : le volet calibration pouvait refléter une campagne
+vieille de plusieurs semaines sans le signaler. `make synthesis` commence désormais
+par rapatrier le store depuis la VM cloud ; si la VM est injoignable, une alarme
+explicite indique la date de l'instantané local utilisé. `make synthesis PULL=0`
+saute le pull (travail hors-ligne).
+
+**Avant :** la page pouvait montrer une campagne cloud figée au dernier `pull-db` manuel (ex. : 9 nœuds `ga1` du 2 août alors que la VM en portait 47).
+**Après :** chaque `make synthesis` reflète l'état réel du store cloud (tuile « Campagne cloud » : 331 nœuds, 385 évals), ou avertit `[ALARME]` s'il ne peut pas.
+
+**Limite connue :** la trajectoire du volet calibration se lit sur les évals `train` ;
+la campagne génétique (ticket 009) évalue ses nœuds sur des jeux `rank`/`screen`,
+que la page ne trace pas. Le store est à jour, mais les champions GA restent
+invisibles de la courbe tant qu'ils n'ont pas d'éval `train` (ou que la page
+n'apprend pas à lire le jeu `rank`).
+
+---
+
+## [2026-08-19] `make analysis` utilise le venv du projet
+
+La cible `analysis` lançait `python` du système, qui n'a pas papermill : les quatre
+notebooks échouaient systématiquement (`No module named papermill`), même venv activé.
+Elle utilise désormais l'interpréteur du venv du projet, comme `dashboard` et `synthesis`,
+surchargeable via `make analysis ANALYSIS_PYTHON=/chemin/vers/python`.
+
+**Avant :** `make analysis` échouait avec `No module named papermill` selon le shell appelant.
+**Après :** les notebooks tournent avec `llm-agents/.venv/bin/python`, quel que soit l'environnement du shell.
+
+---
+
+## [2026-08-18] Rafraîchissement des providers depuis les quotas réels
+
+`make providers` a resynchronisé `llm_module/config/providers.yaml` avec l'état réel des
+fournisseurs. Les deux instances Groq Llama (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`)
+sont désactivées : leurs modèles ont disparu du catalogue `/models` de Groq. Un nouveau
+provider `google_gemini_3_7_flash` est référencé hors rotation (weight 0, RPD free tier trop
+bas). Mistral et les deux instances Cerebras répondent désormais **HTTP 402 (payment
+required)** : leurs blocs restent inchangés mais ces capacités sont indisponibles tant que le
+free tier n'est pas rétabli.
+
+**Avant :** la rotation croyait disposer de Groq Llama 3.3/3.1 (modèles supprimés côté Groq → erreurs à l'appel).
+**Après :** la rotation ne contient que des instances dont le modèle existe réellement ; capacité nominale réduite d'environ 0.4 de weight.
+
+---
+
+## [2026-08-18] make analysis tolère l'absence d'arrivées GAMA
+
+`make analysis` ne plante plus quand le run n'a pas produit `gama_results/gama_arrivals.csv`
+(run interrompu, GAMA jamais arrivé au dump des arrivées). Le notebook `pipeline.ipynb`
+saute proprement la section retard d'arrivée, et `delays.ipynb` — entièrement dédié aux
+arrivées — est ignoré avec un message explicite au lieu de faire échouer toute l'analyse.
+
+**Avant :** `KeyError: 'delay_s'` dans `pipeline.ipynb`, puis `FileNotFoundError` dans `delays.ipynb` ; `make analysis` sortait en erreur sans produire les autres rapports.
+**Après :** les trois notebooks exploitables s'exécutent, `delays.ipynb` est marqué `[SKIPPED]` avec le fichier manquant nommé.
+
+---
+
+## [2026-08-18] Le mutateur réfléchit avant d'écrire
+
+Le modèle qui **propose** les mutations de prompt dispose maintenant d'un budget de réflexion
+(1024 tokens). Il l'utilise sur les trois chemins où il rédige : mutation ciblée, croisement,
+et génération des variants de départ. Le modèle qui **évalue** n'y touche pas.
+
+La raison vient de la littérature : GAAPO (arXiv:2504.07157) compare les LLM employés comme
+générateurs de prompts et mesure que les modèles capables de raisonner mènent la validation à
+0,68–0,70 là où un généraliste stagne à 0,45–0,50 dès la deuxième génération. Écrire une
+mutation suppose de peser une carte de contribution par bloc, des écarts par tranche d'âge et
+de motif, un historique de rejets et une liste tabou — le genre de tâche où délibérer paie.
+
+**Avant :** le mutateur répondait au premier jet, sans étape de réflexion.
+**Après :** il dispose de 1024 tokens pour raisonner avant de rédiger sa proposition.
+
+Le juge, lui, reste sans réflexion, et c'est délibéré : un modèle qui délibère converge vers la
+réponse typique, alors qu'on cherche justement à reproduire la **dispersion** des choix d'une
+population. Le réglage n'entre pas dans la clé du cache d'évaluation — aucune des évaluations
+déjà payées n'est perdue.
+
+Deux garde-fous, parce que réflexion et réponse se partagent le même plafond de sortie : le
+plafond de chaque appel est relevé du montant du budget, et une réponse tronquée lève désormais
+une alarme qui nomme la cause avec ses chiffres — au lieu d'échouer sur un obscur « Expecting
+value: char 0 ».
+
+Réglages : `mutation_thinking_budget` (0 désactive, -1 laisse le modèle arbitrer),
+`mutation_thinking_reserve`.
+
+---
+
+## [2026-08-18] Le biais voiture est comportemental, pas instrumental — mesuré à 6 %
+
+On soupçonnait l'instrument. Les options d'itinéraire montraient une voiture plus rapide
+qu'elle ne l'est, et le prompt calibré la choisissait massivement pour des trajets de
+800 mètres. La question était : combien de ce travers venait des données fausses, et combien
+du comportement du modèle ?
+
+**Réponse : 6 %.** En corrigeant les durées sans toucher au prompt, la sur-représentation de
+la voiture sur les trajets de moins d'un kilomètre passe de +32,3 à +30,2 points d'écart à
+l'enquête ménages. Deux points sur trente-deux.
+
+La mesure a demandé un jeu de comparaison qui ne diffère de l'original que par **une seule**
+variable — mêmes habitants, mêmes trajets, mêmes options en transports collectifs au
+caractère près, seules les lignes voiture et vélo réécrites. Sans cette précaution, la
+différence n'aurait été attribuable à rien.
+
+**Avant :** « le modèle met les habitants en voiture pour 800 mètres » — lecture suspendue,
+faute de savoir si on lui montrait une voiture réaliste.
+**Après :** on lui montre une voiture honnête, et il continue. Le constat tient, et il porte
+sur le comportement du modèle.
+
+Contre-épreuve : le prompt non calibré ne s'améliore pas davantage (+10,3 → +11,3). Ce n'est
+donc pas une résistance propre au prompt optimisé — le modèle lui-même ne réagit pas au coût
+de stationnement sur les trajets courts.
+
+Second résultat, sur la même mesure : **l'avance du prompt calibré n'est pas un artefact.**
+On craignait qu'une partie de son gain consiste à compenser le défaut, et devienne une double
+peine une fois celui-ci corrigé. C'est l'inverse — son avance passe de 7,18 à 9,08 quand
+l'instrument devient honnête.
+
+---
+
+## [2026-08-18] Le coût de la voiture dépend maintenant du quartier
+
+Se garer au Capitole et se garer en 3ᵉ couronne ne coûtent pas le même temps. Jusqu'ici le
+simulateur appliquait la même valeur partout, ce qui sous-estimait le coût d'usage de la
+voiture au centre et le surestimait en périphérie — donc aplatissait précisément la variation
+spatiale qu'on cherche à mesurer.
+
+Le temps d'accès et de stationnement suit désormais les couronnes de l'enquête ménages, et
+**les deux bouts d'un trajet sont tarifés séparément** : rejoindre son véhicule dépend d'où
+l'on part, trouver une place dépend d'où l'on va.
+
+| | rejoindre la voiture | stationner et marcher |
+|---|---|---|
+| Toulouse | 3 min | 7 min |
+| 1ʳᵉ couronne | 2 min | 4 min |
+| 2ᵉ couronne | 2 min | 3 min |
+| 3ᵉ couronne | 1 min | 1 min |
+
+**Avant :** 6 minutes de temps terminal, partout.
+**Après :** 10 minutes pour un trajet interne à Toulouse, 2 minutes en 3ᵉ couronne — et
+8 minutes pour venir de la 3ᵉ couronne au centre (accès rural, stationnement de centre).
+
+Effet mesuré sur le prompt calibré : l'écart à l'enquête baisse de près de 3 points. Le
+zonage n'a pas été inventé pour l'occasion — c'est celui des couronnes de résidence déjà
+utilisées par le journal de déplacements, remonté dans un module partagé pour qu'il n'en
+existe qu'une définition.
+
+---
+
+## [2026-08-18] Le mode rapide de génération de prompts est abandonné
+
+Il promettait de reconstruire la base de prompts en minutes au lieu d'heures, sans appeler le
+modèle de langage. Il tient cette promesse, mais il produit une base **inutilisable pour
+calibrer**, et c'est structurel.
+
+En simulation, un véhicule reste là où on l'a laissé : qui part travailler en bus laisse son
+vélo à la maison et ne peut pas rentrer à vélo. Savoir où est le vélo suppose de connaître le
+mode choisi au trajet précédent — donc d'avoir interrogé le modèle. Le mode rapide ne
+l'interroge pas : la dépendance est circulaire, sans contournement.
+
+Résultat, le vélo est proposé à chaque trajet comme s'il se téléportait. **Mesuré : 34 % de
+vélo sur les trajets de moins d'un kilomètre, contre environ 9 % sur une base issue d'une
+simulation.**
+
+**Avant :** mode rapide présenté comme la voie normale de régénération.
+**Après :** le script refuse de tourner sans confirmation explicite, et le jeu qu'il a produit
+porte la mention « inapte à la calibration » dans son manifeste. Il garde deux usages
+légitimes : réchauffer les caches d'itinéraires — il calcule exactement les routes dont une
+simulation aura besoin — et éprouver un rendu.
+
+Une simulation complète reste donc nécessaire pour produire une base de calibration.
+
+---
+
+## [2026-08-17] La voiture ne payait pas son stationnement, et le vélo non plus
+
+Les options d'itinéraire soumises aux habitants facturaient aux transports collectifs
+l'intégralité de leur temps d'accès — la marche jusqu'à l'arrêt, la correspondance, la marche
+jusqu'à la destination, détaillées minute par minute — et **rien de visible** à la voiture ni
+au vélo. Devant « voiture 7 minutes / bus 13 minutes » pour aller à 1,4 km, choisir la
+voiture est un raisonnement correct. Le modèle raisonnait juste sur une réalité fausse.
+
+Le temps de stationnement existait pourtant déjà : 4 minutes pour la voiture, 2 pour le vélo,
+ajoutées en silence à la durée du trajet, sans provenance et sans jamais être montrées. Ce
+n'était donc pas leur magnitude qui était fausse, c'était leur invisibilité — face à des
+options en transports collectifs décomposées pas à pas.
+
+Le temps d'accès et de stationnement est désormais un **paramètre documenté**, chaque valeur
+avec sa source et son lien (tables de *terminal times* de la modélisation des déplacements,
+littérature sur la recherche de place, enquêtes Cerema). La valeur du vélo est déclarée **non
+sourcée** — aucune référence chiffrée n'existe pour un vélo personnel — plutôt que maquillée
+avec un chiffre de vélo en libre-service. Et les habitants voient maintenant la décomposition,
+comme ils voient celle des transports collectifs.
+
+**Avant :**
+```
+- [4] car: Durée estimée : 6 minutes. Distance : 944 m.
+```
+**Après :**
+```
+- [4] car: Temps de trajet : 8 minutes, dont 6 minutes d'accès et de stationnement. Distance : 944 m.
+    · Rejoindre la voiture : 2 minutes.
+    · Conduite : 2 minutes.
+    · Stationnement et marche jusqu'à 'leisure' : 4 minutes.
+```
+
+Sur ce déplacement de 900 mètres, la voiture passe de meilleure option (6 min) à égalité avec
+le bus (8 min), et l'habitant voit que 6 de ses 8 minutes ne sont pas de la conduite. Les
+options en transports collectifs et à pied ne changent pas d'une seule minute — leur temps
+d'accès était déjà compté, l'ajouter deux fois aurait été le défaut inverse.
+
+Le vélo, lui, garde exactement sa durée : ses 2 minutes terminales étaient déjà là, elles sont
+simplement nommées. Si les parts vélo bougent, ce sera par la seule mise en évidence.
+
+**Deux caches ne pouvaient pas voir ce changement**, et l'un était dangereux : le cache de
+décisions est indexé sur les lignes et les arrêts d'un itinéraire, pas sur ses durées. Il
+aurait rejoué indéfiniment des décisions prises sur l'ancienne réalité, sans qu'aucun message
+ne le signale. Les deux clés portent désormais une version des données d'itinéraire.
+
+---
+
+## [2026-08-17] Régénérer la base de prompts sans relancer la simulation
+
+Corriger la construction des itinéraires imposait jusqu'ici de rejouer 24 heures de
+simulation pour reconstituer la base de prompts de la calibration — soit un budget de modèle
+de langage entier, alors que **les itinéraires proposés ne dépendent pas de ce que le modèle
+choisit** : le calculateur de trajets et le réseau routier suffisent à les construire.
+
+Un mode rapide reconstruit donc la base directement depuis la population, en **zéro appel au
+modèle** : quelques minutes au lieu de plusieurs heures. Le mode simulation reste intact et
+demeure la seule voie quand la mémoire des habitants doit être exploitée — les deux
+producteurs alimentent la même chaîne de gel, et le manifeste enregistre lequel a servi.
+
+**Avant :** toute correction des itinéraires = un run complet, plusieurs heures, budget LLM
+entier consommé pour produire des prompts.
+**Après :** `make prompt-base` — quelques minutes, aucun appel au modèle. Le run complet
+reste disponible pour ce qu'il apporte seul : la mémoire court et long terme.
+
+Deux limites du mode rapide sont écrites dans le manifeste du jeu produit plutôt que laissées
+à découvrir : pas de section mémoire, et la chaîne de véhicules n'est pas rejouée (savoir où
+un vélo est garé suppose de connaître le mode choisi au trajet précédent, donc d'avoir
+interrogé le modèle). Trois réglages jusqu'ici implicites deviennent au passage explicites et
+consignés — la graine du mélange des options, l'ordre d'énumération, l'origine de la météo —
+sans quoi deux générations de la même base ne donnaient pas le même texte.
+
+---
+
+## [2026-08-17] Le chiffre publiable de la calibration ne mesurait qu'un sixième de lui-même
+
+La campagne de référence a été arrêtée et finalisée. Sa première finalisation a rendu un
+résultat **faux** : les cinq découpages par tranche d'âge, occupation, genre, motif et
+distance sont sortis « non mesurés » sur le jeu de test, remplacés chacun par la pénalité
+maximale des deux côtés de la comparaison — donc annulés dans l'écart. Le gain annoncé ne
+portait que sur la distribution globale.
+
+La cause : la table qui associe chaque habitant simulé à ses caractéristiques était
+construite sur les jeux d'entraînement et de validation seulement. Les autres jeux
+intermédiaires en sont des sous-ensembles, si bien que le défaut restait invisible — sauf
+sur le jeu de test, le seul strictement disjoint, et le seul qu'on ne consulte qu'une fois
+dans la vie d'une campagne.
+
+Les décisions brutes, elles, étaient intactes : le score a pu être recalculé **sans
+réinterroger le modèle**. Le gain réel est plus de deux fois supérieur à celui qui avait été
+annoncé, et il est significatif.
+
+**Avant :** écart mesuré −3,41, portant en réalité sur un seul des six termes.
+**Après :** écart réel **−7,13**, intervalle de confiance à 90 % [−10,37 ; −4,35] sur
+259 habitants appariés — soit 4,4 fois le seuil de détection annoncé avant la mesure.
+
+Une réserve accompagne ce résultat : toutes les dimensions s'améliorent **sauf la
+distance**, qui se dégrade. C'est exactement l'axe sur lequel la recherche n'avait aucune
+direction disponible et sur lequel les données d'itinéraire sont biaisées — les deux
+constats du jour, confirmés ici sur un jeu tenu à l'écart de toute la campagne.
+
+---
+
+## [2026-08-17] Deux garde-fous de la calibration étaient débranchés
+
+Deux protections décrites dans la documentation et le protocole existaient bel et bien dans
+le code, avec leurs tests — mais **rien ne les appelait**. La campagne de référence a tourné
+onze générations sans qu'aucune des deux ne s'exécute une seule fois.
+
+La première grave l'empreinte de la configuration au démarrage et refuse de reprendre une
+campagne sous un instrument différent : changer de modèle d'évaluation au douzième jour était
+jusqu'ici indétectable. Elle refuse désormais, en nommant le champ qui a changé ; l'assumer
+explicitement reste possible, mais l'écart est alors enregistré et signalé.
+
+La seconde enregistre, sur chaque mutation, le bras expérimental qui l'a produite — sans quoi
+on ne peut plus dire après coup quelle variante de l'algorithme a proposé quoi. Les onze
+points d'écriture le renseignent maintenant. L'import de campagnes anciennes, lui, continue
+délibérément à ne rien inscrire : leur régime est réellement inconnu, et lui en inventer un
+serait pire que de l'ignorer.
+
+**Avant :** deux garanties annoncées, zéro exécution — le registre de configuration était
+vide et la colonne de régime nulle sur 106 mutations.
+**Après :** les deux sont armées, avec des tests qui vérifient l'appel et non plus seulement
+la mécanique.
+
+Aucun dégât sur la campagne écoulée : son instrument n'a pas bougé, c'est vérifiable dans le
+store. Ce qui manquait était la garantie, pas la propriété.
+
+---
+
+## [2026-08-17] La calibration peut enfin retirer et ajouter des phrases
+
+La recherche de prompt ne savait que **réécrire** des phrases existantes : elle n'a jamais
+retiré ni ajouté un seul bloc de toute la campagne de référence. Le coût était mesurable —
+le diagnostic du champion signalait depuis cinq générations qu'une de ses phrases
+*dégradait* le score, la version sans cette phrase était déjà évaluée et en cache, et rien
+ne pouvait la retenir comme candidate. Deux opérateurs ferment le trou : le **retrait**
+d'une phrase mesurée nuisible (gratuit — aucun appel au modèle, et la version raccourcie
+est déjà évaluée) et la **greffe** d'une phrase neuve qui laisse tout le reste intact.
+
+Un dixième axe de diversification est ajouté, l'**échelle du trajet** : aucun des neuf
+précédents ne portait sur la longueur du déplacement, alors que c'est là que la simulation
+se trompe le plus — sur les trajets les plus courts, elle met la moitié des habitants en
+voiture quand l'enquête en met moins d'un cinquième. L'axe agit par le mécanisme (sortir un
+véhicule coûte le même effort quel que soit le trajet, donc pèse d'autant plus qu'il est
+bref) et non par un seuil chiffré, qui reviendrait à écrire la réponse attendue dans le
+prompt — et serait de toute façon rejeté avant évaluation.
+
+**Avant :** la recherche explorait à structure de prompt figée ; une phrase mesurée
+nuisible y restait indéfiniment, et aucune direction ne visait la longueur du trajet.
+**Après :** elle peut raccourcir, allonger, et diversifier sur l'échelle du déplacement.
+
+La campagne en cours n'est **pas** modifiée : elle arrive à sa règle d'arrêt et changer son
+espace de recherche en route rendrait cet arrêt ininterprétable. Les opérateurs valent pour
+la campagne suivante ; la limite correspondante est inscrite au protocole (amendement A4).
+
+---
+
+## [2026-08-13] Fin du spam nocturne du watchdog de calibration
+
+Pendant une veille quota (état attendu : les tokens sont épuisés, la campagne attend le
+renouvellement), le chien de garde envoyait la même alarme « registre immobile » sur
+Discord à chaque passe de 2 h — jusqu'à 5-6 messages identiques par nuit. Les alertes
+passent à front montant : la première part toujours, les répétitions à l'identique se
+taisent, un rappel quotidien porte l'ancienneté d'une alarme durable, et une levée 🟢 est
+notifiée au retour au sain. La détection, elle, est inchangée : `doctor` sort toujours en
+code 2 et l'arrêt d'une passe figée reste inconditionnel.
+
+**Avant :** une nuit de veille quota = 5-6 alertes 🚨 identiques.
+**Après :** une seule alerte à l'entrée en veille, une levée 🟢 à la reprise ; rappel
+au-delà de 24 h si l'alarme persiste.
+
+---
+
+## [2026-08-12] Le biais vélo/marche est mesuré, et on sait quelle part le prompt peut corriger
+
+L'écart aux parts modales toulousaines était connu qualitativement — « le vélo est
+surestimé, la marche sous-estimée ». Il est maintenant chiffré par strate, sur les mêmes
+2 830 décisions que la politique statistique entraînée sur l'enquête, ce qui permet de
+séparer deux choses qu'on confondait.
+
+**Avant :** un écart global attribué au prompt, sans savoir ce qu'un prompt pouvait en
+récupérer.
+**Après :** marche −16,7 points, vélo +12,0, voiture juste à 0,2 point près — et surtout,
+les causes sont identifiées. **28 % des décisions n'offrent qu'un seul itinéraire**, et
+neuf fois sur dix c'est le **verrou de retour de véhicule** : l'agent qui a pris son vélo
+le matin doit le ramener le soir. Ces trajets ne sont donc pas des contraintes subies mais
+les **échos** d'un choix fait un trajet plus tôt — le dispositif ne dilue pas le biais du
+prompt, il le double. S'y ajoutent une simulation qui produit **deux fois moins de trajets
+de moins d'un kilomètre** que la réalité toulousaine, là où trois déplacements sur quatre
+se font à pied. Sur les seules décisions offrant un choix réel, le modèle statistique
+retombe sur la cible (4,5 % de vélo pour 4,1 attendus) — l'écart restant, **+8,6 sur le
+vélo et −17,6 sur la marche, est bien celui du prompt**.
+
+Un défaut à corriger au passage : **88 retours forcés descendent d'une décision que le
+scoring exclut** (le repli quand le LLM n'a pas répondu). La décision est écartée, sa
+conséquence est comptée — l'exclusion doit suivre la chaîne du véhicule.
+
+Le défaut central n'est pas un niveau mais une **absence de réponse à la distance** :
+l'excès de vélo est constant de +9 à +16 points sur toutes les bandes, jusqu'à 11 % de
+vélo sur les trajets de 10 à 20 km — là où l'enquête en compte 2 %. Sur les trajets de
+moins d'un kilomètre, où trois Toulousains sur quatre marchent, l'agent choisit autre
+chose une fois sur deux.
+
+Mesure, tableaux par âge, occupation, motif, distance et genre, et script de rejeu (zéro
+appel LLM) archivés avec les autres mesures de la calibration.
+
+---
+
+## [2026-08-12] Calibration : deux passes ne peuvent plus écrire ensemble dans le store
+
+Les deux passes quotidiennes de la campagne se partageaient un même fichier de campagne
+sans autre protection que l'écart entre leurs horaires de déclenchement. Comme une passe
+a le droit de durer jusqu'à sept heures, rien n'empêchait la seconde de démarrer pendant
+que la première écrivait encore.
+
+Une passe prend désormais un **verrou exclusif** sur le store avant tout appel LLM. Si
+le store est occupé, elle attend, réessaie, puis renonce proprement sans rien écrire ni
+consommer de quota — et le dit dans le journal. L'heure de déclenchement reste tirée au
+sort à la seconde près : l'aléa sert à étaler la charge, plus à garantir la correction.
+
+**Avant :** deux passes concurrentes possibles dès qu'une passe débordait de sa fenêtre,
+avec écriture simultanée dans le même SQLite (mode d'échec observé le 11 août).
+**Après :** séquentialité garantie par le noyau ; une passe cédée est journalisée, jamais
+silencieuse.
+
+Le protocole pré-enregistré gagne au passage deux précisions demandées en relecture : la
+**provenance du prompt de départ** (travaillé à la main avant la campagne, ce qui rend la
+comparaison plus exigeante) et une section **usage prévu et limites d'usage** — ce que le
+résultat n'autorisera pas à faire, quelle que soit sa significativité.
+
+---
+
+## [2026-08-11] Calibration : la compaction ne plante plus faute de point de comparaison
+
+La passe de compaction (« retirer les phrases inutiles tant que le score ne se dégrade
+pas ») compare chaque variant raccourci au prompt courant, en relisant la mesure déjà
+stockée de ce dernier. Quand cette mesure n'existe pas sous le régime d'évaluation en
+cours — ce qui arrive à la reprise d'une campagne après un changement de protocole, un
+cas que le démarrage signale déjà — la passe partait quand même : elle **payait une
+évaluation par phrase candidate**, puis s'interrompait sur une erreur technique, en fin
+de campagne, après plusieurs heures de travail.
+
+Elle s'abstient désormais **avant de dépenser quoi que ce soit**, et le dit à voix
+haute au lieu de passer pour « rien à compacter ». Si le point de comparaison venait à
+manquer en cours de passe, la phrase est simplement conservée (refus prudent) plutôt
+que de faire tomber la campagne.
+
+**Before :** compaction finale → N évaluations payées → `AttributeError`, passe perdue.
+**After :** « compaction sautée : aucune éval du prompt courant sous la clé … » —
+0 évaluation payée, prompt intact, campagne terminée normalement.
+
+---
+
+## [2026-08-11] Calibration : la suite de tests couvre enfin ce qui décide de la dépense
+
+La calibration de prompt avait 565 tests, tous concentrés sur ses formules — et **un
+quart de son code jamais exécuté en test**. Ce quart-là n'était pas du détail : c'était
+la CLI (les commandes réellement lancées par le Makefile et systemd), les verrous de
+démarrage, le dashboard, et l'envoi des rapports. La suite passe à **1001 tests** et
+couvre **97 % du code du module** (76 % avant), en ciblant d'abord les endroits où une
+régression coûte des heures de quota plutôt que quelques décimales.
+
+**Les verrous de démarrage sont désormais armés en test.** Quatre gardes protègent le
+lancement d'une campagne : provider absent de `providers.yaml`, fuite du jeu de test
+dans le jeu d'entraînement, modèle d'évaluation en alias flottant, clé d'API de mutation
+manquante. Aucun n'avait de test : rien ne disait s'ils pouvaient se déclencher. C'est
+exactement le défaut qui avait laissé passer quatre jours de panne silencieuse — un
+garde jamais éprouvé est un garde dont on ignore l'état. Chacun a maintenant son test
+d'armement *et* son test de silence (un garde qui bloque tout est aussi inutile qu'un
+garde muet : la reprise d'une branche déjà commencée n'est jamais refusée).
+
+**Before :** `calibrate run`, `ga`, `reeval`, `digest`, `doctor`, `finalize` n'étaient
+exercées par aucun test — un défaut ne se voyait qu'en production, sur la VM.
+**After :** chaque commande a ses tests de bout en bout, y compris ses sorties
+anormales : quota épuisé, mutateur en panne, campagne terminée sans rien avoir calibré.
+
+**Le dashboard est testé en le rendant vraiment.** La couche de lecture était pure et
+testée, l'interface ne l'était pas du tout : une vue pouvait lever à chaque ouverture
+sans qu'un test s'en aperçoive. Les sept vues sont désormais rendues pour de vrai (dans
+le process de test, sans serveur ni navigateur), sur un store peuplé *et* sur des
+données partielles. La régression « il fallait deux clics pour changer de vue » a son
+test de non-régression, et la seule action qui écrit dans le store — l'import depuis
+l'onglet Maintenance — est vérifiée verrouillée tant que la case de confirmation n'est
+pas cochée.
+
+**Aucun test ne peut consommer de quota ni notifier.** Les quatre frontières vers
+l'extérieur (appels Gemini de mutation et de seeding, adaptateur d'évaluation, SMTP du
+canal mail) sont franchies par des doubles, et l'URL du webhook Discord est retirée de
+l'environnement de tous les tests. Lancer la suite sur la machine qui détient les
+secrets ne poste rien et ne dépense rien.
+
+**Nouvelle règle vérifiée partout : « rien à mesurer » n'est pas un score parfait.**
+Dans ce projet, l'absence de mesure produit 0.0 — c'est-à-dire le meilleur score
+possible. Un module de tests dédié vérifie, un par un, que chaque trou (jeu vide,
+référence absente, journal tronqué, ligne illisible) rend la perte maximale ou un refus
+explicite, jamais un zéro flatteur.
+
+**`make coverage`** mesure la couverture et échoue sous 95 % : un chemin nouvellement
+écrit et non testé se voit à l'ajout, plus six mois plus tard.
+
+---
+
 ## [2026-08-11] Calibration : la boucle recommence à avancer
 
 Trois mécanismes de la boucle de calibration se refermaient sur elle : elle consommait
