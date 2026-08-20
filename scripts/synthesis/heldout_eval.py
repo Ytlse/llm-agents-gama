@@ -54,6 +54,17 @@ from .sources import REPO_ROOT, import_calibration, load_manifest
 # est un sous-ensemble strict du `train`.
 DEFAULT_DATASET = "test"
 
+
+def dataset_store_key(split: str, version: str) -> str:
+    """Nom sous lequel une éval de jeu gelé est rangée dans le store.
+
+    Qualifié par la version dès qu'on sort de la v1 : le store indexe sur le
+    seul nom de split, et « test » désigne deux jeux différents en v1 et en v2
+    (météo du run vs météo tirée dans l'année). La v1 garde le nom nu pour que
+    les évals déjà payées restent retrouvables.
+    """
+    return split if version in ("", "v1") else f"{split}@{version}"
+
 # Lots de 8 personas — même raison que pour l'action A3 : à 15 (capacité déduite
 # du provider), le modèle rend un JSON valide mais amputé de personas. Le
 # découpage n'entre pas dans ``eval_params_key`` : il change le nombre d'appels,
@@ -219,6 +230,21 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         _load_dotenv()
         config = RunConfig.from_yaml(Path(args.run_config))
+
+        # ── Aligner la version de jeu gelé sur celle qu'épingle la page ──────
+        # `run.yaml` est la config de la BOUCLE de calibration : elle continue de
+        # pointer la version sur laquelle la campagne a été optimisée, et ce ticket
+        # n'y touche pas. La page, elle, épingle la version qu'elle affiche
+        # (`arms.calibration.datasets`). Sans cet alignement, `make heldout-eval`
+        # mesurait la v1 pendant que la page annonçait la v2 — et rien ne l'aurait
+        # signalé, les deux versions portant les mêmes noms de split.
+        if dataset_dir and dataset_dir.exists():
+            config.dataset_dir = dataset_dir.parent
+            config.dataset_version = dataset_dir.name
+            print(f"\n  📂 jeux : {config.dataset_version} (épinglé par le manifeste ; "
+                  f"run.yaml porte {RunConfig.from_yaml(Path(args.run_config)).dataset_version} "
+                  f"pour la boucle d'optimisation)")
+
         if args.provider:
             print(f"\n  🔑 éval : provider {args.provider} (au lieu de "
                   f"{config.eval_provider}) — seau de quota distinct, clé de cache "
@@ -246,19 +272,26 @@ def main(argv: Optional[list[str]] = None) -> int:
             chain = lineage_chain(store, resolve_node(store, leaf))
             plan = select_nodes(chain, args.nodes)
             records = load_records(config, args.dataset)
+            # Le store indexe une éval sur (nœud × NOM DE JEU × params) : la
+            # version du jeu gelé n'y figure pas, et les splits de v1 et v2
+            # portent le même nom. Sans qualification, une mesure v1 serait
+            # resservie telle quelle pour une demande v2 — zéro appel, et un
+            # chiffre étiqueté du mauvais régime météo. La v1 garde le nom nu,
+            # pour que les évals déjà payées restent lisibles.
+            dataset_key = dataset_store_key(args.dataset, config.dataset_version)
             params_key = config.eval_params_key()
             n_batches = len(batches_from_records(
                 records, config.eval_batch_max,
                 prod_option_handling=config.prod_option_handling))
             for entry in plan:
                 entry["cached"] = store.cached_eval(
-                    entry["node"], args.dataset, params_key) is not None
+                    entry["node"], dataset_key, params_key) is not None
             to_pay = [p for p in plan if not p["cached"]]
 
             print()
             print(f"Lignée     : {chain[0][:8]} → {chain[-1][:8]} ({len(chain)} nœuds) — "
                   f"{len(plan)} mesuré(s) ({args.nodes})")
-            print(f"Jeu        : {args.dataset} ({len(records)} décisions, "
+            print(f"Jeu        : {dataset_key} ({len(records)} décisions, "
                   f"{len({r['agent_id'] for r in records})} personnes)")
             print(f"Clé d'éval : {params_key}")
             print(f"À payer    : {len(to_pay)}/{len(plan)} éval(s) × {n_batches} lot(s) "
@@ -286,8 +319,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                     continue
                 try:
                     result, _df = evaluator.evaluate(
-                        entry["node"], blocks, args.dataset, records,
-                        desc=f"{args.dataset} {entry['short']}")
+                        entry["node"], blocks, dataset_key, records,
+                        desc=f"{dataset_key} {entry['short']}")
                 except EvaluationAborted as exc:
                     # Même conduite que `calibrate reeval` : on PERSISTE la date de
                     # reprise plutôt que de laisser la commande suivante marteler une
@@ -314,7 +347,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     finally:
         os.chdir(cwd)
 
-    print(f"\nÉcrit dans le store : {paid} éval(s) sur « {args.dataset} ».")
+    print(f"\nÉcrit dans le store : {paid} éval(s) sur « {dataset_key} ».")
     print("⚠ Ne pas publier l'écart train → test brut : les deux jeux n'ont pas le "
           "même effectif, et les divergences par strate sont biaisées vers le haut "
           "à petits effectifs. Le témoin est calculé par la page.")

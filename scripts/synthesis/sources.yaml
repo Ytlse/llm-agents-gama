@@ -18,13 +18,20 @@ common_set:
   # Chemin d'archive explicite, et non experiments/current : le symlink bouge à
   # chaque run, la page doit rester reproductible. Pour évaluer un autre run :
   # make synthesis RUN=experiments/archive/<run>, puis épingler ici si adopté.
-  run: experiments/archive/2026-07-29_18_34
+  run: experiments/archive/2026-08-02_18_55
   moves: moves.csv                # relatif au run
   population: null                # null → auto-détection de population_*.json
   # Lignes sans décision modale : exclues du scoring.
+  #
+  # « LLM Error (Default index) » en fait partie depuis le ticket 008 (A6.a) : ce
+  # n'est pas une décision, c'est un repli. Le prompt n'a pas répondu, le contrôleur
+  # a pris l'itinéraire d'index 0 — soit, sur le run précédent, 100 % le plus rapide
+  # et 64,7 % de voiture. Les garder revenait à noter le prompt sur un choix qu'il
+  # n'a pas fait. Le compte des lignes ainsi écartées est affiché dans la page.
   exclude_selection_methods:
     - "Pas de déplacement (même localisation)"
     - "Pas de solution de déplacement"
+    - "LLM Error (Default index)"
 
 # ── Définition du score ──────────────────────────────────────────────────────
 score:
@@ -56,7 +63,11 @@ arms:
       - id: local
         label: Campagne locale
         path: prompt_calibration/calibration_results/calibration.db
-    datasets: prompt_calibration/calibration_datasets/v1
+    # v2 depuis le ticket 008 (A7, décision D2) : météo tirée dans l'année climatique
+    # complète, là où v1 ne portait que cinq valeurs toutes ensoleillées. La
+    # comparabilité avec les scores v1 est perdue, et c'est assumé — la page doit
+    # rendre le régime météo visible.
+    datasets: prompt_calibration/calibration_datasets/v2
     prompts_yaml: llm_module/prompts/prompts.yaml
     # Verdicts retenus pour la trajectoire « prompts non rejetés ».
     keep_verdicts: [accepted, imported]
@@ -79,7 +90,11 @@ arms:
     # l'autre ne peut porter un score de généralisation.
     # Produire la mesure (elle vit dans le store, pas dans un fichier) :
     #   make heldout-eval PROVIDER=google2      # chiffrer d'abord : DRY_RUN=1
-    heldout_dataset: test
+    # Nom sous lequel l'éval est rangée dans le store. Qualifié par la version des
+    # jeux gelés depuis la v2 : « test » désignait deux jeux différents (météo du
+    # run en v1, météo tirée dans l'année en v2) et le store, qui n'indexe que sur
+    # le nom de split, aurait resservi la mesure v1 pour une demande v2.
+    heldout_dataset: test@v2
 
   model:
     feature_spec: scripts/progedo_logit/feature_spec.json

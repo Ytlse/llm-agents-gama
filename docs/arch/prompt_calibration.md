@@ -128,6 +128,19 @@ Trois points d'attention :
   (2026-07-17), éval et mutation partagent le même modèle Gemini, donc le même
   quota provider ; basculer la mutation sur un autre modèle (ex. `google_gemma42`)
   rétablit la séparation des quotas si celui-ci devient contraignant.
+- **Le générateur réfléchit, le juge non** (2026-08-18, amendement A7 du protocole).
+  `mutation_thinking_budget: 1024` demande un budget de pensée sur les trois chemins qui
+  **écrivent** du prompt — mutation ciblée, croisement, seeding / `ga_explore` — sur la foi de
+  GAAPO (arXiv:2504.07157, §5.5), qui mesure que les générateurs raisonneurs produisent de
+  meilleurs prompts. Le juge en reste exclu : la réflexion resserre vers la réponse typique
+  alors qu'on calibre une **dispersion**, et le budget n'entrant **pas** dans
+  `eval_params_key()`, l'activer côté éval ferait dériver le juge en silence.
+  Conséquences pratiques : les tokens de pensée étant décomptés de `maxOutputTokens`, le
+  plafond de chaque appel est augmenté du budget (`mutation.thinking_output_cap`) ; les `parts`
+  marquées `thought` sont écartées de la lecture du JSON (`mutation.answer_text`) ; un
+  `finishReason: MAX_TOKENS` lève une erreur nommée sous `[ALARME]`, transitoire, absorbée par
+  le coupe-circuit du mutateur. `0` restaure le comportement antérieur, `-1` laisse le modèle
+  arbitrer (avec `mutation_thinking_reserve` en provision de sortie).
 
 ---
 
@@ -474,6 +487,13 @@ loop.py`, `tabu.py`, `bandit.py`) :
    composite reste sous `compact_margin` — « réduire tant que ça ne dégrade pas le
    score ». Le prompt calibré étant envoyé à chaque décision en production, chaque
    mot compte ; le nombre de mots du meilleur prompt est suivi en fin de run.
+   *Pas de référence, pas de compaction (2026-08-11)* : le test compare le variant
+   au prompt COURANT via son éval en cache. Sur une branche reprise après un
+   changement de protocole d'éval, cette éval n'existe pas sous la clé courante —
+   la passe payait alors une éval par bloc candidat **puis plantait**
+   (`bootstrap_delta(None, …)`). Elle s'abstient désormais AVANT toute dépense, en
+   alarmant ; et un filet au tour N transforme une référence disparue en refus
+   prudent (garder le bloc) plutôt qu'en interruption de passe.
 
 Tout reste dans le store (mutations `rejected_tabu` / `compact_delete`, table
 `bandit`) : visible au dashboard, réversible par lignage, **reprenable**
@@ -1028,12 +1048,47 @@ crash ou un quota en pleine ablation reprend à la première coalition non payé
   forcerait ~70 % de screen (406 décisions, 3× le budget) — le classement
   assume ce bruit, le champion étant confirmé sur `screen`.
 - **Génération 0** (`calibration/seeding.py`) : 1 élite (meilleure feuille du
-  store, sinon prompt seed) + 9 variants « expert » réécrits par le modèle de
-  mutation à `ga_seed_temp` (1.0), chacun sous un **axe imposé**
-  (identification, arbitrage, habitudes, météo, chaîne, socio-éco, démographie,
-  minimaliste, enquêteur). Blocs `json_schema` réattachés en code, validation
-  avant toute éval (`find_numeric_threshold`, longueur, dédoublonnage par hash),
-  3 essais puis population à N−1 (jamais bloquée) ; repli graines Pareto.
+  store, sinon prompt seed) + `ga_population − 1` variants « expert » réécrits par
+  le modèle de mutation à `ga_seed_temp` (1.0), chacun sous un **axe imposé**
+  (**échelle**, identification, arbitrage, habitudes, météo, chaîne, socio-éco,
+  démographie, minimaliste, enquêteur). Blocs `json_schema` réattachés en code,
+  validation avant toute éval (`find_numeric_threshold`, longueur, dédoublonnage
+  par hash), 3 essais puis population à N−1 (jamais bloquée) ; repli graines Pareto.
+  - **Axe `echelle` (2026-08-17)** — le catalogue ne portait aucun axe sur la
+    **longueur du déplacement**, alors que le pire écart mesuré de la campagne
+    `ref1` est exactement là : sur les trajets les plus courts, le champion met
+    la moitié des personas en voiture quand l'enquête en met moins d'un
+    cinquième, et la marche s'effondre (−46 pts sur la strate `0-1km`). Une
+    direction absente du catalogue est une direction que la recherche ne peut pas
+    prendre. Pendant « levier » pour la greffe : `cout_fixe_vehicule` dans
+    `EXPLORE_LEVERS`.
+  - **Il est formulé sans aucun seuil chiffré, et c'est structurel.**
+    `SEEDING_SYSTEM` interdit les seuils et `seed_validation_error` rejette tout
+    variant en portant un, **avant** la moindre éval : un axe « sous 1 km, marche
+    par défaut » ferait rejeter 100 % de ses variants — et devrait l'être, car il
+    coderait la distribution attendue en dur dans le prompt au lieu du
+    raisonnement comportemental qu'on cherche à calibrer. Le levier passe donc
+    par le **mécanisme** : engager un véhicule a un coût fixe (le rejoindre, le
+    déverrouiller, se garer) payé en entier quelle que soit la longueur du
+    trajet, donc d'autant plus lourd que le trajet est bref.
+  - **Il est bidirectionnel, et c'est la mesure qui l'impose.** Le champion de
+    `ref1` produit une part voiture **plate** — 42,7 / 46,6 / 40,4 / 42,6 / 49,1 %
+    de la tranche la plus courte à la plus longue — quand l'enquête va de 18 % à
+    77 %. Le défaut n'est donc pas un biais de niveau mais une **élasticité à la
+    distance quasi nulle** : la marche manque de 44,7 pts sur `0-1km` et *excède*
+    de 8,5 pts sur `10-20km`. Un levier unidirectionnel (« privilégie la marche
+    sur les trajets courts ») relèverait la marche partout, y compris là où elle
+    est déjà trop haute — en échangeant une erreur contre une autre, possiblement
+    à composite amélioré. Le coût fixe crée une **pente** : dominant sur un trajet
+    bref, négligeable sur un trajet long, où le véhicule s'impose. Les deux
+    moitiés de la formulation portent chacune un sens.
+  - **Il est placé en tête du catalogue, et ce n'est pas cosmétique.** La
+    génération 0 parcourt les axes **dans l'ordre** et s'arrête à
+    `ga_population` : avec 10 axes et 10 individus (dont l'élite), le **dernier
+    axe n'est jamais tiré en génération 0** — il n'apparaît qu'ensuite par la voie
+    des immigrants. Ajouté en queue, `echelle` aurait été l'axe systématiquement
+    sacrifié, sur la campagne même où il vise le pire écart. C'est `enqueteur` qui
+    passe désormais par les immigrants. Un test verrouille la position.
 - **Coupe** : classement `rank`, départage des positions frontières par
   bootstrap apparié (IC chevauchant 0 **et** Δ < `racing_min_gap` → ancienneté
   puis moins de mots), **crowding** (`ga_crowding_threshold` : deux survivants
@@ -1055,13 +1110,15 @@ crash ou un quota en pleine ablation reprend à la première coalition non payé
     est choisi parmi `survivors[:2]`) et son seul effet possible était pathologique
     — injecter `None` dans la population si aucun prétendant n'avait de composite
     fini ; il est remplacé par une `[ALARME]` explicite.
-- **Reproduction** : **3 opérateurs stochastiques** en concurrence sous **bandit
+- **Reproduction** : **4 opérateurs stochastiques** en concurrence sous **bandit
   UCB1** (branche dédiée `{branch}#ga`) — `ga_cross` (croisement LLM informé par
   les cartes d'ablation, parents complémentaires via Pareto), `ga_mutate`
   (ciblage `targeting.select_target` sur le pire bloc), `ga_explore` (levier
   comportemental absent tiré d'un catalogue — sécurité perçue, normes sociales,
   fatigue, fiabilité horaire, charge mentale, image de soi… — filtré contre le
-  contenu du prompt). Seuls les **φ dont l'IC bootstrap exclut 0** guident le
+  contenu du prompt), `ga_graft` (greffe chirurgicale d'**un** bloc neuf), plus
+  l'opérateur déterministe **`ga_drop`** hors bandit (voir ci-dessous). Seuls les
+  **φ dont l'IC bootstrap exclut 0** guident le
   croisement (les autres sont transmis « indéterminés »). Anti-doublon
   intra-prompt (paire de blocs cos > `tabu_threshold` → condensation en code
   avant éval), tabu contre les éliminés, **immigrant aléatoire** si la diversité
@@ -1083,6 +1140,44 @@ crash ou un quota en pleine ablation reprend à la première coalition non payé
     0**. Sans cela, un bras qui ne produit rien n'est jamais mis à jour, reste
     « jamais tiré » (score `+inf`) et se fait rejouer indéfiniment — boucle
     fermée, livelock.
+  - **La cardinalité du prompt est devenue atteignable (2026-08-17).** Jusqu'ici
+    la recherche ne pouvait que **réécrire** : sur la campagne `ref1`, les 10
+    enfants `ga_mutate` ont tous conservé le nombre de blocs de leur parent
+    (Δ = 0, **10/10**). Les primitives existaient pourtant — `apply_mutation`
+    implémente `delete` et `insert`, et le système du mutateur les documente —
+    mais sous ciblage le mutateur lit « Ne propose une mutation QUE sur ce bloc »
+    et un gabarit JSON portant `"action":"modify"` en dur : il réécrit, il ne
+    retire ni n'ajoute jamais. Le coût de ce trou est mesurable : pendant cinq
+    générations, la carte d'ablation du champion a signalé `intro_s5` comme
+    **nuisible** (Δ retrait −0,94 sur `rank`), la coalition sans ce bloc était
+    déjà évaluée et en cache — et rien ne pouvait la promouvoir en candidat.
+    Deux opérateurs ferment le trou :
+    - **`ga_drop`** — retire le bloc dont l'ablation **améliore** significativement
+      le score. Il ne lit que la carte *significative* (`_significant_card`, Δ
+      ramené à 0,0 quand l'IC bootstrap contient 0) : un bloc qu'on n'a pas su
+      mesurer ne peut pas déclencher de retrait, conformément au protocole §6
+      (« un critère d'élimination s'abstient au lieu d'éliminer »).
+      `ga_drop_min_gain` n'ajoute qu'un plancher d'ampleur, déclaré **heuristique**.
+      **Gratuit de bout en bout** : aucun appel LLM à la production, et l'enfant
+      produit est — au hash près — la coalition d'ablation ayant servi à mesurer
+      le Δ, donc **déjà évaluée** ; la coupe suivante le classe sans rien
+      repayer. Cette égalité de hash est un invariant testé : si elle se rompait,
+      l'opérateur continuerait de fonctionner en repayant une éval déjà achetée,
+      en silence. **Jamais un bras de bandit** — fonction pure de (parent, carte),
+      donc même erreur de catégorie que `ga_cross_greedy` : tenté au plus **une
+      fois par étape**, et en premier, puisqu'il ne coûte rien.
+    - **`ga_graft`** — greffe **une** phrase neuve après une ancre (le bloc désigné
+      par le ciblage, à défaut le dernier bloc mutable), portant un levier absent
+      du prompt. Chirurgical : tous les autres blocs sont conservés **au caractère
+      près**, ce qui le distingue de `ga_explore`, qui insère lui aussi un levier
+      mais en réécrivant le prompt entier — et perd donc au passage ce qui
+      marchait déjà. Un appel LLM, sortie différente à chaque tirage : bras de
+      bandit légitime. `propose_graft` repose `action`/`target_block` en code, le
+      contenu ayant été rédigé pour cette ancre-là ; un modèle qui ne rend rien
+      d'exploitable produit un **échec d'opérateur**, jamais un enfant fabriqué.
+    Réglage : `ga_drop_enabled`, `ga_drop_min_gain`, `ga_graft_enabled`.
+    Désactiver `ga_graft` le **retire des bras** (un bras jamais tirable garderait
+    un score `+inf` et fausserait la sélection UCB1).
   - **`ga_cross_greedy` n'est plus un bras** (2026-08-11). Assemblage
     déterministe au meilleur φ, c'est le **témoin sans LLM** du croisement : une
     fonction pure, qui à survivants gelés rend toujours le même enfant. Un
@@ -1260,6 +1355,71 @@ comparerait des scores hétérogènes sans le savoir.
 > **Volet 3 non concerné** : `feature_spec.json` ne porte aucune variable météo (persona,
 > géo, `purpose` / `departure_hour` / `od_km`). Ne pas chercher à y injecter la météo.
 
+#### Trois énoncés météo, un seul jour (jeux `v5`, 2026-08-20)
+
+Le tirage ci-dessus ne portait que sur la phrase du **départ**. Or le bloc persona en
+contient deux autres, écrits par la production depuis le jour du run :
+
+| Énoncé | Produit par | Présent sur |
+|---|---|---|
+| `**Contexte :** Météo : …` | `weather_to_natural_language` | 100 % des décisions |
+| `**Météo plus tard :** après-midi …` | `day_weather_outlook` (créneaux restants du jour) | 73–78 % (les autres sont des départs en soirée) |
+| `· 16:18 → leisure (≈3.5 km) — pluie prévue` | `_agenda_lines` (agenda glissant) | 43–47 % (agents ayant un véhicule à chaîner) |
+
+Les deux derniers n'étaient pas retirés. Un prompt gelé pouvait donc annoncer **18 °C et
+des averses au départ, puis un après-midi ensoleillé à 12 °C** : un contexte que la
+production ne peut pas produire, et sur lequel il n'y a rien à calibrer. Le modèle voyait
+deux jours à la fois, et la variable météo — l'un des leviers visés — devenait du bruit.
+
+Depuis `v5`, les trois énoncés viennent du **même jour tiré** :
+
+- `WeatherDeck.outlook_for(key, hour)` rejoue `day_weather_outlook` sur le jour tiré ;
+  `None` quand il ne reste aucun créneau, et la ligne **disparaît** alors du bloc — c'est
+  ce que fait la production, et la laisser serait pire que l'absence.
+- `metadata.reannotate_agenda` retire les annotations de l'agenda puis les repose depuis
+  le jour tiré, en comparant chaque étape au créneau du départ comme le fait
+  `_agenda_lines`. Idempotent, et sans effet sur les lignes d'options.
+
+Contrôle de sortie sur `v5` : le run source ne portait **aucune** étape annotée (mars 2026
+était uniformément dégagé) ; le jeu gelé en porte 87 sur 440 en `val` — le tirage fait
+bien varier les jours, et l'agenda le dit désormais.
+
+#### L'état du génétique est cloisonné par branche (2026-08-20)
+
+L'état de la boucle génétique — génération, population, survivants, champion, compteur
+de stagnation `val`, axes semés — vit dans `run_state` sous la clé **`__ga__:<branche>`**.
+Elle était globale (`__ga__`) jusqu'au 2026-08-20, et ce n'était pas anodin : lancer une
+seconde campagne sur le store d'une première reprenait sa trajectoire. Constaté en
+lançant `ref2` sur le store de `ref1` — génération 11, ses neuf individus, son champion et
+son `val_no_improve: 2` repris tels quels, la graine déclarée jamais semée, à une mesure
+`val` d'une fausse convergence. Détails et portée : amendement A9 de `PROTOCOLE.md`.
+
+Un store portant l'ancienne clé **refuse de démarrer** — rien ne dit à quelle campagne
+elle appartient, et l'adopter comme l'ignorer serait silencieux :
+
+```bash
+python -m scripts.migrate_ga_state --store calibration_results/reference.db \
+  --owner ref1 [--dry-run]
+```
+
+Les rapports de génération suivent : `{ga_report_dir}/<branche>/gen_NN.html` — à plat,
+deux campagnes écrivaient toutes les deux un `gen_00.html` et la seconde écrasait la
+première.
+
+#### Doublons de décision (jeux `v5`)
+
+Un run de 24 h rejoue les mêmes trajets le **jour simulé suivant** (horizon glissant de
+planification), et une reprise à chaud (`make run OFFLINE=1 CONT=1`) les rejoue une
+troisième fois. `drop_repeated_decisions` ne garde que la **première** occurrence de
+`(agent_id, destination, heure de départ, distance minimale)` — la clé ne peut pas porter
+l'`activity_id`, que `llm_exchanges.jsonl` n'écrit pas. Sur le run `2026-08-19_14_36` :
+**323 répétitions sur 2 514 décisions**, écartées, comptées au `manifest.yaml` (bloc
+`dedup`). `--keep-repeats` rétablit l'ancien comportement.
+
+Ce n'est pas un réglage de confort : deux occurrences de la même décision font peser deux
+fois le même persona dans les strates, et fabriquent de la précision à partir de rien —
+ce que le §6 du protocole interdit déjà au niveau de la ligne de décision.
+
 ### 3.2 Découpage des jeux : **50 / 20 / 30** (jeux `v3`, 2026-08-11)
 
 **Le constat.** Une analyse de puissance (archivée dans `docs/mesures/`) a établi que le
@@ -1344,6 +1504,85 @@ effectifs par jeu, rapport de couverture, tirage météo hérité, et un bloc `d
 
 **`v2` n'est pas détruit** — les jeux gelés ne le sont jamais.
 
+### 3.3 Le **mode rapide** sans LLM — et pourquoi il est abandonné (ticket 013)
+
+> ## ⛔ Abandonné le 2026-08-17 — le vélo fantôme
+>
+> Le mode rapide ne peut pas rejouer la **chaîne de véhicules**, et c'est disqualifiant.
+> En production, un véhicule est là où on l'a laissé : qui part travailler en bus laisse
+> son vélo à la maison, et le soir le vélo n'est pas une option. Savoir où il est suppose
+> de connaître le mode choisi au trajet précédent — donc d'avoir interrogé le LLM. Le
+> mode rapide n'appelle pas le LLM : **circulaire, sans contournement**.
+>
+> Seules les conditions statiques s'appliquent donc, et le vélo est proposé à chaque
+> trajet. **Effet mesuré** sur `v4/screen` : B0 met **34 % de vélo sous 1 km** contre
+> ~9 % sur une base de simulation. Le verrou de position, à son introduction, avait
+> corrigé 352 des 1 086 trajets à vélo d'un run — 5,9 points de part modale.
+>
+> **Conséquence** : `v4` est marqué `INAPTE_A_LA_CALIBRATION` dans son manifeste, et
+> `scripts/prompt_base/build.py` refuse de tourner sans `--je-sais-que-cest-abandonne`.
+>
+> **Ce qui reste légitime** : réchauffer les caches OTP et OSMnx (le mode calcule
+> exactement les routes dont un run aura besoin), éprouver un rendu d'option, mesurer le
+> coût de routage d'une population.
+>
+> **Ce qu'il faudrait pour le réhabiliter** : résoudre la chaîne sous une politique de
+> mode **fixe et déclarée** (par exemple « le véhicule rentre toujours au domicile »),
+> ce qui lève la circularité au prix d'une hypothèse à écrire au manifeste.
+
+Le reste de cette section décrit le mécanisme, conservé pour mémoire.
+
+Jusqu'au ticket 013, une version de jeux ne pouvait venir que d'un **run de simulation** :
+on lançait GAMA sur 24 h simulées, on récoltait les prompts de `llm_exchanges.jsonl`, on
+gelait. Toute correction de la construction des itinéraires — comme le temps terminal du
+ticket 013 — imposait donc de tout rejouer, pour un budget LLM entier.
+
+Or **les options d'itinéraire ne dépendent pas de ce que le LLM choisit** : OTP et OSMnx les
+construisent à partir de la population, des activités et de l'heure de départ. Un second
+producteur d'entrées existe désormais, et le point de couture est propre —
+`build_decision_records` ne consomme que `messages[1]["content"]`, donc la simulation n'est
+pas une dépendance de la calibration, seulement l'une de deux sources possibles :
+
+```
+        ┌─ mode simulation (inchangé) ────────────────┐
+        │  GAMA 24 h → llm_exchanges.jsonl            │
+        │  ✓ mémoire STM/LTM   ✗ budget LLM complet   │
+        │  ✓ chaîne de véhicules rejouée              │  ├→ build_decision_records
+        │                                             │  │  → build_datasets → vN/
+        └─ mode direct (nouveau, ZÉRO appel LLM) ─────┘     manifeste, couverture,
+           population_*.json → OTP + OSMnx →                splits, rank : inchangés
+           mêmes gabarits → entrées synthétiques
+           ✗ mémoire   ✗ chaîne   ✓ minutes, pas heures
+```
+
+```bash
+# 1. base de prompts, sans simulation ni appel LLM (pile debout : make up)
+make prompt-base DAY=2026-03-17
+
+# 2. gel d'une version depuis cette base
+cd prompt_calibration && ../llm-agents/.venv/bin/python -m calibration.datasets \
+    --entries ../experiments/bases/2026-03-17/entries.jsonl \
+    --population ../experiments/current/population_1000.json \
+    calibration_datasets v4
+```
+
+**Ce que le mode direct ne fait pas, et qui est déclaré au manifeste** (`entries_source`) :
+
+| Limite | Pourquoi | Conséquence |
+|---|---|---|
+| Aucune section mémoire | Le mode direct ne simule pas STM/LTM | Base uniformément sans mémoire — donc **plus homogène** que `v3`, dont le `train` n'en portait que sur 1 163 records sur 4 286 et dont `val`/`test` en sont dépouillés. Toute étude de l'effet de la mémoire exige le run complet. |
+| Chaîne de véhicules non rejouée | Le verrou de position (« le vélo est là où tu l'as laissé ») dépend du mode choisi au trajet précédent, donc du LLM | Seules les conditions statiques s'appliquent — possession, permis, âge, passager —, avec les **prédicats de production eux-mêmes**. Plus permissif qu'un état de milieu de run. |
+| Population possiblement différente | Le mode direct énumère les paires d'activités consécutives de la population, pas les décisions effectivement prises pendant un run | `rank ≥ 30` doit être vérifié à la génération. Le garde existe et refuse le gel sinon. |
+
+**Trois points de reproductibilité que le mode direct rend explicites** — et qui ne
+l'étaient pas dans les jeux issus d'un run : l'ordre des options est tiré au sort en
+production (`random.shuffle`, contre le biais de position) donc la graine est un paramètre
+consigné au manifeste ; le tirage météo aval dépend du **rang** de l'entrée
+(`draw_key(agent_id, entry_idx)`) donc l'énumération est triée ; et aucune météo n'est
+écrite dans les sections, puisque la chaîne aval la remplace de toute façon par un tirage
+dans l'année climatique (§3.1). Le mode rapide n'a donc **aucune dépendance** à la météo
+d'un run.
+
 ---
 
 ## 4 · Reprise & persistance
@@ -1393,6 +1632,39 @@ qu'aux composites du même régime. Quatre choses le définissent, toutes porté
 > campagne repart sur un **store neuf**. Rien n'est détruit — les décisions brutes restent
 > lisibles, et `calibrate rescore --params-key <ancienne clé>` travaille toujours sur
 > l'historique.
+
+### Les deux gardes de traçabilité, enfin armés (2026-08-17)
+
+Les deux mécanismes ci-dessous étaient **écrits, documentés et testés unitairement** —
+et **jamais appelés en production**. Constaté sur le store de la campagne `ref1` après
+11 générations : `mutations.regime` NULL sur **106/106**, table `run_config` à **0 ligne**.
+
+- **Empreinte de l'instrument (`RunStore.check_and_record_config`).** Le §3 du protocole
+  pré-enregistré promet que « la configuration résolue est gravée dans le store avec son
+  empreinte au démarrage ; toute reprise sous une configuration différente est refusée
+  sauf `--force` ». Le garde est désormais appelé par `calibrate ga` et `calibrate run`
+  (`cli.guard_run_config`), avant toute bascule daemon et tout appel LLM : branche neuve
+  → gravée ; empreinte inchangée → silence ; empreinte différente → **refus, code 2**, avec
+  le diff champ par champ. `--force-config` assume le changement, le grave dans
+  l'historique **et le signale** en `[ALARME]` — l'option sert à prendre la responsabilité
+  d'un changement, pas à contourner la traçabilité.
+- **Régime d'ablation par observation (`mutations.regime`).** Le §2 en fait la condition
+  d'interprétabilité de **T2** : sans cette colonne, rien ne dit a posteriori sous quel bras
+  (`targeting_enabled` / `decomposed_mutation` / `reflection_enabled`) une mutation a été
+  proposée. Les **11 sites d'appel de production** (6 dans `genetic.py`, 3 dans `loop.py`,
+  2 dans `islands.py`) posent maintenant `regime=config.regime()`.
+  **`importer.py` reste délibérément à NULL** : il écrit des mutations d'un format antérieur
+  à la colonne, dont le régime est réellement inconnu — y estampiller la config courante
+  fabriquerait une provenance, ce que l'amendement A1 dénonce comme pire qu'une absence de
+  mesure. Trois tests verrouillent le **câblage** (et non la mécanique, qui était déjà
+  testée) : ils échouent sur le code d'avant.
+
+> Un garde jamais appelé est pire qu'un garde absent : il se lit, dans la documentation
+> comme dans le protocole, comme une protection acquise. C'est la même famille de défaut que
+> l'amendement A1 (toggle honoré par `loop.py`, ignoré par `genetic.py`) et que le trou
+> d'ajout/retrait de blocs du 2026-08-17 — mécanisme déclaré actif, structurellement
+> inatteignable. Aucun dégât sur `ref1` (clé de paramètres unique sur ses 105 évals :
+> l'instrument n'a pas bougé), mais la garantie était décorative.
 
 D'où la lecture du store actuel : le prompt seed vaut **176,7** sous
 `mistral-small-latest` et **25,9** sous `gemini-3.1-flash-lite-preview`, pour le
@@ -1944,9 +2216,22 @@ fichier qui échoue sans bruit.
 temporelle, jamais par une condition d'état.* Une fenêtre retarde la détection
 d'une durée bornée ; une condition d'état peut l'annuler entièrement, et le fait
 invisiblement. D'où : détection et action **découplées** — le watchdog notifie
-dès le code 2, sans condition, et l'état « une passe tourne » ne conditionne plus
-que le `systemctl stop` ; un cooldown actif **enrichit** le message d'alarme, il
-ne le supprime jamais.
+dès le code 2, sans condition d'état, et l'état « une passe tourne » ne
+conditionne plus que le `systemctl stop` ; un cooldown actif **enrichit** le
+message d'alarme, il ne le supprime jamais.
+
+**Anti-répétition des alertes (2026-08-13).** Le revers de « notifier à chaque
+code 2 » : une nuit de veille quota (état attendu — pas de dégradation, on
+attend le renouvellement) relevait `no_registry_growth` à chaque passe de 2 h,
+soit 5-6 messages Discord identiques par nuit. La notification est passée à
+**front montant** : une alarme nouvelle ou différente (empreinte fondée sur les
+*codes* des constats, pas leurs messages horodatés) part toujours ; une alarme
+identique se tait, rappelée toutes les 24 h avec son ancienneté ; le retour au
+sain envoie une levée 🟢 et remet l'état à zéro. C'est un **délai borné, pas
+une condition d'état** : `doctor` sort toujours en code 2 et le STOP reste
+inconditionnel. Décisions pures dans `calibration.health`
+(`alarm_signature`, `renotify_decision`) ; état persistant hors dépôt
+(`~/.calib-watchdog-state.json`).
 
 **Corollaires implémentés** : `usage.jsonl` écrit sa ligne **même à zéro
 requête** (sinon le seul compteur capable de révéler une passe stérile est muet
@@ -1962,6 +2247,64 @@ sans store ni horloge : un test d'**armement** (l'alarme part avec un heartbeat
 frais, reproduction exacte de l'angle mort), un test de **silence** (une alarme
 qui hurle toujours vaut une alarme muette), et un test de **non-régression
 d'incident** rejouant l'état réel figé.
+
+---
+
+## 9 · Suite de tests : couvrir le code qui décide de la dépense
+
+`make test` — **1001 tests, ~2 min, aucun appel réseau**. `make coverage` mesure
+la couverture et **échoue sous 95 %** du paquet (`COV_MIN` ajustable) ; le seuil
+est un garde-fou, pas un objectif : il fait apparaître un chemin non testé à
+l'ajout plutôt que six mois plus tard. Détail des modules dans
+`prompt_calibration/README.md` (section « Tests »).
+
+**Ce que la suite protège en priorité.** Les incidents de ce dossier n'ont
+presque jamais été des erreurs de calcul : c'étaient des *décisions de dépense*
+prises dans le noir — une campagne qui martèle un mur de quota, un rejet payé en
+éval alors qu'il était décidable gratuitement, un score figé pris pour une
+convergence. La suite cible donc, avant les formules :
+
+- **les verrous de démarrage** (`build_engine`) — provider absent de
+  `providers.yaml`, fuite du jeu `test` dans `train`, `eval_model` en alias
+  flottant sur un run neuf, clé de mutation manquante : chacun a son test
+  d'armement, parce qu'un verrou jamais déclenché en test est un verrou dont on
+  ignore s'il peut se déclencher ;
+- **les sorties de campagne** — `done` / `paused` / `failed`, complétion vacante,
+  backoff des réveils stériles, anti-spam des notifications, codes de sortie
+  (`OnFailure=` de systemd en dépend) ;
+- **la gratuité des rejets** — tout filtre de l'entonnoir (tabou, hors-cible,
+  seuil chiffré, doublon de bloc) est vérifié *avec l'assertion « zéro éval
+  payée »*, côté boucle comme côté génétique ;
+- **l'économie du rattrapage** — politique de retry par famille d'erreur, borne
+  `max_retry_wait` (au-delà, on rend la main au cooldown au lieu de dormir des
+  heures dans la boucle chaude), re-tir ciblé des personas manquants ;
+- **« rien à mesurer » ≠ score parfait** — dans ce projet l'absence de mesure
+  produit 0.0, c'est-à-dire le meilleur score possible ; `test_edge_cases.py`
+  verrouille, module par module, que chaque trou rende la perte maximale ou un
+  `None` explicite.
+
+**Frontières LLM et secrets.** Aucun test ne peut consommer de quota ni notifier :
+`httpx.Client` (mutation, seeding, digest), `llm_module.adapters.base.get_adapter`
+(évaluation) et `smtplib.SMTP_SSL` (mail) sont remplacés par des doubles, et une
+fixture *autouse* retire `DISCORD_WEBHOOK_URL` de l'environnement — le webhook ne
+peut donc pas partir depuis une machine qui détient le secret.
+
+**Le dashboard est testé en le rendant vraiment.** `dashboard_data.py` était pur
+et testé, `dashboard.py` ne l'était pas du tout : une vue pouvait lever à chaque
+ouverture sans qu'un test s'en aperçoive. `streamlit.testing.v1.AppTest` exécute
+le vrai script dans le process de test (aucun serveur, aucun navigateur) : chaque
+vue est rendue sur un store peuplé *et* sur des données partielles, la
+persistance du filtre d'expérience et la synchronisation `?view=` ↔ radio sont
+vérifiées (la régression « deux clics pour changer de vue » a son test), et la
+seule écriture de l'UI — Maintenance → import — est vérifiée verrouillée sans sa
+case de confirmation.
+
+**Environnement de test reproductible.** La fixture `mini_env` monte une campagne
+complète en `tmp_path` — `prompts.yaml`, `schemas.json`, `cerema_values.yaml`,
+jeux gelés `train`/`val`/`screen`/`test`/`rank`, store vide, `RunConfig`
+cohérente avec un `eval_model` **épinglé**. C'est elle qui rend `build_engine`,
+les commandes de la CLI et le dashboard testables sans dépendre du dépôt
+principal ni d'un store de production.
 
 ---
 

@@ -9,8 +9,28 @@ approches, globalement et dans chaque sous-catégorie de l'enquête CEREMA.
 make synthesis
 ```
 
+La cible commence par **rapatrier le store de la campagne cloud** depuis la VM
+(`make -C prompt_calibration pull-db` → `calibration_cloud.db`) : la campagne
+tourne là-bas en continu, et sans ce pull le volet calibration refléterait un
+instantané local périmé sans le signaler. Si la VM est injoignable (éteinte,
+`gcloud` absent, hors-ligne), la synthèse avertit bruyamment (`[ALARME]`) et
+continue sur l'instantané local en affichant sa date. Pour sauter le pull
+explicitement : `make synthesis PULL=0`.
+
 Sortie : `docs/synthesis/index.html` (page) et `docs/synthesis/data.json`
-(toutes les valeurs, pour réutilisation).
+(toutes les valeurs, pour réutilisation), plus deux **pages dédiées** qui
+extraient le seul sous-chapitre « Détail par sous-catégorie » :
+`docs/synthesis/detail_simulation.html` (volet 1) et
+`docs/synthesis/detail_progedo.html` (volet 3). La page complète les conserve —
+les pages dédiées la dupliquent, elles ne l'amputent pas — et y renvoie depuis le
+sommaire et depuis chaque sous-chapitre concerné. Elles sont écrites dans le même
+dossier que `index.html` (archive comprise), pour que les liens relatifs tiennent.
+Elles n'ont **pas** de sommaire latéral — un seul chapitre à afficher, autant laisser
+la pleine largeur aux graphiques ; les renvois vers la synthèse et vers l'autre page
+dédiée tiennent sur une ligne en tête.
+Le rendu des cellules est produit par le **même** `_dimension_blocks()` que la
+page complète : aucun chiffre n'est recopié, et une page dédiée ne peut pas
+diverger du volet dont elle est extraite.
 
 ---
 
@@ -71,6 +91,18 @@ Pour évaluer un autre run sans toucher au manifeste :
 `make synthesis RUN=experiments/archive/<run>`. Si le run est adopté, l'épingler
 dans `sources.yaml`.
 
+Un run **repris à chaud** (`make run OFFLINE=1 CONT=1`) est un cas particulier de ce
+substrat, et il faut le connaître avant d'en épingler un : la reprise rejoue le jour
+simulé depuis t0 **dans le même dossier d'expérience**. `moves.csv` porte alors deux
+lignes pour la même décision — une par tentative, toutes deux datées du même jour
+simulé — et la coupe au premier jour simulé ne les sépare pas. `frames.latest_attempts`
+ne garde que la tentative la plus récente (troisième coupe du périmètre commun,
+ci-dessous), et la page annonce qu'elle a lu un run repris ainsi que le nombre de
+lignes écartées. Mesuré sur `experiments/archive/2026-08-19_14_36`, repris le
+2026-08-20 : 1 469 lignes en doublon, 282 décisions comptées deux fois, et un composite
+`emd_jsd` qui passait de 24,09 à 24,43 en lecture brute — 0,34 point, soit l'ordre de
+grandeur des gains que la calibration cherche à mesurer.
+
 Les jeux gelés de la calibration sont d'ailleurs eux-mêmes construits à partir
 d'un run de ce type — le manifeste `calibration_datasets/v1/manifest.yaml`
 enregistre le `llm_exchanges.jsonl` et le `population_1000.json` d'origine.
@@ -96,8 +128,8 @@ enregistre le `llm_exchanges.jsonl` et le `population_1000.json` d'origine.
 ### Périmètre commun aux trois volets
 
 Les trois volets doivent porter sur le **même** sous-ensemble du run, sans quoi la
-matrice comparerait trois substrats en les annonçant comme un seul. Deux coupes, définies
-une fois et appliquées à la source.
+matrice comparerait trois substrats en les annonçant comme un seul. Trois coupes,
+définies une fois et appliquées à la source.
 
 **1. Lignes sans décision modale** — `common_set.exclude_selection_methods` dans
 `sources.yaml`, appliqué par `frames.read_moves` :
@@ -127,7 +159,35 @@ d'échanges. Oublier ce second point ferait porter aux trois volets des périmè
 différents **sans que rien ne le signale**. Les deux emploient la même convention (date
 UTC de l'horodatage simulé), donc la même frontière de journée.
 
-La page publie le jour retenu et les deux comptes d'exclusion dans son bilan de lecture :
+**3. Une seule tentative par décision** — la plus récente, identifiée par la colonne
+« Heure de calcul ». Cette coupe s'applique **avant** les deux autres
+(`frames.latest_attempts`, appelé en tête de `frames.read_moves`), et elle ne concerne
+que les runs repris à chaud : sur un run joué d'une seule traite, elle est un no-op et
+la page n'en dit rien.
+
+La clé de dédoublonnage porte le **jour simulé** en plus du couple
+(`ID Personne`, `ID Activité`), et ce n'est pas un détail de forme :
+
+- **sans le jour**, la décision du jour 1 et sa répétition du jour 2 — celles que la
+  coupe n° 2 est justement là pour écarter, 442 couples sur le run repris du
+  2026-08-19 — passent pour deux tentatives de la même décision. On garde alors celle
+  du jour 2, que la coupe au premier jour simulé écarte ensuite : la décision
+  **disparaît du score** au lieu d'y entrer une fois. Mesuré sur ce run : 2 488
+  décisions scorées et un composite de 23,45, contre 2 844 et 24,09 avec la bonne clé ;
+- **avec le jour**, les deux coupes se composent : le dédoublonnage traite les
+  tentatives d'un même jour, la coupe n° 2 les jours en trop.
+
+`model_compare.latest_attempts` applique la même règle sur le même piège — les deux
+implémentations doivent rester d'accord.
+
+> **Ce dédoublonnage n'a qu'un seul point d'entrée, contrairement à la coupe n° 2.**
+> Il vit dans `frames.read_moves`, donc il couvre les volets 1 et 3 ;
+> `common_set_eval.build_sample` ne l'applique pas au journal d'échanges. Aucun chiffre
+> publié n'en souffre — le volet 2 refuse de s'afficher s'il n'a pas été mesuré sur le
+> run épinglé, et le run épinglé n'a pas été repris — mais épingler un run repris
+> demanderait d'étendre la coupe au volet 2 d'abord.
+
+La page publie le jour retenu et les trois comptes d'exclusion dans son bilan de lecture :
 un périmètre tu ferait passer un sous-ensemble du journal pour le journal entier. La
 vérification se fait en comparant les `n` affichés par les trois volets, pas en les
 supposant égaux.
@@ -530,7 +590,7 @@ même centre-ville.
 | `scripts/synthesis/heldout_eval.py` | Producteur : rejoue la lignée sur un jeu gelé de retenue et écrit dans le store (`make heldout-eval`) — **consomme du quota LLM** ; porte aussi la description des jeux gelés (découpage par personne ou par déplacement) |
 | `scripts/synthesis/model_on_common_set.py` | Producteur : applique la politique PROGEDO au jeu commun, renormalisée sur l'offre OTP (`make common-set-predict`) — hors ligne, déterministe |
 | `scripts/synthesis/charts.py` | SVG en ligne (bullet, profils ordinaux, matrice) |
-| `scripts/synthesis/render.py` | Assemblage HTML |
+| `scripts/synthesis/render.py` | Assemblage HTML — page complète (`render()`) et pages dédiées « Détail par sous-catégorie » (`render_detail()`, spécifiées par `DETAIL_PAGES`) |
 | `scripts/synthesis/build.py` | Orchestration + CLI + liste d'actions |
 
 Aucune donnée absente n'interrompt la génération : chaque source manquante
@@ -581,6 +641,65 @@ sa barre.
   est la pire ».
 - L'alerte sur un écart porte sur son **ampleur**, pas son signe : sous-estimer
   la marche de 19 points est aussi grave que surestimer le vélo de 15.
+
+## 7. Ventilation par modèle — `make model-compare`
+
+La page principale répond à « où en est la simulation face à l'enquête ». Elle ne
+répond pas à « **quel modèle** a produit ce score », parce qu'elle agrège le run
+entier sans regarder la colonne `Fournisseur & Modèle`. Dès qu'un run fait tourner
+plusieurs modèles — c'est le cas dès que la passerelle répartit la charge entre
+fournisseurs — la moyenne du run mélange des lignées de décisions distinctes.
+
+```bash
+make model-compare RUN=experiments/archive/<run> \
+  [BASELINE="experiments/archive/<repère1> experiments/archive/<repère2>"]
+```
+
+Sortie : `docs/synthesis/models/<run>/index.html` et `data.json`. **Aucun appel
+LLM** : tout est relu dans `moves.csv`. Le module ne réimplémente ni la lecture ni
+la loss — il découpe le journal, écrit chaque sous-ensemble dans un CSV temporaire
+et le passe à `frames.read_moves` puis `frames.Scorer`. Un score de cette page est
+donc directement comparable à celui de la page principale.
+
+Trois précautions structurent le découpage.
+
+**La reprise à chaud.** `make run OFFLINE=1 CONT=1` rejoue le jour simulé depuis
+t0 dans le même dossier d'expérience : `moves.csv` porte alors deux fois les mêmes
+couples (personne, activité), une fois par tentative. Le lecteur officiel ne coupe
+que sur le **jour simulé**, pas sur la tentative — il compte donc deux fois les
+décisions d'avant la reprise. La page retient la tentative la plus récente et
+publie **les deux lectures côte à côte**, pour que l'écart soit lisible au lieu de
+rester dans le score sans être dit. La clé de dédoublonnage porte le jour simulé
+en plus du couple : sans lui, la décision du jour 1 et sa répétition du jour 2
+(l'horizon glissant en produit quelques centaines) passeraient pour deux
+tentatives de la même décision, on garderait celle du jour 2, et la coupe au
+premier jour l'écarterait ensuite — la décision disparaîtrait du score.
+
+**L'effectif.** Un sous-ensemble par modèle est plus petit que le run, et les
+divergences par strate sont biaisées vers le haut à petits effectifs (c'est le
+constat de l'action A3). Un **test de permutation** chiffre donc l'écart entre les
+deux modèles les mieux classés contre le bruit de découpage : on remélange leurs
+décisions, on recoupe aux mêmes effectifs, et on compte les tirages qui atteignent
+l'écart observé. Sans ce témoin, tout écart de composite serait interprétable — y
+compris celui qu'un tirage au sort produit. En deçà de 60 décisions, un
+sous-ensemble est affiché mais **pas scoré**.
+
+**La comparabilité des échantillons.** Un modèle peut sembler meilleur parce qu'il
+a hérité des trajets faciles. La répartition de charge n'est pas censée regarder le
+persona ; la page le vérifie (âge, distance, genre, occupation, motif, nombre de
+modes proposés) plutôt que de le supposer.
+
+La page publie aussi **les découpes internes du run** — décisions d'un modèle
+contre trajets à itinéraire unique — parce que le composite du run n'est pas le
+composite de ses modèles : un trajet à itinéraire unique entre dans le score sans
+qu'aucun modèle n'ait rien choisi, et il y entre avec une `absent_penalty` élevée
+(un seul mode proposé ⇒ trois modes à zéro). Et elle publie **la santé du run**
+(échecs par fournisseur et par statut HTTP, cache, débit, backlog, alarmes),
+parce qu'un composite se lit toujours sur un périmètre : si un tiers des décisions
+n'a jamais atteint un modèle, le taire ferait passer une pénurie de fournisseurs
+pour une performance. Les replis d'erreur sortent du score — il n'y a pas de choix
+à noter — mais **pas de la simulation** : l'agent a bien pris l'itinéraire d'index 0,
+et les trajectoires du run portent cette part non décidée.
 
 ## Voir aussi
 

@@ -15,6 +15,7 @@ import csv
 import json
 import sqlite3
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -270,67 +271,196 @@ def resolve_run(manifest: Manifest) -> dict:
     return info
 
 
-def read_moves(path: Path, exclude_methods: list[str]) -> tuple[list[dict], dict]:
-    """Lit moves.csv et annote chaque trajet de ses catégories EMC²."""
-    rows: list[dict] = []
-    stats = Counter()
+def simulated_day(value: str) -> Optional[str]:
+    """Jour simulé (``YYYY-MM-DD``) d'une ligne, depuis « Temps simulé ».
+
+    Même convention que le champ ``sim_day`` de ``llm_exchanges.jsonl`` (UTC, cf.
+    ``llm_module/telemetry/logger.py``) : c'est ce qui permet aux volets 1/3 et au
+    volet 2 de découper le run sur la même frontière de journée.
+    """
+    text = (value or "").strip()
+    if not text:
+        return None
+    try:
+        ts = int(float(text))
+    except ValueError:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def first_simulated_day(path: Path) -> Optional[str]:
+    """Plus petit jour simulé présent dans un moves.csv.
+
+    Déterminé par lecture, jamais codé en dur : le run de référence peut démarrer
+    n'importe quel jour, et une date en dur ferait silencieusement passer un run
+    entier pour vide.
+    """
+    days = set()
     with Path(path).open(encoding="utf-8") as fh:
         for raw in csv.DictReader(fh):
-            stats["total"] += 1
-            if raw.get("Méthode de sélection") in exclude_methods:
-                stats["exclues_methode"] += 1
+            day = simulated_day(raw.get("Temps simulé") or "")
+            if day:
+                days.add(day)
+    return min(days) if days else None
+
+
+def attempt_stamp(raw: dict) -> str:
+    """« Heure de calcul » d'une ligne : c'est elle qui identifie la tentative.
+
+    Deux lignes du même couple (personne, activité, jour simulé) qui ne diffèrent
+    que par cet horodatage sont deux tentatives de la MÊME décision, pas deux
+    décisions.
+    """
+    return (raw.get("Heure de calcul") or "").strip()
+
+
+def latest_attempts(raws: list[dict]) -> tuple[list[dict], dict]:
+    """Ne garde que la tentative la plus récente de chaque décision.
+
+    Un run repris à chaud (``make run OFFLINE=1 CONT=1``) rejoue le jour simulé
+    depuis t0 dans le MÊME dossier d'expérience : ``moves.csv`` porte alors deux
+    fois les mêmes couples (personne, activité), une ligne par tentative, toutes
+    deux datées du même jour simulé. La coupe au premier jour simulé ne les sépare
+    pas — elle les garde toutes les deux — et le score les compte deux fois. Sur
+    le run repris du 2026-08-19, 1 469 lignes en doublon faisaient passer le
+    composite de 24,09 à 24,43, soit l'ordre de grandeur des gains que la
+    calibration cherche à mesurer.
+
+    La clé porte le **jour simulé** en plus du couple (personne, activité), et ce
+    n'est pas un détail : sans lui, la décision du jour 1 et sa répétition du jour
+    2 — que l'horizon glissant de planification produit pour 442 couples sur ce
+    run — passeraient pour deux tentatives de la même décision. On garderait alors
+    celle du jour 2, que la coupe au premier jour simulé écarte ensuite : la
+    décision disparaîtrait du score au lieu d'y entrer une fois.
+    ``model_compare.latest_attempts`` applique la même règle, sur le même piège.
+
+    Une ligne sans identifiant de personne ou d'activité ne peut être appariée à
+    aucune autre : elle est gardée telle quelle, faute de quoi un journal qui ne
+    porte pas ces colonnes s'effondrerait sur une seule ligne.
+    """
+    best: dict[tuple[str, str, Optional[str]], dict] = {}
+    unpaired: set[int] = set()
+    for raw in raws:
+        person = (raw.get("ID Personne") or "").strip()
+        activity = (raw.get("ID Activité") or "").strip()
+        if not person or not activity:
+            unpaired.add(id(raw))
+            continue
+        key = (person, activity, simulated_day(raw.get("Temps simulé") or ""))
+        held = best.get(key)
+        # Journal sans « Heure de calcul » (runs antérieurs) : tous les horodatages
+        # sont vides, la comparaison est fausse partout et c'est la première ligne
+        # qui reste. Faute de tentative datée, il n'y a pas de choix moins arbitraire.
+        if held is None or attempt_stamp(raw) > attempt_stamp(held):
+            best[key] = raw
+    kept_ids = {id(raw) for raw in best.values()} | unpaired
+    kept = [raw for raw in raws if id(raw) in kept_ids]
+    stamps = sorted({attempt_stamp(raw)[:10] for raw in raws if attempt_stamp(raw)})
+    return kept, {
+        "n_dropped": len(raws) - len(kept),
+        # Deux jours de calcul pour un seul jour simulé : le run a été repris.
+        "reprise": len(stamps) > 1,
+        "jours_de_calcul": stamps,
+    }
+
+
+def read_moves(path: Path, exclude_methods: list[str],
+               first_day_only: bool = True) -> tuple[list[dict], dict]:
+    """Lit moves.csv et annote chaque trajet de ses catégories EMC².
+
+    ``first_day_only`` borne la lecture au **premier jour simulé** du run. Même
+    quand le run est censé s'arrêter à 24 h, le bootstrap et l'horizon glissant de
+    planification débordent au-delà : sur le run de référence, 2 538 couples
+    (personne, activité) réapparaissaient un jour plus tard, avec le même mode dans
+    57,8 % des cas. Ces répétitions ne sont pas des décisions supplémentaires, elles
+    pèsent seulement deux fois dans les parts modales. Le volet 2 applique la même
+    coupe sur ``sim_day`` (``common_set_eval.build_sample``) : c'est ce qui garantit
+    aux trois volets un périmètre unique.
+
+    Cette coupe ne suffit pas sur un run **repris à chaud** : la reprise rejoue
+    le jour simulé dans le même dossier d'expérience, et les deux tentatives
+    portent le même jour simulé. ``latest_attempts`` ne garde que la plus
+    récente, en amont de la coupe ; le nombre de lignes ainsi écartées sort dans
+    ``exclues_reprise``.
+    """
+    kept_day = first_simulated_day(path) if first_day_only else None
+    rows: list[dict] = []
+    stats = Counter()
+    if kept_day:
+        stats["jour_retenu"] = kept_day
+    with Path(path).open(encoding="utf-8") as fh:
+        raws = list(csv.DictReader(fh))
+    stats["total"] = len(raws)
+    raws, reprise = latest_attempts(raws)
+    stats["exclues_reprise"] = reprise["n_dropped"]
+    if reprise["reprise"]:
+        stats["reprise"] = True
+        stats["jours_de_calcul"] = reprise["jours_de_calcul"]
+    for raw in raws:
+        if kept_day and simulated_day(raw.get("Temps simulé") or "") != kept_day:
+            stats["exclues_jour"] += 1
+            continue
+        if raw.get("Méthode de sélection") in exclude_methods:
+            stats["exclues_methode"] += 1
+            continue
+        chosen = CHOSEN_MODE_MAP.get((raw.get("Mode de transport Choisi") or "").strip())
+        if chosen is None:
+            stats["sans_mode"] += 1
+            continue
+        occupation = OCCUPATION_MAP.get((raw.get("Occupation principale") or "").strip())
+        if occupation is None:
+            stats["occupation_inconnue"] += 1
+        motif = MOTIF_MAP.get((raw.get("Motifs de déplacement") or "").strip())
+        probas = {}
+        for col, mode in PROBA_COLUMNS.items():
+            value = (raw.get(col) or "").strip()
+            if value == "":
                 continue
-            chosen = CHOSEN_MODE_MAP.get((raw.get("Mode de transport Choisi") or "").strip())
-            if chosen is None:
-                stats["sans_mode"] += 1
+            try:
+                probas[mode] = probas.get(mode, 0.0) + float(value)
+            except ValueError:
                 continue
-            occupation = OCCUPATION_MAP.get((raw.get("Occupation principale") or "").strip())
-            if occupation is None:
-                stats["occupation_inconnue"] += 1
-            motif = MOTIF_MAP.get((raw.get("Motifs de déplacement") or "").strip())
-            probas = {}
-            for col, mode in PROBA_COLUMNS.items():
-                value = (raw.get(col) or "").strip()
-                if value == "":
-                    continue
-                try:
-                    probas[mode] = probas.get(mode, 0.0) + float(value)
-                except ValueError:
-                    continue
-            if probas:
-                stats["avec_distribution"] += 1
-            else:
-                stats["sans_distribution"] += 1
-            logement, logement_reference = normalize_housing(
-                raw.get("Type de logement") or "")
-            if logement is None:
-                stats["type_logement_vide"] += 1
-            elif not logement_reference:
-                # Modalité connue de l'enquête mais absente de la ventilation publiée
-                # (« Autres ») : elle ne joindra aucune ligne de référence. On la
-                # compte ici, faute de quoi elle disparaîtrait du bilan.
-                stats["type_logement_hors_referentiel"] += 1
-            offered = parse_offered_modes(raw.get("Modes proposés au LLM") or "")
-            if not offered:
-                stats["sans_offre"] += 1
-            rows.append({
-                "agent_id": (raw.get("ID Personne") or "").strip(),
-                "activity_id": (raw.get("ID Activité") or "").strip(),
-                "chosen": chosen,
-                "probas": probas,
-                # Jeu de choix réellement soumis à la décision : c'est lui qui borne
-                # le volet 3 (renormalisation sur l'offre OTP), et lui seul distingue
-                # « mode écarté » de « mode jamais proposé ».
-                "offered": offered,
-                "departure_hour": departure_hour(raw.get("Heure de départ") or ""),
-                "genre": (raw.get("Genre") or "").strip() or None,
-                "age_cat": age_to_cat(raw.get("Âge")),
-                "occupation": occupation,
-                "motif": motif,
-                "dist_cat": distance_to_cat(raw.get("Distance parcourue")),
-                "lieu_residence": normalize_place(raw.get("Lieu de résidence") or ""),
-                "type_logement": logement,
-            })
+        if probas:
+            stats["avec_distribution"] += 1
+        else:
+            stats["sans_distribution"] += 1
+        logement, logement_reference = normalize_housing(
+            raw.get("Type de logement") or "")
+        if logement is None:
+            stats["type_logement_vide"] += 1
+        elif not logement_reference:
+            # Modalité connue de l'enquête mais absente de la ventilation publiée
+            # (« Autres ») : elle ne joindra aucune ligne de référence. On la
+            # compte ici, faute de quoi elle disparaîtrait du bilan.
+            stats["type_logement_hors_referentiel"] += 1
+        offered = parse_offered_modes(raw.get("Modes proposés au LLM") or "")
+        if not offered:
+            stats["sans_offre"] += 1
+        # Contrainte de chaîne des véhicules (colonne écrite depuis le ticket 008,
+        # A4 ; vide sur les runs antérieurs). Elle EXPLIQUE une décision, elle ne
+        # la disqualifie pas : ces lignes restent dans le scoring, et la page en
+        # publie seulement la répartition.
+        contrainte = (raw.get("Contrainte de chaîne") or "").strip()
+        stats["contrainte::" + (contrainte or "aucune")] += 1
+        rows.append({
+            "contrainte": contrainte or None,
+            "agent_id": (raw.get("ID Personne") or "").strip(),
+            "activity_id": (raw.get("ID Activité") or "").strip(),
+            "chosen": chosen,
+            "probas": probas,
+            # Jeu de choix réellement soumis à la décision : c'est lui qui borne
+            # le volet 3 (renormalisation sur l'offre OTP), et lui seul distingue
+            # « mode écarté » de « mode jamais proposé ».
+            "offered": offered,
+            "departure_hour": departure_hour(raw.get("Heure de départ") or ""),
+            "genre": (raw.get("Genre") or "").strip() or None,
+            "age_cat": age_to_cat(raw.get("Âge")),
+            "occupation": occupation,
+            "motif": motif,
+            "dist_cat": distance_to_cat(raw.get("Distance parcourue")),
+            "lieu_residence": normalize_place(raw.get("Lieu de résidence") or ""),
+            "type_logement": logement,
+        })
     return rows, dict(stats)
 
 
@@ -415,6 +545,13 @@ def read_store_history(db_path: Path, keep_verdicts: list[str]) -> dict:
     qu'un prompt a été **dédoublonné** : les nœuds étant adressés par contenu, un
     texte déjà produit sur une autre branche est réutilisé avec le parent de sa
     première création. Sans ces arêtes, une lignée reconstruite perd son seed.
+
+    Les noms de jeu **qualifiés par version** (``test@v2``) sont retenus au même
+    titre que les noms nus : depuis que deux versions de jeux gelés coexistent, le
+    store distingue ``test`` de ``test@v2`` — sans quoi une mesure v1 serait
+    resservie pour une demande v2. Le filtre doit suivre, sinon la mesure payée
+    reste invisible à la page. ``screen`` reste exclu : c'est un sous-ensemble
+    strict du train, il ne porte pas de score de généralisation.
     """
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -430,6 +567,9 @@ def read_store_history(db_path: Path, keep_verdicts: list[str]) -> dict:
                    e.eval_model, e.created_at AS eval_at
             FROM nodes n JOIN evals e ON e.node_hash = n.hash
             WHERE e.dataset IN ('train', 'val', 'test')
+               OR e.dataset LIKE 'train@%'
+               OR e.dataset LIKE 'val@%'
+               OR e.dataset LIKE 'test@%'
             ORDER BY n.created_at, e.created_at
         """
         for row in conn.execute(query):

@@ -213,6 +213,35 @@ def section_common_set(payload: dict) -> str:
         warn = "".join(f"<li>{escape(w)}</li>" for w in cs["warnings"])
         warn = f'<ul style="color:var(--ink2);font-size:13.5px">{warn}</ul>'
 
+    # Contraintes de chaîne des véhicules (ticket 008, A4). Une décision prise sur un
+    # jeu d'options déjà restreint n'est pas invalide, mais elle ne mesure pas la même
+    # chose qu'un choix libre : le lecteur doit savoir quelle part du volet 1 elle
+    # représente. Le bloc disparaît sur un run antérieur à la colonne.
+    _CONSTRAINT_LABEL = {
+        "aucune": "Aucune contrainte — jeu de choix d'OTP",
+        "retour_force": "Retour forcé — options restreintes au mode du véhicule garé",
+        "passager": "Passager — voiture conduite par un adulte du foyer",
+        "sortie_bloquee": "Sortie bloquée — véhicule possédé, mais garé ailleurs",
+    }
+    constraints = cs.get("chain_constraints") or {}
+    chain = ""
+    if set(constraints) - {"aucune"}:
+        total_c = max(1, sum(constraints.values()))
+        lines = "".join(
+            f"<tr><td>{escape(_CONSTRAINT_LABEL.get(k, k))}</td>"
+            f'<td class="mono">{v}</td>'
+            f'<td class="mono">{100.0 * v / total_c:.1f}%</td></tr>'
+            for k, v in sorted(constraints.items(), key=lambda kv: -kv[1]))
+        chain = f"""
+<h3>Contraintes de chaîne des véhicules</h3>
+<p>Un véhicule personnel est un <em>lieu</em>&nbsp;: il reste où son propriétaire l'a
+garé. Les décisions ci-dessous ont donc été prises sur un jeu d'options déjà restreint
+par cette cohérence. Elles <strong>restent dans le score</strong> — c'est bien ce que la
+simulation a joué — mais elles ne mesurent pas la même chose qu'un choix libre entre
+tous les modes, et leur part doit être lue avec le reste.</p>
+<div class="scroll"><table><thead><tr><th>Contrainte</th><th>Trajets</th>
+<th>Part</th></tr></thead><tbody>{lines}</tbody></table></div>"""
+
     return f"""
 <section id="jeu-commun">
 <h2>Jeu d'évaluation commun</h2>
@@ -227,8 +256,11 @@ la calibration sont d'ailleurs eux-mêmes construits à partir d'un run de ce ty
     ("Trajets retenus", f'{cs["n_trips"]:,}'.replace(",", " "), "après exclusions"),
     ("Personnes", f'{cs["n_persons"]:,}'.replace(",", " "), "identifiants distincts"),
     ("Avec distribution", f'{cs["pct_distribution"]:.0f}%', "des trajets"),
+    ("Jour simulé", cs.get("sim_day") or "tous",
+     f'{cs.get("n_excluded_day", 0)} lignes écartées hors de ce jour'),
 ])}
 {warn}
+{chain}
 <h3>Couverture par sous-catégorie</h3>
 <p>Effectif en <em>personnes distinctes</em>. Les catégories sous le seuil de 5 sont
 signalées&nbsp;: elles restent affichées mais ne pèsent quasiment rien dans le score,
@@ -318,6 +350,8 @@ le plus.</p>
 <th class="num">n</th></tr></thead><tbody>{worst}</tbody></table></div>
 
 <h3>Détail par sous-catégorie</h3>
+<p>Aussi disponible en page dédiée, sans le reste de la synthèse&nbsp;:
+<a href="detail_simulation.html">détail par sous-catégorie — simulation</a>.</p>
 {_dimension_blocks(arm["details"], "sim")}
 </section>"""
 
@@ -418,6 +452,33 @@ def _lineage_block(lineage: dict) -> str:
               f'<th>Branche</th>{heads}</tr></thead><tbody>{rows}</tbody></table></div>')
 
 
+def _train_version_note(arm: dict) -> str:
+    """Évals de train qualifiées par version, présentes dans le store mais hors courbe.
+
+    Elles ne sont pas fondues dans la trajectoire : deux versions de jeux gelés
+    n'ont pas la même météo, donc pas le même substrat, et les superposer dans une
+    même courbe est le défaut que la qualification par version vient corriger. Mais
+    une mesure payée qui disparaît sans un mot fait relancer l'éval une seconde
+    fois — d'où cette note.
+    """
+    skipped = arm.get("train_versioned_skipped") or {}
+    if not skipped:
+        return ""
+    listing = "".join(
+        f'<li><span class="mono">{escape(k)}</span> — {v} éval(s)</li>'
+        for k, v in sorted(skipped.items()))
+    return f"""
+<div class="note"><div class="t">Des évals de train qualifiées par version sont dans le
+store, hors de cette courbe</div>
+<p>La trajectoire ci-dessous ne porte que le split <span class="mono">train</span> à nom
+nu (jeux <span class="mono">v1</span>). Le store contient aussi&nbsp;:</p>
+<ul>{listing}</ul>
+<p>Elles sont écartées et non fondues&nbsp;: une autre version de jeux gelés, c'est un
+autre régime météo, donc un autre substrat. Les mêler dans une seule courbe est
+exactement ce que la qualification par version corrige. Pour lire la trajectoire sous
+cette version, épingler la version correspondante dans le manifeste.</p></div>"""
+
+
 def _regimes_note(arm: dict) -> str:
     """Ce que le mélange des régimes de mesure interdit — et ce qui y échappe.
 
@@ -465,14 +526,20 @@ def _common_set_block(arm: dict) -> str:
     """
     common = arm.get("common_set") or {}
     if not common.get("available"):
-        return missing_card(
-            "prompts évalués sur le jeu commun",
+        # Une mesure écartée parce qu'elle porte sur un AUTRE run n'est pas une
+        # donnée absente : le fichier existe et il est juste. La carte doit dire
+        # laquelle des deux situations elle décrit, sans quoi le lecteur relance
+        # une mesure qu'il a déjà payée.
+        why = common.get("reason") or (
             "Aucun prompt n'a encore été ré-évalué sur le jeu commun issu de la "
             "simulation. Tant que ce n'est pas fait, le volet 2 ne peut pas entrer "
             "dans la comparaison finale : ses scores portent sur les personas gelés, "
-            "pas sur le run.",
+            "pas sur le run.")
+        return missing_card(
+            "prompts évalués sur le jeu commun", why,
             arm.get("common_set_expected", []),
-            "Action A3 — ré-évaluer la graine et le meilleur prompt sur le jeu commun")
+            common.get("action")
+            or "Action A3 — ré-évaluer la graine et le meilleur prompt sur le jeu commun")
 
     sample = common.get("sample") or {}
     rows = ""
@@ -596,6 +663,29 @@ def _generalization_block(arm: dict) -> str:
             gen.get("action", "Action A4 — évaluer sur le jeu de test gelé"))
 
     ds = escape(gen["dataset"])
+
+    # Régimes de jeu gelé différents des deux côtés : à dire AVANT le tableau, parce
+    # que tout ce qui suit — écart brut, écart corrigé, verdict — se lit autrement.
+    version_warning = ""
+    if not gen.get("versions_match", True):
+        version_warning = f"""
+<div class="constat"><p><strong>Les deux colonnes ne portent pas le même régime
+météo.</strong> Le score d'entraînement vient des évaluations de la campagne, faites sur
+les jeux gelés <code>{escape(gen.get("train_version", "v1"))}</code>&nbsp;; le score de
+retenue vient de la ré-évaluation, faite sur
+<code>{escape(gen.get("held_version", "?"))}</code>. Or les jeux
+<code>{escape(gen.get("train_version", "v1"))}</code> ne contiennent que cinq valeurs
+météo, toutes «&nbsp;ciel dégagé, pas de précipitations&nbsp;» — la fenêtre du run source
+était sèche — là où <code>{escape(gen.get("held_version", "?"))}</code> tire la météo dans
+l'année climatique complète (≈&nbsp;43&nbsp;% de records avec précipitations).</p>
+<p>L'écart train&nbsp;→&nbsp;retenue ci-dessous ne mesure donc <strong>pas</strong> le seul
+effet du découpage&nbsp;: il porte aussi ce changement de régime. Le témoin d'effectif ne
+le neutralise pas — il est calculé par rééchantillonnage des décisions
+<code>{escape(gen.get("train_version", "v1"))}</code>. Pour un écart de généralisation pur,
+il faudrait mesurer aussi le train sur
+<code>{escape(gen.get("held_version", "?"))}</code>&nbsp;; ce n'est pas fait, et ce n'est
+pas gratuit.</p></div>"""
+
     rows = ""
     for step in gen["steps"]:
         ctl = step.get("control") or {}
@@ -744,6 +834,7 @@ distingue pas un prompt qui a compris la population d'un prompt qui a mémorisé
 distingue&nbsp;: la même lignée, sous le même régime
 (<span class="mono">{escape(gen.get("regime") or "—")}</span>), évaluée sur le jeu
 <span class="mono">{ds}</span>.</p>
+{version_warning}
 {tiles([
     ("Graine", _num(seed.get("held")), f"composite, jeu {gen['dataset']}"),
     ("Meilleur", _num(leaf.get("held")), f"composite, jeu {gen['dataset']}"),
@@ -890,6 +981,7 @@ d'instrument de mesure, pas un progrès. Ce que le recalcul ne répare
 de la politique de décision.</p>
 
 {_regimes_note(arm)}
+{_train_version_note(arm)}
 
 <h3>Trajectoire des prompts retenus</h3>
 <p>Seuls les nœuds non rejetés (acceptés, importés, graine) sont tracés, par ordre
@@ -1036,6 +1128,8 @@ décision(s). Taille des jeux de choix&nbsp;: {escape(sizes_txt)} — les
 sont conservés parce que le volet 1 les conserve aussi.</p>
 <p>{excluded_txt}</p>
 <h3>Détail par sous-catégorie</h3>
+<p>Aussi disponible en page dédiée, sans le reste de la synthèse&nbsp;:
+<a href="detail_progedo.html">détail par sous-catégorie — arbre PROGEDO</a>.</p>
 {_dimension_blocks(preds.get("details") or {}, "mod")}"""
 
 
@@ -1294,11 +1388,18 @@ def render(payload: dict) -> str:
         ("grp", "Conclusion"),
         ("synthese", "Synthèse comparative"),
         ("provenance", "Provenance et régénération"),
+        ("grp", "Pages dédiées"),
+        ("detail_simulation.html", "Détail — Simulation"),
+        ("detail_progedo.html", "Détail — PROGEDO"),
     ]
     nav = ""
     for key, label in nav_items:
-        nav += (f'<div class="grp">{escape(label)}</div>' if key == "grp"
-                else f'<a href="#{key}">{escape(label)}</a>')
+        if key == "grp":
+            nav += f'<div class="grp">{escape(label)}</div>'
+        elif key.endswith(".html"):
+            nav += f'<a href="{key}">{escape(label)}</a>'
+        else:
+            nav += f'<a href="#{key}">{escape(label)}</a>'
 
     body = (section_definition(payload) + section_common_set(payload)
             + section_simulation(payload) + section_calibration(payload)
@@ -1322,3 +1423,114 @@ Généré le {escape(payload["generated_at"])} · {escape(payload["engine_note"]
 <code>scripts/synthesis/sources.yaml</code> · Loss importée de
 <code>prompt_calibration/calibration/metrics.py</code></footer>
 </main></div></body></html>"""
+
+
+# ── Pages dédiées « Détail par sous-catégorie » ───────────────────────────────
+# La page de synthèse reste la référence complète ; ces deux pages en extraient
+# le seul sous-chapitre « Détail par sous-catégorie », volet par volet, pour
+# pouvoir le lire (et l'imprimer) sans dérouler tout le reste. Elles sont
+# régénérées par le même `make synthesis` : aucun chiffre n'y est recopié à la
+# main, tout vient du même payload.
+
+DETAIL_PAGES = {
+    "simulation": {
+        "file": "detail_simulation.html",
+        "title": "Détail par sous-catégorie — Simulation (LLM + tirage)",
+        "nav_title": "Détail — Simulation",
+        "heading": "Volet 1 — Simulation (LLM + tirage)",
+        "back_label": "Volet 1 dans la synthèse",
+        "back_anchor": "volet-simulation",
+        "lede": (
+            "Le mode est choisi comme dans le run&nbsp;: le LLM attribue une "
+            "probabilité à chaque itinéraire proposé par OTP, puis la simulation tire "
+            "au sort dans cette distribution. Les profils ci-dessous portent sur la "
+            "<strong>masse de probabilité</strong> — la lecture indépendante du tirage, "
+            "celle que la calibration optimise."),
+        "cells": "parts modales de la population simulée",
+    },
+    "model": {
+        "file": "detail_progedo.html",
+        "title": "Détail par sous-catégorie — Modèle de régression PROGEDO",
+        "nav_title": "Détail — PROGEDO",
+        "heading": "Volet 3 — Modèle de régression PROGEDO",
+        "back_label": "Volet 3 dans la synthèse",
+        "back_anchor": "volet-modele",
+        "lede": (
+            "L'arbre de régression PROGEDO est entraîné sur les micro-données de "
+            "l'enquête, puis appliqué au jeu commun&nbsp;: chaque prédiction est "
+            "restreinte aux modes réellement proposés par OTP pour ce trajet-là, puis "
+            "renormalisée à 100&nbsp;% (hypothèse IIA). Les profils ci-dessous portent "
+            "sur cette masse de probabilité renormalisée, la seule comparable au "
+            "volet 1."),
+        "cells": "parts modales prédites par la politique",
+    },
+}
+
+
+def _detail_details(payload: dict, arm_key: str) -> tuple[dict, str]:
+    """Le dictionnaire de détails du volet, et la raison s'il est indisponible."""
+    arm = (payload.get("arms") or {}).get(arm_key) or {}
+    if arm_key == "simulation":
+        if arm.get("status") != "ok":
+            return {}, arm.get("reason", "Volet simulation indisponible.")
+        return arm.get("details") or {}, ""
+    preds = arm.get("predictions") or {}
+    if not preds.get("available"):
+        return {}, ("Le modèle n'a pas encore été appliqué au jeu commun : aucune "
+                    "distribution prédite à ventiler par sous-catégorie.")
+    return preds.get("details") or {}, ""
+
+
+def render_detail(payload: dict, arm_key: str) -> str:
+    """Une page autonome portant le seul sous-chapitre « Détail par sous-catégorie ».
+
+    Pas de sommaire latéral ici, contrairement à la page de synthèse : la page ne
+    porte qu'un chapitre, sept cellules à la suite, et une colonne de navigation
+    n'y ferait que rogner la largeur des graphiques.
+    """
+    spec = DETAIL_PAGES[arm_key]
+    prefix = "sim" if arm_key == "simulation" else "mod"
+    details, reason = _detail_details(payload, arm_key)
+    other = DETAIL_PAGES["model" if arm_key == "simulation" else "simulation"]
+
+    if reason:
+        body = missing_card(spec["heading"], reason, [],
+                            "Voir la page de synthèse pour la liste d'actions")
+    else:
+        body = _dimension_blocks(details, prefix)
+
+    return f"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{escape(spec["title"])}</title>
+<style>{CSS}
+.solo{{max-width:1040px;margin:0 auto;padding:32px 40px 96px}}
+.solo h1{{font-size:21px;font-weight:500;margin:0 0 4px;letter-spacing:-.015em}}
+.solo .sub{{font-size:13px;color:var(--ink3);margin-bottom:18px}}
+.solo .links{{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin-bottom:22px}}
+@media(max-width:880px){{.solo{{padding:24px 20px 64px}}}}
+</style></head>
+<body><main class="solo">
+<h1>{escape(spec["heading"])}</h1>
+<div class="sub">Détail par sous-catégorie — parts modales face à l'enquête
+EMC² 2023</div>
+<div class="links"><a href="index.html">← Synthèse complète</a>
+<a href="index.html#{spec["back_anchor"]}">{escape(spec["back_label"])}</a>
+<a href="{other["file"]}">{escape(other["nav_title"])}</a></div>
+<p style="color:var(--ink3);font-size:12.5px;margin-bottom:24px">
+Généré le {escape(payload.get("generated_at", ""))} ·
+{escape(payload.get("engine_note", ""))}</p>
+<section id="detail">
+<p class="lede">{spec["lede"]}</p>
+<p>Une cellule par sous-catégorie&nbsp;: barres = {spec["cells"]}, repère de
+référence = EMC² 2023. Les dimensions marquées
+<span class="badge ok">dans le composite</span> entrent dans le score&nbsp;; celles
+marquées <span class="badge">hors composite</span> sont rapportées pour lecture
+seulement. <strong>Plus l'écart au repère est faible, meilleur c'est.</strong>
+Le contexte de ce volet — parts globales, pires croisements, périmètre — reste dans
+<a href="index.html#{spec["back_anchor"]}">{escape(spec["back_label"])}</a>.</p>
+{body}
+</section>
+<footer>Régénérer&nbsp;: <code>make synthesis</code> · Page extraite de
+<code>docs/synthesis/index.html</code>, qui reste la référence complète</footer>
+</main></body></html>"""

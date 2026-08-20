@@ -13,6 +13,12 @@ NOTEBOOKS = [
     "delays.ipynb",
 ]
 
+# Fichiers d'entrée indispensables (relatifs à LOG_DIR) : si absent, le
+# notebook est sauté au lieu de faire échouer toute l'analyse.
+REQUIRED_FILES = {
+    "delays.ipynb": ["gama_results/gama_arrivals.csv"],
+}
+
 SCRIPT_DIR = Path(__file__).parent
 
 
@@ -54,14 +60,25 @@ def main():
     print(f"LOG_DIR: {args.log_dir}")
     print(f"Output:  {output_dir}")
 
+    log_dir_path = (SCRIPT_DIR / args.log_dir).resolve() if not Path(args.log_dir).is_absolute() else Path(args.log_dir)
+
     results = {}
+    skipped = []
     for nb in NOTEBOOKS:
+        missing = [f for f in REQUIRED_FILES.get(nb, []) if not (log_dir_path / f).exists()]
+        if missing:
+            print(f"\n>>> {nb}")
+            print(f"[SKIPPED] {nb} — fichier(s) manquant(s) : {', '.join(missing)}")
+            skipped.append(nb)
+            continue
         results[nb] = run_notebook(nb, args.log_dir, output_dir)
 
     failed = [nb for nb, ok in results.items() if not ok]
     if failed:
         print(f"\nFailed: {', '.join(failed)}")
         sys.exit(1)
+    if skipped:
+        print(f"\nSkipped (données manquantes) : {', '.join(skipped)}")
     print("\nAll notebooks completed successfully.")
 
 

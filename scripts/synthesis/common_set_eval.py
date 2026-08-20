@@ -71,6 +71,17 @@ SAMPLE_BUCKET_MAX = 99
 # mêler aux courbes de la calibration.
 DATASET_NAME = "common_set_v1"
 
+# Le cache du store indexe une éval sur (nœud × NOM DE JEU × params) — le run
+# n'y figure pas. Sous un nom fixe, changer le run épinglé resservait donc la
+# mesure du run précédent en la réétiquetant avec le descriptif du nouveau :
+# 0 appel payé, composites inchangés au centième, et un fichier qui affirmait
+# décrire 383 décisions du nouveau run tout en en portant 762 de l'ancien.
+# Le nom de jeu porte désormais l'empreinte des records réellement soumis : deux
+# runs distincts ne peuvent plus partager une entrée de cache, et relancer sur le
+# même run reste gratuit. Le suffixe reste hors de train/val/test, donc invisible
+# pour les courbes de calibration.
+CACHE_DIGEST_CHARS = 12
+
 # Lots de 8 personas. À 15 (capacité déduite du provider), le modèle rend un JSON
 # valide mais amputé de personas — mesuré par A10 : 4 lots sur 12 incomplets.
 # Ne change pas la mesure (le découpage n'entre pas dans ``eval_params_key``),
@@ -100,6 +111,29 @@ def sample_rule() -> str:
             f'< {SAMPLE_BUCKET_MAX}')
 
 
+def records_digest(records: list[dict]) -> str:
+    """Empreinte des records soumis au modèle : identités + texte gelé.
+
+    C'est le texte de ``section`` qui part réellement dans la requête (persona,
+    contexte, options d'itinéraire) : deux runs qui n'auraient produit ni les
+    mêmes trajets ni les mêmes contextes ne peuvent pas s'y confondre. Trié, donc
+    indépendant de l'ordre de lecture du journal.
+    """
+    h = hashlib.sha256()
+    for agent_id, section in sorted((str(r.get("agent_id", "")),
+                                     str(r.get("section", ""))) for r in records):
+        h.update(agent_id.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(section.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()[:CACHE_DIGEST_CHARS]
+
+
+def cache_dataset(digest: str) -> str:
+    """Nom de jeu du cache d'évals, portant l'empreinte de l'échantillon."""
+    return f"{DATASET_NAME}@{digest}"
+
+
 def build_sample(run_dir: Path) -> tuple[list[dict], dict]:
     """Décisions du run épinglé retenues dans l'échantillon, + descriptif.
 
@@ -121,6 +155,19 @@ def build_sample(run_dir: Path) -> tuple[list[dict], dict]:
             f"Le run {run_dir} ne porte pas les deux sources nécessaires : "
             f"llm_exchanges.jsonl et population_*.json.")
     entries = itinerary_entries(exchanges)
+    # Même coupe que les volets 1 et 3 (ticket 008, A6.b) : le premier jour simulé,
+    # et lui seul. Ce volet ne lit pas moves.csv — il reconstruit son échantillon
+    # depuis llm_exchanges.jsonl — donc le filtre de `frames.read_moves` ne
+    # l'atteindrait pas. Oublier ce second point d'entrée ferait porter aux trois
+    # volets des périmètres différents, sans que rien ne le signale.
+    # `sim_day` est déjà présent dans chaque enregistrement du journal (date UTC de
+    # `sim_ts`, cf. llm_module/telemetry/logger.py), et c'est exactement la
+    # convention que `frames.simulated_day` applique à la colonne « Temps simulé ».
+    days = {e.get("sim_day") for e in entries if e.get("sim_day")}
+    sim_day = min(days) if days else None
+    n_entries_run = len(entries)
+    if sim_day:
+        entries = [e for e in entries if e.get("sim_day") == sim_day]
     traits = load_population(candidates[0])
     records, anomalies = build_decision_records(entries, traits)
     if anomalies:
@@ -150,6 +197,7 @@ def build_sample(run_dir: Path) -> tuple[list[dict], dict]:
                      if w.rsplit(":", 1)[0] in empty_in_run else "")
                 for w in warnings]
     agents = {r["agent_id"] for r in kept}
+    digest = records_digest(kept)
     info = {
         "run": str(run_dir.relative_to(REPO_ROOT)) if run_dir.is_relative_to(REPO_ROOT)
         else str(run_dir),
@@ -162,6 +210,16 @@ def build_sample(run_dir: Path) -> tuple[list[dict], dict]:
         "n_agents": len(agents),
         "n_run_records": len(records),
         "n_run_agents": len({r["agent_id"] for r in records}),
+        # Périmètre temporel, à comparer à celui des volets 1 et 3 : les trois
+        # doivent annoncer le même jour.
+        "sim_day": sim_day,
+        "n_entries_run": n_entries_run,
+        "n_entries_kept": len(entries),
+        # Empreinte de ce qui est réellement soumis, et nom de jeu qu'elle induit
+        # dans le cache du store. Écrits dans le fichier : la page peut ainsi dire
+        # de quel échantillon vient la mesure, et non seulement de quel run.
+        "records_digest": digest,
+        "cache_dataset": cache_dataset(digest),
         # Composition en splits gelés : dit quelle part de l'échantillon tombe
         # dans le train sur lequel la calibration a été optimisée. Ce n'est pas une
         # fuite (les trajets, les contextes et les dates viennent d'un autre run),
@@ -265,6 +323,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"Échantillon : {info['n_records']} décisions, {info['n_agents']} personnes "
           f"(sur {info['n_run_records']} / {info['n_run_agents']} dans le run)")
     print(f"Règle gelée : {info['rule']}")
+    if info.get("sim_day"):
+        print(f"Jour simulé  : {info['sim_day']} "
+              f"({info['n_entries_kept']}/{info['n_entries_run']} entrées du journal) "
+              f"— même coupe que les volets 1 et 3")
+    print(f"Empreinte    : {info['records_digest']} → jeu de cache "
+          f"{info['cache_dataset']}")
     print(f"Splits gelés des personnes retenues : {info['splits']}")
     if info["coverage_warnings"]:
         print(f"⚠ {len(info['coverage_warnings'])} strate(s) sous le seuil de 5 :")
@@ -322,8 +386,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             n_batches = len(batches_from_records(
                 records, config.eval_batch_max,
                 prod_option_handling=config.prod_option_handling))
+            # Le jeu de cache porte l'empreinte de l'échantillon : une éval n'est
+            # servie que si elle a été payée sur EXACTEMENT ces records-là.
+            dataset_key = info["cache_dataset"]
             to_pay = [p for p in prompts
-                      if store.cached_eval(p["node"], DATASET_NAME, params_key) is None]
+                      if store.cached_eval(p["node"], dataset_key, params_key) is None]
             print()
             print(f"Clé d'éval : {params_key}")
             print(f"Prompts    : " + ", ".join(
@@ -347,7 +414,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     continue
                 try:
                     result, df = evaluator.evaluate(
-                        prompt["node"], blocks, DATASET_NAME, records,
+                        prompt["node"], blocks, dataset_key, records,
                         desc=f"{DATASET_NAME} {prompt['short']}")
                 except EvaluationAborted as exc:
                     # Même conduite que `calibrate reeval` : on PERSISTE la date de

@@ -12,7 +12,7 @@ import hashlib
 import json
 import random
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -30,16 +30,19 @@ ACTIONS = [
      "detail": "Remplacer experiments/current par un chemin d'archive explicite dans "
                "sources.yaml, pour que la page reste reproductible quand le symlink bouge.",
      "cost": "5 min", "unlocks": "Reproductibilité de toute la page",
-     "done": "Le manifeste épingle experiments/archive/2026-07-29_18_34. La page ne "
+     "done": "Le manifeste épingle experiments/archive/2026-07-31_15_45 (il a porté "
+             "experiments/archive/2026-07-29_18_34 jusqu'au 2026-07-31). La page ne "
              "suit plus le symlink : elle décrit le même run à chaque régénération, "
-             "et l'empreinte de moves.csv le vérifie."},
+             "et l'empreinte de moves.csv le vérifie. Changer de run est désormais un "
+             "geste sûr de bout en bout : le cache d'évals est indexé sur l'empreinte "
+             "de l'échantillon, et la page écarte une mesure du volet 2 faite sur un "
+             "autre run que celui qu'elle épingle."},
     {"id": "A2", "title": "Renseigner le type de logement dans moves.csv",
      "detail": "La colonne est écrite vide (move_logger.py) alors que la référence EMC² "
                "porte une ventilation par type de logement. Le trait n'existe pas non "
                "plus dans traits_json : il faut le produire à la génération de population.",
      "cost": "1/2 j", "unlocks": "Dimension type de logement, volet 1",
-     "progress": {
-         "acquis":
+     "done":
              "Le trait est produit et journalisé. Aucune source de la chaîne ne le "
              "portait — ni eqasim, ni les tables INSEE de l'étape 3bis du notebook : "
              "vérifié, ce n'est pas un branchement mais une création. La seule source "
@@ -65,27 +68,28 @@ ACTIONS = [
              "journal, move_logger.py écrit le libellé porté par le persona et vide "
              "quand il n'y en a pas ; les modalités sont déclarées EN UN SEUL POINT "
              "(llm_module/core/housing_type.py), partagé par la génération, le journal "
-             "et la page.",
-         "reste":
-             "L'axe lui-même. Comme pour l'action A9, le changement ne touche que les "
-             "runs FUTURS : le moves.csv du run épinglé est déjà écrit, sa colonne est "
-             "vide, et la page la relit telle quelle. La ventilation par type de "
-             "logement restera donc à zéro jusqu'à ce qu'un nouveau run soit produit et "
-             "épinglé. Elle n'a pas été reconstruite à la volée depuis "
-             "population_1000.json, et ce n'était pas possible sans tricher : la "
-             "population du run ne porte pas le trait (il n'existait pas), le "
+             "et la page. L'AXE EST PEUPLÉ depuis que la page épingle le run du "
+             "2026-07-31 : 302 individuel isolé, 219 petit collectif, 211 grand "
+             "collectif, 143 individuel accolé. Il a fallu attendre un run, et c'était "
+             "inévitable — le changement ne touche que les runs FUTURS, le moves.csv "
+             "d'un run déjà écrit ne se corrige pas. L'axe n'a pas été reconstruit à la "
+             "volée depuis population_1000.json, et ce n'était pas possible sans "
+             "tricher : la population de l'ancien run ne portait pas le trait, le "
              "recalculer à la génération de la page supposerait de rejouer "
              "l'imputation, donc d'exiger deux ressources d'accès restreint (couche de "
              "zones, table du type de logement) au moment de bâtir la page — la page "
              "cesserait d'être reproductible sur un poste sans les données PROGEDO, ce "
-             "que l'action A1 a précisément acquis."}},
+             "que l'action A1 a précisément acquis."},
     {"id": "A3", "title": "Ré-évaluer graine et meilleur prompt sur le jeu commun",
      "detail": "Rejouer deux prompts sur un échantillon du run (viser ~400 décisions) "
                "avec le modèle d'évaluation épinglé, et écrire le résultat au format "
                "décisions attendu par la page.",
      "cost": "175 appels LLM", "unlocks": "Volet 2 dans la comparaison finale",
-     "done": "scripts/synthesis/common_set_eval.py (make common-set-eval) a rejoué la "
-             "graine 4c2ea894 et la feuille 0fc427e7 sur 509 décisions du run épinglé, "
+     "progress": {
+         "acquis":
+             "scripts/synthesis/common_set_eval.py (make common-set-eval) a rejoué la "
+             "graine 4c2ea894 et la feuille 0fc427e7 sur 509 décisions du run alors "
+             "épinglé (2026-07-29_18_34), "
              "sous le régime épinglé, avec 100 % de couverture (80/80 personnes). "
              "L'échantillon est gelé : tirage PAR PERSONNE sur "
              "sha256(\"common_set_v1:\" + agent_id) % 1000 < 99 — même famille de règle "
@@ -116,7 +120,22 @@ ACTIONS = [
              "appels a réussi avant que le compteur ne rattrape, l'application du RPD "
              "n'étant pas exacte à la frontière). La page regroupant les régimes par "
              "modèle · politique et non par clé, le libellé produit reste le régime "
-             "épinglé."},
+             "épinglé.",
+         "reste":
+             "La refaire sur le run épinglé depuis le 2026-07-31 (2026-07-31_15_45). La "
+             "mesure ci-dessus reste juste, mais elle porte sur un AUTRE substrat : la "
+             "page l'écarte donc du volet 2 plutôt que de la faire voisiner avec des "
+             "volets 1 et 3 calculés sur le nouveau run. L'échantillon gelé y vaut 383 "
+             "décisions pour les mêmes 80 personnes — la règle est inchangée, c'est le "
+             "run qui porte moins de décisions LLM (beaucoup de trajets n'ont plus "
+             "qu'un itinéraire depuis la cohérence de chaîne des véhicules). Coût "
+             "chiffré : 96 appels avant re-tirs, ≈ 111 avec. Bloqué le 2026-07-31 par "
+             "le quota — les DEUX clés Google épuisées (RPD 500 chacune) ; reprise "
+             "autorisée le 2026-08-01 à 09:00 CEST. Ce report a mis au jour un défaut "
+             "corrigé au passage : le cache d'évals du store était indexé sur le seul "
+             "nom de jeu, sans le run, si bien qu'un changement de run resservait la "
+             "mesure précédente en la réétiquetant — zéro appel, composites inchangés "
+             "au centième. La clé porte désormais l'empreinte des records soumis."}},
     {"id": "A4", "title": "Évaluer sur le jeu de test gelé",
      "detail": "Aucun nœud du store n'a d'évaluation sur le split test : seuls train et "
                "screen sont peuplés. Le chiffre publiable de la calibration n'existe pas.",
@@ -263,9 +282,11 @@ ACTIONS = [
              "repli est la valeur publiée recopiée en constante, et un test échoue si "
              "les deux se mettent à diverger. Les couronnes de résidence des futurs runs "
              "sont donc mesurées depuis 43.597347/1.444997, comme les dist_center_* du "
-             "modèle. Le volet 1 de cette page ne bouge pas pour autant : il relit la "
-             "colonne « Lieu de résidence » déjà écrite dans le moves.csv du run "
-             "épinglé, calculée sous l'ancien centre."},
+             "modèle. C'EST LE CAS DEPUIS LE RUN DU 2026-07-31, et l'effet est "
+             "vérifié plutôt que supposé : à population identique (mêmes 901 "
+             "personnes), 30 d'entre elles changent de couronne par rapport au run "
+             "précédent, dans les DEUX sens — signature d'un déplacement latéral du "
+             "centre, et non d'un seuil qu'on aurait déplacé."},
     {"id": "A10", "title": "Débloquer l'éval sous la politique pondérée, puis porter la "
                            "lignée sur le modèle épinglé",
      "detail": "La lignée se lit bout à bout (A5), mais sous mistral-small-latest et la "
@@ -386,6 +407,38 @@ def build_common_set(manifest, cerema: dict) -> tuple[dict, list[dict]]:
         warnings.append("Le fichier de population du run est introuvable : le volet "
                         "modèle ne pourra pas reconstruire ses variables.")
 
+    # ── Périmètre : ce que la page a écarté, et pourquoi (ticket 008, A6) ────
+    # Ces comptes ne sont pas des avertissements de qualité mais la définition
+    # même de ce que la page mesure. Les taire ferait passer un sous-ensemble du
+    # journal pour le journal entier.
+    excl_methodes = manifest.get("common_set.exclude_selection_methods", [])
+    if stats.get("exclues_methode"):
+        warnings.append(
+            f"{stats['exclues_methode']} lignes écartées du scoring parce qu'elles ne "
+            f"portent pas de décision modale ({', '.join(excl_methodes)}). Les replis "
+            "d'erreur LLM en font partie : le contrôleur y prend l'itinéraire par "
+            "défaut, il n'y a pas de choix à noter.")
+    # Reprise à chaud (`make run OFFLINE=1 CONT=1`) : le jour simulé est rejoué depuis
+    # t0 dans le MÊME dossier d'expérience, et le journal porte deux fois les mêmes
+    # couples (personne, activité), tous deux datés de ce jour simulé. La coupe au
+    # premier jour simulé ne les sépare donc pas. Le dire vaut mieux que le taire : le
+    # lecteur croirait autrement lire un run d'une seule traite.
+    if stats.get("exclues_reprise"):
+        jours = ", ".join(stats.get("jours_de_calcul") or [])
+        warnings.append(
+            f"Run repris à chaud (calculs datés du {jours}) : "
+            f"{stats['exclues_reprise']} lignes en doublon écartées, seule la tentative "
+            "la plus récente de chaque décision est comptée. Sans cette coupe, les "
+            "décisions rejouées pèseraient deux fois dans les parts modales — et le "
+            "biais est du même ordre que les gains que la calibration mesure.")
+    if stats.get("jour_retenu"):
+        warnings.append(
+            f"Périmètre borné au premier jour simulé du run ({stats['jour_retenu']}) : "
+            f"{stats.get('exclues_jour', 0)} lignes postérieures écartées. Le bootstrap "
+            "24 h et l'horizon glissant de planification font déborder le journal "
+            "au-delà de la journée mesurée, en répétant les mêmes couples "
+            "(personne, activité). Le volet 2 applique la même coupe sur sim_day.")
+
     n_persons = len({r["agent_id"] for r in rows})
     total = max(1, len(rows))
     # Un chemin configuré qui se résout ailleurs est un symlink : la page ne décrit
@@ -401,6 +454,19 @@ def build_common_set(manifest, cerema: dict) -> tuple[dict, list[dict]]:
         "n_trips": len(rows),
         "n_persons": n_persons,
         "pct_distribution": 100.0 * stats.get("avec_distribution", 0) / total,
+        "sim_day": stats.get("jour_retenu"),
+        "n_excluded_method": stats.get("exclues_methode", 0),
+        "n_excluded_day": stats.get("exclues_jour", 0),
+        # Tentatives écartées d'un run repris : 0 sur un run joué d'une seule traite.
+        "n_excluded_resume": stats.get("exclues_reprise", 0),
+        "resumed": bool(stats.get("reprise")),
+        "compute_days": stats.get("jours_de_calcul") or [],
+        # Répartition de « Contrainte de chaîne » (ticket 008, A4) : quelle part des
+        # décisions retenues a été prise sur un jeu d'options déjà restreint par la
+        # cohérence des véhicules. Ces lignes SONT dans le score — la répartition dit
+        # au lecteur de combien il s'agit, elle ne les en sort pas.
+        "chain_constraints": {k.split("::", 1)[1]: v for k, v in stats.items()
+                              if isinstance(k, str) and k.startswith("contrainte::")},
         "stats": stats,
         "warnings": warnings,
         "coverage": {},
@@ -558,16 +624,27 @@ def build_simulation_on_sample(rows: list[dict], cerema: dict, scorer,
     frame = frames.simulation_frames(subset)["attendu"]
     scores = scorer.score(frame, cerema)
     dims = scores.get(scorer.primary.name, {}) if scores else {}
+    n_persons = len({r["agent_id"] for r in subset})
+    # La règle de tirage est la même des deux côtés, mais elle ne s'applique pas au
+    # même vivier : le volet 2 part de `llm_exchanges.jsonl` (seules les décisions
+    # passées par un appel LLM réel y figurent), ce témoin part de `moves.csv` (toutes
+    # les décisions, cache compris). Le témoin peut donc être un peu plus large que
+    # l'échantillon qu'il neutralise. L'écart est publié plutôt que tu : c'est la
+    # colonne censée dire ce que coûte l'effectif, elle ne peut pas se tromper
+    # d'effectif en silence.
     return {
         "dims": dims,
         "composite": dims.get("composite"),
         "n_trips": len(subset),
-        "n_persons": len({r["agent_id"] for r in subset}),
+        "n_persons": n_persons,
+        "n_persons_arm2": sample.get("n_agents"),
+        "persons_match": sample.get("n_agents") in (None, n_persons),
     }
 
 
 def build_common_set_eval(source, cerema: dict, scorer,
-                          nodes_table: list[dict]) -> dict:
+                          nodes_table: list[dict],
+                          pinned_run: Optional[str] = None) -> dict:
     """Prompts ré-évalués sur le jeu commun (action A3), scorés comme le reste.
 
     C'est ce qui rend le volet 2 commensurable au volet 1 : les mêmes personas, le
@@ -588,6 +665,20 @@ def build_common_set_eval(source, cerema: dict, scorer,
     entries = frames.load_common_set_eval(source.path)
     if not entries:
         return {"available": False}
+
+    # Garde de substrat : le volet 2 n'a de sens que s'il a été mesuré sur le run
+    # que la page épingle. Sans ce contrôle, changer de run laissait la mesure
+    # précédente en place et la matrice comparait deux substrats en les annonçant
+    # comme un seul — le cache du store, indexé sur le seul nom de jeu, a produit
+    # exactement cette situation le 2026-07-31. La mesure est écartée plutôt que
+    # corrigée : elle est juste, mais elle porte sur un autre run.
+    measured_on = {str((e.get("sample") or {}).get("run") or "?") for e in entries}
+    if pinned_run and measured_on != {str(pinned_run)}:
+        return {"available": False,
+                "reason": (f"Mesure faite sur {', '.join(sorted(measured_on))}, "
+                           f"alors que la page épingle {pinned_run}."),
+                "action": "Reproduire la mesure sur le run épinglé : "
+                          "make common-set-eval (chiffrer d'abord : DRY_RUN=1)"}
 
     # Score du même nœud sur les personas gelés, sous le même régime : c'est le
     # point de comparaison qui dit si le gain de la calibration se transporte.
@@ -749,6 +840,28 @@ def resample_gain(frame_a: list[dict], frame_b: list[dict], cerema: dict, scorer
     }
 
 
+def _resolve_train_dataset(by_key: dict, chain: list[str], regime: Optional[str],
+                           preferred_version: str) -> str:
+    """Nom de jeu sous lequel les évals de `train` de CETTE lignée sont rangées.
+
+    Le store nomme une éval par split ET version dès qu'on sort de la v1
+    (`train`, puis `train@v2`…). La page ne peut donc pas coder le nom en dur :
+    elle relève ceux qui existent pour les nœuds de la lignée, et préfère celui
+    qui porte la même version que le jeu de retenue — c'est la comparaison qui a
+    un sens. À défaut, le nom nu (v1), puis n'importe quel autre, par ordre
+    déterministe. Aucun candidat : on rend le nom nu, et la colonne train sortira
+    vide comme avant.
+    """
+    shorts = {h[:8] for h in chain}
+    available = {ds for (short, reg, ds) in by_key
+                 if short in shorts and reg == regime
+                 and (ds == "train" or ds.startswith("train@"))}
+    for candidate in (f"train@{preferred_version}", "train"):
+        if candidate in available:
+            return candidate
+    return min(available) if available else "train"
+
+
 def build_generalization(chain: list[str], by_key: dict, frames_by_key: dict,
                          cerema: dict, scorer, profile: dict,
                          regime: Optional[str], split_rule: Optional[str],
@@ -776,18 +889,39 @@ def build_generalization(chain: list[str], by_key: dict, frames_by_key: dict,
     """
     if not chain or not regime:
         return None
-    held = profile.get(heldout_dataset) or {}
+    # Le profil des jeux gelés est indexé par nom de SPLIT (`test`), alors que le
+    # store nomme l'éval par split ET version (`test@v2`, pour ne pas confondre deux
+    # jeux de météo différente). Sans ce dépouillement, l'effectif du jeu de retenue
+    # remontait à 0 — et avec lui le témoin de taille, qui en dépend directement.
+    held = profile.get(heldout_dataset) or profile.get(heldout_dataset.split("@", 1)[0]) or {}
     n_agents_held = held.get("n_agents") or 0
+
+    # Version des jeux gelés de chaque côté de la comparaison. Le côté « train »
+    # vient des évals de la CAMPAGNE, qui a tourné sur la version d'alors ; le côté
+    # retenue vient de la ré-évaluation, faite sur la version qu'épingle la page.
+    # Quand elles diffèrent, l'écart train → retenue ne mesure plus le seul effet du
+    # découpage : il porte aussi le changement de régime (en v2, la météo est tirée
+    # dans l'année climatique au lieu d'être celle, uniformément ensoleillée, du run
+    # source). La page doit le dire — c'est la contrepartie explicite du passage v2.
+    held_version = heldout_dataset.split("@", 1)[1] if "@" in heldout_dataset else "v1"
+    # Le côté train est RELEVÉ dans le store, jamais supposé. Le figer à « v1 »
+    # tenait tant que la campagne n'avait mesuré que des splits à nom nu ; le jour
+    # où elle range ses évals sous `train@v2`, un nom figé ne fait pas qu'étiqueter
+    # de travers — `by_key[(short, regime, "train")]` ne trouve plus rien et toute
+    # la colonne train disparaît, témoin d'effectif compris.
+    train_dataset = _resolve_train_dataset(by_key, chain, regime, held_version)
+    train_version = (train_dataset.split("@", 1)[1] if "@" in train_dataset else "v1")
+    versions_match = held_version == train_version
 
     steps = []
     for rank, node_hash in enumerate(chain):
         short = node_hash[:8]
-        train_row = by_key.get((short, regime, "train"))
+        train_row = by_key.get((short, regime, train_dataset))
         held_row = by_key.get((short, regime, heldout_dataset))
         if train_row is None and held_row is None:
             continue
         control = None
-        train_frame = frames_by_key.get((short, regime, "train"))
+        train_frame = frames_by_key.get((short, regime, train_dataset))
         if train_frame and n_agents_held:
             control = resample_composite(train_frame, cerema, scorer,
                                          n_agents_held, n_draws=n_draws)
@@ -836,8 +970,8 @@ def build_generalization(chain: list[str], by_key: dict, frames_by_key: dict,
     gain_control = None
     if seed_step and leaf_step and n_agents_held:
         gain_control = resample_gain(
-            frames_by_key.get((seed_step["short"], regime, "train")) or [],
-            frames_by_key.get((leaf_step["short"], regime, "train")) or [],
+            frames_by_key.get((seed_step["short"], regime, train_dataset)) or [],
+            frames_by_key.get((leaf_step["short"], regime, train_dataset)) or [],
             cerema, scorer, n_agents_held, n_draws=n_draws)
 
     # Le découpage est-il par personne ? Établi sur les fichiers eux-mêmes, pas
@@ -864,6 +998,11 @@ def build_generalization(chain: list[str], by_key: dict, frames_by_key: dict,
         # personnes, il est plus court d'une section.
         "memory_train": (profile.get("train") or {}).get("memory_share"),
         "memory_held": held.get("memory_share"),
+        # Régime des jeux gelés de chaque côté. Différents ⇒ l'écart train → retenue
+        # n'est pas un pur effet de découpage.
+        "train_version": train_version,
+        "held_version": held_version,
+        "versions_match": versions_match,
         "steps": steps,
         "seed": seed_step, "leaf": leaf_step,
         "n_measured": len(measured), "n_nodes": len(chain),
@@ -900,6 +1039,9 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
     # des milliers de lignes) et consommées seulement par le témoin d'effectif.
     frames_by_key: dict[tuple, list] = {}
     lineage_chain_full: list[str] = []
+    # Évals de train QUALIFIÉES par version (`train@v2`…) rencontrées mais écartées
+    # de la courbe principale : comptées pour être dites, jamais fondues dedans.
+    train_versionne: Counter = Counter()
 
     for entry in manifest.get("arms.calibration.stores", []) or []:
         src = manifest.track(f"calibration.store.{entry['id']}", entry["path"],
@@ -942,7 +1084,15 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
             by_key.setdefault((node["short"], regime["label"], node["dataset"]), row)
             frames_by_key.setdefault(
                 (node["short"], regime["label"], node["dataset"]), frame)
+            # La courbe principale ne porte QUE le split train à nom nu (v1). Un
+            # `train@vN` n'y est pas fondu : ce serait mêler deux substrats dans une
+            # même courbe, exactement le défaut que la qualification par version
+            # vient corriger. Il est compté pour être SIGNALÉ plus bas — une mesure
+            # payée puis rendue invisible sans un mot est ce qui fait relancer
+            # l'éval une seconde fois.
             if node["dataset"] != "train":
+                if node["dataset"].startswith("train@"):
+                    train_versionne[node["dataset"]] += 1
                 continue
             eval_models.add(regime["label"])
             nodes_table.append(row)
@@ -1006,7 +1156,8 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
         "calibration.common_set_eval",
         manifest.get("arms.calibration.common_set_eval"),
         "Décisions des prompts ré-évalués sur le jeu commun")
-    common_set = build_common_set_eval(common_eval, cerema, scorer, nodes_table)
+    common_set = build_common_set_eval(common_eval, cerema, scorer, nodes_table,
+                                       manifest.get("common_set.run"))
 
     # ── Généralisation : le jeu que la boucle n'a jamais vu (action A4) ──────
     # Le régime est celui épinglé par le manifeste. Ne pas retomber sur « le
@@ -1060,6 +1211,9 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
         "nodes_table": sorted(table, key=lambda r: r["created_at"] or ""),
         "prompt_variants": variants,
         "mixed_models": len(eval_models) > 1,
+        # Évals de train qualifiées par version, écartées de la courbe : publiées
+        # pour que la page puisse le dire au lieu de les faire disparaître.
+        "train_versioned_skipped": dict(train_versionne),
         "common_set": common_set,
         "common_set_expected": [common_eval.rel],
         "generalization": generalization,
@@ -1255,11 +1409,21 @@ def build_synthesis(payload: dict) -> dict:
         # à lui qu'elles doivent être comparées, pas à la colonne du run entier.
         on_sample = sim.get("on_calibration_sample")
         if on_sample:
+            _n2 = on_sample.get("n_persons_arm2")
+            if on_sample.get("persons_match"):
+                _note = "témoin de taille, mêmes personnes que la calibration"
+            else:
+                # Ne pas laisser croire à une égalité de population qui n'existe pas :
+                # le témoin sur-couvre le volet 2 des agents dont toutes les décisions
+                # sont venues du cache LLM, donc absentes du journal d'échanges.
+                _note = (f"témoin de taille — même règle de tirage, mais {on_sample['n_persons']} "
+                         f"personnes contre {_n2} au volet 2 (celui-ci ne voit que les "
+                         f"décisions passées par un appel LLM réel)")
             arms_out.append({
                 "label": "Sim. (éch. V2)",
-                "basis": f'jeu commun — {on_sample["n_persons"]} personnes de '
-                         f'l\'échantillon du volet 2',
-                "note": "témoin de taille, mêmes personnes que la calibration",
+                "basis": f'jeu commun — {on_sample["n_persons"]} personnes tirées par la '
+                         f'règle gelée du volet 2',
+                "note": _note,
                 "cells": cells_from_dims(on_sample.get("dims") or {})})
     else:
         arms_out.append({"label": "Simulation", "cells": [{"value": None}] * len(dims)})
@@ -1427,6 +1591,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     html_out.parent.mkdir(parents=True, exist_ok=True)
     html_out.write_text(render.render(payload), encoding="utf-8")
 
+    # Pages dédiées : le sous-chapitre « Détail par sous-catégorie » des volets 1
+    # et 3, extrait à côté de la page complète (qui le conserve). Écrites dans le
+    # même dossier que le HTML principal pour que les liens relatifs tiennent,
+    # archive comprise.
+    detail_out = {}
+    for arm_key, spec in render.DETAIL_PAGES.items():
+        path = html_out.parent / spec["file"]
+        path.write_text(render.render_detail(payload, arm_key), encoding="utf-8")
+        detail_out[arm_key] = path
+
     json_out = Path(args.json_out or manifest.get("output.json", "docs/synthesis/data.json"))
     if not json_out.is_absolute():
         json_out = REPO_ROOT / json_out
@@ -1443,6 +1617,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     missing = [s for s in payload["sources"] if not s["exists"]]
     print(f"Page écrite : {display(html_out)}")
+    for arm_key, path in detail_out.items():
+        print(f"Détail {arm_key:<10}: {display(path)}")
     print(f"Données     : {display(json_out)}")
     print(f"Sources     : {len(payload['sources']) - len(missing)} présentes, "
           f"{len(missing)} manquantes")
