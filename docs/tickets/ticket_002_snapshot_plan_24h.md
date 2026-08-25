@@ -1,5 +1,22 @@
 # Ticket 002 — Sauvegarde/rechargement du plan 24h (snapshot de warm-up)
 
+> **REJETÉ le 2026-08-24.** Conservé pour la trace du raisonnement, pas pour être fait.
+>
+> La réutilisation du snapshot est conditionnée à un **hash de population**, et chacun des
+> chantiers en cours change la population (016 l'abonnement TC, 017 le permis, 019 le
+> logement, 020 possiblement le périmètre). Chaque livraison donnerait un hash différent,
+> donc jetterait le snapshot : le fichier serait écrit puis mis à la poubelle à chaque
+> itération, précisément pendant la phase qui s'ouvre.
+>
+> Le filet existant suffit : `make run CONT=1` réutilise le workdir, et les caches
+> OTP/OSMnx/LLM ne sont **pas** invalidés par un changement de trait — un itinéraire entre
+> deux points reste valide même si l'agent gagne un abonnement de bus. Le warm-up « complet »
+> tape donc dans les caches au lieu de refaire les appels réseau, ce que la section
+> « Existant réutilisable » ci-dessous anticipait déjà.
+>
+> À rouvrir seulement si le temps de démarrage redevient un problème **mesuré** sur une
+> population stable.
+
 ## Description
 
 Au `/init`, le warm-up `bootstrap_all_agents` (`urban_mobility_agents/simulation_controller.py:762`)

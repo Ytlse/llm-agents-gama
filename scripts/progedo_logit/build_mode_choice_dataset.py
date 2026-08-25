@@ -49,7 +49,7 @@ from sklearn.model_selection import GroupShuffleSplit
 # --- Version du contrat de features -----------------------------------------
 # À incrémenter à chaque changement de la liste, de l'ordre ou du typage des
 # features. Le runtime refuse de charger un modèle dont la version diffère.
-SPEC_VERSION = 1
+SPEC_VERSION = 2
 
 TEST_SIZE = 0.25
 SPLIT_SEED = 0
@@ -266,17 +266,80 @@ def build_geo(sig_zf: Path, men: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFra
 
 
 def build_household(men: pd.DataFrame) -> pd.DataFrame:
-    """Équipement du foyer. Clé ménage réelle = (ZFM, ECH) — ECH seul n'est pas unique."""
+    """Équipement du foyer. Clé ménage réelle = (ZFM, ECH) — ECH seul n'est pas unique.
+
+    `n_bikes` (= `M21`) est conservé : depuis le ticket 015 il ne sert plus à poser
+    `has_bike` directement, mais il est le **stock** dont l'attribution nominative part
+    (cf. `build_has_bike`).
+    """
     out = pd.DataFrame({
         "ZF": men["ZFM"],
         "ECH": men["ECH"],
         "number_of_cars": pd.to_numeric(men["M6"], errors="coerce"),
         "n_bikes": pd.to_numeric(men["M21"], errors="coerce"),
     })
-    # M22 (vélos à assistance électrique) n'est pas renseigné dans ce jeu : impossible
-    # de distinguer le VAE, `personal_bike` du persona se réduit donc à un booléen.
-    out["has_bike"] = out["n_bikes"].fillna(0) > 0
-    return out.drop_duplicates(["ZF", "ECH"]).drop(columns="n_bikes")
+    return out.drop_duplicates(["ZF", "ECH"])
+
+
+def build_has_bike(person: pd.DataFrame, geo: pd.DataFrame,
+                   model) -> pd.Series:
+    """`has_bike` **construit à l'identique de l'inférence** (ticket 015, lot 3).
+
+    C'est la contrainte du consommateur, et elle est structurelle. La politique de choix
+    modal consomme `has_bike` ; c'est sa 2ᵉ variable la plus influente pour la décision
+    vélo (|SHAP| moyen 0,74, derrière la distance à 1,63). Jusqu'ici elle l'apprenait sur
+    `M21 > 0`, c'est-à-dire « **il y a un vélo dans le foyer** » — vrai pour 63,2 % des
+    personnes. Or le persona porte désormais une **attribution nominative**, vraie pour
+    ~50 %. Les deux côtés ne parlaient pas de la même chose, et le coefficient appris
+    s'appliquait à autre chose que ce qu'il mesure.
+
+    La sortie est de reconstruire la même variable des deux côtés : on applique ici aux
+    ménages de l'enquête — où `k`, la taille et `P20` sont connus — exactement la règle
+    d'attribution de l'étage 2, celle que `enrich_personal_bike` applique à la
+    population. Même définition à l'entraînement et à l'inférence. C'est le prix d'un
+    champ individuel unique, et il est payable.
+
+    Le tirage reste déterministe (hachage sur la clé de ménage de l'enquête), donc le
+    jeu d'entraînement est reproductible sans graine.
+    """
+    from llm_module.core.bike_ownership import (
+        K_MAX, MIN_AGE_ELIGIBLE, Member, assign)
+
+    zone = geo.reindex(person["ZF"]).reset_index(drop=True)
+    propensity = [
+        model.propensity_of(
+            k=int(min(k, K_MAX)) if pd.notna(k) else 0,
+            household_size=int(size) if pd.notna(size) else 1,
+            age=age if pd.notna(age) else None,
+            gender=gender if isinstance(gender, str) else None,
+            main_occupation=occupation if isinstance(occupation, str) else None,
+            density_hh_km2=None if pd.isna(density) else float(density),
+            dist_center_km=0.0 if pd.isna(dist) else float(dist),
+        )
+        for k, size, age, gender, occupation, density, dist in zip(
+            person["n_bikes"], person["household_size"], person["age"],
+            person["gender"], person["main_occupation"],
+            zone["density_hh_km2"], zone["dist_center_km"])
+    ]
+
+    held = pd.Series(False, index=person.index)
+    frame = person.assign(_p=propensity,
+                          _hh=person["ZF"].astype(str) + "|" + person["ECH"].astype(str))
+    for hh_id, group in frame.groupby("_hh", sort=False):
+        stock = group["n_bikes"].iloc[0]
+        if pd.isna(stock) or stock <= 0:
+            continue
+        # Tous les membres du ménage sont dans le fichier de l'enquête : contrairement à
+        # la population synthétique, il n'y a pas de place absente à compléter. La
+        # taille nominale EST le nombre de lignes.
+        members = [
+            Member(index=int(i), propensity=float(p),
+                   eligible=bool(pd.notna(a) and a >= MIN_AGE_ELIGIBLE))
+            for i, p, a in zip(group.index, group["_p"], group["age"])
+        ]
+        for index in assign(members, int(min(stock, K_MAX)), hh_id):
+            held.loc[index] = True
+    return held
 
 
 def build_person(pers: pd.DataFrame, household: pd.DataFrame) -> pd.DataFrame:
@@ -325,6 +388,7 @@ def build_person(pers: pd.DataFrame, household: pd.DataFrame) -> pd.DataFrame:
         return "all" if cars >= lic else "some"
 
     out["car_availability"] = out.apply(car_availability, axis=1)
+    # `n_bikes` reste jusqu'à `build_has_bike`, qui en a besoin comme stock du foyer.
     return out.drop(columns="n_licensed")
 
 
@@ -418,6 +482,12 @@ def build_feature_spec(clean: pd.DataFrame, geo_ref: dict) -> dict:
             "distance_km/crow_km/duration_min sont contaminées : diagnostic uniquement.",
             "train et motorbike sont fusionnés dans transit et car : la politique ne "
             "peut pas les distinguer.",
+            "has_bike (spec v2, ticket 015) est l'attribution NOMINATIVE d'un vélo, "
+            "reconstruite par la règle de l'étage 2 appliquée aux ménages de l'enquête "
+            "— et non « le foyer déclare au moins un vélo » (M21 > 0) comme en v1. "
+            "~50 % des personnes contre 63,2 %. C'est la définition que porte "
+            "traits_json.personal_bike, donc la seule qui rende l'entraînement et "
+            "l'inférence comparables.",
         ],
     }
 
@@ -439,6 +509,21 @@ def main() -> None:
     geo, xys, geo_ref = build_geo(sig_zf, men)
     household = build_household(men)
     person = build_person(pers, household)
+
+    # `has_bike` construit à l'identique de l'inférence (ticket 015, lot 3). Il exige la
+    # ressource d'équipement vélo : sans elle on ne sait pas reconstruire l'indicateur,
+    # et retomber sur `M21 > 0` produirait silencieusement un jeu d'entraînement qui
+    # mesure autre chose que ce que le persona porte. On refuse donc, plutôt que de
+    # replier.
+    from llm_module.core.bike_ownership import BikeOwnershipModel
+    bike_model = BikeOwnershipModel.load()
+    person["has_bike"] = build_has_bike(person, geo, bike_model)
+    print(f"has_bike construit (attribution nominative) : "
+          f"{100 * person['has_bike'].mean():.2f} % des personnes ; "
+          f"pour mémoire, « le foyer a un vélo » (M21 > 0) en vaut "
+          f"{100 * (person['n_bikes'].fillna(0) > 0).mean():.2f} %")
+    person = person.drop(columns="n_bikes")
+
     trips = build_trips(depl, geo, xys)
 
     df = trips.merge(person, on=["ZF", "ECH", "PER"], how="left")

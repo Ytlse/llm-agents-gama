@@ -5,10 +5,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.geo_reference import residence_zone
 from llm_module.core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
+from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
+from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 from models import Person, TravelPlan
 from settings import settings
+
+# Valeurs acceptées dans la colonne « Lieu de résidence ». `hors périmètre` en est
+# une : un domicile connu et situé hors des 453 communes de l'enquête n'a aucune
+# cible par zone, et sa masse doit être COMPTÉE plutôt que diluée dans la 3ᵉ
+# couronne (axe A4 du ticket 020). Une valeur hors de cette liste est ramenée à vide
+# plutôt que journalisée : la page de synthèse joint cette colonne sur les libellés
+# EMC², une valeur exotique y disparaîtrait sans être comptée.
+RESIDENCE_VALUES = frozenset((*COURONNES, OUT_OF_PERIMETER))
 
 _BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular"}
 _RAIL_MODES = {"rail"}
@@ -97,16 +106,28 @@ CSV_HEADERS = [
 ]
 
 
-def _residence_zone(home_lat: Optional[float], home_lon: Optional[float]) -> str:
-    """Couronne de résidence — délègue à la définition PARTAGÉE (ticket 013).
+def _residence_zone(traits: dict) -> str:
+    """Couronne de résidence — LUE sur le persona, jamais recalculée (ticket 021).
 
-    Le classement vivait ici. Il est monté dans `llm_module.core.geo_reference`, qui
-    porte déjà l'hypercentre et se déclare seul point de lecture, parce qu'un second
-    consommateur est apparu : le temps terminal spatialisé des trajets véhiculés.
-    Deux classements divergents feraient facturer un stationnement de centre-ville à
-    un agent que cette colonne dit en 2ᵉ couronne.
+    Le trait est posé à la génération de population (`scripts/data/population/
+    enrich_residence_zone.py`) depuis le découpage **par liste de communes** de
+    l'enquête, celui contre lequel les parts modales par zone sont publiées.
+
+    ⚠ **Ce module n'importe plus `geo_reference.residence_zone`, et c'est délibéré.**
+    Cette fonction classe par DISTANCE à l'hypercentre (8 / 20 / 40 km), ce qui n'est
+    pas la définition de l'enquête : le ticket 020 a mesuré 24,4 % de personas mal
+    classés et 66 « faux Toulousains » habitant Blagnac ou Balma. Tant que l'import
+    existait, un repli « raisonnable » pouvait être rétabli en une ligne par
+    inadvertance ; en le retirant, le repli devient impossible plutôt que déconseillé.
+
+    Vide quand le persona ne porte pas le trait — population générée avant le ticket
+    021, ou domicile sans coordonnées. Vide n'est donc pas une modalité, exactement
+    comme une cellule de probabilité vide n'est pas un 0. `hors périmètre` en est une,
+    en revanche : le domicile est connu et il est dehors, il n'a aucune cible EMC², et
+    sa masse se compte au lieu de se diluer dans la 3ᵉ couronne.
     """
-    return residence_zone(home_lat, home_lon)
+    value = str(traits.get(RESIDENCE_TRAIT_KEY) or "").strip()
+    return value if value in RESIDENCE_VALUES else ""
 
 
 def _housing_type(traits: dict) -> str:
@@ -284,7 +305,7 @@ class MoveLogger:
                 _plan_transport_mode(faster_itinerary),
                 _available_modes_summary(available_options),
                 *_mode_probability_cells(mode_probabilities),
-                _residence_zone(home.lat if home else None, home.lon if home else None),
+                _residence_zone(traits),
                 gender,
                 traits.get("age", ""),
                 traits.get("main_occupation", ""),

@@ -24,7 +24,7 @@
 # qui est le comportement voulu — sans elle, un run rejouerait des décisions
 # prises sur des durées différentes de celles qu'on affiche maintenant.
 # Toute modification des valeurs ci-dessous DOIT bumper cette version.
-version: tt2   # tt2 : temps terminal SPATIALISÉ par couronne (avant : constante globale)
+version: tt3   # tt3 : temps terminal ALIGNÉ SUR L'ENQUÊTE, tiré dans sa loi (avant : constante par couronne)
 
 # Version du ROUTAGE — distincte, et la distinction n'est pas cosmétique. Le cache
 # OSMnx persistant ne mémorise plus que du temps de parcours RÉSEAU, qui ne dépend
@@ -47,60 +47,216 @@ routing_version: r1
 # 60 casserait l'égalité une fois sur deux, et le chargeur la refuse.
 modes:
 
-  car:
-    # ── SPATIALISÉ par couronne (ticket 013 §4.1) ─────────────────────────────
-    # Le §4.1 annonçait la constante globale comme provisoire : « le paramètre
-    # devrait dépendre du lieu de résidence / destination (le stationnement n'a pas
-    # le même coût à Toulouse intra-rocade et en 3ᵉ couronne) ». C'est fait ici.
-    #
-    # Les couronnes sont celles de `lieu_residence` d'EMC²
-    # (`llm_module.core.geo_reference.residence_zone`, distance à l'hypercentre) —
-    # PAS un zonage inventé pour l'occasion : les parts modales produites se
-    # comparent à des cibles définies sur ces mêmes territoires.
-    #
-    # `access_s` dépend de la couronne d'ORIGINE (où est garé le véhicule),
-    # `egress_s` de celle de DESTINATION (où il faut trouver une place). Les deux
-    # bouts d'un même trajet peuvent donc être tarifés différemment — un trajet
-    # 3ᵉ couronne → Toulouse paie un accès rural et un stationnement de centre.
-    #
-    # ⚠ ARRONDI À LA MINUTE, assumé et documenté : la table COMPASS donne des
-    # demi-minutes (périurbain 1,5–2,5) que le rendu ne peut pas afficher — il est
-    # en minutes tronquées, et l'invariant « total = somme des sous-étapes » exige
-    # des multiples de 60 s. L'arrondi va au plus proche ; il n'a JAMAIS été choisi
-    # pour améliorer un score (T2), et la grille de sensibilité couvre ce qu'il
-    # laisse d'arbitraire.
+# ══════════════════════════════════════════════════════════════════════════════
+# tt3 (2026-08-24) — ALIGNEMENT SUR L'ENQUÊTE. Bloc GÉNÉRÉ, ne pas éditer à la main :
+#   make terminal-time                      # loi → llm_module/data/terminal_time_emc2.json
+#   python -m scripts.progedo_logit.export_terminal_time --emit-config <fichier>
+# puis remplacer ce bloc. Une centaine de nombres recopiés à la main dériveraient.
+#
+# CE QUI CHANGE, ET POURQUOI. Les valeurs tt2 venaient de la littérature (tables COMPASS
+# par type de zone, recherche de place encadrée par Shoup et Cerema) : 3 min d'accès et
+# 7 min de stationnement à Toulouse, 1 + 1 en 3ᵉ couronne. L'enquête que le projet prend
+# pour CIBLE mesure ce même temps, et en trouve 8 à 24 fois moins :
+#
+#     couronne          accès : enquête / tt2      égression : enquête / tt2
+#     Toulouse                0,36 / 3 min                0,52 / 7 min
+#     1ere couronne           0,14 / 2                    0,17 / 4
+#     2eme couronne           0,16 / 2                    0,19 / 3
+#     3eme couronne           0,09 / 1                    0,06 / 1
+#
+# Source : EMC² Toulouse 2023 (ProGEDO lil-1750), fichier trajets — T2 « temps de marche
+# à pied au départ », T6 « temps de marche à pied à l'arrivée », T11 « durée de recherche
+# du stationnement », sur les 24 482 trajets conducteur de VP. Renseignées à ~100 %.
+#
+# LE CONTRÔLE QUI AUTORISE LA COMPARAISON. Le doute légitime était que la marche vers la
+# voiture soit codée comme un trajet à pied DISTINCT, auquel cas T2/T6 vaudraient 0 par
+# construction et la mesure serait vide. Vérifié : sur les 24 481 déplacements comportant
+# un trajet voiture, AUCUN ne porte de trajet à pied. Et l'instrument fonctionne — sur les
+# trajets en transports collectifs, de structure identique, T2 + T6 donne 6 min en médiane.
+# L'enquête sait enregistrer un temps terminal ; elle en enregistre 0,55 min pour la voiture.
+#
+# CE N'EST PAS L'AJUSTEMENT QUE T2 INTERDIT. La décision T2 interdit de régler ce paramètre
+# SUR UN SCORE de calibration. Il est ici RE-SOURCÉ sur la mesure d'enquête, ce que son
+# propre `provenance: sourced` réclame. Aucune valeur ci-dessous n'a été choisie en
+# regardant une part modale : elles sortent toutes de l'histogramme observé.
+#
+# POURQUOI UNE LOI ET PAS UNE CONSTANTE. La moyenne d'enquête est INFÉRIEURE À LA MINUTE,
+# et le rendu n'affiche que des minutes entières (l'invariant « total = somme des
+# sous-étapes » l'exige). Une constante devrait donc valoir 0 partout, ce qui effacerait
+# une queue bien réelle : 2 à 4 % des trajets ont vraiment 5 minutes ou plus. Le tirage
+# garde les deux, la moyenne ET la queue. Il est déterministe (hachage de la clé de
+# trajet, cf. `DRAW_SALT`) : les plans et les décisions LLM étant mis en cache, un tirage
+# aléatoire ferait diverger un run de sa reprise.
+#
+# CE N'EST PAS UNE CLOCHE, et c'est mesuré : la loi est massée à zéro (87 à 96 % selon la
+# couronne) et étirée à droite. Une gaussienne produirait des valeurs négatives et
+# détruirait la masse à zéro.
+#
+# LE VÉLO AUSSI. En tt2 il portait 60 s par bout, marqués `provenance: unsourced` faute de
+# source publiée. L'enquête en donne une : 0,23 min de moyenne (T3 ∈ {11, 17}). Le vélo
+# passe donc lui aussi sur loi, et sa provenance devient `sourced`. Corriger la voiture
+# seule aurait laissé un biais non sourcé en face d'un biais corrigé.
+#
+# EFFET MESURÉ, avant de toucher la production : A/B apparié sur les jeux gelés (mêmes
+# options, même prompt, seules les jambes terminales réécrites). TROIS bras, parce que le
+# premier A/B mesurait moins que ce que cette config livre :
+#   `v5` temps de la config       composite 27,00
+#   `v6` voiture seule alignée    composite 22,48   (−4,52)
+#   `v7` voiture ET vélo alignés  composite 24,83   (−2,17)  ← le périmètre de ce fichier
+# Le chiffre opposable est **−2,17**, celui de `v7` : aligner le vélo le rend lui aussi
+# plus attractif, donc rend +2,35 du gain voiture (52 %). Citer −4,52 serait citer une
+# mesure plus étroite que la livraison. Parts modales sur `v7` : vélo 19,5 → 16,3 %
+# (cible 4,0), voiture 38,9 → 47,7 % (cible 55,0), marche 16,1 → 13,5 % (cible 26,0).
+# Les dimensions `distance` (+2,59) et `motif` (+1,29) se dégradent.
+# Traces : docs/traces/2026-08-24_temps_terminal/.
+# ══════════════════════════════════════════════════════════════════════════════
 
-    # Rejoindre le véhicule — terminal time au bout ORIGINE, table COMPASS par type
-    # de zone (rural 1 / périurbain 1,5–2,5 / urbain 2 / frange de centre 2,5 /
-    # centre-ville 3 / parking en ouvrage 4 min).
-    #   https://compassidaho.org/wp-content/uploads/FinalRegionalTravelDemandModelCalibration.pdf
-    access_s:
-      Toulouse:        180   # centre-ville : véhicule garé loin, souvent en ouvrage
-      1ere couronne:   120   # urbain
-      2eme couronne:   120   # périurbain (1,5–2,5 arrondi à 2)
-      3eme couronne:    60   # rural : véhicule devant la porte
-      default:         120   # zone inconnue → valeur urbaine, la plus fréquente
-
-    # Stationnement et marche terminale — terminal time au bout DESTINATION (même
-    # table) + recherche de place. La recherche est encadrée par trois sources :
-    #   - borne haute : Shoup (2006), Transport Policy 13(6), méta-analyse de 16
-    #     études — moyenne 8,1 min, étendue 3,5–13,9. Hyper-centres, stationnement
-    #     sur voirie saturé : c'est un MAJORANT pour Toulouse, pas une moyenne.
-    #       http://shoup.bol.ucla.edu/Cruising.pdf
-    #   - borne basse : Millard-Ball, Hampshire & Weinberger (2020), Land Use Policy
-    #     91:103918 — distance de recherche mesurée au GPS, 32,1 m en moyenne : la
-    #     recherche est quasi nulle hors zones tendues.
-    #   - contexte français : Cerema, « Les enquêtes de stationnement : guide
-    #     méthodologique » — temps de recherche < 5 min en centre-bourg.
-    #       https://doc.cerema.fr/Default/doc/SYRACUSE/16709/les-enquetes-de-stationnement-guide-methodologique
-    # Retenu : 4 min de recherche à Toulouse (sous la moyenne Shoup, cohérent avec
-    # le majorant Cerema), 2 min en 1ʳᵉ couronne, 1 min en 2ᵉ, 0 en 3ᵉ.
-    egress_s:
-      Toulouse:        420   # 3 (centre) + 4 (recherche)
-      1ere couronne:   240   # 2 (urbain) + 2
-      2eme couronne:   180   # 2 (périurbain) + 1
-      3eme couronne:    60   # 1 (rural) + 0 : on se gare devant
-      default:         240
+  car:   # 24482 trajets enquêtés
+    access_law:
+      Toulouse:   # n=6439, moyenne 0.36 min
+        0: 0.890045
+        1: 0.03603
+        2: 0.026557
+        3: 0.011803
+        4: 0.003572
+        5: 0.021587
+        6: 0.000466
+        7: 0.000932
+        8: 0.001708
+        9: 0.000155
+        10: 0.005125
+        12: 0.000155
+        15: 0.000777
+        20: 0.001087
+      1ere couronne:   # n=6995, moyenne 0.14 min
+        0: 0.947248
+        1: 0.027305
+        2: 0.011723
+        3: 0.004003
+        4: 0.000858
+        5: 0.005718
+        7: 0.000286
+        8: 0.000286
+        10: 0.001287
+        13: 0.000143
+        15: 0.000286
+        20: 0.000858
+      2eme couronne:   # n=4383, moyenne 0.16 min
+        0: 0.951175
+        1: 0.023956
+        2: 0.011408
+        3: 0.00365
+        4: 0.000913
+        5: 0.004107
+        6: 0.000228
+        7: 0.000228
+        8: 0.000228
+        10: 0.001141
+        15: 0.000228
+        20: 0.002738
+      3eme couronne:   # n=409, moyenne 0.09 min
+        0: 0.963325
+        1: 0.01956
+        2: 0.00978
+        3: 0.002445
+        5: 0.002445
+        11: 0.002445
+      default:   # n=24482, moyenne 0.24 min
+        0: 0.924434
+        1: 0.028307
+        2: 0.018871
+        3: 0.007802
+        4: 0.001756
+        5: 0.012458
+        6: 0.000245
+        7: 0.000408
+        8: 0.000572
+        9: 4.1e-05
+        10: 0.0029
+        11: 4.1e-05
+        12: 4.1e-05
+        13: 4.1e-05
+        15: 0.000694
+        20: 0.001389
+    egress_law:
+      Toulouse:   # n=6445, moyenne 0.52 min
+        0: 0.876028
+        1: 0.031652
+        2: 0.029635
+        3: 0.013189
+        4: 0.004655
+        5: 0.01955
+        6: 0.003413
+        7: 0.003569
+        8: 0.002483
+        9: 0.000465
+        10: 0.006982
+        11: 0.000621
+        12: 0.001086
+        13: 0.000931
+        14: 0.00031
+        15: 0.002638
+        16: 0.000155
+        17: 0.00031
+        18: 0.000155
+        20: 0.002172
+      1ere couronne:   # n=7026, moyenne 0.17 min
+        0: 0.945346
+        1: 0.024196
+        2: 0.012952
+        3: 0.00427
+        4: 0.001708
+        5: 0.005551
+        6: 0.000712
+        7: 0.000569
+        8: 0.000569
+        9: 0.000285
+        10: 0.001993
+        13: 0.000142
+        15: 0.000427
+        20: 0.001281
+      2eme couronne:   # n=4405, moyenne 0.19 min
+        0: 0.948695
+        1: 0.022474
+        2: 0.010216
+        3: 0.004767
+        4: 0.001589
+        5: 0.003859
+        6: 0.001135
+        7: 0.001362
+        8: 0.000454
+        9: 0.000227
+        10: 0.001816
+        12: 0.000227
+        13: 0.000227
+        15: 0.000454
+        20: 0.002497
+      3eme couronne:   # n=402, moyenne 0.06 min
+        0: 0.965174
+        1: 0.0199
+        2: 0.00995
+        5: 0.004975
+      default:   # n=24482, moyenne 0.32 min
+        0: 0.915407
+        1: 0.026428
+        2: 0.020423
+        3: 0.00821
+        4: 0.003676
+        5: 0.01205
+        6: 0.001675
+        7: 0.001879
+        8: 0.001552
+        9: 0.000327
+        10: 0.004044
+        11: 0.000163
+        12: 0.000449
+        13: 0.00049
+        14: 8.2e-05
+        15: 0.001266
+        16: 4.1e-05
+        17: 8.2e-05
+        18: 4.1e-05
+        20: 0.001716
     provenance: sourced
     spatialise: true
     labels:
@@ -110,30 +266,115 @@ modes:
       egress_sans_destination: "Stationnement et marche jusqu'à la destination"
       terminal: "d'accès et de stationnement"
 
-  bicycle:
-    # ⚠ NON SOURCÉ, et c'est écrit ici plutôt que masqué. Aucune valeur publiée
-    # trouvée pour le temps terminal d'un vélo PERSONNEL (sortir le vélo, le
-    # déverrouiller / l'attacher à l'arrivée). Le guide Cerema ci-dessus ne
-    # traite que du stationnement automobile. Les chiffres disponibles portent
-    # sur le vélo en libre-service (accès/diffusion médian ≈ 6 min, qui est le
-    # temps de MARCHER jusqu'à la station) et ne sont pas transférables.
-    #
-    # Valeur retenue = celle que le code appliquait déjà avant le ticket 013
-    # (`park_base: bike: 60` par bout, config/osmnx.yaml) : la reprendre évite
-    # d'introduire un changement de durée non mesuré en même temps que le
-    # changement de rendu. Contrainte T5 respectée — même nature de coût que la
-    # voiture, valeur nettement inférieure.
-    #
-    # Cohérent avec le seul résultat pertinent trouvé : les cyclistes sont plus
-    # de deux fois plus sensibles à la distance à pied qu'au détour cyclable
-    # (donc une diffusion terminale courte), sans chiffrage en minutes.
-    #   https://easychair.org/publications/preprint/vXDX/open
-    # NON spatialisé, faute de source : rien ne documente que déverrouiller un vélo
-    # coûte plus cher en centre-ville qu'en couronne. Une variation inventée serait
-    # de l'ajustement déguisé.
-    access_s: {default: 60}
-    egress_s: {default: 60}
-    provenance: unsourced
+  bicycle:   # 2047 trajets enquêtés
+    access_law:
+      Toulouse:   # n=2047, moyenne 0.11 min
+        0: 0.964338
+        1: 0.01661
+        2: 0.007816
+        3: 0.001954
+        4: 0.000489
+        5: 0.005862
+        10: 0.001466
+        15: 0.000489
+        20: 0.000977
+      1ere couronne:   # n=2047, moyenne 0.11 min
+        0: 0.964338
+        1: 0.01661
+        2: 0.007816
+        3: 0.001954
+        4: 0.000489
+        5: 0.005862
+        10: 0.001466
+        15: 0.000489
+        20: 0.000977
+      2eme couronne:   # n=2047, moyenne 0.11 min
+        0: 0.964338
+        1: 0.01661
+        2: 0.007816
+        3: 0.001954
+        4: 0.000489
+        5: 0.005862
+        10: 0.001466
+        15: 0.000489
+        20: 0.000977
+      3eme couronne:   # n=2047, moyenne 0.11 min
+        0: 0.964338
+        1: 0.01661
+        2: 0.007816
+        3: 0.001954
+        4: 0.000489
+        5: 0.005862
+        10: 0.001466
+        15: 0.000489
+        20: 0.000977
+      default:   # n=2047, moyenne 0.11 min
+        0: 0.964338
+        1: 0.01661
+        2: 0.007816
+        3: 0.001954
+        4: 0.000489
+        5: 0.005862
+        10: 0.001466
+        15: 0.000489
+        20: 0.000977
+    egress_law:
+      Toulouse:   # n=2047, moyenne 0.11 min
+        0: 0.967758
+        1: 0.013679
+        2: 0.007816
+        3: 0.001466
+        4: 0.000489
+        5: 0.005374
+        6: 0.000489
+        10: 0.000977
+        15: 0.000977
+        20: 0.000977
+      1ere couronne:   # n=2047, moyenne 0.11 min
+        0: 0.967758
+        1: 0.013679
+        2: 0.007816
+        3: 0.001466
+        4: 0.000489
+        5: 0.005374
+        6: 0.000489
+        10: 0.000977
+        15: 0.000977
+        20: 0.000977
+      2eme couronne:   # n=2047, moyenne 0.11 min
+        0: 0.967758
+        1: 0.013679
+        2: 0.007816
+        3: 0.001466
+        4: 0.000489
+        5: 0.005374
+        6: 0.000489
+        10: 0.000977
+        15: 0.000977
+        20: 0.000977
+      3eme couronne:   # n=2047, moyenne 0.11 min
+        0: 0.967758
+        1: 0.013679
+        2: 0.007816
+        3: 0.001466
+        4: 0.000489
+        5: 0.005374
+        6: 0.000489
+        10: 0.000977
+        15: 0.000977
+        20: 0.000977
+      default:   # n=2047, moyenne 0.11 min
+        0: 0.967758
+        1: 0.013679
+        2: 0.007816
+        3: 0.001466
+        4: 0.000489
+        5: 0.005374
+        6: 0.000489
+        10: 0.000977
+        15: 0.000977
+        20: 0.000977
+    provenance: sourced
     spatialise: false
     labels:
       access: "Déverrouiller le vélo"
@@ -141,12 +382,6 @@ modes:
       egress: "Attacher le vélo à '{destination}'"
       egress_sans_destination: "Attacher le vélo à l'arrivée"
       terminal: "d'accès et d'attache"
-
-  # foot : nul par construction — la marche est porte-à-porte (§4.1).
-  # transports collectifs : DÉJÀ compté par les jambes de marche routées d'OTP.
-  #   Y ajouter un temps terminal serait un double comptage, et le critère
-  #   d'acceptation 4 du ticket l'interdit explicitement. Ces deux modes sont
-  #   donc absents de `modes:` — absence qui vaut « aucune composante ».
 
 # Grille de sensibilité — ticket 013, décision T6. Les parts modales par tranche
 # de distance sont recalculées pour chacune de ces valeurs et l'écart à EMC² est

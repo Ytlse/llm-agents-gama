@@ -1,0 +1,103 @@
+{
+  "dataset": "rank",
+  "versions": [
+    "v7",
+    "v8"
+  ],
+  "prompt": "expert_chaine",
+  "n_records": 223,
+  "n_treated_records": 22,
+  "n_treated_agents": 9,
+  "composite": {
+    "v7": 24.831786126656766,
+    "v8": 22.580946622852277
+  },
+  "subsets": {
+    "treated": {
+      "n_rows": {
+        "v7": 36,
+        "v8": 28
+      },
+      "weight": 22.0,
+      "shares": {
+        "v7": {
+          "marche": 11.136363636363637,
+          "velo": 6.363636363636363,
+          "voiture": 54.77272727272727,
+          "transports_collectifs": 27.727272727272727
+        },
+        "v8": {
+          "marche": 9.090909090909092,
+          "velo": 4.090909090909091,
+          "voiture": 62.04545454545455,
+          "transports_collectifs": 24.772727272727273
+        }
+      },
+      "delta": {
+        "marche": -2.0454545454545463,
+        "velo": -2.272727272727272,
+        "voiture": 7.272727272727275,
+        "transports_collectifs": -2.954545454545454
+      }
+    },
+    "placebo": {
+      "n_rows": {
+        "v7": 314,
+        "v8": 310
+      },
+      "weight": 201.0,
+      "shares": {
+        "v7": {
+          "marche": 13.73134328358209,
+          "velo": 17.36318407960199,
+          "voiture": 46.91542288557214,
+          "transports_collectifs": 21.99004975124378
+        },
+        "v8": {
+          "marche": 15.315091210613598,
+          "velo": 16.940298507462686,
+          "voiture": 45.79601990049751,
+          "transports_collectifs": 21.948590381426204
+        }
+      },
+      "delta": {
+        "marche": 1.5837479270315091,
+        "velo": -0.422885572139306,
+        "voiture": -1.11940298507463,
+        "transports_collectifs": -0.041459369817578584
+      }
+    },
+    "aggregate": {
+      "n_rows": {
+        "v7": 350,
+        "v8": 338
+      },
+      "weight": 223.0,
+      "shares": {
+        "v7": {
+          "marche": 13.475336322869955,
+          "velo": 16.278026905829595,
+          "voiture": 47.690582959641254,
+          "transports_collectifs": 22.55605381165919
+        },
+        "v8": {
+          "marche": 14.701046337817639,
+          "velo": 15.672645739910315,
+          "voiture": 47.399103139013455,
+          "transports_collectifs": 22.227204783258596
+        }
+      },
+      "delta": {
+        "marche": 1.225710014947684,
+        "velo": -0.6053811659192804,
+        "voiture": -0.2914798206277991,
+        "transports_collectifs": -0.3288490284005935
+      }
+    }
+  },
+  "n_personas": 75,
+  "n_personas_treated": 9,
+  "noise_floor_raw": 1.5837479270315091,
+  "noise_floor_scaled": 4.787102733442398,
+  "verdict": "SIGNAL"
+}

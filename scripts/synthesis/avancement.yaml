@@ -1,0 +1,363 @@
+# Registre des mesures « base de référence → base modifiée », rendu par
+# `scripts/synthesis/render_avancement.py` → `docs/synthesis/avancement_et_resultats.html`.
+#
+# UNE LIGNE = UNE MESURE, et la ligne n'existe que si la mesure a été faite. Ce fichier
+# n'est pas un plan : une hypothèse non testée n'y figure pas, sinon la page devient une
+# liste d'intentions et cesse de dire ce qui est établi.
+#
+# Chaque `score` doit être RETRAÇABLE jusqu'à une trace committée sous `docs/traces/`.
+# Le champ `trace` porte ce chemin ; une ligne sans trace est refusée par le rendu.
+#
+# Le champ `synthesis` (optionnel) pointe une page de `docs/synthesis/` : la synthèse
+# INTERMÉDIAIRE que cette mesure a fait bouger. Le rendu vérifie qu'elle existe. Ne pas
+# confondre les deux supports : une trace score des JEUX GELÉS, une synthèse score un RUN.
+#
+# ⚠ Le champ `score` n'est pas libre : c'est la grandeur sur laquelle la décision a été
+# prise, avec son signe et son unité. Quand le composite n'est PAS attribuable (traitement
+# minoritaire noyé dans le bruit — cf. docs/arch/protocole-parametre-exogene.md), on porte
+# l'effet RECONSTRUIT et on le dit dans `score_caveat`.
+
+meta:
+  title: Avancement et résultats
+  subtitle: >-
+    Chaque correction envisagée, ce qu'elle a changé, et ce que la mesure a rendu.
+    Les mesures de correction portent sur des jeux gelés et coûtent des dizaines d'appels
+    LLM au lieu d'heures de simulation — cf. le protocole de paramètre exogène. Les lignes
+    de RÉFÉRENCE font exception : elles datent le run de production qui rejoue les
+    corrections adoptées, et leur `score` est run à run, donc non attribuable.
+  protocol: docs/arch/protocole-parametre-exogene.md
+  metric_note: >-
+    Le composite est une LOSS : il baisse quand la simulation se rapproche de l'enquête.
+    Un Δ négatif est donc une amélioration. Les mesures de correction sont appariées
+    (mêmes personas, mêmes options des deux côtés) et évaluées à température 0 sur un
+    modèle épinglé ; une ligne de référence, elle, compare deux RUNS entiers — rien n'y est
+    apparié, et son caveat de lecture dit ce que le chiffre ne porte pas.
+
+measures:
+
+  - id: run_reference_2026_08_24
+    date: '2026-08-25'
+    metric: composite
+    metric_dataset: 'run'
+    composite_reference: 20.1087
+    composite_modified: 18.2316
+    composite_note: >-
+      Comparaison RUN À RUN : plusieurs changements simultanés, l'écart n'est attribuable à
+      aucun d'eux.
+    subject: Run de référence — corrections implémentées en dur et rejouées sur GAMA
+    ticket: '—'
+    reference: >-
+      Run `2026-08-02_18_55` — 2 830 décisions, 867 personnes. Composite 20,11,
+      L1 global 33,27 pt. Parts : marche 10,17 / voiture 56,87 / vélo 16,11 / TC 16,85.
+    modified: >-
+      Run `2026-08-24_17_34` — 2 911 décisions, 890 personnes. Composite 18,23,
+      L1 global 29,81 pt. Parts : marche 11,90 / voiture 57,58 / vélo 13,29 / TC 17,23,
+      pour une cible EMC² de 26,80 / 56,70 / 4,12 / 12,37.
+    change: >-
+      Les corrections validées sur jeux gelés sont passées EN DUR dans la chaîne, puis
+      rejouées sur GAMA : temps terminal aligné sur EMC² (production `tt3`), règle de
+      chaîne au prompt système (`expert_chaine`), anticipation de la journée
+      (`agenda_anticipation_enabled`), mémoïsation des réflexions, disjoncteur du gateway
+      LLM. La chaîne de véhicules et le type de logement étaient déjà là au 2 août : ils
+      ne font pas partie de l'écart.
+    result: >-
+      Le run est meilleur que son prédécesseur — composite 20,11 → 18,23. Le vélo
+      redescend de 16,11 à 13,29 % (cible 4,12) et la marche remonte de 10,17 à 11,90 %
+      (cible 26,80) : le défaut de fond, la sous-représentation massive de la marche,
+      n'est pas corrigé. Ce run devient la RÉFÉRENCE : il est épinglé par la page de
+      synthèse, le volet 3 y est recalculé, et les jeux gelés `v9` en sont tirés
+      (protocole, amendement A10).
+    score: '−1,88 composite (run à run)'
+    score_kind: better
+    score_caveat: >-
+      Support : un RUN, pas un jeu gelé — donc l'écart n'est PAS attribuable à une cause
+      unique. Plusieurs changements sont simultanés et la flotte de modèles diffère
+      (96,4 % des décisions LLM sur les deux Gemini contre 77,9 % dans la référence), le
+      bruit de découpage vaut 5,41 pt d'amplitude contre 1,88 mesuré, et 11,4 % des
+      décisions du jour sont des replis d'erreur — hors score, mais JOUÉS par la
+      simulation. Enfin l'agrégat est meilleur que chacune de ses parties par compensation
+      d'erreurs : décisions d'un modèle 19,01, itinéraires uniques 104,47, run entier
+      18,23 — les premières sur-représentent les TC (23,8 % contre 12,4), les secondes
+      n'en produisent aucun. Cette ligne ne remplace aucune mesure sur jeu gelé.
+    verdict: adopte
+    comment: >-
+      La ligne existe pour que la référence soit DATÉE et retraçable, pas pour créditer les
+      corrections d'un gain : ce sont les traces sur jeux gelés qui les chiffrent, une
+      variable à la fois. Un run les rejoue toutes ensemble et dit seulement où la
+      production en est.
+    trace: docs/traces/2026-08-25_run_reference
+    synthesis: models/2026-08-24_17_34/index.html
+
+  - id: chaine_journee
+    date: '2026-08-24'
+    metric: composite
+    metric_dataset: 'rank'
+    composite_reference: 26.793
+    composite_modified: 26.9998
+    subject: Puce « Chaîne de la journée » dans le prompt système
+    ticket: '014'
+    reference: '`v5` + prompt `expert` — composite 26,79'
+    modified: '`v5` + prompt `expert_chaine` — composite 27,00'
+    change: >-
+      Ajout au prompt système d'une puce demandant de tenir compte de la chaîne de la
+      journée. Le JEU est constant, seul le prompt bouge.
+    result: >-
+      Aucun gain : le composite monte de 0,21 (donc se dégrade très légèrement), et la part
+      de vélo ne bouge que de +0,11 pt. L'hypothèse est close.
+    score: '+0,21 composite'
+    score_kind: worse
+    verdict: rejete
+    comment: >-
+      Une mesure négative vaut une mesure positive : sans sa trace, quelqu'un
+      reformulerait la même idée dans six mois.
+    trace: docs/traces/2026-08-24_temps_terminal
+    synthesis: 2026-08-24_12-03_temps_terminal.html
+
+  - id: terminal_voiture
+    date: '2026-08-24'
+    metric: composite
+    metric_dataset: 'rank'
+    composite_reference: 26.9998
+    composite_modified: 22.4825
+    subject: Temps terminal de la voiture aligné sur EMC²
+    ticket: '013'
+    reference: '`v5` — temps terminal de `terminal_time.yaml`, 7,93 min par option voiture'
+    modified: '`v6` — loi mesurée sur EMC², 0,55 min par option voiture (÷ 14,4)'
+    change: >-
+      Réécriture des seules jambes terminales des options voiture (accès, stationnement),
+      tirées dans l'histogramme d'enquête. Temps réseau inchangé.
+    result: >-
+      Composite 27,00 → 22,48. La part voiture passe de 38,9 % à 48,9 % pour une référence
+      EMC² de 55 %. La dimension `distance` se dégrade en revanche (8,37 → 11,62).
+    score: '−4,52 composite'
+    score_kind: better
+    verdict: mesure
+    comment: >-
+      Le plus gros gain mesuré à ce jour, et il vient des DONNÉES, pas du prompt. Mais son
+      périmètre est plus étroit que ce qui est parti en production — voir la ligne suivante.
+    trace: docs/traces/2026-08-24_temps_terminal
+    synthesis: 2026-08-24_12-03_temps_terminal.html
+
+  - id: terminal_voiture_velo
+    date: '2026-08-24'
+    metric: composite
+    metric_dataset: 'rank'
+    composite_reference: 26.9998
+    composite_modified: 24.8318
+    subject: Temps terminal voiture ET vélo — le périmètre réellement livré (`tt3`)
+    ticket: '013'
+    reference: '`v5` — temps terminal de `terminal_time.yaml`'
+    modified: '`v7` — voiture (0,55 min) ET vélo (0,29 min) alignés sur EMC²'
+    change: >-
+      Même réécriture, étendue au vélo : l'enquête en donne aussi une source (0,11 min par
+      bout), et corriger la voiture seule aurait laissé un biais non documenté face à un
+      biais corrigé.
+    result: >-
+      Composite 27,00 → 24,83. Le gain est donc DEUX FOIS plus petit qu'avec la voiture
+      seule : rendre le vélo 1,8 min plus rapide le rend plus attractif et annule une partie
+      du gain.
+    score: '−2,17 composite'
+    score_kind: better
+    verdict: adopte
+    comment: >-
+      C'est cette ligne qui décrit la production. La précédente mesurait moins que ce qui a
+      été livré — le piège « mesuré ≠ livré » du protocole, attrapé après coup.
+    trace: docs/traces/2026-08-24_temps_terminal
+    synthesis: 2026-08-24_12-03_temps_terminal.html
+
+  - id: fenetre_meteo
+    date: '2026-08-25'
+    metric: composite
+    metric_dataset: 'val'
+    composite_reference: 26.75
+    composite_modified: 25.06
+    composite_note: >-
+      À lire contre le plancher de bruit du témoin nul `v9n` : +1,98 sur le même jeu.
+      L'écart mesuré lui est INFÉRIEUR en valeur absolue.
+    subject: Météo des jeux gelés — fenêtre d'enquête, bulletin, et agenda annoté
+    ticket: '023'
+    reference: '`v9` — météo tirée dans l''année climatique entière (365 j, graine `meteo_v2`), substrat du run de référence 2026-08-24_17_34'
+    modified: '`v10` — tirage restreint aux 152 jours de la fenêtre EMC² (20/09 → 18/02, graine `meteo_v3`). `v10b` ajoute le bulletin du jour, `v10c` l''agenda annoté par étape au relevé de 3 h ; `v9n` est le TÉMOIN NUL — mêmes 365 jours, graine différente'
+    change: >-
+      Réécriture de la seule ligne de contexte météo, de la ligne « Météo plus tard » du
+      même jour tiré et des annotations de l'agenda glissant. Diff strict vérifié sur
+      2 874 records × 3 variantes : zéro ligne hors périmètre.
+    result: >-
+      REJET SUR LES TROIS CORRECTIONS, et un second résultat sur l'INSTRUMENT. Le témoin
+      nul, qui ne change AUCUNE distribution, déplace le composite de −0,34 sur `screen` et
+      de +1,98 sur `val` — il change même de SIGNE entre les deux jeux. La fenêtre vaut
+      −0,43 et −1,69 : sur `val`, le seul jeu indépendant, elle est SOUS le plancher. Le
+      bulletin (+0,55 puis +1,72) et l'agenda annoté (+1,95 puis −0,17) n'y résistent pas
+      davantage. L'agenda est le cas d'école : sur `screen` son +1,95 est le contraste le
+      plus fort de la campagne — 5,7 fois le plancher — et sur `val` il tombe à −0,17, en
+      changeant de signe. DEUX FOIS `screen` A PRODUIT UN SIGNAL QUE `val` N'A PAS
+      CONFIRMÉ : il ne porte que 121 personas, son plancher y est six fois plus étroit, et
+      un plancher étroit fabrique des signaux. Ce jeu ne doit plus être lu seul.
+    score: '−1,69 composite sur `val`, pour un plancher de bruit de +1,98'
+    score_secondary: 'agenda annoté : +1,95 sur `screen`, −0,17 sur `val` — le signal s''effondre sur le jeu indépendant'
+    score_kind: neutral
+    score_caveat: >-
+      Le canal placebo du protocole était INUTILISABLE : le traitement touche 99 % du jeu,
+      le placebo aurait pesé 1 % (19 enregistrements) et sa mise à l'échelle l'aurait
+      amplifié d'un facteur 9,7. Le témoin nul à pleine masse a coûté un quart de la
+      campagne — et il a évité un faux positif, puisque le −1,69 aurait été déclaré
+      « signal » contre un plancher étroit.
+    verdict: rejete
+    comment: >-
+      Ce que la mesure établit porte sur l'INSTRUMENT plus que sur la météo : la variance
+      propre de l'éval (~2 points de composite sur `val`) dépasse l'effet visé. Le tirage
+      de production reste sur l'année entière — la simulation doit pouvoir se jouer
+      n'importe quand. AUCUNE conclusion sur la pluie n'est tirée, comme le ticket
+      l'exigeait avant la mesure : son Δ change de signe selon le substrat. Le bulletin
+      enrichi reste en production comme un choix de CONTENU, pas comme un résultat de
+      mesure. L'agenda annoté n'est PAS porté en production — il n'y a jamais été, et
+      c'est ce qui a permis de ne rien livrer sur la foi du +1,95 de `screen`. ⚠ La
+      RÉSOLUTION DE 3 H reste une piste ouverte : `v10c` la portait en paquet avec
+      l'annotation, la mesure ne peut pas les départager, et son rejet ne la condamne pas.
+      Quatre relevés sur huit dorment encore dans la source, et le code météo diffère entre
+      12H et 15H sur 44 % des jours.
+    trace: docs/traces/2026-08-25_ab_meteo
+
+  - id: car_availability
+    date: '2026-08-24'
+    metric: part_modale
+    metric_dataset: 'train'
+    composite_reference: 25.6925
+    composite_modified: 26.1515
+    composite_note: >-
+      Le composite n'est pas attribuable ici : il varie de +0,46 (`train`) à −2,25 (`rank`)
+      selon le jeu, dominé par le bruit des 91 % de records non traités. La métrique de
+      cette mesure est la part modale sur le sous-ensemble traité.
+    subject: Disponibilité de la voiture du ménage réalignée sur EMC²
+    ticket: '018'
+    reference: '`v7` — production `tt3`. `car_availability` telle que la population la produit : 60,9 / 25,6 / 13,6 % (all / some / none) par persona'
+    modified: '`v8` — 72 personas sur 818 basculés `some` → `all` : 69,7 / 16,7 / 13,6 %, pour une cible EMC² de 70,0 / 16,9 / 13,1 %'
+    change: >-
+      Réécriture du seul segment voiture de la ligne « Mobilité : » du persona. Statut de
+      conducteur préservé (c'est la variable du ticket 017), `none` intouché (c'est la
+      motorisation, pas le partage).
+    result: >-
+      Aucun effet détectable. Sur les 45 personas traités des deux jeux DISJOINTS, l'effet
+      voiture vaut +1,34 pt pour un plancher de bruit de 1,31 — soit exactement le niveau du
+      bruit. Le composite n'est pas attribuable : il varie de +0,46 (`train`) à −2,25
+      (`rank`) selon le jeu, dominé par le bruit des 91 % de records non traités.
+    score: '+0,12 pt de part voiture (agrégat reconstruit)'
+    score_kind: neutral
+    score_caveat: >-
+      Effet RECONSTRUIT (Δ traité × part de masse traitée), et non composite : le
+      traitement ne touche que 9 % des records, donc la lecture agrégée est noyée — sur
+      `rank` elle donnait même le SIGNE INVERSE de l'effet traité.
+    verdict: rejete
+    comment: >-
+      C'est l'amplitude qui ferme la question, pas le test : un dixième de point de part
+      voiture, contre 2,17 de composite pour le temps terminal. Le rejet porte sur le canal
+      NARRATIF ; il ne dit rien de la rivalité intra-foyer, qu'un jeu gelé ne peut pas
+      mesurer.
+    trace: docs/traces/2026-08-24_car_availability
+
+  - id: couronne_residence
+    date: '2026-08-24'
+    metric: l1_zone
+    metric_dataset: 'train+val'
+    composite_note: >-
+      Composite inchangé PAR CONSTRUCTION : `lieu_residence` n'est ni une dimension de
+      l'évaluateur des jeux gelés ni une dimension notée de `frames`. La métrique est le L1
+      par zone.
+    subject: Couronne de résidence lue sur la commune du domicile, non sur la distance
+    ticket: '021'
+    reference: >-
+      `v7` — couronne classée par distance à l'hypercentre (8 / 20 / 40 km), telle que le
+      journal l'écrivait. L1 par zone pondéré par le cadrage : 41,26 pt, et la 3ᵉ couronne
+      n'existe pas du tout sur cette population.
+    modified: >-
+      `v7`, mêmes records et mêmes décisions — couronne de la COMMUNE du domicile,
+      définition de l'enquête. L1 par zone pondéré par le cadrage : 43,38 pt, quatre
+      strates peuplées.
+    change: >-
+      Aucune réécriture de jeu, aucun appel LLM : la couronne ne figure ni dans les records
+      ni dans le prompt ni dans la clé du cache de décisions. Seule l'AGRÉGATION change —
+      chaque persona est reclassé par la commune de son domicile (table `zf_couronne.json`)
+      au lieu de sa distance au Capitole. 178 des 930 personas changent de couronne (19,1 %).
+      Mesuré sur les splits `train` + `val` : 2 197 lignes de décision, 569 agents.
+    result: >-
+      Dégradation sur les quatre strates : Toulouse 58,97 → 59,87, 1ʳᵉ couronne 28,12 →
+      32,39, 2ᵉ couronne 27,45 → 29,13, et une 3ᵉ couronne qui APPARAÎT à 41,88. Le L1 par
+      zone pondéré par le cadrage passe de 41,26 à 43,38 pt. C'est l'issue attendue : le
+      ticket retire un avantage que la mesure n'avait pas mérité.
+    score: '+2,11 pt de L1 par zone (pondéré par le cadrage)'
+    score_kind: worse
+    verdict: mesure
+    score_caveat: >-
+      Ce n'est PAS un composite, et deux précautions s'imposent. (1) `lieu_residence` n'est
+      ni une dimension de l'évaluateur des jeux gelés ni une dimension notée de `frames`
+      (`scored: False`) : le composite comparable ne bouge pas d'un millième, et publier ce
+      zéro serait prendre l'absence de mesure pour une mesure. (2) La même comparaison
+      pondérée par la MASSE observée rend −0,26 pt, soit une fausse amélioration : le
+      reclassement sort des agents de Toulouse, la strate la pire, si bien que la moyenne
+      baisse par changement de mélange alors que chaque strate se dégrade. Les poids
+      publiés sont donc ceux du cadrage EMC², identiques des deux côtés.
+    comment: >-
+      Périmètre PARTIEL, d'où le verdict « mesuré » : les 930 personas de `v7` sont filtrés
+      par bbox et ne contiennent AUCUN domicile hors périmètre, donc cette ligne chiffre
+      l'axe A2 seul. A4 est chiffré à part sur la population de référence — 45 domiciles
+      hors périmètre, dont les 45 étaient rangés en 3ᵉ couronne. Aucun jeu gelé n'expose ce
+      cas aujourd'hui.
+    trace: docs/traces/2026-08-24_couronne_v7
+
+# ── Composite des RUNS de production, dans le temps ──────────────────────────
+#
+# La SEULE série de NIVEAUX du dépôt, et donc le seul « progrès » qu'on puisse tracer.
+# Les mesures ci-dessous sont des ÉCARTS, lus sur des jeux gelés différents et dans des
+# unités différentes : les cumuler en une courbe fabriquerait un artefact, et 5 sur 7
+# n'ont de toute façon jamais été appliquées.
+#
+# ⚠ Ces runs ne sont PAS strictement comparables entre eux : composition de la flotte de
+# modèles, périmètre et taux de repli d'erreur diffèrent. La courbe montre où en est la
+# production, elle n'attribue aucun écart à aucune cause. Cf.
+# docs/traces/2026-08-25_run_reference.
+#
+# Valeurs lues dans docs/synthesis/models/<run>/data.json, chemin
+# `runs[].variants.attendu.scores.emd_jsd.composite` — jamais recopiées à la main.
+runs:
+  - run: '2026-08-02_18_55'
+    composite: 20.1087
+    n_trips: 2830
+    n_persons: 867
+  - run: '2026-08-19_13_17'
+    composite: 24.0845
+    n_trips: 3183
+    n_persons: 878
+  - run: '2026-08-19_14_36'
+    composite: 24.4340
+    n_trips: 3126
+    n_persons: 866
+  - run: '2026-08-21_19_54'
+    composite: 22.1690
+    n_trips: 2859
+    n_persons: 872
+  - run: '2026-08-24_17_34'
+    composite: 18.2316
+    n_trips: 2911
+    n_persons: 890
+    note: substrat épinglé de la page de synthèse et source des jeux gelés `v9`
+
+# ── Le plancher de bruit d'un run, mesuré ────────────────────────────────────
+#
+# Test de permutation sur le run 2026-08-24_17_34 : on re-DÉCOUPE le MÊME run en deux
+# moitiés, 60 fois, et on regarde de combien le composite bouge. Rien de réel ne change —
+# c'est le pendant, au niveau du run, du témoin nul `v9n` des jeux gelés.
+#
+# Résultat : de −4,42 à +5,41 points. TOUS les écarts entre runs consécutifs de la série
+# ci-dessus sont PLUS PETITS que cette amplitude. Aucun n'est donc attribuable, y compris
+# le −1,88 de la ligne `run_reference_2026_08_24`, que sa propre trace signalait déjà.
+#
+# Source : docs/traces/2026-08-25_run_reference/results.json, clé `permutation`.
+runs_noise:
+  source_run: '2026-08-24_17_34'
+  method: test de permutation — re-découpage du même run en deux moitiés
+  n_draws: 60
+  min: -4.4240
+  max: 5.4137
+  median: 0.4132
+  observed: -1.0941
+  p_value: 0.6333

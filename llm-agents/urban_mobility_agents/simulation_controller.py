@@ -326,9 +326,45 @@ def _is_car_passenger(person: Person) -> bool:
     )
 
 
+# Alarme « champ `personal_bike` absent » : elle ne doit se déclencher qu'une fois
+# par processus, sinon elle est émise à chaque décision de chaque agent et noie
+# `make error`. Le compteur Prometheus, lui, compte tous les cas.
+_bike_trait_alarm_on = False
+
+
 def _owns_bike(traits: dict) -> bool:
-    """L'agent possède-t-il un vélo ? Champ absent ⇒ oui (rétrocompatibilité assumée)."""
-    return traits.get("personal_bike", "vélo normal").lower() != "pas de vélo"
+    """L'agent possède-t-il un vélo ? Champ absent ⇒ **non**, et l'alarme sonne.
+
+    Le défaut était l'inverse — champ absent valait « vélo normal » — au nom de la
+    rétrocompatibilité avec les populations générées avant que le trait existe. C'est
+    le scénario que le ticket 015 ferme : une population sans `personal_bike` mettait
+    ainsi **100 % des agents à vélo, en silence**, ce qui est le pire des deux erreurs
+    possibles. Le vélo est le mode dont la part modale est la plus scrutée du projet ;
+    un plancher de possession à 100 % la déplace de plusieurs points sans laisser une
+    seule ligne de log.
+
+    Le repli est donc « pas de vélo », qui prive l'agent d'un mode plutôt que de lui en
+    offrir un qu'il n'a pas — et il est **bruyant** : les sept populations concernées
+    sont sorties du champ du loader (`data/population/old/`), donc ce chemin ne devrait
+    plus jamais être emprunté. S'il l'est, c'est une régression de la chaîne de
+    génération, pas un cas normal à absorber.
+    """
+    global _bike_trait_alarm_on
+    label = traits.get("personal_bike")
+    if label is None:
+        if not _bike_trait_alarm_on:
+            _bike_trait_alarm_on = True
+            logger.error(
+                "[ALARME] Trait `personal_bike` absent de traits_json — les agents "
+                "concernés sont traités SANS vélo. Une population sans ce trait n'est "
+                "pas exploitable : régénérez-la, ou enrichissez-la avec "
+                "`python -m scripts.data.population.enrich_personal_bike <fichier>`. "
+                "(Alarme émise une seule fois ; le compteur alarme_total{source="
+                '"personal_bike_absent"} compte tous les agents concernés.)'
+            )
+        fire_alarme("personal_bike_absent")
+        return False
+    return str(label).lower() != "pas de vélo"
 
 
 def _owns_car(traits: dict) -> bool:

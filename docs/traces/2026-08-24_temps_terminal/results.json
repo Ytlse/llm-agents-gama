@@ -1,0 +1,114 @@
+[
+ {
+  "branch": "ab_chaine_expert",
+  "node": "9c098aa7fd3423cb",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v5",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T04:55:38+00:00",
+  "scores": {
+   "composite": 26.793,
+   "global": 7.7238,
+   "absent_penalty": 0.0,
+   "age": 7.2492,
+   "occupation": 11.4722,
+   "genre": 7.9323,
+   "motif": 9.0565,
+   "distance": 9.3351,
+   "length_penalty": 0.9919
+  },
+  "shares_pct": {
+   "marche": 16.64,
+   "transports_collectifs": 25.58,
+   "velo": 19.39,
+   "voiture": 38.39
+  },
+  "n_decisions": 399,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v5",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T04:57:17+00:00",
+  "scores": {
+   "composite": 26.9998,
+   "global": 7.7951,
+   "absent_penalty": 0.0,
+   "age": 8.2841,
+   "occupation": 11.9983,
+   "genre": 8.1625,
+   "motif": 8.2103,
+   "distance": 8.3653,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 16.07,
+   "transports_collectifs": 25.55,
+   "velo": 19.5,
+   "voiture": 38.88
+  },
+  "n_decisions": 414,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v6",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T09:52:21+00:00",
+  "scores": {
+   "composite": 22.4825,
+   "global": 4.8387,
+   "absent_penalty": 0.0,
+   "age": 7.5527,
+   "occupation": 8.4116,
+   "genre": 5.3659,
+   "motif": 9.1311,
+   "distance": 11.621,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 14.57,
+   "transports_collectifs": 21.41,
+   "velo": 15.16,
+   "voiture": 48.86
+  },
+  "n_decisions": 319,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T09:54:34+00:00",
+  "scores": {
+   "composite": 24.8318,
+   "global": 5.7824,
+   "absent_penalty": 0.0,
+   "age": 8.4449,
+   "occupation": 9.8736,
+   "genre": 6.1833,
+   "motif": 9.4994,
+   "distance": 10.9516,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 13.48,
+   "transports_collectifs": 22.56,
+   "velo": 16.28,
+   "voiture": 47.69
+  },
+  "n_decisions": 350,
+  "n_personas": 75
+ }
+]

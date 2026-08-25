@@ -1,0 +1,36 @@
+{
+  "subject": "ticket 023 — A/B fenêtre météo et bulletin (screen + val)",
+  "host": "dhcp-5-5-173.ut-capitole.fr",
+  "user": "yvesb",
+  "pid": 87917,
+  "created_by_pid": 87921,
+  "acquired_at": "2026-08-25T08:00:18+00:00",
+  "expected_duration_minutes": 30,
+  "cloud_campaign_paused_confirmed": true,
+  "quota_at_acquire": {
+    "at": "2026-08-25T08:00:18+00:00",
+    "available": false,
+    "error": "API (port 8000) injoignable — pile arrêtée ?"
+  },
+  "quota_at_release": {
+    "at": "2026-08-25T08:27:31+00:00",
+    "available": false,
+    "error": "API (port 8000) injoignable — pile arrêtée ?"
+  },
+  "stack_at_acquire": {
+    "at": "2026-08-25T08:00:19+00:00",
+    "probe_available": true,
+    "running": [],
+    "blocking_running": [],
+    "stack_fully_down": true
+  },
+  "stack_at_release": {
+    "at": "2026-08-25T08:27:32+00:00",
+    "probe_available": true,
+    "running": [],
+    "blocking_running": [],
+    "stack_fully_down": true
+  },
+  "limitation": "⚠ Ce jeton est LOCAL. Il ne bloque pas la campagne génétique de la VM Google Cloud, qui a son propre quota et son propre déclenchement hebdomadaire. Les instantanés de quota ci-dessous la DÉTECTENT après coup, ils ne la préviennent pas.",
+  "released_at": "2026-08-25T08:27:32+00:00"
+}

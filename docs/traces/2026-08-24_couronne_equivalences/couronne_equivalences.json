@@ -1,0 +1,52 @@
+{
+ "generated_at": "2026-08-24",
+ "ticket": "021",
+ "lot": 0,
+ "source_couronne_par_secteur": "zf_couronne.json (table versionnée)",
+ "portes": {
+  "A · aucune zone fine orpheline": true,
+  "A · tous les secteurs atteints": true,
+  "B · préfixe == géométrie sur les 785 zones": true,
+  "C · préfixe == géométrie sur les domiciles": true,
+  "D · hors couche == hors périmètre": true,
+  "E · accord avec la trace du ticket 020": true,
+  "F · ZF → INSEE reproduit la commune archivée": true
+ },
+ "A": {
+  "n_secteurs": 88,
+  "n_prefixes": 88,
+  "orphelines": [],
+  "secteurs_sans_zone": []
+ },
+ "B": {
+  "n": 785,
+  "desaccords": []
+ },
+ "C": {
+  "n": 1021,
+  "n_desaccords": 0,
+  "desaccords": []
+ },
+ "D": {
+  "hors_couche": 45,
+  "hors_perimetre": 45,
+  "couche_seule": [],
+  "perimetre_seul": [],
+  "coverage": {
+   "resolved": 976,
+   "outside": 45,
+   "total": 1021,
+   "outside_rate": 0.04407443682664055,
+   "alarm": false
+  }
+ },
+ "E": {
+  "n_ecarts": 0,
+  "ecarts": []
+ },
+ "F": {
+  "zf_sans_insee": [],
+  "n_ecarts": 0,
+  "ecarts": []
+ }
+}

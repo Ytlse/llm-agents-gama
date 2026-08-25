@@ -1,0 +1,5869 @@
+{
+ "version": "zc1",
+ "source": {
+  "survey": "EMC² Toulouse 2023 (ProGEDO / lil-1750)",
+  "dtir_layer": "EMC2_Toulouse_2023_DTIR_17072023.shp",
+  "zf_layer": "EMC2_Toulouse_2023_ZF_26052023.shp",
+  "field": "NOM_D2"
+ },
+ "note": "Les 785 zones fines de l'enquête avec leur secteur de tirage, leur couronne, leur code INSEE et leur commune. Le rattachement zone → secteur passe par les TROIS PREMIERS CHIFFRES du code ZF ; mesuré identique à 100 % au classement par appartenance géométrique, sur les 785 zones comme sur 1 021 domiciles (ticket 021, lot 0, trace docs/traces/2026-08-24_couronne_equivalences/). Hors de cette couche, la couronne ne se devine pas : c'est `hors périmètre`.",
+ "n_zones": 785,
+ "n_secteurs": 88,
+ "counts": {
+  "Toulouse": 179,
+  "1ere couronne": 205,
+  "2eme couronne": 124,
+  "3eme couronne": 277
+ },
+ "secteurs": [
+  {
+   "secteur": "101",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "102",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "103",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "104",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "105",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "106",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "107",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "108",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "109",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "110",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "111",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "112",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "113",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "114",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "115",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "116",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "117",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "118",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "119",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "120",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "121",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "122",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "123",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "124",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "125",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "126",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "127",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "128",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "129",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "130",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "131",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "132",
+   "couronne": "Toulouse"
+  },
+  {
+   "secteur": "201",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "202",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "203",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "204",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "205",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "206",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "207",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "208",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "209",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "210",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "211",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "212",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "213",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "214",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "215",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "216",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "217",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "218",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "219",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "220",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "221",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "222",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "223",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "224",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "225",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "226",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "227",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "228",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "229",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "230",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "231",
+   "couronne": "1ere couronne"
+  },
+  {
+   "secteur": "301",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "302",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "303",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "304",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "305",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "306",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "307",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "308",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "309",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "310",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "311",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "312",
+   "couronne": "2eme couronne"
+  },
+  {
+   "secteur": "401",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "402",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "403",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "404",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "405",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "406",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "407",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "408",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "409",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "410",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "411",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "412",
+   "couronne": "3eme couronne"
+  },
+  {
+   "secteur": "413",
+   "couronne": "3eme couronne"
+  }
+ ],
+ "zones": [
+  {
+   "zf": "101101000",
+   "secteur": "101",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "101102000",
+   "secteur": "101",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "101103000",
+   "secteur": "101",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "101104000",
+   "secteur": "101",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102101000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102102000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102103000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102104000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102105000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102106000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "102107000",
+   "secteur": "102",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103101000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103102000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103103000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103104000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103105000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "103106000",
+   "secteur": "103",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "104101000",
+   "secteur": "104",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "104102000",
+   "secteur": "104",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "104103000",
+   "secteur": "104",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "104104000",
+   "secteur": "104",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "104105000",
+   "secteur": "104",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105101000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105102000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105103000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105104000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105105000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "105106000",
+   "secteur": "105",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "106101000",
+   "secteur": "106",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "106102000",
+   "secteur": "106",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "106103000",
+   "secteur": "106",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107101000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107102000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107103000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107104000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107105000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107106000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "107107000",
+   "secteur": "107",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108101000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108102000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108103000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108104000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108105000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108106000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "108107000",
+   "secteur": "108",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "109101000",
+   "secteur": "109",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "109102000",
+   "secteur": "109",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "109103000",
+   "secteur": "109",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "109104000",
+   "secteur": "109",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110101000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110102000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110103000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110104000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110105000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110106000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "110107000",
+   "secteur": "110",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111101000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111102000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111103000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111104000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111105000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "111106000",
+   "secteur": "111",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112101000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112102000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112103000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112104000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112105000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "112106000",
+   "secteur": "112",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113101000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113102000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113103000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113104000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113105000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113106000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113107000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "113108000",
+   "secteur": "113",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "114101000",
+   "secteur": "114",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "114102000",
+   "secteur": "114",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "114103000",
+   "secteur": "114",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115101000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115102000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115103000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115104000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115105000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115106000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115107000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115108000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115109000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115110000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "115111000",
+   "secteur": "115",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "116101000",
+   "secteur": "116",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "116102000",
+   "secteur": "116",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "116103000",
+   "secteur": "116",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "117101000",
+   "secteur": "117",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "117102000",
+   "secteur": "117",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "117103000",
+   "secteur": "117",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "117104000",
+   "secteur": "117",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "117105000",
+   "secteur": "117",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "118101000",
+   "secteur": "118",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "118102000",
+   "secteur": "118",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "118103000",
+   "secteur": "118",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "118104000",
+   "secteur": "118",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "119101000",
+   "secteur": "119",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "119102000",
+   "secteur": "119",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "119103000",
+   "secteur": "119",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "119104000",
+   "secteur": "119",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "119105000",
+   "secteur": "119",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120101000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120102000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120103000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120104000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120105000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "120106000",
+   "secteur": "120",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "121101000",
+   "secteur": "121",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "121102000",
+   "secteur": "121",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "121103000",
+   "secteur": "121",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "121104000",
+   "secteur": "121",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "122101000",
+   "secteur": "122",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "122102000",
+   "secteur": "122",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "122103000",
+   "secteur": "122",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "122104000",
+   "secteur": "122",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123101000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123102000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123103000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123104000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123105000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123106000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123107000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123108000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "123109000",
+   "secteur": "123",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124101000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124102000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124103000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124104000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124105000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "124106000",
+   "secteur": "124",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125101000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125102000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125103000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125104000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125105000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "125106000",
+   "secteur": "125",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "126101000",
+   "secteur": "126",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "126102000",
+   "secteur": "126",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "126103000",
+   "secteur": "126",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127101000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127102000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127103000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127104000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127105000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127106000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127107000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "127108000",
+   "secteur": "127",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "128101000",
+   "secteur": "128",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "128102000",
+   "secteur": "128",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "128103000",
+   "secteur": "128",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "128104000",
+   "secteur": "128",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129101000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129102000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129103000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129104000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129105000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129106000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "129107000",
+   "secteur": "129",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "130101000",
+   "secteur": "130",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "130102000",
+   "secteur": "130",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131101000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131102000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131103000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131104000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131105000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "131106000",
+   "secteur": "131",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132101000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132102000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132103000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132104000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132105000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132106000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "132107000",
+   "secteur": "132",
+   "couronne": "Toulouse",
+   "insee": "31555",
+   "commune": "Toulouse"
+  },
+  {
+   "zf": "201101000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31182",
+   "commune": "Fenouillet"
+  },
+  {
+   "zf": "201102000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31182",
+   "commune": "Fenouillet"
+  },
+  {
+   "zf": "201103000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31467",
+   "commune": "Saint-Alban"
+  },
+  {
+   "zf": "201104000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31467",
+   "commune": "Saint-Alban"
+  },
+  {
+   "zf": "201105000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31022",
+   "commune": "Aucamville"
+  },
+  {
+   "zf": "201106000",
+   "secteur": "201",
+   "couronne": "1ere couronne",
+   "insee": "31022",
+   "commune": "Aucamville"
+  },
+  {
+   "zf": "202101000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31116",
+   "commune": "Castelginest"
+  },
+  {
+   "zf": "202102000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31116",
+   "commune": "Castelginest"
+  },
+  {
+   "zf": "202103000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31116",
+   "commune": "Castelginest"
+  },
+  {
+   "zf": "202104000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31186",
+   "commune": "Fonbeauzard"
+  },
+  {
+   "zf": "202105000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31282",
+   "commune": "Launaguet"
+  },
+  {
+   "zf": "202106000",
+   "secteur": "202",
+   "couronne": "1ere couronne",
+   "insee": "31282",
+   "commune": "Launaguet"
+  },
+  {
+   "zf": "203101000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203102000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203103000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203104000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203105000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203106000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "203107000",
+   "secteur": "203",
+   "couronne": "1ere couronne",
+   "insee": "31561",
+   "commune": "L'Union"
+  },
+  {
+   "zf": "204101000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204102000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204103000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204104000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204105000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204106000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204107000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204108000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204109000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204110000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "204111000",
+   "secteur": "204",
+   "couronne": "1ere couronne",
+   "insee": "31044",
+   "commune": "Balma"
+  },
+  {
+   "zf": "205101000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31418",
+   "commune": "Pin-Balma"
+  },
+  {
+   "zf": "205102000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31355",
+   "commune": "Mons"
+  },
+  {
+   "zf": "205103000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31163",
+   "commune": "Drémil-Lafage"
+  },
+  {
+   "zf": "205104000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31184",
+   "commune": "Flourens"
+  },
+  {
+   "zf": "205105000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31445",
+   "commune": "Quint-Fonsegrives"
+  },
+  {
+   "zf": "205106000",
+   "secteur": "205",
+   "couronne": "1ere couronne",
+   "insee": "31445",
+   "commune": "Quint-Fonsegrives"
+  },
+  {
+   "zf": "206101000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "206102000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "206103000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "206104000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "206105000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "206106000",
+   "secteur": "206",
+   "couronne": "1ere couronne",
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville"
+  },
+  {
+   "zf": "207101000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31254",
+   "commune": "Labège"
+  },
+  {
+   "zf": "207102000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31254",
+   "commune": "Labège"
+  },
+  {
+   "zf": "207103000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31254",
+   "commune": "Labège"
+  },
+  {
+   "zf": "207104000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31169",
+   "commune": "Escalquens"
+  },
+  {
+   "zf": "207105000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31169",
+   "commune": "Escalquens"
+  },
+  {
+   "zf": "207106000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31169",
+   "commune": "Escalquens"
+  },
+  {
+   "zf": "207107000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31169",
+   "commune": "Escalquens"
+  },
+  {
+   "zf": "207108000",
+   "secteur": "207",
+   "couronne": "1ere couronne",
+   "insee": "31036",
+   "commune": "Auzielle"
+  },
+  {
+   "zf": "208101000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208102000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208103000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208104000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208105000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208106000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208107000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208108000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "208109000",
+   "secteur": "208",
+   "couronne": "1ere couronne",
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne"
+  },
+  {
+   "zf": "209101000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31035",
+   "commune": "Auzeville-Tolosane"
+  },
+  {
+   "zf": "209102000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31035",
+   "commune": "Auzeville-Tolosane"
+  },
+  {
+   "zf": "209103000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209104000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209105000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209106000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209107000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209108000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "209109000",
+   "secteur": "209",
+   "couronne": "1ere couronne",
+   "insee": "31113",
+   "commune": "Castanet-Tolosan"
+  },
+  {
+   "zf": "210101000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31575",
+   "commune": "Vieille-Toulouse"
+  },
+  {
+   "zf": "210102000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31411",
+   "commune": "Pechbusque"
+  },
+  {
+   "zf": "210103000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31578",
+   "commune": "Vigoulet-Auzil"
+  },
+  {
+   "zf": "210104000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31340",
+   "commune": "Mervilla"
+  },
+  {
+   "zf": "210105000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31259",
+   "commune": "Lacroix-Falgarde"
+  },
+  {
+   "zf": "210106000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31227",
+   "commune": "Goyrans"
+  },
+  {
+   "zf": "210107000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31148",
+   "commune": "Clermont-le-Fort"
+  },
+  {
+   "zf": "210108000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31025",
+   "commune": "Aureville"
+  },
+  {
+   "zf": "210109000",
+   "secteur": "210",
+   "couronne": "1ere couronne",
+   "insee": "31448",
+   "commune": "Rebigue"
+  },
+  {
+   "zf": "211101000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211102000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211103000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211104000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211105000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211106000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne"
+  },
+  {
+   "zf": "211107000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31458",
+   "commune": "Roques"
+  },
+  {
+   "zf": "211108000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31458",
+   "commune": "Roques"
+  },
+  {
+   "zf": "211109000",
+   "secteur": "211",
+   "couronne": "1ere couronne",
+   "insee": "31458",
+   "commune": "Roques"
+  },
+  {
+   "zf": "212101000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "212102000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "212103000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "212104000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "212105000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "212106000",
+   "secteur": "212",
+   "couronne": "1ere couronne",
+   "insee": "31157",
+   "commune": "Cugnaux"
+  },
+  {
+   "zf": "213101000",
+   "secteur": "213",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "213102000",
+   "secteur": "213",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "213103000",
+   "secteur": "213",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "213104000",
+   "secteur": "213",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "213105000",
+   "secteur": "213",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "214101000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214102000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214103000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214104000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214105000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214106000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "214107000",
+   "secteur": "214",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215101000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215102000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215103000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215104000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215105000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215106000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215107000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215108000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215109000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215110000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215111000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "215112000",
+   "secteur": "215",
+   "couronne": "1ere couronne",
+   "insee": "31149",
+   "commune": "Colomiers"
+  },
+  {
+   "zf": "216101000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216102000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216103000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216104000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216105000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216106000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216107000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216108000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216109000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216110000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216111000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216112000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216113000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216114000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216115000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "216116000",
+   "secteur": "216",
+   "couronne": "1ere couronne",
+   "insee": "31069",
+   "commune": "Blagnac"
+  },
+  {
+   "zf": "217101000",
+   "secteur": "217",
+   "couronne": "1ere couronne",
+   "insee": "31032",
+   "commune": "Aussonne"
+  },
+  {
+   "zf": "217102000",
+   "secteur": "217",
+   "couronne": "1ere couronne",
+   "insee": "31541",
+   "commune": "Seilh"
+  },
+  {
+   "zf": "217103000",
+   "secteur": "217",
+   "couronne": "1ere couronne",
+   "insee": "31056",
+   "commune": "Beauzelle"
+  },
+  {
+   "zf": "217104000",
+   "secteur": "217",
+   "couronne": "1ere couronne",
+   "insee": "31056",
+   "commune": "Beauzelle"
+  },
+  {
+   "zf": "217105000",
+   "secteur": "217",
+   "couronne": "1ere couronne",
+   "insee": "31056",
+   "commune": "Beauzelle"
+  },
+  {
+   "zf": "218101000",
+   "secteur": "218",
+   "couronne": "1ere couronne",
+   "insee": "31205",
+   "commune": "Gagnac-sur-Garonne"
+  },
+  {
+   "zf": "218102000",
+   "secteur": "218",
+   "couronne": "1ere couronne",
+   "insee": "31293",
+   "commune": "Lespinasse"
+  },
+  {
+   "zf": "218103000",
+   "secteur": "218",
+   "couronne": "1ere couronne",
+   "insee": "31091",
+   "commune": "Bruguières"
+  },
+  {
+   "zf": "219101000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31230",
+   "commune": "Gratentour"
+  },
+  {
+   "zf": "219102000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31410",
+   "commune": "Pechbonnieu"
+  },
+  {
+   "zf": "219103000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31364",
+   "commune": "Montberon"
+  },
+  {
+   "zf": "219104000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31273",
+   "commune": "Lapeyrouse-Fossat"
+  },
+  {
+   "zf": "219105000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31497",
+   "commune": "Saint-Loup-Cammas"
+  },
+  {
+   "zf": "219106000",
+   "secteur": "219",
+   "couronne": "1ere couronne",
+   "insee": "31484",
+   "commune": "Saint-Geniès-Bellevue"
+  },
+  {
+   "zf": "220101000",
+   "secteur": "220",
+   "couronne": "1ere couronne",
+   "insee": "31488",
+   "commune": "Saint-Jean"
+  },
+  {
+   "zf": "220102000",
+   "secteur": "220",
+   "couronne": "1ere couronne",
+   "insee": "31488",
+   "commune": "Saint-Jean"
+  },
+  {
+   "zf": "220103000",
+   "secteur": "220",
+   "couronne": "1ere couronne",
+   "insee": "31488",
+   "commune": "Saint-Jean"
+  },
+  {
+   "zf": "220104000",
+   "secteur": "220",
+   "couronne": "1ere couronne",
+   "insee": "31488",
+   "commune": "Saint-Jean"
+  },
+  {
+   "zf": "221101000",
+   "secteur": "221",
+   "couronne": "1ere couronne",
+   "insee": "31117",
+   "commune": "Castelmaurou"
+  },
+  {
+   "zf": "221102000",
+   "secteur": "221",
+   "couronne": "1ere couronne",
+   "insee": "31462",
+   "commune": "Rouffiac-Tolosan"
+  },
+  {
+   "zf": "221103000",
+   "secteur": "221",
+   "couronne": "1ere couronne",
+   "insee": "31053",
+   "commune": "Beaupuy"
+  },
+  {
+   "zf": "221104000",
+   "secteur": "221",
+   "couronne": "1ere couronne",
+   "insee": "31389",
+   "commune": "Montrabé"
+  },
+  {
+   "zf": "222101000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31420",
+   "commune": "Pinsaguel"
+  },
+  {
+   "zf": "222102000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31460",
+   "commune": "Roquettes"
+  },
+  {
+   "zf": "222103000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31421",
+   "commune": "Pins-Justaret"
+  },
+  {
+   "zf": "222104000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31248",
+   "commune": "Labarthe-sur-Lèze"
+  },
+  {
+   "zf": "222105000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31580",
+   "commune": "Villate"
+  },
+  {
+   "zf": "222106000",
+   "secteur": "222",
+   "couronne": "1ere couronne",
+   "insee": "31533",
+   "commune": "Saubens"
+  },
+  {
+   "zf": "223101000",
+   "secteur": "223",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "223102000",
+   "secteur": "223",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "223103000",
+   "secteur": "223",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "223104000",
+   "secteur": "223",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224101000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224102000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224103000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224104000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224105000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224106000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224107000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "224108000",
+   "secteur": "224",
+   "couronne": "1ere couronne",
+   "insee": "31395",
+   "commune": "Muret"
+  },
+  {
+   "zf": "225101000",
+   "secteur": "225",
+   "couronne": "1ere couronne",
+   "insee": "31547",
+   "commune": "Seysses"
+  },
+  {
+   "zf": "225102000",
+   "secteur": "225",
+   "couronne": "1ere couronne",
+   "insee": "31547",
+   "commune": "Seysses"
+  },
+  {
+   "zf": "225103000",
+   "secteur": "225",
+   "couronne": "1ere couronne",
+   "insee": "31547",
+   "commune": "Seysses"
+  },
+  {
+   "zf": "226101000",
+   "secteur": "226",
+   "couronne": "1ere couronne",
+   "insee": "31203",
+   "commune": "Frouzins"
+  },
+  {
+   "zf": "226102000",
+   "secteur": "226",
+   "couronne": "1ere couronne",
+   "insee": "31588",
+   "commune": "Villeneuve-Tolosane"
+  },
+  {
+   "zf": "226103000",
+   "secteur": "226",
+   "couronne": "1ere couronne",
+   "insee": "31588",
+   "commune": "Villeneuve-Tolosane"
+  },
+  {
+   "zf": "226104000",
+   "secteur": "226",
+   "couronne": "1ere couronne",
+   "insee": "31588",
+   "commune": "Villeneuve-Tolosane"
+  },
+  {
+   "zf": "226105000",
+   "secteur": "226",
+   "couronne": "1ere couronne",
+   "insee": "31203",
+   "commune": "Frouzins"
+  },
+  {
+   "zf": "227101000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "227102000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "227103000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "227104000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "227105000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "227106000",
+   "secteur": "227",
+   "couronne": "1ere couronne",
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch"
+  },
+  {
+   "zf": "228101000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228102000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228103000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228104000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228105000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228106000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "228107000",
+   "secteur": "228",
+   "couronne": "1ere couronne",
+   "insee": "31557",
+   "commune": "Tournefeuille"
+  },
+  {
+   "zf": "229101000",
+   "secteur": "229",
+   "couronne": "1ere couronne",
+   "insee": "31526",
+   "commune": "La Salvetat-Saint-Gilles"
+  },
+  {
+   "zf": "229102000",
+   "secteur": "229",
+   "couronne": "1ere couronne",
+   "insee": "31526",
+   "commune": "La Salvetat-Saint-Gilles"
+  },
+  {
+   "zf": "230101000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31417",
+   "commune": "Pibrac"
+  },
+  {
+   "zf": "230102000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31417",
+   "commune": "Pibrac"
+  },
+  {
+   "zf": "230103000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31417",
+   "commune": "Pibrac"
+  },
+  {
+   "zf": "230104000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31088",
+   "commune": "Brax"
+  },
+  {
+   "zf": "230105000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31291",
+   "commune": "Léguevin"
+  },
+  {
+   "zf": "230106000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31291",
+   "commune": "Léguevin"
+  },
+  {
+   "zf": "230107000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31291",
+   "commune": "Léguevin"
+  },
+  {
+   "zf": "230108000",
+   "secteur": "230",
+   "couronne": "1ere couronne",
+   "insee": "31291",
+   "commune": "Léguevin"
+  },
+  {
+   "zf": "231101000",
+   "secteur": "231",
+   "couronne": "1ere couronne",
+   "insee": "31351",
+   "commune": "Mondonville"
+  },
+  {
+   "zf": "231102000",
+   "secteur": "231",
+   "couronne": "1ere couronne",
+   "insee": "31150",
+   "commune": "Cornebarrieu"
+  },
+  {
+   "zf": "301101000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31118",
+   "commune": "Castelnau-d'Estrétefonds"
+  },
+  {
+   "zf": "301102000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31079",
+   "commune": "Bouloc"
+  },
+  {
+   "zf": "301103000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31587",
+   "commune": "Villeneuve-lès-Bouloc"
+  },
+  {
+   "zf": "301104000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31563",
+   "commune": "Vacquiers"
+  },
+  {
+   "zf": "301105000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31211",
+   "commune": "Gargas"
+  },
+  {
+   "zf": "301106000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31136",
+   "commune": "Cépet"
+  },
+  {
+   "zf": "301107000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31516",
+   "commune": "Saint-Sauveur"
+  },
+  {
+   "zf": "301108000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31490",
+   "commune": "Saint-Jory"
+  },
+  {
+   "zf": "301109000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31490",
+   "commune": "Saint-Jory"
+  },
+  {
+   "zf": "301110000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31490",
+   "commune": "Saint-Jory"
+  },
+  {
+   "zf": "301111000",
+   "secteur": "301",
+   "couronne": "2eme couronne",
+   "insee": "31490",
+   "commune": "Saint-Jory"
+  },
+  {
+   "zf": "302101000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31252",
+   "commune": "Labastide-Saint-Sernin"
+  },
+  {
+   "zf": "302102000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31579",
+   "commune": "Villariès"
+  },
+  {
+   "zf": "302103000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31383",
+   "commune": "Montjoire"
+  },
+  {
+   "zf": "302104000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31407",
+   "commune": "Paulhac"
+  },
+  {
+   "zf": "302105000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31049",
+   "commune": "Bazus"
+  },
+  {
+   "zf": "302106000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31212",
+   "commune": "Garidech"
+  },
+  {
+   "zf": "302107000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31358",
+   "commune": "Montastruc-la-Conseillère"
+  },
+  {
+   "zf": "302108000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31216",
+   "commune": "Gémil"
+  },
+  {
+   "zf": "302109000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31388",
+   "commune": "Montpitol"
+  },
+  {
+   "zf": "302110000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31489",
+   "commune": "Saint-Jean-Lherm"
+  },
+  {
+   "zf": "302111000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31228",
+   "commune": "Gragnague"
+  },
+  {
+   "zf": "302112000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31285",
+   "commune": "Lavalette"
+  },
+  {
+   "zf": "302113000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31352",
+   "commune": "Mondouzil"
+  },
+  {
+   "zf": "302114000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31501",
+   "commune": "Saint-Marcel-Paulel"
+  },
+  {
+   "zf": "302115000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31074",
+   "commune": "Bonrepos-Riquet"
+  },
+  {
+   "zf": "302116000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31573",
+   "commune": "Verfeil"
+  },
+  {
+   "zf": "302117000",
+   "secteur": "302",
+   "couronne": "2eme couronne",
+   "insee": "31511",
+   "commune": "Saint-Pierre"
+  },
+  {
+   "zf": "303101000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31215",
+   "commune": "Gauré"
+  },
+  {
+   "zf": "303102000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31567",
+   "commune": "Vallesvilles"
+  },
+  {
+   "zf": "303103000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31512",
+   "commune": "Saint-Pierre-de-Lages"
+  },
+  {
+   "zf": "303104000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31271",
+   "commune": "Lanta"
+  },
+  {
+   "zf": "303105000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31029",
+   "commune": "Aurin"
+  },
+  {
+   "zf": "303106000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31331",
+   "commune": "Maureville"
+  },
+  {
+   "zf": "303107000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31105",
+   "commune": "Caragoudes"
+  },
+  {
+   "zf": "303108000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31392",
+   "commune": "Mourvilles-Basses"
+  },
+  {
+   "zf": "303109000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31568",
+   "commune": "Varennes"
+  },
+  {
+   "zf": "303110000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31249",
+   "commune": "Labastide-Beauvoir"
+  },
+  {
+   "zf": "303111000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31551",
+   "commune": "Tarabel"
+  },
+  {
+   "zf": "303112000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31439",
+   "commune": "Préserville"
+  },
+  {
+   "zf": "303113000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31192",
+   "commune": "Fourquevaux"
+  },
+  {
+   "zf": "303114000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31402",
+   "commune": "Odars"
+  },
+  {
+   "zf": "303115000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31480",
+   "commune": "Sainte-Foy-d'Aigrefeuille"
+  },
+  {
+   "zf": "303116000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31284",
+   "commune": "Lauzerville"
+  },
+  {
+   "zf": "303117000",
+   "secteur": "303",
+   "couronne": "2eme couronne",
+   "insee": "31003",
+   "commune": "Aigrefeuille"
+  },
+  {
+   "zf": "304101000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31409",
+   "commune": "Péchabou"
+  },
+  {
+   "zf": "304102000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31429",
+   "commune": "Pompertuzat"
+  },
+  {
+   "zf": "304103000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31057",
+   "commune": "Belberaud"
+  },
+  {
+   "zf": "304104000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31384",
+   "commune": "Montlaur"
+  },
+  {
+   "zf": "304105000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31161",
+   "commune": "Deyme"
+  },
+  {
+   "zf": "304106000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31151",
+   "commune": "Corronsac"
+  },
+  {
+   "zf": "304107000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31366",
+   "commune": "Montbrun-Lauragais"
+  },
+  {
+   "zf": "304108000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31162",
+   "commune": "Donneville"
+  },
+  {
+   "zf": "304109000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31437",
+   "commune": "Pouze"
+  },
+  {
+   "zf": "304110000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31058",
+   "commune": "Belbèze-de-Lauragais"
+  },
+  {
+   "zf": "304111000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31381",
+   "commune": "Montgiscard"
+  },
+  {
+   "zf": "304112000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31048",
+   "commune": "Baziège"
+  },
+  {
+   "zf": "304113000",
+   "secteur": "304",
+   "couronne": "2eme couronne",
+   "insee": "31004",
+   "commune": "Ayguesvives"
+  },
+  {
+   "zf": "305101000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31165",
+   "commune": "Eaunes"
+  },
+  {
+   "zf": "305102000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31052",
+   "commune": "Beaumont-sur-Lèze"
+  },
+  {
+   "zf": "305103000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31263",
+   "commune": "Lagardelle-sur-Lèze"
+  },
+  {
+   "zf": "305104000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31574",
+   "commune": "Vernet"
+  },
+  {
+   "zf": "305105000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31572",
+   "commune": "Venerque"
+  },
+  {
+   "zf": "305106000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31171",
+   "commune": "Espanès"
+  },
+  {
+   "zf": "305107000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31240",
+   "commune": "Issus"
+  },
+  {
+   "zf": "305108000",
+   "secteur": "305",
+   "couronne": "2eme couronne",
+   "insee": "31401",
+   "commune": "Noueilles"
+  },
+  {
+   "zf": "306101000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31269",
+   "commune": "Lamasquère"
+  },
+  {
+   "zf": "306102000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31475",
+   "commune": "Saint-Clar-de-Rivière"
+  },
+  {
+   "zf": "306103000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31253",
+   "commune": "Labastidette"
+  },
+  {
+   "zf": "306104000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31299",
+   "commune": "Lherm"
+  },
+  {
+   "zf": "306105000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31287",
+   "commune": "Lavernose-Lacasse"
+  },
+  {
+   "zf": "306106000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31486",
+   "commune": "Saint-Hilaire"
+  },
+  {
+   "zf": "306107000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31181",
+   "commune": "Le Fauga"
+  },
+  {
+   "zf": "306108000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31181",
+   "commune": "Le Fauga"
+  },
+  {
+   "zf": "306109000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31334",
+   "commune": "Mauzac"
+  },
+  {
+   "zf": "306110000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31399",
+   "commune": "Noé"
+  },
+  {
+   "zf": "306111000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31104",
+   "commune": "Capens"
+  },
+  {
+   "zf": "306112000",
+   "secteur": "306",
+   "couronne": "2eme couronne",
+   "insee": "31303",
+   "commune": "Longages"
+  },
+  {
+   "zf": "307101000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "32016",
+   "commune": "Auradé"
+  },
+  {
+   "zf": "307102000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31075",
+   "commune": "Bonrepos-sur-Aussonnelle"
+  },
+  {
+   "zf": "307103000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31466",
+   "commune": "Saiguède"
+  },
+  {
+   "zf": "307104000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31518",
+   "commune": "Saint-Thomas"
+  },
+  {
+   "zf": "307105000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31166",
+   "commune": "Empeaux"
+  },
+  {
+   "zf": "307106000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "32432",
+   "commune": "Seysses-Savès"
+  },
+  {
+   "zf": "307107000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31087",
+   "commune": "Bragayrac"
+  },
+  {
+   "zf": "307108000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31464",
+   "commune": "Sabonnères"
+  },
+  {
+   "zf": "307109000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "32308",
+   "commune": "Pébées"
+  },
+  {
+   "zf": "307110000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31051",
+   "commune": "Beaufort"
+  },
+  {
+   "zf": "307111000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31481",
+   "commune": "Sainte-Foy-de-Peyrolières"
+  },
+  {
+   "zf": "307112000",
+   "secteur": "307",
+   "couronne": "2eme couronne",
+   "insee": "31101",
+   "commune": "Cambernard"
+  },
+  {
+   "zf": "308101000",
+   "secteur": "308",
+   "couronne": "2eme couronne",
+   "insee": "31499",
+   "commune": "Saint-Lys"
+  },
+  {
+   "zf": "308102000",
+   "secteur": "308",
+   "couronne": "2eme couronne",
+   "insee": "31499",
+   "commune": "Saint-Lys"
+  },
+  {
+   "zf": "308103000",
+   "secteur": "308",
+   "couronne": "2eme couronne",
+   "insee": "31499",
+   "commune": "Saint-Lys"
+  },
+  {
+   "zf": "308104000",
+   "secteur": "308",
+   "couronne": "2eme couronne",
+   "insee": "31499",
+   "commune": "Saint-Lys"
+  },
+  {
+   "zf": "309101000",
+   "secteur": "309",
+   "couronne": "2eme couronne",
+   "insee": "31188",
+   "commune": "Fontenilles"
+  },
+  {
+   "zf": "309102000",
+   "secteur": "309",
+   "couronne": "2eme couronne",
+   "insee": "31187",
+   "commune": "Fonsorbes"
+  },
+  {
+   "zf": "309103000",
+   "secteur": "309",
+   "couronne": "2eme couronne",
+   "insee": "31187",
+   "commune": "Fonsorbes"
+  },
+  {
+   "zf": "309104000",
+   "secteur": "309",
+   "couronne": "2eme couronne",
+   "insee": "31187",
+   "commune": "Fonsorbes"
+  },
+  {
+   "zf": "310101000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32160",
+   "commune": "L'Isle-Jourdain"
+  },
+  {
+   "zf": "310102000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "31496",
+   "commune": "Sainte-Livrade"
+  },
+  {
+   "zf": "310103000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32425",
+   "commune": "Ségoufielle"
+  },
+  {
+   "zf": "310104000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "31339",
+   "commune": "Mérenvielle"
+  },
+  {
+   "zf": "310105000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32334",
+   "commune": "Pujaudran"
+  },
+  {
+   "zf": "310106000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32210",
+   "commune": "Lias"
+  },
+  {
+   "zf": "310107000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32160",
+   "commune": "L'Isle-Jourdain"
+  },
+  {
+   "zf": "310108000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32160",
+   "commune": "L'Isle-Jourdain"
+  },
+  {
+   "zf": "310109000",
+   "secteur": "310",
+   "couronne": "2eme couronne",
+   "insee": "32160",
+   "commune": "L'Isle-Jourdain"
+  },
+  {
+   "zf": "311101000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31553",
+   "commune": "Thil"
+  },
+  {
+   "zf": "311102000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31089",
+   "commune": "Bretx"
+  },
+  {
+   "zf": "311103000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31507",
+   "commune": "Saint-Paul-sur-Save"
+  },
+  {
+   "zf": "311104000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31356",
+   "commune": "Montaigut-sur-Save"
+  },
+  {
+   "zf": "311105000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31160",
+   "commune": "Daux"
+  },
+  {
+   "zf": "311106000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31297",
+   "commune": "Lévignac"
+  },
+  {
+   "zf": "311107000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31277",
+   "commune": "Lasserre-Pradère"
+  },
+  {
+   "zf": "311108000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31120",
+   "commune": "Le Castéra"
+  },
+  {
+   "zf": "311109000",
+   "secteur": "311",
+   "couronne": "2eme couronne",
+   "insee": "31338",
+   "commune": "Menville"
+  },
+  {
+   "zf": "312101000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31403",
+   "commune": "Ondes"
+  },
+  {
+   "zf": "312102000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31232",
+   "commune": "Grenade"
+  },
+  {
+   "zf": "312103000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31341",
+   "commune": "Merville"
+  },
+  {
+   "zf": "312104000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31592",
+   "commune": "Larra"
+  },
+  {
+   "zf": "312105000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31232",
+   "commune": "Grenade"
+  },
+  {
+   "zf": "312106000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31232",
+   "commune": "Grenade"
+  },
+  {
+   "zf": "312107000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31232",
+   "commune": "Grenade"
+  },
+  {
+   "zf": "312108000",
+   "secteur": "312",
+   "couronne": "2eme couronne",
+   "insee": "31232",
+   "commune": "Grenade"
+  },
+  {
+   "zf": "401101000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82105",
+   "commune": "Mas-Grenier"
+  },
+  {
+   "zf": "401102000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82062",
+   "commune": "Finhan"
+  },
+  {
+   "zf": "401103000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82114",
+   "commune": "Monbéqui"
+  },
+  {
+   "zf": "401104000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82017",
+   "commune": "Bessens"
+  },
+  {
+   "zf": "401105000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82048",
+   "commune": "Dieupentale"
+  },
+  {
+   "zf": "401106000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82028",
+   "commune": "Canals"
+  },
+  {
+   "zf": "401107000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82075",
+   "commune": "Grisolles"
+  },
+  {
+   "zf": "401108000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82142",
+   "commune": "Pompignan"
+  },
+  {
+   "zf": "401109000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "31515",
+   "commune": "Saint-Rustice"
+  },
+  {
+   "zf": "401110000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82005",
+   "commune": "Aucamville"
+  },
+  {
+   "zf": "401111000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82178",
+   "commune": "Savenès"
+  },
+  {
+   "zf": "401112000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82014",
+   "commune": "Beaupuy"
+  },
+  {
+   "zf": "401113000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82020",
+   "commune": "Bouillac"
+  },
+  {
+   "zf": "401114000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82043",
+   "commune": "Comberouger"
+  },
+  {
+   "zf": "401115000",
+   "secteur": "401",
+   "couronne": "3eme couronne",
+   "insee": "82190",
+   "commune": "Verdun-sur-Garonne"
+  },
+  {
+   "zf": "402101000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82150",
+   "commune": "Reyniès"
+  },
+  {
+   "zf": "402102000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82194",
+   "commune": "Villebrumier"
+  },
+  {
+   "zf": "402103000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82135",
+   "commune": "Nohic"
+  },
+  {
+   "zf": "402104000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82136",
+   "commune": "Orgueil"
+  },
+  {
+   "zf": "402105000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82079",
+   "commune": "Labastide-Saint-Pierre"
+  },
+  {
+   "zf": "402106000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82027",
+   "commune": "Campsas"
+  },
+  {
+   "zf": "402107000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "82057",
+   "commune": "Fabas"
+  },
+  {
+   "zf": "402108000",
+   "secteur": "402",
+   "couronne": "3eme couronne",
+   "insee": "31202",
+   "commune": "Fronton"
+  },
+  {
+   "zf": "403101000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "82188",
+   "commune": "Varennes"
+  },
+  {
+   "zf": "403102000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31584",
+   "commune": "Villemur-sur-Tarn"
+  },
+  {
+   "zf": "403103000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31077",
+   "commune": "Le Born"
+  },
+  {
+   "zf": "403104000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "81293",
+   "commune": "Tauriac"
+  },
+  {
+   "zf": "403105000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "81185",
+   "commune": "Montvalen"
+  },
+  {
+   "zf": "403106000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "81228",
+   "commune": "Roquemaure"
+  },
+  {
+   "zf": "403107000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31346",
+   "commune": "Mirepoix-sur-Tarn"
+  },
+  {
+   "zf": "403108000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31288",
+   "commune": "Layrac-sur-Tarn"
+  },
+  {
+   "zf": "403109000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31073",
+   "commune": "Bondigoux"
+  },
+  {
+   "zf": "403110000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31311",
+   "commune": "La Magdelaine-sur-Tarn"
+  },
+  {
+   "zf": "403111000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31583",
+   "commune": "Villematier"
+  },
+  {
+   "zf": "403112000",
+   "secteur": "403",
+   "couronne": "3eme couronne",
+   "insee": "31581",
+   "commune": "Villaudric"
+  },
+  {
+   "zf": "404101000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "31066",
+   "commune": "Bessières"
+  },
+  {
+   "zf": "404102000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "31094",
+   "commune": "Buzet-sur-Tarn"
+  },
+  {
+   "zf": "404103000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "81164",
+   "commune": "Mézens"
+  },
+  {
+   "zf": "404104000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "81271",
+   "commune": "Saint-Sulpice-la-Pointe"
+  },
+  {
+   "zf": "404105000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "81150",
+   "commune": "Lugan"
+  },
+  {
+   "zf": "404106000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "81102",
+   "commune": "Garrigues"
+  },
+  {
+   "zf": "404107000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "81236",
+   "commune": "Saint-Agnan"
+  },
+  {
+   "zf": "404108000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "31038",
+   "commune": "Azas"
+  },
+  {
+   "zf": "404109000",
+   "secteur": "404",
+   "couronne": "3eme couronne",
+   "insee": "31459",
+   "commune": "Roquesérière"
+  },
+  {
+   "zf": "405101000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81106",
+   "commune": "Grazac"
+  },
+  {
+   "zf": "405102000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81220",
+   "commune": "Rabastens"
+  },
+  {
+   "zf": "405103000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81149",
+   "commune": "Loupiac"
+  },
+  {
+   "zf": "405104000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81070",
+   "commune": "Coufouleux"
+  },
+  {
+   "zf": "405105000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81104",
+   "commune": "Giroussens"
+  },
+  {
+   "zf": "405106000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81255",
+   "commune": "Saint-Jean-de-Rives"
+  },
+  {
+   "zf": "405107000",
+   "secteur": "405",
+   "couronne": "3eme couronne",
+   "insee": "81261",
+   "commune": "Saint-Lieux-lès-Lavaur"
+  },
+  {
+   "zf": "406101000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81298",
+   "commune": "Teulat"
+  },
+  {
+   "zf": "406102000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81025",
+   "commune": "Belcastel"
+  },
+  {
+   "zf": "406103000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81324",
+   "commune": "Viviers-lès-Lavaur"
+  },
+  {
+   "zf": "406104000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81126",
+   "commune": "Lacougotte-Cadoul"
+  },
+  {
+   "zf": "406105000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81310",
+   "commune": "Veilhes"
+  },
+  {
+   "zf": "406106000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81162",
+   "commune": "Maurens-Scopont"
+  },
+  {
+   "zf": "406107000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81318",
+   "commune": "Villeneuve-lès-Lavaur"
+  },
+  {
+   "zf": "406108000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81022",
+   "commune": "Bannières"
+  },
+  {
+   "zf": "406109000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81173",
+   "commune": "Montcabrier"
+  },
+  {
+   "zf": "406110000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31082",
+   "commune": "Bourg-Saint-Bernard"
+  },
+  {
+   "zf": "406111000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31534",
+   "commune": "Saussens"
+  },
+  {
+   "zf": "406112000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31194",
+   "commune": "Francarville"
+  },
+  {
+   "zf": "406113000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31571",
+   "commune": "Vendine"
+  },
+  {
+   "zf": "406114000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31304",
+   "commune": "Loubens-Lauragais"
+  },
+  {
+   "zf": "406115000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31179",
+   "commune": "Le Faget"
+  },
+  {
+   "zf": "406116000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81050",
+   "commune": "Cambon-lès-Lavaur"
+  },
+  {
+   "zf": "406117000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81076",
+   "commune": "Cuq-Toulza"
+  },
+  {
+   "zf": "406118000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "81189",
+   "commune": "Mouzens"
+  },
+  {
+   "zf": "406119000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31097",
+   "commune": "Le Cabanial"
+  },
+  {
+   "zf": "406120000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31491",
+   "commune": "Saint-Julia"
+  },
+  {
+   "zf": "406121000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31026",
+   "commune": "Auriac-sur-Vendinelle"
+  },
+  {
+   "zf": "406122000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31527",
+   "commune": "La Salvetat-Lauragais"
+  },
+  {
+   "zf": "406123000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31006",
+   "commune": "Albiac"
+  },
+  {
+   "zf": "406124000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31325",
+   "commune": "Mascarville"
+  },
+  {
+   "zf": "406125000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31441",
+   "commune": "Prunet"
+  },
+  {
+   "zf": "406126000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31106",
+   "commune": "Caraman"
+  },
+  {
+   "zf": "406127000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31540",
+   "commune": "Ségreville"
+  },
+  {
+   "zf": "406128000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31102",
+   "commune": "Cambiac"
+  },
+  {
+   "zf": "406129000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31180",
+   "commune": "Falga"
+  },
+  {
+   "zf": "406130000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31570",
+   "commune": "Vaux"
+  },
+  {
+   "zf": "406131000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31329",
+   "commune": "Maurens"
+  },
+  {
+   "zf": "406132000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31055",
+   "commune": "Beauville"
+  },
+  {
+   "zf": "406133000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31558",
+   "commune": "Toutens"
+  },
+  {
+   "zf": "406134000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31485",
+   "commune": "Saint-Germier"
+  },
+  {
+   "zf": "406135000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31137",
+   "commune": "Cessales"
+  },
+  {
+   "zf": "406136000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31519",
+   "commune": "Saint-Vincent"
+  },
+  {
+   "zf": "406137000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31310",
+   "commune": "Lux"
+  },
+  {
+   "zf": "406138000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31243",
+   "commune": "Juzes"
+  },
+  {
+   "zf": "406139000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31060",
+   "commune": "Bélesta-en-Lauragais"
+  },
+  {
+   "zf": "406140000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "11074",
+   "commune": "Les Cassés"
+  },
+  {
+   "zf": "406141000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31393",
+   "commune": "Mourvilles-Hautes"
+  },
+  {
+   "zf": "406142000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31453",
+   "commune": "Rieumajou"
+  },
+  {
+   "zf": "406143000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31185",
+   "commune": "Folcarde"
+  },
+  {
+   "zf": "406144000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31566",
+   "commune": "Vallègue"
+  },
+  {
+   "zf": "406145000",
+   "secteur": "406",
+   "couronne": "3eme couronne",
+   "insee": "31560",
+   "commune": "Trébons-sur-la-Grasse"
+  },
+  {
+   "zf": "407101000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31589",
+   "commune": "Villenouvelle"
+  },
+  {
+   "zf": "407102000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31328",
+   "commune": "Mauremont"
+  },
+  {
+   "zf": "407103000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31377",
+   "commune": "Montgaillard-Lauragais"
+  },
+  {
+   "zf": "407104000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31582",
+   "commune": "Villefranche-de-Lauragais"
+  },
+  {
+   "zf": "407105000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31514",
+   "commune": "Saint-Rome"
+  },
+  {
+   "zf": "407106000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31576",
+   "commune": "Vieillevigne"
+  },
+  {
+   "zf": "407107000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31374",
+   "commune": "Montesquieu-Lauragais"
+  },
+  {
+   "zf": "407108000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31210",
+   "commune": "Gardouch"
+  },
+  {
+   "zf": "407109000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31450",
+   "commune": "Renneville"
+  },
+  {
+   "zf": "407110000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31037",
+   "commune": "Avignonet-Lauragais"
+  },
+  {
+   "zf": "407111000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11243",
+   "commune": "Montferrand"
+  },
+  {
+   "zf": "407112000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11026",
+   "commune": "Baraigne"
+  },
+  {
+   "zf": "407113000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11238",
+   "commune": "Molleville"
+  },
+  {
+   "zf": "407114000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11030",
+   "commune": "Belflou"
+  },
+  {
+   "zf": "407115000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11166",
+   "commune": "Gourvieille"
+  },
+  {
+   "zf": "407116000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11359",
+   "commune": "Saint-Michel-de-Lanès"
+  },
+  {
+   "zf": "407117000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31054",
+   "commune": "Beauteville"
+  },
+  {
+   "zf": "407118000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31368",
+   "commune": "Montclar-Lauragais"
+  },
+  {
+   "zf": "407119000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31262",
+   "commune": "Lagarde"
+  },
+  {
+   "zf": "407120000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31546",
+   "commune": "Seyre"
+  },
+  {
+   "zf": "407121000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31396",
+   "commune": "Nailloux"
+  },
+  {
+   "zf": "407122000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31495",
+   "commune": "Saint-Léon"
+  },
+  {
+   "zf": "407123000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31380",
+   "commune": "Montgeard"
+  },
+  {
+   "zf": "407124000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31354",
+   "commune": "Monestrol"
+  },
+  {
+   "zf": "407125000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31099",
+   "commune": "Caignac"
+  },
+  {
+   "zf": "407126000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "31220",
+   "commune": "Gibel"
+  },
+  {
+   "zf": "407127000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11218",
+   "commune": "Marquein"
+  },
+  {
+   "zf": "407128000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11134",
+   "commune": "Fajac-la-Relenque"
+  },
+  {
+   "zf": "407129000",
+   "secteur": "407",
+   "couronne": "3eme couronne",
+   "insee": "11208",
+   "commune": "La Louvière-Lauragais"
+  },
+  {
+   "zf": "408101000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31345",
+   "commune": "Miremont"
+  },
+  {
+   "zf": "408102000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31233",
+   "commune": "Grépiac"
+  },
+  {
+   "zf": "408103000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31256",
+   "commune": "Labruyère-Dorsa"
+  },
+  {
+   "zf": "408104000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31024",
+   "commune": "Auragne"
+  },
+  {
+   "zf": "408105000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31033",
+   "commune": "Auterive"
+  },
+  {
+   "zf": "408106000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31033",
+   "commune": "Auterive"
+  },
+  {
+   "zf": "408107000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31033",
+   "commune": "Auterive"
+  },
+  {
+   "zf": "408108000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31332",
+   "commune": "Mauvaisin"
+  },
+  {
+   "zf": "408109000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31002",
+   "commune": "Aignes"
+  },
+  {
+   "zf": "408110000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31145",
+   "commune": "Cintegabelle"
+  },
+  {
+   "zf": "408111000",
+   "secteur": "408",
+   "couronne": "3eme couronne",
+   "insee": "31100",
+   "commune": "Calmont"
+  },
+  {
+   "zf": "409101000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31361",
+   "commune": "Montaut"
+  },
+  {
+   "zf": "409102000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31027",
+   "commune": "Auribail"
+  },
+  {
+   "zf": "409103000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31264",
+   "commune": "Lagrâce-Dieu"
+  },
+  {
+   "zf": "409104000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31517",
+   "commune": "Saint-Sulpice-sur-Lèze"
+  },
+  {
+   "zf": "409105000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31379",
+   "commune": "Montgazin"
+  },
+  {
+   "zf": "409106000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31258",
+   "commune": "Lacaugne"
+  },
+  {
+   "zf": "409107000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09167",
+   "commune": "Lézat-sur-Lèze"
+  },
+  {
+   "zf": "409108000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31173",
+   "commune": "Esperce"
+  },
+  {
+   "zf": "409109000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31442",
+   "commune": "Puydaniel"
+  },
+  {
+   "zf": "409110000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31330",
+   "commune": "Mauressac"
+  },
+  {
+   "zf": "409111000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31231",
+   "commune": "Grazac"
+  },
+  {
+   "zf": "409112000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31128",
+   "commune": "Caujac"
+  },
+  {
+   "zf": "409113000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31206",
+   "commune": "Gaillac-Toulza"
+  },
+  {
+   "zf": "409114000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09275",
+   "commune": "Saint-Quirc"
+  },
+  {
+   "zf": "409115000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09170",
+   "commune": "Lissac"
+  },
+  {
+   "zf": "409116000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09147",
+   "commune": "Labatut"
+  },
+  {
+   "zf": "409117000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31319",
+   "commune": "Marliac"
+  },
+  {
+   "zf": "409118000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09338",
+   "commune": "Villeneuve-du-Latou"
+  },
+  {
+   "zf": "409119000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09277",
+   "commune": "Saint-Ybars"
+  },
+  {
+   "zf": "409120000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31111",
+   "commune": "Castagnac"
+  },
+  {
+   "zf": "409121000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31280",
+   "commune": "Latrape"
+  },
+  {
+   "zf": "409122000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31312",
+   "commune": "Mailholas"
+  },
+  {
+   "zf": "409123000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31047",
+   "commune": "Bax"
+  },
+  {
+   "zf": "409124000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31272",
+   "commune": "Lapeyrère"
+  },
+  {
+   "zf": "409125000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31103",
+   "commune": "Canens"
+  },
+  {
+   "zf": "409126000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "31326",
+   "commune": "Massabrac"
+  },
+  {
+   "zf": "409127000",
+   "secteur": "409",
+   "couronne": "3eme couronne",
+   "insee": "09342",
+   "commune": "Sainte-Suzanne"
+  },
+  {
+   "zf": "410101000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31317",
+   "commune": "Marignac-Lasclares"
+  },
+  {
+   "zf": "410102000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31229",
+   "commune": "Gratens"
+  },
+  {
+   "zf": "410103000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31071",
+   "commune": "Bois-de-la-Pierre"
+  },
+  {
+   "zf": "410104000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31416",
+   "commune": "Peyssies"
+  },
+  {
+   "zf": "410105000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31107",
+   "commune": "Carbonne"
+  },
+  {
+   "zf": "410106000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31320",
+   "commune": "Marquefave"
+  },
+  {
+   "zf": "410107000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31455",
+   "commune": "Rieux-Volvestre"
+  },
+  {
+   "zf": "410108000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31525",
+   "commune": "Salles-sur-Garonne"
+  },
+  {
+   "zf": "410109000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31261",
+   "commune": "Lafitte-Vigordane"
+  },
+  {
+   "zf": "410110000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31476",
+   "commune": "Saint-Élix-le-Château"
+  },
+  {
+   "zf": "410111000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31286",
+   "commune": "Lavelanet-de-Comminges"
+  },
+  {
+   "zf": "410112000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31492",
+   "commune": "Saint-Julien-sur-Garonne"
+  },
+  {
+   "zf": "410113000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31219",
+   "commune": "Gensac-sur-Garonne"
+  },
+  {
+   "zf": "410114000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31225",
+   "commune": "Goutevernisse"
+  },
+  {
+   "zf": "410115000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31474",
+   "commune": "Saint-Christaud"
+  },
+  {
+   "zf": "410116000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31375",
+   "commune": "Montesquieu-Volvestre"
+  },
+  {
+   "zf": "410117000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31226",
+   "commune": "Gouzens"
+  },
+  {
+   "zf": "410118000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "31267",
+   "commune": "Lahitère"
+  },
+  {
+   "zf": "410119000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "09310",
+   "commune": "Thouars-sur-Arize"
+  },
+  {
+   "zf": "410120000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "09172",
+   "commune": "Loubaut"
+  },
+  {
+   "zf": "410121000",
+   "secteur": "410",
+   "couronne": "3eme couronne",
+   "insee": "09038",
+   "commune": "La Bastide-de-Besplas"
+  },
+  {
+   "zf": "411101000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31309",
+   "commune": "Lussan-Adeilhac"
+  },
+  {
+   "zf": "411102000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31204",
+   "commune": "Fustignac"
+  },
+  {
+   "zf": "411103000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31119",
+   "commune": "Castelnau-Picampeau"
+  },
+  {
+   "zf": "411104000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31193",
+   "commune": "Le Fousseret"
+  },
+  {
+   "zf": "411105000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31387",
+   "commune": "Montoussin"
+  },
+  {
+   "zf": "411106000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31370",
+   "commune": "Montégut-Bourjac"
+  },
+  {
+   "zf": "411107000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31529",
+   "commune": "Samouillan"
+  },
+  {
+   "zf": "411108000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31196",
+   "commune": "Francon"
+  },
+  {
+   "zf": "411109000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31552",
+   "commune": "Terrebasse"
+  },
+  {
+   "zf": "411110000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31292",
+   "commune": "Lescuns"
+  },
+  {
+   "zf": "411111000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31349",
+   "commune": "Mondavezan"
+  },
+  {
+   "zf": "411112000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31530",
+   "commune": "Sana"
+  },
+  {
+   "zf": "411113000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31324",
+   "commune": "Martres-Tolosane"
+  },
+  {
+   "zf": "411114000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31318",
+   "commune": "Marignac-Laspeyres"
+  },
+  {
+   "zf": "411115000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31084",
+   "commune": "Boussens"
+  },
+  {
+   "zf": "411116000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31327",
+   "commune": "Mauran"
+  },
+  {
+   "zf": "411117000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31367",
+   "commune": "Montclar-de-Comminges"
+  },
+  {
+   "zf": "411118000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31406",
+   "commune": "Palaminy"
+  },
+  {
+   "zf": "411119000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31135",
+   "commune": "Cazères"
+  },
+  {
+   "zf": "411120000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31153",
+   "commune": "Couladère"
+  },
+  {
+   "zf": "411121000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31422",
+   "commune": "Plagne"
+  },
+  {
+   "zf": "411122000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31505",
+   "commune": "Saint-Michel"
+  },
+  {
+   "zf": "411123000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31425",
+   "commune": "Le Plan"
+  },
+  {
+   "zf": "411124000",
+   "secteur": "411",
+   "couronne": "3eme couronne",
+   "insee": "31362",
+   "commune": "Montberaud"
+  },
+  {
+   "zf": "412101000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32098",
+   "commune": "Cazaux-Savès"
+  },
+  {
+   "zf": "412102000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32171",
+   "commune": "Labastide-Savès"
+  },
+  {
+   "zf": "412103000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32322",
+   "commune": "Pompiac"
+  },
+  {
+   "zf": "412104000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32295",
+   "commune": "Nizas"
+  },
+  {
+   "zf": "412105000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32421",
+   "commune": "Savignac-Mona"
+  },
+  {
+   "zf": "412106000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32261",
+   "commune": "Monblanc"
+  },
+  {
+   "zf": "412107000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32420",
+   "commune": "Sauvimont"
+  },
+  {
+   "zf": "412108000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32387",
+   "commune": "Saint-Loube"
+  },
+  {
+   "zf": "412109000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31189",
+   "commune": "Forgues"
+  },
+  {
+   "zf": "412110000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31266",
+   "commune": "Lahage"
+  },
+  {
+   "zf": "412111000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31382",
+   "commune": "Montgras"
+  },
+  {
+   "zf": "412112000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31454",
+   "commune": "Rieumes"
+  },
+  {
+   "zf": "412113000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31423",
+   "commune": "Plagnole"
+  },
+  {
+   "zf": "412114000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31353",
+   "commune": "Monès"
+  },
+  {
+   "zf": "412115000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32206",
+   "commune": "Laymont"
+  },
+  {
+   "zf": "412116000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "32289",
+   "commune": "Montpézat"
+  },
+  {
+   "zf": "412117000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31419",
+   "commune": "Le Pin-Murelet"
+  },
+  {
+   "zf": "412118000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31283",
+   "commune": "Lautignac"
+  },
+  {
+   "zf": "412119000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31538",
+   "commune": "Savères"
+  },
+  {
+   "zf": "412120000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31435",
+   "commune": "Poucharramet"
+  },
+  {
+   "zf": "412121000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31065",
+   "commune": "Bérat"
+  },
+  {
+   "zf": "412122000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31250",
+   "commune": "Labastide-Clermont"
+  },
+  {
+   "zf": "412123000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31436",
+   "commune": "Pouy-de-Touges"
+  },
+  {
+   "zf": "412124000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31122",
+   "commune": "Casties-Labrande"
+  },
+  {
+   "zf": "412125000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31428",
+   "commune": "Polastron"
+  },
+  {
+   "zf": "412126000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31593",
+   "commune": "Cazac"
+  },
+  {
+   "zf": "412127000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31543",
+   "commune": "Sénarens"
+  },
+  {
+   "zf": "412128000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31469",
+   "commune": "Saint-Araille"
+  },
+  {
+   "zf": "412129000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31359",
+   "commune": "Montastruc-Savès"
+  },
+  {
+   "zf": "412130000",
+   "secteur": "412",
+   "couronne": "3eme couronne",
+   "insee": "31520",
+   "commune": "Sajas"
+  },
+  {
+   "zf": "413101000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31090",
+   "commune": "Brignemont"
+  },
+  {
+   "zf": "413102000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31096",
+   "commune": "Cabanac-Séguenville"
+  },
+  {
+   "zf": "413103000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31265",
+   "commune": "Lagraulet-Saint-Nicolas"
+  },
+  {
+   "zf": "413104000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31062",
+   "commune": "Bellesserre"
+  },
+  {
+   "zf": "413105000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31093",
+   "commune": "Le Burgaud"
+  },
+  {
+   "zf": "413106000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31473",
+   "commune": "Saint-Cézert"
+  },
+  {
+   "zf": "413107000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31281",
+   "commune": "Launac"
+  },
+  {
+   "zf": "413108000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31413",
+   "commune": "Pelleport"
+  },
+  {
+   "zf": "413109000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31164",
+   "commune": "Drudas"
+  },
+  {
+   "zf": "413110000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31444",
+   "commune": "Puysségur"
+  },
+  {
+   "zf": "413111000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31156",
+   "commune": "Cox"
+  },
+  {
+   "zf": "413112000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31275",
+   "commune": "Laréole"
+  },
+  {
+   "zf": "413113000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32007",
+   "commune": "Ardizas"
+  },
+  {
+   "zf": "413114000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32357",
+   "commune": "Sainte-Anne"
+  },
+  {
+   "zf": "413115000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32106",
+   "commune": "Cologne"
+  },
+  {
+   "zf": "413116000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32435",
+   "commune": "Sirac"
+  },
+  {
+   "zf": "413117000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32448",
+   "commune": "Touget"
+  },
+  {
+   "zf": "413118000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32379",
+   "commune": "Saint-Germier"
+  },
+  {
+   "zf": "413119000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32444",
+   "commune": "Thoux"
+  },
+  {
+   "zf": "413120000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32372",
+   "commune": "Saint-Cricq"
+  },
+  {
+   "zf": "413121000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32120",
+   "commune": "Encausse"
+  },
+  {
+   "zf": "413122000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31098",
+   "commune": "Cadours"
+  },
+  {
+   "zf": "413123000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31126",
+   "commune": "Caubiac"
+  },
+  {
+   "zf": "413124000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31234",
+   "commune": "Le Grès"
+  },
+  {
+   "zf": "413125000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31209",
+   "commune": "Garac"
+  },
+  {
+   "zf": "413126000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31577",
+   "commune": "Vignaux"
+  },
+  {
+   "zf": "413127000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "31061",
+   "commune": "Bellegarde-Sainte-Marie"
+  },
+  {
+   "zf": "413128000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32262",
+   "commune": "Monbrun"
+  },
+  {
+   "zf": "413129000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32349",
+   "commune": "Roquelaure-Saint-Aubin"
+  },
+  {
+   "zf": "413130000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32038",
+   "commune": "Beaupuy"
+  },
+  {
+   "zf": "413131000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32339",
+   "commune": "Razengues"
+  },
+  {
+   "zf": "413132000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32105",
+   "commune": "Clermont-Savès"
+  },
+  {
+   "zf": "413133000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32268",
+   "commune": "Monferran-Savès"
+  },
+  {
+   "zf": "413134000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32148",
+   "commune": "Giscaro"
+  },
+  {
+   "zf": "413135000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32134",
+   "commune": "Frégouville"
+  },
+  {
+   "zf": "413136000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32234",
+   "commune": "Marestaing"
+  },
+  {
+   "zf": "413137000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32090",
+   "commune": "Castillon-Savès"
+  },
+  {
+   "zf": "413138000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32121",
+   "commune": "Endoufielle"
+  },
+  {
+   "zf": "413139000",
+   "secteur": "413",
+   "couronne": "3eme couronne",
+   "insee": "32182",
+   "commune": "Lahas"
+  }
+ ]
+}

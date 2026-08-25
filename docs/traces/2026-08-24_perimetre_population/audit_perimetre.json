@@ -1,0 +1,422 @@
+{
+ "generated_at": "2026-08-24T11:30:18+00:00",
+ "ticket": "020",
+ "recoupement_microdonnees": {
+  "disponible": true,
+  "controles": [
+   {
+    "grandeur": "ménages enquêtés",
+    "recalcule": 10783,
+    "cadrage": 10783,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "personnes interrogées (PENQ=1)",
+    "recalcule": 15775,
+    "cadrage": 15775,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "déplacements recensés",
+    "recalcule": 54585,
+    "cadrage": 54585,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "secteurs de tirage",
+    "recalcule": 88,
+    "cadrage": 88,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "habitants de 5 ans et + (milliers)",
+    "recalcule": 1320,
+    "cadrage": 1320,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "ménages (milliers)",
+    "recalcule": 674,
+    "cadrage": 674,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "voitures par ménage",
+    "recalcule": 1.25,
+    "cadrage": 1.25,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "ménages sans voiture (%)",
+    "recalcule": 19.4,
+    "cadrage": 19,
+    "ecart": 0.4
+   },
+   {
+    "grandeur": "ménages à une voiture (%)",
+    "recalcule": 45.3,
+    "cadrage": 45,
+    "ecart": 0.3
+   },
+   {
+    "grandeur": "ménages à 2 voitures et + (%)",
+    "recalcule": 35.3,
+    "cadrage": 35,
+    "ecart": 0.3
+   },
+   {
+    "grandeur": "déplacements internes au périmètre (%)",
+    "recalcule": 95.94,
+    "cadrage": 95.94,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "part de population — Toulouse (%)",
+    "recalcule": 36.3,
+    "cadrage": 36.4,
+    "ecart": -0.1
+   },
+   {
+    "grandeur": "part de population — 1ere couronne (%)",
+    "recalcule": 34.1,
+    "cadrage": 34.1,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "part de population — 2eme couronne (%)",
+    "recalcule": 14.2,
+    "cadrage": 14.2,
+    "ecart": 0.0
+   },
+   {
+    "grandeur": "part de population — 3eme couronne (%)",
+    "recalcule": 15.3,
+    "cadrage": 15.4,
+    "ecart": -0.1
+   }
+  ],
+  "parts_modales_recalculees": {
+   "internes": {
+    "marche": 26.954685972473147,
+    "velo": 4.195097976355754,
+    "voiture": 54.958332151694584,
+    "transports_collectifs": 12.249402998005769,
+    "autres": 1.6424809014707415
+   },
+   "tous": {
+    "marche": 26.23357397834516,
+    "velo": 4.062670657967113,
+    "voiture": 56.07769723263147,
+    "transports_collectifs": 12.027459575974047,
+    "autres": 1.5985985550822148
+   }
+  },
+  "localisation_deplacements_pct": {
+   "1": 95.93633282807778,
+   "2": 2.6905430991797394,
+   "3": 1.3731240727424874
+  }
+ },
+ "inputs": {
+  "population": "data/population/toulouse_population_1000.json",
+  "n_personas": 1021,
+  "run": "experiments/current",
+  "run_resolved": "2026-08-21_19_54",
+  "n_moves": 3936,
+  "moves_error": null,
+  "zones_error": null
+ },
+ "findings": [
+  {
+   "axe": "A1",
+   "titre": "Âge minimum de la population comptée",
+   "enquete": "population cible = 5 ans et plus",
+   "simule": "0 persona(s) de moins de 5 ans sur 1021",
+   "ecart": "0.00 pt de population",
+   "verdict": "conforme",
+   "detail": "Âge minimum observé : 5 ans ; 0 persona(s) sans âge. Le contrôle n'est pas gratuit même à zéro : `frames.age_to_cat` teste `a <= 9`, donc un persona de 3 ans tomberait dans la classe « 5-9 » et serait comparé à la cible d'une classe dont il ne fait pas partie, sans qu'aucun log ne le signale. La conformité est ici HÉRITÉE de la chaîne eqasim (les chaînes d'activités sont appariées sur une enquête qui commence à 5 ans), elle n'est garantie par aucune assertion.",
+   "tables": {
+    "age_min": 5.0,
+    "n_sous_seuil": 0,
+    "n_total": 1021,
+    "n_sans_age": 0
+   }
+  },
+  {
+   "axe": "A2",
+   "titre": "Définition des couronnes",
+   "enquete": "découpage par liste de communes : 1 / 69 / 108 / 275",
+   "simule": "classement par distance à l'hypercentre (8 / 20 / 40 km)",
+   "ecart": "24.4 % des personas changent de couronne ; cible voiture implicite 51.7 % → 53.4 %",
+   "verdict": "à corriger",
+   "detail": "Une couronne administrative n'est pas un anneau métrique. Le disque de 8 km autour du Capitole sort largement de la commune de Toulouse et mord sur Blagnac, Balma, Colomiers, Tournefeuille et Ramonville — de 1ʳᵉ couronne dans l'enquête. L'erreur est UNIDIRECTIONNELLE : les 179 zones fines de Toulouse sont toutes à moins de 7 km du centre, donc aucun Toulousain n'est classé dehors. Elle gonfle Toulouse et vide la 1ʳᵉ couronne. Enjeu direct : la cible `voiture` vaut 31 % à Toulouse et 64 % en 1ʳᵉ couronne — un agent mal classé n'est pas comparé à une cible un peu décalée, il l'est à une cible qui diffère de plus de 30 points.",
+   "tables": {
+    "confusion": {
+     "1ere couronne → 1ere couronne": 298,
+     "1ere couronne → 2eme couronne": 57,
+     "2eme couronne → 1ere couronne": 2,
+     "2eme couronne → 2eme couronne": 84,
+     "2eme couronne → 3eme couronne": 79,
+     "3eme couronne → 3eme couronne": 14,
+     "3eme couronne → hors périmètre": 45,
+     "Toulouse → 1ere couronne": 66,
+     "Toulouse → Toulouse": 376
+    },
+    "cible_voiture_implicite": {
+     "metrique": 51.734573947110675,
+     "communal": 53.39856557377049
+    },
+    "parts_par_zone": {
+     "metrique": {
+      "zones": {
+       "Toulouse": {
+        "n": 1854,
+        "shares": {
+         "voiture": 34.8975188781014,
+         "marche": 13.214670981661273,
+         "transports_collectifs": 29.28802588996764,
+         "velo": 22.599784250269686
+        },
+        "l1": 53.983029170698074
+       },
+       "1ere couronne": {
+        "n": 1581,
+        "shares": {
+         "voiture": 56.166982922201136,
+         "marche": 10.879190385831752,
+         "transports_collectifs": 14.927261227071474,
+         "velo": 18.026565464895636
+        },
+        "l1": 41.16538534269711
+       },
+       "2eme couronne": {
+        "n": 401,
+        "shares": {
+         "voiture": 58.104738154613464,
+         "marche": 20.698254364089774,
+         "transports_collectifs": 1.9950124688279303,
+         "velo": 19.201995012468828
+        },
+        "l1": 45.1066212020968
+       }
+      },
+      "l1_pondere": 47.77235803214785
+     },
+     "communal": {
+      "zones": {
+       "1ere couronne": {
+        "n": 1638,
+        "shares": {
+         "voiture": 51.15995115995116,
+         "marche": 10.5006105006105,
+         "transports_collectifs": 18.55921855921856,
+         "velo": 19.78021978021978
+        },
+        "l1": 51.93660863763956
+       },
+       "2eme couronne": {
+        "n": 562,
+        "shares": {
+         "voiture": 60.320284697508896,
+         "marche": 16.370106761565836,
+         "transports_collectifs": 3.0249110320284696,
+         "velo": 20.284697508896798
+        },
+        "l1": 38.61573098990486
+       },
+       "3eme couronne": {
+        "n": 99,
+        "shares": {
+         "voiture": 51.515151515151516,
+         "marche": 30.303030303030305,
+         "transports_collectifs": 2.0202020202020203,
+         "velo": 16.161616161616163
+        },
+        "l1": 51.69217952723107
+       },
+       "Toulouse": {
+        "n": 1537,
+        "shares": {
+         "voiture": 35.13337670787248,
+         "marche": 13.402732595966167,
+         "transports_collectifs": 30.18867924528302,
+         "velo": 21.275211450878334
+        },
+        "l1": 53.60690594208828
+       }
+      },
+      "l1_pondere": 50.64795254717563
+     }
+    }
+   }
+  },
+  {
+   "axe": "A3",
+   "titre": "Base de pondération des cibles",
+   "enquete": "taille 2.08 · 1.25 voiture/ménage · 19 % sans voiture (poids COE0)",
+   "simule": "brut : 2.71 · 1.47 · 13.0 % — pondéré ménages : 2.01 · 1.23 · 20.7 %",
+   "ecart": "taille : +0.63 en brut, -0.07 pondéré",
+   "verdict": "à publier",
+   "detail": "L'écart brut n'est pas un défaut de la population : c'est un défaut de BASE. Une population synthétique échantillonne des PERSONNES, donc un ménage de 5 y apparaît cinq fois et un ménage de 1 une seule ; la moyenne brute d'un attribut de ménage y est mécaniquement tirée vers les grands ménages. Pondérer chaque personne par 1/taille rend à chaque ménage un poids de 1 — et l'écart de 30 % sur la taille de ménage tombe à 3 %. C'est le même raisonnement que le ticket 019 a appliqué à la loi du logement. Les parts modales, elles, sont des comptages de DÉPLACEMENTS non pondérés : c'est la bonne base pour une cible `COEP`, à ceci près qu'un persona qui se déplace beaucoup y pèse plus qu'un sédentaire, ce que le redressement d'enquête corrige et que la simulation ne corrige pas.",
+   "tables": {
+    "brut": {
+     "taille": 2.714005876591577,
+     "voitures": 1.4730656219392753,
+     "sans_voiture_pct": 13.026444662095985
+    },
+    "pondere_menages": {
+     "taille": 2.0101063131644574,
+     "voitures": 1.230804567528547,
+     "sans_voiture_pct": 20.717941987137422
+    },
+    "cible": {
+     "taille_moyenne_menage": 2.08,
+     "voitures_par_menage": 1.25,
+     "sans_voiture_pct": 19.0,
+     "une_voiture_pct": 45.0,
+     "deux_voitures_plus_pct": 35.0
+    },
+    "n_deplacements_non_ponderes": 3936
+   }
+  },
+  {
+   "axe": "A4",
+   "titre": "Populations et déplacements hors périmètre",
+   "enquete": "453 communes ; 95,9 % des déplacements internes au périmètre",
+   "simule": "45 domicile(s) hors périmètre sur 1021",
+   "ecart": "4.4 % des personas, jusqu'à 114 km du Capitole",
+   "verdict": "à corriger",
+   "detail": "L'enquête ne compte QUE le périmètre de 453 communes : ni touristes, ni EHPAD, ni marchandises, et 95,9 % de ses déplacements pondérés sont internes au périmètre (le recalcul sur les internes seuls redonne exactement la cible publiée de 55 % voiture). Un domicile hors périmètre n'a donc AUCUNE cible à laquelle se comparer — et le classement métrique lui en donne une quand même, celle de la 3ᵉ couronne, parce que « au-delà de 40 km » n'a pas de borne supérieure. C'est le mécanisme exact du motif de vacuité : l'absence de périmètre produit une classification, pas une erreur.",
+   "tables": {
+    "n_hors_perimetre": 45,
+    "n_total": 1021,
+    "distance_max_km": 113.92330409550873,
+    "distance_min_km": 47.680732326568965,
+    "activites_hors_perimetre_pct": 4.5385395537525355,
+    "residents_avec_activite_externe": 9
+   }
+  },
+  {
+   "axe": "A5",
+   "titre": "Fenêtre saisonnière de la mesure",
+   "enquete": "2022-09-20 → 2023-02-18, hors vacances scolaires",
+   "simule": "4 jour(s) simulé(s) : 2026-03-16, 2026-03-17, 2026-03-18, 2026-03-19 ; 0.0 % des trajets sous la pluie",
+   "ecart": "pluie : 44.7 % de jours en fenêtre d'enquête, 42.5 % sur l'année tirée par les jeux gelés, 0.0 % dans ce run — et T° midi 12.7 contre 18.0 °C",
+   "verdict": "à publier",
+   "detail": "CE QUE L'ENQUÊTE MESURE, vérifié deux fois. La méthode EMC² recueille les « déplacements de la VEILLE » (passation du mardi au samedi hors fériés et vacances scolaires, jour de référence du lundi au vendredi) : elle n'interroge personne sur ses habitudes annuelles. Les dates de référence des microdonnées le confirment — seuls les mois 09 à 12 de 2022 et 01 à 02 de 2023 y apparaissent, aucune observation de mars à août, et le jour de référence est toujours ouvré. Les cibles sont donc bien des déplacements d'automne-hiver.\n\nMAIS CE QU'ELLE PUBLIE est « un jour moyen de semaine ». La fenêtre automne-hiver et l'exclusion des congés sont le MOYEN d'obtenir une journée ordinaire, pas une revendication saisonnière. L'écart n'est donc pas « cible d'automne contre simulation de printemps » : c'est un écart de MOYENNAGE, et il se sépare en deux.\n\n(1) LES JEUX GELÉS MOYENNENT, mais sur la mauvaise fenêtre. Un jour est tiré indépendamment par décision, sur 365 jours : la pluie y est donc bien représentée (42,5 % contre 44,7 % en fenêtre), et l'écart est THERMIQUE — 18,0 contre 12,7 °C à midi. Restreindre le tirage à la fenêtre d'enquête corrige cet écart-là, et lui seul.\n\n(2) UN RUN NE MOYENNE PAS. Il rejoue des jours calendaires consécutifs réels — ici cinq jours de mi-mars, tous secs. Thermiquement ces jours sont TYPIQUES de la fenêtre d'enquête (14,6 °C à midi, chacun entre le 56ᵉ et le 81ᵉ centile de sa distribution), et mi-mars est une semaine scolaire ordinaire : le grief calendaire est faible. Le grief réel est qu'une réalisation de 5 jours est comparée à une moyenne de 152 jours. Et 0 % de pluie n'est pas un tirage exotique qu'il suffirait d'éviter : 27,7 % des fenêtres de 5 jours consécutifs de la période d'enquête sont elles aussi entièrement sèches. AUCUN choix de jours ne rend un run de 5 jours comparable à la moyenne sur le mode le plus sensible à la météo — le vélo, dont les mouvements de 4 à 5 points ont déjà arbitré les tickets 013 et 014. C'est une limite de variance, à publier, pas un réglage à trouver.",
+   "tables": {
+    "jours_simules": [
+     "2026-03-16",
+     "2026-03-17",
+     "2026-03-18",
+     "2026-03-19"
+    ],
+    "jours_dans_la_fenetre": [],
+    "fenetre": {
+     "n_jours": 152,
+     "rain_pct": 44.73684210526316,
+     "precip_moy_mm": 0.9236842105263158,
+     "temp_midi_moy": 12.657894736842104
+    },
+    "annee": {
+     "n_jours": 365,
+     "rain_pct": 42.465753424657535,
+     "precip_moy_mm": 0.7295890410958904,
+     "temp_midi_moy": 17.956164383561642
+    },
+    "part_trajets_sous_la_pluie": 0.0
+   }
+  },
+  {
+   "axe": "A6",
+   "titre": "Jour de la semaine",
+   "enquete": "veille enquêtée = jours [1, 2, 3, 4, 5] (lundi à vendredi), répartis à peu près uniformément",
+   "simule": "lundi 84 % · mardi 16 % · mercredi 0 % · jeudi 0 %",
+   "ecart": "0.0 % de trajets de week-end",
+   "verdict": "conforme",
+   "detail": "Le garde-fou existe et il est actif : `no_weekend_departures` reporte tout départ de samedi ou dimanche au lundi suivant à la même heure. Il n'est jamais exercé sur les runs courants, qui démarrent un lundi et durent au plus cinq jours. Deux nuances mesurées à l'intérieur d'EMC² : les parts modales ne varient que de 1,3 point au plus entre les cinq jours ouvrés (voiture 54,5 à 55,8 %), donc un run mono-journalier ne biaise pas les PARTS ; mais le lundi porte 3,16 déplacements par personne contre 3,51 le mercredi, soit 10 % de volume en moins — l'écart compterait si un VOLUME était un jour comparé. Attention au report : sur un run de plus de cinq jours, il empilerait les départs de week-end sur le lundi et fabriquerait un lundi atypique.",
+   "tables": {
+    "trajets_par_jour_semaine": {
+     "lundi": 3302,
+     "mardi": 623,
+     "mercredi": 9,
+     "jeudi": 2
+    }
+   }
+  },
+  {
+   "axe": "A7",
+   "titre": "Objet compté : le déplacement à mode principal",
+   "enquete": "un déplacement, un mode principal ; hiérarchie plaçant les transports collectifs au-dessus de la voiture (760/770 déplacements mixtes)",
+   "simule": "3936 lignes pour 3936 identifiants de trajet distincts ; aucune ligne de jambe",
+   "ecart": "0 déplacement mal classé aujourd'hui ; 1,4 pt de rabattement inatteignable",
+   "verdict": "à publier",
+   "detail": "Deux questions distinctes, et les réponses ne vont pas dans le même sens.\n\nCE QUI EST CONFORME. Une ligne de `moves.csv` est bien un DÉPLACEMENT, pas une jambe : les jambes terminales du ticket 013 portent `is_transfer=True` et `_plan_transport_mode` ne regarde que les jambes non-transfert, donc la marche d'accès à une voiture ou à un bus n'est jamais comptée comme un déplacement à pied. L'enquête fait la même chose, et c'est vérifié dans ses microdonnées : AUCUN de ses déplacements en voiture ou en transports collectifs ne porte de trajet à pied — l'accès y est une DURÉE (T2/T6), pas un trajet. La marche n'est donc pas surestimée par construction.\n\nCE QUI DIVERGE. La hiérarchie de mode principal est INVERSÉE. `_plan_transport_mode` teste la voiture AVANT les transports collectifs ; l'enquête fait le contraire — sur ses 770 déplacements mêlant voiture et transports collectifs, 760 sont codés « transports collectifs » et 10 seulement « voiture ». Ces déplacements pèsent 1,4 point de part modale, soit 11,5 % de la cible transports collectifs de 12 %. La divergence est aujourd'hui LATENTE : OTP est interrogé mode par mode, donc aucun itinéraire simulé ne mêle voiture et transports collectifs, et zéro déplacement est aujourd'hui mal classé. Mais l'effet miroir est réel : la simulation ne peut STRUCTURELLEMENT pas produire les 1,4 point de rabattement que la cible compte en transports collectifs.",
+   "tables": {
+    "n_lignes": 3936,
+    "n_trajets_uniques": 3936,
+    "modes": {
+     "Voiture Privée": 1768,
+     "Transports_collectifs": 787,
+     "Vélo": 781,
+     "Marche": 500,
+     "Aucun": 100
+    },
+    "part_rabattement_dans_cible_tc_pct": 11.5,
+    "part_rabattement_absolue_pct": 1.41
+   }
+  },
+  {
+   "axe": "A8",
+   "titre": "Structure de ménage",
+   "enquete": "2.08 personnes par ménage ; 674 000 ménages",
+   "simule": "2.10 déclarée par adresse, 1.87 réellement présente ; 419/547 grappes complètes",
+   "ecart": "+0.02 sur la taille déclarée ; 11.2 % de membres absents",
+   "verdict": "à publier",
+   "detail": "La taille de ménage DÉCLARÉE est juste : la moyenne par adresse tombe sur la cible. Ce qui manque, ce sont des MEMBRES : environ un membre déclaré sur dix n'existe pas comme persona, et un quart des grappes est incomplet. Deux conséquences à ne pas confondre. Sur les cibles de ménage, aucune : elles se lisent sur la taille déclarée, qui est correcte. Sur tout ce qui dépend des CO-RÉSIDENTS — partage de voiture du foyer, verrous de chaîne, attribution de vélo — l'effet est réel, et c'est le mécanisme déjà documenté par le ticket 015.",
+   "tables": {
+    "n_adresses": 547,
+    "grappes_completes": 419,
+    "grappes_incompletes": 121,
+    "collisions_adresse": 4,
+    "taille_declaree_moyenne": 2.1023765996343693,
+    "membres_presents_moyenne": 1.86654478976234,
+    "membres_absents_pct": 11.217391304347826
+   }
+  },
+  {
+   "axe": "A9",
+   "titre": "Représentativité spatiale de l'échantillon",
+   "enquete": "Toulouse 36.4 % · 1ere couronne 34.1 % · 2eme couronne 14.2 % · 3eme couronne 15.4 %",
+   "simule": "Toulouse 38.5 % · 1ere couronne 37.5 % · 2eme couronne 14.4 % · 3eme couronne 9.5 %",
+   "ecart": "Toulouse + 1ʳᵉ couronne : 76.0 % réel contre 70.5 % cible, et 78.1 % tel que PUBLIÉ par le classement métrique (L1 = 11.7 pt)",
+   "verdict": "à publier",
+   "detail": "Une surconcentration en cœur d'agglomération tire mécaniquement la part voiture vers le bas, sans qu'aucun modèle de choix ne soit en cause : la cible voiture vaut 31 % à Toulouse et 71 à 74 % dans les couronnes externes. Sur cette population, l'excès est modéré et il est CUMULATIF avec l'axe A2 : le classement métrique gonfle encore Toulouse, si bien que la concentration PUBLIÉE est plus forte que la concentration réelle de la population.",
+   "tables": {
+    "cible": {
+     "Toulouse": 36.36363636363637,
+     "1ere couronne": 34.09090909090909,
+     "2eme couronne": 14.166666666666666,
+     "3eme couronne": 15.378787878787879
+    },
+    "observe": {
+     "Toulouse": 38.52459016393443,
+     "1ere couronne": 37.5,
+     "2eme couronne": 14.44672131147541,
+     "3eme couronne": 9.528688524590164
+    },
+    "l1": 11.700198708395424,
+    "coeur_cible_pct": 70.45454545454547,
+    "coeur_reel_pct": 76.02459016393442,
+    "coeur_publie_metrique_pct": 78.06072477962782,
+    "n_dans_le_perimetre": 976,
+    "n_hors_perimetre": 45
+   }
+  }
+ ],
+ "verdicts": {
+  "conforme": 2,
+  "à corriger": 2,
+  "à publier": 5
+ }
+}

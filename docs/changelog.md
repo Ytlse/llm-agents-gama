@@ -1,3 +1,1509 @@
+## [2026-08-25] Le cinquième bras, ou comment un jeu de lecture fabrique un signal
+
+Un cinquième bras a été mesuré : l'**agenda annoté par étape**. Chaque trajet prévu dans la
+journée porte sa condition, sa température, sa luminosité — jour, nuit, aube, crépuscule — et
+ses aléas : rafales au-delà de 30 km/h, verglas sous 3 °C.
+
+**Avant :** `· 21:09 → home (≈37.5 km)`
+
+**Après :** `· 21:09 → home (≈37.5 km) — ciel dégagé/ensoleillé, -2°C, de nuit, risque de verglas`
+
+Un retour de nuit à −2 °C sur trente-sept kilomètres, que rien n'annonçait jusque-là. Au
+passage, la source a livré une surprise : elle porte **huit relevés de trois heures**, et le
+code n'en lisait que quatre depuis toujours. Le code météo diffère entre 12H et 15H sur
+**44 % des jours** — deux trajets du même après-midi étaient donc annoncés identiques dans les
+deux tiers des cas alors que la donnée savait les distinguer.
+
+### Le résultat, et ce qu'il apprend
+
+Sur le premier jeu de lecture, l'agenda annoté **dégrade le composite de 1,95 point** —
+5,7 fois le plancher de bruit, le contraste le plus net de toute la campagne. La marche recule
+de 13,3 % à 10,9 % alors qu'elle est déjà le mode le plus sous-représenté. On tenait un
+résultat.
+
+Sur le second jeu — le seul qui n'ait jamais servi à régler quoi que ce soit — le même
+changement vaut **−0,17**. Il a changé de signe et s'est effondré au dixième du plancher.
+
+**Il ne reste rien.** Rejet, comme pour la fenêtre et pour le bulletin.
+
+### Le vrai enseignement porte sur l'instrument
+
+Deux fois dans cette campagne, le jeu `screen` a produit un écart que le jeu indépendant n'a
+pas confirmé. Ce n'est pas un hasard : il ne porte que 121 personas, et son plancher de bruit
+y est **six fois plus étroit** que sur l'autre. Un plancher étroit fabrique des signaux.
+
+**Avant :** un écart mesuré sur `screen` se lisait comme un résultat.
+**Après :** `screen` ne se lit plus seul. Toute conclusion exige le jeu indépendant.
+
+### Ce qui n'est pas condamné
+
+L'agenda annoté n'est **pas porté en production** — il n'y a jamais été, et c'est exactement
+ce qui a permis de ne rien livrer sur la foi du premier chiffre.
+
+Mais la **résolution de trois heures** reste une piste ouverte. Elle voyageait dans le même
+bras que l'annotation, la mesure ne peut pas les départager, et le rejet de l'ensemble ne la
+condamne pas. Quatre relevés sur huit dorment encore dans la source.
+
+### Un défaut trouvé par le garde-fou renforcé
+
+Le contrôle qui vérifie que deux bras diffèrent ne comparait que la ligne météo. Or ce
+cinquième bras ne se distingue du précédent que par le bloc de l'agenda : si l'annotation
+n'avait rien annoté, **rien ne l'aurait signalé** et une évaluation aurait été payée pour un
+écart nul par construction. Le contrôle porte désormais sur le prompt entier, et compare les
+bras deux à deux au lieu de tous les comparer au premier.
+
+### La page d'avancement montre enfin des chiffres
+
+Deux graphiques, et jamais un seul. En haut, la **courbe des runs de production** — la seule
+série de niveaux du dépôt, celle qui répond à « est-ce que ça s'améliore ». Elle n'est pas
+monotone, et c'est un fait.
+
+En dessous, **une barre par mesure**, groupée par unité et jamais sur un axe commun : un point
+de composite et un point de part modale ne sont pas la même chose. Les mesures qui n'ont pas
+été appliquées — cinq sur sept — sont estompées, pour qu'on ne lise pas un cumul qui n'a
+jamais eu lieu.
+
+Et chaque fiche porte désormais ses niveaux : `26,75 → 25,06 sur val`, plutôt qu'un écart nu.
+Deux mesures affichent « composite non applicable » plutôt qu'un chiffre inventé.
+
+---
+
+## [2026-08-25] La fenêtre météo est rejetée — et c'est le bruit de l'instrument qui l'a tranché
+
+L'A/B du ticket 023 a tourné : quatre bras, 232 appels, modèle d'éval épinglé. **Verdict :
+rejet.** Ni la fenêtre d'enquête ni le bulletin enrichi ne produisent d'effet distinguable de
+ce qu'un simple re-tirage produit tout seul.
+
+Le résultat qui compte ne porte pas sur la météo, mais sur l'**instrument de mesure**.
+
+Le témoin nul — un jeu qui rejoue le tirage sans changer **aucune** distribution — devait
+donner le plancher de bruit. Il déplace le composite de −0,34 sur un jeu et de **+1,98** sur
+l'autre. Il change de **signe**. Autrement dit : la variance propre de l'évaluation vaut
+environ deux points de composite, et c'est plus que l'effet qu'on cherchait à mesurer.
+
+| Contraste | `screen` | `val` |
+|---|---:|---:|
+| la fenêtre d'enquête — le traitement | −0,43 | −1,69 |
+| **le témoin nul — le plancher de bruit** | **−0,34** | **+1,98** |
+| le bulletin enrichi | +0,55 | +1,72 |
+
+Sur `val` — le seul jeu réellement indépendant — le traitement est **sous** le plancher.
+
+**Ce bras supplémentaire a coûté un quart de la campagne, et il a évité de publier un effet
+qui n'existe pas.** Le témoin habituel du protocole compare les enregistrements que le
+traitement n'a pas touchés ; ici il en touche 99 %, si bien que ce témoin aurait reposé sur
+une vingtaine d'enregistrements et donné un plancher très étroit. Contre un tel plancher, le
+−1,69 aurait été annoncé comme un signal sans hésitation.
+
+**Une réserve, écrite plutôt que corrigée.** Sur `screen`, le script annonce « signal » parce
+qu'il applique la règle du dépôt : le traitement dépasse le plancher. Mais 0,43 contre 0,34,
+c'est 1,26 fois le bruit — un rapport qui ne veut rien dire. Le seuil n'a **pas** été modifié
+après coup : déplacer les poteaux une fois le résultat connu invaliderait la mesure. La
+sortie brute est archivée telle quelle, la réserve à côté, et un seuil opposable reste à
+définir avant la prochaine campagne.
+
+**Aucune conclusion sur la pluie**, comme le ticket l'exigeait *avant* la mesure — et il n'en
+tire aucune.
+
+**Ce qui change, et ce qui ne change pas.** Le tirage météo de production reste sur l'année
+entière : la simulation doit pouvoir se jouer n'importe quand. La fenêtre d'enquête reste
+disponible et gelée dans les manifestes des jeux `v10` et `v10b`, sans être adoptée nulle
+part. Le **bulletin enrichi reste en production** — non parce que la mesure le soutient, mais
+parce qu'elle ne montre pas qu'il dégrade, et que l'information qu'il porte est factuellement
+absente du prompt sans lui. C'est un choix de contenu, pas un résultat, et il est assumé
+comme tel.
+
+Deux questions restent ouvertes, et le rejet ne les ferme pas : la variance d'un run de cinq
+jours comparé à une moyenne de cent cinquante-deux, et l'excès de transports collectifs, à
+20,8 % contre 12,4 % attendus.
+
+**Avant :** un effet faible aurait été lu comme un effet.
+**Après :** le plancher de bruit est mesuré à pleine masse, et il dit que l'instrument ne
+sait pas trancher cette question-là.
+
+---
+
+## [2026-08-25] Le jeton d'exclusion, la fenêtre d'enquête et le bulletin météo
+
+Trois livrables du ticket 023, tous en place **sans qu'un seul appel LLM ait été dépensé**.
+
+### Plus aucune mesure ne peut tourner pendant un run
+
+Une procédure du protocole exogène et une simulation consomment le **même quota LLM**.
+Quand un fournisseur sature, la cascade bascule sur le suivant — et si la bascule survient
+entre le premier et le second bras d'un A/B, les deux bras n'ont pas été évalués par le même
+modèle. L'écart mesuré est alors confondu avec le traitement, et rien dans les agrégats ne le
+montre.
+
+**Avant :** rien n'empêchait de lancer `make run` au milieu d'un A/B. La seule protection
+était de s'en souvenir.
+
+**Après :** un jeton d'exclusion, pris et relâché explicitement.
+
+```bash
+make protocol-status
+make protocol-lock SUBJECT="A/B fenêtre météo" CLOUD_PAUSED=1
+make protocol-unlock
+```
+
+La prise refuse si un run tourne, ou si les services `controller` / `worker` sont en marche —
+ils peuvent drainer une file de décisions même sans GAMA. Les scripts `ab_*.py` refusent
+désormais de démarrer sans jeton ; seul `--dry-run` passe, puisqu'il ne dépense rien.
+
+Un jeton dont le terminal a été fermé est **signalé, jamais levé automatiquement** : une
+procédure peut encore tourner sous un autre shell, et un verrou qui se libère seul n'est pas
+un verrou.
+
+Deux instantanés de quota sont enregistrés, à la prise et au relâchement. Ils entrent dans
+l'archive de la mesure : c'est la preuve qu'aucune consommation concurrente n'a eu lieu — et,
+s'il y en a eu une malgré tout, le moyen de savoir que la mesure est à jeter.
+
+⚠ **Le jeton est local et n'atteint pas la campagne génétique de la VM cloud.** C'est pour
+cela que `CLOUD_PAUSED=1` est exigé : une vérification humaine, pas une garantie du verrou.
+La limite est écrite dans la sortie du jeton, pas seulement dans la documentation.
+
+### La météo des jeux gelés se tire enfin dans la fenêtre de sa cible
+
+Les jeux de calibration tiraient un jour dans l'année climatique entière, alors que les
+cibles auxquelles ils servent à comparer sont des déplacements recueillis du 20 septembre
+2022 au 18 février 2023 — **152 jours, pas 365**. La fenêtre se lit maintenant dans le
+référentiel de population et se gèle dans le manifeste du jeu.
+
+Elle **franchit le 1er janvier**, ce qui est le piège de toute la manœuvre : écrite comme un
+intervalle ordinaire, elle ne retiendrait aucun jour — et un tirage vide ressemble à un
+tirage juste jusqu'à ce qu'on regarde les températures. Chaque jeu publie donc son contrôle
+de validité : les profils de température et de précipitation des deux fenêtres, côte à côte.
+
+### Le bulletin météo dit maintenant quand il pleut, et s'il fera nuit
+
+**Avant :** `Météo : 2°C, Partiellement nuageux. Précipitations prévues dans la journée : 0,2 mm.`
+
+**Après :** `Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 7°C, lever 07:55, coucher 17:25. Pluie prévue en soirée (0,2 mm sur la journée).`
+
+Amplitude thermique, lever et coucher du soleil, créneaux où il pleut — trois choses qu'un
+humain consulte avant de sortir un vélo, et qu'aucun agent ne voyait.
+
+Il n'y a **pas** de « risque de pluie » en pourcentage, et il ne peut pas y en avoir : la
+source météo ne porte aucune probabilité de précipitation. Un chiffre serait fabriqué. Seuls
+les créneaux dont le code météo est effectivement précipitant sont annoncés.
+
+Trois pièges de la source ont été chiffrés avant qu'une ligne de bulletin soit écrite.
+25 jours sur 365 portent des millimètres sans qu'aucun créneau ne soit pluvieux : ils gardent
+l'ancienne formulation, car **la forme enrichie ajoute et ne retranche jamais**. 30 créneaux
+sur 1 460 sortent des bornes min/max de la source, jusqu'à 3 °C — les bornes annoncées sont
+élargies aux créneaux réellement lus, faute de quoi le prompt se contredirait lui-même. Et la
+neige n'apparaît qu'un seul jour dans l'année : la branche existe quand même.
+
+### Quatre jeux, parce que trois ne suffiraient pas
+
+`v10` porte la fenêtre, `v10b` la fenêtre et le bulletin, `v9n` **ne change rien du tout** —
+même liste de jours, graine différente. Ce dernier est le plancher de bruit : le traitement
+touche 99 % du jeu, si bien que le témoin habituel du protocole ne pèserait qu'une vingtaine
+d'enregistrements et ne mesurerait plus rien. `v10` et `v10b` ne diffèrent que par la forme
+de la phrase, à jour tiré identique : c'est ce qui rend les deux corrections séparables bien
+qu'elles soient livrées ensemble.
+
+L'A/B à quatre bras est chiffré : **92 appels sur `screen`, 140 sur `val`**, environ un quart
+d'heure. Il n'a pas encore tourné.
+
+⚠ **Aucune conclusion sur la pluie ne sortira de cette campagne**, quel que soit son
+résultat. Le Δ mesuré change de signe selon le substrat — −1,20 pt sur `v7`, +1,10 pt sur
+`v9` — pour un plancher de bruit de −1,16 pt. Un effet qui s'inverse quand on change de
+substrat, à magnitude égale au bruit, est du bruit. La correction est thermique, et elle
+seule.
+
+---
+
+## [2026-08-25] La fenêtre météo re-chiffrée sur le nouveau substrat, et un effet « pluie » qui s'effondre
+
+La pré-mesure du ticket 023 — restreindre le tirage météo des jeux gelés à la fenêtre
+d'enquête EMC² (152 jours) au lieu de l'année entière — a été **rejouée sur `v9`**, le
+substrat issu du run de référence du 24 août. Zéro appel LLM dépensé : on ne compare que
+des lignes de contexte.
+
+L'effet thermique tient : **−4,74 °C** sur `v9`, −4,90 °C sur `v7`, contre +0,26 °C pour un
+témoin nul qui ne fait que rejouer le tirage. C'est dix-huit fois le plancher de bruit.
+
+Reste à savoir ce que « se réplique » veut dire au juste, et le recoupement a été fait plutôt
+que supposé. Les deux substrats **partagent 89 % de leurs personas** — ce ne sont pas deux
+échantillons indépendants de population, et il aurait été facile de l'écrire. Ce qui est
+disjoint, c'est l'unité réellement mesurée : la clé de tirage météo, commune à 1,8 %
+seulement. **99 % des enregistrements du nouveau substrat lisent une météo que la mesure
+précédente n'avait jamais lue.** La réplication vaut donc pour la grandeur, pas pour la
+population.
+
+Au passage, la pré-mesure d'origine **comptait double** : ses 2 087 enregistrements
+additionnaient `train`, `val`, `screen` et `rank` alors que les deux derniers sont des
+sous-ensembles du premier — 519 lignes pesaient deux fois. Le décompte juste est 1 568. Le
+défaut sur-pondère `train` sans renverser le résultat, mais il tenait depuis l'ouverture du
+ticket, et la lecture ne prend désormais que `train` + `val`.
+
+L'effet sur la pluie, lui, s'effondre — et c'est le résultat qui compte.
+
+**Avant :** le ticket écartait toute conclusion sur la pluie par précaution, parce que le
+Δ mesuré sur `v7` (−1,20 pt) était quatre fois plus petit que le bruit de re-tirage.
+
+**Après :** le Δ **change de signe** selon le substrat — −1,20 pt sur `v7`, **+1,10 pt sur
+`v9`** — pour un plancher de bruit de −1,16 pt. Un effet qui s'inverse quand on change de
+substrat, à magnitude égale au bruit, est du bruit. Ce n'est plus une précaution de méthode,
+c'est un résultat mesuré, et il est archivé comme tel.
+
+Deux pièges ont été désamorcés au passage. Le jeu que le ticket prévoyait de nommer `v8`
+**portait déjà** la réécriture `car_availability` du ticket 018 : comme la clé d'éval porte
+le nom du jeu et non une empreinte de son contenu, la procédure serait tombée dans le piège
+que le ticket lui-même documente — servir l'éval d'un tout autre jeu sans que rien ne le
+détecte. Les jeux deviennent `v10` et `v9n`. Et la filiation se relit désormais sur le
+manifeste de `v9`, qui est un jeu neuf tiré d'un run neuf, pas un dérivé de `v7`.
+
+Le ticket 023 gagne enfin un troisième livrable : le **bulletin météo enrichi** — lever et
+coucher du soleil, amplitude min/max de la journée, créneaux où il pleut.
+
+**Avant :** `Météo : 2°C, Partiellement nuageux. Précipitations prévues dans la journée : 0,2 mm.`
+
+**Après :** `Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 7°C, lever 07:55, coucher 17:25. Pluie prévue en soirée (0,2 mm sur la journée).`
+
+Il n'y aura **pas** de « risque de pluie » en pourcentage : la source météo ne porte aucune
+probabilité de précipitation, et un tel chiffre serait fabriqué. Seuls les créneaux dont le
+code météo est effectivement précipitant sont annoncés.
+
+Les contrôles de la source ont trouvé trois pièges, tous chiffrés avant qu'une ligne de
+bulletin soit écrite : 25 jours sur 365 portent des millimètres sans qu'aucun créneau ne
+soit pluvieux — le bulletin y garde donc l'ancienne formulation, car la forme enrichie doit
+ajouter et jamais retrancher ; 30 créneaux sur 1 460 sortent des bornes min/max de la source,
+jusqu'à 3 °C, ce qui aurait produit un prompt qui se contredit lui-même ; et la neige
+n'apparaît qu'un seul jour dans l'année.
+
+Le bulletin est livré dans la même campagne que la fenêtre, mais porté par un **quatrième
+bras** d'A/B, pour que les deux corrections restent séparables malgré la livraison commune.
+
+---
+
+## [2026-08-25] Le run du 24 août devient la référence, et le substrat cesse de dériver en silence
+
+Le run GAMA `2026-08-24_17_34` — celui qui rejoue en dur les corrections validées une à une
+sur jeux gelés (temps terminal `tt3`, règle de chaîne au prompt système, anticipation de la
+journée, mémoïsation des réflexions, disjoncteur du gateway LLM) — devient le **substrat
+épinglé** de la synthèse. Il figure au journal des mesures comme la dernière version jouée,
+avec sa trace archivée : composite **20,11 → 18,23**, le vélo redescendu de 16,1 à 13,3 %
+(cible 4,1), la marche remontée de 10,2 à 11,9 % — donc le défaut de fond, la marche massivement
+sous-représentée, **toujours pas corrigé**.
+
+L'écart de −1,88 est mesuré, pas attribué : un run rejoue tous les changements à la fois, la
+flotte de modèles a changé (96,4 % des décisions LLM sur les deux Gemini contre 77,9 %), et le
+bruit de découpage vaut 5,41 points d'amplitude. La page le dit à l'endroit du chiffre.
+
+**Avant :** épingler un nouveau run écartait la mesure du volet calibration, mais laissait
+celle du volet modèle en place — la matrice comparait une simulation lue sur un run à un modèle
+lu sur un autre, en les annonçant comme un seul substrat.
+**Après :** le volet modèle est écarté aux mêmes conditions, sur le nom du run **et** sur
+l'empreinte du journal — une reprise à chaud réécrit `moves.csv` sans changer de nom de run,
+et seule l'empreinte distingue ces deux états. Écarté, il affiche l'action qui le rétablit.
+
+Le journal des mesures se lit désormais dans l'ordre du temps, de la plus ancienne à la plus
+récente. L'ordre était celui de la saisie dans le registre : une ligne écrite en tête y
+remontait quelle que soit sa date, si bien qu'une page présentée comme une chronologie
+racontait l'histoire dans le désordre. Il est maintenant calculé — et une date au mauvais
+format est refusée, parce qu'elle trierait de travers sans rien dire.
+
+Chaque ligne affiche aussi son **heure**, lue sur le document qu'elle met en avant, et c'est
+elle qui départage les mesures d'un même jour — cinq tombaient le 24 août. L'heure inscrite
+dans la page par son générateur est préférée à celle du fichier, parce qu'elle survit à un
+clone ; sa provenance se lit en infobulle. Et quand le document lié ne tombe pas le jour de
+la mesure, aucune heure n'est affichée plutôt qu'une heure qui ne situe rien.
+
+**Avant :** `ticket 013 · 2026-08-24`, trois mesures du même jour dans l'ordre où elles
+avaient été écrites.
+**Après :** `ticket 013 · 2026-08-24 à 12:03`, et la journée se lit dans son ordre réel.
+
+Les jeux gelés **`v9`** sont tirés de ce run (`test` : 258 personas, 723 décisions), et le
+protocole gagne une règle : si un run GAMA plus récent que le substrat existe, **la question
+est posée à l'expérimentateur** — rester sur le dernier jeu validé du journal des mesures, ou
+reconstruire un jeu depuis le dernier run. Les deux ont un coût opposé, comparabilité contre
+fidélité : ce n'est pas un arbitrage que l'outil doit rendre à votre place.
+
+---
+
+## [2026-08-24] Le bassin de tirage devient le périmètre d'enquête, pas un rectangle
+
+La population synthétique se tirait dans un **rectangle** — l'emprise des arrêts Tisséo
+élargie de 5 km — et se chargeait en écartant tout domicile qui en sortait. Ce rectangle ne
+correspond à aucune définition d'enquête : mesuré, il ne contient que **221 des 453 communes**
+du périmètre EMC² et **51 de ses 277 zones fines de 3ᵉ couronne**.
+
+**Avant :** eqasim peuplait la Haute-Garonne entière, puis le chargement coupait au rectangle.
+Résultat : 111 communes touchées sur 453, une 3ᵉ couronne à 54 personas pour 15,4 % du
+cadrage, et 45 domiciles hors du périmètre d'enquête conservés dans la population de référence.
+**Après :** le cadre de tirage est une **liste de communes** — celles du périmètre —, et le
+filtre d'admission au chargement porte sur le **périmètre** et non sur le réseau TC. Un
+habitant de 3ᵉ couronne à 60 km reste dans la simulation ; un domicile hors des 453 communes
+en sort.
+
+Deux réglages, `EQASIM_PERIMETER` et `EQASIM_DEPARTMENTS`, exposés dans `docker-compose.yml`,
+dans l'API de génération et dans la cellule « Paramètres » du notebook. Le cadre **prime sur
+la bbox** — un rectangle ne sait pas dire « ni plus ni moins » — et il **échoue** s'il est
+vide : sans ce garde-fou, une faute de frappe ferait peupler tout le département en silence.
+
+⚠ **Limite assumée, chiffrée et publiée.** Cette livraison ne sert que la **Haute-Garonne** :
+346 des 453 communes. Les 107 autres — Gers, Tarn, Tarn-et-Garonne, Ariège, Aude, dont **100
+en 3ᵉ couronne** — demandent +10 Go de données d'adresses et de bâti. Conséquence : la 3ᵉ
+couronne plafonne à **10,6 %** de la population quand l'enquête en compte **15,4 %**, soit un
+résidu **structurel** de 4,7 points. En écart global de répartition : 11,7 → ≈ 9,5 points, là
+où le périmètre complet donnerait ≈ 2,7. La limite est inscrite dans les « limites à publier »
+de la documentation, sous le n°6.
+
+**Une population non enrichie ne passe plus en silence** : si le trait `residence_zone`
+manque, le chargement retombe sur l'ancien filtre **et lève une alarme**. Sans elle, on
+croirait filtrer sur l'enquête alors qu'on filtre sur le réseau de transport.
+
+**Correction d'une affirmation antérieure** : la documentation annonçait que les activités
+hors du graphe OTP étaient « snappées sur le bord » et que `identity.home` portait des
+coordonnées post-snap. C'est faux — la fonction de snap existe mais **n'est appelée nulle
+part**. Aucun domicile n'a jamais été déplacé. Ce qui reste vrai, et qui est désormais écrit :
+rien ne ramène dans le graphe une activité qui en sort, donc les personas éloignés n'auront
+pas d'offre en transport collectif tant que le graphe restera celui de l'agglomération.
+
+Reste à faire, et c'est de la machine : régénérer la population avec ce cadre. La procédure
+est dans `docs/setup/population.md`.
+
+---
+
+## [2026-08-24] Ce que la correction des couronnes coûte au score : +2,11 points
+
+`make couronne-v7` chiffre l'effet du reclassement des couronnes de résidence, **sans un seul
+appel LLM** : les décisions du jeu gelé `v7` sont déjà en base, et la couronne n'entre ni dans
+le prompt du persona ni dans la clé du cache de décisions. Seule l'agrégation change, donc
+« à décisions constantes » est structurel et non une précaution.
+
+**Avant :** le stratum 3ᵉ couronne était **vide** sur cette population, et Toulouse portait
+la masse de 47 agents qui habitent en réalité la 1ʳᵉ couronne. L1 par zone : 41,26 pt.
+**Après :** quatre strates peuplées, et 43,38 pt. Les quatre se dégradent — Toulouse +0,90,
+1ʳᵉ +4,27, 2ᵉ +1,68 — et la 3ᵉ apparaît à 41,88.
+
+C'est l'issue attendue : le ticket retire un avantage que la mesure n'avait pas mérité. La
+page « Avancement et résultats » porte la ligne, avec la précision que ce n'est **pas** un
+composite : `lieu_residence` n'est pas une dimension notée, le composite comparable ne bouge
+pas d'un millième, et publier ce zéro serait prendre l'absence de mesure pour une mesure.
+
+**Le piège qui a failli faire publier l'inverse.** La première version de la mesure pondérait
+le L1 par la masse observée de chaque strate. Elle rendait **−0,26 pt** — une amélioration —
+alors que chaque strate se dégradait. Explication : le reclassement sort des agents de
+Toulouse, la strate la pire, et la moyenne baisse par changement de mélange. Comparer deux
+*classements* avec des poids qui se déplacent en même temps que les strates n'est pas une
+règle de score valide. Les poids publiés sont ceux du cadrage de population, identiques des
+deux côtés. Sans le principe « une correction qui améliore le score est suspect », ce
+résultat serait parti en publication.
+
+**Une masse exclue est désormais visible.** Les pages de synthèse affichent une ligne
+« — hors référentiel — » par dimension : elle porte la masse des catégories que la référence
+EMC² ne ventile pas — `hors périmètre` pour la zone, « Autres » pour le type de logement, qui
+était dans ce cas depuis des mois sans que rien ne le montre. Exclu des cibles ne veut pas
+dire inexistant.
+
+Enfin, les générations neuves poseront le trait elles-mêmes : le pipeline eqasim écrit la
+couronne et la commune juste après le recalage des localisations sur le réseau. ⚠ Ce dernier
+point est **écrit mais non rejoué** — il demande une reconstruction du service et une
+régénération complète ; d'ici là, une population neuve doit passer par `make residence-zone`.
+
+---
+
+## [2026-08-24] Le journal ne devine plus la couronne d'un agent, il la lit
+
+La colonne « Lieu de résidence » de `moves.csv` recopie désormais le trait du persona. Elle
+ne consulte plus la distance du domicile à l'hypercentre — et le module qui l'écrit
+**n'importe même plus** la fonction qui la calculait.
+
+**Avant :** à chaque déplacement journalisé, la couronne était recalculée par un disque de
+8 km autour du Capitole. Un agent de Blagnac était journalisé « Toulouse », puis comparé à
+une cible voiture de 31 % au lieu de 64 %.
+**Après :** la colonne porte la couronne de la **commune** du domicile, et accepte
+`hors périmètre` pour les domiciles situés hors des 453 communes de l'enquête — une valeur
+de première classe, dont la masse sera comptée au lieu d'être diluée en 3ᵉ couronne.
+
+Une population enrichie avant ce correctif produit une colonne **vide**, jamais une couronne
+devinée. Vide n'est pas une modalité : c'est une information, et elle est visible.
+
+Le retrait de l'import n'est pas cosmétique. Tant qu'il existait, un « repli raisonnable sur
+la distance » pouvait être rétabli en une ligne à la première relecture distraite, et il
+aurait reproduit l'écart en silence. Un test l'interdit maintenant explicitement.
+
+Le classement métrique, lui, survit — pour le **temps terminal** seul, dont les lois d'accès
+et de stationnement ont été estimées avec lui. Son docstring dit désormais ce qu'il est,
+cesse de prétendre porter la définition EMC² de la résidence, chiffre la divergence assumée
+avec le journal (34 s par bout de trajet sur le pire couple observé) et dit ce que coûterait
+son alignement : un ré-export de la loi de temps terminal, donc trois caches invalidés et un
+run complet. Un autre ticket.
+
+Deux tests existants exigeaient l'inverse de tout ça — que les deux classements
+coïncident. Ils sont inversés, et leur inversion **est** la décision.
+
+---
+
+## [2026-08-24] Les personas savent dans quelle commune ils habitent
+
+`make residence-zone` pose sur chaque persona la couronne de son domicile **et sa commune**,
+au découpage de l'enquête EMC² — plus par sa distance au Capitole. Le trait est ajouté en
+tête des enrichissements du notebook de génération, et il est le seul de l'étape à être
+**observé** : ni tirage, ni loi, ni sel. Un domicile est dans une commune ou il n'y est pas.
+
+**Avant :** la couronne d'un persona était recalculée à chaque écriture du journal, par un
+disque de 8 km autour du Capitole. 249 des 1 021 personas de la population de référence
+étaient ainsi comparés à la cible d'une autre zone, dont 66 « Toulousains » habitant en
+réalité Blagnac, Balma ou Colomiers.
+**Après :** la couronne et la commune sont écrites dans le persona, lues dans le référentiel
+de l'enquête. Le journal n'aura plus qu'à les recopier (lot suivant).
+
+**Trois valeurs, trois significations** — la distinction est le cœur du correctif : une
+couronne quand le domicile est dans le périmètre ; `hors périmètre` quand il est connu et
+**dehors**, ce qui n'est pas une couronne et n'a aucune cible ; **aucun trait** quand le
+persona n'a pas de coordonnées, parce qu'affirmer « dehors » de quelqu'un dont on ne sait
+rien serait pire que de ne rien dire. La commune, elle, ne s'invente jamais.
+
+La validation ne porte pas sur une distribution mais sur un **accord** : la couronne écrite
+par le code de zone fine est recalculée par appartenance géométrique aux polygones de
+couronnes, et les deux doivent coïncider à 100 % sur chaque population. L'écart au cadrage
+de population, lui, a son propre code de sortie : il mesure la concentration spatiale du
+tirage — un autre sujet — et le confondre avec un échec apprendrait à ignorer les échecs.
+
+Au passage, la passe recoupe le ticket 020 par un chemin indépendant : 24,4 % de personas
+reclassés sur la population de référence, 19,1 % sur celle des jeux gelés. Les chiffres
+publiés tiennent.
+
+⚠ Une population épinglée par un manifeste de jeu gelé ne s'enrichit **jamais en place** :
+`make residence-zone POP=… OUT=…` écrit ailleurs. Quatre jeux (`v5` à `v8`) épinglent le
+même fichier par son sha256.
+
+---
+
+## [2026-08-24] Deux affirmations sur le modèle passent au statut de mesure (ticket 024)
+
+Deux choses se disaient du modèle sans qu'aucun chiffre ne les soutienne : *il manque de
+diversité, il répond toujours la même chose* et *plus on lui donne de contexte, plus il est
+juste*. Le [ticket 024](tickets/ticket_024_diversite_et_contexte.md) les cadre en mesures
+opposables, toutes lues contre la **dernière version de prompt acceptée**. Il ne corrige
+rien : il produit des chiffres, les archive, et ouvre une porte de décision.
+
+**La moitié du travail était déjà faite et personne ne l'avait présentée comme telle.** La
+part voiture produite par le champion est **plate — 42,7 % à 49,1 % selon la distance —
+quand la réelle va de 18 % à 77 %**. Le déficit de marche (−14,5 points) n'est donc pas un
+biais uniforme : c'est la somme d'un effondrement sur les trajets courts (−44,7 points en
+dessous d'un kilomètre) et d'un excédent sur les longs, qui se compensent en partie.
+L'agrégat masquait le défaut au lieu de le montrer.
+
+**Ce qui coûte zéro appel LLM et n'avait jamais été lu.** Les décisions par persona
+dorment déjà dans le store. Comparer l'agrégat pondéré à l'agrégat par vote majoritaire ne
+demande donc aucune dépense — et cet écart *est* le coût du figement. Même chose pour
+quatre grandeurs de dispersion (entropie normalisée, nombre effectif de modes, taux de
+réponses quasi certaines, variance entre personas) qui n'existaient nulle part.
+
+**Le chiffre qui décide du discours n'était dans aucune des deux affirmations.** Dire « le
+prompt joue mais le contexte compte davantage » est une comparaison d'amplitudes. Celle du
+prompt est connue : **−7,13 de composite**, IC90 [−10,37 ; −4,35]. Celle du contexte est à
+mesurer, par retrait progressif d'information dans un jeu gelé. Si elle ne dépasse pas
+7,13, c'est l'inverse qu'il faudra dire.
+
+**Un piège attrapé avant d'avoir dépensé.** La température d'évaluation est gelée à zéro.
+Un bras « choix direct » y rend une réponse unique par persona : sa dispersion vaut zéro
+**par construction de l'instrument**, pas par propriété du modèle. Le comparer aux
+distributions actuelles sur ce terrain n'aurait rien mesuré, et rien ne l'aurait signalé —
+le même motif que « l'absence de donnée n'est pas une donnée ». La comparaison se lit donc
+au niveau agrégé, et la limite est écrite dans le ticket plutôt que découverte après coup.
+
+Le ticket note aussi sa propre dépendance : le jeton d'exclusion qu'exige le protocole
+n'est pas encore livré ([ticket 023](tickets/ticket_023_fenetre_meteo_jeux_geles.md), lot
+1). Les deux premiers lots ne consommant aucun quota, ils peuvent partir sans lui — les
+suivants, non.
+
+---
+
+## [2026-08-24] La couronne d'un domicile se lit dans le code de sa zone fine
+
+`make communes-couronnes` publie une ressource de plus, `llm_module/data/zf_couronne.json` :
+les 785 zones fines de l'enquête avec leur secteur de tirage, leur couronne, leur code INSEE
+et **leur commune**. Un domicile déjà résolu en zone fine — ce que la simulation fait pour
+le type de logement et l'équipement vélo — donne donc sa couronne sans aucune géométrie, et
+la commune vient avec.
+
+**Avant :** la couronne d'un domicile se déduisait de sa **distance au Capitole** (moins de
+8 km = Toulouse), et rien dans le dépôt ne portait la correspondance zone fine → couronne.
+**Après :** la couronne est **lue** dans le référentiel de l'enquête, et la commune du
+domicile est disponible à côté d'elle — c'est ce qui rendra le classement auditable plutôt
+que seulement correct.
+
+Le grain est la zone fine, pas le secteur : une table `secteur → couronne` de 88 lignes
+aurait donné la couronne mais jamais la commune. La classification de référence par
+appartenance géométrique, qui vivait dans l'audit du ticket 020, est montée dans
+`llm_module/core/residence_zone.py` : l'audit et la production lisent maintenant la même,
+parce que deux copies d'une définition finissent par diverger.
+
+Verrous ajoutés : l'export refuse un secteur sans zone fine (les deux couches SIG doivent
+décrire le même périmètre) ; le lecteur refuse une ressource d'une autre version, une
+modalité hors des quatre couronnes, un secteur rattaché à deux couronnes ; la commune ne se
+déduit **jamais** d'un secteur, qui couvre plusieurs communes. Et l'équivalence entre le
+classement par code et le classement géométrique n'est plus une mesure ponctuelle : elle est
+rejouée à chaque exécution des tests, sur les 785 zones.
+
+---
+
+## [2026-08-24] Les couronnes de résidence : deux équivalences mesurées avant de corriger
+
+`make audit-couronnes` répond à une question qui bloquait la correction des couronnes de
+résidence (ticket 021) : peut-on lire la couronne d'un domicile dans le **code de sa zone
+fine**, au lieu de la deviner à sa distance au Capitole ? La réponse était supposée ; elle
+est maintenant mesurée, sur sept portes, dont un recoupement par un chemin indépendant.
+
+**Avant :** le ticket affirmait un accord de 100 % entre le classement par code de zone et le
+classement par appartenance géométrique. Rien dans le dépôt ne l'établissait — ce qui était
+vérifié, c'était l'intégrité de la jointure zone fine → secteur, pas l'accord de deux
+classements sur des domiciles.
+**Après :** 785 / 785 au grain zone fine, 1 021 / 1 021 au grain domicile, et « hors de la
+couche de zones fines » désigne **exactement** les mêmes 45 domiciles que « hors des quatre
+couronnes ». La commune, elle aussi, se reproduit depuis le code de zone : c'est ce qui
+permettra de publier la commune du domicile à côté de sa couronne, et donc de rendre le
+classement auditable.
+
+La cible ne modifie rien et refuse de se taire : code de sortie `2` si une porte échoue,
+`3` si une porte est **non mesurable** faute des données d'enquête d'accès restreint — parce
+qu'une porte non mesurée est une porte qui passe. Trace :
+`docs/traces/2026-08-24_couronne_equivalences/`.
+
+---
+
+## [2026-08-24] Un journal des mesures : « avancement et résultats »
+
+Nouvelle page, `make avancement` → [`docs/synthesis/avancement_et_resultats.html`]. Elle
+répond à une question que les pages existantes ne posaient pas : **qu'est-ce qu'on a
+essayé, et qu'est-ce que ça a rendu ?** Une ligne par correction testée — base de
+référence, base modifiée, modification faite, résultat obtenu, score, commentaire.
+
+La distinction avec `index.html` est le point : celle-ci score un **run** de simulation, le
+journal recense les **mesures sur jeux gelés**, qui coûtent des dizaines d'appels LLM au
+lieu d'heures de calcul. Les mêler sous un même chiffre ferait perdre le seul repère qui
+compte — de quoi le score parle. Chaque ligne renvoie donc à sa trace archivée **et** à la
+synthèse intermédiaire correspondante quand elle existe.
+
+Quatre mesures y figurent, toutes du 2026-08-24 :
+
+| Mesure | Score | Verdict |
+|---|---|---|
+| Temps terminal voiture (`v5` → `v6`) | −4,52 composite | mesuré, périmètre partiel |
+| Temps terminal voiture + vélo (`v5` → `v7`, = production `tt3`) | −2,17 composite | **adopté** |
+| Puce « Chaîne de la journée » au prompt | +0,21 composite | rejeté |
+| `car_availability` réalignée (`v7` → `v8`) | +0,12 pt de part voiture | rejeté |
+
+**Le registre n'est pas un plan.** Une ligne n'existe que si la mesure a été faite —
+sinon la page devient une liste d'intentions et cesse de dire ce qui est établi. Et le
+rendu **refuse d'écrire**, code de sortie 1, si une trace citée n'existe pas sur le disque,
+si un champ manque ou si un verdict sort du vocabulaire : une page de résultats qui se
+dégrade en silence est pire qu'une page absente.
+
+**Un écart de chiffre à arbitrer.** Le ticket 013 et le changelog citent **−5,28 de
+composite** pour la correction du temps terminal. L'archive committée
+(`docs/traces/2026-08-24_temps_terminal/results.json`) ne contient que quatre composites,
+et le delta `v5` → `v6` y vaut **−4,52** (27,00 → 22,48), le delta `v5` → `v7` **−2,17**.
+Le 5,28 n'est pas reproductible depuis la trace : la page publie les chiffres vérifiables
+et l'écart reste à trancher.
+
+---
+
+## [2026-08-24] Le partage de la voiture testé sans payer de run : rejet du canal narratif
+
+Le ticket 018 a été mesuré selon
+[`protocole-parametre-exogene.md`](arch/protocole-parametre-exogene.md) — la méthode qui
+chiffre une correction sur des jeux gelés **avant** de dépenser des heures de simulation.
+Coût total : 227 appels LLM, aucun run.
+
+**Le résultat.** Réaligner `car_availability` sur EMC² — 72 personas sur 818 basculés de
+« voiture à partager dans le foyer » à « voiture toujours disponible », ce qui porte la
+distribution de 60,9 / 25,6 / 13,6 % à 69,7 / 16,7 / 13,6 % pour une cible de
+70,0 / 16,9 / 13,1 % — ne déplace **pas** les parts modales de façon détectable. Sur les
+45 personas traités des deux jeux disjoints, l'effet voiture vaut +1,34 pt pour un plancher
+de bruit de 1,31, soit exactement le niveau du bruit.
+
+**Et c'est l'amplitude qui ferme la question, pas le test.** En prenant le point estimé au
+pied de la lettre, l'effet **agrégé** vaut **+0,12 pt de part voiture** — contre les 5,28 de
+composite que la même méthode avait rapportés sur le temps terminal. Le biais de niveau est
+réel (+8,7 pts de personas en `some`), mais le faire passer par le narratif du persona ne
+coûte pas un dixième de point.
+
+**Ce que le rejet ne couvre pas**, et qui reste ouvert : la **rivalité**. Un jeu gelé ne
+rejoue ni l'offre d'options ni les chaînes de véhicule, donc les 6,1 % de trajets voiture
+qui partent alors que toutes les voitures du foyer sont déjà dehors ne sont pas testables
+ainsi. La sortie recommandée du ticket devient l'**option C** — écrire la limite et la
+publier — le ticket 017 continuant de corriger le niveau gratuitement.
+
+**Une cible recalculée plutôt que reprise.** `make car-availability` mesure la distribution
+depuis les microdonnées avec la règle de dérivation d'eqasim, et refuse de publier si son
+contrôle positif échoue. Il donne 70,0 / 16,9 / 13,1 % là où le ticket citait
+69,5 / 16,9 / 13,6 — le recoupement tient. Contrôle négatif au passage : la non-réponse du
+permis est **nulle** chez les majeurs, donc la variable n'est pas morte.
+
+**Before :** « `car_availability` pèse −7,3 pt de voiture (politique logit), et la
+population synthétique en voit 6,9 pts de trop » — un biais réel, d'effet supposé.
+**After :** le même biais, chiffré à **+0,12 pt de part voiture** dans la simulation. Le
+LLM, sous le prompt de production, est bien moins sensible à cette phrase que ne l'est la
+politique logit à la variable correspondante.
+
+---
+
+## [2026-08-24] Un faux positif attrapé, et le protocole de mesure renforcé
+
+Le premier chiffre du test ci-dessus annonçait **+7,27 pt de voiture** — une amplitude qui
+recoupait presque exactement l'effet marginal connu de la politique logit. Tout concordait.
+C'était faux, et l'autopsie a produit quatre règles nouvelles, désormais dans le protocole.
+
+**Le témoin placebo, gratuit et décisif.** Quand une correction ne touche que 9 % des
+records, les 91 % restants sont identiques dans les deux bras — mais ré-évalués dans chacun,
+donc porteurs de bruit et d'aucun signal. Ils forment un **témoin placebo qui était déjà
+payé** : leur Δ devrait valoir zéro, et ce qu'on y lit est le plancher de bruit de
+l'instrument. Sur le premier jeu, la lecture agrégée donnait −0,29 pt de voiture, soit le
+**signe inverse** de l'effet traité : −1,12 × 0,901 de bruit contre +7,27 × 0,099 de signal.
+Sans ce témoin, un chiffre de signe faux partait au changelog.
+
+**Le plancher doit être ramené à la masse traitée.** Comparer un Δ mesuré sur 22 unités de
+masse à un plancher mesuré sur 201 est un faux test. En 1/√n, le plancher passe de 1,58 à
+4,79 pt. Le cas qui trompe le plus est celui du jeu `val` : **au-dessus du plancher brut,
+sous le plancher mis à l'échelle**.
+
+**La dispersion avant la moyenne.** Derrière les +7,27 pt, une médiane de +1,3 pt : 5
+personas en hausse, 1 en baisse, 3 immobiles, et deux cas passant de 70 % à 100 % portant
+tout le résultat.
+
+**Vérifier la filiation des jeux avant de parler de réplication.** Le manifeste dit
+`rank ⊂ screen ⊂ train`. Il n'y a jamais eu deux mesures en désaccord — il y a eu une
+sous-population de 9 personas qui fluctuait à l'intérieur des 35. Seuls des jeux **disjoints**
+se mettent en commun.
+
+**Outillage.** `prompt_calibration/ab_car_availability.py` publie les trois lectures
+(traité / placebo / agrégat) et refuse un jeu où rien ne diffère ;
+`rewrite_car_availability.py` produit le jeu dérivé ; `archive_car_availability.py` écrit la
+trace committée. Deux défauts corrigés en passant : la réécriture perdait l'espace avant le
+séparateur `|` — elle changeait donc la *structure* du rendu en plus de la variable — et les
+manifestes hérités annonçaient `version: v5` dans un répertoire `v8`.
+
+---
+
+## [2026-08-24] Un quart des habitants simulés étaient notés sur le territoire du voisin
+
+La simulation note ses résultats en les comparant à une enquête de terrain. Personne
+n'avait vérifié que les deux comptaient la même population. Les neuf écarts de base sont
+désormais mesurés, chacun avec un chiffre et un verdict — deux à corriger, cinq à publier
+comme limites, deux conformes, **aucun laissé sans mesure**.
+
+Le plus lourd n'a rien à voir avec les décisions des habitants : c'est de la géographie.
+L'enquête découpe ses couronnes par **liste de communes** (1 / 69 / 108 / 275) ; le code
+classait par **distance à l'hypercentre** (8 / 20 / 40 km), en annonçant en commentaire
+qu'il s'agissait des mêmes modalités.
+
+**Before :** le disque de 8 km compte 442 « Toulousains », dont 66 habitent en réalité
+Blagnac, Balma, Tournefeuille, Colomiers ou Ramonville — comparés à une cible voiture de
+31 % au lieu de 64 %
+**After :** l'écart est mesuré, nommé commune par commune, et archivé : **249 personas sur
+1 021 (24,4 %) changent de couronne**
+
+L'erreur ne va que dans un sens — les 179 zones fines de Toulouse tiennent toutes dans
+7,0 km, donc elle gonfle Toulouse et vide la 1ʳᵉ couronne. Et elle **flatte la note** :
+l'écart aux cibles par zone vaut 47,8 points sous le classement publié contre 50,7 sous le
+classement correct, sur le même run et les mêmes décisions. Le stratum « 3ᵉ couronne »,
+absent du tableau publié, réapparaît avec 99 trajets.
+
+**Le contre-exemple, aussi instructif.** La taille de ménage affichait 2,71 contre une
+cible de 2,08 — un écart de 30 % qui n'existe pas. Une population synthétique échantillonne
+des *personnes* : un ménage de cinq y apparaît cinq fois. En rendant à chaque ménage un
+poids de 1, on obtient 2,01, et 1,23 voiture par ménage pour une cible de 1,25. Une base de
+comparaison non déclarée fabrique aussi des défauts imaginaires.
+
+**Trois autres écarts découverts en chemin :**
+
+- **45 habitants (4,4 %) vivent hors des 453 communes enquêtées**, jusqu'à 114 km du
+  Capitole. Le classement les rangeait en « 3ᵉ couronne », où ils formaient 76 % du
+  stratum. « Hors périmètre » n'est pas une couronne : c'est maintenant une modalité à part.
+- **Aucun trajet des vingt derniers runs ne s'est joué sous la pluie**, contre 44,7 % de
+  jours pluvieux dans la fenêtre d'enquête — et c'est le vélo, mode le plus sensible à la
+  météo, qui arbitre les décisions de ce projet depuis deux tickets. La cause exacte est
+  précisée plus bas : ce n'est pas une affaire de saison.
+- **La hiérarchie de mode principal est inversée** : l'enquête compte un trajet
+  voiture + métro comme un déplacement en transports collectifs (760 fois sur 770), le code
+  le compterait en voiture. Sans effet aujourd'hui — aucun itinéraire simulé ne mêle les
+  deux modes — mais une part de la cible « transports collectifs » est de ce fait hors
+  d'atteinte. **Remesurée depuis par strate, elle est bien plus lourde que son chiffre
+  global de 1,4 point** : voir plus bas.
+
+Le soupçon de départ, en revanche, est levé : la marche d'accès à un bus ou à une voiture
+n'est comptée comme un déplacement ni côté simulation ni côté enquête. La marche n'était pas
+surestimée par construction.
+
+**Le cadrage de l'enquête n'est plus décoratif.** Le fichier qui décrit la population
+interrogée existait, mais aucun code ne le lisait et l'essentiel dormait en commentaire. Il
+est maintenant chargé par un module qui refuse un cadrage incohérent, couvert par 17 tests,
+et **chacune de ses valeurs a été recalculée depuis les données brutes de l'enquête** —
+indépendamment de la publication d'où elle avait été recopiée. Deux valeurs en sont sorties
+corrigées : 54 585 déplacements recensés et non 54 785, et 69 / 108 communes en première et
+deuxième couronne et non 68 / 109 (même total de 453).
+
+**Nouveaux outils :**
+
+| Commande | Ce qu'elle fait |
+|---|---|
+| `make communes-couronnes` | Extrait la correspondance commune → couronne des 453 communes, et la géométrie des couronnes — la donnée qui manquait |
+| `make audit-perimetre` | Rejoue les neuf mesures sur une population et un run. Sort 0 si tout est conforme, 2 s'il reste un écart à corriger, **3 si un axe n'a pas pu être mesuré** |
+
+Le code 3 n'est pas un détail : dans ce projet, l'absence de mesure produit régulièrement
+la note parfaite. Un axe silencieux est un axe qui passe.
+
+Rapport lisible, traces et tables : `docs/traces/2026-08-24_perimetre_population/`.
+Détail technique : `docs/arch/perimetre-population.md`.
+
+**La correction des deux écarts « à corriger » est cadrée** (ticket 021) et prend une voie
+qui ne coûte aucun run : la couronne sera **posée sur l'habitant** à la génération, au lieu
+d'être devinée à sa distance du centre au moment de la simulation. Les deux écarts vivent en
+effet dans la colonne du journal, c'est-à-dire sur le seul chemin qui ne porte aucun cache —
+les corriger là n'invalide rien et ne demande pas de rejouer une simulation.
+
+La donnée nécessaire est déjà dans le conteneur : le code de zone fine que la simulation
+résout déjà pour chaque domicile porte, sur ses trois premiers chiffres, le secteur
+d'enquête — et le secteur porte la couronne. Vérifié sur les 1 021 habitants : **accord de
+100 %** avec le classement géométrique. Il ne reste qu'une table de 88 lignes à publier. Le
+« hors périmètre » vient gratuitement, puisque le résolveur rend déjà « aucune zone » pour
+ces 45 domiciles.
+
+Attendu de cette correction : **le score se dégrade**, de 47,8 à 50,7 points d'écart aux
+cibles. C'est le critère de réussite et non un échec — elle retire un avantage que la mesure
+n'avait pas mérité.
+
+**Correction sur l'écart de météo : la cause n'est pas la saison.** Question posée après
+coup : l'enquête porte-t-elle sur ses cinq mois de collecte, ou interroge-t-elle les gens
+sur leurs habitudes annuelles ? Elle porte sur ces cinq mois — la méthode recueille les
+*déplacements de la veille*, et les dates de référence des données brutes ne couvrent que
+septembre-décembre 2022 et janvier-février 2023, jours ouvrés seulement.
+
+**Mais l'enquête ne publie pas « un jour d'automne » : elle publie « un jour moyen de
+semaine ».** La fenêtre automne-hiver est la méthode pour obtenir une journée ordinaire, pas
+une revendication sur la saison. Le diagnostic change donc de nature, et deux affirmations du
+rapport initial étaient trop sévères :
+
+**Before :** « une cible d'automne, une simulation de printemps »
+**After :** « une moyenne de 152 jours comparée à une réalisation de 5 jours » — les
+journées simulées sont en fait **thermiquement typiques** de la fenêtre d'enquête
+(56ᵉ à 81ᵉ centile), et **27,7 % des séquences de cinq jours consécutifs de la période
+d'enquête sont elles aussi entièrement sèches**
+
+Ce qui reste, et qui se sépare en deux remèdes distincts : les jeux de test gelés moyennent
+correctement la météo mais sur l'année entière, d'où un biais **thermique de +5,3 °C** qui se
+corrige en restreignant leur tirage à la fenêtre ; un run, lui, ne moyenne pas du tout, et
+**aucun choix de dates n'y changera rien**. C'est une limite de variance : on l'annonce, on
+allonge l'horizon, ou on tire la météo dans la distribution de la fenêtre plutôt que de
+rejouer des jours consécutifs.
+
+Source de la vérification : [méthodologie des Enquêtes Mobilité Certifiées
+Cerema](https://www.cerema.fr/fr/actualites/enquetes-mobilite-certifiees-cerema-methodologie),
+recoupée sur les dates de référence des microdonnées.
+
+**Le parking-relais : 1,4 point en moyenne, mais six dixièmes de la cible sur les longs
+trajets.** L'écart sur la définition du mode principal a été remesuré par territoire et par
+distance (ticket 022). Le chiffre global était trompeusement rassurant.
+
+**Before :** « 1,4 point de la cible transports collectifs est hors d'atteinte »
+**After :** « 3 % de la cible à Toulouse, mais **31 % en 2ᵉ couronne** ; 3 % sur les trajets
+de 2 à 5 km, mais **39 % de 10 à 20 km et 59 % de 20 à 50 km** »
+
+Autrement dit : sur les longs trajets, près de six dixièmes de l'objectif « transports
+collectifs » correspondent à des gens qui prennent leur voiture jusqu'à un parking-relais
+puis le métro — un trajet que la simulation ne sait pas proposer. Le modèle est jugé, sur
+cette tranche, contre un objectif qu'il ne peut pas approcher, et il en est « corrigé »
+d'autant.
+
+**Le piège à éviter, dit avant que quelqu'un s'y jette :** retirer ces trajets de l'objectif
+serait faux. Ces voyageurs se déplacent quand même — privés du trajet mixte, ils feront tout
+en voiture ou tout en transports collectifs, et on ne sait pas lequel. L'objectif atteignable
+est donc un **intervalle**, pas un chiffre : entre 4,8 et 7 % pour la 2ᵉ couronne, entre 5,3
+et 13 % sur les trajets de 20 à 50 km.
+
+**Deux tickets ouverts sur cet audit, et leurs corrections vont dans des sens opposés** —
+c'est ce qui les rend faciles à confondre :
+
+| | Ticket 021 (territoires) | Ticket 022 (parking-relais) |
+|---|---|---|
+| Effet attendu sur la note | elle **se dégrade** (47,8 → 50,7) | elle **s'améliore** |
+| Pourquoi c'est acceptable | retire un avantage non mérité | élargit un objectif inatteignable |
+| Ce qu'il faut donc exiger | rien de plus | une justification **territoire par territoire** |
+
+Une neutralisation qui améliore la note sans être justifiée strate par strate est
+indistinguable d'un objectif ajusté pour arranger — ce que le protocole du projet interdit.
+
+**Un troisième ticket, et un verrou qui manquait à tout le monde.** La moitié corrigeable de
+l'écart de météo — les jeux de test tirent leurs journées dans l'année entière au lieu des
+cinq mois de l'enquête — part en correction (ticket 023) selon le protocole du projet pour ce
+genre de paramètre. Elle est déjà chiffrée **sans avoir dépensé un seul appel au modèle** :
+**−4,9 °C** sur la température vue par le prompt, et **aucun effet annonçable sur la pluie**.
+
+Ce dernier point vient d'un contrôle qui a renversé une lecture. En comparant le changement de
+fenêtre à un simple **re-tirage sans changement de fenêtre**, on constate que la fenêtre
+déplace l'exposition à la pluie de 1,2 point là où le re-tirage seul la déplace de 5,1. L'effet
+« pluie » était du bruit. Il est maintenant interdit de le conclure, quel que soit le résultat
+de la mesure — c'est écrit comme critère.
+
+**Before :** le protocole prescrivait un témoin qui n'existe que si la correction touche une
+petite partie du jeu de test
+**After :** il prescrit aussi le cas inverse — ici la correction touche 98,9 % du jeu, le
+témoin habituel ne pèse plus que 23 enregistrements, et il faut un **témoin nul à pleine
+masse** à la place
+
+**Et une procédure ne s'exécute plus pendant qu'une simulation tourne.** Un jeton
+d'exclusion (`make protocol-lock`) refuse de se prendre si un run est actif, et enregistre
+l'état des quotas à la prise et au relâchement. La raison n'est pas l'hygiène : mesure et
+simulation puisent dans le même quota, et si un fournisseur sature entre les deux moitiés
+d'une comparaison, les deux moitiés n'ont pas été évaluées par le même modèle. L'écart
+mesuré ne veut plus rien dire, et rien dans les résultats ne le signale. Le jeton devient
+l'étape 0 du protocole.
+
+Limite écrite noir sur blanc plutôt que contournée : ce verrou est **local** et n'atteint
+pas la campagne de calibration qui tourne en autonomie sur une machine distante. La mettre
+en pause reste une case à cocher, pas une garantie du verrou.
+
+---
+
+## [2026-08-24] Le gain du temps terminal, remesuré sur son vrai périmètre
+
+Le chiffre publié pour l'alignement du temps terminal (`tt3`) était **plus favorable que la
+réalité**, parce que la mesure portait sur moins que la livraison. Il est corrigé partout.
+
+L'A/B avait comparé `v5` (temps de la config) à `v6`, qui n'aligne que la **voiture** : gain
+de 4,52 de composite. Mais `tt3`, en production, aligne aussi le **vélo** — 2,00 → 0,29 min
+par option. Rendre le vélo plus rapide le rend plus attractif, donc *contre* le gain. Un
+troisième jeu, `v7`, aligne les deux modes et mesure exactement ce qui tourne.
+
+**Before :** « le temps terminal aligné gagne 5,28 de composite »
+**After :** « il en gagne **2,17** ; aligner la voiture seule en aurait gagné 4,52, et
+l'alignement du vélo rend 2,35 — la moitié »
+
+| | v5 | v6 (voiture) | v7 (**livré**) |
+|---|---|---|---|
+| composite | 27,00 | 22,48 | **24,83** |
+| vélo | 19,50 % | 15,16 % | 16,28 % (cible 4,0) |
+| voiture | 38,88 % | 48,86 % | 47,69 % (cible 55,0) |
+
+Rien ne change en production : la correction reste celle que la source réclame, et le vélo
+à 1 min par bout n'était pas plus sourcé que la voiture à 3-7 min. Ce qui change est le
+chiffre qu'on lui attribue, et l'argument de priorité qu'il portait — corriger une entrée
+pèse *autant* qu'une calibration de prompt, non plus le double.
+
+**Ce que l'incident a laissé dans l'outillage :**
+
+- `rewrite_terminal_time.py` prend un `--modes` : le périmètre du jeu de test devient
+  explicite, et huit tests vérifient qu'aligner la voiture laisse le vélo intact ;
+- le rapport de dérivation donne le temps terminal **par mode** et non plus une moyenne
+  commune. Celle-ci vaut 5,83 → 0,46 min pour `v7` : elle ne décrit ni la voiture (7,93 →
+  0,55) ni le vélo (2,00 → 0,29), et c'est pourtant le chiffre qu'on aurait cité ;
+- la page de mesure ne porte plus **aucun** chiffre écrit à la main — gain, dimensions,
+  parts modales sont calculés depuis les traces. La version précédente en portait quinze,
+  et ils décrivaient déjà un jeu périmé ;
+- la page horodatée est écrite en **double** : dans `docs/synthesis/` où on la lit, et dans
+  `docs/traces/` où elle survit — `docs/synthesis/*` est gitignoré.
+
+**Un piège de cache à connaître.** Ajouter le mode à la clé de tirage a changé le *contenu*
+de `v6` sans changer son *nom* ; la clé de cache d'éval (`ds=v6`) porte le nom, pas une
+empreinte du contenu. L'éval en cache décrivait un jeu qui n'existait plus, et il a fallu la
+purger à la main. Toute modification du mécanisme de tirage invalide les évals des jeux
+qu'il a produits, et le store ne le détectera pas pour vous.
+
+Traces : `docs/traces/2026-08-24_temps_terminal/` · page :
+`docs/traces/2026-08-24_temps_terminal/2026-08-24_12-03_temps_terminal.html`
+
+---
+
+## [2026-08-24] Le portefeuille de tickets recentré sur la base de population
+
+Arbitrage de priorité : **les données d'entrée passent devant la calibration**. Le gain
+mesuré sur le seul calibre du temps terminal (2,17 de composite sur le périmètre livré)
+est du même ordre que celui de la calibration de prompt (3,67), et il vient d'un défaut de
+population, pas de formulation. Calibrer un prompt contre une base biaisée revient à
+calibrer l'instrument sur le biais.
+
+**Chiffre révisé le 2026-08-24.** L'arbitrage s'appuyait d'abord sur 5,28, mesurés en
+n'alignant que la voiture alors que la production alignait aussi le vélo. Le bras `v7`,
+qui aligne les deux, donne 2,17. L'arbitrage tient — un seul paramètre exogène pèse autant
+que toute une calibration de texte — mais il ne tient plus « largement ».
+
+**Deux chantiers mis en veille** — `004` (industrialisation de la calibration de prompt) et
+`009` (calibration génétique, dont le résultat n'est pas significatif). Rien ne les bloque :
+c'est une décision de séquence, le travail reprendra tel quel. La campagne génétique
+**continue de tourner** en tâche de fond sur la VM, elle n'est simplement plus un chantier
+instruit.
+
+**Deux chantiers abandonnés** — `006` (relance du run de référence) et `010` (validation du
+drainage nocturne). Tous deux devaient être jugés sur les runs des 19-21 août ; on repart
+d'un **nouveau jeu de test**, et rejouer leurs critères mesurerait une base qu'on ne veut
+plus. Le code du 010 (A1–A4) **reste en production** : c'est son volet de validation qui est
+abandonné, pas sa livraison.
+
+**Un ticket ouvert — `020`, « la même base ? »** Toute la chaîne de mesure compare des parts
+modales simulées aux cibles CEREMA dans huit sous-catégories, et cette comparaison n'a de
+sens que si les deux côtés parlent de la même population. Ce n'était jamais vérifié, c'était
+supposé. Trois écarts sont déjà établis à la seule lecture du dépôt :
+
+- les caractéristiques de la population enquêtée (453 communes, 1,32 M de 5 ans et plus,
+  674 000 ménages, variables de redressement) sont documentées dans
+  `population_emc2_2023.yaml` — qu'**aucun code ne lit**, et dont l'essentiel dort en
+  commentaire ;
+- les couronnes sont classées par **distance** à l'hypercentre (8/20/40 km) là où l'enquête
+  découpe par **liste de communes** (1/68/109/275), alors que le commentaire du code annonce
+  l'inverse. La cible voiture vaut 31 % à Toulouse contre 64 % en 1ʳᵉ couronne — un agent
+  mal classé est comparé à une cible qui diffère de 30 points, et depuis `tt3` ce même
+  classement **facture** son temps terminal ;
+- l'enquête couvre le 20/09/2022 – 18/02/2023 hors vacances scolaires, quand les jeux gelés
+  tirent la météo dans **l'année entière** — sur le mode le plus sensible à la météo.
+
+Six autres axes restent à mesurer (âge minimum de 5 ans, pondérations `COE0`/`COEP`,
+populations exclues, jour de semaine, définition du déplacement à mode principal,
+représentativité spatiale). Chaque axe recevra un verdict écrit : corriger, neutraliser dans
+le scoring, ou publier comme limite. Un axe non mesuré est un axe qui passe.
+
+**Priorités confirmées** — `016` (abonnement TC) et `017` (permis) restent les chantiers de
+tête ; `011` (arrivées perdues GAMA) est maintenu en priorité basse, son échéance réelle
+étant le passage à 10 000 agents et non le prochain run.
+
+**Troisième mise en veille : `012`** (mémoïsation des réflexions). Le code reste en
+production — seule la mesure A3 est suspendue : elle demande de rejouer deux fois un
+scénario épinglé, et ce scénario change avec le nouveau jeu de test. Elle garde tout son
+intérêt là-bas : chaque réflexion vaut une requête pleine sur le quota jour, et c'est le
+poste que les replays d'itération font payer deux fois.
+
+**`013` et `014` restent ouverts.** Pour le `014`, les **deux** options restent instruites :
+l'analyse recommandait d'abandonner l'option 2 (le prompt-journée), au motif que son
+bénéfice *tour-based* est atteint par l'option 3 sans sa rupture de granularité de mesure ;
+cette recommandation n'est pas retenue.
+
+**Deux rejets.** `002` (snapshot du plan 24 h) : sa réutilisation était conditionnée à un
+hash de population, et chaque chantier en cours change la population — le snapshot serait
+écrit puis jeté à chaque itération. Le filet suffit : les caches OTP/OSMnx/LLM ne sont pas
+invalidés par un changement de trait, un itinéraire restant valide même si l'agent gagne un
+abonnement de bus. Et le **lot 4 du `015`**, qui remontait la loi du vélo dans le fork
+eqasim : le post-traitement étant obligatoire dans tous les cas, la même loi n'a pas à vivre
+à deux endroits — le doublon n'apporterait qu'un risque de dérive entre deux
+implémentations. La crainte d'une population régénérée qui retrouverait l'ancien gradient en
+silence ne tient pas : le contrôleur lève une `[ALARME]` en ERROR sur `personal_bike`
+absent, compte les agents concernés et les traite sans vélo. L'échec est déjà détecté.
+
+Le `015` n'attend donc plus qu'une chose : un run neuf pour rafraîchir les chiffres de son
+volet 3, aujourd'hui lus sur un run archivé dont les personas portent encore l'ancien
+gradient. Cette relance était le ticket `006`, abandonné — la dépendance bascule sur le
+nouveau jeu de test.
+
+**`018` : la méthode de test est arrêtée d'avance.** Au signal de l'utilisateur, le partage
+de la voiture du foyer sera testé selon
+[`protocole-parametre-exogene.md`](arch/protocole-parametre-exogene.md) — mesure d'enquête,
+jeu gelé, A/B apparié, archivage, porte de décision — donc **chiffré sans payer de run**.
+Deux limites du protocole mordent sur ce ticket et sont inscrites dans le ticket : la
+réécriture d'un jeu gelé ne change pas *quelles* options ont été offertes (c'est justement
+l'objet de son option A) et ne rejoue pas les chaînes de véhicule (or la rivalité
+intra-foyer est un phénomène de chaîne). Le protocole peut donc trancher le **niveau** de
+`car_availability` à coût quasi nul, pas l'effet d'une vraie rivalité.
+
+**Nouveau statut de ticket : `en veille`.** Distinct de `bloqué`, qui dit qu'une dépendance
+extérieure manque — les confondre ferait chercher un déblocage qui n'existe pas.
+
+---
+
+## [2026-08-24] Temps terminal : la correction passe en production (tt3)
+
+L'alignement mesuré ce matin est désormais **le comportement par défaut**.
+`llm-agents/config/terminal_time.yaml` passe en `version: tt3` : le temps d'accès et de
+stationnement n'est plus une constante par couronne, il est **tiré dans la loi mesurée sur
+EMC²**. `routing_version` reste à `r1` — le temps réseau ne change pas, donc les milliers
+de routes OSMnx ne sont pas recalculées (~2 h évitées).
+
+**Before :** `car: Temps de trajet : 10 minutes, dont 10 minutes d'accès et de
+stationnement. Distance : 47 m.` — 8 secondes de conduite, 10 minutes de stationnement.
+**After :** le même trajet tire son temps terminal dans la loi d'enquête, qui vaut 0 dans
+88 à 96 % des cas selon la couronne.
+
+**Le vélo aussi.** En `tt2` il portait 60 s par bout, marqués `provenance: unsourced` faute
+de source publiée pour le temps terminal d'un vélo *personnel*. L'enquête en donne une :
+0,11 min par bout (`T3 ∈ {11, 17}`, 2 047 trajets). Les deux modes véhiculés sont donc
+sourcés, et corriger la voiture seule aurait laissé un biais non documenté en face d'un
+biais corrigé.
+
+**Trois pièges fermés au passage**, parce qu'un paramètre tiré n'est pas un paramètre
+constant :
+
+- **la grille de sensibilité effaçait les lois.** `apply_variant` reconstruisait le profil
+  sans les champs de loi : les variantes `low`/`high` retombaient sur les constantes,
+  nulles depuis `tt3`. La grille aurait mesuré « avec ou sans temps terminal » au lieu de
+  « plus ou moins », sous une étiquette de variante juste. Elle met désormais la **loi** à
+  l'échelle, en fusionnant les masses des clés qui collisionnent — la loi somme toujours
+  à 1 ;
+- **le tirage devait être déterministe.** Les plans et les décisions LLM sont mis en
+  cache ; un tirage aléatoire ferait diverger un run de sa reprise et rendrait le cache de
+  décisions faux. La clé est le trajet — mode et couple origine-destination à ~1 m près ;
+- **le rendu impose des minutes entières.** Les clés de la loi sont en minutes, donc
+  multiples de 60 s par construction : l'invariant « total affiché = somme des sous-étapes
+  affichées » tient sans avoir à le vérifier.
+
+**Une fuite d'isolation de tests, découverte par le garde-fou d'alignement.** Le helper
+`_write_config` réassignait `terminal_time._CONFIG_PATH` vers un fichier temporaire sans le
+remettre : tout test exécuté après un test de configuration lisait un YAML jeté dans
+`tmp_path`. La fuite était invisible tant qu'aucun test ne dépendait des valeurs de
+production — le nouveau garde-fou, lui, en dépend : il passait seul et tombait en suite.
+
+**Ce qui est verrouillé maintenant.** 56 tests sur le temps terminal, dont un garde-fou qui
+**refuse un retour aux valeurs `tt2`** : si l'espérance servie sortait de la fourchette de
+l'enquête, il échoue. C'est exactement la régression qui a coûté 2 points de composite au
+run du 21 août, et elle ne peut plus passer inaperçue.
+
+Le bloc `modes:` du YAML est **généré**, pas recopié : `make terminal-time` réémet la loi
+depuis l'enquête (`--emit-config`). Une centaine de nombres maintenus à la main
+dériveraient.
+
+**Traces archivées** dans `docs/traces/2026-08-24_temps_terminal/` — `index.html` pour la lecture au navigateur, `README.md` et `results.json` à côté. Et une page de mesure **horodatée avec ses graphiques** dans `docs/synthesis/2026-08-24_11-31_temps_terminal.html` (`make terminal-page`), au même endroit et dans le même langage visuel que la page de synthèse principale — le store de
+calibration et les jeux `v6` étant gitignorés, les résultats agrégés y sont committés avec
+de quoi les retracer (empreintes de nœuds, clés de paramètres, effectifs).
+
+**Reste à faire, et c'est la partie qui coûte :** un run de simulation neuf. Les mesures
+portent sur des jeux gelés — elles disent ce que le modèle choisirait, pas ce qu'une
+simulation produirait, la réécriture ne rejouant ni l'offre d'options ni les chaînes de
+véhicule. La grille de sensibilité (T6 du ticket 013) reste par ailleurs à parcourir.
+
+---
+
+## [2026-08-24] Le temps de stationnement aligné sur l'enquête : −5,3 sur le composite
+
+Suite du diagnostic du même jour. `llm-agents/config/terminal_time.yaml` applique 2 à
+10 minutes d'accès et de stationnement par trajet voiture, sourcées sur la littérature
+(tables COMPASS, Shoup, Cerema). L'enquête que le projet prend pour cible **le mesure**, et
+en trouve 8 à 24 fois moins.
+
+`make terminal-time` extrait la loi depuis le fichier trajets d'EMC² — `T2` (marche au
+départ), `T6` (marche à l'arrivée), `T11` (durée de recherche du stationnement) :
+
+| couronne | accès : enquête / config | égression : enquête / config |
+|---|---|---|
+| Toulouse | 0,36 / **3** min | 0,52 / **7** min |
+| 1ʳᵉ couronne | 0,14 / 2 | 0,17 / 4 |
+| 2ᵉ couronne | 0,16 / 2 | 0,19 / 3 |
+| 3ᵉ couronne | 0,09 / 1 | 0,06 / 1 |
+
+**Le doute a été levé avant de conclure.** Si EMC² codait la marche vers la voiture comme un
+trajet à pied distinct, `T2`/`T6` vaudraient 0 par construction et la comparaison serait
+vide. Vérifié : sur les 24 481 déplacements comportant un trajet voiture, **aucun** ne porte
+de trajet à pied. Et l'instrument fonctionne — sur les trajets en transports collectifs, de
+structure identique, `T2 + T6` donne 6 minutes en médiane. L'enquête sait enregistrer un
+temps terminal ; elle en enregistre 0,55 min pour la voiture.
+
+**Mesuré, sans rejouer de simulation.** Les jeux gelés portent les composantes décomposées
+sous-puce par sous-puce, et le temps terminal est additif et séparable du temps réseau — la
+config acte déjà cette séparation en versionnant à part les plans et le routage. Les jeux
+dérivés sont donc `v5` avec les seules jambes terminales réécrites, temps de conduite
+intact, offre d'options intacte.
+
+**Trois bras, parce que deux mesuraient moins que ce qui part en production.** `v6` aligne
+la **voiture** seule ; `v7` aligne **voiture et vélo**, soit le périmètre exact de `tt3`.
+Le vélo passe lui aussi de 2,00 à 0,29 min par option, ce qui le rend plus attractif — dans
+le sens *inverse* du gain. La mesure honnête est celle de `v7`.
+
+Résultat de l'A/B apparié (même prompt de production, 223 décisions, 75 personas) :
+
+| | v5 (config) | v6 (voiture) | v7 (**livré**) | écart livré | cible EMC² |
+|---|---|---|---|---|---|
+| **composite** | 27,00 | 22,48 | **24,83** | **−2,17** | |
+| global | 7,80 | 4,84 | 5,78 | −2,01 | |
+| genre | 8,16 | 5,37 | 6,18 | −1,98 | |
+| motif | 8,21 | 9,13 | 9,50 | **+1,29** | |
+| distance | 8,37 | 11,62 | 10,95 | **+2,59** | |
+| **vélo** | 19,50 % | 15,16 % | **16,28 %** | −3,22 | 4,0 % |
+| **voiture** | 38,88 % | 48,86 % | **47,69 %** | +8,81 | 55,0 % |
+| marche | 16,07 % | 14,57 % | 13,48 % | −2,59 | 26,0 % |
+| TC | 25,55 % | 21,41 % | 22,56 % | −3,00 | 12,0 % |
+
+**Before :** `car: Temps de trajet : 10 minutes, dont 10 minutes d'accès et de
+stationnement. Distance : 47 m.` — 8 secondes de conduite.
+**After :** `car: Temps de trajet : 0 minute. Distance : 47 m.`
+
+Le gain de **2,17** est à comparer aux **3,67** que la calibration de prompt a gagnés sur le
+même jeu commun. Aligner la voiture seule aurait rapporté 4,52 ; aligner le vélo en rend
+2,35, soit la moitié. Corriger l'entrée reste du même ordre qu'optimiser le texte, et non
+plus nettement au-dessus : c'est une révision à la baisse de l'argument, et elle est due.
+
+**Ce n'est pas gratuit, et il faut le dire.** Les dimensions `distance` (+2,59) et `motif`
+(+1,29) se **dégradent** : le vélo reste 4× au-dessus de la cible et la marche s'en éloigne
+(13,5 % contre 26,0 attendus). L'alignement corrige un biais dominant, il ne résout pas la
+sous-représentation de la marche.
+
+**Portée de la mesure.** Elle dit ce que le modèle choisirait avec des temps corrigés, pas
+ce que la simulation produirait : la réécriture ne rejoue ni l'offre d'options ni les
+chaînes de véhicule, où le choix d'un jour se répercute sur les offres du lendemain. La
+correction en production (`terminal_time.yaml` + bump de `version`, sans toucher
+`routing_version`) et un run neuf restent à faire.
+
+Ce n'est pas l'ajustement que la décision T2 du ticket 013 interdit : T2 interdit de régler
+ce paramètre **sur un score**. Il est ici re-sourcé sur la mesure d'enquête, ce que son
+propre `provenance: sourced` réclame — et aucune valeur n'a été choisie en regardant une
+part modale.
+
+---
+
+## [2026-08-24] La régression du run du 21 août vient du temps de stationnement, pas du prompt
+
+Le run du 21 août score **22,17** contre **20,11** au run du 2 août sur la loss du moteur de
+calibration — soit +2,06, moins bon — avec un vélo à 20,4 % pour une cible de 4,1 % et une
+voiture tombée à 46,5 % pour 56,7 % attendus. Quatre causes étaient plausibles ; trois sont
+écartées par la mesure, et la quatrième n'était pas sur la liste.
+
+**Ce n'est pas la population.** L'offre de vélo est identique d'un run à l'autre (33,1 % →
+33,6 % des décisions) et l'équipement du run est conforme à l'enquête : 49,6 % de porteurs
+pour ~49,4 % attendus, gradient de taille de ménage croissant. Le nouveau trait
+`personal_bike` ne déplace pas les parts modales.
+
+**Ce n'est pas le prompt.** Le prompt de production `expert_chaine` ne diffère de `expert`
+que par une puce — « Chaîne de la journée : en cas d'utilisation d'un véhicule personnel
+(vélo, trottinette, voiture…), pense au stationnement… ». Un A/B **apparié** des deux
+textes, sur le jeu gelé `rank` et sous le régime de la campagne `ref2`, donne 19,39 % de
+vélo contre 19,50 % : **+0,11 point**. La puce est hors de cause, et le composite ne bouge
+que de sa pénalité de longueur.
+
+**Ce n'est pas la composition des décisions.** Décomposition par bande de distance :
++1,0 point vient du changement de quelles décisions se voient offrir un vélo, +12,4 points
+du taux de prise **à distance constante**.
+
+**C'est le temps terminal des itinéraires (ticket 013).** Sur les trajets de 0,5 à 6 km, le
+temps affiché au LLM est passé de 3,9 à **5,4 min/km pour la voiture** (+38 %), tandis que le
+vélo reste à 4,4 et la marche à 12,4. Le temps d'accès et de stationnement a bien été ajouté
+aux deux modes, mais il pèse trois fois plus sur la voiture — 6 minutes pour rejoindre et
+garer une voiture contre 2 pour déverrouiller et attacher un vélo.
+
+**Before :** `car: Durée estimée : 27 minutes. Distance : 11.3 km.`
+**After :** `car: Temps de trajet : 8 minutes, dont 6 minutes d'accès et de stationnement.
+Distance : 760 m.`
+
+À 2,3 km, la voiture passe de 9 à 13 minutes quand le vélo reste à 10 : **le vélo double la
+voiture**. Le taux de prise du vélo monte dans toutes les bandes de distance sauf sous 1 km,
+avec un maximum de +20 à +40 points entre 1 et 3 km — exactement là où quatre minutes
+renversent le classement.
+
+Le principe du ticket 013 n'est pas en cause : se garer coûte du temps, et l'ignorer était
+un biais en faveur de la voiture. C'est son **calibre** qui est à confronter à l'enquête —
+6 minutes d'accès et de stationnement sur *tout* trajet en voiture, y compris de 760 mètres.
+Et le prompt en service n'a jamais été recalibré sous ce nouveau régime de temps.
+
+Outillage ajouté : `prompt_calibration/ab_chaine.py` compare deux prompts sur un jeu gelé
+avec les mécanismes de la calibration (même `Evaluator`, même loss, même store
+content-addressed) sans lancer de campagne — 30 appels LLM au lieu des centaines qu'aurait
+coûté l'attribution initiale d'un `calibrate run`. Il chiffre avant de dépenser
+(`--dry-run`) et refuse le jeu `test`, réservé au regard unique du protocole.
+
+---
+
+## [2026-08-21] Les familles dans les maisons, les personnes seules dans les appartements
+
+Le type de logement d'un persona ne dépendait que d'une chose : **où** il habite. Dans une
+même zone fine, un célibataire et une famille de quatre tiraient dans la même loi — alors
+que l'enquête voit 15,7 % de personnes seules en maison individuelle isolée contre 53,9 %
+des ménages de quatre et plus. Le gradient était aplati, et dans la population synthétique
+carrément **inversé** : 29,0 % pour une personne seule, 38,5 % à quatre.
+
+La loi du logement est désormais conditionnée à la **taille du ménage** autant qu'à la zone.
+La géographie fixe le niveau, la taille déplace les modalités les unes par rapport aux
+autres, puis on renormalise. La taille utilisée est celle que le persona **déclare**, jamais
+le nombre de ses colocataires présents dans le fichier — un quart des foyers y sont
+incomplets, et les compter mettrait des familles dans des lois de personne seule.
+
+**Avant :** 29,0 / 41,8 / 38,5 / 38,5 % d'individuel isolé pour les tailles 1 à 4 — pente
++9,5 point, quand l'enquête en voit +38.
+**Après :** 14,5 / 41,8 / 36,9 / 52,1 % — pente **+37,6 point**. Mesurée à l'intérieur de
+l'enquête, sur des ménages dont on connaît la vérité, l'erreur du mécanisme tombe de
+**3,00 à 0,75 point** sur les vingt cellules (cinq types de logement × quatre tailles), et
+la marginale d'ensemble ne bouge pas : le levier déplace les tailles, pas la géographie.
+
+**Ce que ça débloque, et c'était la raison d'être du chantier.** L'axe habitat sert à valider
+l'équipement vélo (ticket 015), mais il ne pouvait pas : le logement du persona étant lui-même
+imputé, il ne coïncidait avec le vrai qu'une fois sur deux, ce qui plafonnait l'amplitude
+mesurable à 19,9 points au lieu des 33,4 publiés. L'accord monte à **50,2 %** et l'amplitude
+opposable à **26,8 points** — **+6,9 points regagnés sans qu'une ligne du modèle vélo bouge**.
+Le contrôle a été rejoué et il passe, à +0,1 à +2,3 points de la cible sur les quatre types
+d'habitat.
+
+Le premier rejeu, lui, montrait un biais de 1 à 9 points **sous** la cible, du même signe
+partout — donc pas du bruit. Il ne venait pas du modèle vélo mais d'une **confusion
+d'unité** : la cible comptait des *ménages équipés* (un foyer compte pour un dès qu'il a un
+vélo) quand la population mesure des *personnes dotées* (dans un foyer de quatre avec un
+vélo, une seule personne le porte). L'écart entre les deux suit la taille du ménage, et
+c'est pourquoi il était maximal en maison individuelle. Les deux grandeurs sont désormais
+servies séparément, et un test échoue si on recalcule l'une avec la formule de l'autre.
+
+**Trois refus explicites**, parce qu'un trait imputé qui se replie en silence est pire qu'un
+trait absent :
+
+- une population dont le trait manque **en masse** fait désormais **échouer** la validation
+  au lieu de la réussir par vacuité ; une population trop petite pour trancher a son propre
+  code de sortie, qui ne dit ni succès ni échec ;
+- un persona **sans taille de ménage** ne reçoit aucun logement — retomber sur la loi de zone
+  ferait rentrer le défaut par la fenêtre ;
+- la ressource est **versionnée** : celle d'avant est refusée au chargement, avec la commande
+  à lancer. Un déploiement à moitié fait s'arrête au lieu d'imputer à l'ancienne.
+
+Le sel de tirage passe à `housing_type_v2` : **toutes** les imputations existantes sont
+rebattues, y compris celles qui n'auraient pas changé de loi. C'est délibéré et daté ; les
+populations 10 / 100 / 1 000 sont ré-imputées.
+
+---
+
+## [2026-08-21] Le notebook de génération va enfin jusqu'au bout
+
+Le notebook de population s'arrêtait dans son dossier de travail. Les cinq étapes
+tournaient, produisaient un résultat correct dans `Temp/5_scheduled/`… et personne ne le
+recopiait vers `data/population/`, seul dossier que lisent GAMA et le serveur d'agents. Le
+fichier qui s'y trouvait était donc la sortie **brute** d'eqasim, déposée par l'étape 1 et
+jamais remplacée.
+
+Ce n'est pas un détail de plomberie. `toulouse_population_1000.json` portait **0 activité
+planifiée** là où `Temp/5_scheduled/` en comptait **3 944** : la population servie à la
+simulation n'avait ni activités corrigées, ni flag de desserte TC, ni horaires recalés sur
+les temps de trajet réels. Et rien ne le signalait, parce que le fichier était par ailleurs
+parfaitement valide.
+
+Trois étapes ont été ajoutées :
+
+- **7 — export final** vers `data/population/`, qui **refuse** d'écraser une population
+  valide par une population dégradée (aucune activité planifiée, ordre temporel invalide,
+  ou perte de la moitié des agents) et laisse un `.bak` ;
+- **8 — traits imputés depuis EMC²** : `fix_minor_traits`, puis `enrich_housing_type`, puis
+  `enrich_personal_bike` — dans cet ordre, le dernier lisant le trait du deuxième. Ces
+  imputations n'étaient posées que si quelqu'un pensait à lancer les scripts à la main ;
+- **9 — audit de complétude**, qui rend un verdict **POPULATION COMPLÈTE / INCOMPLÈTE** sur
+  la présence des neuf traits que la simulation consomme.
+
+**Un trait manquant n'est plus silencieux.** C'est le fond du problème : les consommateurs
+en aval ne se plaignent pas tous d'une donnée absente. `personal_bike` manquant était traité
+comme « vélo normal » jusqu'à hier — 100 % des agents à vélo, sans une ligne de log. L'audit
+prononce donc un verdict sévère plutôt qu'un avertissement, et l'étape 8 distingue trois
+sorties : trait posé, trait **impossible** à poser (ressource d'accès restreint absente —
+elle dit laquelle produire), et population **enrichie mais trop petite pour être validée**
+— ce dernier cas n'étant pas un échec, une population de 10 agents ne pouvant arbitrer
+aucun croisement.
+
+**Before :** notebook exécuté → `data/population/` contenait la sortie brute d'eqasim, sans
+horaires recalés ni traits imputés ; il fallait connaître trois commandes et leur ordre.
+**After :** notebook exécuté → population complète, vérifiée, avec un verdict explicite.
+
+---
+
+## [2026-08-21] Le vélo de l'agent, appris sur l'enquête au lieu d'être hérité d'un inconnu
+
+Le vélo d'un persona venait d'un ménage réel de l'ENTD 2008 tiré au sort — mais apparié
+**sans** la taille du foyer ni le type d'habitat. Un célibataire toulousain héritait donc
+des trois vélos d'une famille de cinq, et une famille de cinq du zéro vélo d'un couple âgé.
+Le total tombait à peu près juste, ce qui masquait tout : le gradient de taille de ménage
+était **inversé**.
+
+`personal_bike` est désormais produit en trois étages appris sur EMC² Toulouse 2023 : le
+**nombre de vélos du foyer** est tiré d'abord (conditionné à la zone fine du domicile, à la
+taille du ménage et à la motorisation), puis **attribué nominativement** par tirage sans
+remise pondéré par la propension à pratiquer le vélo, puis **typé** en VAE à 7,7 % du parc.
+Le tirage est déterministe par hachage de l'adresse : deux générations donnent le même parc.
+
+**Avant :** 76 % des personnes seules avaient un vélo, contre 36 % dans les ménages de
+quatre — l'inverse de l'enquête.
+**Après :** 35 % / 50 % / 61 % / 68 % pour les tailles 1 à 4, contre 33 / 48 / 54 / 63 %
+attendus. La pente est dans le bon sens, et le total ne bouge pas (50,3 % de porteurs pour
+50,9 % observés).
+
+Pourquoi tirer le stock du foyer d'abord, et pas redresser à la fin : l'équipement vélo est
+un trait de **ménage**, pas une pièce lancée pour chaque membre. Sur les familles de quatre,
+l'enquête voit 16 % de foyers sans aucun vélo et 40 % avec un vélo par tête ; un tirage
+individuel indépendant **calé sur la même moyenne** produit 1 % et 18 %, en empilant tout au
+milieu. Les deux lois ont exactement la même moyenne — donc aucun redressement sur la
+moyenne ne peut les rapprocher.
+
+**Les vélos dormants sont conservés, exprès.** Onze points de la population tiennent un vélo
+sans le pratiquer. Un vélo au garage est un vélo : c'est au choix modal et à l'agent de
+décider de ne pas le prendre, pas à l'imputation de le faire disparaître.
+
+**Une population sans le trait ne roule plus en silence.** `personal_bike` absent valait
+« vélo normal » par rétrocompatibilité, ce qui mettait 100 % des agents à vélo sans une
+ligne de log — sur le mode le plus scruté du projet. Le défaut est désormais « pas de vélo »,
+et l'alarme sonne (`make error`).
+
+**La politique de choix modal a été ré-entraînée sur la même définition.** Elle apprenait
+« il y a un vélo dans le foyer » (63 % des personnes) et l'appliquait à une attribution
+nominative (50 %) : le coefficient portait sur autre chose que ce qu'il mesurait. Les deux
+côtés reconstruisent maintenant la même variable (spec v2, `make policy`). L'ajustement ne
+bouge pas — ce n'était pas le but, c'était la cohérence.
+
+**Trois critères de recette ont été restatés, mesure à l'appui**, parce qu'ils étaient
+inatteignables comme écrits — et c'est peut-être le résultat le plus utile de ce lot :
+
+- « 71 % en individuel isolé contre 38 % en grand collectif » est en outre une part de
+  **ménages** équipés, quand `personal_bike` est un trait **individuel** : la cible servie
+  est donc exprimée en part de **personnes** dotées. Confondre les deux unités biaise les
+  quatre modalités dans le même sens, d'autant plus fort que l'habitat est familial (−10 pts
+  en individuel isolé, −3 en grand collectif) — un foyer de quatre à un vélo est « équipé »
+  mais un seul de ses membres est doté. Corrigé, les écarts tombent de −0,9…−8,6 à
+  **+0,1…+2,3 points**. Et le critère lui-même ne peut pas être vérifié sur
+  une population synthétique : le type de logement d'un persona est lui-même imputé et n'est
+  juste qu'une fois sur deux, ce qui écrase l'amplitude mesurable, même avec le vrai nombre
+  de vélos de l'enquête. La cible opposable est la courbe **diluée**, recalculée à chaque
+  export — et elle s'est déjà resserrée toute seule de 19,9 à **26,8 points** à la livraison
+  du ticket 019, sans qu'une ligne du modèle vélo change et sans que la population cesse de
+  la tenir. C'est la meilleure preuve qu'on mesurait la dilution, et non un défaut du vélo.
+- « 1,22 vélo par ménage » compte des vélos que le mécanisme ne représente pas exprès (le
+  cinquième vélo d'un foyer de deux, qui n'a personne pour le porter).
+- les cibles par catégorie sont désormais **standardisées** sur la composition réellement
+  mesurée, et leur précision se calcule en **ménages** et non en personnes — le nombre de
+  vélos est tiré une fois par foyer, deux frères ne sont pas deux observations.
+
+Et une cellule sans matière n'est plus « réussie » : sous 30 ménages elle est **non
+concluante**, et si aucun contrôle ne tranche, la validation **échoue**. La population de
+10 agents ne peut donc plus décrocher un sans-faute en ne mesurant rien.
+
+Le correctif est aussi remonté dans le fork eqasim, pour qu'une génération neuve soit juste
+sans post-traitement. Il n'a **pas été rejoué** : la chaîne est exécutable (les données
+sources sont là) mais demande un `docker compose build eqasim` — le stage importe désormais
+`llm_module` — puis une régénération complète.
+
+Détail, décisions et cibles : `docs/arch/velo-equipement.md`.
+
+---
+
+## [2026-08-21] L'habitat imputé sans la taille du ménage
+
+Le type de logement d'un persona est tiré dans la loi de sa zone fine — et **seulement** dans
+celle-là. Dans une même zone, les familles sont dans les maisons et les personnes seules dans
+les appartements ; le tirage par zone mélange les deux.
+
+Le mécanisme a été mis à l'épreuve **à l'intérieur d'EMC²**, en le faisant tourner sur des
+ménages dont on connaît la vérité : la part d'individuel isolé qu'il attribue aux personnes
+seules vaut 25,4 % quand la réalité est de 15,7 %, et 49,4 % aux ménages de quatre et plus
+contre 53,9 %. Dans la population synthétique, la pente est carrément inversée — 27,2 % pour
+une personne seule, 36,1 % à quatre et plus.
+
+**Ça bloque la recette du vélo.** Le deuxième critère du ticket 015 valide l'équipement vélo
+par type d'habitat, 71 % en individuel isolé contre 38 % en grand collectif. Or **38 % de ce
+gradient est de la composition de ménages** et non de l'habitat : standardisé sur la taille,
+il tombe de 33,4 à 20,8 points. Valider les vélos sur cet axe suppose donc que le croisement
+habitat × taille soit juste — il ne l'est pas.
+
+`docs/tickets/ticket_019_habitat_taille_menage.md` spécifie la reprise, et la règle proposée
+est **testée avant d'être écrite** : loi de zone multipliée par un levier de taille estimé au
+périmètre, puis renormalisée. L'erreur absolue moyenne passe de 2,62 à 0,63 point sur les
+vingt cellules, et la géographie ne bouge pas (34,7 % d'individuel isolé en marginale
+d'ensemble, 34,9 % après correction). La loi brute par (zone, taille) était hors de portée :
+trois ménages par cellule en médiane. Le ticket n'a pas de volet eqasim — `housing_type` est
+posé après coup, une ré-imputation suffit.
+
+Deux autres candidats du même balayage sont **clos par décision**, et la trace est écrite là
+où elle sera relue : le libellé de revenu, qui mesure une taille de ménage autant qu'un
+niveau de vie parce que l'unité de consommation est jetée après avoir servi
+(`docs/arch/population-post-traitements.md`), et le deux-roues motorisé, mode réel à 0,85 %
+des déplacements mesuré à zéro parce qu'absent (annexe du ticket 018). Aucun des deux n'est
+corrigé ; les deux sont documentés.
+
+**Avant :** l'axe habitat servait de critère de recette sans avoir jamais été testé.
+**Après :** il est testé, chiffré, et sa correction est validée sur données réelles avant
+d'être implémentée.
+
+---
+
+## [2026-08-21] Le vélo n'était pas seul : l'abonnement TC, le permis, la voiture
+
+Le diagnostic du vélo a été rejoué sur tous les traits d'équipement de la population
+synthétique, face aux mêmes microdonnées EMC² Toulouse 2023. **Quatre champs seulement sont
+recopiés d'un donneur ENTD 2008** — permis, abonnement TC, statut de passager, nombre de
+vélos — et deux d'entre eux souffrent exactement du mal du vélo : un total à peu près juste,
+une répartition retournée.
+
+**L'abonnement TC est le cas le plus grave, et le plus influent.** 21,9 % d'abonnés simulés
+contre 25,8 % mesurés : quatre points d'écart en agrégat, mais les étudiants passent de
+74,3 % à 36,7 % et les retraités de 17,7 % à 28,5 %. L'abonnement a changé de génération. Or
+c'est le levier d'équipement le plus fort de la politique de choix modal — +9,7 points de TC
+et −8,2 points de voiture, presque le double du vélo — donc la part TC globale reste presque
+juste **pour les mauvaises personnes**.
+
+**Le permis suit la même pente, en plus discret** : 91,5 % de titulaires simulés contre
+85,9 % chez les majeurs, l'écart se concentrant sur les 18-24 ans (85,4 % contre 58,1 %). La
+cause est commune aux deux : la classe d'âge de l'appariement couvre 15 à 29 ans d'un bloc,
+alors que le permis y va de 0 % à 78 % et l'abonnement de 64 % à 29 %. Un donneur national de
+2008 ne peut pas rendre une cohorte toulousaine de 2023.
+
+**La voiture, elle, pose une autre question** : elle est traitée comme un bien personnel
+alors qu'elle est partagée. 20,6 % des ménages motorisés comptent plus de titulaires que de
+voitures, et 6,1 % des trajets voiture conduits d'un run de référence partent alors que
+toutes les voitures du foyer sont déjà sorties.
+
+Trois spécifications sont écrites : `docs/tickets/ticket_016_abonnement_tc_progedo.md`,
+`ticket_017_permis_progedo.md` et `ticket_018_partage_voiture_foyer.md` (non prioritaire,
+avec en annexe le deux-roues motorisé — 9 % des ménages, mesuré à zéro parce qu'absent).
+Les 016 et 017 partagent leurs deux premiers lots : même fichier source, même cause, un seul
+chargeur pour deux cibles. Et contrairement au vélo, ils **alignent** les définitions au lieu
+de les écarter — la politique est déjà entraînée sur `P12` et `P7`, aucun ré-entraînement.
+
+**Avant :** un seul trait d'équipement était confronté à l'enquête ; les trois autres
+n'avaient jamais été mesurés.
+**Après :** les quatre le sont, avec vingt-cinq critères de recette chiffrés et un ordre
+de livraison qui tient compte des dépendances — le permis avant la voiture, dont il
+désamorce l'essentiel du biais.
+
+---
+
+## [2026-08-21] Le vélo des agents : le total est bon, la répartition non
+
+L'équipement vélo de la population synthétique a été confronté aux microdonnées EMC²
+Toulouse 2023 (ProGEDO `lil-1750`) et au rapport d'enquête publié. Le volume tient :
+53,3 % des agents ont un vélo, contre ~51 % attendus. **La répartition, elle, est
+inversée** : l'équipement décroît avec la taille du ménage (76 % pour une personne seule,
+25 % à cinq) quand l'enquête le voit croître (33 % → 84 %), et il est plat selon le type
+d'habitat quand l'enquête va de 38 % à 71 %.
+
+La cause est isolée : eqasim ne calcule pas le nombre de vélos d'un ménage, il le
+**recopie** du ménage ENTD 2008 apparié — or l'appariement ne tient compte ni de la taille
+du foyer ni de l'habitat. Un célibataire peut donc hériter des trois vélos d'une famille de
+cinq. La formule de répartition interne, elle, est presque juste : à nombre de vélos donné,
+elle ne s'écarte de l'enquête que de quelques points (sauf pour la personne seule).
+
+`docs/tickets/ticket_015_acces_velo_progedo.md` spécifie la reprise : apprendre le nombre
+de vélos du ménage sur EMC² (et non plus le recopier), puis l'attribuer nominativement
+d'après la pratique déclarée — vélos dormants compris, car un vélo qu'on n'utilise pas
+existe quand même. Un seul champ individuel en sortie, le ménage ne vit que le temps de la
+génération.
+
+**Avant :** l'équipement vélo était une formule non validée, sa seule trace vérifiable un
+commentaire de code.
+**Après :** un diagnostic reproductible sur données officielles, neuf cibles chiffrées de
+validation, et quatre lots dont le premier ne demande aucun modèle.
+
+Danger fermé au passage : `personal_bike` manquait dans 7 des 10 fichiers de
+`data/population/` — dont celui de 10 000 agents — et `_owns_bike` traite le champ absent
+comme « possède un vélo ». Un run parti d'un répertoire d'expérience neuf aurait équipé
+100 % des agents en silence. Ces fichiers sont déplacés dans `data/population/old/`, hors
+du champ du loader, avec la note qui explique pourquoi.
+
+---
+
+## [2026-08-21] D'où vient chaque attribut d'un agent
+
+Un persona arrive au LLM avec 19 traits, et rien ne disait lesquels sortent du tirage
+statistique d'eqasim, lesquels sont recodés à l'export, et lesquels sont **imputés** faute
+de donnée. La question se posait à chaque lecture d'un prompt : « ce type de logement, il
+est observé ou tiré ? ».
+
+`docs/arch/population-post-traitements.md` répond attribut par attribut, en quatre étages
+— fork eqasim, export JSON, notebook, correctifs de surface — avec la règle exacte
+appliquée et son ancre dans le code.
+
+Deux constats qui en sortent, notés dans la page :
+
+- `bike_availability` (le vélo au niveau du ménage) est calculé, exporté en CSV, et
+  **jamais lu** : son seul consommateur est l'export MATSim, hors de notre `run:`. Toute
+  l'information vélo qui atteint l'agent passe par `personal_bike`, donc par une imputation
+  individuelle.
+- `number_of_vehicles`, à l'inverse, n'atteint pas l'agent mais pilote l'appariement HTS
+  via `any_cars` — et comme il somme voitures et deux-roues, un ménage sans voiture mais
+  motorisé est apparié comme « motorisé ».
+
+**Avant :** l'origine d'un trait se reconstituait en lisant quatre fichiers dans trois
+dépôts.
+**Après :** une page, une ligne par transformation, l'ancre de code à côté.
+
+---
+
 ## [2026-08-20] Le statut des tickets vit dans la conf, plus dans les tickets
 
 Le tableau de bord annonçait « à faire, 0/15 » pour le ticket 008 dont les sept actions

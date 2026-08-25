@@ -87,7 +87,7 @@ def _person(**traits) -> Person:
     )
 
 
-# ── Possession (comportement historique, inchangé pour le vélo) ───────────────
+# ── Possession ───────────────────────────────────────────────────────────────
 
 class TestPossession:
     def test_pas_de_velo(self):
@@ -102,9 +102,54 @@ class TestPossession:
     def test_vae(self):
         assert _owns_bike({"personal_bike": "VAE"}) is True
 
-    def test_velo_champ_absent_defaut_true(self):
-        """Rétrocompatibilité : populations sans le champ → vélo autorisé."""
-        assert _owns_bike({}) is True
+    def test_velo_champ_absent_defaut_false_et_alarme(self, monkeypatch):
+        """Ticket 015, lot 1 : champ absent ⇒ PAS de vélo, et l'alarme sonne.
+
+        Le défaut était l'inverse, au nom de la rétrocompatibilité : une population sans
+        `personal_bike` mettait ainsi 100 % des agents à vélo **en silence**, sur le mode
+        dont la part modale est la plus scrutée du projet. Le repli prive désormais
+        l'agent d'un mode plutôt que de lui en offrir un qu'il n'a pas, et il est
+        bruyant."""
+        import urban_mobility_agents.simulation_controller as controller
+
+        fired = []
+        monkeypatch.setattr(controller, "fire_alarme", fired.append)
+        monkeypatch.setattr(controller, "_bike_trait_alarm_on", False)
+        errors = []
+        monkeypatch.setattr(controller.logger, "error",
+                            lambda message, *a, **k: errors.append(message))
+
+        assert _owns_bike({}) is False
+        assert fired == ["personal_bike_absent"]
+        assert any("[ALARME]" in message and "personal_bike" in message
+                   for message in errors)
+
+    def test_lalarme_champ_absent_ne_sonne_quune_fois(self, monkeypatch):
+        """Sinon elle est émise à chaque décision de chaque agent et noie `make error`.
+        Le compteur Prometheus, lui, compte bien tous les cas."""
+        import urban_mobility_agents.simulation_controller as controller
+
+        fired = []
+        monkeypatch.setattr(controller, "fire_alarme", fired.append)
+        monkeypatch.setattr(controller, "_bike_trait_alarm_on", False)
+        errors = []
+        monkeypatch.setattr(controller.logger, "error",
+                            lambda message, *a, **k: errors.append(message))
+
+        for _ in range(5):
+            assert _owns_bike({}) is False
+        assert len(errors) == 1
+        assert len(fired) == 5
+
+    def test_un_velo_declare_ne_declenche_aucune_alarme(self, monkeypatch):
+        import urban_mobility_agents.simulation_controller as controller
+
+        fired = []
+        monkeypatch.setattr(controller, "fire_alarme", fired.append)
+        monkeypatch.setattr(controller, "_bike_trait_alarm_on", False)
+        assert _owns_bike({"personal_bike": "vélo normal"}) is True
+        assert _owns_bike({"personal_bike": "Pas de vélo"}) is False
+        assert fired == []
 
     def test_voiture_selon_number_of_cars(self):
         assert _owns_car({"number_of_cars": 1}) is True

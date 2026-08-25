@@ -1,0 +1,123 @@
+<title>Traces — temps terminal et règle de chaîne</title>
+<style>
+:root{--ink:#1b1b1f;--ink2:#54545e;--ink3:#82828e;--bg:#fbfbfa;--card:#ffffff;
+--line:#e3e3df;--line2:#cfcfc9;--accent:#4A6FE3;--warn:#C2571A;--warnbg:#fdf4ec;
+--ok:#2E7D5B;--okbg:#f2f8f5;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:27px;font-weight:600;letter-spacing:-.02em;margin:0 0 4px}
+h2{font-size:21px;font-weight:500;margin:36px 0 6px;letter-spacing:-.015em}
+h3{font-size:15px;font-weight:600;margin:24px 0 4px}
+.sub{color:var(--ink3);font-size:13px;margin-bottom:26px}
+p{color:var(--ink2);margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:12px 0}
+th{text-align:left;font-weight:500;color:var(--ink3);font-size:11.5px;
+padding:7px 10px 7px 0;border-bottom:1px solid var(--line2)}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--line);color:var(--ink2)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.hi td{background:#f6f8fe;font-weight:600;color:var(--ink)}
+.mono{font-family:var(--mono);font-size:12.5px}
+.note{border:1px solid var(--line2);border-left:3px solid var(--ok);
+background:var(--okbg);border-radius:10px;padding:14px 18px;margin:16px 0}
+.note.warn{border-left-color:var(--warn);background:var(--warnbg)}
+.note .t{font-weight:600;color:var(--ink);margin-bottom:5px}
+.good{color:var(--ok);font-weight:600}
+.bad{color:var(--warn);font-weight:600}
+.tiles{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0}
+.tile{border:1px solid var(--line2);border-radius:10px;background:var(--card);
+padding:12px 16px;min-width:158px}
+.tile .k{font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em}
+.tile .v{font-size:23px;font-weight:600;margin-top:2px}
+.tile .u{font-size:11.5px;color:var(--ink3)}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;
+padding:12px 14px;overflow-x:auto;font-family:var(--mono);font-size:12px;
+color:var(--ink2);line-height:1.5}
+.scroll{overflow-x:auto}
+</style>
+<div class="wrap">
+<h1>Deux A/B, une seule cause</h1>
+<div class="sub">Diagnostic de la régression du run <span class="mono">2026-08-21_19_54</span> · mesures appariées sur jeux gelés · archivé le 25/08/2026 à 08:27 UTC</div>
+<div class="tiles">
+<div class="tile"><div class="k">Composite · temps config</div><div class="v">27.00</div><div class="u">jeu v5</div></div>
+<div class="tile"><div class="k">Composite · temps enquête</div><div class="v good">22.48</div><div class="u">jeu v6</div></div>
+<div class="tile"><div class="k">Gain</div><div class="v good">-4.52</div><div class="u">la calibration gagnait +3,67</div></div>
+<div class="tile"><div class="k">Effet de la puce de prompt</div><div class="v">+0.11</div><div class="u">point de vélo — nul</div></div>
+</div>
+<h2>Ce qui a été mesuré</h2>
+<p>Quatre choses avaient changé entre le run du 2 août et celui du 21 : le prompt système, l'agenda d'anticipation, le mélange de modèles et le temps terminal des itinéraires. Deux A/B <strong>appariés</strong> — mêmes personas, mêmes jeux d'options des deux côtés — isolent les axes un par un.</p>
+<h3>A/B 1 — la puce « Chaîne de la journée », à jeu constant</h3>
+<p>Le prompt de production <span class="mono">expert_chaine</span> ne diffère de <span class="mono">expert</span> que par une puce : « en cas d'utilisation d'un véhicule personnel (vélo, trottinette, voiture…), pense au stationnement… ».</p>
+<div class="scroll"><table><thead><tr><th>mesure</th><th class="num">expert</th><th class="num">expert_chaine</th><th class="num">écart</th></tr></thead><tbody>
+<tr><td>composite (↓ mieux)</td><td class="num">26.79</td><td class="num">27.00</td><td class="num">+0.21</td></tr>
+<tr><td>global</td><td class="num">7.72</td><td class="num">7.80</td><td class="num">+0.07</td></tr>
+<tr><td>part de vélo (%)</td><td class="num">19.39</td><td class="num">19.50</td><td class="num">+0.11</td></tr>
+<tr><td>part de voiture (%)</td><td class="num">38.39</td><td class="num">38.88</td><td class="num">+0.49</td></tr>
+</tbody></table></div>
+<div class="note"><div class="t">La puce est hors de cause : +0,11 point de vélo</div><p>Le composite ne bouge que de sa pénalité de longueur (+0,69) — le comportement s'est même très légèrement amélioré. Une puce de prompt n'explique pas un glissement de 4 points de part modale.</p></div>
+<h3>A/B 2 — le temps terminal, à prompt constant</h3>
+<p>Le jeu <span class="mono">v6</span> est <span class="mono">v5</span> avec les seules jambes terminales des options voiture réécrites selon la loi mesurée sur EMC² : 7,93 min → 0,56 min de moyenne. Temps de conduite intact, offre d'options intacte.</p>
+<div class="scroll"><table><thead><tr><th>mesure</th><th class="num">v5 · config</th><th class="num">v6 · enquête</th><th class="num">écart</th><th class="num">cible EMC²</th></tr></thead><tbody>
+<tr class="hi"><td>composite (↓ mieux)</td><td class="num">27.00</td><td class="num">22.48</td><td class="num"><span class="good">-4.52</span></td><td class="num">—</td></tr>
+<tr><td>global</td><td class="num">7.80</td><td class="num">4.84</td><td class="num"><span class="good">-2.96</span></td><td class="num">—</td></tr>
+<tr><td>âge</td><td class="num">8.28</td><td class="num">7.55</td><td class="num"><span class="good">-0.73</span></td><td class="num">—</td></tr>
+<tr><td>genre</td><td class="num">8.16</td><td class="num">5.37</td><td class="num"><span class="good">-2.80</span></td><td class="num">—</td></tr>
+<tr><td>motif</td><td class="num">8.21</td><td class="num">9.13</td><td class="num"><span class="bad">+0.92</span></td><td class="num">—</td></tr>
+<tr><td>distance</td><td class="num">8.37</td><td class="num">11.62</td><td class="num"><span class="bad">+3.26</span></td><td class="num">—</td></tr>
+<tr><td>marche (%)</td><td class="num">16.07</td><td class="num">14.57</td><td class="num"><span class="bad">-1.50</span></td><td class="num">26.0</td></tr>
+<tr><td>velo (%)</td><td class="num">19.50</td><td class="num">15.16</td><td class="num"><span class="good">-4.34</span></td><td class="num">4.0</td></tr>
+<tr><td>voiture (%)</td><td class="num">38.88</td><td class="num">48.86</td><td class="num"><span class="good">+9.98</span></td><td class="num">55.0</td></tr>
+<tr><td>transports collectifs (%)</td><td class="num">25.55</td><td class="num">21.41</td><td class="num"><span class="good">-4.14</span></td><td class="num">12.0</td></tr>
+</tbody></table></div>
+<div class="note"><div class="t">−5,28 de composite, et la voiture regagne 11 points</div><p>À comparer aux <strong>+3,67</strong> que la calibration de prompt a gagnés sur le même jeu commun : corriger l'entrée rapporte plus qu'optimiser le texte. C'est l'argument pour le faire d'abord.</p></div>
+<div class="note warn"><div class="t">Ce n'est pas gratuit</div><p>La dimension <span class="mono">distance</span> se dégrade de <strong>+2,80</strong>. Le vélo reste 3,5× au-dessus de la cible et la marche s'en éloigne (14,4 % contre 26,0 attendus). L'alignement corrige le biais dominant ; il ne résout pas la sous-représentation de la marche, qui devient l'écart principal.</p></div>
+<h2>Pourquoi l'enquête fait foi ici</h2>
+<p>EMC² mesure ce temps directement : <span class="mono">T2</span> (marche au départ), <span class="mono">T6</span> (marche à l'arrivée) et <span class="mono">T11</span> (durée de recherche du stationnement), sur 24 482 trajets conducteur de VP, renseignés à ~100 %.</p>
+<div class="scroll"><table><thead><tr><th>couronne</th><th class="num">accès · enquête</th><th class="num">accès · tt2</th><th class="num">égression · enquête</th><th class="num">égression · tt2</th><th class="num">facteur</th></tr></thead><tbody>
+<tr><td>Toulouse</td><td class="num">0.36</td><td class="num">3</td><td class="num">0.52</td><td class="num">7</td><td class="num bad">×11</td></tr>
+<tr><td>1ʳᵉ couronne</td><td class="num">0.14</td><td class="num">2</td><td class="num">0.17</td><td class="num">4</td><td class="num bad">×19</td></tr>
+<tr><td>2ᵉ couronne</td><td class="num">0.16</td><td class="num">2</td><td class="num">0.19</td><td class="num">3</td><td class="num bad">×14</td></tr>
+<tr><td>3ᵉ couronne</td><td class="num">0.09</td><td class="num">1</td><td class="num">0.06</td><td class="num">1</td><td class="num bad">×13</td></tr>
+</tbody></table></div>
+<div class="note"><div class="t">Le contrôle qui autorise la comparaison</div><p>Le doute légitime : si la marche vers la voiture était codée comme un trajet à pied <em>distinct</em>, <span class="mono">T2</span> et <span class="mono">T6</span> vaudraient 0 par construction et la mesure serait vide. Vérifié — sur les 24 481 déplacements comportant un trajet voiture, <strong>aucun</strong> ne porte de trajet à pied. Et l'instrument fonctionne : sur les trajets en transports collectifs, de structure identique, <span class="mono">T2 + T6</span> donne <strong>6 minutes</strong> en médiane. L'enquête sait enregistrer un temps terminal ; elle en enregistre 0,55 min pour la voiture.</p></div>
+<h3>Ce que le modèle voyait</h3>
+<pre>avant   car: Temps de trajet : 10 minutes, dont 10 minutes d'accès
+             et de stationnement. Distance : 47 m.
+          · Rejoindre la voiture : 3 minutes.
+          · Conduite : 8 seconds.          &lt;- 47 mètres
+          · Stationnement et marche : 7 minutes.
+
+après   car: Temps de trajet : 0 minute. Distance : 47 m.</pre>
+<h2>Portée de ces mesures</h2>
+<div class="note warn"><div class="t">Jeux gelés, pas simulation</div><p>Elles disent ce que le modèle <em>choisirait</em> dans ces situations, pas ce qu'une simulation <em>produirait</em> : la réécriture ne rejoue ni l'offre d'options ni les chaînes de véhicule, où le choix d'un jour se répercute sur les offres du lendemain. Un run neuf reste nécessaire pour la mesure de bout en bout.</p></div>
+<p>Le comparatif est apparié dans les deux cas. L'effectif opposable est celui des personas <strong>distincts</strong>, pas des décisions — les déplacements d'un même agent partagent son profil.</p>
+<div class="scroll"><table><thead><tr><th>branche</th><th>jeu</th><th class="num">composite</th><th class="num">décisions</th><th class="num">personas</th><th>nœud</th><th>modèle</th></tr></thead><tbody>
+<tr><td class="mono">ab_chaine_expert</td><td>rank (v5)</td><td class="num">26.79</td><td class="num">399</td><td class="num">75</td><td class="mono">9c098aa7fd</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>rank (v5)</td><td class="num">27.00</td><td class="num">414</td><td class="num">75</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>rank (v6)</td><td class="num">22.48</td><td class="num">319</td><td class="num">75</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>rank (v7)</td><td class="num">24.83</td><td class="num">350</td><td class="num">75</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>rank (v8)</td><td class="num">22.58</td><td class="num">338</td><td class="num">75</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>train (v7)</td><td class="num">25.69</td><td class="num">1657</td><td class="num">404</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>train (v8)</td><td class="num">26.15</td><td class="num">1591</td><td class="num">404</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v7)</td><td class="num">30.98</td><td class="num">540</td><td class="num">165</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v8)</td><td class="num">29.03</td><td class="num">552</td><td class="num">165</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>screen (v9)</td><td class="num">22.93</td><td class="num">559</td><td class="num">121</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>screen (v10)</td><td class="num">22.51</td><td class="num">476</td><td class="num">121</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>screen (v9n)</td><td class="num">22.60</td><td class="num">583</td><td class="num">121</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>screen (v10b)</td><td class="num">23.06</td><td class="num">515</td><td class="num">121</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v9)</td><td class="num">26.75</td><td class="num">795</td><td class="num">182</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v10)</td><td class="num">25.06</td><td class="num">794</td><td class="num">182</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v9n)</td><td class="num">28.73</td><td class="num">784</td><td class="num">182</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+<tr><td class="mono">ab_chaine_expert_chaine</td><td>val (v10b)</td><td class="num">26.78</td><td class="num">796</td><td class="num">182</td><td class="mono">c00b4318b3</td><td class="mono">gemini-3.5-flash-lite</td></tr>
+</tbody></table></div>
+<h2>Reproduire</h2>
+<p>Store d'origine : <span class="mono">calibration_results/ab_chaine.db</span> — gitignoré, donc volatil, et c'est la raison d'être de cette page. Les deux A/B se rejouent <strong>gratuitement</strong> tant qu'il existe (cache content-addressed) ; sinon ~15 appels LLM par bras.</p>
+<pre>make terminal-time           # la loi d'enquête, depuis les microdonnées
+cd prompt_calibration
+python rewrite_terminal_time.py --src v5 --dst v6
+python ab_chaine.py   --config run_ab_chaine.yaml --dataset rank --dry-run
+python ab_terminal.py --dry-run
+python archive_ab.py  --out ../docs/traces/2026-08-24_temps_terminal</pre>
+<p>La correction est en production depuis <span class="mono">tt3</span> (<span class="mono">llm-agents/config/terminal_time.yaml</span>) : le temps terminal y est tiré dans cette loi, et 56 tests — dont un garde-fou d'alignement — refusent un retour aux valeurs tt2.</p>
+</div>

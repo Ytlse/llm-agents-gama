@@ -1,0 +1,46 @@
+{
+  "date": "2026-08-25",
+  "ticket": "023",
+  "substrat": "v9",
+  "run_source": "experiments/archive/2026-08-24_17_34",
+  "appels_llm": 0,
+  "jours": {
+    "annee": 365,
+    "fenetre": 152
+  },
+  "fenetre_enquete": {
+    "debut": "09-20",
+    "fin": "02-18",
+    "franchit_le_1er_janvier": true
+  },
+  "effectifs": {
+    "enregistrements": 1810,
+    "personas_distincts": 613,
+    "splits": [
+      "train",
+      "val"
+    ]
+  },
+  "bras": {
+    "v9_annee_meteo_v2": {
+      "temperature_moyenne_c": 15.57,
+      "part_sous_la_pluie_pct": 42.43
+    },
+    "v10_fenetre_meteo_v3": {
+      "temperature_moyenne_c": 10.84,
+      "part_sous_la_pluie_pct": 43.54,
+      "phrase_inchangee_pct": 1.05,
+      "bascules_pluie_sec_pct": 49.4,
+      "delta_temperature_c": -4.74,
+      "delta_pluie_pt": 1.1
+    },
+    "v9n_annee_meteo_v3n": {
+      "temperature_moyenne_c": 15.83,
+      "part_sous_la_pluie_pct": 41.27,
+      "phrase_inchangee_pct": 1.1,
+      "bascules_pluie_sec_pct": 49.3,
+      "delta_temperature_c": 0.26,
+      "delta_pluie_pt": -1.16
+    }
+  }
+}

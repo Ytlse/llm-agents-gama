@@ -1384,6 +1384,71 @@ Contrôle de sortie sur `v5` : le run source ne portait **aucune** étape annot�
 était uniformément dégagé) ; le jeu gelé en porte 87 sur 440 en `val` — le tirage fait
 bien varier les jours, et l'agenda le dit désormais.
 
+#### La fenêtre d'enquête et le bulletin (jeux `v10` / `v9n` / `v10b`, 2026-08-25)
+
+Le tirage dans l'année complète a supprimé le défaut grave des jeux `v1`. Restait un
+**raffinement** : les cibles auxquelles ces jeux servent à comparer sont des déplacements
+recueillis du **20/09/2022 au 18/02/2023** — 152 jours, pas 365. `WeatherDeck.load` accepte
+donc une fenêtre, lue par `survey_window_md()` dans `population_emc2_2023.yaml`, et **gelée
+dans le manifeste** pour que la mesure reste rejouable en déploiement autonome.
+
+> ⚠️ **La fenêtre franchit le 1er janvier.** Le filtre est `>= début OU <= fin`, jamais
+> l'intervalle simple `début <= x <= fin` — celui-ci ne retient **aucun** jour, et un tirage
+> vide est indistinguable d'un tirage juste jusqu'à ce qu'on regarde les températures. D'où
+> le **contrôle de validité** publié avec la loi (`WeatherDeck.validity_report()`) : les
+> profils de température et de précipitation des deux fenêtres, côte à côte, dans le
+> `DERIVATION.md` de chaque jeu.
+
+**Le bulletin.** La ligne météo porte désormais le cadre de la journée :
+
+| | |
+|---|---|
+| Avant | `Météo : 2°C, Partiellement nuageux. Précipitations prévues dans la journée : 0,2 mm.` |
+| Après | `Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 7°C, lever 07:55, coucher 17:25. Pluie prévue en soirée (0,2 mm sur la journée).` |
+
+Trois contraintes que la source impose, toutes chiffrées avant d'écrire une ligne
+(`docs/traces/2026-08-25_premesure_meteo_v9/controles_source.json`) :
+
+- **aucun « risque de pluie » chiffré n'est dérivable** — la source ne porte pas de colonne
+  de probabilité. Seuls les créneaux dont le *code météo* est précipitant sont annonçables ;
+- **25 jours sur 365 portent des millimètres sans créneau précipitant** (jusqu'à 2,5 mm) :
+  ils gardent la formulation d'origine. La forme enrichie **ajoute, elle n'enlève jamais** ;
+- **30 créneaux sur 1 460 sortent de `[MIN, MAX]`** de la source, jusqu'à 3 °C, tous de
+  nuit. Les bornes du jour sont élargies aux créneaux lus, sans quoi le prompt se
+  contredirait (`Météo : 11°C … Aujourd'hui 13°C à 20°C`).
+
+**Les quatre bras, et pourquoi il en faut quatre** (`rewrite_weather.py`, `ab_meteo.py`) :
+
+| Jeu | Tirage | Bulletin | Rôle |
+|---|---|---|---|
+| `v9` | année, `meteo_v2` | d'origine | la référence |
+| `v10` | fenêtre 152 j, `meteo_v3` | d'origine | le traitement — la fenêtre seule |
+| `v9n` | année, `meteo_v3n` | d'origine | **le plancher de bruit** — re-tirage seul |
+| `v10b` | fenêtre 152 j, `meteo_v3` | enrichi | le bulletin, lu contre `v10` |
+
+`v9n` remplace le **canal placebo** du protocole, inutilisable ici : le traitement touche
+99 % du jeu, le placebo pèserait 1 %, et sa mise à l'échelle en
+`√(masse_placebo / masse_traitée)` l'amplifierait d'un facteur ~10. `v10b` existe pour que
+les deux corrections, livrées ensemble, restent **séparables** — `v10` et `v10b` ne
+diffèrent que par la forme de la phrase, à jour tiré identique.
+
+> ⚠️ **Aucune conclusion sur la pluie ne sortira de ces jeux.** Le Δ mesuré change de
+> **signe** selon le substrat — −1,20 pt sur `v7`, +1,10 pt sur `v9` — pour un plancher de
+> bruit de −1,16 pt sur ce même `v9`. Un effet qui s'inverse à magnitude égale au bruit est
+> du bruit. La correction est **thermique** (−4,74 °C) et elle seule.
+
+Génération :
+
+```bash
+cd prompt_calibration && .venv/bin/python rewrite_weather.py --all --dry-run
+cd prompt_calibration && ../llm-agents/.venv/bin/python ab_meteo.py --dry-run --dataset val
+```
+
+⚠️ `v9` **ne porte pas de jeu `rank`** : l'A/B lit `screen` (121 personas, ⊂ `train`) et
+`val` (182 personas, le seul réellement indépendant). `test` reste fermé.
+
+Détail et porte de décision : [ticket 023](../tickets/ticket_023_fenetre_meteo_jeux_geles.md).
+
 #### L'état du génétique est cloisonné par branche (2026-08-20)
 
 L'état de la boucle génétique — génération, population, survivants, champion, compteur
@@ -1419,6 +1484,37 @@ l'`activity_id`, que `llm_exchanges.jsonl` n'écrit pas. Sur le run `2026-08-19_
 Ce n'est pas un réglage de confort : deux occurrences de la même décision font peser deux
 fois le même persona dans les strates, et fabriquent de la précision à partir de rien —
 ce que le §6 du protocole interdit déjà au niveau de la ligne de décision.
+
+#### Fraîcheur du substrat : une QUESTION, jamais une décision automatique (jeux `v9`, 2026-08-25)
+
+Un jeu gelé est extrait d'un run GAMA, et rien n'obligeait à regarder si un run plus récent
+existait. Le défaut est silencieux dans les deux sens : mesurer sur un jeu ancien donne des
+scores comparables à toute la série antérieure, mais sur un substrat que la production
+n'émet plus ; reconstruire à chaque run donne un substrat fidèle, mais rompt la
+comparabilité et consomme un **regard de `test` neuf** (§8 du protocole).
+
+Aucune des deux n'est « la bonne » dans l'absolu, donc l'arbitrage n'est pas automatisable :
+**avant toute mesure sur jeu gelé, comparer le run source du jeu en cours**
+(`manifest.yaml`, clé `sources.llm_exchanges.path`) au dernier run sous
+`experiments/archive/`, et **si un run plus récent existe, demander à l'utilisateur** s'il
+faut rester sur le dernier jeu validé du registre `avancement_et_resultats.html` ou
+reconstruire un jeu depuis le dernier run. Règle inscrite à l'amendement **A10** de
+`PROTOCOLE.md` ; son garde-fou exécutable reste à écrire (`TODO.md`) — et le protocole
+lui-même rappelle, en A9, ce que valent les garanties non testées.
+
+Reconstruire est sans risque : un jeu n'est **jamais** modifié, toute évolution est un
+`vN+1`, et l'affectation par hachage garantit qu'un agent ne change jamais de jeu.
+
+```bash
+cd prompt_calibration && ../llm-agents/.venv/bin/python -m calibration.datasets \
+  ../experiments/archive/2026-08-24_17_34 calibration_datasets v9
+```
+
+Le chemin d'**archive** est explicite, et non le symlink `experiments/current` : c'est lui
+que le manifeste enregistre, et un symlink y inscrirait une provenance qui bouge. `v9` porte
+`train` 431 personas / 1 294 décisions, `val` 182 / 516, `test` 258 / 723, `screen` 121 /
+341, pour 838 répétitions écartées. Son sous-jeu `rank` n'est pas gelé : `make rank
+VERSION=v9` avant de faire tourner le génétique dessus.
 
 ### 3.2 Découpage des jeux : **50 / 20 / 30** (jeux `v3`, 2026-08-11)
 
@@ -2305,6 +2401,157 @@ jeux gelés `train`/`val`/`screen`/`test`/`rank`, store vide, `RunConfig`
 cohérente avec un `eval_model` **épinglé**. C'est elle qui rend `build_engine`,
 les commandes de la CLI et le dashboard testables sans dépendre du dépôt
 principal ni d'un store de production.
+
+---
+
+## 10 · A/B d'un fragment de prompt, sans lancer de campagne
+
+`prompt_calibration/ab_chaine.py` (+ `run_ab_chaine.yaml`) répond à une question étroite :
+**que coûte une puce donnée du prompt ?** Le cas d'usage d'origine est le diagnostic du run
+du 2026-08-21, où `expert_chaine` ne diffère de `expert` que par la puce « Chaîne de la
+journée » et où le vélo avait bondi de 4 points de part modale.
+
+Pourquoi pas `calibrate run --iterations 0`. La boucle évalue la graine sur **`train`** puis
+lance l'**attribution initiale** (par omission : N+1 évals, une par bloc du prompt). Pour
+comparer deux textes, c'est deux ordres de grandeur de trop. Le script réutilise donc les
+*mécanismes* sans la boucle : même `RunConfig`, même `Evaluator`, même métrique, même store
+content-addressed, mêmes jeux gelés — seul le texte du prompt varie entre les deux bras, ce
+qui est la condition pour attribuer l'écart à la puce et non au dispositif.
+
+Trois propriétés qui en font un outil de mesure et pas un script d'exploration :
+
+- **il chiffre avant de dépenser.** `--dry-run` annonce le nombre d'appels LLM, dit quels
+  bras sont déjà en cache, et s'arrête. C'est la règle du dépôt pour toute commande qui
+  consomme du quota ;
+- **il refuse le jeu `test`**, réservé au regard unique du protocole ;
+- **le comparatif est apparié** : mêmes personas, mêmes jeux d'options des deux côtés. La
+  variance du Δ s'en trouve très réduite, mais l'effectif opposable reste celui des
+  **personas distincts**, pas des décisions — les déplacements d'un même agent partagent son
+  profil, et le script affiche les deux nombres pour que la précision ne soit pas surestimée.
+
+Le régime de mesure est celui de la campagne `ref2` (`gemini-3.5-flash-lite`, jeux `v5`),
+c'est-à-dire précisément la campagne semée depuis `expert_chaine` : l'écart se lit à côté de
+ses propres scores. Le modèle est **épinglé** et non un alias `-preview`, ce qui satisfait le
+garde-fou `assert_pinned_eval_model` — `run.yaml`, qui pointe `gemini-3.1-flash-lite-preview`,
+serait refusé sur un store neuf, et c'est voulu : un alias re-résout au fil du temps.
+
+Le store est **dédié** (`calibration_results/ab_chaine.db`) : un A/B exploratoire n'entre pas
+dans une lignée de campagne, et `calibration_cloud.db` est de toute façon réécrit par
+`make pull-cloud`.
+
+```bash
+cd prompt_calibration && ../llm-agents/.venv/bin/python ab_chaine.py \
+  --config run_ab_chaine.yaml --dataset rank --dry-run
+```
+
+**Résultat sur le cas d'origine** (223 décisions, 75 personas) : vélo 19,39 % pour `expert`
+contre 19,50 % pour `expert_chaine`, soit **+0,11 point**. La puce est hors de cause ; le
+composite ne bouge (+0,21) que de sa pénalité de longueur (+0,69), le comportement s'étant
+en fait légèrement amélioré. La régression venait du **temps terminal des itinéraires**
+(ticket 013), qui a alourdi la voiture de 38 % en minutes par kilomètre sans toucher le
+vélo — cf. `docs/changelog.md` du 2026-08-24.
+
+**La leçon d'outillage** : un écart de part modale entre deux runs ne s'attribue pas au
+prompt sous prétexte que le prompt a changé. Ici quatre choses avaient bougé en même temps
+(prompt, agenda, mélange de modèles, temps d'itinéraire) et la seule qui comptait n'était
+pas celle qu'on regardait. L'A/B apparié est ce qui permet d'en éliminer une proprement.
+
+---
+
+## 11 · A/B d'un paramètre d'entrée : réécrire un jeu gelé plutôt que rejouer une simu
+
+> ⚠️ **Tous les `ab_*.py` exigent le jeton du protocole** et refusent de démarrer sans lui
+> (code de sortie 7). Seul `--dry-run` passe toujours — il ne dépense rien, et le protocole
+> demande de chiffrer avant de payer. Le garde-fou vit dans
+> `calibration/protocol_guard.py` : il lit `experiments/protocol_lock.json` **par chemin**,
+> sans rien importer du dépôt principal, pour que `prompt_calibration` reste déployable
+> seul. La forme du fichier est un contrat entre les deux dépôts, figé par un test de
+> chaque côté.
+>
+> ```bash
+> make protocol-status
+> make protocol-lock SUBJECT="A/B fenêtre météo" CLOUD_PAUSED=1
+> make protocol-unlock
+> ```
+>
+> Le jeton refuse la prise si un run tourne **ou** si `controller` / `worker` sont en
+> marche, et il n'atteint pas la campagne cloud — d'où `CLOUD_PAUSED=1`, une liste de
+> contrôle humaine. Cf. [protocole exogène, étape 0](protocole-parametre-exogene.md).
+
+`ab_chaine.py` fait varier le **prompt** à jeu constant. `ab_terminal.py` fait varier le
+**jeu** à prompt constant, et c'est l'autre moitié de l'outillage de diagnostic : quand un
+écart de parts modales ne vient pas du texte, il vient de ce que le texte décrit.
+
+Le cas d'origine : le temps terminal des trajets voiture (ticket 013). `terminal_time.yaml`
+applique 2 à 10 minutes d'accès et de stationnement par couronne ; l'enquête que le projet
+prend pour cible en mesure 8× à 24× moins (`make terminal-time`, cf.
+`scripts/progedo_logit/export_terminal_time.py`).
+
+**Pourquoi on peut réécrire un jeu gelé sans rejouer la simulation.** Le temps terminal est
+additif et séparable du temps réseau — `terminal_time.yaml` acte déjà cette séparation en
+versionnant à part `version` (les plans, qui portent les jambes terminales) et
+`routing_version` (le temps réseau, qui n'en dépend pas). Et les jeux portent les
+composantes **décomposées**, sous-puce par sous-puce : la réécriture est mécanique, pas
+inférée. `rewrite_terminal_time.py` reparse chaque option du ou des modes
+demandés, retire accès et égression dans la loi d'enquête, et reconstruit le total depuis
+les composantes — ce qui maintient l'invariant « total affiché = somme des sous-étapes »
+par construction plutôt que par confiance.
+
+**Le périmètre est un argument, `--modes`, et il doit valoir celui de la production.** Le
+script sait aligner la voiture seule (`--modes car`, le jeu `v6`) ou voiture et vélo
+(`--modes car,bicycle`, le jeu `v7`). La clé de tirage porte le mode, donc voiture et vélo
+d'une même option tirent indépendamment ; huit tests (`TestPerimetreDesModes`) vérifient
+qu'aligner la voiture laisse le vélo intact, et que chaque mode garde sa clause terminale
+propre.
+
+**La couronne est lue dans le texte.** La config sert des valeurs discrètes, donc
+l'égression appliquée (7 / 4 / 3 / 1 min) identifie la couronne de destination. Rien n'est
+deviné, et l'accès (2 min, ambigu entre 1ʳᵉ et 2ᵉ couronne) est documenté comme tel.
+
+**Le tirage est une loi, pas une constante — et pas une cloche.** La moyenne d'enquête est
+inférieure à la minute, or le rendu impose des multiples de 60 s : une constante devrait
+valoir 0 partout et effacerait une queue réelle (2 à 4 % des trajets à 5 min et plus). La
+loi observée est massée à zéro (87 à 96 % selon la couronne) et étirée à droite ; une
+gaussienne produirait des négatifs et détruirait la masse à zéro. Le tirage est
+déterministe par hachage, comme `housing_type` et `personal_bike`.
+
+**Deux limites, à énoncer avec le résultat.** La réécriture ne change pas *quelles* options
+ont été offertes, et ne rejoue pas les chaînes de véhicule — le choix d'un jour se
+répercute sur les offres du lendemain. Elle mesure donc « qu'aurait choisi le modèle avec
+des temps corrigés », pas « qu'aurait produit la simulation ». C'est précisément ce qu'on
+veut savoir **avant** de payer un run de plusieurs heures.
+
+```bash
+make terminal-time                                   # loi d'enquête → llm_module/data/
+cd prompt_calibration
+../llm-agents/.venv/bin/python rewrite_terminal_time.py --src v5 --dst v6 --modes car
+../llm-agents/.venv/bin/python rewrite_terminal_time.py --src v5 --dst v7 \
+    --modes car,bicycle
+../llm-agents/.venv/bin/python ab_terminal.py --versions v5,v6,v7 --dry-run
+```
+
+`eval_params_key()` porte `ds=<dataset_version>`, donc les jeux ne partagent aucune entrée
+de cache et le store distingue proprement les mesures. Le comparatif reste apparié — mêmes
+agents, mêmes options — et `ab_terminal.py` tabule **tous** les bras : avec trois jeux, la
+colonne du milieu est le résultat intéressant, c'est elle qui dit ce que l'alignement du
+vélo coûte au gain de la voiture.
+
+**Résultat sur ce cas** : composite 27,00 (`v5`) → 22,48 (`v6`, voiture) → 24,83 (`v7`,
+voiture + vélo). Le gain opposable est celui de `v7`, **−2,17**, parce que c'est `v7` qui a
+le périmètre de la production. Mesurer `v6` seul aurait publié −4,52, soit le double.
+
+⚠ **Le nom d'un jeu n'est pas une empreinte de son contenu.** `ds=v6` indexe le cache
+d'éval sur le *nom* de version. Modifier le mécanisme de tirage — ici, ajouter le mode à la
+clé — change le contenu de `v6` sans changer son nom : l'éval en cache décrit alors un jeu
+qui n'existe plus, et rien ne le signale. Toute modification de `rewrite_terminal_time.py`
+qui touche au tirage oblige à purger les évals des jeux qu'il a produits.
+
+⚠ **Piège rencontré, et il valait un test.** La première version de la réécriture bornait la
+distance sur `[^.\n]+\.`, ce qui tronquait « Distance : 1.6 km. » en « Distance : 1. » — le
+premier point d'une décimale ferme la classe. 117 options sur 140 étaient corrompues, et le
+jeu était déjà parti en évaluation. `scripts/tests/test_rewrite_terminal_time.py` verrouille
+désormais la conservation de la distance, l'invariant du total, l'intégrité du temps de
+conduite et le déterminisme du tirage.
 
 ---
 

@@ -198,7 +198,8 @@ dashboard:
 # Synthèse des scores
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: synthesis synthesis-open synthesis-pull-db common-set-eval heldout-eval \
+.PHONY: synthesis synthesis-open synthesis-pull-db terminal-page \
+        common-set-eval heldout-eval \
         model-compare model-compare-open
 
 # La synthèse importe pandas/numpy et le moteur de calibration : le python3 du
@@ -234,6 +235,16 @@ synthesis: $(if $(filter 0,$(PULL)),,synthesis-pull-db)
 ## Regenerate then open the page in the default browser.
 synthesis-open: synthesis
 	open docs/synthesis/index.html
+
+## Build a TIMESTAMPED, archived synthesis page for the frozen-set A/B measurements
+## (temps terminal). Aucun appel LLM : relit docs/traces/<nom>/results.json.
+## Sortie : docs/synthesis/<AAAA-MM-JJ_HH-MM>_temps_terminal.html — chaque exécution
+## crée une archive, aucune page existante n'est écrasée (contrairement à index.html,
+## régénérée en place parce qu'elle suit l'état courant).
+terminal-page:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.build_terminal_page
 
 ## Compare a run to its predecessors AND break its score down by LLM model.
 ## Usage: make model-compare RUN=experiments/archive/<run> [BASELINE="a b"] [OUT=…]
@@ -291,7 +302,87 @@ heldout-eval:
 # Modèle de choix modal (ticket 005)
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: zones housing-type policy common-set-predict
+.PHONY: zones housing-type bike-ownership terminal-time car-availability avancement policy common-set-predict
+.PHONY: communes-couronnes audit-perimetre audit-couronnes residence-zone couronne-v7
+
+## ──────────────────────────────────────────────────────────────────────────────
+## Périmètre de population (ticket 020)
+## ──────────────────────────────────────────────────────────────────────────────
+
+## Rebuild the commune → couronne table and the couronne geometry (ticket 020, lot 3).
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## C'est la DONNÉE MANQUANTE du ticket : l'enquête découpe ses couronnes par LISTE DE
+## COMMUNES (1 / 69 / 108 / 275), là où `geo_reference.residence_zone` classe par
+## distance à l'hypercentre. Produit llm_module/data/commune_couronne.json et
+## couronne_perimetre.geojson, tous deux versionnés.
+communes-couronnes:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_commune_couronne
+
+## Audit des neuf écarts de base entre population enquêtée et population simulée
+## (ticket 020, lot 2). N'exige PAS les données PROGEDO : il lit le cadrage
+## `population_emc2_2023.yaml` et les ressources versionnées de `make communes-couronnes`.
+##   make audit-perimetre                                  # population et run par défaut
+##   make audit-perimetre POP=data/population/x.json RUN=experiments/archive/y
+##   make audit-perimetre TRACE=docs/traces/2026-08-24_perimetre_population
+## Codes de sortie : 0 tout conforme, 2 au moins un axe à corriger, 3 au moins un axe
+## NON MESURABLE — un axe non mesuré est un axe qui passe, et le script refuse de le taire.
+## Les deux équivalences du ticket 021, lot 0 : le classement d'un domicile par PRÉFIXE de
+## code de zone fine contre son classement par APPARTENANCE géométrique, et « hors couche de
+## zones fines » contre « hors périmètre ». Sept portes, dont un recoupement INDÉPENDANT
+## contre la trace du ticket 020. Ne modifie rien.
+##   make audit-couronnes
+##   make audit-couronnes POP=data/population/x.json TRACE=docs/traces/y
+## Codes de sortie : 0 les portes passent, 2 une porte ÉCHOUE (le ticket est à reconcevoir),
+## 3 une porte est NON MESURABLE — données SIG d'accès restreint absentes, et une porte non
+## mesurée est une porte qui passe. Après le lot 1, la table versionnée remplace le SIG.
+## Pose la couronne de résidence et la commune sur une population déjà générée
+## (ticket 021, lot 2 — étage D). Déterministe, aucun tirage, aucun appel LLM : le trait est
+## OBSERVÉ. La ressource, elle, se (re)produit par `make communes-couronnes`.
+##   make residence-zone                                    # population par défaut
+##   make residence-zone POP=data/population/x.json CHECK=1
+##   make residence-zone POP=experiments/archive/y/population_1000.json OUT=/tmp/z.json
+## ⚠ NE JAMAIS enrichir EN PLACE une population épinglée par un manifeste de jeu gelé
+## (calibration_datasets/v5..v8 épinglent le sha256 de l'archive 2026-08-19_14_36) : passez
+## par OUT=. Codes de sortie de CHECK : 0 portes passées, 1 ressource absente, 2 une porte
+## démentie, 4 portes passées mais écart au cadrage (axe A9 — le tirage, pas ce trait).
+## La cible TRADUIT le 4 en succès, en le disant : make ne sait pas distinguer un code de
+## sortie informatif d'une erreur, et un « Error 4 » apprendrait à ignorer les erreurs.
+residence-zone:
+	@$(SYNTHESIS_PYTHON) -m scripts.data.population.enrich_residence_zone \
+	  $(if $(POP),$(POP),data/population/toulouse_population_1000.json) \
+	  $(if $(OUT),--out $(OUT),) $(if $(CHECK),--check,) $(if $(DRY),--dry-run,) ; \
+	code=$$? ; \
+	if [ $$code -eq 4 ]; then \
+	  echo "→ code 4 : écart au cadrage (axe A9, le tirage) — PAS un échec de ce trait." ; \
+	  exit 0 ; \
+	fi ; \
+	exit $$code
+
+## Chiffre l'effet du reclassement des couronnes sur le jeu gelé `v7` (ticket 021, lot 4).
+## AUCUN appel LLM : les décisions sont déjà dans le store de calibration, et la couronne
+## n'entre ni dans le prompt ni dans la clé de cache — « à décisions constantes » est donc
+## structurel. Splits `train` + `val` (569 agents) ; `rank` est trop petit pour un découpage
+## par couronne, `test` n'a pas d'éval stockée et reste la réserve de publication.
+##   make couronne-v7 TRACE=docs/traces/2026-08-24_couronne_v7
+couronne-v7:
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.measure_couronne_v7 \
+	  $(if $(TRACE),--trace $(TRACE),)
+
+audit-couronnes:
+	$(SYNTHESIS_PYTHON) -m scripts.data.population.audit_couronne_equivalences \
+	  $(if $(POP),--population $(POP),) $(if $(TRACE),--trace $(TRACE),)
+
+audit-perimetre:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make audit-perimetre SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.data.population.audit_perimetre \
+	  $(if $(POP),--population $(POP),) $(if $(RUN),--run $(RUN),) \
+	  $(if $(TRACE),--trace $(TRACE),)
 
 ## Rebuild the fine-zone resource read by llm_module.core.zone_resolver.
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
@@ -303,14 +394,76 @@ zones:
 
 ## Rebuild the housing-type law read when enriching a synthetic population (action A2).
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## Ticket 019 : la loi est conditionnée à la ZONE FINE et à la TAILLE DU MÉNAGE, et la
+## ressource produite est en v2 — le module refuse une v1. L'export publie le test interne
+## EMC² et ÉCHOUE si l'erreur du mécanisme dépasse 1 point sur les 20 cellules.
 ## Puis, pour poser le trait sur une population (aucun appel LLM, déterministe) :
 ##   llm-agents/.venv/bin/python -m scripts.data.population.enrich_housing_type \
-##     data/population/toulouse_population_1000.json
+##     data/population/toulouse_population_1000.json --check
+## Codes de sortie de --check : 0 tout est dans la tolérance, 1 ressource absente,
+## 2 une cible servie est démentie, 3 population enrichie mais trop petite pour trancher.
 housing-type:
 	@test -d "data/PROGEDO 2023" || { \
 	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
 	  exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_housing_type
+
+## Rebuild the bike-ownership model read when enriching a synthetic population
+## (ticket 015 : les trois étages k / attribution / VAE appris sur EMC²).
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## Il lit aussi la table du type de logement (make housing-type) pour publier la cible
+## d'équipement par habitat DILUÉE — la seule opposable à une population synthétique.
+## Puis, pour poser le trait sur une population (aucun appel LLM, déterministe) :
+##   llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike \
+##     data/population/toulouse_population_1000.json --check
+bike-ownership:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_bike_ownership
+
+## Rebuild the EMC²-measured car terminal time (access + parking search) law.
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## Ce que ça mesure : T2 (marche au départ), T6 (marche à l'arrivée) et T11 (durée de
+## recherche du stationnement) du fichier trajets, par couronne. À comparer aux valeurs
+## de llm-agents/config/terminal_time.yaml, mesurées 8x à 24x plus grandes.
+terminal-time:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_terminal_time
+
+## Rebuild the "Avancement et résultats" page from the measurement registry.
+## Une ligne par mesure FAITE : base de référence → base modifiée → modification → résultat
+## → score, chacune retraçable jusqu'à une archive de docs/traces/.
+## Le rendu REFUSE (et n'écrit rien) si une trace citée n'existe pas sur le disque, si un
+## champ manque ou si un verdict sort du vocabulaire : une page de résultats qui se dégrade
+## en silence est pire qu'une page absente. `make avancement CHECK=1` valide sans écrire.
+avancement:
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.render_avancement $(if $(CHECK),--check,)
+
+## Détail par sous-catégorie d'un A/B de jeux gelés — un mini-graphe par mode, une
+## courbe par bras, plus les tableaux L1. Reconstruit depuis les décisions DÉJÀ dans le
+## store : aucun appel LLM. Usage: make ab-detail [DATASET=val|screen]
+.PHONY: ab-detail
+ab-detail:
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.build_ab_detail --dataset $(if $(DATASET),$(DATASET),val)
+	$(if $(DATASET),,$(SYNTHESIS_PYTHON) -m scripts.synthesis.build_ab_detail --dataset screen)
+
+## Rebuild the EMC²-measured household car availability reference (ticket 018).
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+## Ce que ça mesure : `car_availability` (all / some / none) recalculée avec LA RÈGLE
+## D'EQASIM — all si voitures >= permis des majeurs, some si <, none si voitures == 0 —
+## depuis M6 (voitures) et P7 (permis). Deux pondérations : ménages (COE0) et personnes
+## (COE1), cette dernière étant celle opposable à une population d'agents.
+## L'export ÉCHOUE si son contrôle positif ne reproduit pas la motorisation publiée
+## (1,25 VP/ménage ; 19 / 45 / 35 %) : une lecture qui rate le parc ne peut pas prétendre
+## mesurer sa disponibilité.
+car-availability:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_car_availability
 
 ## Retrain the PROGEDO mode-choice policy → scripts/progedo_logit/mode_choice_policy.json
 ## Le parquet d'entraînement est versionné : contrairement à `zones`, cette cible
@@ -463,6 +616,30 @@ status:
 		echo "run=inactif"; \
 	fi
 	@echo "current=$$(readlink experiments/current 2>/dev/null || echo '-')"
+
+## ── Jeton d'exclusion du protocole exogène (ticket 023) ─────────────────────
+## Aucune procédure du protocole (A/B, réécriture de jeu, archivage) ne doit tourner
+## pendant qu'un run consomme le même quota LLM : si la cascade de fournisseurs bascule
+## entre deux bras, ils n'ont pas été évalués par le même modèle, et l'écart mesuré est
+## confondu avec le traitement.
+## ⚠ Ce verrou est LOCAL : il n'atteint pas la campagne génétique de la VM cloud. D'où
+## CLOUD_PAUSED=1, qui est une liste de contrôle humaine et non une garantie.
+.PHONY: protocol-lock protocol-unlock protocol-status
+
+## État du jeton et des sondes qui empêcheraient une prise. Usage: make protocol-status [JSON=1]
+protocol-status:
+	@python3 scripts/protocol_lock.py status $(if $(JSON),--json,)
+
+## Prend le jeton. Usage: make protocol-lock SUBJECT="ticket 023 — A/B météo" CLOUD_PAUSED=1 [MINUTES=90] [STEAL=1]
+protocol-lock:
+	@test -n "$(SUBJECT)" || { echo "[REFUS] SUBJECT est obligatoire — un jeton anonyme ne se débloque pas sans risque."; exit 2; }
+	@python3 scripts/protocol_lock.py acquire --subject "$(SUBJECT)" \
+	  $(if $(MINUTES),--expected-minutes $(MINUTES),) \
+	  $(if $(CLOUD_PAUSED),--cloud-paused,) $(if $(STEAL),--steal-orphan,)
+
+## Relâche le jeton et enregistre le second instantané de quota. Usage: make protocol-unlock [FORCE=1]
+protocol-unlock:
+	@python3 scripts/protocol_lock.py release $(if $(FORCE),--force,)
 
 ## Arrête le run GAMA en cours SANS toucher au reste de la pile (api, worker, redis…).
 ## Offline : tue le launcher dans le conteneur controller puis stoppe le service gama

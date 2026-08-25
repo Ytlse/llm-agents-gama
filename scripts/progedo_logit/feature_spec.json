@@ -1,5 +1,5 @@
 {
-  "spec_version": 1,
+  "spec_version": 2,
   "source": "EMC² Toulouse 2023 (ProGEDO / lil-1750)",
   "target": {
     "name": "mode",
@@ -196,6 +196,7 @@
   },
   "notes": [
     "distance_km/crow_km/duration_min sont contaminées : diagnostic uniquement.",
-    "train et motorbike sont fusionnés dans transit et car : la politique ne peut pas les distinguer."
+    "train et motorbike sont fusionnés dans transit et car : la politique ne peut pas les distinguer.",
+    "has_bike (spec v2, ticket 015) est l'attribution NOMINATIVE d'un vélo, reconstruite par la règle de l'étage 2 appliquée aux ménages de l'enquête — et non « le foyer déclare au moins un vélo » (M21 > 0) comme en v1. ~50 % des personnes contre 63,2 %. C'est la définition que porte traits_json.personal_bike, donc la seule qui rende l'entraînement et l'inférence comparables."
   ]
 }

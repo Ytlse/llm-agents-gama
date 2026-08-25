@@ -1,0 +1,96 @@
+══════════════════════════════════════════════════════════════════════════════
+AUDIT DE PÉRIMÈTRE — population enquêtée EMC² contre population simulée
+ticket 020 · 2026-08-24T11:30:18+00:00
+══════════════════════════════════════════════════════════════════════════════
+population : data/population/toulouse_population_1000.json (1021 personas)
+run        : experiments/current → 2026-08-21_19_54 (3936 trajets)
+
+──────────────────────────────────────────────────────────────────────────────
+A1 · Âge minimum de la population comptée   [CONFORME]
+   enquête  : population cible = 5 ans et plus
+   simulé   : 0 persona(s) de moins de 5 ans sur 1021
+   écart    : 0.00 pt de population
+   │ Âge minimum observé : 5 ans ; 0 persona(s) sans âge. Le contrôle n'est pas gratuit même à zéro : `frames.age_to_cat` teste `a <= 9`, donc un persona de 3 ans tomberait dans la classe « 5-9 » et serait comparé à la cible d'une classe dont il ne fait pas partie, sans qu'aucun log ne le signale. La conformité est ici HÉRITÉE de la chaîne eqasim (les chaînes d'activités sont appariées sur une enquête qui commence à 5 ans), elle n'est garantie par aucune assertion.
+──────────────────────────────────────────────────────────────────────────────
+A2 · Définition des couronnes   [À CORRIGER]
+   enquête  : découpage par liste de communes : 1 / 69 / 108 / 275
+   simulé   : classement par distance à l'hypercentre (8 / 20 / 40 km)
+   écart    : 24.4 % des personas changent de couronne ; cible voiture implicite 51.7 % → 53.4 %
+   │ Une couronne administrative n'est pas un anneau métrique. Le disque de 8 km autour du Capitole sort largement de la commune de Toulouse et mord sur Blagnac, Balma, Colomiers, Tournefeuille et Ramonville — de 1ʳᵉ couronne dans l'enquête. L'erreur est UNIDIRECTIONNELLE : les 179 zones fines de Toulouse sont toutes à moins de 7 km du centre, donc aucun Toulousain n'est classé dehors. Elle gonfle Toulouse et vide la 1ʳᵉ couronne. Enjeu direct : la cible `voiture` vaut 31 % à Toulouse et 64 % en 1ʳᵉ couronne — un agent mal classé n'est pas comparé à une cible un peu décalée, il l'est à une cible qui diffère de plus de 30 points.
+──────────────────────────────────────────────────────────────────────────────
+A3 · Base de pondération des cibles   [À PUBLIER]
+   enquête  : taille 2.08 · 1.25 voiture/ménage · 19 % sans voiture (poids COE0)
+   simulé   : brut : 2.71 · 1.47 · 13.0 % — pondéré ménages : 2.01 · 1.23 · 20.7 %
+   écart    : taille : +0.63 en brut, -0.07 pondéré
+   │ L'écart brut n'est pas un défaut de la population : c'est un défaut de BASE. Une population synthétique échantillonne des PERSONNES, donc un ménage de 5 y apparaît cinq fois et un ménage de 1 une seule ; la moyenne brute d'un attribut de ménage y est mécaniquement tirée vers les grands ménages. Pondérer chaque personne par 1/taille rend à chaque ménage un poids de 1 — et l'écart de 30 % sur la taille de ménage tombe à 3 %. C'est le même raisonnement que le ticket 019 a appliqué à la loi du logement. Les parts modales, elles, sont des comptages de DÉPLACEMENTS non pondérés : c'est la bonne base pour une cible `COEP`, à ceci près qu'un persona qui se déplace beaucoup y pèse plus qu'un sédentaire, ce que le redressement d'enquête corrige et que la simulation ne corrige pas.
+──────────────────────────────────────────────────────────────────────────────
+A4 · Populations et déplacements hors périmètre   [À CORRIGER]
+   enquête  : 453 communes ; 95,9 % des déplacements internes au périmètre
+   simulé   : 45 domicile(s) hors périmètre sur 1021
+   écart    : 4.4 % des personas, jusqu'à 114 km du Capitole
+   │ L'enquête ne compte QUE le périmètre de 453 communes : ni touristes, ni EHPAD, ni marchandises, et 95,9 % de ses déplacements pondérés sont internes au périmètre (le recalcul sur les internes seuls redonne exactement la cible publiée de 55 % voiture). Un domicile hors périmètre n'a donc AUCUNE cible à laquelle se comparer — et le classement métrique lui en donne une quand même, celle de la 3ᵉ couronne, parce que « au-delà de 40 km » n'a pas de borne supérieure. C'est le mécanisme exact du motif de vacuité : l'absence de périmètre produit une classification, pas une erreur.
+──────────────────────────────────────────────────────────────────────────────
+A5 · Fenêtre saisonnière de la mesure   [À PUBLIER]
+   enquête  : 2022-09-20 → 2023-02-18, hors vacances scolaires
+   simulé   : 4 jour(s) simulé(s) : 2026-03-16, 2026-03-17, 2026-03-18, 2026-03-19 ; 0.0 % des trajets sous la pluie
+   écart    : pluie : 44.7 % de jours en fenêtre d'enquête, 42.5 % sur l'année tirée par les jeux gelés, 0.0 % dans ce run — et T° midi 12.7 contre 18.0 °C
+   │ CE QUE L'ENQUÊTE MESURE, vérifié deux fois. La méthode EMC² recueille les « déplacements de la VEILLE » (passation du mardi au samedi hors fériés et vacances scolaires, jour de référence du lundi au vendredi) : elle n'interroge personne sur ses habitudes annuelles. Les dates de référence des microdonnées le confirment — seuls les mois 09 à 12 de 2022 et 01 à 02 de 2023 y apparaissent, aucune observation de mars à août, et le jour de référence est toujours ouvré. Les cibles sont donc bien des déplacements d'automne-hiver.
+   │
+   │ MAIS CE QU'ELLE PUBLIE est « un jour moyen de semaine ». La fenêtre automne-hiver et l'exclusion des congés sont le MOYEN d'obtenir une journée ordinaire, pas une revendication saisonnière. L'écart n'est donc pas « cible d'automne contre simulation de printemps » : c'est un écart de MOYENNAGE, et il se sépare en deux.
+   │
+   │ (1) LES JEUX GELÉS MOYENNENT, mais sur la mauvaise fenêtre. Un jour est tiré indépendamment par décision, sur 365 jours : la pluie y est donc bien représentée (42,5 % contre 44,7 % en fenêtre), et l'écart est THERMIQUE — 18,0 contre 12,7 °C à midi. Restreindre le tirage à la fenêtre d'enquête corrige cet écart-là, et lui seul.
+   │
+   │ (2) UN RUN NE MOYENNE PAS. Il rejoue des jours calendaires consécutifs réels — ici cinq jours de mi-mars, tous secs. Thermiquement ces jours sont TYPIQUES de la fenêtre d'enquête (14,6 °C à midi, chacun entre le 56ᵉ et le 81ᵉ centile de sa distribution), et mi-mars est une semaine scolaire ordinaire : le grief calendaire est faible. Le grief réel est qu'une réalisation de 5 jours est comparée à une moyenne de 152 jours. Et 0 % de pluie n'est pas un tirage exotique qu'il suffirait d'éviter : 27,7 % des fenêtres de 5 jours consécutifs de la période d'enquête sont elles aussi entièrement sèches. AUCUN choix de jours ne rend un run de 5 jours comparable à la moyenne sur le mode le plus sensible à la météo — le vélo, dont les mouvements de 4 à 5 points ont déjà arbitré les tickets 013 et 014. C'est une limite de variance, à publier, pas un réglage à trouver.
+──────────────────────────────────────────────────────────────────────────────
+A6 · Jour de la semaine   [CONFORME]
+   enquête  : veille enquêtée = jours [1, 2, 3, 4, 5] (lundi à vendredi), répartis à peu près uniformément
+   simulé   : lundi 84 % · mardi 16 % · mercredi 0 % · jeudi 0 %
+   écart    : 0.0 % de trajets de week-end
+   │ Le garde-fou existe et il est actif : `no_weekend_departures` reporte tout départ de samedi ou dimanche au lundi suivant à la même heure. Il n'est jamais exercé sur les runs courants, qui démarrent un lundi et durent au plus cinq jours. Deux nuances mesurées à l'intérieur d'EMC² : les parts modales ne varient que de 1,3 point au plus entre les cinq jours ouvrés (voiture 54,5 à 55,8 %), donc un run mono-journalier ne biaise pas les PARTS ; mais le lundi porte 3,16 déplacements par personne contre 3,51 le mercredi, soit 10 % de volume en moins — l'écart compterait si un VOLUME était un jour comparé. Attention au report : sur un run de plus de cinq jours, il empilerait les départs de week-end sur le lundi et fabriquerait un lundi atypique.
+──────────────────────────────────────────────────────────────────────────────
+A7 · Objet compté : le déplacement à mode principal   [À PUBLIER]
+   enquête  : un déplacement, un mode principal ; hiérarchie plaçant les transports collectifs au-dessus de la voiture (760/770 déplacements mixtes)
+   simulé   : 3936 lignes pour 3936 identifiants de trajet distincts ; aucune ligne de jambe
+   écart    : 0 déplacement mal classé aujourd'hui ; 1,4 pt de rabattement inatteignable
+   │ Deux questions distinctes, et les réponses ne vont pas dans le même sens.
+   │
+   │ CE QUI EST CONFORME. Une ligne de `moves.csv` est bien un DÉPLACEMENT, pas une jambe : les jambes terminales du ticket 013 portent `is_transfer=True` et `_plan_transport_mode` ne regarde que les jambes non-transfert, donc la marche d'accès à une voiture ou à un bus n'est jamais comptée comme un déplacement à pied. L'enquête fait la même chose, et c'est vérifié dans ses microdonnées : AUCUN de ses déplacements en voiture ou en transports collectifs ne porte de trajet à pied — l'accès y est une DURÉE (T2/T6), pas un trajet. La marche n'est donc pas surestimée par construction.
+   │
+   │ CE QUI DIVERGE. La hiérarchie de mode principal est INVERSÉE. `_plan_transport_mode` teste la voiture AVANT les transports collectifs ; l'enquête fait le contraire — sur ses 770 déplacements mêlant voiture et transports collectifs, 760 sont codés « transports collectifs » et 10 seulement « voiture ». Ces déplacements pèsent 1,4 point de part modale, soit 11,5 % de la cible transports collectifs de 12 %. La divergence est aujourd'hui LATENTE : OTP est interrogé mode par mode, donc aucun itinéraire simulé ne mêle voiture et transports collectifs, et zéro déplacement est aujourd'hui mal classé. Mais l'effet miroir est réel : la simulation ne peut STRUCTURELLEMENT pas produire les 1,4 point de rabattement que la cible compte en transports collectifs.
+──────────────────────────────────────────────────────────────────────────────
+A8 · Structure de ménage   [À PUBLIER]
+   enquête  : 2.08 personnes par ménage ; 674 000 ménages
+   simulé   : 2.10 déclarée par adresse, 1.87 réellement présente ; 419/547 grappes complètes
+   écart    : +0.02 sur la taille déclarée ; 11.2 % de membres absents
+   │ La taille de ménage DÉCLARÉE est juste : la moyenne par adresse tombe sur la cible. Ce qui manque, ce sont des MEMBRES : environ un membre déclaré sur dix n'existe pas comme persona, et un quart des grappes est incomplet. Deux conséquences à ne pas confondre. Sur les cibles de ménage, aucune : elles se lisent sur la taille déclarée, qui est correcte. Sur tout ce qui dépend des CO-RÉSIDENTS — partage de voiture du foyer, verrous de chaîne, attribution de vélo — l'effet est réel, et c'est le mécanisme déjà documenté par le ticket 015.
+──────────────────────────────────────────────────────────────────────────────
+A9 · Représentativité spatiale de l'échantillon   [À PUBLIER]
+   enquête  : Toulouse 36.4 % · 1ere couronne 34.1 % · 2eme couronne 14.2 % · 3eme couronne 15.4 %
+   simulé   : Toulouse 38.5 % · 1ere couronne 37.5 % · 2eme couronne 14.4 % · 3eme couronne 9.5 %
+   écart    : Toulouse + 1ʳᵉ couronne : 76.0 % réel contre 70.5 % cible, et 78.1 % tel que PUBLIÉ par le classement métrique (L1 = 11.7 pt)
+   │ Une surconcentration en cœur d'agglomération tire mécaniquement la part voiture vers le bas, sans qu'aucun modèle de choix ne soit en cause : la cible voiture vaut 31 % à Toulouse et 71 à 74 % dans les couronnes externes. Sur cette population, l'excès est modéré et il est CUMULATIF avec l'axe A2 : le classement métrique gonfle encore Toulouse, si bien que la concentration PUBLIÉE est plus forte que la concentration réelle de la population.
+──────────────────────────────────────────────────────────────────────────────
+RECOUPEMENT DU CADRAGE — chaque valeur recalculée depuis EMC²
+   grandeur                                    recalculé    cadrage    écart
+   ménages enquêtés                                10783      10783    +0.00
+   personnes interrogées (PENQ=1)                  15775      15775    +0.00
+   déplacements recensés                           54585      54585    +0.00
+   secteurs de tirage                                 88         88    +0.00
+   habitants de 5 ans et + (milliers)               1320       1320    +0.00
+   ménages (milliers)                                674        674    +0.00
+   voitures par ménage                              1.25       1.25    +0.00
+   ménages sans voiture (%)                         19.4         19    +0.40
+   ménages à une voiture (%)                        45.3         45    +0.30
+   ménages à 2 voitures et + (%)                    35.3         35    +0.30
+   déplacements internes au périmètre (%)          95.94      95.94    +0.00
+   part de population — Toulouse (%)                36.3       36.4    -0.10
+   part de population — 1ere couronne (%)           34.1       34.1    +0.00
+   part de population — 2eme couronne (%)           14.2       14.2    +0.00
+   part de population — 3eme couronne (%)           15.3       15.4    -0.10
+   parts modales recalculées (pondéré COEP) :
+      internes  marche 27.0 % · velo 4.2 % · voiture 55.0 % · transports_collectifs 12.2 % · autres 1.6 %
+      tous      marche 26.2 % · velo 4.1 % · voiture 56.1 % · transports_collectifs 12.0 % · autres 1.6 %
+──────────────────────────────────────────────────────────────────────────────
+Verdicts : conforme : 2 · à corriger : 2 · à publier : 5
+
+Trace archivée : docs/traces/2026-08-24_perimetre_population/audit_perimetre.json

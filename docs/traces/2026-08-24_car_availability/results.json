@@ -1,0 +1,114 @@
+{
+  "subject": "car_availability — ticket 018",
+  "date": "2026-08-24",
+  "protocol": "docs/arch/protocole-parametre-exogene.md",
+  "decision": "REJET — effet sous le plancher de bruit sur les jeux dimensionnés",
+  "lineage_warning": "rank ⊂ screen ⊂ train ; seul val est indépendant de train",
+  "runs": {
+    "train": {
+      "n_personas": 404,
+      "n_personas_treated": 35,
+      "n_treated_records": 105,
+      "n_records": 1128,
+      "composite": {
+        "v7": 25.692529848904034,
+        "v8": 26.151451800906983
+      },
+      "verdict": "au-dessus du plancher mis à l'échelle (2.38 pt) : transports_collectifs -2.71",
+      "treated_delta": {
+        "marche": 1.0432900432900434,
+        "velo": 1.428571428571429,
+        "voiture": 0.23809523809523725,
+        "transports_collectifs": -2.709956709956707
+      },
+      "placebo_delta": {
+        "marche": 0.3136793151455902,
+        "velo": 0.35325394709558866,
+        "voiture": 0.09705348415026682,
+        "transports_collectifs": -0.7639867463914402
+      },
+      "aggregate_delta": {
+        "marche": 0.38159520739308034,
+        "velo": 0.4533499892542453,
+        "voiture": 0.11018237082067728,
+        "transports_collectifs": -0.9451275674679932
+      },
+      "reconstructed_aggregate": {
+        "marche": 0.09711476466795615,
+        "velo": 0.13297872340425534,
+        "voiture": 0.022163120567375807,
+        "transports_collectifs": -0.25225660863958704
+      }
+    },
+    "val": {
+      "n_personas": 165,
+      "n_personas_treated": 10,
+      "n_treated_records": 40,
+      "n_records": 440,
+      "composite": {
+        "v7": 30.978398720591738,
+        "v8": 29.034457022036126
+      },
+      "verdict": "AUCUN mode au-dessus du plancher mis à l'échelle (5.49 pt)",
+      "treated_delta": {
+        "marche": 2.6931818181818183,
+        "velo": -3.2499999999999987,
+        "voiture": 4.249999999999998,
+        "transports_collectifs": -3.6931818181818206
+      },
+      "placebo_delta": {
+        "marche": 1.7225000000000004,
+        "velo": 0.9950000000000014,
+        "voiture": -1.7374999999999918,
+        "transports_collectifs": -0.9800000000000003
+      },
+      "aggregate_delta": {
+        "marche": 1.810743801652892,
+        "velo": 0.6090909090909091,
+        "voiture": -1.193181818181821,
+        "transports_collectifs": -1.226652892561983
+      },
+      "reconstructed_aggregate": {
+        "marche": 0.24483471074380167,
+        "velo": -0.29545454545454536,
+        "voiture": 0.3863636363636362,
+        "transports_collectifs": -0.3357438016528928
+      }
+    },
+    "rank": {
+      "n_personas": 75,
+      "n_personas_treated": 9,
+      "n_treated_records": 22,
+      "n_records": 223,
+      "composite": {
+        "v7": 24.831786126656766,
+        "v8": 22.580946622852277
+      },
+      "verdict": "au-dessus du plancher mis à l'échelle (4.79 pt) : voiture +7.27",
+      "treated_delta": {
+        "marche": -2.0454545454545463,
+        "velo": -2.272727272727272,
+        "voiture": 7.272727272727275,
+        "transports_collectifs": -2.954545454545454
+      },
+      "placebo_delta": {
+        "marche": 1.5837479270315091,
+        "velo": -0.422885572139306,
+        "voiture": -1.11940298507463,
+        "transports_collectifs": -0.041459369817578584
+      },
+      "aggregate_delta": {
+        "marche": 1.225710014947684,
+        "velo": -0.6053811659192804,
+        "voiture": -0.2914798206277991,
+        "transports_collectifs": -0.3288490284005935
+      },
+      "reconstructed_aggregate": {
+        "marche": -0.20179372197309425,
+        "velo": -0.22421524663677123,
+        "voiture": 0.7174887892376683,
+        "transports_collectifs": -0.29147982062780264
+      }
+    }
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "schema": "trace/run_reference/v1",
+  "date": "2026-08-25",
+  "subject": "Run de référence : features adoptées implémentées en dur, rejouées sur GAMA",
+  "run": {
+    "run_id": "2026-08-24_17_34",
+    "path": "experiments/archive/2026-08-24_17_34"
+  },
+  "baseline": "base_2026-08-02_18_55",
+  "target_shares": {
+    "marche": 26.8,
+    "voiture": 56.7,
+    "velo": 4.12,
+    "transports_collectifs": 12.37
+  },
+  "runs": [
+    {
+      "label": "Run 2026-08-24_17_34 — lecture brute",
+      "n_trips": 2911,
+      "n_persons": 890,
+      "composite_emd_jsd": 18.231611582477925,
+      "l1_global": 29.80536181635957,
+      "parts": {
+        "marche": 11.9,
+        "voiture": 57.58,
+        "velo": 13.29,
+        "transports_collectifs": 17.23
+      }
+    },
+    {
+      "label": "Run 2026-08-24_17_34 — tentative la plus récente",
+      "n_trips": 2911,
+      "n_persons": 890,
+      "composite_emd_jsd": 18.231611582477925,
+      "l1_global": 29.80536181635957,
+      "parts": {
+        "marche": 11.9,
+        "voiture": 57.58,
+        "velo": 13.29,
+        "transports_collectifs": 17.23
+      }
+    },
+    {
+      "label": "Run 2026-08-02_18_55",
+      "n_trips": 2830,
+      "n_persons": 867,
+      "composite_emd_jsd": 20.10870158339718,
+      "l1_global": 33.26930077285038,
+      "parts": {
+        "marche": 10.17,
+        "voiture": 56.87,
+        "velo": 16.11,
+        "transports_collectifs": 16.85
+      }
+    }
+  ],
+  "slices": [
+    {
+      "label": "Décisions d'un modèle seules",
+      "n_trips": 2105,
+      "n_persons": 812,
+      "composite_emd_jsd": 19.00934777382278,
+      "l1_global": 37.06038053725791,
+      "parts": {
+        "marche": 14.65,
+        "voiture": 50.32,
+        "velo": 11.2,
+        "transports_collectifs": 23.82
+      }
+    },
+    {
+      "label": "Itinéraires uniques seuls",
+      "n_trips": 806,
+      "n_persons": 532,
+      "composite_emd_jsd": 104.47045902420389,
+      "l1_global": 68.92123506689519,
+      "parts": {
+        "marche": 4.71,
+        "voiture": 76.55,
+        "velo": 18.73,
+        "transports_collectifs": 0.0
+      }
+    },
+    {
+      "label": "Les deux réunis (= le run)",
+      "n_trips": 2911,
+      "n_persons": 890,
+      "composite_emd_jsd": 18.231611582477925,
+      "l1_global": 29.80536181635957,
+      "parts": {
+        "marche": 11.9,
+        "voiture": 57.58,
+        "velo": 13.29,
+        "transports_collectifs": 17.23
+      }
+    }
+  ],
+  "models": [
+    {
+      "label": "gemini-3.1-flash-lite-preview",
+      "n_trips": 1021,
+      "n_persons": 581,
+      "composite_emd_jsd": 18.099482602121178,
+      "l1_global": 38.92216040469718,
+      "parts": {
+        "marche": 15.24,
+        "voiture": 48.81,
+        "velo": 11.55,
+        "transports_collectifs": 24.41
+      }
+    },
+    {
+      "label": "gemini-3.5-flash-lite",
+      "n_trips": 1003,
+      "n_persons": 571,
+      "composite_emd_jsd": 19.19363054531862,
+      "l1_global": 34.870129816735336,
+      "parts": {
+        "marche": 13.69,
+        "voiture": 52.38,
+        "velo": 11.08,
+        "transports_collectifs": 22.85
+      }
+    }
+  ],
+  "permutation": {
+    "available": true,
+    "observed": -1.0941479431974415,
+    "n_draws": 60,
+    "median": 0.41324803629396456,
+    "min": -4.424049188666437,
+    "max": 5.413671493915162,
+    "n_extreme": 38,
+    "p_value": 0.6333333333333333
+  },
+  "perimeter": {
+    "sim_day": "2026-03-16",
+    "methods": {
+      "LLM": 2105,
+      "Un seul itinéraire disponible": 806,
+      "LLM Error (Default index)": 390,
+      "Pas de déplacement (même localisation)": 76,
+      "Pas de solution de déplacement": 44
+    },
+    "n_day_total": 3421,
+    "legend": {
+      "LLM": "décision d'un modèle — dans le score",
+      "Un seul itinéraire disponible": "aucun choix à faire — dans le score",
+      "LLM Error (Default index)": "repli sur l'itinéraire d'index 0 — hors score, mais joué par la simulation",
+      "Pas de déplacement (même localisation)": "pas de trajet — hors score",
+      "Pas de solution de déplacement": "aucun itinéraire — hors score"
+    }
+  },
+  "health": {
+    "n_errors": 690,
+    "errors": [
+      {
+        "provider": "mistral",
+        "status": 402,
+        "n": 239
+      },
+      {
+        "provider": "cerebras_gemma_4_31b",
+        "status": 402,
+        "n": 221
+      },
+      {
+        "provider": "cerebras_gpt-oss-120b",
+        "status": 402,
+        "n": 208
+      },
+      {
+        "provider": "groq_openai_120",
+        "status": 429,
+        "n": 8
+      },
+      {
+        "provider": "groq_qwen_qwen3_6_27b",
+        "status": 429,
+        "n": 7
+      },
+      {
+        "provider": "groq_qwen_qwen3_6_27b",
+        "status": 503,
+        "n": 6
+      },
+      {
+        "provider": "groq_qwen_qwen3_6_27b",
+        "status": 400,
+        "n": 1
+      }
+    ]
+  },
+  "sources": {
+    "moves_sha256": "1d217aed2a503dc21c4c4cc2dd737ac902d60f529480cb20e416abad3a8bbb00"
+  },
+  "generated_from": "docs/synthesis/models/2026-08-24_17_34/data.json"
+}

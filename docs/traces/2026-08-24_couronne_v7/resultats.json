@@ -1,0 +1,223 @@
+{
+ "generated_at": "2026-08-24",
+ "ticket": "021",
+ "lot": 4,
+ "jeu": "v7",
+ "splits": [
+  "train",
+  "val"
+ ],
+ "n_decisions": 2197,
+ "n_agents_decides": 569,
+ "store": {
+  "path": "prompt_calibration/calibration_results/ab_chaine.db",
+  "meta": {
+   "rank": {
+    "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+    "node": "c00b4318b325b1b9",
+    "model": "gemini-3.5-flash-lite",
+    "temp": 0.0,
+    "created_at": "2026-08-24T09:54:34+00:00"
+   },
+   "train": {
+    "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+    "node": "c00b4318b325b1b9",
+    "model": "gemini-3.5-flash-lite",
+    "temp": 0.0,
+    "created_at": "2026-08-24T11:33:03+00:00"
+   },
+   "val": {
+    "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+    "node": "c00b4318b325b1b9",
+    "model": "gemini-3.5-flash-lite",
+    "temp": 0.0,
+    "created_at": "2026-08-24T11:42:35+00:00"
+   }
+  }
+ },
+ "population": {
+  "path": "experiments/archive/2026-08-19_14_36/population_1000.json",
+  "sha256": "cab69d4b434dca575cadfe9dc0e31f52d3e05e3d4e25c72771e91d2f8862ef63",
+  "inchangee": true,
+  "n_personas": 930,
+  "reclasses": 178
+ },
+ "resultats": {
+  "couronne_metrique": {
+   "classement": "couronne_metrique",
+   "zones": [
+    {
+     "zone": "Toulouse",
+     "n": 279,
+     "masse": 801.9999999999999,
+     "parts": {
+      "marche": 10.72111388196176,
+      "voiture": 45.08104738154615,
+      "velo": 19.00498753117207,
+      "transports_collectifs": 25.192851205320014
+     },
+     "cible": {
+      "marche": 40.20618556701031,
+      "voiture": 31.95876288659794,
+      "velo": 6.185567010309279,
+      "transports_collectifs": 21.649484536082475
+     },
+     "l1": 58.97014337009709,
+     "couverte": true
+    },
+    {
+     "zone": "1ere couronne",
+     "n": 223,
+     "masse": 615.9999999999998,
+     "parts": {
+      "marche": 7.590909090909095,
+      "voiture": 67.62175324675323,
+      "velo": 13.596861471861468,
+      "transports_collectifs": 11.190476190476193
+     },
+     "cible": {
+      "marche": 21.649484536082475,
+      "voiture": 65.97938144329896,
+      "velo": 4.123711340206185,
+      "transports_collectifs": 8.24742268041237
+     },
+     "l1": 28.117150890346753,
+     "couverte": true
+    },
+    {
+     "zone": "2eme couronne",
+     "n": 67,
+     "masse": 150.0,
+     "parts": {
+      "marche": 13.066666666666668,
+      "voiture": 65.83333333333333,
+      "velo": 15.766666666666667,
+      "transports_collectifs": 5.333333333333333
+     },
+     "cible": {
+      "marche": 15.306122448979592,
+      "voiture": 75.51020408163265,
+      "velo": 2.0408163265306123,
+      "transports_collectifs": 7.142857142857143
+     },
+     "l1": 27.45170068027211,
+     "couverte": true
+    }
+   ],
+   "l1_pondere_masse": 43.83416775083692,
+   "l1_pondere_cadrage": 41.26397022874979,
+   "poids_cadrage_couvert": 84.62121212121214,
+   "couronnes_absentes": [
+    "3eme couronne"
+   ],
+   "masse_scoree": 1567.9999999999995,
+   "masse_exclue": 0.0,
+   "ecartes": {}
+  },
+  "couronne": {
+   "classement": "couronne",
+   "zones": [
+    {
+     "zone": "Toulouse",
+     "n": 232,
+     "masse": 651.9999999999998,
+     "parts": {
+      "marche": 10.273517382413093,
+      "voiture": 44.55521472392638,
+      "velo": 20.118098159509206,
+      "transports_collectifs": 25.053169734151307
+     },
+     "cible": {
+      "marche": 40.20618556701031,
+      "voiture": 31.95876288659794,
+      "velo": 6.185567010309279,
+      "transports_collectifs": 21.649484536082475
+     },
+     "l1": 59.865336369194424,
+     "couverte": true
+    },
+    {
+     "zone": "1ere couronne",
+     "n": 233,
+     "masse": 665.0,
+     "parts": {
+      "marche": 9.352380952380953,
+      "voiture": 62.082706766917305,
+      "velo": 12.742857142857137,
+      "transports_collectifs": 15.822055137844607
+     },
+     "cible": {
+      "marche": 21.649484536082475,
+      "voiture": 65.97938144329896,
+      "velo": 4.123711340206185,
+      "transports_collectifs": 8.24742268041237
+     },
+     "l1": 32.38755652016637,
+     "couverte": true
+    },
+    {
+     "zone": "2eme couronne",
+     "n": 86,
+     "masse": 216.00000000000006,
+     "parts": {
+      "marche": 10.077160493827158,
+      "voiture": 69.42129629629629,
+      "velo": 16.604938271604933,
+      "transports_collectifs": 3.8966049382716044
+     },
+     "cible": {
+      "marche": 15.306122448979592,
+      "voiture": 75.51020408163265,
+      "velo": 2.0408163265306123,
+      "transports_collectifs": 7.142857142857143
+     },
+     "l1": 29.128243890148653,
+     "couverte": true
+    },
+    {
+     "zone": "3eme couronne",
+     "n": 18,
+     "masse": 35.0,
+     "parts": {
+      "marche": 4.0,
+      "voiture": 67.28571428571429,
+      "velo": 23.000000000000004,
+      "transports_collectifs": 5.714285714285714
+     },
+     "cible": {
+      "marche": 18.556701030927837,
+      "voiture": 73.19587628865979,
+      "velo": 2.0618556701030926,
+      "transports_collectifs": 6.185567010309279
+     },
+     "l1": 41.87628865979381,
+     "couverte": true
+    }
+   ],
+   "l1_pondere_masse": 43.576081110963194,
+   "l1_pondere_cadrage": 43.376992497487976,
+   "poids_cadrage_couvert": 100.00000000000001,
+   "couronnes_absentes": [],
+   "masse_scoree": 1567.9999999999998,
+   "masse_exclue": 0.0,
+   "ecartes": {}
+  }
+ },
+ "delta_l1_pondere_cadrage": 2.1130222687381846,
+ "delta_l1_pondere_masse": -0.25808663987372427,
+ "avertissement_ponderation": "La moyenne pondérée par la MASSE observée n'est pas une comparaison valide entre deux classements : les poids se déplacent avec les strates. Sur `v7` elle rend −0,26 pt alors que les quatre strates se dégradent. La grandeur publiée est pondérée par les parts de population du CADRAGE, identiques des deux côtés.",
+ "composite": "inchangé par construction — `lieu_residence` n'est ni une dimension de l'évaluateur des jeux gelés ni une dimension notée de `frames`",
+ "a4": {
+  "mesurable_sur_v7": false,
+  "hors_perimetre_v7": 0,
+  "population_reference": "data/population/toulouse_population_1000.json",
+  "n_personas": 1021,
+  "hors_perimetre": 45,
+  "en_3eme_couronne_metrique": 45
+ },
+ "rank_pour_memoire": {
+  "n_decisions": 350,
+  "n_agents": 75,
+  "raison_exclusion": "75 agents : les strates par couronne tombent sous l'effectif minimal de publication (n ≥ 5)"
+ }
+}

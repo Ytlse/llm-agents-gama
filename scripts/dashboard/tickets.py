@@ -27,19 +27,32 @@ TODO = "à faire"
 DOING = "en cours"
 DONE = "terminé"
 BLOCKED = "bloqué"
+PAUSED = "en veille"
 DROPPED = "abandonné"
 UNKNOWN = "sans statut"
 
-STATUS_ORDER = [DOING, BLOCKED, TODO, DONE, DROPPED, UNKNOWN]
+# `en veille` ≠ `bloqué` : rien n'empêche d'avancer, c'est une DÉCISION de ne pas le
+# faire maintenant (le travail reprendra tel quel). `bloqué` dit qu'une dépendance
+# extérieure manque. Les confondre ferait chercher un déblocage qui n'existe pas.
+STATUS_ORDER = [DOING, BLOCKED, TODO, PAUSED, DONE, DROPPED, UNKNOWN]
 STATUS_KIND = {
     DOING: "warning",
     BLOCKED: "critical",
     TODO: "muted",
+    PAUSED: "muted",
     DONE: "good",
     DROPPED: "muted",
     UNKNOWN: "muted",
 }
-STATUS_ICON = {DOING: "🟠", BLOCKED: "🔴", TODO: "⚪", DONE: "🟢", DROPPED: "⚫", UNKNOWN: "❔"}
+STATUS_ICON = {
+    DOING: "🟠",
+    BLOCKED: "🔴",
+    TODO: "⚪",
+    PAUSED: "🔵",
+    DONE: "🟢",
+    DROPPED: "⚫",
+    UNKNOWN: "❔",
+}
 
 _DONE_RE = re.compile(r"^\s*[-*]\s*\[[xX]\]")
 _TODO_RE = re.compile(r"^\s*[-*]\s*\[ \]")

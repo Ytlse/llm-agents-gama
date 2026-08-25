@@ -1,0 +1,103 @@
+{
+  "dataset": "train",
+  "versions": [
+    "v7",
+    "v8"
+  ],
+  "prompt": "expert_chaine",
+  "n_records": 1128,
+  "n_treated_records": 105,
+  "n_treated_agents": 35,
+  "composite": {
+    "v7": 25.692529848904034,
+    "v8": 26.151451800906983
+  },
+  "subsets": {
+    "treated": {
+      "n_rows": {
+        "v7": 148,
+        "v8": 142
+      },
+      "weight": 105.0,
+      "shares": {
+        "v7": {
+          "marche": 10.333333333333334,
+          "velo": 12.714285714285714,
+          "voiture": 58.857142857142854,
+          "transports_collectifs": 18.095238095238095
+        },
+        "v8": {
+          "marche": 11.376623376623376,
+          "velo": 14.142857142857142,
+          "voiture": 59.09523809523809,
+          "transports_collectifs": 15.385281385281388
+        }
+      },
+      "delta": {
+        "marche": 1.0432900432900434,
+        "velo": 1.428571428571429,
+        "voiture": 0.23809523809523725,
+        "transports_collectifs": -2.709956709956707
+      }
+    },
+    "placebo": {
+      "n_rows": {
+        "v7": 1509,
+        "v8": 1449
+      },
+      "weight": 1023.0,
+      "shares": {
+        "v7": {
+          "marche": 9.849788204626915,
+          "velo": 17.156076898012383,
+          "voiture": 54.687194525904204,
+          "transports_collectifs": 18.306940371456502
+        },
+        "v8": {
+          "marche": 10.163467519772505,
+          "velo": 17.50933084510797,
+          "voiture": 54.78424801005447,
+          "transports_collectifs": 17.54295362506506
+        }
+      },
+      "delta": {
+        "marche": 0.3136793151455902,
+        "velo": 0.35325394709558866,
+        "voiture": 0.09705348415026682,
+        "transports_collectifs": -0.7639867463914402
+      }
+    },
+    "aggregate": {
+      "n_rows": {
+        "v7": 1657,
+        "v8": 1591
+      },
+      "weight": 1128.0,
+      "shares": {
+        "v7": {
+          "marche": 9.894799054373522,
+          "velo": 16.74261229314421,
+          "voiture": 55.07535460992907,
+          "transports_collectifs": 18.28723404255319
+        },
+        "v8": {
+          "marche": 10.276394261766603,
+          "velo": 17.19596228239845,
+          "voiture": 55.18553698074975,
+          "transports_collectifs": 17.3421064750852
+        }
+      },
+      "delta": {
+        "marche": 0.38159520739308034,
+        "velo": 0.4533499892542453,
+        "voiture": 0.11018237082067728,
+        "transports_collectifs": -0.9451275674679932
+      }
+    }
+  },
+  "n_personas": 404,
+  "n_personas_treated": 35,
+  "noise_floor_raw": 0.7639867463914402,
+  "noise_floor_scaled": 2.384673863856838,
+  "verdict": "SOUS LE PLANCHER DE BRUIT"
+}

@@ -1,0 +1,478 @@
+[
+ {
+  "branch": "ab_chaine_expert",
+  "node": "9c098aa7fd3423cb",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v5",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T04:55:38+00:00",
+  "scores": {
+   "composite": 26.793,
+   "global": 7.7238,
+   "absent_penalty": 0.0,
+   "age": 7.2492,
+   "occupation": 11.4722,
+   "genre": 7.9323,
+   "motif": 9.0565,
+   "distance": 9.3351,
+   "length_penalty": 0.9919
+  },
+  "shares_pct": {
+   "marche": 16.64,
+   "transports_collectifs": 25.58,
+   "velo": 19.39,
+   "voiture": 38.39
+  },
+  "n_decisions": 399,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v5",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T04:57:17+00:00",
+  "scores": {
+   "composite": 26.9998,
+   "global": 7.7951,
+   "absent_penalty": 0.0,
+   "age": 8.2841,
+   "occupation": 11.9983,
+   "genre": 8.1625,
+   "motif": 8.2103,
+   "distance": 8.3653,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 16.07,
+   "transports_collectifs": 25.55,
+   "velo": 19.5,
+   "voiture": 38.88
+  },
+  "n_decisions": 414,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v6",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T09:52:21+00:00",
+  "scores": {
+   "composite": 22.4825,
+   "global": 4.8387,
+   "absent_penalty": 0.0,
+   "age": 7.5527,
+   "occupation": 8.4116,
+   "genre": 5.3659,
+   "motif": 9.1311,
+   "distance": 11.621,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 14.57,
+   "transports_collectifs": 21.41,
+   "velo": 15.16,
+   "voiture": 48.86
+  },
+  "n_decisions": 319,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T09:54:34+00:00",
+  "scores": {
+   "composite": 24.8318,
+   "global": 5.7824,
+   "absent_penalty": 0.0,
+   "age": 8.4449,
+   "occupation": 9.8736,
+   "genre": 6.1833,
+   "motif": 9.4994,
+   "distance": 10.9516,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 13.48,
+   "transports_collectifs": 22.56,
+   "velo": 16.28,
+   "voiture": 47.69
+  },
+  "n_decisions": 350,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "rank",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v8",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T11:24:34+00:00",
+  "scores": {
+   "composite": 22.5809,
+   "global": 5.2096,
+   "absent_penalty": 0.0,
+   "age": 7.6466,
+   "occupation": 9.1037,
+   "genre": 5.5625,
+   "motif": 8.0582,
+   "distance": 10.9944,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 14.7,
+   "transports_collectifs": 22.23,
+   "velo": 15.67,
+   "voiture": 47.4
+  },
+  "n_decisions": 338,
+  "n_personas": 75
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "train",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T11:33:03+00:00",
+  "scores": {
+   "composite": 25.6925,
+   "global": 6.2929,
+   "absent_penalty": 0.0,
+   "age": 8.9629,
+   "occupation": 10.6295,
+   "genre": 6.4922,
+   "motif": 7.9167,
+   "distance": 12.3248,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 9.89,
+   "transports_collectifs": 18.29,
+   "velo": 16.74,
+   "voiture": 55.08
+  },
+  "n_decisions": 1657,
+  "n_personas": 404
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "train",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v8",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T11:39:12+00:00",
+  "scores": {
+   "composite": 26.1515,
+   "global": 6.1681,
+   "absent_penalty": 0.0,
+   "age": 9.6231,
+   "occupation": 10.3201,
+   "genre": 6.3357,
+   "motif": 8.0447,
+   "distance": 13.6289,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 10.28,
+   "transports_collectifs": 17.34,
+   "velo": 17.2,
+   "voiture": 55.19
+  },
+  "n_decisions": 1591,
+  "n_personas": 404
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v7",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T11:42:35+00:00",
+  "scores": {
+   "composite": 30.9784,
+   "global": 6.1798,
+   "absent_penalty": 0.0,
+   "age": 10.3771,
+   "occupation": 13.9446,
+   "genre": 6.8796,
+   "motif": 13.8685,
+   "distance": 12.132,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 9.26,
+   "transports_collectifs": 16.52,
+   "velo": 16.13,
+   "voiture": 58.09
+  },
+  "n_decisions": 540,
+  "n_personas": 165
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v8",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-24T11:45:15+00:00",
+  "scores": {
+   "composite": 29.0345,
+   "global": 5.4929,
+   "absent_penalty": 0.0,
+   "age": 9.4213,
+   "occupation": 12.4963,
+   "genre": 6.1187,
+   "motif": 13.2529,
+   "distance": 13.7355,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 11.07,
+   "transports_collectifs": 15.3,
+   "velo": 16.74,
+   "voiture": 56.9
+  },
+  "n_decisions": 552,
+  "n_personas": 165
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "screen",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v9",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:03:28+00:00",
+  "scores": {
+   "composite": 22.9341,
+   "global": 5.1012,
+   "absent_penalty": 0.0,
+   "age": 9.3594,
+   "occupation": 8.7265,
+   "genre": 5.1071,
+   "motif": 7.2796,
+   "distance": 12.0601,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 11.92,
+   "transports_collectifs": 27.87,
+   "velo": 9.01,
+   "voiture": 51.2
+  },
+  "n_decisions": 559,
+  "n_personas": 121
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "screen",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v10",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:06:02+00:00",
+  "scores": {
+   "composite": 22.5063,
+   "global": 3.8952,
+   "absent_penalty": 0.0,
+   "age": 11.8571,
+   "occupation": 8.5682,
+   "genre": 4.2316,
+   "motif": 7.2712,
+   "distance": 11.6445,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 13.26,
+   "transports_collectifs": 24.64,
+   "velo": 9.02,
+   "voiture": 53.08
+  },
+  "n_decisions": 476,
+  "n_personas": 121
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "screen",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v9n",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:10:09+00:00",
+  "scores": {
+   "composite": 22.5953,
+   "global": 4.7321,
+   "absent_penalty": 0.0,
+   "age": 9.9007,
+   "occupation": 8.7542,
+   "genre": 4.8537,
+   "motif": 7.5725,
+   "distance": 10.978,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 12.45,
+   "transports_collectifs": 26.64,
+   "velo": 9.46,
+   "voiture": 51.45
+  },
+  "n_decisions": 583,
+  "n_personas": 121
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "screen",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v10b",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:13:09+00:00",
+  "scores": {
+   "composite": 23.0556,
+   "global": 4.7493,
+   "absent_penalty": 0.0,
+   "age": 9.4647,
+   "occupation": 9.4243,
+   "genre": 4.9889,
+   "motif": 8.0186,
+   "distance": 11.1862,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 12.17,
+   "transports_collectifs": 25.13,
+   "velo": 10.56,
+   "voiture": 52.14
+  },
+  "n_decisions": 515,
+  "n_personas": 121
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v9",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:16:57+00:00",
+  "scores": {
+   "composite": 26.7539,
+   "global": 5.4608,
+   "absent_penalty": 0.0,
+   "age": 9.5243,
+   "occupation": 9.152,
+   "genre": 5.5818,
+   "motif": 12.712,
+   "distance": 13.0815,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 9.47,
+   "transports_collectifs": 20.89,
+   "velo": 12.35,
+   "voiture": 57.28
+  },
+  "n_decisions": 795,
+  "n_personas": 182
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v10",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:20:02+00:00",
+  "scores": {
+   "composite": 25.0599,
+   "global": 4.9158,
+   "absent_penalty": 0.0,
+   "age": 9.8722,
+   "occupation": 8.6384,
+   "genre": 5.0742,
+   "motif": 11.2027,
+   "distance": 12.5505,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 10.47,
+   "transports_collectifs": 20.84,
+   "velo": 12.02,
+   "voiture": 56.68
+  },
+  "n_decisions": 794,
+  "n_personas": 182
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v9n",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:23:29+00:00",
+  "scores": {
+   "composite": 28.7294,
+   "global": 6.385,
+   "absent_penalty": 0.0,
+   "age": 10.3444,
+   "occupation": 10.2531,
+   "genre": 6.7216,
+   "motif": 12.8092,
+   "distance": 12.0819,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 8.19,
+   "transports_collectifs": 21.52,
+   "velo": 12.92,
+   "voiture": 57.37
+  },
+  "n_decisions": 784,
+  "n_personas": 182
+ },
+ {
+  "branch": "ab_chaine_expert_chaine",
+  "node": "c00b4318b325b1b9",
+  "dataset": "val",
+  "params_key": "prov=google_gemini35|model=gemini-3.5-flash-lite|temp=0.0|policy=weighted|opt=prod|ds=v10b",
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "created_at": "2026-08-25T08:27:04+00:00",
+  "scores": {
+   "composite": 26.777,
+   "global": 5.5534,
+   "absent_penalty": 0.0,
+   "age": 9.0888,
+   "occupation": 9.1437,
+   "genre": 5.7857,
+   "motif": 13.1481,
+   "distance": 12.6586,
+   "length_penalty": 1.6806
+  },
+  "shares_pct": {
+   "marche": 9.27,
+   "transports_collectifs": 21.55,
+   "velo": 11.96,
+   "voiture": 57.23
+  },
+  "n_decisions": 796,
+  "n_personas": 182
+ }
+]

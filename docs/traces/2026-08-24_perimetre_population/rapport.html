@@ -1,0 +1,905 @@
+<title>La même base ?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F1F2ED; --surface:#FBFBF8; --surface-2:#E9EBE4;
+  --ink:#161C1A; --ink-soft:#39423F; --muted:#5D6764; --rule:#D3D7CD; --rule-soft:#E3E6DD;
+  --accent:#0D5A52; --accent-ink:#0A403A; --accent-wash:#DEEAE7;
+  --ok:#2E6A4C; --ok-wash:#DFEBE3;
+  --publish:#8A6412; --publish-wash:#F0E8D4;
+  --fix:#A23520; --fix-wash:#F4E1DC;
+  --shadow:0 1px 2px rgba(22,28,26,.05),0 8px 24px -16px rgba(22,28,26,.18);
+  --display:"Newsreader",ui-serif,Georgia,"Times New Roman",serif;
+  --body:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1312; --surface:#161B1A; --surface-2:#1E2422;
+    --ink:#E7EAE5; --ink-soft:#C3CAC6; --muted:#95A09C; --rule:#2A312F; --rule-soft:#222827;
+    --accent:#58BBAD; --accent-ink:#8FD6CB; --accent-wash:#12302C;
+    --ok:#69B98C; --ok-wash:#14291F;
+    --publish:#D3A94A; --publish-wash:#2C2413;
+    --fix:#E2836C; --fix-wash:#301A15;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1312; --surface:#161B1A; --surface-2:#1E2422;
+  --ink:#E7EAE5; --ink-soft:#C3CAC6; --muted:#95A09C; --rule:#2A312F; --rule-soft:#222827;
+  --accent:#58BBAD; --accent-ink:#8FD6CB; --accent-wash:#12302C;
+  --ok:#69B98C; --ok-wash:#14291F;
+  --publish:#D3A94A; --publish-wash:#2C2413;
+  --fix:#E2836C; --fix-wash:#301A15;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -18px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body); font-size:17px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px 96px}
+
+/* ── Grille : rail de codes d'axe + colonne de lecture ───────────────────── */
+.col{max-width:44rem;margin:0 auto}
+.wide{max-width:68rem;margin:0 auto}
+
+h1,h2,h3{font-family:var(--display);font-weight:500;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.5rem,6vw,4.1rem);line-height:1.03;letter-spacing:-.02em}
+h2{font-size:clamp(1.6rem,3.2vw,2.15rem);line-height:1.15;letter-spacing:-.01em}
+h3{font-size:1.2rem;line-height:1.3}
+p{margin:0 0 1.05em}
+a{color:var(--accent-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2.5px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+strong{font-weight:600}
+em{font-style:italic;font-family:var(--display);font-size:1.05em}
+code{font-family:var(--mono);font-size:.85em;background:var(--surface-2);padding:.1em .35em;border-radius:3px}
+
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;font-weight:500;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 1rem
+}
+
+/* ── En-tête ─────────────────────────────────────────────────────────────── */
+header.masthead{padding:88px 0 40px;border-bottom:1px solid var(--rule)}
+.masthead .lede{
+  font-family:var(--display);font-size:clamp(1.15rem,2.2vw,1.42rem);line-height:1.5;
+  color:var(--ink-soft);margin-top:1.4rem;max-width:38rem
+}
+.byline{
+  display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:2.2rem;
+  font-family:var(--mono);font-size:.76rem;color:var(--muted);letter-spacing:.02em
+}
+.byline b{color:var(--ink-soft);font-weight:500}
+
+/* ── Chiffres d'ouverture ────────────────────────────────────────────────── */
+.keys{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:4px;
+  overflow:hidden;margin:44px 0 8px
+}
+.key{background:var(--surface);padding:20px 20px 18px}
+.key .n{
+  font-family:var(--display);font-size:2.5rem;line-height:1;font-weight:500;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;display:block
+}
+.key .n small{font-size:.5em;font-weight:400;color:var(--muted);margin-left:.15em}
+.key .l{display:block;margin-top:.6rem;font-size:.84rem;line-height:1.4;color:var(--muted)}
+.key.alarm .n{color:var(--fix)}
+.key.good .n{color:var(--ok)}
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+section{padding:72px 0 0}
+.section-head{margin-bottom:2rem}
+
+/* ── Figures ─────────────────────────────────────────────────────────────── */
+figure{margin:36px 0;background:var(--surface);border:1px solid var(--rule);border-radius:5px;box-shadow:var(--shadow);overflow:hidden}
+figure .fig-body{padding:24px}
+figcaption{
+  padding:14px 24px;border-top:1px solid var(--rule-soft);background:var(--surface-2);
+  font-size:.83rem;line-height:1.5;color:var(--muted)
+}
+figcaption b{color:var(--ink-soft);font-weight:600}
+
+/* ── Tableaux ────────────────────────────────────────────────────────────── */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:.87rem}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top}
+thead th{
+  font-family:var(--mono);font-size:.7rem;font-weight:500;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule);
+  white-space:nowrap
+}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr.total td{border-top:1px solid var(--rule);font-weight:600;background:var(--surface-2)}
+td.hi{background:var(--fix-wash);font-weight:600}
+.dim{color:var(--muted)}
+
+/* ── Puces de verdict ────────────────────────────────────────────────────── */
+.chip{
+  display:inline-block;font-family:var(--mono);font-size:.67rem;font-weight:500;
+  letter-spacing:.07em;text-transform:uppercase;padding:.28em .6em;border-radius:3px;
+  white-space:nowrap
+}
+.chip.ok{background:var(--ok-wash);color:var(--ok)}
+.chip.publish{background:var(--publish-wash);color:var(--publish)}
+.chip.fix{background:var(--fix-wash);color:var(--fix)}
+
+/* ── Fiches d'axe ────────────────────────────────────────────────────────── */
+.axis{
+  display:grid;grid-template-columns:5.5rem 1fr;gap:0 28px;
+  padding:34px 0;border-top:1px solid var(--rule)
+}
+.axis:first-of-type{border-top:1px solid var(--ink)}
+.axis .rail{font-family:var(--mono);font-size:.78rem;color:var(--muted);letter-spacing:.06em}
+.axis .rail .code{
+  display:block;font-family:var(--display);font-size:2.1rem;line-height:1;
+  color:var(--accent);font-weight:500;letter-spacing:-.01em;margin-bottom:.5rem
+}
+.axis h3{margin-bottom:.5rem}
+.axis .verdict{margin-bottom:1.1rem}
+.axis .facts{
+  display:grid;gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft);
+  border-radius:4px;overflow:hidden;margin:0 0 1.2rem;font-size:.87rem
+}
+.axis .facts div{background:var(--surface);padding:11px 14px;display:grid;grid-template-columns:7.5rem 1fr;gap:14px}
+.axis .facts dt{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);margin:0;padding-top:.18em
+}
+.axis .facts dd{margin:0}
+.axis .facts dd.strong{font-weight:600}
+.axis p{margin-bottom:.8em}
+.axis p:last-child{margin-bottom:0}
+
+/* ── Encadrés ────────────────────────────────────────────────────────────── */
+.note{
+  border-left:2px solid var(--accent);background:var(--accent-wash);
+  padding:18px 22px;margin:32px 0;border-radius:0 4px 4px 0;font-size:.94rem
+}
+.note p:last-child{margin-bottom:0}
+.note .t{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--accent-ink);display:block;margin-bottom:.5rem;font-weight:500
+}
+
+/* ── Barres de comparaison ───────────────────────────────────────────────── */
+.bars{display:grid;gap:18px}
+.bar-row{display:grid;grid-template-columns:11rem 1fr 4.5rem;gap:14px;align-items:center;font-size:.87rem}
+.bar-row .lab{color:var(--ink-soft)}
+.bar-track{height:12px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:2px}
+.bar-fill.fix{background:var(--fix)}
+.bar-fill.ghost{background:var(--muted);opacity:.45}
+.bar-row .val{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:.83rem}
+@media(max-width:560px){
+  .bar-row{grid-template-columns:1fr 3.6rem;grid-template-areas:"lab lab" "track val"}
+  .bar-row .lab{grid-area:lab}.bar-track{grid-area:track}.bar-row .val{grid-area:val}
+  .axis{grid-template-columns:1fr;gap:0}
+  .axis .rail{display:flex;align-items:baseline;gap:.7rem;margin-bottom:.8rem}
+  .axis .rail .code{margin-bottom:0}
+  .axis .facts div{grid-template-columns:1fr;gap:2px}
+}
+
+/* ── Carte ───────────────────────────────────────────────────────────────── */
+.map-legend{
+  display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:18px;
+  font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:.03em
+}
+.map-legend span{display:inline-flex;align-items:center;gap:7px}
+.swatch{width:14px;height:10px;border-radius:2px;display:inline-block}
+.dash{width:16px;height:0;border-top:1.5px dashed var(--fix);display:inline-block}
+
+footer{margin-top:88px;padding-top:32px;border-top:1px solid var(--rule);font-size:.85rem;color:var(--muted)}
+footer h3{font-size:1rem;margin-bottom:.7rem;color:var(--ink)}
+footer ul{margin:0 0 1.4rem;padding-left:1.1rem}
+footer li{margin-bottom:.35rem}
+details{margin:26px 0;border:1px solid var(--rule);border-radius:4px;background:var(--surface)}
+summary{padding:14px 20px;cursor:pointer;font-family:var(--mono);font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink)}
+details[open] summary{border-bottom:1px solid var(--rule-soft)}
+details .d-body{padding:20px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<div class="wrap">
+
+<header class="masthead">
+  <div class="col">
+    <p class="eyebrow">Audit de périmètre · Ticket 020</p>
+    <h1>La même base&nbsp;?</h1>
+    <p class="lede">Depuis deux ans, cette simulation note ses résultats en les comparant
+    à une enquête de terrain. Personne n'avait vérifié que les deux comptaient la même
+    population. Voici les neuf écarts, mesurés.</p>
+    <div class="byline">
+      <span><b>24 août 2026</b></span>
+      <span>1&nbsp;021 personas · 3&nbsp;936 trajets</span>
+      <span>Enquête EMC² CEREMA 2023, bassin toulousain</span>
+    </div>
+  </div>
+
+  <div class="wide">
+    <div class="keys">
+      <div class="key alarm"><span class="n">24,4<small>&thinsp;%</small></span>
+        <span class="l">des habitants simulés sont notés sur le territoire du voisin</span></div>
+      <div class="key alarm"><span class="n">45</span>
+        <span class="l">habitent hors de la zone enquêtée — jusqu'à 114&nbsp;km du centre</span></div>
+      <div class="key"><span class="n">9<small>&thinsp;/&thinsp;9</small></span>
+        <span class="l">écarts instruits, chacun avec un chiffre et un verdict</span></div>
+      <div class="key good"><span class="n">0</span>
+        <span class="l">écart laissé « non mesuré » — c'était la règle du jeu</span></div>
+    </div>
+  </div>
+</header>
+
+<section>
+<div class="col">
+<h2>De quoi on parle</h2>
+<p>Le projet fait vivre une ville simulée. Un millier d'habitants artificiels s'y
+lèvent, décident comment aller au travail, à l'école, faire leurs courses. Pour savoir
+si ces décisions ressemblent à celles de vrais Toulousains, on les compare à une
+enquête de terrain&nbsp;: l'<strong>Enquête Mobilité Certifiée</strong> menée par le
+CEREMA en 2022-2023, qui a interrogé 15&nbsp;775 personnes sur 54&nbsp;585 déplacements
+réels.</p>
+
+<p>L'enquête dit par exemple&nbsp;: dans l'agglomération toulousaine, 55&nbsp;% des
+déplacements se font en voiture, 26&nbsp;% à pied, 12&nbsp;% en transports collectifs,
+4&nbsp;% à vélo. Si la simulation produit les mêmes proportions, elle est
+« calibrée »&nbsp;; sinon, on ajuste.</p>
+
+<p>Toute cette mécanique repose sur une hypothèse jamais vérifiée&nbsp;: que les deux
+côtés parlent bien <em>de la même population</em>, et comptent bien <em>la même
+chose</em>. C'est ce qu'on a mis à l'épreuve, écart par écart.</p>
+
+<div class="note">
+  <span class="t">L'analogie</span>
+  <p>Comparer deux mesures suppose deux instruments réglés pareil. Si l'un pèse en
+  kilos et l'autre en livres, l'écart qu'on lit n'est pas un écart réel&nbsp;: c'est
+  l'écart entre deux règles. Un audit de périmètre cherche exactement ça — les endroits
+  où la simulation et l'enquête n'utilisent pas la même règle.</p>
+</div>
+
+<h2 style="margin-top:2.6rem">Le résultat en une phrase</h2>
+<p>Sur neuf points de comparaison, <strong>deux sont franchement faux</strong>, cinq
+portent un écart réel qu'il faut annoncer plutôt que corriger, et deux sont conformes.
+Le plus lourd n'a rien à voir avec l'intelligence des habitants simulés&nbsp;: c'est une
+question de <strong>géographie</strong>.</p>
+</div>
+</section>
+
+<section>
+<div class="col">
+<p class="eyebrow">Écart n° 1 · le plus lourd</p>
+<h2>Un cercle n'est pas une carte</h2>
+<p>L'enquête découpe le territoire en quatre anneaux&nbsp;: Toulouse, puis une première,
+une deuxième et une troisième couronne. Ce découpage est une <strong>liste de
+communes</strong>&nbsp;: Toulouse est une commune, la première couronne en compte 69, la
+deuxième 108, la troisième 275. Total&nbsp;: 453&nbsp;communes.</p>
+
+<p>La simulation, elle, classait chaque habitant <strong>à la distance du
+centre-ville</strong>&nbsp;: moins de 8&nbsp;km, vous êtes « Toulouse »&nbsp;; moins de
+20&nbsp;km, « première couronne »&nbsp;; moins de 40&nbsp;km, « deuxième »&nbsp;; au-delà,
+« troisième ». C'est commode, et c'était même annoté dans le code comme étant
+« les modalités de la référence ». Ce n'en sont pas.</p>
+</div>
+<div class="wide">
+<figure>
+  <div class="fig-body">
+    <div class="scroll">
+    <svg viewBox="-49 -43 90 98" style="width:100%;max-width:600px;height:auto;display:block;margin:0 auto" role="img"
+         aria-label="Carte du périmètre d'enquête de Toulouse : les quatre couronnes définies par communes, avec les cercles de 8, 20 et 40 kilomètres du classement par distance superposés en tirets rouges.">
+      <g stroke="var(--rule)" stroke-width="0.18" stroke-linejoin="round">
+        <path d="M-32.33,50.34L-33.11,48.08L-35.09,46.99L-35.48,48.10L-36.35,47.73L-37.75,45.37L-38.90,45.48L-40.29,47.65L-40.27,46.44L-41.83,44.85L-42.51,42.17L-40.58,39.80L-41.12,37.17L-42.35,36.55L-41.48,34.60L-43.28,33.27L-41.68,30.92L-42.32,29.71L-41.28,30.03L-41.10,28.95L-38.91,28.49L-42.56,26.92L-39.03,23.60L-39.73,22.29L-40.83,22.65L-40.91,21.04L-39.00,20.20L-38.85,16.99L-37.68,17.23L-40.39,15.59L-40.41,14.35L-38.38,15.06L-38.98,12.63L-38.17,11.25L-38.94,10.26L-38.43,9.37L-37.28,9.62L-38.06,8.07L-39.18,7.89L-38.23,6.28L-39.43,4.69L-42.59,4.02L-44.35,5.28L-46.08,4.07L-45.53,2.79L-46.86,1.88L-45.76,-0.05L-41.42,2.79L-40.11,0.72L-42.72,-1.79L-42.75,-2.86L-40.48,-2.73L-40.48,-4.89L-39.48,-4.70L-37.79,-7.86L-40.53,-8.02L-40.95,-9.08L-41.36,-8.15L-42.72,-8.37L-45.37,-11.94L-43.83,-13.02L-41.38,-12.94L-40.85,-14.29L-38.82,-14.28L-39.51,-18.31L-37.88,-19.17L-39.13,-22.02L-37.01,-21.86L-36.01,-23.05L-32.44,-23.72L-30.78,-22.98L-28.82,-24.44L-30.65,-25.91L-29.11,-28.17L-30.03,-29.40L-28.92,-30.04L-30.34,-31.08L-28.67,-33.40L-24.68,-31.24L-22.08,-31.96L-23.23,-32.98L-22.95,-35.69L-20.47,-37.49L-17.90,-36.35L-15.90,-36.89L-14.68,-33.96L-10.43,-33.56L-9.80,-34.16L-10.61,-35.69L-6.47,-39.73L-5.54,-36.43L-4.06,-35.55L-2.80,-37.45L-3.34,-38.07L-1.33,-38.59L1.07,-38.44L2.35,-37.20L3.51,-38.17L5.51,-37.32L6.97,-33.90L7.78,-35.88L9.53,-35.54L8.83,-33.74L10.19,-30.29L10.58,-32.45L13.02,-31.93L12.59,-33.52L14.94,-31.52L21.72,-32.74L24.43,-31.67L27.06,-27.70L29.97,-25.82L29.11,-25.72L30.09,-24.16L27.80,-22.79L32.70,-19.42L33.37,-17.42L31.92,-15.73L30.81,-16.19L28.04,-14.97L28.65,-14.37L27.95,-13.52L25.76,-15.17L23.11,-13.53L24.30,-11.19L26.02,-10.38L25.31,-9.24L17.90,-10.38L18.01,-11.41L15.09,-13.20L13.48,-16.26L12.16,-15.85L10.48,-17.04L9.94,-18.57L10.85,-20.94L9.52,-21.06L5.91,-24.26L2.28,-22.98L-1.11,-24.83L-3.37,-24.48L-4.52,-25.63L-4.84,-24.83L-7.29,-24.52L-9.33,-22.05L-10.53,-22.94L-12.71,-22.34L-12.95,-23.12L-13.90,-22.62L-12.76,-21.74L-13.32,-21.17L-18.72,-19.56L-19.18,-18.13L-17.99,-17.21L-19.00,-15.49L-24.25,-15.54L-26.00,-14.72L-26.55,-11.95L-24.87,-11.87L-26.29,-9.20L-25.97,-7.12L-28.09,-8.15L-31.90,-8.08L-33.35,-6.42L-32.74,-5.08L-35.32,-4.96L-32.92,-3.22L-34.13,-1.19L-32.61,0.05L-32.84,4.26L-32.00,5.55L-34.11,9.74L-35.05,10.00L-33.27,11.88L-35.56,13.16L-34.20,15.92L-32.62,14.22L-28.09,16.62L-25.45,15.24L-25.34,16.56L-21.98,16.15L-20.00,17.32L-20.98,21.04L-18.89,22.67L-23.10,27.00L-20.15,29.02L-18.09,27.83L-15.31,30.15L-13.27,30.20L-14.53,28.22L-12.79,25.53L-9.82,25.58L-9.72,26.75L-8.38,27.50L-6.71,26.88L-4.29,24.92L-5.32,24.21L-4.93,22.87L-2.91,21.22L-0.78,21.20L-1.54,20.13L-0.86,19.35L1.71,19.71L2.39,20.90L5.99,22.12L8.04,19.76L7.41,18.99L9.61,19.19L11.84,23.20L12.35,19.46L14.10,17.54L15.16,17.44L15.34,18.33L16.30,17.49L17.71,15.42L16.96,14.77L21.15,14.81L22.98,12.59L22.42,9.47L23.89,7.95L20.66,5.44L21.40,4.84L21.31,2.34L18.38,0.82L18.12,-2.64L19.62,-3.09L21.19,-5.80L23.20,-6.27L23.75,-7.70L26.21,-6.27L26.47,-4.83L28.39,-5.10L29.59,-6.56L31.91,-4.58L32.41,-3.00L31.65,-1.55L33.49,-0.84L34.40,1.65L38.89,4.07L38.79,6.05L36.26,6.54L37.12,7.63L35.77,9.64L38.37,12.48L37.08,13.19L37.20,14.53L35.56,14.27L34.11,11.12L31.54,9.74L31.67,11.71L34.01,13.81L32.71,15.20L31.72,14.59L32.93,15.70L32.52,17.47L36.25,20.83L33.33,20.90L31.98,19.94L31.78,20.84L30.61,20.40L29.75,21.23L33.52,26.65L30.44,28.61L32.36,32.02L32.03,33.20L29.39,32.21L29.13,32.96L27.20,32.75L25.02,31.56L25.55,32.57L24.25,33.01L23.63,32.32L22.75,34.17L25.38,36.28L25.42,38.56L22.95,38.10L22.38,35.92L20.07,35.46L19.06,36.34L17.87,35.44L15.92,37.67L16.39,39.40L15.33,40.34L14.66,40.32L14.88,38.28L10.17,36.02L9.39,36.13L8.99,38.41L7.52,35.71L7.40,36.67L3.10,40.08L4.39,41.81L2.58,41.15L1.10,43.13L-0.27,42.80L-1.48,44.07L-0.37,45.44L-3.65,44.14L-5.40,45.42L-6.64,44.64L-6.48,43.45L-7.48,43.32L-11.48,45.06L-13.54,42.10L-15.03,42.28L-16.02,44.55L-12.96,45.10L-12.80,47.19L-15.70,49.86L-16.43,49.64L-15.60,46.90L-16.45,45.64L-18.82,46.83L-19.57,48.58L-17.84,49.36L-19.16,50.54L-19.00,52.67L-20.09,53.19L-22.96,50.26L-23.71,51.44L-25.32,50.60L-27.05,48.39L-30.08,50.88L-32.33,50.34Z" fill="var(--surface-2)"/>
+        <path d="M-16.05,29.87L-18.88,27.97L-20.15,29.02L-23.10,27.00L-18.89,22.67L-20.98,21.04L-20.19,17.16L-22.18,16.13L-24.07,17.00L-25.34,16.56L-25.45,15.24L-27.70,16.66L-32.62,14.22L-33.84,16.01L-35.25,14.82L-35.56,13.16L-33.21,11.68L-35.05,10.00L-34.11,9.74L-32.00,5.55L-32.84,4.26L-32.61,0.05L-34.13,-1.19L-32.92,-3.22L-35.32,-4.96L-32.74,-5.08L-33.35,-6.42L-31.90,-8.08L-28.09,-8.15L-25.97,-7.12L-26.29,-9.20L-24.87,-11.87L-26.55,-11.95L-26.00,-14.72L-24.25,-15.54L-19.00,-15.49L-17.99,-17.21L-19.18,-18.13L-18.72,-19.56L-13.32,-21.17L-12.76,-21.74L-13.90,-22.62L-12.95,-23.12L-12.71,-22.34L-10.53,-22.94L-9.33,-22.05L-7.29,-24.52L-4.84,-24.83L-4.52,-25.63L-3.37,-24.48L-1.11,-24.83L2.28,-22.98L5.91,-24.26L9.52,-21.06L10.85,-20.94L9.94,-18.57L10.48,-17.04L12.16,-15.85L13.48,-16.26L15.09,-13.20L18.01,-11.41L17.90,-10.38L22.44,-9.71L23.20,-6.27L20.67,-5.38L17.79,-1.69L18.86,-0.18L18.52,0.99L20.69,1.37L21.31,2.34L21.40,4.84L20.66,5.44L23.89,7.95L22.42,9.47L22.98,12.59L21.15,14.81L18.61,14.62L18.62,15.37L17.42,14.61L16.96,14.77L17.71,15.42L16.30,17.49L15.34,18.33L15.16,17.44L14.10,17.54L12.35,19.46L11.84,23.20L9.61,19.19L7.41,18.99L8.04,19.76L5.99,22.12L2.39,20.90L1.71,19.71L-0.86,19.35L-1.54,20.13L-0.78,21.20L-2.91,21.22L-4.92,22.86L-5.32,24.21L-4.29,24.92L-7.53,27.41L-9.72,26.75L-9.84,25.57L-12.79,25.53L-14.53,28.22L-13.31,30.23L-16.05,29.87Z" fill="var(--accent-wash)"/>
+        <path d="M-11.51,22.58L-11.61,20.60L-13.04,19.60L-12.61,18.95L-14.62,17.99L-15.70,18.50L-14.62,16.11L-15.91,15.07L-15.13,14.39L-18.26,13.90L-17.89,12.62L-14.24,13.10L-15.27,11.56L-17.50,10.95L-16.24,8.43L-13.73,8.73L-12.68,7.71L-16.84,4.65L-15.58,2.75L-19.90,2.71L-19.65,-0.32L-20.71,-1.39L-17.90,-5.31L-11.47,-9.57L-11.79,-11.06L-7.97,-12.38L-7.90,-14.00L-6.26,-12.93L-5.31,-13.80L-5.50,-15.30L-4.66,-13.92L-4.45,-14.93L-3.83,-14.18L-3.93,-15.79L-2.22,-16.04L-1.97,-17.46L-0.57,-14.76L2.42,-14.63L2.62,-13.85L4.41,-14.93L10.28,-10.40L9.10,-7.54L10.75,-6.94L9.90,-5.24L10.52,-4.43L8.87,-4.74L7.95,-3.91L9.35,-2.46L12.76,-2.09L15.09,0.06L13.45,3.76L11.09,2.05L8.30,4.62L11.35,6.31L9.88,9.51L4.40,10.11L3.63,10.93L4.21,12.22L1.94,13.29L2.28,15.31L0.15,16.99L-3.36,16.62L-4.21,17.88L-6.16,15.19L-10.24,19.99L-9.31,22.01L-11.51,22.58Z" fill="var(--accent)" fill-opacity="0.34"/>
+        <path d="M1.19,7.21L-2.88,5.29L-4.69,6.63L-7.00,3.97L-6.20,2.55L-6.99,1.88L-5.51,0.71L-7.63,-0.93L-7.20,-2.44L-6.01,-3.61L-4.61,-2.12L-3.59,-2.70L-3.28,-7.98L-0.92,-6.69L-1.08,-7.70L-0.25,-7.94L-0.04,-5.61L1.34,-7.03L2.60,-4.95L4.48,-5.31L2.88,-3.39L4.16,1.82L5.46,2.38L5.50,3.72L4.38,4.92L1.70,5.07L0.66,6.31L1.19,7.21Z" fill="var(--accent)" fill-opacity="0.78"/>
+      </g>
+      <g fill="none" stroke="var(--fix)" stroke-width="0.32" stroke-dasharray="1.6 1.2" opacity="0.95">
+        <circle cx="0" cy="0" r="8"/><circle cx="0" cy="0" r="20"/><circle cx="0" cy="0" r="40"/>
+      </g>
+      <g font-size="1.9" fill="var(--fix)" style="font-family:var(--mono)">
+        <text x="0.9" y="-8.5">8 km</text>
+        <text x="0.9" y="-20.5">20 km</text>
+        <text x="0.9" y="-40.5">40 km</text>
+      </g>
+      <circle cx="0" cy="0" r="0.75" fill="var(--ink)"/>
+      <text x="1.8" y="1.1" font-size="2.1" fill="var(--ink)" font-weight="600" style="font-family:var(--body)">Capitole</text>
+      <g font-size="2.4" fill="var(--ink-soft)" style="font-family:var(--body)">
+        <text x="-46" y="50">3ᵉ couronne — 275 communes</text>
+        <text x="-31" y="-33">2ᵉ couronne — 108</text>
+        <text x="10" y="16">1ʳᵉ couronne — 69</text>
+      </g>
+    </svg>
+    </div>
+    <div class="map-legend">
+      <span><i class="swatch" style="background:var(--accent)"></i>Toulouse (1 commune)</span>
+      <span><i class="swatch" style="background:var(--accent);opacity:.34"></i>1ʳᵉ couronne</span>
+      <span><i class="swatch" style="background:var(--accent-wash)"></i>2ᵉ couronne</span>
+      <span><i class="swatch" style="background:var(--surface-2);border:1px solid var(--rule)"></i>3ᵉ couronne</span>
+      <span><i class="dash"></i>bornes du classement par distance</span>
+    </div>
+  </div>
+  <figcaption><b>Le périmètre réel de l'enquête, et les cercles qui prétendaient le décrire.</b>
+  La commune de Toulouse (teinte pleine) tient tout entière dans un rayon de 7&nbsp;km&nbsp;;
+  le cercle de 8&nbsp;km, lui, déborde largement sur Blagnac, Balma, Colomiers, Tournefeuille
+  et Ramonville — qui sont de 1ʳᵉ couronne dans l'enquête. L'erreur ne va donc que dans un
+  sens&nbsp;: elle gonfle Toulouse et vide la 1ʳᵉ couronne.
+  Géométrie&nbsp;: couche SIG de l'enquête (785 zones fines, 88 secteurs de tirage), projetée
+  en Lambert-93 et centrée sur l'hypercentre.</figcaption>
+</figure>
+</div>
+<div class="col">
+<p>Le résultat est massif. Sur 1&nbsp;021 habitants simulés, <strong>249 changent de
+couronne</strong> quand on passe de la règle du cercle à celle de l'enquête. Et ce ne
+sont pas des erreurs d'arrondi&nbsp;: la cible « part de la voiture » vaut
+<strong>31&nbsp;% à Toulouse</strong> et <strong>64&nbsp;% en première couronne</strong>.
+Un habitant mal classé n'est pas comparé à une cible un peu décalée&nbsp;; il est comparé
+à une cible qui diffère de plus de trente points.</p>
+</div>
+
+<div class="wide">
+<figure>
+  <div class="fig-body scroll">
+    <table>
+      <caption class="visually-hidden" style="position:absolute;left:-9999px">Croisement des deux classements</caption>
+      <thead>
+        <tr>
+          <th>Classé par le cercle&nbsp;↓ &nbsp;/&nbsp; réellement&nbsp;→</th>
+          <th class="num">Toulouse</th><th class="num">1ʳᵉ couronne</th>
+          <th class="num">2ᵉ couronne</th><th class="num">3ᵉ couronne</th>
+          <th class="num">hors périmètre</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Toulouse</td><td class="num">376</td><td class="num hi">66</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr><td>1ʳᵉ couronne</td><td class="num dim">—</td><td class="num">298</td><td class="num hi">57</td><td class="num dim">—</td><td class="num dim">—</td></tr>
+        <tr><td>2ᵉ couronne</td><td class="num dim">—</td><td class="num hi">2</td><td class="num">84</td><td class="num hi">79</td><td class="num dim">—</td></tr>
+        <tr><td>3ᵉ couronne</td><td class="num dim">—</td><td class="num dim">—</td><td class="num dim">—</td><td class="num">14</td><td class="num hi">45</td></tr>
+        <tr class="total"><td>Total réel</td><td class="num">376</td><td class="num">366</td><td class="num">141</td><td class="num">93</td><td class="num">45</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>Où passent les 249 habitants reclassés.</b> La diagonale est ce que les
+  deux règles s'accordent à dire&nbsp;; les cases teintées sont les désaccords. On lit
+  notamment que la simulation compte 442 « Toulousains » là où il y en a 376, et que sa
+  « 3ᵉ couronne » de 59 habitants en contient 45 qui vivent hors du territoire enquêté.</figcaption>
+</figure>
+</div>
+
+<div class="col">
+<h3 style="margin-top:2rem">Les communes concernées, nommément</h3>
+<p>Les 66 faux Toulousains habitent&nbsp;: Blagnac (21), Balma (19), Tournefeuille (6),
+Colomiers (5), Ramonville-Saint-Agne (5), L'Union (4), Aucamville (3), Launaguet (2),
+Auzeville-Tolosane (1). Ce sont des communes de première couronne, à haute motorisation,
+que la règle du cercle notait sur les critères d'un centre-ville dense et bien desservi.</p>
+
+<div class="note">
+  <span class="t">Ce qui rend cet écart pernicieux</span>
+  <p>Sur le total, l'erreur se voit à peine&nbsp;: la cible moyenne de la voiture ne bouge
+  que de 51,7&nbsp;% à 53,4&nbsp;%. C'est exactement le motif que ce projet traque —
+  <strong>un biais réel, invisible dans les agrégats</strong>. Il ne réapparaît que
+  lorsqu'on regarde territoire par territoire, c'est-à-dire là où la simulation est
+  justement censée être fine.</p>
+</div>
+
+<p>Et l'erreur ne se contente pas de brouiller la lecture&nbsp;: elle
+<strong>flatte la note</strong>. En recalculant l'écart aux cibles par couronne sous les
+deux règles, on obtient&nbsp;:</p>
+</div>
+
+<div class="wide">
+<figure>
+  <div class="fig-body">
+    <div class="bars">
+      <div class="bar-row"><span class="lab">Règle du cercle <span class="dim">(publiée)</span></span>
+        <span class="bar-track"><span class="bar-fill ghost" style="width:78%"></span></span>
+        <span class="val">47,8 pt</span></div>
+      <div class="bar-row"><span class="lab">Règle de l'enquête <span class="dim">(correcte)</span></span>
+        <span class="bar-track"><span class="bar-fill fix" style="width:83%"></span></span>
+        <span class="val">50,7 pt</span></div>
+    </div>
+  </div>
+  <figcaption><b>L'erreur de classement améliore le score de 2,9 points.</b> Écart moyen
+  aux cibles par couronne (somme des écarts absolus sur les quatre modes, pondérée par le
+  nombre de trajets), sur le même run et les mêmes décisions&nbsp;: seule la façon de
+  ranger les habitants change. Plus la barre est courte, meilleure paraît la simulation.</figcaption>
+</figure>
+</div>
+</section>
+
+<section>
+<div class="col">
+<p class="eyebrow">Écart n° 2</p>
+<h2>Quarante-cinq habitants qui n'existent pas pour l'enquête</h2>
+<p>L'enquête ne couvre que 453 communes. Elle exclut explicitement les touristes, les
+résidents d'EHPAD et les flux de marchandises. Ses cibles ne valent donc que dans ce
+territoire, et rien ailleurs.</p>
+
+<p>Or la population synthétique contient <strong>45 habitants (4,4&nbsp;%) domiciliés en
+dehors</strong>, entre 48 et <strong>114&nbsp;km du Capitole</strong> — jusque dans les
+contreforts pyrénéens. La règle du cercle leur attribuait quand même une couronne, la
+troisième, parce que « au-delà de 40&nbsp;km » n'avait pas de borne supérieure. Ils
+formaient ainsi <strong>76&nbsp;% de tout le stratum « 3ᵉ couronne »</strong> tel que
+publié.</p>
+
+<div class="note">
+  <span class="t">Le mécanisme, en une ligne</span>
+  <p>L'absence de périmètre ne produit pas une erreur visible&nbsp;: elle produit une
+  classification. Rien dans les journaux ne signale qu'un habitant des Pyrénées vient
+  d'être comparé à la mobilité de la couronne toulousaine.</p>
+</div>
+
+<p>Bonne nouvelle en revanche sur le versant inverse&nbsp;: seuls 0,9&nbsp;% des résidents
+du périmètre ont une activité au-delà de ses limites. Le bassin d'emploi n'importe pas de
+déplacements en masse&nbsp;; c'est bien le lieu de <em>résidence</em> qui pose problème,
+pas les destinations.</p>
+</div>
+</section>
+<section>
+<div class="col">
+<p class="eyebrow">Le contre-exemple</p>
+<h2>Un écart de 30 % qui n'existait pas</h2>
+<p>L'enquête annonce <strong>2,08 personnes par ménage</strong>. La population
+synthétique en affiche 2,71. Un écart de 30&nbsp;% — de quoi conclure que la génération
+de population fabrique des familles trop grandes.</p>
+
+<p>Elle n'en fabrique pas. Les deux chiffres ne comptent pas la même chose. Le 2,08 de
+l'enquête est une moyenne <strong>par ménage</strong>. Le 2,71 est une moyenne
+<strong>par personne</strong> — et une population synthétique est un échantillon de
+personnes&nbsp;: un ménage de cinq y apparaît cinq fois, un ménage d'une personne une
+seule. La moyenne est donc mécaniquement tirée vers les grands foyers.</p>
+
+<p>Il suffit de rendre à chaque ménage un poids de&nbsp;1 — en pondérant chaque personne
+par l'inverse de la taille de son foyer — pour que l'écart s'évapore&nbsp;:</p>
+</div>
+
+<div class="wide">
+<figure>
+  <div class="fig-body scroll">
+    <table>
+      <thead><tr><th>Grandeur du ménage</th><th class="num">Cible de l'enquête</th>
+        <th class="num">Moyenne brute</th><th class="num">Écart</th>
+        <th class="num">Pondérée par ménage</th><th class="num">Écart</th></tr></thead>
+      <tbody>
+        <tr><td>Personnes par ménage</td><td class="num">2,08</td>
+          <td class="num">2,71</td><td class="num hi">+0,63</td>
+          <td class="num">2,01</td><td class="num">−0,07</td></tr>
+        <tr><td>Voitures par ménage</td><td class="num">1,25</td>
+          <td class="num">1,47</td><td class="num hi">+0,22</td>
+          <td class="num">1,23</td><td class="num">−0,02</td></tr>
+        <tr><td>Ménages sans voiture</td><td class="num">19&nbsp;%</td>
+          <td class="num">13,0&nbsp;%</td><td class="num hi">−6,0</td>
+          <td class="num">20,7&nbsp;%</td><td class="num">+1,7</td></tr>
+        <tr><td>Ménages à une voiture</td><td class="num">45&nbsp;%</td>
+          <td class="num">36,0&nbsp;%</td><td class="num hi">−9,0</td>
+          <td class="num">42,0&nbsp;%</td><td class="num">−3,0</td></tr>
+        <tr><td>Ménages à deux voitures et plus</td><td class="num">35&nbsp;%</td>
+          <td class="num">50,9&nbsp;%</td><td class="num hi">+15,9</td>
+          <td class="num">37,3&nbsp;%</td><td class="num">+2,3</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>La même population, deux façons de la compter.</b> Colonne « brute »&nbsp;:
+  chaque personne compte pour une. Colonne « pondérée »&nbsp;: chaque personne compte pour
+  1/taille&nbsp;de&nbsp;son&nbsp;foyer, ce qui rétablit la base ménage de l'enquête. Un écart
+  de 15,9&nbsp;points sur la bi-motorisation tombe à 2,3.</figcaption>
+</figure>
+</div>
+
+<div class="col">
+<p>C'est le contre-exemple utile de cet audit&nbsp;: <strong>un écart de base peut aussi
+faire croire à un défaut qui n'existe pas</strong>. Ce qui compte n'est pas l'ampleur du
+chiffre, c'est de savoir sur quelle base il a été calculé — et de l'écrire.</p>
+</div>
+</section>
+
+<section>
+<div class="col">
+<p class="eyebrow">Écart n° 3 · révisé</p>
+<h2>Une moyenne comparée à un seul point</h2>
+<p>Première question à trancher, parce qu'elle décide de tout le reste&nbsp;: l'enquête
+porte-t-elle sur ces cinq mois, ou interroge-t-elle les gens sur leurs habitudes de
+l'année&nbsp;? Réponse&nbsp;: sur ces cinq mois. La méthode recueille les
+<strong>déplacements de la veille</strong> — on vous appelle un mardi, on vous demande ce
+que vous avez fait le lundi. Personne n'est interrogé sur ses habitudes annuelles.</p>
+
+<p>Deux vérifications indépendantes le confirment. La méthodologie publiée par le
+CEREMA&nbsp;: passation du mardi au samedi hors fériés et vacances scolaires, sur les
+déplacements de la veille, donc du lundi au vendredi. Et les données brutes elles-mêmes&nbsp;:
+les jours de référence n'y couvrent que <strong>septembre à décembre 2022 et janvier à
+février 2023</strong> — aucune observation de mars à août, aucun week-end.</p>
+
+<p><strong>Mais l'enquête ne publie pas « un jour d'automne ». Elle publie « un jour moyen
+de semaine ».</strong> La fenêtre automne-hiver et l'exclusion des congés sont la
+<em>méthode</em> pour obtenir une journée ordinaire, pas une revendication sur la saison.
+Ce qui déplace complètement le diagnostic&nbsp;: le problème n'est pas que la simulation se
+joue au printemps. C'est qu'elle compare <strong>une moyenne à un point unique</strong>.</p>
+</div>
+
+<div class="wide">
+<figure>
+  <div class="fig-body">
+    <div class="bars">
+      <div class="bar-row"><span class="lab">Fenêtre d'enquête</span>
+        <span class="bar-track"><span class="bar-fill" style="width:44.7%"></span></span>
+        <span class="val">44,7 %</span></div>
+      <div class="bar-row"><span class="lab">Année entière <span class="dim">(jeux gelés)</span></span>
+        <span class="bar-track"><span class="bar-fill" style="width:42.5%"></span></span>
+        <span class="val">42,5 %</span></div>
+      <div class="bar-row"><span class="lab">Jours du run</span>
+        <span class="bar-track"><span class="bar-fill fix" style="width:0.6%"></span></span>
+        <span class="val">0,0 %</span></div>
+    </div>
+  </div>
+  <figcaption><b>Part de journées pluvieuses.</b> Vérifié sur les 76 runs archivés
+  exploitables&nbsp;: 18 seulement ont connu de la pluie, et <b>aucun des 20 derniers</b>.
+  La chaîne de mesure récente est donc entièrement calibrée sur des journées sèches.</figcaption>
+</figure>
+</div>
+
+<div class="col">
+<h3 style="margin-top:1.8rem">Deux mécanismes, un seul remède possible</h3>
+<p><strong>Les jeux de test gelés, eux, moyennent correctement.</strong> Chaque décision
+reçoit une journée tirée indépendamment&nbsp;: la pluie y est bien représentée (42,5&nbsp;%
+contre 44,7&nbsp;%). Leur écart est <strong>thermique</strong> — 18,0&nbsp;°C à midi en
+moyenne contre 12,7 dans la fenêtre d'enquête, parce qu'ils tirent dans l'année entière.
+Restreindre ce tirage à la fenêtre corrige cet écart-là, et il est peu coûteux à faire.</p>
+
+<p><strong>Un run, lui, ne moyenne pas.</strong> Il rejoue cinq journées calendaires réelles
+et consécutives. Et sur deux points, mon premier diagnostic était trop sévère&nbsp;:</p>
+<ul>
+  <li>ces cinq journées sont <strong>thermiquement typiques</strong> de la fenêtre
+  d'enquête, pas printanières&nbsp;: 14,6&nbsp;°C à midi contre 12,7 de moyenne, chacune
+  entre le 56ᵉ et le 81ᵉ centile de la distribution. Mi-mars est par ailleurs une semaine
+  scolaire ordinaire, exactement ce que la méthode cible ;</li>
+  <li><strong>zéro pluie n'est pas un tirage malheureux</strong> qu'il suffirait
+  d'éviter&nbsp;: <strong>27,7&nbsp;% des séquences de cinq jours consécutifs de la période
+  d'enquête elle-même sont entièrement sèches</strong> (41 sur 148).</li>
+</ul>
+
+<div class="note">
+  <span class="t">Le vrai grief, et il n'a pas de réglage</span>
+  <p>Une réalisation de cinq jours est comparée à une moyenne de cent cinquante-deux.
+  <strong>Aucun choix de dates ne rend un run court comparable à cette moyenne</strong> sur
+  le mode le plus sensible à la météo — le vélo, dont des mouvements de quatre à cinq points
+  ont déjà arbitré plusieurs décisions de ce projet. C'est une limite de variance&nbsp;: on
+  l'annonce, ou on allonge l'horizon, ou on tire la météo dans la distribution de la fenêtre
+  au lieu de rejouer des jours consécutifs. On ne la corrige pas en changeant le calendrier.</p>
+</div>
+
+<p>À l'inverse, le <strong>jour de la semaine</strong> est un faux problème, et on peut
+maintenant le dire avec un chiffre. À l'intérieur de l'enquête, les parts modales ne
+varient que de 1,3 point au plus entre lundi et vendredi (la voiture oscille entre 54,5
+et 55,8&nbsp;%). Un run joué un lundi ne biaise donc pas les proportions. Il porte en
+revanche 10&nbsp;% de déplacements en moins qu'un mercredi — ce qui compterait si un jour
+on comparait des volumes, et pas seulement des parts.</p>
+</div>
+</section>
+
+<section>
+<div class="col">
+<p class="eyebrow">Écart n° 4</p>
+<h2>Ce qu'on appelle « un déplacement »</h2>
+<p>Question apparemment scolastique, conséquence bien réelle. Quand vous marchez dix
+minutes jusqu'à l'arrêt de bus, prenez le bus, puis marchez cinq minutes jusqu'au
+bureau&nbsp;: est-ce un déplacement en bus, ou trois déplacements&nbsp;?</p>
+
+<p>L'enquête répond&nbsp;: <strong>un seul déplacement, en bus</strong>. La marche
+d'accès n'est pas un déplacement, c'est une durée. On l'a vérifié dans ses données
+brutes&nbsp;: aucun de ses déplacements en voiture ou en transports collectifs ne porte
+de trajet à pied. La simulation fait la même chose — bonne nouvelle, la marche n'est
+donc <em>pas</em> surestimée par construction, ce qui était le soupçon de départ.</p>
+
+<p>Mais en fouillant, on trouve autre chose. Pour un trajet mixte — la voiture jusqu'au
+parking-relais, puis le métro — <strong>les deux règles se contredisent</strong>&nbsp;:</p>
+</div>
+
+<div class="wide">
+<figure>
+  <div class="fig-body scroll">
+    <table>
+      <thead><tr><th>Trajet voiture + transports collectifs</th>
+        <th class="num">Enquête</th><th class="num">Simulation</th></tr></thead>
+      <tbody>
+        <tr><td>Compté comme « transports collectifs »</td>
+          <td class="num">760 déplacements</td><td class="num hi">jamais</td></tr>
+        <tr><td>Compté comme « voiture »</td>
+          <td class="num">10 déplacements</td><td class="num hi">toujours</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <figcaption><b>La hiérarchie des modes est inversée.</b> L'enquête place les transports
+  collectifs au-dessus de la voiture&nbsp;; le code de la simulation teste la voiture
+  d'abord. Aujourd'hui la divergence ne coûte rien — le calculateur d'itinéraires est
+  interrogé mode par mode, donc <b>aucun trajet simulé ne mêle les deux</b>, et zéro
+  déplacement est mal classé. Mais l'effet miroir est bien là&nbsp;: ces rabattements
+  pèsent <b>1,4 point</b> de part modale, soit <b>11,5&nbsp;% de la cible « transports
+  collectifs »</b> de 12&nbsp;% — une fraction que la simulation ne peut structurellement
+  pas atteindre.</figcaption>
+</figure>
+</div>
+</section>
+<section>
+<div class="col">
+<h2>Les neuf écarts, un par un</h2>
+<p>Chacun porte une valeur d'enquête, une valeur simulée et un verdict. Aucun n'est laissé
+sans mesure&nbsp;: dans ce projet, un axe non mesuré est un axe qui passe — et l'absence
+de mesure y produit régulièrement la note parfaite.</p>
+</div>
+
+<div class="wide">
+
+<div class="axis">
+  <div class="rail"><span class="code">A1</span>Âge</div>
+  <div>
+    <h3>L'âge minimum compté</h3>
+    <p class="verdict"><span class="chip ok">Conforme</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>population cible&nbsp;: 5 ans et plus (1,32&nbsp;M sur 1,4&nbsp;M)</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">0 habitant de moins de 5 ans, sur toutes les populations générées</dd></div>
+    </div>
+    <p>Conforme, mais par héritage et non par garantie&nbsp;: rien dans le code ne
+    l'impose. Le tri des âges range tout ce qui est « inférieur ou égal à 9 » dans la
+    classe « 5-9 »&nbsp;; un enfant de trois ans y tomberait sans qu'aucun journal ne le
+    signale. La conformité vient de la chaîne de génération en amont, qui apparie les
+    emplois du temps sur une enquête commençant elle-même à 5 ans.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A2</span>Couronnes</div>
+  <div>
+    <h3>Le découpage du territoire</h3>
+    <p class="verdict"><span class="chip fix">À corriger</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>liste de communes&nbsp;: 1 / 69 / 108 / 275</dd></div>
+      <div><dt>Simulation</dt><dd>distance à l'hypercentre&nbsp;: 8 / 20 / 40&nbsp;km</dd></div>
+      <div><dt>Écart</dt><dd class="strong">249 habitants sur 1&nbsp;021 (24,4&nbsp;%) changent de couronne</dd></div>
+    </div>
+    <p>Le plus lourd des neuf, et le seul qui agisse aussi sur la simulation
+    elle-même&nbsp;: depuis l'introduction du temps d'accès aux véhicules, ce même
+    classement sert à facturer le temps de stationnement. La correction est donc plus
+    coûteuse qu'un simple ajustement de lecture — elle invalide trois caches et exige un
+    run complet. Elle ouvre son propre ticket.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A3</span>Pondération</div>
+  <div>
+    <h3>La base de calcul des cibles</h3>
+    <p class="verdict"><span class="chip publish">À publier</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>cibles ménage redressées&nbsp;: 2,08 personnes, 1,25 voiture, 19&nbsp;% sans voiture</dd></div>
+      <div><dt>Simulation</dt><dd>comptages bruts de personnes et de déplacements, sans redressement</dd></div>
+      <div><dt>Écart</dt><dd class="strong">+0,63 en brut sur la taille de ménage, −0,07 une fois la base rétablie</dd></div>
+    </div>
+    <p>Corrigé pour ce qui concerne les cibles de ménage&nbsp;: le calcul de pondération
+    est maintenant nommé et testé. Il reste un point à publier, celui-là non corrigeable
+    — dans les parts modales, un habitant simulé qui se déplace beaucoup pèse plus qu'un
+    sédentaire, ce que le redressement d'enquête corrige et que la simulation ne corrige
+    pas.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A4</span>Périmètre</div>
+  <div>
+    <h3>Les populations exclues</h3>
+    <p class="verdict"><span class="chip fix">À corriger</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>453 communes&nbsp;; 95,9&nbsp;% des déplacements internes au périmètre</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">45 habitants (4,4&nbsp;%) hors périmètre, jusqu'à 114&nbsp;km</dd></div>
+    </div>
+    <p>Le recalcul des parts modales de l'enquête sur ses seuls déplacements internes
+    redonne exactement la cible publiée (55,0&nbsp;% de voiture contre 55 annoncés)&nbsp;:
+    la cible est bien une cible intra-périmètre, et les habitants hors périmètre n'ont
+    aucune cible à laquelle se comparer. Il faut les exclure du scoring, pas les ranger
+    ailleurs.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A5</span>Saison</div>
+  <div>
+    <h3>La fenêtre de mesure</h3>
+    <p class="verdict"><span class="chip publish">À publier</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>déplacements de la VEILLE, 20/09/2022 → 18/02/2023, du lundi au vendredi hors congés&nbsp;; 44,7&nbsp;% de jours pluvieux. Publiée comme « un jour moyen de semaine »</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">5 journées réelles consécutives, 0,0&nbsp;% des trajets sous la pluie&nbsp;; jeux gelés tirés sur l'année entière, +5,3&nbsp;°C</dd></div>
+      <div><dt>Écart</dt><dd>thermique et corrigeable pour les jeux gelés&nbsp;; de <strong>variance</strong> et non corrigeable pour les runs</dd></div>
+    </div>
+    <p>Deux remèdes distincts. Restreindre le tirage des jeux gelés à la fenêtre d'enquête
+    supprime les 5,3&nbsp;°C de biais thermique — décision de protocole, peu coûteuse. La
+    variance d'un run de cinq jours, elle, ne se règle pas&nbsp;: 27,7&nbsp;% des séquences
+    de cinq jours de la période d'enquête sont aussi entièrement sèches. Elle s'annonce.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A6</span>Jour</div>
+  <div>
+    <h3>Le jour de la semaine</h3>
+    <p class="verdict"><span class="chip ok">Conforme</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>veille enquêtée du lundi au vendredi, répartition à peu près uniforme</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">aucun trajet de week-end&nbsp;; le garde-fou de report existe et n'est jamais sollicité</dd></div>
+    </div>
+    <p>Deux nuances chiffrées à conserver. Les parts modales ne bougent que de 1,3 point
+    au plus d'un jour ouvré à l'autre&nbsp;: un run mono-journalier ne les biaise pas. Mais
+    le report des départs de week-end vers le lundi n'a jamais été exercé — sur un run de
+    plus de cinq jours, il empilerait ces départs et fabriquerait un lundi atypique.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A7</span>Objet compté</div>
+  <div>
+    <h3>La définition du déplacement</h3>
+    <p class="verdict"><span class="chip publish">À publier</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>un déplacement, un mode principal&nbsp;; transports collectifs prioritaires sur la voiture</dd></div>
+      <div><dt>Simulation</dt><dd>un déplacement par ligne, jamais une jambe&nbsp;; mais la voiture testée en premier</dd></div>
+      <div><dt>Écart</dt><dd class="strong">0 déplacement mal classé aujourd'hui&nbsp;; 1,4 point de rabattement hors d'atteinte</dd></div>
+    </div>
+    <p>Divergence latente&nbsp;: elle ne coûte rien tant que le calculateur d'itinéraires
+    n'offre pas de trajets mixtes, et elle coûtera exactement 1,4 point le jour où il en
+    offrira. À inscrire aux limites, et à corriger avant d'introduire le parking-relais.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A8</span>Ménages</div>
+  <div>
+    <h3>La structure des foyers</h3>
+    <p class="verdict"><span class="chip publish">À publier</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>2,08 personnes par ménage&nbsp;; 674&nbsp;000 ménages</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">2,10 déclarée par adresse, mais 1,87 réellement présente</dd></div>
+      <div><dt>Écart</dt><dd>11,2&nbsp;% de membres déclarés absents&nbsp;; 419 grappes complètes sur 547, 121 incomplètes</dd></div>
+    </div>
+    <p>La taille <em>déclarée</em> tombe sur la cible&nbsp;: ce sont des membres qui
+    manquent, pas une distribution fausse. Sans effet sur les cibles de ménage, qui se
+    lisent sur la déclaration. Avec effet réel sur tout ce qui dépend des co-résidents —
+    partage de la voiture du foyer, verrous de chaîne de déplacements, attribution des
+    vélos.</p>
+  </div>
+</div>
+
+<div class="axis">
+  <div class="rail"><span class="code">A9</span>Géographie</div>
+  <div>
+    <h3>La répartition spatiale de l'échantillon</h3>
+    <p class="verdict"><span class="chip publish">À publier</span></p>
+    <div class="facts">
+      <div><dt>Enquête</dt><dd>70,5&nbsp;% de la population en Toulouse + 1ʳᵉ couronne (36,4 / 34,1 / 14,2 / 15,4&nbsp;%)</dd></div>
+      <div><dt>Simulation</dt><dd class="strong">76,0&nbsp;% en réalité — et 78,1&nbsp;% telle que publiée par la règle du cercle</dd></div>
+    </div>
+    <p>Une surconcentration au cœur tire mécaniquement la part de la voiture vers le bas,
+    sans qu'aucun modèle de décision ne soit en cause&nbsp;: la cible y vaut 31&nbsp;%
+    contre 71 à 74&nbsp;% dans les couronnes externes. L'excès est modéré, mais il
+    <strong>se cumule</strong> avec l'écart A2, qui gonfle encore Toulouse.</p>
+  </div>
+</div>
+
+</div>
+</section>
+<section>
+<div class="col">
+<h2>Ce qui a changé, et ce qui reste</h2>
+
+<h3 style="margin-top:1.6rem">Le cadrage est devenu opposable</h3>
+<p>Le fichier qui décrit la population enquêtée — périmètre, âge minimum, poids de
+redressement, structure des ménages — existait déjà. Mais <strong>aucun code ne le
+lisait</strong>, et l'essentiel dormait en commentaire. Il avait l'air d'être une donnée.
+Il est maintenant chargé par un module qui refuse un cadrage incohérent, et couvert par
+17 tests qui échouent si les couronnes ne somment plus à 453 communes, si une répartition
+ne fait plus 100&nbsp;%, ou si les modalités de territoire divergent de celles auxquelles
+les résultats sont comparés.</p>
+
+<p>Chacune de ses valeurs a par ailleurs été <strong>recalculée depuis les données brutes
+de l'enquête</strong>, indépendamment de la publication d'où elle avait été recopiée&nbsp;:
+les 10&nbsp;783 ménages, les 15&nbsp;775 personnes interrogées, les 674&nbsp;000 ménages du
+territoire, les 1,25 voiture par ménage, les quatre parts de population par couronne. Tout
+retombe à moins d'un demi-point. Deux corrections en sont sorties&nbsp;: le nombre de
+déplacements recensés (54&nbsp;585 et non 54&nbsp;785) et le compte de communes des
+première et deuxième couronnes (69 et 108, non 68 et 109 — même total de 453).</p>
+
+<h3 style="margin-top:1.8rem">La donnée qui manquait existe</h3>
+<p>La correspondance commune → couronne, pour les 453 communes, n'existait nulle part dans
+le projet&nbsp;: c'est ce qui rendait le classement par distance commode. Elle est
+maintenant extraite de la couche cartographique de l'enquête et versionnée, avec la
+géométrie des quatre couronnes. Le classement correct est donc désormais possible.</p>
+
+<h3 style="margin-top:1.8rem">L'audit est rejouable</h3>
+<p>Les neuf mesures ne sont pas un rapport ponctuel&nbsp;: elles sont un script. Il prend
+une population et un run, et publie le tableau écart par écart. Son code de sortie vaut 0
+si tout est conforme, 2 s'il reste un écart à corriger, et <strong>3 si un axe n'a pas pu
+être mesuré</strong> — parce qu'un axe silencieux est le motif de vacuité que ce projet
+traque, et non un axe qui passe.</p>
+
+<div class="note">
+  <span class="t">Ce que cet audit ne fait pas</span>
+  <p>Il ne corrige pas les écarts trouvés. C'était le périmètre convenu&nbsp;: établir et
+  qualifier. Le passage au classement communal, en particulier, touche la facturation du
+  temps de stationnement dans la simulation&nbsp;; il invalide trois caches et exige un run
+  complet. Il ouvre son propre ticket, à coordonner avec une correction déjà en attente.</p>
+</div>
+
+<h3 style="margin-top:1.8rem">Ce qui doit figurer aux limites de la publication</h3>
+<p>Cinq écarts ne sont pas corrigeables ici et doivent être annoncés
+<strong>avec leur amplitude</strong>, jamais comme « supposés négligeables »&nbsp;:</p>
+<ul>
+  <li>les parts modales simulées sont des comptages non redressés&nbsp;; un habitant très
+  mobile y pèse plus qu'un sédentaire ;</li>
+  <li>un run de cinq jours est une réalisation comparée à une moyenne de 152&nbsp;jours —
+  0,0&nbsp;% de trajets sous la pluie contre 44,7&nbsp;% de jours pluvieux — et cela ne se
+  corrige pas en changeant les dates ;</li>
+  <li>1,4&nbsp;point de la cible « transports collectifs » correspond à des rabattements
+  voiture + transport que la simulation ne peut pas produire ;</li>
+  <li>11,2&nbsp;% des membres de foyer déclarés n'existent pas comme habitants
+  simulés&nbsp;; tout ce qui dépend des co-résidents en est affecté ;</li>
+  <li>la population synthétique est concentrée à 76,0&nbsp;% dans le cœur d'agglomération,
+  contre 70,5&nbsp;% dans le territoire enquêté.</li>
+</ul>
+
+<h3 style="margin-top:1.8rem">La leçon</h3>
+<p>Les quatre investigations précédentes de ce projet avaient trouvé le même motif&nbsp;:
+un coefficient appris sur une variable, appliqué à une autre, et l'écart invisible dans
+les moyennes. Le périmètre de population était le dernier maillon de cette famille à
+n'avoir jamais été vérifié, et le plus en amont — un biais de périmètre déplace toutes les
+cibles à la fois.</p>
+<p>Il l'était bien. Et il l'était de la façon la moins visible possible&nbsp;: en
+<strong>améliorant la note de 2,9 points</strong>.</p>
+</div>
+</section>
+
+<div class="col">
+<details>
+  <summary>Méthode et reproduction</summary>
+  <div class="d-body">
+    <p style="font-size:.9rem"><strong>Sources.</strong> Enquête Mobilité Certifiée
+    CEREMA — EMC² 2023, bassin de vie toulousain. Microdonnées ProGEDO/ADISP
+    <code>lil-1750</code> (accès restreint)&nbsp;: fichiers ménages, personnes,
+    déplacements, trajets, et couche cartographique (785 zones fines, 88 secteurs de
+    tirage, 453 communes). Côté simulation&nbsp;: population de 1&nbsp;021 personas et run
+    du 21 août 2026 (3&nbsp;936 trajets, 901 agents).</p>
+    <p style="font-size:.9rem"><strong>Pondérations.</strong> Toute grandeur de ménage est
+    pondérée par le coefficient de redressement ménage de l'enquête, toute grandeur de
+    personne ou de déplacement par le coefficient personne. Les parts modales de l'enquête
+    ont été recalculées sur ses seuls déplacements internes au périmètre, ce qui reproduit
+    la cible publiée à 0,1&nbsp;point.</p>
+    <p style="font-size:.9rem"><strong>Écart L1.</strong> Somme des écarts absolus entre
+    part simulée et cible sur les quatre modes retenus, cibles renormalisées sur ces
+    quatre modes, puis moyenne pondérée par le nombre de trajets de chaque couronne.
+    Même run, mêmes décisions, mêmes trajets dans les deux colonnes&nbsp;: seule la
+    règle de classement change.</p>
+    <p style="font-size:.9rem;margin-bottom:0"><strong>Reproduction.</strong>
+    <code>make communes-couronnes</code> puis
+    <code>make audit-perimetre TRACE=…</code>. Le mode <code>--recompute</code> refait le
+    recoupement du cadrage depuis les microdonnées. Traces, tables intermédiaires et
+    sortie complète archivées dans le dépôt.</p>
+  </div>
+</details>
+</div>
+
+<footer>
+<div class="col">
+  <h3>Périmètre de cet audit</h3>
+  <ul>
+    <li>Mesuré&nbsp;: l'effet des écarts de base sur la <em>lecture</em> des résultats, à
+    run constant.</li>
+    <li>Non mesuré&nbsp;: l'effet d'un passage au classement communal sur la
+    <em>simulation</em> elle-même, qui exige un run complet après invalidation des caches.</li>
+    <li>Hors périmètre&nbsp;: le millésime des données d'appariement utilisées pour le
+    permis de conduire et l'abonnement de transport, traité ailleurs.</li>
+  </ul>
+  <p style="font-family:var(--mono);font-size:.75rem;letter-spacing:.03em">
+  Audit de périmètre de population · ticket 020 · mesures du 24 août 2026 ·
+  9 axes instruits, 0 non mesuré</p>
+</div>
+</footer>
+
+</div>

@@ -91,6 +91,14 @@ x-eqasim-env: &eqasim-env
   EQASIM_POPULATION_SIZE: ${EQASIM_POPULATION_SIZE:-}
   EQASIM_GENERATE_PERSONALITY: ${EQASIM_GENERATE_PERSONALITY:-false}
   EQASIM_RANDOM_SEED: ${EQASIM_RANDOM_SEED:-1234}
+  # Cadre de tirage = le périmètre d'enquête EMC² (liste de communes), et non un
+  # rectangle (ticket 026). `EQASIM_DEPARTMENTS` le restreint : la version livrée ne sert
+  # que la Haute-Garonne, faute des données BD TOPO/BAN des cinq autres départements du
+  # périmètre. La limite est chiffrée dans docs/arch/perimetre-population.md (limite n°6).
+  # Mettre EQASIM_PERIMETER=false pour revenir au comportement d'avant (département entier
+  # ou filtrage par bbox).
+  EQASIM_PERIMETER: ${EQASIM_PERIMETER:-true}
+  EQASIM_DEPARTMENTS: ${EQASIM_DEPARTMENTS:-31}
   OTP_ENDPOINT: http://otp1:8080
 
 services:
@@ -129,6 +137,14 @@ services:
       - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
+      # Ticket 015, lot 4 : `synthesis/population/enriched.py` apprend l'équipement
+      # vélo avec `llm_module.core.bike_ownership` (et `zone_resolver` pour la zone
+      # fine du domicile), au lieu de recopier le nombre de vélos d'un ménage ENTD.
+      # WORKDIR est /eqasim, donc le paquet est importable tel quel ; le montage
+      # apporte aussi ses ressources `llm_module/data/` (bike_ownership.json,
+      # zf_zones.gpkg), que le module résout relativement à son propre fichier.
+      # geopandas/shapely/pandas sont déjà des dépendances de l'image.
+      - ./llm_module:/eqasim/llm_module:ro
       - ./data/cache/eqasim:/eqasim-cache:rw
       - ./data/population:/eqasim-output:rw
     healthcheck:

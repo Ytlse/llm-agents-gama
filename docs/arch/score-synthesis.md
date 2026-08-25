@@ -32,6 +32,69 @@ Le rendu des cellules est produit par le **même** `_dimension_blocks()` que la
 page complète : aucun chiffre n'est recopié, et une page dédiée ne peut pas
 diverger du volet dont elle est extraite.
 
+### `avancement_et_resultats.html` — le journal des mesures
+
+`make avancement` produit une page distincte des précédentes, et la distinction
+est le point : `index.html` score un **run** de simulation, cette page-ci
+journalise les **mesures sur jeux gelés** — « base de référence → base modifiée →
+modification → résultat → score », une ligne par correction testée.
+
+Sa source unique est `scripts/synthesis/avancement.yaml`. Une ligne n'existe que
+si la mesure a été **faite** : le registre n'est pas un plan, sinon la page
+devient une liste d'intentions et cesse de dire ce qui est établi.
+
+Le rendu **refuse d'écrire** — bruyamment, code de sortie 1 — si une trace citée
+n'existe pas sur le disque, si un champ obligatoire manque, ou si un verdict sort
+du vocabulaire (`adopte` / `mesure` / `rejete` / `encours`). Une page de résultats
+qui se dégrade en silence est pire qu'une page absente. `make avancement CHECK=1`
+valide sans écrire.
+
+Les mesures sont affichées **de la plus ancienne à la plus récente**, et cet ordre est
+**calculé par le rendu**, pas hérité de l'ordre de saisie du registre : une ligne écrite en
+tête du YAML remontait en tête de page quelle que soit sa date. Le résumé imprimé en console
+passe par la même fonction que la page : les deux ne peuvent pas annoncer deux chronologies
+différentes. Corollaire : `date` est validée au format `AAAA-MM-JJ`, et une date mal formée
+est un **refus** — elle trierait de travers en silence.
+
+**À date égale, l'heure du document lié départage** — le registre ne porte qu'un jour, et
+plusieurs mesures tombent le même. L'heure est celle de la **synthèse intermédiaire** quand
+la ligne en cite une (c'est la page que la mesure a fait bouger), sinon celle du HTML de sa
+trace, sinon celle du dossier de trace. Elle s'affiche en regard de la date
+(`ticket 013 · 2026-08-24 à 12:03`), sa provenance en infobulle — une heure sans source ne
+se vérifie pas.
+
+Deux provenances, qui ne se valent pas :
+
+| Source | Portée |
+|---|---|
+| Heure **inscrite dans la page** par son générateur (« généré le 24/08/2026 à 12:03 ») | versionnée : identique sur toutes les machines |
+| À défaut, **horodatage du fichier** (création si le système la garde, sinon modification) | **git ne restitue pas les dates** : après un clone, c'est la date du clone |
+
+La seconde ne sert donc qu'à *départager* deux mesures d'un même jour, jamais à établir la
+date, qui vient du registre. Conséquence assumée : sur un clone frais, l'ordre intra-journée
+des lignes sans heure inscrite peut différer — la date, elle, ne bouge pas.
+
+Une heure n'est retenue que si le document lié **tombe le jour de la mesure**. Un document
+régénéré plus tard porte une heure qui ne situe plus rien : l'afficher en regard de la date
+du registre composerait un couple date/heure n'ayant jamais existé. Dans ce cas la ligne
+n'affiche pas d'heure et garde sa place stable — l'absence est honnête, l'approximation ne
+le serait pas.
+
+Chaque ligne porte deux liens : sa **trace archivée** sous `docs/traces/`, et
+quand elle existe la **synthèse intermédiaire** correspondante de
+`docs/synthesis/`. Les synthèses voisines sont en outre **découvertes sur le
+disque** plutôt que listées à la main — une liste écrite se périme au premier
+instantané ajouté ; les fichiers de travail (`index copy.html` et compagnie) sont
+exclus par motif, parce qu'un lien vers un brouillon fait douter de tous les
+autres. Les chemins relatifs sont calculés par `os.path.relpath` et non comptés à
+la main : un `../` de trop produit un lien qui a l'air juste et sort de `docs/`.
+
+⚠ Le champ `score` n'est pas libre : c'est la grandeur sur laquelle la décision a
+été prise. Quand le composite n'est **pas attribuable** — traitement minoritaire
+noyé dans le bruit, cf.
+[protocole-parametre-exogene.md](protocole-parametre-exogene.md) — la ligne porte
+l'effet **reconstruit** et le dit dans `score_caveat`.
+
 ---
 
 ## 1. Le principe : une trame, une loss, trois adaptateurs
@@ -48,6 +111,7 @@ La trame de décision est une ligne par (décision, mode envisagé) :
 | `weight` | Masse de probabilité accordée à ce mode (une décision somme à 1) |
 | `genre`, `age_cat`, `occupation`, `motif`, `dist_cat` | Catégories EMC² |
 | `lieu_residence`, `type_logement` | Affichés hors composite |
+| `— hors référentiel —` | Ligne de masse d'une dimension : les catégories que la référence ne ventile pas (`hors périmètre` pour la zone, « Autres » pour le logement). Ni cible, ni L1, jamais « couverte » — elle existe pour que « exclu des cibles » ne se confonde pas avec « inexistant » |
 
 La loss n'est **pas réimplémentée** : elle est importée de
 `prompt_calibration/calibration/metrics.py` via `sys.path`. Un score affiché sur
@@ -224,14 +288,22 @@ a joué, mais elle ne mesure pas la même chose qu'un choix libre entre tous les
 détail des valeurs est dans [vehicle-chain.md](vehicle-chain.md). Sur un run antérieur à
 la colonne, le bloc disparaît de la page plutôt que d'afficher « 100 % aucune ».
 
-Le **lieu de résidence** (Toulouse / 1re / 2e / 3e couronne) n'est pas recalculé
-par la page : elle relit la colonne `Lieu de résidence` telle que le run l'a
-écrite. Le classement est fait à la journalisation par `move_logger.py`, à partir
-de la distance du domicile à l'hypercentre — lu depuis
-`scripts/progedo_logit/feature_spec.json` via `llm_module/core/geo_reference.py`
-(action A9), le même centre que celui dont dérivent les `dist_center_*` du
-volet 3. Conséquence pratique : un changement d'hypercentre ne déplace les
-couronnes que dans les runs **postérieurs**, jamais dans un run déjà archivé.
+Le **lieu de résidence** (Toulouse / 1re / 2e / 3e couronne, plus `hors périmètre`)
+n'est pas recalculé par la page : elle relit la colonne `Lieu de résidence` telle
+que le run l'a écrite. Et depuis le **ticket 021**, `move_logger.py` ne la calcule
+plus non plus : il **recopie** le trait `residence_zone` du persona, posé à la
+génération de population depuis le découpage **par liste de communes** de l'enquête
+(`llm_module/core/residence_zone.py`). Classer par distance à l'hypercentre — ce que
+faisait l'action A9 — comparait 24,4 % des personas à la cible d'une autre zone et
+rangeait en 3ᵉ couronne 45 domiciles qui ne sont pas dans le périmètre d'enquête.
+
+Trois conséquences pratiques : une population enrichie avant le ticket 021 produit
+une colonne **vide** plutôt qu'une couronne devinée ; `hors périmètre` est une
+valeur de première classe, à **exclure** des cibles par zone et dont la masse se
+compte ; et un run déjà archivé garde le classement qu'il a écrit, comme avant. Le
+classement métrique, lui, survit pour le **temps terminal** seul, dont les lois sont
+stratifiées avec lui — la divergence entre les deux est bornée à 34 s par bout de
+trajet et documentée dans le docstring de `geo_reference.residence_zone`.
 
 ### Volet 2 — Calibration de prompt
 
@@ -522,6 +594,19 @@ colonnes mesurées sur deux populations ne se comparent pas. Le résultat est é
 ligne par décision, avec les probabilités **avant et après** renormalisation : sans le
 « avant », la correction est une affirmation invérifiable. Aucun appel LLM, aucun
 réseau, résultat déterministe.
+
+**Garde de substrat — le volet 3 est écarté s'il n'a pas été mesuré sur le run
+épinglé.** Symétrique de celle du volet 2, et elle a manqué jusqu'au 2026-08-25 : ce
+jour-là, épingler un nouveau run a bien écarté la mesure du volet 2, mais laissé celle du
+volet 3 en place. La matrice comparait alors une simulation lue sur un run à un modèle lu
+sur un autre, en les annonçant comme un seul substrat — le défaut exact que l'action A1
+avait fermé d'un seul côté. Le parquet porte `meta.run` et `meta.moves_sha256` ; la page
+compare les deux au run qu'elle épingle et à l'empreinte du `moves.csv` réellement sur le
+disque. **L'empreinte n'est pas redondante avec le nom** : une reprise à chaud
+(`make run OFFLINE=1 CONT=1`) réécrit `moves.csv` DANS le même dossier, donc sous le même
+nom de run — seule l'empreinte distingue ces deux états. Écartée, la mesure devient une
+carte « Données manquantes » portant l'action qui la rétablit (`make common-set-predict`),
+jamais un chiffre servi en silence.
 
 **Ce que la renormalisation corrige.** La politique prédit sur 4 classes sans savoir ce
 qui était offert ; la simulation ne choisit que parmi les itinéraires qu'OTP a

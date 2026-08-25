@@ -16,6 +16,8 @@ import json
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+
+from llm_module.core.population_reference import OUT_OF_PERIMETER
 from pathlib import Path
 from typing import Any, Optional
 
@@ -141,6 +143,16 @@ OCCUPATION_MAP = {
 }
 
 
+# Clé de la modalité hors périmètre. ASCII et sans accent, comme les clés de
+# `cerema_values.yaml` (`1ere_couronne`) : la sortie brute de `normalize_place`
+# donnerait `hors_périmètre`, qui ne joindrait rien et disparaîtrait sans un mot.
+OUT_OF_PERIMETER_KEY = "hors_perimetre"
+
+# Nom de la ligne qui porte la masse hors référentiel d'une dimension. Elle n'a ni
+# cible ni L1 : elle existe pour que « exclu des cibles » ne se confonde jamais avec
+# « inexistant ». `global_view` fait la même chose de sa masse hors modes scorés.
+OFF_REFERENCE_ROW = "— hors référentiel —"
+
 # Les clés de cerema_values.yaml sont des identifiants, pas des libellés : on les
 # rend lisibles à l'affichage sans jamais toucher aux clés elles-mêmes.
 CAT_LABELS = {
@@ -157,6 +169,9 @@ CAT_LABELS = {
     "petit_habitat_collectif": "Petit habitat collectif",
     "grand_habitat_collectif": "Grand habitat collectif",
     "plus_50km": "plus de 50 km", "75-130": "75 ans et plus",
+    # Recopie de la modalité canonique (`population_reference.OUT_OF_PERIMETER`), pas une
+    # reformulation : c'est la même chaîne que le journal écrit et que la trace archive.
+    OUT_OF_PERIMETER_KEY: OUT_OF_PERIMETER,
 }
 
 
@@ -186,8 +201,24 @@ def distance_to_cat(km: float) -> Optional[str]:
     return "plus_50km"
 
 
-def normalize_place(value: str) -> Optional[str]:
-    return value.strip().replace(" ", "_") if value and value.strip() else None
+
+def normalize_place(value: str) -> tuple[Optional[str], bool]:
+    """« Lieu de résidence » du journal → clé EMC², et le fait qu'elle soit référencée.
+
+    Depuis le ticket 021 la colonne porte quatre couronnes **et** `hors périmètre` : un
+    domicile connu, situé hors des 453 communes de l'enquête. Ce n'est pas une couronne
+    — le ranger en 3ᵉ a fait publier un stratum dont 76 % des habitants n'étaient pas
+    dans l'enquête —, il n'a donc **aucune cible** par zone, et le second membre du
+    couple dit qu'il ne joindra aucune ligne de référence. C'est ce qui permet de le
+    COMPTER plutôt que de le voir disparaître, exactement comme `normalize_housing` le
+    fait de la modalité « Autres ».
+    """
+    text = (value or "").strip()
+    if not text:
+        return None, False
+    if text == OUT_OF_PERIMETER:
+        return OUT_OF_PERIMETER_KEY, False
+    return text.replace(" ", "_"), True
 
 
 def normalize_housing(value: str) -> tuple[Optional[str], bool]:
@@ -433,6 +464,15 @@ def read_moves(path: Path, exclude_methods: list[str],
             # (« Autres ») : elle ne joindra aucune ligne de référence. On la
             # compte ici, faute de quoi elle disparaîtrait du bilan.
             stats["type_logement_hors_referentiel"] += 1
+        lieu_residence, lieu_reference = normalize_place(
+            raw.get("Lieu de résidence") or "")
+        if lieu_residence is None:
+            stats["lieu_residence_vide"] += 1
+        elif not lieu_reference:
+            # `hors périmètre` (ticket 021) : domicile connu, hors des 453 communes de
+            # l'enquête. Aucune cible par zone, donc exclu des strates — mais compté
+            # ici, faute de quoi il se diluerait sans laisser de trace.
+            stats["lieu_residence_hors_perimetre"] += 1
         offered = parse_offered_modes(raw.get("Modes proposés au LLM") or "")
         if not offered:
             stats["sans_offre"] += 1
@@ -458,7 +498,7 @@ def read_moves(path: Path, exclude_methods: list[str],
             "occupation": occupation,
             "motif": motif,
             "dist_cat": distance_to_cat(raw.get("Distance parcourue")),
-            "lieu_residence": normalize_place(raw.get("Lieu de résidence") or ""),
+            "lieu_residence": lieu_residence,
             "type_logement": logement,
         })
     return rows, dict(stats)
@@ -793,6 +833,14 @@ def dimension_detail(rows: list[dict], cerema: dict, dim: dict) -> list[dict]:
         bucket["mass"][row["mode_cat"]] += float(row.get("weight", 1.0))
         bucket["agents"].add(row.get("agent_id"))
 
+    # Ce que la boucle ci-dessous ne verra pas : les catégories que la référence ne
+    # ventile pas (`hors périmètre` pour la zone, « Autres » pour le logement). Elles
+    # n'ont aucune cible et sortent donc des strates — mais leur masse est publiée, au
+    # lieu de disparaître dans un dénominateur.
+    off_reference = {cat: {"mass": sum(bucket["mass"].values()),
+                           "n": len(bucket["agents"])}
+                     for cat, bucket in by_cat.items() if cat not in parts}
+
     out = []
     for cat in parts.keys():
         target = reference_shares(cerema, dim["cerema"], cat)
@@ -807,6 +855,12 @@ def dimension_detail(rows: list[dict], cerema: dict, dim: dict) -> list[dict]:
         n = len(bucket["agents"])
         out.append({"cat": cat, "n": n, "actual": actual, "target": target,
                     "l1": l1, "covered": n >= 5})
+    if off_reference:
+        excluded_mass = sum(row["mass"] for row in off_reference.values())
+        out.append({"cat": OFF_REFERENCE_ROW, "n": sum(row["n"] for row
+                                                       in off_reference.values()),
+                    "actual": {}, "target": {}, "l1": None, "covered": False,
+                    "excluded_mass": excluded_mass, "categories": off_reference})
     return out
 
 

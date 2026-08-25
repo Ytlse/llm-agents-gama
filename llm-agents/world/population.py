@@ -192,10 +192,16 @@ class WorldPopulation:
 
     @staticmethod
     def _is_within_bbox(person: Person, bbox: BBox) -> bool:
-        home = PersonScheduler(person).get_home_location()
-        if home is None:
-            return False
-        return bbox.min_lon <= home.lon <= bbox.max_lon and bbox.min_lat <= home.lat <= bbox.max_lat
+        """Admission au PÉRIMÈTRE d'enquête, avec repli sur la bbox (ticket 026).
+
+        Le nom reste pour ne pas casser les appelants, mais le critère a changé : c'est
+        le trait `residence_zone` du persona qui décide, et la bbox du réseau TC ne sert
+        plus que de repli pour une population générée avant le ticket 021.
+        """
+        from inputs.population.eqasim_loader import _perimeter_verdict
+
+        admis, _ = _perimeter_verdict(person, bbox)
+        return admis
 
     def load_population(self, world_bbox: BBox):
         file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}.json"

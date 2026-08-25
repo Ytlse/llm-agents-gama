@@ -1,0 +1,36 @@
+{
+  "subject": "ticket 023 — 5e bras v10c (agenda annoté par étape)",
+  "host": "dhcp-5-5-173.ut-capitole.fr",
+  "user": "yvesb",
+  "pid": 10753,
+  "created_by_pid": 10758,
+  "acquired_at": "2026-08-25T09:19:05+00:00",
+  "expected_duration_minutes": 20,
+  "cloud_campaign_paused_confirmed": true,
+  "quota_at_acquire": {
+    "at": "2026-08-25T09:19:05+00:00",
+    "available": false,
+    "error": "API (port 8000) injoignable — pile arrêtée ?"
+  },
+  "quota_at_release": {
+    "at": "2026-08-25T09:26:45+00:00",
+    "available": false,
+    "error": "API (port 8000) injoignable — pile arrêtée ?"
+  },
+  "stack_at_acquire": {
+    "at": "2026-08-25T09:19:05+00:00",
+    "probe_available": true,
+    "running": [],
+    "blocking_running": [],
+    "stack_fully_down": true
+  },
+  "stack_at_release": {
+    "at": "2026-08-25T09:26:47+00:00",
+    "probe_available": true,
+    "running": [],
+    "blocking_running": [],
+    "stack_fully_down": true
+  },
+  "limitation": "⚠ Ce jeton est LOCAL. Il ne bloque pas la campagne génétique de la VM Google Cloud, qui a son propre quota et son propre déclenchement hebdomadaire. Les instantanés de quota ci-dessous la DÉTECTENT après coup, ils ne la préviennent pas.",
+  "released_at": "2026-08-25T09:26:47+00:00"
+}

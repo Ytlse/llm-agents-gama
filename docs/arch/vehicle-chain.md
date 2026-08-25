@@ -24,9 +24,20 @@ position, pas un droit d'usage : il ne fait jamais apparaître un véhicule chez
 qui n'en a pas. Un agent `personal_bike = "Pas de vélo"` ou `number_of_cars = 0` est
 écarté du mode avant toute question de position — au verrou de sortie
 (`_vehicle_available`), au verrou de retour (`_vehicles_parked_at`) comme au décompte des
-orphelins (`_orphaned_vehicles`). Les défauts diffèrent entre les deux véhicules : champ
-`personal_bike` absent ⇒ vélo (rétrocompatibilité des anciennes populations), champ
-`number_of_cars` absent ou nul ⇒ pas de voiture.
+orphelins (`_orphaned_vehicles`). Les deux véhicules se comportent désormais pareil face à
+une donnée manquante : champ `personal_bike` absent ⇒ **pas de vélo** et **alarme**
+(ticket 015, lot 1), champ `number_of_cars` absent ou nul ⇒ pas de voiture.
+
+Le défaut du vélo était l'inverse — champ absent ⇒ « vélo normal » — au nom de la
+rétrocompatibilité avec les populations générées avant que le trait existe. Une population
+dépourvue du trait mettait ainsi **100 % des agents à vélo, en silence**, sur le mode dont
+la part modale est la plus scrutée du projet. Le repli prive maintenant l'agent d'un mode
+plutôt que de lui en offrir un qu'il n'a pas, et il est **bruyant** :
+`[ALARME]` une fois par processus (sinon elle serait levée à chaque décision de chaque agent
+et noierait `make error`) et compteur `alarme_total{source="personal_bike_absent"}` sur tous
+les cas. Les sept populations concernées sont sorties du champ du loader
+(`data/population/old/`) : ce chemin ne devrait plus jamais être emprunté. Voir
+[velo-equipement.md](velo-equipement.md).
 
 Les clés sont les sorties de `_primary_mode` (`bike`, `car`, `walk`, `transit`), pour
 comparer directement une position de véhicule au mode d'un itinéraire.

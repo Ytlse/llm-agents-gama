@@ -180,6 +180,19 @@ tickets:
     note: la cause amont n'est pas comprise, l'accusé de réception n'est pas écrit
 ```
 
+Statuts admis — `à faire`, `en cours`, `terminé`, `bloqué`, `en veille`, `abandonné`.
+Le vocabulaire est **fermé** : `tickets.py` indexe l'icône par le statut, une valeur
+hors liste lève une `KeyError` à l'affichage plutôt que de passer inaperçue.
+
+Deux distinctions qui portent du sens, et qu'il ne faut pas fondre :
+
+- **`en veille` ≠ `bloqué`.** *En veille* est une décision de ne pas avancer
+  maintenant, le travail reprendra tel quel ; *bloqué* dit qu'une dépendance
+  extérieure manque. Les confondre ferait chercher un déblocage qui n'existe pas.
+- **`abandonné` ne veut pas dire « code retiré ».** Le ticket 010 est abandonné comme
+  chantier alors que ses actions A1–A4 tournent en production : c'est le volet de
+  validation qui est abandonné, pas la livraison. La note dit lequel des deux.
+
 ⚠ **Clé = nom de fichier complet.** Les formes courtes (`ticket_005`, `005`) sont
 acceptées par `tickets.py`, mais deux tickets distincts partagent le numéro 005
 (choix modal probabiliste / politique PROGEDO) et deux autres le 014 (anticipation /

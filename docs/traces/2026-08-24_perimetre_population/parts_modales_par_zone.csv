@@ -1,0 +1,10 @@
+classement,zone,n_trajets,voiture,marche,transports_collectifs,velo,l1_vs_cible
+metrique,1ere couronne,1581,56.17,10.88,14.93,18.03,41.17
+metrique,2eme couronne,401,58.1,20.7,2.0,19.2,45.11
+metrique,Toulouse,1854,34.9,13.21,29.29,22.6,53.98
+metrique,— L1 moyen pondéré —,,,,,,47.77
+communal,1ere couronne,1638,51.16,10.5,18.56,19.78,51.94
+communal,2eme couronne,562,60.32,16.37,3.02,20.28,38.62
+communal,3eme couronne,99,51.52,30.3,2.02,16.16,51.69
+communal,Toulouse,1537,35.13,13.4,30.19,21.28,53.61
+communal,— L1 moyen pondéré —,,,,,,50.65

@@ -1,0 +1,33 @@
+{
+  "date": "2026-08-25",
+  "ticket": "023",
+  "appels_llm": 0,
+  "source": "data/weather/meteo_toulouse_12_mois.csv",
+  "n_jours": 365,
+  "mm_sans_creneau_precipitant": {
+    "n_jours": 25,
+    "cumul_min_mm": 0.1,
+    "cumul_median_mm": 0.2,
+    "cumul_max_mm": 2.5,
+    "n_jours_au_moins_1mm": 2,
+    "consequence": "repli obligatoire sur la formulation actuelle : la forme enrichie ajoute, n'enlève jamais"
+  },
+  "creneaux_hors_bornes_min_max": {
+    "n_creneaux": 30,
+    "sur_total": 1460,
+    "ecart_max_c": 3,
+    "consequence": "bornes du jour élargies aux créneaux lus ; source inchangée"
+  },
+  "creneau_precipitant_sans_cumul": {
+    "n_jours": 23
+  },
+  "jours_avec_neige": {
+    "n_jours": 1,
+    "dates": [
+      "2025-11-21"
+    ]
+  },
+  "colonnes_absentes": [
+    "probabilité de précipitation — aucun « risque de pluie » chiffré n'est dérivable de cette source"
+  ]
+}

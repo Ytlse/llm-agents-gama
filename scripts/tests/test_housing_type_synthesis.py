@@ -120,13 +120,29 @@ class TestVentilation:
         assert detail["petit_habitat_collectif"] == 0
 
     def test_autres_ne_pollue_pas_la_ventilation(self, tmp_path, cerema):
+        """« Autres » ne devient pas une strate — mais sa masse est COMPTÉE.
+
+        Le ticket 019 exigeait la première moitié : la modalité existe dans l'enquête,
+        la ventilation EMC² publiée l'ignore, elle ne doit donc pas recevoir de cible ni
+        peser dans un L1. Le ticket 021 a ajouté la seconde : une masse exclue des cibles
+        et invisible se confond avec une masse inexistante. `dimension_detail` rend donc
+        une ligne supplémentaire, sans cible ni L1 et jamais « couverte », qui porte cette
+        masse — le même geste que `global_view` fait de sa masse hors modes scorés.
+        """
         rows, _ = frames.read_moves(_moves(tmp_path, ["Autres"] * 5), [])
         dim = next(d for d in frames.DIMENSIONS if d["key"] == "type_logement")
         detail = frames.dimension_detail(
             frames.simulation_frames(rows)["attendu"], cerema, dim)
-        assert {d["cat"] for d in detail} == set(
+
+        strates = [d for d in detail if d["cat"] != frames.OFF_REFERENCE_ROW]
+        assert {d["cat"] for d in strates} == set(
             cerema["parts_modales_2023"]["type_logement"])
-        assert all(d["n"] == 0 for d in detail)
+        assert all(d["n"] == 0 for d in strates)
+
+        hors = [d for d in detail if d["cat"] == frames.OFF_REFERENCE_ROW]
+        assert len(hors) == 1, "la masse hors référentiel doit être publiée, pas diluée"
+        assert hors[0]["excluded_mass"] > 0
+        assert hors[0]["l1"] is None and hors[0]["covered"] is False
 
 
 class TestAvertissementDeLaPage:
@@ -184,34 +200,56 @@ class TestLoiExportee:
             reason="l'export exige geopandas/sklearn (extra 'geo')")
 
     @pytest.fixture
-    def persons(self):
+    def households(self):
+        """Un secteur (1001) à deux zones, et un gradient de taille net.
+
+        La zone 100100000 est bien enquêtée et entièrement en grand collectif ; la zone
+        100199000 n'a qu'un répondant, en individuel isolé. Les ménages d'une personne
+        sont en collectif, ceux de quatre en individuel : c'est ce gradient que le levier
+        de taille doit retrouver.
+        """
         pd = pytest.importorskip("pandas")
-        # Un secteur (1001) à deux zones : l'une bien enquêtée et entièrement en
-        # grand collectif, l'autre à un seul répondant en individuel isolé.
-        rows = ([{"ZF": "100100000", "housing": "grand_habitat_collectif", "weight": 1.0}] * 100
-                + [{"ZF": "100199000", "housing": "individuel_isole", "weight": 1.0}])
+        rows = []
+        for index in range(100):
+            size = 1 if index < 60 else 4
+            housing = "grand_habitat_collectif" if size == 1 else "individuel_isole"
+            rows.append({"ZF": "100100000", "housing": housing, "weight": 1.0,
+                         "size": size, "bucket": size})
+        rows.append({"ZF": "100199000", "housing": "individuel_isole", "weight": 1.0,
+                     "size": 2, "bucket": 2})
+        rows.append({"ZF": "100199000", "housing": "petit_habitat_collectif",
+                     "weight": 1.0, "size": 3, "bucket": 3})
         return pd.DataFrame(rows)
 
-    def test_les_lois_sont_des_distributions(self, export, persons):
-        table = export.build_table(persons)
+    def test_les_lois_sont_des_distributions(self, export, households):
+        table = export.build_table(households)
         assert table["modalities"] == list(MODALITY_KEYS)
         assert sum(table["global"]) == pytest.approx(1.0, abs=1e-3)
         for node in list(table["zones"].values()) + list(table["sectors"].values()):
             assert sum(node["shares"]) == pytest.approx(1.0, abs=1e-3)
 
-    def test_une_zone_mince_est_tiree_vers_son_secteur(self, export, persons):
+    def test_la_ressource_est_versionnee_pour_le_module(self, export, households):
+        """Le module refuse une v1 : l'export doit donc annoncer la v2, et servir les
+        quatre leviers — sans quoi la ressource produite serait illisible pour lui."""
+        from llm_module.core.housing_type import MIN_RESOURCE_VERSION, SIZE_MAX
+        table = export.build_table(households)
+        assert table["version"] >= MIN_RESOURCE_VERSION
+        assert sorted(table["size_leverage"]) == [
+            str(size) for size in range(1, SIZE_MAX + 1)]
+
+    def test_une_zone_mince_est_tiree_vers_son_secteur(self, export, households):
         """Sans lissage, une zone à 1 répondant servirait 100 % d'individuel isolé :
         du bruit d'échantillonnage présenté comme de la géographie."""
-        table = export.build_table(persons)
+        table = export.build_table(households)
         index = MODALITY_KEYS.index("individuel_isole")
         thin = table["zones"]["100199000"]["shares"][index]
-        assert thin < 0.15
-        assert table["zones"]["100199000"]["n"] == 1
+        assert thin < 0.45
+        assert table["zones"]["100199000"]["n"] == 2
 
-    def test_une_zone_bien_enquetee_garde_sa_loi(self, export, persons):
-        table = export.build_table(persons)
+    def test_une_zone_bien_enquetee_garde_sa_loi(self, export, households):
+        table = export.build_table(households)
         index = MODALITY_KEYS.index("grand_habitat_collectif")
-        assert table["zones"]["100100000"]["shares"][index] > 0.9
+        assert table["zones"]["100100000"]["shares"][index] > 0.5
 
     def test_le_lissage_est_une_combinaison_convexe(self, export):
         observed = np.array([1.0, 0.0, 0.0, 0.0, 0.0])
@@ -221,8 +259,90 @@ class TestLoiExportee:
         assert smoothed[1] == pytest.approx(0.5)
         assert sum(smoothed) == pytest.approx(1.0)
 
-    def test_l_effectif_enquete_est_publie_avec_la_loi(self, export, persons):
+    def test_l_effectif_enquete_est_publie_avec_la_loi(self, export, households):
         """Aucun seuil ne masque rien : le lecteur voit sur quoi la loi repose."""
-        table = export.build_table(persons)
+        table = export.build_table(households)
         assert table["zones"]["100100000"]["n"] == 100
-        assert table["meta"]["n_persons"] == 101
+        assert table["meta"]["n_households"] == 102
+
+
+class TestLevierDeTailleExporte:
+    """Le bloc que le ticket 019 ajoute à la ressource, et son test interne."""
+
+    @pytest.fixture(scope="class")
+    def export(self):
+        return pytest.importorskip(
+            "scripts.progedo_logit.export_housing_type",
+            reason="l'export exige geopandas/sklearn (extra 'geo')")
+
+    @pytest.fixture
+    def households(self):
+        """Deux zones identiques en géographie, opposées en composition de ménages :
+        le levier de taille est la SEULE chose qui puisse les distinguer."""
+        pd = pytest.importorskip("pandas")
+        rows = []
+        for zone in ("100100000", "100200000"):
+            for index in range(200):
+                size = 1 if index % 2 else 4
+                # Les personnes seules en collectif, les familles en individuel.
+                housing = ("grand_habitat_collectif" if size == 1
+                           else "individuel_isole")
+                rows.append({"ZF": zone, "housing": housing, "weight": 1.0,
+                             "size": size, "bucket": size})
+        return pd.DataFrame(rows)
+
+    def test_le_levier_va_dans_le_sens_de_la_composition(self, export, households):
+        table = export.build_table(households)
+        isole = MODALITY_KEYS.index("individuel_isole")
+        assert table["size_leverage"]["1"]["leverage"][isole] < 1.0
+        assert table["size_leverage"]["4"]["leverage"][isole] > 1.0
+
+    def test_les_effectifs_de_cellule_sont_ecrits(self, export, households):
+        """« Effectifs de cellule écrits dans la ressource, comme aujourd'hui pour les
+        zones ; toute cellule sous 30 observations pondérées est signalée. »"""
+        table = export.build_table(households)
+        cells = {cell["modality"]: cell
+                 for cell in table["size_leverage"]["1"]["cells"]}
+        assert cells["grand_habitat_collectif"]["n"] == 200
+        assert cells["grand_habitat_collectif"]["thin"] is False
+        assert cells["individuel_isole"]["n"] == 0
+        assert cells["individuel_isole"]["thin"] is True
+
+    def test_le_test_interne_mesure_le_mecanisme_livre(self, export, households):
+        """Sur une population où la taille explique TOUT, le levier doit ramener
+        l'erreur à zéro là où la loi de zone seule se trompe de plein fouet."""
+        table = export.build_table(households)
+        delivered = table["validation"]["delivered"]
+        zone_seule = next(row for row in table["validation"]["baselines"]
+                          if "ménages" in row["label"])
+        assert delivered["mean_abs_error_pt"] < 0.5
+        assert zone_seule["mean_abs_error_pt"] > 10.0
+        assert table["validation"]["passes"] is True
+
+    def test_le_test_interne_publie_les_20_cellules(self, export, households):
+        from llm_module.core.housing_type import SIZE_MAX
+        table = export.build_table(households)
+        cells = table["validation"]["delivered"]["cells"]
+        # Deux tailles peuplées dans ce jeu : 5 modalités chacune.
+        assert len(cells) == 2 * len(MODALITY_KEYS)
+        assert {cell["size"] for cell in cells} == {1, SIZE_MAX}
+        assert all("observed_pct" in cell and "imputed_pct" in cell for cell in cells)
+
+    def test_la_marginale_d_ensemble_n_est_pas_deplacee(self, export, households):
+        """Si le levier écrasait la zone, la marginale bougerait — c'est le garde-fou
+        du ticket : « le raking ne doit pas déplacer la géographie »."""
+        table = export.build_table(households)
+        delivered = table["validation"]["delivered"]
+        for observed, imputed in zip(delivered["overall_marginal_observed_pct"],
+                                     delivered["overall_marginal_imputed_pct"]):
+            assert abs(observed - imputed) < 1.5
+
+    def test_le_mecanisme_precedent_est_rejoue_quand_on_donne_les_personnes(
+            self, export, households):
+        """La comparaison avant/après vit dans la ressource : sans elle, « quatre fois
+        moins d'erreur » ne serait qu'une phrase."""
+        pd = pytest.importorskip("pandas")
+        persons = pd.concat([households.assign(weight=households["size"])] * 1)
+        table = export.build_table(households, persons)
+        labels = [row["label"] for row in table["validation"]["baselines"]]
+        assert any("pondération personnes" in label for label in labels)

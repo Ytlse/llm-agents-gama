@@ -195,8 +195,16 @@ def _make_travel_plan(
     legs: list[Transit] = []
     cursor = departure_time
 
-    access_s = profile.access_s(origin_zone) if profile is not None else 0
-    egress_s = profile.egress_s(dest_zone) if profile is not None else 0
+    # Clé de tirage du temps terminal (tt3 : la durée est tirée dans la loi d'enquête,
+    # pas constante). Elle identifie le TRAJET — mode et couple origine-destination à
+    # 10⁻⁵ degré, ~1 m — donc deux trajets distincts tirent indépendamment et le même
+    # trajet tire toujours pareil. Ce dernier point n'est pas cosmétique : les plans
+    # sont mis en cache et les décisions LLM aussi, un tirage instable ferait diverger
+    # un run de sa reprise et rendrait le cache de décisions faux.
+    draw_key = (f"{trip_mode}:{origin.lat:.5f},{origin.lon:.5f}"
+                f"→{destination.lat:.5f},{destination.lon:.5f}")
+    access_s = profile.access_s(origin_zone, draw_key) if profile is not None else 0
+    egress_s = profile.egress_s(dest_zone, draw_key) if profile is not None else 0
 
     if access_s:
         legs.append(_terminal_leg(TERMINAL_ACCESS_ROUTE, origin, cursor,

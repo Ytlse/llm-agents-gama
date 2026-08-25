@@ -18,7 +18,7 @@ common_set:
   # Chemin d'archive explicite, et non experiments/current : le symlink bouge à
   # chaque run, la page doit rester reproductible. Pour évaluer un autre run :
   # make synthesis RUN=experiments/archive/<run>, puis épingler ici si adopté.
-  run: experiments/archive/2026-08-02_18_55
+  run: experiments/archive/2026-08-24_17_34
   moves: moves.csv                # relatif au run
   population: null                # null → auto-détection de population_*.json
   # Lignes sans décision modale : exclues du scoring.

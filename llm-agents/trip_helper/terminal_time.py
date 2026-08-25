@@ -18,9 +18,11 @@ pas d'état mutable, donc testable sans réseau ni conteneur.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+import hashlib
 
 import yaml
 
@@ -32,6 +34,11 @@ _CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "terminal_tim
 # de ``TravelPlan.get_code()`` — invariant CRITIQUE : le code de plan est la clé
 # du cache de décisions et de la déduplication d'itinéraires, il ne doit pas
 # changer parce qu'on décompose l'affichage.
+# Sel du tirage du temps terminal. Versionné : le changer rebat tous les temps
+# terminaux, donc les plans ET les décisions LLM mises en cache. À ne bouger qu'avec
+# `version` ci-dessous.
+DRAW_SALT = "terminal_time_v1"
+
 TERMINAL_ACCESS_ROUTE = "__TERMINAL_ACCESS__"
 TERMINAL_EGRESS_ROUTE = "__TERMINAL_EGRESS__"
 
@@ -52,17 +59,66 @@ class TerminalProfile:
     provenance: str
     spatialise: bool
     labels: dict[str, str]
+    # Lois par couronne, `{couronne: {secondes: probabilité}}`. Présentes → le temps
+    # terminal est TIRÉ dedans ; absentes → les tables constantes ci-dessus font foi.
+    # Les deux mécanismes coexistent : la voiture et le vélo sont sur loi depuis tt3,
+    # un mode futur peut rester sur constante sans que rien ne change pour lui.
+    access_law_by_zone: dict[str, dict[int, float]] = field(default_factory=dict)
+    egress_law_by_zone: dict[str, dict[int, float]] = field(default_factory=dict)
 
-    def access_s(self, zone: str = "") -> int:
-        """Temps d'accès dans la couronne d'origine (repli ``default``)."""
+    def _draw(self, law: dict[int, float], key: str) -> int:
+        """Inverse de la fonction de répartition, sur un uniforme haché.
+
+        Déterministe et sans RNG : le même trajet reçoit toujours le même temps
+        terminal. Ce n'est pas un détail de confort — les plans sont mis en cache
+        (OTP) et les décisions LLM le sont aussi ; un tirage aléatoire ferait
+        divariger un run de sa reprise, et rendrait le cache de décisions faux.
+        """
+        digest = hashlib.sha256(f"{DRAW_SALT}:{key}".encode("utf-8")).digest()
+        u = int.from_bytes(digest[:8], "big") / 2 ** 64
+        cumulated = 0.0
+        for seconds, probability in sorted(law.items()):
+            cumulated += probability
+            if u < cumulated:
+                return int(seconds)
+        return int(max(law)) if law else 0
+
+    def _law_for(self, laws: dict[str, dict[int, float]], zone: str):
+        return laws.get(zone) or laws.get("default")
+
+    def access_s(self, zone: str = "", key: str = "") -> int:
+        """Temps d'accès dans la couronne d'origine (repli ``default``).
+
+        Avec une loi servie, ``key`` identifie le trajet : deux trajets distincts
+        tirent indépendamment, le même trajet tire toujours pareil. Sans ``key``, le
+        tirage retombe sur la couronne seule — tous les trajets d'une couronne
+        reçoivent alors la même valeur, ce qui est un repli lisible et non un
+        silence, mais pas ce qu'on veut en production.
+        """
+        law = self._law_for(self.access_law_by_zone, zone)
+        if law:
+            return self._draw(law, f"{self.mode}:access:{zone}:{key}")
         return int(self.access_by_zone.get(zone, self.access_by_zone["default"]))
 
-    def egress_s(self, zone: str = "") -> int:
+    def egress_s(self, zone: str = "", key: str = "") -> int:
         """Temps de stationnement et de marche dans la couronne de destination."""
+        law = self._law_for(self.egress_law_by_zone, zone)
+        if law:
+            return self._draw(law, f"{self.mode}:egress:{zone}:{key}")
         return int(self.egress_by_zone.get(zone, self.egress_by_zone["default"]))
 
-    def total_s(self, origin_zone: str = "", dest_zone: str = "") -> int:
-        return self.access_s(origin_zone) + self.egress_s(dest_zone)
+    def total_s(self, origin_zone: str = "", dest_zone: str = "",
+                key: str = "") -> int:
+        return self.access_s(origin_zone, key) + self.egress_s(dest_zone, key)
+
+    def mean_s(self, end: str, zone: str = "") -> float:
+        """Espérance du temps terminal — pour les rapports, jamais pour le rendu."""
+        laws = self.access_law_by_zone if end == "access" else self.egress_law_by_zone
+        law = self._law_for(laws, zone)
+        if law:
+            return sum(s * p for s, p in law.items())
+        table = self.access_by_zone if end == "access" else self.egress_by_zone
+        return float(table.get(zone, table["default"]))
 
     def egress_label(self, destination: Optional[str]) -> str:
         """Libellé de la jambe de diffusion, nommant la destination si connue.
@@ -109,9 +165,60 @@ def _validate(raw: dict) -> dict:
 
     profiles: dict[str, TerminalProfile] = {}
     for mode, cfg in (raw.get("modes") or {}).items():
+        # Lois par couronne (`*_law`), servies depuis tt3. Elles remplacent la constante
+        # quand elles sont là : la moyenne mesurée sur EMC² est INFÉRIEURE À LA MINUTE
+        # (0,36 min d'accès à Toulouse), et le rendu ne sait afficher que des minutes
+        # entières. Une constante devrait donc valoir 0 partout, ce qui effacerait une
+        # queue bien réelle — 2 à 4 % des trajets ont vraiment 5 minutes ou plus. Le
+        # tirage garde les deux, la moyenne ET la queue.
+        laws: dict[str, dict[str, dict[int, float]]] = {}
+        for name in ("access_law", "egress_law"):
+            raw_law = cfg.get(name)
+            if raw_law is None:
+                laws[name] = {}
+                continue
+            if not isinstance(raw_law, dict) or "default" not in raw_law:
+                raise ValueError(
+                    f"{_CONFIG_PATH.name} : {mode}.{name} doit être une table "
+                    f"{{couronne: {{minutes: probabilité}}}} avec une entrée `default` "
+                    f"— une zone hors couche EMC² tomberait sinon dans le vide.")
+            built: dict[str, dict[int, float]] = {}
+            for zone, pmf in raw_law.items():
+                if not isinstance(pmf, dict) or not pmf:
+                    raise ValueError(
+                        f"{_CONFIG_PATH.name} : {mode}.{name}.{zone} vide. Tirer dans "
+                        f"une loi vide rendrait 0 — une valeur plausible, donc un repli "
+                        f"indétectable.")
+                total = 0.0
+                cell: dict[int, float] = {}
+                for minutes, probability in pmf.items():
+                    minutes, probability = int(minutes), float(probability)
+                    if minutes < 0 or probability < 0:
+                        raise ValueError(
+                            f"{_CONFIG_PATH.name} : {mode}.{name}.{zone} — valeur "
+                            f"négative ({minutes} min, p={probability}).")
+                    # Les clés sont en MINUTES : converties en secondes ici, elles sont
+                    # des multiples de 60 par construction, ce qui préserve l'invariant
+                    # du rendu sans avoir à le vérifier.
+                    cell[minutes * 60] = probability
+                    total += probability
+                if abs(total - 1.0) > 1e-3:
+                    raise ValueError(
+                        f"{_CONFIG_PATH.name} : {mode}.{name}.{zone} somme à {total:.4f} "
+                        f"et non 1. Une loi qui ne somme pas à 1 fait taire une partie "
+                        f"de la masse sans le dire.")
+                built[zone] = cell
+            laws[name] = built
+
         tables: dict[str, dict[str, int]] = {}
         for name in ("access_s", "egress_s"):
             table = cfg.get(name)
+            if table is None and laws[name.replace("_s", "_law")]:
+                # Mode servi par une loi : la constante devient facultative. On garde
+                # un `default` à 0 pour que `access_s`/`egress_s` restent appelables
+                # sans loi (repli de `_law_for` sur une couronne absente).
+                tables[name] = {"default": 0}
+                continue
             if not isinstance(table, dict):
                 raise ValueError(
                     f"{_CONFIG_PATH.name} : {mode}.{name} doit être une table "
@@ -144,7 +251,9 @@ def _validate(raw: dict) -> dict:
             mode=mode, access_by_zone=tables["access_s"],
             egress_by_zone=tables["egress_s"],
             provenance=str(cfg.get("provenance", "unsourced")),
-            spatialise=bool(cfg.get("spatialise", False)), labels=dict(labels))
+            spatialise=bool(cfg.get("spatialise", False)), labels=dict(labels),
+            access_law_by_zone=laws["access_law"],
+            egress_law_by_zone=laws["egress_law"])
 
     if not raw.get("routing_version"):
         raise ValueError(
@@ -236,13 +345,41 @@ def apply_variant(name: str) -> None:
         # sensibilité mesurerait « spatialisé ou non » en même temps que « plus ou
         # moins de temps terminal » — deux variables pour une conclusion.
         factor = float(override.get("factor", 1.0))
+
         def _scaled(table: dict[str, int]) -> dict[str, int]:
             return {z: int(round(v * factor / 60.0)) * 60 for z, v in table.items()}
+
+        def _scaled_laws(laws: dict[str, dict[int, float]]
+                         ) -> dict[str, dict[int, float]]:
+            """Met la LOI à l'échelle, pas seulement les constantes.
+
+            ⚠ Sans ceci, une variante reconstruisait le profil en oubliant les champs
+            de loi : les lois disparaissaient et le temps terminal retombait sur les
+            constantes — nulles depuis tt3. La grille de sensibilité aurait mesuré
+            « avec ou sans temps terminal » au lieu de « plus ou moins », sous une
+            étiquette de variante juste. C'est exactement le silence que la
+            spatialisation avait déjà failli introduire.
+
+            Les secondes mises à l'échelle sont ramenées au multiple de 60 le plus
+            proche, et les clés qui collisionnent (×0,5 envoie 1 min et 0 min sur 0)
+            voient leurs masses **s'additionner** : la loi somme toujours à 1.
+            """
+            out: dict[str, dict[int, float]] = {}
+            for zone, pmf in laws.items():
+                scaled: dict[int, float] = {}
+                for seconds, probability in pmf.items():
+                    key = int(round(seconds * factor / 60.0)) * 60
+                    scaled[key] = scaled.get(key, 0.0) + probability
+                out[zone] = scaled
+            return out
+
         conf["modes"][mode] = TerminalProfile(
             mode=mode, access_by_zone=_scaled(profile.access_by_zone),
             egress_by_zone=_scaled(profile.egress_by_zone),
             provenance=profile.provenance, spatialise=profile.spatialise,
-            labels=profile.labels)
+            labels=profile.labels,
+            access_law_by_zone=_scaled_laws(profile.access_law_by_zone),
+            egress_law_by_zone=_scaled_laws(profile.egress_law_by_zone))
     # Repart de la version de BASE et non de la courante : deux bascules
     # successives ne doivent pas empiler les suffixes.
     conf["version"] = f"{conf['base_version']}-{name}"

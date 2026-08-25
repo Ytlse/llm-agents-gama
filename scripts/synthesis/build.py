@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 from . import frames, heldout_eval, render
 from .frames import DIMENSIONS, MODES
-from .sources import REPO_ROOT, import_calibration, load_manifest
+from .sources import REPO_ROOT, import_calibration, load_manifest, probe
 
 # Actions pour remplir la page. Affichées telles quelles en bas de page : une
 # seule source de vérité entre la doc et le rendu. Les identifiants ne sont
@@ -1220,7 +1220,9 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
     }
 
 
-def build_model_predictions(source, cerema: dict, scorer) -> dict:
+def build_model_predictions(source, cerema: dict, scorer,
+                            pinned_run: Optional[str] = None,
+                            pinned_digest: Optional[str] = None) -> dict:
     """Prédictions du modèle sur le jeu commun (action A8), scorées comme le reste.
 
     Même exigence que pour le volet 2 : le score sort du même ``Scorer`` — donc de la
@@ -1240,6 +1242,33 @@ def build_model_predictions(source, cerema: dict, scorer) -> dict:
     loaded = frames.load_model_predictions(source.path)
     if not loaded:
         return {"available": False}
+
+    # Garde de substrat, symétrique de celle du volet 2. Elle manquait ici, et le
+    # défaut n'était pas théorique : le 2026-08-25, épingler un nouveau run a écarté
+    # la mesure du volet 2 et laissé celle du volet 3 en place, si bien que la
+    # matrice a comparé une simulation lue sur un run à un modèle lu sur un autre,
+    # en les annonçant comme un seul substrat.
+    #
+    # Le nom du run ne suffit pas : une reprise à chaud (make run CONT=1) réécrit
+    # moves.csv DANS LE MÊME dossier, donc sous le même nom. L'empreinte du journal
+    # est le seul contrôle qui distingue ces deux états, et le parquet la porte.
+    meta_guard = loaded.get("meta") or {}
+    measured_run = str(meta_guard.get("run") or "?")
+    if pinned_run and measured_run != str(pinned_run):
+        return {"available": False,
+                "reason": (f"Prédictions faites sur {measured_run}, alors que la page "
+                           f"épingle {pinned_run}."),
+                "action": "Reproduire la mesure sur le run épinglé : "
+                          "make common-set-predict (chiffrer d'abord : DRY_RUN=1)"}
+    measured_digest = meta_guard.get("moves_sha256")
+    if pinned_digest and measured_digest and measured_digest != pinned_digest:
+        return {"available": False,
+                "reason": (f"Prédictions faites sur une autre version du journal de "
+                           f"{measured_run} — empreinte {str(measured_digest)[:12]} "
+                           f"contre {str(pinned_digest)[:12]} sur le disque. Une reprise "
+                           f"à chaud réécrit moves.csv sans changer de nom de run."),
+                "action": "Reproduire la mesure sur le journal courant : "
+                          "make common-set-predict (chiffrer d'abord : DRY_RUN=1)"}
 
     variants: dict[str, Any] = {}
     for name, frame in loaded["variants"].items():
@@ -1298,7 +1327,14 @@ def build_model(manifest, cerema: dict, scorer) -> dict:
     zones = manifest.track("model.zones", manifest.get("arms.model.zones"),
                            "Couche de zones fines (résolveur point → zone)")
 
-    predictions = build_model_predictions(preds, cerema, scorer)
+    # Empreinte du journal RÉELLEMENT sur le disque, et non celle qu'un manifeste
+    # annoncerait : c'est elle qui doit correspondre à celle inscrite dans le parquet.
+    run_info = frames.resolve_run(manifest)
+    moves_rel = ((run_info.get("moves") or {}).get("path")) if run_info else None
+    pinned_digest = probe("model.pinned_moves", REPO_ROOT / moves_rel).sha256 \
+        if moves_rel else None
+    predictions = build_model_predictions(preds, cerema, scorer,
+                                          manifest.get("common_set.run"), pinned_digest)
     # Ce que la prédiction a réellement trouvé, plutôt que ce qu'on en attendait :
     # une variable « disponible » peut être massivement manquante à l'arrivée (une
     # modalité que la population synthétique porte et que le spec ne connaît pas

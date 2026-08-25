@@ -139,7 +139,8 @@ docker compose up --build
 | `travel_time.py` | Calcul des temps de trajet pour la population |
 | `route_worker.py` | Worker de calcul d'itinéraires en batch |
 | `cerema_values.yaml` | Valeurs de référence CEREMA EMC² 2023 pour calibration |
-| `population_emc2_2023.yaml` | Données de l'Enquête Mobilité Certifiée CEREMA |
+| `population_emc2_2023.yaml` | **Cadrage** de la population interrogée par l'enquête CEREMA — périmètre, âge minimum, poids de redressement, couronnes. Chargé et validé par `llm_module.core.population_reference` ; toute valeur y est recoupée sur les microdonnées (cf. [périmètre de population](../arch/perimetre-population.md)) |
+| `audit_perimetre.py` | `make audit-perimetre` — les neuf écarts de base entre population enquêtée et population simulée. Sortie 0 conforme / 2 à corriger / **3 axe non mesurable** |
 
 ### Infrastructure / debug (`scripts/infra/`)
 
