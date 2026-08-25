@@ -107,6 +107,10 @@ async def main() -> None:
         "parameters": [
             {"type": "string", "name": "http_url", "value": CONTROLLER_HTTP_URL},
             {"type": "int", "name": "http_port", "value": CONTROLLER_HTTP_PORT},
+            # ⚠ Ne pas injecter ici les paramètres de simulation (mémoire, jours…) :
+            # Settings.gaml (load_sim_config, cycle 1) les écrase depuis
+            # GAMA/CityTransport/config/sim_params.yaml. C'est ce fichier qui fait foi —
+            # `make run MEM=0|1` le réécrit avant le lancement.
         ],
     }
     log(f"📦 load {MODEL_PATH} (expériment '{EXPERIMENT}', controller={CONTROLLER_HTTP_URL}:{CONTROLLER_HTTP_PORT})")

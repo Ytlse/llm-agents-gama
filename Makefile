@@ -43,6 +43,16 @@ ifneq ($(CONT),)
   export CONTINUE_RUN = 1
 endif
 
+# ── Mémoire des agents ─────────────────────────────────────────────────────────
+# `make run MEM=0` : coupe la mémoire long terme ET l'auto-réflexion ;
+# `make run MEM=1` : les réactive. Sans MEM, le fichier n'est pas touché.
+# ⚠ Le levier est GAMA/CityTransport/config/sim_params.yaml, PAS l'injection de
+# paramètres GAMA Server : Settings.gaml (load_sim_config, cycle 1) écrase les
+# paramètres injectés avec le contenu de ce fichier. Le réglage est PERSISTANT
+# (le fichier est réécrit à cycle 2) : il vaut aussi pour les runs GUI suivants.
+MEM ?=
+SIM_PARAMS = GAMA/CityTransport/config/sim_params.yaml
+
 # ── Run sans modèles Google ───────────────────────────────────────────────────
 # `make run NO_GOOGLE=1` : blanchit les deux clés Google dans les conteneurs ;
 # les instances google* sont exclues de la rotation (« clé API manquante »)
@@ -554,6 +564,10 @@ ifeq ($(CONT),)
 
 else
 	@echo "♻️  Reprise à chaud : workdir, métriques et compteurs conservés ($(shell readlink experiments/current))"
+endif
+ifneq ($(MEM),)
+	@perl -pi -e 's/^long_term_memory_enabled:.*/long_term_memory_enabled: $(if $(filter 0,$(MEM)),false,true)/; s/^long_term_self_reflect_enabled:.*/long_term_self_reflect_enabled: $(if $(filter 0,$(MEM)),false,true)/' $(SIM_PARAMS)
+	@echo "🧠 Mémoire des agents (LTM + auto-réflexion) : $(if $(filter 0,$(MEM)),DÉSACTIVÉE,activée) — écrit dans $(SIM_PARAMS)"
 endif
 	@$(MAKE) up
 	@$(MAKE) wait-ready

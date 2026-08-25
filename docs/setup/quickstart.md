@@ -39,6 +39,14 @@ make run OFFLINE=1 NO_GOOGLE=1   # campagne sans les modèles Google (gemini/gem
                                  # clés blanchies, instances google* hors rotation,
                                  # cascade sur mistral/groq/cerebras
 
+make run OFFLINE=1 MEM=0         # coupe la mémoire des agents : LTM ET auto-réflexion
+                                 # (MEM=1 pour les réactiver ; sans MEM, réglage inchangé).
+                                 # Écrit dans GAMA/CityTransport/config/sim_params.yaml —
+                                 # réglage PERSISTANT, il vaut aussi pour les runs IHM
+                                 # suivants. L'injection de paramètres GAMA Server ne
+                                 # fonctionne pas pour ces drapeaux : Settings.gaml
+                                 # (load_sim_config) les écrase depuis ce fichier.
+
 make stop-run                    # arrêt à chaud : stoppe GAMA et le launcher,
                                  # laisse le reste de la pile en place
 make run OFFLINE=1 CONT=1        # reprise : réutilise le workdir du run précédent

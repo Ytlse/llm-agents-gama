@@ -1,3 +1,21 @@
+## [2026-08-25] La mémoire des agents se coupe au lancement
+
+Un run peut désormais se lancer sans la mémoire des agents — mémoire long terme ET
+auto-réflexion — d'une seule option : `make run MEM=0` (et `MEM=1` pour la réactiver).
+Sans réflexions à drainer, la fin de run est immédiate : plus de queue d'écritures LTM
+à attendre avant `make down`.
+
+**Avant :** couper la mémoire supposait d'éditer `GAMA/CityTransport/config/sim_params.yaml`
+à la main — et l'injection de paramètres GAMA Server, qui semblait le canal naturel en mode
+headless, était silencieusement écrasée par `load_sim_config` au premier cycle.
+**Après :** `make run MEM=0|1` écrit le réglage dans `sim_params.yaml` avant le lancement,
+et l'écho GAMA (`ltm=… self_reflect=…`) permet de vérifier ce qui a réellement été joué.
+
+⚠ Le réglage est persistant (fichier réécrit à chaque run) : il vaut aussi pour les
+runs IHM suivants tant qu'un `MEM=1` ne le rétablit pas.
+
+---
+
 ## [2026-08-25] Le cinquième bras, ou comment un jeu de lecture fabrique un signal
 
 Un cinquième bras a été mesuré : l'**agenda annoté par étape**. Chaque trajet prévu dans la
