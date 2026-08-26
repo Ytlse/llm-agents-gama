@@ -216,6 +216,14 @@ measures:
       l'annotation, la mesure ne peut pas les départager, et son rejet ne la condamne pas.
       Quatre relevés sur huit dorment encore dans la source, et le code météo diffère entre
       12H et 15H sur 44 % des jours.
+
+    instrument_note: >-
+      ⚠ CHIFFRES MESURÉS SOUS L'INSTRUMENT D'AVANT LE 2026-08-26. `categorize_mode`
+      ignorait alors `cableway` (le Téléo), comptant en MARCHE une option de téléphérique
+      pur. Corrigé depuis (amendement A13) ; recalculé depuis les décisions en cache, ce
+      contraste vaut −1,49 au lieu de −1,69, et son plancher +2,02 au lieu
+      de +1,98. Le verdict est inchangé. Les valeurs ci-dessus restent celles
+      de la mesure : les réécrire falsifierait la trace.
     trace: docs/traces/2026-08-25_ab_meteo
 
   - id: bulletin_seul_pleine_masse
@@ -267,6 +275,14 @@ measures:
       reste en production comme un choix de CONTENU — l'information qu'il porte est
       factuellement absente du prompt sans lui — et ce statut ne doit rien à la mesure.
       Ce qui est CLOS, c'est l'hypothèse qu'un gain de composite se cachait dans sa forme.
+
+    instrument_note: >-
+      ⚠ CHIFFRES MESURÉS SOUS L'INSTRUMENT D'AVANT LE 2026-08-26. `categorize_mode`
+      ignorait alors `cableway` (le Téléo), comptant en MARCHE une option de téléphérique
+      pur. Corrigé depuis (amendement A13) ; recalculé depuis les décisions en cache, ce
+      contraste vaut +0,20 au lieu de +0,19, et son plancher −1,01 au lieu
+      de −1,07. Le verdict est inchangé. Les valeurs ci-dessus restent celles
+      de la mesure : les réécrire falsifierait la trace.
     trace: docs/traces/2026-08-25_ab_bulletin_seul
 
   - id: car_availability

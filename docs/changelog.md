@@ -1,3 +1,45 @@
+## [2026-08-26] Le téléphérique n'est plus compté comme de la marche
+
+Le Téléo fait partie du réseau Tisséo. Le calcul du score l'ignorait : une option de
+**téléphérique pur** — « foot,cableway,foot » — tombait sur le mot « foot » et était comptée
+en **marche**, le mode déjà le plus sous-représenté du modèle. Les trajets mêlant le Téléo à
+un bus ou un métro étaient, eux, correctement classés : seul le téléphérique seul était
+touché.
+
+**Avant :** `foot,cableway,foot` → marche
+**Après :** `foot,cableway,foot` → transports collectifs
+
+Ce n'est pas une convention nouvelle. Le journal de production comptait déjà ces modes
+correctement — la série de runs n'a jamais été affectée. Seule la loss de calibration
+divergeait, et personne ne lisait les deux listes côte à côte. Un test de parité les
+verrouille désormais ensemble.
+
+### Chiffré avant d'être appliqué, parce que c'est l'instrument de mesure
+
+Corriger la fonction qui note change les notes déjà données. L'effet a donc été recalculé
+depuis les décisions en cache, **sans un seul appel LLM**, avant toute modification :
+
+| Jeu | Contraste | Avant | Après |
+|---|---|---:|---:|
+| `all` | bulletin météo | +0,190 | +0,196 |
+| `all` | témoin nul | −1,066 | −1,012 |
+| `val` | fenêtre météo | −1,694 | −1,492 |
+| `val` | bulletin météo | +1,717 | +1,511 |
+| `screen` | *les quatre* | — | *inchangé* |
+
+Les composites bougent de 0,01 à 0,32 point, toujours vers le haut : déplacer de la masse de
+la marche vers les transports collectifs dégrade les deux côtés à la fois, la première étant
+sous-représentée et les seconds sur-représentés.
+
+**Aucun verdict ne change.** Fenêtre, bulletin et agenda restent tous sous leur plancher de
+bruit. C'est ce qui autorisait le correctif sans clore la série de mesures.
+
+Les traces et le registre gardent les chiffres **tels que mesurés**, et portent désormais la
+note du correctif avec les valeurs recalculées : un recoupement futur doit pouvoir dire quel
+instrument a produit quel nombre. Les réécrire aurait falsifié l'archive.
+
+---
+
 ## [2026-08-26] Le prompt dit ce que les options ne disent pas — et rien de plus
 
 Neuf changements sur le prompt soumis au modèle, dans un seul sens : ne servir que

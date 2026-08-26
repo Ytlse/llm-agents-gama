@@ -110,10 +110,12 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
 # Jambes de transport collectif, pour décider si l'abonnement TC est pertinent à
 # annoncer sur une option. `cableway` = Téléo, qui fait partie du réseau Tisséo.
 #
-# ⚠ Cette liste sert le PROMPT, pas le score. `categorize_mode` (loss de calibration)
-# a sa propre liste, où `cableway` MANQUE — une option « foot,cableway,foot » y est
-# comptée en marche. Ne pas aligner l'une sur l'autre à la légère : la seconde est
-# l'instrument de mesure, et le protocole le gèle.
+# ⚠ Cette liste sert le PROMPT, pas le score. Trois listes de modes TC coexistent dans
+# le dépôt et doivent rester cohérentes : celle-ci, `move_logger._BUS_MODES` (journal de
+# production) et `categorize_mode` (loss de calibration). Cette dernière ignorait
+# `cableway` jusqu'au 2026-08-26 — le Téléo y était compté en marche ; un test de parité
+# verrouille désormais les deux dernières. La loss est l'instrument de mesure : toute
+# évolution s'y chiffre avant de s'appliquer (amendement A13 du protocole).
 _PT_LEG_MODES = ("bus", "metro", "métro", "tram", "cableway", "transit", "public_transport", "rail", "train")
 
 

@@ -169,3 +169,30 @@ porte la sortie brute des 437 appels, lots incomplets et alarmes comprises. Le j
 reconstruit par `cat calibration_datasets/<v>/train.jsonl calibration_datasets/<v>/val.jsonl`.
 L'amendement **A12** du `PROTOCOLE.md` de `prompt_calibration` déclare cette lecture à pleine
 masse et le bras `v9b`.
+
+---
+
+## ⚠ Correctif d'instrument postérieur à cette mesure — 2026-08-26
+
+`categorize_mode` ignorait `cableway` : une option de **téléphérique pur**
+(« foot,cableway,foot ») tombait sur le mot « foot » et était comptée en **marche**, alors
+que le Téléo fait partie du réseau Tisséo. `move_logger._BUS_MODES` le comptait déjà
+correctement côté production — la loss était seule à diverger. Corrigé, et chiffré avant de
+l'être (amendement **A13** du `PROTOCOLE.md`).
+
+Recalculé depuis les décisions en cache, sans un appel LLM :
+
+| Jeu | Contraste | Mesuré ici | Recalculé | Δ |
+|---|---|---:|---:|---:|
+| `all` | bulletin `v9b − v9` | +0,190 | +0,196 | +0,006 |
+| `all` | témoin nul `v9n − v9` | −1,066 | −1,012 | +0,054 |
+| `val` | fenêtre `v10 − v9` | −1,694 | −1,492 | +0,202 |
+| `val` | témoin nul `v9n − v9` | +1,976 | +2,022 | +0,047 |
+| `val` | bulletin `v10b − v10` | +1,717 | +1,511 | −0,206 |
+| `val` | agenda `v10c − v10` | −0,175 | −0,301 | −0,126 |
+| `screen` | *les quatre* | — | — | **0,000** |
+
+**Aucun verdict ne change** : chaque traitement reste sous son plancher de bruit. Les
+chiffres de cette page restent ceux de la mesure, sous l'instrument du jour — les réécrire
+falsifierait la trace. Un recoupement futur doit savoir lequel des deux instruments a
+produit quel nombre : c'est l'objet de cette note.
