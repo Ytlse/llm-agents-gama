@@ -20,7 +20,7 @@ Voir aussi : [prompt_calibration.md §10 et §11](prompt_calibration.md) (l'outi
 
 | Étape | Coût | Ce qu'elle produit | Ce qu'elle ne dit pas |
 |---|---|---|---|
-| 0 · **Prendre le jeton d'exclusion** | 0 | l'assurance qu'aucun run ne consomme le même quota | ce que fait la campagne cloud |
+| 0 · **Vérifier l'exclusion** (à la main depuis le 2026-08-26) | 0 | qu'aucun run ne consomme le même quota | ce que fait la campagne cloud — et, sans jeton, la PREUVE que la vérification a eu lieu |
 | 1 · Mesurer le paramètre dans l'enquête | 0 | une **loi**, pas une moyenne | si le modèle y réagit |
 | 2 · Réécrire un jeu gelé | 0 | un jeu `vN+1`, une variable de plus | ce qu'une simulation produirait |
 | 3 · A/B apparié sur le moteur de calibration | ~15 appels/bras | l'effet sur la loss et les parts modales | l'effet des chaînes de véhicule |
@@ -30,20 +30,20 @@ Voir aussi : [prompt_calibration.md §10 et §11](prompt_calibration.md) (l'outi
 L'ordre n'est pas cosmétique. L'étape 3 est **le test qui peut démentir l'hypothèse**, et
 elle passe avant toute modification de production. L'étape 0 passe avant tout : une mesure
 prise pendant un run concurrent n'est pas une mesure imprécise, c'est une mesure dont on ne
-sait pas ce qu'elle décrit. Si l'effet mesuré est nul, on a dépensé
+sait pas ce qu'elle décrit. Depuis le 2026-08-26 elle n'est plus outillée — c'est une
+vigilance, plus un verrou. Si l'effet mesuré est nul, on a dépensé
 trente appels LLM au lieu d'une nuit de calcul et d'un paramètre faussé.
 
 ---
 
-## 0 · Prendre le jeton d'exclusion
+## 0 · L'exclusion — plus de verrou, une vigilance
 
-**Aucun appel LLM de ce protocole ne se passe pendant qu'un run tourne.** Ce n'est pas une
-règle d'hygiène, c'est une condition de validité : la mesure et la simulation consomment le
-**même quota**, et quand un fournisseur sature la cascade bascule sur le suivant. Si la
-bascule survient entre le premier et le second bras, **les deux bras n'ont pas été évalués
-par le même modèle** — un facteur confondu avec le traitement, et invisible dans les
-agrégats. C'est précisément la « dérive systématique entre bras » que le § « second piège »
-signale plus bas.
+**Aucun appel LLM de ce protocole ne devrait se passer pendant qu'un run tourne.** Ce n'est
+pas une règle d'hygiène, c'est une condition de validité : la mesure et la simulation
+consomment le **même quota**, et quand un fournisseur sature la cascade bascule sur le
+suivant. Si la bascule survient entre le premier et le second bras, **les deux bras n'ont pas
+été évalués par le même modèle** — un facteur confondu avec le traitement, et invisible dans
+les agrégats.
 
 Deux autres ressources sont partagées, et les deux abîment silencieusement :
 
@@ -52,100 +52,21 @@ Deux autres ressources sont partagées, et les deux abîment silencieusement :
 | Store content-addressed | deux procédures écrivant sous la même clé `ds=` |
 | Lien `experiments/current` | `make run` le repointe ; une archive en cours archiverait le mauvais run |
 
-```bash
-make protocol-status                                    # qui détient le jeton, depuis quand
-make protocol-lock SUBJECT="fenêtre météo" CLOUD_PAUSED=1
-# … étapes 1 à 4 …
-make protocol-unlock
-```
+**Le jeton d'exclusion qui automatisait cette vérification a été retiré le 2026-08-26.** Il
+n'y a plus ni `make protocol-lock`, ni garde-fou dans les scripts `ab_*.py` : ceux-ci
+démarrent désormais sans rien vérifier.
 
-`CLOUD_PAUSED=1` n'est pas une formalité : c'est **la** liste de contrôle du § cloud
-ci-dessous, et la prise est refusée sans elle. `SUBJECT` l'est tout autant — un jeton
-anonyme ne se débloque pas sans risque.
+⚠ **La condition de validité, elle, n'a pas disparu — seul son contrôle l'a.** Avant une
+mesure, il reste à s'assurer à la main qu'aucun run ni service consommateur ne tourne
+(`docker compose ps` doit être vide, ou au moins sans `controller` ni `worker`), et que la
+campagne génétique de la VM cloud est en pause (`systemctl is-active calib-ga` → `inactive`).
+Ce que le verrou apportait et qui manque désormais : la **preuve**. Une trace ne peut plus
+citer un jeton horodaté avec ses instantanés de quota ; elle ne peut plus qu'affirmer que la
+vérification a été faite. À une mesure près, la différence est mince ; à l'échelle d'une
+campagne, c'est ce qui distingue un dossier opposable d'un souvenir.
 
-La prise **refuse** si un run tourne (`live.run_process()`, les mêmes motifs que `make run`)
-ou si les services `controller` / `worker` sont en marche : ils peuvent drainer une file de
-décisions même sans GAMA. En pratique, il faut donc `docker compose stop controller worker`
-avant de commencer.
-
-Le jeton enregistre un **instantané de quota** à la prise et au relâchement. Il entre dans
-l'archive de l'étape 4 : c'est la preuve qu'aucune consommation concurrente n'a eu lieu — et,
-quand il y en a eu une malgré le verrou, le moyen de savoir que la mesure est à jeter.
-
-**Un jeton orphelin est signalé, jamais levé automatiquement.** Si le terminal qui l'a pris
-a été fermé, `make protocol-status` le dit en `[ALARME]` et la reprise doit être explicite
-(`STEAL=1`). Un verrou qui se libère seul n'est pas un verrou : une procédure peut encore
-tourner sous un autre shell.
-
-**Les scripts `ab_*.py` exigent le jeton** et refusent de démarrer sans lui (code de sortie
-7). Seul `--dry-run` passe toujours : il ne dépense rien, et le protocole demande justement
-de chiffrer avant de payer — exiger le jeton pour savoir ce qu'il coûterait serait
-circulaire.
-
-### La dérogation explicite — `PROTOCOL_LOCK_OPTIONAL=1`
-
-L'exigence se lève, en connaissance de cause :
-
-```bash
-PROTOCOL_LOCK_OPTIONAL=1 python ab_meteo.py --dataset val --out …
-```
-
-Elle sert les cas où l'exclusion est garantie **autrement** : pile entièrement arrêtée et
-vérifiée à la main, poste isolé, ou un jeton concurrent portant un quota qui ne recouvre pas
-celui de la mesure (deux modèles-juges, deux projets — les compteurs free tier se comptent
-par modèle **et** par projet).
-
-Trois propriétés en font une dérogation et non un contournement :
-
-- **elle ne se prend jamais par défaut** — seule la valeur exacte `1` la déclenche, et un test
-  vérifie qu'un `PROTOCOL_LOCK_OPTIONAL=0` ne lève rien ;
-- **elle est bruyante** — cinq lignes d'avertissement à l'écran, et le message de refus la
-  nomme, parce qu'une échappatoire introuvable n'en est pas une ;
-- **elle est écrite dans le résultat** — les scripts portent une clé `exclusion` dans leur
-  JSON, `{"garantie": false, "avertissement": "…"}`. Ce champ est écrit **systématiquement**,
-  y compris quand le jeton était détenu : un champ absent se lirait comme « pas de problème ».
-
-⚠ **Une mesure en dérogation n'est pas invalide — elle est SANS PREUVE D'EXCLUSION.** La
-distinction est tout l'objet du dispositif : le protocole exige une **preuve**, pas un rituel,
-et ce qui reste refusé c'est de **ne pas savoir**. Une trace doit dire dans quelles conditions
-d'exclusion sa mesure a été prise, au même titre qu'elle dit son modèle-juge et sa
-température. Cf. l'amendement **A14** du `PROTOCOLE.md`.
-
-⚠ **Le jeton est local et ne couvre pas la campagne cloud**, qui tourne en autonomie sur une
-VM avec son propre quota. La mettre en pause est une entrée de liste de contrôle à la prise
-du jeton, pas quelque chose que le verrou garantit. Ne pas confondre les deux.
-
-### Jetons nommés — deux campagnes qui ne partagent pas de quota
-
-Le jeton par défaut vit dans `experiments/protocol_lock.json`. `PROTOCOL_LOCK_FILE` en désigne
-un **autre**, ce qui permet à deux campagnes de tourner en parallèle **si et seulement si elles
-ne partagent aucun compteur de quota** — les compteurs free tier se comptent par **modèle ET
-par projet**, donc deux juges épinglés sur des modèles différents, ou sur deux clés de projets
-distincts, sont indépendants.
-
-```bash
-PROTOCOL_LOCK_FILE=experiments/protocol_lock_35.json make protocol-lock SUBJECT="…" CLOUD_PAUSED=1
-```
-
-La variable est lue par les deux bouts de la chaîne — `scripts/protocol_lock.py` (prise,
-statut, relâchement) et le garde des scripts `ab_*.py` — et doit être exportée **des deux
-côtés** dans la même invocation, sinon la mesure cherche le jeton par défaut et refuse de
-démarrer. L'archive de relâchement suit le nom du jeton
-(`protocol_lock_35.json` → `protocol_lock_35_last.json`) : deux campagnes ne s'écrasent pas
-mutuellement leur preuve d'exclusion.
-
-⚠ **Le partage de compteur se vérifie, il ne se suppose pas.** La question n'est pas « est-ce
-un autre modèle ? » mais « est-ce un autre seau ? ». Le store de la campagne concurrente porte
-la réponse : sa clé de cache commence par `prov=…|model=…`. Deux campagnes sur le même couple
-partagent le seau et doivent partager le jeton — un second jeton ne serait alors qu'une
-autorisation de se marcher dessus.
-
-Mesure de référence : [le bulletin seul à pleine masse](../traces/2026-08-25_ab_bulletin_seul/README.md),
-menée sous `protocol_lock_35.json` pendant qu'une campagne du ticket 024 détenait le jeton par
-défaut sur un autre modèle-juge.
-
-Outillage et détail : [ticket 023](../tickets/ticket_023_fenetre_meteo_jeux_geles.md), lots 1
-et 2.
+Les mesures antérieures au 2026-08-26 gardent leur preuve : leurs jetons sont committés dans
+leurs traces (`docs/traces/2026-08-25_ab_meteo/protocol_lock.json`).
 
 ## 1 · Mesurer le paramètre dans l'enquête
 

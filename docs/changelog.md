@@ -1,3 +1,48 @@
+## [2026-08-26] Le pré-enregistrement et le jeton d'exclusion sont retirés
+
+Deux dispositifs de méthode disparaissent, sur décision explicite.
+
+**`prompt_calibration/PROTOCOLE.md`** — le protocole pré-enregistré de la campagne de
+calibration, 73 Ko, quinze amendements datés de A1 à A15. Il fixait les hypothèses,
+l'instrument gelé, la métrique gelée, les règles statistiques, le regard unique sur le jeu de
+test, et ce qui serait conclu en cas de non-significativité.
+
+**Le jeton d'exclusion** — `make protocol-lock/unlock/status`, le script qui le prenait, le
+garde-fou que tous les scripts de mesure appelaient, et leurs tests. Une mesure démarre
+désormais sans rien vérifier.
+
+**Avant :** un `ab_*.py` sans jeton refusait de démarrer (code 7), et sa trace pouvait citer
+un jeton horodaté avec ses instantanés de quota.
+**Après :** il démarre. Rien ne l'empêche de tourner pendant un run qui consomme le même
+quota.
+
+### Ce qui reste, et ce qui manque
+
+La **condition de validité n'a pas disparu — seul son contrôle l'a.** Deux bras évalués par
+deux modèles différents, parce que la cascade de fournisseurs a basculé au milieu, restent une
+mesure dont on ne sait pas ce qu'elle décrit. Avant une mesure, il reste donc à vérifier à la
+main qu'aucun run ni service consommateur ne tourne, et que la campagne cloud est en pause.
+
+Ce que le verrou apportait et qui manque : la **preuve**. Une trace ne peut plus produire
+qu'une affirmation. À une mesure près la différence est mince ; à l'échelle d'une campagne,
+c'est ce qui distingue un dossier opposable d'un souvenir.
+
+Les mesures déjà publiées gardent la leur : leurs jetons sont committés dans leurs traces.
+L'étape 0 du protocole exogène est réécrite en conséquence — elle décrit désormais une
+vigilance, pas un outil.
+
+### Rien n'est perdu, mais il faut savoir où chercher
+
+Les deux fichiers restent dans l'historique git. Un amendement se retrouve par
+`git log --all -- PROTOCOLE.md` dans le dépôt `prompt_calibration`.
+
+⚠ **Sept fichiers renvoient encore à `PROTOCOLE.md`** : quatre tickets, deux traces archivées
+et un libellé de rôle dans le catalogue de prompts. Ils n'ont pas été réécrits — une trace
+archivée décrit ce qui a été fait au moment où ça a été fait, et la corriger après coup
+falsifierait le dossier. Leurs liens pointent donc vers un fichier absent, et c'est un choix.
+
+---
+
 ## [2026-08-26] Le jeton d'exclusion devient optionnel, et son absence se déclare
 
 Une mesure sur jeux gelés refusait de démarrer sans jeton d'exclusion. Elle l'exige toujours

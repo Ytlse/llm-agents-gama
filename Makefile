@@ -631,30 +631,6 @@ status:
 	fi
 	@echo "current=$$(readlink experiments/current 2>/dev/null || echo '-')"
 
-## ── Jeton d'exclusion du protocole exogène (ticket 023) ─────────────────────
-## Aucune procédure du protocole (A/B, réécriture de jeu, archivage) ne doit tourner
-## pendant qu'un run consomme le même quota LLM : si la cascade de fournisseurs bascule
-## entre deux bras, ils n'ont pas été évalués par le même modèle, et l'écart mesuré est
-## confondu avec le traitement.
-## ⚠ Ce verrou est LOCAL : il n'atteint pas la campagne génétique de la VM cloud. D'où
-## CLOUD_PAUSED=1, qui est une liste de contrôle humaine et non une garantie.
-.PHONY: protocol-lock protocol-unlock protocol-status
-
-## État du jeton et des sondes qui empêcheraient une prise. Usage: make protocol-status [JSON=1]
-protocol-status:
-	@python3 scripts/protocol_lock.py status $(if $(JSON),--json,)
-
-## Prend le jeton. Usage: make protocol-lock SUBJECT="ticket 023 — A/B météo" CLOUD_PAUSED=1 [MINUTES=90] [STEAL=1]
-protocol-lock:
-	@test -n "$(SUBJECT)" || { echo "[REFUS] SUBJECT est obligatoire — un jeton anonyme ne se débloque pas sans risque."; exit 2; }
-	@python3 scripts/protocol_lock.py acquire --subject "$(SUBJECT)" \
-	  $(if $(MINUTES),--expected-minutes $(MINUTES),) \
-	  $(if $(CLOUD_PAUSED),--cloud-paused,) $(if $(STEAL),--steal-orphan,)
-
-## Relâche le jeton et enregistre le second instantané de quota. Usage: make protocol-unlock [FORCE=1]
-protocol-unlock:
-	@python3 scripts/protocol_lock.py release $(if $(FORCE),--force,)
-
 ## Arrête le run GAMA en cours SANS toucher au reste de la pile (api, worker, redis…).
 ## Offline : tue le launcher dans le conteneur controller puis stoppe le service gama
 ## (GAMA Server tue l'expérience dont le client s'est déconnecté). IHM : SIGTERM à GAMA.

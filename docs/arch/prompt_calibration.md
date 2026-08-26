@@ -1457,7 +1457,7 @@ Elle était globale (`__ga__`) jusqu'au 2026-08-20, et ce n'était pas anodin : 
 seconde campagne sur le store d'une première reprenait sa trajectoire. Constaté en
 lançant `ref2` sur le store de `ref1` — génération 11, ses neuf individus, son champion et
 son `val_no_improve: 2` repris tels quels, la graine déclarée jamais semée, à une mesure
-`val` d'une fausse convergence. Détails et portée : amendement A9 de `PROTOCOLE.md`.
+`val` d'une fausse convergence. Détails et portée : amendement A9 de `PROTOCOLE.md` — supprimé le 2026-08-26, à retrouver dans l'historique git de `prompt_calibration`.
 
 Un store portant l'ancienne clé **refuse de démarrer** — rien ne dit à quelle campagne
 elle appartient, et l'adopter comme l'ignorer serait silencieux :
@@ -1499,8 +1499,9 @@ Aucune des deux n'est « la bonne » dans l'absolu, donc l'arbitrage n'est pas a
 `experiments/archive/`, et **si un run plus récent existe, demander à l'utilisateur** s'il
 faut rester sur le dernier jeu validé du registre `avancement_et_resultats.html` ou
 reconstruire un jeu depuis le dernier run. Règle inscrite à l'amendement **A10** de
-`PROTOCOLE.md` ; son garde-fou exécutable reste à écrire (`TODO.md`) — et le protocole
-lui-même rappelle, en A9, ce que valent les garanties non testées.
+`PROTOCOLE.md` — supprimé le 2026-08-26, à retrouver dans l'historique git de
+`prompt_calibration` ; son garde-fou exécutable reste à écrire (`TODO.md`), et A9 rappelait
+ce que valent les garanties non testées.
 
 Reconstruire est sans risque : un jeu n'est **jamais** modifié, toute évolution est un
 `vN+1`, et l'affectation par hachage garantit qu'un agent ne change jamais de jeu.
@@ -1629,7 +1630,7 @@ non-transportabilité des niveaux entre jeux de lecture est précisément ce que
 a établi (`v9` vaut 22,93 sur `screen`, 26,75 sur `val`, 21,73 sur `all` — même jeu, même
 juge). Seuls les **écarts appariés** voyagent, et seulement accompagnés de leur plancher.
 
-Déclaré par l'**amendement A12** du `PROTOCOLE.md` de `prompt_calibration`.
+Déclaré par l'**amendement A12** de `PROTOCOLE.md` — supprimé le 2026-08-26, à retrouver dans l'historique git de `prompt_calibration`.
 
 ### 3.3 Le **mode rapide** sans LLM — et pourquoi il est abandonné (ticket 013)
 
