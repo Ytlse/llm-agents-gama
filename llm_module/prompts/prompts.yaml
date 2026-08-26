@@ -979,15 +979,15 @@ prompts:
       - Friction d'accès brute (temps d'approche, stationnement, correspondances).
       - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
       - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, etc.).
-      - Chaîne de la journée : en cas d'utilisation d'un véhicule personnel (vélo, trottinette, voiture…), pense au stationnement et aux déplacements du reste de la journée, jusqu'au retour au domicile.
+      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, pluie et vent, ...).
+      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il est donc nécessaire d'anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée, même si certains trajets intermédiaires s'effectuent par d'autres moyens.
       3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
 
       [Instructions de sortie]
       1) Analyse le profil via ce prisme.
       2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
       3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      4) Justifie la répartition en une phrase concise par option.
 
       Schéma JSON attendu :
       {
@@ -1019,24 +1019,25 @@ prompts:
                       "probability": {
                         "type": "number",
                         "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                      },
+                      "reason": {
+                        "type": "string",
+                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
                       }
                     },
                     "required": [
                       "index",
                       "mode",
-                      "probability"
+                      "probability",
+                      "reason"
                     ],
                     "additionalProperties": false
                   }
-                },
-                "reason": {
-                  "type": "string"
                 }
               },
               "required": [
                 "agent_id",
-                "probabilities",
-                "reason"
+                "probabilities"
               ],
               "additionalProperties": false
             }

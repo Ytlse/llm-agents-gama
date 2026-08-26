@@ -83,6 +83,52 @@ _CODE_COLS = {
     "evening": "WEATHER_CODE_EVENING_18H",
 }
 
+# ── Résolution de 3 h (2026-08-26) ────────────────────────────────────────────
+# La source porte HUIT relevés (0, 3, 6, 9, 12, 15, 18, 21 h) ; le code n'en lisait
+# que quatre, si bien qu'un départ à 11 h recevait la météo de 6 h et un départ à
+# 17 h celle de 12 h. Le code météo diffère entre 12 h et 15 h sur 159 jours sur 365.
+#
+# ⚠ Deux rôles distincts, et ils ne doivent PAS être confondus :
+#   * `_reading_bucket` (8 créneaux) — le relevé du MOMENT du départ ;
+#   * `_BUCKET_ORDER` (4 tranches) — l'anticipation « Météo plus tard » et le cadre du
+#     jour (amplitude, créneaux précipitants), délibérément laissés grossiers pour que
+#     la mesure de la résolution ne charrie pas un allongement de la ligne d'agenda.
+#     Le piège de `v10c` (ticket 023) était exactement ce paquet de deux changements.
+_FINE_TEMP_COLS = {
+    "midnight": "TEMPERATURE_MIDNIGHT_0H",
+    "night":    "TEMPERATURE_NIGHT_C_3H",
+    "morning":  "TEMPERATURE_MORNING_C_6H",
+    "forenoon": "TEMPERATURE_9H",
+    "noon":     "TEMPERATURE_NOON_C_12H",
+    "afternoon": "TEMPERATURE_15H",
+    "evening":  "TEMPERATURE_EVENING_C_18H",
+    "dusk":     "TEMPERATURE_21H",
+}
+_FINE_CODE_COLS = {
+    "midnight": "WEATHER_CODE_MIDNIGHT_0H",
+    "night":    "WEATHER_CODE_NIGHT_3H",
+    "morning":  "WEATHER_CODE_MORNING_6H",
+    "forenoon": "WEATHER_CODE_9H",
+    "noon":     "WEATHER_CODE_NOON_12H",
+    "afternoon": "WEATHER_CODE_15H",
+    "evening":  "WEATHER_CODE_EVENING_18H",
+    "dusk":     "WEATHER_CODE_21H",
+}
+# Ordre des huit relevés, indexé par `heure // 3`.
+_FINE_ORDER = ("midnight", "night", "morning", "forenoon",
+               "noon", "afternoon", "evening", "dusk")
+
+# Seuils d'aléa portés au bulletin (2026-08-26). Repris du bras `v10c` du ticket 023,
+# où ils annotaient chaque étape — emplacement inadapté pour le vent, qui est un
+# MAXIMUM JOURNALIER (`WINDSPEED_MAX_KMH`) et se répétait donc à l'identique partout.
+# 30 km/h = vent frais (Beaufort 5) ; 3 °C = seuil de verglas.
+VENT_FORT_KMH = 30
+VERGLAS_C = 3
+
+def _reading_bucket(hour: int) -> str:
+    """Relevé de 3 h le plus proche EN ARRIÈRE de `hour` (cf. `_FINE_ORDER`)."""
+    return _FINE_ORDER[max(0, min(7, int(hour) // 3))]
+
 
 def get_weather(timestamp: int) -> Optional[dict]:
     """Return weather info for the given Unix timestamp (matched by month+day, ignoring year).
@@ -98,10 +144,10 @@ def get_weather(timestamp: int) -> Optional[dict]:
     if row is None:
         return None
 
-    bucket = _time_bucket(dt.hour)
+    bucket = _reading_bucket(dt.hour)
     try:
-        temp = float(row[_TEMP_COLS[bucket]])
-        code = int(float(row[_CODE_COLS[bucket]]))
+        temp = float(row[_FINE_TEMP_COLS[bucket]])
+        code = int(float(row[_FINE_CODE_COLS[bucket]]))
         precip = float(row["PRECIP_TOTAL_DAY_MM"])
     except (ValueError, KeyError):
         return None
@@ -170,12 +216,19 @@ def day_frame(row: dict) -> dict:
         if family:
             precip_slots.append((bucket, family))
 
+    # Vent : MAXIMUM JOURNALIER, d'où sa place dans le cadre du jour et non par étape.
+    try:
+        wind_max = int(float(row["WINDSPEED_MAX_KMH"]))
+    except (ValueError, KeyError, TypeError):
+        wind_max = None
+
     return {
         "temp_min": temp_min,
         "temp_max": temp_max,
         "sunrise": _hhmm(row.get("SUNRISE")),
         "sunset": _hhmm(row.get("SUNSET")),
         "precip_slots": precip_slots,
+        "wind_max_kmh": wind_max,
     }
 
 
@@ -282,6 +335,14 @@ def weather_to_natural_language(w: Optional[dict]) -> Optional[str]:
         frame.append(f"lever {w['sunrise']}")
     if w.get("sunset"):
         frame.append(f"coucher {w['sunset']}")
+    # Aléas (2026-08-26) : ajoutés SEULEMENT au franchissement du seuil, pour que les
+    # journées ordinaires gardent la phrase d'origine mot pour mot — et pour que les
+    # jeux gelés antérieurs, dépourvus de ces champs, se relisent à l'identique.
+    wind = w.get("wind_max_kmh")
+    if wind is not None and wind >= VENT_FORT_KMH:
+        frame.append(f"rafales à {int(wind)} km/h")
+    if w.get("temp_min") is not None and int(w["temp_min"]) < VERGLAS_C:
+        frame.append("risque de verglas")
     if not frame:
         return f"Météo : {temp}°C, {label}. {tail}"
     return f"Météo : {temp}°C, {label}. {', '.join(frame)}. {tail}"

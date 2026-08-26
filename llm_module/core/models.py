@@ -104,6 +104,11 @@ class OptionProbability(BaseModel):
     index: Optional[int] = None
     mode: Optional[str] = None
     probability: Optional[float] = None
+    # Justification PAR OPTION (2026-08-26). Portée auparavant par `AgentResponse.reason`,
+    # une seule phrase pour tout le persona : elle ne disait pas pourquoi telle option
+    # perdait contre telle autre. `extra="allow"` la tolérait déjà — on la déclare pour
+    # que le contrat soit dans le modèle et non seulement dans le prompt.
+    reason: Optional[str] = None
 
     @field_validator("probability", mode="before")
     @classmethod
@@ -180,4 +185,4 @@ class InternalRequest(BaseModel):
     messages: List[InternalMessage]
     response_schema: Dict[str, Any]      # JSON Schema injecté pour Structured Output
     temperature: float = 0.7
-    max_tokens: int = 4096
+    max_tokens: int = 8192

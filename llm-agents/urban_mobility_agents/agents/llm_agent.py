@@ -107,6 +107,31 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
     return file_name
 
 
+# Jambes de transport collectif, pour décider si l'abonnement TC est pertinent à
+# annoncer sur une option. `cableway` = Téléo, qui fait partie du réseau Tisséo.
+#
+# ⚠ Cette liste sert le PROMPT, pas le score. `categorize_mode` (loss de calibration)
+# a sa propre liste, où `cableway` MANQUE — une option « foot,cableway,foot » y est
+# comptée en marche. Ne pas aligner l'une sur l'autre à la légère : la seconde est
+# l'instrument de mesure, et le protocole le gèle.
+_PT_LEG_MODES = ("bus", "metro", "métro", "tram", "cableway", "transit", "public_transport", "rail", "train")
+
+
+def _pt_subscription_note(mode_label: str, has_pt: bool) -> str:
+    """Mention d'abonnement TC à accoler à une option, ou chaîne vide.
+
+    L'information vit sur l'OPTION et non plus sur le persona (2026-08-26) : elle n'est
+    pas déductible du jeu d'options — une option bus est proposée qu'on soit abonné ou
+    non — mais elle ne pèse sur la décision que là où un transport collectif est
+    réellement offert. Une ligne de persona la faisait lire même sans aucune option TC.
+    """
+    ml = (mode_label or "").lower()
+    if not any(k in ml for k in _PT_LEG_MODES):
+        return ""
+    return (" Abonné aux transports en commun." if has_pt
+            else " Pas d'abonnement aux transports en commun.")
+
+
 def _build_profile_narrative(traits: dict) -> str:
     name = traits.get("name", "")
     first_name = name.split()[0] if name else ""
@@ -130,50 +155,23 @@ def _build_profile_narrative(traits: dict) -> str:
     if extras:
         line1 += f" ({', '.join(extras)})"
 
-    car_avail = traits.get("car_availability", "none")
-    has_pt = traits.get("has_pt_subscription", False)
-
-    # Conduire suppose le permis **et** l'âge légal, exactement comme `_can_drive`
-    # du contrôleur : le narratif doit décrire le jeu d'options réellement proposé,
-    # sinon le LLM raisonne sur une voiture que l'agent n'a pas le droit de conduire.
-    age_val = age if isinstance(age, (int, float)) else 0
-    can_drive = bool(traits.get("has_driving_license", False)) and age_val >= 18
-    # Mode passager (ticket 008, A2) : il faut une voiture au foyer et quelqu'un
-    # d'autre pour la conduire. Le trajet du conducteur n'est pas modélisé (D5) —
-    # le narratif ne promet donc rien de plus qu'« un adulte du foyer m'emmène ».
-    can_be_driven = (not can_drive) and car_avail != "none" and (household or 0) > 1
-
-    if car_avail == "all" and can_drive:
-        car_str = "conducteur·trice, voiture toujours dispo"
-    elif car_avail == "all" and can_be_driven:
-        car_str = ("ne conduit pas : se déplace en voiture uniquement en passager·ère, "
-                   "conduit·e par un adulte du foyer — voiture toujours disponible")
-    elif car_avail == "some" and can_drive:
-        car_str = "peut conduire, voiture à partager dans le foyer, conditionné par la nécessité"
-    elif car_avail == "some" and can_be_driven:
-        car_str = ("ne conduit pas : se déplace en voiture uniquement en passager·ère, "
-                   "conduit·e par un adulte du foyer — voiture à partager dans le foyer")
-    elif car_avail == "none" and can_drive:
-        car_str = "permis mais sans voiture"
-    elif not can_drive and car_avail != "none":
-        # Voiture au foyer, mais personne pour la conduire : adulte sans permis
-        # vivant seul. La voiture n'est pas une option de déplacement pour lui.
-        car_str = "sans permis et seul·e au foyer : la voiture n'est pas une option"
-    else:
-        car_str = "sans voiture ni permis"
-
-    pt_str = "abonné·e TC" if has_pt else "sans abonnement TC"
-
-    personal_bike = traits.get("personal_bike", "")
-    if personal_bike == "VAE":
-        bike_str = "possède un VAE (vélo à assistance électrique)"
-    elif personal_bike == "vélo normal":
-        bike_str = "possède un vélo classique"
-    else:
-        bike_str = "sans vélo personnel"
-    line2 = f"Mobilité : {car_str} | {pt_str} | {bike_str}"
-
-    return "\n".join([line1, line2])
+    # La ligne « Mobilité : » a disparu le 2026-08-26. Ce qu'elle portait :
+    #
+    # * `car_availability` et le statut de conducteur — RETIRÉS. Le jeu d'options dit déjà
+    #   si la voiture est prenable (`_owns_car` / `_can_drive` du contrôleur la proposent
+    #   ou non), et le canal narratif a été mesuré puis rejeté : +0,12 pt de part voiture,
+    #   au niveau du bruit (ticket 018, docs/traces/2026-08-24_car_availability).
+    # * le vélo personnel — RETIRÉ pour la même raison. ⚠ Avec une perte assumée : un
+    #   agent qui possède un vélo garé ailleurs (chaîne de véhicules) n'a pas d'option
+    #   vélo, et le prompt ne dit plus qu'il en a un. Comme il ne peut pas s'en servir,
+    #   l'information ne portait aucune décision.
+    # * l'abonnement TC — DÉPLACÉ sur l'option TC (cf. `pt_subscription_suffix`) : il
+    #   n'est PAS déductible du jeu d'options (une option bus existe, abonné ou pas),
+    #   donc il reste servi — mais là où il pèse, et seulement quand un TC est proposé.
+    #
+    # Ne reste que l'identité sociale, seule information du bloc que les options ne
+    # portent pas. Une ligne vide n'est pas rendue.
+    return line1
 
 
 class LlmAgent:
@@ -364,7 +362,6 @@ class LlmAgent:
     ) -> Dict[str, Any]:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
-        constraints = "None" #TODO To be replaced by real constraints from persona
         current_time = humanize_time(context.timestamp)
         city_context = weather_to_natural_language(get_weather(context.timestamp)) or "None"
 
@@ -378,12 +375,29 @@ class LlmAgent:
             if _rec is not None:
                 _rec.T_ltm_end = time.time()
 
+        # Abonnement TC : porté par l'option, pas par le persona (cf. `_pt_subscription_note`).
+        _has_pt = bool((context.person.identity.traits_json or {}).get("has_pt_subscription", False))
+
+        def _describe(opt: TravelPlan) -> str:
+            """Texte de l'option, avec la mention d'abonnement sur sa PREMIÈRE ligne.
+
+            Les lignes suivantes sont les étapes de l'itinéraire, ré-indentées en
+            sous-puces par le gabarit : y coller la mention la ferait passer pour une
+            étape. Elle est donc accolée à la phrase de synthèse.
+            """
+            text = env_ob_to_text("travel_plan", opt.model_dump())
+            note = _pt_subscription_note(opt.mode_label() or "", _has_pt)
+            if not note:
+                return text
+            head, sep, tail = text.partition("\n")
+            return f"{head.rstrip()}{note}{sep}{tail}"
+
         # Utilisation d'une compréhension de liste pour la performance et la clarté
         trajectories = [
             {
                 "index": i,
                 "mode": opt.mode_label() or "unknown",
-                "description": env_ob_to_text("travel_plan", opt.model_dump()),
+                "description": _describe(opt),
                 # Distance totale du trajet (en mètres) — utilisée pour les métriques Prometheus
                 "total_distance_m": (
                     opt.distance
@@ -401,7 +415,9 @@ class LlmAgent:
             "agents": [
                 {
                     "agent_id": agent_id,
-                    "perception": f"{perception} Contraintes : {constraints}",
+                    # `Contraintes : None` retiré le 2026-08-26 : littéral codé en dur,
+                    # jamais implémenté, mesuré constant sur 2 487 records sur 2 487.
+                    "perception": perception,
                     "destination": destination,
                     "destination_zone": dest_zone,
                     "departure_time": humanize_time(departure_time) if departure_time else None,

@@ -69,7 +69,12 @@ sur les ~1 600 tokens/agent mesurés + 25 % de marge).
 
 #### Budget de sortie (max_tokens) proportionnel au batch
 
-Le `max_tokens` envoyé par le client (défaut 4096) est un budget **par tâche** (1 agent).
+Le `max_tokens` envoyé par le client (défaut **8192** depuis le 2026-08-26, 4096 avant)
+est un budget **par tâche** (1 agent). Le relèvement accompagne la justification **par
+option** : mesurée sur 437 appels, la complétion valait 2 825 tokens en moyenne et
+3 921 au pic pour des lots de 15 personas avec une seule raison par persona ; à
+5,39 options par persona en moyenne (jusqu'à 9), une raison par option franchit 4096 et
+se fait tronquer en silence.
 Le worker le multiplie par le nombre d'agents fusionnés dans le batch, borné par
 `settings.max_output_tokens` (16 384, plafond global) puis par le
 `max_output_tokens` **du provider** (plafond de complétion du modèle, déclaré dans
@@ -173,8 +178,18 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
 Pour la catégorie `itinary_multi_agent`, le LLM **ne choisit plus** d'itinéraire : il
 attribue à *chaque* option proposée la probabilité (en %) que le persona la retienne, la
 somme valant 100. Le schéma (`llm_module/prompts/schemas.json`) exige donc un tableau
-`probabilities` de `{index, mode, probability}` — une entrée par option, `0` pour une
-option jugée impossible — en lieu et place de l'ancien `chosen_index`.
+`probabilities` de `{index, mode, probability, reason}` — une entrée par option, `0` pour
+une option jugée impossible — en lieu et place de l'ancien `chosen_index`.
+
+**`reason` est passé du persona à l'option le 2026-08-26.** Le schéma portait une raison
+unique par persona (« justifie la répartition en une phrase concise, en précisant si c'est
+le cas pourquoi la marche n'obtient pas la plus forte probabilité ») : elle ne disait pas
+pourquoi telle option perdait contre telle autre, et la clause sur la marche orientait la
+justification vers un mode en particulier. La consigne est désormais « justifie la
+répartition en une phrase concise par option », et chaque entrée de `probabilities` porte
+sa raison — « une phrase justifiant la probabilité de CETTE option par rapport aux
+autres ». Conséquence à ne pas oublier : la sortie est ~5 fois plus longue, d'où le
+relèvement de `max_tokens` (voir ci-dessus).
 
 Le post-traitement vit dans `llm_module/core/mode_choice.py`, partagé par tous les
 consommateurs pour qu'ils appliquent la **même** politique de décision :
@@ -286,14 +301,102 @@ vous » : mesurée sur le run `2026-08-19_13_17`, elle a gonflé la part vélo d
 (écart EMC² +13,8 → +19,6) — le libellé agissait comme une invitation, pas comme une
 information, et la disponibilité réelle est déjà portée par le jeu d'options via les
 verrous. La règle de chaîne vit désormais dans le **prompt système** (variante
-`expert_chaine` de `prompts.yaml`, seed `expert`) : « en cas d'utilisation d'un véhicule
-personnel (vélo, trottinette, voiture…), pense au stationnement et aux déplacements du
-reste de la journée, jusqu'au retour au domicile ». Cette phrase est un **segment
-calibrable** (à couvrir par le catalogue de mutations), pas une constante. La colonne `Anticipation` de `moves.csv`
+`expert_chaine` de `prompts.yaml`, seed `expert`). Reformulée le **2026-08-26** : elle
+énonçait « pense au stationnement et aux déplacements du reste de la journée, jusqu'au
+retour au domicile », ce qui se lisait comme une obligation de garder le véhicule toute la
+journée. Elle dit désormais la vraie contrainte — la **continuité de position** :
+
+> l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements
+> journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de
+> stationnement précédent. Il est donc nécessaire d'anticiper l'enchaînement de tous vos
+> parcours prévus pour valider la faisabilité globale de la journée, même si certains
+> trajets intermédiaires s'effectuent par d'autres moyens.
+
+La dernière clause est celle qui manquait : laisser la voiture au travail et aller déjeuner
+à pied est un enchaînement valide, que l'ancienne formulation décourageait. Cette phrase
+est un **segment calibrable** (à couvrir par le catalogue de mutations), pas une constante. La colonne `Anticipation` de `moves.csv`
 trace ce que le prompt de chaque trajet contenait (`agenda` / `meteo` / vide), et la
 **signature** déterministe des textes entre dans la clé du cache de décisions (cf.
 `docs/arch/cache-memory.md`). Flag : `settings.agent.agenda_anticipation_enabled`
 (défaut `True` ; `False` rétablit le prompt myope pour l'A/B).
+
+#### Le bloc persona allégé — 2026-08-26
+
+La ligne `Mobilité : … | … | …` a été **retirée**, et avec elle `Contraintes : None`. Ce
+que chacun portait, et pourquoi il part :
+
+| Élément | Sort | Motif |
+|---|---|---|
+| `car_availability` + statut de conducteur | retiré | le jeu d'options dit déjà si la voiture est prenable (`_owns_car` / `_can_drive`), et le canal narratif a été **mesuré puis rejeté** : +0,12 pt de part voiture, au niveau du bruit (ticket 018) |
+| vélo personnel | retiré | même raison ; l'option vélo n'est proposée que si le vélo est là |
+| abonnement TC | **déplacé sur l'option** | il n'est *pas* déductible du jeu d'options — une option bus existe qu'on soit abonné ou non — mais il ne pèse que là où un TC est offert |
+| `Contraintes : None` | retiré | littéral codé en dur (`constraints = "None"`, TODO d'origine), jamais implémenté : mesuré constant sur **2 487 records sur 2 487** |
+
+Ne reste que l'identité sociale — prénom, âge, occupation, taille du foyer, revenu — seule
+information que les options ne portent pas.
+
+L'abonnement s'accole à la **première ligne** de la description de l'option
+(`_pt_subscription_note`, `llm_agent.py`), jamais aux sous-puces « · » : collé à une étape,
+il passerait pour une étape.
+
+```
+- [0] foot,bus,foot: Temps de trajet : 1 h 36, dont 13 minutes de marche. Pas d'abonnement aux transports en commun.
+    · Marche jusqu'à 'Mairie Aussonne' : 3 minutes.
+```
+
+⚠ **Deux pertes assumées.** (1) Un agent possédant un vélo garé ailleurs n'a pas d'option
+vélo, et le prompt ne dit plus qu'il en possède un — comme il ne peut pas s'en servir,
+l'information ne portait aucune décision. (2) Les libellés de voiture n'étaient pas
+binaires (« peut conduire, voiture à partager dans le foyer, conditionné par la
+nécessité », « sans permis et seul·e au foyer »…) : ces nuances ne se déduisent pas de la
+seule présence d'une option voiture. Elles disparaissent.
+
+Ordre de grandeur de ce qui change : la phrase « ne conduit pas : se déplace en voiture
+uniquement en passager·ère… » portait sur **384 records sur 1 810 (21,2 %)** du jeu gelé,
+dont 330 de mineurs — un enfant de 5 ans s'y voyait décrire comme passager d'une voiture
+toujours disponible.
+
+⚠ **À mesurer avant d'être crédité d'un gain.** La campagne du ticket 024 a établi que le
+modèle réagit à la **mise en forme** du contexte plus qu'à son contenu : son témoin nul de
+reformulation coûte 2,03 de composite, plus que le retrait de *tout* le contexte (2,52).
+Retirer des segments et rendre une mention conditionnelle sont des changements de mise en
+forme : leur effet se lit contre ce plancher-là, pas contre zéro.
+
+#### Météo : résolution de 3 h, rafales et verglas — 2026-08-26
+
+**La lecture du moment passe de quatre relevés à huit.** La source porte 0, 3, 6, 9, 12,
+15, 18 et 21 h ; le code n'en lisait que quatre (3, 6, 12, 18 h), si bien qu'un départ à
+11 h recevait la météo de 6 h et un départ à 17 h celle de 12 h. Or **le code météo diffère
+entre 12 h et 15 h sur 159 jours sur 365** : pour les trajets d'après-midi, le prompt
+annonçait couramment un temps qui n'était plus celui-là.
+
+Deux rôles sont désormais séparés, et ils ne doivent pas être confondus :
+
+- `_reading_bucket` — **huit** créneaux, le relevé le plus proche en arrière de l'heure de
+  départ. C'est la météo du moment ;
+- `_BUCKET_ORDER` — **quatre** tranches, délibérément laissées grossières : la ligne
+  « Météo plus tard » et le cadre du jour (amplitude, créneaux précipitants). Les affiner
+  en même temps referait le paquet de deux changements du bras `v10c` (ticket 023), que la
+  mesure n'a pas su départager.
+
+**Le bulletin porte deux aléas de plus**, au franchissement d'un seuil seulement :
+
+- `rafales à N km/h` si `WINDSPEED_MAX_KMH` ≥ **30** (vent frais, Beaufort 5) ;
+- `risque de verglas` si le minimum du jour est sous **3 °C**.
+
+Les deux viennent du bras `v10c` rejeté, où ils annotaient *chaque étape* — emplacement
+inadapté pour le vent, qui est un **maximum journalier** et se répétait donc à l'identique
+partout. Le bulletin est sa place.
+
+```
+Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 11°C, lever 06:41, coucher 19:18, rafales à 33 km/h, risque de verglas. Pas de précipitations prévues.
+```
+
+Une journée sans aléa garde sa phrase **mot pour mot**, et un jeu gelé antérieur au
+2026-08-26 — dépourvu du champ `wind_max_kmh` — se relit à l'identique : sinon sa
+ré-évaluation ne porterait plus sur ce qui a été mesuré. Un test le verrouille, comme il
+verrouille l'égalité de la phrase entre `weather_loader.py` (production) et
+`calibration/weather.py` (jeux gelés).
 
 #### Isolation du cache LLM par version de prompt
 

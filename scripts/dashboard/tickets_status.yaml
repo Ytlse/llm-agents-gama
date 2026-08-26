@@ -984,3 +984,34 @@ tickets:
       sans quota, sans attente. L'issue « pas d'effet » (pente dans le bruit du témoin nul)
       RÉFUTE l'affirmation « plus de contexte = plus de précision » et s'archive comme les
       autres.
+
+  ticket_027_motif_accompagnement:
+    status: à faire
+    note: >-
+      OUVERT le 2026-08-26. Le motif `other` du prompt (19 % des décisions) est aux DEUX
+      TIERS de l'accompagnement — le motif le plus routier de la référence (70 % voiture).
+      MESURÉ sur les 54 585 déplacements de l'EMC² 2023 (`D5A`) : 6 797 en `other`, dont
+      4 503 d'accompagnement (61/64/71/74), soit 66,2 % de `other` et 8,2 % de tous les
+      déplacements ; santé et démarches (41/42/43) en font 30,7 %. L'information est détruite
+      dans eqasim, en UNE LIGNE : la table ENTD replie les familles 3, 4 et 6 sur `other`
+      (famille 6 = accompagnement, RECOUPÉ indépendamment de la nomenclature — la colonne
+      dédiée `V2_MMOTIFDACC` est renseignée sur 3 743 des 3 759 cas dans cette seule famille).
+      Projection : ~208 records du jeu `all`, 11,5 %. LE SCORE EST DÉJÀ CÂBLÉ — `MOTIF_MAP`
+      porte `"escort": "accompagnement"` et la cible est dans `cerema_values.yaml` ; la
+      dimension attend un motif qui n'arrive jamais, et elle est vide pour 59,9 % des records.
+      AUCUNE LOGIQUE AVAL NE BRANCHE sur le motif (seules occurrences de `purpose ==` :
+      du code commenté) — une valeur neuve traverse sans casse. OPTION A (le patch) : sortir
+      la famille 6 de `other`, faire pointer `escort` sur le vivier de lieux `other`, ajouter
+      `DEST_TO_MOTIF["escort"]`, régénérer. OPTION B (le substrat) : basculer `hts: entd` →
+      `mobisurvstd` sur l'EMC² 2023 — le format standard porte DÉJÀ `escort` comme motif de
+      première classe et eqasim l'écrase (`"escort": "other"`), et nos fichiers PROGEDO sont
+      à ce format. B fait venir toutes les chaînes d'activités de l'enquête LOCALE et de 2023
+      au lieu d'une enquête nationale de 2008 : c'est l'écart de fond, et un chantier de
+      substrat (population, run, jeux gelés, comparabilité de la série à re-établir).
+      ⚠ RIEN NE SE RATTRAPE APRÈS COUP : contrairement à la couronne du ticket 021, le motif
+      d'origine n'est nulle part dans la population ni dans les jeux — il faut régénérer.
+      ⚠ LE PROTOCOLE EXOGÈNE NE SAIT PAS MESURER CE TICKET : on ne peut pas fabriquer un bras
+      `escort` par réécriture, faute de savoir LESQUELS des `other` en sont. Mesure partielle
+      gratuite possible (réécrire le libellé sur 66 % des `other` tirés au hasard) — elle
+      borne le gain NARRATIF, pas la justesse de l'affectation, et se lit contre le plancher
+      de reformulation du ticket 024 (2,03), pas contre zéro.
