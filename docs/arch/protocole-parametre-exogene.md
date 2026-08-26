@@ -86,6 +86,35 @@ circulaire.
 VM avec son propre quota. La mettre en pause est une entrée de liste de contrôle à la prise
 du jeton, pas quelque chose que le verrou garantit. Ne pas confondre les deux.
 
+### Jetons nommés — deux campagnes qui ne partagent pas de quota
+
+Le jeton par défaut vit dans `experiments/protocol_lock.json`. `PROTOCOL_LOCK_FILE` en désigne
+un **autre**, ce qui permet à deux campagnes de tourner en parallèle **si et seulement si elles
+ne partagent aucun compteur de quota** — les compteurs free tier se comptent par **modèle ET
+par projet**, donc deux juges épinglés sur des modèles différents, ou sur deux clés de projets
+distincts, sont indépendants.
+
+```bash
+PROTOCOL_LOCK_FILE=experiments/protocol_lock_35.json make protocol-lock SUBJECT="…" CLOUD_PAUSED=1
+```
+
+La variable est lue par les deux bouts de la chaîne — `scripts/protocol_lock.py` (prise,
+statut, relâchement) et le garde des scripts `ab_*.py` — et doit être exportée **des deux
+côtés** dans la même invocation, sinon la mesure cherche le jeton par défaut et refuse de
+démarrer. L'archive de relâchement suit le nom du jeton
+(`protocol_lock_35.json` → `protocol_lock_35_last.json`) : deux campagnes ne s'écrasent pas
+mutuellement leur preuve d'exclusion.
+
+⚠ **Le partage de compteur se vérifie, il ne se suppose pas.** La question n'est pas « est-ce
+un autre modèle ? » mais « est-ce un autre seau ? ». Le store de la campagne concurrente porte
+la réponse : sa clé de cache commence par `prov=…|model=…`. Deux campagnes sur le même couple
+partagent le seau et doivent partager le jeton — un second jeton ne serait alors qu'une
+autorisation de se marcher dessus.
+
+Mesure de référence : [le bulletin seul à pleine masse](../traces/2026-08-25_ab_bulletin_seul/README.md),
+menée sous `protocol_lock_35.json` pendant qu'une campagne du ticket 024 détenait le jeton par
+défaut sur un autre modèle-juge.
+
 Outillage et détail : [ticket 023](../tickets/ticket_023_fenetre_meteo_jeux_geles.md), lots 1
 et 2.
 

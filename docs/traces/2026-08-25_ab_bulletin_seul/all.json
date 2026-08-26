@@ -1,0 +1,78 @@
+{
+  "ticket": "023",
+  "dataset": "all",
+  "prompt": "expert_chaine",
+  "arms": [
+    "v9",
+    "v9n",
+    "v9b"
+  ],
+  "eval_model": "gemini-3.5-flash-lite",
+  "eval_temp": 0.0,
+  "n_records": 1810,
+  "n_personas": 613,
+  "n_context_changed_vs_base": {
+    "v9n": 1799,
+    "v9b": 1810
+  },
+  "scores": {
+    "composite": {
+      "v9": 21.730776397681105,
+      "v9n": 20.66455852474794,
+      "v9b": 21.920976543938945
+    },
+    "global_": {
+      "v9": 4.989178781033314,
+      "v9n": 4.53799264862655,
+      "v9b": 4.964253469172484
+    },
+    "age": {
+      "v9": 8.522261318655653,
+      "v9n": 8.17590919847629,
+      "v9b": 7.902462763078258
+    },
+    "genre": {
+      "v9": 5.029883759909073,
+      "v9n": 4.564030952135602,
+      "v9b": 4.991047003278197
+    },
+    "motif": {
+      "v9": 6.573020084632594,
+      "v9n": 6.212846709215959,
+      "v9b": 7.1747003064748345
+    },
+    "distance": {
+      "v9": 11.441298969340162,
+      "v9n": 12.127188598360872,
+      "v9b": 12.606986739014635
+    }
+  },
+  "deltas": {
+    "v9n-v9": -1.0662178729331657,
+    "v9b-v9": 0.19020014625784043
+  },
+  "verdict": "SOUS LE PLANCHER DE BRUIT",
+  "noise_floor_arm": "v9n",
+  "noise_floor_rationale": "le traitement touche ~99 % du jeu : le canal placebo du protocole pèserait 1 % et sa mise à l'échelle l'amplifierait d'un facteur ~10",
+  "shares": {
+    "v9": {
+      "marche": 11.309007199062448,
+      "velo": 11.067219152854511,
+      "voiture": 53.32872928176795,
+      "transports_collectifs": 24.295044366315086
+    },
+    "v9n": {
+      "marche": 11.933534237401641,
+      "velo": 10.746762391546273,
+      "voiture": 53.68084320619258,
+      "transports_collectifs": 23.638860164859516
+    },
+    "v9b": {
+      "marche": 11.207971586424625,
+      "velo": 10.344203678457822,
+      "voiture": 53.51130085384229,
+      "transports_collectifs": 24.93652388127526
+    }
+  },
+  "rain_conclusion": "AUCUNE. Le Δ de pluie change de signe selon le substrat (−1,20 pt sur v7, +1,10 pt sur v9) pour un plancher de bruit de −1,16 pt : c'est du bruit."
+}

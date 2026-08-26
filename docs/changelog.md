@@ -1,3 +1,51 @@
+## [2026-08-26] Le bulletin météo jugé sur le plus grand jeu disponible
+
+Le bulletin météo enrichi — la seule des trois corrections du ticket 023 réellement livrée en
+production — a enfin été mesuré **tel qu'il tourne** : tirage sur l'année entière, et rien que
+la forme de la phrase qui change. L'A/B précédent le chiffrait par-dessus la fenêtre d'enquête,
+une combinaison que la simulation ne joue pas.
+
+**Résultat : aucun effet mesurable.** +0,19 de composite contre un plancher de bruit de −1,07,
+soit un effet 5,6 fois plus petit que ce qu'un simple re-tirage de la météo produit tout seul.
+
+### Ce qui change vraiment, c'est la finesse de l'instrument
+
+La mesure porte sur un nouveau jeu de lecture, `all` — la réunion de `train` et `val`, soit
+**1 810 décisions et 613 personas** au lieu des 516 décisions de `val` seul. `test` en reste
+exclu : aucun regard neuf n'est consommé.
+
+**Avant :** sur `val`, le bulletin valait +1,72 pour un plancher de ±1,98 — un rapport de 0,87.
+Trop serré pour rien affirmer.
+**Après :** sur `all`, il vaut +0,19 pour un plancher de 1,07 — un rapport de 0,18. Le
+non-résultat devient un vrai résultat.
+
+Le plancher a été divisé par 1,85 quand l'effectif a été multiplié par 3,5 : très exactement la
+racine du rapport, comme du bruit de tirage. **L'instrument n'était pas cassé, il était trop
+petit** — et c'est la troisième fois que le témoin nul change de signe selon le jeu (−0,34,
+puis +1,98, puis −1,07), ce qui interdit de raisonner sur le signe d'un écart sous-liminaire.
+
+### Le bulletin reste en production
+
+Rien ne change à l'exécution : l'information qu'il porte — amplitude, soleil, créneaux
+pluvieux — est factuellement absente du prompt sans lui, et ce choix de contenu est assumé.
+Ce que la mesure ferme, c'est l'hypothèse qu'un gain de score se cachait dans sa forme.
+
+### Deux campagnes en parallèle, sans se marcher dessus
+
+Le jeton d'exclusion accepte désormais un **nom** (`PROTOCOL_LOCK_FILE`). Deux campagnes
+peuvent tourner en même temps à une condition stricte : ne partager **aucun compteur de quota**
+— ceux du free tier se comptent par modèle et par projet. Ici, une campagne du ticket 024
+tenait le jeton par défaut sur un autre modèle-juge ; la mesure a pris le sien.
+
+**Avant :** une seule campagne à la fois, même quand les quotas étaient indépendants.
+**Après :** un jeton par seau de quota, chacun avec sa propre preuve d'exclusion archivée.
+
+⚠ Le partage de compteur se **vérifie** (la clé de cache de l'autre campagne porte son
+`prov=…|model=…`), il ne se suppose pas. Deux campagnes sur le même couple doivent partager
+le jeton — un second jeton ne serait qu'une autorisation de se marcher dessus.
+
+---
+
 ## [2026-08-25] La mémoire des agents se coupe au lancement
 
 Un run peut désormais se lancer sans la mémoire des agents — mémoire long terme ET

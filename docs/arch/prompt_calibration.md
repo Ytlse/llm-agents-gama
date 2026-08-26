@@ -1600,6 +1600,37 @@ effectifs par jeu, rapport de couverture, tirage météo hérité, et un bloc `d
 
 **`v2` n'est pas détruit** — les jeux gelés ne le sont jamais.
 
+#### Le jeu de lecture `all` — quand le plancher de bruit est le facteur limitant
+
+`all` = `train` ∪ `val`, concaténation stricte (sur `v9` : 1 810 décisions, 613 personas). Il
+se construit sans rien recalculer :
+
+```bash
+cat calibration_datasets/v9/train.jsonl calibration_datasets/v9/val.jsonl > calibration_datasets/v9/all.jsonl
+```
+
+**À quoi il sert.** À mesurer un traitement qui touche ~100 % du jeu et dont l'effet attendu
+est **plus petit que le plancher de bruit d'un split seul**. La campagne du ticket 023 a
+buté là : sur `val` (516 records), le témoin nul déplaçait le composite de ±1,98 — plus que
+l'effet cherché ; sur `screen` (341 records), son plancher six fois plus étroit a fabriqué
+deux signaux que `val` n'a pas confirmés. La réponse n'était pas de changer de jeu de lecture
+mais d'en prendre un **plus gros** : à 1 810 records, le plancher tombe à 1,07, et le rapport
+des amplitudes (1,85) suit la racine du rapport des effectifs (1,87) — le bruit décroît comme
+du bruit de tirage. Cf. [la mesure du bulletin seul](../traces/2026-08-25_ab_bulletin_seul/README.md).
+
+**Ce que `all` n'est pas.** Il ne crée **aucun regard neuf** : il recompose deux splits déjà
+exposés à la mesure, donc il ne touche pas au budget de `test` (§8 du protocole — `test` n'y
+entre jamais). `screen` n'y figure pas en propre puisque `screen ⊂ train`. Il ne remplace pas
+la lecture par splits pour un traitement **partiel**, où le canal placebo reste la règle : à
+pleine masse, un placebo qui pèse 1 % du jeu resterait tout aussi inutilisable.
+
+⚠ **Un niveau lu sur `all` ne se compare qu'à un niveau lu sur `all`.** La
+non-transportabilité des niveaux entre jeux de lecture est précisément ce que la campagne 023
+a établi (`v9` vaut 22,93 sur `screen`, 26,75 sur `val`, 21,73 sur `all` — même jeu, même
+juge). Seuls les **écarts appariés** voyagent, et seulement accompagnés de leur plancher.
+
+Déclaré par l'**amendement A12** du `PROTOCOLE.md` de `prompt_calibration`.
+
 ### 3.3 Le **mode rapide** sans LLM — et pourquoi il est abandonné (ticket 013)
 
 > ## ⛔ Abandonné le 2026-08-17 — le vélo fantôme

@@ -92,7 +92,13 @@ live = _load_live()
 
 ROOT = Path(__file__).resolve().parents[1]
 # `experiments/` est déjà gitignoré : le jeton est un état de poste, pas du dépôt.
-LOCK_PATH = ROOT / "experiments" / "protocol_lock.json"
+# PROTOCOL_LOCK_FILE : jeton NOMMÉ pour une campagne dont le quota ne recouvre pas
+# celui du jeton par défaut (ex. deux juges épinglés sur des modèles différents —
+# les compteurs free tier sont par modèle ET par projet). Deux campagnes ne partagent
+# un jeton que si elles partagent un compteur ; sinon chacune prend le sien.
+LOCK_PATH = (Path(os.environ["PROTOCOL_LOCK_FILE"]).resolve()
+             if os.environ.get("PROTOCOL_LOCK_FILE")
+             else ROOT / "experiments" / "protocol_lock.json")
 
 # Services dont la présence signifie qu'un pipeline de décisions peut consommer du quota.
 # `api` n'y figure PAS : c'est lui qui sert `/health`, donc les instantanés de quota.
@@ -323,7 +329,10 @@ def cmd_release(args: argparse.Namespace) -> int:
     lock["quota_at_release"] = quota_snapshot()
     lock["stack_at_release"] = stack_snapshot()
     lock["released_at"] = _now()
-    archive = LOCK_PATH.with_name("protocol_lock_last.json")
+    # L'archive suit le NOM du jeton : deux jetons nommés ne s'écrasent pas l'un
+    # l'autre au relâchement (protocol_lock.json → protocol_lock_last.json,
+    # protocol_lock_35.json → protocol_lock_35_last.json).
+    archive = LOCK_PATH.with_name(LOCK_PATH.stem + "_last.json")
     archive.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n",
                        encoding="utf-8")
     LOCK_PATH.unlink()

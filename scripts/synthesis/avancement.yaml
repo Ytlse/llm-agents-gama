@@ -218,6 +218,57 @@ measures:
       12H et 15H sur 44 % des jours.
     trace: docs/traces/2026-08-25_ab_meteo
 
+  - id: bulletin_seul_pleine_masse
+    date: '2026-08-26'
+    metric: composite
+    metric_dataset: 'all'
+    composite_reference: 21.7308
+    composite_modified: 21.9210
+    composite_note: >-
+      À lire contre le plancher de bruit du témoin nul `v9n` : −1,07 sur le même jeu.
+      L'écart mesuré est 5,6 fois PLUS PETIT en valeur absolue. Le jeu `all` (train ∪ val,
+      1 810 décisions) resserre ce plancher de moitié par rapport à `val` seul (±1,98).
+    subject: Bulletin météo enrichi SEUL, tel que livré en production, à pleine masse
+    ticket: 023bis
+    reference: >-
+      `v9` — météo tirée dans l'année climatique entière (365 j, graine `meteo_v2`), phrase
+      d'origine. Substrat du run de référence 2026-08-24_17_34.
+    modified: >-
+      `v9b` — MÊME tirage que `v9` (même graine, même année : les 2 874 phrases régénérées
+      puis dépouillées sont identiques à la source, zéro écart), seule la FORME de la phrase
+      change — le bulletin du jour (amplitude, soleil, créneaux pluvieux). `v9n` est le
+      TÉMOIN NUL : mêmes 365 jours, graine différente.
+    change: >-
+      Réécriture de la seule mise en forme de la ligne de contexte météo. Aucun jour tiré ne
+      bouge, aucune température, aucun agenda : c'est le contraste le plus étroit de la
+      campagne. Mesuré sur `all` = `train` ∪ `val` (1 810 décisions, 613 personas) —
+      le plus grand jeu de lecture disponible sans jouer un nouveau run, `test` exclu.
+    result: >-
+      AUCUN EFFET DISTINGUABLE, et cette fois le non-résultat est solide. Le bulletin vaut
+      +0,19 contre un plancher de bruit de −1,07 : 5,6 fois plus petit. Sur `val`, le même
+      bulletin donnait +1,72 contre un plancher de +1,98 — un rapport de 0,87, trop serré
+      pour rien prouver. Le gain vient de la MASSE : le plancher passe de ±1,98 (516 records)
+      à 1,07 (1 810 records), soit un rapport de 1,85 pour une racine du rapport des
+      effectifs de 1,87 — le bruit décroît comme du bruit de tirage. L'instrument n'était
+      pas cassé, il était trop petit.
+    score: '+0,19 composite sur `all`, pour un plancher de bruit de −1,07'
+    score_kind: neutral
+    score_caveat: >-
+      Le plancher employé MAJORE le bruit applicable : `v9n` re-tire la météo (1 799 des
+      1 810 contextes changent) alors que `v9b` ne re-tire rien. Conclure « sous le plancher »
+      contre un plancher majoré rend le non-signal plus solide, pas moins. Le niveau de `v9`
+      sur ce jeu (21,73) n'est PAS comparable au 18,23 du run : un seul modèle-juge à T0 au
+      lieu de la flotte, 1 810 décisions sur 2 911, replis d'erreur exclus.
+    verdict: rejete
+    comment: >-
+      La mesure existe parce que l'A/B du ticket 023 chiffrait le bulletin PAR-DESSUS la
+      fenêtre d'enquête (`v10b − v10`), alors que la production tire sur l'année entière :
+      la combinaison réellement livrée n'avait jamais été contrastée. Elle l'est. Le bulletin
+      reste en production comme un choix de CONTENU — l'information qu'il porte est
+      factuellement absente du prompt sans lui — et ce statut ne doit rien à la mesure.
+      Ce qui est CLOS, c'est l'hypothèse qu'un gain de composite se cachait dans sa forme.
+    trace: docs/traces/2026-08-25_ab_bulletin_seul
+
   - id: car_availability
     date: '2026-08-24'
     metric: part_modale
