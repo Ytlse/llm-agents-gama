@@ -82,6 +82,35 @@ tourner sous un autre shell.
 de chiffrer avant de payer — exiger le jeton pour savoir ce qu'il coûterait serait
 circulaire.
 
+### La dérogation explicite — `PROTOCOL_LOCK_OPTIONAL=1`
+
+L'exigence se lève, en connaissance de cause :
+
+```bash
+PROTOCOL_LOCK_OPTIONAL=1 python ab_meteo.py --dataset val --out …
+```
+
+Elle sert les cas où l'exclusion est garantie **autrement** : pile entièrement arrêtée et
+vérifiée à la main, poste isolé, ou un jeton concurrent portant un quota qui ne recouvre pas
+celui de la mesure (deux modèles-juges, deux projets — les compteurs free tier se comptent
+par modèle **et** par projet).
+
+Trois propriétés en font une dérogation et non un contournement :
+
+- **elle ne se prend jamais par défaut** — seule la valeur exacte `1` la déclenche, et un test
+  vérifie qu'un `PROTOCOL_LOCK_OPTIONAL=0` ne lève rien ;
+- **elle est bruyante** — cinq lignes d'avertissement à l'écran, et le message de refus la
+  nomme, parce qu'une échappatoire introuvable n'en est pas une ;
+- **elle est écrite dans le résultat** — les scripts portent une clé `exclusion` dans leur
+  JSON, `{"garantie": false, "avertissement": "…"}`. Ce champ est écrit **systématiquement**,
+  y compris quand le jeton était détenu : un champ absent se lirait comme « pas de problème ».
+
+⚠ **Une mesure en dérogation n'est pas invalide — elle est SANS PREUVE D'EXCLUSION.** La
+distinction est tout l'objet du dispositif : le protocole exige une **preuve**, pas un rituel,
+et ce qui reste refusé c'est de **ne pas savoir**. Une trace doit dire dans quelles conditions
+d'exclusion sa mesure a été prise, au même titre qu'elle dit son modèle-juge et sa
+température. Cf. l'amendement **A14** du `PROTOCOLE.md`.
+
 ⚠ **Le jeton est local et ne couvre pas la campagne cloud**, qui tourne en autonomie sur une
 VM avec son propre quota. La mettre en pause est une entrée de liste de contrôle à la prise
 du jeton, pas quelque chose que le verrou garantit. Ne pas confondre les deux.

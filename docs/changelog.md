@@ -1,3 +1,41 @@
+## [2026-08-26] Le jeton d'exclusion devient optionnel, et son absence se déclare
+
+Une mesure sur jeux gelés refusait de démarrer sans jeton d'exclusion. Elle l'exige toujours
+par défaut, mais l'exigence se lève désormais en connaissance de cause :
+
+```
+PROTOCOL_LOCK_OPTIONAL=1 python ab_meteo.py --dataset val --out …
+```
+
+**Avant :** pas de jeton, pas de mesure — même quand l'exclusion était garantie autrement
+(pile arrêtée et vérifiée à la main, ou jeton concurrent portant un quota qui ne recouvre pas
+celui de la mesure).
+**Après :** la mesure part, et elle **dit** qu'elle est partie sans preuve.
+
+### Ce qui distingue une dérogation d'un contournement
+
+Trois propriétés, et la troisième est celle qui compte :
+
+- elle ne se prend **jamais** par défaut — seule la valeur exacte `1` la déclenche, et un test
+  vérifie qu'un `PROTOCOL_LOCK_OPTIONAL=0` ne lève rien ;
+- elle est **bruyante** — cinq lignes d'avertissement, et le message de refus la nomme, parce
+  qu'une échappatoire introuvable n'en est pas une ;
+- elle est **écrite dans le résultat** — chaque mesure porte désormais une clé `exclusion`
+  dans son JSON, présente *systématiquement*, y compris quand tout allait bien. Un champ
+  absent se lirait comme « pas de problème », ce qui est précisément l'ambiguïté que le jeton
+  existe pour supprimer.
+
+Une mesure en dérogation **n'est pas invalide — elle est sans preuve d'exclusion.** La
+distinction est tout l'objet du dispositif : ce qui reste refusé, ce n'est pas de mesurer sans
+jeton, c'est de **ne pas savoir** dans quelles conditions une mesure a été prise. Une trace
+doit le dire au même titre qu'elle dit son modèle-juge et sa température.
+
+Au passage, les jetons archivés de verrous déjà relâchés ont été supprimés du répertoire de
+travail. Les preuves d'exclusion des mesures publiées ne bougent pas : elles vivent, commitées,
+dans les traces qui les citent.
+
+---
+
 ## [2026-08-26] Le téléphérique n'est plus compté comme de la marche
 
 Le Téléo fait partie du réseau Tisséo. Le calcul du score l'ignorait : une option de
