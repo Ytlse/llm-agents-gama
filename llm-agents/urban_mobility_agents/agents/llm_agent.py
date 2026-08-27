@@ -1,4 +1,5 @@
 import asyncio
+from functools import lru_cache
 from datetime import datetime, timezone
 import json
 import demjson3
@@ -33,6 +34,7 @@ from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from urban_mobility_agents.utils.weather_loader import get_weather, weather_to_natural_language
+from urban_mobility_agents.utils.weather_draw import jours_eligibles, timestamp_meteo
 import time
 from utils import create_background_task
 from world.population import PersonScheduler
@@ -78,6 +80,41 @@ def _format_distribution(distribution: dict) -> str:
     parts = [f"{mode} {pct * 100:.0f}%" for mode, pct in
              sorted(distribution.items(), key=lambda kv: -kv[1]) if pct > 0]
     return " · ".join(parts) or "aucune"
+
+
+@lru_cache(maxsize=1)
+def _weather_eligible_days() -> tuple[tuple[int, int], ...]:
+    """Jours de l'année dans lesquels le tirage météo par agent puise.
+
+    Résolue une fois : la fenêtre ne change pas en cours de run, et la relire à
+    chaque décision coûterait une lecture de YAML par agent et par activité.
+    `"enquete"` délègue les bornes à `llm_module.core.population_reference`
+    plutôt que de les recopier — renommer une clé du cadrage ne doit pas casser
+    ce dispositif en silence.
+    """
+    fenetre = settings.agent.weather_window
+    jours_semaine = None
+    if fenetre == "enquete":
+        from llm_module.core.population_reference import survey_window, surveyed_weekdays
+
+        debut, fin = survey_window()
+        if settings.agent.weather_weekdays_only:
+            jours_semaine = tuple(surveyed_weekdays())
+    elif fenetre == "annee":
+        debut, fin = "2024-01-01", "2024-12-31"
+        if settings.agent.weather_weekdays_only:
+            jours_semaine = (1, 2, 3, 4, 5)
+    else:
+        debut, fin = fenetre
+        if settings.agent.weather_weekdays_only:
+            jours_semaine = (1, 2, 3, 4, 5)
+
+    jours = jours_eligibles(debut, fin, jours_semaine)
+    logger.info(
+        f"[météo] une date par agent : {len(jours)} journée(s) éligible(s) dans "
+        f"{debut} → {fin}" + (f", jours de semaine {jours_semaine}" if jours_semaine else "")
+    )
+    return jours
 
 
 class Context(BaseModel):
@@ -231,6 +268,37 @@ class LlmAgent:
             self.short_term_memory[user_id] = UserShortTermMemory(user_id)
         return self.short_term_memory[user_id]
     
+    def _weather_timestamp(self, context: Context) -> int:
+        """Timestamp servant à lire le bulletin météo de cet agent.
+
+        Par défaut, l'horloge simulée — comportement historique. Quand
+        `weather_per_agent_dates` est actif, la seule DATE est remplacée par un
+        jour de l'année tiré déterministement depuis l'identifiant de l'agent :
+        sur une journée simulée unique, tous les agents partageraient sinon une
+        seule météo, et l'effet météo serait par construction non mesurable
+        (ticket 023). L'heure du départ est conservée, l'offre de transport
+        aussi : seule la météo varie.
+        """
+        if not settings.agent.weather_per_agent_dates:
+            return context.timestamp
+        try:
+            jours = _weather_eligible_days()
+            return timestamp_meteo(
+                context.timestamp,
+                context.person.person_id,
+                settings.agent.weather_draw_seed,
+                jours,
+            )
+        except Exception as err:  # pragma: no cover - garde-fou de production
+            # Un tirage impossible ne doit pas faire tomber une décision : on
+            # retombe sur l'horloge simulée, mais en le DISANT — un run muet qui
+            # perd silencieusement le dispositif serait pire que son absence.
+            logger.error(
+                f"[ALARME] tirage de date météo impossible ({err}) — repli sur "
+                f"l'horloge simulée, le dispositif « une météo par agent » est INACTIF"
+            )
+            return context.timestamp
+
     def add_short_term_memory(self, context: Context, msg: str, timestamp: Optional[int] = None):
         memory = self.get_short_term_memory(context.person.person_id)
         memory.add_message(
@@ -365,7 +433,7 @@ class LlmAgent:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
         current_time = humanize_time(context.timestamp)
-        city_context = weather_to_natural_language(get_weather(context.timestamp)) or "None"
+        city_context = weather_to_natural_language(get_weather(self._weather_timestamp(context))) or "None"
 
         history = []
         if settings.agent.long_term_memory_enabled:
@@ -473,7 +541,7 @@ class LlmAgent:
         random.shuffle(shuffled_options)
 
         activity_purpose = options[0].purpose or ""
-        weather = get_weather(context.timestamp)
+        weather = get_weather(self._weather_timestamp(context))
 
         # Graine du tirage : le jour simulé en fait partie, donc un même contexte
         # rejoué le lendemain retire un autre mode (y compris sur un cache hit),
@@ -568,6 +636,7 @@ class LlmAgent:
                 # dépende pas du mélange anti-biais de position appliqué au prompt.
                 weights = None
                 weights_are_fallback = False
+                reasons = None
                 if agent_result.probabilities:
                     # Modes tels qu'ils ont été envoyés dans le prompt : ils permettent de
                     # réaligner une réponse dont les index sont hors bornes (le modèle a
@@ -588,13 +657,35 @@ class LlmAgent:
                         weights[position_in_sorted[id(opt)]] += w
                     index = draw_index(weights, *seed_parts)
                     decision_list = sorted_options
+
+                    # Justification PAR OPTION (2026-08-26) : `normalize_option_probabilities`
+                    # ne renvoie que les poids, la `reason` de chaque entrée s'y perdrait sinon.
+                    # Repérée par l'index envoyé (source de vérité côté prompt), puis reportée
+                    # sur `sorted_options` comme les poids, pour retrouver la justification de
+                    # l'option effectivement tirée.
+                    reasons = [None] * len(sorted_options)
+                    for entry in agent_result.probabilities:
+                        entry_reason = getattr(entry, "reason", None)
+                        if not entry_reason:
+                            continue
+                        try:
+                            entry_idx = int(entry.index)
+                        except (TypeError, ValueError):
+                            continue
+                        if 0 <= entry_idx < len(shuffled_options):
+                            opt = shuffled_options[entry_idx]
+                            reasons[position_in_sorted[id(opt)]] = entry_reason
                 else:
                     # Réponse à l'ancien format (un index choisi) — repli sans tirage.
                     index = agent_result.chosen_index
                     decision_list = shuffled_options
 
                 if isinstance(index, int) and 0 <= index < len(decision_list):
-                    reason = agent_result.reason or "Pas de justification fournie."
+                    reason = (
+                        (reasons[index] if reasons is not None else None)
+                        or agent_result.reason
+                        or "Pas de justification fournie."
+                    )
 
                     # Normalisation de la raison (alignement avec aplan_trip_old)
                     if "is chosen because it" in reason:
