@@ -18,7 +18,9 @@ from loguru import logger
 import numpy as np
 
 from inputs.population.base import Filter, PopulationLoader
-from models import BBox
+from models import Activity, BBox, Location, Person, PersonalIdentity, PersonState
+from settings import settings
+from utils import fake
 
 from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
 from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
@@ -41,7 +43,7 @@ from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 _ADMITTED_ZONES = frozenset(COURONNES)
 
 
-def _perimeter_verdict(person, bbox: Optional[BBox]) -> tuple[bool, str]:
+def perimeter_verdict(person, bbox: Optional[BBox]) -> tuple[bool, str]:
     """`(admis, motif de rejet)` — le motif est vide quand la personne est admise.
 
     Trois cas, et le troisième est le seul qui retombe sur le rectangle :
@@ -79,7 +81,7 @@ def _apply_perimeter_filter(people: list, bbox: Optional[BBox], source: str) -> 
     for person in people:
         if not (person.identity.traits_json or {}).get(RESIDENCE_TRAIT_KEY):
             sans_trait += 1
-        admis, motif = _perimeter_verdict(person, bbox)
+        admis, motif = perimeter_verdict(person, bbox)
         if admis:
             retenus.append(person)
         else:
@@ -100,11 +102,6 @@ def _apply_perimeter_filter(people: list, bbox: Optional[BBox], source: str) -> 
             f"avec `make residence-zone` (ticket 021)."
         )
     return retenus
-
-from models import Activity, BBox, Location, Person, PersonalIdentity, PersonState
-from settings import settings
-from utils import fake
-
 
 def _generate_name(gender: str) -> str:
     if gender == "Male":

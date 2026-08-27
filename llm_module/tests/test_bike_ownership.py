@@ -46,6 +46,7 @@ from llm_module.core.bike_ownership import (
     NO_BIKE,
     PLAIN_BIKE,
     PROPENSITY_BASE_FEATURES,
+    RESOURCE_VERSION,
     STOCK_FEATURES,
     TRAIT_KEY,
     VAE_SHARE,
@@ -396,6 +397,16 @@ class TestChargement:
         path = tmp_path / "bike.json"
         path.write_text(json.dumps(doc), encoding="utf-8")
         with pytest.raises(ValueError, match="classes"):
+            BikeOwnershipModel.load(path)
+
+    def test_une_ressource_d_une_autre_version_est_refusee(self, tmp_path):
+        """Même garde-fou que `residence_zone.RESOURCE_VERSION` : une ressource
+        écrite pour un autre schéma ne doit pas se charger avec des coefficients
+        mal alignés faute de contrôle de version."""
+        doc = _minimal_doc(version=RESOURCE_VERSION + 1)
+        path = tmp_path / "bike.json"
+        path.write_text(json.dumps(doc), encoding="utf-8")
+        with pytest.raises(ValueError, match="version"):
             BikeOwnershipModel.load(path)
 
 

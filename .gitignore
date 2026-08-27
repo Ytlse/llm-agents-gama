@@ -2,6 +2,8 @@
 # Système / éditeurs
 # ============================================================
 .DS_Store
+# Verrous laissés par Word/PowerPoint quand un document est ouvert.
+~$*
 
 # ============================================================
 # Environnements virtuels Python
@@ -50,6 +52,15 @@ scripts/models_influence/calibration_results/*
 # Captures d'écran ponctuelles (monitoring, debug) déposées dans docs/capture/
 docs/capture/*.png
 
+# Supports de présentation déposés dans docs/slides/ : 46 Mo de PPTX et de PDF
+# exportés à chaque itération, sans intérêt pour le code et définitifs une fois
+# dans l'historique (le plus gros fichier versionné du dépôt fait 6,4 Mo).
+# Le README du dossier, lui, reste versionné : c'est lui qui porte l'historique
+# fonctionnel des versions. La règle *.pptx couvre aussi les verrous « ~$… »
+# laissés par PowerPoint.
+docs/slides/*.pptx
+docs/slides/*.pdf
+
 # ============================================================
 # Dossiers de données de monitoring (Grafana / Prometheus)
 # ============================================================
@@ -76,10 +87,15 @@ llm_module/llm_gateway.egg-info/SOURCES.txt
 # ============================================================
 otp-toulouse/toulouse/*
 otp-toulouse/source/*
-data/archives/gtfs/*
 scripts/data/gtfs/*
+# Feeds annuels reconstruits par `make gtfs-year` : 280 Mo décompressés,
+# entièrement régénérables depuis les exports archivés. Le code du pipeline
+# (scripts/data/gtfs_year/) et la trace de build restent versionnés, et
+# l'instantané du calendrier scolaire aussi — c'est lui qui rend le build
+# rejouable à l'identique hors ligne.
+data/gtfs_year/*
+scripts/data/gtfs_year/cache/*
 scripts/data/population/Temp/*
-scripts/general/travel_time.py
 
 # ============================================================
 # Données restreintes ProGEDO / EMC² / INSEE
@@ -109,11 +125,8 @@ scripts/progedo_logit/*.parquet
 # ============================================================
 # Fichiers de données et de debug spécifiques
 # ============================================================
-llm-agents/debug.txt
-llm-agents/llm_exchanges.jsonl
 scripts/general/*.csv
 Divers/*
-GAMA/CityTransport/models/false
 
 # ============================================================
 # Dépôts git externes / séparés (gérés indépendamment, ne pas versionner
@@ -124,4 +137,5 @@ eqasim-toulouse/
 # Calibration de prompt (github.com/Ytlse/prompt_calibration)
 prompt_calibration/
 # Assistant personnel — dépôt git autonome imbriqué
-assistant_perso/
+docs/slides/README.md
+docs/traces/*

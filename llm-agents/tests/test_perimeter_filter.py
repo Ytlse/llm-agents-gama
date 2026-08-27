@@ -45,9 +45,9 @@ def person(lat, lon, zone=None, pid="p1") -> Person:
 
 
 def verdict(p, bbox=TISSEO_BBOX):
-    from inputs.population.eqasim_loader import _perimeter_verdict
+    from inputs.population.eqasim_loader import perimeter_verdict
 
-    return _perimeter_verdict(p, bbox)
+    return perimeter_verdict(p, bbox)
 
 
 # ── Le trait décide ──────────────────────────────────────────────────────────

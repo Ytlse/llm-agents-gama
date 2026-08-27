@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from models import Activity, BBox, Location, Person, PersonId
 from settings import settings
 from inputs.population import PopulationLoader
+from inputs.population.eqasim_loader import perimeter_verdict
 from errors import PersonNotFoundException
 from helper import to_24h_timestamp_full
 from loguru import logger
@@ -198,9 +199,7 @@ class WorldPopulation:
         le trait `residence_zone` du persona qui décide, et la bbox du réseau TC ne sert
         plus que de repli pour une population générée avant le ticket 021.
         """
-        from inputs.population.eqasim_loader import _perimeter_verdict
-
-        admis, _ = _perimeter_verdict(person, bbox)
+        admis, _ = perimeter_verdict(person, bbox)
         return admis
 
     def load_population(self, world_bbox: BBox):

@@ -465,6 +465,12 @@ def bike_label(household_key: str, member_index: int, age: Optional[float],
 
 DEFAULT_RESOURCE = Path(__file__).resolve().parent.parent / "data" / "bike_ownership.json"
 
+# Version de ressource acceptée, au même patron que `residence_zone.RESOURCE_VERSION`
+# et `housing_type.MIN_RESOURCE_VERSION` : une ressource écrite pour un autre schéma
+# (nouvelle covariable, écrêtage différent) doit être rejetée explicitement au
+# chargement, pas chargée silencieusement avec des coefficients mal alignés.
+RESOURCE_VERSION = 1
+
 # Features attendues de chaque étage. Le module refuse une ressource écrite pour
 # d'autres : des coefficients alignés sur les mauvaises colonnes ne produisent pas
 # d'erreur, ils produisent un parc faux.
@@ -511,6 +517,12 @@ class BikeOwnershipModel:
                 "'data/PROGEDO 2023/' (accès restreint lil-1750)."
             )
         doc = json.loads(path.read_text(encoding="utf-8"))
+        version = int(doc.get("version") or 0)
+        if version != RESOURCE_VERSION:
+            raise ValueError(
+                f"Ressource {path} en version {version}, le module attend "
+                f"{RESOURCE_VERSION}. Rejouez `make bike-ownership`."
+            )
         stock = LogitModel.from_doc(doc["stock"])
         propensity = LogitModel.from_doc(doc["propensity"])
         occupations = tuple(str(o) for o in doc.get("occupations") or ())

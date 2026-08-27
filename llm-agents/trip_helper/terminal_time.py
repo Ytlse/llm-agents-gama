@@ -72,7 +72,7 @@ class TerminalProfile:
         Déterministe et sans RNG : le même trajet reçoit toujours le même temps
         terminal. Ce n'est pas un détail de confort — les plans sont mis en cache
         (OTP) et les décisions LLM le sont aussi ; un tirage aléatoire ferait
-        divariger un run de sa reprise, et rendrait le cache de décisions faux.
+        diverger un run de sa reprise, et rendrait le cache de décisions faux.
         """
         digest = hashlib.sha256(f"{DRAW_SALT}:{key}".encode("utf-8")).digest()
         u = int.from_bytes(digest[:8], "big") / 2 ** 64
