@@ -16,7 +16,12 @@ data/
 │   ├── ter_gtfs/            # Feed GTFS TER (réseau régional SNCF)
 │   ├── Toulouse.osm.pbf     # Carte OSM utilisée par OTP pour la construction du graphe
 │   ├── graph.obj            # Graphe multimodal compilé par OTP
-│   └── archives/            # Anciennes versions des feeds GTFS 
+│   └── archives/            # Anciennes versions des feeds GTFS
+│       └── 2026-08-26_pre_year_feed/   # Jeu en service avant le feed annuel + 7 exports bruts
+│
+├── gtfs_year/               # Feeds annuels reconstruits (non versionné, `make gtfs-year`)
+│   ├── tisseo_<année>/      # 365 jours : offre réelle quand elle existe, copiée sinon
+│   └── ter_<année>/         # idem pour le TER — voir docs/arch/gtfs-annee.md
 │
 ├── population/              # Population synthétique générée par eqasim (DVC : eqasim_output.dvc)
 │   └── toulouse_population_<N>.json   # N = taille de la population (100, 200, …, 10000)

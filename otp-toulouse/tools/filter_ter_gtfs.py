@@ -31,9 +31,13 @@ TOULOUSE_OSM_ROUTES_30K_BBOX = (
 
 REPO_ROOT = Path(__file__).parent.parent.parent  # tools/ → otp-toulouse/ → repo root
 # Source: full TER Occitanie GTFS (download from https://www.data.gouv.fr/fr/datasets/horaires-des-trains-ter/)
-# Place the unzipped feed at otp-toulouse/toulouse/ter_occitanie/
-SRC_DIR = REPO_ROOT / "otp-toulouse" / "toulouse" / "ter_occitanie"
-OUT_ZIP = REPO_ROOT / "otp-toulouse" / "toulouse" / "ter_gtfs.zip"
+# Place the unzipped feed at otp-toulouse/source/ter_occitanie/
+SRC_DIR = REPO_ROOT / "otp-toulouse" / "source" / "ter_occitanie"
+# OTP only loads GTFS zips sitting at the ROOT of its build directory, which is
+# `data/gtfs` (see otp-toulouse/Makefile: `--build ../data/gtfs`). Writing the
+# zip under otp-toulouse/toulouse/ left it outside the build entirely — which is
+# one reason the TER has never been in graph.obj.
+OUT_ZIP = REPO_ROOT / "data" / "gtfs" / "ter_gtfs.zip"
 
 # ---------------------------------------------------------------------------
 # Helpers

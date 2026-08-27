@@ -1,0 +1,111 @@
+# Construction du feed GTFS annuel — paramètres.
+#
+# Ce fichier décrit QUOI assembler et SOUS QUELLES TOLÉRANCES. Il ne contient
+# aucune donnée d'horaire : tout ce qui est servi vient des exports de
+# l'opérateur, soit à sa date réelle, soit recopié verbatim depuis une journée
+# réelle de même signature.
+
+# ── Réseaux ──────────────────────────────────────────────────────────────────
+reseaux:
+  tisseo:
+    libelle: "Tisséo — réseau urbain toulousain"
+    agency_id_attendu: "network:1"
+    # Répertoires ou zips fouillés dans l'ordre ; les doublons (md5 identique)
+    # sont ignorés avec un compteur.
+    exports:
+      # Les sept exports de l'opérateur, archivés et renommés par date de
+      # publication. Déposer ici les livraisons suivantes : les doublons stricts
+      # (même md5) sont détectés et ignorés avec un compteur.
+      - "data/gtfs/archives/2026-08-26_pre_year_feed/exports_bruts"
+    # Dates que la source décrit explicitement comme sans service : plusieurs
+    # exports les englobent et les omettent tous. Les extrapoler inventerait de
+    # l'offre. Elles restent vides et sont comptées à part des trous.
+    dates_sans_service_confirme:
+      - "20260501"   # 1er mai : omis par les exports du 08/04 et du 24/04
+
+  ter:
+    libelle: "TER Occitanie — SNCF Voyageurs"
+    agency_id_attendu: "1187"
+    exports:
+      - "data/gtfs/ter_gtfs"
+    dates_sans_service_confirme: []
+
+# ── Détection de la queue tronquée ───────────────────────────────────────────
+# Chaque export « rolling » n'est complet que sur ses premières semaines ;
+# ensuite l'opérateur ne publie plus que les lignes structurantes (métro).
+# Le seuil est RELATIF au type de jour : un seuil absolu couperait les samedis
+# et dimanches normaux, qui ont légitimement moins de lignes qu'un mardi.
+fiabilite:
+  # n_lignes(j) / maximum observé pour ce type de jour sur tout l'export. La
+  # référence est le maximum et non la médiane des premières semaines : un
+  # export livré tardivement, majoritairement composé de sa propre queue,
+  # contaminerait sa référence et passerait intact.
+  ratio_lignes_min: 0.5
+  # Plancher absolu, en fraction du maximum de lignes atteint par l'export tous
+  # types de jour confondus. La règle ci-dessus est aveugle quand un type de jour
+  # n'apparaît jamais complet dans l'export : sa référence vaut alors le niveau
+  # de la queue et rien n'est coupé. Très bas pour laisser passer les dimanches,
+  # qui roulent à 39 % des lignes d'un mardi.
+  ratio_plancher_lignes: 0.15
+  jours_min_par_export: 7      # sous ce seuil, l'export est déclaré inutilisable
+
+# ── Classification des journées ──────────────────────────────────────────────
+calendrier:
+  zone: "Zone C"               # académie de Toulouse
+  localite: "Toulouse"
+  # Les bornes officielles de vacances ne coïncident pas toujours avec la
+  # bascule d'offre (un samedi de premier jour de vacances peut encore rouler
+  # en samedi scolaire). L'ajustement est APPRIS sur les dates réelles :
+  # on essaie ces décalages de début de période et on retient celui qui
+  # minimise la dispersion intra-signature.
+  decalages_debut_testes: [0, 1, 2]
+  # L'été se scinde : l'offre de juillet et celle d'août sont distinctes.
+  scission_ete: "08-01"
+
+# ── Extrapolation ────────────────────────────────────────────────────────────
+extrapolation:
+  # Repli quand une classe de période n'a aucune journée réelle dans la source.
+  # Ordre de préférence ; le premier repli disponible gagne.
+  repli_periodes:
+    vac_hiver:      ["vac_printemps", "vac_toussaint", "vac_noel"]
+    vac_toussaint:  ["vac_printemps", "vac_hiver", "vac_noel"]
+    vac_noel:       ["vac_printemps", "vac_hiver", "vac_toussaint"]
+    vac_printemps:  ["vac_hiver", "vac_toussaint", "vac_noel"]
+    pont_ascension: ["vac_printemps", "scolaire"]
+    ete_juillet:    ["ete_aout"]
+    ete_aout:       ["ete_juillet"]
+    scolaire:       []
+  # Un férié n'est pas un dimanche : 14/07 = 5 674 trips contre 4 683-5 054 pour
+  # les dimanches de juillet, 08/05 = 4 782 contre 4 644. Un férié cherche donc
+  # d'abord un autre férié, et ne se rabat sur le dimanche qu'à défaut.
+  repli_ferie: ["ferie", "dim"]
+  # Écart en jours au-delà duquel la confiance tombe.
+  confiance:
+    haute_si: "reel"
+    moyenne_si_ecart_jours_max: 60      # même signature exacte, donneur proche
+    # tout le reste (repli de période, ou donneur lointain) → basse
+
+# ── Invariants et alarmes ────────────────────────────────────────────────────
+controles:
+  # Déplacement d'un arrêt entre deux exports au-delà duquel on alarme.
+  deplacement_arret_max_m: 25
+  # Dispersion relative tolérée du nombre de trips à l'intérieur d'une même
+  # signature. Mesurée sur les dates réelles 2026 : ≤ 6 % en général, 7,5 % pour
+  # les dimanches de juillet.
+  dispersion_signature_max: 0.10
+  # Plancher de lignes actives un jour ouvré, en fraction de la médiane
+  # observée sur le réseau lui-même. Un seuil absolu calibré sur Tisséo
+  # (123 lignes) alarmerait à tort sur le TER, qui en compte une vingtaine.
+  ratio_lignes_min_jour_ouvre: 0.6
+  # Au-delà de ce nombre de dates en confiance basse, le build sort en code 4.
+  dates_confiance_basse_max: 60
+  # Écart relatif toléré lors de la validation hold-out (offre extrapolée vs
+  # offre réelle masquée), par journée.
+  holdout_ecart_max: 0.15
+
+# ── Canonicalisation ─────────────────────────────────────────────────────────
+# Sans ces arrondis, le bruit flottant des exports produit 270 faux conflits
+# d'arrêts et 21 fausses divergences de géométrie.
+canonicalisation:
+  decimales_coordonnees: 6
+  decimales_distance: 1
