@@ -5,7 +5,7 @@ x-shared-env: &shared-env
   # En lister davantage suppose d'avoir activé osmnx2/osmnx3 — voir l'avertissement
   # mesuré à leur définition avant de le faire.
   OSMNX_ENDPOINTS: http://osmnx1:8090/route
-  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
   # Reprise à chaud (`make run CONT=1`) : le contrôleur réutilise le workdir
   # pointé par experiments/current au lieu d'en créer un nouveau (settings.py).
   CONTINUE_RUN: ${CONTINUE_RUN:-}
@@ -23,7 +23,7 @@ x-shared-env: &shared-env
   # groq ni cerebras — la cascade multi-providers reste en place (décision D4).
   #
   # Pour rendre la clé 1 à la simulation le temps d'un run :
-  #   SIM_PROVIDER_KEYS__google="$PROVIDER_KEYS__google" make run CONFIG=...
+  #   SIM_PROVIDER_KEYS__google="$PROVIDER_KEYS__google" make run
   PROVIDER_KEYS__google: ${SIM_PROVIDER_KEYS__google:-}
   # `google2_35` (clé 2, modèle 3.5) est un second seau de 500 requêtes/jour. Il
   # n'a pas de secret propre : on le dérive de la clé 2 plutôt que de dupliquer le
@@ -40,7 +40,7 @@ x-shared-env: &shared-env
   # mort laissé en rotation coûte des décisions dégradées : le balancer le
   # re-sonde à l'expiration du retrait et des tâches y épuisent leurs relances
   # (155 replis « Default index » sur le run 2026-08-19_11_01). Usage :
-  #   PROVIDER_KEYS__mistral="" PROVIDER_KEYS__cerebras="" make run CONFIG=...
+  #   PROVIDER_KEYS__mistral="" PROVIDER_KEYS__cerebras="" make run
   # Sans surcharge, l'interpolation lit .env : comportement inchangé.
   PROVIDER_KEYS__mistral: ${PROVIDER_KEYS__mistral:-}
   PROVIDER_KEYS__cerebras: ${PROVIDER_KEYS__cerebras:-}
@@ -56,7 +56,7 @@ x-osmnx-service: &osmnx-service
     - ./data/cache/osmnx:/app/osmnx_cache
     - ./llm-agents/config:/app/config:ro
   environment:
-    APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+    APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
   healthcheck:
     test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8090/health')\""]
     interval: 15s
@@ -87,7 +87,7 @@ x-otp-service: &otp-service
 # EQASIM_GENERATE_PERSONALITY: "true" to populate Big Five scores
 # EQASIM_RANDOM_SEED: reproducibility seed (default 1234)
 x-eqasim-env: &eqasim-env
-  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config_baseline_1000_current.yaml}
+  APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
   EQASIM_POPULATION_SIZE: ${EQASIM_POPULATION_SIZE:-}
   EQASIM_GENERATE_PERSONALITY: ${EQASIM_GENERATE_PERSONALITY:-false}
   EQASIM_RANDOM_SEED: ${EQASIM_RANDOM_SEED:-1234}

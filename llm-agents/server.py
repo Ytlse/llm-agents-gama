@@ -1,21 +1,10 @@
 import uvicorn
-import argparse
-import os
 from backup_helper import backup_file_if_exists
 from loguru import logger
 from helper import setup_logging
 from settings import settings
 
-args = argparse.ArgumentParser()
-
-args.add_argument("--config", type=str, default="", help="Path to the configuration file")
-
 if __name__ == "__main__":
-    args = args.parse_args()
-    if args.config:
-        os.environ["APP_CONFIG_PATH"] = args.config
-        settings = settings.force_reload()  # workdir dérivé + dossier créé + config copié
-
     # Backup important files
     backup_file_if_exists(settings.app.agent_memory_events_jsonl)
 

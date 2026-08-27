@@ -1,10 +1,21 @@
-# Ce fichier définit les overrides de base communs à toutes les expériences.
-# La section "cache" n'est pas incluse ici : elle est disabled par défaut (CacheConfig.enabled=False).
-# Pour activer le cache LLM dans une expérience, ajouter dans le yaml d'expérience :
-#   cache:
-#     enabled: true
-#     cache_dir: /app/data/llm_cache
+# Test de non-régression et de mécanisme : une date météo par agent.
 #
-# Le cache de routage persistant OTP (gtfs.otp_cache_enabled) n'est volontairement
-# surchargé dans AUCUNE config : la valeur par défaut de settings.py (True) fait foi
-# partout, pour éviter qu'une config d'expérience le désactive par inadvertance.
+# Mémoire coupée volontairement (le levier autoritaire est
+# GAMA/CityTransport/config/sim_params.yaml, via `make run MEM=0` — Settings.gaml
+# écrase à cycle 1 tout paramètre injecté par le contenu de ce fichier).
+# Sans souvenirs, la décision ne dépend que des conditions factuelles : c'est ce
+# qui isole la météo comme seule variable qui bouge.
+
+gtfs:
+  mode: OTP
+
+agent:
+  reschedule_activity_departure_time: false
+  quantify_time_window: false
+  long_term_reflect_interval: 86400
+
+  # Le dispositif sous test.
+  weather_per_agent_dates: true
+  weather_window: enquete          # 2022-09-20 → 2023-02-18, jours ouvrés
+  weather_weekdays_only: true
+  weather_draw_seed: 42

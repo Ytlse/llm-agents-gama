@@ -4,8 +4,8 @@ archive_log.py - Script d'archivage des logs.
 Ce script est destiné à être exécuté une seule fois au démarrage du stack de services
 pour archiver le fichier de log existant avant que les nouveaux logs ne soient écrits.
 
-Il lit la configuration depuis la variable d'environnement APP_CONFIG_PATH pour
-trouver le chemin du fichier de log.
+Il lit la configuration (llm-agents/config/config.yaml) pour trouver le chemin
+du fichier de log.
 """
 import os
 from datetime import datetime

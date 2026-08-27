@@ -311,6 +311,25 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # sans réappeler le LLM.
     mode_draw_seed: int = 42
 
+    # ── Une date météo par agent (ticket 023, suite) ───────────────────────────
+    # Sur une seule journée simulée, tous les agents partagent une seule météo :
+    # le régresseur a une variance nulle, et « aucun effet mesuré » ne veut alors
+    # rien dire. Activé, chaque agent lit le bulletin d'un jour de l'année tiré
+    # déterministement depuis son identifiant — seule la DATE du bulletin change,
+    # l'heure du départ est conservée, et l'offre de transport reste celle de la
+    # journée simulée. Dispositif ceteris paribus : la graine du tirage de mode,
+    # elle, n'est pas touchée.
+    # DÉSACTIVÉ PAR DÉFAUT : rien ne bouge sans intention explicite.
+    weather_per_agent_dates: bool = False
+    # "enquete" lit la fenêtre de collecte EMC² et ses jours enquêtés depuis
+    # llm_module.core.population_reference (pas de bornes recopiées) ; "annee"
+    # prend les 365 jours ; sinon un couple ["AAAA-MM-JJ", "AAAA-MM-JJ"].
+    weather_window: Any = "enquete"
+    # L'enquête ne porte que des jours ouvrés ; sans effet si la fenêtre est
+    # "annee" et ce drapeau est faux.
+    weather_weekdays_only: bool = True
+    weather_draw_seed: int = 42
+
     llm_params: dict[str, Any] = {
         "temperature": 0,
         "top_p": 1.0,
@@ -480,72 +499,70 @@ class FactorySettings:
         if cls._instance is not None:
             return cls._instance
 
+        # Une seule configuration de run, toujours chargée depuis ce chemin fixe —
+        # plus de sélection via APP_CONFIG_PATH/CONFIG=... : pour changer de config,
+        # éditer directement llm-agents/config/config.yaml.
         base_config_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "config/config.yaml",
         )
         yaml_files = [base_config_path]
-        workdir = None
-        config_file_path = os.environ.get("APP_CONFIG_PATH")
-        if config_file_path and os.path.isfile(config_file_path):
-            yaml_files.append(config_file_path)
 
-        # Derive workdir from config file name: experiments/archive/<YYYY-MM-DD>_<HH_MM>
-        if config_file_path and os.path.isfile(config_file_path):
-            now = datetime.now()
-            cls._creation_time = now
-            experiments_dir = Path(config_file_path).resolve().parent.parent / "experiments"
-            # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
-            # workdir du run précédent (cible du symlink experiments/current) au lieu
-            # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
-            # en-tête, app.log continue), state.json et les checkpoints de population
-            # y sont retrouvés par les chemins _in_workdir_path_fields. La simulation
-            # GAMA, elle, repart à t0 du jour simulé (pas de gel d'état côté GAMA,
-            # cf. ticket 002) — les caches rendent le rejeu quasi instantané.
-            _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in ("1", "true", "yes")
-            _current_link = experiments_dir / "current"
-            if _resume and _current_link.is_symlink() and _current_link.resolve().is_dir():
-                workdir = str(_current_link.resolve())
-            else:
-                if _resume:
-                    logger.warning(
-                        "CONTINUE_RUN demandé mais experiments/current ne pointe vers aucun "
-                        "run existant — démarrage d'un run neuf."
-                    )
-                exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
-                workdir = str(experiments_dir / "archive" / exp_name)
+        # Le workdir d'expérience (experiments/archive/<YYYY-MM-DD>_<HH_MM>) est
+        # créé et archivé inconditionnellement à chaque démarrage.
+        now = datetime.now()
+        cls._creation_time = now
+        experiments_dir = Path(base_config_path).resolve().parent.parent / "experiments"
+        # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
+        # workdir du run précédent (cible du symlink experiments/current) au lieu
+        # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
+        # en-tête, app.log continue), state.json et les checkpoints de population
+        # y sont retrouvés par les chemins _in_workdir_path_fields. La simulation
+        # GAMA, elle, repart à t0 du jour simulé (pas de gel d'état côté GAMA,
+        # cf. ticket 002) — les caches rendent le rejeu quasi instantané.
+        _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in ("1", "true", "yes")
+        _current_link = experiments_dir / "current"
+        if _resume and _current_link.is_symlink() and _current_link.resolve().is_dir():
+            workdir = str(_current_link.resolve())
+        else:
+            if _resume:
+                logger.warning(
+                    "CONTINUE_RUN demandé mais experiments/current ne pointe vers aucun "
+                    "run existant — démarrage d'un run neuf."
+                )
+            exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
+            workdir = str(experiments_dir / "archive" / exp_name)
 
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
         # Create workdir, write the full config into it, and update "current" symlink
-        if config_file_path and os.path.isfile(config_file_path):
-            cls._instance.workdir.mkdir(parents=True, exist_ok=True)
+        cls._instance.workdir.mkdir(parents=True, exist_ok=True)
 
-            cls.save_static_config()
+        cls.save_static_config()
 
-            current_link = experiments_dir / "current"
-            current_link.unlink(missing_ok=True)
-            current_link.symlink_to(Path("archive") / cls._instance.workdir.name)
+        current_link = experiments_dir / "current"
+        current_link.unlink(missing_ok=True)
+        current_link.symlink_to(Path("archive") / cls._instance.workdir.name)
 
-            # Redirect GAMA results into this experiment's workdir.
-            # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
-            # project root (CityTransport → GAMA → project root), then down to experiments/.
-            gama_results_dir = cls._instance.workdir / "gama_results"
-            gama_results_dir.mkdir(parents=True, exist_ok=True)
-            gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
-            if gama_results_link.parent.exists():
-                exp_name = gama_results_dir.parent.name
-                relative_target = Path("../../experiments") / "archive" / exp_name / "gama_results"
-                # Plusieurs workers hypercorn importent ce module en parallèle :
-                # unlink/symlink doivent tolérer qu'un autre worker soit passé avant.
-                if gama_results_link.is_symlink():
-                    gama_results_link.unlink(missing_ok=True)
-                elif gama_results_link.exists():
-                    gama_results_link.rename(gama_results_link.parent / "results_legacy")
-                try:
-                    gama_results_link.symlink_to(relative_target)
-                except FileExistsError:
-                    pass
+        # Redirect GAMA results into this experiment's workdir.
+        # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
+        # project root (CityTransport → GAMA → project root), then down to experiments/.
+        gama_results_dir = cls._instance.workdir / "gama_results"
+        gama_results_dir.mkdir(parents=True, exist_ok=True)
+        gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
+        if gama_results_link.parent.exists():
+            exp_name = gama_results_dir.parent.name
+            relative_target = Path("../../experiments") / "archive" / exp_name / "gama_results"
+            # Plusieurs workers hypercorn importent ce module en parallèle :
+            # unlink/symlink doivent tolérer qu'un autre worker soit passé avant.
+            if gama_results_link.is_symlink():
+                gama_results_link.unlink(missing_ok=True)
+            elif gama_results_link.exists():
+                gama_results_link.rename(gama_results_link.parent / "results_legacy")
+            try:
+                gama_results_link.symlink_to(relative_target)
+            except FileExistsError:
+                pass
 
         # logger.info(f"Settings loaded from: {yaml_files}")
         # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
