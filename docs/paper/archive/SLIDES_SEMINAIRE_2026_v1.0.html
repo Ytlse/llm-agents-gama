@@ -1,0 +1,1686 @@
+<title>L'Oracle et l'Agent</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@300;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F5F6F8; --card:#FFFFFF; --card2:#EDEFF4; --hatch:#E4E8EF;
+  --ink:#191C22; --ink2:#4A5160; --muted:#79808F;
+  --rule:#DDE1E8; --rule2:#C6CCD7;
+  --accent:#1F5FA0; --accent-soft:#E6EEF8;
+  --ochre:#A8681C; --ochre-soft:#F5EBDB;
+  --car:#C43D3D; --bike:#7B52C7; --pt:#2E9E52; --walk:#0C7DA6;
+  --disp:"Spectral",ui-serif,Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#16181C; --card:#1D2026; --card2:#23272F; --hatch:#262B34;
+    --ink:#E9EBEF; --ink2:#AEB4C0; --muted:#7F8794;
+    --rule:#2C313A; --rule2:#3A404B;
+    --accent:#4E93D8; --accent-soft:#1A2635;
+    --ochre:#BB8638; --ochre-soft:#2B2318;
+    --car:#D9584F; --bike:#9A78DE; --pt:#37A863; --walk:#2892C0;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#16181C; --card:#1D2026; --card2:#23272F; --hatch:#262B34;
+  --ink:#E9EBEF; --ink2:#AEB4C0; --muted:#7F8794;
+  --rule:#2C313A; --rule2:#3A404B;
+  --accent:#4E93D8; --accent-soft:#1A2635;
+  --ochre:#BB8638; --ochre-soft:#2B2318;
+  --car:#D9584F; --bike:#9A78DE; --pt:#37A863; --walk:#2892C0;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;margin:0}
+p{margin:0}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ---------- stage ---------- */
+.deck{padding-bottom:3.6rem}
+.slide{
+  container-type:inline-size;
+  background:var(--card);color:var(--ink);
+  font-size:1.42cqw;
+  position:relative;
+}
+.deck[data-mode="slides"] .slide{
+  display:none;
+  width:min(100vw, 177.7vh);
+  aspect-ratio:16/9;
+  margin:0 auto;
+  border:1px solid var(--rule);
+}
+.deck[data-mode="slides"] .slide.on{display:block}
+.deck[data-mode="slides"]{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 3.6rem)}
+.deck[data-mode="doc"] .slide{
+  container-type:normal;font-size:15.5px;
+  max-width:62rem;margin:0 auto;border-bottom:1px solid var(--rule);
+  background:transparent;
+}
+.pad{position:absolute;inset:0;display:flex;flex-direction:column;gap:1.05em;padding:3.1em 3.6em 3.4em}
+.deck[data-mode="doc"] .pad{position:static;inset:auto;padding:3.2em 1.6em 3.6em}
+.body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:.95em}
+.deck[data-mode="doc"] .body{overflow:visible}
+
+/* ---------- slide head ---------- */
+.eyebrow{display:flex;align-items:baseline;gap:.9em;font:500 .66em/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.eyebrow b{color:var(--accent);font-weight:500}
+.eyebrow .num{margin-left:auto;font-variant-numeric:tabular-nums}
+h2.t{font-size:2.05em;line-height:1.08;letter-spacing:-.012em}
+.msg{font-family:var(--disp);font-size:1.06em;line-height:1.4;color:var(--accent);font-weight:500;max-width:44em}
+.deck[data-mode="doc"] .slide{padding-top:1rem}
+
+/* ---------- status ---------- */
+.st{display:inline-flex;align-items:center;gap:.45em;font:500 .62em/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.st::before{content:"";width:.6em;height:.6em;border-radius:50%;border:1.5px solid currentColor;flex:none}
+.st.m{color:var(--accent)}.st.m::before{background:currentColor}
+.st.p{color:var(--ink2)}.st.p::before{background:linear-gradient(90deg,currentColor 0 50%,transparent 50% 100%)}
+.st.t::before{border-style:dashed}
+
+/* ---------- blocks ---------- */
+.cols{display:grid;gap:.85em;grid-template-columns:repeat(auto-fit,minmax(0,1fr));align-items:start}
+.cols.c2{grid-template-columns:1fr 1fr}
+.cols.c3{grid-template-columns:repeat(3,1fr)}
+.cols.wide-l{grid-template-columns:1.35fr 1fr}
+.cols.wide-r{grid-template-columns:1fr 1.35fr}
+.card{background:var(--card2);border:1px solid var(--rule);border-radius:.35em;padding:.95em 1.05em;display:flex;flex-direction:column;gap:.5em}
+.card h3{font-size:.95em;line-height:1.25}
+.card .lab{font:500 .62em/1.1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.card p,.card li{font-size:.8em;line-height:1.5;color:var(--ink2)}
+ul.tight{margin:0;padding-left:1.15em;display:flex;flex-direction:column;gap:.35em}
+ul.tight li{font-size:.82em;line-height:1.45;color:var(--ink2)}
+ul.tight li b,.card p b{color:var(--ink);font-weight:600}
+ul.none{list-style:none;padding-left:0}
+.kpis{display:grid;gap:.7em;grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+.kpi{border:1px solid var(--rule);border-radius:.35em;padding:.8em .9em;background:var(--card);display:flex;flex-direction:column;gap:.25em}
+.kpi .v{font-family:var(--mono);font-size:1.7em;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi .k{font:500 .6em/1.25 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.kpi .s{font-size:.72em;line-height:1.35;color:var(--ink2)}
+.kpi.acc .v{color:var(--accent)}.kpi.och .v{color:var(--ochre)}
+.note,.warn{border-left:2px solid var(--accent);background:var(--accent-soft);padding:.7em .9em;border-radius:0 .3em .3em 0;font-size:.82em;line-height:1.5;color:var(--ink2)}
+.warn{border-left-color:var(--ochre);background:var(--ochre-soft)}
+.note b,.warn b{color:var(--ink)}
+.quote{font-family:var(--disp);font-size:1em;line-height:1.5;font-style:italic;color:var(--ink2);border-left:2px solid var(--rule2);padding-left:.9em}
+.tag{display:inline-block;font:500 .62em/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:.35em .55em;border:1px solid var(--rule2);border-radius:.25em;color:var(--ink2)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.78em}
+th,td{text-align:left;padding:.48em .6em;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+thead th{font:500 .78em/1.2 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule2)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tr.hi td{background:var(--accent-soft)}
+tr.hi2 td{background:var(--ochre-soft)}
+figure{margin:0;display:flex;flex-direction:column;gap:.5em}
+figure svg{width:100%;height:auto;display:block;color:var(--ink2)}
+.deck[data-mode="slides"] figure svg{max-height:13em}
+figcaption{font-size:.72em;line-height:1.4;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:.55em 1.1em;font:500 .66em/1 var(--mono);letter-spacing:.05em;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:.4em}
+.legend i{width:.8em;height:.8em;border-radius:.15em;display:inline-block;flex:none}
+.mode-car{color:var(--car)}.mode-bike{color:var(--bike)}.mode-pt{color:var(--pt)}.mode-walk{color:var(--walk)}
+
+/* ---------- title slide ---------- */
+.title-slide .pad{justify-content:center;gap:1.5em}
+.title-slide h1{font-size:2.9em;line-height:1.05;letter-spacing:-.02em;max-width:34em;font-weight:600}
+.title-slide .sub{font-family:var(--disp);font-size:1.15em;line-height:1.45;color:var(--ink2);max-width:38em}
+.title-slide .meta{display:flex;flex-direction:column;gap:.45em;font:500 .68em/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.rule-brick{height:.32em;width:8em;background:
+  repeating-linear-gradient(90deg,var(--accent) 0 1.5em,transparent 1.5em 1.75em)}
+
+/* ---------- section divider ---------- */
+.sec .pad{justify-content:center;gap:.8em}
+.sec .k{font:500 .78em/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.sec h2{font-size:2.6em;line-height:1.06;max-width:30em}
+.sec p{font-family:var(--disp);font-size:1.1em;line-height:1.45;color:var(--ink2);max-width:36em}
+
+/* ---------- nav ---------- */
+.nav{position:fixed;left:0;right:0;bottom:0;height:3.6rem;background:var(--paper);border-top:1px solid var(--rule);
+  display:flex;align-items:center;gap:.9rem;padding:0 1rem;z-index:20;font-family:var(--mono)}
+.rail{display:flex;gap:.25rem;flex:1;min-width:0}
+.rail button{flex:1;min-width:0;background:none;border:0;border-top:2px solid var(--rule2);padding:.55rem 0 0;cursor:pointer;
+  font:500 .56rem/1.1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rail button[aria-current="true"]{border-top-color:var(--accent);color:var(--accent)}
+.nav .count{font:500 .7rem/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink2);white-space:nowrap}
+.nav .btns{display:flex;gap:.35rem}
+.nav .btns button,.nav .modebtn{background:var(--card);border:1px solid var(--rule2);color:var(--ink2);border-radius:.25rem;
+  padding:.4rem .6rem;cursor:pointer;font:500 .62rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.nav .btns button:hover,.nav .modebtn:hover{border-color:var(--accent);color:var(--accent)}
+.deck[data-mode="doc"] .nav .btns{display:none}
+.tip{position:fixed;z-index:40;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--ink);color:var(--paper);
+  font:500 .68rem/1.35 var(--mono);padding:.4rem .55rem;border-radius:.25rem;max-width:18rem;transform:translate(-50%,-130%)}
+.tip.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{.nav{display:none}.deck{padding-bottom:0}}
+</style>
+<div class="deck" id="deck" data-mode="slides">
+
+<!-- ============ 1. TITRE ============ -->
+<section class="slide title-slide" data-act="cadrage">
+ <div class="pad">
+  <div class="rule-brick"></div>
+  <h1>L'oracle et l'agent</h1>
+  <p class="sub">De la décision statistique au comportement adaptatif : évaluation empirique,
+   limites et perspectives hybrides des agents LLM en simulation de mobilité urbaine.</p>
+  <div class="meta">
+   <span>Yves B. · Benoit Gaudou · Kamaldeep Singh Oberoi</span>
+   <span>Projet LLM-Agents GAMA — Défis Clés Occitanie (MIDOC)</span>
+   <span>Métropole de Toulouse · EMC² 2023</span>
+   <span>Séminaire — septembre 2026</span>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 2. LE VERROU ============ -->
+<section class="slide" data-act="cadrage">
+ <div class="pad">
+  <div class="eyebrow"><b>Cadrage</b><span>Le verrou</span><span class="num">2</span></div>
+  <h2 class="t">Une justification impeccable, une distribution fausse</h2>
+  <p class="msg">L'expressivité sémantique de l'agent ne prédit rien de sa fidélité distributionnelle.</p>
+  <div class="body">
+   <div class="cols wide-r">
+    <div style="display:flex;flex-direction:column;gap:.8em">
+     <p class="quote">« Le trajet ne fait que 2,4 km et la météo est clémente ; le vélo évite
+      l'attente du bus et l'agent dispose d'un vélo personnel. Je choisis le vélo. »</p>
+     <p style="font-size:.8em;line-height:1.5;color:var(--ink2)">Chaque décision est plausible, sourcée,
+      argumentée. Prises ensemble, elles décrivent une ville qui n'existe pas : le vélo y pèse
+      <b style="color:var(--bike)">trois fois</b> son poids réel et la marche <b style="color:var(--walk)">moins de la moitié</b> du sien.</p>
+     <div class="note"><b>Ce que ce verrou n'est pas.</b> Ce n'est pas un défaut de prompt — l'étape 2 le montre.
+      C'est un prior culturel de pré-entraînement, qui ne connaît pas la répartition modale d'un territoire donné.</div>
+    </div>
+    <figure>
+     <svg viewBox="0 0 900 250" role="img" aria-label="Parts modales : enquête EMC² 2023 comparée à la simulation LLM, par mode. La marche est sous-estimée de 14 points, le vélo surestimé de 9 points, la voiture juste.">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker></defs>
+      <g stroke="var(--rule)" stroke-width="1">
+       <line x1="150" y1="30" x2="150" y2="215"/><line x1="250" y1="30" x2="250" y2="215"/>
+       <line x1="350" y1="30" x2="350" y2="215"/><line x1="450" y1="30" x2="450" y2="215"/>
+       <line x1="550" y1="30" x2="550" y2="215"/><line x1="650" y1="30" x2="650" y2="215"/>
+       <line x1="750" y1="30" x2="750" y2="215"/></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="middle">
+       <text x="150" y="235">0</text><text x="250" y="235">10</text><text x="350" y="235">20</text>
+       <text x="450" y="235">30</text><text x="550" y="235">40</text><text x="650" y="235">50</text>
+       <text x="750" y="235">60 %</text></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="13" text-anchor="end" fill="var(--ink2)">
+       <text x="140" y="64">Voiture</text><text x="140" y="109">Marche</text>
+       <text x="140" y="154">TC</text><text x="140" y="199">Vélo</text></g>
+      <!-- voiture -->
+      <g class="mode-car" stroke="currentColor" fill="currentColor">
+       <line x1="720.7" y1="60" x2="725.8" y2="60" stroke-width="2.5"/>
+       <circle cx="720.7" cy="60" r="5.5" fill="var(--card)" stroke-width="2.5"/>
+       <circle cx="725.8" cy="60" r="5" stroke="var(--card)" stroke-width="2"/></g>
+      <!-- marche -->
+      <g class="mode-walk" stroke="currentColor" fill="currentColor">
+       <line x1="412.8" y1="105" x2="278" y2="105" stroke-width="2.5" marker-end="url(#ar)"/>
+       <circle cx="412.8" cy="105" r="5.5" fill="var(--card)" stroke-width="2.5"/>
+       <circle cx="269" cy="105" r="5" stroke="var(--card)" stroke-width="2"/></g>
+      <!-- TC -->
+      <g class="mode-pt" stroke="currentColor" fill="currentColor">
+       <line x1="276.4" y1="150" x2="314" y2="150" stroke-width="2.5" marker-end="url(#ar)"/>
+       <circle cx="276.4" cy="150" r="5.5" fill="var(--card)" stroke-width="2.5"/>
+       <circle cx="322.3" cy="150" r="5" stroke="var(--card)" stroke-width="2"/></g>
+      <!-- vélo -->
+      <g class="mode-bike" stroke="currentColor" fill="currentColor">
+       <line x1="190.1" y1="195" x2="274" y2="195" stroke-width="2.5" marker-end="url(#ar)"/>
+       <circle cx="190.1" cy="195" r="5.5" fill="var(--card)" stroke-width="2.5"/>
+       <circle cx="282.9" cy="195" r="5" stroke="var(--card)" stroke-width="2"/></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)">
+       <text x="740" y="64">57,1 → 57,6</text><text x="425" y="109">26,3 → 11,9</text>
+       <text x="335" y="154">12,6 → 17,2</text><text x="295" y="199">4,0 → 13,3</text></g>
+     </svg>
+     <div class="legend">
+      <span><i style="border:2px solid var(--ink2);background:var(--card)"></i>Enquête EMC² 2023</span>
+      <span><i style="background:var(--ink2)"></i>Simulation LLM</span>
+     </div>
+     <figcaption>Parts modales, en points de pourcentage. Enquête : jeu de test scellé, 13 045 trajets.
+      Simulation : run LLM nu. La part TC simulée (17,2 %) est obtenue par complément et reste à confirmer sur le run épinglé.</figcaption>
+    </figure>
+   </div>
+  </div>
+  <span class="st p">Partiel — parts simulées à re-extraire du run épinglé</span>
+ </div>
+</section>
+
+<!-- ============ 3. AFFIRMATIONS ============ -->
+<section class="slide" data-act="cadrage">
+ <div class="pad">
+  <div class="eyebrow"><b>Cadrage</b><span>Ce qui est affirmé</span><span class="num">3</span></div>
+  <h2 class="t">Trois hypothèses réfutables, et une non-affirmation</h2>
+  <p class="msg">Un papier se juge autant sur ce qu'il refuse de conclure que sur ce qu'il démontre.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card">
+     <span class="lab">Hypothèse H1</span>
+     <h3>Le prompt ne rattrape pas la physique du réseau</h3>
+     <p>Le gain de prompt engineering est du même ordre que le bruit inter-graines, tandis qu'un
+      seul paramètre de temps terminal déplace la loss dix fois plus.</p>
+     <span class="st m">Mesuré</span>
+    </div>
+    <div class="card">
+     <span class="lab">Hypothèse H2</span>
+     <h3>Sur le flux nominal, le tabulaire supervisé domine</h3>
+     <p>À variables identiques, un LightGBM entraîné sur l'enquête est plus fidèle et
+      plusieurs milliers de fois moins cher que l'agent génératif.</p>
+     <span class="st m">Mesuré</span>
+    </div>
+    <div class="card">
+     <span class="lab">Hypothèse H3</span>
+     <h3>Le LLM domine sur l'événement textuel et l'inertie</h3>
+     <p>Presse locale non tabulée et hystérésis comportementale : deux régimes où le modèle
+      tabulaire est structurellement muet.</p>
+     <span class="st t">À produire</span>
+    </div>
+   </div>
+   <div class="warn"><b>Ce que ce papier n'affirmera pas.</b> Il n'existe aucune vérité terrain pour la
+    cinétique de ré-adoption après une panne, ni pour la réaction individuelle à un article de presse.
+    L'étape 3 mesure donc un <b>accord directionnel avec des prédictions pré-enregistrées</b>, une sensibilité
+    aux paramètres et un ordre entre bras expérimentaux — pas une exactitude. Annoncé d'entrée, ce n'est pas une faiblesse ;
+    passé sous silence, c'est le défaut que le relecteur trouvera.</div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 4. DÉMARCHE ============ -->
+<section class="slide" data-act="cadrage">
+ <div class="pad">
+  <div class="eyebrow"><b>Cadrage</b><span>La démarche</span><span class="num">4</span></div>
+  <h2 class="t">Six étapes, chacune avec son verdict</h2>
+  <p class="msg">L'ordre n'est pas rhétorique : chaque étape ne devient interprétable qu'une fois la précédente établie.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 200" role="img" aria-label="Enchaînement des six étapes du protocole : métriques et socle, modèle nu, ablation et audit, hystérésis, presse locale, perspectives hybrides.">
+     <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+       <path d="M0,1 L9,5 L0,9 z" fill="var(--rule2)"/></marker></defs>
+     <g stroke="var(--rule2)" stroke-width="1.5" marker-end="url(#ar2)">
+      <line x1="145" y1="72" x2="163" y2="72"/><line x1="288" y1="72" x2="306" y2="72"/>
+      <line x1="431" y1="72" x2="449" y2="72"/><line x1="574" y1="72" x2="592" y2="72"/>
+      <line x1="717" y1="72" x2="735" y2="72"/></g>
+     <g fill="var(--card2)" stroke="var(--rule2)" stroke-width="1">
+      <rect x="5" y="40" width="140" height="64" rx="4"/><rect x="163" y="40" width="125" height="64" rx="4"/>
+      <rect x="306" y="40" width="125" height="64" rx="4"/><rect x="449" y="40" width="125" height="64" rx="4"/>
+      <rect x="592" y="40" width="125" height="64" rx="4"/>
+      <rect x="735" y="40" width="160" height="64" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="500" fill="var(--accent)">
+      <text x="20" y="34">ÉTAPE 0</text><text x="178" y="34">ÉTAPE 1</text><text x="321" y="34">ÉTAPE 2</text>
+      <text x="464" y="34">ÉTAPE 3a</text><text x="607" y="34">ÉTAPE 3b</text><text x="750" y="34">PERSPECTIVES</text></g>
+     <g font-family="Spectral, serif" font-size="15" fill="var(--ink)">
+      <text x="20" y="68">Métriques</text><text x="20" y="88">&amp; socle</text>
+      <text x="178" y="68">Modèle nu</text><text x="178" y="88">&amp; variabilité</text>
+      <text x="321" y="68">Ablation</text><text x="321" y="88">&amp; audit</text>
+      <text x="464" y="68">Hystérésis</text><text x="464" y="88">sur 5 jours</text>
+      <text x="607" y="68">Presse</text><text x="607" y="88">locale réelle</text>
+      <text x="750" y="68">Cascade</text><text x="750" y="88">hybride</text></g>
+     <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--ink2)">
+      <text x="20" y="132">Deux échelles,</text><text x="20" y="150">un piège de mesure</text>
+      <text x="178" y="132">Plancher à</text><text x="178" y="150">battre : 57,1 %</text>
+      <text x="321" y="132">Le prompt</text><text x="321" y="150">plafonne</text>
+      <text x="464" y="132">Le tabulaire</text><text x="464" y="150">est amnésique</text>
+      <text x="607" y="132">Le tabulaire</text><text x="607" y="150">est muet</text>
+      <text x="750" y="132">90 % oracle,</text><text x="750" y="150">10 % agent</text></g>
+     <line x1="5" y1="172" x2="895" y2="172" stroke="var(--rule)" stroke-width="1"/>
+     <text x="5" y="190" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">
+      Étapes 0 à 2 : ce que le LLM ne sait pas faire.  ·  Étapes 3a et 3b : ce qu'il est seul à faire.  ·  Perspectives : comment les composer.</text>
+    </svg>
+    <figcaption>Le fil rouge du séminaire. Les étapes 0 à 2 sont un audit à charge ; les étapes 3a et 3b cherchent le domaine d'excellence.</figcaption>
+   </figure>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 5. DIVIDER ÉTAPE 0 ============ -->
+<section class="slide sec" data-act="e0">
+ <div class="pad">
+  <span class="k">Étape 0</span>
+  <h2>Définir la mesure avant de mesurer</h2>
+  <p>Deux échelles de décision, un piège de comparaison à désamorcer, deux corrections
+   d'effectif et d'offre — et une population synthétique dont il faut dire exactement ce qu'elle prouve.</p>
+ </div>
+</section>
+
+<!-- ============ 6. MÉTRIQUES ============ -->
+<section class="slide" data-act="e0">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 0</b><span>Cadre de mesure</span><span class="num">6</span></div>
+  <h2 class="t">Deux échelles, parce que deux erreurs différentes</h2>
+  <p class="msg">Un modèle peut avoir la bonne distribution avec les mauvais individus. L'inverse est vrai aussi.</p>
+  <div class="body">
+   <div class="cols c2">
+    <div class="card">
+     <span class="lab">Échelle macro — distributionnelle</span>
+     <h3>Ce que voit l'aménageur</h3>
+     <ul class="tight">
+      <li><b>Parts modales</b> par mode, comparées à EMC² 2023.</li>
+      <li><b>Erreur L1 cumulée</b> — somme des écarts absolus, en points.</li>
+      <li><b>Composite multi-strates</b> : global 1,0 · âge 0,5 · occupation 0,5 · motif 0,5 · genre 0,3 · distance 0,3,
+       pour empêcher qu'une erreur sur les seniors compense une erreur inverse sur les étudiants.</li>
+      <li><b>EMD / JSD</b> comme loss du moteur de calibration ; le composite L1 comme lecture publiable, en points de %.</li>
+     </ul>
+    </div>
+    <div class="card">
+     <span class="lab">Échelle micro — décision unitaire</span>
+     <h3>Ce que voit le modélisateur du choix</h3>
+     <ul class="tight">
+      <li><b>Accuracy pondérée</b> par le coefficient d'extrapolation de l'enquête.</li>
+      <li><b>Rappel et précision par mode</b> — seule façon de voir l'angle mort du vélo à 4 % de support.</li>
+      <li><b>LogLoss multi-classe</b> pour juger la calibration des probabilités, pas seulement l'argmax.</li>
+      <li><b>Macro-F1</b> pour ne pas récompenser un modèle qui abandonne les classes minoritaires.</li>
+     </ul>
+    </div>
+   </div>
+   <div class="note"><b>Règle tenue dans tout le papier.</b> Aucun chiffre macro n'est cité sans son effectif,
+    et aucun chiffre micro sans le périmètre du jeu de test. Les deux corrections qui suivent expliquent pourquoi.</div>
+  </div>
+  <span class="st m">Mesuré — sources.yaml, docs/arch/score-synthesis.md</span>
+ </div>
+</section>
+
+<!-- ============ 7. LES DEUX L1 ============ -->
+<section class="slide" data-act="e0">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 0</b><span>Piège de mesure</span><span class="num">7</span></div>
+  <h2 class="t">Un modèle probabiliste a deux erreurs L1</h2>
+  <p class="msg">En simulation, un agent prend un mode, pas une distribution : c'est l'argmax qui compte.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 220" role="img" aria-label="Erreur L1 : LightGBM en masse de probabilité 2,69 points, LightGBM en argmax 7,30 points, LLM nu en argmax 29,81 points.">
+     <defs><pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+       <line x1="0" y1="0" x2="0" y2="7" stroke="var(--accent)" stroke-width="3.5"/></pattern></defs>
+     <line x1="60" y1="20" x2="60" y2="212" stroke="var(--rule2)" stroke-width="1"/>
+     <g font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink2)">
+      <text x="60" y="26">LightGBM · masse de probabilité</text>
+      <text x="60" y="100">LightGBM · argmax</text>
+      <text x="60" y="174">LLM nu · argmax</text></g>
+     <rect x="60" y="34" width="69.9" height="30" rx="4" fill="url(#hatch)" stroke="var(--accent)" stroke-width="1"/>
+     <rect x="60" y="108" width="189.8" height="30" rx="4" fill="var(--accent)"/>
+     <rect x="60" y="182" width="775.1" height="30" rx="4" fill="var(--ochre)"/>
+     <g font-family="IBM Plex Mono, monospace" font-size="15" font-weight="500">
+      <text x="140" y="54" fill="var(--accent)">2,69 pt</text>
+      <text x="260" y="128" fill="var(--accent)">7,30 pt</text>
+      <text x="822" y="202" text-anchor="end" fill="var(--paper)" font-weight="500">29,81 pt</text></g>
+    </svg>
+    <div class="legend">
+     <span><i style="background:var(--accent)"></i>Mesure pertinente en simulation</span>
+     <span><i style="background:var(--hatch);border:1px solid var(--accent)"></i>Mesure non pertinente ici</span>
+    </div>
+    <figcaption>Erreur L1 cumulée sur le jeu de test scellé (13 045 trajets, découpage par ménage, graine 0).
+     La masse de probabilité et l'argmax du même modèle diffèrent d'un facteur 2,7.</figcaption>
+   </figure>
+   <div class="warn"><b>L'écart à corriger dans le manuscrit.</b> Opposer les 2,68 pt de LightGBM aux 29,81 pt du LLM
+    compare une <b>espérance de distribution</b> à une <b>suite de décisions dures</b>. À règle égale, l'écart réel est
+    <b>7,30 contre 29,81</b> — soit un facteur 4, pas 11. La conclusion tient, le chiffre change ; et c'est exactement le genre
+    de facteur 11 qu'un rapporteur vérifie.</div>
+  </div>
+  <span class="st m">Recalculé depuis mode_choice_policy_metrics.json</span>
+ </div>
+</section>
+
+<!-- ============ 8. CONTRAINTE D'OFFRE ============ -->
+<section class="slide" data-act="e0">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 0</b><span>Comparabilité</span><span class="num">8</span></div>
+  <h2 class="t">On ne reproche pas à l'agent un mode qu'on ne lui a pas offert</h2>
+  <p class="msg">L'agent choisit dans le jeu d'itinéraires d'OTP ; la politique tabulaire prédit sur quatre classes en aveugle.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 230" role="img" aria-label="Mécanisme de renormalisation : la distribution sur quatre classes est masquée par les modes réellement offerts par OTP, puis renormalisée à cent pour cent sous hypothèse IIA.">
+     <defs><pattern id="hatch2" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+       <line x1="0" y1="0" x2="0" y2="6" stroke="var(--rule2)" stroke-width="2.5"/></pattern>
+      <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+       <path d="M0,1 L9,5 L0,9 z" fill="var(--rule2)"/></marker></defs>
+     <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)">
+      <text x="0" y="34">1 · Politique — 4 classes</text>
+      <text x="0" y="112">2 · Masque OTP — offert = {voiture, marche}</text>
+      <text x="0" y="190">3 · Renormalisé à 100 % — hypothèse IIA</text></g>
+     <!-- bar 1 -->
+     <g><rect x="330" y="20" width="22.1" height="26" rx="2" fill="var(--bike)"/>
+      <rect x="354.1" y="20" width="313.9" height="26" rx="2" fill="var(--car)"/>
+      <rect x="670" y="20" width="69.5" height="26" rx="2" fill="var(--pt)"/>
+      <rect x="741.5" y="20" width="144.5" height="26" rx="2" fill="var(--walk)"/></g>
+     <!-- bar 2 -->
+     <g><rect x="330" y="98" width="22.1" height="26" rx="2" fill="url(#hatch2)" stroke="var(--rule2)"/>
+      <rect x="354.1" y="98" width="313.9" height="26" rx="2" fill="var(--car)"/>
+      <rect x="670" y="98" width="69.5" height="26" rx="2" fill="url(#hatch2)" stroke="var(--rule2)"/>
+      <rect x="741.5" y="98" width="144.5" height="26" rx="2" fill="var(--walk)"/></g>
+     <!-- bar 3 -->
+     <g><rect x="330" y="176" width="379.5" height="26" rx="2" fill="var(--car)"/>
+      <rect x="711.5" y="176" width="174.5" height="26" rx="2" fill="var(--walk)"/></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--paper)" font-weight="500">
+      <text x="366" y="38">57,1</text><text x="678" y="38">12,6</text><text x="750" y="38">26,3</text>
+      <text x="366" y="116">57,1</text><text x="750" y="116">26,3</text>
+      <text x="342" y="194">68,5</text><text x="723" y="194">31,5</text></g>
+     <g stroke="var(--rule2)" stroke-width="1.5" marker-end="url(#ar3)">
+      <line x1="300" y1="52" x2="300" y2="92"/><line x1="300" y1="130" x2="300" y2="170"/></g>
+     <text x="292" y="76" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)" text-anchor="end">retirer l'inoffert</text>
+     <text x="292" y="154" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)" text-anchor="end">réétaler la masse</text>
+    </svg>
+    <div class="legend">
+     <span><i style="background:var(--car)"></i>Voiture</span><span><i style="background:var(--walk)"></i>Marche</span>
+     <span><i style="background:var(--pt)"></i>TC</span><span><i style="background:var(--bike)"></i>Vélo</span>
+     <span><i style="background:var(--hatch);border:1px solid var(--rule2)"></i>Non offert</span>
+    </div>
+    <figcaption>Exemple sur une décision réelle : la politique répartit sur quatre classes, OTP n'en a offert que deux. La correspondance des quatre vocabulaires de modes est établie en un seul point du code, et testée.</figcaption>
+   </figure>
+   <div class="cols c2">
+    <div class="note"><b>Ce que ça corrige.</b> Sans renormalisation, on crédite le modèle d'options inexistantes
+     et on pénalise l'agent pour des modes jamais proposés. Les deux biais vont dans le même sens : ils flattent le tabulaire.</div>
+    <div class="warn"><b>La limite à annoncer.</b> Renormaliser suppose l'indépendance aux alternatives non pertinentes (IIA) —
+     l'hypothèse même que les logits emboîtés existent pour relâcher. À citer comme limite, pas à taire.</div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — model_on_common_set.py, ticket 005 §4</span>
+ </div>
+</section>
+
+<!-- ============ 9. BIAIS D'EFFECTIF ============ -->
+<section class="slide" data-act="e0">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 0</b><span>Comparabilité</span><span class="num">9</span></div>
+  <h2 class="t">Cinq points de loss qui ne viennent d'aucun modèle</h2>
+  <p class="msg">À décisions rigoureusement inchangées, réduire l'effectif dégrade le score : les divergences de distribution sont biaisées vers le haut sur les petites strates.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Substrat comparé</th><th class="n">Personnes</th><th class="n">Composite</th></tr></thead>
+      <tbody>
+       <tr><td>Simulation, run complet</td><td class="n">881</td><td class="n">24,37</td></tr>
+       <tr class="hi"><td>Simulation, <b>mêmes décisions</b>, effectif réduit</td><td class="n">81</td><td class="n">29,39</td></tr>
+       <tr><td>Écart imputable au seul effectif</td><td class="n">—</td><td class="n">+5,02</td></tr>
+      </tbody>
+     </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="note"><b>Le témoin.</b> Une seconde lecture de la simulation restreinte aux mêmes personnes que le
+      volet comparé, <b>sans aucun appel LLM</b> : résultat déterministe, réseau non sollicité. C'est un témoin
+      d'effectif, pas une mesure de plus.</div>
+     <p style="font-size:.8em;line-height:1.5;color:var(--ink2)">Conséquence directe sur la lecture des résultats de
+      calibration : un gain de prompt <b>se transporte</b> d'un substrat à l'autre (2,12 → 2,13), mais le
+      <b>niveau ne se transporte pas</b> (+14,2 points pour les deux prompts). Comparer deux niveaux mesurés sur
+      des effectifs différents, c'est comparer deux artefacts.</p>
+    </div>
+   </div>
+   <div class="warn"><b>Règle qui en découle.</b> Toute case de tableau comparatif porte son effectif, ou n'est pas publiée.
+    C'est le premier des neuf écarts relevés entre le manuscrit et les mesures du dépôt.</div>
+  </div>
+  <span class="st m">Mesuré — build_simulation_on_sample</span>
+ </div>
+</section>
+
+<!-- ============ 10. POPULATION ============ -->
+<section class="slide" data-act="e0">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 0</b><span>Jalon 0</span><span class="num">10</span></div>
+  <h2 class="t">La population synthétique est conforme — et ce n'est pas une validation</h2>
+  <p class="msg">EQASIM cale ces marges par construction : les retrouver est un contrôle de cohérence, pas une preuve de fidélité.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Marge démographique</th><th class="n">Insee / CEREMA</th><th class="n">Cohorte N = 1 000</th><th class="n">Δ</th></tr></thead>
+      <tbody>
+       <tr><td>Femmes / hommes</td><td class="n">51,8 / 48,2 %</td><td class="n">51,9 / 48,1 %</td><td class="n">± 0,1</td></tr>
+       <tr><td>Moins de 18 ans</td><td class="n">19,4 %</td><td class="n">19,2 %</td><td class="n">− 0,2</td></tr>
+       <tr><td>18 – 64 ans</td><td class="n">62,1 %</td><td class="n">62,4 %</td><td class="n">+ 0,3</td></tr>
+       <tr><td>65 ans et plus</td><td class="n">18,5 %</td><td class="n">18,4 %</td><td class="n">− 0,1</td></tr>
+       <tr><td>Ménages sans voiture</td><td class="n">22,3 %</td><td class="n">22,1 %</td><td class="n">− 0,2</td></tr>
+       <tr><td>Ménages à 1 voiture</td><td class="n">46,1 %</td><td class="n">46,5 %</td><td class="n">+ 0,4</td></tr>
+       <tr><td>Ménages à 2 voitures et plus</td><td class="n">31,6 %</td><td class="n">31,4 %</td><td class="n">− 0,2</td></tr>
+       <tr><td>Détention du permis B (adultes)</td><td class="n">84,2 %</td><td class="n">84,0 %</td><td class="n">− 0,2</td></tr>
+      </tbody>
+     </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="warn"><b>Deux écarts de méthode à corriger.</b><br>
+      1. Un χ² non significatif ne prouve pas la conformité : il échoue à détecter un écart. À N = 1 000, sa puissance est faible —
+      l'absence de preuve devient ici la preuve de l'absence, ce qui est exactement l'erreur à ne pas commettre.<br>
+      2. « Seuil de non-rejet p &gt; 0,95 » n'est pas un critère statistique ; c'est un seuil inversé.</div>
+     <div class="note"><b>Ce qui en ferait une vraie validation.</b> Un test d'<b>équivalence</b> (TOST) par marge, avec une borne
+      d'indifférence annoncée d'avance (± 1 pt) ; l'écart absolu maximal et un V de Cramér comme tailles d'effet ; et surtout un test
+      sur les <b>croisements</b> — âge × motorisation × zone fine — là où une synthèse échoue réellement, les marges étant calées d'office.</div>
+    </div>
+   </div>
+  </div>
+  <span class="st p">Partiel — table mesurée, tests d'équivalence à produire</span>
+ </div>
+</section>
+
+<!-- ============ 11. DIVIDER ÉTAPE 1 ============ -->
+<section class="slide sec" data-act="e1">
+ <div class="pad">
+  <span class="k">Étape 1</span>
+  <h2>Le modèle nu, et le bruit qu'il faut connaître avant de lire un gain</h2>
+  <p>Un prompt neutre, trois familles de modèles, cinq graines — pour établir le point de départ
+   et l'amplitude du bruit contre lesquels tout gain ultérieur devra se mesurer.</p>
+ </div>
+</section>
+
+<!-- ============ 12. MODÈLE NU ============ -->
+<section class="slide" data-act="e1">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 1</b><span>Définition</span><span class="num">12</span></div>
+  <h2 class="t">Le modèle nu : tout le contexte, aucune consigne</h2>
+  <p class="msg">Zéro prompt engineering, zéro few-shot, zéro persona enrichi — la condition de reproductibilité du point de départ.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="card" style="background:var(--card);border-color:var(--rule2)">
+     <span class="lab">Le prompt, en entier</span>
+     <p class="mono" style="font-size:.78em;line-height:1.6;color:var(--ink2);white-space:pre-wrap">Profil : femme, 34 ans, cadre, permis B, 1 voiture au ménage,
+abonnement TC : non, vélo personnel : oui.
+Déplacement : domicile → travail, départ 08 h 15, 3,1 km.
+
+Itinéraires proposés (OpenTripPlanner) :
+  [0] voiture — 14 min (dont 7,9 min terminal)
+  [1] vélo    — 13 min
+  [2] TC      — 27 min, 1 correspondance
+  [3] marche  — 38 min
+
+<b style="color:var(--accent)">Choisis l'itinéraire le plus approprié.</b></p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <ul class="tight">
+      <li><b>Ce qui est donné :</b> le persona complet issu de la population synthétique, et les
+       itinéraires <b>réellement calculés</b> sur le réseau — pas des durées inventées.</li>
+      <li><b>Ce qui n'est pas donné :</b> aucune consigne comportementale, aucune part modale cible,
+       aucun exemple d'enquête, aucune instruction de style de raisonnement.</li>
+      <li><b>Sortie contrainte :</b> un index d'itinéraire et une justification libre. Les réponses non
+       conformes sont comptées comme <b>replis</b> et exclues du scoring — un repli n'est pas une décision.</li>
+     </ul>
+     <div class="note"><b>Pourquoi publier le prompt intégral.</b> Sans lui, « modèle nu » ne veut rien dire :
+      la moitié des désaccords de la littérature sur les agents génératifs porte sur ce que le prompt contenait vraiment.</div>
+    </div>
+   </div>
+  </div>
+  <span class="st p">Partiel — prompt à figer et publier tel quel en annexe</span>
+ </div>
+</section>
+
+<!-- ============ 13. PLANCHERS ============ -->
+<section class="slide" data-act="e1">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 1</b><span>Palier 0</span><span class="num">13</span></div>
+  <h2 class="t">Avant tout LLM : trois planchers à battre</h2>
+  <p class="msg">« Toujours la voiture » obtient 57,1 % d'accuracy. Tout modèle qui ne fait pas mieux ne fait rien.</p>
+  <div class="body">
+   <div class="kpis">
+    <div class="kpi"><span class="k">Plancher 0.1 — hasard uniforme</span><span class="v">25,0 %</span>
+     <span class="s">Tirage équiprobable sur les 4 modes. Zéro information.</span></div>
+    <div class="kpi acc"><span class="k">Plancher 0.2 — prior empirique</span><span class="v">57,1 %</span>
+     <span class="s">Prédire toujours « voiture » : la part observée de la voiture dans le jeu de test scellé.</span></div>
+    <div class="kpi"><span class="k">Plancher 0.3 — physique du réseau</span><span class="v">min(t)</span>
+     <span class="s">Choisir l'itinéraire le plus rapide offert par OTP. Aucun paramètre appris.</span></div>
+   </div>
+   <div class="cols c2">
+    <div class="note"><b>Pourquoi le plancher 0.3 est le plus instructif.</b> Il n'utilise que des durées de réseau,
+     sans une seule variable socio-démographique. S'il approche le LLM, alors l'agent génératif n'apporte pas de
+     comportement : il approxime un minimum de temps de parcours — l'hypothèse la plus simple, et celle que l'étape 2 confirme.</div>
+    <div class="warn"><b>Le plancher qu'il ne faut pas oublier de publier.</b> Un LLM à 60 % d'accuracy sonne bien
+     jusqu'à ce qu'on rappelle que « toujours la voiture » en fait 57,1. La règle : aucun score micro n'est cité sans
+     ses planchers dans la même figure.</div>
+   </div>
+  </div>
+  <span class="st p">Mesuré pour 0.1 et 0.2 · heuristique 0.3 à produire</span>
+ </div>
+</section>
+
+<!-- ============ 14. BENCHMARK ============ -->
+<section class="slide" data-act="e1">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 1</b><span>Palier 1</span><span class="num">14</span></div>
+  <h2 class="t">Trois familles de modèles, un seul prompt</h2>
+  <p class="msg">Si le biais distributionnel est un prior de pré-entraînement, il doit se déplacer d'un modèle à l'autre — et c'est testable.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th>Famille</th><th>Modèle évalué</th><th>Régime</th><th>Ce que la ligne isole</th></tr></thead>
+     <tbody>
+      <tr><td><b>Européen, API</b></td><td class="mono">mistral-small-latest · Mistral-Nemo</td><td>τ ≈ 0,2 · API</td>
+       <td>Pilier de la simulation : 60 req/min, le seul fournisseur qui tient un run complet.</td></tr>
+      <tr><td><b>Ouvert, local</b></td><td class="mono">Qwen-2.5-32B-Instruct (AWQ, vLLM)</td><td>τ = 0,0 · graine fixée</td>
+       <td>Le seul bras <b>strictement reproductible</b> : poids figés, pas de mise à jour silencieuse côté fournisseur.</td></tr>
+      <tr><td><b>Propriétaire, distant</b></td><td class="mono">gemini-3.1-flash-lite · gemini-3.5-flash-lite</td><td>τ ≈ 0,0</td>
+       <td>Le juge et le mutateur de la calibration : à garder <b>stables sur toute la campagne</b>, sous peine d'invalider le cache d'évaluation.</td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="cols c2">
+    <div class="note"><b>Le socle d'inférence existe déjà.</b> Passerelle à répartition pondérée lissée :
+     <b>11 instances</b> en rotation, <b>206 requêtes/minute</b>, <b>37 700+ requêtes/jour</b> sur quotas gratuits.
+     Un run de 10 000 décisions tient dans la journée sans crédit payant.</div>
+    <div class="warn"><b>Le piège de reproductibilité des modèles distants.</b> Un alias comme
+     <span class="mono">-latest</span> ou <span class="mono">-preview</span> change de poids sans changer de nom.
+     Tout chiffre publié doit citer la <b>date de relevé</b>, et le bras local Qwen sert de témoin d'ancrage.</div>
+   </div>
+  </div>
+  <span class="st t">À produire — socle d'inférence en place</span>
+ </div>
+</section>
+
+<!-- ============ 15. VARIABILITÉ ============ -->
+<section class="slide" data-act="e1">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 1</b><span>Réfutabilité</span><span class="num">15</span></div>
+  <h2 class="t">À température nulle, le modèle n'est pas déterministe</h2>
+  <p class="msg">Un gain de prompt plus petit que la dispersion inter-graines n'est pas un gain : c'est du bruit publié.</p>
+  <div class="body">
+   <div class="cols c2">
+    <div class="card">
+     <span class="lab">Protocole</span>
+     <h3>Cinq graines, deux niveaux de lecture</h3>
+     <ul class="tight">
+      <li>Graines <span class="mono">[0, 42, 123, 999, 2026]</span>, prompt et jeu de décisions identiques.</li>
+      <li><b>Niveau agrégé :</b> écart-type des parts modales et intervalle de confiance à 95 % ;
+       la distribution reste encadrée à ± 1,2 pt.</li>
+      <li><b>Niveau individuel :</b> <b>taux de bascule</b> — part des décisions dont le mode change
+       d'une graine à l'autre. C'est la métrique qui manque au manuscrit, et la plus parlante.</li>
+     </ul>
+    </div>
+    <div class="card">
+     <span class="lab">Ce que la double lecture révèle</span>
+     <h3>Une stabilité agrégée peut masquer une instabilité totale</h3>
+     <p>Deux graines peuvent produire la même part modale en permutant les individus : les cas d'indifférence
+      (durées voisines à deux minutes près) basculent, et se compensent en agrégé.</p>
+     <p><b>Conséquence pour l'usage :</b> une part modale stable ne garantit <b>pas</b> une affectation individuelle stable —
+      donc ni des charges de tronçon stables, ni des files stables. Pour un modèle de trafic, c'est ce niveau-là qui compte.</p>
+    </div>
+   </div>
+   <div class="note"><b>Test associé.</b> Comparaison de deux prompts par test de <b>McNemar</b> sur les décisions appariées
+    (même persona, même jeu d'options), et non par différence d'accuracy globale : deux modèles à 60 % peuvent se tromper
+    sur des individus totalement disjoints.</div>
+  </div>
+  <span class="st t">À produire</span>
+ </div>
+</section>
+
+<!-- ============ 16. DIVIDER ÉTAPE 2 ============ -->
+<section class="slide sec" data-act="e2">
+ <div class="pad">
+  <span class="k">Étape 2</span>
+  <h2>L'invalidation : le prompt plafonne, la physique décide</h2>
+  <p>Quatre paliers d'ablation, un audit unitaire à variables identiques face à un oracle supervisé,
+   et l'enseignement le plus transférable de tout le travail.</p>
+ </div>
+</section>
+
+<!-- ============ 17. ABLATION 4 PALIERS ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Ablation</span><span class="num">17</span></div>
+  <h2 class="t">Quatre paliers d'information croissante</h2>
+  <p class="msg">Chaque palier n'ajoute qu'une chose : le gain observé lui est donc imputable.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th style="width:9%">Palier</th><th style="width:27%">Ce qui est ajouté</th><th style="width:40%">Contenu exact</th><th style="width:24%">Question tranchée</th></tr></thead>
+     <tbody>
+      <tr><td class="mono">0</td><td><b>Rien</b> — planchers</td>
+       <td>Hasard uniforme · prior « toujours voiture » · min(durée OTP)</td>
+       <td>Le modèle bat-il l'absence de modèle ?</td></tr>
+      <tr><td class="mono">1</td><td><b>Le LLM</b>, nu</td>
+       <td>Persona complet + itinéraires OTP + consigne neutre</td>
+       <td>Le raisonnement en langue naturelle apporte-t-il quelque chose sur la physique seule ?</td></tr>
+      <tr><td class="mono">2</td><td><b>Le prompt</b></td>
+       <td>Consignes comportementales, personas enrichis, calibration par recuit simulé</td>
+       <td>Le prompt engineering corrige-t-il le biais distributionnel ?</td></tr>
+      <tr class="hi"><td class="mono">3</td><td><b>La supervision</b></td>
+       <td>Logit multinomial (McFadden) · LightGBM entraîné sur 31 279 trajets d'enquête</td>
+       <td>Où est le plafond tabulaire, à variables identiques ?</td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="cols c2">
+    <div class="note"><b>Le palier 3 n'est pas un rival, c'est un plafond.</b> Il a vu l'enquête, le LLM non.
+     La comparaison dit donc ce que coûte l'absence de supervision — pas que « le LLM est moins intelligent ».</div>
+    <div class="warn"><b>Le bras manquant, à ajouter.</b> Un <b>LLM few-shot</b> recevant k exemples d'enquête :
+     seul moyen de séparer « le LLM ne peut pas » de « le LLM n'a pas été informé ». Sans lui, H2 reste attaquable.</div>
+   </div>
+  </div>
+  <span class="st p">Structure établie · chiffres des paliers 1 et 2 à produire</span>
+ </div>
+</section>
+
+<!-- ============ 18. PROMPT PLAFONNE ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Palier 2</span><span class="num">18</span></div>
+  <h2 class="t">Le prompt engineering plafonne sous le bruit</h2>
+  <p class="msg">Le paysage de perte du prompt est non convexe et plat : on y gagne des dixièmes de point, pas des points.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="kpi"><span class="k">Gain net du meilleur prompt</span><span class="v">&lt; 1,5</span>
+     <span class="s">Points de composite entre modèle nu et modèle calibré.</span></div>
+    <div class="kpi"><span class="k">Dispersion inter-graines</span><span class="v">± 1,2</span>
+     <span class="s">Points de part modale à basse température, 5 graines.</span></div>
+    <div class="kpi och"><span class="k">Gain d'un seul paramètre physique</span><span class="v">− 4,52</span>
+     <span class="s">Points de composite, en alignant le temps terminal voiture. Slide suivante.</span></div>
+   </div>
+   <div class="cols c2">
+    <div class="card">
+     <span class="lab">Ce que la calibration a réellement produit</span>
+     <ul class="tight">
+      <li>Le <b>gain se transporte</b> d'un substrat à l'autre : 2,12 sur les personas gelés, 2,13 sur le jeu commun.
+       Le mécanisme est donc réel.</li>
+      <li>Le <b>niveau ne se transporte pas</b> : + 14,2 points pour les deux prompts en changeant de substrat.
+       Le gain est réel mais petit devant l'effet du terrain d'évaluation.</li>
+      <li>À substrat <b>et</b> effectif égaux, le prompt calibré reste <b>moins fidèle que la simulation nue elle-même</b>
+       sur ce run — un résultat négatif, publiable comme tel.</li>
+     </ul>
+    </div>
+    <div class="card">
+     <span class="lab">Lecture honnête du résultat négatif</span>
+     <h3>Ce n'est pas « le prompt ne sert à rien »</h3>
+     <p>C'est : <b>le prompt ne peut pas déplacer une distribution que la physique du réseau contraint</b>.
+      Tant qu'un trajet voiture porte 7,9 min de temps terminal invisible dans le prompt, aucune consigne textuelle
+      ne rétablira la part de la marche.</p>
+     <p>D'où l'ordre de travail qui en découle : <b>calibrer le réseau avant de calibrer le texte</b>.</p>
+    </div>
+   </div>
+  </div>
+  <span class="st p">Partiel — gain net à re-mesurer sur le run épinglé courant</span>
+ </div>
+</section>
+
+<!-- ============ 19. PHYSIQUE DU RÉSEAU ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Résultat central</span><span class="num">19</span></div>
+  <h2 class="t">Un seul paramètre de réseau bat tous les prompts</h2>
+  <p class="msg">Aligner le temps terminal de la voiture — accès, stationnement, marche finale — rapporte 4,52 points de composite.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Mode</th><th class="n">Temps terminal avant</th><th class="n">Après alignement</th><th>Effet</th></tr></thead>
+      <tbody>
+       <tr class="hi"><td><b class="mode-car">Voiture</b></td><td class="n">7,93 min</td><td class="n">0,55 min</td>
+        <td><b>− 4,52 pt</b> de composite à lui seul</td></tr>
+       <tr><td><b class="mode-bike">Vélo</b></td><td class="n">2,00 min</td><td class="n">0,29 min</td>
+        <td>Effet en sens inverse : aligner le vélo <b>rend</b> du composite</td></tr>
+       <tr><td>Moyenne tous modes</td><td class="n">5,83 min</td><td class="n">0,46 min</td>
+        <td>Chiffre trompeur : il ne décrit <b>ni</b> la voiture <b>ni</b> le vélo</td></tr>
+      </tbody>
+     </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="note"><b>Le piège évité de justesse.</b> La première version du rapport donnait la
+      <b>moyenne</b> des temps terminaux : 5,83 → 0,46 min. C'est ce chiffre qu'on aurait cité, et il ne décrit aucun
+      mode réel. Le rapport donne désormais le temps terminal <b>par mode</b>, et huit tests vérifient qu'aligner la
+      voiture laisse le vélo intact.</div>
+     <div class="warn"><b>Ce que cela dit du domaine.</b> Une part importante de la littérature sur les agents génératifs
+      en mobilité attribue au raisonnement du modèle ce que produit la <b>paramétrisation du réseau</b>. Sans ablation
+      des paramètres physiques, un gain de prompt n'est pas interprétable.</div>
+    </div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — rapport de dérivation par mode, 8 tests</span>
+ </div>
+</section>
+
+<!-- ============ 20. PARITÉ 21 VARIABLES ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Audit unitaire</span><span class="num">20</span></div>
+  <h2 class="t">Parité informationnelle : 21 variables, pas 15</h2>
+  <p class="msg">Les trois concurrents reçoivent le même vecteur — mais l'un des trois a vu l'enquête, et il faut le dire.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card"><span class="lab">12 variables · personne</span>
+     <p class="mono" style="font-size:.72em;line-height:1.7;color:var(--ink2)">age · gender · household_size
+has_driving_license · has_pt_subscription
+number_of_cars · car_availability · has_bike
+socioprofessional_class · main_occupation
+employed · studies</p></div>
+    <div class="card"><span class="lab">3 variables · contexte</span>
+     <p class="mono" style="font-size:.72em;line-height:1.7;color:var(--ink2)">purpose
+purpose_origin
+departure_hour</p>
+     <span class="lab" style="margin-top:.3em">6 variables · géographie</span>
+     <p class="mono" style="font-size:.72em;line-height:1.7;color:var(--ink2)">od_km · same_zone
+dist_center_orig_km · dist_center_dest_km
+density_orig · density_dest</p></div>
+    <div class="card" style="background:var(--ochre-soft);border-color:var(--ochre)">
+     <span class="lab">La dissymétrie assumée</span>
+     <p><b>LightGBM :</b> 31 279 trajets d'entraînement, 7 924 de validation, 1 500 tours.<br>
+      <b>Logit multinomial :</b> coefficients estimés sur les mêmes données.<br>
+      <b>LLM :</b> zéro trajet d'enquête vu.</p>
+     <p>La parité porte sur les <b>entrées</b>, pas sur l'exposition aux données. Un plafond, donc — pas un match.</p>
+    </div>
+   </div>
+   <div class="cols c2">
+    <div class="warn"><b>Écart à corriger.</b> Le manuscrit annonce « 15 variables ». Le contrat de production en
+     compte <b>21</b> ; une variante à 19 a été mesurée (0,7843 / 7,43) et deux autres écartées. Le chiffre de parité doit
+     être celui du contrat servi, avec sa version de spécification.</div>
+    <div class="note"><b>Découpage du jeu de test.</b> Séparation <b>par ménage</b>, pas par trajet : sans cela, deux
+     déplacements du même individu se retrouvent des deux côtés et l'accuracy monte pour rien. 25 % du jeu, graine 0,
+     13 045 trajets scellés.</div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — feature_spec.json, spec v2</span>
+ </div>
+</section>
+
+<!-- ============ 21. L'ORACLE ET SON ANGLE MORT ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Palier 3</span><span class="num">21</span></div>
+  <h2 class="t">78,5 % d'accuracy — et presque aveugle au vélo</h2>
+  <p class="msg">Le plafond tabulaire est honnête, pas glorieux : il abandonne la classe minoritaire pour maximiser l'accuracy globale.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 300" role="img" aria-label="Matrice de confusion de LightGBM sur 13 045 trajets scellés. Le rappel atteint 87,5 % pour la voiture, 74,9 % pour la marche, 66,1 % pour les transports en commun, mais seulement 13,8 % pour le vélo.">
+     <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--muted)" text-anchor="middle">
+      <text x="238" y="46">PRÉDIT VÉLO</text><text x="336" y="46">PRÉDIT VOITURE</text>
+      <text x="434" y="46">PRÉDIT TC</text><text x="532" y="46">PRÉDIT MARCHE</text>
+      <text x="620" y="46">RAPPEL</text><text x="718" y="46">SUPPORT</text></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink2)" text-anchor="end">
+      <text x="182" y="90">Réel vélo</text><text x="182" y="138">Réel voiture</text>
+      <text x="182" y="186">Réel TC</text><text x="182" y="234">Réel marche</text>
+      <text x="182" y="278">Précision</text></g>
+     <g fill="var(--accent)">
+      <rect x="190" y="66" width="96" height="38" rx="2" fill-opacity=".16"/><rect x="288" y="66" width="96" height="38" rx="2" fill-opacity=".47"/>
+      <rect x="386" y="66" width="96" height="38" rx="2" fill-opacity=".14"/><rect x="484" y="66" width="96" height="38" rx="2" fill-opacity=".30"/>
+      <rect x="190" y="114" width="96" height="38" rx="2" fill-opacity=".06"/><rect x="288" y="114" width="96" height="38" rx="2" fill-opacity=".79"/>
+      <rect x="386" y="114" width="96" height="38" rx="2" fill-opacity=".09"/><rect x="484" y="114" width="96" height="38" rx="2" fill-opacity=".14"/>
+      <rect x="190" y="162" width="96" height="38" rx="2" fill-opacity=".07"/><rect x="288" y="162" width="96" height="38" rx="2" fill-opacity=".22"/>
+      <rect x="386" y="162" width="96" height="38" rx="2" fill-opacity=".62"/><rect x="484" y="162" width="96" height="38" rx="2" fill-opacity=".18"/>
+      <rect x="190" y="210" width="96" height="38" rx="2" fill-opacity=".07"/><rect x="288" y="210" width="96" height="38" rx="2" fill-opacity=".24"/>
+      <rect x="386" y="210" width="96" height="38" rx="2" fill-opacity=".09"/><rect x="484" y="210" width="96" height="38" rx="2" fill-opacity=".70"/></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="14" text-anchor="middle" fill="var(--ink)">
+      <text x="238" y="90">67</text><text x="336" y="90">251</text><text x="434" y="90">51</text><text x="532" y="90">150</text>
+      <text x="238" y="138">30</text><text x="336" y="138" fill="var(--paper)">6 384</text><text x="434" y="138">264</text><text x="532" y="138">632</text>
+      <text x="238" y="186">25</text><text x="336" y="186">302</text><text x="434" y="186" fill="var(--paper)">1 068</text><text x="532" y="186">217</text>
+      <text x="238" y="234">20</text><text x="336" y="234">748</text><text x="434" y="234">110</text><text x="532" y="234" fill="var(--paper)">2 726</text></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="14" text-anchor="middle">
+      <text x="620" y="90" fill="var(--ochre)" font-weight="500">13,8 %</text>
+      <text x="620" y="138" fill="var(--ink2)">87,5 %</text><text x="620" y="186" fill="var(--ink2)">66,1 %</text>
+      <text x="620" y="234" fill="var(--ink2)">74,9 %</text>
+      <text x="718" y="90" fill="var(--muted)">519</text><text x="718" y="138" fill="var(--muted)">7 310</text>
+      <text x="718" y="186" fill="var(--muted)">1 612</text><text x="718" y="234" fill="var(--muted)">3 604</text>
+      <text x="238" y="278" fill="var(--ink2)">46,0 %</text><text x="336" y="278" fill="var(--ink2)">83,4 %</text>
+      <text x="434" y="278" fill="var(--ink2)">70,8 %</text><text x="532" y="278" fill="var(--ink2)">72,6 %</text></g>
+     <line x1="190" y1="256" x2="580" y2="256" stroke="var(--rule2)" stroke-width="1"/>
+    </svg>
+    <figcaption>Effectifs bruts ; rappels et précisions pondérés par le coefficient d'extrapolation de l'enquête.
+     Teinte proportionnelle à la part de la ligne. Accuracy pondérée 78,54 % · LogLoss 0,540.</figcaption>
+   </figure>
+   <div class="cols c2">
+    <div class="warn"><b>L'angle mort.</b> 519 trajets vélo réels, 67 retrouvés. Le modèle envoie 251 cyclistes
+     en voiture et 150 à pied : à 4 % de support, abandonner le vélo <b>maximise</b> l'accuracy. Toute comparaison
+     LLM / oracle limitée à l'accuracy globale masque exactement cela.</div>
+    <div class="note"><b>Ce que le LLM pourrait y gagner.</b> Le vélo est précisément la classe où le contexte non tabulé
+     pèse — météo, dénivelé ressenti, tenue, sécurité perçue. C'est l'angle mort de l'oracle qui désigne le domaine
+     d'excellence à tester en étape 3.</div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — 13 045 trajets, découpage par ménage</span>
+ </div>
+</section>
+
+<!-- ============ 22. SHAP ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Interprétation</span><span class="num">22</span></div>
+  <h2 class="t">L'oracle décide sur la géométrie ; l'agent argumente sur le ressenti</h2>
+  <p class="msg">Deux modèles peuvent atteindre des scores voisins en s'appuyant sur des grandeurs disjointes — et ne pas être substituables.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <figure>
+     <svg viewBox="0 0 900 300" role="img" aria-label="Contributions au pouvoir prédictif de LightGBM : distance origine-destination 28,5 %, abonnement transport 9,5 %, même zone 7,4 %, densités 6,5 et 6,1 %, nombre de voitures 5,7 %.">
+      <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)" text-anchor="end">
+       <text x="225" y="26">od_km</text><text x="225" y="58">has_pt_subscription</text>
+       <text x="225" y="90">same_zone</text><text x="225" y="122">density_orig</text>
+       <text x="225" y="154">density_dest</text><text x="225" y="186">number_of_cars</text>
+       <text x="225" y="218">dist_center_dest_km</text><text x="225" y="250">car_availability</text>
+       <text x="225" y="282">purpose</text></g>
+      <line x1="235" y1="8" x2="235" y2="292" stroke="var(--rule2)" stroke-width="1"/>
+      <g fill="var(--accent)">
+       <rect x="235" y="12" width="593.8" height="18" rx="4"/><rect x="235" y="44" width="198.6" height="18" rx="4"/>
+       <rect x="235" y="76" width="154.7" height="18" rx="4"/><rect x="235" y="108" width="136.1" height="18" rx="4"/>
+       <rect x="235" y="140" width="127.4" height="18" rx="4"/><rect x="235" y="172" width="117.8" height="18" rx="4"/>
+       <rect x="235" y="204" width="98.6" height="18" rx="4"/><rect x="235" y="236" width="90.5" height="18" rx="4"/>
+       <rect x="235" y="268" width="73.7" height="18" rx="4"/></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)">
+       <text x="838" y="26">28,5 %</text><text x="443" y="58">9,5 %</text><text x="399" y="90">7,4 %</text>
+       <text x="381" y="122">6,5 %</text><text x="372" y="154">6,1 %</text><text x="363" y="186">5,7 %</text>
+       <text x="343" y="218">4,7 %</text><text x="335" y="250">4,3 %</text><text x="318" y="282">3,5 %</text></g>
+     </svg>
+     <figcaption>Part du gain total, LightGBM de production. Géométrie et équipement du ménage : environ 68 % du pouvoir prédictif.</figcaption>
+    </figure>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="card">
+      <span class="lab">Ce que dit la colonne de gauche</span>
+      <p>La distance OD à elle seule pèse <b>28,5 %</b>. Ajoutez les deux densités, la distance à l'hypercentre et
+       « même zone fine » : la <b>géométrie</b> décide. Puis l'équipement — abonnement TC, nombre de voitures, disponibilité.</p>
+      <p>L'âge, l'occupation, le motif : <b>marginaux</b>. L'oracle est un modèle d'accessibilité, pas de comportement.</p>
+     </div>
+     <div class="note"><b>Ce que dit l'agent, en face.</b> Ses justifications invoquent le temps ressenti, le confort,
+      l'exposition à la pluie, la charge à porter. D'où sa préférence pour les TC sur des distances marchables :
+      il optimise un ressenti, là où l'oracle lit une géométrie. <b>Même tâche, grandeurs disjointes.</b></div>
+    </div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — importances de gain, modèle de production</span>
+ </div>
+</section>
+
+<!-- ============ 23. LA FUITE ============ -->
+<section class="slide" data-act="e2">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 2</b><span>Enseignement transférable</span><span class="num">23</span></div>
+  <h2 class="t">93 % d'accuracy sur l'enquête, et le pire score en simulation</h2>
+  <p class="msg">La métrique d'enquête et la métrique d'usage peuvent varier en sens opposés — c'est le résultat le plus réutilisable du papier.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <figure>
+     <svg viewBox="0 0 900 320" role="img" aria-label="Cinq variantes du modèle : trois variantes tabulaires groupées à 78,4-78,5 % d'accuracy et 7,40-7,47 de composite ; deux variantes à 93 % d'accuracy avec des composites dégradés de 9,28 et 12,69.">
+      <defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,1 L9,5 L0,9 z" fill="var(--ochre)"/></marker></defs>
+      <g stroke="var(--rule)" stroke-width="1">
+       <line x1="90" y1="40" x2="860" y2="40"/><line x1="90" y1="120" x2="860" y2="120"/>
+       <line x1="90" y1="200" x2="860" y2="200"/><line x1="90" y1="280" x2="860" y2="280"/></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="end">
+       <text x="82" y="44">7</text><text x="82" y="124">9</text><text x="82" y="204">11</text><text x="82" y="284">13</text></g>
+      <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="middle">
+       <text x="113" y="306">78 %</text><text x="294" y="306">82 %</text><text x="475" y="306">86 %</text>
+       <text x="657" y="306">90 %</text><text x="838" y="306">94 %</text></g>
+      <text x="8" y="20" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">Composite en simulation — bas = meilleur</text>
+      <text x="860" y="320" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="end">Accuracy sur l'enquête</text>
+      <line x1="90" y1="8" x2="90" y2="292" stroke="var(--rule2)" stroke-width="1"/>
+      <!-- cluster -->
+      <ellipse cx="135" cy="57" rx="26" ry="16" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="1.5"/>
+      <circle cx="137" cy="56" r="5" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>
+      <circle cx="132" cy="57.2" r="5" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>
+      <circle cx="132.5" cy="58.8" r="5" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>
+      <text x="172" y="52" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--accent)" font-weight="500">3 variantes servies — 78,4 à 78,5 % · 7,40 à 7,47</text>
+      <text x="172" y="70" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)">21 variables (production) · 19 variables · distance routière ajoutée</text>
+      <!-- leaky points -->
+      <circle cx="812.5" cy="131.2" r="6" fill="var(--ochre)" stroke="var(--card)" stroke-width="2"/>
+      <circle cx="809.3" cy="267.6" r="6" fill="var(--ochre)" stroke="var(--card)" stroke-width="2"/>
+      <text x="800" y="126" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ochre)" text-anchor="end">93,45 % · 9,28 — distance reconstruite depuis la durée</text>
+      <text x="797" y="272" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ochre)" text-anchor="end">93,38 % · 12,69 — idem, homogénéisée entre réseaux</text>
+      <path d="M142,76 Q470,104 793,130" fill="none" stroke="var(--ochre)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar4)"/>
+      <text x="450" y="92" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--ochre)" text-anchor="middle">+ 15 pt d'accuracy, + 1,9 pt de loss</text>
+     </svg>
+     <figcaption>Quatre variantes de distance construites, entraînées et notées de bout en bout. Aucune ne fait mieux que le modèle servi.</figcaption>
+    </figure>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="card" style="background:var(--ochre-soft);border-color:var(--ochre)">
+      <span class="lab">La cause, en une phrase</span>
+      <p>Toute distance reconstruite depuis la <b>durée déclarée</b> contient le mode retenu — c'est lui qui fixe la
+       vitesse. Le modèle apprend à le relire dans l'enquête ; en simulation, il reçoit une grandeur qui ne le contient pas.</p>
+      <p>Ce n'était <b>pas du surapprentissage</b> : la validation généralisait parfaitement (0,9336 contre 0,9345 en test).
+       C'était une <b>divergence entraînement / service</b>.</p>
+     </div>
+     <ul class="tight">
+      <li><b>Le problème n'était pas la distance, c'était la durée.</b> Une distance homogénéisée construite depuis les
+       distances routées, sans durée, ne fuit pas — elle est seulement redondante à 0,983.</li>
+      <li><b>Règle tirée :</b> une variable n'entre au contrat que si le runtime sait la produire. L'ordre correct est
+       loader d'inférence, puis point d'appel, puis colonne d'entraînement.</li>
+     </ul>
+    </div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — quatre variantes, mesures archivées</span>
+ </div>
+</section>
+
+<!-- ============ 24. DIVIDER 3a ============ -->
+<section class="slide sec" data-act="e3a">
+ <div class="pad">
+  <span class="k">Étape 3a</span>
+  <h2>Ce que le tabulaire ne peut pas être : rancunier</h2>
+  <p>Un modèle supervisé reprend sa prédiction nominale à la seconde où l'incident cesse.
+   L'usager, non. C'est le premier des deux domaines d'excellence de l'agent.</p>
+ </div>
+</section>
+
+<!-- ============ 25. MÉMOIRE ============ -->
+<section class="slide" data-act="e3a">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3a</b><span>Formalisation</span><span class="num">25</span></div>
+  <h2 class="t">Un registre de mémoire court terme, et un exemple chiffré</h2>
+  <p class="msg">La confiance envers un mode décroît avec le retard subi et remonte avec le temps écoulé.</p>
+  <div class="body">
+   <div class="cols c2">
+    <div class="card" style="background:var(--card);border-color:var(--rule2)">
+     <span class="lab">Le registre</span>
+     <p class="mono" style="font-size:.82em;line-height:1.9;color:var(--ink)">M(t) = { e = (t<sub>k</sub>, mode<sub>k</sub>, retard<sub>k</sub>, ressenti<sub>k</sub>)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| t − t<sub>k</sub> ≤ ΔT }
+
+w<sub>m</sub>(t) = 1 − Σ γ · (retard<sub>k</sub> / retard<sub>réf</sub>) · e<sup>−λ(t − t<sub>k</sub>)</sup></p>
+     <p style="font-size:.78em;line-height:1.5;color:var(--ink2)">
+      <b>γ</b> — sensibilité au retard subi. <b>λ</b> — vitesse d'oubli. <b>ΔT</b> — horizon du registre.
+      <b>retard<sub>réf</sub></b> — retard de référence qui normalise l'incident.</p>
+    </div>
+    <div class="card">
+     <span class="lab">Un agent, cinq jours</span>
+     <h3>Ce que les paramètres donnent, concrètement</h3>
+     <ul class="tight">
+      <li><b>J2, 17 h :</b> panne de la ligne A, retard subi <b>+ 45 min</b> contre un retard de référence de 15 min.
+       Avec γ = 0,20 : la pénalité instantanée vaut 0,20 × 3 = <b>0,60</b>, donc w<sub>métro</sub> = <b>0,40</b>.</li>
+      <li><b>J3 :</b> réseau rétabli, mais λ = 0,35 par jour → e<sup>−0,35</sup> = 0,70 ; w = 1 − 0,60 × 0,70 = <b>0,58</b>.
+       L'agent évite encore le métro alors que rien ne le justifie physiquement.</li>
+      <li><b>J5 :</b> e<sup>−1,05</sup> = 0,35 ; w = <b>0,79</b>. Retour presque complet, sans jamais l'atteindre.</li>
+     </ul>
+     <p style="font-size:.78em;color:var(--ink2)"><b>À publier avec :</b> la sensibilité du résultat à γ et λ.
+      Deux paramètres libres non identifiés font n'importe quelle courbe.</p>
+    </div>
+   </div>
+   <div class="note"><b>Le point théorique.</b> Ce registre déplace le modèle de choix d'une <b>fonction sans état</b>
+    vers un <b>processus dépendant du chemin</b>. C'est l'argument de fond en faveur de l'agent : aucun modèle tabulaire
+    entraîné sur des trajets indépendants ne peut représenter une dépendance à l'historique qu'il n'a jamais observée.</div>
+  </div>
+  <span class="st t">À produire — formalisme posé, paramètres à identifier</span>
+ </div>
+</section>
+
+<!-- ============ 26. PROTOCOLE J1-J5 ============ -->
+<section class="slide" data-act="e3a">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3a</b><span>Protocole</span><span class="num">26</span></div>
+  <h2 class="t">Trois bras, cinq jours, un seul choc</h2>
+  <p class="msg">Sans le bras « agent sans mémoire », on ne saura pas si l'inertie vient du registre ou du modèle.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th>Bras</th><th>Ce qu'il reçoit</th><th>Comportement attendu à J3</th><th>Ce qu'il contrôle</th></tr></thead>
+     <tbody>
+      <tr><td><b>Oracle LightGBM</b></td><td>Variables tabulaires du jour</td><td>Retour immédiat au nominal</td>
+       <td>Le plancher d'amnésie : la référence à battre.</td></tr>
+      <tr><td><b>Agent sans mémoire</b></td><td>Persona + itinéraires du jour, registre vide</td><td>Retour quasi immédiat</td>
+       <td><b>Le contrôle décisif.</b> S'il montre déjà de l'inertie, elle ne vient pas du registre.</td></tr>
+      <tr class="hi"><td><b>Agent + registre M(t)</b></td><td>Idem + les événements des jours précédents</td><td>Évitement persistant, décroissant</td>
+       <td>L'effet du registre, isolé du reste.</td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="cols c3">
+    <div class="card"><span class="lab">Le choc</span><p>Panne informatique générale de la ligne A à 17 h, sourcée dans la
+     presse locale. À J2, le métro <b>n'est pas offert</b> : les trois bras basculent, contraints par l'offre. Ce n'est pas un résultat.</p></div>
+    <div class="card"><span class="lab">Le résultat</span><p>Il est <b>tout entier à J3, J4, J5</b> — quand le réseau est
+     rétabli et que la physique ne justifie plus rien. Seule la mémoire peut alors expliquer un écart.</p></div>
+    <div class="card"><span class="lab">La mesure</span><p>Taux de reprise du mode perturbé par jour, écart entre bras,
+     et <b>demi-vie</b> de l'évitement. Cinq graines par bras : l'inertie doit survivre au bruit inter-graines de l'étape 1.</p></div>
+   </div>
+  </div>
+  <span class="st t">À produire</span>
+ </div>
+</section>
+
+<!-- ============ 27. RÉSULTAT ATTENDU ============ -->
+<section class="slide" data-act="e3a">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3a</b><span>Statut épistémique</span><span class="num">27</span></div>
+  <h2 class="t">La forme de la courbe est l'hypothèse, pas le résultat</h2>
+  <p class="msg">Il n'existe aucune vérité terrain sur la ré-adoption jour par jour : ce qui est testable, c'est l'ordre des bras et la monotonie.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 300" role="img" aria-label="Courbe attendue sous l'hypothèse H3 : après la panne de J2, l'oracle et l'agent sans mémoire reviennent au nominal dès J3, tandis que l'agent doté du registre remonte progressivement de 35 % à 78 % entre J3 et J5.">
+     <defs><pattern id="hatch3" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+       <line x1="0" y1="0" x2="0" y2="8" stroke="var(--rule)" stroke-width="2"/></pattern></defs>
+     <rect x="90" y="30" width="770" height="230" fill="url(#hatch3)" fill-opacity=".55"/>
+     <rect x="270" y="30" width="60" height="230" fill="var(--ochre)" fill-opacity=".1"/>
+     <g stroke="var(--rule)" stroke-width="1">
+      <line x1="90" y1="84" x2="860" y2="84"/><line x1="90" y1="150" x2="860" y2="150"/><line x1="90" y1="216" x2="860" y2="216"/></g>
+     <line x1="90" y1="260" x2="860" y2="260" stroke="var(--rule2)" stroke-width="1"/>
+     <line x1="90" y1="26" x2="90" y2="260" stroke="var(--rule2)" stroke-width="1"/>
+     <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="end">
+      <text x="82" y="88">80 %</text><text x="82" y="154">50 %</text><text x="82" y="220">20 %</text></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink2)" text-anchor="middle">
+      <text x="120" y="280">J1</text><text x="300" y="280">J2</text><text x="480" y="280">J3</text>
+      <text x="660" y="280">J4</text><text x="840" y="280">J5</text></g>
+     <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--muted)" text-anchor="middle">
+      <text x="300" y="296">panne 17 h</text><text x="480" y="296">réseau rétabli</text></g>
+     <polyline points="120,84 300,249 480,84 660,84 840,84" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+     <polyline points="120,84 300,249 480,88 660,86 840,84" fill="none" stroke="var(--ink2)" stroke-width="2" stroke-dasharray="6 4"/>
+     <polyline points="120,84 300,249 480,183 660,128 840,88" fill="none" stroke="var(--ochre)" stroke-width="2.5"/>
+     <g stroke="var(--card)" stroke-width="2">
+      <circle cx="480" cy="183" r="5.5" fill="var(--ochre)"/><circle cx="660" cy="128" r="5.5" fill="var(--ochre)"/>
+      <circle cx="840" cy="88" r="5.5" fill="var(--ochre)"/><circle cx="480" cy="84" r="5.5" fill="var(--accent)"/>
+      <circle cx="120" cy="84" r="5.5" fill="var(--ink2)"/><circle cx="300" cy="249" r="5.5" fill="var(--ink2)"/></g>
+     <g font-family="IBM Plex Mono, monospace" font-size="12.5">
+      <text x="500" y="76" fill="var(--accent)">Oracle + agent sans mémoire — retour immédiat</text>
+      <text x="500" y="200" fill="var(--ochre)">Agent + registre M(t) — 35 % → 60 % → 78 %</text></g>
+     <text x="856" y="46" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" text-anchor="end">FOND HACHURÉ = COURBE ATTENDUE, NON MESURÉE</text>
+    </svg>
+    <figcaption>Part de choix du mode perturbé, par jour. Valeurs illustrant l'hypothèse H3 ; aucune mesure n'est encore attachée à cette figure.</figcaption>
+   </figure>
+   <div class="cols c2">
+    <div class="note"><b>Testable ici.</b> L'ordre des trois bras à J3 · la monotonie de la remontée · la sensibilité
+     à γ et λ · la persistance de l'écart au-delà du bruit inter-graines · la comparaison de la demi-vie mesurée aux
+     élasticités publiées après grèves et pannes.</div>
+    <div class="warn"><b>Non testable ici, et à écrire noir sur blanc.</b> La <b>valeur</b> du taux de reprise à J3.
+     Aucune enquête ne suit les mêmes individus jour après jour autour d'un incident : il n'y a rien à quoi comparer 35 %.</div>
+   </div>
+  </div>
+  <span class="st t">Hypothèse — figure explicitement non mesurée</span>
+ </div>
+</section>
+
+<!-- ============ 28. RÉFUTATION ============ -->
+<section class="slide" data-act="e3a">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3a</b><span>Réfutabilité</span><span class="num">28</span></div>
+  <h2 class="t">Ce qui réfuterait H3</h2>
+  <p class="msg">Une hypothèse qu'aucun résultat ne pourrait démentir n'est pas une hypothèse.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card"><span class="lab">Réfutation 1</span><h3>Inertie identique sans registre</h3>
+     <p>Si l'agent sans mémoire montre le même évitement à J3, alors le registre ne fait rien :
+      l'inertie est un artefact du prompt ou du modèle, et H3 tombe.</p></div>
+    <div class="card"><span class="lab">Réfutation 2</span><h3>Insensibilité à λ</h3>
+     <p>Si diviser la vitesse d'oubli par trois ne change pas la courbe, le registre n'est pas ce qui la produit.
+      Le mécanisme annoncé n'est alors pas celui qui opère.</p></div>
+    <div class="card"><span class="lab">Réfutation 3</span><h3>Inertie sous choc placebo</h3>
+     <p>Si un incident <b>sans rapport</b> avec le métro produit le même évitement du métro, l'agent ne mémorise pas
+      un événement : il réagit à la présence d'un texte.</p></div>
+   </div>
+   <div class="note"><b>Pourquoi ces trois-là.</b> Elles couvrent les trois façons dont un résultat d'agent génératif
+    se révèle vide : <b>le mécanisme n'opère pas</b> (1), <b>le paramètre est décoratif</b> (2), <b>l'effet est un réflexe
+    de suivi de consigne</b> (3). Les trois sont bon marché à tester, et aucune n'exige de nouvelle donnée.</div>
+  </div>
+  <span class="st t">À produire — trois tests, aucune donnée nouvelle requise</span>
+ </div>
+</section>
+
+<!-- ============ 29. DIVIDER 3b ============ -->
+<section class="slide sec" data-act="e3b">
+ <div class="pad">
+  <span class="k">Étape 3b</span>
+  <h2>Trente articles de presse réels, et une pré-enregistration qui existait déjà</h2>
+  <p>L'évaluation écologique sort des vignettes synthétiques : des faits datés, sourcés et archivés,
+   et des prédictions écrites avant tout appel au modèle.</p>
+ </div>
+</section>
+
+<!-- ============ 30. CORPUS ============ -->
+<section class="slide" data-act="e3b">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3b</b><span>Corpus</span><span class="num">30</span></div>
+  <h2 class="t">Ce qui est tabulairement incompressible</h2>
+  <p class="msg">Un événement dont l'effet sur le choix modal ne passe par aucune colonne de la table : odeur, dégoût, peur, agrément, densité de foule.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Registre de perturbation</th><th>Exemple sourcé</th><th>Voie d'effet</th><th class="n">Retenus</th></tr></thead>
+      <tbody>
+       <tr><td><b>Répulsion sensorielle</b></td><td>Grève des éboueurs, hypercentre</td><td>Trottoirs impraticables, odeur</td><td class="n">4</td></tr>
+       <tr><td><b>Panique morale / hygiène</b></td><td>Punaises de lit dans le métro</td><td>Dégoût anticipé, coût catastrophique</td><td class="n">3</td></tr>
+       <tr><td><b>Risque physique perçu</b></td><td>Vent d'Autan à 80 km/h, parcs fermés</td><td>Vulnérabilité corporelle, ponts</td><td class="n">3</td></tr>
+       <tr><td><b>Densité de foule</b></td><td>Le Minotaure de La Machine</td><td>Impossibilité mécanique, contournement</td><td class="n">3</td></tr>
+       <tr><td><b>Insécurité perçue</b></td><td>Couloirs Jean-Jaurès la nuit</td><td>Évitement genré et horaire</td><td class="n">4</td></tr>
+       <tr><td><b>Agrément paysager</b></td><td>Ombrières, Ramblas, passerelles</td><td>Attractivité de la marche</td><td class="n">4</td></tr>
+       <tr><td><b>Lever de contrainte</b></td><td>VélôToulouse électrique sur les coteaux</td><td>Suppression du coût métabolique</td><td class="n">2</td></tr>
+      </tbody>
+     </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="kpis" style="grid-template-columns:1fr 1fr">
+      <div class="kpi"><span class="k">Articles analysés</span><span class="v">30</span><span class="s">Aspirés, archivés et horodatés dans le dépôt.</span></div>
+      <div class="kpi acc"><span class="k">Scénarios majeurs</span><span class="v">5</span><span class="s">Quadri-modaux, échelle méso ou macro.</span></div>
+     </div>
+     <div class="note"><b>Grille de sélection, appliquée avant tout run.</b> Incompressibilité tabulaire ·
+      impact par mode noté de 0 à 3 · échelle spatiale (micro / méso / macro) · classe de crédibilité de la source ·
+      verdict retenir / réserve / éliminer. Sept articles sont <b>éliminés</b> — dont un tarif de désinfection et une odeur
+      limitée à une rue : trop locaux ou purement documentaires.</div>
+     <p style="font-size:.78em;line-height:1.5;color:var(--ink2)">Les éliminés ne sont pas perdus : ils deviennent le
+      <b>matériel placebo</b> de la condition 4. Un article réel, daté, sourcé — mais sans effet modal attendu.</p>
+    </div>
+   </div>
+  </div>
+  <span class="st m">Mesuré — 30 articles archivés, grille appliquée</span>
+ </div>
+</section>
+
+<!-- ============ 31. PRÉ-ENREGISTRATION ============ -->
+<section class="slide" data-act="e3b">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3b</b><span>Apport méthodologique</span><span class="num">31</span></div>
+  <h2 class="t">Les étoiles du rapport sont une pré-enregistration</h2>
+  <p class="msg">Écrites avant tout appel au modèle, elles transforment un rapport qualitatif en test réfutable — sans une seule mesure supplémentaire.</p>
+  <div class="body">
+   <div class="cols wide-l">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Article</th><th class="n">Voiture</th><th class="n">Vélo</th><th class="n">Marche</th><th class="n">TC</th><th>Prédiction signée</th></tr></thead>
+      <tbody>
+       <tr><td>Vent d'Autan 80 km/h</td><td class="n">★★☆</td><td class="n">★★★</td><td class="n">★★★</td><td class="n">★★☆</td>
+        <td class="mono">+ voiture, + TC, −− vélo, −− marche</td></tr>
+       <tr><td>Punaises de lit, métro</td><td class="n">★★☆</td><td class="n">★★☆</td><td class="n">★★☆</td><td class="n">★★★</td>
+        <td class="mono">−−− TC, + vélo, + marche, + voiture</td></tr>
+       <tr><td>Grève des éboueurs</td><td class="n">★☆☆</td><td class="n">★★☆</td><td class="n">★★★</td><td class="n">★★☆</td>
+        <td class="mono">−−− marche, − vélo, + TC</td></tr>
+       <tr><td>Minotaure de La Machine</td><td class="n">★★★</td><td class="n">★★★</td><td class="n">★★★</td><td class="n">★★★</td>
+        <td class="mono">−−− voiture, −−− vélo, + TC, marche duale</td></tr>
+       <tr><td>VélôToulouse électrique</td><td class="n">★★☆</td><td class="n">★★★</td><td class="n">★☆☆</td><td class="n">★★☆</td>
+        <td class="mono">+++ vélo, − voiture, − TC</td></tr>
+      </tbody>
+     </table>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="card" style="background:var(--accent-soft);border-color:var(--accent)">
+      <span class="lab">Le protocole qui en découle</span>
+      <ul class="tight">
+       <li><b>Geler</b> la grille par empreinte git, datée, avant le premier appel.</li>
+       <li>Mesurer le <b>taux de signe correct</b> sur 4 modes × 30 articles = 120 prédictions signées.</li>
+       <li>Mesurer l'accord avec l'expert par <b>κ pondéré</b>, l'intensité prédite étant ordinale (0 à 3 étoiles).</li>
+       <li>Publier la grille <b>en annexe intégrale</b> : c'est le matériel qui rend le test rejouable.</li>
+      </ul>
+     </div>
+     <div class="note"><b>Pourquoi cela vaut mieux qu'une évaluation post hoc.</b> Juger la réaction du modèle après
+      l'avoir vue, c'est se donner raison. Ici, la prédiction est écrite, datée et signée par un expert du domaine
+      <b>avant</b> d'observer quoi que ce soit — et le modèle peut la contredire.</div>
+    </div>
+   </div>
+  </div>
+  <span class="st m">Matériau existant · mesure d'accord à produire</span>
+ </div>
+</section>
+
+<!-- ============ 32. CINQ SCÉNARIOS ============ -->
+<section class="slide" data-act="e3b">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3b</b><span>Scénarios majeurs</span><span class="num">32</span></div>
+  <h2 class="t">Cinq ruptures, cinq mécanismes cognitifs distincts</h2>
+  <p class="msg">Chaque scénario est choisi pour le mécanisme qu'il isole — et pour la raison précise qui rend l'oracle muet.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th style="width:20%">Scénario réel</th><th style="width:24%">Mécanisme comportemental</th><th style="width:28%">Effet quadri-modal attendu</th><th style="width:28%">Pourquoi l'oracle est muet</th></tr></thead>
+     <tbody>
+      <tr><td><b>Vent d'Autan à 80 km/h</b><br><span class="mono" style="font-size:.9em;color:var(--muted)">parcs fermés en urgence</span></td>
+       <td>Évaluation de la menace physique, aversion à l'effort hostile</td>
+       <td>Voiture-refuge, métro sous-fluvial ; effondrement du vélo et de la marche</td>
+       <td>Il a la vitesse du vent en colonne ; il ignore que les grilles des parcs sont <b>fermées à clé</b></td></tr>
+      <tr><td><b>Punaises de lit</b><br><span class="mono" style="font-size:.9em;color:var(--muted)">banquettes en tissu</span></td>
+       <td>Heuristique de contagion, surestimation des probabilités faibles</td>
+       <td>Rejet viscéral des TC, report vers vélo, marche et voiture</td>
+       <td>L'offre GTFS est <b>100 % nominale</b> : zéro minute de retard. Aucune colonne ne code le dégoût</td></tr>
+      <tr><td><b>Grève des éboueurs</b><br><span class="mono" style="font-size:.9em;color:var(--muted)">hypercentre</span></td>
+       <td>Heuristique de l'affect, marqueur somatique</td>
+       <td>Marche impraticable, vélo freiné, évitement par le métro souterrain</td>
+       <td>Le réseau piéton reste <b>géométriquement ouvert</b> : le temps nominal ne bouge pas</td></tr>
+      <tr><td><b>Minotaure de La Machine</b><br><span class="mono" style="font-size:.9em;color:var(--muted)">foule compacte</span></td>
+       <td>Friction de densité, discrimination par le motif du déplacement</td>
+       <td>Voiture exclue, vélo bloqué, marche <b>duale</b> — attractive pour le badaud, piège pour l'actif</td>
+       <td>Aucun modèle de trafic ne représente des <b>barrages filtrants informels</b> de spectateurs</td></tr>
+      <tr><td><b>VélôToulouse électrique</b><br><span class="mono" style="font-size:.9em;color:var(--muted)">coteaux, stations neuves</span></td>
+       <td>Suppression du coût métabolique, incitation à l'adoption</td>
+       <td>Adoption massive du vélo sur les reliefs, report pendulaire depuis la voiture</td>
+       <td>Sans mois de données nouvelles, il applique les <b>priors du vélo mécanique</b></td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="warn"><b>La polarité duale du Minotaure est le cas le plus intéressant.</b> Le même événement doit
+    <b>attirer</b> le promeneur et <b>repousser</b> l'actif pressé. Aucun coefficient global ne peut faire les deux :
+    c'est un test de discrimination par le motif, pas un test d'intensité.</div>
+  </div>
+  <span class="st m">Sourcé et documenté · réactions à mesurer</span>
+ </div>
+</section>
+
+<!-- ============ 33. CINQ CONDITIONS ============ -->
+<section class="slide" data-act="e3b">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3b</b><span>Apport méthodologique</span><span class="num">33</span></div>
+  <h2 class="t">Cinq conditions, sans quoi la comparaison est un homme de paille</h2>
+  <p class="msg">Les deux conditions ajoutées sont celles qui décident si le résultat vaut quelque chose.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th style="width:6%">#</th><th style="width:26%">Condition</th><th style="width:34%">Ce que reçoit le modèle</th><th style="width:34%">L'objection qu'elle ferme</th></tr></thead>
+     <tbody>
+      <tr><td class="mono">1</td><td><b>Agent, régime nominal</b></td><td>Aucun article</td><td>Référence interne : le point de départ du bras.</td></tr>
+      <tr><td class="mono">2</td><td><b>Agent + article brut</b></td><td>Le texte de presse tel quel</td><td>Aucune — c'est la mesure de l'effet total.</td></tr>
+      <tr class="hi2"><td class="mono">3</td><td><b>Agent + paraphrase sans indice modal</b></td>
+       <td>Le même fait, réécrit en retirant toute mention de mode (« métros renforcés » supprimé)</td>
+       <td><b>« Le modèle ne raisonne pas, il obéit. »</b> L'article contient souvent la réponse ; sans ce bras, on mesure du suivi de consigne.</td></tr>
+      <tr class="hi2"><td class="mono">4</td><td><b>Agent + article placebo</b></td>
+       <td>Un article réel classé « éliminer », sans effet modal attendu</td>
+       <td><b>« Le modèle réagit à n'importe quel texte. »</b> Contrôle de spécificité, gratuit : le matériel existe.</td></tr>
+      <tr class="hi"><td class="mono">5</td><td><b>Oracle + événement encodé</b></td>
+       <td>L'événement traduit à la main en variables : liens coupés dans OTP, fréquences dégradées, météo</td>
+       <td><b>« Votre oracle est aveugle parce que vous ne lui avez rien donné. »</b> La comparaison honnête n'est pas texte contre rien, c'est <b>texte contre encodage équivalent</b>.</td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="cols c2">
+    <div class="note"><b>Ce que la condition 5 va probablement montrer.</b> Que l'oracle encaisse très bien les événements
+     <b>encodables</b> (rocade coupée, métro à l'arrêt) et reste muet sur les autres (dégoût, foule, agrément). C'est un
+     résultat plus fort et plus défendable que « le tabulaire est aveugle » : il <b>délimite</b> le domaine du LLM au lieu de le proclamer.</div>
+    <div class="warn"><b>Coût.</b> Les conditions 3 et 4 ne demandent aucune donnée nouvelle : une réécriture de prompt
+     et un article déjà archivé. La condition 5 demande un encodage manuel par événement — c'est le vrai travail, et il
+     conditionne la solidité de H3.</div>
+   </div>
+  </div>
+  <span class="st t">À produire — 5 conditions × 5 scénarios × 1 000 déplacements</span>
+ </div>
+</section>
+
+<!-- ============ 34. COHÉRENCE PHYSIQUE ============ -->
+<section class="slide" data-act="e3b">
+ <div class="pad">
+  <div class="eyebrow"><b>Étape 3b</b><span>Limite</span><span class="num">34</span></div>
+  <h2 class="t">L'agent lit un article que le réseau ignore</h2>
+  <p class="msg">Si le texte ferme des rues mais qu'OTP calcule sur un graphe intact, l'agent raisonne contre les durées qu'on lui montre.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card"><span class="lab">L'incohérence</span><h3>Deux sources de vérité</h3>
+     <p>L'article annonce l'hypercentre piétonnisé. Le jeu d'itinéraires, calculé sur le réseau nominal, propose toujours
+      un trajet voiture à 14 minutes. L'agent doit choisir entre le texte et la table.</p></div>
+    <div class="card"><span class="lab">Pourquoi ça compte</span><h3>Le résultat devient ambigu</h3>
+     <p>S'il suit le texte, on ne sait pas s'il aurait résisté à une durée voiture crédible. S'il suit la table, on
+      conclut à tort qu'il ignore l'actualité. <b>Les deux lectures sont invalides.</b></p></div>
+    <div class="card" style="background:var(--accent-soft);border-color:var(--accent)"><span class="lab">La sortie</span>
+     <h3>Encoder l'événement dans le graphe</h3>
+     <p>C'est exactement le travail de la <b>condition 5</b> : liens coupés, fréquences dégradées. Il sert deux fois —
+      il rend l'oracle comparable, <b>et</b> il rend l'agent cohérent. À faire une fois, pour les deux bras.</p></div>
+   </div>
+   <div class="note"><b>Formulation à retenir pour le papier.</b> Le contexte textuel et le contexte physique doivent être
+    <b>le même événement, déclaré deux fois</b> — une fois en langue, une fois en graphe. Tout écart entre les deux
+    déclarations est une variable cachée, et elle jouera systématiquement en faveur de l'agent.</div>
+  </div>
+  <span class="st t">À traiter — prérequis de l'étape 3b</span>
+ </div>
+</section>
+
+<!-- ============ 35. DIVIDER PERSPECTIVES ============ -->
+<section class="slide sec" data-act="persp">
+ <div class="pad">
+  <span class="k">Perspectives</span>
+  <h2>Composer, plutôt que choisir</h2>
+  <p>Le calage statistique pour le flux nominal, l'agent génératif pour les ruptures — et l'échelle du foyer
+   comme prochaine frontière.</p>
+ </div>
+</section>
+
+<!-- ============ 36. CASCADE ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Perspectives</b><span>Architecture</span><span class="num">36</span></div>
+  <h2 class="t">Une cascade à trois étages</h2>
+  <p class="msg">Chaque étage traite ce que le précédent ne sait pas trancher — et l'agent n'est appelé que là où il est le seul à savoir répondre.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 900 330" role="img" aria-label="Cascade à trois étages : un filtre déterministe élimine les modes impossibles, l'oracle LightGBM traite 90 % du flux nominal, l'agent LLM traite 10 % d'exceptions et alimente le registre de mémoire qui revient sur la requête du lendemain.">
+     <defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+       <path d="M0,1 L9,5 L0,9 z" fill="var(--rule2)"/></marker>
+      <marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+       <path d="M0,1 L9,5 L0,9 z" fill="var(--ochre)"/></marker></defs>
+     <rect x="350" y="10" width="200" height="36" rx="4" fill="var(--card2)" stroke="var(--rule2)"/>
+     <text x="450" y="33" font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--ink)" text-anchor="middle">REQUÊTE DE DÉPLACEMENT</text>
+     <line x1="450" y1="46" x2="450" y2="80" stroke="var(--rule2)" stroke-width="1.5" marker-end="url(#ar5)"/>
+     <rect x="60" y="84" width="780" height="54" rx="4" fill="var(--card2)" stroke="var(--rule2)"/>
+     <text x="76" y="106" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--accent)">ÉTAGE 1 — FILTRE DÉTERMINISTE</text>
+     <text x="76" y="126" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="var(--ink2)">Pas de permis · pas de véhicule au ménage · véhicule garé ailleurs → l'alternative impossible est retirée avant tout modèle</text>
+     <path d="M240,138 L240,168" stroke="var(--rule2)" stroke-width="1.5" marker-end="url(#ar5)"/>
+     <path d="M660,138 L660,168" stroke="var(--rule2)" stroke-width="1.5" marker-end="url(#ar5)"/>
+     <text x="252" y="158" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)">90 % — flux nominal</text>
+     <text x="672" y="158" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ochre)">10 % — exception détectée</text>
+     <rect x="60" y="172" width="360" height="76" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+     <text x="76" y="194" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--accent)">ÉTAGE 2 — ORACLE LIGHTGBM</text>
+     <text x="76" y="214" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="var(--ink2)">Trajet de routine, réseau nominal,</text>
+     <text x="76" y="232" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="var(--ink2)">certitude du modèle → 0 token, calage garanti</text>
+     <rect x="480" y="172" width="360" height="76" rx="4" fill="var(--ochre-soft)" stroke="var(--ochre)"/>
+     <text x="496" y="194" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ochre)">ÉTAGE 3 — AGENT GÉNÉRATIF</text>
+     <text x="496" y="214" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="var(--ink2)">Article de presse · alerte météo · arbitrage</text>
+     <text x="496" y="232" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="var(--ink2)">de ménage · incertitude du modèle (max P &lt; 0,50)</text>
+     <line x1="660" y1="248" x2="660" y2="272" stroke="var(--ochre)" stroke-width="1.5" marker-end="url(#ar6)"/>
+     <rect x="480" y="276" width="360" height="38" rx="4" fill="var(--card2)" stroke="var(--ochre)" stroke-dasharray="5 3"/>
+     <text x="496" y="300" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="var(--ink2)">REGISTRE M(t) — mémoire du jour, relue à J+1</text>
+     <path d="M480,295 L30,295 L30,28 L346,28" fill="none" stroke="var(--ochre)" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar6)"/>
+     <text x="40" y="170" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--ochre)" transform="rotate(-90 40 170)" text-anchor="middle">HYSTÉRÉSIS</text>
+    </svg>
+    <figcaption>Le seul étage coûteux est le troisième, et il ne voit qu'un dixième du flux. La boucle en pointillé est ce
+     qu'aucun modèle sans état ne peut représenter.</figcaption>
+   </figure>
+   <div class="warn"><b>Statut de cette architecture : perspective, pas résultat.</b> Elle n'est ni implémentée ni mesurée
+    dans ce papier. Le seuil de bascule (max P &lt; 0,50) et la part de 10 % sont des <b>paramètres à calibrer</b>, pas des
+    constantes établies — et le papier doit le dire au présent, pas au futur.</div>
+  </div>
+  <span class="st t">Perspective — non implémentée</span>
+ </div>
+</section>
+
+<!-- ============ 37. MATRICE ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Perspectives</b><span>Arbitrage</span><span class="num">37</span></div>
+  <h2 class="t">Ce que chaque architecture coûte et ce qu'elle sait faire</h2>
+  <p class="msg">Aucune colonne ne domine partout : c'est précisément ce qui justifie de les composer.</p>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th style="width:26%">Dimension</th><th style="width:24%">100 % oracle</th><th style="width:24%">100 % agent</th><th style="width:26%">Cascade hybride</th></tr></thead>
+     <tbody>
+      <tr><td><b>Temps pour 10 000 trajets</b></td><td class="mono">&lt; 1 s</td><td class="mono">≈ 45 min</td><td class="mono">≈ 4 min</td></tr>
+      <tr><td><b>Requêtes au modèle de langue</b></td><td class="mono">0</td><td class="mono">10 000</td><td class="mono">≈ 1 000 (− 90 %)</td></tr>
+      <tr><td><b>Fidélité macro — L1 argmax</b></td><td class="mono">7,30 pt</td><td class="mono">29,81 pt</td><td class="mono">à mesurer</td></tr>
+      <tr><td><b>Rappel sur classe minoritaire (vélo)</b></td><td class="mono">13,8 %</td><td class="mono">à mesurer</td><td class="mono">à mesurer</td></tr>
+      <tr><td><b>Réaction à un article de presse</b></td><td>Nulle sur l'inencodable</td><td>Réaliste</td><td>Préservée sur les 10 %</td></tr>
+      <tr><td><b>Hystérésis temporelle</b></td><td>Nulle — sans état</td><td>Présente</td><td>Préservée</td></tr>
+      <tr><td><b>Reproductibilité stricte</b></td><td>Totale — graine fixée</td><td>Partielle — alias de modèle</td><td>Partielle sur 10 % du flux</td></tr>
+     </tbody>
+    </table>
+   </div>
+   <div class="cols c2">
+    <div class="warn"><b>Écart à corriger.</b> La conclusion du manuscrit annonce un oracle « 10 000 fois plus rapide ».
+     Le tableau du manuscrit lui-même donne moins d'une seconde contre 45 minutes, soit <b>≈ 2 700 ×</b>. Un facteur
+     annoncé quatre fois trop grand décrédibilise les chiffres justes qui l'entourent.</div>
+    <div class="note"><b>Deux cases vides assumées.</b> La fidélité de la cascade et son rappel vélo ne sont pas mesurés,
+     et la ligne « à mesurer » vaut mieux qu'une estimation. C'est aussi le plan de travail : ces deux cases sont
+     le prochain résultat à produire.</div>
+   </div>
+  </div>
+  <span class="st p">Partiel — colonnes 1 et 2 mesurées, colonne 3 à produire</span>
+ </div>
+</section>
+
+<!-- ============ 38. MÉNAGE ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Perspectives</b><span>Prochaine frontière</span><span class="num">38</span></div>
+  <h2 class="t">L'échelle du foyer, et la conservation des véhicules</h2>
+  <p class="msg">Le choix modal n'est pas individuel : une voiture partagée par trois personnes crée des contraintes qu'aucun modèle par trajet ne voit.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card"><span class="lab">Arbitrage intra-ménage</span><h3>Qui prend la voiture</h3>
+     <p>Deux actifs, un véhicule, des horaires qui se chevauchent : c'est une <b>négociation</b>, pas deux décisions
+      indépendantes. Un agent qui argumente en langue peut la représenter ; un modèle par trajet ne peut pas.</p></div>
+    <div class="card"><span class="lab">Chaîne spatiale</span><h3>Le véhicule est là où on l'a laissé</h3>
+     <p>Si la voiture est au bureau, elle n'est pas au domicile pour le trajet suivant. La <b>conservation stricte de la
+      chaîne</b> est déjà tenue dans le simulateur, et elle restreint le jeu d'options offert — donc le score.</p></div>
+    <div class="card"><span class="lab">Dépose scolaire</span><h3>Un trajet qui en contraint deux</h3>
+     <p>Le détour d'un parent contraint le mode de l'enfant et sa propre heure d'arrivée. C'est le cas d'école d'une
+      dépendance que l'enquête observe et que les modèles par trajet effacent.</p></div>
+   </div>
+   <div class="note"><b>Pourquoi c'est la bonne suite.</b> Ces trois cas partagent la propriété qui a fait la valeur de
+    l'étape 3a : ce sont des <b>dépendances</b> — entre personnes, entre trajets, entre jours. Le domaine d'excellence de
+    l'agent n'est pas « le contexte riche » en général, c'est <b>tout ce qui lie une décision à une autre</b>.</div>
+  </div>
+  <span class="st m">Chaîne des véhicules déjà tenue dans le simulateur</span>
+ </div>
+</section>
+
+<!-- ============ 39. ENSEIGNEMENTS ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Conclusion</b><span>Trois enseignements</span><span class="num">39</span></div>
+  <h2 class="t">Trois choses à retenir</h2>
+  <p class="msg">Une sur les agents, une sur les baselines, une sur la mesure — et c'est la troisième qui se transporte le plus loin.</p>
+  <div class="body">
+   <div class="cols c3">
+    <div class="card"><span class="lab">Sur les agents</span><h3>Pas de LLM pour la prédiction de masse statique</h3>
+     <p>Sur le flux nominal, l'oracle supervisé est ≈ 2 700 × plus rapide, gratuit en tokens, quatre fois plus fidèle
+      en argmax et strictement reproductible. Le prompt engineering n'y change pas l'ordre de grandeur.</p></div>
+    <div class="card"><span class="lab">Sur le domaine d'excellence</span><h3>La valeur de l'agent est dans la dépendance</h3>
+     <p>Non tabulé (presse, dégoût, foule, agrément) et non indépendant (hystérésis, ménage, chaîne de véhicules) :
+      partout ailleurs, un arbre de décision fait mieux et moins cher.</p></div>
+    <div class="card" style="background:var(--accent-soft);border-color:var(--accent)">
+     <span class="lab">Sur la mesure</span><h3>La métrique d'enquête n'est pas la métrique d'usage</h3>
+     <p>Une variante à <b>93 % d'accuracy</b> a produit le <b>pire</b> score en simulation. Toute évaluation d'agent
+      génératif doit être notée <b>là où le modèle sert</b>, pas là où il est facile de le noter.</p></div>
+   </div>
+   <div class="note"><b>Ce que le papier apporte au domaine, en une phrase.</b> Non pas « les LLM marchent » ou
+    « les LLM ne marchent pas », mais un <b>protocole qui décide</b> : planchers, ablation des paramètres physiques,
+    parité informationnelle explicite, conditions placebo et paraphrase, et mesure sur le terrain d'usage.</div>
+  </div>
+ </div>
+</section>
+
+<!-- ============ 40. REPRODUCTIBILITÉ ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Conclusion</b><span>Reproductibilité</span><span class="num">40</span></div>
+  <h2 class="t">Ce qui rend ces chiffres rejouables</h2>
+  <p class="msg">Un dispositif de mesure qui refuse de servir un chiffre plutôt que d'en servir un faux.</p>
+  <div class="body">
+   <div class="cols c2">
+    <div class="card">
+     <span class="lab">Garde-fous en place</span>
+     <ul class="tight">
+      <li><b>Run épinglé par chemin d'archive</b>, jamais par le lien courant : deux régénérations donnent les mêmes chiffres.</li>
+      <li><b>Empreinte sha256</b> du fichier de décisions : une reprise à chaud réécrit le même nom de dossier, seule
+       l'empreinte distingue les deux états.</li>
+      <li><b>Garde de substrat :</b> une mesure faite sur un autre run est <b>écartée</b> et remplacée par une carte
+       « données manquantes » portant la commande qui la rétablit — jamais par un chiffre servi en silence.</li>
+     </ul>
+    </div>
+    <div class="card">
+     <span class="lab">Décisions de périmètre, explicites</span>
+     <ul class="tight">
+      <li><b>Les replis sont exclus du scoring.</b> Quand le modèle ne répond pas et que le contrôleur prend
+       l'itinéraire d'index 0 — soit 100 % le plus rapide et 64,7 % de voiture sur un run — ce n'est pas une décision.
+       Les garder revenait à noter le prompt sur un choix qu'il n'a pas fait. Le compte des lignes écartées est affiché.</li>
+      <li><b>Découpage par ménage</b> et non par trajet ; retiré et refait dès que le nombre de lignes change.</li>
+      <li><b>Aucun chiffre écrit à la main</b> dans les pages de mesure : gains, dimensions et parts modales sont
+       recalculés depuis les traces.</li>
+     </ul>
+    </div>
+   </div>
+   <div class="note"><b>Un précédent qui justifie ces garde-fous.</b> Le jour où un nouveau run a été épinglé, la garde a
+    bien écarté une mesure mais laissé l'autre en place : la page comparait alors deux substrats différents en les
+    annonçant comme un seul. Le défaut a été fermé des deux côtés — et c'est pourquoi il est raconté ici plutôt que caché.</div>
+  </div>
+  <span class="st m">En place — vérifiable dans le dépôt</span>
+ </div>
+</section>
+
+<!-- ============ 41. ANNEXES ============ -->
+<section class="slide" data-act="persp">
+ <div class="pad">
+  <div class="eyebrow"><b>Annexes</b><span>Matériel de discussion</span><span class="num">41</span></div>
+  <h2 class="t">Ce qui reste à montrer si on me le demande</h2>
+  <p class="msg">Six annexes, et la liste ordonnée du travail restant.</p>
+  <div class="body">
+   <div class="cols c2">
+    <div class="card">
+     <span class="lab">Annexes disponibles</span>
+     <ul class="tight">
+      <li><b>A.</b> Dictionnaire des 21 variables — EMC² 2023, ProGEDO lil-1750.</li>
+      <li><b>B.</b> Quotas et rotation des fournisseurs : 11 instances, 206 req/min, 37 700 req/jour.</li>
+      <li><b>C.</b> Configuration d'inférence locale Qwen-32B (vLLM, τ = 0, graine fixée).</li>
+      <li><b>D.</b> Bilan de calibration : paysage de perte non convexe et justification du pivot.</li>
+      <li><b>E.</b> Les 30 articles, avec liens sources et grille d'impact intégrale.</li>
+      <li><b>F.</b> Matrice de confusion complète, importances de gain et courbes de calibration.</li>
+     </ul>
+    </div>
+    <div class="card" style="background:var(--accent-soft);border-color:var(--accent)">
+     <span class="lab">Travail restant, par ordre de rendement</span>
+     <ul class="tight">
+      <li><b>1.</b> Encoder les 5 événements dans le graphe — débloque la condition 5 <b>et</b> la cohérence physique.</li>
+      <li><b>2.</b> Conditions paraphrase et placebo — aucune donnée nouvelle, ferme deux objections majeures.</li>
+      <li><b>3.</b> Mesure d'accord à la grille pré-enregistrée — le matériel existe déjà.</li>
+      <li><b>4.</b> Benchmark multi-modèles et taux de bascule inter-graines.</li>
+      <li><b>5.</b> Tests d'équivalence sur la population, y compris les croisements.</li>
+      <li><b>6.</b> Bras LLM few-shot, pour séparer « ne peut pas » de « n'a pas été informé ».</li>
+     </ul>
+    </div>
+   </div>
+   <p style="font-size:.8em;line-height:1.5;color:var(--muted)">Sources des chiffres cités : jeu de test scellé
+    EMC² 2023 (13 045 trajets, découpage par ménage, graine 0) · métriques du modèle de production, spécification v2 ·
+    rapport de dérivation des temps terminaux par mode · page de synthèse sur run épinglé · corpus de presse archivé.</p>
+  </div>
+ </div>
+</section>
+
+</div>
+
+<nav class="nav" aria-label="Navigation du diaporama">
+ <div class="rail" id="rail"></div>
+ <span class="count" id="count">1 / 41</span>
+ <div class="btns">
+  <button type="button" id="prev" aria-label="Slide précédente">◀</button>
+  <button type="button" id="next" aria-label="Slide suivante">▶</button>
+ </div>
+ <button type="button" class="modebtn" id="mode">Mode document</button>
+</nav>
+<div class="tip" id="tip" role="status"></div>
+
+<script>
+(function(){
+ var deck=document.getElementById('deck');
+ var slides=[].slice.call(deck.querySelectorAll('.slide'));
+ var ACTS=[['cadrage','Cadrage'],['e0','0 · Socle'],['e1','1 · Modèle nu'],['e2','2 · Ablation'],
+           ['e3a','3a · Hystérésis'],['e3b','3b · Presse'],['persp','Perspectives']];
+ var i=0, rail=document.getElementById('rail'), count=document.getElementById('count');
+
+ ACTS.forEach(function(a){
+  var b=document.createElement('button');
+  b.type='button'; b.textContent=a[1]; b.dataset.act=a[0];
+  b.addEventListener('click',function(){
+   var t=slides.findIndex(function(s){return s.dataset.act===a[0];});
+   if(t<0) return;
+   if(deck.dataset.mode==='slides'){ go(t); }
+   else { slides[t].scrollIntoView({behavior:'smooth',block:'start'}); }
+  });
+  rail.appendChild(b);
+ });
+ var railBtns=[].slice.call(rail.children);
+
+ function paint(){
+  slides.forEach(function(s,n){ s.classList.toggle('on', n===i); });
+  count.textContent=(i+1)+' / '+slides.length;
+  var act=slides[i].dataset.act;
+  railBtns.forEach(function(b){ b.setAttribute('aria-current', String(b.dataset.act===act)); });
+ }
+ function go(n){ i=Math.max(0,Math.min(slides.length-1,n)); paint(); }
+
+ document.getElementById('prev').addEventListener('click',function(){go(i-1);});
+ document.getElementById('next').addEventListener('click',function(){go(i+1);});
+ document.getElementById('mode').addEventListener('click',function(){
+  var doc=deck.dataset.mode==='slides';
+  deck.dataset.mode=doc?'doc':'slides';
+  this.textContent=doc?'Mode diaporama':'Mode document';
+  if(doc){ slides[i].scrollIntoView({block:'start'}); } else { paint(); window.scrollTo(0,0); }
+ });
+ document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(deck.dataset.mode==='slides'){
+   if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); go(i+1); }
+   else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); go(i-1); }
+   else if(e.key==='Home'){ e.preventDefault(); go(0); }
+   else if(e.key==='End'){ e.preventDefault(); go(slides.length-1); }
+  }
+  if(e.key==='d'||e.key==='D'){ document.getElementById('mode').click(); }
+ });
+
+ /* tooltips sur les marques de graphique */
+ var tip=document.getElementById('tip');
+ document.addEventListener('mouseover',function(e){
+  var t=e.target.closest ? e.target.closest('[data-tip]') : null;
+  if(!t){ tip.classList.remove('on'); return; }
+  tip.textContent=t.getAttribute('data-tip');
+  var r=t.getBoundingClientRect();
+  tip.style.left=(r.left+r.width/2)+'px'; tip.style.top=r.top+'px';
+  tip.classList.add('on');
+ });
+ document.addEventListener('mouseout',function(e){
+  if(e.target.closest && e.target.closest('[data-tip]')) tip.classList.remove('on');
+ });
+
+ paint();
+})();
+</script>

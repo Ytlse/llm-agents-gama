@@ -1,3 +1,980 @@
+## [2026-09-02] Le support de séminaire prend la forme d'un article
+
+Le support passe de 41 à **31 planches** et adopte la forme d'un article : planche *Abstract* en texte
+suivi, sections numérotées de 1 à 11, figures et tables légendées et référencées (« Figure 3 — … »,
+« cf. § 3.3 »), section *Limites*, planche *Références*. Le titre est celui du papier :
+*Évaluation empirique, limites et perspectives hybrides des agents LLM en simulation de mobilité urbaine*.
+
+**Ce qui change dans la lecture.** Trois dispositifs de la première version disparaissent : la phrase de
+thèse colorée sous chaque titre, les titres-aphorismes, et les encadrés qui expliquaient pourquoi une
+précaution de méthode avait été prise. Les titres deviennent des intitulés de section — « Mesure de la
+proximité aux enquêtes de terrain » plutôt que « Définir la mesure avant de mesurer ». Les remarques de
+méthode passent en **notes de planche**, masquées en projection (touche `n`) et visibles en mode document
+et à l'impression.
+
+**Toute planche sans mesure le dit en grand.** Le statut « à produire » était une pastille de bas de page ;
+il devient un **bandeau pleine largeur** en tête de planche, « Hypothèse — à confirmer par expérience »,
+avec la raison à droite et une trame sur la figure concernée. Six planches le portent : modèles évalués,
+variabilité inter-graines, registre de mémoire, dispositif sur cinq jours, plan à cinq conditions, cascade
+hybride.
+
+**Aucun résultat envisagé n'est plus tracé comme un résultat.** La courbe de ré-adoption sur cinq jours et
+l'exemple de mémoire chiffré sont retirés : le protocole temporel décrit désormais son dispositif — trois
+bras, cinq jours, fenêtre de mesure, grandeurs mesurées, critères de réfutation — sans aucune valeur de
+sortie.
+
+**Corrections de fond.** « Palier 3 : supervision » devient une **comparaison** aux modèles statistiques
+estimés sur l'enquête : les deux familles ne se rangent pas sur le même axe d'ablation. La planche
+d'importances de gain ne s'annonce plus comme une analyse SHAP — ce sont des parts de gain d'un modèle à
+gradient boosté, et les deux quantités ne se substituent pas. Le choix de la taille de population devient
+une planche à part entière, arbitrée entre coût d'inférence et peuplement des strates. Les références
+triviales portent leurs scores. Trois planches sont supprimées : les deux erreurs L1, le plan en six
+étapes, et la sensibilité du score à la définition de la distance.
+
+**Avant :** un support qui argumentait, annonçait ses conclusions en sous-titre et signalait discrètement
+qu'une mesure manquait.
+**Après :** un support qui expose, numérote et légende, et qui affiche en tête de planche quand rien n'a
+encore été mesuré.
+
+Le lien de consultation est inchangé. Le fichier perd son numéro de version dans son nom
+(`SLIDES_SEMINAIRE_2026.html`, version portée dans l'en-tête) et la version `v1.0` est figée dans `archive/`.
+
+---
+
+## [2026-09-02] Un support de séminaire, et onze chiffres du manuscrit remis d'aplomb
+
+Le dossier `docs/paper/` gagne un **support de séminaire de 41 slides** (40–45 min) qui présente
+l'article selon la démarche 0 → 1 → 2 → 3a → 3b → perspectives, avec un mode diaporama (flèches,
+`d` pour basculer) et un mode document pour la relecture et l'impression. Chaque slide porte son
+**statut de mesure** : mesuré et tracé dans le dépôt, partiel, ou à produire — on voit d'un coup d'œil
+ce qui est déjà démontrable et ce qui reste à faire.
+
+Il a été écrit en recoupant chaque chiffre citable avec sa source dans le dépôt plutôt qu'avec le
+manuscrit. Ce recoupement a fait apparaître **onze écarts**, tous corrigés dans le manuscrit (`v1.4`),
+le protocole (`v1.3`) et le plan (`v1.4`), et consignés dans un nouveau **journal des corrections**
+(Annexe F du manuscrit). Les trois qui changent une conclusion :
+
+- **La comparaison L1 opposait deux mesures différentes.** Les 2,68 pt attribués à l'oracle sont une
+  erreur sur la *masse de probabilité* ; les 29,81 pt du LLM sont une erreur sur des *décisions dures*.
+  À règle égale — argmax contre argmax — l'écart est de 7,30 contre 29,81, soit un facteur 4 et non 11.
+- **La parité informationnelle portait sur 15 variables.** Le contrat servi en compte 21.
+- **« 10 000 fois plus rapide »** devient ≈ 2 700 ×, d'après le tableau comparatif du manuscrit lui-même.
+
+Les huit autres portent sur le statut de ce qui est affirmé : le jalon 0 est requalifié en **contrôle de
+cohérence** (ces marges sont calées par construction, et un χ² non significatif ne prouve rien), la
+dissymétrie d'exposition aux données est déclarée (l'oracle a vu 31 279 trajets, l'agent zéro), et
+l'effectif devient obligatoire à côté de tout composite — 5,02 points de loss s'expliquent par le seul
+passage de 881 à 81 personnes, à décisions inchangées.
+
+**L'étape 3 devient réfutable.** Le protocole d'évaluation sur la presse locale passe de trois à
+**cinq conditions** : s'ajoutent une paraphrase sans indice modal (l'article contient souvent la réponse —
+« métros renforcés » —, sans quoi on mesure du suivi de consigne), un article placebo pris parmi les
+sept que la grille d'expertise avait éliminés, et un **oracle recevant l'événement encodé** en variables.
+Cette dernière condition ferme l'objection la plus solide contre l'article : le modèle tabulaire n'est pas
+*aveugle*, il n'est pas *informé*. Elle rétablit du même coup la cohérence physique du bras textuel — un
+article qui ferme des rues que le calculateur d'itinéraires ignore rend le résultat ininterprétable dans
+les deux sens.
+
+Enfin, les étoiles de la grille des 30 articles, écrites avant tout appel au modèle, sont requalifiées en
+**prédictions pré-enregistrées** : 120 signes gelés par empreinte git, contre lesquels l'accord du modèle
+se mesure au lieu d'être commenté après coup.
+
+**Avant :** le manuscrit citait un facteur 11 sur la fidélité, 15 variables à parité, un χ² à p = 0,98
+présenté comme une preuve, et comparait l'agent informé à un oracle qu'on n'avait pas informé.
+**Après :** les chiffres sont ceux du dépôt, les périmètres et les effectifs sont déclarés, et chaque
+affirmation de l'étape 3 a son critère de réfutation.
+
+> ⚠ **`MANUSCRIT_DETAILLE_2026_SLIDES.html` n'a pas été mis à jour** et porte donc encore les onze
+> chiffres corrigés. La règle de parité Markdown ↔ HTML du dossier `paper/` demande de l'aligner —
+> à faire lors d'une prochaine passe sur ce fichier.
+
+---
+
+## [2026-09-01] Manuscrit v1.2 : Validation Démographique, Ablation 4 Paliers & Événements Réels Sourcés
+
+Mise à jour majeure du manuscrit et du protocole scientifique ([`MANUSCRIT_DETAILLE_2026.md`](file:///Users/yvesb/Documents/Projects/llm-agents-gama/docs/paper/MANUSCRIT_DETAILLE_2026.md), [`PROTOCOLE_SCIENTIFIQUE.md`](file:///Users/yvesb/Documents/Projects/llm-agents-gama/docs/paper/PROTOCOLE_SCIENTIFIQUE.md), [`PLAN_ARTICLE_2026.md`](file:///Users/yvesb/Documents/Projects/llm-agents-gama/docs/paper/PLAN_ARTICLE_2026.md)) :
+* **Jalon 0 (Validation Démographique) :** Clarification de l'équiprobabilité des agents synthétiques (poids unitaire = 1, pas de $COEP$ runtime requis) et tableau de Goodness-of-Fit face au recensement Insee RP 2022 / CEREMA ($\chi^2$, $p > 0,95$).
+* **Ablation Incrémentale en 4 Paliers :**
+  - *Palier 0 (Planchers)* : Hasard pur (25 %), Prior empirique (56,7 %) et Heuristique du plus rapide $\min(\text{durée OTP})$.
+  - *Palier 1 (Modèle Nu / Bare LLM)* : Évaluation zéro prompt engineering avec **Mistral AI** (modèles français/européens), **Qwen-2.5-32B** (open-weights local déterministe) et **Gemini-Flash**.
+  - *Palier 2 (Modèle Calibré)* : Mesure du gain net de prompt engineering.
+  - *Palier 3 (Baselines)* : Logit Multinomial (MNL) et Oracle LightGBM supervisé scellé.
+* **Évaluation Écologique sur Actualités Réelles Toulousaines :** Substitution des scénarios synthétiques par des articles de presse réelle sourcée (*La Dépêche*, communiqués Tisséo, arrêtés préfectoraux) : *Le Minotaure / La Machine*, *Pic d'Ozone / Alerte Canicule*, *Coupure du Périphérique Ouest*.
+* **Archivage :** Snapshots immutables `v1.2` enregistrés sous `docs/paper/archive/`.
+
+---
+
+## [2026-09-01] Manuscrit v1.1 & Protocole Scientifique de Référence pour la Publication
+
+Formalisation complète du cadre méthodologique et versionnage des documents de recherche :
+* **Nouveau document :** [`docs/paper/PROTOCOLE_SCIENTIFIQUE.md`](file:///Users/yvesb/Documents/Projects/llm-agents-gama/docs/paper/PROTOCOLE_SCIENTIFIQUE.md) établissant les règles épistémologiques, le contrôle du *data leakage*, les tests d'hypothèses et les 4 protocoles expérimentaux.
+* **Manuscrit révisé en version `v1.1` :** [`docs/paper/MANUSCRIT_DETAILLE_2026.md`](file:///Users/yvesb/Documents/Projects/llm-agents-gama/docs/paper/MANUSCRIT_DETAILLE_2026.md) :
+  - *Étude factorielle par vignettes sémantiques* ($N = 50 \times 5 = 250$ tests, test de McNemar) en remplacement des cas anecdotiques isolés.
+  - *Parité informationnelle stricte* pour l'évaluation unitaire (vecteur 15 variables identique pour LLM, MNL et LightGBM).
+  - *Formalisation mathématique de l'hystérésis* (mémoire court-terme $\mathcal{M}_t$ et cinétique de ré-adoption sur 5 jours).
+  - *Formulation conceptuelle & cadre comparatif* de l'architecture hybride en cascade (100 % LightGBM vs 100 % LLM vs Hybride 90/10).
+* **Archivage des versions :** Snapshots immutables créés sous `docs/paper/archive/`.
+
+---
+
+## [2026-09-01] Retour au modèle servi, après l'exploration de la distance
+
+La page de synthèse est rendue au modèle de production — 21 variables, `od_km` = distance
+entre les centres des deux zones fines — qui reste **le meilleur score de toutes les
+variantes essayées** : composite comparable **7,40** sur le jeu commun.
+
+Quatre variantes de distance ont été construites, entraînées et notées de bout en bout.
+Aucune ne fait mieux, et le classement est net :
+
+| Variante | Accuracy sur l'enquête | Composite sur le jeu commun |
+|---|---|---|
+| **Production — 21 variables** | 0,7854 | **7,40** |
+| Sans les deux distances à l'hypercentre — 19 variables | 0,7843 | 7,43 |
+| Distance routière ajoutée — 22 variables | 0,7844 | 7,47 |
+| Distance reconstruite depuis la durée | 0,9345 | 9,28 |
+| Idem, homogénéisée entre réseaux | 0,9338 | 12,69 |
+
+Les deux dernières lignes sont contre-intuitives et c'est l'enseignement de la journée :
+**une accuracy de 93 % sur l'enquête accompagne le pire score en simulation**. Toute
+distance reconstruite depuis la durée déclarée contient le mode retenu, puisque c'est lui
+qui choisit la vitesse ; le modèle apprend à le relire, et en simulation il reçoit une
+grandeur qui ne le contient pas. L'homogénéisation entre réseaux aggrave l'écart au lieu
+de le réduire, parce qu'elle déplace chaque mode d'un facteur différent — 0,83 pour la
+marche contre 1,49 pour les transports.
+
+Ce qui a été mesuré et qui reste vrai : le problème n'a jamais été la distance, c'était la
+**durée**. Une distance homogénéisée construite depuis les distances routées, sans durée,
+ne fuit pas — score de trahison de la marche 0,686 contre un plancher de 0,722. Elle est
+seulement redondante, à 0,983 de corrélation avec la distance déjà en place.
+
+**Avant :** on ne savait pas ce que valaient ces pistes.
+**Après :** on sait, chiffres à l'appui, qu'elles sont épuisées — et pourquoi.
+
+Comptes rendus et archives conservés : `docs/traces/2026-08-31_second_modele_19_features/`
+et quatre versions datées de la page dans `docs/synthesis/archive/`.
+
+---
+
+## [2026-08-31] Retour au contrat à 21 features : la matrice de vitesse et otp_km retirées
+
+Deux pistes explorées aujourd'hui pour enrichir la distance du modèle de choix modal sont
+retirées du dépôt. Toutes deux ont été mesurées de bout en bout avant d'être abandonnées, et
+c'est la mesure qui a tranché — pas une préférence.
+
+**La matrice de vitesse** (`od_km` reconstruit depuis `D9 × vitesse moyenne du mode`) était
+bien meilleure sur l'enquête et **25 % moins bonne là où le modèle sert** : composite du jeu
+commun 9,28 contre 7,40. Cause : sa recette exigeait la durée du mode **effectivement pris**,
+qui n'existe pas avant que le mode soit choisi. Le runtime fournissait donc une autre grandeur
+sous le même nom. Ce n'était pas du surapprentissage — sur l'enquête, le modèle généralisait
+parfaitement (validation 0,9336, test 0,9345) — mais une divergence entraînement / service.
+
+**`otp_km`** (distance routière de `mode_skims.parquet`, servie à l'inférence par un loader
+`core/mode_skims.py`) n'avait pas ce défaut : la même ressource, la même clé et la même
+fonction de tranche horaire des deux côtés, non-fuite vérifiée à écart-type nul sur 2 668
+paires-tranches parcourues par au moins deux modes. Elle ne rendait simplement **rien** :
+composite 7,474 contre 7,401, accuracy 0,7844 contre 0,7854. Redondante à **0,972** avec
+`od_km`, et absente **une fois sur deux** en simulation — `mode_skims` n'a été routé que sur
+les paires OD de l'enquête, pas sur celles que la population synthétique génère.
+
+**Avant :** le builder portait deux drapeaux de variante, une ressource de matrice de vitesse,
+un loader runtime et deux versions de contrat supplémentaires.
+**Après :** `build_mode_choice_dataset.py` est **identique au bit près** à son état d'avant
+l'exploration — vérifié par diff, et par reconstruction du jeu (52 248 lignes, 32 colonnes,
+aucune colonne différente de l'original, spec v2, 21 features).
+
+`docs/synthesis/index.html` est régénérée sur le modèle de production — composite comparable
+**7,40**, accuracy 78,5 %, 1 500 tours. La page du modèle v4 est archivée dans
+`docs/synthesis/archive/2026-08-31_v4_matrice_vitesse/`.
+
+**Trois enseignements gardés, et ils valent plus que le code retiré.**
+
+1. **Une variable n'entre au contrat que si le runtime sait la produire.** L'ordre de travail
+   correct est : loader d'inférence, puis point d'appel, puis colonne d'entraînement. Faire la
+   colonne d'abord, c'est refaire l'erreur de la matrice de vitesse.
+2. **Le découpage train/test se retire quand le nombre de lignes change.** 74,1 % des lignes de
+   l'ancien test avaient été vues à l'entraînement par le modèle suivant ; la comparaison naïve
+   donnait 0,9434 au lieu de 0,9205 sur le périmètre réellement hors échantillon.
+3. **Une définition dupliquée dérive.** Les bornes de tranche horaire existaient en deux
+   versions — nuit 0-7 h dans `build_mode_skims.py`, 0-5 h dans le code exploratoire — et
+   attachaient la mauvaise ligne routée pour tout départ entre 5 et 7 h. Écrire le loader
+   d'abord a fait apparaître l'écart avant qu'il ne coûte un entraînement.
+
+Mesures conservées : `docs/traces/2026-08-31_second_modele_19_features/`.
+
+---
+
+## [2026-08-31] La matrice de vitesse : od_km reconstruit depuis la durée, mesuré de bout en bout
+
+> ⚠ **Code retiré du dépôt le 31/08/2026.** La variante a été mesurée puis
+> abandonnée ; seules les mesures survivent. Voir l'entrée du 31/08 « Retour au
+> contrat à 21 features ».
+
+Nouvelle ressource `speed_matrix.json` (`scripts/progedo_logit/export_speed_matrix.py`) : la
+vitesse moyenne réalisée par cellule **mode × classe de durée × tranche horaire × distance
+au centre origine × destination**, 495 cellules, estimée sur le split train seul, repli
+hiérarchique sous 30 observations. Et un drapeau `--od-km {centroides,matrice_vitesse}` sur
+`build_mode_choice_dataset.py` qui convertit une durée en distance avec elle, en retirant
+`D9`, `D11` et les deux `dist_center_*`.
+
+**Un résultat contre-intuitif sur la sélection des dimensions.** La tranche horaire ne
+qualifie pas à mode fixé (`eta²` 0,0050) mais qualifie **à mode × classe de durée fixés**
+(0,0097). L'effet était dilué, pas absent : la congestion pèse sur les trajets longs et
+presque pas sur les courts — `eta²` de l'heure à 0,0029 sur les trajets voiture de moins de
+8 minutes, **0,0688 au-delà de 60 minutes**. La classe de durée doit donc être une dimension
+*avant* l'heure. Elle est d'ailleurs elle-même excellente (0,0177).
+
+**Effet secondaire favorable, et il est réel.** `od_km` ne dépendant plus du rattachement
+aux zones fines, le filtre de périmètre tombe : le jeu passe de 52 248 à **54 559
+déplacements**, et le biais de sélection de −1,11 point sur la voiture disparaît. Les parts
+pondérées du nouveau jeu — voiture 56,94 · marche 26,95 · TC 12,05 · vélo 4,06 — collent à
+la table EMC² publiée (56,70 / 26,80 / 12,37 / 4,12).
+
+**Avant :** on ne savait pas ce que valait cette piste, discutée trois fois sans chiffre de
+bout en bout.
+**Après :** le modèle v4 est **nettement meilleur sur l'enquête et 25 % moins bon là où il
+servirait**. Sur les 3 382 déplacements hors échantillon pour les trois modèles, accuracy
+0,7729 → **0,9205** et rappel vélo 0,1211 → **0,5272**. Sur le jeu commun renormalisé sur
+l'offre OTP, composite comparable 7,401 → **9,282**, et toutes les dimensions se dégradent
+sauf la distance.
+
+La cause est structurelle. `od_km` version matrice se calcule depuis `D9`, la durée du mode
+**effectivement pris**. À l'instant de la décision en simulation, ce mode n'est pas encore
+choisi : il n'existe pas de `D9`. Le runtime fournit donc l'`od_km` entre centroïdes, une
+autre grandeur (corrélation 0,78 entre les deux), et le modèle qui avait appris à lire la
+première reçoit la seconde. Ce n'est pas un surapprentissage — sur l'enquête, v4 généralise
+parfaitement (validation 0,9336, test 0,9345) — c'est une divergence entraînement / service.
+
+**Deux pièges évités, à retenir pour les prochaines comparaisons.** Le découpage train/test
+se retire quand le nombre de lignes change : 74,1 % des lignes de l'ancien test avaient été
+vues à l'entraînement par v4, et la comparaison naïve donnait 0,9434 au lieu de 0,9205. Et
+la version du contrat de features est un verrou, pas une étiquette : `spec_version` vaut 4
+et non 3, parce que 3 désigne déjà un autre contrat à 19 features.
+
+`docs/synthesis/index.html` est régénérée avec v4 ; la version précédente est archivée dans
+`docs/synthesis/archive/2026-08-31_avant_v4/`. La production reste sur `centroides` — le
+drapeau est explicite et son défaut inchangé.
+
+Traces, artefacts et les cinq étapes détaillées :
+`docs/traces/2026-08-31_second_modele_19_features/`.
+
+---
+
+## [2026-08-31] Le score du modèle statistique mesuré sur les deux bases, et la page de synthèse remise à jour
+
+Le composite du modèle de choix modal existait sous deux valeurs qu'on pouvait croire
+comparables : **1,235** et **7,53**. Elles ne le sont pas, et l'écart n'est pas une
+progression du modèle — c'est la base de mesure qui change.
+
+| Base de mesure | A — 21 features | B — 19 features |
+|---|---|---|
+| Split test de l'enquête, 13 045 déplacements déclarés | 1,248 | **1,235** |
+| Jeu commun, 3 249 décisions, avant renormalisation OTP | 3,457 | 3,451 |
+| Jeu commun, **renormalisé sur l'offre OTP** | 7,401 | **7,430** |
+
+Trois différences se cumulent entre la première ligne et la dernière. La **population** :
+personas de synthèse au lieu de déplacements déclarés, dont ~5 % des localisations tombent
+hors de la couche de zones fines, à 22 km en médiane du périmètre d'enquête. La **contrainte
+d'offre** : sur le jeu commun le modèle ne peut proposer que ce qu'OTP a offert, et cette
+seule correction fait passer le composite de 3,45 à 7,43 — plus du double. Le **référentiel
+de lecture** : sur le split test, on compare à la table EMC² des trajets que l'enquête a
+elle-même produits, ce que la décision E3 du ticket 005 qualifie déjà de borne supérieure
+et non de comparaison loyale.
+
+**Ce que ça règle pour l'arbitrage des 19 features.** Sur le jeu commun, B est
+**équivalent** à A : +0,029 sur le composite de tête (+0,4 %), −0,002 en mode élu, −0,006
+avant renormalisation. Le léger avantage de B mesuré sur l'enquête (−0,013) ne se
+transporte pas, il est au niveau du bruit. Retirer les deux distances à l'hypercentre ne
+change donc rien à ce que la politique produira en simulation : même performance servie,
+deux variables de moins, une dépendance à la définition de l'hypercentre en moins.
+
+**Avant :** `docs/synthesis/index.html` datait du 27/08 à 19:50 et son volet 3 décrivait un
+booster de **140 arbres** — composite comparable 7,53, accuracy 79,1 %, L1 2,4 points. Ces
+chiffres ne correspondaient plus à l'artefact en place depuis le réglage des hyperparamètres
+du 30/08, et rien sur la page ne le disait.
+**Après :** régénérée, elle affiche le booster réel — 1 500 tours, composite comparable
+**7,40**, mode élu 6,65, avant renormalisation 3,46, accuracy 78,5 %, L1 2,7 points. Ces
+valeurs reproduisent au millième une mesure indépendante refaite à côté, ce qui vaut
+contrôle croisé du chemin de score.
+
+Enseignement à garder : **un composite ne se lit pas sans sa base**. Trois nombres du même
+modèle — 1,2 / 3,5 / 7,4 — sont tous justes, et deux d'entre eux sont trompeurs si on omet
+de dire sur quoi ils portent.
+
+Traces : `docs/traces/2026-08-31_second_modele_19_features/volet3_scores_jeu_commun.json`.
+
+---
+
+## [2026-08-31] Un second modèle de choix modal, à 19 variables au lieu de 21
+
+Les deux distances à l'hypercentre — `dist_center_orig_km` et `dist_center_dest_km`, la
+distance en kilomètres entre le centre de la zone fine de départ, puis d'arrivée, et le
+centroïde du secteur Capitole — sortent du contrat de features dans une variante mesurée
+et documentée. Un second modèle est entraîné sans elles, avec le harnais de production,
+sur le même découpage et la même pondération `COEP`.
+
+**Le retrait coûte onze centièmes de point d'accuracy.** 0,7843 contre 0,7854 sur les
+13 045 déplacements de test, log-loss 0,5470 contre 0,5402, L1 des parts modales 0,0293
+contre 0,0269. La PR-AUC de la marche ne bouge pas (0,8191 contre 0,8185) ; celle des
+transports collectifs paie le plus, à −1,21 point — cohérent, la desserte TC est radiale
+et ces deux variables étaient la seule mesure explicite de la radialité d'un trajet.
+
+**La raison du faible coût est mesurable, et elle vaut pour la suite :** à Toulouse,
+densité de ménages et distance au centre mesurent le même gradient — **Spearman −0,879**.
+Les 9 points de gain libérés se redistribuent presque exactement sur `density_orig`,
+`density_dest` et `od_km`. Un arbre ne lisant que l'ordre des valeurs, une variable
+monotone d'une autre lui est quasiment interchangeable.
+
+**Corollaire à ne pas perdre : le coût des retraits n'est pas additif.** Retirer les deux
+paires — les distances au centre *et* les densités — fait tomber la log-loss à 0,5806 et
+la PR-AUC du TC à 0,7151, quatre points au lieu d'un. Sans aucune variable géographique,
+accuracy 0,6974 et PR-AUC marche 0,560. On retire l'une **ou** l'autre, jamais les deux.
+
+Deux vérifications faites au passage sur `od_km`, la distance entre centres de zones fines
+qui reste la première variable du modèle. **Aucune fuite d'étiquette** : sur 20 922 paires
+origine-destination distinctes, l'écart-type d'`od_km` à l'intérieur d'une paire vaut
+exactement zéro, y compris sur les 3 093 paires parcourues par au moins deux modes
+différents — le même trajet fait à pied et en voiture reçoit la valeur identique. **Biais
+de sélection résiduel** : `od_km` est calculable pour 95,76 % des déplacements, mais le
+taux reste inégal selon le mode (voiture 93,84 % contre vélo 98,87 %, les trajets longs
+sortant du périmètre d'enquête), ce qui sous-représente la voiture de 1,11 point.
+
+Effet de bord acquis : plus aucune feature ne consomme la définition de l'hypercentre.
+L'écart de 820 m entre le centre publié dans le spec et la constante codée en dur dans
+`move_logger.py` cesse de pouvoir décaler une prédiction.
+
+**Avant :** le contrat comptait 21 features et personne ne savait ce que valaient les deux
+distances au centre ; les retirer était une intuition.
+**Après :** un second jeu de métriques côté à côte avec la référence, un contrat réduit
+prêt à promouvoir (`feature_spec_19f.json`, spec v3), et le chiffre exact de ce que le
+retrait coûte.
+
+La politique servie n'est **pas** remplacée : l'arbitrage reste à faire. Promouvoir la
+variante demande de retirer les deux features de `FEATURE_SPEC`, de porter `SPEC_VERSION`
+à 3, de retirer les deux champs de `GeoFeatures` dans `zone_resolver.py`, de reprendre les
+tests qui figent la liste des six features géo, puis de régénérer parquet, spec et
+politique.
+
+Rapport lisible, contrat réduit et métriques :
+`docs/traces/2026-08-31_second_modele_19_features/`. Ce dossier tombe sous la règle
+`docs/traces/*` du `.gitignore` et n'est donc **pas versionné** : il vit sur la machine
+qui l'a produit. Les quatre fichiers se régénèrent avec la commande du `README.md`.
+
+---
+
+## [2026-08-31] Le jeu d'entraînement du choix modal passe au crible
+
+Un notebook d'audit — `scripts/progedo_logit/explore_mode_choice_dataset.ipynb` — exporte le
+jeu de la politique de choix modal en CSV, le **recharge depuis le CSV**, et vérifie ce
+qu'on tenait pour acquis : étanchéité du découpage, représentativité train↔test de chaque
+variable, valeurs aberrantes, colonnes contaminées.
+
+Le découpage tient (0 ménage à cheval sur 9 393, 25,0 % de test), aucune variable ne dérive
+entre les deux côtés (SMD max 0,037 ; TVD max 2,55 pts), et les dix règles d'impossibilité
+de domaine passent toutes.
+
+**Le seul défaut est un trou d'effectif, et il explique un chiffre de la page de synthèse.**
+Le jeu de test ne contient qu'**une seule marche au-delà de 10 km et aucune au-delà de
+20 km** ; neuf cases du croisement mode × distance tiennent sous 30 observations. C'est le
+même mécanisme qui, sur la page de synthèse, laisse **un unique déplacement de plus de
+50 km peser autant qu'une tranche de 856** dans la note de distance — la métrique ordinale
+retient une tranche sur la présence d'une référence, jamais sur l'effectif mesuré.
+
+**Avant :** le jeu était décrit par le seul résumé d'entraînement (accuracy, log-loss) ; les
+cases trop minces pour être notées n'étaient visibles nulle part.
+**Après :** neuf contrôles rendent un verdict explicite, et la carte des effectifs de test
+montre où une note n'a pas de sens — avant qu'elle soit calculée.
+
+Deux distinctions que l'audit tient et qu'un test naïf confond : *impossible* contre
+*invraisemblable* (223 déplacements en voiture sans permis sont des passagers, pas des
+erreurs), et *saturation* d'une variable continue contre valeur dominante d'une variable
+discrète — les artefacts d'arrondi trouvés (`duration_min` à 17,6 % sur « 10 minutes ») sont
+tous confinés aux colonnes déjà exclues du modèle.
+
+---
+
+## [2026-08-30] Le booster de choix modal réglé pour les modes rares
+
+### Le vélo gagne en vraisemblance, sans repondération de classe
+
+Les hyperparamètres LightGBM de la politique de choix modal n'avaient jamais été cherchés :
+ils étaient posés à la main. Un banc de réglage les a cherchés sur **96 configurations**,
+en validation croisée par ménage à l'intérieur du train — le split test n'est jamais lu
+pendant la sélection.
+
+Le diagnostic était contre-intuitif : le modèle était **en sur-capacité**, et c'est le mode
+le plus rare qui le payait. Une classe à 4,3 % des déplacements ne peuple pas assez les
+feuilles d'un arbre à 31 feuilles pour que sa probabilité y soit estimée sur autre chose que
+du bruit. Passer à 5 feuilles, avec un pas trois fois plus court et dix fois plus de tours,
+lui rend ce qui lui manquait.
+
+**Avant :** vélo — vraisemblance 2,42 sur ses propres lignes, masse de probabilité à 96 % de
+l'observé, PR-AUC 0,241.
+**Après :** vraisemblance **2,35** (gain significatif au bootstrap apparié par ménage,
+IC 95 % entièrement négatif), PR-AUC 0,276 en validation croisée.
+
+Le log-loss global et l'écart sur les parts modales ne bougent pas au-delà du bruit : le
+réglage transfère de la vraisemblance de la voiture vers le vélo, sans dégrader ce que le
+pipeline consomme réellement. La calibration s'améliore (ECE 0,0142 → 0,0118).
+
+**La décision E7 n'a pas été contournée.** Aucune repondération de classe : le banc écarte
+d'office toute configuration qui dégrade de plus de 0,005 l'écart aux parts modales
+observées — 22 des 49 configurations de la première passe y sont tombées.
+
+**Ce qui ne change pas** : en mode élu (argmax), le vélo reste à 1,2 % pour 4,0 % observés,
+avant comme après. C'est une propriété de l'argmax sur une classe rare, pas un défaut du
+modèle ; la lecture juste des parts modales reste la masse de probabilité.
+
+**Ce que ça coûte** : 6 000 arbres au lieu de 560, artefact 18,9 Mo au lieu de 12,2,
+prédiction 44 µs par ligne au lieu de 10. Sans effet sur le pipeline actuel.
+
+### Un banc de réglage réutilisable
+
+`make policy-tune` cherche les hyperparamètres et écrit son classement complet sans toucher
+au modèle servi : reporter un gagnant reste un geste humain, suivi de `make policy`. Le banc
+mesure ce que l'accuracy et le rappel ne savent pas mesurer sur une classe rare — la
+vraisemblance restreinte à la classe, la PR-AUC un-contre-tous, l'ECE, et l'écart aux parts
+modales comme garde-fou.
+
+---
+
+## [2026-08-28] Le cache LLM se coupe au lancement, et deux planchers de hasard cadrent le score
+
+### `make run CACHE=0` — un run entièrement journalisé
+
+Le cache sémantique se désactive désormais depuis la ligne de commande, comme la mémoire
+avec `MEM=0`. Ce n'est pas un réglage de confort : **une décision servie par le cache
+n'est jamais journalisée**, et sans journal il n'y a pas de prompt à rejouer.
+
+Mesuré sur le run du 27/08 : 6 735 décisions passées par la voie LLM, dont **76,4 %
+servies par le cache**. Le journal ne contenait donc que 377 des 3 249 décisions du
+périmètre scoré — 12 %, et pas n'importe lesquelles : celles qui avaient *raté* le cache,
+donc les plus atypiques du run. Tout rejeu mesuré là-dessus aurait porté sur un
+sous-ensemble biaisé sans que rien ne le signale.
+
+**Avant :** un A/B de prompt ou une mesure de plancher ne pouvait porter que sur les
+décisions ayant raté le cache.
+**Après :** `make run CACHE=0` force chaque décision à passer par le modèle, donc à être
+journalisée, et le rejeu couvre le périmètre entier.
+
+Le coût est exactement l'inverse du taux de service du cache — **×4,24** — et il se
+chiffre : 228 requêtes HTTP deviennent ~967, et 1,2 million de tokens d'entrée en
+deviennent ~5,2 millions. Sur des paliers gratuits à 500 requêtes/jour par clé, un run de
+1 000 agents tient tout juste sur deux seaux, ce qui **garantit la bascule entre modèles**.
+Qui veut un plancher sur modèle unique doit réduire le périmètre plutôt que compter sur
+la marge. `make run CACHE=1` remet le cache : sans ce retour, tous les runs suivants
+paient le plein tarif.
+
+### Deux planchers de hasard, mesurés sans un seul appel
+
+`scripts/synthesis/bare_prompt_replay.py uniform` répartit la masse à parts égales et
+score le résultat avec le même scoreur que les trois volets, sur le même périmètre.
+
+| Plancher | Composite | Ce qu'il isole |
+|---|---|---|
+| Hasard **nu** — 4 modes, offre ignorée (`--all-modes`) | **38,29** | rien du tout : le plancher absolu |
+| Hasard **contraint** — modes offerts par OTP | **21,76** | le hasard, mais informé de la faisabilité |
+| Agents LLM | 16,16 | la chaîne complète |
+| LightGBM | 7,53 | le modèle statistique |
+
+**L'écart entre les deux hasards — 16,5 points — n'est produit par aucun modèle.** C'est ce
+qu'apporte l'offre OTP à elle seule : savoir qu'on ne peut pas prendre un bus qui n'existe
+pas fait plus de la moitié du chemin. Les agents ajoutent 5,6 points par-dessus, le
+LightGBM 14,2.
+
+Deux constats que ce cadrage rend visibles, et qu'il vaut mieux connaître avant qu'un
+relecteur ne les trouve :
+
+- **Sur la marche, le hasard contraint fait mieux que les agents** — écart à la cible
+  +3,7 contre −12,3. Sur les transports collectifs aussi (+14,9 contre +17,8). Tout
+  l'avantage des agents sur le hasard vient de la **voiture** (−8,6 contre −23,7) et,
+  dans le détail des dimensions, du **motif** et de la **distance** : à eux deux ils
+  expliquent **92 %** des 5,6 points d'écart.
+- **Sur l'âge, le hasard est meilleur que les agents** (3,58 contre 4,37) — des personas
+  qui portent l'âge dans leur prompt représentent moins bien la structure par âge qu'une
+  pièce lancée.
+
+### Ce que le rejeu « prompt nu » a déjà appris avant de tourner
+
+`bare_prompt_replay.py replay` dépouille le bloc utilisateur de tout ce qui décrit la
+personne, en **filtrant** le texte rendu par le moteur plutôt qu'en le reconstruisant.
+Son essai à blanc a révélé une fuite : la mention d'abonnement TC n'est pas sur la ligne
+de persona mais **dans la ligne d'option** (`_pt_subscription_note`, depuis le 26/08) —
+**1 052 mentions sur 2 006 options**. Un dépouillement qui ne traitait que le persona
+laissait donc le prompt annoncer si la personne a un abonnement. Le script échoue
+bruyamment si le dépouillement ne retire rien : un prompt qu'on croit nu et qui ne l'est
+pas produirait un plancher faux sans le dire.
+
+---
+
+## [2026-08-27] L'effet d'un ajout de prompt se lit en deux camemberts
+
+`make alt-prompt-figure VARIANT=1` produit une figure PNG qui met côte à côte les parts
+modales de la population entière avant et après un ajout au prompt système. Sur la
+variante V1, l'écart tient en peu de chose : transports collectifs −1,7 point, voiture
++1,2, marche +0,3.
+
+C'est le résultat, pas un défaut de la figure. L'ajout n'a été appliqué qu'aux 495
+décisions où le modèle avait retenu un transport collectif alors que la marche lui était
+proposée — sur 2 911. Là, il déplace 9,9 points de transport collectif ; dilué dans le run
+entier, il en reste 1,7. `SCOPE=subset` dessine ces 495 décisions seules, `SCOPE=both`
+empile les deux étages. La figure ne porte pas de titre, mais elle nomme toujours la
+variante et le périmètre avec son effectif, et une phrase de lecture dit en pied ce que la
+version choisie cache : un camembert de sous-jeu pris pour une part modale de ville est un
+contresens.
+
+Les chiffres sont lus dans la page de la variante — Δ compris, pour qu'une figure ne puisse
+pas contredire d'un dixième la page dont elle dérive — et les réserves de la campagne
+(pas de bras témoin, simulation non rejouée) sont imprimées en pied de figure. Un bras qui
+n'a pas été rejoué n'est pas dessiné : la commande s'arrête en nommant celle qui produirait
+la page manquante.
+
+**Avant :** l'effet d'un prompt se lisait dans deux tableaux d'une page HTML, et le lecteur
+pressé retenait celui des deux qui l'arrangeait.
+**Après :** une image, un périmètre nommé, et la dilution dite à côté de l'effet.
+
+---
+
+## [2026-08-27] GAMA écrit à nouveau ses résultats : le symlink de sortie ne pend plus
+
+Lancer une suite de tests sur l'hôte pendant une simulation faisait échouer l'écriture des
+CSV de GAMA, avec une trace Java qui ne nommait pas la cause :
+`FileAlreadyExistsException` sur `GAMA/CityTransport/results`, doublée d'un
+« Java error: I/O error ».
+
+Deux défauts se combinaient. Importer `settings` créait un répertoire de run et repointait le
+symlink de sortie de GAMA — un import de test volait donc sa sortie à la simulation en cours.
+Et hors conteneur, ce répertoire était fabriqué dans `llm-agents/experiments/` au lieu de
+`experiments/` : la cible du symlink, codée en dur, ne résolvait plus rien depuis
+`GAMA/CityTransport/`. GAMA voyait un lien pendant, tentait de créer le répertoire, et se
+heurtait au lien lui-même.
+
+Désormais : sous pytest ou `unittest` (ou avec `APP_NO_RUN_ARTIFACTS=1`), l'import lit la
+configuration et s'arrête là — aucun répertoire créé, aucun symlink touché. Le répertoire des
+expériences est celui de la racine du dépôt dans les deux contextes, ce qui rend à nouveau
+valide la cible `../../experiments/…` — écrite par le contrôleur, mais lue par GAMA sur
+l'hôte ou par le conteneur `gama`. Le contrôleur vérifie enfin cette résolution au
+démarrage : elle est journalisée quand elle aboutit, et signalée en `[ALARME]` sinon — plutôt
+que de laisser GAMA échouer une heure plus tard sur une erreur muette.
+
+**Avant :** `make tests` pendant un run → GAMA perd ses sorties CSV, avec une erreur Java
+opaque ; un `llm-agents/experiments/` fantôme se remplit de runs vides.
+**Après :** les tests n'ont plus d'effet sur le run ; le symlink pointe toujours vers le
+workdir courant, et une anomalie se lit dans les logs du contrôleur au démarrage.
+
+---
+
+## [2026-08-27] La page déclare quand les jeux gelés ne portent plus la population du run
+
+La page de synthèse affirme que ses trois volets partagent un substrat. C'est vrai du run —
+les gardes le vérifient — mais le volet 2 est *aussi* scoré sur des **jeux gelés**, découpés
+dans un run antérieur. Leur manifeste enregistre l'empreinte de la population d'origine ; la
+page la compare maintenant à celle du run épinglé et **déclare la divergence** quand elle
+existe.
+
+État constaté : le manifeste épingle une population `aec28f0146…`, le run en porte une
+`4cd38bdc19…`. Les jeux gelés gardent donc l'abonnement TC et le permis recopiés du donneur
+ENTD 2008, que les tickets 016 et 017 viennent de réécrire dans la population en service.
+
+**Avant :** la phrase « les jeux gelés sont eux-mêmes construits à partir d'un run de ce
+type » laissait croire à un substrat partagé, sans jamais le vérifier.
+**Après :** les deux empreintes sont comparées, et l'écart est écrit avec sa conséquence de
+lecture — les scores du volet 2 sur jeux gelés restent comparables entre eux, ce qui est leur
+rôle, mais pas au volet 1 ni au volet 3.
+
+La divergence est déclarée et **non corrigée** : refaire les jeux gelés casserait la
+comparabilité de toute la trajectoire de calibration déjà mesurée. L'encadré ne s'affiche que
+si la divergence existe — une mise en garde permanente cesse d'être lue.
+
+---
+
+## [2026-08-27] Un trait corrigé invalide désormais les décisions en cache
+
+Le `state_hash` du cache sémantique LLM était fait des codes d'options, de la météo et de la
+signature d'anticipation — **pas des traits du persona**. Or tous les traits ne conditionnent
+pas l'offre : `has_pt_subscription` ne change que le texte du prompt. Corriger l'abonnement
+de 352 agents laissait donc leurs décisions déjà en cache être resservies **sous l'ancien
+prompt**, sans qu'aucun log ne le signale — troisième occurrence de la famille de pièges que
+le ticket 013 avait ouverte pour les durées et le 014 pour l'anticipation.
+
+Une signature des traits entre maintenant dans la clé. Conséquence pour l'usage : corriger un
+trait de population suffit désormais, sans vidage manuel du cache — les décisions concernées
+sont recalculées, les autres restent servies.
+
+**Avant :** après une correction de trait, il fallait vider `data/cache/llm` à la main, et
+rien ne rappelait qu'il le fallait.
+**Après :** la clé porte les traits ; un agent dont un trait a changé rate le cache, les
+autres continuent d'en bénéficier.
+
+Deux précisions qui séparent le correctif de la gêne. `has_driving_license` s'auto-invalidait
+déjà — il passe par `_can_drive`, qui déplace les modes offerts, donc les codes d'options.
+Et `name` est **exclu** de la signature : il vient de Faker non graine, donc l'inclure
+viderait tout le cache à chaque régénération de population. Vérifié plutôt que supposé — le
+`name` est identique entre la population source et celle du run (930/930), il n'est donc pas
+re-tiré au chargement, contrairement à ce qu'affirmait la documentation.
+
+Une signature vide laisse le hash inchangé : un cache antérieur reste lisible, au prix de
+n'être pas gardé sur cet axe.
+
+---
+
+## [2026-08-27] Blocs d'âge scolaires : testés, rejetés — et les traits posés sur les populations en service
+
+### L'étape 6, arbitrée et négative
+
+Trois représentations de l'âge dans la politique de choix modal, mêmes données et mêmes
+hyperparamètres, arbitrées par validation croisée **GroupKFold(5) groupée par ménage** sur
+les 52 248 déplacements et 9 393 ménages du jeu corrigé. Règle annoncée avant de voir le
+résultat : retenu si la log-loss pondérée gagne au moins 0,002.
+
+| Variante | Log-loss hors échantillon | Gain | Verdict |
+|---|---|---|---|
+| âge continu (référence) | 0,58888 | — | — |
+| + `under_26` | 0,58736 | +0,00152 | **rejeté** — sous le seuil |
+| âge remplacé par blocs de cycles scolaires | 0,59505 | −0,00617 | **rejeté** — dégrade |
+| blocs **et** âge continu | 0,59760 | −0,00872 | **rejeté** — dégrade |
+
+Remplacer l'âge continu par des blocs `[0-5] [6-10] [11-14] [15-18] [19-26] …` **dégrade**
+le modèle : le bloc perd le gradient interne, et un booster trouve déjà ses coupures. Le
+palier `under_26` apporte un gain réel mais trois fois trop petit pour le seuil annoncé.
+
+Rien n'est changé dans le modèle. Le résultat est consigné parce qu'une hypothèse éprouvée
+et rejetée vaut d'être écrite — sinon elle se repropose dans six mois.
+
+Ce verdict était attendu depuis la correction de la granularité des codes de zone du même
+jour : la motivation des blocs était que le modèle apprenait mal les cohortes scolaires,
+mais la cause était l'attrition de l'échantillon, pas la représentation de l'âge. Le jeu
+étant redevenu représentatif par bande d'âge, le modèle apprend le gradient tout seul.
+
+### Les deux traits posés sur les trois populations en service
+
+`enrich_equipment` puis `fix_minor_traits` appliqués à `data/population/`. Aucune
+régénération : c'est la voie 1 des tickets 016 et 017.
+
+| Population | Abonnement TC posé | Permis posé | Valeurs modifiées | `car_availability` recalculé |
+|---|---|---|---|---|
+| 100 | 24,8 % *(cible 25,8)* | 86,9 % *(cible 85,9)* | 47 + 20 | 27 ménages |
+| 1000 | 22,9 % | 87,7 % | 352 + 148 | 68 ménages |
+| 1014 | **25,8 %** | 83,9 % | 348 + 173 | 121 ménages |
+
+Les portes d'ensemble passent sur les trois, l'écart étudiant − retraité vaut +45,5 pt sur
+la population 1000 et +65,1 sur la 1014 (contre +5,7 avant, pour +54,5 observés), et
+`car_availability` est cohérent avec les permis posés partout. Les trois sortent en code 4 —
+écart de composition sur la strate étudiante, qui se corrige au tirage et non ici.
+
+**Avant :** un étudiant sur trois arrivait au LLM avec son abonnement.
+**Après :** les trois populations en service portent des traits appris sur l'enquête, et le
+prochain run les lira sans rien régénérer.
+
+---
+
+## [2026-08-27] La moitié des déplacements manquait à l'entraînement du modèle — corrigé
+
+`build_trips` comparait les codes de zone du fichier déplacements (`102103503`, au niveau
+sous-zone) à ceux de la couche `zf_zones.gpkg` (`102103000`, toujours suffixés `000`).
+Résultat : **51,1 % des origines-destinations résolues**, et une attrition qui n'était pas
+uniforme — trois quarts des déplacements des 10-14 ans écartés contre la moitié de ceux des
+adultes, ce qui divisait par près de trois la part de transports collectifs apprise pour les
+cohortes scolaires. Le modèle était mal entraîné exactement là où la page de synthèse
+affiche son plus gros écart.
+
+`zone_key()` ramène le code à la granularité de la couche. Résolution **51,1 % → 95,8 %**,
+jeu d'entraînement **27 886 → 52 248 déplacements**, et il est désormais représentatif :
+
+| Bande | Part TC avant | après | réelle |
+|---|---|---|---|
+| 10-14 | 9,7 % | **27,3 %** | 27,1 % |
+| 15-19 | 31,5 % | **45,4 %** | 45,2 % |
+| global | 9,8 % | **12,3 %** | 12,4 % |
+
+Validé plutôt qu'affirmé : sur les 24 365 déplacements récupérés, la distance obtenue
+corrèle à 0,984 avec la distance à vol d'oiseau déclarée, contre 0,992 sur ceux déjà
+résolus — la troncature situe les trajets aussi bien, elle ne rapproche pas des
+destinations lointaines. Les 4,2 % restants sont hors périmètre pour de bon et le restent.
+
+Politique ré-entraînée : test sur 13 045 déplacements au lieu de 6 985, L1 du mode élu
+0,0861 → 0,0573, `has_pt_subscription` devenu deuxième variable du modèle (10,2 % du gain).
+
+**Sur l'écart des 15-19 ans, le plus gros de la page, les deux corrections du jour se
+cumulent :** transports collectifs −24,5 → **−14,8** points, voiture +28,0 → **+20,9**.
+Le motif « études » passe de −9,9 à −4,5 sur les TC, les 10-14 ans de −15,3 à −9,3.
+
+**Mais le composite de tête empire (6,015 → 6,208), et c'est un biais de la lecture, pas
+des corrections.** La renormalisation sur l'offre OTP retire 9 points à la voiture — que le
+modèle surprédit en brut — et les répartit sur les modes offerts. Elle **améliore** ainsi
+deux modes sur quatre : marche −7,7 → −2,7 d'écart, voiture +6,4 → −2,6. Le problème est
+concentré sur les transports collectifs, presque toujours offerts, donc premiers
+bénéficiaires de cette masse : ils sont à **+0,9** de leur cible dans la vision propre du
+modèle et à **+4,1** après renormalisation. **`attendu` pénalise donc toute correction qui
+augmente les TC, même juste** ; `elu` (6,464 → 5,933) et `brut` (6,282 → 5,652) n'ont pas
+ce biais et vont dans le bon sens. Le déplacement par mode est désormais **mesuré et publié**
+dans `data.json` (`renormalisation_bias`), recalculé à chaque régénération : une valeur
+figée deviendrait fausse au run suivant sans que rien ne le dise.
+
+**Avant :** un ré-entraînement à variables inchangées laissait les parquets périmés servis
+comme courants, sans signal.
+**Après :** le parquet porte `policy_sha256` et la page le compare à l'artefact sur le
+disque — troisième axe du garde de substrat, après le nom du run et l'empreinte du journal.
+
+---
+
+## [2026-08-27] `cerema_values.yaml` vérifié contre le rapport source — et la vraie cause de l'écart des 15-19 ans
+
+Les cibles de la page ont été confrontées au rapport d'enquête publié (aua-toulouse.org,
+68 pages). **Elles sont conformes** : recalculées sur les 54 559 déplacements exploitables
+des micro-données, pondérées `COEP`, les parts modales reproduisent la table publiée à
+0,4 point près en global, et à moins de 1 point sur chaque bande d'âge sauf les 15-19 ans
+(2,2 points). Les tables occupation, type de logement, motif et genre concordent exactement.
+Le rapport confirme aussi ce que « transports collectifs » recouvre — Tisséo, train liO, et
+les autres transports en commun dont les autocars régionaux et scolaires — et que « autres
+modes » désigne les deux-roues motorisés, camionnettes et trottinettes.
+
+**En revanche le jeu d'entraînement de la politique perd la moitié des déplacements, et pas
+au hasard.** `build_mode_choice_dataset` n'en garde que 27 886 sur 54 559, et l'attrition
+tient à un seul filtre : `od_km`, qui exige que les deux extrémités du déplacement tombent
+dans la couche de zones fines.
+
+| Bande | `od_km` absent | Part TC réelle | Part TC dans l'entraînement |
+|---|---|---|---|
+| 10-14 | **75,5 %** | 27,1 % | **9,7 %** |
+| 15-19 | **64,7 %** | 45,2 % | **31,5 %** |
+| 30-49 | 48,4 % | 5,8 % | 7,0 % |
+
+Trois quarts des déplacements des 10-14 ans sont écartés, contre la moitié de ceux des
+adultes, et le sous-ensemble retenu divise leur part de transports collectifs par près de
+trois. La politique est donc mal entraînée exactement sur la cohorte où la page affiche son
+plus gros écart — les 15-19 ans, voiture +28 points et TC −24,5 avant correction des traits.
+
+**Avant :** on pouvait attribuer cet écart à la population ou à la cible.
+**Après :** la cible est vérifiée juste, la correction des traits n'en récupère que
+5,3 points, et le reste s'explique par un échantillon d'apprentissage biaisé en âge. Le
+correctif est du côté de la résolution des OD, pas de la table de référence.
+
+---
+
+## [2026-08-27] Ce que la correction des traits vaut sur le volet 3 : le chiffre de tête ne bouge pas, et c'est le résultat
+
+Contrefactuel chiffré avant tout run : sur `experiments/archive/2026-08-26_17_46`, mêmes OD,
+même offre OTP, même politique PROGEDO, seuls l'abonnement TC et le permis passent de la
+recopie ENTD à la loi apprise sur l'enquête.
+
+| Lecture du volet 3 | Avant | Après |
+|---|---|---|
+| brut (vision propre du modèle) | 6,282 | **5,749** |
+| mode le plus probable | 6,464 | **6,086** |
+| masse renormalisée sur l'offre OTP | 6,015 | 5,941 |
+
+La prédiction brute gagne 0,53 point de composite et 9,2 points de L1. Le chiffre publié —
+la masse renormalisée — ne gagne que 0,07 et perd même 0,72 en L1.
+
+**Le gain est là où le ticket 016 l'annonçait** : les 15-19 ans, plus gros écart de la page,
+voient leur surestimation de voiture passer de +28,0 à +23,7 points et leur sous-estimation
+de TC de −24,5 à −19,2. Les 10-14 ans gagnent 4,0 points sur les TC, le motif « études »
+2,9 sur la voiture. Et là où aucun gain n'était à attendre, il n'y en a pas : la marche des
+chômeurs reste à −11,9 — cet écart-là vient des longueurs de trajet, que nul trait ne corrige.
+
+**Deux dimensions se dégradent, pour une raison qui est le diagnostic même du ticket 016.**
+Les TC étaient déjà surprédits chez les adultes : hommes 13,5 % pour une cible de 11,6,
+Toulouse 23,4 pour 21,6. Relever les abonnements — à juste titre — les pousse plus haut
+encore. La surprédiction chez les adultes et la sous-prédiction chez les jeunes se
+compensaient ; corriger les personnes les **sépare**. « La part TC globale reste presque
+juste, et elle est juste pour les mauvaises personnes » — c'est vérifié par l'autre bout.
+
+**Avant :** on pouvait croire que corriger les traits ferait baisser le composite du volet 3.
+**Après :** on sait que non, et pourquoi — le composite était juste pour de mauvaises
+raisons. Le volet 3 n'est donc pas le bon juge de ce lot ; ce que la correction produit se
+mesure au volet 1, sur un run.
+
+Réserve inscrite : l'offre OTP est gelée dans ce contrefactuel, alors que le permis
+conditionne l'offre voiture dans le simulateur. L'effet du permis y est donc **sous-estimé**,
+et son chiffre définitif viendra du run.
+
+---
+
+## [2026-08-27] Abonnement TC et permis posés sur la population — lot 2 des tickets 016 et 017
+
+`enrich_equipment` remplace la recopie du donneur ENTD 2008 par un tirage dans les lois
+apprises sur EMC² 2023, et le notebook de génération l'enchaîne désormais avec les autres
+correctifs de surface. Applicable aux populations existantes, sans régénération.
+
+Sur `toulouse_population_1000.json` :
+
+| Trait | Avant | Après | Cible |
+|---|---|---|---|
+| abonnement TC, ensemble | 21,9 % | 22,9 % | 25,8 % |
+| permis, 18 ans et + | 91,5 % | 87,7 % | 85,9 % |
+| **écart étudiant − retraité** | **+5,7 pt** | **+45,5 pt** | +54,5 pt |
+
+Le dernier est le critère le plus discriminant du ticket 016 : l'abonnement passait des
+étudiants aux retraités, la répartition est rétablie aux quatre cinquièmes. 352 valeurs
+d'abonnement et 148 de permis changent.
+
+**Un piège fermé au passage.** `car_availability` dérive du nombre de permis du ménage :
+tout recalcul fait avant la pose des permis est périmé, et rien ne le signalait. Le
+notebook rejoue donc `fix_minor_traits` **après** l'enrichissement — 68 ménages recalculés —
+et la recette **échoue** si les deux ne sont plus d'accord.
+
+**Avant :** un étudiant sur trois arrivait au LLM avec son abonnement ; les mineurs
+n'avaient pas de permis mais 85 % des 18-24 ans en avaient un, contre 58 % mesurés.
+**Après :** les deux courbes suivent l'enquête, et les trois niveaux de repli géographique
+sont comptés et publiés — jamais un `false` par défaut silencieux.
+
+**Ce que la recette refuse de laisser passer**, et qui n'est pas un défaut du trait : les
+étudiants synthétiques s'abonnent à 59,8 % contre 72,2 % attendus, et détiennent le permis
+à 72,0 % contre 59,2 %. Cause mesurée : ils vivent dans des ménages **trop motorisés** —
+36,6 % sans voiture contre 48,5 % dans l'enquête. La motorisation est la covariable la plus
+forte de la loi, donc l'écart se propage mécaniquement. `number_of_cars` est juste en
+agrégat ; c'est sa distribution jointe avec l'occupation qui ne l'est pas. Ça se corrige au
+**tirage** de population, pas dans un post-traitement de trait : la recette le dit avec un
+code de sortie distinct (4, écart de composition) de celui d'un vrai échec (2), pour ne pas
+bloquer la chaîne de génération sur un défaut qu'aucun enrichissement ne peut réparer.
+
+---
+
+## [2026-08-27] Abonnement TC et permis appris sur l'enquête — lot 1 des tickets 016 et 017
+
+`make equipment-propensity` apprend les deux propensions d'équipement sur les microdonnées
+EMC² 2023 et écrit deux ressources autoportantes. Ces deux traits étaient jusqu'ici
+**recopiés** d'un donneur ENTD 2008 apparié dans une classe d'âge couvrant 15 à 29 ans d'un
+bloc — alors que l'abonnement TC y passe de 64 % à 29 % et le permis de 0 % à 78 %.
+
+Un seul chargeur pour les deux traits, comme les tickets le demandent. La loi tient ses
+cibles hors échantillon : toutes les strates d'occupation à 0,1 point, le gradient de
+motorisation exact (61,8 → 25,5 → 16,1 %), l'ensemble à 25,9 % pour l'abonnement et 85,9 %
+pour le permis. AUC hors-échantillon 0,798 et 0,953, validation croisée **groupée par
+ménage** — un découpage par personne mettrait le même foyer des deux côtés.
+
+**La tarification Tisséo entre comme emplacement de rupture, jamais comme grandeur.** Ni
+montant, ni échelon, ni condition de ressources : le revenu du ménage est livré vide dans
+l'enquête, et les tarifs qui en dépendent sont donc inobservables. Les paliers d'âge
+(« moins de 26 ans », ouverture senior) sont ajustés puis **arbitrés** sur une règle écrite
+d'avance — retenus si l'AUC hors-échantillon gagne au moins 0,002. Ils sont retenus sur
+l'abonnement (+0,0079) et **retirés sur le permis** (−0,0001), où ils n'avaient aucune
+raison métier d'être : l'arbitrage tranche dans les deux sens.
+
+**Avant :** un étudiant sur trois arrivait au LLM avec son abonnement, contre deux sur
+trois dans la réalité toulousaine ; 85,4 % des 18-24 ans avaient le permis contre 58,1 %
+mesurés.
+**Après :** la loi qui posera ces traits reproduit les deux courbes sur l'enquête, et son
+vecteur de design est partagé entre l'apprentissage et l'application — l'aller-retour est
+vérifié à 4·10⁻¹⁶.
+
+Deux réserves inscrites plutôt que tues : la cible « étudiants » du ticket 016 est
+**restatée de 74,3 % à 72,2 %**, parce que le recodage du dépôt range les alternants avec
+les étudiants et qu'ils s'abonnent à 56,7 % — c'est la définition du dépôt qui doit gagner,
+puisque c'est celle que le persona porte. Et l'écart des 25-34 ans sur le permis (−3,2 pt)
+dépasse la tolérance du ticket 017 : il demande soit l'interaction âge × genre que le
+ticket prévoit, soit un critère restaté, à trancher au lot 2.
+
+Les traits ne sont **pas encore posés** sur une population : c'est le lot 2 (scripts
+d'enrichissement et appel dans le notebook de génération).
+
+---
+
+## [2026-08-27] Le modèle PROGEDO rejoué sur le run du 26/08 — et la population qui n'a pas bougé
+
+`docs/synthesis/detail_progedo_26_08.html` publie le détail par sous-catégorie du volet 3
+mesuré sur `experiments/archive/2026-08-26_17_46`, à côté de `detail_progedo.html` qui garde
+la mesure du run épinglé (`2026-08-24_17_34`). Les deux mesures coexistent : la mesure
+épinglée n'est pas écrasée, et sa trace `progedo_on_common_set.parquet` non plus — celle du
+nouveau run vit dans `progedo_on_common_set_2026-08-26_17_46.parquet`.
+
+Le composite du volet 3 recule nettement : `emd_jsd` **8,01 → 6,02** en masse renormalisée,
+**9,05 → 6,46** en mode le plus probable. La part de marche prédite passe de 23,1 % à 24,9 %
+(cible 26,8 %), les transports collectifs de 11,7 % à 14,0 % (cible 12,4 %).
+
+**Ce gain ne vient pas de la population.** Le `population_1000.json` du nouveau run est
+**byte-identique** à celui du run épinglé (`4cd38bdc…`) : mêmes 930 personas, mêmes domiciles,
+mêmes traits, mêmes horaires d'activités. La modification portée à
+`data/population/toulouse_population_1000.json` ne touchait que les horaires d'activités
+(945 agents sur 1021, champs `start_time` / `end_time` / `scheduled_start_time`), et la passe 2
+de préparation les recalcule intégralement depuis les temps de parcours OSMnx — l'édition est
+écrasée avant d'atteindre la simulation.
+
+Ce qui a bougé, c'est **l'offre OTP** : décisions à mode unique 810 → 723, offres à deux modes
+627 → 765, et 504 décisions (contre 475) dont la renormalisation déplace le mode le plus
+probable. Le volet 3 ne lit ni le prompt ni les décisions du LLM ; sur un substrat de personas
+identique, l'offre est son seul canal de variation.
+
+**Avant :** le volet 3 se lisait sur le seul run épinglé du 24/08.
+**Après :** deux mesures comparables coexistent, et l'écart entre elles est attribuable à
+l'offre de mobilité, pas au peuplement.
+
+---
+
+## [2026-08-26] Une seule configuration de run — plus de choix par le Makefile
+
+`llm-agents/config/` ne contenait plus qu'un empilement de variantes d'expériences passées
+(`config_baseline*.yaml`, `config_gpt-oss-*.yaml`, `config_llama*.yaml`, `config_mistral*.yaml`,
+`config_qwen*.yaml`, `config_deepseek*.yaml` — une trentaine de fichiers), sélectionnables au
+lancement via `make run CONFIG=...`. Cette collection est supprimée (récupérable via
+l'historique git) au profit d'un unique `llm-agents/config/config.yaml`, repris du contenu de
+l'ancien `config_test_meteo_agent.yaml`. `osmnx.yaml` et `terminal_time.yaml`, sans lien avec
+ce mécanisme de sélection, ne sont pas touchés.
+
+Pour changer de configuration de run, éditer directement `llm-agents/config/config.yaml` — il
+n'y a plus de variable `CONFIG=` à passer à `make run` / `make run-offline`, ni de sélecteur
+dans le dashboard de pilotage. Chaque run continue d'écrire la configuration effectivement
+utilisée dans `experiments/archive/<run>/static_config.yaml`, et le déclenche désormais
+inconditionnellement dès le premier accès à `settings` (au lieu d'être conditionné à la
+présence d'un fichier de config choisi) — y compris hors `make run` (tests, scripts).
+
+**Avant :** `make run CONFIG=config_baseline_1000_current.yaml` choisissait parmi ~30 fichiers ;
+sans `APP_CONFIG_PATH` défini (hors `make run`/Docker), aucun run n'était archivé.
+**Après :** `make run` (sans variable) utilise toujours `config.yaml` ; tout accès à `settings`
+crée et archive un workdir d'expérience.
+
+---
+
+## [2026-08-26] Relecture du lot en cours : justifications LLM, garde-fous et documentation du tirage météo
+
+Corrections issues d'une relecture complète du diff depuis la dernière version poussée
+(`964ccbab`) : quatre bugs bloquants, une incohérence de configuration et deux garde-fous
+manquants.
+
+**La justification par option, ajoutée le 26/08 (`prompts.yaml`), n'était en réalité
+jamais lue.** `AgentResponse.reason` a été retiré du schéma racine au profit d'une `reason`
+par `OptionProbability`, mais `llm_agent.py` continuait de lire l'ancien champ racine —
+plus jamais rempli par le LLM. Chaque décision loggait donc systématiquement « Pas de
+justification fournie. », qu'un modèle ait ou non expliqué son choix.
+**Avant :** aucune justification par option n'atteignait la mémoire court-terme ni les logs.
+**Après :** la justification de l'option effectivement tirée est retrouvée et reportée dans
+la STM et les logs.
+
+**`enrich_housing_type` ne pouvait jamais faire échouer la génération de population.**
+Seul ce trait tournait sans `--check` dans `generate_population.ipynb`, contrairement à
+`enrich_residence_zone` et `enrich_personal_bike` : sans `--check`, le script rend toujours
+un code de sortie « ok », même si toutes les portes de recette du ticket 019 échouent.
+**Avant :** un logement mal imputé ne bloquait rien dans la chaîne du notebook.
+**Après :** les trois traits imputés sont soumis aux mêmes portes de recette.
+
+**Le dashboard Streamlit plantait à l'affichage des tickets.** `tickets_status.yaml`
+portait `status: fait`, hors du vocabulaire déclaré (`à faire | en cours | terminé | bloqué
+| en veille | abandonné`), provoquant un `KeyError` dans `STATUS_ICON[t.status]`. Corrigé
+en `terminé`, et `tickets.py` refuse désormais explicitement toute surcharge hors
+vocabulaire au lieu de laisser planter l'appelant plus loin.
+
+**Un test du filtre de périmètre (ticket 026) ne pouvait plus s'exécuter** —
+`test_perimeter_filter.py` importait `_perimeter_verdict` (inexistant) au lieu de
+`perimeter_verdict` ; le code de production était correct, seul le test échouait
+(`ImportError` sur 7 des 9 cas). Le filtre n'était donc en réalité pas couvert malgré
+l'apparence.
+
+**Le tirage météo par agent (`weather_draw.py`, cf. `docs/arch/llm-inference.md`) pouvait
+lire le mauvais créneau au franchissement de la bascule heure d'été/hiver** — un offset UTC
+figé sur la date de départ réelle plutôt que recalculé pour la date météo substituée.
+Corrigé en fixant le fuseau sur `Europe/Paris`, comme le fait déjà `weather_loader.py`.
+
+**`bike_ownership.json` n'avait pas de contrôle de version au chargement**, contrairement
+aux ressources `housing_type`/`residence_zone` du même lot — ajouté (`RESOURCE_VERSION`),
+avec le test de rejet correspondant.
+
+Documentation mise à jour en conséquence : le dispositif « une date météo par agent »
+(absent de toute doc jusqu'ici) est maintenant décrit dans `docs/arch/llm-inference.md`, et
+le ticket 024 ne prétend plus que le jeton d'exclusion existe (retiré le même jour, cf.
+entrée suivante).
+
+---
+
 ## [2026-08-26] Le pré-enregistrement et le jeton d'exclusion sont retirés
 
 Deux dispositifs de méthode disparaissent, sur décision explicite.
@@ -121,6 +1098,143 @@ Les traces et le registre gardent les chiffres **tels que mesurés**, et portent
 note du correctif avec les valeurs recalculées : un recoupement futur doit pouvoir dire quel
 instrument a produit quel nombre. Les réécrire aurait falsifié l'archive.
 
+### Le chiffrage a été recoupé, et il a trouvé une campagne de plus
+
+Le recalcul a été **refait indépendamment**, avec un contrôle qui le rend opposable : sous
+l'ancien instrument, il doit reproduire le score **déjà en base**, au chiffre près. Écart nul
+sur les 39 évaluations en cache, deux bases, deux modèles d'évaluation. Les chiffres du
+tableau ci-dessus sont confirmés au millième.
+
+Ce recoupement a montré qu'une **deuxième campagne** était concernée, celle de l'échelle de
+contexte : sur son jeu `val`, les composites montent de 0,13 à 0,22 et les écarts au palier de
+référence bougent de 0,02 à 0,10 — plancher de bruit compris. Sa conclusion ne bouge pas d'un
+cheveu (les quatre ablations restent sous le témoin nul, et l'inversion de signe entre les
+deux jeux tient), mais ses traces portent désormais la même note que celles de la météo.
+
+À l'inverse, deux choses sont **hors d'atteinte par construction**, et pas par chance : la
+campagne génétique — son jeu de classement ne contient pas une occurrence de téléphérique —
+et le **regard unique** du protocole : aucun des 23 découpages gelés n'offre d'option de
+téléphérique pur dans son jeu de test.
+
+**Ce que le correctif ne répare pas :** la sous-représentation de la marche. Elle passe de
+11,309 % à 11,303 %, soit 0,006 point sur un écart de 14,7 points à l'enquête. Les
+5 occurrences sont des *options proposées* ; une seule a reçu de la probabilité. Le défaut
+était réel, sa contribution au biais est négligeable : l'instrument devient juste, le
+diagnostic ne bouge pas.
+
+### Les scores déjà en base ont été recalés, parce qu'une série est encore ouverte
+
+Un score est **figé en base** au moment de l'évaluation, et une évaluation en cache le relit
+tel quel. Rejouer les deux campagnes affichait donc les notes de l'ancien instrument, tandis
+qu'un bras neuf aurait été noté par le nouveau : deux instruments dans le même tableau, ce que
+le protocole interdit sur une série ouverte.
+
+Les 18 scores concernés ont donc été recalculés depuis les décisions en cache — **sans un seul
+appel LLM**, décisions intouchées, copie de sûreté de chaque base. `calibrate rescore
+--from-decisions` ne pouvait pas le faire : il note toutes les évaluations contre les strates
+d'un seul découpage, alors que chaque bras a le sien, et il ignore le jeu complet. D'où
+`scripts/recalage_instrument.py`, qui lit le bras de chaque évaluation et **refuse** d'écrire
+un score que ni l'ancien ni le nouvel instrument ne reproduit.
+
+**Avant :** rejouer la campagne météo ou celle du contexte réaffichait les composites d'avant
+le correctif.
+**Après :** les deux campagnes sont notées par un seul instrument, et un second passage du
+recalage ne signale rien.
+
+---
+
+## [2026-08-26] Le transport en commun couvre enfin toute l'année
+
+La simulation ne pouvait tourner que du 16 mars au 12 mai 2026 : hors de cette fenêtre,
+aucun bus, aucun métro, et pour tout signal un avertissement dans les logs. Elle couvre
+désormais 2026 et 2027 en entier, pour Tisséo comme pour le TER.
+
+**Avant :** 58 jours de calendrier. Un run lancé un 15 décembre ne planifiait aucune course
+en transport en commun, sans erreur.
+**Après :** 730 jours. Chaque journée porte soit l'offre réellement publiée par l'opérateur,
+soit la copie verbatim d'une journée réelle de même signature — même jour de semaine, même
+période du calendrier scolaire de la zone de Toulouse. Aucun horaire n'est synthétisé.
+
+### Le feed en service sur-servait, et personne ne le savait
+
+Les exports Tisséo sont glissants : chacun couvre ~35 jours mais n'est complet que sur les
+premières semaines, après quoi l'opérateur ne publie plus que le métro. Fusionner deux
+exports par simple union produit donc deux défauts, tous deux présents dans le feed qui
+était en service :
+
+- **13 250 trips le 08/04/2026**, là où ses deux sources en donnent 12 652 et 12 660 (+4,7 %) ;
+  5 438 le 12/04 contre 4 646 et 4 886 (+11,3 %).
+- La géométrie `14846` mélangeait **deux tracés différents** en un seul, entrelacés par une
+  déduplication sur `(shape_id, shape_pt_sequence)` — un tracé chimère dont les distances ne
+  correspondaient plus à ses arrêts.
+
+Le nouveau pipeline retient **une seule source autoritaire par date** et rend la sur-offre
+structurellement impossible.
+
+La date de simulation du 16 mars n'était pas indemne non plus : ses 12 608 courses sont bien
+les bonnes, mais **six d'entre elles portaient un tracé chimère** (la géométrie `14848`, 524
+points en production contre 523 dans l'export d'origine). Le feed annuel restitue exactement
+l'export : même nombre de courses, même empreinte d'offre.
+
+### Ce que « période similaire la plus proche » veut dire
+
+Les bornes des vacances scolaires de la zone C expliquent l'offre de très près : la chute du
+20/04, le retour du 04/05, le vendredi de pont du 15/05 réduit à 10 877 trips. Une journée
+sans donnée reçoit donc la journée réelle la plus proche **au sens des saisons** ayant le même
+jour de semaine et la même classe de période.
+
+Deux corrections que les données ont imposées : un **jour férié n'est pas un dimanche** (le
+14/07 sert 5 674 trips contre 4 683 à 5 054 les dimanches de juillet), et les bornes de période
+sont **apprises** plutôt que postulées — le samedi qui ouvre les vacances de printemps roule
+encore en samedi scolaire, celui qui ouvre l'été non.
+
+Le 1er mai reste sans service : les deux exports qui l'englobent l'omettent tous les deux.
+L'extrapoler aurait inventé de l'offre un jour où le réseau ne roule pas.
+
+### La preuve, pas la vraisemblance
+
+On masque un mois réel, on laisse le pipeline le reconstruire, on compare : sur mai 2026
+(30 journées, deux fériés, le pont de l'Ascension, deux week-ends), **l'écart maximal est de
+5,3 % et la médiane sous 1 %**. Les jours ouvrés scolaires tombent sous 1,2 %.
+
+Chaque journée du feed est tracée : d'où elle vient, à quel écart de saison, à quel niveau de
+confiance. 97 journées de 2026 sont en confiance basse — essentiellement les vacances d'hiver,
+de la Toussaint et de Noël, dont aucun export ne couvre l'équivalent 2026. C'est écrit, pas masqué.
+
+### Testé
+
+`make test-gtfs-year` : 41 tests unitaires sur feeds synthétiques, sans accès réseau, en moins
+d'une seconde. Chacun porte sur une décision qui, prise à l'envers, donne un feed plausible
+mais faux — la sur-offre par union, l'identifiant recyclé confondu avec la course d'origine,
+la géométrie entrelacée, le creux d'un férié pris pour une troncature.
+
+Les écrire a fait apparaître deux faiblesses, corrigées : la référence servant à détecter la
+queue tronquée pouvait être **contaminée par cette queue même** (un export livré tardivement
+passait intact), et deux courses de contenu identique le même jour étaient confondues sans
+rien dire. Aucune des deux ne se manifeste sur les exports 2026 — les feeds produits sont
+inchangés au bit près après correction — mais toutes deux passaient silencieusement.
+
+### Rejouable à la prochaine livraison
+
+```bash
+make gtfs-year-dry      # ce qui deviendrait réel, ce qui resterait copié
+make gtfs-year          # les quatre feeds + la trace de provenance
+make gtfs-window START=2026-03-16 DAYS=64   # la tranche que consomme GAMA
+```
+
+Déposer de nouveaux exports suffit : les journées auparavant extrapolées qui deviennent
+couvertes basculent d'elles-mêmes, et le manifeste le dit.
+
+Les feeds sont produits **à côté** du jeu en service : ni `data/gtfs/` ni le graphe OTP ne
+sont touchés. Les publier est une décision explicite, décrite dans `docs/arch/gtfs-annee.md`.
+
+### Au passage
+
+Le TER n'a jamais été dans le graphe OTP, contrairement à ce qu'affirmait la documentation
+du routage — le graphe ne contient qu'un feed, et le mode `rail` n'est même pas demandé dans
+les requêtes. C'est corrigé dans la doc, et le feed TER annuel est prêt le jour où on voudra
+l'intégrer.
+
 ---
 
 ## [2026-08-26] Le prompt dit ce que les options ne disent pas — et rien de plus
@@ -210,6 +1324,31 @@ mise en forme. Leur effet se mesurera contre ce plancher, pas contre zéro.
 
 ---
 
+## [2026-08-26] Sur le jeu complet, retirer tout le contexte ne change rien
+
+La mesure a été refaite sur l'union de `train` et `val` — **569 personnes, 1 568
+déplacements**, soit 3,4 fois l'effectif de la première lecture, et sans un appel de plus
+(les décisions déjà payées se relisent).
+
+Retirer la **totalité** du contexte servi au modèle — équipement de mobilité, identité
+sociale, météo, décomposition des étapes — déplace le composite de **0,27**. Réordonner et
+réétiqueter ce même contexte, sans rien retirer, le déplace de **2,66**. Sur `train` seul,
+l'ablation totale donne exactement **−0,00**.
+
+Un épuisement de quota a obligé à rejouer une colonne sur une seconde clé, ce qui a produit
+une mesure qu'on n'avait pas : **rejouer deux fois la même chose coûte 0,01**. Trois échelles
+emboîtées, donc — 0,01 pour l'aléa de répétition, 0,27 pour tout le contenu du contexte,
+2,66 pour sa seule mise en forme.
+
+**Avant :** on supposait que la quantité de contexte servie au modèle déterminait la qualité
+de la sortie, et qu'elle comptait davantage que le prompt.
+**Après :** sur le plus grand effectif disponible, le contenu du contexte est indiscernable
+du néant, et c'est la **forme** — l'ordre des lignes, les libellés — qui porte le seul signal
+mesurable. Les parts modales, elles, bougent beaucoup : le composite est stable parce que les
+écarts se compensent, pas parce que le modèle répond pareil.
+
+---
+
 ## [2026-08-26] Le bulletin météo jugé sur le plus grand jeu disponible
 
 Le bulletin météo enrichi — la seule des trois corrections du ticket 023 réellement livrée en
@@ -257,6 +1396,133 @@ tenait le jeton par défaut sur un autre modèle-juge ; la mesure a pris le sien
 le jeton — un second jeton ne serait qu'une autorisation de se marcher dessus.
 
 ---
+
+## [2026-08-26] Le modèle d'évaluation annoncé est enfin celui qui est appelé
+
+La calibration déclarait un modèle d'évaluation, l'inscrivait dans sa clé de cache et dans
+son store… et appelait l'API sans le préciser. L'adaptateur retombait donc sur le modèle par
+défaut du fournisseur. Toute la discipline d'épinglage — y compris le garde-fou qui refuse un
+alias flottant — portait sur une étiquette qui n'atteignait jamais l'API.
+
+Le défaut ne se voyait que là où le modèle annoncé diffère du défaut du fournisseur, ce qui
+est exactement le cas des configurations qui prennent soin d'épingler un nom stable.
+
+**Avant :** une mesure pouvait être étiquetée `gemini-3.1-flash-lite` dans le store alors que
+l'API avait servi `gemini-3.1-flash-lite-preview`. Deux modèles pouvaient se mélanger sous une
+même clé de cache — précisément ce que le garde-fou prétendait empêcher.
+**Après :** le modèle de la configuration est passé explicitement à chaque appel, et un test
+échoue si un jour il cesse de l'être.
+
+Conséquence à connaître : les mesures déjà publiées sous une configuration qui épingle un nom
+stable sur un fournisseur dont le défaut est un alias — c'est le cas du jeu commun de la page
+de synthèse — portent une étiquette de modèle qui n'est pas celle du modèle appelé. Les
+chiffres restent valides et comparables entre eux (un seul modèle a servi) ; c'est leur nom
+qui est faux.
+
+---
+
+## [2026-08-26] Le contexte pèse moins que sa mise en forme
+
+Première mesure de l'échelle d'ablation du contexte : à prompt constant, retirer **tout** le
+contexte servi au modèle — équipement de mobilité, identité sociale, météo, décomposition des
+étapes — coûte **2,52** de composite. Réordonner et réétiqueter ce **même** contexte, sans
+rien retirer, en coûte **2,03**.
+
+Autrement dit la pente entière tient dans le plancher de bruit. Deux paliers dégradent même
+*moins* qu'une simple reformulation, et la courbe sature dès le retrait de la météo : enlever
+ensuite la décomposition des étapes, soit 55 % de la longueur du prompt, ne change plus rien
+de mesurable.
+
+**Avant :** « plus le contexte est riche, plus la sortie est juste » était une affirmation
+sans chiffre, et le corollaire annoncé était que le contexte pèse davantage que le prompt.
+**Après :** sur ce jeu, le contexte pèse 2,5 de composite et reste dans le bruit, quand le
+prompt pesait 7,1 hors bruit. C'est l'inverse du discours prévu.
+
+La confirmation sur `val` (165 personas) enfonce le clou et ajoute un fait que personne ne
+cherchait : **les quatre ablations y améliorent le score** au lieu de le dégrader. Le signe
+s'inverse d'un jeu à l'autre, et dans les deux cas l'amplitude reste sous celle du témoin nul.
+
+Ce témoin nul est d'ailleurs, dans les deux jeux, la colonne **la plus dégradée** — plus que
+le retrait de tout le contexte. Réordonner et réétiqueter l'information coûte plus cher que
+la supprimer : le modèle réagit à la **mise en forme** du contexte plus qu'à son contenu.
+C'est le seul point sur lequel les deux jeux concordent, ce qui le rend plus solide que la
+pente elle-même — et ça ouvre un chantier, pas une conclusion : `L4n` cumule quatre
+permutations et deux renommages, et on ne sait pas encore lequel porte l'effet.
+
+À lire avec ses réserves : le regard sur le jeu de test est consommé, donc ces chiffres sont
+exploratoires ; et le témoin nul réordonne sans paraphraser.
+
+---
+
+## [2026-08-25] Les courbes par strate ne traversent plus les tranches non couvertes
+
+Sur les pages de synthèse (`detail_simulation.html`, `detail_progedo.html`, `index.html`),
+les courbes de parts modales par âge et par distance traçaient tous les points, y compris
+ceux assis sur un effectif sous le seuil de couverture (n < 5). La tranche « plus de 50 km »
+du run de référence, portée par **une seule décision** — elle-même privée d'option voiture
+par la chaîne des véhicules —, affichait ainsi « voiture 0 %, TC 60 % » : un lecteur en
+concluait à un modèle cassé, alors que la tranche 20-50 km (n = 178) est la mieux ajustée
+de toute la dimension (L1 5,7).
+
+Le calcul connaissait déjà la couverture (`covered` dans `frames.py`) ; le rendu la
+respecte désormais : la série observée est coupée aux tranches non couvertes (segments
+séparés, pas de pont par-dessus), leurs points ne sont plus tracés, et le libellé de la
+tranche est estompé. La référence enquête, assise sur ses propres effectifs, reste tracée
+en entier.
+
+**Avant :** la courbe voiture plongeait à 0 % sur « 50+ », tirée par 1 décision.
+**Après :** la courbe s'arrête à 20-50 km ; le tick « 50+ » est grisé.
+
+---
+
+## [2026-08-25] La diversité des choix du modèle est chiffrée, sans dépenser un appel
+
+« Le modèle manque de diversité » circulait sans chiffre. Il en a un désormais, et il tient :
+sur le prompt de production, le modèle hésite en pratique entre **1,4 et 1,8 modes** sur les
+3 à 4 qui lui sont offerts, et **un tiers à plus de la moitié** des personas reçoivent une
+réponse *déterministe* (une probabilité ≥ 0,99 sur un seul mode). Douze évaluations déjà
+payées ont suffi : tout se relit dans le store.
+
+Trois livrables :
+
+- **quatre métriques de dispersion** (entropie normalisée par l'offre, nombre effectif de
+  modes, taux de réponses dégénérées à 0,90 et 0,99, variance inter-persona), volontairement
+  **hors du composite** — les faire entrer dans la loss ferait chercher à la campagne une
+  dispersion au lieu d'une justesse ;
+- **`analyse_dispersion.py`**, qui tabule l'agrégat pondéré contre l'agrégat par vote
+  majoritaire : leur écart *est* le coût du collapse (6,8 à 13,3 points selon le jeu) ;
+- **`rewrite_context.py`**, qui produit les six paliers de l'échelle de contexte
+  (`ctxL0`…`ctxL4`, plus le témoin nul `ctxL4n`) par retrait de texte, sans rejouer de
+  simulation.
+
+**Avant :** deux affirmations opposées sur le modèle — « il manque de diversité », « ce qui
+compte c'est la quantité de contexte » — et aucun moyen d'en départager une. La part modale
+agrégée pouvait tomber juste alors que le modèle rendait le même vecteur à tout le monde.
+**Après :** la première est chiffrée et reproductible sur douze évaluations existantes ; la
+seconde a son instrument prêt (six paliers gelés, témoin nul à +0,2 % de longueur), en
+attente d'un budget d'appels.
+
+Le protocole change aussi de forme : son §3 **ne nomme plus de modèle d'évaluation**. Un nom
+se périme (dépréciation, quota épuisé, alias re-résolu) et faisait tomber l'instrument avec
+lui. Ce qui est gelé est désormais la **constance du juge à l'intérieur d'une comparaison** :
+deux chiffres ne se comparent que sous le même juge, le juge ne change pas tant qu'une série
+est ouverte, et le régime effectif accompagne tout chiffre publié.
+
+---
+
+## [2026-08-25] Les tests du cache LLM repassent au vert
+
+La suite `scripts/tests/test_llm_cache.py` couvre à nouveau le cache de décisions
+LLM sans échec : le double de test des options expose désormais `mode_label()`,
+que le cache appelle depuis l'étiquetage des modes par trajectoire (commit e04907c).
+
+**Avant :** 2 tests sur 9 échouaient — le store levait une `AttributeError` avalée
+en WARNING, rien n'était persisté, et les lookups attendus en hit rendaient `None`.
+**Après :** 9 tests sur 9 passent ; le fake dérive son étiquette de mode de son code,
+comme le fait `TravelPlan`.
+
+---
+
 
 ## [2026-08-25] La mémoire des agents se coupe au lancement
 

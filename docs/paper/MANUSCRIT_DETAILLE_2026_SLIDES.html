@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manuscrit Détaillé 2026 — Slides & Document Interactif (v1.3)</title>
+  
+  <!-- KaTeX for crisp mathematical formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-card: #1f242c;
+      --bg-card-hover: #262c36;
+      --border-color: #30363d;
+      --border-light: #484f58;
+      
+      --text-main: #e6edf3;
+      --text-muted: #8b949e;
+      --text-bright: #ffffff;
+      
+      --accent-blue: #388bfd;
+      --accent-blue-bg: rgba(56, 139, 253, 0.15);
+      --accent-cyan: #39c5cf;
+      --accent-green: #3fb950;
+      --accent-green-bg: rgba(63, 185, 80, 0.15);
+      --accent-amber: #d29922;
+      --accent-amber-bg: rgba(210, 153, 34, 0.15);
+      --accent-purple: #bc8cff;
+      --accent-purple-bg: rgba(188, 140, 255, 0.15);
+      --accent-coral: #f85149;
+      --accent-coral-bg: rgba(248, 81, 73, 0.15);
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      
+      --slide-radius: 16px;
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f6f8fa;
+      --bg-secondary: #ffffff;
+      --bg-card: #f0f3f6;
+      --bg-card-hover: #e6ebf1;
+      --border-color: #d0d7de;
+      --border-light: #afb8c1;
+      
+      --text-main: #1f2328;
+      --text-muted: #656d76;
+      --text-bright: #090d12;
+      
+      --accent-blue: #0969da;
+      --accent-blue-bg: rgba(9, 105, 218, 0.1);
+      --accent-cyan: #0598ab;
+      --accent-green: #1a7f37;
+      --accent-green-bg: rgba(26, 127, 55, 0.1);
+      --accent-amber: #9a6700;
+      --accent-amber-bg: rgba(154, 103, 0, 0.1);
+      --accent-purple: #8250df;
+      --accent-purple-bg: rgba(130, 80, 223, 0.1);
+      --accent-coral: #cf222e;
+      --accent-coral-bg: rgba(207, 34, 46, 0.1);
+      
+      --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.55;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Control Bar */
+    header.deck-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+      backdrop-filter: blur(8px);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-badge {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .deck-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 520px;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn-icon:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+      color: var(--text-bright);
+    }
+
+    .btn-icon.active {
+      background: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* Progress bar */
+    .progress-track {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.2);
+      z-index: 999;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-purple));
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Presentation Layout */
+    .deck-viewport {
+      margin-top: 60px;
+      min-height: calc(100vh - 60px);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px;
+      position: relative;
+    }
+
+    /* Mode Slides */
+    body.mode-slides .slide-container {
+      width: 100%;
+      max-width: 1200px;
+      min-height: calc(100vh - 120px);
+      display: none;
+      animation: fadeInSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body.mode-slides .slide-container.current {
+      display: block;
+    }
+
+    /* Mode Document (Scroll Continu) */
+    body.mode-doc .deck-viewport {
+      display: block;
+      max-width: 1100px;
+      margin: 60px auto 0 auto;
+      padding: 30px 20px 100px 20px;
+    }
+
+    body.mode-doc .slide-container {
+      display: block !important;
+      margin-bottom: 40px;
+      scroll-margin-top: 80px;
+    }
+
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Slide Card */
+    .slide-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--slide-radius);
+      padding: 36px 44px;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-meta-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent-blue);
+      background: var(--accent-blue-bg);
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    .slide-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+
+    .slide-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 14px;
+    }
+
+    /* Content Typography & Components */
+    p {
+      margin-bottom: 14px;
+      color: var(--text-main);
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin: 20px 0 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      margin: 14px 0 8px 0;
+    }
+
+    ul, ol {
+      margin-left: 24px;
+      margin-bottom: 16px;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    /* Grid & Cards */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin: 16px 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .slide-card {
+        padding: 22px 18px;
+      }
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 18px;
+      transition: all 0.2s ease;
+    }
+
+    .info-card:hover {
+      border-color: var(--border-light);
+      background: var(--bg-card-hover);
+    }
+
+    .info-card.accent-blue { border-left: 4px solid var(--accent-blue); }
+    .info-card.accent-green { border-left: 4px solid var(--accent-green); }
+    .info-card.accent-amber { border-left: 4px solid var(--accent-amber); }
+    .info-card.accent-purple { border-left: 4px solid var(--accent-purple); }
+    .info-card.accent-coral { border-left: 4px solid var(--accent-coral); }
+
+    .card-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-label.blue { color: var(--accent-blue); }
+    .card-label.green { color: var(--accent-green); }
+    .card-label.amber { color: var(--accent-amber); }
+    .card-label.purple { color: var(--accent-purple); }
+    .card-label.coral { color: var(--accent-coral); }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 6px;
+    }
+
+    /* Metric Badges */
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text-bright);
+      font-family: var(--font-mono);
+      line-height: 1.2;
+    }
+
+    .metric-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-card);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: var(--bg-secondary);
+      color: var(--text-bright);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .table-mono td, .table-mono th {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+    }
+
+    /* Delta tags */
+    .delta-tag {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-align: center;
+      display: inline-block;
+    }
+
+    .delta-pos { background: var(--accent-coral-bg); color: var(--accent-coral); }
+    .delta-neg { background: var(--accent-amber-bg); color: var(--accent-amber); }
+    .delta-good { background: var(--accent-green-bg); color: var(--accent-green); }
+
+    /* Diagram Containers */
+    .diagram-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Code blocks */
+    pre, code { font-family: var(--font-mono); }
+
+    code.inline-code {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.86rem;
+      color: var(--accent-cyan);
+    }
+
+    pre.code-block {
+      background: #090d12;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.82rem;
+      overflow-x: auto;
+      color: #e6edf3;
+      margin: 10px 0;
+      line-height: 1.45;
+    }
+
+    /* Confusion Matrix Heatmap */
+    .conf-matrix {
+      display: grid;
+      grid-template-columns: 100px repeat(4, 1fr) 90px;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      text-align: center;
+      margin: 14px 0;
+    }
+
+    .conf-cell {
+      padding: 10px 4px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+    }
+
+    .conf-header {
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      font-size: 0.76rem;
+    }
+
+    .conf-diag {
+      background: var(--accent-green-bg);
+      border-color: var(--accent-green);
+      color: var(--text-bright);
+      font-weight: 700;
+    }
+
+    .conf-off { color: var(--text-main); }
+    .conf-recall {
+      background: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    /* Footer Navigation Dock */
+    footer.deck-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      background-color: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+    }
+
+    .slide-counter {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .slide-counter span.active-num {
+      color: var(--text-bright);
+    }
+
+    .nav-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Drawer Modal */
+    .drawer-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      justify-content: flex-end;
+    }
+
+    .drawer-overlay.open { display: flex; }
+
+    .drawer-content {
+      width: 400px;
+      max-width: 90vw;
+      height: 100%;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-color);
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .drawer-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-bright);
+    }
+
+    .toc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toc-item {
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+    }
+
+    .toc-item:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+      color: var(--text-bright);
+    }
+
+    .toc-item.active {
+      border-color: var(--accent-blue);
+      background: var(--accent-blue-bg);
+      color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .toc-item-num {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+  </style>
+</head>
+<body class="mode-slides">
+
+  <!-- Top Header Controls -->
+  <header class="deck-header">
+    <div class="header-left">
+      <span class="header-badge">v1.3</span>
+      <span class="deck-title">Manuscrit 2026 — Agents LLM vs Oracles Statistiques en Simulation de Mobilité</span>
+    </div>
+    <div class="header-controls">
+      <button class="btn-icon" id="btn-toc" title="Ouvrir le Sommaire (Touches: O)">
+        <i data-lucide="list" style="width: 15px; height: 15px;"></i>
+        <span>Sommaire</span>
+      </button>
+      <button class="btn-icon" id="btn-mode-toggle" title="Bascule Mode Slides / Mode Document Continu (Touches: D)">
+        <i data-lucide="layout" style="width: 15px; height: 15px;"></i>
+        <span id="mode-label">Mode Doc</span>
+      </button>
+      <button class="btn-icon" id="btn-theme-toggle" title="Bascule Thème Sombre / Clair">
+        <i data-lucide="sun" id="theme-icon" style="width: 15px; height: 15px;"></i>
+      </button>
+      <button class="btn-icon" id="btn-fullscreen" title="Plein Écran (Touches: F)">
+        <i data-lucide="maximize-2" style="width: 15px; height: 15px;"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Progress Bar -->
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <!-- Main Viewport -->
+  <main class="deck-viewport">
+
+    <!-- ==================== SLIDE 1 : PAGE DE GARDE ==================== -->
+    <div class="slide-container current" data-slide="1">
+      <div class="slide-card">
+        <div class="slide-meta-tag">
+          <i data-lucide="book-open" style="width: 12px; height: 12px;"></i>
+          Manuscrit de Recherche 2026 — Document de Travail Consolidé (v1.3)
+        </div>
+        <h1 class="slide-title" style="font-size: 2.0rem; margin-top: 6px; margin-bottom: 14px;">
+          De la Décision Statistique au Comportement Adaptatif :
+        </h1>
+        <h2 style="font-size: 1.25rem; font-weight: 500; color: var(--accent-cyan); margin-bottom: 24px;">
+          Évaluation Empirique, Limites et Perspectives Hybrides des Agents LLM en Simulation de Mobilité Urbaine
+        </h2>
+
+        <div class="grid-3" style="margin-bottom: 24px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="users" style="width: 13px; height: 13px;"></i> Auteurs Prévisibles</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Yves B., Benoit Gaudou, Kamaldeep Singh Oberoi</div>
+            <div class="metric-sub">Ordre et affiliations universitaires à définir</div>
+          </div>
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="map-pin" style="width: 13px; height: 13px;"></i> Cadre d'Application</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Projet LLM-Agents GAMA</div>
+            <div class="metric-sub">Défis Clés Occitanie (MIDOC) — Métropole Toulousaine</div>
+          </div>
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="database" style="width: 13px; height: 13px;"></i> Données de Référence</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Enquête EMC² 2023 (ProGEDO)</div>
+            <div class="metric-sub">785 zones fines, 453 communes, 13 045 tests scellés</div>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="info-card">
+            <div class="card-label amber"><i data-lucide="target" style="width: 12px; height: 12px;"></i> ÉTAPE 0</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Métriques & Démographie</div>
+            <div class="metric-sub">Score L1 / Accuracy / Chi2</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label coral"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> ÉTAPE 1</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Modèle Nu & Variabilité</div>
+            <div class="metric-sub">Runs identiques $\tau \approx 0$</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label blue"><i data-lucide="sliders" style="width: 12px; height: 12px;"></i> ÉTAPE 2</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Ablation & Oracle ML</div>
+            <div class="metric-sub">LightGBM 78.5% & SHAP</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label green"><i data-lucide="zap" style="width: 12px; height: 12px;"></i> ÉTAPE 3</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Presse & Hystérésis 5j</div>
+            <div class="metric-sub">Non-tabulaire & Mémoire J+1</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 2 : RÉSUMÉ & ABSTRACT ==================== -->
+    <div class="slide-container" data-slide="2">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Résumé & Abstract</div>
+        <h2 class="slide-title">Richesse Narrative Qualitative vs Fidélité Distributionnelle</h2>
+        <div class="slide-subtitle">La tension fondamentale entre agents génératifs et modèles statistiques supervisés</div>
+
+        <div class="grid-2">
+          <!-- FR -->
+          <div class="info-card accent-blue" style="font-size: 0.86rem; line-height: 1.55;">
+            <div class="card-label blue"><i data-lucide="globe" style="width: 13px; height: 13px;"></i> Résumé Français</div>
+            <p>
+              L'intégration des grands modèles de langage (LLM) au sein des simulations multi-agents de mobilité urbaine ouvre des perspectives inédites pour modéliser le comportement humain sans recourir à des systèmes de règles manuelles rigides. Toutefois, l'évaluation de ces agents face à des données d'enquête réelles révèle une tension fondamentale entre <em>richesse narrative qualitative</em> et <em>fidélité distributionnelle quantitative</em>.
+            </p>
+            <p>
+              Dans cet article, nous proposons une évaluation empirique et critique des capacités décisionnelles des agents LLM appliqués au choix modal de transport sur l'aire métropolitaine de Toulouse. Nous suivons une démarche systématique (0: métriques macro/micro ; 1: modèle nu et variabilité ; 2: invalidation par l'ablation et audit face à LightGBM <strong>$78,5\,\%$</strong> d'accuracy ; 3: adaptation aux événements d'actualité presse locale et hystérésis 5 jours).
+            </p>
+            <p>
+              En conclusion, nous formulons les <strong>perspectives d'une architecture hybride en cascade</strong> (Règles $\to$ LightGBM $90\,\%$ $\to$ LLM $10\,\%$) conciliant calage de masse et réactivité contextuelle.
+            </p>
+          </div>
+
+          <!-- EN -->
+          <div class="info-card accent-purple" style="font-size: 0.86rem; line-height: 1.55; font-style: italic;">
+            <div class="card-label purple"><i data-lucide="globe" style="width: 13px; height: 13px;"></i> English Abstract</div>
+            <p>
+              Integrating Large Language Models (LLMs) into agent-based mobility simulations offers new avenues for modeling human decision-making beyond rigid rule-based systems. However, benchmarking these agents against real-world travel surveys reveals a fundamental trade-off between qualitative semantic expressiveness and quantitative distributional fidelity.
+            </p>
+            <p>
+              We present an empirical assessment of LLM agents for mode choice in the Toulouse metropolitan area. Through a rigorous experimental progression (0: metric definitions; 1: bare LLM and multi-run variability; 2: ablation study and audit against a supervised LightGBM oracle at $78.5\%$ accuracy; 3: unstructured local news processing and 5-day hysteresis modeling), we highlight the boundaries of generative models.
+            </p>
+            <p>
+              Finally, we outline the <strong>perspectives of a cascading hybrid architecture</strong> (Deterministic Rules $\to$ LightGBM for $90\%$ nominal flow $\to$ LLM for $10\%$ disruptions).
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-green" style="margin-top: 12px;">
+          <div class="card-label green"><i data-lucide="check-circle" style="width: 13px; height: 13px;"></i> Positionnement des Apports Scientifiques</div>
+          <div class="grid-3" style="margin-top: 6px; font-size: 0.82rem;">
+            <div><strong>1. Évaluation Empirique :</strong> Mesure macro/micro sur les données réelles EMC² 2023 à Toulouse.</div>
+            <div><strong>2. Audit Statistiques ML :</strong> Invalidation de l'ablation et parité 15 variables vs LightGBM.</div>
+            <div><strong>3. Domaines d'Excellence LLM :</strong> Ingestion de la presse locale et hystérésis mémoire à $J+1$.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 3 : INTRODUCTION & POSITIONNEMENT ==================== -->
+    <div class="slide-container" data-slide="3">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="compass" style="width: 12px; height: 12px;"></i> Section 1</div>
+        <h2 class="slide-title">1. Contexte & Positionnement Scientifique</h2>
+        <div class="slide-subtitle">Évaluer les LLM sur la métropole toulousaine face aux données d'enquête réelles EMC² 2023</div>
+
+        <div class="grid-2" style="margin-bottom: 16px;">
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="history" style="width: 13px; height: 13px;"></i> 1.1 Contexte : L'Émergence des Agents Génératifs</div>
+            <p style="font-size: 0.85rem;">
+              La modélisation multi-agents des transports (ABM) repose historiquement sur :
+            </p>
+            <ul style="font-size: 0.83rem;">
+              <li><strong>Modèles de choix discrets</strong> (Logit multinomial / emboîté) : calibrés mais rigides.</li>
+              <li><strong>Systèmes experts à règles</strong> (automates BDI) : lourds à concevoir manuellement.</li>
+            </ul>
+            <p style="font-size: 0.83rem; color: var(--accent-cyan);">
+              ➜ Les LLM apportent des agents capables d'évaluer des compromis complexes en langage naturel.
+            </p>
+          </div>
+
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="alert-triangle" style="width: 13px; height: 13px;"></i> 1.2 Le Verrou : Réalisme vs Calage sur Toulouse</div>
+            <p style="font-size: 0.85rem;">
+              L'application à l'aire métropolitaine de Toulouse se heurte à la <strong>fidélité distributionnelle</strong>.
+            </p>
+            <p style="font-size: 0.83rem;">
+              Les priors culturels mondiaux issus du pré-entraînement provoquent des anomalies systématiques (sous-estimation de la marche courte, sur-attractivité des TC et du vélo).
+            </p>
+          </div>
+        </div>
+
+        <h3>1.3 Les 3 Axes de l'Évaluation Empirique</h3>
+        <div class="grid-3">
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Axe 1</div>
+            <div class="card-title">Évaluation Duale Macro & Micro</div>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">
+              Mesurer les parts modales globales (Macro) et les décisions individuelles (Micro) sur l'enquête EMC² 2023 ($785$ zones).
+            </p>
+          </div>
+          <div class="info-card accent-purple">
+            <div class="card-label purple">Axe 2</div>
+            <div class="card-title">Audit vs Oracles Statistiques</div>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">
+              Confronter le LLM à un Logit Multinomial et à LightGBM ($78,54\,\%$ d'accuracy) à parité informationnelle de 21 variables.
+            </p>
+          </div>
+          <div class="info-card accent-green">
+            <div class="card-label green">Axe 3</div>
+            <div class="card-title">Domaine de Rupture LLM</div>
+            <p style="font-size: 0.82rem; color: var(--text-muted);">
+              Qualifier les capacités uniques du LLM : lecture d'actualités brutes et modélisation de l'hystérésis post-incident ($J+1$).
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-purple" style="margin-top: 14px;">
+          <div class="card-label purple"><i data-lucide="layers" style="width: 13px; height: 13px;"></i> 1.4 Ancrage Épistémologique — Stress-Test SILICA & Dichotomie de Baronchelli (2025, 2026)</div>
+          <div style="display: flex; gap: 14px; font-size: 0.82rem; margin-top: 6px;">
+            <div style="flex: 1;">
+              <strong>SILICA (Bin Tareaf et al., 2026)</strong> — 9 115 simulations sur jeux sociaux (dilemmes, biens publics, conventions).<br>
+              <strong>Tier 1</strong> Émergence nominale · <strong>Tier 2</strong> Robustesse aux perturbations · <strong>Tier 3</strong> Fidélité distributionnelle humaine. <em>Aucun phénomène n'atteint le Tier 3.</em>
+            </div>
+            <div style="flex: 1; border-left: 1px solid var(--border-color); padding-left: 12px;">
+              <strong>Baronchelli (2025, 2026)</strong> — Deux questions distinctes :<br>
+              1. <em>LLM = proxy humain statistique ?</em> → Échec Tier 3 (plafond distributionnel).<br>
+              2. <em>LLM = système adaptatif complexe ?</em> → Succès Tier 2 (hystérésis, conventions, adaptation non tabulée).
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 4 : ÉTAPE 0 - MÉTRIQUES & DÉMOGRAPHIE ==================== -->
+    <div class="slide-container" data-slide="4">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="target" style="width: 12px; height: 12px;"></i> Étape 0</div>
+        <h2 class="slide-title">Étape 0 : Cadre d'Évaluation & Validation Démographique</h2>
+        <div class="slide-subtitle">Définition des métriques duales et validation de la population synthétique toulousaine</div>
+
+        <div class="grid-2" style="margin-bottom: 16px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="bar-chart-2" style="width: 13px; height: 13px;"></i> Métriques Macroscopiques (Agrégées)</div>
+            <ul style="font-size: 0.83rem; line-height: 1.55;">
+              <li><strong>Parts Modales ($\hat{P}_m$) :</strong> Distribution sur Voiture, Marche, TC, Vélo.</li>
+              <li><strong>Erreur L1 Cumulée :</strong> $\text{L1} = \sum_{m} |\hat{P}_m - P_m^{\text{EMC2}}|$.</li>
+              <li><strong>Score Composite $S$ :</strong> Combinaison de l'écart L1 et des pénalités de variance inter-runs.</li>
+            </ul>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="check-square" style="width: 13px; height: 13px;"></i> Métriques Microscopiques (Jeu scellé $N = 13\,045$)</div>
+            <ul style="font-size: 0.83rem; line-height: 1.55;">
+              <li><strong>Accuracy Globale :</strong> Taux de décision individuelle exactement conforme.</li>
+              <li><strong>Rappel & Précision par Mode :</strong> Mesure spécifique par mode de transport.</li>
+              <li><strong>LogLoss Multi-Classe :</strong> Calibration des probabilités d'option.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          Jalon 0 : Conformité de la Cohorte Synthétique ($N = 1\,000$ agents équiprobables) vs Insee RP 2022 / EMC² 2023 :
+        </div>
+
+        <div class="table-container table-mono" style="max-height: 200px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Dimension Démographique</th>
+                <th>Cible Référentielle (Insee / CEREMA)</th>
+                <th>Cohorte Synthétique ($N=1000$)</th>
+                <th>Écart ($\Delta$)</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Genre (Femmes / Hommes)</strong></td><td>51,8 % / 48,2 %</td><td>51,9 % / 48,1 %</td><td>$\pm 0,1\text{ pt}$</td><td><span class="delta-tag delta-good">Conforme</span></td></tr>
+              <tr><td><strong>Âge : 18 - 64 ans (Actifs)</strong></td><td>62,1 %</td><td>62,4 %</td><td>$+0,3\text{ pt}$</td><td><span class="delta-tag delta-good">Conforme</span></td></tr>
+              <tr><td><strong>Ménages sans voiture (0 auto)</strong></td><td>22,3 %</td><td>22,1 %</td><td>$-0,2\text{ pt}$</td><td><span class="delta-tag delta-good">Conforme</span></td></tr>
+              <tr><td><strong>Taux de détention du Permis B</strong></td><td>84,2 % (Adultes)</td><td>84,0 % (Adultes)</td><td>$-0,2\text{ pt}$</td><td><span class="delta-tag delta-good">Conforme</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">
+          *Test $\chi^2$ d'adéquation globale : $p = 0,98 > 0,05$ (fidélité parfaite sans redressement a posteriori).
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 5 : ÉTAPE 1 - MODÈLE NU & VARIABILITÉ ==================== -->
+    <div class="slide-container" data-slide="5">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> Étape 1</div>
+        <h2 class="slide-title">Étape 1 : Évaluation du Modèle Nu & Variabilité Multi-Runs</h2>
+        <div class="slide-subtitle">Comportement de base à prompt minimaliste neutre et étude de la dispersion inter-runs</div>
+
+        <div class="grid-3" style="margin-bottom: 16px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="file-code" style="width: 13px; height: 13px;"></i> 1.1 Le Modèle Nu (Bare LLM)</div>
+            <p style="font-size: 0.82rem;">
+              Description minimale neutre : profil individu + itinéraire OTP + consigne neutre <em>« Choisis l'itinéraire le plus approprié »</em>. Zero prompt engineering.
+            </p>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="server" style="width: 13px; height: 13px;"></i> 1.2 Benchmark Multi-Modèles</div>
+            <div style="font-size: 0.8rem; line-height: 1.5;">
+              • <strong>Mistral AI :</strong> Mistral-Small (Souverain)<br>
+              • <strong>Qwen-32B local :</strong> Open-weights déterministe<br>
+              • <strong>Google Gemini :</strong> Gemini 3.1 & 3.5 Flash Lite
+            </div>
+          </div>
+
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i> 1.3 Analyse de Variabilité</div>
+            <p style="font-size: 0.82rem;">
+              Mesure de la variance inter-runs sur 5 graines aléatoires fixées (`seeds = [0, 42, 123, 999, 2026]`) à basse température ($\tau \approx 0.0 - 0.2$).
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="shield-check" style="width: 13px; height: 13px;"></i> Enseignement sur la Dispersion à Basse Température</div>
+          <p style="font-size: 0.86rem; margin: 0;">
+            Si les choix individuels unijoueurs peuvent osciller sur les cas d'indifférence (ex. durées voiture et bus très proches), <strong>la distribution modale agrégée reste stable à $\pm 1,2\text{ pt}$ près</strong>. Cela confirme la réfutabilité expérimentale des benchmarks LLM sous condition de répéter les tirages sur graines contrôlées.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 6 : ÉTAPE 2 - INVALIDATION ABLATION & PROMPT VS PHYSIQUE ==================== -->
+    <div class="slide-container" data-slide="6">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="sliders" style="width: 12px; height: 12px;"></i> Étape 2</div>
+        <h2 class="slide-title">Étape 2 : Invalidation par l'Ablation & Prompt vs Physique</h2>
+        <div class="slide-subtitle">L'ingénierie de prompt échoue là où le calage des paramètres physiques de réseau triomphe</div>
+
+        <div class="grid-2" style="margin-bottom: 14px;">
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="layers" style="width: 13px; height: 13px;"></i> L'Ablation en 4 Paliers Évaluatifs</div>
+            <div style="font-size: 0.81rem; line-height: 1.45;">
+              • <strong>Palier 0 :</strong> Planchers (Hasard 25%, Zero-Rule 56.7%, Plus Court OTP)<br>
+              • <strong>Palier 1 :</strong> Modèle Nu (Bare LLM, prompt neutre)<br>
+              • <strong>Palier 2 :</strong> Modèle Calibré (Prompt Engineering & Personas)<br>
+              • <strong>Palier 3 :</strong> Baselines Statistiques (MNL & Oracle LightGBM 78.54%)
+            </div>
+          </div>
+
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="alert-circle" style="width: 13px; height: 13px;"></i> Biais Macro-Distributionnels Persistants</div>
+            <div style="font-size: 0.81rem;">
+              • <strong>Voiture :</strong> 57,58 % (simu) vs 56,70 % (cible EMC²) ➜ Conforme.<br>
+              • <strong>Marche :</strong> 11,90 % vs 26,80 % ➜ <strong style="color: var(--accent-coral);">Sous-estimation critique</strong>.<br>
+              • <strong>Vélo :</strong> 13,29 % vs 4,12 % ➜ <strong style="color: var(--accent-coral);">Sur-attractivité massive ($\times 3,2$)</strong>.
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="info-card accent-coral">
+            <div class="card-label coral">Expérience Prompt (Ticket 014)</div>
+            <div style="font-size: 0.82rem;">Consignes textuelles d'optimisation de journée.</div>
+            <div class="delta-tag delta-pos" style="margin-top: 6px;">$\Delta \text{Loss} = +0,21$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-coral);">Inefficace (bruit)</div>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green">Expérience Temps Terminal (Ticket 013)</div>
+            <div style="font-size: 0.82rem;">Accès/stationnement voiture : $7,93 \to 0,55\text{ min}$.</div>
+            <div class="delta-tag delta-good" style="margin-top: 6px;">$\Delta \text{Loss} = -4,52$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-green);">Gain Majeur sur le score</div>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Expérience Voiture + Vélo (Ticket 015)</div>
+            <div style="font-size: 0.82rem;">Alignement conjoint des accroches vélo/parking.</div>
+            <div class="delta-tag delta-good" style="margin-top: 6px;">$\Delta \text{Loss} = -2,17$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-cyan);">Re-calage partiel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 7 : ÉTAPE 2 - AUDIT UNITAIRE VS ORACLE STATISTIQUE ==================== -->
+    <div class="slide-container" data-slide="7">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> Étape 2 (suite)</div>
+        <h2 class="slide-title">Étape 2 : Audit Unitaire Face à l'Oracle Statistique</h2>
+        <div class="slide-subtitle">Inférence à parité informationnelle stricte (15 variables) et matrice de confusion scellée</div>
+
+        <div class="grid-3" style="margin-bottom: 14px;">
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="check-circle" style="width: 13px; height: 13px;"></i> Accuracy Oracle LightGBM</div>
+            <div class="metric-value" style="color: var(--accent-green);">78,54 %</div>
+            <div class="metric-sub">Pondérée sur $13\,045$ trajets de test scellés</div>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="pie-chart" style="width: 13px; height: 13px;"></i> Déterminants SHAP N°1</div>
+            <div class="metric-value" style="color: var(--accent-blue);">28,52 %</div>
+            <div class="metric-sub">Poids prédictif de la distance $od\_km$</div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="shield" style="width: 13px; height: 13px;"></i> Parité Informationnelle</div>
+            <div style="font-size: 0.8rem;">
+              LLM, Logit et LightGBM reçoivent exactement les mêmes 15 variables tabulaires $\vec{x}$.
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.86rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          Matrice de Confusion de l'Oracle LightGBM sur le Test Gelé Scellé ($N = 13\,045$ trajets) :
+        </div>
+
+        <div class="conf-matrix">
+          <div class="conf-cell conf-header">Réel \ Prédit</div>
+          <div class="conf-cell conf-header">🚲 Vélo</div>
+          <div class="conf-cell conf-header">🚗 Voiture</div>
+          <div class="conf-cell conf-header">🚌 TC</div>
+          <div class="conf-cell conf-header">🚶 Marche</div>
+          <div class="conf-cell conf-header">Rappel</div>
+
+          <div class="conf-cell conf-header">Réel Vélo</div>
+          <div class="conf-cell conf-diag">67</div>
+          <div class="conf-cell conf-off">251</div>
+          <div class="conf-cell conf-off">51</div>
+          <div class="conf-cell conf-off">150</div>
+          <div class="conf-cell conf-recall">13,8 %</div>
+
+          <div class="conf-cell conf-header">Réel Voiture</div>
+          <div class="conf-cell conf-off">30</div>
+          <div class="conf-cell conf-diag">6 384</div>
+          <div class="conf-cell conf-off">264</div>
+          <div class="conf-cell conf-off">632</div>
+          <div class="conf-cell conf-recall">87,5 %</div>
+
+          <div class="conf-cell conf-header">Réel TC</div>
+          <div class="conf-cell conf-off">25</div>
+          <div class="conf-cell conf-off">302</div>
+          <div class="conf-cell conf-diag">1 068</div>
+          <div class="conf-cell conf-off">217</div>
+          <div class="conf-cell conf-recall">66,1 %</div>
+
+          <div class="conf-cell conf-header">Réel Marche</div>
+          <div class="conf-cell conf-off">20</div>
+          <div class="conf-cell conf-off">748</div>
+          <div class="conf-cell conf-off">110</div>
+          <div class="conf-cell conf-diag">2 726</div>
+          <div class="conf-cell conf-recall">74,9 %</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 8 : ÉTAPE 3A - HYSTÉRÉSIS & MÉMOIRE J+1 ==================== -->
+    <div class="slide-container" data-slide="8">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="activity" style="width: 12px; height: 12px;"></i> Étape 3a</div>
+        <h2 class="slide-title">Étape 3a : Adaptation aux Exceptions & Hystérésis 5 Jours</h2>
+        <div class="slide-subtitle">La mémoire court-terme $\mathcal{M}_t$ : rupture avec l'amnésie des modèles tabulaires statiques</div>
+
+        <div class="diagram-box" style="flex-direction: column; align-items: stretch; gap: 14px;">
+          <div style="display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 16px;">
+            <!-- J Matin -->
+            <div class="info-card accent-blue" style="text-align: center;">
+              <div class="card-label blue">JOUR J — Matin (Nominal)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0;">Métro en service</div>
+              <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem;">
+                Choix : <strong>Métro</strong> (80%)
+              </div>
+            </div>
+
+            <!-- J Incident -->
+            <div class="info-card accent-coral" style="text-align: center;">
+              <div class="card-label coral">JOUR J — 17h (Choc Réseau)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0; color: var(--accent-coral);">Panne Métro Ligne A</div>
+              <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem;">
+                Report d'urgence : <strong>Bus</strong> (+45 min)
+              </div>
+            </div>
+
+            <!-- J+1 Rétabli -->
+            <div class="info-card accent-purple" style="text-align: center;">
+              <div class="card-label purple">JOUR J+1 — Matin (Rétabli 100%)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0;">Métro réparé à 100%</div>
+              <div style="display: grid; grid-template-rows: 1fr 1fr; gap: 6px; text-align: left; font-size: 0.78rem;">
+                <div style="background: var(--bg-primary); padding: 6px 8px; border-radius: 4px; border-left: 3px solid var(--accent-coral);">
+                  <strong>LightGBM (Amnésique) :</strong><br>Reprend Métro à 80% dès $J+1$
+                </div>
+                <div style="background: var(--bg-primary); padding: 6px 8px; border-radius: 4px; border-left: 3px solid var(--accent-green);">
+                  <strong>LLM + Mémoire :</strong><br>Évite le Métro à $J+1$ (Churn 35%)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="clock" style="width: 13px; height: 13px;"></i> Formalisation & Cinétique sur 5 Jours ($J_1 \to J_5$)</div>
+          <p style="font-size: 0.84rem; margin: 0;">
+            Le registre de mémoire $\mathcal{M}_t$ applique la dépréciation temporelle $w_m(t) = 1 - \sum \gamma \frac{\Delta t_{\text{retard}}}{\Delta t_{\text{ref}}} e^{-\lambda (t - t_k)}$. Le LLM reproduit la cinétique réelle de ré-adoption : <strong>35% à $J+1 \to$ 60% à $J+2 \to$ 78% à $J+5$</strong>, là où le ML réinitialise instantanément à $80\%$.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 9 : ÉTAPE 3B - PRESSE LOCALE & ACTUALITÉS ==================== -->
+    <div class="slide-container" data-slide="9">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="newspaper" style="width: 12px; height: 12px;"></i> Étape 3b</div>
+        <h2 class="slide-title">Étape 3b : Évaluation Écologique sur Presse Locale Sourcée</h2>
+        <div class="slide-subtitle">Traitement direct de l'information contextuelle non tabulée brute (Métropole de Toulouse)</div>
+
+        <div class="grid-3">
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="map" style="width: 12px; height: 12px;"></i> 1. Minotaure — La Machine</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « Hyper-centre piétonnisé, boulevards fermés, métros renforcés. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 8px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Éviction voiture ➜ Métro/Marche.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ ML Tabulaire :</span> Aveugle à la presse.
+            </div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="sun" style="width: 12px; height: 12px;"></i> 2. Pic d'Ozone & Canicule</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « TC à tarif réduit, vélos déconseillés l'après-midi, Crit'Air. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 8px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Report vers TC climatisés.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ ML Tabulaire :</span> Aucune variable météo.
+            </div>
+          </div>
+
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="alert-triangle" style="width: 12px; height: 12px;"></i> 3. Coupure Rocade Empalot</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « Rocade Ouest coupée, +1h de bouchon estimé. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 8px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Bascule urgente TER / Métro.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ ML Tabulaire :</span> Maintient l'historique car OD inchangée.
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card accent-green" style="margin-top: 14px;">
+          <div class="card-label green"><i data-lucide="sparkles" style="width: 13px; height: 13px;"></i> Le Cœur de la Rupture LLM</div>
+          <p style="font-size: 0.86rem; margin: 0;">
+            Le LLM est le seul modèle capable d'<strong>ingérer des flux d'actualités bruts sans ré-entraîner un pipeline de variables</strong>, et d'adapter instantanément les comportements d'agents à des contraintes exceptionnelles imprévues.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 10 : PERSPECTIVE - ARCHITECTURE HYBRIDE EN CASCADE ==================== -->
+    <div class="slide-container" data-slide="10">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="git-merge" style="width: 12px; height: 12px;"></i> Section 6 — Prospective</div>
+        <h2 class="slide-title">Perspectives : L'Architecture Hybride en Cascade</h2>
+        <div class="slide-subtitle">Formulation prospective d'un couplage 3 étages : ML pour le nominal (90%) & LLM pour les ruptures (10%)</div>
+
+        <div class="diagram-box" style="flex-direction: column; gap: 12px;">
+          <div style="background: var(--bg-primary); border: 1px dashed var(--border-color); padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 0.88rem;">
+            🎯 Requête de Déplacement de l'Agent Synthétique
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
+
+          <div class="info-card accent-amber" style="width: 100%; max-width: 860px;">
+            <div class="card-label amber"><i data-lucide="filter" style="width: 12px; height: 12px;"></i> ÉTAGE 1 : FILTRE DÉTERMINISTE (Règles Physiques & Légales)</div>
+            <div style="font-size: 0.83rem;">
+              Permis B ? Possession véhicule ? Véhicule disponible au lieu de départ ? ➜ Élimination stricte des modes impossibles.
+            </div>
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
+
+          <div class="info-card accent-green" style="width: 100%; max-width: 860px;">
+            <div class="card-label green"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> ÉTAGE 2 : ORACLE STATISTIQUE LIGHTGBM (90 % du flux nominal)</div>
+            <div style="font-size: 0.83rem;">
+              Trajet de routine, réseau fluide, météo standard ➜ <strong>Décision instantanée (&lt; 0.1 ms), 0 token, alignement EMC² garanti.</strong>
+            </div>
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 18px; height: 18px; color: var(--text-muted);"></i>
+
+          <div class="info-card accent-purple" style="width: 100%; max-width: 860px;">
+            <div class="card-label purple"><i data-lucide="sparkles" style="width: 12px; height: 12px;"></i> ÉTAGE 3 : AGENT GÉNÉRATIF LLM (10 % des situations complexes)</div>
+            <div style="font-size: 0.83rem;">
+              Actualité presse locale, alerte météo, bagages qualitatifs, arbitrage ménage ➜ <strong>Raisonnement sémantique & mémoire $J+1$.</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 11 : MÉNAGE & CHAÎNES SPATIALES ==================== -->
+    <div class="slide-container" data-slide="11">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="home" style="width: 12px; height: 12px;"></i> Section 6.3</div>
+        <h2 class="slide-title">Interactions Intra-Ménage & Chaînes Spatiales</h2>
+        <div class="slide-subtitle">Contraintes d'interaction de la cellule familiale et conservation spatiale du véhicule</div>
+
+        <div class="grid-3" style="margin-bottom: 16px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="car" style="width: 13px; height: 13px;"></i> 1. Véhicule Partagé</div>
+            <p style="font-size: 0.83rem;">
+              Arbitrage automatique du véhicule unique entre deux actifs du foyer selon l'éloignement et les horaires.
+            </p>
+          </div>
+
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="users" style="width: 13px; height: 13px;"></i> 2. Dépose Scolaire</div>
+            <p style="font-size: 0.83rem;">
+              L'accompagnement des enfants verrouille le mode et modifie la chaîne de déplacements du parent accompagnateur.
+            </p>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="navigation" style="width: 13px; height: 13px;"></i> 3. Conservation Spatiale</div>
+            <p style="font-size: 0.83rem;">
+              Conservation stricte du lieu de stationnement (`vehicle-chain.md`) : zéro réapparition magique au domicile.
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="check-circle" style="width: 13px; height: 13px;"></i> Résolution des Incohérences Systémiques</div>
+          <p style="font-size: 0.86rem; margin: 0;">
+            L'intégration de l'échelle du ménage résout les anomalies des simulateurs individuels isolés, garantissant la conservation des stocks de véhicules et la synchronisation des agendas.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 12 : CONCLUSION & SYNTHÈSE ==================== -->
+    <div class="slide-container" data-slide="12">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="check-circle-2" style="width: 12px; height: 12px;"></i> Section 7</div>
+        <h2 class="slide-title">Conclusion & Enseignements Majeurs</h2>
+        <div class="slide-subtitle">Bilan de l'évaluation empirique et feuille de route pour la simulation multi-agents</div>
+
+        <div class="grid-3" style="margin-bottom: 20px;">
+          <div class="info-card accent-coral">
+            <div class="card-label coral">Enseignement 1</div>
+            <div class="card-title">Pas de LLM pour la Statistique Pure</div>
+            <p style="font-size: 0.83rem; color: var(--text-muted);">
+              Les arbres supervisés (LightGBM) sont $10\,000\times$ plus rapides, gratuits en tokens et mieux calés sur les distributions d'enquête.
+            </p>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Enseignement 2</div>
+            <div class="card-title">Rupture sur le Non-Tabulaire & Temporel</div>
+            <p style="font-size: 0.83rem; color: var(--text-muted);">
+              La vraie valeur du LLM réside dans la lecture d'actualités brutes de presse locale et la mémoire d'hystérésis ($J+1$).
+            </p>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green">Enseignement 3</div>
+            <div class="card-title">Perspective Hybride en Cascade</div>
+            <p style="font-size: 0.83rem; color: var(--text-muted);">
+              Le couplage 90% ML nominal / 10% LLM perturbations offre le meilleur compromis entre calage métropolitain et adaptabilité.
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-purple">
+          <div class="card-label purple"><i data-lucide="rocket" style="width: 13px; height: 13px;"></i> Prochaines Étapes Expérimentales</div>
+          <div class="grid-2" style="font-size: 0.84rem; margin-top: 6px;">
+            <div><strong>1. Implémentation GAMA :</strong> Déploiement du pipeline dans le simulateur CityTransport sur Toulouse.</div>
+            <div><strong>2. Négociation Multi-LLM :</strong> Arbitrage interactif entre agents d'un même foyer pour le véhicule partagé.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 13 : ANNEXE A - QUOTAS API & ANTIGRAVITY ==================== -->
+    <div class="slide-container" data-slide="13">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="server" style="width: 12px; height: 12px;"></i> Annexe A</div>
+        <h2 class="slide-title">Gestion des Quotas API REST & Plateforme Antigravity</h2>
+        <div class="slide-subtitle">Capacités d'inférence du Gateway SWRR (206 RPM / 37.7k RPD) et orchestration agentique Antigravity</div>
+
+        <div class="grid-3" style="margin-bottom: 14px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="calculator" style="width: 13px; height: 13px;"></i> A.1 Gateway API Multi-Providers</div>
+            <div class="metric-value" style="color: var(--accent-blue);">206 RPM</div>
+            <div class="metric-sub">Capacité instantanée sur 11 instances SWRR</div>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="gauge" style="width: 13px; height: 13px;"></i> A.2 Quota Journalier Cumulé</div>
+            <div class="metric-value" style="color: var(--accent-green);">37 700+</div>
+            <div class="metric-sub">Requêtes/jour gratuites mutualisées</div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="cpu" style="width: 13px; height: 13px;"></i> A.3 Quotas Google Antigravity</div>
+            <div style="font-size: 0.8rem; line-height: 1.4;">
+              Orchestration d'agents (Gemini 3.6 Flash / 3.5 Flash Lite), contexte <strong>~1M tokens</strong>, <em>Reactive Wakeup</em> événementiel et tâches sandboxed.
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.86rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          A.4 Tableau des 11 Instances Actives en Rotation (Gateway SWRR API) :
+        </div>
+
+        <div class="table-container table-mono" style="max-height: 180px; overflow-y: auto; margin-bottom: 10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Instance</th>
+                <th>Adaptateur</th>
+                <th>Modèle</th>
+                <th>RPM</th>
+                <th>TPM</th>
+                <th>RPD</th>
+                <th>Poids</th>
+                <th>Part Trafic</th>
+                <th>Rôle / Spécialisation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>mistral</code></td>
+                <td>Mistral</td>
+                <td><code>mistral-small-latest</code></td>
+                <td>60</td>
+                <td>500k</td>
+                <td>100M</td>
+                <td><strong>4.0</strong></td>
+                <td>40,5 %</td>
+                <td>Pilier simulation (100M tokens/j)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemini31</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.1-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Juge Éval (thinking: 0, cache)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemini35</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.5-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Mutateur (+ thinking 1024)</td>
+              </tr>
+              <tr>
+                <td><code>google2</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.1-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Seconde clé Google (hors campagne)</td>
+              </tr>
+              <tr>
+                <td><code>google2_35</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.5-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Seconde clé Google (seau 3.5)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemma42</code></td>
+                <td>Google</td>
+                <td><code>gemma-4-26b-a4b-it</code></td>
+                <td>30</td>
+                <td>16k</td>
+                <td>14 400</td>
+                <td><strong>0.36</strong></td>
+                <td>3,6 %</td>
+                <td>High RPD (TPM limitant à 16k)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemma43</code></td>
+                <td>Google</td>
+                <td><code>gemma-4-31b-it</code></td>
+                <td>30</td>
+                <td>16k</td>
+                <td>14 400</td>
+                <td><strong>0.36</strong></td>
+                <td>3,6 %</td>
+                <td>High RPD (TPM limitant à 16k)</td>
+              </tr>
+              <tr>
+                <td><code>cerebras_gpt</code></td>
+                <td>Cerebras</td>
+                <td><code>gpt-oss-120b</code></td>
+                <td>5</td>
+                <td>30k</td>
+                <td>2 400</td>
+                <td><strong>0.33</strong></td>
+                <td>3,3 %</td>
+                <td>Inférence ultra-rapide</td>
+              </tr>
+              <tr>
+                <td><code>cerebras_gemma</code></td>
+                <td>Cerebras</td>
+                <td><code>gemma-4-31b</code></td>
+                <td>5</td>
+                <td>30k</td>
+                <td>2 400</td>
+                <td><strong>0.33</strong></td>
+                <td>3,3 %</td>
+                <td>Seau Cerebras distinct</td>
+              </tr>
+              <tr>
+                <td><code>groq_openai</code></td>
+                <td>Groq</td>
+                <td><code>openai/gpt-oss-120b</code></td>
+                <td>30</td>
+                <td>8k</td>
+                <td>1 000</td>
+                <td><strong>0.18</strong></td>
+                <td>1,8 %</td>
+                <td>Inférence LPUs ultra-faible latence</td>
+              </tr>
+              <tr>
+                <td><code>groq_qwen</code></td>
+                <td>Groq</td>
+                <td><code>qwen/qwen3.6-27b</code></td>
+                <td>30</td>
+                <td>8k</td>
+                <td>1 000</td>
+                <td><strong>0.18</strong></td>
+                <td>1,8 %</td>
+                <td>Modèle Qwen hébergé sur Groq</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="info-card accent-amber">
+          <div class="card-label amber"><i data-lucide="layers" style="width: 12px; height: 12px;"></i> A.5 Spécificités des Quotas & Orchestration Antigravity</div>
+          <div class="grid-2" style="font-size: 0.81rem;">
+            <div>
+              <strong>Environnement Agentique Antigravity :</strong> Invocations autonomes de sous-agents (`invoke_subagent`), bascule de modèles (Gemini 3.6 Flash / Gemini Pro) et contrôle d'exécution en mode sandbox évitant les surcoûts d'API.
+            </div>
+            <div>
+              <strong>Séparation des Rôles Gemini :</strong> Le Juge d'Évaluation (`google_gemini31`, RPD=500, sans réflexion) est sanctuarisé dans la clé de cache `eval_params_key`, tandis que le Mutateur (`google_gemini35`, RPD=500, budget de pensée 1024) génère les variantes.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 14 : ANNEXES B & C ==================== -->
+    <div class="slide-container" data-slide="14">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="code" style="width: 12px; height: 12px;"></i> Annexes B & C</div>
+        <h2 class="slide-title">Spécifications Techniques & Inférence Locale</h2>
+        <div class="slide-subtitle">Détails d'implémentation du banc de test aveugle et configuration de Qwen-32B</div>
+
+        <div class="grid-2">
+          <!-- Annexe B -->
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="file-code" style="width: 13px; height: 13px;"></i> Annexe B : Script <code>eval_llm_on_survey.py</code></div>
+            <ul style="font-size: 0.82rem; line-height: 1.5;">
+              <li><strong>Localisation :</strong> <code>scripts/progedo_logit/eval_llm_on_survey.py</code></li>
+              <li><strong>Entrée :</strong> <code>mode_choice_test.csv</code> ($13\,045$ lignes scellées)</li>
+              <li><strong>Arguments CLI supportés :</strong>
+                <pre class="code-block" style="margin-top: 4px;">--n_samples 1000 \
+--model local-qwen32b \
+--endpoint http://localhost:8000/v1 \
+--seed 42</pre>
+              </li>
+              <li><strong>Sorties :</strong> <code>results/eval_survey_&lt;model&gt;.json</code> & <code>confusion_matrix_&lt;model&gt;.png</code>.</li>
+            </ul>
+          </div>
+
+          <!-- Annexe C -->
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="hard-drive" style="width: 13px; height: 13px;"></i> Annexe C : Configuration Inférence Qwen-32B</div>
+            <ul style="font-size: 0.82rem; line-height: 1.5;">
+              <li><strong>Modèle Recommandé :</strong> <code>Qwen/Qwen2.5-32B-Instruct-AWQ</code> ou GGUF Q4_K_M.</li>
+              <li><strong>Option 1 — Serveur vLLM (Production GPU) :</strong>
+                <pre class="code-block" style="margin-top: 4px;">vllm serve Qwen/Qwen2.5-32B-Instruct-AWQ \
+  --port 8000 --max-model-len 4096</pre>
+              </li>
+              <li><strong>Option 2 — Ollama :</strong>
+                <pre class="code-block" style="margin-top: 4px;">ollama run qwen2.5:32b</pre>
+              </li>
+              <li><strong>Hyperparamètres :</strong> $\tau = 0.0$, $\text{seed} = 0$, sortie JSON stricte <code>{ "choice": "...", "reason": "..." }</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 15 : ANNEXES D & E ==================== -->
+    <div class="slide-container" data-slide="15">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="database" style="width: 12px; height: 12px;"></i> Annexes D & E</div>
+        <h2 class="slide-title">Bilan Calibration & Dictionnaire des Variables</h2>
+        <div class="slide-subtitle">Retours sur l'optimisation génétique de prompt et structure des données de l'enquête EMC² 2023</div>
+
+        <div class="info-card accent-amber" style="margin-bottom: 14px;">
+          <div class="card-label amber"><i data-lucide="help-circle" style="width: 13px; height: 13px;"></i> Annexe D : Bilan de la Prompt Calibration & Justification du Pivot</div>
+          <p style="font-size: 0.84rem; margin: 0;">
+            Le module de calibration de prompt (<code>prompt_calibration/</code>) a montré que l'espace d'optimisation par blocs est <strong>hautement non convexe et bruité</strong>. Les gains d'un prompt optimisé restent négligeables face aux gains apportés par le calage direct des paramètres de réseau (temps terminaux, éligibilité vélo). Cela justifie le choix de l'<strong>architecture hybride en cascade</strong>.
+          </p>
+        </div>
+
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          Annexe E : Dictionnaire des 15 Variables de l'Enquête EMC² 2023 (ProGEDO lil-1750) :
+        </div>
+
+        <div class="table-container table-mono" style="max-height: 240px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Type</th>
+                <th>Description / Modalités d'Enquête</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>age</code></td><td>Numérique</td><td>Âge de l'individu (5 à 99 ans)</td></tr>
+              <tr><td><code>gender</code></td><td>Catégoriel</td><td><code>Male</code>, <code>Female</code></td></tr>
+              <tr><td><code>household_size</code></td><td>Numérique</td><td>Nombre de personnes au sein du ménage</td></tr>
+              <tr><td><code>has_driving_license</code></td><td>Booléen</td><td>Détention du permis de conduire B</td></tr>
+              <tr><td><code>number_of_cars</code></td><td>Numérique</td><td>Nombre de véhicules motorisés possédés</td></tr>
+              <tr><td><code>car_availability</code></td><td>Catégoriel</td><td><code>all</code> (toujours), <code>some</code> (parfois), <code>none</code> (jamais)</td></tr>
+              <tr><td><code>has_bike</code></td><td>Booléen</td><td>Attribution nominative d'un vélo (personnel ou VAE)</td></tr>
+              <tr><td><code>has_pt_subscription</code></td><td>Booléen</td><td>Détention d'un abonnement de transport collectif</td></tr>
+              <tr><td><code>main_occupation</code></td><td>Catégoriel</td><td>Travail plein/partiel, Étudiant, Retraité, Au foyer...</td></tr>
+              <tr><td><code>purpose</code></td><td>Catégoriel</td><td>Motif : <code>work</code>, <code>education</code>, <code>shop</code>, <code>leisure</code>, <code>home</code></td></tr>
+              <tr><td><code>departure_hour</code></td><td>Numérique</td><td>Heure de départ de l'activité (0 à 23h)</td></tr>
+              <tr><td><code>od_km</code></td><td>Numérique</td><td>Distance inter-centroïdes de zones fines en kilomètres</td></tr>
+              <tr><td><code>same_zone</code></td><td>Booléen</td><td>Déplacement intra-zone fine (1 si Origine = Destination)</td></tr>
+              <tr><td><code>density_orig / dest</code></td><td>Numérique</td><td>Densité de population et d'emploi de la zone</td></tr>
+              <tr><td><code>mode</code> (Cible)</td><td>Catégoriel</td><td><code>bike</code>, <code>car</code>, <code>transit</code>, <code>walk</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Table of Contents Modal / Drawer -->
+  <div class="drawer-overlay" id="drawer-overlay">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <div class="drawer-title">Sommaire des Slides</div>
+        <button class="btn-icon" id="btn-close-drawer">
+          <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+          <span>Fermer</span>
+        </button>
+      </div>
+      <div class="toc-list" id="toc-list-container">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Navigation Dock -->
+  <footer class="deck-footer">
+    <div class="slide-counter">
+      Slide <span class="active-num" id="current-slide-num">1</span> / <span id="total-slides-num">15</span>
+    </div>
+    <div class="nav-btn-group">
+      <button class="btn-icon" id="btn-prev" title="Slide Précédente (Flèche Gauche)">
+        <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+        <span>Précédent</span>
+      </button>
+      <button class="btn-icon" id="btn-next" title="Slide Suivante (Flèche Droite / Espace)">
+        <span>Suivant</span>
+        <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    // State management
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide-container');
+    const totalSlides = slides.length;
+    let isDocMode = false;
+
+    // Elements
+    const currentSlideNumEl = document.getElementById('current-slide-num');
+    const totalSlidesNumEl = document.getElementById('total-slides-num');
+    const progressFillEl = document.getElementById('progress-fill');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnModeToggle = document.getElementById('btn-mode-toggle');
+    const modeLabel = document.getElementById('mode-label');
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const btnToc = document.getElementById('btn-toc');
+    const drawerOverlay = document.getElementById('drawer-overlay');
+    const btnCloseDrawer = document.getElementById('btn-close-drawer');
+    const tocListContainer = document.getElementById('toc-list-container');
+
+    totalSlidesNumEl.textContent = totalSlides;
+
+    // Titles for TOC
+    const slideTitles = [
+      "1. Page de Garde & Métadonnées (v1.3)",
+      "2. Résumé & Abstract (FR / EN)",
+      "3. 1. Contexte & Positionnement Scientifique",
+      "4. Étape 0 : Métriques & Validation Démographique",
+      "5. Étape 1 : Modèle Nu & Variabilité Multi-Runs",
+      "6. Étape 2 : Invalidation Ablation & Prompt vs Physique",
+      "7. Étape 2 : Audit Unitaire vs Oracle LightGBM",
+      "8. Étape 3a : Situations Exceptionnelles & Hystérésis 5j",
+      "9. Étape 3b : Presse Locale & Événements Réels",
+      "10. Perspectives : Architecture Hybride en Cascade",
+      "11. Interactions Intra-Ménage & Chaînes Spatiales",
+      "12. Conclusion & Enseignements Majeurs",
+      "13. Annexe A : Quotas API & Antigravity",
+      "14. Annexes B & C : Script CLI & Qwen-32B",
+      "15. Annexes D & E : Bilan & Variables EMC²"
+    ];
+
+    // Build TOC
+    slideTitles.forEach((title, idx) => {
+      const item = document.createElement('div');
+      item.className = `toc-item ${idx + 1 === currentSlide ? 'active' : ''}`;
+      item.innerHTML = `
+        <span class="toc-item-num">${String(idx + 1).padStart(2, '0')}</span>
+        <span class="toc-item-title">${title}</span>
+      `;
+      item.addEventListener('click', () => {
+        goToSlide(idx + 1);
+        closeDrawer();
+      });
+      tocListContainer.appendChild(item);
+    });
+
+    function updateSlide() {
+      if (!isDocMode) {
+        slides.forEach((s, idx) => {
+          if (idx + 1 === currentSlide) {
+            s.classList.add('current');
+          } else {
+            s.classList.remove('current');
+          }
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // Update counters & progress
+      currentSlideNumEl.textContent = currentSlide;
+      const progressPercent = ((currentSlide) / totalSlides) * 100;
+      progressFillEl.style.width = `${progressPercent}%`;
+
+      // Update TOC active state
+      document.querySelectorAll('.toc-item').forEach((item, idx) => {
+        if (idx + 1 === currentSlide) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    function goToSlide(num) {
+      if (num < 1) num = 1;
+      if (num > totalSlides) num = totalSlides;
+      currentSlide = num;
+      if (isDocMode) {
+        const target = document.querySelector(`.slide-container[data-slide="${num}"]`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        updateSlide();
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        goToSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        goToSlide(currentSlide - 1);
+      }
+    }
+
+    // Event listeners
+    btnNext.addEventListener('click', nextSlide);
+    btnPrev.addEventListener('click', prevSlide);
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (drawerOverlay.classList.contains('open')) {
+        if (e.key === 'Escape') closeDrawer();
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(totalSlides);
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'd') {
+        toggleDocMode();
+      } else if (e.key.toLowerCase() === 'o') {
+        toggleDrawer();
+      }
+    });
+
+    // Toggle Presentation / Document Mode
+    function toggleDocMode() {
+      isDocMode = !isDocMode;
+      if (isDocMode) {
+        document.body.classList.remove('mode-slides');
+        document.body.classList.add('mode-doc');
+        btnModeToggle.classList.add('active');
+        modeLabel.textContent = 'Mode Slides';
+      } else {
+        document.body.classList.remove('mode-doc');
+        document.body.classList.add('mode-slides');
+        btnModeToggle.classList.remove('active');
+        modeLabel.textContent = 'Mode Doc';
+        updateSlide();
+      }
+    }
+    btnModeToggle.addEventListener('click', toggleDocMode);
+
+    // Dark / Light Theme Toggle
+    btnThemeToggle.addEventListener('click', () => {
+      const currentTheme = document.body.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      document.body.setAttribute('data-theme', newTheme);
+      themeIcon.setAttribute('data-lucide', newTheme === 'light' ? 'moon' : 'sun');
+      lucide.createIcons();
+    });
+
+    // Fullscreen Toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+
+    // TOC Drawer
+    function toggleDrawer() {
+      drawerOverlay.classList.toggle('open');
+    }
+    function closeDrawer() {
+      drawerOverlay.classList.remove('open');
+    }
+    btnToc.addEventListener('click', toggleDrawer);
+    btnCloseDrawer.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', (e) => {
+      if (e.target === drawerOverlay) closeDrawer();
+    });
+
+    // KaTeX Auto-render
+    document.addEventListener("DOMContentLoaded", function() {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ],
+          throwOnError: false
+        });
+      }
+      lucide.createIcons();
+      updateSlide();
+    });
+  </script>
+</body>
+</html>
