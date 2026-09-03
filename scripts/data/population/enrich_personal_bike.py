@@ -220,7 +220,7 @@ def enrich(population: list[dict], model: BikeOwnershipModel, resolver) -> Count
                                   [lons[i] for i in resolvable])
     zone_by_index = dict(zip(resolvable, zones))
     addresses: list[Optional[str]] = [
-        address_key(lats[i], lons[i]) if i in resolvable else None
+        address_key(lats[i], lons[i]) if i in zone_by_index else None
         for i in range(len(population))
     ]
 

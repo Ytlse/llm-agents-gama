@@ -193,3 +193,33 @@ menages_equipement_voiture:
       sans_voiture_pct: 6
       une_voiture_pct: 38
       deux_voitures_plus_pct: 55
+
+# ── Où chaque valeur ci-dessus est PUBLIÉE (relu le 2026-09-02) ──────────────────
+# Rapport final AUAT/CEREMA « Enquête mobilité 2023 — bassin de vie toulousain », 68 pages,
+# mai 2024 (https://www.aua-toulouse.org/wp-content/uploads/2024/05/Rapport-final-68-pages-
+# Enquete-mobilite-2023-Bassin-de-vie-toulousain.pdf). Pages du PDF.
+#
+# Ce bloc n'ajoute AUCUNE valeur : il dit d'où viennent celles du fichier, pour qu'un
+# recoupement ne dépende plus de la mémoire de qui l'a saisi. Les fiches méthodologiques
+# CEREMA (https://www.cerema.fr/fr/actualites/enquetes-mobilite-certifiees-cerema-methodologie)
+# donnent la méthode — hiérarchie des modes, dimensionnement par secteur — mais aucune marge
+# toulousaine.
+sources_publication:
+  population.totaux_perimetre_2023: "p. 10 — 1,4 M habitants, 674 000 ménages, 1,32 M de 5 ans et +, 2,08 pers./ménage"
+  population.repartition_par_territoire: "p. 10 — chiffres clés par territoire (ménages, habitants, 5 ans et +, densité, part 36/34/14/15 %)"
+  population.repartition_par_classe_age: "p. 11 — 6 classes, population de 5 ans et + redressée"
+  population.repartition_par_occupation_principale: "p. 11 — 7 postes, population de 5 ans et + redressée"
+  menages_equipement_voiture.perimetre_2023: "p. 21 — 19 / 45 / 35 %, base MÉNAGE ; voitures par ménage par couronne 0,82 / 1,47 / 1,71 / 1,66"
+  menages_equipement_voiture.par_territoire: "p. 21 — répartition par couronne (35-49-16, 9-46-45, 5-38-58, 6-38-55)"
+  territoire.decoupage_concentrique: "p. 10 — 1 / 68 / 109 / 275 communes tels que publiés ; la couche SIG DTIR donne 69 / 108 et fait foi"
+  # ⚠ Absents du rapport, donc sans cible publiée : la répartition par SEXE et le taux de
+  # détention du PERMIS (le mot n'apparaît qu'une fois, p. 4, dans la liste des questions).
+  # Le contrôle de population les rend « non mesurable » ; des candidats recalculés sur les
+  # microdonnées (P2, P7, COEP) vivent dans scripts/AAMAS/cible_jointe_couronne_motorisation.yaml.
+  non_publie: ["repartition_par_sexe", "taux_detention_permis"]
+  # ⚠ Piège : l'annexe p. 66 est une série historique sur le PÉRIMÈTRE 2013 (984 000 hab.,
+  # 504 000 ménages, 1,09 voiture/ménage, 24 % sans voiture). Ne pas la mélanger au 2023.
+  perimetre_2013_annexe: "p. 66 — série 1978-2023 sur le périmètre 2013, hors cadrage"
+  # La motorisation sur base PERSONNE (13,6 / 37,8 / 48,7 %) n'est publiée nulle part : c'est
+  # un recalcul microdonnées, gelé avec sa provenance dans
+  # scripts/AAMAS/cible_jointe_couronne_motorisation.yaml — pas une seconde copie ici.

@@ -2,15 +2,8 @@
 # Configuration
 # ──────────────────────────────────────────────────────────────────────────────
 
-CONFIG   ?= config_baseline_10000_current.yaml
-# CONFIG   ?= config_baseline_1000_current.yaml
-export CONFIG_FILE = $(CONFIG)
-
-# Guard: warn immediately if the chosen config file does not exist
-_CONFIG_PATH := llm-agents/config/$(CONFIG)
-ifeq ($(wildcard $(_CONFIG_PATH)),)
-  $(warning ⚠️  Config file '$(_CONFIG_PATH)' not found — containers will start with default settings (SOLARI mode, wrong endpoints). Set CONFIG=<existing-file>.yaml)
-endif
+# Un seul fichier de configuration de run, plus de choix par variable : pour
+# changer de config, éditer directement llm-agents/config/config.yaml.
 
 GAMA_BIN        = /Applications/GAMA.app/Contents/MacOS/GAMA
 # Racine du dépôt, déduite de l'emplacement du Makefile (pas de chemin absolu en dur)
@@ -51,7 +44,13 @@ endif
 # paramètres injectés avec le contenu de ce fichier. Le réglage est PERSISTANT
 # (le fichier est réécrit à cycle 2) : il vaut aussi pour les runs GUI suivants.
 MEM ?=
+# `make run CACHE=0` : coupe le cache sémantique LLM — chaque décision passe par le
+# modèle et se retrouve donc dans llm_exchanges.jsonl. Condition d'un rejeu (plancher
+# « prompt nu », A/B de prompt) sur le périmètre COMPLET. Coûte ~4x plus d'appels.
+# `make run CACHE=1` : le réactive. Sans CACHE, le fichier n'est pas touché.
+CACHE ?=
 SIM_PARAMS = GAMA/CityTransport/config/sim_params.yaml
+APP_CONFIG = llm-agents/config/config.yaml
 
 # ── Run sans modèles Google ───────────────────────────────────────────────────
 # `make run NO_GOOGLE=1` : blanchit les deux clés Google dans les conteneurs ;
@@ -308,11 +307,62 @@ heldout-eval:
 	  $(if $(BATCH),--batch $(BATCH),) $(if $(NODES),--nodes $(NODES),) \
 	  $(if $(DATASET),--dataset $(DATASET),)
 
+## Sélectionne les décisions du run épinglé où le LLM a retenu un transport collectif
+## alors que la MARCHE était proposée, puis les rejoue sous dix prompts modifiés.
+## AUCUN appel LLM ici : sélection seule, pour vérifier le périmètre.
+alt-prompt-subset:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make alt-prompt-subset SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.alt_prompt_replay subset
+
+## Rejoue le sous-jeu sous les dix variantes de prompt.
+## CONSOMME DU QUOTA LLM (~620 appels Gemini free tier, ~25 min sur deux clés).
+## Chiffrez d'abord : make alt-prompt-replay DRY_RUN=1
+## Reprise gratuite : un bras dont la trace existe déjà est repris sans appel
+## (FORCE=1 pour le re-payer). Usage : [VARIANTS=1,4,10] [DRY_RUN=1] [FORCE=1]
+alt-prompt-replay:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make alt-prompt-replay SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.alt_prompt_replay replay \
+	  $(if $(DRY_RUN),--dry-run,) $(if $(FORCE),--force,) \
+	  $(if $(VARIANTS),--variants $(VARIANTS),)
+
+## Écrit les dix pages docs/synthesis/detail_simulation_26_08_alternative<N>.html
+## depuis les traces du rejeu. Aucun appel LLM. Usage : [VARIANTS=1,4,10]
+alt-prompt-pages:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make alt-prompt-pages SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.alt_prompt_replay render \
+	  $(if $(VARIANTS),--variants $(VARIANTS),)
+
+## Figure PNG : les camemberts avant / après d'un ajout de prompt, lus dans la page
+## de la variante. Aucun appel LLM.
+## Usage : [VARIANT=1] [SCOPE=global|subset|both] — global (défaut) = population entière,
+## subset = les 495 décisions rejouées seules, both = les deux étages empilés.
+alt-prompt-figure:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make alt-prompt-figure SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.alt_prompt_figure \
+	  $(if $(VARIANT),--variant $(VARIANT),) $(if $(SCOPE),--scope $(SCOPE),)
+
+## Tests du rejeu : appariement moves.csv ↔ llm_exchanges.jsonl, point d'insertion
+## du bloc de variante, substitution. Journaux fabriqués, aucun appel LLM.
+test-alt-prompt:
+	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_alt_prompt_replay.py -q
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Modèle de choix modal (ticket 005)
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: zones housing-type bike-ownership terminal-time car-availability avancement policy common-set-predict
+.PHONY: zones housing-type bike-ownership terminal-time car-availability avancement policy policy-tune common-set-predict equipment-propensity
 .PHONY: communes-couronnes audit-perimetre audit-couronnes residence-zone couronne-v7
 
 ## ──────────────────────────────────────────────────────────────────────────────
@@ -394,6 +444,115 @@ audit-perimetre:
 	  $(if $(POP),--population $(POP),) $(if $(RUN),--run $(RUN),) \
 	  $(if $(TRACE),--trace $(TRACE),)
 
+.PHONY: reference-marges control-population select-population seal-population
+
+## Contrôle de la population du jeu de test (article AAMAS, jalon 0 du protocole).
+## Compare une population synthétique aux marges de l'EMC² 2023 — classes d'âge, occupation,
+## motorisation (base personne et base ménage), couronne, croisement couronne × motorisation —
+## avec IC95, TOST à ± BORNE pt, χ² + V de Cramér, EMD/JSD, journal de recoupement du
+## protocole et synthèse des écarts. Code 1 s'il reste un « à corriger ».
+##   make control-population                                   # population par défaut
+##   make control-population POP=data/population/x.json BORNE=1.0 TRACE=docs/traces/y
+control-population:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make control-population SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.control_population \
+	  $(if $(POP),$(POP),data/population/toulouse_population_1000.json) \
+	  $(if $(BORNE),--borne $(BORNE),) $(if $(TRACE),--trace $(TRACE),--trace-auto) $(if $(JSON),--json $(JSON),)
+
+## Les marges de référence, avec leur source (page du rapport ou recalcul gelé).
+## RECOMPUTE=1 regèle la cible jointe couronne × motorisation depuis les microdonnées ProGEDO.
+reference-marges:
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.reference_marges $(if $(RECOMPUTE),--recompute,)
+
+## Sélection stratifiée de N personas dans un vivier (avant le routage — l'étape 3ter du
+## notebook l'appelle). POOL obligatoire ; OUT défaut : <dossier du vivier>/toulouse_population_<N>_AAMAS.json
+##   make select-population POOL=scripts/data/population/Temp/4_zone_enriched/toulouse_population_5000.json N=1000
+select-population:
+	@test -n "$(POOL)" || { echo "POOL=<vivier.json> obligatoire"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.seal_population select --pool $(POOL) \
+	  --n $(if $(N),$(N),1000) \
+	  --out $(if $(OUT),$(OUT),$(dir $(POOL))toulouse_population_$(if $(N),$(N),1000)_AAMAS.json)
+
+## Scellement : contrôle puis copie dans un dossier immuable avec MANIFEST.yaml et CONTROLE.md.
+## REFUSE si une marge est « à corriger ». POP obligatoire ; OUT_DIR défaut : data/population/population_1000_AAMAS_v3
+## (règle de sélection v3 par ménage, ticket 029 ; le dossier v2 du 2026-09-02 reste intact)
+##   make seal-population POP=data/population/toulouse_population_1000_AAMAS.json \
+##        SELECTION=scripts/data/population/Temp/4_zone_enriched/toulouse_population_1000_AAMAS_selection.json
+seal-population:
+	@test -n "$(POP)" || { echo "POP=<population.json> obligatoire"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.seal_population seal --population $(POP) \
+	  $(if $(OUT_DIR),--out-dir $(OUT_DIR),) $(if $(N),--n $(N),) \
+	  $(if $(SELECTION),--selection-json $(SELECTION),) $(if $(BORNE),--borne $(BORNE),) \
+	  $(if $(NOTE),--note "$(NOTE)",)
+
+.PHONY: gtfs-year gtfs-year-dry gtfs-year-holdout gtfs-window test-gtfs-year
+
+## Reconstruit un feed GTFS couvrant l'année entière à partir des exports partiels
+## de l'opérateur. Chaque journée porte soit l'offre réelle publiée, soit la copie
+## verbatim d'une journée réelle de même signature (jour de semaine × période
+## scolaire zone C) ; aucun horaire n'est synthétisé, et la provenance de chaque
+## jour est tracée sous docs/traces/<date>_gtfs_annee/.
+##   make gtfs-year                              # Tisséo + TER, 2026 et 2027
+##   make gtfs-year RESEAU=tisseo ANNEES="2026"
+## Codes de sortie : 0 tout tenu, 1 ressource absente, 2 invariant démenti
+## (le feed ne doit PAS être publié), 4 construit mais confiance dégradée.
+## La cible TRADUIT le 4 en succès, en le disant : un feed annuel bâti sur six
+## mois d'exports comporte forcément des journées extrapolées de loin, et un
+## « Error 4 » apprendrait à ignorer les erreurs.
+gtfs-year:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make gtfs-year SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	@$(SYNTHESIS_PYTHON) -m scripts.data.gtfs_year.build_year_feed \
+	  $(foreach r,$(RESEAU),--reseau $(r)) \
+	  $(foreach a,$(ANNEES),--annee $(a)) \
+	  $(if $(SORTIE),--sortie $(SORTIE),) $(if $(TRACE),--trace $(TRACE),) \
+	  $(if $(DRY),--dry-run,) $(if $(HOLDOUT),--holdout $(HOLDOUT),) \
+	  $(if $(REFRESH),--rafraichir-calendrier,) ; \
+	code=$$? ; \
+	if [ $$code -eq 4 ]; then \
+	  echo "→ code 4 : feed construit, mais des journées sont extrapolées sans donneur de même nature." ; \
+	  echo "  Lisez docs/traces/*_gtfs_annee/provenance_*.csv avant de publier." ; \
+	  exit 0 ; \
+	fi ; \
+	exit $$code
+
+## Planifie sans rien écrire : quelles journées sont réelles, lesquelles seraient
+## copiées et depuis quand. À lancer avant tout build après réception d'exports.
+gtfs-year-dry:
+	@$(MAKE) gtfs-year DRY=1
+
+## Masque un mois réel et mesure l'écart entre l'offre extrapolée et l'offre
+## réellement publiée ce mois-là. C'est la seule preuve que le modèle
+## d'extrapolation vaut quelque chose. Mesure de référence sur mai 2026 : écart
+## maximal 5,3 %, médiane sous 1 %.
+##   make gtfs-year-holdout HOLDOUT=202605
+gtfs-year-holdout:
+	@$(MAKE) gtfs-year RESEAU=tisseo ANNEES=2026 HOLDOUT=$(if $(HOLDOUT),$(HOLDOUT),202605) \
+	  SORTIE=/tmp/gtfs_year_holdout
+
+## Extrait du feed annuel la fenêtre que consomment GAMA et le runtime. OTP lit
+## l'année entière, GAMA non : son calendrier est un masque binaire 64 bits
+## (llm-agents/inputs/gtfs/gama.py, PublicTransport.gaml). La fenêtre DOIT
+## contenir la date de simulation, sinon plus aucune course n'est planifiée.
+##   make gtfs-window START=2026-03-16 DAYS=64
+gtfs-window:
+	@$(SYNTHESIS_PYTHON) -m scripts.data.gtfs_year.window_feed \
+	  --source $(if $(SOURCE),$(SOURCE),data/gtfs_year/tisseo_2026) \
+	  --debut $(if $(START),$(START),2026-03-16) \
+	  --jours $(if $(DAYS),$(DAYS),64) \
+	  --sortie $(if $(OUT),$(OUT),data/gtfs_year/fenetre_gama) --zip
+
+## Tests unitaires du pipeline de feed annuel. Feeds synthétiques, aucun accès
+## réseau, moins d'une seconde. Chaque test porte sur une décision qui, prise à
+## l'envers, produit un feed plausible mais faux.
+test-gtfs-year:
+	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_gtfs_year.py -q
+
 ## Rebuild the fine-zone resource read by llm_module.core.zone_resolver.
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 zones:
@@ -431,6 +590,21 @@ bike-ownership:
 	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
 	  exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_bike_ownership
+
+## Rebuild the two equipment-propensity laws read when enriching a population:
+## `has_pt_subscription` (ticket 016) and `has_driving_license` (ticket 017).
+## Lot 1 commun aux deux tickets : un seul chargeur, deux cibles apprises sur le
+## fichier standard `pers` d'EMC² (PENQ = 1, pondération COEP), validation croisée
+## GROUPÉE PAR MÉNAGE. Les paliers tarifaires (moins de 26 ans, ouverture senior)
+## sont ajustés puis ARBITRÉS sur l'AUC hors-échantillon, pas décrétés.
+## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
+##   make equipment-propensity DRY_RUN=1   # ajuste et affiche la recette, sans écrire
+equipment-propensity:
+	@test -d "data/PROGEDO 2023" || { \
+	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.export_equipment_propensity \
+	  $(if $(DRY_RUN),--dry-run,)
 
 ## Rebuild the EMC²-measured car terminal time (access + parking search) law.
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
@@ -489,6 +663,21 @@ policy:
 	  echo "Surchargez-le : make policy SYNTHESIS_PYTHON=/chemin/vers/python"; \
 	  exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_policy
+
+## Tune the mode-choice booster's hyperparameters → scripts/progedo_logit/mode_choice_tuning.json
+## Validation croisée groupée PAR MÉNAGE, entièrement À L'INTÉRIEUR du train : le split
+## test n'est jamais lu. N'écrit aucun modèle — le gagnant se reporte à la main dans
+## PARAMS de fit_mode_choice_policy.py, puis `make policy`.
+##   make policy-tune TUNE_ARGS="--refine --trials 40"   # espace resserré (2e passe)
+policy-tune:
+	@test -f scripts/progedo_logit/progedo_mode_choice_v2.parquet || { \
+	  echo "Jeu d'entraînement absent : scripts/progedo_logit/progedo_mode_choice_v2.parquet"; \
+	  exit 1; }
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make policy-tune SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.tune_mode_choice_policy $(TUNE_ARGS)
 
 ## Apply the trained policy to the pinned common set, renormalised on the OTP offer
 ## (action A8) → scripts/synthesis/data/progedo_on_common_set.parquet
@@ -549,7 +738,7 @@ wait-ready:
 	@echo "\n✅ Services prêts — lancement GAMA autorisé"
 
 ## Start all services then launch the GAMA experiment
-## Usage: make run [CONFIG=my_config.yaml] [EXPERIMENT_NAME=e] [OFFLINE=1]
+## Usage: make run [EXPERIMENT_NAME=e] [OFFLINE=1]
 ## OFFLINE=1 : GAMA headless en conteneur (service `gama`, profil compose "offline"),
 ## piloté via GAMA Server — aucune IHM, tout démarre avec docker compose.
 run:
@@ -568,6 +757,10 @@ endif
 ifneq ($(MEM),)
 	@perl -pi -e 's/^long_term_memory_enabled:.*/long_term_memory_enabled: $(if $(filter 0,$(MEM)),false,true)/; s/^long_term_self_reflect_enabled:.*/long_term_self_reflect_enabled: $(if $(filter 0,$(MEM)),false,true)/' $(SIM_PARAMS)
 	@echo "🧠 Mémoire des agents (LTM + auto-réflexion) : $(if $(filter 0,$(MEM)),DÉSACTIVÉE,activée) — écrit dans $(SIM_PARAMS)"
+endif
+ifneq ($(CACHE),)
+	@perl -0pi -e 's/^(cache:\n(?:.*\n)*?\s*enabled:).*/$$1 $(if $(filter 0,$(CACHE)),false,true)/m' $(APP_CONFIG)
+	@echo "💾 Cache sémantique LLM : $(if $(filter 0,$(CACHE)),DÉSACTIVÉ — chaque décision sera journalisée (~4x plus d'appels),activé) — écrit dans $(APP_CONFIG)"
 endif
 	@$(MAKE) up
 	@$(MAKE) wait-ready

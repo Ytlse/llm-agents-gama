@@ -19,3 +19,28 @@ agent:
   weather_window: enquete          # 2022-09-20 → 2023-02-18, jours ouvrés
   weather_weekdays_only: true
   weather_draw_seed: 42
+
+# Cache sémantique des décisions LLM.
+#
+# `enabled: false` force CHAQUE décision à passer par le modèle, donc à être
+# journalisée dans `llm_exchanges.jsonl`. C'est la condition d'un rejeu sur le
+# périmètre complet : mesuré le 2026-08-28, un run à cache actif n'a journalisé que
+# 377 de ses 3 249 décisions (76,4 % servies par le cache), et un plancher mesuré sur
+# ce reste ne porterait que sur les décisions les plus atypiques du run.
+#
+# Coût à connaître : ~4x plus d'appels, et le run est d'autant plus lent.
+# Bascule au lancement : `make run CACHE=0` / `make run CACHE=1`.
+cache:
+  enabled: false
+
+# ── Population scellée (article AAMAS) ─────────────────────────────────────────
+# Le run prend ce fichier ENTIER, à la place de la recherche par taille et de tout appel à
+# eqasim ; s'il ne compte pas exactement `population_size` agents (sim_params.yaml : 1000),
+# le chargement refuse au lieu de ré-échantillonner. Chemin vu du conteneur controller
+# (./data/population est monté sur /data/eqasim-output). Scellé le 2026-09-03 (règle v3 :
+# ménages entiers, 13 marges conformes, 10,6 % d'immobiles), sha256 8d8bfa3645fa77fb… —
+# cf. data/population/population_1000_AAMAS_v3/MANIFEST.yaml et
+# docs/arch/controle-population-jeu-de-test.md. Le sceau v2 du 2026-09-02 reste disponible :
+# data/population/population_1000_AAMAS/population.json (sha256 f67b07772f3dced9…).
+data:
+  population_file: /data/eqasim-output/population_1000_AAMAS_v3/population.json

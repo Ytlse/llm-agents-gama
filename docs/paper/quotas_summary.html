@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Résumé des Quotas Providers LLM — Plateforme GAMA</title>
+  <style>
+    :root {
+      --ink: #1b1b1f;
+      --ink2: #54545e;
+      --ink3: #82828e;
+      --bg: #fbfbfa;
+      --card: #ffffff;
+      --line: #e3e3df;
+      --line2: #cfcfc9;
+      --accent: #4a6fe3;
+      --accent-bg: #eef2ff;
+      --warn: #c2571a;
+      --warnbg: #fdf4ec;
+      --ok: #2e7d5b;
+      --okbg: #edf7f2;
+      --info: #0284c7;
+      --infobg: #f0f9ff;
+      --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink: #ececef;
+        --ink2: #a8a8b2;
+        --ink3: #7c7c88;
+        --bg: #17171a;
+        --card: #1e1e22;
+        --line: #2e2e34;
+        --line2: #3d3d45;
+        --accent: #8aa4f2;
+        --accent-bg: #1e2438;
+        --warn: #e08b4a;
+        --warnbg: #2a2018;
+        --ok: #5fb894;
+        --okbg: #1a2922;
+        --info: #38bdf8;
+        --infobg: #152736;
+        --shadow: 0 1px 3px rgba(0,0,0,0.25);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 400 14.5px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    .wrap {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 0;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line);
+    }
+    nav h1 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0 0 4px;
+      letter-spacing: -0.01em;
+    }
+    nav .sub {
+      font-size: 12px;
+      color: var(--ink3);
+      margin-bottom: 24px;
+    }
+    nav a {
+      display: block;
+      padding: 6px 0;
+      font-size: 13px;
+      color: var(--ink2);
+      text-decoration: none;
+      border-left: 2px solid transparent;
+      padding-left: 10px;
+      margin-left: -10px;
+      transition: all 0.15s ease;
+    }
+    nav a:hover {
+      color: var(--ink);
+      border-left-color: var(--accent);
+    }
+    nav .grp {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ink3);
+      margin: 20px 0 6px;
+      font-weight: 600;
+    }
+    main {
+      padding: 36px 44px 96px;
+      min-width: 0;
+    }
+    section {
+      margin-bottom: 56px;
+      scroll-margin-top: 24px;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 8px;
+      letter-spacing: -0.015em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 28px 0 10px;
+    }
+    p {
+      margin: 0 0 14px;
+      color: var(--ink2);
+      max-width: 80ch;
+    }
+    .lede {
+      color: var(--ink2);
+      font-size: 15.5px;
+      margin-bottom: 24px;
+      max-width: 80ch;
+    }
+    code, .mono {
+      font-family: var(--mono);
+      font-size: 12.5px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 20px 22px;
+      margin: 16px 0;
+      box-shadow: var(--shadow);
+    }
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .tile {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+    .tile .k {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink3);
+      margin-bottom: 6px;
+    }
+    .tile .v {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      color: var(--ink);
+    }
+    .tile .u {
+      font-size: 12px;
+      color: var(--ink3);
+      margin-top: 5px;
+    }
+    .tile.accent { border-top: 3px solid var(--accent); }
+    .tile.ok { border-top: 3px solid var(--ok); }
+    .tile.warn { border-top: 3px solid var(--warn); }
+    .tile.info { border-top: 3px solid var(--info); }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+      margin: 14px 0;
+    }
+    th {
+      text-align: left;
+      font-weight: 600;
+      color: var(--ink3);
+      font-size: 11.5px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line2);
+      background: var(--card);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink2);
+      vertical-align: middle;
+    }
+    tr:hover td {
+      background: rgba(0, 0, 0, 0.015);
+    }
+    td.num, th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    td strong {
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 99px;
+      border: 1px solid var(--line2);
+      color: var(--ink3);
+    }
+    .badge.ok {
+      color: var(--ok);
+      border-color: var(--ok);
+      background: var(--okbg);
+    }
+    .badge.warn {
+      color: var(--warn);
+      border-color: var(--warn);
+      background: var(--warnbg);
+    }
+    .badge.info {
+      color: var(--info);
+      border-color: var(--info);
+      background: var(--infobg);
+    }
+    .badge.accent {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .badge.disabled {
+      color: var(--ink3);
+      border-color: var(--line2);
+      background: var(--line);
+    }
+    .note {
+      border: 1px solid var(--line2);
+      border-left: 3px solid var(--ok);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 16px 0;
+    }
+    .note.warn {
+      border-left-color: var(--warn);
+      background: var(--warnbg);
+    }
+    .note.info {
+      border-left-color: var(--info);
+      background: var(--infobg);
+    }
+    .note .t {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 6px;
+    }
+    .note p {
+      margin: 0;
+      font-size: 13px;
+    }
+    .bar-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .bar-fill {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--accent);
+    }
+    .cmd-box {
+      background: #1e1e24;
+      color: #e2e8f0;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      margin: 12px 0;
+      overflow-x: auto;
+      border: 1px solid #2d2d38;
+    }
+    .cmd-box code {
+      color: #38bdf8;
+    }
+    .cmd-desc {
+      color: #94a3b8;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+      nav { height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); }
+      main { padding: 24px 20px 64px; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <h1>⚡ Quotas LLM</h1>
+    <div class="sub">Plateforme GAMA & Gateway</div>
+
+    <div class="grp">Navigation</div>
+    <a href="#vue-d-ensemble">Vue d'ensemble</a>
+    <a href="#tableau-actif">Fournisseurs actifs (Rotation)</a>
+    <a href="#tableau-hors-rotation">Fournisseurs Hors Rotation</a>
+    <a href="#tableau-inactifs">Fournisseurs Inactifs / Archivés</a>
+    <a href="#script-actualisation">Script d'actualisation</a>
+    <a href="#regles-quotas">Règles & Limiteurs</a>
+    <a href="#roles-specifiques">Rôles clés (Juge & Mutateur)</a>
+  </nav>
+
+  <main>
+    <section id="vue-d-ensemble">
+      <h2>📊 Vue d'ensemble des capacités LLM</h2>
+      <p class="lede">
+        Synthèse en temps réel des quotas de débit (<strong>RPM</strong> / <strong>TPM</strong>) et de plafonds journaliers (<strong>RPD</strong> / <strong>TPD</strong>) configurés pour le répartiteur de charge (Smooth Weighted Round Robin) et la calibration des agents.
+      </p>
+
+      <div class="tiles">
+        <div class="tile accent">
+          <div class="k">FOURNISSEURS EN ROTATION</div>
+          <div class="v">11</div>
+          <div class="u">Instances réparties sur 4 adapters</div>
+        </div>
+        <div class="tile ok">
+          <div class="k">DÉBIT CUMULÉ (RPM)</div>
+          <div class="v">206 <span style="font-size:14px; font-weight:normal;">req/min</span></div>
+          <div class="u">Capacité instantanée du pool</div>
+        </div>
+        <div class="tile info">
+          <div class="k">QUOTA JOURNALIER (RPD)</div>
+          <div class="v">37 700+ <span style="font-size:14px; font-weight:normal;">req/j</span></div>
+          <div class="u">Plafond free-tier combiné</div>
+        </div>
+        <div class="tile warn">
+          <div class="k">HORS ROTATION / MANQUANT</div>
+          <div class="v">5</div>
+          <div class="u">4 modèles RPD &lt; 100 + 1 sans clé (OpenAI)</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:600; margin-bottom:10px;">Répartition relative du trafic SWRR (Poids de sélection)</div>
+        <p style="font-size:13px; color:var(--ink3); margin-bottom:14px;">
+          Poids calculé selon la règle normalisée : <code>weight = min(rpm_limit, tpm_limit / 3000) / 15</code> (1.0 = référence 15 RPM).
+        </p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span><strong>mistral</strong> (mistral-small-latest)</span>
+              <span>Poids <strong>4.0</strong> (40.5%)</span>
+            </div>
+            <div class="bar-container"><div class="bar-fill" style="width: 40.5%; background:#4a6fe3;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span><strong>google_gemini31 / 35 & google2 / 2_35</strong> (4 instances × 1.0)</span>
+              <span>Poids <strong>4.0</strong> (40.5%)</span>
+            </div>
+            <div class="bar-container"><div class="bar-fill" style="width: 40.5%; background:#2e7d5b;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span><strong>google_gemma42 / 43</strong> (2 instances × 0.36)</span>
+              <span>Poids <strong>0.72</strong> (7.3%)</span>
+            </div>
+            <div class="bar-container"><div class="bar-fill" style="width: 7.3%; background:#0284c7;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span><strong>cerebras_gpt-oss-120b & gemma_4_31b</strong> (2 instances × 0.33)</span>
+              <span>Poids <strong>0.66</strong> (6.7%)</span>
+            </div>
+            <div class="bar-container"><div class="bar-fill" style="width: 6.7%; background:#c2571a;"></div></div>
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span><strong>groq_openai_120 & qwen3_6_27b</strong> (2 instances × 0.18)</span>
+              <span>Poids <strong>0.36</strong> (3.6%)</span>
+            </div>
+            <div class="bar-container"><div class="bar-fill" style="width: 3.6%; background:#8b5cf6;"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tableau-actif">
+      <h2>🟢 Fournisseurs actifs dans la rotation SWRR</h2>
+      <p>Ces instances reçoivent le trafic distribué selon leur poids et disposent de clés API valides dans <code>.env</code>.</p>
+
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Instance</th>
+              <th>Adapter</th>
+              <th>Modèle par défaut</th>
+              <th class="num">RPM</th>
+              <th class="num">TPM</th>
+              <th class="num">RPD</th>
+              <th class="num">TPD</th>
+              <th class="num">Poids</th>
+              <th class="num">Conc.</th>
+              <th>Rôle / Remarques</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>mistral</strong></td>
+              <td><span class="badge info">mistral</span></td>
+              <td><code>mistral-small-latest</code></td>
+              <td class="num"><strong>60</strong></td>
+              <td class="num">500 000</td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">100 M <sup>†</sup></td>
+              <td class="num"><strong>4.0</strong></td>
+              <td class="num">3</td>
+              <td>Garde-fou 100M/j (prorata 1 Md/mois). RPM borné à 1 req/s</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemini31</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.1-flash-lite-preview</code></td>
+              <td class="num">15</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>500</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">1.0</td>
+              <td class="num">2</td>
+              <td><span class="badge ok">Juge Éval</span> Clé d'évaluation de calibration</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemini35</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.5-flash-lite</code></td>
+              <td class="num">15</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>500</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">1.0</td>
+              <td class="num">2</td>
+              <td><span class="badge accent">Mutateur</span> Seau indépendant de 3.1 (+ thinking)</td>
+            </tr>
+            <tr>
+              <td><strong>google2</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.1-flash-lite-preview</code></td>
+              <td class="num">15</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>500</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">1.0</td>
+              <td class="num">2</td>
+              <td>Seconde clé Google (hors campagne / pré-tests)</td>
+            </tr>
+            <tr>
+              <td><strong>google2_35</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.5-flash-lite</code></td>
+              <td class="num">15</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>500</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">1.0</td>
+              <td class="num">2</td>
+              <td>Deuxième seau 3.5 sur seconde clé Google</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemma42</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemma-4-26b-a4b-it</code></td>
+              <td class="num">30</td>
+              <td class="num">16 000</td>
+              <td class="num"><strong>14 400</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">0.36</td>
+              <td class="num">1</td>
+              <td>TPM 16k limitant (max_tokens_per_request: 16k)</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemma43</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemma-4-31b-it</code></td>
+              <td class="num">30</td>
+              <td class="num">16 000</td>
+              <td class="num"><strong>14 400</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">0.36</td>
+              <td class="num">1</td>
+              <td>TPM 16k limitant (max_tokens_per_request: 16k)</td>
+            </tr>
+            <tr>
+              <td><strong>cerebras_gpt-oss-120b</strong></td>
+              <td><span class="badge warn">cerebras</span></td>
+              <td><code>gpt-oss-120b</code></td>
+              <td class="num">5</td>
+              <td class="num">30 000</td>
+              <td class="num"><strong>2 400</strong></td>
+              <td class="num">1 M</td>
+              <td class="num">0.33</td>
+              <td class="num">4</td>
+              <td>En-têtes x-ratelimit. Limite 150 req/h non modélisée</td>
+            </tr>
+            <tr>
+              <td><strong>cerebras_gemma_4_31b</strong></td>
+              <td><span class="badge warn">cerebras</span></td>
+              <td><code>gemma-4-31b</code></td>
+              <td class="num">5</td>
+              <td class="num">30 000</td>
+              <td class="num"><strong>2 400</strong></td>
+              <td class="num">1 M</td>
+              <td class="num">0.33</td>
+              <td class="num">1</td>
+              <td>Ajouté le 2026-08-03 (seau Cerebras indépendant)</td>
+            </tr>
+            <tr>
+              <td><strong>groq_openai_120</strong></td>
+              <td><span class="badge accent">groq</span></td>
+              <td><code>openai/gpt-oss-120b</code></td>
+              <td class="num">30</td>
+              <td class="num">8 000</td>
+              <td class="num"><strong>1 000</strong></td>
+              <td class="num">200 K</td>
+              <td class="num">0.18</td>
+              <td class="num">3</td>
+              <td>TPM 8k limitant (max_tokens_per_request: 8k)</td>
+            </tr>
+            <tr>
+              <td><strong>groq_qwen_qwen3_6_27b</strong></td>
+              <td><span class="badge accent">groq</span></td>
+              <td><code>qwen/qwen3.6-27b</code></td>
+              <td class="num">30</td>
+              <td class="num">8 000</td>
+              <td class="num"><strong>1 000</strong></td>
+              <td class="num"><span style="color:var(--ink3)">—</span></td>
+              <td class="num">0.18</td>
+              <td class="num">3</td>
+              <td>Ajouté le 2026-08-03 via <code>make providers</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12.5px; color:var(--ink3);">
+        <sup>†</sup> Garde-fou local du gateway : 3× le prorata journalier du milliard de tokens/mois Mistral (non exposé par l'API).
+      </p>
+    </section>
+
+    <section id="tableau-hors-rotation">
+      <h2>🟡 Fournisseurs Hors Rotation (<code>weight: 0.0</code>) & Non Configurés</h2>
+      <p>
+        Ces fournisseurs sont définis dans <code>providers.yaml</code> mais sont <strong>exclus de la rotation SWRR automatique</strong> car leur quota RPD est trop faible (&lt; 100 req/jour) ou la clé API est absente. Ils sont utilisables exclusivement via un forçage explicite <code>llm.provider</code>.
+      </p>
+
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Instance</th>
+              <th>Adapter</th>
+              <th>Modèle par défaut</th>
+              <th class="num">RPM</th>
+              <th class="num">TPM</th>
+              <th class="num">RPD</th>
+              <th class="num">Poids</th>
+              <th>Statut / Raison</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>google_gemini_3_flash_preview</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3-flash-preview</code></td>
+              <td class="num">5</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>20</strong></td>
+              <td class="num"><strong>0.0</strong></td>
+              <td><span class="badge warn">Hors rotation</span> RPD free tier 20/j &lt; 100 (forcé uniquement)</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemini_3_5_flash</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.5-flash</code></td>
+              <td class="num">5</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>20</strong></td>
+              <td class="num"><strong>0.0</strong></td>
+              <td><span class="badge warn">Hors rotation</span> RPD free tier 20/j &lt; 100 (forcé uniquement)</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemini_3_6_flash</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.6-flash</code></td>
+              <td class="num">5</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>20</strong></td>
+              <td class="num"><strong>0.0</strong></td>
+              <td><span class="badge warn">Hors rotation</span> RPD free tier 20/j &lt; 100 (forcé uniquement)</td>
+            </tr>
+            <tr>
+              <td><strong>google_gemini_3_7_flash</strong></td>
+              <td><span class="badge ok">google</span></td>
+              <td><code>gemini-3.7-flash</code></td>
+              <td class="num">5</td>
+              <td class="num">250 000</td>
+              <td class="num"><strong>20</strong></td>
+              <td class="num"><strong>0.0</strong></td>
+              <td><span class="badge warn">Hors rotation</span> RPD free tier 20/j &lt; 100 (relevé le 2026-08-18)</td>
+            </tr>
+            <tr>
+              <td><strong>openai</strong></td>
+              <td><span class="badge disabled">openai</span></td>
+              <td><code>gpt-4o-mini</code></td>
+              <td class="num">15</td>
+              <td class="num">200 000</td>
+              <td class="num">—</td>
+              <td class="num">1.0</td>
+              <td><span class="badge disabled">Clé manquante</span> Pas de <code>PROVIDER_KEYS__openai</code> dans <code>.env</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tableau-inactifs">
+      <h2>⚪ Fournisseurs Inactifs / Commentés / Obsolètes</h2>
+      <p>Modèles archivés ou désactivés dans <code>providers.yaml</code> pour incompatibilité technique ou obsolescence.</p>
+
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Instance</th>
+              <th>Modèle</th>
+              <th>Date / Contexte</th>
+              <th>Motif de désactivation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>groq_llama3</code></td>
+              <td><code>llama-3.3-70b-versatile</code></td>
+              <td>2026-08-18</td>
+              <td><strong>Disparu de l'API</strong> : Modèle absent de <code>GET /models</code> Groq, commenté automatiquement par <code>make providers</code>.</td>
+            </tr>
+            <tr>
+              <td><code>groq_llama31</code></td>
+              <td><code>llama-3.1-8b-instant</code></td>
+              <td>2026-08-18</td>
+              <td><strong>Disparu de l'API</strong> : Modèle absent de <code>GET /models</code> Groq.</td>
+            </tr>
+            <tr>
+              <td><code>cerebras_zai-glm-4.7</code></td>
+              <td><code>zai-glm-4.7</code></td>
+              <td>2026-08-03</td>
+              <td><strong>100% troncatures</strong> : Modèle raisonneur qui épuise sa complétion en réflexion avant d'émettre le JSON. Produisait des vecteurs nuls et pollue le cache.</td>
+            </tr>
+            <tr>
+              <td><code>groq_meta1</code> & <code>groq_meta2</code></td>
+              <td><code>llama-prompt-guard-2-*</code></td>
+              <td>Historique</td>
+              <td><strong>Plafond insuffisant</strong> : <code>max_tokens</code> limité à 512, insuffisant pour les lots d'itinéraires.</td>
+            </tr>
+            <tr>
+              <td><code>groq_allam</code></td>
+              <td><code>allam-2-7b</code></td>
+              <td>Historique</td>
+              <td><strong>Erreur de parsing</strong> : Incompatibilité du format de sortie JSON.</td>
+            </tr>
+            <tr>
+              <td><code>groq_openai_20</code></td>
+              <td><code>openai/gpt-oss-20b</code></td>
+              <td>Historique</td>
+              <td><strong>Instabilité</strong> : Erreurs 5xx régulières et indisponibilité.</td>
+            </tr>
+            <tr>
+              <td><code>google_gemma3n</code></td>
+              <td><code>gemma-3n-e2b-it</code></td>
+              <td>Historique</td>
+              <td>Désactivé au profit de la génération 4 (Gemma 4.2 / 4.3).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="script-actualisation">
+      <h2>🛠️ Le Script d'Actualisation des Quotas</h2>
+      <p>
+        Le script <code>scripts/providers/refresh.py</code> automatise la détection, la mesure des quotas réels et l'ajustement du fichier de configuration <code>llm_module/config/providers.yaml</code>.
+      </p>
+
+      <div class="cmd-box">
+        <div><code>make providers</code></div>
+        <div class="cmd-desc">Sonde les providers réels et applique les modifications au YAML</div>
+      </div>
+      <div class="cmd-box">
+        <div><code>make providers DRY_RUN=1</code></div>
+        <div class="cmd-desc">Prévisualise le bilan et les alarmes sans toucher au fichier</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:8px;">📡 Sources de données par Adapter</div>
+          <ul style="margin:0 0 0 18px; padding:0; font-size:13px; color:var(--ink2);">
+            <li><strong>Mistral / Groq / Cerebras</strong> : 1 requête sonde minimale (<code>max_tokens=1</code>) &rarr; extraction des en-têtes HTTP <code>x-ratelimit-*</code>.</li>
+            <li><strong>Google</strong> : Requête directe sur l'API Cloud Quotas (<code>cloudquotas.googleapis.com</code>) avec le token <code>gcloud auth print-access-token</code> sur le projet actif.</li>
+            <li><strong>OpenAI</strong> : Pas de sonde automatique sans clé configurée dans <code>.env</code>.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div style="font-weight:600; margin-bottom:8px;">🔄 Cycle de vie des modèles</div>
+          <ul style="margin:0 0 0 18px; padding:0; font-size:13px; color:var(--ink2);">
+            <li><strong>Nouveau modèle détecté</strong> : Découvert via <code>GET /models</code>. Si RPD &ge; 100 &rarr; inclus en rotation avec calcul de poids. Si RPD &lt; 100 &rarr; <code>weight: 0</code> (hors rotation).</li>
+            <li><strong>Modèle disparu</strong> : Automatiquement commenté avec la date du jour et marqué par une <code>[ALARME]</code> dans le rapport.</li>
+            <li><strong>Édition chirurgicale</strong> : Seuls les scalaires modifiés sont réécrits, les commentaires humains et blocs archivés sont strictement préservés.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="regles-quotas">
+      <h2>⚖️ Règles d'Application & Rate Limiting</h2>
+
+      <div class="grid-2">
+        <div class="card">
+          <div style="font-weight:600; color:var(--ink); margin-bottom:8px;">1. Quotas par Minute (RPM & TPM)</div>
+          <p style="font-size:13px;">
+            Gérés par réservation atomique Lua dans Redis sur des fenêtres glissantes de 60 secondes.
+            Le micro-batching ajuste la taille maximale des lots (<code>batch_max_agents</code>) :
+            <br>
+            <code>batch_max = max(1, min(tpm / 3000, req_cap / 3000, rpm, 20))</code>
+          </p>
+        </div>
+        <div class="card">
+          <div style="font-weight:600; color:var(--ink); margin-bottom:8px;">2. Quotas Journaliers (RPD & TPD)</div>
+          <p style="font-size:13px;">
+            Compteurs journaliers réinitialisés à <strong>00:00 UTC</strong>.
+            Dès qu'un provider atteint son <code>rpd_limit</code> ou <code>tpd_limit</code>, le répartiteur de charge l'écarte automatiquement de la rotation jusqu'au lendemain au lieu d'attendre un simple timeout.
+          </p>
+        </div>
+      </div>
+
+      <div class="note info">
+        <div class="t">💡 Diagnostic et suivi post-simulation</div>
+        <p>
+          Pour analyser a posteriori l'utilisation des quotas d'un run et vérifier qu'aucune minute n'a subi de saturation 429 ou de dépassement de débit, utilisez :
+          <br>
+          <code>python3 scripts/debug/quota_validator.py experiments/current</code> ou <code>make capacity</code>.
+        </p>
+      </div>
+    </section>
+
+    <section id="roles-specifiques">
+      <h2>🎯 Rôles Clés en Calibration : Juge vs Mutateur</h2>
+      <p>
+        Dans le module de calibration génétique des prompts (<code>prompt_calibration</code>), les modèles Google Gemini sont strictement partitionnés pour maximiser les quotas et stabiliser les scores :
+      </p>
+
+      <div class="grid-2">
+        <div class="card" style="border-top:3px solid var(--ok);">
+          <div style="font-weight:600; font-size:15px; margin-bottom:6px;">👨‍⚖️ Le Juge d'Évaluation : <code>google_gemini31</code></div>
+          <p style="font-size:13px; margin-bottom:8px;">
+            <strong>Modèle :</strong> <code>gemini-3.1-flash-lite-preview</code> (alias stable <code>gemini-3.1-flash-lite</code>)<br>
+            <strong>Quota :</strong> 500 requêtes/jour dédiées.<br>
+            <strong>Règle :</strong> <em>Aucune réflexion (thinking = 0)</em>. Épinglé dans la clé de cache <code>RunConfig.eval_params_key()</code>. Ne jamais modifier sous peine d'invalider tout le cache d'évaluations.
+          </p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--accent);">
+          <div style="font-weight:600; font-size:15px; margin-bottom:6px;">🧬 Le Générateur / Mutateur : <code>google_gemini35</code></div>
+          <p style="font-size:13px; margin-bottom:8px;">
+            <strong>Modèle :</strong> <code>gemini-3.5-flash-lite</code><br>
+            <strong>Quota :</strong> 500 requêtes/jour indépendantes du juge.<br>
+            <strong>Règle :</strong> Dispose d'un budget de pensée (<code>mutation_thinking_budget: 1024</code> tokens) pour concevoir et croiser de meilleurs prompts sans influencer la note du juge.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

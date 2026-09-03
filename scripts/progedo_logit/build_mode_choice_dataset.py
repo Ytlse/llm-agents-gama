@@ -392,6 +392,33 @@ def build_person(pers: pd.DataFrame, household: pd.DataFrame) -> pd.DataFrame:
     return out.drop(columns="n_licensed")
 
 
+# Granularité des codes de zone : la couche `zf_zones.gpkg` est indexée sur des codes à
+# 9 chiffres dont les 3 derniers sont TOUJOURS `000` (785 zones, vérifié), alors que le
+# fichier déplacements code l'origine (`D3`) et la destination (`D7`) au niveau
+# sous-zone — `102103503`, `127105205`. Comparer les deux tels quels ne résolvait que
+# **51,1 %** des OD, et l'attrition n'était pas uniforme : 75,5 % des déplacements des
+# 10-14 ans y passaient contre 48,4 % de ceux des 30-49 ans, ce qui divisait par près de
+# trois la part de transports collectifs apprise pour cette cohorte. Le modèle était donc
+# mal entraîné exactement sur les âges où la page de synthèse affiche son plus gros écart.
+#
+# Ramener le code à la granularité de la couche porte la résolution à **95,8 %**, et ce
+# n'est pas un rapprochement abusif : sur les 24 365 déplacements ainsi récupérés, la
+# distance obtenue corrèle à **0,984** avec la distance à vol d'oiseau déclarée (`D11`),
+# contre 0,992 sur les déplacements déjà résolus, avec le même biais médian (+0,18 km
+# contre +0,14) et la même queue (0,3 % d'écarts au-delà de 5 km contre 0,2 %). Autrement
+# dit les codes tronqués situent les déplacements aussi bien que les autres.
+#
+# Les 4,2 % restants sont hors périmètre d'enquête pour de bon (préfixes 98x, 93x, 909 —
+# autres départements, communes lointaines) et doivent rester non résolus : leur inventer
+# une zone serait une extrapolation hors domaine, exactement ce que le volet 3 refuse.
+ZONE_CODE_WIDTH = 6
+
+
+def zone_key(codes: pd.Series) -> pd.Series:
+    """Code de zone ramené à la granularité de la couche (6 chiffres + `000`)."""
+    return codes.astype(str).str[:ZONE_CODE_WIDTH] + "0" * (9 - ZONE_CODE_WIDTH)
+
+
 def build_trips(depl: pd.DataFrame, geo: pd.DataFrame, xys: pd.DataFrame) -> pd.DataFrame:
     """Déplacements enrichis de la géométrie origine-destination."""
     out = pd.DataFrame({
@@ -403,8 +430,8 @@ def build_trips(depl: pd.DataFrame, geo: pd.DataFrame, xys: pd.DataFrame) -> pd.
         "purpose": depl["D5A"].map(purpose_from_code),
         "purpose_origin": depl["D2A"].map(purpose_from_code),
         "departure_hour": (pd.to_numeric(depl["D4"], errors="coerce") // 100) % 24,
-        "ZF_orig": depl["D3"],
-        "ZF_dest": depl["D7"],
+        "ZF_orig": zone_key(depl["D3"]),
+        "ZF_dest": zone_key(depl["D7"]),
         # Diagnostic uniquement — contaminées, jamais dans le modèle (ticket 005 §1).
         "distance_km": pd.to_numeric(depl["D12"], errors="coerce") / 1000,
         "crow_km": pd.to_numeric(depl["D11"], errors="coerce") / 1000,

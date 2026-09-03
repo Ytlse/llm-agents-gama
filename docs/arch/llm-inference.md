@@ -398,6 +398,29 @@ ré-évaluation ne porterait plus sur ce qui a été mesuré. Un test le verroui
 verrouille l'égalité de la phrase entre `weather_loader.py` (production) et
 `calibration/weather.py` (jeux gelés).
 
+#### Une date météo par agent — variance du régresseur (`weather_per_agent_dates`) — 2026-08-26
+
+Le ticket 023 a mesuré le bulletin météo enrichi « à pleine masse » et conclu à aucun
+effet. La cause est instrumentale, pas substantielle : **sur une seule journée simulée,
+les 1 000 agents partagent une seule météo** — le régresseur a une variance nulle, et
+« aucun effet mesuré » ne veut alors rien dire.
+
+`urban_mobility_agents/utils/weather_draw.py` (activé par `Settings.weather_per_agent_dates`,
+désactivé par défaut) tire, pour chaque agent, un jour de l'année dans la fenêtre déclarée
+par `Settings.weather_window` (`"enquete"` par défaut — la fenêtre de collecte EMC²,
+lue depuis `llm_module.core.population_reference`, pas recopiée en dur), et ne substitue
+que la **date** du bulletin lu par `weather_loader.get_weather` : l'heure du départ est
+conservée (le bulletin se lit par créneaux de 3 h, cf. ci-dessus), et tout le reste de la
+simulation — horaires GTFS, véhicules, itinéraires, agendas — reste sur la journée
+simulée. Le tirage est une fonction pure de `(weather_draw_seed, person_id)` : deux runs
+identiques produisent exactement les mêmes météos.
+
+C'est un dispositif distinct du jeton d'exclusion / bulletin enrichi du ticket 023 : celui-ci
+porte sur la fenêtre météo des **jeux gelés de calibration** (hors ligne), quand
+`weather_per_agent_dates` porte sur le tirage météo **en simulation GAMA**, pour rendre
+l'effet météo mesurable sur un run donné plutôt que de le confondre avec l'absence de
+variance de l'instrument.
+
 #### Isolation du cache LLM par version de prompt
 
 Le cache sémantique LLM (`data/cache/llm/`) est partitionné par empreinte du prompt système

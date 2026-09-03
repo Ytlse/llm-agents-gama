@@ -262,6 +262,55 @@ sans rien détruire — les anciennes lignes restent lisibles pour audit.
 > désactivée) laisse le hash strictement identique à l'existant : le cache d'avant reste
 > lisible à flag éteint.
 
+### Couper le cache pour rendre un run rejouable — `make run CACHE=0`
+
+Une décision servie par le cache **n'est jamais journalisée** : elle n'apparaît pas dans
+`llm_exchanges.jsonl`, donc son prompt n'existe nulle part. Conséquence directe pour toute
+mesure qui rejoue des décisions — A/B de prompt, plancher « prompt nu », ablation : elle ne
+peut porter que sur les décisions ayant **raté** le cache.
+
+Chiffré sur le run du 2026-08-27 : 6 735 décisions par la voie LLM, **76,4 % servies par le
+cache**, et le journal ne portait que **377 des 3 249** décisions du périmètre scoré. Les
+377 ne sont pas un échantillon : ce sont les plus atypiques du run, celles qu'aucune
+décision voisine n'avait déjà couvertes.
+
+`make run CACHE=0` bascule `cache.enabled` dans `llm-agents/config/config.yaml`, sur le
+patron de `MEM=0`. `enabled: false` court-circuite entièrement le cache
+(`self.llm_cache = None`) : il n'est ni lu ni écrit, et **il est donc inutile de le
+supprimer** — les décisions déjà payées restent valides pour un run ultérieur.
+
+Le coût est l'inverse exact du taux de service : **×4,24** sur ce run. En requêtes et en
+tokens, 228 → ~967 et 1,2 M → ~5,2 M. Deux conséquences pratiques : sur des paliers
+gratuits à 500 requêtes/jour, un run de 1 000 agents **force la bascule entre modèles**
+— qui veut un plancher sur modèle unique doit réduire le périmètre ; et `make run CACHE=1`
+doit suivre, sinon tous les runs ultérieurs paient le plein tarif sans que rien ne le
+rappelle.
+
+> **Troisième occurrence de la même famille, fermée le 2026-08-27 — et celle qui a coûté un
+> vidage manuel.** Les **traits du persona** n'apparaissent ni dans les codes d'options, ni
+> dans la météo, ni dans la signature d'anticipation. Or tous ne conditionnent pas l'offre :
+> `has_pt_subscription` ne change que le **texte du prompt** (`_pt_subscription_note` accole
+> « Abonné aux transports en commun. » à l'option TC). Corriger l'abonnement de 352 agents
+> laissait donc leurs décisions déjà en cache être resservies **sous l'ancien prompt**, sans
+> aucun signal. Une signature des traits entre désormais dans le `state_hash` via
+> `traits_key` (`_traits_signature` dans `llm_agent.py`).
+>
+> Deux précisions qui font la différence entre un correctif et une gêne :
+>
+> - **`has_driving_license` s'auto-invalidait déjà.** Il passe par `_can_drive`, qui
+>   conditionne les modes offerts, donc les codes d'options, donc le `state_hash`. Seuls les
+>   traits « narratifs » avaient besoin de la signature.
+> - **`name` est exclu de la signature, et c'est vérifié plutôt que supposé.** Il vient de
+>   Faker non graine à la génération : l'inclure viderait tout le cache à chaque
+>   régénération de population. Contrôle du 2026-08-27 : le `name` est **identique** entre la
+>   population source et celle du run (930/930), il n'est donc pas re-tiré au chargement,
+>   contrairement à ce qu'affirmait la documentation de la chaîne de population. Tout le
+>   reste de `traits_json` entre, y compris ce qui ne sert qu'au narratif — trier par « ce
+>   qui atteint le prompt » est exactement l'arbitrage qui a produit le défaut.
+>
+> `traits_key` vide laisse le hash strictement identique à l'existant, comme `extra_key` :
+> un cache d'avant le correctif reste lisible, au prix de n'être pas gardé sur cet axe.
+
 > La **liste noire** d'`OtpPersistentCache` (`make_blacklist_key`) reste délibérément **non
 > versionnée** : « OTP ne relie pas ces deux points » est un fait de topologie du réseau, qui
 > ne dépend d'aucun temps terminal. La versionner ferait re-interroger OTP pour rien sur

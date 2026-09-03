@@ -81,11 +81,9 @@ Points d'attention :
 ## Commandes Docker
 
 ```shell
-# Démarrage standard
+# Démarrage standard — configuration unique : llm-agents/config/config.yaml
+# (pour changer de config, éditer directement ce fichier)
 docker compose up
-
-# Choisir un fichier de config spécifique
-CONFIG_FILE=config_baseline_100_current.yaml docker compose up
 
 # Surcharger la taille de population
 EQASIM_POPULATION_SIZE=5000 docker compose up

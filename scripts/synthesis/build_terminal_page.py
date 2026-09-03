@@ -58,6 +58,8 @@ from datetime import datetime
 from html import escape
 from pathlib import Path
 
+import yaml
+
 from scripts.synthesis import charts
 from scripts.synthesis.frames import MODE_COLORS, MODE_LABELS, MODES
 from scripts.synthesis.render import CSS
@@ -65,10 +67,20 @@ from scripts.synthesis.render import CSS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TRACES = REPO_ROOT / "docs" / "traces" / "2026-08-24_temps_terminal"
 OUT_DIR = REPO_ROOT / "docs" / "synthesis"
+CEREMA_VALUES = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
 
-# Référence EMC² globale (`cerema_values.yaml`, parts_modales_2023.global).
-REFERENCE = {"marche": 26.0, "voiture": 55.0, "velo": 4.0,
-             "transports_collectifs": 12.0}
+
+def _load_reference() -> dict:
+    """Référence EMC² globale — relue depuis `cerema_values.yaml` plutôt que recopiée en
+    dur : c'est exactement l'erreur que ce fichier dénonce dans son propre docstring pour
+    les chiffres de prose (une quinzaine en dur, décrivant déjà un `v6` périmé)."""
+    doc = yaml.safe_load(CEREMA_VALUES.read_text(encoding="utf-8")) or {}
+    glob = (doc.get("parts_modales_2023") or {}).get("global") or {}
+    return {mode: float(glob[mode]) for mode in ("marche", "voiture", "velo",
+                                                  "transports_collectifs")}
+
+
+REFERENCE = _load_reference()
 
 # Les trois bras, dans l'ordre de lecture. Le dernier est le périmètre livré.
 ARMS = (
@@ -77,6 +89,14 @@ ARMS = (
     ("v7", "voiture + vélo alignés", "#2E7D5B"),
 )
 PROMPT_BRANCH = "ab_chaine_expert_chaine"
+
+# EXCEPTION à la règle du docstring (« tous les chiffres viennent de `results.json` ») :
+# ces deux blocs sont recopiés à la main depuis des rapports de scripts *hors ligne*
+# (`export_terminal_time`, `rewrite_terminal_time.py`), qui n'écrivent pas leur résultat
+# dans un fichier stable que cette page pourrait relire — contrairement à REFERENCE,
+# recalculée depuis `cerema_values.yaml`. Comme pour la version précédente de ce fichier,
+# ils dérivent silencieusement si `tt2`/les jeux gelés sont retirés : à re-produire (et
+# recopier à la main) si `export_terminal_time`/`rewrite_terminal_time.py` sont rejoués.
 
 # Enquête contre valeurs `tt2`, par couronne (minutes) — rapport de `export_terminal_time`.
 SURVEY_VS_CONFIG = (

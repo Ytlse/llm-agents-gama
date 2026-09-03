@@ -1761,6 +1761,46 @@ qu'aux composites du même régime. Quatre choses le définissent, toutes porté
 > lisibles, et `calibrate rescore --params-key <ancienne clé>` travaille toujours sur
 > l'historique.
 
+### Changer la fonction qui note : recaler les scores en cache (2026-08-26)
+
+La première ligne du tableau ci-dessus — « la loss change, c'est réparable sans LLM » — vaut
+aussi pour un changement plus discret : **la catégorisation des modes**. `categorize_mode`
+ignorait `cableway` (le Téléo), et une option de téléphérique pur était comptée en marche.
+Corriger cette fonction ne corrige pas un bug local : ça change l'**instrument**, donc les
+notes déjà données.
+
+Ce que la correction a révélé du dispositif :
+
+- **Un score est figé en base, et `cached_eval` le relit tel quel.** Après un changement
+  d'instrument, rejouer une campagne réaffiche les anciennes notes, tandis qu'un bras neuf
+  serait noté par le nouvel instrument — deux instruments dans un même tableau. Sur une série
+  **ouverte**, c'est la comparabilité qui tombe, pas seulement l'esthétique.
+- **`calibrate rescore --from-decisions` ne suffit pas sur un store d'A/B.** Il charge les
+  métadonnées de strate depuis le **seul** `dataset_version` de sa config, alors que chaque
+  bras porte le sien dans son `params_key` (`ds=v9`, `ds=v9n`, `ds=ctxL3`…), et il ne charge
+  pas le jeu `all`. Il noterait des décisions contre les strates d'un autre découpage, en
+  silence.
+
+D'où `scripts/recalage_instrument.py` :
+
+```bash
+python -m scripts.recalage_instrument --store calibration_results/ab_context.db \
+    --config run_ab_context.yaml --instrument-precedent <ref git> [--dry-run]
+```
+
+Il lit le bras dans le `params_key`, recalcule chaque éval avec les records de **sa** version
+et de **son** jeu, et **refuse** d'écrire un score que ni l'ancien ni le nouvel instrument ne
+reproduit à 1e-6 — mauvaise config, store mélangeant deux campagnes, pénalité de longueur
+changée entre-temps : dans tous ces cas, réécrire remplacerait un chiffre inconnu par un
+autre. Les lignes refusées sont comptées et signalées en `[ALARME]`. Les **décisions** ne sont
+jamais touchées, une copie de la base est prise avant écriture, et un second passage ne
+signale rien (le recalage est idempotent, et une alarme qui crie à tort apprend à ne plus les
+lire).
+
+Effet mesuré du premier usage — 18 scores recalés sur 39 évals, deux stores, zéro appel
+LLM ; aucun verdict des campagnes 023 et 024 ne change. Chiffrage, réserves et rejeu :
+`prompt_calibration/docs/mesures/correctif_cableway_2026-08-26.md`.
+
 ### Les deux gardes de traçabilité, enfin armés (2026-08-17)
 
 Les deux mécanismes ci-dessous étaient **écrits, documentés et testés unitairement** —
@@ -2584,6 +2624,202 @@ premier point d'une décimale ferme la classe. 117 options sur 140 étaient corr
 jeu était déjà parti en évaluation. `scripts/tests/test_rewrite_terminal_time.py` verrouille
 désormais la conservation de la distance, l'invariant du total, l'intégrité du temps de
 conduite et le déterminisme du tirage.
+
+---
+
+## 12 · Dispersion des choix et échelle de contexte — mesurer sans dépenser
+
+Deux affirmations circulaient sur le modèle sans être chiffrées : **D**, « il manque de
+diversité, il pointe vers une réponse quasi unique » ; **C**, « plus le contexte est riche,
+plus la sortie est juste ». Le ticket 024 les transforme en mesures. Ce que la section
+décrit est livré : les métriques (lot 1), le tableau du collapse (lot 2) et l'échelle
+d'ablation (lot 3) — tous **sans un seul appel LLM**.
+
+### 12.1 · Quatre grandeurs de dispersion, hors composite
+
+Depuis la bascule vers les **probabilités par option**, chaque persona rend un vecteur et
+non un choix : la dispersion est enfin observable. Quatre grandeurs vivent dans
+`calibration/metrics.py`, et **aucune n'entre dans le composite** — les faire entrer dans la
+loss changerait ce que la campagne optimise (elle chercherait une dispersion, pas une
+justesse). Un test verrouille la liste des champs de `Scores` pour que l'ajout se voie.
+
+| Grandeur | Ce qu'elle dit | Piège désamorcé |
+|---|---|---|
+| entropie normalisée `H(p)/log k` | à quel point la réponse est étalée | `k` = nombre de **modes distincts offerts**, jamais le nombre d'options : le vecteur vit sur les modes (les options d'un même mode sont agrégées), et normaliser par l'offre d'itinéraires mesurerait l'offre, pas le modèle |
+| nombre effectif de modes `exp(H)` | « le modèle hésite entre combien de modes ? » | lisible sans conversion mentale |
+| taux de réponses dégénérées | part des personas à `max p ≥ 0,90`, puis `≥ 0,99` | deux seuils : `0,99` sépare **décidé** de **déterministe** |
+| variance inter-persona | le modèle rend-il le **même** vecteur pour tout le monde ? | nulle = modèle figé — **et l'agrégat peut malgré tout tomber juste sur la cible globale**, ce qu'aucune métrique d'écart à la référence ne révèle |
+
+⚠ **Vacuité ≠ perfection, appliqué à la dispersion.** Sur ces grandeurs, l'absence de mesure
+imite exactement le résultat le plus spectaculaire : une variance sur un persona unique vaut
+0, c'est-à-dire « le modèle est figé ». Une grandeur non mesurable rend donc `None` et se
+déclare dans `undefined` (même règle que `Measurement`) — jamais `0.0`. L'offre d'un agent
+récurrent est l'**union** des modes offerts sur ses déplacements : son vecteur relu couvre
+tous ses trajets, donc son plafond aussi.
+
+### 12.2 · A1 vs A2 : le coût du collapse, gratuit
+
+`analyse_dispersion.py` relit les décisions `(agent_id, mode, poids)` déjà en store et
+tabule deux agrégations de la même éval :
+
+- **A1 — pondérée** : chaque persona verse sa masse de probabilité (l'état actuel) ;
+- **A2 — vote majoritaire** : `argmax` par persona, poids 1 sur le mode dominant.
+
+**Leur écart EST le coût du collapse.** Si le modèle était dispersé, les deux agrégats
+seraient proches ; s'il est piqué, `argmax` amplifie le mode dominant. Le script ouvre le
+store en **lecture seule**, relève le nombre d'évals à l'entrée et à la sortie et l'affiche :
+la trace démontre qu'aucune éval n'a été créée.
+
+Mesuré sur le prompt de production `expert_chaine`, 12 évals, juge `gemini-3.5-flash-lite`
+(T=0), **0 appel LLM** :
+
+| jeu | substrat | personas | entropie | modes eff. | ≥ 0,90 | ≥ 0,99 | variance | collapse |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `screen` | `v9`…`v10c` | 121 | 0,30–0,41 | 1,53–1,75 | 41–54 % | 25–39 % | 0,078–0,096 | 11,4–13,3 |
+| `val` | `v9`…`v10c` | 182 | 0,32–0,36 | 1,57–1,63 | 48–53 % | 32–37 % | 0,083–0,087 | 7,0–9,1 |
+| `val` | `v7`, `v8` | 165 | 0,24–0,26 | 1,43–1,46 | 59–63 % | **49–56 %** | 0,100 | 6,8–8,0 |
+
+Lecture : le modèle hésite en pratique entre **1,4 et 1,8 modes** sur les 3 à 4 qui lui sont
+offerts, et **un tiers à plus de la moitié** des personas rendent une réponse
+*déterministe* (`max p ≥ 0,99`). L'affirmation D est chiffrée, et elle tient. Le substrat
+compte : `v7`/`v8` sont nettement plus dégénérés que `v9`/`v10`.
+
+⚠ Le grain est le **persona**, pas le déplacement : les décisions stockées ont perdu leur clé
+de trajet, si bien qu'un agent récurrent voit ses trajets fusionnés (limite héritée de
+`decisions_to_df`). L'effectif annoncé est le nombre de **personas distincts**, affiché à côté
+du nombre de décisions.
+
+⚠ `screen` **ne se lit plus seul** : 121 personas, plancher de bruit six fois plus étroit que
+`val`, et deux signaux fabriqués pendant le ticket 023. Le script le rappelle à l'exécution.
+
+### 12.2 bis · Étalon : la politique LightGBM soumise aux mêmes mesures
+
+Un chiffre de dispersion ne se lit pas seul. La politique PROGEDO (ticket 005, LightGBM
+entraîné sur EMC²) fournit ses probabilités par mode sur le jeu commun du run épinglé
+(`scripts/synthesis/data/progedo_on_common_set.parquet`, restreintes et renormalisées sur
+l'offre OTP) : elle passe donc exactement les mêmes mesures, sans un appel de plus.
+
+| | LLM (`val@v10c`, 182 personas) | LightGBM (890 personas) |
+|---|---:|---:|
+| entropie normalisée | 0,360 | **0,519** |
+| modes effectifs | 1,63 | **1,82** |
+| dégénérés `≥ 0,90` | 47,8 % | 36,1 % |
+| dégénérés `≥ 0,99` | **33,0 %** | 13,5 % |
+| variance inter-persona | **0,0871** | 0,0712 |
+| part de l'écart inter-persona atteignable | 65 % | 53 % |
+| coût du collapse (A2 − A1) | 8,9 pts | 6,4 pts |
+
+Les deux colonnes ne disent pas la même chose et c'est l'intérêt : **le LLM est plus piqué
+DANS un persona** (un tiers de réponses déterministes contre un huitième) mais ses vecteurs
+diffèrent un peu plus **ENTRE personas**. Le modèle statistique, entraîné à la log-loss,
+étale sa probabilité — c'est son métier.
+
+⚠ **La « part de l'écart atteignable » n'est pas indépendante de la concentration.** Un
+modèle piqué se rapproche mécaniquement de la borne « chaque persona décidé » : les 65 %
+redisent surtout que les vecteurs sont concentrés, ils ne démontrent pas une sensibilité au
+persona. LightGBM le prouve en réalisant **moins** (53 %) tout en étant plus dispersé.
+
+**La mesure qui, elle, sépare les deux questions** est la part de la variance inter-persona
+**expliquée par une strate** (η²) : elle dit si la réponse dépend de *qui est la personne*,
+indépendamment du piqué.
+
+| strate | LLM | LightGBM |
+|---|---:|---:|
+| distance | 15,2 % | 16,3 % |
+| âge | 10,2 % | 6,7 % |
+| occupation | 7,9 % | 6,6 % |
+| genre | 0,4 % | 0,3 % |
+
+**Le LLM répond au persona à peu près autant que le modèle ajusté** — et les deux ignorent
+le genre au même degré. Réserves à citer avec ces chiffres : substrats et effectifs
+différents (comparaison **indicative**, pas test apparié) ; la politique est un **oracle par
+construction** sur les parts modales (ticket 005, décision E3), donc une borne haute et non
+un concurrent loyal ; `motif` est exclu du tableau (renseigné à 31 % dans le parquet, et sur
+3 modalités contre 4). Enfin, ~85 % de la variation reste expliquée par aucune de ces
+strates chez les deux : c'est l'**offre du trajet** qui porte le reste.
+
+### 12.3 · L'échelle de contexte se construit par retrait
+
+`rewrite_context.py` produit les paliers d'une échelle **à prompt constant**, en retirant du
+texte gelé — rien à produire, rien à simuler :
+
+| Palier | Contexte servi | Longueur de `section` (base `v7`) |
+|---|---|---|
+| `ctxL4` | la source telle quelle (copie à l'octet) | 4 425 105 car. (référence) |
+| `ctxL3` | sans le segment `Mobilité :` | −7,5 % |
+| `ctxL2` | `L3` sans la ligne d'identité sociale | −11,9 % |
+| `ctxL1` | `L2` sans la météo | −16,5 % |
+| `ctxL0` | `L1` sans les sous-puces `·` des options | −54,6 % |
+| `ctxL4n` | **témoin nul** : même information, réordonnée et réétiquetée | **+0,2 %** |
+
+Trois pièges, tous sous test (un test par palier, plus un diff strict sur le corpus réel) :
+
+- **`Contraintes` vit sur la même ligne que `Mobilité`** : `L3` ne retire que le segment
+  annoncé. *(Sur `v7`, `Contraintes` vaut `None` sur 2 487 records sur 2 487 — l'information
+  est constante. Le périmètre reste strict par principe, pas par effet.)*
+- **tous les `·` ne sont pas des sous-étapes d'option** : l'agenda glissant en porte 3 440
+  sur `v7`, contre 33 141 dans les options. `L0` ne touche qu'après le marqueur
+  `**Options de trajet`.
+- **la météo a trois porteurs** : le champ `context`, la ligne « Météo plus tard » (75 % des
+  records) et les annotations « — pluie prévue » de l'agenda. Un palier « sans météo » qui en
+  laisserait un porterait un nom faux. `L1` les retire tous les trois en réutilisant
+  `retime_day_outlook` et `reannotate_agenda`, et laisse l'agenda lui-même (heure,
+  destination, distance) : il décrit la chaîne du jour, pas le temps qu'il fait.
+
+Le **témoin nul `L4n`** est obligatoire et se produit dans le même lot : retirer du texte ne
+fait pas que retirer de l'information, ça raccourcit le contexte — un palier pourrait
+« améliorer » parce qu'il est plus court. `L4n` porte la même information à +0,2 % de
+longueur (permutation des lignes de contexte, des segments d'équipement et des clauses de la
+phrase persona ; `Mobilité`→`Équipement`, `Contraintes`→`Restrictions`). Le script **refuse
+d'écrire** si `L4n` s'écarte de plus de 5 % en longueur, ou si `L4` n'est pas une copie à
+l'octet.
+
+⚠ `L4n` réordonne et réétiquette, il ne **paraphrase** pas : le bruit qu'il mesure est un
+**minorant** du bruit de reformulation. Le marqueur `**Météo plus tard :**` est laissé intact
+(il est lu par `metadata.retime_day_outlook`), et le bloc d'options n'est jamais touché —
+`parse_option_modes` y lit la mesure elle-même, et un test vérifie que les six paliers rendent
+le **même** `{index: mode}`.
+
+**Un nom de jeu neuf par palier**, et le champ `version:` du manifeste porte ce nom : la clé
+d'éval contient `ds=<nom>` et non une empreinte du contenu, donc un contenu qui change sous un
+nom stable ferait servir une éval périmée en silence. Les manifestes produits portent aussi
+`derived_from` et `derived_from_label_in_source` — ce qui rend visible le défaut d'origine
+(`v6` et `v7` portent tous deux `version: v5`).
+
+### 12.4 · La pente mesurée : l'affirmation C n'est pas soutenue
+
+Les six colonnes ont été évaluées le 2026-08-26 sous un juge unique
+(`google_gemini31` / `gemini-3.1-flash-lite`, T=0), prompt constant `expert_chaine`,
+comparatif apparié.
+
+| Δ composite vs `L4` | `screen` (108 pers.) | `val` (165 pers.) |
+|---|---:|---:|
+| `L3` — sans l'équipement | +1,60 | **−2,79** |
+| `L2` — sans l'identité | +1,36 | **−1,23** |
+| `L1` — sans la météo | +2,56 | **−1,75** |
+| `L0` — sans la décomposition | +2,52 | **−1,18** |
+| **`L4n` — témoin nul** | **+2,03** | **+3,92** |
+
+**Sur `val` les quatre ablations améliorent le score ; sur `screen` elles le dégradaient.** Le
+signe s'inverse d'un jeu à l'autre et l'amplitude reste sous celle du témoin nul dans les
+deux. C'est la forme la plus nette d'un résultat nul : l'effet est plus petit que le bruit
+**et** sa direction n'est pas stable. Issue (c) de la porte de décision du ticket.
+
+**Le fait qui n'était pas cherché.** Dans les deux jeux, le témoin nul est la colonne **la
+plus dégradée** — davantage que le retrait de tout le contexte. Un plancher systématiquement
+pire que tous les traitements n'est probablement plus du bruit : c'est un **effet de forme**.
+Le modèle réagit à la manière dont le contexte est présenté (ordre des lignes, libellés) plus
+qu'à ce qu'il contient. C'est le seul point sur lequel les deux jeux concordent. ⚠ `L4n`
+cumule quatre permutations et deux renommages : un palier par permutation dirait lequel porte
+l'effet, et ne coûterait que des retraits mécaniques.
+
+**Comparaison d'amplitudes** — contexte ≤ 2,8 de composite et sans signe stable, contre
+prompt 7,13 hors bruit. Les deux ne sont ni sur le même jeu ni sous le même juge : c'est
+**indicatif**, pas un test apparié. L'ordre de grandeur va néanmoins à l'inverse du discours
+annoncé.
+
+⚠ Rien de tout cela n'est **confirmatoire** : le regard unique sur `test` est consommé
+(amendement A5). Tous ces chiffres sont exploratoires.
 
 ---
 

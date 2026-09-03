@@ -136,7 +136,13 @@ def parse_ticket(path: Path, overrides: dict[str, dict]) -> Ticket:
     override = overrides.get(path.stem) or overrides.get(f"ticket_{number}") or overrides.get(number) or {}
     note = str(override.get("note", "") or "")
     if override.get("status"):
-        status, source = str(override["status"]), "surcharge"
+        override_status = str(override["status"])
+        if override_status not in STATUS_ICON:
+            raise ValueError(
+                f"{path.stem} : statut de surcharge inconnu {override_status!r} dans "
+                f"{OVERRIDES_PATH.name} — attendu l'un de {sorted(STATUS_ICON)}"
+            )
+        status, source = override_status, "surcharge"
 
     return Ticket(
         path=path,

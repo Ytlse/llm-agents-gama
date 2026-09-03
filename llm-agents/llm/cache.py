@@ -205,7 +205,8 @@ class LlmSemanticCache:
         self._consecutive_errors = 0
 
     @staticmethod
-    def _make_state_hash(options: list, weather: Optional[dict] = None, extra_key: str = "") -> str:
+    def _make_state_hash(options: list, weather: Optional[dict] = None, extra_key: str = "",
+                         traits_key: str = "") -> str:
         """Hash SHA-256 des codes d'options triés + météo + version des données.
 
         ⚠ La version des données d'itinéraire (``terminal_time.data_version()``)
@@ -215,6 +216,15 @@ class LlmSemanticCache:
         des décisions prises sur des options où la voiture était plus rapide
         qu'elle ne l'est — sans qu'aucun log ne le signale, puisque de son point
         de vue le contexte de décision est identique.
+
+        ``traits_key`` (2026-08-27) : signature des traits du persona. **Troisième
+        occurrence du même piège**, et celle qui a coûté un vidage manuel de cache. Les
+        traits qui ne conditionnent pas l'offre — l'abonnement TC au premier chef —
+        n'apparaissent NI dans les codes d'options NI dans la météo : ils ne changent que
+        le texte du prompt (cf. ``_pt_subscription_note``). Sans cette signature, corriger
+        l'abonnement de 352 agents laissait leurs décisions déjà en cache être resservies
+        sous l'ancien prompt, sans qu'aucun log ne le signale. Le permis, lui, passe par
+        ``_can_drive`` et déplace donc les codes d'options : il s'auto-invalidait déjà.
 
         ``extra_key`` (ticket 014) : signature du contexte d'anticipation injecté
         dans le prompt (météo du jour, agenda restant, position des véhicules).
@@ -236,6 +246,8 @@ class LlmSemanticCache:
                + weather_key)
         if extra_key:
             raw += f"|anticipation:{extra_key}"
+        if traits_key:
+            raw += f"|traits:{traits_key}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @staticmethod
@@ -259,6 +271,7 @@ class LlmSemanticCache:
         weather: Optional[dict],
         memory_empty: bool,
         extra_key: str = "",
+        traits_key: str = "",
     ):
         """Filtre déterministe des conditions factuelles, partagé par les deux branches du cache."""
         from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -269,7 +282,7 @@ class LlmSemanticCache:
                 FieldCondition(key="activity_id", match=MatchValue(value=str(activity_id or ""))),
                 FieldCondition(key="weekday", match=MatchValue(value=self._make_weekday(timestamp))),
                 FieldCondition(key="time_slice", match=MatchValue(value=self._make_time_slice(timestamp))),
-                FieldCondition(key="state_hash", match=MatchValue(value=self._make_state_hash(options, weather, extra_key))),
+                FieldCondition(key="state_hash", match=MatchValue(value=self._make_state_hash(options, weather, extra_key, traits_key))),
                 FieldCondition(key="memory_empty", match=MatchValue(value=memory_empty)),
             ]
         )
@@ -294,13 +307,14 @@ class LlmSemanticCache:
         options: list,
         weather: Optional[dict],
         extra_key: str = "",
+        traits_key: str = "",
     ) -> tuple[Optional[dict], Optional[str]]:
         """Branche « mémoire vide » : correspondance exacte sur les conditions factuelles.
 
         Sans souvenir, deux décisions prises dans les mêmes conditions sont identiques :
         le filtre déterministe suffit. Simple `scroll` clé-valeur — aucun embedding.
         """
-        filt = self._make_filter(agent_id, activity_id, timestamp, options, weather, memory_empty=True, extra_key=extra_key)
+        filt = self._make_filter(agent_id, activity_id, timestamp, options, weather, memory_empty=True, extra_key=extra_key, traits_key=traits_key)
         with self._db_lock:
             candidates, _ = self._client.scroll(
                 collection_name=COLLECTION_NAME,
@@ -332,13 +346,14 @@ class LlmSemanticCache:
         memory_text: str,
         weather: Optional[dict],
         extra_key: str = "",
+        traits_key: str = "",
     ) -> tuple[Optional[dict], Optional[str]]:
         """Branche « mémoire remplie » : similarité sémantique sur la LTM, à conditions égales.
 
         Le vécu de l'agent influence sa décision : on n'accepte la décision en cache que si
         la LTM courante est proche de celle qui l'avait produite (similarité ≥ seuil).
         """
-        filt = self._make_filter(agent_id, activity_id, timestamp, options, weather, memory_empty=False, extra_key=extra_key)
+        filt = self._make_filter(agent_id, activity_id, timestamp, options, weather, memory_empty=False, extra_key=extra_key, traits_key=traits_key)
         query_vector = self._embed(memory_text)
         with self._db_lock:
             candidates = self._client.query_points(
@@ -382,6 +397,7 @@ class LlmSemanticCache:
         weather: Optional[dict],
         probabilities: Optional[list[float]] = None,
         extra_key: str = "",
+        traits_key: str = "",
     ):
         """Insère (upsert) un point Qdrant avec les métadonnées de la décision.
 
@@ -396,7 +412,7 @@ class LlmSemanticCache:
         from qdrant_client.models import PointStruct
         from datetime import datetime as _dt
 
-        state_hash = self._make_state_hash(options, weather, extra_key)
+        state_hash = self._make_state_hash(options, weather, extra_key, traits_key)
         time_slice = self._make_time_slice(timestamp)
         dt = _dt.fromtimestamp(timestamp)
 
@@ -497,6 +513,7 @@ class LlmSemanticCache:
         activity_purpose: str = "",
         seed_parts: tuple = (),
         extra_key: str = "",
+        traits_key: str = "",
     ) -> Optional[dict]:
         """
         Recherche hybride dans le cache. Retourne un dict {index, mode, score} sur hit,
@@ -516,11 +533,13 @@ class LlmSemanticCache:
         try:
             if memory_text is None:
                 result, miss_reason = await asyncio.to_thread(
-                    self._lookup_exact_sync, agent_id, activity_id, timestamp, options, weather, extra_key
+                    self._lookup_exact_sync, agent_id, activity_id, timestamp, options, weather, extra_key,
+                    traits_key
                 )
             else:
                 result, miss_reason = await asyncio.to_thread(
-                    self._lookup_semantic_sync, agent_id, activity_id, timestamp, options, memory_text, weather, extra_key
+                    self._lookup_semantic_sync, agent_id, activity_id, timestamp, options, memory_text, weather, extra_key,
+                    traits_key
                 )
         except Exception as e:
             logger.warning(f"LLM cache lookup error: {e}")
@@ -545,7 +564,7 @@ class LlmSemanticCache:
                 logger.info(
                     f"[cache] miss exact no_candidates — agent={agent_id} act={activity_id} "
                     f"weekday={self._make_weekday(timestamp)} slice={self._make_time_slice(timestamp)} "
-                    f"state_hash={self._make_state_hash(options, weather, extra_key)[:12]} → {cause}"
+                    f"state_hash={self._make_state_hash(options, weather, extra_key, traits_key)[:12]} → {cause}"
                 )
             return None
 
@@ -591,6 +610,7 @@ class LlmSemanticCache:
         weather: Optional[dict] = None,
         probabilities: Optional[list[float]] = None,
         extra_key: str = "",
+        traits_key: str = "",
     ):
         """Wrapper async de _store_sync : persiste la décision dans Qdrant et enregistre la latence d'écriture.
 
@@ -612,6 +632,7 @@ class LlmSemanticCache:
                 weather,
                 probabilities,
                 extra_key,
+                traits_key,
             )
         except Exception as e:
             logger.warning(f"LLM cache store error: {e}")

@@ -662,6 +662,11 @@ class SimulationLoopV1(BaseScenario):
         self._vehicle_home_returns = 0
         self._vehicle_orphan_returns = 0
         self._vehicle_orphan_alarm_on = False
+        # Calendrier du run (audit de périmètre, axe A6). L'enquête ne compte que des
+        # jours de semaine ; un départ de week-end reporté au lundi s'EMPILE sur le lundi
+        # et en fait un jour atypique. Le report est journalisé en info à chaque fois ;
+        # l'alarme, elle, ne part qu'au premier — c'est l'événement qui compte.
+        self._weekend_shift_alarm_on = False
 
         # Worker
         # _worker_sem  : limite la concurrence LLM+OTP (initialisé dans start_worker)
@@ -1505,6 +1510,28 @@ class SimulationLoopV1(BaseScenario):
             self._sim_start_ts = timestamp
             self._sim_real_start = time.monotonic()
             self._next_day_log_at = timestamp + 86400
+            # Jour de semaine du départ de simulation (audit A6). L'enquête EMC² compte
+            # les déplacements de la veille d'un jour de passation mardi→samedi : jour de
+            # référence LUNDI à VENDREDI, jamais de week-end. Un run comparable démarre un
+            # lundi et dure au plus cinq jours simulés ; tout autre calendrier est dit ici,
+            # au moment où il est encore gratuit de le corriger.
+            weekday = datetime.datetime.fromtimestamp(timestamp).isoweekday()
+            if weekday >= 6:
+                logger.error(
+                    f"[ALARME] La simulation démarre un {humanize_date(timestamp)} — un "
+                    "WEEK-END. L'enquête de référence ne compte aucun déplacement de "
+                    "week-end (jours 1 à 5) : les parts modales de ce run ne sont pas "
+                    "comparables à ses cibles. Corrigez `starting_date` dans "
+                    "GAMA/CityTransport/models/Settings.gaml (un lundi 05:00).")
+            elif weekday != 1:
+                logger.warning(
+                    f"[calendrier] La simulation démarre un {humanize_date(timestamp)} "
+                    "(jour de semaine {weekday}), pas un lundi : un run de cinq jours "
+                    "franchira le week-end et ses départs seront reportés au lundi.")
+            else:
+                logger.info(f"[calendrier] Simulation démarrée un lundi : "
+                            f"{humanize_date(timestamp)} — calendrier conforme à l'enquête "
+                            "(jours ouvrés) tant que le run ne dépasse pas cinq jours.")
         elif timestamp >= self._next_day_log_at:
             sim_day = (timestamp - self._sim_start_ts) // 86400 + 1
             real_elapsed = int(time.monotonic() - self._sim_real_start)
@@ -2089,6 +2116,19 @@ class SimulationLoopV1(BaseScenario):
         if settings.agent.no_weekend_departures:
             shifted = shift_weekend_departure_to_monday(departure_time)
             if shifted != departure_time:
+                # Alarme à front montant (audit A6) : le PREMIER report signifie que le run a
+                # franchi un week-end. Chaque report ultérieur reste en info — l'événement
+                # qui compte est le franchissement, pas son volume.
+                if not self._weekend_shift_alarm_on:
+                    self._weekend_shift_alarm_on = True
+                    logger.error(
+                        "[ALARME] Le run a franchi un week-end : un départ de samedi/dimanche "
+                        "est reporté au lundi suivant (`agent.no_weekend_departures`). Les "
+                        "départs reportés s'EMPILENT sur le lundi et en font un jour atypique, "
+                        "alors que l'enquête de référence ne compte aucun week-end (jours 1 à 5). "
+                        "Un run comparable à l'EMC² démarre un lundi et ne dépasse pas cinq "
+                        "jours simulés (`simulation_max_days`). (Alarme émise une seule fois ; "
+                        "chaque report reste journalisé en info.)")
                 logger.info(
                     f"[weekend] Départ de {person.person_id} pour {next_activity.purpose} "
                     f"reporté de {humanize_date(departure_time)} à {humanize_date(shifted)} (lundi)"

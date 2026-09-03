@@ -184,7 +184,7 @@ un relecteur le fera.
 
 | # | Axe | Question | Attendu |
 |---|---|---|---|
-| D1 | **Jeton d'exclusion** | Le protocole l'exige à l'étape 0. Il n'existe pas. | `scripts/protocol_lock.py` est **absent du dépôt** : le lot 1 du [ticket 023](ticket_023_fenetre_meteo_jeux_geles.md) n'est pas livré. **Dépendance dure** — voir « avant de commencer » |
+| D1 | **Jeton d'exclusion** | Le protocole l'exige à l'étape 0. | **Levé le 2026-08-25** : `scripts/protocol_lock.py` existe (lot 1 du [ticket 023](ticket_023_fenetre_meteo_jeux_geles.md)), avec `make protocol-lock/unlock/status` et le garde `calibration/protocol_guard.py` que tous les `ab_*.py` appellent. ⚠ Le jeton est **local** : il ne bloque pas la campagne cloud |
 | D2 | **Jeu de lecture** | Quels jeux ? | `screen` pour la pente (rapide, bon marché), `val` pour confirmer le palier retenu. **`test` est fermé** : son regard unique est consommé depuis l'amendement A5. Tous les chiffres de ce ticket sont **exploratoires**, jamais confirmatoires |
 | D3 | **Nom des jeux** | Réutiliser `v7` avec un suffixe ? | **Non.** La clé d'éval porte `ds=<nom>`, pas une empreinte du contenu : un contenu qui change sous un nom stable fait servir une éval périmée en silence. Un nom neuf par palier. ⚠ Et le champ `version:` du manifeste doit porter **ce nom** : `v6` et `v7` portent tous deux `version: v5`, recopié de leur source — la filiation y est illisible |
 | D4 | **Plancher de bruit** | Placebo ou témoin nul ? | **Témoin nul à pleine masse** (`L4n`, même information reformulée). Le canal placebo n'existe pas : l'ablation touche 100 % des enregistrements |
@@ -196,6 +196,9 @@ un relecteur le fera.
 ---
 
 ## Lots
+
+> **Lots 1, 2 et 3 livrés le 2026-08-25**, sans un seul appel LLM et sans jeton :
+> métriques de dispersion (`calibration/metrics.py`, hors composite), tableau A1 vs A2 (`analyse_dispersion.py`) et les six paliers de l'échelle (`rewrite_context.py` → `ctxL0`…`ctxL4`, `ctxL4n`). Chiffres et trace : `docs/traces/2026-08-25_diversite_contexte/`, et §12 de [`prompt_calibration.md`](../arch/prompt_calibration.md).
 
 1. **Lot 1 — Les métriques de dispersion (aucun appel LLM).** Les quatre grandeurs du
    bloc A dans `metrics.py`, hors composite, plus leur relecture sur les stores existants
@@ -278,12 +281,23 @@ un relecteur le fera.
 
 ## Ce qu'il faut savoir avant de commencer
 
-- **Le jeton d'exclusion n'existe pas.** `scripts/protocol_lock.py` est absent et le
-  ticket 023 est « à faire ». Deux voies, à trancher explicitement et pas par défaut :
-  livrer d'abord le lot 1 du 023 (la voie propre, et elle sert tous les ticket suivants),
-  ou suivre la procédure à la main — campagne cloud mise en pause, aucun run local, deux
-  relevés de quota encadrant la mesure, consignés dans la trace. **La seconde voie n'est
-  acceptable que parce que les lots 1 et 2 ne consomment rien** ; les lots 4 et 5, si.
+- **Le jeton d'exclusion est retiré** *(mis à jour le 2026-08-26 — retrait demandé, cf.
+  commit « Retrait du jeton d'exclusion : plus de verrou, une vigilance manuelle »)*.
+  `scripts/protocol_lock.py`, `make protocol-lock/unlock/status` et le garde
+  `calibration/protocol_guard.py` sont partis ; il n'y a plus de verrou à prendre pour les
+  lots 4 et 5. Ce qui reste exigé — deux bras évalués par le même juge, aucun run ni
+  service consommateur concurrent, campagne cloud en pause (`CLOUD_PAUSED=1`) — se vérifie
+  désormais à la main avant de mesurer, sans preuve automatique : une trace ne peut plus
+  produire qu'une affirmation, pas un jeton committé. Les mesures publiées avant ce retrait
+  gardent leur jeton dans leur trace archivée (ex. ticket 023, lot 1).
+- **Le juge n'est plus prescrit par le §3** *(amendement A11, 2026-08-25)*. Le protocole ne
+  nomme aucun modèle : il exige la **constance du juge à l'intérieur d'une comparaison**.
+  Les six colonnes du bloc B doivent donc partager un juge, et ce juge doit être cité à côté
+  du chiffre — mais lequel est un arbitrage d'exploitation, pas de protocole.
+- **`screen` ne se lit plus seul** *(leçon du ticket 023)*. 121 personas, plancher de bruit
+  six fois plus étroit que `val`, et **deux** signaux fabriqués qu'il n'a pas confirmés. La
+  pente du bloc B se lit sur `screen` **et** `val`, pas sur `screen` puis `val` au seul
+  palier retenu.
 - **La moitié du bloc A est déjà acquise et coûte zéro.** Commencer par les lots 1 et 2
   donne des chiffres immédiatement, sans jeton, sans quota, sans attente. Ne pas
   commencer par l'A/B.

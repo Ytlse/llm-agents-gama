@@ -210,7 +210,7 @@ partiel »), jamais `adopte`, et dit qu'aucun jeu gelé n'expose A4 aujourd'hui.
 | B4 | **Scoring du hors-périmètre** | Exclu des cibles par zone (il n'en a aucune) **et** sa masse comptée, sur le patron du drapeau `referenced` de `normalize_housing` et du `excluded_mass` de `global_view` |
 | B5 | **Effet publié** | L1 de la dimension zone sur `v7`, à recalculer ; **le composite ne bouge pas** et `lieu_residence` reste `scored: False`. Le passer à `scored: True` rendrait incomparables les quatre lignes du registre et les scores stockés du DAG de calibration : hors périmètre |
 | B6 | **Quel étage** | Étage **D** pour l'existant, étage **B** pour les générations neuves. **Pas l'étage A** : `enriched.py` travaille sur `spatial.home.locations`, coordonnées *avant* snap, alors que `llm_agents.py:439-446` snappe les localisations hors polygone OTP et que `identity.home` — que lit le journal — porte les coordonnées *après* snap. Poser la couronne en amont du snap la ferait diverger pour tout persona snappé |
-| B7 | **Sort du classement métrique** | `COURONNE_BOUNDS_KM` reste, pour le temps terminal, qui classe des points quelconques **et dont les lois sont stratifiées avec lui**. Son docstring doit dire qu'il n'est plus la définition de la résidence, et que l'aligner demande de ré-exporter la ressource |
+| B7 | **Sort du classement métrique** | `COURONNE_BOUNDS_KM` reste, pour le temps terminal, qui classe des points quelconques **et dont les lois sont stratifiées avec lui**. Son docstring doit dire qu'il n'est plus la définition de la résidence, et que l'aligner demande de ré-exporter la ressource. — **Aligné le 2026-09-02 par le [ticket 028](ticket_028_temps_terminal_couronnes_communales.md)** : ressource ré-exportée (`tt4`), la fonction métrique ne survit que comme témoin d'audit |
 | B8 | **Où écrire quand la population est épinglée** | Les étages D réécrivent **en place**. Or `experiments/archive/2026-08-19_14_36/population_1000.json` est épinglé par sha256 dans les manifestes de `v5`, `v6`, `v7` **et** `v8` : l'enrichir casserait quatre jeux gelés. D'où `--out` sur ce seul script, et une table de jointure pour la mesure |
 
 ---
@@ -380,6 +380,7 @@ partiel »), jamais `adopte`, et dit qu'aucun jeu gelé n'expose A4 aujourd'hui.
   demande de ré-exporter la ressource, invalide trois caches et exige un run complet ; c'est
   un ticket distinct, à coordonner avec la correction de calibre en attente du
   [ticket 013](ticket_013_temps_terminal_itineraires.md).
+  → **Traité le 2026-09-02 par le [ticket 028](ticket_028_temps_terminal_couronnes_communales.md).**
 - **Faire entrer la zone dans le composite** (`lieu_residence` → `scored: True`). Rendrait
   incomparables les quatre lignes du registre et les scores stockés du DAG. Si on le veut un
   jour, c'est un ticket qui rebaseline, pas un effet de bord de celui-ci.

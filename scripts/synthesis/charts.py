@@ -149,35 +149,42 @@ def ordinal_profiles(detail: Sequence[dict], *, order: Sequence[str]) -> str:
             parts.append(f'<text class="cx-axis-label" x="{ox + plot_l - 6}" '
                          f'y="{gy + 3:.1f}" text-anchor="end">{top * frac:.0f}</text>')
 
-        def path(kind: str) -> str:
-            pts = []
+        def segments(kind: str) -> list[str]:
+            # La série observée est coupée aux tranches non couvertes (n < 5) :
+            # un point assis sur une poignée de décisions ne doit pas tirer la
+            # courbe. La référence enquête, elle, reste tracée en entier.
+            segs: list[list[str]] = []
+            cur: list[str] = []
             for i, cat in enumerate(cats):
-                value = by_cat[cat][kind].get(mode)
-                if value is None:
+                entry = by_cat[cat]
+                value = entry[kind].get(mode)
+                if value is None or (kind == "actual" and not entry.get("covered")):
+                    if len(cur) >= 2:
+                        segs.append(cur)
+                    cur = []
                     continue
                 px = ox + plot_l + i * step
                 py = oy + plot_t + plot_h * (1 - min(value, top) / top)
-                pts.append(f"{px:.1f},{py:.1f}")
-            return " ".join(pts)
+                cur.append(f"{px:.1f},{py:.1f}")
+            if len(cur) >= 2:
+                segs.append(cur)
+            return [" ".join(s) for s in segs]
 
-        target_pts = path("target")
-        actual_pts = path("actual")
-        if target_pts:
-            parts.append(f'<polyline class="cx-ref-line" points="{target_pts}"/>')
-        if actual_pts:
-            parts.append(f'<polyline points="{actual_pts}" fill="none" '
+        for pts in segments("target"):
+            parts.append(f'<polyline class="cx-ref-line" points="{pts}"/>')
+        for pts in segments("actual"):
+            parts.append(f'<polyline points="{pts}" fill="none" '
                          f'stroke="{MODE_COLORS[mode]}" stroke-width="2" '
                          f'stroke-linejoin="round" stroke-linecap="round"/>')
         for i, cat in enumerate(cats):
             entry = by_cat[cat]
             value = entry["actual"].get(mode)
-            if value is None:
+            if value is None or not entry.get("covered"):
                 continue
             px = ox + plot_l + i * step
             py = oy + plot_t + plot_h * (1 - min(value, top) / top)
-            opacity = "1" if entry.get("covered") else "0.35"
             parts.append(f'<circle cx="{px:.1f}" cy="{py:.1f}" r="2.6" '
-                         f'fill="{MODE_COLORS[mode]}" opacity="{opacity}"/>')
+                         f'fill="{MODE_COLORS[mode]}"/>')
         # Un libellé sur n, choisi pour que deux étiquettes voisines ne se touchent
         # jamais : l'axe âge compte 15 tranches pour 250 px utiles.
         every = 3 if len(cats) > 10 else (2 if len(cats) > 7 else 1)
@@ -185,7 +192,8 @@ def ordinal_profiles(detail: Sequence[dict], *, order: Sequence[str]) -> str:
             if i % every:
                 continue
             px = ox + plot_l + i * step
-            parts.append(f'<text class="cx-tick" x="{px:.1f}" '
+            low = "" if by_cat[cat].get("covered") else " cx-tick-low"
+            parts.append(f'<text class="cx-tick{low}" x="{px:.1f}" '
                          f'y="{oy + plot_t + plot_h + 12}" text-anchor="middle">'
                          f'{escape(_tick_label(cat))}</text>')
     parts.append("</svg>")

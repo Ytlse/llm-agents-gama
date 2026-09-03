@@ -38,6 +38,11 @@ class FakeOption:
     def get_code(self) -> str:
         return self._code
 
+    def mode_label(self) -> str:
+        # Cohérent avec TravelPlan : get_code() joint les jambes par "+",
+        # mode_label() joint leurs modes par ",". Ici un segment de code = un mode.
+        return ",".join(seg.lower() for seg in self._code.split("+"))
+
 
 def make_embed_fn(vectors: dict):
     """
@@ -301,3 +306,73 @@ class TestCacheRoundTrip(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ---------------------------------------------------------------------------
+# Signature des traits dans le state_hash (correctif du 2026-08-27)
+# ---------------------------------------------------------------------------
+
+class TestTraitsKeyDansStateHash(unittest.TestCase):
+    """Un trait qui ne conditionne pas l'offre — l'abonnement TC — ne change que le
+    texte du prompt. Sans signature de traits, les décisions déjà en cache étaient
+    resservies sous l'ancien prompt, sans qu'aucun log ne le signale."""
+
+    @staticmethod
+    def _hash(**kw):
+        from llm.cache import LlmSemanticCache
+        class _Opt:
+            def __init__(self, code): self._c = code
+            def get_code(self): return self._c
+        return LlmSemanticCache._make_state_hash([_Opt("a"), _Opt("b")], **kw)
+
+    def test_traits_differents_donnent_des_hash_differents(self):
+        self.assertNotEqual(self._hash(traits_key="aaa"), self._hash(traits_key="bbb"))
+
+    def test_traits_identiques_donnent_le_meme_hash(self):
+        self.assertEqual(self._hash(traits_key="aaa"), self._hash(traits_key="aaa"))
+
+    def test_absence_de_signature_reste_compatible(self):
+        """Une signature vide ne doit pas altérer le hash : le champ est facultatif."""
+        self.assertEqual(self._hash(), self._hash(traits_key=""))
+
+    def test_la_signature_ne_se_confond_pas_avec_lanticipation(self):
+        """Deux ingrédients distincts : les intervertir changerait le sens du hash."""
+        self.assertNotEqual(self._hash(extra_key="x"), self._hash(traits_key="x"))
+
+
+class TestSignatureDesTraits(unittest.TestCase):
+    """La signature elle-même : ce qu'elle doit voir et ce qu'elle doit ignorer."""
+
+    @staticmethod
+    def _sig(traits):
+        import hashlib as _h, json as _j
+        excluded = ("name",)
+        if not traits:
+            return ""
+        kept = {k: v for k, v in sorted(traits.items()) if k not in excluded}
+        raw = _j.dumps(kept, ensure_ascii=False, sort_keys=True, default=str)
+        return _h.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    BASE = {"name": "Alice", "age": 20,
+            "has_pt_subscription": False, "has_driving_license": True}
+
+    def test_labonnement_deplace_la_signature(self):
+        """Le trait qui a coûté le vidage manuel de cache."""
+        self.assertNotEqual(self._sig(self.BASE),
+                            self._sig({**self.BASE, "has_pt_subscription": True}))
+
+    def test_le_nom_ne_la_deplace_pas(self):
+        """`name` vient de Faker non graine : l'inclure viderait le cache à chaque
+        régénération de population, sans qu'aucune décision n'en dépende."""
+        self.assertEqual(self._sig(self.BASE),
+                         self._sig({**self.BASE, "name": "Bob"}))
+
+    def test_lordre_des_cles_est_indifferent(self):
+        """Un dict Python garde l'ordre d'insertion : deux sérialisations de la même
+        population donneraient deux signatures sans le tri."""
+        self.assertEqual(self._sig(self.BASE),
+                         self._sig(dict(reversed(list(self.BASE.items())))))
+
+    def test_traits_absents_donnent_une_signature_vide(self):
+        self.assertEqual(self._sig(None), "")
+        self.assertEqual(self._sig({}), "")

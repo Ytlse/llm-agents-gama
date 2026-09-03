@@ -1,0 +1,106 @@
+# Population scellée pour l'article AAMAS — ne pas modifier (cf. `regle`).
+version: sceau1
+nom: population_1000_AAMAS_v3
+scelle_le: '2026-09-02T23:18:49+00:00'
+population:
+  fichier: population.json
+  sha256: 8d8bfa3645fa77fb0bcb8aaac8d02bff57395ae06475701f523ef3c772fbb704
+  n: 1000
+  source: data/population/toulouse_population_1000_AAMAS.json
+  source_sha256: 8d8bfa3645fa77fb0bcb8aaac8d02bff57395ae06475701f523ef3c772fbb704
+selection:
+  fichier: selection.json
+  version: aamas_seal_v3
+  regle: 'unité = ménage (household.id) ; allocation proportionnelle à la cible jointe
+    couronne × motorisation (base personne), effectifs par plus fort reste, ménages
+    dans l''ordre sha256(''aamas_seal_v3:'' + household_id) s''ils tiennent dans la
+    cellule ; exclus : hors périmètre, moins de 5 ans, sans motorisation ; puis descente
+    par échanges de ménages de même taille et même cellule minimisant la somme des
+    écarts absolus (en points) aux marges : occupation, age_quinquennal, genre, taille_menage_personne,
+    permis_adultes, abonnement_tc, logement, immobile'
+  vivier:
+    n: 11922
+    eligibles: 11558
+    exclus:
+      moins_de_5_ans: 364
+    menages: 5924
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/data/population/Temp/4_zone_enriched/toulouse_population_10000.json
+    sha256: c4df91db8732ecaeabd1387149bf71adcfb4c249e3cff047bc704ddec7e5f46b
+    residence_zone:
+      deja_pose: 11922
+  menages_retenus:
+    n: 514
+    par_taille:
+      '1': 232
+      '2': 160
+      '3': 64
+      '4': 37
+      '5': 18
+      '6': 3
+    membres_declares: 1034
+    membres_presents: 1000
+  deficits: {}
+  reports: 0
+  descente:
+    echanges: 279
+    passes: 5
+    perte_avant_pt: 39.94
+    perte_apres_pt: 6.1
+    candidats_par_menage: 150
+    marges_non_mesurees: []
+    duree_s: 4.18
+controle:
+  rapport: CONTROLE.md
+  verdicts:
+    conforme: 13
+    à corriger: 0
+    à publier: 0
+    non mesurable: 0
+  borne_tost_pt: 1.0
+  n_min: 30
+  n_min_cellule: 50
+  cible_jointe:
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/AAMAS/cible_jointe_couronne_motorisation.yaml
+    version: cj1
+    sha256: bbf9c36e59ea19b4ac26e5f5cbe15e86a77f55c33c4c124905af089edcbecaa4
+  cibles_marges:
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/AAMAS/cibles_marges_personne.yaml
+    version: cm1
+    sha256: 1406c2cb403307678273dc004393108e3713b347b9b32739a0182d313a4e1e8b
+  menages_et_mobilite:
+    n_menages: 514
+    menages_complets_taille_declaree: 485
+    part_menages_complets_pct: 94.4
+    membres_presents: 1000
+    membres_declares: 1034
+    part_membres_presents_pct: 96.7
+    sans_household_id: 0
+    deplacements_par_persona: 2.579
+    deplacements_par_persona_mobile: 2.885
+    immobiles: 106
+    part_immobiles_pct: 10.6
+    reference_enquete:
+      deplacements_par_personne: 3.53
+      part_immobiles_pct: 10.6
+      deplacements_par_personne_mobile: 3.95
+      source: microdonnées EMC² 2023, PENQ = 1, COEP
+  synthese_des_ecarts:
+  - ecart: mobilité quotidienne
+    amplitude: 2.58 déplacements par persona contre 3.53 dans l'enquête ; 10.6 % d'immobiles
+      contre 10.6 %
+    nature: chaînes d'activités (ENTD 2008 appariée par eqasim)
+    verdict: à publier
+    refermable_au_scellement: non — enquête d'appariement (levier eqasim)
+depot:
+  git_head: 998b3e27311fa033b5f12404462bbe2f12eb6574
+  branche: feat_cache_population
+  arbre_propre: false
+regle: Ce dossier ne se modifie pas. Toute correction de la population produit un
+  nouveau dossier scellé ; les jeux gelés et les runs qui citent celui-ci citent son
+  sha256.
+note: 'Vivier eqasim 11 922 personnes (population_size 10000, EQASIM_RANDOM_SEED 1234,
+  périmètre = 453 communes restreintes au dept 31, immobiles gardés : 1 798). Règle
+  aamas_seal_v3 : ménages entiers, allocation 12 cellules couronne × motorisation
+  (cj1), descente sur 8 marges (occupation p. 11 + cm1) — 279 échanges, perte 39,9
+  → 6,1 pt. Vivier pré-imputé (3ter-a). Notebook generate_population du 2026-09-03,
+  réchauffage OSMnx différé.'

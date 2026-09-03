@@ -1,6 +1,7 @@
 import asyncio
 from functools import lru_cache
 from datetime import datetime, timezone
+import hashlib
 import json
 import demjson3
 import os
@@ -154,6 +155,38 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
 # verrouille désormais les deux dernières. La loss est l'instrument de mesure : toute
 # évolution s'y chiffre avant de s'appliquer (amendement A13 du protocole).
 _PT_LEG_MODES = ("bus", "metro", "métro", "tram", "cableway", "transit", "public_transport", "rail", "train")
+
+
+# Traits du persona EXCLUS de la signature de cache. `name` seulement, et pour une raison
+# vérifiée : il vient de Faker non graine à la génération, donc il diffère d'une population
+# à l'autre sans qu'aucune décision n'en dépende — l'inclure invaliderait tout le cache à
+# chaque régénération de population. Contrôle fait le 2026-08-27 : le `name` est identique
+# entre la population source et celle du run (930/930), il n'est donc PAS re-tiré au
+# chargement, contrairement à ce que la doc affirmait.
+#
+# Tout le reste entre, y compris les traits qui ne servent qu'au narratif : le tri par
+# « ce qui atteint le prompt » est exactement l'arbitrage qui a produit le défaut qu'on
+# corrige ici. Sur-invalider est le sens sûr.
+_TRAITS_EXCLUDED_FROM_CACHE_KEY = ("name",)
+
+
+def _traits_signature(traits: Optional[dict]) -> str:
+    """Signature stable des traits du persona, pour le `state_hash` du cache LLM.
+
+    Sans elle, un trait qui ne conditionne pas l'offre — l'abonnement TC — change le
+    prompt sans changer la clé de cache, et les décisions déjà stockées sont resservies
+    sous l'ancien prompt en silence. Mesuré le 2026-08-27 : 352 abonnements corrigés sur
+    la population de 1 000, dont aucun n'aurait atteint les décisions en cache.
+
+    Tri des clés : un dict Python conserve l'ordre d'insertion, et deux populations
+    sérialisées différemment donneraient deux signatures pour les mêmes traits.
+    """
+    if not traits:
+        return ""
+    kept = {k: v for k, v in sorted(traits.items())
+            if k not in _TRAITS_EXCLUDED_FROM_CACHE_KEY}
+    raw = json.dumps(kept, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _pt_subscription_note(mode_label: str, has_pt: bool) -> str:
@@ -580,6 +613,7 @@ class LlmAgent:
                 activity_purpose=activity_purpose,
                 seed_parts=seed_parts,
                 extra_key=anticipation_key,
+                traits_key=_traits_signature(context.person.identity.traits_json),
             )
             if cache_hit is not None:
                 chosen_plan = sorted_options[cache_hit["index"]]
@@ -734,6 +768,7 @@ class LlmAgent:
                             weather=weather,
                             probabilities=weights,
                             extra_key=anticipation_key,
+                            traits_key=_traits_signature(context.person.identity.traits_json),
                         ))
                         _cache_task.add_done_callback(
                             lambda t: logger.warning(f"Cache store failed: {t.exception()}") if not t.cancelled() and t.exception() else None

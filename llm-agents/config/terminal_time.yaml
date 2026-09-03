@@ -24,7 +24,7 @@
 # qui est le comportement voulu — sans elle, un run rejouerait des décisions
 # prises sur des durées différentes de celles qu'on affiche maintenant.
 # Toute modification des valeurs ci-dessous DOIT bumper cette version.
-version: tt3   # tt3 : temps terminal ALIGNÉ SUR L'ENQUÊTE, tiré dans sa loi (avant : constante par couronne)
+version: tt4   # tt4 : strates COMMUNALES (ticket 028) ; tt3 : aligné sur l'enquête, tiré dans sa loi ; avant : constante par couronne
 
 # Version du ROUTAGE — distincte, et la distinction n'est pas cosmétique. Le cache
 # OSMnx persistant ne mémorise plus que du temps de parcours RÉSEAU, qui ne dépend
@@ -46,6 +46,36 @@ routing_version: r1
 # affichées (critère d'acceptation 2 du ticket 013). Une valeur non multiple de
 # 60 casserait l'égalité une fois sur deux, et le chargeur la refuse.
 modes:
+
+# ══════════════════════════════════════════════════════════════════════════════
+# tt4 (2026-09-02) — MÊMES LOIS, STRATES COMMUNALES (ticket 028). Bloc GÉNÉRÉ, ne pas
+# éditer à la main :
+#   make terminal-time                      # loi → llm_module/data/terminal_time_emc2.json
+#   python -m scripts.progedo_logit.export_terminal_time --emit-config <fichier>
+# puis remplacer ce bloc.
+#
+# CE QUI CHANGE. Rien dans la mesure — T2, T6, T11 sur les mêmes 24 482 trajets conducteur
+# de VP — mais tout dans la STRATIFICATION : la couronne d'une zone fine est lue dans la
+# table de l'enquête (zone fine → secteur de tirage → couronne, `CouronneTable`), et non
+# plus déduite de la distance de son centroïde à l'hypercentre (8 / 20 / 40 km). C'est la
+# définition que le trait `residence_zone` des personas porte depuis le ticket 021 : le
+# temps terminal et la résidence parlent enfin du même découpage.
+#
+# CE QUE ÇA DÉPLACE, mesuré à l'export (trajets à l'accès, tt3 → tt4) :
+#     Toulouse         6 439 → 6 130      moyenne 0,36 → 0,45 min
+#     1ere couronne    6 995 → 10 576     moyenne 0,14 → 0,16 min
+#     2eme couronne    4 383 → 3 447      moyenne 0,16 → 0,15 min
+#     3eme couronne      409 → 3 370      moyenne 0,09 → 0,13 min
+#     hors strates     6 256 → 959        (25,6 % → 3,9 % des trajets sans couronne)
+# La 3ᵉ couronne métrique — au-delà de 40 km — n'existait presque pas ; celle de l'enquête
+# compte 275 communes. Et le rattachement par secteur retrouve une couronne pour ~5 300
+# trajets que le centroïde laissait hors strates. Les moyennes d'ensemble ne bougent pas
+# (0,24 / 0,32 min) : même mesure, autre découpage.
+#
+# LE BUMP tt3 → tt4 invalide le cache de plans OTP et le cache de décisions LLM : des
+# décisions prises sur d'autres durées ne doivent pas être resservies. `routing_version`
+# reste r1, les durées réseau n'ont pas changé.
+# ══════════════════════════════════════════════════════════════════════════════
 
 # ══════════════════════════════════════════════════════════════════════════════
 # tt3 (2026-08-24) — ALIGNEMENT SUR L'ENQUÊTE. Bloc GÉNÉRÉ, ne pas éditer à la main :
@@ -113,54 +143,58 @@ modes:
 
   car:   # 24482 trajets enquêtés
     access_law:
-      Toulouse:   # n=6439, moyenne 0.36 min
-        0: 0.890045
-        1: 0.03603
-        2: 0.026557
-        3: 0.011803
-        4: 0.003572
-        5: 0.021587
-        6: 0.000466
-        7: 0.000932
-        8: 0.001708
-        9: 0.000155
-        10: 0.005125
-        12: 0.000155
-        15: 0.000777
-        20: 0.001087
-      1ere couronne:   # n=6995, moyenne 0.14 min
-        0: 0.947248
-        1: 0.027305
-        2: 0.011723
-        3: 0.004003
-        4: 0.000858
-        5: 0.005718
-        7: 0.000286
-        8: 0.000286
-        10: 0.001287
-        13: 0.000143
-        15: 0.000286
-        20: 0.000858
-      2eme couronne:   # n=4383, moyenne 0.16 min
-        0: 0.951175
-        1: 0.023956
-        2: 0.011408
-        3: 0.00365
-        4: 0.000913
-        5: 0.004107
-        6: 0.000228
-        7: 0.000228
-        8: 0.000228
-        10: 0.001141
-        15: 0.000228
-        20: 0.002738
-      3eme couronne:   # n=409, moyenne 0.09 min
-        0: 0.963325
-        1: 0.01956
-        2: 0.00978
-        3: 0.002445
-        5: 0.002445
-        11: 0.002445
+      Toulouse:   # n=6130, moyenne 0.45 min
+        0: 0.869657
+        1: 0.037357
+        2: 0.032463
+        3: 0.014356
+        4: 0.003752
+        5: 0.029201
+        6: 0.000653
+        7: 0.000979
+        8: 0.001631
+        9: 0.000163
+        10: 0.007015
+        12: 0.000163
+        15: 0.001305
+        20: 0.001305
+      1ere couronne:   # n=10576, moyenne 0.16 min
+        0: 0.939107
+        1: 0.026759
+        2: 0.015507
+        3: 0.006902
+        4: 0.001135
+        5: 0.007186
+        6: 9.5e-05
+        7: 0.000284
+        8: 0.000284
+        10: 0.001418
+        13: 9.5e-05
+        15: 0.000473
+        20: 0.000756
+      2eme couronne:   # n=3447, moyenne 0.15 min
+        0: 0.949811
+        1: 0.02582
+        2: 0.011894
+        3: 0.002901
+        4: 0.00116
+        5: 0.004062
+        8: 0.00029
+        10: 0.00116
+        15: 0.00029
+        20: 0.002611
+      3eme couronne:   # n=3370, moyenne 0.13 min
+        0: 0.954599
+        1: 0.020772
+        2: 0.012166
+        3: 0.003561
+        4: 0.00089
+        5: 0.005045
+        6: 0.000297
+        7: 0.000297
+        10: 0.000297
+        11: 0.000297
+        20: 0.00178
       default:   # n=24482, moyenne 0.24 min
         0: 0.924434
         1: 0.028307
@@ -179,63 +213,72 @@ modes:
         15: 0.000694
         20: 0.001389
     egress_law:
-      Toulouse:   # n=6445, moyenne 0.52 min
-        0: 0.876028
-        1: 0.031652
-        2: 0.029635
-        3: 0.013189
-        4: 0.004655
-        5: 0.01955
-        6: 0.003413
-        7: 0.003569
-        8: 0.002483
-        9: 0.000465
-        10: 0.006982
-        11: 0.000621
-        12: 0.001086
-        13: 0.000931
-        14: 0.00031
-        15: 0.002638
-        16: 0.000155
-        17: 0.00031
-        18: 0.000155
-        20: 0.002172
-      1ere couronne:   # n=7026, moyenne 0.17 min
-        0: 0.945346
-        1: 0.024196
-        2: 0.012952
-        3: 0.00427
-        4: 0.001708
-        5: 0.005551
-        6: 0.000712
-        7: 0.000569
-        8: 0.000569
-        9: 0.000285
-        10: 0.001993
-        13: 0.000142
-        15: 0.000427
-        20: 0.001281
-      2eme couronne:   # n=4405, moyenne 0.19 min
-        0: 0.948695
-        1: 0.022474
-        2: 0.010216
-        3: 0.004767
-        4: 0.001589
-        5: 0.003859
-        6: 0.001135
-        7: 0.001362
-        8: 0.000454
-        9: 0.000227
-        10: 0.001816
-        12: 0.000227
-        13: 0.000227
-        15: 0.000454
-        20: 0.002497
-      3eme couronne:   # n=402, moyenne 0.06 min
-        0: 0.965174
-        1: 0.0199
-        2: 0.00995
-        5: 0.004975
+      Toulouse:   # n=6136, moyenne 0.65 min
+        0: 0.850554
+        1: 0.033898
+        2: 0.033735
+        3: 0.015156
+        4: 0.006682
+        5: 0.027053
+        6: 0.004074
+        7: 0.0044
+        8: 0.003748
+        9: 0.000489
+        10: 0.01043
+        11: 0.000652
+        12: 0.000978
+        13: 0.001467
+        14: 0.000326
+        15: 0.003585
+        16: 0.000163
+        17: 0.000326
+        18: 0.000163
+        20: 0.002119
+      1ere couronne:   # n=10604, moyenne 0.21 min
+        0: 0.931252
+        1: 0.025556
+        2: 0.018106
+        3: 0.007261
+        4: 0.003112
+        5: 0.008016
+        6: 0.001037
+        7: 0.00066
+        8: 0.000943
+        9: 0.000189
+        10: 0.001697
+        12: 0.000283
+        13: 9.4e-05
+        15: 0.000566
+        20: 0.001226
+      2eme couronne:   # n=3461, moyenne 0.18 min
+        0: 0.946258
+        1: 0.024559
+        2: 0.013869
+        3: 0.002889
+        4: 0.0026
+        5: 0.002889
+        7: 0.000867
+        8: 0.000578
+        9: 0.000578
+        10: 0.001734
+        12: 0.000289
+        15: 0.000289
+        20: 0.0026
+      3eme couronne:   # n=3377, moyenne 0.16 min
+        0: 0.951436
+        1: 0.019248
+        2: 0.010956
+        3: 0.004738
+        4: 0.001184
+        5: 0.005626
+        6: 0.001481
+        7: 0.001481
+        8: 0.000296
+        9: 0.000296
+        10: 0.001184
+        13: 0.000296
+        15: 0.000296
+        20: 0.001481
       default:   # n=24482, moyenne 0.32 min
         0: 0.915407
         1: 0.026428

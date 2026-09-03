@@ -204,16 +204,30 @@ async def _prepare_population(
             return workdir_path
 
     if data is None:
-        # Ensure raw eqasim output exists for the exact requested size
-        raw_json_path = _find_population_json(population_size)
-        if not raw_json_path:
-            # No bbox: let eqasim generate the full Toulouse area pool.
-            # Bbox filtering is applied below in Python after loading the raw data.
-            await _trigger_eqasim_generation(population_size)
+        sealed = settings.data.population_file
+        if sealed:
+            # Population SCELLÉE : désignée explicitement, prise telle quelle, jamais
+            # régénérée. Un fichier absent est une erreur de configuration, pas un cas où
+            # l'on « repasserait » par eqasim — ce serait remplacer le sceau en silence.
+            if not os.path.exists(sealed):
+                logger.error(
+                    f"[ALARME] [population] Population scellée introuvable : {sealed} "
+                    "(data.population_file). Rien n'est généré à sa place : corrigez le "
+                    "chemin, ou retirez le réglage pour revenir à la recherche par taille.")
+                return None
+            raw_json_path = sealed
+            logger.info(f"[population] Population scellée : {sealed} (data.population_file)")
+        else:
+            # Ensure raw eqasim output exists for the exact requested size
             raw_json_path = _find_population_json(population_size)
             if not raw_json_path:
-                logger.error("[population] No population file found after eqasim generation")
-                return None
+                # No bbox: let eqasim generate the full Toulouse area pool.
+                # Bbox filtering is applied below in Python after loading the raw data.
+                await _trigger_eqasim_generation(population_size)
+                raw_json_path = _find_population_json(population_size)
+                if not raw_json_path:
+                    logger.error("[population] No population file found after eqasim generation")
+                    return None
 
         with open(raw_json_path, encoding="utf-8") as f:
             raw_data = json.load(f)
@@ -242,6 +256,16 @@ async def _prepare_population(
                 f"[population] Bbox filter: {before} → {len(raw_data)} agents "
                 f"(dropped {before - len(raw_data)} with home or activity outside OSMnx area)"
             )
+        if sealed and len(raw_data) != population_size:
+            # Un sceau se prend entier. Ré-échantillonner 1 000 agents dans un fichier scellé
+            # de 1 000 dont la bbox a écarté 12 reviendrait à publier une population qui
+            # n'est plus celle du MANIFEST — et rien ne le signalerait.
+            logger.error(
+                f"[ALARME] [population] Population scellée {sealed} : {len(raw_data)} agents "
+                f"après filtre bbox pour population_size={population_size}. Un sceau ne se "
+                "rogne pas : alignez population_size sur l'effectif scellé, ou retirez la "
+                "bbox. Rien n'est chargé.")
+            return None
         if population_size < len(raw_data):
             # Local seeded RNG (n'affecte pas l'état global de `random`) : le même
             # sous-ensemble d'agents est tiré à chaque run → trajets identiques → cache

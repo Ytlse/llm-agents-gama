@@ -1,0 +1,64 @@
+# Population scellée pour l'article AAMAS — ne pas modifier (cf. `regle`).
+version: sceau1
+nom: population_1000_AAMAS
+scelle_le: '2026-09-02T20:39:51+00:00'
+population:
+  fichier: population.json
+  sha256: f67b07772f3dced9d1058cbf1c29f5779425386cc52ced0f778d1a2c233b0a84
+  n: 1000
+  source: data/population/toulouse_population_1000_AAMAS.json
+  source_sha256: f67b07772f3dced9d1058cbf1c29f5779425386cc52ced0f778d1a2c233b0a84
+selection:
+  fichier: selection.json
+  regle: 'allocation proportionnelle à la cible jointe couronne × motorisation (base
+    personne), arrondi au plus fort reste ; ordre intra-cellule = sha256(''aamas_seal_v1:''
+    + person_id) croissant ; exclus : hors périmètre, moins de 5 ans, sans motorisation
+    ; puis équilibrage secondaire de l''occupation (p. 11) par échanges intra-cellule,
+    même classe d''âge de préférence'
+  vivier:
+    n: 5063
+    eligibles: 5063
+    exclus: {}
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/data/population/Temp/4_zone_enriched/toulouse_population_5000.json
+    sha256: 97b019fa81c6598d1023f8e620e883cfe9b5d447b2e6b76ca1708d9ee3f4c033
+    residence_zone:
+      deja_pose: 5063
+  deficits: {}
+  reports: 0
+controle:
+  rapport: CONTROLE.md
+  verdicts:
+    conforme: 6
+    non mesurable: 2
+    à corriger: 0
+    à publier: 0
+  borne_tost_pt: 1.0
+  n_min: 30
+  n_min_cellule: 50
+  cible_jointe:
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/AAMAS/cible_jointe_couronne_motorisation.yaml
+    version: cj1
+    sha256: 1ff17632dde41eeb9e1a1378a9046ee1dd25c1d987fe44060ddf6a856703a18c
+  synthese_des_ecarts:
+  - ecart: genre
+    amplitude: —
+    nature: référence (aucune cible publiée)
+    verdict: non mesurable
+    refermable_au_scellement: non — cible absente du rapport
+  - ecart: permis_adultes
+    amplitude: —
+    nature: référence (aucune cible publiée)
+    verdict: non mesurable
+    refermable_au_scellement: non — cible absente du rapport
+depot:
+  git_head: 1164ac5b5e04c845457bdf963a5ce677782ebfa6
+  branche: feat_cache_population
+  arbre_propre: false
+regle: Ce dossier ne se modifie pas. Toute correction de la population produit un
+  nouveau dossier scellé ; les jeux gelés et les runs qui citent celui-ci citent son
+  sha256.
+note: 'Vivier eqasim 5 063 personnes (population_size 5000, EQASIM_RANDOM_SEED 1234,
+  périmètre = liste des 453 communes restreinte au dept 31). Règle aamas_seal_v2 :
+  allocation 12 cellules couronne × motorisation (cible jointe cj1) + équilibrage
+  occupation (50 échanges). Notebook generate_population étapes 1-5 et 7-9 du 2026-09-02
+  ; réchauffage OSMnx (étape 6) différé — le runtime route à la demande.'

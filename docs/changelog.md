@@ -1,3 +1,144 @@
+## [2026-09-03] La population scellée passe à 13 marges conformes : ménages entiers, marges multiples, immobiles rendus
+
+La règle de sélection v3 (ticket 029) remplace la v2 pour le jeu de test de l'article. Trois
+changements, chacun pour un écart mesuré sur la population scellée de la veille.
+
+**Sélection par ménage.** L'unité n'est plus la personne mais le ménage entier (`household.id`) :
+la cohorte de 1 000 vient de **514 ménages complets** — tous leurs membres de 5 ans et + sont
+présents — au lieu de 865 ménages dont 308 complets. Ce que la négociation intra-ménage et la
+chaîne de véhicules attendaient.
+
+**Descente sur marges multiples.** Après l'allocation aux 12 cellules couronne × motorisation,
+des échanges de ménages de même taille et même cellule ramènent **huit marges** sur leurs cibles :
+occupation, âge quinquennal, genre, taille de ménage, permis, abonnement TC, logement, part
+d'immobiles. Sept cibles que le rapport ne publie pas à ce pas sont recalculées sur les
+microdonnées et gelées (`cm1`) ; genre et permis deviennent mesurables. Le vivier est
+pré-imputé avant la sélection pour que logement, permis et abonnement soient des marges.
+
+**Les immobiles reviennent.** L'export eqasim écartait toute personne sans activité hors
+domicile ; l'enquête en compte 10,6 %. Ils restent (journée « domicile », drapeau `immobile`),
+la sélection les ramène exactement à **10,6 %**, et deux gardes de la chaîne qui plantaient sur
+une journée à une activité sont corrigées.
+
+**Avant :** v2 — 6 marges conformes sur 6 contrôlées, mais 75 ans et + à 9,8 % (7,1 attendus),
+0 % d'immobiles, ménages fragmentés (54,6 % de membres absents).
+**Après :** v3 — **13 marges conformes, 0 à corriger, 0 à publier, 0 non mesurable** ; 2,5 % de
+membres absents ; vivier de 11 922 (10 000 demandés, 209 s d'eqasim) dont la sélection ne garde
+que 8,4 %. Le seul écart restant à publier est la mobilité des agents mobiles (2,88 déplacements
+contre 3,95) : celui des chaînes d'activités ENTD 2008, prochain levier.
+
+Scellé `data/population/population_1000_AAMAS_v3/` (sha256 `8d8bfa3645fa77fb…`), sauvegardé avec
+son vivier, runtime repointé ; le sceau v2 reste intact. Le run GAMA avec des agents immobiles
+est à vérifier au premier lancement.
+
+---
+
+## [2026-09-02] La population du jeu de test se contrôle contre l'enquête, puis se scelle
+
+Première étape des travaux pour l'article AAMAS (§ 3.1 du gabarit, jalon 0 du protocole) :
+une population synthétique se **contrôle** marge par marge contre la population enquêtée par
+l'EMC² 2023, et, si elle passe, se **scelle** dans un dossier immuable avec son empreinte, la
+règle qui l'a produite et le rapport qui l'a jugée. Trois cibles `make` : `control-population`,
+`select-population`, `seal-population` (et `reference-marges` pour voir d'où vient chaque cible).
+
+**Ce que le contrôle rend.** Pour chaque modalité — classes d'âge, occupation, motorisation sur
+base personne *et* sur base ménage, couronne de résidence, et le **croisement** couronne ×
+motorisation (là où une synthèse par marges échoue sans qu'aucune marge ne bouge) — la part
+observée, son IC95, la cible et sa page dans le rapport, l'écart, le verdict TOST à ± 1 pt ;
+par marge, le χ² demandé par le gabarit avec son V de Cramér, EMD ou JSD aux définitions
+exactes du moteur de score. Une marge sans cible publiée (sexe, permis : absents du rapport)
+sort `non mesurable` avec sa raison, jamais 0. Le rapport termine par une **synthèse des
+écarts** — amplitude, nature, refermable au scellement ou non — et par le **journal de
+recoupement** du tableau § 2.1 du protocole : ses neuf lignes s'écartent de la référence
+(« moins de 18 ans » 19,4 % publié contre 16,0 % dans l'enquête, « 18-64 » 62,1 % contre
+68,0 %, ménages sans voiture 22,3 % contre 19,0 %), à consigner en Annexe F.
+
+**Deux bases, désormais distinguées.** Le rapport publie la motorisation par ménage (19 / 45 /
+35 %) ; une population synthétique est un échantillon de personnes, où « deux voitures et + »
+pèse **48,7 %**. La cible jointe sur base personne, que personne ne publie, est recalculée sur
+les microdonnées et **gelée** (`scripts/AAMAS/cible_jointe_couronne_motorisation.yaml`, avec
+provenance) : le contrôle tourne sans les microdonnées d'accès restreint.
+
+**Avant :** « 1 000 agents » en contenait 1 021 (eqasim tire 15 % de plus et renomme le
+fichier), le runtime en ré-échantillonnait 930 au hasard, et la conformité démographique du
+protocole reposait sur un tableau non recoupé.
+**Après :** `select` tire 1 000 personas pile par allocation proportionnelle aux 12 cellules
+couronne × motorisation de l'enquête (ordre `sha256`, déterministe), exclut les 45 domiciles
+hors périmètre, journalise tout déficit, puis **équilibre l'occupation** par échanges à
+l'intérieur des cellules — le générateur produit 7,4 % d'actifs à temps partiel pour 5 % dans
+l'enquête, et 50 échanges suffisent à remettre les sept postes sur la cible sans déplacer une
+cellule ; `seal` **refuse** de sceller s'il reste un « à corriger ». Sur la population de référence actuelle, le contrôle rend 4 « à corriger »
+(couronne −5,9 pt sur la 3ᵉ couronne, joint, âge, occupation), 2 conformes (motorisation, deux
+bases), 2 non mesurables.
+
+**Chaîne de génération.** Le notebook gagne une étape **3ter** — la sélection, placée *avant*
+les étapes de routage : on génère un vivier (`POPULATION_SIZES = [5000]`, seuil calculé pour
+remplir les 12 cellules dans 99,2 % des tirages) et seuls les 1 000 retenus passent au
+scheduling et au réchauffage OSMnx. L'export eqasim pose à la racine de chaque enregistrement
+`household` (id, iris, commune), `provenance` (donneurs RP et ENTD) et `validation.commute_mode`
+— le mode de navette déclaré, vérité terrain par individu qui **ne doit pas atteindre le
+prompt**. Ces champs vivent hors de `traits_json` : ils n'entrent ni dans le narratif ni dans
+la clé du cache.
+
+**Le runtime prend le sceau entier.** Nouveau réglage `data.population_file` : un fichier de
+population désigné explicitement remplace la recherche par taille et tout appel à eqasim. Il
+est pris tel quel — s'il ne compte pas exactement `population_size` agents après le filtre bbox,
+le chargement **refuse** au lieu de ré-échantillonner au hasard comme avant : un sceau ne se
+rogne pas en silence.
+
+**Population scellée le 2026-09-02.** `data/population/population_1000_AAMAS/` — 1 000 personas
+(sha256 `f67b0777…`), tirés dans un vivier de 5 063 : **six marges conformes** (classes d'âge,
+occupation à l'unité, motorisation sur les deux bases, couronne, couronne × motorisation), genre
+et permis non mesurables faute de cible publiée ; audit de périmètre A2, A4, A9 conformes. Le
+run lit ce fichier via `data.population_file`. Limite nouvelle, mesurable grâce à `household.id` :
+la sélection par personne ne retient que 308 ménages complets sur 865 — sans effet sur le choix
+modal individuel, à déclarer pour tout ce qui dépend des co-résidents.
+
+**Le réchauffage OSMnx devient optionnel.** L'étape 6 du notebook (≈ 78 000 routes pour 1 000
+personas) ne touche pas à la population ; elle pré-calcule le cache d'itinéraires. `SKIP_WARMUP`
+la saute — le runtime calcule les itinéraires manquants à la demande — et `MAX_WORKERS` devient
+un paramètre : à 12 workers chaque copie des graphes fait swapper la machine (23 Go mesurés, workers
+à 50 % de CPU, des heures de calcul) ; à 6 elle tient en RAM.
+
+---
+
+## [2026-09-02] Le temps terminal et la résidence parlent enfin du même découpage
+
+Le temps d'accès au véhicule et de stationnement était facturé selon des **anneaux de
+distance** autour du Capitole (8 / 20 / 40 km), alors que la couronne de résidence des
+personas — et toutes les cibles de l'enquête — suivent la **liste de communes** de l'EMC².
+Un même trajet pouvait donc être « Toulouse » pour le stationnement et 1ʳᵉ couronne pour le
+journal. Les lois de temps terminal sont re-stratifiées sur la table de l'enquête (`tt4`,
+ticket 028) et les points d'origine et de destination sont classés par appartenance aux
+couronnes.
+
+**Avant :** Blagnac, Balma, Ramonville — à 5 ou 6 km du Capitole — payaient le stationnement
+de centre-ville ; 25,6 % des trajets d'enquête restaient hors strates et la loi de la 3ᵉ
+couronne reposait sur 409 trajets ; un point à 100 km recevait la loi de la 3ᵉ couronne en
+silence.
+**Après :** ces communes paient la loi de la 1ʳᵉ couronne ; 3,9 % de trajets hors strates et
+3 370 trajets pour la 3ᵉ couronne ; un point hors des 453 communes reçoit la loi d'ensemble,
+est compté (`terminal_time_out_of_perimeter_total`) et déclenche une alarme `[ALARME]` une
+fois. Les moyennes d'ensemble ne bougent pas (0,24 / 0,32 min) : même mesure, autre découpage.
+
+⚠ Le passage `tt3 → tt4` **invalide le cache de plans OTP et le cache de décisions LLM** : le
+prochain run repart à froid sur ces deux caches (le cache de routage OSMnx, `r1`, est
+conservé). C'est voulu — une population propre pour l'ensemble des tests AAMAS.
+
+**Audit de périmètre.** L'axe A2 ne remesure plus l'écart historique de 24,4 % : il vérifie que
+le trait `residence_zone`, la géométrie des couronnes et la ressource de temps terminal sont
+sur le même découpage, et passe `conforme` sur la population de référence (1 021/1 021). A9
+perd sa colonne « publié par le classement métrique », qui n'existe plus. La fonction
+métrique ne survit que comme témoin des scripts de mesure archivés, et un test garantit
+qu'aucun module de production ne l'importe.
+
+**Calendrier du run (axe A6).** Le contrôleur journalise le jour de semaine du départ de
+simulation — `[ALARME]` s'il tombe un week-end, avertissement si ce n'est pas un lundi — et
+alarme une fois quand un départ de week-end est reporté au lundi : l'enquête ne compte aucun
+week-end, et les reports s'empilent sur le lundi.
+
+---
+
 ## [2026-09-02] Le support de séminaire prend la forme d'un article
 
 Le support passe de 41 à **31 planches** et adopte la forme d'un article : planche *Abstract* en texte
@@ -7941,3 +8082,5 @@ les portent pas et ne seront jamais retrouvés. Supprimer `data/llm_cache/` avan
   par jour »** : les activités étant récurrentes et non datées, on vérifie que chaque activité
   d'un agent s'exécute chaque jour de sa plage — décomptant les activités *dégradées* (sans
   LLM) et *manquées* (aucune exécution ce jour-là), avec alarmes dédiées.
+
+SESSION ENDED

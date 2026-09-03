@@ -147,6 +147,14 @@ les lois sont massées à zéro et les moyennes valent 0,06 à 0,52 min : la mê
 coûte désormais **34 secondes**. Le classement reste à corriger pour la lecture ; l'urgence
 côté simulation est levée.
 
+**Refermé le 2026-09-02 par le [ticket 028](../tickets/ticket_028_temps_terminal_couronnes_communales.md).**
+Les lois de temps terminal sont re-stratifiées par la table de l'enquête (`tt4`) et
+`_make_travel_plan` classe ses points par appartenance aux couronnes : journal et
+facturation ne peuvent plus diverger. La re-stratification rend au passage une couronne
+à ~5 300 trajets d'enquête que le centroïde laissait hors strates (25,6 % → 3,9 %) — la
+3ᵉ couronne passe de 409 à 3 370 trajets, et ses lois cessent de reposer sur une cellule
+mince.
+
 ### A4 — Hors périmètre n'est pas une couronne
 
 45 personas (4,4 %) habitent hors des 453 communes, entre **48 et 114 km** de l'hypercentre
@@ -157,6 +165,10 @@ C'est le mécanisme de vacuité à l'état pur — l'absence de périmètre ne p
 erreur, elle produit une classification. D'où la constante nommée
 `population_reference.OUT_OF_PERIMETER`, et le test qui vérifie qu'elle n'est *pas* une
 couronne.
+
+Côté **temps terminal**, le même point recevait la loi de la 3ᵉ couronne. Depuis `tt4`
+(ticket 028) il reçoit `hors périmètre`, donc la loi `default` de l'ensemble des trajets —
+et il est **compté** (`terminal_time_out_of_perimeter_total`) et alarmé une fois.
 
 Le versant destinations est en revanche négligeable : 4,5 % des lieux d'activité sont hors
 périmètre, mais seulement **0,9 %** des résidents du périmètre ont une activité au-delà.
@@ -323,12 +335,14 @@ attribution de vélo — mécanisme déjà documenté par le ticket 015.
 |---|---:|---:|---:|---:|---:|
 | Cible (habitants 5 ans et +) | 36,4 % | 34,1 % | 14,2 % | 15,4 % | **70,5 %** |
 | Population réelle (classement communal) | 38,5 % | 37,5 % | 14,4 % | 9,5 % | **76,0 %** |
-| Telle que publiée (classement métrique) | 43,3 % | 34,8 % | 16,2 % | 5,8 % | **78,1 %** |
+| Telle que publiée **avant le ticket 021** (classement métrique) | 43,3 % | 34,8 % | 16,2 % | 5,8 % | **78,1 %** |
 
 La cible `voiture` valant 31 % à Toulouse contre 71–74 % dans les couronnes externes, une
 surconcentration tire mécaniquement la part voiture vers le bas sans qu'aucun modèle de
-choix ne soit en cause. Et les deux biais **se cumulent** : le classement métrique aggrave
-encore la concentration publiée.
+choix ne soit en cause. Les deux biais **se cumulaient** : le classement métrique aggravait
+la concentration publiée. Depuis les tickets 021 (journal) et 028 (temps terminal), la ligne
+« publiée » n'existe plus — trait, géométrie et facturation coïncident, et l'axe A2 de
+l'audit le vérifie à chaque exécution.
 
 ## Ce qui reste ouvert
 
@@ -338,6 +352,12 @@ encore la concentration publiée.
   **n'importe plus** la fonction métrique ; `hors périmètre` est une modalité exclue des
   cibles par zone dont la masse est publiée. Aucun cache invalidé, aucun run rejoué,
   `terminal_time.yaml` intact.
+
+  **Complétés le 2026-09-02 par le [ticket 028](../tickets/ticket_028_temps_terminal_couronnes_communales.md).**
+  Le temps terminal classe lui aussi par commune et ses lois sont re-stratifiées (`tt4`) ;
+  un point hors périmètre reçoit la loi `default`, compté et alarmé. Ce bump-là invalide
+  le cache de plans OTP et le cache de décisions LLM — ce que le scellement de la
+  population AAMAS rendait de toute façon nécessaire.
 
   **Ce que ça a coûté au score, mesuré à décisions constantes sur le jeu gelé `v7` sans un
   seul appel LLM** (trace [`2026-08-24_couronne_v7`](../traces/2026-08-24_couronne_v7/README.md)) :

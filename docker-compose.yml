@@ -6,6 +6,10 @@ x-shared-env: &shared-env
   # mesuré à leur définition avant de le faire.
   OSMNX_ENDPOINTS: http://osmnx1:8090/route
   APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
+  # Répertoire des expériences, explicite plutôt que déduit : le code vit dans
+  # /app et les runs dans /app/experiments (montage de ./experiments), alors que
+  # sur l'hôte ils sont un niveau au-dessus du paquet (<dépôt>/experiments).
+  APP_EXPERIMENTS_DIR: /app/experiments
   # Reprise à chaud (`make run CONT=1`) : le contrôleur réutilise le workdir
   # pointé par experiments/current au lieu d'en créer un nouveau (settings.py).
   CONTINUE_RUN: ${CONTINUE_RUN:-}

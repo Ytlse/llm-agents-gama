@@ -264,9 +264,25 @@ tickets:
       non nécessaire (résidu 0,75 pt).
 
   ticket_016_abonnement_tc_progedo:
-    status: à faire
+    status: en cours
     note: >-
-      Spécification écrite, rien d'implémenté. Même diagnostic que le 015 sur un trait
+      LOTS 1 ET 2 LIVRÉS le 2026-08-27, communs avec le 017. Loi apprise sur `P12`
+      (`make equipment-propensity`, AUC hors-échantillon 0,798, CV groupée par ménage),
+      posée par `scripts.data.population.enrich_equipment` et câblée dans l'étape 8 du
+      notebook de génération. Reproduit ses cibles sur l'enquête : toutes les strates
+      d'occupation à 0,1 pt, gradient de motorisation exact (61,8 / 25,5 / 16,1 %).
+      Sur la population 1000, l'écart étudiant − retraité passe de +5,7 à +45,5 pts
+      (cible +54,5) — le critère le plus discriminant du ticket. Les paliers tarifaires
+      Tisséo (moins de 26 ans, ouverture senior) sont ARBITRÉS sur l'AUC et retenus
+      (+0,0079), pas décrétés ; la tarification n'entre jamais comme grandeur (P12 ne
+      sert que deux modalités, et M22/revenu est livré vide). Cible « étudiants »
+      RESTATÉE de 74,3 à 72,2 % : le recodage du dépôt range l'alternance avec les
+      étudiants, et c'est la définition du persona qui doit gagner. Contrefactuel volet 3
+      à politique figée : les 15-19 ans gagnent 5,3 pts sur les TC et 4,2 sur la voiture,
+      mais le composite de TÊTE ne bouge pas (6,015 → 5,941) — il était juste pour les
+      mauvaises personnes, exactement ce que ce ticket annonçait. RESTE : lot 3 (recette
+      sur un run, volet 1) et lot 4 (remontée dans le fork eqasim). Ancien diagnostic
+      ci-dessous. Même diagnostic que le 015 sur un trait
       qui pèse davantage : le total tient (21,9 % d'abonnés simulés contre 25,8 %
       mesurés) mais la répartition est RETOURNÉE — étudiants 35,4 % contre 74,3 %
       observés, retraités 29,7 % contre 17,7 %, et le signe de l'écart 18-24 ans /
@@ -282,9 +298,21 @@ tickets:
       chantier prioritaire avec le 017.
 
   ticket_017_permis_progedo:
-    status: à faire
+    status: en cours
     note: >-
-      Spécification écrite, rien d'implémenté. Écart modéré en agrégat (91,5 % simulé
+      LOTS 1 ET 2 LIVRÉS le 2026-08-27, communs avec le 016 (même chargeur, même script
+      de pose). Loi apprise sur `P7` — `P7 == 3`, conduite accompagnée, compte NON —
+      AUC hors-échantillon 0,953, plancher légal 18 ans en dur. Sur la population 1000 :
+      91,5 % → 87,7 % chez les majeurs (cible 85,9). Les paliers tarifaires ont été
+      offerts puis RETIRÉS par l'arbitrage (gain −0,0001) : la règle tranche dans les
+      deux sens. Piège de l'ordre FERMÉ : `car_availability` dérive du nombre de permis,
+      le notebook rejoue donc `fix_minor_traits` (idempotent) APRÈS la pose — 68 ménages
+      recalculés — et la recette échoue si les deux ne sont plus d'accord. ⚠ Écart des
+      25-34 ans à −3,2 pt, AU-DELÀ de la tolérance ± 3 du ticket : demande soit
+      l'interaction âge × genre que le ticket prévoit, soit un critère restaté — non
+      tranché. ⚠ Le contrefactuel volet 3 SOUS-ESTIME l'effet du permis : l'offre OTP y
+      est gelée alors que `_can_drive` la conditionne. RESTE : lot 3 (run) et lot 4
+      (fork). Ancien diagnostic ci-dessous. Écart modéré en agrégat (91,5 % simulé
       contre 85,9 % mesuré chez les majeurs) et concentré sur les jeunes adultes : 85,4 %
       contre 58,1 % à 18-24 ans, soit +27 points. Même cause que le 016 (classe
       d'appariement 15-29 : 0 % à 15-17, 58 % à 18-24, 78 % à 25-29) plus le millésime
@@ -711,7 +739,7 @@ tickets:
       de véhicule qui va avec (verrou de retour du 008, position des véhicules du 014).
 
   ticket_023_fenetre_meteo_jeux_geles:
-    status: fait
+    status: terminé
     note: >-
       OUVERT le 2026-08-24 à la suite du ticket 020, axe A5. À MENER SELON
       `docs/arch/protocole-parametre-exogene.md` — le paramètre corrigé est ici
@@ -935,7 +963,7 @@ tickets:
       reproduisent exactement les scores écrits à la main.
 
   ticket_024_diversite_et_contexte:
-    status: à faire
+    status: en cours
     note: >-
       OUVERT le 2026-08-24. Ticket de MESURE, pas de correction : rien n'est modifié, ni
       en production ni dans l'instrument. Trois chiffres à produire, tous lus contre la
@@ -984,6 +1012,105 @@ tickets:
       sans quota, sans attente. L'issue « pas d'effet » (pente dans le bruit du témoin nul)
       RÉFUTE l'affirmation « plus de contexte = plus de précision » et s'archive comme les
       autres.
+      ── LOTS 1 À 3 LIVRÉS le 2026-08-25, ZÉRO APPEL LLM, jeton non requis ──
+      Lot 1 : les quatre métriques de dispersion dans `metrics.py`, HORS composite (un test
+      verrouille la liste des champs de `Scores`). Entropie normalisée par le nombre de MODES
+      DISTINCTS offerts et non par le nombre d'options — le vecteur vit sur les modes, les
+      options d'un même mode étant agrégées ; l'offre d'un agent récurrent est l'UNION de ses
+      trajets. Toute grandeur non mesurable rend `None` et se déclare, jamais 0,0 : sur une
+      dispersion, l'absence de mesure imite le résultat le plus spectaculaire.
+      Lot 2 : `analyse_dispersion.py`, store en LECTURE SEULE, compte les évals à l'entrée et
+      à la sortie pour démontrer qu'aucune n'est créée. RÉSULTAT sur `expert_chaine`,
+      12 évals, juge `gemini-3.5-flash-lite` : modes effectifs 1,43 à 1,75 sur 3 à 4 offerts ;
+      réponses DÉTERMINISTES (max p ≥ 0,99) de 24,8 % (`screen@v9n`) à 55,8 % (`val@v7`) ;
+      variance inter-persona 0,078 à 0,101 ; coût du collapse (A2−A1) de 6,8 à 13,3 points.
+      L'AFFIRMATION D EST CHIFFRÉE ET ELLE TIENT. Le substrat compte : `v7`/`v8` sont bien
+      plus dégénérés que `v9`/`v10`. Trace : `docs/traces/2026-08-25_diversite_contexte/`.
+      Lot 3 : `rewrite_context.py` produit `ctxL4` (copie à l'octet), `ctxL3`, `ctxL2`,
+      `ctxL1`, `ctxL0` et le témoin nul `ctxL4n` (+0,2 % de longueur). Le script REFUSE
+      d'écrire si `L4` n'est pas identique à sa source ou si `L4n` dérive de plus de 5 %.
+      Trois pièges de périmètre désamorcés et sous test : `Contraintes` survit au retrait de
+      `Mobilité` (même ligne ; il vaut `None` sur 2 487/2 487, information constante) ;
+      l'agenda survit au retrait de la météo (seules ses annotations « — … prévu » partent) ;
+      les sous-puces de l'agenda survivent à celles des options. La météo avait TROIS
+      porteurs, pas un — `context`, la ligne de bulletin et les annotations d'agenda.
+      D1 CADUC : `scripts/protocol_lock.py` EXISTE depuis le 2026-08-25 (lot 1 du 023), avec
+      `make protocol-lock/unlock/status` et le garde `calibration/protocol_guard.py` que tous
+      les `ab_*.py` appellent. La dépendance dure du ticket est levée.
+      ARBITRÉ le 2026-08-25 : (a) SUBSTRAT = `v7`, on refera sur un jeu plus récent plus
+      tard si besoin ; (b) JUGE = `gemini-3.1-flash-lite` (nom stable, `google_gemini31`,
+      seau de quota distinct de 3.5 dont la clé 1 est épuisée) — config `run_ab_context.yaml`
+      prête et validée contre `assert_pinned_eval_model`. ⚠ CE JUGE N'EST PAS CELUI DE
+      `ref2` : le bloc B ouvre une SÉRIE NEUVE au sens du §3 amendé, ses composites ne se
+      posent pas à côté de ceux de `ref2` ni du −7,13 de `ref1`, et la comparaison
+      d'amplitudes exigera son propre pont (champion vs B0 sous CE juge et CE jeu).
+      CE QUE LES LOTS 1-3 ONT APPRIS, AU-DELÀ DE D : le modèle réalise 65 % de l'écart
+      inter-persona ATTEIGNABLE (variance A1 0,087 contre 0,133 en A2 décidé, identique sur
+      `screen` et `val`) — il n'est donc pas figé, il est SOUS-DÉCIDÉ. Et le tableau
+      d'élasticité du ticket est PÉRIMÉ : sur `val@v10c` la part voiture va de 34,5 % à
+      87,3 % (contre 42,7 → 49,1 pour le champion de `ref1`), le défaut n'est plus une
+      courbe plate mais un EFFONDREMENT DE LA MARCHE SOUS 2 KM (−43,2 pts à 0-1 km, −38,7 à
+      1-2 km, contre −6,6 à +5,9 au-delà). Le TC est en grande partie une masse de SECOND
+      CHOIX : 22,1 % en pondéré, 17,0 % en vote majoritaire.
+      ── LOT 4 (bloc B) le 2026-08-26 — LA PENTE EST DANS LE BRUIT ──
+      `screen`, 108 personas appariés, juge `gemini-3.1-flash-lite`, six colonnes :
+      L4 23,00 · L3 24,60 (+1,60) · L2 24,36 (+1,36) · L1 25,56 (+2,56) · L0 25,52 (+2,52) ·
+      TÉMOIN NUL L4n 25,04 (+2,03). Retirer TOUT le contexte coûte 2,52 ; réordonner et
+      réétiqueter le MÊME contexte en coûte 2,03 — rapport 1,24. DEUX PALIERS SONT SOUS LE
+      PLANCHER (L3 à 0,79 ×, L2 à 0,67 ×). La pente SATURE dès L1 : retirer la décomposition
+      des étapes, soit 55 % de la longueur du prompt, ne change plus rien de mesurable.
+      `val` : quota épuisé (429) après deux colonnes, mais ce sont les bonnes — référence
+      23,74 et témoin nul 27,66, soit un PLANCHER DE +3,92, presque le double de celui de
+      `screen`. L'effet cherché est donc plus petit que le bruit du jeu le plus fiable.
+      ISSUE (c) DE LA PORTE DE DÉCISION : l'affirmation C n'est pas soutenue, et la
+      comparaison d'amplitudes penche à l'inverse du discours annoncé — contexte 2,5 (dans le
+      bruit) contre prompt 7,13 (hors bruit, autre juge, autre jeu, donc indicatif).
+      ⚠ Le témoin nul déplace la part voiture de 4,8 points à information constante : aucune
+      affirmation sur une part modale sous ~5 points n'est opposable ici.
+      DÉFAUT D'INSTRUMENT TROUVÉ ET CORRIGÉ : `make_provider_call` n'envoyait pas `model`,
+      l'adaptateur retombait sur le `default_model` du fournisseur. Le modèle ANNONCÉ n'était
+      pas le modèle APPELÉ, et le garde anti-alias du §3 portait sur une étiquette décorative.
+      Le premier passage a été jeté (store conservé sous
+      `ab_context_PREVIEW_ETIQUETTE_FAUSSE.db`) ; les composites du second sont IDENTIQUES,
+      donc les chiffres jetés étaient mal étiquetés, pas faux. ⚠ `run_common_set.yaml`
+      (volet 2 de la page de synthèse, DÉJÀ PUBLIÉ) est dans le même cas.
+      `val` COMPLET le 2026-08-26 (165 personas appariés) : L4 23,74 · L3 20,95 (−2,79) ·
+      L2 22,51 (−1,23) · L1 21,99 (−1,75) · L0 22,56 (−1,18) · TÉMOIN NUL L4n 27,66 (+3,92).
+      LES QUATRE ABLATIONS AMÉLIORENT LE SCORE SUR `val` LÀ OÙ ELLES LE DÉGRADAIENT SUR
+      `screen` : le signe s'inverse, et l'amplitude reste sous le témoin nul dans les deux
+      jeux. Résultat nul de la forme la plus nette — l'effet est plus petit que le bruit ET
+      sa direction n'est pas stable. AFFIRMATION C RÉFUTÉE sur ce dispositif.
+      LE FAIT NON CHERCHÉ, ET LE SEUL SUR LEQUEL LES DEUX JEUX CONCORDENT : le témoin nul est
+      la colonne LA PLUS DÉGRADÉE des deux tableaux, davantage que le retrait de tout le
+      contexte. Un plancher systématiquement pire que tous les traitements n'est plus du
+      bruit : c'est un EFFET DE FORME. Le modèle réagit à la mise en forme du contexte plus
+      qu'à son contenu. ⚠ `L4n` cumule 4 permutations et 2 renommages — un palier par
+      permutation dirait lequel porte l'effet, et ne coûte que des retraits mécaniques.
+      TICKET À OUVRIR, pas une conclusion à écrire.
+      ── JEU COMPLET (train + val) le 2026-08-26, 0 appel : `pool_context.py` ──
+      569 personnes, 1 568 déplacements (3,4 × `val` seul). L4 22,69 · L0 22,42 (−0,27, soit
+      0,10 × le plancher) · TÉMOIN NUL L4n 25,35 (+2,66). Sur `train` seul l'ablation totale
+      donne EXACTEMENT −0,00 (22,83 contre 22,83). RETIRER TOUT LE CONTEXTE NE CHANGE RIEN.
+      TROIS ÉCHELLES DE BRUIT EMBOÎTÉES, la troisième mesurée par accident : l'épuisement du
+      quota a forcé à rejouer `ctxL4` sur la SECONDE CLÉ (même modèle, autre projet) →
+      22,83 contre 22,84, écart 0,01, ≤ 0,05 par dimension. Donc : répétition pure 0,01 ·
+      contenu du contexte 0,27 · FORME du contexte 2,66. Le témoin nul vaut 250 × l'aléa de
+      répétition — ce n'est pas du bruit, c'est un effet systématique de mise en forme, et
+      c'est le SEUL signal du bloc B. Le contrôle d'équivalence justifie par la mesure de
+      mélanger les deux clés dans un tableau ; le triplet L4/L4n/L0 a malgré tout été refait
+      ENTIER sur la clé 2 pour qu'aucun contraste ne repose sur un changement de clé.
+      MANQUE : L3/L2/L1 sur `train` (456 appels pour six colonnes contre 500 par seau et par
+      jour). Ils restent mesurés sur `screen` et `val`, tous sous le plancher : leur ajout
+      préciserait le point de saturation, pas la conclusion.
+      COMPARAISON D'AMPLITUDES (livrable principal) : contexte ≤ 2,8 et sans signe stable
+      contre prompt 7,13 hors bruit — indicatif (jeux et juges différents), mais l'ordre de
+      grandeur est l'INVERSE du discours annoncé.
+      LOT 4 CLOS : les trois questions qui précédaient sa mesure sont retombées d'elles-mêmes.
+      Le substrat est `v7`, tranché ci-dessus et trace conservée ; le juge a été tenu CONSTANT
+      sur les six colonnes, comme l'exige le §3 amendé (A11) ; et `val` a bien été lu à côté de
+      `screen`, la leçon du 023 étant appliquée. Rien de ce bloc ne reste ouvert : il ne
+      subsiste que le MANQUE déjà énoncé plus haut (L3/L2/L1 sur `train`), qui préciserait le
+      point de saturation, pas la conclusion.
 
   ticket_027_motif_accompagnement:
     status: à faire
@@ -1015,3 +1142,37 @@ tickets:
       gratuite possible (réécrire le libellé sur 66 % des `other` tirés au hasard) — elle
       borne le gain NARRATIF, pas la justesse de l'affectation, et se lit contre le plancher
       de reformulation du ticket 024 (2,03), pas contre zéro.
+  ticket_028_temps_terminal_couronnes_communales:
+    status: terminé
+    note: >-
+      OUVERT ET LIVRÉ le 2026-09-02, en préparation du scellement de la population AAMAS.
+      Ressource ré-exportée (tt4), 70 + 38 tests verts, audit A2 conforme sur les 1 021
+      personas. Aucun run rejoué : l'effet sur les parts modales se lit au prochain run
+      scellé, qui repart à froid sur les caches OTP et décisions. C'est le
+      ticket « distinct » que le 021 a renvoyé : le temps terminal classait encore les points
+      d'origine/destination par DISTANCE à l'hypercentre (8/20/40 km) alors que la résidence
+      est classée par COMMUNE depuis le 021 — deux définitions dans la même simulation, écart
+      borné à 34 s par bout de trajet mais rendu « à corriger » par l'audit A2 à chaque
+      exécution. Trois appelants : export_terminal_time (strates des lois → ré-export,
+      tt3 → tt4, caches OTP et décisions invalidés, routing_version inchangé),
+      osmnx_direct._make_travel_plan (CommunalZones.classify ; hors périmètre → loi
+      `default`, compté et alarmé au lieu du repli silencieux « 3ᵉ couronne » = axe A4),
+      et l'audit lui-même (A2 vérifie meta.crown_definition + trait = géométrie ; A9 perd
+      sa colonne métrique). geo_reference.residence_zone SURVIT comme témoin d'audit avec
+      zéro appelant de production, et un test l'exige.
+  ticket_029_selection_par_menage_marges_multiples:
+    status: terminé
+    note: >-
+      OUVERT ET LIVRÉ le 2026-09-03 (population_1000_AAMAS_v3 scellée : 13 marges conformes,
+      514 ménages entiers, 10,6 % d'immobiles ; runtime GAMA avec immobiles à vérifier au
+      premier run). Suite du scellement v2 du 2026-09-02. Trois écarts mesurés sur la
+      population scellée : marges non allouées au biais du générateur (75 ans et + 9,8 % contre
+      7,1 ; permis « non » 16,6 contre 14,1), ménages fragmentés par la sélection individuelle
+      (308 complets sur 865), AUCUN immobile (l'export eqasim écartait les journées sans
+      déplacement ; l'enquête en compte 10,6 %). Livraison : cibles personne gelées cm1 (7 marges
+      recalculées COEP, non publiées), sélection v3 par MÉNAGE avec descente sur marges multiples
+      (échanges de ménages de même taille et même cellule), pré-imputation du vivier avant
+      sélection (3ter-a), immobiles gardés à l'export (journée domicile, drapeau racine) + garde
+      `ajuster_planning` (KeyError sur une activité), contrôle à 13 marges + section ménages et
+      mobilité. Nouveau dossier population_1000_AAMAS_v3 ; runtime GAMA avec immobiles À VÉRIFIER
+      au premier run.

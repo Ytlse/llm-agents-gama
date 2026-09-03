@@ -138,11 +138,12 @@ def hypercenter() -> tuple[float, float]:
 # Bornes des couronnes, en km depuis l'hypercentre. Elles portent les LIBELLÉS de
 # `lieu_residence` de la référence EMC², mais elles n'en sont PAS la définition :
 # l'enquête découpe par liste de communes (ticket 020, axe A2 — 24,4 % de personas
-# reclassés). Ces bornes ne servent donc plus qu'au temps terminal, dont les lois sont
-# stratifiées avec elles (`terminal_time_emc2.json`, `meta.crown_definition`) : les
-# changer sans ré-exporter la ressource comparerait des durées à des strates qui ne
-# désignent pas les mêmes territoires. La couronne de RÉSIDENCE se lit sur le persona,
-# cf. `llm_module.core.residence_zone` et le docstring de `residence_zone` plus bas.
+# reclassés). Depuis le ticket 028, plus rien en production ne les consulte : la
+# résidence se lit sur le persona (ticket 021) et le temps terminal classe par
+# appartenance aux couronnes, ses lois étant stratifiées par la table de l'enquête
+# (`terminal_time_emc2.json`, `meta.crown_definition`, tt4). Elles restent comme TÉMOIN
+# des scripts de mesure — cf. `llm_module.core.residence_zone` et le docstring de
+# `residence_zone` plus bas. Ne pas les déplacer : une trace archivée les a mesurées.
 COURONNE_BOUNDS_KM: tuple[tuple[float, str], ...] = (
     (8.0,  "Toulouse"),
     (20.0, "1ere couronne"),
@@ -165,44 +166,42 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def residence_zone(lat: Optional[float], lon: Optional[float]) -> str:
-    """Classement MÉTRIQUE d'un point, pour le temps terminal — **pas** la résidence.
+    """Classement MÉTRIQUE d'un point — **témoin d'audit, zéro appelant de production**.
 
     Rend ``Toulouse`` / ``1ere`` / ``2eme`` / ``3eme couronne`` selon la seule distance
     à l'hypercentre (8 / 20 / 40 km). Chaîne vide quand le point est inconnu — vide
     n'est pas une modalité, exactement comme une cellule de probabilité vide n'est pas
     un 0.
 
-    ⚠ **CE N'EST PAS LA DÉFINITION DE LA RÉSIDENCE AU SENS D'EMC².** Cette fonction a
-    longtemps prétendu servir « les modalités de `lieu_residence` de la référence EMC² » ;
-    c'était faux, et ça a coûté deux ans de parts modales par zone mal lues. L'enquête
-    découpe son périmètre par **liste de communes**, pas par anneaux métriques. Le
-    ticket 020 a chiffré l'écart : **24,4 %** des personas changent de couronne, **66**
-    « Toulousains » habitent en réalité Blagnac, Balma ou Colomiers, et **45** domiciles
-    rangés en 3ᵉ couronne sont hors du périmètre d'enquête. La couronne de résidence se
-    LIT désormais sur le persona (`llm_module.core.residence_zone`, trait
-    `residence_zone`, ticket 021) ; `move_logger` n'importe plus cette fonction, pour que
-    le repli à la distance soit impossible et non seulement déconseillé.
+    ⚠ **CE N'EST LA DÉFINITION DE RIEN AU SENS D'EMC².** Cette fonction a longtemps
+    prétendu servir « les modalités de `lieu_residence` de la référence EMC² » ; c'était
+    faux, et ça a coûté deux ans de parts modales par zone mal lues. L'enquête découpe son
+    périmètre par **liste de communes**, pas par anneaux métriques. Le ticket 020 a
+    chiffré l'écart : **24,4 %** des personas changent de couronne, **66** « Toulousains »
+    habitent en réalité Blagnac, Balma ou Colomiers, et **45** domiciles rangés en 3ᵉ
+    couronne sont hors du périmètre d'enquête — parce qu'« au-delà de 40 km » n'a pas de
+    borne supérieure.
 
-    **Ce qu'elle sert encore, et pourquoi elle reste.** Le temps terminal spatialisé des
-    trajets véhiculés (ticket 013, `trip_helper/terminal_time.py`) classe des points
-    d'ORIGINE et de DESTINATION quelconques — pas des domiciles —, et surtout ses lois
-    sont **stratifiées avec ce classement** : `llm_module/data/terminal_time_emc2.json`
-    l'inscrit dans son `meta.crown_definition`, parce que `export_terminal_time.py` a
-    réparti les 785 zones fines de l'enquête avec cette même distance. L'aligner sur le
-    découpage communal ne consiste donc pas à changer un `if` : il faut **ré-exporter la
-    ressource** (version 2 → 3), ce qui invalide le cache OTP et le cache de décisions
-    LLM et exige un run complet. C'est un ticket distinct, à coordonner avec la
-    correction de calibre en attente du ticket 013.
+    **Qui classe quoi, désormais.** La couronne de RÉSIDENCE se lit sur le persona
+    (trait `residence_zone`, `llm_module.core.residence_zone`, ticket 021) ; le TEMPS
+    TERMINAL classe ses points d'origine et de destination par appartenance aux couronnes
+    (`CommunalZones`, ticket 028), et ses lois sont stratifiées par la table de l'enquête
+    (`terminal_time_emc2.json`, `meta.crown_definition`, `tt4`). Ni `move_logger`, ni
+    `osmnx_direct`, ni `export_terminal_time` n'importent cette fonction, et un test
+    l'exige pour chacun : le repli à la distance est impossible par construction, pas
+    seulement déconseillé.
 
-    **La divergence assumée, avec son amplitude.** Le journal classe une *personne* par
-    sa commune ; le temps terminal classe un *point* par sa distance. Les deux peuvent
-    donc désigner des couronnes différentes pour un même domicile. Ce que ça coûte, aux
-    lois `tt3` (moyennes accès + stationnement : Toulouse 0,87 min, 1ʳᵉ 0,30, 2ᵉ 0,34,
-    3ᵉ 0,15) : **34 s par bout de trajet** sur le pire couple observé (Toulouse contre
-    1ʳᵉ couronne, 66 cas), 43 s sur le pire couple possible, qui ne se produit pas. Sous
-    `tt2` le même écart valait 4 minutes — c'est le ticket 013 qui a absorbé le risque.
-    Une divergence documentée et bornée est une décision ; la même, non écrite, est le
-    bug de demain.
+    **Pourquoi elle reste.** Comme COMPARATEUR : `audit_perimetre` (axe A2 historique),
+    `enrich_residence_zone --check` et `measure_couronne_v7` la confrontent au classement
+    communal pour chiffrer ce que l'ancienne définition faisait dire aux parts modales, et
+    une trace archivée doit rester rejouable à l'identique. La supprimer effacerait le
+    témoin ; l'appeler en production rétablirait le défaut.
+
+    **Ce que la divergence coûtait, pour mémoire.** Sous `tt3`, journal et temps terminal
+    pouvaient désigner deux couronnes pour un même domicile : **34 s par bout de trajet**
+    sur le pire couple observé (Toulouse contre 1ʳᵉ couronne, 66 cas). Le ticket 028 l'a
+    refermée en ré-exportant la ressource — et en re-stratifiant, il a rendu une couronne
+    à ~5 300 trajets d'enquête que le centroïde laissait hors strates (25,6 % → 3,9 %).
     """
     if lat is None or lon is None:
         return ""

@@ -32,6 +32,54 @@ Le rendu des cellules est produit par le **même** `_dimension_blocks()` que la
 page complète : aucun chiffre n'est recopié, et une page dédiée ne peut pas
 diverger du volet dont elle est extraite.
 
+### Les pages « alternative » — le même volet 1, sous un autre prompt
+
+`docs/synthesis/detail_simulation_26_08_alternative<1..10>.html` reprennent la forme de
+`detail_simulation.html` sur un run dont **495 décisions ont été rejouées** : celles où le
+modèle a retenu un transport collectif alors que la marche lui était proposée. Chaque page
+affiche en entier le prompt système modifié qui les a produites.
+
+Elles sont écrites par `make alt-prompt-pages`, jamais par `make synthesis` : leur substrat
+n'est pas le run tel qu'il a tourné. Le sous-chapitre de détail y est rendu par le **même**
+`_dimension_blocks()` et scoré par le **même** `Scorer` — une alternative ne peut donc pas
+diverger de la page dont elle dérive. Le protocole, ses quatre réserves de lecture et le
+piège d'appariement `moves.csv` ↔ `llm_exchanges.jsonl` sont dans
+[report-marche-tc.md](report-marche-tc.md).
+
+
+### Une page de détail datée, pour un run non épinglé
+
+`docs/synthesis/detail_progedo_26_08.html` est le volet 3 mesuré sur
+`experiments/archive/2026-08-26_17_46` sans toucher au run épinglé. La recette vaut pour
+n'importe quel run — elle tient en un manifeste jetable, parce que `model_on_common_set`
+n'a pas de `--run` (il lit `common_set.run` du manifeste) :
+
+```bash
+sed -e 's|^  run: .*|  run: experiments/archive/<run>|' \
+    -e 's|^    predictions: .*|    predictions: scripts/synthesis/data/progedo_on_common_set_<run>.parquet|' \
+    scripts/synthesis/sources.yaml > /tmp/sources_<run>.yaml
+python -m scripts.synthesis.model_on_common_set --config /tmp/sources_<run>.yaml
+python -m scripts.synthesis.build --config /tmp/sources_<run>.yaml \
+    --out /tmp/out/index.html --json /tmp/out/data.json
+cp /tmp/out/detail_progedo.html docs/synthesis/detail_progedo_<date>.html
+```
+
+Deux points la rendent sûre plutôt que commode :
+
+- **le parquet de sortie est renommé**, sinon la mesure du run épinglé est écrasée et la garde
+  de substrat écarte le volet 3 de `index.html` à la régénération suivante — silencieusement du
+  point de vue de celui qui voulait juste une page de plus ;
+- **la construction passe par un dossier hors dépôt**, parce que `build.py` écrit toujours
+  `detail_simulation.html` et `detail_progedo.html` à côté de son `--out` : bâtir directement
+  dans `docs/synthesis/` remplacerait les pages publiées.
+
+⚠ **La page ne nomme pas son run.** `render_detail()` n'affiche que la date de génération, et
+ses liens de retour (`index.html`, `detail_simulation.html`) pointent vers la synthèse du run
+**épinglé**. Une page datée ainsi extraite ne se relit donc qu'accompagnée de l'entrée de
+changelog qui dit sur quel run elle porte.
+
+---
+
 ### `avancement_et_resultats.html` — le journal des mesures
 
 `make avancement` produit une page distincte des précédentes, et la distinction
@@ -187,6 +235,27 @@ enregistre le `llm_exchanges.jsonl` et le `population_1000.json` d'origine.
 > doit pas être lu comme telle. Le chiffre de généralisation est celui du jeu de
 > test gelé — produit depuis le 2026-07-31, cf. « Généralisation » plus bas.
 
+### ⚠ Les jeux gelés du volet 2 peuvent ne plus porter la population du run
+
+L'invariant « un seul substrat » est vérifié par les gardes **sur le run**. Mais le volet 2
+est aussi scoré sur des **jeux gelés**, découpés dans un run antérieur, et leur manifeste
+enregistre l'empreinte de la population d'origine. La page la compare désormais à celle du
+run épinglé et **déclare la divergence** quand elle existe (bloc `common_set.frozen_sets` du
+`data.json`, encadré dans le chapitre « Jeu d'évaluation commun »).
+
+État au 2026-08-27 : le manifeste épingle `aec28f0146…`, le run porte `4cd38bdc19…`. Les
+jeux gelés gardent l'abonnement TC et le permis **recopiés du donneur ENTD 2008**, que les
+tickets 016 et 017 viennent de réécrire dans la population en service.
+
+Ce que ça change pour la lecture : les scores du volet 2 sur jeux gelés restent comparables
+**entre eux** — c'est leur rôle, suivre une trajectoire de prompt — mais pas au volet 1 ni au
+volet 3, qui portent la population courante. Le témoin d'échantillon du volet 2 sur le jeu
+commun est calculé sur le run et n'est pas concerné.
+
+Divergence **déclarée et non corrigée** : refaire les jeux gelés casserait la comparabilité
+de toute la trajectoire de calibration déjà mesurée. L'encadré ne s'affiche que si la
+divergence existe — une mise en garde permanente cesse d'être lue.
+
 ## 4. Les trois volets
 
 ### Périmètre commun aux trois volets
@@ -301,9 +370,11 @@ Trois conséquences pratiques : une population enrichie avant le ticket 021 prod
 une colonne **vide** plutôt qu'une couronne devinée ; `hors périmètre` est une
 valeur de première classe, à **exclure** des cibles par zone et dont la masse se
 compte ; et un run déjà archivé garde le classement qu'il a écrit, comme avant. Le
-classement métrique, lui, survit pour le **temps terminal** seul, dont les lois sont
-stratifiées avec lui — la divergence entre les deux est bornée à 34 s par bout de
-trajet et documentée dans le docstring de `geo_reference.residence_zone`.
+classement métrique ne survit plus que comme **témoin d'audit** : depuis le
+[ticket 028](../tickets/ticket_028_temps_terminal_couronnes_communales.md) (`tt4`), le
+temps terminal classe lui aussi ses points par appartenance aux couronnes et ses lois
+sont stratifiées par la table de l'enquête — la divergence de 34 s par bout de trajet
+qui séparait le journal de la facturation est refermée.
 
 ### Volet 2 — Calibration de prompt
 
@@ -578,7 +649,8 @@ intérêt est de borner ce qu'un modèle purement statistique atteint.
 
 **Le modèle existe depuis l'action A6**, entraîné par
 `scripts/progedo_logit/fit_mode_choice_policy.py` (`make policy`) et sérialisé dans
-`mode_choice_policy.json`. La page en lit les métriques de test directement dans
+`mode_choice_policy.json`. Ses hyperparamètres sont ceux du banc `make policy-tune`
+(ticket 005 §9), choisis en validation croisée par ménage sans jamais lire le split test. La page en lit les métriques de test directement dans
 l'artefact — il les embarque, étant conçu pour être autoportant — et affiche
 log-loss, accuracy et parts modales prédites face aux observées. Ces chiffres
 portent sur le **split test de l'enquête**, étanche au ménage : ils disent que le
@@ -658,6 +730,135 @@ demande `make zones`. Dès que les prédictions existent, la colonne « État »
 plus ce qu'on attendait de la variable mais **ce que la prédiction a trouvé** : une
 variable annoncée disponible peut être massivement manquante à l'arrivée, l'encodage
 rendant manquante toute modalité que le spec ne connaît pas — sans rien lever.
+
+#### Le jeu d'entraînement perdait la moitié des déplacements — corrigé le 2026-08-27
+
+Vérifié le 2026-08-27 contre le rapport source de l'enquête
+([aua-toulouse.org, 68 p.](https://www.aua-toulouse.org/wp-content/uploads/2024/05/Rapport-final-68-pages-Enquete-mobilite-2023-Bassin-de-vie-toulousain.pdf)) :
+`cerema_values.yaml` est **conforme**. Recalculées sur les 54 559 déplacements exploitables
+du fichier source, pondérées `COEP`, les parts modales reproduisent la table publiée —
+global voiture 56,9 contre 56,7 ; marche 26,9 contre 26,8 ; TC 12,0 contre 12,4 ; vélo 4,1
+contre 4,1. Aucun désaccord entre la table publiée et les micro-données.
+
+Mais `build_mode_choice_dataset` n'en garde que **27 886**, et l'attrition vient d'un seul
+filtre — `od_km` dans `CRITICAL`, qui exige que l'origine **et** la destination tombent dans
+la couche de zones fines. Elle n'est pas uniforme en âge :
+
+| Bande | Déplacements | `od_km` absent | Retenus | Part TC réelle | Part TC dans l'entraînement |
+|---|---|---|---|---|---|
+| 5-9 | 2 563 | 73,0 % | 27,0 % | 5,5 % | 4,6 % |
+| **10-14** | 2 808 | **75,5 %** | **24,5 %** | **27,1 %** | **9,7 %** |
+| **15-19** | 3 270 | **64,7 %** | **35,3 %** | **45,2 %** | **31,5 %** |
+| 20-24 | 4 316 | 45,9 % | 54,1 % | 29,6 % | 27,3 % |
+| 30-49 | 16 061 | 48,4 % | 51,6 % | 5,8 % | 7,0 % |
+
+Trois quarts des déplacements de 10-14 ans sortent du jeu d'entraînement, contre la moitié
+de ceux des adultes, et le sous-ensemble retenu **divise leur part TC par près de trois**.
+
+Conséquence à connaître avant de lire le volet 3 : **la politique est mal entraînée
+précisément sur la cohorte où la page montre sa plus grosse erreur.** L'écart des 15-19 ans
+— voiture +28,0 pt, TC −24,5 pt avant la correction des traits — n'est donc pas seulement
+un défaut de population ou de cible ; c'est aussi un défaut d'échantillon d'apprentissage.
+La correction de l'abonnement TC n'en a récupéré que 5,3 points, et c'est cohérent : elle ne
+touche pas cette cause-là.
+
+Ce n'est **pas** un défaut de la table de référence : la cible est juste. C'était un
+défaut de **granularité de codes**. La couche est indexée sur des codes à 9 chiffres dont
+les 3 derniers valent toujours `000`, alors que `D3` / `D7` codent au niveau sous-zone
+(`102103503`). `build_trips` comparait les deux tels quels.
+
+**Correctif : `zone_key()` ramène le code à la granularité de la couche.** Résolution des
+OD **51,1 % → 95,8 %**, jeu d'entraînement **27 886 → 52 248** déplacements. Les 4,2 %
+restants sont hors périmètre pour de bon (préfixes 98x, 93x, 909) et le restent — leur
+inventer une zone serait une extrapolation hors domaine.
+
+Validé plutôt qu'affirmé : sur les 24 365 déplacements que le correctif récupère, la
+distance obtenue corrèle à **0,984** avec la distance à vol d'oiseau déclarée (`D11`),
+contre 0,992 sur ceux déjà résolus, même biais médian (+0,18 km contre +0,14) et même
+queue (0,3 % d'écarts au-delà de 5 km contre 0,2 %). La troncature situe les déplacements
+aussi bien que les codes complets ; elle ne rapproche pas des destinations lointaines.
+
+Le jeu d'entraînement est désormais représentatif :
+
+| Bande | Part TC avant | Part TC après | Part TC réelle |
+|---|---|---|---|
+| 5-9 | 4,6 % | 5,5 % | 5,5 % |
+| 10-14 | 9,7 % | **27,3 %** | 27,1 % |
+| 15-19 | 31,5 % | **45,4 %** | 45,2 % |
+| 20-24 | 27,3 % | 30,2 % | 29,6 % |
+| 30-49 | 7,0 % | 5,9 % | 5,8 % |
+| **global** | **9,8 %** | **12,3 %** | **12,4 %** |
+
+Politique ré-entraînée : test sur 13 045 déplacements au lieu de 6 985, log-loss 0,5392,
+accuracy 0,791, `od_km` à 31,6 % du gain et `has_pt_subscription` à 10,2 % — deuxième
+variable du modèle. L1 du mode élu **0,0861 → 0,0573**.
+
+> **Réglée depuis le 2026-08-30.** Les hyperparamètres du booster ont été cherchés
+> (ticket 005 §9) : `num_leaves` 31 → 5, 6 000 arbres au lieu de 560. Le log-loss (0,5402)
+> et l'écart aux parts modales ne bougent pas au-delà du bruit ; ce qui change est la
+> vraisemblance du **vélo**, 2,42 → 2,35, gain significatif au bootstrap apparié par
+> ménage. Les importances de gain se redistribuent en conséquence : `od_km` 28,5 %,
+> `has_pt_subscription` 9,5 %. La page lit ces chiffres dans l'artefact, elle suit donc
+> d'elle-même.
+
+#### ⚠ La lecture `attendu` est biaisée vers les TC, et pénalise les corrections justes
+
+Quatre mesures sur le run `2026-08-26_17_46`, chaque correction isolée puis combinée :
+
+| Composite `emd_jsd` | A référence | B traits corrigés | C `od_km` corrigé | D les deux |
+|---|---|---|---|---|
+| `attendu` (masse renormalisée) | 6,015 | 5,941 | 6,086 | **6,208** |
+| `elu` (mode le plus probable) | 6,464 | 6,086 | 6,022 | **5,933** |
+| `brut` (avant renormalisation) | 6,282 | 5,749 | 6,173 | **5,652** |
+
+Et pourtant, sur l'écart le plus gros de la page :
+
+| Âge 15-19 | A | B | C | D |
+|---|---|---|---|---|
+| `l1` de la strate | 63,8 | 53,7 | 56,9 | **48,7** |
+| voiture | +28,0 | +23,7 | +24,2 | **+20,9** |
+| transports collectifs | −24,5 | −19,2 | −19,6 | **−14,8** |
+
+Les deux corrections **se cumulent** là où elles visent : 9,7 des 24,5 points d'écart TC
+récupérés, 7,1 des 28 points de voiture. Mais `attendu` **empire**.
+
+Mécanisme, mesuré par mode (`renormalisation_bias` du `data.json`, recalculé à chaque
+régénération) — configuration D sur le run `2026-08-26_17_46` :
+
+| Mode | Brut | Renormalisé | Ajouté | Cible | Écart brut | Écart renormalisé |
+|---|---|---|---|---|---|---|
+| marche | 19,1 % | 24,1 % | **+5,0** | 26,8 % | −7,7 | **−2,7** |
+| voiture | 63,1 % | 54,1 % | **−9,0** | 56,7 % | +6,4 | **−2,6** |
+| vélo | 4,4 % | 5,3 % | +0,8 | 4,1 % | +0,3 | +1,1 |
+| **transports collectifs** | 13,3 % | 16,5 % | +3,2 | 12,4 % | **+0,9** | **+4,1** |
+
+La renormalisation retire 9 points à la voiture — le modèle la surprédit en brut — et les
+répartit sur les modes offerts. **Elle améliore donc deux modes sur quatre** : la marche
+passe de −7,7 à −2,7 d'écart, la voiture de +6,4 à −2,6. Ce n'est pas une correction
+néfaste, et il ne faut pas la présenter comme telle.
+
+Le problème est concentré sur les **transports collectifs** : ils sont à +0,9 de leur cible
+dans la vision propre du modèle, et à **+4,1** après renormalisation, parce qu'ils sont
+presque toujours offerts et captent donc une part de la masse retirée à la voiture. Le vélo
+subit le même effet en plus petit (+0,3 → +1,1).
+
+**Conséquence de lecture, à ne pas escamoter : `attendu` lit les TC comme largement
+au-dessus de leur cible alors que le modèle les met presque dessus. Il pénalise donc toute
+correction qui augmente les TC, même juste.** Les lectures `elu` et `brut` n'ont pas ce
+biais, et ce sont elles qui bougent dans le bon sens ici. Un lot qui corrige la
+sous-représentation des TC doit être jugé sur les strates et sur `elu`/`brut`, pas sur le
+chiffre de tête.
+
+#### Le garde de substrat couvre désormais la politique
+
+`spec_version` ne bouge que si le contrat de variables change. Le correctif ci-dessus a
+porté le jeu d'entraînement de 27 886 à 52 248 déplacements **sans y toucher** : les
+parquets mesurés sous l'ancienne politique auraient été servis comme courants, en silence.
+Le parquet porte donc `policy_sha256`, et la page le compare à l'artefact sur le disque —
+troisième axe du garde, après le nom du run et l'empreinte du journal. Contrepartie
+assumée : les parquets écrits avant ce correctif ne portent pas la clé et restent non
+gardés sur cet axe ; c'est son absence qui les identifie.
+
 
 `dist_center_orig_km` et `dist_center_dest_km` se mesurent depuis l'hypercentre
 publié par `feature_spec.json`, celui-là même que le volet 1 utilise pour ses

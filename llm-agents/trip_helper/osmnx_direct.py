@@ -79,6 +79,12 @@ OSMNX_ERR = Counter(
     "OSMnx routing failures",
     ["mode", "reason"],
 )
+TERMINAL_OUT_OF_PERIMETER = Counter(
+    "terminal_time_out_of_perimeter_total",
+    "Bouts de trajet véhiculé dont le point est hors des 453 communes de l'enquête : "
+    "la loi `default` de temps terminal leur est servie (ticket 028)",
+    ["end"],
+)
 OSMNX_LAT = Histogram(
     "osmnx_request_duration_seconds",
     "OSMnx routing latency",
@@ -149,6 +155,61 @@ def _terminal_leg(route_marker: str, at: Location, start_s: int,
     )
 
 
+# ── Couronne d'un point, pour le temps terminal (ticket 028) ──────────────────
+#
+# Le temps terminal est SPATIALISÉ : l'accès se tarife sur la couronne d'ORIGINE, le
+# stationnement sur celle de DESTINATION. Jusqu'à tt3 le point était classé par sa
+# distance à l'hypercentre (8 / 20 / 40 km) — ce n'est pas la définition de l'enquête,
+# qui découpe par liste de communes, et le ticket 020 a mesuré 24,4 % de personas
+# reclassés entre les deux. Depuis tt4 les lois sont stratifiées par la table de
+# l'enquête, et le point est classé par APPARTENANCE aux couronnes (`CommunalZones`,
+# l'emprise normative) : le journal, les cibles et le temps terminal parlent du même
+# découpage.
+#
+# Un point hors des 453 communes reçoit `hors périmètre` — qui n'est pas une couronne et
+# n'a pas de loi propre : `TerminalProfile` lui sert la loi `default` (l'ensemble des
+# trajets). Avant tt4 il tombait en « 3ᵉ couronne » parce qu'« au-delà de 40 km » n'avait
+# pas de borne : un repli silencieux, exactement le motif de vacuité que le dépôt traque.
+# Il est désormais COMPTÉ (`terminal_time_out_of_perimeter_total`) et alarmé une fois.
+_out_of_perimeter_alarm_on = False
+
+
+@functools.lru_cache(maxsize=1)
+def _communal_zones():
+    """Géométrie des couronnes, chargée une fois.
+
+    ⚠ Import PARESSEUX, et c'est nécessaire : les réplicas `osmnx` embarquent ce module
+    dans leur image mais n'ont PAS `llm_module` sur leur path (ils ne montent que
+    `config/`). Un import en tête de fichier les ferait mourir au démarrage dès la
+    prochaine reconstruction de l'image — panne différée, déclenchée par un
+    `docker compose build` sans rapport. En mode HTTP, le réplica ne calcule que la
+    durée réseau et n'appelle jamais `_make_travel_plan` : l'import n'a lieu que là où
+    `llm_module` existe (controller, tests).
+    """
+    from llm_module.core.residence_zone import CommunalZones
+
+    return CommunalZones.load()
+
+
+def _terminal_zone(lat: float, lon: float, end: str) -> str:
+    """Couronne d'un bout de trajet ; `hors périmètre` est compté et alarmé une fois."""
+    global _out_of_perimeter_alarm_on
+    from llm_module.core.population_reference import OUT_OF_PERIMETER
+
+    zone = _communal_zones().classify(lat, lon)
+    if zone == OUT_OF_PERIMETER:
+        TERMINAL_OUT_OF_PERIMETER.labels(end=end).inc()
+        if not _out_of_perimeter_alarm_on:
+            _out_of_perimeter_alarm_on = True
+            logger.error(
+                "[ALARME] Temps terminal : un bout de trajet est hors des 453 communes de "
+                f"l'enquête ({end}, lat≈{lat:.2f} lon≈{lon:.2f}) — la loi `default` lui "
+                "est servie. Attendu pour quelques destinations périphériques ; un volume "
+                "élevé signale une population ou un périmètre qui a changé. (Alarme émise "
+                "une seule fois ; le compteur terminal_time_out_of_perimeter_total continue.)")
+    return zone
+
+
 def _make_travel_plan(
     origin: Location,
     destination: Location,
@@ -168,15 +229,6 @@ def _make_travel_plan(
     jambe ajoutée : la marche est porte-à-porte, et les jambes de marche d'accès
     des TC sont déjà routées par OTP (critère 4 : pas de double comptage).
     """
-    # ⚠ Import PARESSEUX, et c'est nécessaire : les réplicas `osmnx` embarquent ce
-    # module dans leur image mais n'ont PAS `llm_module` sur leur path (ils ne montent
-    # que `config/`). Un import en tête de fichier les ferait mourir au démarrage dès
-    # la prochaine reconstruction de l'image — panne différée, déclenchée par un
-    # `docker compose build` sans rapport. En mode HTTP, le réplica ne calcule que la
-    # durée réseau et n'appelle jamais cette fonction : l'import n'a lieu que là où
-    # `llm_module` existe (controller, tests).
-    from llm_module.core.geo_reference import residence_zone
-
     profile = terminal_profile(trip_mode)
     loc_start = TransitLocation(stop="", lat=origin.lat, lon=origin.lon)
     loc_end = TransitLocation(stop="", lat=destination.lat, lon=destination.lon)
@@ -185,12 +237,14 @@ def _make_travel_plan(
     # couronne d'ORIGINE — c'est là que le véhicule est garé — et le stationnement
     # sur celle de DESTINATION, où il faut trouver une place. Un trajet 3ᵉ couronne
     # → Toulouse paie donc un accès rural et un stationnement de centre-ville.
-    # Le classement vient de `geo_reference.residence_zone`, la même définition que
-    # la colonne « Lieu de résidence » du move-log : deux classements divergents
-    # feraient facturer un stationnement de centre à un agent que le journal dit en
-    # 2ᵉ couronne, incohérence invisible dans les logs.
-    origin_zone = residence_zone(origin.lat, origin.lon)
-    dest_zone = residence_zone(destination.lat, destination.lon)
+    # Le classement est celui de l'enquête — appartenance aux couronnes, la même
+    # définition que le trait `residence_zone` du persona et que la colonne « Lieu de
+    # résidence » du journal (ticket 028) : deux classements divergents feraient
+    # facturer un stationnement de centre à un agent que le journal dit en 1ʳᵉ
+    # couronne, incohérence invisible dans les logs. L'import de `llm_module` reste
+    # paresseux, dans `_communal_zones` — voir pourquoi là-bas.
+    origin_zone = _terminal_zone(origin.lat, origin.lon, "access")
+    dest_zone = _terminal_zone(destination.lat, destination.lon, "egress")
 
     legs: list[Transit] = []
     cursor = departure_time

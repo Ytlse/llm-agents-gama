@@ -59,7 +59,7 @@ java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --load data/gtfs
 ### Configuration dans le controller
 
 ```yaml
-# llm-agents/config/config_baseline_1000_current.yaml
+# llm-agents/config/config.yaml
 gtfs:
   mode: OTP
   otp_endpoint: http://localhost:8080/otp/transmodel/v3

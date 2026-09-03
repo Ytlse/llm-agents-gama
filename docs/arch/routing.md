@@ -30,8 +30,19 @@ Pour garantir que l'agent arrive à l'heure à son activité, le système utilis
 ### API
 
 - Endpoint unique : `/otp/transmodel/v3` (GraphQL)
-- Données sources : OSM Toulouse (`.pbf`) + GTFS Tisséo + GTFS TER, compilés en `graph.obj`
+- Données sources : OSM Toulouse (`.pbf`) + GTFS Tisséo, compilés en `graph.obj`
 - Le `graph.obj` est chargé en mémoire au démarrage (6 Go RAM par instance)
+
+> **Le TER n'est pas dans le graphe.** `data/gtfs/ter_gtfs/` existe, mais le
+> `graph.obj` en service ne contient qu'un seul feed (`tisseo`), et
+> `transportModes` ne demande pas le mode `rail` — un TER ne serait donc pas
+> proposé même s'il y était. Le feed TER annuel est désormais construit par
+> [`docs/arch/gtfs-annee.md`](gtfs-annee.md) ; son intégration au graphe reste
+> une étape à part, car elle change les résultats de simulation.
+
+Le feed Tisséo consommé par la simulation est une **fenêtre** du feed annuel :
+GAMA encode le calendrier des services en masque binaire 64 bits et ne peut pas
+en absorber davantage. Voir [`gtfs-annee.md`](gtfs-annee.md).
 
 ### Load balancing
 
@@ -85,10 +96,15 @@ Trois propriétés structurent le dispositif :
 
 - **Paramètre exogène**, valeurs et provenance dans `llm-agents/config/terminal_time.yaml`
   (NCHRP 716, COMPASS, Shoup, Millard-Ball, Cerema) — jamais ajusté pour améliorer un score.
-- Les couronnes viennent de `llm_module.core.geo_reference.residence_zone`, **la même
-  définition** que la colonne « Lieu de résidence » du move-log : deux classements
-  divergents factureraient un stationnement de centre-ville à un agent que le journal dit
-  en 2ᵉ couronne.
+- Les couronnes sont celles de l'enquête — appartenance aux couronnes par liste de
+  communes (`llm_module.core.residence_zone.CommunalZones`, ticket 028), **la même
+  définition** que le trait `residence_zone` du persona et que la colonne « Lieu de
+  résidence » du move-log : deux classements divergents factureraient un stationnement de
+  centre-ville à un agent que le journal dit en 1ʳᵉ couronne. Les lois de
+  `terminal_time_emc2.json` sont stratifiées sur cette même table (`tt4`). Un point hors
+  des 453 communes reçoit `hors périmètre`, donc la loi `default` — compté
+  (`terminal_time_out_of_perimeter_total`) et alarmé une fois, jamais rangé en silence
+  dans la couronne la plus externe.
 - Les jambes terminales portent `is_transfer=True` et un marqueur `__TERMINAL_*`, ce qui les
   exclut de `TravelPlan.get_code()` et de `mode_label()` : **décomposer l'affichage d'une
   option ne doit pas la faire passer pour une autre option** (le code est la clé du cache de

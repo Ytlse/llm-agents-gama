@@ -222,6 +222,10 @@ Le système expose trois terminaux de collecte Prometheus synchronisés à une f
 
 Chaque run crée un répertoire horodaté sous `experiments/archive/<YYYY-MM-DD>_<HH_MM>/`. Le lien symbolique `experiments/current` pointe vers `archive/<nom>` pour un accès rapide au dernier run. GAMA écrit ses résultats dans le symlink `GAMA/CityTransport/results` → `../../experiments/archive/<nom>/gama_results`.
 
+**Où se trouve `experiments/`.** Le répertoire est celui de la racine du dépôt. Le conteneur monte `./experiments` sur `/app/experiments`, à côté du code (`/app`) ; sur l'hôte, le code vit dans `<dépôt>/llm-agents/` et les runs un niveau au-dessus. `settings.py` résout les deux cas ; `APP_EXPERIMENTS_DIR` force le chemin si besoin (les services Python le fixent à `/app/experiments` dans `docker-compose.yml`). La cible du symlink `results` s'exprime toujours dans la disposition du dépôt (`../../experiments/…`), car elle est lue par GAMA sur l'hôte ou par le conteneur `gama` — jamais par le contrôleur qui l'écrit. Un symlink pendant fait échouer le `save` de GAMA sur une `java.nio.file.FileAlreadyExistsException` doublée d'un « Java error: I/O error » qui ne nomme pas la cause. Le contrôleur vérifie donc la résolution au démarrage et journalise `[ALARME]` si elle échoue.
+
+**Importer `settings` hors run n'ouvre pas de run.** Sous pytest / `unittest` (ou avec `APP_NO_RUN_ARTIFACTS=1`), l'import lit la configuration sans créer de répertoire d'expérience ni toucher aux symlinks `experiments/current` et `GAMA/CityTransport/results` — une suite de tests lancée pendant une simulation lui volait sa sortie.
+
 ### Journaux d'analyse (fichiers CSV exportés dans `gama_results/`)
 
 *   `move_log.csv` : Registre centralisé des décisions (mode choisi, raisons textuelles de l'agent, retards induits, colonnes météo : température, condition, précipitations mm).

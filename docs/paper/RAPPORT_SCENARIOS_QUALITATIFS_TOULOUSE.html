@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'Expertise en Sciences Comportementales - Scénarios Toulouse (GAMA + LLM)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0b1120;
+            --bg-card: #1e293b;
+            --bg-card-alt: #131d31;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-indigo: #818cf8;
+            --accent-green: #34d399;
+            --accent-yellow: #fbbf24;
+            --accent-red: #f87171;
+            --star-color: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e293b 0%, #0b1120 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .badge-header {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-blue);
+            padding: 0.35rem 0.85rem;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.75rem;
+            background: linear-gradient(to right, #f8fafc, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .meta-item {
+            font-size: 0.9rem;
+        }
+        .meta-item strong {
+            color: var(--accent-blue);
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+
+        section {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: #cbd5e1;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin: 1.5rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            text-align: left;
+            background-color: var(--bg-card-alt);
+        }
+
+        th {
+            background-color: #1e293b;
+            color: #f1f5f9;
+            font-weight: 600;
+            padding: 1rem 0.85rem;
+            border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.9rem 0.85rem;
+            border-bottom: 1px solid var(--border-color);
+            color: #e2e8f0;
+            vertical-align: middle;
+        }
+
+        tr:hover {
+            background-color: rgba(56, 189, 248, 0.04);
+        }
+
+        .stars {
+            color: var(--star-color);
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+
+        .stars.empty {
+            color: #475569;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+
+        .badge-top5 {
+            background-color: rgba(56, 189, 248, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .badge-retenir {
+            background-color: rgba(52, 211, 153, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(52, 211, 153, 0.4);
+        }
+
+        .badge-reserve {
+            background-color: rgba(251, 191, 36, 0.15);
+            color: var(--accent-yellow);
+            border: 1px solid rgba(251, 191, 36, 0.4);
+        }
+
+        .badge-eliminer {
+            background-color: rgba(248, 113, 113, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 113, 113, 0.4);
+        }
+
+        .class-badge {
+            font-weight: 700;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            font-size: 0.78rem;
+        }
+        .class-a { background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); }
+        .class-b { background: rgba(251, 191, 36, 0.2); color: var(--accent-yellow); }
+        .class-c { background: rgba(248, 113, 113, 0.2); color: var(--accent-red); }
+
+        a.source-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-weight: 600;
+            background: rgba(56, 189, 248, 0.1);
+            padding: 0.3rem 0.65rem;
+            border-radius: 6px;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        a.source-link:hover {
+            background: rgba(56, 189, 248, 0.25);
+            color: #ffffff;
+            border-color: var(--accent-blue);
+            transform: translateY(-1px);
+        }
+
+        .top5-card {
+            background: var(--bg-card-alt);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.75rem;
+            margin-bottom: 2rem;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+
+        .top5-card:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .top5-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .top5-theme {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent-blue);
+            background: rgba(56, 189, 248, 0.12);
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            display: inline-block;
+            margin-bottom: 0.35rem;
+        }
+
+        .quote-box {
+            background: rgba(15, 23, 42, 0.7);
+            border-left: 4px solid var(--accent-indigo);
+            padding: 1rem 1.25rem;
+            font-style: italic;
+            color: #cbd5e1;
+            border-radius: 0 8px 8px 0;
+            margin: 1.25rem 0;
+            font-size: 0.93rem;
+            line-height: 1.6;
+        }
+
+        .modes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.85rem;
+            margin: 1.25rem 0;
+        }
+
+        .mode-box {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.85rem;
+            font-size: 0.86rem;
+        }
+
+        .mode-box strong {
+            display: block;
+            color: #ffffff;
+            margin-bottom: 0.25rem;
+        }
+
+        .analysis-box {
+            background: rgba(52, 211, 153, 0.06);
+            border-left: 4px solid var(--accent-green);
+            padding: 1rem 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin-top: 1.25rem;
+            font-size: 0.9rem;
+            color: #e2e8f0;
+        }
+
+        .analysis-box strong {
+            color: var(--accent-green);
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.95rem;
+        }
+
+        .failure-box {
+            background: rgba(248, 113, 113, 0.06);
+            border-left: 4px solid var(--accent-red);
+            padding: 0.85rem 1.2rem;
+            border-radius: 0 8px 8px 0;
+            margin-top: 0.75rem;
+            font-size: 0.88rem;
+            color: #e2e8f0;
+        }
+
+        .failure-box strong {
+            color: var(--accent-red);
+        }
+
+        footer {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <header>
+        <span class="badge-header">Rapport d'Expertise en Sciences Comportementales 2026</span>
+        <h1>Évaluation Critique & Sélection des Scénarios de Mobilité</h1>
+        <p class="subtitle">Grille Exhaustive (30 Scénarios) & Analyse Approfondie du Top 5 Quadri-Modal pour GAMA + LLM</p>
+        
+        <div class="meta-grid">
+            <div class="meta-item">
+                <strong>EXPERT COGNITIF</strong>
+                Docteur en Sciences Comportementales
+            </div>
+            <div class="meta-item">
+                <strong>TERRITOIRE</strong>
+                Toulouse Métropole
+            </div>
+            <div class="meta-item">
+                <strong>COUVERTURE MODALE</strong>
+                Voiture · Vélo · Pied · TC (100 %)
+            </div>
+            <div class="meta-item">
+                <strong>SOURCES</strong>
+                100 % Presse Écrite Textuelle
+            </div>
+        </div>
+    </header>
+
+    <section>
+        <h2>1. Matrice Complète des 30 Scénarios Candidats</h2>
+        <p>L'ensemble des 30 scénarios réels issus de la presse locale toulousaine et des rapports officiels, classés selon leur incompressibilité pour un modèle tabulaire, leurs impacts modaux (<span class="stars">★★★</span> critique, <span class="stars">★★☆</span> fort, <span class="stars">★☆☆</span> modéré, <span class="stars empty">—</span> nul), leur échelle et leur crédibilité académique :</p>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Titre de l'Article & Source</th>
+                        <th>Lien Source Vérifié</th>
+                        <th>Incompressibilité</th>
+                        <th>Auto</th>
+                        <th>Vélo</th>
+                        <th>Pied</th>
+                        <th>TC</th>
+                        <th>Échelle</th>
+                        <th>Persona Cible Clé</th>
+                        <th>Crédibilité</th>
+                        <th>Verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td><strong>Insécurité & climat anxiogène Arnaud Bernard</strong><br><small>La Dépêche / LDH</small></td>
+                        <td><a href="https://www.ldh-france.org/wp-content/uploads/2021/04/rapport-toulouse-4-ans-dobservations-final-compresse.pdf" target="_blank" class="source-link">🔗 Rapport LDH</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Méso (Quartier)</td>
+                        <td>Femmes seules, personnes âgées</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td><strong>Insécurité nocturne couloirs Jean-Jaurès</strong><br><small>La Dépêche / Évous</small></td>
+                        <td><a href="https://www.evous.fr/toulouse.html?debut_articles=400" target="_blank" class="source-link">🔗 Archives Évous</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Micro (Hub)</td>
+                        <td>Étudiantes, voyageuses isolées (nuit)</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>3</strong></td>
+                        <td><strong>Agression & faune nocturne Parvis Matabiau</strong><br><small>Actu Toulouse</small></td>
+                        <td><a href="https://actu.fr/occitanie/toulouse_31555/toulouse-homme-blesse-deux-coups-couteau-pres-gare-matabiau_27383794.html" target="_blank" class="source-link">🔗 Actu Toulouse</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Micro (Gare)</td>
+                        <td>Voyageurs avec valises, cadres</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>4</strong></td>
+                        <td><strong>Campagne Tisséo contre harcèlement sexuel</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/nouvelle-campagne-tisseo-contre-harcelement-sexuel-transports-toulousains-1434817.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Macro (Réseau)</td>
+                        <td>Femmes (toutes tranches d'âge)</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>5</strong></td>
+                        <td><strong>Poussière & marteaux-piqueurs Rue de Metz</strong><br><small>La Dépêche / Métropole</small></td>
+                        <td><a href="https://metropole.toulouse.fr/actualites" target="_blank" class="source-link">🔗 Métropole</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Micro (Axe)</td>
+                        <td>Actifs en tenue soignée, chalands</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>6</strong></td>
+                        <td><strong>Passerelles provisoires bois François Verdier</strong><br><small>Toulouse Métropole</small></td>
+                        <td><a href="https://metropole.toulouse.fr/sites/toulouse-fr/files/2022-12/1.1_commission_de_quartier_projet_metro_francois_verdier_juin_2022.pdf" target="_blank" class="source-link">🔗 PDF Métropole</a></td>
+                        <td><strong>Moyenne</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Micro (Pôle)</td>
+                        <td>PMR, poussettes, personnes âgées</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>7</strong></td>
+                        <td><strong>Grève éboueurs : sacs et odeurs hypercentre</strong><br><small>Toulouse FM Texte</small></td>
+                        <td><a href="https://www.toulousefm.fr/news/toulouse-les-eboueurs-de-la-ville-en-greve-illimitee-a-partir-d-aujourd-hui-17762" target="_blank" class="source-link">🔗 Toulouse FM</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Méso (Centre)</td>
+                        <td>Piétons, familles, cyclistes</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-top5">🟢 TOP 5 DOCTEUR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>8</strong></td>
+                        <td><strong>Éboueurs : fin de collecte nocturne</strong><br><small>La Dépêche du Midi</small></td>
+                        <td><a href="https://www.ladepeche.fr/2023/02/13/les-eboueurs-ne-passeront-plus-de-nuit-dans-lhypercentre-de-toulouse-10994220.php" target="_blank" class="source-link">🔗 La Dépêche</a></td>
+                        <td><strong>Faible</strong></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td>Méso (Centre)</td>
+                        <td>Riverains matinaux</td>
+                        <td><span class="class-badge class-b">Classe B-</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>9</strong></td>
+                        <td><strong>Vent d'Autan : fermeture Jardin des Plantes</strong><br><small>La Dépêche du Midi</small></td>
+                        <td><a href="https://www.ladepeche.fr/2026/07/16/rafales-de-vent-a-plus-de-80-kmh-toulouse-ferme-en-urgence-ses-parcs-et-jardins-ce-jeudi-soir-13471686.php" target="_blank" class="source-link">🔗 La Dépêche</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Macro (Métropole)</td>
+                        <td>Vélotafeurs, étudiants, navetteurs</td>
+                        <td><span class="class-badge class-a">Classe A+</span></td>
+                        <td><span class="badge badge-top5">🟢 TOP 5 DOCTEUR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>10</strong></td>
+                        <td><strong>Menace chute platanes sous Autan</strong><br><small>Actu Toulouse</small></td>
+                        <td><a href="https://actu.fr/occitanie/toulouse_31555" target="_blank" class="source-link">🔗 Actu Toulouse</a></td>
+                        <td><strong>Moyenne</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Macro (Canaux)</td>
+                        <td>Usagers Canal du Midi</td>
+                        <td><span class="class-badge class-b">Classe B</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>11</strong></td>
+                        <td><strong>Rafales sur ponts Garonne & berges Daurade</strong><br><small>Pyrros Météo</small></td>
+                        <td><a href="https://pyrros.fr/galerie/galerie-orages-et-meteo/" target="_blank" class="source-link">🔗 Pyrros Météo</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Micro (Ponts)</td>
+                        <td>Cyclistes légers, piétons</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>12</strong></td>
+                        <td><strong>Culture du « Vent des fous » et fatigue</strong><br><small>La Dépêche du Midi</small></td>
+                        <td><a href="https://www.ladepeche.fr/" target="_blank" class="source-link">🔗 La Dépêche</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Macro</td>
+                        <td>Actifs fatigués en soirée</td>
+                        <td><span class="class-badge class-b">Classe B</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>13</strong></td>
+                        <td><strong>Psychose punaises de lit (Banquettes tissu)</strong><br><small>Punaise Info Texte</small></td>
+                        <td><a href="https://www.punaise-de-lit-info.fr/actualites/la-possible-presence-de-punaises-de-lit-dans-le-metro-de-toulouse-suscite-des-questions" target="_blank" class="source-link">🔗 Punaise Info</a></td>
+                        <td><strong>Très Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Macro (Réseau)</td>
+                        <td>Profils sensibles à l'hygiène, actifs</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-top5">🟢 TOP 5 DOCTEUR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>14</strong></td>
+                        <td><strong>Démenti ministre « zéro cas avéré » punaises</strong><br><small>France 3 Texte</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Très Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Macro</td>
+                        <td>Usagers méfiants (réseaux)</td>
+                        <td><span class="class-badge class-b">Classe B+</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>15</strong></td>
+                        <td><strong>Surveillance spécialisée punaises Tisséo</strong><br><small>Punaise Info</small></td>
+                        <td><a href="https://www.punaise-de-lit-info.fr/actualites/la-possible-presence-de-punaises-de-lit-dans-le-metro-de-toulouse-suscite-des-questions" target="_blank" class="source-link">🔗 Punaise Info</a></td>
+                        <td><strong>Moyenne</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Macro</td>
+                        <td>Usagers prudents</td>
+                        <td><span class="class-badge class-b">Classe B</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>16</strong></td>
+                        <td><strong>Tarif désinfection 240 € Métropole</strong><br><small>Toulouse Métropole</small></td>
+                        <td><a href="https://metropole.toulouse.fr/sites/toulouse-fr/files/2023-08/telecharger_le_recueil_des_tarifs_septembre_2023_1.pdf" target="_blank" class="source-link">🔗 Recueil Tarifs</a></td>
+                        <td><strong>Faible</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Documentaire</td>
+                        <td>Familles à budget contraint</td>
+                        <td><span class="class-badge class-c">Classe C</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>17</strong></td>
+                        <td><strong>Marée humaine Capitole (Bouclier de Brennus)</strong><br><small>Actu Toulouse</small></td>
+                        <td><a href="https://actu.fr/occitanie/toulouse_31555" target="_blank" class="source-link">🔗 Actu Toulouse</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Méso (Centre)</td>
+                        <td>Coursiers, cyclistes utilitaires</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>18</strong></td>
+                        <td><strong>Le Minotaure / La Machine dans les ruelles</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/le-minotaure-l-araignee-et-la-gardienne-des-teneberes-arrivent-a-toulouse-le-programme-du-nouveau-spectacle-des-machines-3049804.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Méso/Macro (Centre)</td>
+                        <td>Spectateurs vs Actifs pressés</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-top5">🟢 TOP 5 DOCTEUR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>19</strong></td>
+                        <td><strong>Fête de la Musique (Rue des Paradoux saturée)</strong><br><small>Culture 31</small></td>
+                        <td><a href="https://blog.culture31.com/2012/06/24/une-fete-de-la-musique-sous-la-ramure-protectrice-du-neflier-du-japon-de-la-rue-des-paradoux/" target="_blank" class="source-link">🔗 Culture 31</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Micro (Ruelle)</td>
+                        <td>Travailleurs en transit</td>
+                        <td><span class="class-badge class-b">Classe B+</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>20</strong></td>
+                        <td><strong>Grande Braderie : portants rue Saint-Rome</strong><br><small>La Dépêche / Calaméo</small></td>
+                        <td><a href="https://www.calameo.com/books/0073330388f2c9cc87274" target="_blank" class="source-link">🔗 Calaméo Presse</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Micro (Rue)</td>
+                        <td>Cyclistes vélotaf, usagers pressés</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>21</strong></td>
+                        <td><strong>Ombrières dorées & fraîcheur Rue Alsace</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/une-multitude-de-rubans-dores-pour-faire-baisser-la-temperature-les-ombrieres-font-leur-retour-au-c-ur-de-la-ville-3002567.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Micro (Axe)</td>
+                        <td>Chalands d'été, seniors</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>22</strong></td>
+                        <td><strong>Ramblas Jean-Jaurès : promenade paysagère</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/toulouse-ramblas-jardins-belle-promenade-apres-1766681.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Micro (Allées)</td>
+                        <td>Voyageurs Gare-Centre, flâneurs</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>23</strong></td>
+                        <td><strong>Passerelles dédiées Île du Ramier</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/toulouse-deux-passerelles-rejoindront-l-ile-du-ramier-d-ici-2024-2446026.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Moyenne</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td>Micro (Pont)</td>
+                        <td>Familles, cyclistes débutants</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>24</strong></td>
+                        <td><strong>Vélotour : balade atypique lieux interdits</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/velotour-occitanie-une-balade-insolite-pour-explorer-des-lieux-habituellement-interdits-a-velo-2954129.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Faible</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td>Méso (Loisir)</td>
+                        <td>Cyclistes du dimanche</td>
+                        <td><span class="class-badge class-c">Classe C</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>25</strong></td>
+                        <td><strong>VélôToulouse électrique & fin des côtes</strong><br><small>La Dépêche du Midi</small></td>
+                        <td><a href="https://www.ladepeche.fr/2024/06/22/mobilite-douce-a-toulouse-lancement-du-nouveau-service-velotoulouse-des-le-30-aout-12034444.php" target="_blank" class="source-link">🔗 La Dépêche</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Macro (Reliefs)</td>
+                        <td>Actifs habitant Jolimont, Pech-David</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-top5">🟢 TOP 5 DOCTEUR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>26</strong></td>
+                        <td><strong>Noctambus avec médiateurs de sécurité</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/toulouse-nouveau-dispositif-bus-nocturnes-fetards-1201791.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Macro (Campus)</td>
+                        <td>Étudiants fêtards, jeunes femmes</td>
+                        <td><span class="class-badge class-a">Classe A</span></td>
+                        <td><span class="badge badge-retenir">🟢 RETENIR</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>27</strong></td>
+                        <td><strong>Enquête Tisséo : essor vélo & norme sociale</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/la-voiture-delaissee-au-profit-du-velo-et-de-la-marche-tisseo-publie-sa-grande-enquete-sur-les-deplacements-3011477.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Très Élevée</strong></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td>Macro</td>
+                        <td>Néo-urbains, indécis modaux</td>
+                        <td><span class="class-badge class-b">Classe B+</span></td>
+                        <td><span class="badge badge-reserve">🟡 RÉSERVE</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>28</strong></td>
+                        <td><strong>Concert Stadium Bigflo & Oli (Navettes)</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/infos-pratiques-ce-qu-il-faut-savoir-si-vous-allez-voir-bigflo-oli-au-stadium-toulouse-1671505.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Faible</strong></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars">★★★</span></td>
+                        <td>Méso (Stadium)</td>
+                        <td>Spectateurs</td>
+                        <td><span class="class-badge class-c">Classe C</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>29</strong></td>
+                        <td><strong>« Ça pue chez vous ! » (Odeur isolée)</strong><br><small>La Dépêche du Midi</small></td>
+                        <td><a href="https://www.ladepeche.fr/2023/12/22/ca-pue-chez-vous-une-odeur-nauseabonde-envahit-une-rue-de-toulouse-les-habitants-se-sentent-demunis-11657388.php" target="_blank" class="source-link">🔗 La Dépêche</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td>Micro (1 rue)</td>
+                        <td>Riverains immédiats</td>
+                        <td><span class="class-badge class-c">Classe C</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>30</strong></td>
+                        <td><strong>Engouement vélo post-déconfinement 2020</strong><br><small>France 3 Occitanie</small></td>
+                        <td><a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/clients-reparateurs-vendeurs-expliquent-engouement-velo-toulouse-deconfinement-1832170.html" target="_blank" class="source-link">🔗 France 3</a></td>
+                        <td><strong>Élevée</strong></td>
+                        <td><span class="stars">★☆☆</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td><span class="stars empty">—</span></td>
+                        <td><span class="stars">★★☆</span></td>
+                        <td>Macro</td>
+                        <td>Population générale</td>
+                        <td><span class="class-badge class-b">Classe B</span></td>
+                        <td><span class="badge badge-eliminer">🔴 ÉLIMINER</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section>
+        <h2>2. Analyse Approfondie des 5 Scénarios Majeurs par le Docteur</h2>
+        <p>En éliminant les bruits de fond structurels et les faits trop facilement modélisables par le GTFS, le spécialiste en sciences comportementales sélectionne <strong>5 scénarios majeurs à échelle Méso/Macro déclenchant des transferts sur les 4 modes simultanément</strong> :</p>
+
+        <!-- TOP 1 -->
+        <div class="top5-card">
+            <div class="top5-header">
+                <div>
+                    <span class="top5-theme">MÉTÉO SPATIALE & RISQUE PHYSIQUE · MACRO</span>
+                    <div class="top5-title" style="margin-top:0.4rem;">1. Vent d'Autan à 80 km/h & Fermeture Préventive des Parcs</div>
+                </div>
+                <a href="https://www.ladepeche.fr/2026/07/16/rafales-de-vent-a-plus-de-80-kmh-toulouse-ferme-en-urgence-ses-parcs-et-jardins-ce-jeudi-soir-13471686.php" target="_blank" class="source-link">📄 Article La Dépêche du Midi</a>
+            </div>
+            <div class="quote-box">
+                « Rafales de vent à plus de 80 km/h : la mairie de Toulouse annonce la fermeture en urgence de l'ensemble des parcs et jardins clôturés pour prévenir les chutes de branches. Le vent souffle violemment sur les ponts franchissant la Garonne et soulève d'importants nuages de poussière sur les boulevards. »
+            </div>
+            <div class="modes-grid">
+                <div class="mode-box">
+                    <strong>🚴 Vélo : <span class="stars">★★★</span> Rejet Critique</strong>
+                    Raccourcis verts coupés ; risque de déséquilibre sur les parapets des ponts.
+                </div>
+                <div class="mode-box">
+                    <strong>🚶 Marche : <span class="stars">★★★</span> Rejet Fort</strong>
+                    Bourrasques aveuglantes et détours le long des boulevards routiers exposés.
+                </div>
+                <div class="mode-box">
+                    <strong>🚇 TC (Métro) : <span class="stars">★★☆</span> Attraction</strong>
+                    Traversée sous-terraine abritée du vent et franchissement sous-fluvial sûr.
+                </div>
+                <div class="mode-box">
+                    <strong>🚗 Voiture : <span class="stars">★★☆</span> Refuge</strong>
+                    Habitacle fermé protégeant de l'épuisement nerveux lié à l'Autan.
+                </div>
+            </div>
+            <div class="analysis-box">
+                <strong>Analyse Cognitive du Spécialiste :</strong>
+                <em>Mécanisme : Perception du Risque Physique & Aversion à l'Effort Hostile (Threat Appraisal Theory).</em><br>
+                L'usager évalue sa vulnérabilité corporelle face aux éléments. Les continuités douces habituelles (Jardin des Plantes, Grand Rond) disparaissant de la carte mentale, l'agent réorganise son schéma spatial vers les modes en dur abrités.
+            </div>
+            <div class="failure-box">
+                <strong>Échec de LightGBM :</strong> Dispose d'une vitesse du vent dans sa table météo mais ignore que les grilles des parcs sont cadenassées et que les ponts génèrent une angoisse physique de basculement.
+            </div>
+        </div>
+
+        <!-- TOP 2 -->
+        <div class="top5-card">
+            <div class="top5-header">
+                <div>
+                    <span class="top5-theme">PHOBIE SANITAIRE & PANIQUE MORALE · MACRO</span>
+                    <div class="top5-title" style="margin-top:0.4rem;">2. Psychose des Punaises de Lit dans les Transports Publics</div>
+                </div>
+                <a href="https://www.punaise-de-lit-info.fr/actualites/la-possible-presence-de-punaises-de-lit-dans-le-metro-de-toulouse-suscite-des-questions" target="_blank" class="source-link">📄 Article Punaise Info Texte</a>
+            </div>
+            <div class="quote-box">
+                « Face aux signalements répétés sur les réseaux sociaux concernant la présence supposée de punaises de lit sur les sièges en tissu du métro toulousain, Tisséo multiplie les opérations de désinfection vapeur. Malgré les démentis sur l'absence de foyers avérés, l'anxiété de contamination gagne les usagers. »
+            </div>
+            <div class="modes-grid">
+                <div class="mode-box">
+                    <strong>🚇 TC (Métro/Bus) : <span class="stars">★★★</span> Rejet Viscéral</strong>
+                    Refus de s'asseoir sur les tissus et évitement des rames pour trajets non contraints.
+                </div>
+                <div class="mode-box">
+                    <strong>🚴 Vélo : <span class="stars">★★☆</span> Attraction Propre</strong>
+                    Report vers la micro-mobilité individuelle, perçue comme hygiéniquement neutre.
+                </div>
+                <div class="mode-box">
+                    <strong>🚶 Marche : <span class="stars">★★☆</span> Attraction</strong>
+                    Allongement volontaire de la marche pour s'affranchir du contact avec les sièges.
+                </div>
+                <div class="mode-box">
+                    <strong>🚗 Voiture / VTC : <span class="stars">★★☆</span> Refuge Sanitaire</strong>
+                    Sanctuarisation des déplacements familiaux pour éviter toute contamination domestique.
+                </div>
+            </div>
+            <div class="analysis-box">
+                <strong>Analyse Cognitive du Spécialiste :</strong>
+                <em>Mécanisme : Heuristique de Contagion & Surestimation des Probabilités Faibles (Prospect Theory / Kahneman & Tversky).</em><br>
+                L'utilité perçue du métro s'effondre non par un retard, mais par anticipation d'un coût catastrophique (infestation du domicile chiffrée à plusieurs centaines d'euros et stigmate social).
+            </div>
+            <div class="failure-box">
+                <strong>Échec de LightGBM :</strong> L'offre technique GTFS est à 100 % nominale (0 min de retard). LightGBM prédit massivement le métro car aucune variable n'encode le dégoût parasitaire.
+            </div>
+        </div>
+
+        <!-- TOP 3 -->
+        <div class="top5-card">
+            <div class="top5-header">
+                <div>
+                    <span class="top5-theme">SALUBRITÉ & NUISANCE SENSORIELLE · MÉSO</span>
+                    <div class="top5-title" style="margin-top:0.4rem;">3. Grève des Éboueurs & Ruelles Historiques Saturées de Déchets</div>
+                </div>
+                <a href="https://www.toulousefm.fr/news/toulouse-les-eboueurs-de-la-ville-en-greve-illimitee-a-partir-d-aujourd-hui-17762" target="_blank" class="source-link">📄 Article Toulouse FM Texte</a>
+            </div>
+            <div class="quote-box">
+                « Les éboueurs de Toulouse sont en grève illimitée. Dans les ruelles étroites de l'hypercentre, les sacs s'entassent à même le sol. Conséquence : les trottoirs deviennent impraticables, jonchés d'immondices, et une odeur nauséabonde s'installe, obligeant les passants à marcher sur la chaussée. »
+            </div>
+            <div class="modes-grid">
+                <div class="mode-box">
+                    <strong>🚶 Marche : <span class="stars">★★★</span> Rejet Critique</strong>
+                    Répulsion olfactive (dégoût) et danger physique au milieu de la circulation.
+                </div>
+                <div class="mode-box">
+                    <strong>🚴 Vélo : <span class="stars">★★☆</span> Friction Élevée</strong>
+                    Risque direct de crevaison sur débris et glissades sur les jus d'ordures.
+                </div>
+                <div class="mode-box">
+                    <strong>🚇 TC (Métro) : <span class="stars">★★☆</span> Report d'Évitement</strong>
+                    Traversée de l'hypercentre en sous-sol pour contourner la surface souillée.
+                </div>
+                <div class="mode-box">
+                    <strong>🚗 Voiture : <span class="stars">★☆☆</span> Déviation / Ralentissement</strong>
+                    Ralentissements causés par les piétons marchant sur la voie routière.
+                </div>
+            </div>
+            <div class="analysis-box">
+                <strong>Analyse Cognitive du Spécialiste :</strong>
+                <em>Mécanisme : Heuristique de l'Affect & Répulsion Sensorielle (Somatic Marker Hypothesis / Damasio).</em><br>
+                L'espace historique perd son affordance de marche. Le dégoût sensoriel pousse le citadin à s'enfermer sous terre (métro) plutôt que d'effectuer 10 min de marche à l'air libre.
+            </div>
+            <div class="failure-box">
+                <strong>Échec de LightGBM :</strong> OpenStreetMap déclare les rues géométriquement ouvertes. LightGBM continue d'y assigner les piétons au temps nominal.
+            </div>
+        </div>
+
+        <!-- TOP 4 -->
+        <div class="top5-card">
+            <div class="top5-header">
+                <div>
+                    <span class="top5-theme">MARÉE HUMAINE & DYNAMIQUE DES FLUIDES · MÉSO/MACRO</span>
+                    <div class="top5-title" style="margin-top:0.4rem;">4. Spectacle Géant de La Machine dans les Ruelles de Toulouse</div>
+                </div>
+                <a href="https://france3-regions.francetvinfo.fr/occitanie/haute-garonne/toulouse/le-minotaure-l-araignee-et-la-gardienne-des-teneberes-arrivent-a-toulouse-le-programme-du-nouveau-spectacle-des-machines-3049804.html" target="_blank" class="source-link">📄 Article France 3 Occitanie</a>
+            </div>
+            <div class="quote-box">
+                « Le Minotaure et les Géants de La Machine déambulent dans le centre de Toulouse devant près d'un million de spectateurs. Les rues du centre-ville sont noires de monde, créant une marée humaine dense où tout déplacement sur roues devient impossible au milieu de la foule compacte. »
+            </div>
+            <div class="modes-grid">
+                <div class="mode-box">
+                    <strong>🚴 Vélo : <span class="stars">★★★</span> Blocage Absolu</strong>
+                    Densité > 5 pers/m² rendant physiquement impossible le moindre coup de pédale.
+                </div>
+                <div class="mode-box">
+                    <strong>🚗 Voiture : <span class="stars">★★★</span> Exclusion Totale</strong>
+                    Périmètre urbain central totalement cadenassé et parkings complets.
+                </div>
+                <div class="mode-box">
+                    <strong>🚶 Marche : <span class="stars">★★★</span> Polarité Duale</strong>
+                    Attracteur pour les badauds mais piétinement bloquant pour les actifs pressés.
+                </div>
+                <div class="mode-box">
+                    <strong>🚇 TC (Métro) : <span class="stars">★★★</span> Saturation Record</strong>
+                    Unique moyen d'acheminement de masse vers les stations du cœur de ville.
+                </div>
+            </div>
+            <div class="analysis-box">
+                <strong>Analyse Cognitive du Spécialiste :</strong>
+                <em>Mécanisme : Dynamique des Fluides Humains & Friction de Densité Spatiale.</em><br>
+                L'agent LLM discrimine le comportement selon le persona : le touriste est attiré par la machine, tandis que l'actif pressé contourne l'hyper-centre par les boulevards extérieurs ou le métro.
+            </div>
+            <div class="failure-box">
+                <strong>Échec de LightGBM :</strong> Aucun modèle de trafic conventionnel ne modélise une machine géante entourée de 700 000 spectateurs créant des barrages filtrants informels.
+            </div>
+        </div>
+
+        <!-- TOP 5 -->
+        <div class="top5-card">
+            <div class="top5-header">
+                <div>
+                    <span class="top5-theme">TRANSITION & EFFORT PHYSIQUE · MACRO</span>
+                    <div class="top5-title" style="margin-top:0.4rem;">5. Déploiement Massif du VélôToulouse Électrique sur les Coteaux</div>
+                </div>
+                <a href="https://www.ladepeche.fr/2024/06/22/mobilite-douce-a-toulouse-lancement-du-nouveau-service-velotoulouse-des-le-30-aout-12034444.php" target="_blank" class="source-link">📄 Article La Dépêche du Midi</a>
+            </div>
+            <div class="quote-box">
+                « Lancement du nouveau service VélôToulouse avec 50 % de vélos à assistance électrique et de nouvelles stations en périphérie. Ce déploiement efface le dénivelé des collines toulousaines et lève le frein de l'effort physique pour les trajets domicile-travail. »
+            </div>
+            <div class="modes-grid">
+                <div class="mode-box">
+                    <strong>🚴 Vélo : <span class="stars">★★★</span> Adoption Massive</strong>
+                    Fin du frein de la pente et de la transpiration pour les navetteurs.
+                </div>
+                <div class="mode-box">
+                    <strong>🚗 Voiture : <span class="stars">★★☆</span> Report Pendulaire</strong>
+                    Bascule de l'auto vers le vélo électrique pour les trajets coteaux ──► centre.
+                </div>
+                <div class="mode-box">
+                    <strong>🚌 TC (Bus) : <span class="stars">★★☆</span> Concurrence Directe</strong>
+                    Émancipation des lignes de bus de colline, jugées lentes et rigides.
+                </div>
+                <div class="mode-box">
+                    <strong>🚶 Marche : <span class="stars">★☆☆</span> Réduction</strong>
+                    Diminution des temps de marche terminale grâce aux nouvelles stations en hauteur.
+                </div>
+            </div>
+            <div class="analysis-box">
+                <strong>Analyse Cognitive du Spécialiste :</strong>
+                <em>Mécanisme : Suppression du Coût Métabolique & Nudge d'Adoption (Effort Discounting Theory).</em><br>
+                Le VAE lève la barrière psychologique de l'incapacité physique et de la tenue vestimentaire au travail. L'agent virtuel réévalue l'accessibilité topographique de son domicile.
+            </div>
+            <div class="failure-box">
+                <strong>Échec de LightGBM :</strong> Tant que les nouvelles stations ne sont pas documentées sur des mois de données d'enquête, LightGBM applique les priors du vélo mécanique classique.
+            </div>
+        </div>
+
+    </section>
+
+    <footer>
+        Projet de Recherche LLM-Agents GAMA · Défis Clés Occitanie (MIDOC) · Septembre 2026
+    </footer>
+
+</div>
+
+</body>
+</html>

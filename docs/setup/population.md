@@ -188,13 +188,45 @@ Il enchaîne 5 étapes avec checkpoints intermédiaires dans `scripts/data/popul
 | 1 – Génération eqasim | API eqasim (port 8003) | `Temp/1_raw/` | Appel HTTP POST `/generate` — synthèse des agents à partir des données INSEE/ENTD |
 | 2 – Validation activités | `Temp/1_raw/` | `Temp/2_fixed/` | Correction des chevauchements temporels, fusion des activités redondantes |
 | 3 – Enrichissement TC | `Temp/2_fixed/` | `Temp/3_pt_enriched/` | Calcul du flag `public_transport` (arrêt Tisséo dans un rayon de 1 500 m) |
+| 3bis – Enrichissement zone | `Temp/3_pt_enriched/` | `Temp/4_zone_enriched/` | Libellé de zone de chaque localisation (grille de densité INSEE + aire d'attraction), géocodage inverse BAN mis en cache |
+| 3ter – Sélection stratifiée (AAMAS) | `Temp/4_zone_enriched/` | `Temp/4_zone_enriched/toulouse_population_<N>_AAMAS.json` | **Optionnelle** (`SELECT_N`). D'abord **3ter-a** : les post-traitements de l'étape 8 tournent sur le vivier (logement, vélo, permis, abonnement), pour que ces traits soient des marges de sélection. Puis `scripts/AAMAS/seal_population.py select` (règle `aamas_seal_v3`, ticket 029) retient `SELECT_N` personas pile **par ménages entiers** : allocation aux 12 cellules couronne × motorisation de l'enquête, puis descente par échanges de ménages de même taille et même cellule qui rapproche âge quinquennal, genre, occupation, taille de ménage, permis, abonnement TC, logement et part d'immobiles de leurs cibles ; exclut les domiciles hors des 453 communes. Placée **avant** le routage : les étapes 4 à 9 ne tournent que sur les retenus. Vivier conseillé : `POPULATION_SIZES = [5000]` (99,2 % de chances de remplir les 12 cellules ; 2 700 → 63 %). Détail : [docs/arch/controle-population-jeu-de-test.md](../arch/controle-population-jeu-de-test.md) |
 | 4 – Calcul d'itinéraires | `Temp/3_pt_enriched/` | `Temp/4_routed/` | Routes OSMnx parallélisées (jusqu'à 12 workers) — durée, distance, géométrie |
 | 5 – Ajustement horaires | `Temp/4_routed/` | `Temp/5_scheduled/` | Recalage des `scheduled_start_time` pour absorber les temps de trajet réels |
+| 6 – Réchauffage OSMnx (**optionnel**) | `Temp/5_scheduled/` | `data/cache/osmnx/<population>/osmnx_cache.db` | Pré-calcule le cache d'itinéraires du runtime (marche + vélo + voiture × 24 h : ≈ 78 000 routes pour 1 000 personas). Ne touche pas à la population. `SKIP_WARMUP = True` la saute — le runtime calcule les itinéraires manquants à la demande. `MAX_WORKERS` (défaut 12) : chaque worker charge sa copie des graphes ; à 12 la machine de développement swappe (23 Go mesurés), à 6 elle tient en RAM. Se relance seule avec `SKIP_WARMUP = False`, les autres étapes étant sautées |
 | 7 – Export final | `Temp/5_scheduled/` | `data/population/` | Copie vers le dossier consommé par GAMA et le serveur d'agents (monté dans les conteneurs sous `/eqasim-output`). **Refuse** d'écraser si la source n'a aucune activité planifiée ou perd la moitié des agents ; laisse un `.bak` |
 | 8 – Traits EMC² | `data/population/` | `data/population/` | `fix_minor_traits`, puis `enrich_housing_type`, puis `enrich_personal_bike` — dans cet ordre. Chacun **refuse de tourner** si sa ressource d'accès restreint manque, au lieu d'imputer à l'aveugle |
 | 9 – Audit | `data/population/` | (rapport) | Verdict **POPULATION COMPLÈTE / INCOMPLÈTE** : présence des neuf traits que la simulation consomme, et des horaires recalés |
 
 Chaque étape est idempotente : si le fichier de sortie existe déjà dans `Temp/`, elle est ignorée. Pour forcer la reprise à partir d'une étape, définir `FORCE_STEP = 'raw' | 'fixed' | 'pt_enriched' | 'routed' | 'scheduled'` dans la première cellule.
+
+### Population scellée pour l'article (AAMAS)
+
+Pour un jeu de test à effectif rond et représentatif, la chaîne se joue en trois temps
+(détail : [docs/arch/controle-population-jeu-de-test.md](../arch/controle-population-jeu-de-test.md)) :
+
+1. **Notebook** avec `POPULATION_SIZES = [10000]` et `SELECT_N = 1000` : les étapes 1 à 3bis
+   tournent sur le vivier (≈ 11 900 personnes, immobiles compris, 209 s d'eqasim), l'étape 3ter
+   pré-impute le vivier puis retient 1 000 personas **par ménages entiers** (règle v3 : allocation
+   couronne × motorisation, descente sur huit marges), les étapes 4 à 9 ne tournent que sur eux
+   et exportent `data/population/toulouse_population_1000_AAMAS.json` — le fichier
+   `toulouse_population_1000.json` n'est pas touché.
+2. **Contrôle puis scellement** :
+   ```shell
+   make control-population POP=data/population/toulouse_population_1000_AAMAS.json TRACE=docs/traces/<date>_population_1000_AAMAS
+   make seal-population POP=data/population/toulouse_population_1000_AAMAS.json \
+        SELECTION=scripts/data/population/Temp/4_zone_enriched/toulouse_population_1000_AAMAS_selection.json
+   ```
+   Le scellement **refuse** s'il reste une marge « à corriger » ; sinon il produit
+   `data/population/population_1000_AAMAS/` (`population.json`, `MANIFEST.yaml`, `CONTROLE.md`).
+3. **Runs** sur le fichier scellé, pris entier — plus aucun ré-échantillonnage :
+   ```yaml
+   # llm-agents/config/config.yaml
+   data:
+     population_file: /data/eqasim-output/population_1000_AAMAS_v3/population.json
+   ```
+
+⚠ L'export eqasim élargi (`household`, `provenance`, `validation.commute_mode` à la racine des
+enregistrements) demande de **reconstruire l'image** avant de générer : `docker compose build eqasim`.
 
 **Prérequis** : le service eqasim doit être démarré avant d'exécuter le notebook.
 

@@ -13,6 +13,49 @@ import yaml
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 
+def _resolve_experiments_dir(package_dir: Path) -> Path:
+    """Répertoire `experiments/` du dépôt, vu depuis l'hôte comme depuis un conteneur.
+
+    Le conteneur monte `./experiments` sur `/app/experiments`, à côté du code
+    (`/app`) : `package_dir / "experiments"` est alors la bonne réponse. Sur
+    l'hôte, le code vit dans `<dépôt>/llm-agents/` et les expériences dans
+    `<dépôt>/experiments/` — un niveau plus haut. Prendre `package_dir` sans
+    distinguer les deux cas fabriquait un `llm-agents/experiments/` parallèle,
+    dont les chemins ne se résolvaient pas depuis `GAMA/CityTransport/`.
+
+    `APP_EXPERIMENTS_DIR` court-circuite la détection si besoin.
+    """
+    override = os.environ.get("APP_EXPERIMENTS_DIR", "").strip()
+    if override:
+        return Path(override)
+    parent_candidate = package_dir.parent / "experiments"
+    if parent_candidate.is_dir():
+        return parent_candidate
+    return package_dir / "experiments"
+
+
+def _run_artifacts_disabled() -> bool:
+    """Vrai quand importer ce module ne doit créer aucun artefact de run.
+
+    Une suite de tests qui importe `settings` créait un répertoire de run et
+    repointait le symlink `GAMA/CityTransport/results` — volant sa sortie à la
+    simulation en cours. Un import de test observe la configuration, il
+    n'ouvre pas un run.
+    """
+    if os.environ.get("APP_NO_RUN_ARTIFACTS", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    import sys
+
+    if "pytest" in sys.modules:
+        return True
+    # `python -m unittest` : détecté par la ligne de commande, pas par
+    # sys.modules — une dépendance quelconque peut importer `unittest`.
+    argv0 = os.path.basename(sys.argv[0] or "")
+    return argv0 in ("pytest", "unittest") or argv0.startswith("pytest")
+
+
 def merge_configs(*config_paths: str) -> Dict[str, Any]:
     """Merge multiple YAML files, with later files overriding earlier ones."""
     merged_config = {}
@@ -256,6 +299,13 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     # eqasim : garantit le même sous-ensemble d'agents (donc les mêmes trajets) d'un run
     # à l'autre → le cache OSMnx est réutilisable au rejeu.
     population_sample_seed: int = 42
+    # Population SCELLÉE (article AAMAS, docs/arch/controle-population-jeu-de-test.md) :
+    # chemin d'un fichier de population à utiliser tel quel, à la place de la recherche
+    # `{eqasim_output_dir}/{prefix}population_{population_size}.json` et de tout appel à
+    # eqasim. Le fichier est pris ENTIER : s'il ne compte pas exactement
+    # `population_size` agents (après filtre bbox éventuel), le chargement REFUSE plutôt
+    # que de ré-échantillonner — un sceau ne se rogne pas en silence.
+    population_file: Optional[str] = None
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
 
@@ -512,7 +562,7 @@ class FactorySettings:
         # créé et archivé inconditionnellement à chaque démarrage.
         now = datetime.now()
         cls._creation_time = now
-        experiments_dir = Path(base_config_path).resolve().parent.parent / "experiments"
+        experiments_dir = _resolve_experiments_dir(Path(base_config_path).resolve().parent.parent)
         # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
         # workdir du run précédent (cible du symlink experiments/current) au lieu
         # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
@@ -535,6 +585,13 @@ class FactorySettings:
 
         cls._instance = Settings.from_yaml_files(*yaml_files, workdir=workdir)
 
+        if _run_artifacts_disabled():
+            logger.info(
+                "Import sous test : aucun répertoire de run créé, symlinks "
+                "experiments/current et GAMA/CityTransport/results laissés en place."
+            )
+            return cls._instance
+
         # Create workdir, write the full config into it, and update "current" symlink
         cls._instance.workdir.mkdir(parents=True, exist_ok=True)
 
@@ -545,14 +602,19 @@ class FactorySettings:
         current_link.symlink_to(Path("archive") / cls._instance.workdir.name)
 
         # Redirect GAMA results into this experiment's workdir.
-        # Relative symlink from GAMA/CityTransport/results: 2 levels up reach the
-        # project root (CityTransport → GAMA → project root), then down to experiments/.
         gama_results_dir = cls._instance.workdir / "gama_results"
         gama_results_dir.mkdir(parents=True, exist_ok=True)
         gama_results_link = Path(base_dir).parent / "GAMA" / "CityTransport" / "results"
         if gama_results_link.parent.exists():
-            exp_name = gama_results_dir.parent.name
-            relative_target = Path("../../experiments") / "archive" / exp_name / "gama_results"
+            # Le lien est écrit ici mais LU ailleurs — par GAMA sur l'hôte, ou par le
+            # conteneur `gama` (qui monte ./GAMA sur /GAMA et ./experiments sur
+            # /experiments). Sa cible doit donc s'exprimer dans la disposition du
+            # dépôt, pas dans celle du contrôleur : depuis GAMA/CityTransport, deux
+            # niveaux au-dessus donnent la racine, puis experiments/. Un calcul par
+            # `relpath` depuis le workdir du contrôleur (/app/experiments/…) donnerait
+            # un lien correct dans ce conteneur seulement, et pendant partout ailleurs.
+            within_experiments = os.path.relpath(gama_results_dir, experiments_dir)
+            relative_target = Path("../../experiments") / within_experiments
             # Plusieurs workers hypercorn importent ce module en parallèle :
             # unlink/symlink doivent tolérer qu'un autre worker soit passé avant.
             if gama_results_link.is_symlink():
@@ -563,6 +625,22 @@ class FactorySettings:
                 gama_results_link.symlink_to(relative_target)
             except FileExistsError:
                 pass
+            # Le lien ne se résout pas depuis ce processus (le contrôleur ne voit
+            # pas /experiments) : ce qu'on peut vérifier, c'est l'invariant qui
+            # l'avait cassé — le workdir doit vivre sous un répertoire nommé
+            # `experiments` à la racine du dépôt. Sinon le lien pend, et GAMA échoue
+            # sur `save` par une I/O error qui ne nomme pas la cause.
+            if experiments_dir.name == "experiments" and not within_experiments.startswith(".."):
+                logger.info(
+                    f"Sorties GAMA redirigées : {gama_results_link} → {relative_target}"
+                )
+            else:
+                logger.error(
+                    f"[ALARME] Symlink de sortie GAMA pendant : {gama_results_link} → "
+                    f"{relative_target} ne résoudra aucun répertoire depuis "
+                    f"GAMA/CityTransport (workdir : {gama_results_dir}, experiments_dir : "
+                    f"{experiments_dir}). GAMA échouera sur `save` en I/O error."
+                )
 
         # logger.info(f"Settings loaded from: {yaml_files}")
         # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")

@@ -138,4 +138,7 @@ eqasim-toulouse/
 prompt_calibration/
 # Assistant personnel — dépôt git autonome imbriqué
 docs/slides/README.md
+# Les traces d'expériences se versionnent PAR DATE ET HEURE sur disque (docs/traces/<AAAA-MM-JJ_HH-MM>_…),
+# pas dans git — décision du 2026-09-02. Ce qui se versionne dans git est l'artefact scellé
+# (data/population/population_1000_AAMAS/) et sa documentation.
 docs/traces/*

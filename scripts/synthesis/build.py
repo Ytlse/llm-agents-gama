@@ -365,6 +365,48 @@ def build_score_def(manifest, weights: dict) -> dict:
     }
 
 
+def frozen_sets_lineage(manifest, run: dict) -> dict:
+    """Les jeux gelés de la calibration portent-ils encore la population en service ?
+
+    La page affirme que les trois volets partagent un substrat. C'est vrai du run — les
+    gardes le vérifient — mais le volet 2 est *aussi* scoré sur des jeux gelés, et ceux-là
+    ont été découpés dans un run passé. Leur manifeste enregistre l'empreinte de la
+    population d'origine ; on la compare à celle du run épinglé.
+
+    Pourquoi c'est nécessaire depuis le 2026-08-27 : les tickets 016 et 017 réécrivent
+    `has_pt_subscription` et `has_driving_license` dans la population en service. Les jeux
+    gelés, eux, gardent les valeurs recopiées du donneur ENTD 2008. Un score de volet 2
+    décrit donc une population que la simulation ne joue plus — et rien ne le disait.
+
+    Divergence **déclarée, pas corrigée** : refaire les jeux gelés casserait la
+    comparabilité de toute la trajectoire de calibration déjà mesurée. Le choix est de
+    l'écrire.
+    """
+    import yaml
+
+    repo = manifest.get("arms.calibration.repo", "prompt_calibration")
+    path = REPO_ROOT / repo / "calibration_datasets" / "v1" / "manifest.yaml"
+    out: dict = {"manifest": str(path.relative_to(REPO_ROOT)) if path.exists() else None}
+    if not path.exists():
+        return out
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return out
+    frozen = ((raw.get("sources") or {}).get("population") or {})
+    frozen_sha = frozen.get("sha256")
+    current = (run.get("population") or {})
+    current_sha = current.get("sha256")
+    out.update({
+        "frozen_population_path": frozen.get("path"),
+        "frozen_population_sha256": frozen_sha,
+        "run_population_path": current.get("path"),
+        "run_population_sha256": current_sha,
+        "diverges": bool(frozen_sha and current_sha and frozen_sha != current_sha),
+    })
+    return out
+
+
 def build_common_set(manifest, cerema: dict) -> tuple[dict, list[dict]]:
     run = frames.resolve_run(manifest)
     if not run.get("exists") or not run.get("moves", {}).get("exists"):
@@ -451,6 +493,7 @@ def build_common_set(manifest, cerema: dict) -> tuple[dict, list[dict]]:
         "run_path": resolved,
         "run_pinned": bool(resolved) and configured.rstrip("/") == resolved.rstrip("/"),
         "run_date": (run.get("moves", {}).get("mtime") or "")[:10],
+        "frozen_sets": frozen_sets_lineage(manifest, run),
         "n_trips": len(rows),
         "n_persons": n_persons,
         "pct_distribution": 100.0 * stats.get("avec_distribution", 0) / total,
@@ -1220,9 +1263,58 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
     }
 
 
+def renormalisation_bias(variants: dict) -> dict:
+    """Ce que la renormalisation sur l'offre OTP ajoute à chaque mode, mesuré.
+
+    Le composite `attendu` est le chiffre de tête du volet 3, et il est **biaisé** :
+    ~20 % de la masse du modèle tombe sur des modes qu'OTP n'a pas offerts et se
+    redistribue au prorata, au bénéfice des modes presque toujours offerts (les
+    transports collectifs) et au détriment de ceux qui ne le sont pas sur les trajets
+    courts (la marche, le vélo). Conséquence de lecture, mesurée le 2026-08-27 sur
+    quatre configurations du même run : `attendu` **pénalise** toute correction qui
+    augmente les TC, même juste — il passait de 6,015 à 6,208 alors que l'écart des
+    15-19 ans, le plus gros de la page, tombait de 63,8 à 48,7 de `l1`.
+
+    On calcule donc l'écart `attendu − brut` par mode, et la position des deux lectures
+    face à la cible. Calculé plutôt qu'écrit en dur : le biais dépend de l'offre du run,
+    et une valeur figée deviendrait fausse au run suivant sans que rien ne le dise.
+    """
+    raw = (variants.get("brut") or {}).get("global") or {}
+    renorm = (variants.get("attendu") or {}).get("global") or {}
+    if not raw.get("actual") or not renorm.get("actual"):
+        return {}
+    target = renorm.get("target") or {}
+    modes = {}
+    for mode, after in (renorm.get("actual") or {}).items():
+        before = (raw.get("actual") or {}).get(mode)
+        if before is None:
+            continue
+        aim = target.get(mode)
+        modes[mode] = {
+            "raw_pct": round(before, 2),
+            "renormalised_pct": round(after, 2),
+            "added_pt": round(after - before, 2),
+            "target_pct": round(aim, 2) if aim is not None else None,
+            "raw_gap_pt": round(before - aim, 2) if aim is not None else None,
+            "renormalised_gap_pt": round(after - aim, 2) if aim is not None else None,
+        }
+    inflated = sorted((m for m, v in modes.items() if v["added_pt"] > 0),
+                      key=lambda m: -modes[m]["added_pt"])
+    return {
+        "modes": modes,
+        "most_inflated": inflated[0] if inflated else None,
+        "note": ("La renormalisation sur l'offre OTP déplace de la masse entre modes : "
+                 "l'écart `attendu − brut` ci-dessus le chiffre. Un mode dont la "
+                 "renormalisation gonfle la part et qui dépasse déjà sa cible fait "
+                 "empirer le composite `attendu` à chaque correction qui l'augmente, "
+                 "même juste. Lire alors `elu` et `brut`, qui n'ont pas ce biais."),
+    }
+
+
 def build_model_predictions(source, cerema: dict, scorer,
                             pinned_run: Optional[str] = None,
-                            pinned_digest: Optional[str] = None) -> dict:
+                            pinned_digest: Optional[str] = None,
+                            pinned_policy: Optional[str] = None) -> dict:
     """Prédictions du modèle sur le jeu commun (action A8), scorées comme le reste.
 
     Même exigence que pour le volet 2 : le score sort du même ``Scorer`` — donc de la
@@ -1259,6 +1351,19 @@ def build_model_predictions(source, cerema: dict, scorer,
                 "reason": (f"Prédictions faites sur {measured_run}, alors que la page "
                            f"épingle {pinned_run}."),
                 "action": "Reproduire la mesure sur le run épinglé : "
+                          "make common-set-predict (chiffrer d'abord : DRY_RUN=1)"}
+    # Même garde, sur l'autre axe : la POLITIQUE. Un ré-entraînement à contrat de
+    # variables inchangé ne bouge pas `spec_version`, donc rien ne signalait qu'un
+    # parquet mesuré sous l'ancien modèle était servi comme courant.
+    measured_policy = meta_guard.get("policy_sha256")
+    if measured_policy and pinned_policy and measured_policy != pinned_policy:
+        return {"available": False,
+                "reason": (f"Prédictions faites sous une autre politique — empreinte "
+                           f"{str(measured_policy)[:12]} contre "
+                           f"{str(pinned_policy)[:12]} sur le disque. Un "
+                           f"ré-entraînement ne change pas `spec_version` : seule "
+                           f"l'empreinte distingue les deux modèles."),
+                "action": "Reproduire la mesure sous la politique courante : "
                           "make common-set-predict (chiffrer d'abord : DRY_RUN=1)"}
     measured_digest = meta_guard.get("moves_sha256")
     if pinned_digest and measured_digest and measured_digest != pinned_digest:
@@ -1302,6 +1407,7 @@ def build_model_predictions(source, cerema: dict, scorer,
         "details": details,
         "meta": meta,
         "summary": summary,
+        "renormalisation_bias": renormalisation_bias(variants),
         # Deux masses écartées, et elles ne disent pas la même chose : les décisions
         # sorties du périmètre du modèle (zone inconnue, offre sans mode prédictible)
         # et, dans les décisions retenues, la part de probabilité tombant sur des modes
@@ -1312,6 +1418,18 @@ def build_model_predictions(source, cerema: dict, scorer,
                          if total_mass else 0.0),
         "path": source.rel,
     }
+
+
+def _policy_digest(manifest) -> Optional[str]:
+    """Empreinte de l'artefact de politique présent sur le disque, ou ``None``."""
+    path = manifest.path_of("arms.model.policy")
+    if path is None or not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def build_model(manifest, cerema: dict, scorer) -> dict:
@@ -1334,7 +1452,8 @@ def build_model(manifest, cerema: dict, scorer) -> dict:
     pinned_digest = probe("model.pinned_moves", REPO_ROOT / moves_rel).sha256 \
         if moves_rel else None
     predictions = build_model_predictions(preds, cerema, scorer,
-                                          manifest.get("common_set.run"), pinned_digest)
+                                          manifest.get("common_set.run"), pinned_digest,
+                                          _policy_digest(manifest))
     # Ce que la prédiction a réellement trouvé, plutôt que ce qu'on en attendait :
     # une variable « disponible » peut être massivement manquante à l'arrivée (une
     # modalité que la population synthétique porte et que le spec ne connaît pas

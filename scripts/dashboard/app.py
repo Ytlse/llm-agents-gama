@@ -1238,14 +1238,13 @@ def render_run_actions() -> None:
 
     with launch, st.container(border=True):
         st.markdown("**▶ Lancer un run offline**")
-        configs = ("(défaut)", *makefiles._config_choices())
-        config = st.selectbox("CONFIG", configs, key="run-config")
+        st.caption("Config unique : llm-agents/config/config.yaml (l'éditer directement pour changer de run).")
         confirmed = st.checkbox(
             "Je confirme : purge Grafana/Prometheus et compteurs Redis avant démarrage",
             key="run-confirm",
         )
         if st.button("🚀 make run-offline", disabled=proc.active or not confirmed, width="stretch"):
-            argv = ["make", "run-offline"] + ([f"CONFIG={config}"] if config != "(défaut)" else [])
+            argv = ["make", "run-offline"]
             REGISTRY.launch("root:run-offline", argv, REPO_ROOT, ("long", "danger"))
             st.toast("Run lancé — suivi dans 📟 Lancements")
         if proc.active:

@@ -30,9 +30,10 @@ TROIS VERDICTS POSSIBLES, et ils ne sont pas interchangeables :
 
 CE QUE ÇA NE FAIT PAS. Aucune correction. Le ticket 020 établit et qualifie les
 écarts ; les corrections qui dépassent un ajustement de mesure ouvrent leurs propres
-tickets. En particulier le script NE MODIFIE PAS `geo_reference.residence_zone` : ce
-classement facture le temps terminal (ticket 013), donc le changer demande un bump de
-`version` dans `terminal_time.yaml` et invalide trois caches.
+tickets. C'est ce qui s'est passé pour A2 et A4 : le ticket 021 a posé la couronne de
+résidence SUR LE PERSONA (trait `residence_zone`, par liste de communes), le ticket 028
+a re-stratifié le temps terminal sur la même table (`tt4`) et rendu « hors périmètre »
+explicite. L'axe A2 vérifie désormais que ni l'un ni l'autre ne revient à la distance.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.geo_reference import haversine_km, hypercenter, residence_zone  # noqa: E402
+from llm_module.core.geo_reference import haversine_km, hypercenter  # noqa: E402
 from llm_module.core.population_reference import (  # noqa: E402
     COURONNES, MIN_AGE, OUT_OF_PERIMETER, couronne_commune_counts,
     couronne_population_shares, household_targets, household_weight,
@@ -64,6 +65,9 @@ DEFAULT_RUN = REPO_ROOT / "experiments" / "current"
 CEREMA_VALUES = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
 COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
 WEATHER_CSV = REPO_ROOT / "data" / "weather" / "meteo_toulouse_12_mois.csv"
+# Ressource du temps terminal : son `meta.crown_definition` dit sur quel découpage les
+# lois sont stratifiées. C'est le troisième lieu où la distance pourrait revenir (A2).
+TERMINAL_TIME_JSON = REPO_ROOT / "llm_module" / "data" / "terminal_time_emc2.json"
 
 SCORED_MODES = ("voiture", "marche", "transports_collectifs", "velo")
 MOVE_MODE_MAP = {
@@ -172,71 +176,86 @@ def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
             "`make communes-couronnes` l'exige, et cette cible exige les données "
             "PROGEDO d'accès restreint.")
 
+    # Depuis les tickets 021 et 028, plus rien en production ne classe par distance : le
+    # journal LIT le trait `residence_zone`, le temps terminal classe par appartenance aux
+    # couronnes et ses lois sont stratifiées par la table de l'enquête. L'axe vérifie donc
+    # les trois portes par lesquelles l'écart reviendrait : un trait absent, un trait qui
+    # ne coïncide pas avec la géométrie, une ressource de temps terminal encore stratifiée
+    # à la distance. La géométrie (`CommunalZones`) est la mesure INDÉPENDANTE du trait.
     confusion: Counter = Counter()
     per_person: dict[str, tuple[str, str]] = {}
+    missing = 0
     for person in people:
         h = home(person)
-        metric = residence_zone(h.get("lat"), h.get("lon"))
+        trait = str(traits(person).get("residence_zone") or "")
         communal = zones.classify(h.get("lat"), h.get("lon"))
-        confusion[(metric, communal)] += 1
-        per_person[str(person.get("person_id"))] = (metric, communal)
+        if not trait:
+            missing += 1
+        confusion[(trait or "∅", communal)] += 1
+        per_person[str(person.get("person_id"))] = (trait, communal)
 
     total = sum(confusion.values())
-    moved = sum(n for (m, c), n in confusion.items() if m != c)
-    share = 100.0 * moved / total if total else 0.0
+    mismatched = sum(n for (t, c), n in confusion.items() if t != "∅" and t != c)
 
-    # Cible implicite : la part voiture à laquelle chaque agent est comparé, moyennée.
-    targets = (cerema.get("parts_modales_2023") or {}).get("lieu_residence") or {}
+    crown_definition = ""
+    try:
+        crown_definition = str(json.loads(TERMINAL_TIME_JSON.read_text(encoding="utf-8"))
+                               ["meta"]["crown_definition"])
+    except (OSError, KeyError, ValueError, TypeError):
+        crown_definition = ""
+    terminal_communal = ("CouronneTable" in crown_definition
+                         and "geo_reference" not in crown_definition)
 
-    def implied_car(index: int) -> Optional[float]:
-        weighted, mass = 0.0, 0
-        for pair, n in confusion.items():
-            key = pair[index].replace(" ", "_")
-            node = targets.get(key)
-            if not node:
-                continue
-            weighted += float(node["voiture"]) * n
-            mass += n
-        return weighted / mass if mass else None
-
-    car_metric, car_communal = implied_car(0), implied_car(1)
-
-    # Effet sur les parts modales publiées par zone, quand un run est disponible.
     tables: dict[str, Any] = {
-        "confusion": {f"{m} → {c}": n for (m, c), n in sorted(confusion.items())},
-        "cible_voiture_implicite": {"metrique": car_metric, "communal": car_communal},
+        "confusion_trait_vs_geometrie": {f"{t} → {c}": n
+                                         for (t, c), n in sorted(confusion.items())},
+        "trait_absent": missing,
+        "trait_different_de_la_geometrie": mismatched,
+        "temps_terminal_crown_definition": crown_definition or "(ressource illisible)",
     }
     if moves:
         tables["parts_par_zone"] = modal_shares_by_zone(moves, per_person, cerema)
+
+    problems: list[str] = []
+    if missing:
+        problems.append(f"{missing} persona(s) sans trait `residence_zone`")
+    if mismatched:
+        problems.append(f"{mismatched} trait(s) qui ne coïncident pas avec la géométrie")
+    if not terminal_communal:
+        problems.append("temps terminal encore stratifié à la distance "
+                        "(`meta.crown_definition`)")
 
     detail = (
         "Une couronne administrative n'est pas un anneau métrique. Le disque de 8 km "
         "autour du Capitole sort largement de la commune de Toulouse et mord sur "
         "Blagnac, Balma, Colomiers, Tournefeuille et Ramonville — de 1ʳᵉ couronne dans "
-        "l'enquête. L'erreur est UNIDIRECTIONNELLE : les 179 zones fines de Toulouse "
-        "sont toutes à moins de 7 km du centre, donc aucun Toulousain n'est classé "
-        "dehors. Elle gonfle Toulouse et vide la 1ʳᵉ couronne. Enjeu direct : la cible "
-        "`voiture` vaut 31 % à Toulouse et 64 % en 1ʳᵉ couronne — un agent mal classé "
-        "n'est pas comparé à une cible un peu décalée, il l'est à une cible qui diffère "
-        "de plus de 30 points.")
-    ecart = f"{share:.1f} % des personas changent de couronne"
-    if car_metric is not None and car_communal is not None:
-        ecart += (f" ; cible voiture implicite {car_metric:.1f} % → "
-                  f"{car_communal:.1f} %")
+        "l'enquête. Le ticket 020 a mesuré 24,4 % de personas reclassés entre les deux "
+        "définitions, unidirectionnellement (aucun Toulousain classé dehors). Enjeu "
+        "direct : la cible `voiture` vaut 31 % à Toulouse et 64 % en 1ʳᵉ couronne — un "
+        "agent mal classé est comparé à une cible qui diffère de plus de 30 points. "
+        "Le ticket 021 a posé la couronne SUR le persona ; le ticket 028 a re-stratifié "
+        "le temps terminal sur la même table (tt4). L'axe ne remesure pas cet écart "
+        "historique : il garde les trois portes fermées.")
+    ecart = "aucun écart : trait, géométrie et temps terminal sur le même découpage" \
+        if not problems else " ; ".join(problems)
     return Finding(
         "A2", "Définition des couronnes",
         "découpage par liste de communes : "
-        + " / ".join(f"{n}" for n in couronne_commune_counts().values()),
-        "classement par distance à l'hypercentre (8 / 20 / 40 km)",
-        ecart, A_CORRIGER, detail, tables)
+        + " / ".join(f"{n}" for n in couronne_commune_counts().values())
+        + " — pour la résidence ET le temps terminal",
+        f"trait `residence_zone` posé sur {total - missing}/{total} personas ; temps "
+        f"terminal stratifié par {'la table de l’enquête (tt4)' if terminal_communal else 'la distance à l’hypercentre'}",
+        ecart, CONFORME if not problems else A_CORRIGER, detail, tables)
 
 
 def modal_shares_by_zone(moves: list[dict], per_person: dict[str, tuple[str, str]],
                          cerema: dict) -> dict:
-    """Parts modales par couronne sous les deux classements, plus l'écart L1 aux cibles."""
+    """Parts modales par couronne — sous le trait du persona et sous la géométrie —, plus
+    l'écart L1 aux cibles. Les deux colonnes doivent coïncider ; l'écart entre elles est
+    exactement ce que l'axe A2 compte."""
     targets = (cerema.get("parts_modales_2023") or {}).get("lieu_residence") or {}
     out: dict[str, Any] = {}
-    for index, label in ((0, "metrique"), (1, "communal")):
+    for index, label in ((0, "trait"), (1, "communal")):
         mass: dict[str, Counter] = defaultdict(Counter)
         for row in moves:
             mode = MOVE_MODE_MAP.get((row.get("Mode de transport Choisi") or "").strip())
@@ -618,38 +637,37 @@ def axis_a9_spatial(people: list[dict], zones: Optional[CommunalZones]) -> Findi
                        "—", "—", NON_MESURABLE,
                        "Ressource `couronne_perimetre.geojson` absente.")
     target = couronne_population_shares()
+    # La géométrie des couronnes est la mesure indépendante ; depuis les tickets 021 et
+    # 028 c'est aussi ce que la simulation publie (trait) et facture (temps terminal), et
+    # l'axe A2 vérifie que les trois coïncident. Il n'y a donc plus de « concentration
+    # publiée » distincte de la concentration réelle.
     counts: Counter = Counter()
-    metric_counts: Counter = Counter()
     for person in people:
         h = home(person)
         counts[zones.classify(h.get("lat"), h.get("lon"))] += 1
-        metric_counts[residence_zone(h.get("lat"), h.get("lon"))] += 1
     inside = sum(n for z, n in counts.items() if z in COURONNES)
     observed = {z: 100.0 * counts.get(z, 0) / inside for z in COURONNES} if inside else {}
     core_target = target["Toulouse"] + target["1ere couronne"]
     core_observed = observed.get("Toulouse", 0) + observed.get("1ere couronne", 0)
-    metric_total = sum(metric_counts.values()) or 1
-    core_published = 100.0 * (metric_counts.get("Toulouse", 0)
-                              + metric_counts.get("1ere couronne", 0)) / metric_total
     l1 = sum(abs(observed.get(z, 0) - target[z]) for z in COURONNES)
     detail = (
         "Une surconcentration en cœur d'agglomération tire mécaniquement la part "
         "voiture vers le bas, sans qu'aucun modèle de choix ne soit en cause : la cible "
-        "voiture vaut 31 % à Toulouse et 71 à 74 % dans les couronnes externes. Sur "
-        "cette population, l'excès est modéré et il est CUMULATIF avec l'axe A2 : le "
-        "classement métrique gonfle encore Toulouse, si bien que la concentration "
-        "PUBLIÉE est plus forte que la concentration réelle de la population.")
+        "voiture vaut 31 % à Toulouse et 71 à 74 % dans les couronnes externes. L'écart "
+        "est un écart de CADRE DE TIRAGE (Haute-Garonne : 346 des 453 communes, la 3ᵉ "
+        "couronne plafonne à 10,6 % de la population pour 15,4 % dans l'enquête) — il se "
+        "referme par une sélection stratifiée sur un vivier assez large, pas par un "
+        "meilleur classement.")
     return Finding(
         "A9", "Représentativité spatiale de l'échantillon",
         " · ".join(f"{z} {target[z]:.1f} %" for z in COURONNES),
         " · ".join(f"{z} {observed.get(z, 0):.1f} %" for z in COURONNES),
-        f"Toulouse + 1ʳᵉ couronne : {core_observed:.1f} % réel contre "
-        f"{core_target:.1f} % cible, et {core_published:.1f} % tel que PUBLIÉ par le "
-        f"classement métrique (L1 = {l1:.1f} pt)",
+        f"Toulouse + 1ʳᵉ couronne : {core_observed:.1f} % contre {core_target:.1f} % "
+        f"cible (L1 = {l1:.1f} pt) ; {counts.get(OUT_OF_PERIMETER, 0)} domicile(s) hors "
+        "périmètre exclus du calcul",
         A_PUBLIER if l1 > 4 else CONFORME, detail,
         {"cible": target, "observe": observed, "l1": l1,
          "coeur_cible_pct": core_target, "coeur_reel_pct": core_observed,
-         "coeur_publie_metrique_pct": core_published,
          "n_dans_le_perimetre": inside,
          "n_hors_perimetre": counts.get(OUT_OF_PERIMETER, 0)})
 

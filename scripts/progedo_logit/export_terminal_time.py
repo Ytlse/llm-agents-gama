@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,9 +66,10 @@ CAR_DRIVER = "21"
 TRANSIT = ("31", "32", "33")
 BIKE = ("11", "17")
 
-# Couronnes, dans l'ordre de lecture d'EMC². Mêmes bornes que
-# `llm_module.core.geo_reference.residence_zone` — c'est la définition unique du dépôt,
-# et le fichier de config spatialise déjà dessus.
+# Couronnes, dans l'ordre de lecture d'EMC². Ce sont les modalités de
+# `population_reference.COURONNES`, et depuis le ticket 028 les strates sont posées par la
+# TABLE de l'enquête (zone fine → secteur de tirage → couronne), plus par la distance à
+# l'hypercentre : le temps terminal et la résidence parlent enfin du même découpage.
 CROWNS = ("Toulouse", "1ere couronne", "2eme couronne", "3eme couronne")
 
 # Écrêtage de la queue, en minutes. Au-delà de 20 min l'enquête ne porte plus que
@@ -83,20 +83,24 @@ MAX_MINUTES = 20
 MIN_CELL = 200
 
 
-def crown_by_zone(root: Path) -> dict[str, str]:
-    """Zone fine → couronne, via les centroïdes de la couche exportée."""
-    import geopandas as gpd
+def crown_of_zone():
+    """Zone fine → couronne, par la TABLE de l'enquête (ticket 028).
 
-    from llm_module.core.geo_reference import residence_zone
+    Avant : le centroïde de chaque zone fine était classé par sa distance à l'hypercentre
+    (`geo_reference.residence_zone`, 8 / 20 / 40 km). Ce n'est pas la définition de
+    l'enquête, qui découpe par liste de communes, et le ticket 020 a mesuré l'écart :
+    24,4 % des domiciles changent de couronne entre les deux. Les lois de temps terminal
+    étaient donc stratifiées sur un découpage que ni les cibles ni le journal n'utilisent.
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        layer = gpd.read_file(root / "llm_module" / "data" / "zf_zones.gpkg")
-        # Centroïde calculé en Lambert 93 (projeté) puis reprojeté : le calculer
-        # directement en WGS84 donne un résultat faux, et geopandas le signale.
-        centroids = layer.to_crs("EPSG:2154").geometry.centroid.to_crs("EPSG:4326")
-    return {str(zf).strip(): residence_zone(p.y, p.x)
-            for zf, p in zip(layer["ZF"], centroids)}
+    `CouronneTable.couronne_of_zf` rattache une zone fine par son secteur de tirage — les
+    trois premiers chiffres du code — et c'est le secteur qui porte la couronne dans
+    l'enquête. Mesuré identique à 100 % au classement géométrique (ticket 021, lot 0). Un
+    code inconnu de la table rend `None` : la ligne sort des strates et reste dans la loi
+    d'ensemble, comme avant — on ne devine pas une couronne.
+    """
+    from llm_module.core.residence_zone import CouronneTable
+
+    return CouronneTable.load().couronne_of_zf
 
 
 def load_legs(root: Path) -> pd.DataFrame:
@@ -109,7 +113,7 @@ def load_legs(root: Path) -> pd.DataFrame:
     for column in ("T2", "T6", "T11"):
         legs[column] = pd.to_numeric(legs[column], errors="coerce").fillna(0.0)
 
-    zones = crown_by_zone(root)
+    crown_of = crown_of_zone()
     # `access` = marche au départ ; `egress` = marche à l'arrivée + recherche de place.
     # La recherche est comptée à l'arrivée parce que c'est là qu'on cherche.
     legs["access"] = legs["T2"].clip(0, MAX_MINUTES).round().astype(int)
@@ -117,10 +121,15 @@ def load_legs(root: Path) -> pd.DataFrame:
     # `T4`/`T5` : zones fines de départ et d'arrivée **du mode mécanisé**. L'accès dépend
     # de l'origine (où le véhicule est garé), l'égression de la destination (où il faut
     # trouver une place) — même convention que le fichier de config.
-    legs["access_crown"] = legs["T4"].map(zones)
-    legs["egress_crown"] = legs["T5"].map(zones)
-    print(f"Trajets : {len(legs)} au total, "
-          f"{(legs['T3'] == CAR_DRIVER).sum()} en conducteur de VP")
+    legs["access_crown"] = legs["T4"].map(crown_of)
+    legs["egress_crown"] = legs["T5"].map(crown_of)
+    car = legs["T3"] == CAR_DRIVER
+    # Compteur des trajets sans couronne : ils restent dans la loi d'ensemble, jamais
+    # dans une strate. Un chiffre élevé signalerait une table périmée, pas un cas normal.
+    unmapped = int((legs.loc[car, "access_crown"].isna()
+                    | legs.loc[car, "egress_crown"].isna()).sum())
+    print(f"Trajets : {len(legs)} au total, {int(car.sum())} en conducteur de VP, "
+          f"dont {unmapped} sans couronne à un bout ({100.0 * unmapped / max(int(car.sum()), 1):.1f} %)")
     return legs
 
 
@@ -232,9 +241,10 @@ def build(legs: pd.DataFrame) -> dict:
                       "recherche du stationnement)",
             "scope": "conducteur de véhicule particulier (T3 = 21) ; le passager ne "
                      "cherche pas de place",
-            "crown_definition": "llm_module.core.geo_reference.residence_zone — la "
-                                "définition unique du dépôt, celle sur laquelle "
-                                "terminal_time.yaml spatialise déjà",
+            "crown_definition": "llm_module.core.residence_zone.CouronneTable — zone "
+                                "fine → secteur de tirage → couronne, la liste de "
+                                "communes de l'enquête (ticket 028) ; même définition "
+                                "que le trait `residence_zone` des personas",
             "clip_minutes": MAX_MINUTES,
             "min_cell": MIN_CELL,
             "not_a_calibration_fit": "Aucune valeur n'a été choisie en regardant une "

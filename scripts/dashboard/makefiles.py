@@ -72,13 +72,13 @@ class Target:
 # (projet, cible) → (groupe, drapeaux, variables proposées)
 _META: dict[tuple[str, str], tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     # racine — Docker
-    ("root", "up"): ("Docker", (), ("CONFIG",)),
+    ("root", "up"): ("Docker", (), ()),
     ("root", "down"): ("Docker", (), ()),
-    ("root", "restart"): ("Docker", (), ("CONFIG",)),
+    ("root", "restart"): ("Docker", (), ()),
     ("root", "ps"): ("Docker", (), ()),
     ("root", "logs"): ("Docker", ("long",), ()),
-    ("root", "rebuild"): ("Docker", ("long",), ("CONFIG",)),
-    ("root", "api"): ("Docker", ("long",), ("CONFIG",)),
+    ("root", "rebuild"): ("Docker", ("long",), ()),
+    ("root", "api"): ("Docker", ("long",), ()),
     ("root", "otp"): ("Docker", ("long",), ()),
     # racine — diagnostic
     ("root", "error"): ("Diagnostic", (), ("LOG",)),
@@ -112,8 +112,8 @@ _META: dict[tuple[str, str], tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     # `run` et `run-offline` purgent Grafana/Prometheus et les compteurs Redis
     # avant de démarrer → danger.
     ("root", "wait-ready"): ("GAMA", ("long",), ()),
-    ("root", "run"): ("GAMA", ("long", "gui", "danger"), ("CONFIG", "EXPERIMENT_NAME")),
-    ("root", "run-offline"): ("GAMA", ("long", "danger"), ("CONFIG", "EXPERIMENT_NAME")),
+    ("root", "run"): ("GAMA", ("long", "gui", "danger"), ("EXPERIMENT_NAME",)),
+    ("root", "run-offline"): ("GAMA", ("long", "danger"), ("EXPERIMENT_NAME",)),
     ("root", "status"): ("GAMA", (), ()),
     ("root", "stop-run"): ("GAMA", (), ()),
     # racine — pilotage
@@ -179,11 +179,6 @@ class Project:
     variables: dict[str, Variable] = field(default_factory=dict)
 
 
-def _config_choices() -> tuple[str, ...]:
-    cfg = REPO_ROOT / "llm-agents" / "config"
-    return tuple(sorted(p.name for p in cfg.glob("*.yaml"))) if cfg.is_dir() else ()
-
-
 def _run_choices() -> tuple[str, ...]:
     out: list[str] = []
     cur = REPO_ROOT / "experiments" / "current"
@@ -203,9 +198,6 @@ def _calib_config_choices() -> tuple[str, ...]:
 
 def _root_variables() -> dict[str, Variable]:
     return {
-        "CONFIG": Variable(
-            "CONFIG", "Config LLM montée dans les conteneurs", "choice", _config_choices()
-        ),
         "RUN": Variable("RUN", "Run analysé (défaut : le plus récent)", "choice", _run_choices()),
         "LOG": Variable("LOG", "Fichier de log", "text", placeholder="experiments/current/app.log"),
         "OUT": Variable("OUT", "Écrire le rapport dans ce fichier", "text", placeholder="rapport.md"),

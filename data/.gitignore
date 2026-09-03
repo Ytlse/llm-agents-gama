@@ -2,6 +2,12 @@
 *.pbf
 *.tar
 /gtfs
-/population
+# Populations générées : ignorées, SAUF le dossier scellé de l'article — `/population/*`
+# (et non `/population`) pour qu'une négation puisse ré-inclure un sous-dossier : git ne
+# ré-inclut jamais un fichier dont le répertoire parent est lui-même exclu.
+/population/*
+!/population/population_1000_AAMAS/
+!/population/population_1000_AAMAS_v3/
 /population_samples
 /po_toulouse.small
+!/population/sauvegardes/

@@ -67,20 +67,48 @@ POLICY_FORMAT_VERSION = 1
 # reproductible d'une exécution à l'autre.
 SEED = 0
 VALID_FRACTION = 0.2          # part du train réservée à l'arrêt anticipé
-MAX_ROUNDS = 2000
+# Le plafond doit rester franchement au-dessus de l'arrêt anticipé réel (~1 500 tours
+# depuis le réglage du 2026-08-30). Une configuration qui *atteint* le plafond n'a pas
+# convergé : son chiffre est tronqué, et rien dans le journal ne le dit si on ne le
+# vérifie pas. `best_iteration` est reporté à la fin de l'entraînement, comparez-le.
+MAX_ROUNDS = 4000
 EARLY_STOPPING_ROUNDS = 50
 
 PARAMS = {
     "objective": "multiclass",
     "metric": "multi_logloss",
-    "learning_rate": 0.05,
-    "num_leaves": 31,
-    "min_data_in_leaf": 50,
-    "feature_fraction": 0.9,
-    "lambda_l2": 1.0,
+    # Réglages issus du banc `tune_mode_choice_policy.py` (2026-08-30) : recherche
+    # aléatoire puis raffinement, 96 configurations distinctes, validation croisée à 5 plis par
+    # ménage **à l'intérieur du train**, le split test n'ayant jamais été lu.
+    #
+    # Le résultat tient en une phrase : le modèle précédent était en sur-capacité, et
+    # c'est le vélo qui le payait. Passer de 31 à 5 feuilles, avec un pas trois fois
+    # plus court et trois fois plus de tours, améliore *simultanément* le log-loss
+    # global, la vraisemblance du vélo, sa PR-AUC, la calibration (ECE) et la L1 des
+    # parts modales. Beaucoup d'arbres peu profonds valent mieux ici que peu d'arbres
+    # profonds : une classe à 4,3 % ne peuple pas assez les feuilles d'un arbre à 31
+    # feuilles pour que sa probabilité y soit estimée sur autre chose que du bruit.
+    "learning_rate": 0.015,
+    "num_leaves": 5,
+    "min_data_in_leaf": 10,
+    "feature_fraction": 0.5,
+    "bagging_fraction": 0.9,
+    "bagging_freq": 1,            # sans `freq`, `bagging_fraction` est ignoré en silence
+    "lambda_l1": 0.5,
+    "lambda_l2": 10.0,
+    # Lissage des modalités rares vers la moyenne globale : `purpose = education` et
+    # `socioprofessional_class = Farmer` n'ont pas assez d'observations vélo pour
+    # mériter une branche à elles.
+    "cat_smooth": 50.0,
+    "min_data_per_group": 50,
+    "max_cat_threshold": 16,
+    "path_smoothing": 5.0,        # régularise les feuilles peu peuplées — les minoritaires
     # E7 : ni `is_unbalance` ni `class_weight`. Rééquilibrer les classes détruit la
     # calibration (précision vélo 0.14 dans le notebook d'origine), or ce sont les
-    # probabilités, pas l'accuracy, qui servent à produire des parts modales.
+    # probabilités, pas l'accuracy, qui servent à produire des parts modales. Le gain
+    # sur les modes sous-représentés est allé chercher de la *capacité mieux placée*,
+    # pas de la repondération — et le banc le vérifie : chaque configuration qui
+    # dégradait la L1 des parts modales de plus de 0,005 y était écartée d'office.
     "verbosity": -1,
     "num_threads": 4,
     "deterministic": True,
@@ -88,6 +116,7 @@ PARAMS = {
     "seed": SEED,
     "data_random_seed": SEED,
     "feature_fraction_seed": SEED,
+    "bagging_seed": SEED,
 }
 
 

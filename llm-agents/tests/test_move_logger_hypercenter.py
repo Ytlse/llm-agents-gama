@@ -6,15 +6,17 @@ Deux décisions cohabitent dans ce fichier, et il faut les tenir séparées.
 `scripts/progedo_logit/feature_spec.json` — le même dont dérivent les `dist_center_*` du
 modèle de choix modal. `move_logger.py` en portait une seconde définition codée en dur
 (43.6047 / 1.4442), distante de 820 m : les agents de la bande intermédiaire basculaient
-d'une couronne à l'autre selon le module qui les regardait. Ce centre sert désormais le
-**temps terminal**, dont les lois sont stratifiées avec lui.
+d'une couronne à l'autre selon le module qui les regardait. Ce centre ne sert plus qu'aux
+distances (`dist_center_*` du modèle, axe A4 de l'audit) : depuis le ticket 028, le
+**temps terminal** classe lui aussi ses points par commune.
 
 **La colonne « Lieu de résidence »** de `moves.csv`, elle, ne se calcule plus du tout
 (ticket 021) : elle recopie le trait `residence_zone` du persona, posé à la génération
 depuis le découpage **par liste de communes** de l'enquête. Classer par distance
 comparait 24,4 % des personas à la cible d'une autre zone et rangeait 45 domiciles hors
 périmètre en 3ᵉ couronne. Les tests de seuils métriques restent — mais ils portent sur
-`geo_reference.residence_zone`, qui n'est plus la définition de la résidence.
+`geo_reference.residence_zone`, qui n'a plus aucun appelant de production : c'est un
+témoin d'audit, et les scripts de mesure archivés doivent rester rejouables.
 """
 
 import json
@@ -93,12 +95,14 @@ class TestSourceDeLHypercentre:
 
 
 class TestClassementMetrique:
-    """Les seuils de distance, qui servent maintenant le TEMPS TERMINAL.
+    """Les seuils de distance — TÉMOIN D'AUDIT, sans appelant de production (ticket 028).
 
-    Ils restent verrouillés : les lois de `terminal_time_emc2.json` ont été estimées
-    avec eux (`meta.crown_definition`), donc les déplacer sans ré-exporter la ressource
-    comparerait des durées à des strates qui ne désignent plus les mêmes territoires.
-    Ce n'est en revanche plus la définition de la RÉSIDENCE — cf. `TestColonneDeResidence`.
+    Jusqu'à tt3 ils servaient le temps terminal, dont les lois étaient stratifiées avec
+    eux. Depuis tt4 le temps terminal classe par commune, comme la résidence. Les seuils
+    restent verrouillés pour une autre raison : trois scripts de mesure les utilisent
+    comme COMPARATEUR (`audit_perimetre`, `enrich_residence_zone --check`,
+    `measure_couronne_v7`), et une trace archivée doit rester rejouable à l'identique.
+    Ce n'est plus la définition de rien — cf. `TestColonneDeResidence`.
     """
 
     def _point_au_sud(self, km: float) -> tuple[float, float]:

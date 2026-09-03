@@ -549,7 +549,12 @@ def ajuster_planning(
                   build_travel_times.  Defaults to {} (all trips treated as instant).
     """
     n = len(activities)
-    if n == 0:
+    # Une journée à une seule activité — un agent IMMOBILE, domicile 0 → 86 400 s — n'a
+    # rien à planifier : aucun trajet, aucun horaire à recaler. Avant cette garde, le
+    # calcul des ajustements supposait deux activités et levait `KeyError: 1` (mesuré le
+    # 2026-09-03 sur un persona à une activité) — ce qui interdisait de garder les
+    # immobiles dans la population, alors que l'enquête en compte 10,6 %.
+    if n < 2:
         return activities
 
     if travel_times is None:

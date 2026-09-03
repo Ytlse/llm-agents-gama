@@ -40,7 +40,7 @@ _REAL_BUS_ROUTE = "line:142"
 # la version tt2) : sans ancrage, les attendus dépendraient d'un hasard de latitude.
 ORIGIN = Location(lon=1.4450, lat=43.5973)   # hypercentre → « Toulouse »
 DEST = Location(lon=1.4400, lat=43.6000)     # à 500 m → « Toulouse » aussi
-ZONE_LOINTAINE = Location(lon=1.10, lat=43.40)  # ~35 km → « 2eme couronne »
+ZONE_LOINTAINE = Location(lon=1.10, lat=43.40)  # ~35 km au sud-ouest ; « 3eme couronne » par commune (« 2eme » par la distance — l'écart que le ticket 028 referme)
 T0 = 1773723994
 
 
@@ -560,49 +560,85 @@ def test_les_deux_bouts_sont_tarifes_separement():
     # Aller au centre coûte plus cher qu'en partir : le stationnement domine. En
     # ESPÉRANCE — un couple de tirages ne prouverait rien, la loi étant massée à zéro.
     p = terminal_time.terminal_profile("car")
-    attendu_centre = (p.mean_s("access", "2eme couronne")
+    attendu_centre = (p.mean_s("access", "3eme couronne")
                       + p.mean_s("egress", "Toulouse"))
     attendu_peripherie = (p.mean_s("access", "Toulouse")
-                          + p.mean_s("egress", "2eme couronne"))
+                          + p.mean_s("egress", "3eme couronne"))
     assert attendu_centre > attendu_peripherie
     # Et le total reste la somme des sous-étapes affichées.
     for plan in (vers_centre, vers_peripherie):
         assert plan.total_seconds // 60 == sum(s // 60 for _, s in plan.described_steps)
 
 
-def test_les_deux_classements_sont_desormais_distincts():
-    """Ce test disait l'inverse jusqu'au ticket 021, et son inversion EST la décision.
+def test_les_deux_classements_convergent_depuis_tt4():
+    """Ce test s'inverse pour la seconde fois, et chaque inversion a été une décision.
 
-    Il exigeait que `move_logger` et le temps terminal classent identiquement. Mais les
-    deux ne classent pas le même objet : le journal classe une PERSONNE par sa commune
-    de résidence — la définition de l'enquête —, le temps terminal classe un POINT
-    d'origine ou de destination par sa distance à l'hypercentre. Vouloir une définition
-    unique revenait à imposer la métrique à la résidence, ce que le ticket 020 a chiffré :
-    24,4 % de personas comparés à la cible d'une autre zone.
+    Jusqu'au ticket 021 il exigeait que journal et temps terminal classent identiquement
+    — par la distance. Le 021 les a séparés : le journal LIT le trait communal du persona,
+    le temps terminal continuait de classer ses points par distance, divergence bornée à
+    34 s par bout de trajet et documentée. Le ticket 028 la referme par l'autre bout : les
+    lois de `terminal_time_emc2.json` sont re-stratifiées par la table de l'enquête (tt4),
+    et `_make_travel_plan` classe ses points par APPARTENANCE aux couronnes. Les deux
+    définitions coïncident donc de nouveau — mais sur celle de l'enquête, pas sur la
+    métrique.
 
-    Ce qui est verrouillé ici, c'est donc l'inverse : le journal ne recalcule plus rien,
-    il LIT le trait du persona, et il n'a même plus accès à la fonction métrique. La
-    divergence est bornée à 34 s par bout de trajet (cf. le docstring de
-    `geo_reference.residence_zone`) et documentée ; la refermer exige de ré-exporter
-    `terminal_time_emc2.json`, pas de rétablir un import.
+    Blagnac est le cas qui les départageait : à 6 km du Capitole, « Toulouse » par la
+    distance, 1ʳᵉ couronne par la commune. Le temps terminal doit le dire 1ʳᵉ couronne.
     """
-    import urban_mobility_agents.utils.move_logger as move_logger
-    from llm_module.core.geo_reference import residence_zone
+    import json
+    from pathlib import Path
 
-    # Le temps terminal, lui, continue de classer par distance : c'est ce que ses lois
-    # attendent, et le ticket 021 n'y touche pas.
-    assert residence_zone(43.5973, 1.4450) == "Toulouse"
-    assert residence_zone(43.40, 1.10) == "2eme couronne"   # ~35 km du Capitole
-    assert residence_zone(43.10, 1.10) == "3eme couronne"   # ~64 km
+    import urban_mobility_agents.utils.move_logger as move_logger
+    from llm_module.core.geo_reference import residence_zone as classement_metrique
+    from trip_helper import osmnx_direct
+
+    blagnac = (43.635, 1.39)
+    assert classement_metrique(*blagnac) == "Toulouse"                      # l'ancienne définition
+    assert osmnx_direct._terminal_zone(*blagnac, "access") == "1ere couronne"  # celle de l'enquête
+    assert osmnx_direct._terminal_zone(43.5973, 1.4450, "egress") == "Toulouse"
+
+    # La ressource est stratifiée sur la même définition — sinon les durées tirées
+    # seraient comparées à des strates qui ne désignent pas les mêmes territoires.
+    repo = Path(__file__).resolve().parents[2]
+    meta = json.loads((repo / "llm_module" / "data" / "terminal_time_emc2.json")
+                      .read_text(encoding="utf-8"))["meta"]
+    assert "CouronneTable" in meta["crown_definition"]
+    assert "geo_reference" not in meta["crown_definition"]
 
     # Le journal lit le trait, et rien d'autre.
     assert move_logger._residence_zone({"residence_zone": "1ere couronne"}) == "1ere couronne"
     assert move_logger._residence_zone({}) == ""
 
-    # Et le repli à la distance est IMPOSSIBLE, pas seulement déconseillé : le module
-    # n'importe plus la fonction métrique. Sans ce contrôle, un « repli raisonnable »
-    # reviendrait en une ligne à la première relecture distraite.
+    # Et le repli à la distance est IMPOSSIBLE dans les TROIS modules, pas seulement
+    # déconseillé : aucun n'importe la fonction métrique. Sans ce contrôle, un « repli
+    # raisonnable » reviendrait en une ligne à la première relecture distraite.
     assert not hasattr(move_logger, "residence_zone")
+    for source_path in (Path(osmnx_direct.__file__),
+                        repo / "scripts" / "progedo_logit" / "export_terminal_time.py"):
+        assert "geo_reference import residence_zone" not in source_path.read_text(
+            encoding="utf-8"), source_path.name
+
+
+def test_hors_perimetre_est_compte_et_tombe_sur_la_loi_default():
+    """Axe A4 du ticket 020, refermé côté temps terminal par le ticket 028.
+
+    Avant tt4, un point à 100 km du Capitole était classé « 3ᵉ couronne » parce qu'« au-delà
+    de 40 km » n'avait pas de borne : il payait la loi d'une couronne où il n'est pas, en
+    silence. Il reçoit désormais `hors périmètre`, qui n'a pas de loi propre : la loi
+    `default` lui est servie, et le cas est COMPTÉ — un volume élevé signalerait une
+    population ou un périmètre qui a changé, pas un cas normal à absorber.
+    """
+    from llm_module.core.population_reference import OUT_OF_PERIMETER
+    from trip_helper import osmnx_direct
+
+    lot = (44.50, 1.00)   # département du Lot, ~100 km au nord — hors des 453 communes
+    counter = osmnx_direct.TERMINAL_OUT_OF_PERIMETER.labels(end="egress")
+    before = counter._value.get()
+    assert osmnx_direct._terminal_zone(*lot, "egress") == OUT_OF_PERIMETER
+    assert counter._value.get() == before + 1
+    p = terminal_time.terminal_profile("car")
+    assert p.mean_s("egress", OUT_OF_PERIMETER) == p.mean_s("egress", "default")
+    assert p.mean_s("egress", OUT_OF_PERIMETER) > 0
 
 
 # ── tt3 : le temps terminal est TIRÉ dans la loi d'enquête ───────────────────

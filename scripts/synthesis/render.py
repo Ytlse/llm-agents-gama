@@ -81,6 +81,7 @@ svg text{font-family:inherit}
 .cx-delta{font-size:11px;font-variant-numeric:tabular-nums}
 .cx-delta-up{fill:var(--warn)}.cx-delta-down{fill:var(--ink3)}
 .cx-axis-label,.cx-tick{font-size:10.5px;fill:var(--ink3)}
+.cx-tick-low{opacity:.45}
 .cx-track{fill:var(--line);opacity:.55}
 .cx-target{stroke:var(--ink);stroke-width:2}
 .cx-axis{stroke:var(--line2);stroke-width:1}
@@ -181,6 +182,33 @@ somme des écarts absolus de parts modales vaut 12 points.</p>
 </section>"""
 
 
+def _frozen_sets_note(fz: dict) -> str:
+    """Déclare la divergence entre les jeux gelés et la population en service.
+
+    Rendue seulement si elle existe : une mise en garde permanente cesse d'être lue.
+    """
+    if not fz or not fz.get("diverges"):
+        return ""
+    frozen = str(fz.get("frozen_population_sha256") or "")[:12]
+    current = str(fz.get("run_population_sha256") or "")[:12]
+    return f"""
+<div class="note"><div class="t">Les jeux gelés du volet 2 ne portent plus la population
+du run</div>
+<p>Le manifeste des jeux gelés épingle une population d'empreinte
+<code>{escape(frozen)}</code>&nbsp;; le run de cette page en porte une d'empreinte
+<code>{escape(current)}</code>. Les jeux gelés ont été découpés dans un run antérieur, et
+depuis, la population en service a changé — les tickets 016 et 017 y réécrivent
+l'abonnement TC et le permis, que les jeux gelés gardent recopiés du donneur ENTD 2008.</p>
+<p>Conséquence de lecture&nbsp;: les scores du volet 2 mesurés <strong>sur jeux gelés</strong>
+décrivent une population que la simulation ne joue plus. Ils restent comparables
+<em>entre eux</em>, ce qui est leur rôle — suivre une trajectoire de prompt — mais pas au
+volet 1 ni au volet 3, qui portent la population courante. Le témoin d'échantillon du
+volet 2 sur le jeu commun, lui, est calculé sur le run et n'est pas concerné.</p>
+<p>La divergence est <strong>déclarée et non corrigée</strong>&nbsp;: refaire les jeux gelés
+casserait la comparabilité de toute la trajectoire de calibration déjà mesurée.
+Manifeste&nbsp;: <code>{escape(str(fz.get("manifest") or "—"))}</code>.</p></div>"""
+
+
 def section_common_set(payload: dict) -> str:
     cs = payload["common_set"]
     if not cs.get("available"):
@@ -249,7 +277,8 @@ tous les modes, et leur part doit être lue avec le reste.</p>
 un run de simulation. C'est le seul terrain où ils peuvent se rencontrer — il fournit
 à la fois les personas complets, les jeux de choix OTP réellement proposés, et les
 coordonnées origine/destination dont le modèle statistique a besoin. Les jeux gelés de
-la calibration sont d'ailleurs eux-mêmes construits à partir d'un run de ce type.</p>
+la calibration sont d'ailleurs eux-mêmes construits à partir d'un run de ce type — mais
+pas forcément de <em>celui-ci</em>, cf. ci-dessous.</p>
 {tiles([
     ("Run", cs["run_id"], "épinglé dans le manifeste" if cs.get("run_pinned")
      else "⚠ chemin non épinglé — la page suivra le prochain run"),
@@ -261,6 +290,7 @@ la calibration sont d'ailleurs eux-mêmes construits à partir d'un run de ce ty
 ])}
 {warn}
 {chain}
+{_frozen_sets_note(cs.get("frozen_sets") or {})}
 <h3>Couverture par sous-catégorie</h3>
 <p>Effectif en <em>personnes distinctes</em>. Les catégories sous le seuil de 5 sont
 signalées&nbsp;: elles restent affichées mais ne pèsent quasiment rien dans le score,
@@ -1127,10 +1157,53 @@ décision(s). Taille des jeux de choix&nbsp;: {escape(sizes_txt)} — les
 1,0, ce qui n'est pas une prédiction mais le constat qu'il n'y avait pas de choix. Ils
 sont conservés parce que le volet 1 les conserve aussi.</p>
 <p>{excluded_txt}</p>
+{_renormalisation_warning(preds.get("renormalisation_bias") or {})}
 <h3>Détail par sous-catégorie</h3>
 <p>Aussi disponible en page dédiée, sans le reste de la synthèse&nbsp;:
 <a href="detail_progedo.html">détail par sous-catégorie — arbre PROGEDO</a>.</p>
 {_dimension_blocks(preds.get("details") or {}, "mod")}"""
+
+
+def _renormalisation_warning(bias: dict) -> str:
+    """Avertissement de lecture sur le composite `attendu`, calculé et non écrit en dur.
+
+    La renormalisation sur l'offre OTP n'est pas neutre : elle retire de la masse aux
+    modes que le modèle surprédit et la donne à ceux qu'OTP offre presque toujours. Sur
+    certains modes elle rapproche de la cible, sur d'autres elle en éloigne — et pour ces
+    derniers, `attendu` **pénalise** toute correction qui augmente le mode, même juste.
+    Mesuré le 2026-08-27 : le composite passait de 6,015 à 6,208 pendant que l'écart des
+    15-19 ans, le plus gros de la page, tombait de 63,8 à 48,7 de `l1`.
+
+    Le texte nomme les modes concernés au lieu de les supposer : le biais dépend de
+    l'offre du run, et une phrase figée deviendrait fausse au run suivant en silence.
+    """
+    modes = (bias or {}).get("modes") or {}
+    worsened, improved = [], []
+    for mode, v in modes.items():
+        raw_gap, ren_gap = v.get("raw_gap_pt"), v.get("renormalised_gap_pt")
+        if raw_gap is None or ren_gap is None:
+            continue
+        (worsened if abs(ren_gap) > abs(raw_gap) + 1.0 else
+         improved if abs(ren_gap) + 1.0 < abs(raw_gap) else []).append((mode, raw_gap, ren_gap))
+    if not worsened:
+        return ""
+    def _fmt(items):
+        return ", ".join(
+            f"<strong>{escape(MODE_LABELS.get(m, m))}</strong> ({r:+.1f} → {n:+.1f})"
+            for m, r, n in items)
+    good = (f" À l'inverse elle en rapproche {_fmt(improved)}, "
+            f"donc elle n'est pas à retirer&nbsp;: elle corrige la surprédiction de la "
+            f"voiture que le modèle produit en brut." if improved else "")
+    return f"""
+<div class="note"><div class="t">Comment lire le composite « masse de probabilité »</div>
+<p>La renormalisation <strong>éloigne</strong> de la cible EMC² la part de
+{_fmt(worsened)} — écart avant puis après renormalisation.{good}</p>
+<p>Conséquence sur ces modes-là&nbsp;: le composite « masse de probabilité »
+<strong>pénalise toute correction qui augmente le mode, même juste</strong>, puisqu'il le
+lit au-dessus de sa cible alors que le modèle l'y met presque. Un lot qui corrige la
+sous-représentation d'un de ces modes se juge sur le <strong>détail par
+sous-catégorie</strong> et sur les composites « mode élu » et « avant renormalisation »,
+qui n'ont pas ce biais.</p></div>"""
 
 
 def section_model(payload: dict) -> str:

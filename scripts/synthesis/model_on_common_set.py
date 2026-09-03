@@ -45,6 +45,7 @@ produisent le même parquet.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from collections import Counter
@@ -396,6 +397,17 @@ COLUMNS = (
 )
 
 
+def _digest(path: Optional[Path]) -> Optional[str]:
+    """sha256 d'un fichier, ou ``None`` s'il est illisible. Sert d'empreinte de modèle."""
+    if path is None or not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def write_parquet(rows: list[dict], path: Path, meta: dict) -> None:
     """Écrit le parquet et y attache son descriptif (schéma, run, modèle, exclusions).
 
@@ -557,6 +569,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         "moves_sha256": (run.get("moves") or {}).get("sha256"),
         "spec_version": spec["spec_version"],
         "policy_generated_at": artefact.get("generated_at"),
+        # Empreinte de la POLITIQUE, et pas seulement sa date. `spec_version` ne bouge
+        # que si le contrat de variables change : un ré-entraînement à variables
+        # identiques — plus d'itérations, jeu d'entraînement corrigé — le laisse à sa
+        # valeur, et la page servait alors un parquet périmé comme courant, en silence.
+        # C'est le défaut symétrique de celui fermé le 2026-08-25 pour le run, sur l'axe
+        # du modèle. Mesuré le 2026-08-27 : corriger la granularité des codes de zone a
+        # porté le jeu d'entraînement de 27 886 à 52 248 déplacements sans toucher au
+        # spec — exactement le cas que cette empreinte rend visible.
+        "policy_sha256": _digest(policy_path),
         "classes": list(spec["target"]["classes"]),
         "class_to_cat": POLICY_CLASS_TO_CAT,
         "exclude_selection_methods":

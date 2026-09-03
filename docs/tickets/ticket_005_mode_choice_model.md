@@ -11,7 +11,7 @@ qu'un modèle exogène prédit correctement le mode ; il reste à en faire une p
 servie en simulation.
 
 **État d'avancement** : phase 1 livrée le 2026-07-29 (§6), phase 3a le 2026-07-30 (§2.2),
-phase 2 le 2026-07-31 (§7).
+phase 2 le 2026-07-31 (§7), réglage des hyperparamètres le 2026-08-30 (§9).
 
 ---
 
@@ -31,6 +31,7 @@ phase 2 le 2026-07-31 (§7).
 | E8 | Contrat de features versionné `feature_spec.json` | Seule garantie contre le train/serve skew — voir §2 |
 | E9 | Évaluateur **pur Python** du booster exporté au runtime | Le conteneur `controller` est un `python:3.12-slim` sans `libgomp1` : `import lightgbm` y échouerait. Voir §3 |
 | E10 | Renormalisation sur le choice set offert par OTP | C'est l'hypothèse **IIA**, assumée et documentée |
+| E11 | **Réglages cherchés, pas posés** — arbres peu profonds et nombreux | Banc `tune_mode_choice_policy.py`, 96 configurations distinctes en CV groupée par ménage *dans le train*. `num_leaves` 31 → 5 : le vélo gagne significativement en vraisemblance sans que le log-loss global ni la L1 des parts modales bougent. Voir §9 |
 
 ### Décisions écartées (et pourquoi)
 
@@ -41,6 +42,7 @@ phase 2 le 2026-07-31 (§7).
 | Injection des règles dans le prompt système (U3) | Sans objet : un GBM n'est pas verbalisable. L'usage sort du périmètre |
 | Pré-remplissage du cache LLM par le modèle | Mélangerait deux sources de décision dans un artefact déjà difficile à auditer |
 | `distance_km` (D12) comme feature | Fuite démontrée — §1 |
+| Repondérer les classes pour redresser le vélo | Toujours écarté (E7), et le banc du §9 le vérifie plutôt que de le supposer : son garde-fou écarte d'office toute configuration qui dégrade la L1 des parts modales de plus de 0,005. Le gain vélo est venu de la capacité, pas du poids |
 
 ---
 
@@ -323,6 +325,10 @@ pour la phase 3 (cf. §2).
 
 ## 7 · Résultats de la phase 2 (2026-07-31, action A6)
 
+> **Réglages dépassés depuis le 2026-08-30 (§9).** Les chiffres de cette section décrivent
+> le modèle à 31 feuilles entraîné sur le spec v1 (20 901 lignes de train). Ils sont conservés
+> tels quels : c'est l'état à partir duquel le §9 mesure.
+
 `scripts/progedo_logit/fit_mode_choice_policy.py` (`make policy`) entraîne le booster et
 écrit `mode_choice_policy.json` + `mode_choice_policy_metrics.json`. Script versionné et
 non notebook : la reproductibilité est le livrable, pas la narration. La cible `make policy`
@@ -460,11 +466,145 @@ absent.
 
 ---
 
+## 9 · Réglage des hyperparamètres (2026-08-30)
+
+**Question de départ** : peut-on améliorer les modes sous-représentés — le vélo, 4,3 % des
+déplacements — sans repondérer les classes, puisque E7 l'interdit ?
+
+**Réponse : oui, en réduisant la capacité du modèle.** Les réglages d'origine n'avaient
+jamais été cherchés. `scripts/progedo_logit/tune_mode_choice_policy.py` (`make policy-tune`)
+les a cherchés sur **96 configurations distinctes** (114 essais : la référence et les
+gagnants sont rejoués d'une passe à l'autre), en validation croisée à 5 plis par ménage
+**entièrement à l'intérieur du train** — le split test n'est jamais lu par le banc, et
+l'arrêt anticipé est refait dans chaque pli.
+
+**Le diagnostic qui oriente tout.** Le vélo n'a pas un problème de repondération : sa masse
+de probabilité manque de 13 %, pas d'un facteur. Ce qui lui manque est du pouvoir
+discriminant — PR-AUC 0,241 contre 0,78 à 0,93 pour les trois autres modes. Un déficit de
+discrimination ne se corrige pas en poussant la classe vers le haut. Le rappel argmax du
+vélo (0,16) ne mesure d'ailleurs presque rien d'autre que sa prévalence : sur une classe à
+4 %, l'argmax d'un classifieur calibré s'effondre par construction. Les critères retenus
+sont donc la **NLL restreinte à la classe** et la **PR-AUC un-contre-tous**.
+
+**Garde-fou** : toute configuration dégradant la L1 des parts modales de plus de 0,005 est
+écartée d'office, quel que soit son gain sur le vélo — 22 des 49 configurations de la
+première passe y sont tombées. C'est ce qui empêche la recherche de redécouvrir la
+repondération de classes par une porte dérobée.
+
+**Ce qui a été trouvé : le modèle était en sur-capacité.** Deux passes successives ont fait
+sortir leurs gagnants sur la borne *basse* de `num_leaves` (15, puis 7) — un optimum sur un
+bord de grille n'en est pas un. Une troisième passe à réglages figés a localisé le plateau,
+une quatrième a relevé le plafond de tours parce que `num_leaves = 3` l'atteignait sans que
+l'arrêt anticipé se déclenche (chiffre tronqué, pas convergé).
+
+| `num_leaves` | log-loss | NLL vélo | PR-AUC vélo | L1 parts | ECE | tours |
+|---|---|---|---|---|---|---|
+| 31 *(avant)* | 0,5403 | 2,5380 | 0,2410 | 0,0117 | 0,0180 | 122 |
+| 10 | 0,5308 | 2,3878 | 0,2713 | 0,0069 | 0,0098 | 672 |
+| **5** *(retenu)* | **0,5324** | **2,3430** | **0,2757** | **0,0050** | **0,0078** | **1 461** |
+| 3 | 0,5367 | 2,3334 | 0,2751 | 0,0044 | 0,0078 | 2 297 |
+
+**Réglages retenus** — `learning_rate` 0,015 · `num_leaves` 5 · `min_data_in_leaf` 10 ·
+`feature_fraction` 0,5 · `bagging_fraction` 0,9 (`freq` 1) · `lambda_l1` 0,5 ·
+`lambda_l2` 10 · `cat_smooth` 50 · `min_data_per_group` 50 · `path_smoothing` 5.
+Arrêt anticipé à **1 500 itérations**, soit 6 000 arbres. Plafond porté de 2 000 à 4 000
+tours pour qu'il reste franchement au-dessus de l'arrêt réel.
+
+Beaucoup d'arbres peu profonds valent mieux ici que peu d'arbres profonds : une classe à
+4,3 % ne peuple pas assez les feuilles d'un arbre à 31 feuilles pour que sa probabilité y
+soit estimée sur autre chose que du bruit.
+
+**Test (13 045 déplacements, 2 349 ménages, pondéré COEP)** — bootstrap apparié par ménage,
+2 000 tirages :
+
+| mesure | avant | après | Δ | IC 95 % | verdict |
+|---|---|---|---|---|---|
+| log-loss global | 0,5392 | 0,5402 | +0,0009 | [−0,0048, +0,0066] | dans le bruit |
+| L1 parts modales | 0,0236 | 0,0269 | +0,0033 | [−0,0043, +0,0089] | dans le bruit |
+| **NLL vélo** | 2,4222 | **2,3512** | **−0,0710** | [−0,1331, −0,0075] | **significatif** |
+| NLL voiture | 0,3267 | 0,3337 | +0,0070 | [+0,0022, +0,0120] | significatif |
+| NLL transport collectif | 0,7928 | 0,7939 | +0,0011 | [−0,0211, +0,0219] | dans le bruit |
+| NLL marche | 0,5917 | 0,5903 | −0,0014 | [−0,0149, +0,0105] | dans le bruit |
+
+Le seul effet net est un **transfert de vraisemblance de la classe dominante vers la classe
+rare** : le vélo gagne 0,071, la voiture perd 0,007 — un ordre de grandeur d'écart, et la
+voiture part de dix fois moins haut. ECE global 0,0142 → 0,0118 ; NLL macro (les 4 modes à
+égalité) 1,0333 → 1,0173.
+
+**Les gains de CV ne se retrouvent pas tels quels sur le test**, et c'est reporté ainsi
+plutôt que lissé. La CV note chacune des 39 203 lignes du train hors-échantillon ; le test
+est un tirage unique de 13 045 lignes. La CV a servi à choisir — c'est le protocole ; le
+test est le chiffre de généralisation, et il donne la borne prudente.
+
+**Prix payé** — 6 000 arbres au lieu de 560, artefact 18,9 Mo au lieu de 12,2, prédiction
+43,9 µs/ligne au lieu de 9,9. Sans conséquence pour le pipeline actuel ; le point de
+vigilance est **l'évaluateur pur Python de la phase 3b** (E9), pas encore écrit, qui
+traversera environ six fois plus de travail. Repli documenté si ce coût gêne :
+`num_leaves = 10`, 2 688 arbres, les trois quarts du gain vélo.
+
+**Ce que le réglage ne corrige pas** — le vélo reste à 1,2 % en mode élu pour 4,0 %
+observés, avant comme après : c'est une propriété de l'argmax sur une classe rare (§7), pas
+un défaut du modèle. Et le vélo reste la classe la plus mal séparée des quatre ; ce qui lui
+manque tient probablement à une variable absente du spec, pas à un hyperparamètre.
+
+**Traces** — [`docs/traces/2026-08-30_reglage_lightgbm/`](../traces/2026-08-30_reglage_lightgbm/)
+archive les quatre passes, les métriques avant/après et le bootstrap.
+
+---
+
+## 10 · Audit du jeu d'entraînement (2026-08-31)
+
+`scripts/progedo_logit/explore_mode_choice_dataset.ipynb` exporte le parquet en deux CSV
+(`mode_choice_train.csv`, `mode_choice_test.csv`, ignorés par git) et les **recharge depuis
+le CSV** avant de les passer au crible. Le round-trip est volontaire : les types sont
+réimposés depuis `feature_spec.json`, jamais devinés — sans quoi un booléen revient en
+chaîne et une modalité absente d'un split disparaît silencieusement des tableaux.
+
+**Ce que l'audit établit.**
+
+| Contrôle | Verdict |
+|---|---|
+| Découpage étanche au ménage | ✅ 0 ménage à cheval (7 044 / 2 349), 0 personne |
+| Part de test | ✅ 25,0 % pour 25 % annoncés |
+| Colonnes contaminées entraînées | ✅ aucune |
+| Représentativité numérique (SMD) | ✅ max 0,037 (`household_size`), seuil 0,25 |
+| Représentativité catégorielle (TVD) | ✅ max 2,55 pts (`socioprofessional_class`), seuil 3 |
+| Impossibilités de domaine (10 règles) | ✅ 0 ligne |
+| Saturation d'une variable retenue | ✅ aucune |
+| Cases test `mode × distance` sous 30 obs. | ⚠ **9 cases** |
+
+**Le seul défaut est un défaut d'effectif, et il est structurel.** Le test ne contient
+qu'**1 marche au-delà de 10 km, 0 au-delà de 20 km, 2 vélos entre 20 et 50 km, 1 transport
+collectif au-delà de 50 km**. Ces cases ne supportent aucune lecture — et c'est exactement
+le mécanisme qui fait qu'une tranche de distance à un seul déplacement pèse autant qu'une
+tranche à 856 dans l'EMD ordinale de la page de synthèse (`emd_ordinal_dim_measured` filtre
+les tranches sur la seule présence d'une **référence**, jamais sur l'effectif du candidat,
+là où le chemin nominal pondère en continu par effectif). Le notebook rend le trou visible
+**avant** de scorer.
+
+**Trois lectures des valeurs aberrantes**, parce qu'aucune ne suffit seule : IQR pour les
+queues, z-score pour les points isolés, et **règles de domaine** pour ce que les deux
+premières ne verront jamais — une valeur centrale mais impossible. Les règles sont séparées
+en *impossibilités* (tout effectif non nul est un bug amont) et *invraisemblances* (rares
+mais vraies, on surveille le volume) : 223 déplacements en `car` sans permis ni voiture au
+foyer sont des **passagers**, 235 en `bike` sans vélo nominatif sont des **vélos partagés
+ou empruntés**. Les confondre ferait corriger des lignes justes.
+
+Un quatrième test, la **saturation** — la valeur la plus fréquente de chaque variable
+continue — trouve `duration_min` à 17,6 % sur la seule valeur « 10 minutes » (arrondi
+déclaratif), `distance_km` et `crow_km` à 6,6 % sur une même valeur. Les trois sont
+`diagnostic_only` : les artefacts d'arrondi sont **confinés aux colonnes déjà exclues**,
+aucune variable retenue n'en porte.
+
+---
+
 ## Voir aussi
 
 - `scripts/synthesis/model_on_common_set.py` — application au jeu commun (§8)
 
-- `scripts/progedo_logit/fit_mode_choice_policy.py` — entraînement de la politique (§7)
+- `scripts/progedo_logit/fit_mode_choice_policy.py` — entraînement de la politique (§7, §9)
+- `scripts/progedo_logit/tune_mode_choice_policy.py` — banc de réglage des hyperparamètres (§9)
+- `scripts/progedo_logit/explore_mode_choice_dataset.ipynb` — audit du jeu train/test (§10)
 - `scripts/progedo_logit/prepare_progedo_logit.ipynb` — préparation initiale (contient la
   fuite D12, corrigée ici)
 - `scripts/progedo_logit/explore_progedo_walk_shapley.ipynb` §7 — diagnostic de fuite
