@@ -11,19 +11,18 @@ inside the controller where hypercorn workers are daemon processes.
 
 import asyncio
 import functools
-import hashlib
 import os
 import time
 from contextlib import asynccontextmanager
 from concurrent.futures.process import BrokenProcessPool
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
-from geography import TOULOUSE_CENTER_DIST_M
 from models import Location
 from trip_helper.osmnx_direct import (
     _GraphStore,
@@ -34,6 +33,8 @@ from trip_helper.osmnx_direct import (
     _reset_pool,
     _route_sync,
     _route_sync_process,
+    graph_key,
+    graph_label,
 )
 
 # Two fixed Toulouse points used only for warmup routing.
@@ -48,10 +49,19 @@ _inflight: dict[str, int] = {m: 0 for m in _MODE_TO_OSMNX}
 async def lifespan(app: FastAPI):
     logger.info(f"[osmnx-server] startup  pid={os.getpid()}  daemon={_in_daemon}  {_proc_mem_mb()}")
 
-    city      = "Toulouse, France"
-    dist      = TOULOUSE_CENTER_DIST_M
+    # Graphe servi : celui de `graph_key()` — le polygone des 453 communes par défaut (ticket 031,
+    # partie 2). Son pickle doit être dans le cache monté ; rien n'est téléchargé à sa place.
     cache_dir = str(_GraphStore._cache_dir())
-    cache_key = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+    cache_key = graph_key()
+    g_path    = Path(cache_dir) / f"graphs_{cache_key}.pkl"
+    if not g_path.exists():
+        logger.error(
+            f"[ALARME] [osmnx-server] graphe {cache_key} ({graph_label(cache_key)}) introuvable : "
+            f"{g_path}. Le service ne démarre pas — montez data/cache/osmnx et construisez le graphe "
+            "(`make osmnx-perimeter-graph`).")
+        raise RuntimeError(f"graphe OSMnx {cache_key} absent : {g_path}")
+    logger.info(f"[osmnx-server] graphe {cache_key} ({graph_label(cache_key)}) — "
+                f"{g_path.name} {g_path.stat().st_size / 1_048_576:.0f} Mo dans {cache_dir}")
     loop      = asyncio.get_running_loop()
 
     for mode, osmnx_mode in _MODE_TO_OSMNX.items():
@@ -128,10 +138,8 @@ async def route(req: _RouteRequest) -> Optional[dict]:
             graphs[osmnx_mode], boundary, origin, destination, osmnx_mode, req.congestion_dt,
         )
     else:
-        city      = "Toulouse, France"
-        dist      = TOULOUSE_CENTER_DIST_M
         cache_dir = str(_GraphStore._cache_dir())
-        cache_key = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+        cache_key = graph_key()
         fn = functools.partial(
             _route_sync_process,
             cache_dir, cache_key, origin, destination, osmnx_mode, req.congestion_dt,

@@ -11,7 +11,6 @@ Optimised for high-frequency async use:
 import asyncio
 import functools
 import gc
-import hashlib
 import itertools
 import math
 import multiprocessing as _mp
@@ -35,7 +34,8 @@ from prometheus_client import Counter, Gauge, Histogram
 from shapely.geometry import Point
 
 from models import Location, Transit, TransitLocation, TravelPlan
-from geography import TOULOUSE_CENTER_DIST_M
+from geography import (PERIMETER_CACHE_KEY, PERIMETER_GRAPH_LABEL, PRODUCTION_CACHE_KEY_30KM,
+                       TOULOUSE_CENTER_DIST_M)
 from settings import settings
 from trip_helper.congestion_zones import (NODE_ZONE_KEY, ZONE_AGGLO, ZONE_CITY, ZONE_OUTSIDE,
                                           ZoneError, ensure_zones)
@@ -371,6 +371,34 @@ def _reset_pool(osmnx_mode: str) -> None:
 
 # ── Graph singleton ───────────────────────────────────────────────────────────
 
+# Ville et rayon du graphe HISTORIQUE (disque de 30 km, téléchargé par Overpass). Ils ne servent
+# plus qu'à reconstruire ce graphe d'audit si son pickle manque — jamais le graphe du runtime.
+_LEGACY_CITY = "Toulouse, France"
+_LEGACY_DIST_M = TOULOUSE_CENTER_DIST_M
+
+
+class GraphMissingError(RuntimeError):
+    """Le pickle du graphe configuré est absent : on refuse d'en télécharger un autre à sa place."""
+
+
+def graph_key() -> str:
+    """Clé du graphe OSMnx servi au runtime (ticket 031, partie 2).
+
+    `settings.gtfs.osmnx_graph_key` si elle est posée, sinon le graphe du **polygone des 453
+    communes** (`geography.PERIMETER_CACHE_KEY`). Le disque de 30 km (`PRODUCTION_CACHE_KEY_30KM`)
+    reste chargeable pour un audit ; ce n'est plus lui que la simulation route.
+    """
+    return getattr(settings.gtfs, "osmnx_graph_key", None) or PERIMETER_CACHE_KEY
+
+
+def graph_label(key: str) -> str:
+    if key == PERIMETER_CACHE_KEY:
+        return PERIMETER_GRAPH_LABEL
+    if key == PRODUCTION_CACHE_KEY_30KM:
+        return f"disque historique {_LEGACY_CITY} r={_LEGACY_DIST_M} m (audit)"
+    return "clé configurée (settings.gtfs.osmnx_graph_key)"
+
+
 class _GraphStore:
     """Process-wide singleton: load walk/bike/drive graphs + city boundary once."""
 
@@ -391,27 +419,51 @@ class _GraphStore:
         return path
 
     @classmethod
-    def _build_sync(cls, city: str, dist: int) -> tuple[dict, gpd.GeoDataFrame]:
-        """Download or restore graphs and boundary from disk cache."""
-        key     = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+    def _build_sync(cls, key: Optional[str] = None) -> tuple[dict, gpd.GeoDataFrame]:
+        """Restaure les graphes et la frontière du graphe `key` depuis le cache disque.
+
+        Le graphe du polygone des 453 communes se construit hors ligne
+        (`make osmnx-perimeter-graph`) : s'il manque, c'est une erreur explicite — télécharger
+        un disque de 30 km à sa place reviendrait à servir un autre périmètre sous le même nom.
+        Seul le graphe historique (`PRODUCTION_CACHE_KEY_30KM`) garde sa recette de
+        téléchargement Overpass, pour l'audit.
+        """
+        key     = key or graph_key()
+        legacy  = key == PRODUCTION_CACHE_KEY_30KM
         g_path  = cls._cache_dir() / f"graphs_{key}.pkl"
         b_path  = cls._cache_dir() / f"boundary_{key}.pkl"
 
         graphs = None
         if g_path.exists():
-            logger.info(f"OSMnx: loading graphs from {g_path.name}")
+            t_load = _time.monotonic()
+            logger.info(f"OSMnx: chargement du graphe {key} ({graph_label(key)}) depuis {g_path.name} "
+                        f"({g_path.stat().st_size / 1_048_576:.0f} Mo)")
             with g_path.open("rb") as f:
                 graphs = pickle.load(f)
             if not all(G.number_of_edges() > 0 for G in graphs.values()):
+                if not legacy:
+                    raise GraphMissingError(f"OSMnx : le pickle {g_path} porte un graphe vide — "
+                                            "reconstruisez-le (`make osmnx-perimeter-graph FORCE=1`)")
                 logger.warning("OSMnx: cached graphs are empty, clearing cache and re-downloading…")
                 g_path.unlink(missing_ok=True)
                 graphs = None
+            else:
+                logger.info(f"OSMnx: graphe {key} chargé en {_time.monotonic() - t_load:.1f}s — "
+                            + " ; ".join(f"{m}: {G.number_of_nodes()} nœuds / {G.number_of_edges()} arêtes"
+                                         for m, G in graphs.items()))
 
         if graphs is None:
-            logger.info(f"OSMnx: downloading graphs for {city!r} (r={dist} m) …")
+            if not legacy:
+                logger.error(
+                    f"[ALARME] OSMnx : graphe {key} ({graph_label(key)}) introuvable dans "
+                    f"{cls._cache_dir()} (attendu {g_path.name}). Rien n'est téléchargé à sa place : "
+                    "construisez-le avec `make osmnx-perimeter-graph` (data/cache/osmnx est monté "
+                    "dans le conteneur), ou posez settings.gtfs.osmnx_graph_key sur une clé en cache.")
+                raise GraphMissingError(f"graphe OSMnx {key} absent : {g_path}")
+            logger.info(f"OSMnx: downloading graphs for {_LEGACY_CITY!r} (r={_LEGACY_DIST_M} m) …")
             graphs = {}
             for osmnx_mode in _OSMNX_MODES:
-                G = ox.graph_from_address(city, dist=dist, network_type=osmnx_mode)
+                G = ox.graph_from_address(_LEGACY_CITY, dist=_LEGACY_DIST_M, network_type=osmnx_mode)
                 for _, _, _, data in G.edges(keys=True, data=True):
                     hwy = data.get("highway")
                     if isinstance(hwy, list):
@@ -426,12 +478,17 @@ class _GraphStore:
             logger.info(f"OSMnx: loading boundary from {b_path.name}")
             with b_path.open("rb") as f:
                 boundary = pickle.load(f)
-        else:
-            logger.info(f"OSMnx: downloading boundary for {city!r} …")
-            boundary = ox.geocode_to_gdf(city).to_crs("EPSG:4326")
+        elif legacy:
+            logger.info(f"OSMnx: downloading boundary for {_LEGACY_CITY!r} …")
+            boundary = ox.geocode_to_gdf(_LEGACY_CITY).to_crs("EPSG:4326")
             with b_path.open("wb") as f:
                 pickle.dump(boundary, f)
             logger.info(f"OSMnx: boundary saved to {b_path.name}")
+        else:
+            logger.error(f"[ALARME] OSMnx : frontière de Toulouse absente pour le graphe {key} "
+                         f"({b_path.name}) — `make osmnx-perimeter-graph` la copie depuis le cache de "
+                         "production ; rien n'est géocodé à sa place.")
+            raise GraphMissingError(f"frontière {b_path} absente")
 
         # Zones de congestion (ticket 031, décision 4) : calculées une fois pour un graphe qui n'en
         # a pas — le graphe historique de 30 km téléchargé avant ce changement — puis mises en
@@ -452,18 +509,19 @@ class _GraphStore:
         return graphs, boundary
 
     @classmethod
-    async def get(cls, city: str = "Toulouse, France", dist: int = TOULOUSE_CENTER_DIST_M) -> tuple[dict, gpd.GeoDataFrame]:
+    async def get(cls, key: Optional[str] = None) -> tuple[dict, gpd.GeoDataFrame]:
+        """Graphes et frontière du graphe `key` (défaut : `graph_key()`), chargés une fois."""
         # Return cached graphs and boundary if exist
         if cls._graphs is not None:
             return cls._graphs, cls._boundary
-        
+
         # Else build them in a thread to avoid blocking the event loop, with a lock to prevent concurrent builds
         async with cls._get_lock():
             if cls._graphs is not None:
                 return cls._graphs, cls._boundary
             loop = asyncio.get_running_loop()
             cls._graphs, cls._boundary = await loop.run_in_executor(
-                _IO_EXECUTOR, cls._build_sync, city, dist
+                _IO_EXECUTOR, cls._build_sync, key or graph_key()
             )
             logger.info("OSMnx: graphs ready.")
         return cls._graphs, cls._boundary
@@ -745,11 +803,13 @@ async def get_direct_plan(
     trip_mode:     str,      # "foot" | "bicycle" | "car"
     departure_time: int,     # Unix timestamp in seconds
     congestion_dt:  datetime, # Real calendar date+time for congestion lookup
-    city: str = "Toulouse, France",
-    dist: int = TOULOUSE_CENTER_DIST_M,
     _timing_sink: dict | None = None,
 ) -> Optional[TravelPlan]:
-    """Async OSMnx direct route. Returns a one-leg TravelPlan or None on failure."""
+    """Async OSMnx direct route. Returns a one-leg TravelPlan or None on failure.
+
+    Le graphe est celui de `graph_key()` — le polygone des 453 communes par défaut (ticket 031,
+    partie 2) ; plus de ville ni de rayon en paramètre.
+    """
     # Fast reject: skip routing when the straight-line distance exceeds the mode's threshold.
     straight_m = _crow_flies_m(origin, destination)
     if trip_mode == "foot" and straight_m > _MAX_FOOT_M:
@@ -787,7 +847,7 @@ async def get_direct_plan(
                                                  _timing_sink=_timing_sink)
         else:
             # Local mode: compute in-process (thread or process pool depending on daemon status).
-            graphs, boundary = await _GraphStore.get(city, dist)
+            graphs, boundary = await _GraphStore.get()
             loop = asyncio.get_running_loop()
 
             if _in_daemon:
@@ -799,7 +859,7 @@ async def get_direct_plan(
             else:
                 # Process pool: workers load their graph from disk cache independently.
                 cache_dir = str(_GraphStore._cache_dir())
-                cache_key = hashlib.md5(f"{city}_{dist}".encode()).hexdigest()[:12]
+                cache_key = graph_key()
                 fn = functools.partial(
                     _route_sync_process,
                     cache_dir, cache_key, origin, destination, osmnx_mode, congestion_dt,
@@ -843,9 +903,9 @@ async def get_direct_plan(
                              result["duration_s"], result["distance_m"])
 
 
-async def warmup(city: str = "Toulouse, France", dist: int = TOULOUSE_CENTER_DIST_M) -> None:
+async def warmup(key: Optional[str] = None) -> None:
     """Pre-load OSMnx graphs at application startup to avoid cold-start latency."""
-    await _GraphStore.get(city, dist)
+    await _GraphStore.get(key)
 
 
 if __name__ == "__main__":

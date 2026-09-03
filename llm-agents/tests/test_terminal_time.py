@@ -764,3 +764,39 @@ def test_la_config_de_production_est_alignee_sur_lenquete():
     assert 0.5 < total_car < 1.5, total_car      # Toulouse, la couronne la plus chère
     assert 0.1 < total_bike < 0.5, total_bike
     assert car.provenance == "sourced" and bike.provenance == "sourced"
+
+
+def test_la_routing_version_de_production_est_r2_pour_le_graphe_du_polygone():
+    """Ticket 031, partie 2 : le graphe servi au runtime est celui du POLYGONE des
+    453 communes, et les vitesses vélo de `config/osmnx.yaml` ont été complétées.
+
+    La clé du cache SQLite d'itinéraires directs ne porte PAS le graphe
+    (`osmnx_persistent_cache.make_key` = `routing_version` + mode + coordonnées) : un
+    retour à `r1` resservirait des durées calculées sur l'ancien disque de 30 km — dont
+    les replis à 70 km/h d'un trajet de 3ᵉ couronne sur six — sans que rien ne le
+    signale. Ce garde-fou verrouille le geste, pas une valeur cosmétique.
+    """
+    assert terminal_time.routing_version() == "r2"
+
+
+def test_le_bump_de_routing_version_change_la_cle_du_cache_direct(monkeypatch):
+    """Ce qui rend le bump efficace : la version entre dans la clé du cache.
+
+    Sans cette dépendance, passer à `r2` ne servirait à rien — une entrée calculée sur
+    l'ancien graphe de 30 km serait resservie telle quelle sur le graphe du polygone.
+    """
+    from datetime import datetime
+
+    from trip_helper.osmnx_persistent_cache import OsmnxPersistentCache
+
+    dt = datetime(2026, 3, 16, 8, 0)
+    # Capitole → Villeneuve-du-Latou : un trajet que le rectangle de 30 km ne routait pas.
+    args = dict(congestion_dt=dt, lat_from=43.6045, lon_from=1.4440,
+                lat_to=43.2104, lon_to=1.4223)
+    for mode in ("bicycle", "car"):
+        key_r2, *_ = OsmnxPersistentCache.make_key(mode=mode, **args)
+        monkeypatch.setattr(
+            "trip_helper.terminal_time.routing_version", lambda: "r1", raising=True)
+        key_r1, *_ = OsmnxPersistentCache.make_key(mode=mode, **args)
+        monkeypatch.undo()
+        assert key_r1 != key_r2, f"{mode} : la routing_version n'entre pas dans la clé"

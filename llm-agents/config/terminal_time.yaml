@@ -37,7 +37,14 @@ version: tt4   # tt4 : strates COMMUNALES (ticket 028) ; tt3 : aligné sur l'enq
 # Les caches qui mémorisent des PLANS, eux, restent indexés sur `version` : le cache
 # OTP stocke les TravelPlan sérialisés avec leurs jambes terminales, et le cache de
 # décisions LLM porte sur des options dont les durées ont changé.
-routing_version: r1
+#
+# r2 (2026-09-03, ticket 031 partie 2) : le graphe servi au runtime devient celui du
+# POLYGONE des 453 communes (clé `444ca7e6a515`) au lieu du disque de 30 km, et les vitesses
+# vélo de config/osmnx.yaml sont complétées (track, service, pedestrian, trunk, *_link…). La
+# clé du cache SQLite ne porte pas le graphe : sans ce bump, une durée calculée sur le disque
+# (dont les replis à 70 km/h des trajets de 3ᵉ couronne) serait resservie sur le polygone.
+# r1 : retrait du stationnement du moteur (ticket 013).
+routing_version: r2
 
 # ⚠ Les temps doivent être des multiples de 60 s, et c'est structurel, pas
 # cosmétique : le rendu affiche chaque composante en minutes tronquées

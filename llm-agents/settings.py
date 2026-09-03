@@ -272,6 +272,12 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # OSMnx direct routing cache (walk/bike/car graphs, persisted across restarts)
     osmnx_cache_dir: str = "/app/osmnx_cache"
+    # Clé du graphe OSMnx servi au runtime (`graphs_<clé>.pkl` / `boundary_<clé>.pkl` dans
+    # `osmnx_cache_dir`). Vide → le graphe du polygone des 453 communes
+    # (`geography.PERIMETER_CACHE_KEY`, ticket 031 partie 2). La clé du disque historique de
+    # 30 km (`geography.PRODUCTION_CACHE_KEY_30KM`) reste acceptée pour un audit ; toute autre
+    # clé doit avoir son pickle en cache — rien n'est téléchargé à sa place.
+    osmnx_graph_key: Optional[str] = None
     # Active le cache persistant des graphes OSMnx sur disque entre les redémarrages
     # (évite de re-télécharger/reconstruire les graphes ville+distance à chaque démarrage)
     osmnx_cache_enabled: bool = True

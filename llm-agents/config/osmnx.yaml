@@ -1,6 +1,16 @@
 # OSMnx routing configuration — speeds, penalties, and congestion tables for Toulouse.
 # Source for congestion data: tomtom.com/traffic-index
 
+# Vitesses par type de voie OSM (km/h). Une voie dont le type n'est pas listé reçoit la
+# vitesse de `fallbacks` — un repli MUET, qu'on mesure : sur le graphe du polygone des
+# 453 communes (2026-09-03, `build_osmnx_perimeter_graph.py`), 32,0 % des arêtes vélo
+# tombaient en repli (14 km/h) faute d'entrée pour `service` (91 k arêtes, 6 372 km) et
+# `track` (22,6 k arêtes, 8 494 km, les chemins ruraux de 3ᵉ couronne) ; 5,1 % en marche
+# (`track`), 1,2 % en voiture (`living_street`, `motorway_link`). Les entrées ajoutées ce
+# jour (ticket 031 partie 2, action O3) portent chacune leur source ; les vitesses
+# historiques ne bougent pas. Toute modification ici change la durée RÉSEAU → bumper
+# `routing_version` dans config/terminal_time.yaml (fait : r2) et reposer les vitesses sur
+# le pickle du graphe (`python -m scripts.data.population.build_osmnx_perimeter_graph --respeed`).
 speeds:
   walk:
     residential: 5
@@ -14,6 +24,9 @@ speeds:
     unclassified: 5
     secondary: 5
     primary: 5
+    # 2026-09-03 — chemins ruraux (8 535 km sur le polygone) : allure de marche ordinaire,
+    # même valeur qu'une voie résidentielle (le repli valait déjà 5 ; l'entrée le rend explicite).
+    track: 5
   bike:
     residential: 15
     tertiary: 18
@@ -23,6 +36,31 @@ speeds:
     primary: 16
     unclassified: 14
     path: 10
+    # 2026-09-03 — entrées ajoutées (ticket 031 partie 2). Source : profil `bike` de
+    # GraphHopper (moteur de routage libre, valeurs par défaut de
+    # `BikeCommonAverageSpeedParser`, github.com/graphhopper/graphhopper) : service 14,
+    # track 12 (sans `tracktype`), road 12, bridleway 6, footway et pedestrian = « section
+    # poussée » (PUSHING_SECTION_SPEED, 4 km/h : le vélo est poussé à pied — en France la
+    # circulation à vélo sur trottoir est interdite, art. R412-7 du code de la route, et
+    # l'aire piétonne se traverse à l'allure du pas, art. R431-9). Les bretelles (`*_link`)
+    # prennent la vitesse de la voie qu'elles prolongent, comme dans ce même profil ; `trunk`
+    # (route à accès réglementé ouverte aux cycles, 101 km sur le polygone) est aligné sur
+    # `primary` de ce fichier (16) plutôt que sur les 18 de GraphHopper, qui tarife aussi
+    # primary à 18 : l'échelle du fichier prime, la hiérarchie est celle de la source.
+    service: 14
+    track: 12
+    road: 12
+    bridleway: 6
+    footway: 4
+    pedestrian: 4
+    trunk: 16
+    trunk_link: 16
+    primary_link: 16
+    secondary_link: 16
+    tertiary_link: 18
+    # Voie réservée aux bus ouverte aux cycles (7 arêtes) : hypothèse déclarée, vitesse d'une
+    # voie résidentielle — aucune source ne tarife ce cas, GraphHopper l'exclut du profil.
+    busway: 15
   drive:
     motorway: 100
     trunk: 80
@@ -32,6 +70,11 @@ speeds:
     residential: 25
     unclassified: 30
     service: 15
+    # 2026-09-03 — zone de rencontre : vitesse limitée à 20 km/h (art. R110-2 du code de la
+    # route) ; le repli servait 30. Bretelle d'autoroute : 70 km/h, profil `car` de GraphHopper
+    # (`motorway_link`), le repli servait 30 sur 125 km de bretelles.
+    living_street: 20
+    motorway_link: 70
 
 fallbacks:
   walk: 5

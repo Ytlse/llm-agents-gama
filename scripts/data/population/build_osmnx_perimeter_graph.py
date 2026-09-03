@@ -71,11 +71,10 @@ logger = logging.getLogger("osmnx.perimetre")
 # Le label dit ce que le graphe couvre et d'où il vient ; la clé en dérive. Changer les pbf
 # (millésime), la table des communes (version `cc1`) ou le périmètre change la clé — et donc
 # le cache — au lieu de resservir un vieux graphe sous un nom neuf.
-PERIMETER_GRAPH_LABEL = "perimetre_453_communes:cc1:osm-220101"
-PERIMETER_CACHE_KEY = hashlib.md5(PERIMETER_GRAPH_LABEL.encode()).hexdigest()[:12]
-
-# Clé du graphe de production (disque de 30 km) : sa frontière `Toulouse, France` est réutilisée.
-PRODUCTION_CACHE_KEY = hashlib.md5(b"Toulouse, France_30000").hexdigest()[:12]
+# Définies dans `llm-agents/geography.py` depuis la partie 2 du ticket 031 : le runtime
+# (`osmnx_server`, `osmnx_direct`) sert ce graphe-là, une seule définition de la clé.
+from geography import PERIMETER_CACHE_KEY, PERIMETER_GRAPH_LABEL  # noqa: E402
+from geography import PRODUCTION_CACHE_KEY_30KM as PRODUCTION_CACHE_KEY  # noqa: E402  (disque de 30 km : frontière réutilisée)
 
 COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
 COMMUNE_TABLE = REPO_ROOT / "llm_module" / "data" / "commune_couronne.json"
@@ -275,6 +274,47 @@ def build_graphs(xml_path: Path, speeds: dict, fallbacks: dict) -> tuple[dict, d
     return graphs, journal
 
 
+def respeed_graphs(graphs: dict, speeds: dict, fallbacks: dict) -> dict:
+    """Repose `speed_kph` et `travel_time` de chaque arête depuis la config courante ; journal par mode.
+
+    Sert quand `config/osmnx.yaml` change (ticket 031 partie 2, action O3 : vitesses vélo pour
+    `track`, `service`, `trunk`, `*_link`…) : le pickle porte les vitesses de sa construction, la
+    config seule ne suffit pas. Ne reconstruit rien d'autre — nœuds, arêtes, zones restent.
+    """
+    import osmnx as ox
+    from collections import Counter
+
+    journal: dict = {}
+    for mode, G in graphs.items():
+        t1 = time.monotonic()
+        n_fallback = n_changed = 0
+        en_repli: Counter = Counter()
+        for _, _, _, data in G.edges(keys=True, data=True):
+            hwy = data.get("highway")
+            if isinstance(hwy, list):
+                hwy = hwy[0]
+            new = speeds[mode].get(hwy)
+            if new is None:
+                new = fallbacks[mode]
+                n_fallback += 1
+                en_repli[str(hwy)] += 1
+            if data.get("speed_kph") != new:
+                n_changed += 1
+            data["speed_kph"] = new
+        ox.add_edge_travel_times(G)
+        journal[mode] = {
+            "aretes": G.number_of_edges(), "aretes_modifiees": n_changed,
+            "aretes_vitesse_repli": n_fallback,
+            "part_aretes_vitesse_repli_pct": round(100.0 * n_fallback / max(G.number_of_edges(), 1), 1),
+            "types_en_repli": dict(en_repli.most_common(10)), "duree_s": round(time.monotonic() - t1, 1),
+        }
+        logger.info("vitesses reposées sur %-5s : %d arêtes modifiées / %d, %d en repli (%.1f %%) : %s — %.1fs",
+                    mode, n_changed, G.number_of_edges(), n_fallback,
+                    journal[mode]["part_aretes_vitesse_repli_pct"], dict(en_repli.most_common(6)),
+                    time.monotonic() - t1)
+    return journal
+
+
 def city_geometry(cache_dir: Path):
     """La commune de Toulouse (frontière géocodée du graphe de production)."""
     b_path = cache_dir / f"boundary_{PRODUCTION_CACHE_KEY}.pkl"
@@ -360,6 +400,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--force", action="store_true", help="refaire l'extrait et réécrire le pickle")
     parser.add_argument("--zones-only", action="store_true",
                         help="ne (re)poser que les zones de congestion sur le pickle existant, sans reconstruire")
+    parser.add_argument("--respeed", action="store_true",
+                        help="reposer les vitesses de config/osmnx.yaml (speed_kph, travel_time) sur le pickle "
+                             "existant, sans reconstruire — après toute modification de `speeds`")
     parser.add_argument("--trace", type=Path, default=None, help="dossier de trace horodaté (docs/traces/…)")
     parser.add_argument("--cache-dir", type=Path, default=OSMNX_CACHE_DIR)
     parser.add_argument("--work-dir", type=Path, default=WORK_DIR)
@@ -390,6 +433,38 @@ def main(argv: Optional[list[str]] = None) -> int:
         meta["zones_posees_le"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
         logger.info("zones posées et pickle réécrit (%.0f Mo) en %.1fs", _mb(g_path), time.monotonic() - t0)
+        return 0
+    if args.respeed:
+        if not g_path.exists():
+            logger.error("[ALARME] --respeed : pas de pickle %s", g_path)
+            return 2
+        with g_path.open("rb") as fh:
+            graphs = pickle.load(fh)
+        speeds, fallbacks = production_speeds()
+        journal = respeed_graphs(graphs, speeds, fallbacks)
+        tmp = g_path.with_suffix(".pkl.tmp")
+        with tmp.open("wb") as fh:
+            pickle.dump(graphs, fh)
+        tmp.replace(g_path)
+        meta_path = args.cache_dir / f"graphs_{PERIMETER_CACHE_KEY}.meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+        for mode, j in journal.items():
+            meta.setdefault("graphes", {}).setdefault("modes", {}).setdefault(mode, {}).update(
+                {"aretes_vitesse_repli": j["aretes_vitesse_repli"],
+                 "part_aretes_vitesse_repli_pct": j["part_aretes_vitesse_repli_pct"]})
+        meta["vitesses"] = {"source": "trip_helper.osmnx_direct._SPEEDS / _FALLBACKS (config/osmnx.yaml)",
+                            "speeds_kph": speeds, "fallbacks_kph": fallbacks, "reposees_le":
+                            datetime.now(timezone.utc).isoformat(timespec="seconds"), "journal": journal}
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+        ram_mo = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1_048_576 if sys.platform == "darwin" else 1024)
+        logger.info("vitesses reposées et pickle réécrit (%.0f Mo) en %.1fs ; RAM de pointe %d Mo",
+                    _mb(g_path), time.monotonic() - t0, round(ram_mo))
+        if args.trace:
+            args.trace.mkdir(parents=True, exist_ok=True)
+            (args.trace / "respeed.json").write_text(json.dumps(
+                {"date": meta["vitesses"]["reposees_le"], "cache_key": PERIMETER_CACHE_KEY, "journal": journal,
+                 "speeds_kph": speeds, "fallbacks_kph": fallbacks, "duree_s": round(time.monotonic() - t0, 1),
+                 "ram_pointe_mo": round(ram_mo)}, ensure_ascii=False, indent=1), encoding="utf-8")
         return 0
     if g_path.exists() and not args.force:
         logger.info("graphes déjà en cache : %s (%.0f Mo) — --force pour reconstruire", g_path, _mb(g_path))
