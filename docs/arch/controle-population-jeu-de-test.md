@@ -323,9 +323,11 @@ conforme. Immobiles **10,6 %** ; **scolaires (6-17 ans) avec activité d'études
 88,5 %** (seuil 88, enquête 90-95 ; v3 : 54 %) ; mobilité 3,33 déplacements par persona et 3,73
 par mobile (enquête 3,53 / 3,95). Audit de périmètre : A1, A2, A4, A9 conformes, A3, A5, A8 à
 publier, A6 et A7 propriétés d'un run. Équipement vélo : chaque taille de ménage dans sa tolérance ; la pente par taille
-(27,3 / 44,4 / 63,4 / 55,5 % sur 250 / 150 / 69 / 55 foyers) est « non concluante » sur 1 000 agents et se
-juge sur le vivier, où elle est croissante (32,8 / 49,1 / 55,0 / 60,9 %) — règle du 2026-09-03, page
-[velo-equipement.md](velo-equipement.md).
+(27,3 / 44,4 / 63,4 / 55,5 % sur 218 / 148 / 69 / 55 foyers) est « non concluante » sur 1 000 agents et se
+juge sur le vivier, où elle est croissante (32,8 / 49,1 / 55,0 / 60,9 % sur 2 350 / 1 657 / 744 / 532 foyers) —
+règle du 2026-09-03, page [velo-equipement.md](velo-equipement.md). La synthèse HTML lit ces deux verdicts
+dans les rapports `enrich_personal_bike --check --rapport-json` de la cohorte et du vivier (`--velo`,
+`--velo-vivier` de `synthese_representativite.py`).
 Le vivier, lui, avait 9 marges à corriger (65 ans et + +3,4 pt, étudiants −2,8 pt, immobiles
 19,4 %, Toulouse −1,8 pt) : la distance entre les deux est ce que la sélection fait.
 

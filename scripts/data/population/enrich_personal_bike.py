@@ -58,6 +58,7 @@ Usage :
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import statistics
 import sys
@@ -131,9 +132,9 @@ MIN_CELL_HOUSEHOLDS = 30
 # (`slope_verdict`). Décision du 2026-09-03 (ticket 031, question 7) : sur la cohorte scellée v4,
 # les tailles 3 et 4 comptaient 69 et 55 foyers, 63,4 % contre 55,5 % — une inversion de 8 pt
 # pour des intervalles à ± 12-13 pt, c'est du bruit d'échantillon, et le même modèle donne sur le
-# vivier de 11 329 personnes une pente 32,8 < 58,2 < 74,5 < 84,8 sur 2 482 / 1 691 / 746 / 533
-# foyers. La pente est donc opposable sur le VIVIER ; sur une cohorte de 1 000, elle s'affiche
-# (non concluant) sans compter dans le verdict.
+# vivier de 11 329 personnes une pente 32,8 < 49,1 < 55,0 < 60,9 sur 2 350 / 1 657 / 744 / 532
+# foyers (mesuré le 2026-09-03 au soir). La pente est donc opposable sur le VIVIER ; sur une
+# cohorte de 1 000, elle s'affiche (non concluant) sans compter dans le verdict.
 SLOPE_MIN_CELL = 100
 SLOPE_Z = 1.96
 
@@ -475,8 +476,18 @@ def standardise(by_size: dict[int, dict[str, int]],
 
 
 def report(measured: dict, household: dict, counts: Counter,
-           model: BikeOwnershipModel) -> list[str]:
-    """Affiche le résultat en regard des cibles. Renvoie la liste des échecs."""
+           model: BikeOwnershipModel, journal: Optional[dict] = None) -> list[str]:
+    """Affiche le résultat en regard des cibles. Renvoie la liste des échecs.
+
+    `journal`, s'il est fourni, reçoit la version structurée de ce qui est imprimé —
+    chaque contrôle avec sa mesure, sa cible, sa marge et son verdict, la pente par
+    taille de ménage, les compteurs de verdicts — pour que la synthèse de
+    représentativité (`scripts/AAMAS/synthese_representativite.py --velo`) lise le
+    verdict vélo dans un fichier plutôt que dans une sortie console recopiée.
+    """
+    if journal is None:
+        journal = {}
+    journal["controles"] = []
     validation = model.validation
     targets = validation.get("targets") or {}
     stock = validation.get("stock") or {}
@@ -519,6 +530,8 @@ def report(measured: dict, household: dict, counts: Counter,
         """
         if target is None:
             print(f"  {label:42s} {got:8.2f}   (pas de cible servie){note}")
+            journal["controles"].append({"controle": label, "mesure": got, "cible": None,
+                                         "n_foyers": n, "verdict": "pas de cible"})
             return
         if n is not None and 0 < n < MIN_CELL_HOUSEHOLDS:
             # Ni « ok » ni « ÉCHEC » : la cellule n'a pas de quoi trancher. Déclarer un
@@ -528,6 +541,9 @@ def report(measured: dict, household: dict, counts: Counter,
             print(f"  {label:42s} {got:8.2f}  cible {target:7.2f} "
                   f"{'':>16s}  {got - target:+6.2f}  NON CONCLUANT "
                   f"({n} foyers < {MIN_CELL_HOUSEHOLDS}){note}")
+            journal["controles"].append({"controle": label, "mesure": got, "cible": target,
+                                         "ecart": got - target, "n_foyers": n,
+                                         "verdict": "non concluant"})
             return
         delta = got - target
         sigma = 0.0
@@ -545,6 +561,9 @@ def report(measured: dict, household: dict, counts: Counter,
         print(f"  {label:42s} {got:8.2f}  cible {target:7.2f} "
               f"{band:>16s}  {delta:+6.2f}  {'ok' if ok else 'ÉCHEC'}{note}")
         verdicts["ok" if ok else "echec"] += 1
+        journal["controles"].append({"controle": label, "mesure": got, "cible": target,
+                                     "ecart": delta, "marge": margin, "n_foyers": n,
+                                     "verdict": "ok" if ok else "echec"})
         if not ok:
             failures.append(f"{label} : {got:.2f} contre {target:.2f} ± {margin:.2f}")
 
@@ -579,6 +598,9 @@ def report(measured: dict, household: dict, counts: Counter,
     cells = [measured["holders_by_size"].get(s, (None, 0, 0)) for s in (1, 2, 3, 4)]
     ordered = [value for value, _, _ in cells]
     statut, detail = slope_verdict(cells)
+    journal["pente_tailles_1_4"] = {"statut": statut, "detail": detail, "taux_pct": ordered,
+                                    "foyers": [n_hh for _, _, n_hh in cells],
+                                    "min_foyers_pour_juger": SLOPE_MIN_CELL, "z": SLOPE_Z}
     if statut == "non calculable":
         print("  pente sur les tailles 1→4 : non calculable (une taille est absente)")
     elif statut == "non concluant":
@@ -695,6 +717,7 @@ def report(measured: dict, household: dict, counts: Counter,
               "avec `make bike-ownership`)")
 
     conclusive = verdicts["ok"] + verdicts["echec"]
+    journal["verdicts"] = dict(verdicts)
     print(f"\n  verdicts : {verdicts['ok']} ok, {verdicts['echec']} échec(s), "
           f"{verdicts['non_concluant']} non concluant(s)")
     if conclusive < MIN_CONCLUSIVE_CHECKS:
@@ -752,6 +775,9 @@ def main() -> int:
                         help="Calcule et rapporte sans réécrire les fichiers")
     parser.add_argument("--check", action="store_true",
                         help="Sort en échec si une cible est hors tolérance")
+    parser.add_argument("--rapport-json", type=Path, default=None,
+                        help="Écrit le rapport structuré (contrôles, pente, verdicts, code de "
+                             "sortie) dans ce fichier — lu par la synthèse de représentativité")
     args = parser.parse_args()
 
     from llm_module.core.zone_resolver import ZoneResolver
@@ -774,15 +800,23 @@ def main() -> int:
           f"prédits pour {practice.get('overall_practice_pct_observed', '?')} % observés")
 
     all_failures: list[tuple[Path, list[str]]] = []
+    journaux: list[dict] = []
     for path in args.population:
         if not path.exists():
             print(f"[ERREUR] Population introuvable : {path}", file=sys.stderr)
             return 1
-        population = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes()
+        population = json.loads(raw.decode("utf-8"))
         counts = enrich(population, model, resolver)
         print(f"\n=== {path}")
-        failures = report(measure(population), household_measure(population),
-                          counts, model)
+        measured = measure(population)
+        journal: dict = {"fichier": str(path), "sha256_avant": hashlib.sha256(raw).hexdigest(),
+                         "n": len(population), "trait_pose": measured["with_trait"],
+                         "couverture_pct": round(100 * measured["coverage"], 2),
+                         "compteurs": dict(counts)}
+        failures = report(measured, household_measure(population), counts, model, journal)
+        journal["echecs"] = list(failures)
+        journaux.append(journal)
         if failures:
             all_failures.append((path, failures))
         if args.dry_run:
@@ -795,6 +829,7 @@ def main() -> int:
         tmp.replace(path)
         print(f"  écrit → {path}")
 
+    code = EXIT_OK
     if all_failures:
         print("\n── Cibles hors tolérance ───────────────────────────────────────────────")
         for path, failures in all_failures:
@@ -811,12 +846,35 @@ def main() -> int:
                 print(f"\n  → code {EXIT_NOT_MEASURABLE} : population enrichie mais NON "
                       f"VALIDÉE (pas assez de foyers pour trancher), et non « en "
                       f"échec ». Aucune cible servie n'est démentie.")
-                return EXIT_NOT_MEASURABLE
-            return EXIT_TARGET_MISSED
-        print("  (informatif : relancez avec --check pour en faire un échec)")
+                code = EXIT_NOT_MEASURABLE
+            else:
+                code = EXIT_TARGET_MISSED
+        else:
+            print("  (informatif : relancez avec --check pour en faire un échec)")
     elif args.check:
         print("\nToutes les cibles servies sont dans la tolérance.")
-    return EXIT_OK
+    if args.rapport_json:
+        write_journal(args.rapport_json, model, journaux, code, args)
+    return code
+
+
+def write_journal(path: Path, model: BikeOwnershipModel, journaux: list[dict], code: int,
+                  args) -> None:
+    """Le rapport structuré de `--check` : ce que la console a dit, relisible par un script."""
+    from datetime import datetime, timezone
+    payload = {
+        "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "script": "scripts/data/population/enrich_personal_bike.py",
+        "modele_exporte_le": model.meta.get("exported_at"),
+        "regles": {"MIN_CELL_HOUSEHOLDS": MIN_CELL_HOUSEHOLDS, "SLOPE_MIN_CELL": SLOPE_MIN_CELL,
+                   "SLOPE_Z": SLOPE_Z, "MIN_CONCLUSIVE_CHECKS": MIN_CONCLUSIVE_CHECKS,
+                   "MIN_COVERAGE": MIN_COVERAGE, "TOLERANCES": TOLERANCES},
+        "check": bool(args.check), "dry_run": bool(args.dry_run),
+        "populations": journaux, "code_sortie": code,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"  rapport structuré → {path}")
 
 
 if __name__ == "__main__":

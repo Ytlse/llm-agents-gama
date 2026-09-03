@@ -384,6 +384,15 @@ vivier de 11 329 personnes une pente **32,8 < 49,1 < 55,0 < 60,9 %** sur 2 350 /
 foyers : croissante, opposable. Le contrôle du vivier est donc celui qui compte pour ce critère ;
 sur une cohorte de 1 000 agents, aucune taille ≥ 3 n'atteindra 100 foyers.
 
+**Le rapport se lit aussi en JSON.** `--rapport-json <fichier>` écrit ce que la console affiche —
+chaque contrôle avec sa mesure, sa cible, sa marge (tolérance + 2 σ) et son verdict, la pente avec
+ses taux et ses effectifs de foyers, les compteurs de verdicts, le code de sortie, les règles
+(`SLOPE_MIN_CELL`, `SLOPE_Z`, tolérances) et l'empreinte du fichier contrôlé. C'est ce fichier,
+produit sur la cohorte scellée **et** sur le vivier pré-imputé (`Temp/4_zone_enriched`), que la
+synthèse de représentativité lit (`scripts/AAMAS/synthese_representativite.py --velo … --velo-vivier …`,
+`make synthese-representativite VELO=… VELO_VIVIER=…`) pour publier le verdict vélo sans recopier un
+chiffre de console. Le vivier se contrôle en `--dry-run` : il est déjà enrichi, on ne le réécrit pas.
+
 ## La contrainte du consommateur : la même variable des deux côtés
 
 La politique de choix modal PROGEDO consomme `has_bike`, reconstruit depuis

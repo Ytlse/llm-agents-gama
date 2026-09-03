@@ -1,3 +1,38 @@
+## [2026-09-03] Une page raconte comment la population du jeu de test est fabriquée
+
+`docs/paper/population/fabrication_population_v4_2026-09-03.html` suit le fichier de bout en bout :
+ce qu'eqasim consomme (recensement, ENTD 2008, FILOSOFI, BD TOPO, BAN) et ce que le fork y règle
+(six départements, 453 communes, appariement national, borne d'âge 17, jours de classe, pondération
+des communes sans IRIS), la chaîne des stages, les étapes du notebook (journée, desserte TC, zone
+fine, pré-imputation, sélection par ménages entiers, routage sur le graphe du polygone, export,
+traits, audit), puis le contrôle, l'audit de périmètre et le scellement — avec, à chaque étage, les
+résultats mesurés sur la v4 et un tableau récapitulatif. Elle complète la synthèse de représentativité,
+qui juge ; celle-ci explique. Elle se régénère (`make synthese-generation-population`) depuis les
+mêmes fichiers que la synthèse, plus la méta du graphe OSMnx et les mesures du graphe ; les seuls
+chiffres sans fichier structuré (journal de génération eqasim) sont marqués d'une croix et sourcés.
+
+---
+
+## [2026-09-03] La synthèse de représentativité porte le verdict vélo et le bon compte des déplacements
+
+La page « La population scellée v4 est-elle représentative de l'enquête ? » lit désormais le contrôle
+de l'équipement vélo dans deux rapports structurés — celui de la cohorte scellée et celui du vivier —
+au lieu de l'ignorer : le nombre de contrôles ok, la pente du taux de porteurs par taille de ménage
+et son verdict (« non concluant » sur 1 000 agents, « croissante » sur le vivier) figurent dans le
+niveau 3 du verdict et dans le tableau de ce que la sélection ne referme pas. Le contrôle vélo gagne
+pour cela l'option `--rapport-json`, qui écrit ce que la console affichait (contrôles, marges,
+pente, verdicts, code de sortie), et la cible `make synthese-representativite` prend `VELO=` et
+`VELO_VIVIER=`. Le sous-titre du graphique de mobilité disait encore « activités − 1 » : il dit la
+convention en vigueur, n déplacements pour n activités, retour au domicile compris.
+
+**Avant :** la synthèse v4 ne disait rien du vélo, et son graphique de mobilité portait une légende
+périmée.
+**Après :** cohorte v4 — 12 contrôles ok, pente non concluante (27,3 / 44,4 / 63,4 / 55,5 % sur
+218 / 148 / 69 / 55 foyers) ; vivier — 14 contrôles ok, pente croissante (32,8 / 49,1 / 55,0 /
+60,9 % sur 2 350 / 1 657 / 744 / 532 foyers). Chiffres lus dans les rapports JSON, jamais saisis.
+
+---
+
 ## [2026-09-03] La pente de l'équipement vélo se juge sur le vivier, pas sur mille agents
 
 Le contrôle de l'imputation du vélo personnel vérifie que le taux de porteurs croît avec la taille

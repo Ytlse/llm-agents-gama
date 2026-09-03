@@ -5,6 +5,7 @@
         --precedent data/population/population_1000_AAMAS_v3 \\
         --vivier docs/traces/<date>_controle_vivier_10000_v4/report.json \\
         --audit docs/traces/<date>_audit_perimetre_v4/audit_perimetre.json \\
+        --velo docs/traces/<date>_…/velo_cohorte.json --velo-vivier docs/traces/<date>_…/velo_vivier.json \\
         --out docs/traces/<date>_controle_…/synthese_representativite_v3.html \\
         --copie docs/paper/population/synthese_representativite_v3_population_v4_<date>.html
 
@@ -16,7 +17,9 @@ script de rendu **lus dans ce fichier**, pas recopiés) et n'écrit que des chif
 rapports JSON — aucun n'est saisi à la main.
 
 Toutes les entrées sont des sorties d'autres scripts : `report.json` et `selection.json` du
-dossier scellé (`seal_population.py`), `report.json` du contrôle du vivier, `audit_perimetre.json`.
+dossier scellé (`seal_population.py`), `report.json` du contrôle du vivier, `audit_perimetre.json`,
+et les rapports structurés du contrôle vélo (`enrich_personal_bike.py --check --rapport-json`) sur
+la cohorte et sur le vivier — la pente de l'équipement par taille de ménage se juge sur le vivier.
 """
 
 from __future__ import annotations
@@ -95,9 +98,35 @@ def charts(report: dict) -> list[dict]:
     return out
 
 
+def velo_resume(rapport: Optional[dict]) -> Optional[dict]:
+    """Ce que la synthèse retient d'un rapport `--rapport-json` : verdicts, pente, couverture."""
+    if not rapport or not rapport.get("populations"):
+        return None
+    pop = rapport["populations"][0]
+    pente = pop.get("pente_tailles_1_4") or {}
+    return {"n": pop.get("n"), "verdicts": pop.get("verdicts") or {}, "pente": pente,
+            "couverture_pct": pop.get("couverture_pct"), "code_sortie": rapport.get("code_sortie"),
+            "echecs": pop.get("echecs") or [], "check": rapport.get("check", False)}
+
+
+def velo_phrase(v: Optional[dict], quoi: str) -> str:
+    if not v:
+        return f"{quoi} : non fourni"
+    verd = v["verdicts"]
+    pente = v["pente"]
+    taux = " / ".join(fr(t) for t in (pente.get("taux_pct") or [])) or "—"
+    foyers = " / ".join(str(f) for f in (pente.get("foyers") or [])) or "—"
+    statut = pente.get("statut", "—")
+    return (f"{quoi} : {verd.get('ok', 0)} contrôles ok, {verd.get('echec', 0)} échec, "
+            f"{verd.get('non_concluant', 0)} non concluant ; pente par taille de ménage (1 → 4) "
+            f"{taux} % sur {foyers} foyers — <strong>{statut}</strong> ({pente.get('detail', '—')})")
+
+
 def build(sceau: Path, precedent: Optional[Path], vivier: Optional[Path], audit: Optional[Path],
-          template: Path, synthese_version: str, lien_precedent: str) -> str:
+          template: Path, synthese_version: str, lien_precedent: str,
+          velo: Optional[Path] = None, velo_vivier: Optional[Path] = None) -> str:
     head, script, _ = template_parts(template)
+    vc, vv = velo_resume(load(velo)), velo_resume(load(velo_vivier))
     manifest = yaml.safe_load((sceau / "MANIFEST.yaml").read_text(encoding="utf-8"))
     rep = load(sceau / "report.json")
     sel = load(sceau / "selection.json") or {}
@@ -208,7 +237,8 @@ def build(sceau: Path, precedent: Optional[Path], vivier: Optional[Path], audit:
 <h2 id="verdict">1 · Le verdict, en trois niveaux</h2><div class="prose">
 <p><strong>Niveau 1 — les marges contrôlées.</strong> {n_conf} marges {pill('conforme')} sur {n_marges} : classes d'âge, occupation, motorisation sur deux bases, couronne, croisement, âge quinquennal, genre, taille de ménage, permis, abonnement TC, logement, immobiles. Ménages : {men['n_menages']}, dont {men['menages_complets_taille_declaree']} complets au sens strict ({fr(men['part_membres_presents_pct'])} % des membres déclarés présents). Immobiles {fr(men['part_immobiles_pct'])} % (cible {fr(ref['part_immobiles_pct'])}).</p>
 <p><strong>Niveau 2 — ce que ça prouve.</strong> Douze marges sur treize sont allouées par la sélection (allocation sur 12 cellules, descente sur {len(dm)} marges) ; seule la motorisation en base ménage est probante sans allocation. La représentativité <em>réelle</em> du générateur se lit sur le vivier de {vivier_n} : <strong>{v_a_corr} marges à corriger</strong>. Deux choses que ce vivier porte et que les précédents n'avaient pas : le périmètre entier (la 3ᵉ couronne compte ses 275 communes, dont 100 hors de la Haute-Garonne) et un appariement sur l'ENTD nationale — le service Docker appariait jusqu'ici sur 308 donneurs résidents du 31, v3 comprise.</p>
-<p><strong>Niveau 3 — ce que le contrôle ne voit pas.</strong> La mobilité des agents mobiles ({fr(men['deplacements_par_persona_mobile'], 2)} déplacements contre {fr(ref['deplacements_par_personne_mobile'], 2)}) reste {pill('à publier')} : les chaînes viennent de l'ENTD 2008 et aucune sélection ne les rallonge. Activités hors du polygone des 453 communes : {hp_txt}. Les enfants de moins de 5 ans sont hors population enquêtée et absents par construction.</p>{audit_txt}</div>
+<p><strong>Niveau 3 — ce que le contrôle ne voit pas.</strong> La mobilité des agents mobiles ({fr(men['deplacements_par_persona_mobile'], 2)} déplacements contre {fr(ref['deplacements_par_personne_mobile'], 2)}) reste {pill('à publier')} : les chaînes viennent de l'ENTD 2008 et aucune sélection ne les rallonge. Activités hors du polygone des 453 communes : {hp_txt}. Les enfants de moins de 5 ans sont hors population enquêtée et absents par construction.</p>
+<p><strong>Équipement vélo</strong> (trait imputé, contrôlé à part par <code>enrich_personal_bike --check</code>, ticket 015) : {velo_phrase(vc, 'cohorte') if vc else "rapport de la cohorte non fourni"}. {("La pente ne se juge qu'à partir de " + str((vc or {}).get('pente', {}).get('min_foyers_pour_juger', 100)) + " foyers par taille, donc sur le vivier — " + velo_phrase(vv, 'vivier') + ".") if vv else "Rapport du vivier non fourni : la pente n'est pas jugée."}</p>{audit_txt}</div>
 <h2 id="v3v4">2 · De la {prev_nom.split('_')[-1]} à la {nom.split('_')[-1]} — ce que le périmètre et l'appariement ont changé</h2><div class="prose"><p>Même mécanique de sélection (ménages entiers, allocation couronne × motorisation, descente), trois changements en amont : le cadre de tirage passe des 346 communes haut-garonnaises aux <strong>453 communes de six départements</strong> ; les journées donneuses ENTD sont des <strong>jours de classe</strong> et l'appariement se fait sur l'enquête <strong>nationale</strong> avec la classe d'âge tenue (borne à 17 ans pour les lycéens) ; les six classes d'âge du rapport entrent dans la descente. Le vivier est pré-imputé (logement, vélo, permis, abonnement) avant la sélection.</p></div>
 <div class="tblwrap"><table><thead><tr><th>Marge</th><th>Vivier {vivier_n} (brut du générateur)</th><th>{prev_nom.split('_')[-1]}</th><th>{nom.split('_')[-1]}</th><th class="n">Descente : écart max avant → après (pt)</th></tr></thead><tbody>{rows_cmp}</tbody></table></div>
 <h2 id="marges">3 · Les {n_marges} marges</h2><p class="prose">Barre : population scellée {nom.split('_')[-1]}. Tiret : cible. Trait fin : IC95. Survolez une barre pour le détail.</p><div class="legend"><span class="lb">population scellée (%)</span><span class="lt">cible</span><span class="li">IC95</span></div><div class="grid" id="charts"></div>
@@ -216,13 +246,13 @@ def build(sceau: Path, precedent: Optional[Path], vivier: Optional[Path], audit:
 <div class="callout"><strong>Lecture.</strong> Sur une marge allouée, p ≈ 1 et V ≈ 0 par construction. Le χ² est publié parce que le gabarit le demande ; il se lit avec V et l'effectif, jamais seul.</div>
 <h2 id="vivier">4 · Du vivier à la cohorte — ce que la sélection fait</h2><div class="prose"><p>Le vivier eqasim ({vivier_n} personnes livrées pour 10 000 demandées ; {(sel.get('vivier') or {}).get('eligibles', '—')} éligibles, exclus : {json.dumps((sel.get('vivier') or {}).get('exclus', {}), ensure_ascii=False)}) a <strong>{v_a_corr} marges à corriger</strong>. La sélection en retient {fr(100.0 * n / vivier_n) if isinstance(vivier_n, int) else '—'} %.</p><p><strong>Allocation.</strong> Cibles en personnes par cellule couronne × motorisation (plus fort reste) ; les ménages entrent dans l'ordre d'un <code>sha256</code> de leur identifiant s'ils tiennent dans leur cellule. Déficits : {json.dumps(sel.get('deficits') or {}) if sel.get('deficits') else 'aucun sur les 12 cellules'}.</p><p><strong>Descente.</strong> {desc.get('echanges', '—')} échanges de ménages de même taille et même cellule, en {desc.get('passes', '—')} passes, perte {fr(desc.get('perte_avant_pt'), 2)} → {fr(desc.get('perte_apres_pt'), 2)} pt ({desc.get('duree_s', '—')} s). Déterministe : même vivier, même fichier au sha256 près.</p></div>
 <div class="tblwrap"><table><thead><tr><th>Marge de la descente</th><th class="n">champ (personas)</th><th class="n">écart max avant</th><th class="n">écart max après</th></tr></thead><tbody>{rows_desc}</tbody></table></div>
-<h2 id="reste">5 · Ce qui reste</h2><h3>La mobilité des agents mobiles {pill('à publier')}</h3><div class="two"><div class="card"><h4>Déplacements par jour et par personne</h4><p class="sub">enquête : PENQ = 1, COEP · scellée : activités − 1</p><svg class="chart" id="c-mob"></svg></div><div class="card"><h4>Part des personnes sans déplacement</h4><p class="sub">une marge de la sélection</p><svg class="chart" id="c-imm"></svg></div></div>
+<h2 id="reste">5 · Ce qui reste</h2><h3>La mobilité des agents mobiles {pill('à publier')}</h3><div class="two"><div class="card"><h4>Déplacements par jour et par personne</h4><p class="sub">enquête : PENQ = 1, COEP · scellée : n déplacements pour n activités, retour au domicile compris</p><svg class="chart" id="c-mob"></svg></div><div class="card"><h4>Part des personnes sans déplacement</h4><p class="sub">une marge de la sélection</p><svg class="chart" id="c-imm"></svg></div></div>
 <div class="prose"><p class="small">Les chaînes d'activités viennent de l'ENTD 2008 appariée par eqasim — désormais l'enquête nationale, un jour de classe, par classe d'âge — mais l'enquête de référence compte {fr(ref['deplacements_par_personne_mobile'], 2)} déplacements par personne mobile. Le levier restant est l'EMC² 2023 comme enquête d'appariement, un chantier eqasim distinct.</p></div>
 <h3>La synthèse des écarts du contrôle</h3><div class="tblwrap"><table><thead><tr><th>Écart</th><th>Amplitude</th><th>Nature</th><th>Verdict</th></tr></thead><tbody>{synth_rows}</tbody></table></div>
-<h3>Ce que ni la sélection ni le contrôle ne peuvent refermer</h3><div class="tblwrap"><table><thead><tr><th>Écart</th><th>Amplitude</th><th>Nature</th></tr></thead><tbody><tr><td>Chaînes d'activités</td><td>ENTD 2008 nationale, jours de classe ; motifs sans accompagnement (ticket 027)</td><td>enquête d'appariement</td></tr><tr><td>Enfants de moins de 5 ans</td><td>{men['membres_declares'] - men['membres_presents']} membres déclarés absents sur {men['membres_declares']} ; hors population enquêtée, absents par construction</td><td>définition</td></tr><tr><td>Immobiles du vivier</td><td>{fr(vmen.get('part_immobiles_pct'))} % dans le vivier (ENTD nationale, jours de classe) contre {fr(ref['part_immobiles_pct'])} % dans l'enquête ; la cohorte est tenue à {fr(men['part_immobiles_pct'])} %</td><td>vivier — déclaré</td></tr><tr><td>Activités hors du polygone des 453 communes</td><td>{hp_txt}</td><td>hypothèse assumée</td></tr><tr><td>Parts non redressées, rabattement voiture + TC, fenêtre saisonnière du run</td><td>axes A3, A7, A5 de l'audit de périmètre</td><td>objet compté / run</td></tr></tbody></table></div>
+<h3>Ce que ni la sélection ni le contrôle ne peuvent refermer</h3><div class="tblwrap"><table><thead><tr><th>Écart</th><th>Amplitude</th><th>Nature</th></tr></thead><tbody><tr><td>Chaînes d'activités</td><td>ENTD 2008 nationale, jours de classe ; motifs sans accompagnement (ticket 027)</td><td>enquête d'appariement</td></tr><tr><td>Enfants de moins de 5 ans</td><td>{men['membres_declares'] - men['membres_presents']} membres déclarés absents sur {men['membres_declares']} ; hors population enquêtée, absents par construction</td><td>définition</td></tr><tr><td>Immobiles du vivier</td><td>{fr(vmen.get('part_immobiles_pct'))} % dans le vivier (ENTD nationale, jours de classe) contre {fr(ref['part_immobiles_pct'])} % dans l'enquête ; la cohorte est tenue à {fr(men['part_immobiles_pct'])} %</td><td>vivier — déclaré</td></tr><tr><td>Activités hors du polygone des 453 communes</td><td>{hp_txt}</td><td>hypothèse assumée</td></tr><tr><td>Parts non redressées, rabattement voiture + TC, fenêtre saisonnière du run</td><td>axes A3, A7, A5 de l'audit de périmètre</td><td>objet compté / run</td></tr><tr><td>Équipement vélo — pente par taille de ménage</td><td>{velo_phrase(vc, 'cohorte') if vc else 'cohorte : non fourni'} ; {velo_phrase(vv, 'vivier') if vv else 'vivier : non fourni'}</td><td>jugée sur le vivier (≥ {(vc or vv or {}).get('pente', {}).get('min_foyers_pour_juger', 100)} foyers par taille, règle du 2026-09-03) — trait imputé, hors sélection</td></tr></tbody></table></div>
 <h2 id="recoupement">6 · Recoupement du tableau § 2.1 du protocole</h2><div class="tblwrap"><table><thead><tr><th>Ligne du protocole</th><th class="n">publié</th><th class="n">référence</th><th class="n">écart</th><th>statut</th><th>source</th></tr></thead><tbody>{rows_recoup}</tbody></table></div>
 <h2 id="article">7 · Ce que ça change pour l'article</h2><div class="prose"><p><strong>Formulation défendable.</strong> « La cohorte de {n} agents, en {men['n_menages']} ménages entiers, est <em>alignée par construction</em> sur {n_marges} marges de l'EMC² 2023 — structure couronne × motorisation, âge, genre, occupation, taille de ménage, permis, abonnement, logement, part d'immobiles — par sélection stratifiée dans un vivier synthétique de {vivier_n} personnes tiré sur le périmètre exact de l'enquête, 453 communes de six départements. Ses chaînes d'activités viennent de l'ENTD 2008 nationale appariée par classe d'âge un jour de classe ; elle ne reproduit pas leur longueur : {fr(men['deplacements_par_persona_mobile'], 2)} déplacements par agent mobile contre {fr(ref['deplacements_par_personne_mobile'], 2)}. »</p><p><strong>À déclarer.</strong> Que douze marges sur treize sont allouées ; que le vivier brut en avait {v_a_corr} à corriger ; les chaînes ENTD ; que les sceaux v2 et v3 — et les runs qui les citent — reposaient sur un appariement à 308 donneurs résidents de Haute-Garonne et sur le seul département 31.</p></div>
-<footer>Sources : rapport AUAT/CEREMA EMC² 2023 (68 p., pages 10, 11, 21, 24, 26) ; microdonnées ProGEDO lil-1750 (personnes, ménages, déplacements ; COEP, COE0) ; cibles gelées <code>scripts/AAMAS/cible_jointe_couronne_motorisation.yaml</code> (cj1) et <code>cibles_marges_personne.yaml</code> (cm1) ; <code>control_population.py</code> (rapport dans le dossier scellé) ; <code>seal_population.py</code> {sel.get('version', '')} ; <code>make audit-perimetre</code>. Méthode : <code>docs/arch/controle-population-jeu-de-test.md</code> ; tickets 029 et 031. Généré le {aujourd_hui} par <code>scripts/AAMAS/synthese_representativite.py</code>.</footer></div><div class="tip" id="tip" hidden></div>
+<footer>Sources : rapport AUAT/CEREMA EMC² 2023 (68 p., pages 10, 11, 21, 24, 26) ; microdonnées ProGEDO lil-1750 (personnes, ménages, déplacements ; COEP, COE0) ; cibles gelées <code>scripts/AAMAS/cible_jointe_couronne_motorisation.yaml</code> (cj1) et <code>cibles_marges_personne.yaml</code> (cm1) ; <code>control_population.py</code> (rapport dans le dossier scellé) ; <code>seal_population.py</code> {sel.get('version', '')} ; <code>make audit-perimetre</code> ; <code>enrich_personal_bike.py --check --rapport-json</code> (cohorte et vivier). Méthode : <code>docs/arch/controle-population-jeu-de-test.md</code> ; tickets 029 et 031. Généré le {aujourd_hui} par <code>scripts/AAMAS/synthese_representativite.py</code>.</footer></div><div class="tip" id="tip" hidden></div>
 <script>
 const DATA = {json.dumps(data, ensure_ascii=False)};
 {script}</script>
@@ -236,13 +266,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--precedent", type=Path, default=None, help="dossier scellé précédent (colonne de comparaison)")
     ap.add_argument("--vivier", type=Path, default=None, help="report.json du contrôle du vivier")
     ap.add_argument("--audit", type=Path, default=None, help="audit_perimetre.json")
+    ap.add_argument("--velo", type=Path, default=None, help="rapport JSON du contrôle vélo de la cohorte (enrich_personal_bike --check --rapport-json)")
+    ap.add_argument("--velo-vivier", type=Path, default=None, help="rapport JSON du contrôle vélo du vivier (la pente se juge là)")
     ap.add_argument("--template", type=Path, default=TEMPLATE_V2)
     ap.add_argument("--version", default="v3", help="numéro de la synthèse (v3 pour la population v4)")
     ap.add_argument("--lien-precedent", default="synthese_representativite_v2_population_v3_2026-09-03.html")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--copie", type=Path, default=None, help="copie dans docs/paper/population/")
     args = ap.parse_args(argv)
-    html = build(args.sceau, args.precedent, args.vivier, args.audit, args.template, args.version, args.lien_precedent)
+    html = build(args.sceau, args.precedent, args.vivier, args.audit, args.template, args.version, args.lien_precedent,
+                 velo=args.velo, velo_vivier=args.velo_vivier)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
     print(f"synthèse écrite : {args.out} ({len(html.encode('utf-8')) / 1024:.0f} Ko)")

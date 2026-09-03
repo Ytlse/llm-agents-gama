@@ -11,7 +11,8 @@ def test_pente_non_concluante_sous_100_foyers():
 
 
 def test_pente_croissante_ok():
-    cells = [(32.8, 2482, 2482), (58.2, 3382, 1691), (74.5, 2238, 746), (84.8, 2132, 533)]
+    # Vivier v4 (11 329 personnes), mesuré le 2026-09-03 : 2 350 / 1 657 / 744 / 532 foyers.
+    cells = [(32.8, 2482, 2350), (49.1, 3382, 1657), (55.0, 2238, 744), (60.9, 2132, 532)]
     assert slope_verdict(cells) == ("ok", "croissante")
 
 

@@ -490,3 +490,38 @@ class TestBoutEnBout:
             classmethod(lambda cls, resource=None: (_ for _ in ()).throw(
                 FileNotFoundError("Modèle d'équipement vélo absent : make bike-ownership"))))
         assert enrich_module.main() == 1
+
+    def test_le_rapport_json_dit_ce_que_la_console_a_dit(self, tmp_path, monkeypatch):
+        """`--rapport-json` écrit les contrôles, la pente, les verdicts et le code de sortie :
+        c'est ce que lit la synthèse de représentativité, au lieu d'une console recopiée."""
+        path = tmp_path / "pop.json"
+        population = [_person(43.6 + i / 1000, household_size=1 + i % 4, age=30 + i)
+                      for i in range(40)]
+        path.write_text(json.dumps(population, ensure_ascii=False), encoding="utf-8")
+        rapport = tmp_path / "trace" / "velo.json"
+
+        model = _model()
+        object.__setattr__(model, "validation", {"targets": {}, "stock": {}})
+        monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
+                            classmethod(lambda cls, resource=None: model))
+        monkeypatch.setattr(
+            "llm_module.core.zone_resolver.ZoneResolver.load",
+            classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
+        monkeypatch.setattr("sys.argv", ["enrich", str(path), "--dry-run", "--check",
+                                         "--rapport-json", str(rapport)])
+
+        code = enrich_module.main()
+        payload = json.loads(rapport.read_text(encoding="utf-8"))
+        assert payload["code_sortie"] == code
+        assert payload["check"] is True and payload["dry_run"] is True
+        assert payload["regles"]["SLOPE_MIN_CELL"] == enrich_module.SLOPE_MIN_CELL
+        pop = payload["populations"][0]
+        assert pop["n"] == 40 and pop["fichier"] == str(path)
+        assert len(pop["sha256_avant"]) == 64
+        # Sans cible servie, chaque contrôle est journalisé « pas de cible » ; la pente est
+        # « non concluant » (40 personnes ne font pas 100 foyers par taille) et le dit.
+        assert pop["controles"] and all(c["verdict"] == "pas de cible" for c in pop["controles"])
+        assert pop["pente_tailles_1_4"]["statut"] == "non concluant"
+        assert pop["pente_tailles_1_4"]["min_foyers_pour_juger"] == enrich_module.SLOPE_MIN_CELL
+        assert set(pop["verdicts"]) == {"ok", "echec", "non_concluant"}
+        assert isinstance(pop["echecs"], list)

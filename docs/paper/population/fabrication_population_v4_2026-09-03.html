@@ -1,0 +1,259 @@
+<title>Fabrication de la population v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=Public+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --page:#F5F7FA; --card:#FFFFFF; --line:#D9DEE5; --line-soft:#E8ECF1;
+    --ink:#1B2430; --ink-2:#465262; --ink-3:#6E7A89;
+    --accent:#1F6F8B; --accent-soft:rgba(31,111,139,.16); --accent-ink:#17546A;
+    --ok:#2E7D4F; --ok-bg:#E6F2EA; --pub:#B26A00; --pub-bg:#FBF0DC; --ko:#B3261E; --ko-bg:#F9E3E1; --nm:#5F6B78; --nm-bg:#E9ECF0;
+    --tick:#1B2430; --focus:#1F6F8B;
+    --serif:"Literata",Georgia,"Times New Roman",serif; --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --page:#0F1519; --card:#171E25; --line:#2A3440; --line-soft:#212A34;
+      --ink:#E6EAF0; --ink-2:#B6C0CC; --ink-3:#8E99A6;
+      --accent:#5FB3CF; --accent-soft:rgba(95,179,207,.22); --accent-ink:#8FD0E6;
+      --ok:#5FBF82; --ok-bg:#16322A; --pub:#E0A146; --pub-bg:#3A2C14; --ko:#E57373; --ko-bg:#3D1F1D; --nm:#9AA3AD; --nm-bg:#232B33;
+      --tick:#E6EAF0; --focus:#8FD0E6;
+    }
+  }
+  :root[data-theme="dark"]{
+    --page:#0F1519; --card:#171E25; --line:#2A3440; --line-soft:#212A34;
+    --ink:#E6EAF0; --ink-2:#B6C0CC; --ink-3:#8E99A6;
+    --accent:#5FB3CF; --accent-soft:rgba(95,179,207,.22); --accent-ink:#8FD0E6;
+    --ok:#5FBF82; --ok-bg:#16322A; --pub:#E0A146; --pub-bg:#3A2C14; --ko:#E57373; --ko-bg:#3D1F1D; --nm:#9AA3AD; --nm-bg:#232B33;
+    --tick:#E6EAF0; --focus:#8FD0E6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-ink)} a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 72px}
+  .prose{max-width:74ch}
+  h1,h2,h3{font-family:var(--serif);font-weight:700;letter-spacing:-.005em;text-wrap:balance;margin:0}
+  h1{font-size:clamp(30px,4vw,44px);line-height:1.12;font-weight:700}
+  h2{font-size:26px;line-height:1.2;margin-top:64px;padding-top:20px;border-top:1px solid var(--line)}
+  h3{font-size:19px;line-height:1.3;margin-top:32px;font-weight:600}
+  p{margin:14px 0} p.lead{font-size:18px;color:var(--ink-2)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  .meta{font-family:var(--mono);font-size:13px;color:var(--ink-3);margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 18px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:30px 0 8px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px}
+  .tile .k{font-family:var(--serif);font-size:34px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .tile .l{margin-top:8px;font-size:13px;color:var(--ink-2)}
+  .toc{display:flex;flex-wrap:wrap;gap:8px 20px;margin:24px 0 0;padding:0;list-style:none;font-size:14px}
+  .toc a{text-decoration:none;border-bottom:1px solid var(--line)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap;vertical-align:middle}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .ok{color:var(--ok);background:var(--ok-bg)} .pub{color:var(--pub);background:var(--pub-bg)} .ko{color:var(--ko);background:var(--ko-bg)} .nm{color:var(--nm);background:var(--nm-bg)}
+  .callout{border-left:3px solid var(--accent);background:var(--card);padding:14px 18px;border-radius:0 6px 6px 0;margin:22px 0}
+  .callout.warn{border-left-color:var(--pub)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin:22px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px 12px}
+  .card h4{margin:0 0 2px;font-family:var(--sans);font-weight:600;font-size:15px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .card .sub{font-size:12.5px;color:var(--ink-3);margin:0 0 8px;font-family:var(--mono)}
+  .chart{width:100%;display:block;overflow:visible}
+  .chart text{font-family:var(--sans);font-size:12.5px;fill:var(--ink-2)}
+  .chart text.v{font-family:var(--mono);fill:var(--ink);font-size:12px}
+  .chart .bar{fill:var(--accent)} .chart .ic{stroke:var(--accent);stroke-opacity:.55;stroke-width:1.5} .chart .tk{stroke:var(--tick);stroke-width:2} .chart .grid{stroke:var(--line-soft);stroke-width:1}
+  .chart .hit{fill:transparent;cursor:crosshair}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--ink-2);margin:6px 0 0}
+  .legend span::before{content:"";display:inline-block;vertical-align:middle;margin-right:6px}
+  .legend .lb::before{width:16px;height:9px;background:var(--accent);border-radius:2px}
+  .legend .lt::before{width:2px;height:14px;background:var(--tick)}
+  .legend .li::before{width:16px;height:2px;background:var(--accent);opacity:.55}
+  .tip{position:fixed;pointer-events:none;z-index:9;background:var(--ink);color:var(--page);font-family:var(--mono);font-size:12px;line-height:1.45;padding:8px 10px;border-radius:4px;max-width:280px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  .tip[hidden]{display:none}
+  .tblwrap{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-weight:600;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;background:var(--page)}
+  td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  .swap{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-family:var(--mono);font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:14px 0}
+  .swap b{font-weight:500;color:var(--ink-3)}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .small{font-size:13.5px;color:var(--ink-2)}
+  footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3)}
+  code{font-family:var(--mono);font-size:.92em;background:var(--card);border:1px solid var(--line-soft);padding:0 5px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.bar,.ic,.tk{transition:opacity .15s}}
+</style>
+<style>
+.flow{width:100%;height:auto;display:block;margin:14px 0 6px}
+.flow text{font-family:var(--sans);font-size:12px;fill:var(--ink)}
+.flow .t{font-weight:600;font-size:13px}
+.flow .s{fill:var(--ink-3);font-size:11px}
+.flow rect{fill:var(--card);stroke:var(--line)}
+.flow .hl rect{stroke:var(--accent);stroke-width:1.5}
+.flow path,.flow line{stroke:var(--ink-3);fill:none}
+.steps{counter-reset:s;margin:0;padding:0;list-style:none}
+.steps li{position:relative;padding:8px 0 8px 40px;border-top:1px solid var(--line-soft)}
+.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:9px;width:26px;height:26px;border-radius:13px;background:var(--accent-soft);color:var(--accent-ink);font:600 12px/26px var(--sans);text-align:center}
+.steps li strong{color:var(--ink)}
+.dag{color:var(--ink-3);font-size:12px}
+sup.j{color:var(--pub);font-weight:600}
+</style>
+<div class="wrap">
+<div class="eyebrow">Article AAMAS 2027 · jalon 0 du protocole · population scellée v4 · page générée le 2026-09-03</div>
+<h1>Comment la population du jeu de test est fabriquée</h1>
+<p class="lead prose">Mille agents en 513 ménages entiers, tirés dans un vivier synthétique de 11 329 personnes que le générateur eqasim a construit pour les 453 communes de l'enquête EMC² Toulouse 2023, puis routés, dotés de leurs traits et scellés. Cette page suit le fichier de bout en bout : ce qu'eqasim consomme et ce que le fork y change, ce que chaque étape du notebook ajoute ou corrige, comment la sélection par ménages entiers choisit, et ce que le contrôle a mesuré à chaque étage. La page compagne <a href="synthese_representativite_v3_population_v4_2026-09-03.html">« La population scellée v4 est-elle représentative de l'enquête ? »</a> juge ; celle-ci raconte.</p>
+<div class="meta"><span>data/population/population_1000_AAMAS_v4/</span><span>sha256 9f05c655c3ad2cf4…</span><span>scellée le 2026-09-03 16:57</span><span>règle aamas_seal_v4</span><span>dépôt 19b31fb9b1 (feat_cache_population)</span></div>
+<div class="tiles"><div class="tile"><div class="k">11 329</div><div class="l">personnes dans le vivier eqasim — 5 652 ménages, 6 départements, 453 communes du cadre</div></div><div class="tile"><div class="k">1000</div><div class="l">personas retenus en 513 ménages entiers — 393 échanges de descente, perte 74,0 → 5,0 pt</div></div><div class="tile"><div class="k">12 / 13</div><div class="l">marges conformes au contrôle — 1 à publier, 0 à corriger ; vivier brut : 9 à corriger</div></div><div class="tile"><div class="k">0,03 %</div><div class="l">de paires distantes rabattues sur un même nœud du graphe du polygone (disque de 30 km : 2,24 %)</div></div></div>
+<ul class="toc"><li><a href="#vue">1 · Vue d'ensemble</a></li><li><a href="#eqasim">2 · eqasim</a></li><li><a href="#notebook">3 · Le notebook, étapes 1 à 3ter</a></li><li><a href="#selection">4 · La sélection par ménages</a></li><li><a href="#routage">5 · Le routage sur le polygone</a></li><li><a href="#traits">6 · Les traits</a></li><li><a href="#controle">7 · Contrôle, audit, sceau</a></li><li><a href="#resultats">8 · Les résultats en un tableau</a></li><li><a href="#limites">9 · Ce que la fabrication ne fait pas</a></li><li><a href="#rejouer">10 · Rejouer</a></li></ul>
+
+<h2 id="vue">1 · Vue d'ensemble — cinq temps, un fichier</h2>
+<svg class="flow" viewBox="0 0 1035 120" role="img" aria-label="Les cinq temps de la fabrication"><g><rect x="10" y="18" width="190" height="84" rx="8"/><text class="t" x="22" y="42">1 · eqasim</text><text class="s" x="22" y="62">recensement + ENTD + BD TOPO/BAN</text><text class="s" x="22" y="80">vivier ≈ 11 000 personnes, JSON</text></g><path d="M200 60 L215 60" stroke-width="1.5"/><path d="M210 55 L215 60 L210 65" stroke-width="1.5"/><g><rect x="215" y="18" width="190" height="84" rx="8"/><text class="t" x="227" y="42">2 · notebook 1 → 3bis</text><text class="s" x="227" y="62">journée, TC, zone fine</text><text class="s" x="227" y="80">vivier pré-imputé</text></g><path d="M405 60 L420 60" stroke-width="1.5"/><path d="M415 55 L420 60 L415 65" stroke-width="1.5"/><g class="hl"><rect x="420" y="18" width="190" height="84" rx="8"/><text class="t" x="432" y="42">3 · sélection v4</text><text class="s" x="432" y="62">ménages entiers, 12 cellules</text><text class="s" x="432" y="80">1 000 personas</text></g><path d="M610 60 L625 60" stroke-width="1.5"/><path d="M620 55 L625 60 L620 65" stroke-width="1.5"/><g><rect x="625" y="18" width="190" height="84" rx="8"/><text class="t" x="637" y="42">4 · notebook 4 → 9</text><text class="s" x="637" y="62">routage polygone, export, traits</text><text class="s" x="637" y="80">population complète</text></g><path d="M815 60 L830 60" stroke-width="1.5"/><path d="M825 55 L830 60 L825 65" stroke-width="1.5"/><g class="hl"><rect x="830" y="18" width="190" height="84" rx="8"/><text class="t" x="842" y="42">5 · contrôle + sceau</text><text class="s" x="842" y="62">13 marges, audit, MANIFEST</text><text class="s" x="842" y="80">dossier immuable</text></g></svg>
+<div class="prose"><p>Le générateur <strong>eqasim</strong> (fork <code>eqasim-llm-toulouse</code>) tire des ménages dans le recensement, leur apparie une journée réelle de l'enquête nationale ENTD 2008, les loge à une adresse et place leurs activités ; il livre un vivier bien plus grand que la cible. Le <strong>notebook</strong> <code>generate_population.ipynb</code> rend chaque journée jouable (chevauchements, fusions, activités hors du polygone), pose la desserte TC et la zone fine, puis <strong>pré-impute</strong> le vivier et en <strong>sélectionne</strong> 1000 personas par ménages entiers, sur les marges de l'enquête. Les retenus seuls sont <strong>routés</strong> sur le graphe du polygone des 453 communes pour recaler leurs horaires, exportés, puis dotés des traits que la simulation consomme. Enfin le <strong>contrôle</strong> juge le fichier sur 13 marges, l'audit de périmètre le passe aux neuf axes du ticket 020, et le <strong>scellement</strong> le fige avec son empreinte, sa règle et son rapport.</p><p class="small">Croix (†) : chiffre lu dans le journal de génération ou le ticket, pas dans un fichier structuré (ticket 031 (docs/tickets/ticket_031_perimetre_453_communes.md, § 1.2, § 1.2 bis, décisions et « Sceau v4 ») et CHANGELOG.md du fork eqasim-toulouse, journal de génération du 2026-09-03). Tout le reste est lu dans les fichiers du sceau, des contrôles et des traces.</p></div>
+
+<h2 id="eqasim">2 · eqasim — des données publiques à un vivier de 11 329 personnes</h2>
+<div class="prose"><p><strong>Ce qu'il fait, en une phrase.</strong> Il tire des individus et leurs ménages dans le recensement INSEE des communes du cadre, apparie à chacun une personne réellement enquêtée dans l'ENTD 2008 — dont il recopie la journée (motifs, heures) et l'équipement (permis, abonnement, vélos) —, lui affecte un revenu FILOSOFI, le loge dans un bâtiment BD TOPO à une adresse BAN, place ses lieux de travail, d'études et d'achats, puis exporte le tout en JSON pour GAMA.</p></div>
+<h3>Les réglages scientifiques (<code>config_toulouse.yml</code>, source unique)</h3>
+<div class="tblwrap"><table><thead><tr><th>Réglage</th><th>Valeur</th><th>Pourquoi</th></tr></thead><tbody><tr><td>Départements</td><td><code>31, 32, 81, 82, 09, 11</code></td><td>les six départements du périmètre EMC² 2023 (ticket 031)</td></tr>
+<tr><td>Cadre de tirage</td><td><code>453 communes (09 : 10, 11 : 10, 31 : 346, 32 : 38, 81 : 27, 82 : 22)</code></td><td>liste des communes de l'enquête, croisée avec les départements ; une commune inconnue du référentiel IRIS fait échouer le stage</td></tr>
+<tr><td>Couronnes</td><td><code>1ere couronne : 69, 2eme couronne : 108, 3eme couronne : 275, Toulouse : 1</code></td><td>table `commune_couronne.json` version cc1</td></tr>
+<tr><td>Taux de sondage</td><td><code>0.01 (recalculé par le service sur la population RP 2022 du cadre)</code></td><td>10 000 demandés → vivier de 11 329 personnes</td></tr>
+<tr><td>Graine</td><td><code>1234</code></td><td>reproductibilité du tirage</td></tr>
+<tr><td>Enquête d'appariement</td><td><code>ENTD 2008 nationale (`filter_hts: False`)</code></td><td>sans ce réglage, le vivier de donneurs tombait à 308<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> résidents de Haute-Garonne — c'était le cas de toutes les populations jusqu'à la v3</td></tr>
+<tr><td>Attributs d'appariement</td><td><code>age_class → sex → any_cars → socioprofessional_class → departement_id</code></td><td>la dégradation retire les colonnes par la fin : l'âge est le dernier abandonné</td></tr>
+<tr><td>Bornes d'âge</td><td><code>14, 17, 29, 44, 59, 74, 1000</code></td><td>la borne 17 sépare les lycéens des jeunes actifs (décision du 2026-09-03)</td></tr>
+<tr><td>Observations minimales</td><td><code>5</code></td><td>seuil sous lequel une strate se dégrade</td></tr>
+<tr><td>Journées donneuses</td><td><code>jours de classe (`hts_school_days_only: True`), mercredi exclu sous 11 ans</code></td><td>hors vacances scolaires (V2_VAC_SCOL) ; un donneur dont la journée est écartée sort du vivier</td></tr>
+<tr><td>Personnes à commune inconnue</td><td><code>pondérées (`census_undefined_reweighting: True`)</code></td><td>poids RP × part de la population sans IRIS du département qui vit dans le cadre</td></tr></tbody></table></div>
+<h3>La chaîne des stages synpp</h3>
+<div class="tblwrap"><table><thead><tr><th>Stage</th><th>Quoi</th><th>Ce qu'il produit</th><th>Ce que le fork y change</th></tr></thead><tbody><tr><td><code class='dag'>data.census.filtered</code></td><td><strong>Recensement INSEE (RP)</strong></td><td>individus et ménages des communes du cadre : âge, sexe, PCS, activité, voitures, taille du ménage</td><td>filtre par liste de communes ; les personnes à commune « undefined » (communes sans IRIS) sont gardées et pondérées</td></tr>
+<tr><td><code class='dag'>data.hts.entd.cleaned → filtered → selected</code></td><td><strong>ENTD 2008</strong></td><td>journées de référence, trajets, permis, abonnement, vélos des donneurs</td><td>jours de classe seulement ; témoin « scolaires mobiles avec trajet vers l'école » (alarme sous 85 %)</td></tr>
+<tr><td><code class='dag'>synthesis.population.sampled</code></td><td><strong>Tirage</strong></td><td>tirage des ménages au taux de sondage, poids RP</td><td>—</td></tr>
+<tr><td><code class='dag'>synthesis.population.income.selected</code></td><td><strong>Revenu (FILOSOFI)</strong></td><td>revenu du ménage par unité de consommation, par commune</td><td>—</td></tr>
+<tr><td><code class='dag'>synthesis.population.matched</code></td><td><strong>Appariement HTS</strong></td><td>à chaque personne un donneur ENTD de même strate (âge, sexe, motorisation, PCS, département)</td><td>national, bornes d'âge configurables, seuil 5 observations</td></tr>
+<tr><td><code class='dag'>synthesis.population.enriched</code></td><td><strong>Enrichissement</strong></td><td>permis, abonnement, vélos du donneur ; `car_availability`, `age_range`, PCS détaillée, secteur</td><td>permis des mineurs neutralisés avant l'agrégation ; colonnes source du sceau (RP `TRANS`, identifiants des donneurs)</td></tr>
+<tr><td><code class='dag'>synthesis.population.trips → activities</code></td><td><strong>Chaîne d'activités</strong></td><td>la journée du donneur ENTD recopiée : motifs, heures, durées</td><td>—</td></tr>
+<tr><td><code class='dag'>data.bdtopo · data.ban · spatial.home.zones → locations</code></td><td><strong>Domicile</strong></td><td>zone (IRIS ou commune) puis adresse : bâtiments BD TOPO pondérés par leurs logements, adresses BAN</td><td>BD TOPO 2025-03-15 des six départements, lue dans les archives .7z ; BAN du 2026-09-03</td></tr>
+<tr><td><code class='dag'>spatial.primary · spatial.secondary → spatial.locations</code></td><td><strong>Lieux d'activité</strong></td><td>travail et études par distance de navette et capacité (BPE, SIRENE) ; lieux secondaires (achats, loisirs) par distances ENTD</td><td>—</td></tr>
+<tr><td><code class='dag'>synthesis.population.llm_agents</code></td><td><strong>Export JSON pour GAMA</strong></td><td>personas (traits, occupation, revenu textualisé, nom Faker), activités avec coordonnées, `household`, `provenance`, `validation.commute_mode` à la racine, immobiles gardés</td><td>stage du fork ; `household.commune_id` renseigné pour tous depuis le tirage de zone ; couronne de résidence posée ici</td></tr></tbody></table></div>
+<h3>Ce que le journal de génération a mesuré</h3>
+<div class="prose"><ul>
+<li><strong>Journées donneuses.</strong> Le filtre des jours de classe garde 12 392<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> journées de référence sur 15 687<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> ; la part des scolaires mobiles avec un trajet vers l'école passe de 72,0<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> % à 90,8<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> % chez les donneurs. Un donneur dont la journée est écartée sort du vivier : la première version le gardait comme immobile, et la population générée comptait alors 40 % d'immobiles.</li>
+<li><strong>Personnes à commune inconnue.</strong> Le recensement ne nomme pas la commune des habitants des communes sans IRIS. Avec une liste de communes comme cadre, eqasim versait toute la population rurale du département dans les quelques villages du cadre : 17 986<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> personnes livrées pour 10 000 demandées, 42,5<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> % en 3ᵉ couronne. Leur poids est désormais multiplié par la part de la population sans IRIS du département qui vit dans le cadre (31 : 86,7<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %, 32 : 9,4<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %, 81 : 9,0<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %, 82 : 20,1<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %, 09 : 4,0<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %, 11 : 1,0<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> %). Résultat : 11 329 personnes, 3ᵉ couronne au niveau de l'enquête.</li>
+<li><strong>Le vivier livré</strong> : 11 329 personnes en 5 652 ménages ; 10 979 éligibles à la sélection après exclusion de 335 enfants de moins de 5 ans (hors population enquêtée), 14 sans domicile localisable et 1 domicile hors des 453 communes (adresse en limite de commune). Immobiles 19,4 % (enquête 10,6 %) ; scolaires mobiles avec activité d'études 93,1 %.</li>
+</ul></div>
+
+<h2 id="notebook">3 · Le notebook — rendre la journée jouable, puis choisir</h2>
+<div class="prose"><p>Chaque étape écrit un point de reprise dans <code>Temp/</code> et se saute si sa sortie existe ; une sélection n'est réutilisée que si son journal porte l'empreinte du vivier courant. Les cinq premières étapes :</p></div>
+<ol class="steps"><li><strong>Génération eqasim.</strong> POST /generate au service (port 8003) ; le vivier brut va dans <code>Temp/1_raw/</code> <span class='small'>— le service refuse de générer si <code>config_toulouse.yml</code> manque ou si un département n'a pas ses données ; 3<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> min avec les caches BD TOPO/BAN, 8<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> min à froid</span></li>
+<li><strong>Journée valide.</strong> activités hors du polygone des 453 communes supprimées (jamais le domicile), comptées et alarmées ; chevauchements corrigés ; activités consécutives ou circulaires de même motif et même lieu fusionnées — le domicile du soir et celui du matin sont une seule activité <span class='small'>— 0 activité hors polygone sur 1000 personas contrôlés</span></li>
+<li><strong>Desserte TC.</strong> drapeau <code>public_transport</code> vrai si un arrêt Tisséo (GTFS) est à moins de 1 500 m du lieu <span class='small'>— c'est ce drapeau que l'agent lit pour envisager le TC</span></li>
+<li><strong>Zone fine.</strong> libellé de zone de chaque lieu (grille de densité INSEE, aire d'attraction), géocodage inverse BAN mis en cache <span class='small'>— —</span></li>
+<li><strong>Pré-imputation puis sélection (3ter).</strong> les traits d'équipement sont posés sur le <em>vivier</em> (permis, abonnement, logement, vélo, deux passes de <code>fix_minor_traits</code>) pour être des marges de sélection ; puis <code>seal_population select</code>, règle aamas_seal_v4 <span class='small'>— 11 329 personnes → 1000 retenus en 513 ménages</span></li></ol>
+<div class="callout"><strong>Pourquoi la sélection vient avant le routage.</strong> Le vivier ne coûte que la synthèse eqasim ; le routage et les traits ne tournent que sur les 1000 retenus. La pré-imputation du vivier (étape 3ter-a) est ce qui permet au logement, au vélo, au permis et à l'abonnement d'être des <em>marges</em> de la sélection et non de simples constats.</div>
+
+<h2 id="selection">4 · La sélection par ménages entiers (règle aamas_seal_v4)</h2>
+<div class="prose"><p><strong>L'unité est le ménage.</strong> Un ménage a une couronne et une motorisation, donc une cellule ; ses membres de 5 ans et plus entrent ou sortent ensemble. <strong>Allocation</strong> : les 12 cellules couronne × motorisation reçoivent un effectif cible par plus fort reste sur la cible jointe de l'enquête (base personne, version cj1) ; les ménages entrent dans l'ordre d'un <code>sha256</code> de leur identifiant s'ils tiennent dans leur cellule. <strong>Descente</strong> : tant qu'un échange de deux ménages de même taille et même cellule réduit la somme des écarts absolus aux marges contrôlées, on l'applique — 393 échanges en 3 passes, perte 73,96 → 4,97 pt en 2.81 s. Déterministe : même vivier, même fichier au sha256 près. Déficits : aucun ; reports : 0.</p><p>Ménages retenus par taille : 1 : 223, 2 : 167, 3 : 66, 4 : 45, 5 : 10, 6 : 1, 9 : 1 — 1 000 membres présents sur 1 052 déclarés (les absents sont les enfants de moins de 5 ans). Départements de résidence : 09 : 2, 11 : 1, 31 : 939, 32 : 9, 81 : 30, 82 : 19 ; 141 communes distinctes.</p></div>
+<div class="two"><div class="card"><h4>Les 12 cellules</h4><div class="tblwrap"><table><thead><tr><th>Couronne × motorisation</th><th class="n">vivier</th><th class="n">cible</th><th class="n">retenus</th></tr></thead><tbody><tr><td>Toulouse × sans voiture</td><td class='n'>1 030</td><td class='n'>107</td><td class='n'>107</td></tr>
+<tr><td>Toulouse × une voiture</td><td class='n'>1 832</td><td class='n'>172</td><td class='n'>172</td></tr>
+<tr><td>Toulouse × deux voitures et +</td><td class='n'>931</td><td class='n'>84</td><td class='n'>84</td></tr>
+<tr><td>1ere couronne × sans voiture</td><td class='n'>259</td><td class='n'>19</td><td class='n'>19</td></tr>
+<tr><td>1ere couronne × une voiture</td><td class='n'>1 515</td><td class='n'>122</td><td class='n'>122</td></tr>
+<tr><td>1ere couronne × deux voitures et +</td><td class='n'>2 130</td><td class='n'>200</td><td class='n'>200</td></tr>
+<tr><td>2eme couronne × sans voiture</td><td class='n'>95</td><td class='n'>4</td><td class='n'>4</td></tr>
+<tr><td>2eme couronne × une voiture</td><td class='n'>406</td><td class='n'>39</td><td class='n'>39</td></tr>
+<tr><td>2eme couronne × deux voitures et +</td><td class='n'>1 098</td><td class='n'>99</td><td class='n'>99</td></tr>
+<tr><td>3eme couronne × sans voiture</td><td class='n'>92</td><td class='n'>6</td><td class='n'>6</td></tr>
+<tr><td>3eme couronne × une voiture</td><td class='n'>519</td><td class='n'>44</td><td class='n'>44</td></tr>
+<tr><td>3eme couronne × deux voitures et +</td><td class='n'>1 072</td><td class='n'>104</td><td class='n'>104</td></tr></tbody></table></div></div>
+<div class="card"><h4>Ce que la descente referme</h4><div class="tblwrap"><table><thead><tr><th>Marge</th><th class="n">écart max avant</th><th class="n">après</th></tr></thead><tbody><tr><td>Classes d'âge (6)</td><td class='n'>3,10 pt</td><td class='n'>0,30 pt</td></tr>
+<tr><td>Occupation</td><td class='n'>3,40 pt</td><td class='n'>0,70 pt</td></tr>
+<tr><td>Âge quinquennal</td><td class='n'>1,72 pt</td><td class='n'>0,30 pt</td></tr>
+<tr><td>Genre</td><td class='n'>0,58 pt</td><td class='n'>0,02 pt</td></tr>
+<tr><td>Taille de ménage (personne)</td><td class='n'>2,36 pt</td><td class='n'>0,81 pt</td></tr>
+<tr><td>Permis (adultes)</td><td class='n'>2,66 pt</td><td class='n'>0,04 pt</td></tr>
+<tr><td>Abonnement TC</td><td class='n'>2,95 pt</td><td class='n'>0,05 pt</td></tr>
+<tr><td>Type de logement</td><td class='n'>2,13 pt</td><td class='n'>0,04 pt</td></tr>
+<tr><td>Immobiles</td><td class='n'>7,76 pt</td><td class='n'>0,05 pt</td></tr></tbody></table></div></div></div>
+
+<h2 id="routage">5 · Le routage sur le polygone des 453 communes (étapes 4 et 5)</h2>
+<div class="prose"><p>Les horaires exportés par eqasim ignorent les temps de trajet. L'étape 4 calcule, pour chaque paire de lieux consécutifs d'un persona, un itinéraire OSMnx dans son <em>mode de planification</em> (voiture s'il en a une, vélo sinon), et l'étape 5 recale les heures de début pour absorber ces durées. Le graphe est celui du <strong>polygone des communes</strong> (5 428 km²), construit sans téléchargement depuis les extraits OSM régionaux du fork (<code>perimetre_453_communes:cc1:osm-220101</code>, clé <code>444ca7e6a515</code>, OSMnx 2.1.0), et non le disque de 30 km de la production : un domicile de 3ᵉ couronne y a ses propres nœuds. Construction 603 s, 2 729 Mo de pointe, pickle 223,1 Mo.</p></div>
+<div class="two"><div class="card"><h4>Les trois graphes</h4><div class="tblwrap"><table><thead><tr><th>Mode</th><th class="n">nœuds</th><th class="n">arêtes</th><th class="n">arêtes en vitesse de repli</th><th class="n">construction</th></tr></thead><tbody><tr><td>walk</td><td class='n'>176 340</td><td class='n'>472 544</td><td class='n'>5,1 %</td><td class='n'>191 s</td></tr>
+<tr><td>bike</td><td class='n'>151 833</td><td class='n'>360 801</td><td class='n'>32,0 %</td><td class='n'>235 s</td></tr>
+<tr><td>drive</td><td class='n'>65 150</td><td class='n'>148 959</td><td class='n'>1,2 %</td><td class='n'>116 s</td></tr></tbody></table></div><p class="small">Vitesses de repli (config/osmnx.yaml) : walk 5 km/h, bike 14 km/h, drive 30 km/h. Zones de congestion posées sur les nœuds — walk : 32 342 ville / 102 858 agglomération / 41 140 dehors · bike : 23 202 ville / 89 453 agglomération / 39 178 dehors · drive : 8 878 ville / 38 447 agglomération / 17 825 dehors.</p></div>
+<div class="card"><h4>Paires « même nœud » par couronne (cohorte v4, 3 300 paires)</h4><div class="tblwrap"><table><thead><tr><th>Couronne d'origine</th><th class="n">paires</th><th class="n">distantes > 500 m sur un même nœud — disque 30 km</th><th class="n">— polygone</th><th class="n">même nœud, toutes distances</th></tr></thead><tbody><tr><td>Toulouse</td><td class='n'>1 264</td><td class='n'>0,00 %</td><td class='n'>0,00 %</td><td class='n'>2,2 %</td></tr>
+<tr><td>1ere couronne</td><td class='n'>1 133</td><td class='n'>0,00 %</td><td class='n'>0,00 %</td><td class='n'>4,2 %</td></tr>
+<tr><td>2eme couronne</td><td class='n'>426</td><td class='n'>0,00 %</td><td class='n'>0,23 %</td><td class='n'>8,0 %</td></tr>
+<tr><td>3eme couronne</td><td class='n'>477</td><td class='n'>15,51 %</td><td class='n'>0,00 %</td><td class='n'>5,9 %</td></tr></tbody></table></div><p class="small">Critère 3 du ticket 031 (≤ 0,5 % par couronne) : tenu — 0,03 % au total. Rabattement médian 56 m, p95 251 m. Routage échantillonné : 787 routes, 0,64 % sans itinéraire, 423 ms par route (médiane). Worker : 1 847 Mo, chargement 7,1 s (disque : 2 032 Mo, 10,1 s).</p></div></div>
+<div class="prose"><p><strong>Ce que le routage de la cohorte a donné</strong><sup class='j'>†</sup> : 3 291<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> paires de planification, 17<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> sans itinéraire, 582<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> s avec 3<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> workers ; 3 335<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> activités planifiées, 2 660<sup class='j' title='lu dans le journal de génération, pas dans un fichier structuré'>†</sup> desservies en TC. Deux règles du 2026-09-03 : le facteur de congestion TomTom s'applique par <em>zone</em> de l'arête (ville, agglomération, dehors) et non plus à tout trajet ; une paire rabattue sur un même nœud reçoit une durée à la vitesse du mode (vol d'oiseau × 1,3), plus jamais 0 minute. Le réchauffage du cache d'itinéraires du runtime (étape 6) est optionnel et ne touche pas au fichier.</p></div>
+
+<h2 id="traits">6 · Les traits (étape 8) — ce que la simulation consomme</h2>
+<div class="prose"><p>Après l'export vers <code>data/population/</code> (étape 7, qui refuse d'écraser une population sans horaires ou amputée de moitié), sept post-traitements posent ou corrigent les traits, dans un ordre imposé : le vélo lit le logement, et <code>car_availability</code> dérive des permis que <code>enrich_equipment</code> réécrit — d'où la seconde passe. Chacun refuse de tourner si sa ressource d'accès restreint manque, plutôt que d'imputer à l'aveugle. L'étape 9 rend le verdict <strong>POPULATION COMPLÈTE</strong> quand les neuf traits consommés et les horaires recalés sont là.</p></div>
+<div class="tblwrap"><table><thead><tr><th>Post-traitement</th><th>Ce qu'il pose</th><th>Garde-fou</th></tr></thead><tbody><tr><td><code>fix_minor_traits</code></td><td>permis → non sous 18 ans ; `work` → `education` pour scolaires et étudiants ; motifs recalculés ; `car_availability` par ménage sans les permis de mineurs</td><td>règles idempotentes ; rejoué une seconde fois après `enrich_equipment`</td></tr>
+<tr><td><code>enrich_residence_zone</code></td><td>couronne, commune et code INSEE du domicile, lus sur le découpage de l'enquête (trait observé, pas tiré)</td><td>`hors périmètre` pour un domicile connu et dehors ; rien sans coordonnées</td></tr>
+<tr><td><code>enrich_housing_type</code></td><td>type de logement tiré dans la loi EMC² des ménages de la zone fine, levier de taille de ménage, hachage de l'adresse</td><td>ticket 019 ; refuse une ressource v1</td></tr>
+<tr><td><code>enrich_personal_bike</code></td><td>vélo personnel par les trois étages appris sur EMC² : stock du ménage, attribution, VAE — tirage par foyer reconstitué à l'adresse</td><td>ticket 015 ; contrôle `--check` à part (ci-dessous)</td></tr>
+<tr><td><code>enrich_equipment</code></td><td>abonnement TC et permis par les lois apprises sur EMC² (tickets 016 et 017), hachage sur la personne</td><td>recette en lecture seule après la seconde passe de `fix_minor_traits`</td></tr></tbody></table></div>
+<h3>Le contrôle du vélo, à part</h3>
+<div class="prose"><p>Le vélo est le trait dont la part modale est la plus scrutée : son imputation a son propre contrôle (<code>enrich_personal_bike --check</code>), qui compare le taux de porteurs, la part de VAE, le gradient par taille de ménage et par type d'habitat, la part de ménages équipés et les vélos par ménage à des cibles EMC², bruit d'échantillonnage compris. La <strong>pente</strong> du taux de porteurs par taille de ménage ne se juge qu'à partir de 100 foyers par taille : sur la cohorte elle s'affiche « non concluant » sans peser sur le verdict, et se lit sur le vivier.</p></div>
+<div class="tblwrap"><table><thead><tr><th>Population</th><th class="n">couverture</th><th class="n">contrôles</th><th class="n">pente tailles 1 → 4</th><th>verdict de la pente</th></tr></thead><tbody><tr><td>cohorte v4</td><td class='n'>100,0 %</td><td class='n'>12 ok · 0 échec · 3 non concluant</td><td class='n'>27,3 / 44,4 / 63,4 / 55,5 % sur 218 / 148 / 69 / 55 foyers</td><td><span class='pill nm'>non mesurable</span> non concluant — code de sortie 0</td></tr><tr><td>vivier</td><td class='n'>100,0 %</td><td class='n'>14 ok · 0 échec · 1 non concluant</td><td class='n'>32,8 / 49,1 / 55,0 / 60,9 % sur 2350 / 1657 / 744 / 532 foyers</td><td><span class='pill ok'>conforme</span> ok — code de sortie 0</td></tr></tbody></table></div>
+
+<h2 id="controle">7 · Contrôle, audit, scellement</h2>
+<div class="prose"><p><strong>Le contrôle</strong> (<code>control_population.py</code>) compare la population aux marges de l'EMC² 2023 : IC95 de Clopper–Pearson, TOST à ± 1.0 pt, χ² et V de Cramér, EMD ou JSD selon l'échelle ; cibles gelées <code>cj1</code> (jointe couronne × motorisation) et <code>cm1</code> (marges personne recalculées sur microdonnées). Un écart établi sur une marge que la sélection sait refermer est <em>à corriger</em> et fait refuser le scellement ; sur une marge qu'elle ne referme pas, il est <em>à publier</em>. La ligne « scolaires avec activité d'études » est un témoin des chaînes d'activités, pas une marge de sélection.</p></div>
+<div class="two"><div class="card"><h4>Les 13 marges — vivier brut puis cohorte</h4><div class="tblwrap"><table><thead><tr><th>Marge</th><th>vivier</th><th>cohorte</th><th class="n">écart max</th></tr></thead><tbody><tr><td>Classes d'âge (6)</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,30 pt</td></tr>
+<tr><td>Occupation</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,70 pt</td></tr>
+<tr><td>Motorisation — base personne</td><td><span class='pill ok'>conforme</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,09 pt</td></tr>
+<tr><td>Motorisation — base ménage (1/taille)</td><td><span class='pill pub'>à publier</span></td><td><span class='pill pub'>à publier</span></td><td class='n'>3,57 pt</td></tr>
+<tr><td>Couronne de résidence</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,06 pt</td></tr>
+<tr><td>Couronne × motorisation</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,05 pt</td></tr>
+<tr><td>Âge quinquennal</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,30 pt</td></tr>
+<tr><td>Genre</td><td><span class='pill ok'>conforme</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,02 pt</td></tr>
+<tr><td>Taille de ménage (personne)</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,81 pt</td></tr>
+<tr><td>Permis (adultes)</td><td><span class='pill ok'>conforme</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,04 pt</td></tr>
+<tr><td>Abonnement TC</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,05 pt</td></tr>
+<tr><td>Type de logement</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,04 pt</td></tr>
+<tr><td>Immobiles</td><td><span class='pill ko'>à corriger</span></td><td><span class='pill ok'>conforme</span></td><td class='n'>0,05 pt</td></tr></tbody></table></div></div>
+<div class="card"><h4>Ménages et mobilité</h4><div class="tblwrap"><table><thead><tr><th></th><th class="n">vivier</th><th class="n">cohorte</th><th class="n">enquête</th></tr></thead><tbody><tr><td>Personnes</td><td class='n'>11 329</td><td class='n'>1 000</td><td class='n'>—</td></tr>
+<tr><td>Ménages</td><td class='n'>5 658</td><td class='n'>513 entiers, 469 complets au sens strict</td><td class='n'>—</td></tr>
+<tr><td>Immobiles</td><td class='n'>19,4 %</td><td class='n'>10,6 %</td><td class='n'>10,6 %</td></tr>
+<tr><td>Déplacements par personne</td><td class='n'>2,99</td><td class='n'>3,33</td><td class='n'>3,53</td></tr>
+<tr><td>Déplacements par personne mobile</td><td class='n'>3,71</td><td class='n'>3,73</td><td class='n'>3,95</td></tr>
+<tr><td>Scolaires (6-17 ans) mobiles avec activité d'études</td><td class='n'>93,1 %</td><td class='n'>88,5 % (131/148)</td><td class='n'>90 à 95 %</td></tr></tbody></table></div><p class="small">Déplacements : n déplacements pour n activités, retour au domicile compris ; enquête : PENQ = 1, COEP.</p></div></div>
+<h3>L'audit de périmètre (ticket 020)</h3>
+<div class="tblwrap"><table><thead><tr><th>Axe</th><th>Question</th><th>Constat sur la cohorte</th><th>Verdict</th></tr></thead><tbody><tr><td>A1</td><td>Âge minimum de la population comptée</td><td>0 persona(s) de moins de 5 ans sur 1000</td><td><span class='pill ok'>conforme</span></td></tr>
+<tr><td>A2</td><td>Définition des couronnes</td><td>trait `residence_zone` posé sur 1000/1000 personas ; temps terminal stratifié par la table de l’enquête (tt4)</td><td><span class='pill ok'>conforme</span></td></tr>
+<tr><td>A3</td><td>Base de pondération des cibles</td><td>brut : 2.71 · 1.44 · 13.6 % — pondéré ménages : 2.01 · 1.16 · 22.8 %</td><td><span class='pill pub'>à publier</span></td></tr>
+<tr><td>A4</td><td>Populations et déplacements hors périmètre</td><td>0 domicile(s) hors périmètre sur 1000</td><td><span class='pill ok'>conforme</span></td></tr>
+<tr><td>A5</td><td>Fenêtre saisonnière de la mesure</td><td>aucun run exploitable</td><td><span class='pill pub'>à publier</span></td></tr>
+<tr><td>A6</td><td>Jour de la semaine</td><td>—</td><td><span class='pill nm'>non mesurable</span></td></tr>
+<tr><td>A7</td><td>Objet compté : le déplacement à mode principal</td><td>—</td><td><span class='pill nm'>non mesurable</span></td></tr>
+<tr><td>A8</td><td>Structure de ménage</td><td>2.06 déclarée par adresse, 1.97 réellement présente ; 460/508 grappes complètes</td><td><span class='pill pub'>à publier</span></td></tr>
+<tr><td>A9</td><td>Représentativité spatiale de l'échantillon</td><td>Toulouse 36.3 % · 1ere couronne 34.1 % · 2eme couronne 14.2 % · 3eme couronne 15.4 %</td><td><span class='pill ok'>conforme</span></td></tr></tbody></table></div>
+<h3>Le sceau</h3>
+<div class="prose"><p><code>seal_population.py seal</code> rejoue le contrôle, refuse s'il reste un « à corriger », sinon écrit un dossier qui ne se modifie plus : <code>population.json</code> (sha256 <code>9f05c655c3ad2cf4d8c71cc3c34238417718cec742b42ef94a21eb33f694639f</code>), <code>MANIFEST.yaml</code> (empreinte, règle, vivier et exclus, ménages retenus, descente, verdicts, cibles gelées et leurs empreintes, périmètre — définition, départements attendus et retenus, activités hors polygone —, révision git <code>19b31fb9b1</code>), <code>CONTROLE.md</code> et <code>report.json</code>, <code>selection.json</code>. Écarts déclarés au sceau : motorisation_menage — sans voiture : 22.8 % contre 19.2 % (+3.6 pt) (à publier). La sauvegarde <code>data/population/sauvegardes/</code> archive le dossier <em>et</em> le vivier (brut et pré-imputé) : sans le vivier, la sélection ne se rejoue pas ; avec, elle redonne le même fichier à l'octet.</p></div>
+
+<h2 id="resultats">8 · Les résultats en un tableau</h2>
+<div class="tblwrap"><table><thead><tr><th>Étage</th><th>Mesure</th></tr></thead><tbody>
+<tr><td>eqasim</td><td>11 329 personnes, 5 652 ménages, 6 départements ; immobiles 19,4 % ; scolaires avec études 93,1 % ; 3,71 déplacements par personne mobile ; 9 marges à corriger sur 13</td></tr>
+<tr><td>Journée (étape 2)</td><td>0 activité hors du polygone sur 1000 personas</td></tr>
+<tr><td>Sélection</td><td>1000 personas, 513 ménages entiers, aucun déficit, 393 échanges, perte 74,0 → 5,0 pt ; 6 départements représentés</td></tr>
+<tr><td>Routage</td><td>0,03 % de paires distantes sur un même nœud (critère 3 tenu), 0,64 % sans itinéraire, 423 ms par route</td></tr>
+<tr><td>Traits</td><td>vélo : cohorte 12 contrôles ok, pente non concluant ; vivier 14 ok, pente ok</td></tr>
+<tr><td>Contrôle</td><td>12 conformes, 1 à publier, 0 à corriger ; immobiles 10,6 % ; scolaires 88,5 % ; 3,33 déplacements par persona, 3,73 par mobile (enquête 3,53 / 3,95)</td></tr>
+<tr><td>Audit</td><td>A1 conforme · A2 conforme · A3 à publier · A4 conforme · A5 à publier · A6 non mesurable · A7 non mesurable · A8 à publier · A9 conforme</td></tr>
+</tbody></table></div>
+
+<h2 id="limites">9 · Ce que la fabrication ne fait pas</h2>
+<div class="prose"><ul>
+<li><strong>Les chaînes d'activités restent celles de l'ENTD 2008</strong>, nationale, un jour de classe : 3,73 déplacements par agent mobile contre 3,95 dans l'enquête, et des motifs sans accompagnement. Remplacer l'enquête d'appariement par l'EMC² 2023 est un chantier eqasim distinct.</li>
+<li><strong>Le vivier porte plus d'immobiles que l'enquête</strong> (19,4 % contre 10,6 %) ; la sélection tient la cohorte à 10,6 %, l'écart du vivier est déclaré.</li>
+<li><strong>La motorisation en base ménage</strong> est la seule marge que la sélection n'alloue pas : motorisation_menage — sans voiture : 22.8 % contre 19.2 % (+3.6 pt) (à publier).</li>
+<li><strong>Le transport scolaire</strong> n'est dans aucun GTFS ouvert : les écoliers de 3ᵉ couronne n'ont pas de TC dans la simulation tant que le ticket 030 n'est pas livré.</li>
+<li><strong>Le runtime</strong> doit encore charger ce fichier par commune du domicile et router sur le même graphe du polygone (partie 2 du ticket 031) ; jusque-là, le sceau ne se charge pas entier.</li>
+<li><strong>Les enfants de moins de 5 ans</strong> sont hors population enquêtée et absents par construction (52 membres déclarés absents).</li>
+</ul></div>
+
+<h2 id="rejouer">10 · Rejouer la fabrication</h2>
+<div class="prose"><ol>
+<li><code>docker compose build eqasim && docker compose up -d eqasim otp1</code> — le service part de <code>config_toulouse.yml</code> et des six départements.</li>
+<li><code>make osmnx-perimeter-graph</code> — le graphe du polygone, s'il n'est pas déjà dans <code>data/cache/osmnx/</code>.</li>
+<li>Notebook <code>scripts/data/population/generate_population.ipynb</code>, cellule « Paramètres » : <code>POPULATION_SIZES = [10000]</code>, <code>SELECT_N = 1000</code>, <code>FORCE_REGENERATE = True</code> ; exécuter tout.</li>
+<li><code>make control-population POP=… TRACE=docs/traces/&lt;date&gt;_…</code> puis <code>make seal-population POP=… SELECTION=…</code> ; <code>make audit-perimetre</code>.</li>
+<li><code>enrich_personal_bike … --dry-run --check --rapport-json</code> sur la cohorte et sur le vivier ; <code>make synthese-representativite … VELO=… VELO_VIVIER=…</code> ; cette page : <code>make synthese-generation-population …</code>.</li>
+</ol><p class="small">Méthode : <code>docs/setup/population.md</code> (chaîne), <code>docs/arch/population-post-traitements.md</code> (d'où vient chaque attribut), <code>docs/arch/controle-population-jeu-de-test.md</code> (contrôle et scellement), <code>docs/arch/velo-equipement.md</code>, tickets 026, 029, 031.</p></div>
+<footer>Sources lues : <code>population_1000_AAMAS_v4/MANIFEST.yaml</code>, <code>report.json</code>, <code>selection.json</code> ; contrôle du vivier (docs/traces/2026-09-03_18-58_controle_toulouse_population_10000/report.json) ; audit de périmètre ; rapports <code>enrich_personal_bike --rapport-json</code> ; <code>config_toulouse.yml</code> du fork ; <code>commune_couronne.json</code> ; méta du graphe <code>444ca7e6a515</code> ; <code>mesures.json</code> du graphe. Chiffres marqués † : ticket 031 (docs/tickets/ticket_031_perimetre_453_communes.md, § 1.2, § 1.2 bis, décisions et « Sceau v4 ») et CHANGELOG.md du fork eqasim-toulouse, journal de génération du 2026-09-03. Généré le 2026-09-03 par <code>scripts/AAMAS/synthese_generation_population.py</code>.</footer></div>

@@ -336,6 +336,11 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
 - ⚠ Le runtime filtre encore sur `TOULOUSE_OSM_ROUTES_30K_BBOX` : ce sceau ne se charge entier
   qu'après le portage de la partie 2 (chargement par commune du domicile).
   **Réglé le 2026-09-03 au soir** : `slope_verdict` juge la pente à partir de 100 foyers par taille et tolère une inversion contenue dans l'incertitude ; sur la cohorte v4 le critère est « non concluant » (code de sortie 0), sur le vivier la pente est croissante (32,8 / 49,1 / 55,0 / 60,9 %). Doc : `docs/arch/velo-equipement.md`.
+- **Pages du 2026-09-03 au soir** : la synthèse de représentativité v3 est régénérée avec le verdict vélo
+  (rapports `--rapport-json` de la cohorte et du vivier) et la légende corrigée du compte des déplacements ;
+  la page `docs/paper/population/fabrication_population_v4_2026-09-03.html` explique la fabrication de
+  bout en bout (`scripts/AAMAS/synthese_generation_population.py`). Trace :
+  `docs/traces/2026-09-03_22-32_synthese_v3_population_v4_velo/`.
 
 ### Critères d'acceptation — partie 1
 1. Vivier : 0 persona hors des 453 communes ; six départements représentés ; ≥ 88 % des 6-17 ans

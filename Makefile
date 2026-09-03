@@ -467,13 +467,33 @@ osmnx-perimeter-graph:
 ##   make synthese-representativite SCEAU=data/population/population_1000_AAMAS_v4 \
 ##        PRECEDENT=data/population/population_1000_AAMAS_v3 VIVIER=docs/traces/<d>_controle_vivier/report.json \
 ##        AUDIT=docs/traces/<d>_audit/audit_perimetre.json OUT=docs/traces/<d>/synthese_representativite_v3.html \
+##        VELO=docs/traces/<d>/velo_cohorte.json VELO_VIVIER=docs/traces/<d>/velo_vivier.json \
 ##        COPIE=docs/paper/population/synthese_representativite_v3_population_v4_<date>.html
+## Les deux rapports vélo viennent de `enrich_personal_bike <population> --dry-run --check --rapport-json <fichier>`
+## sur la cohorte scellée et sur le vivier pré-imputé (Temp/4_zone_enriched) : la pente se juge sur le vivier.
 synthese-representativite:
 	@test -n "$(SCEAU)" || { echo "SCEAU=<dossier scellé> obligatoire"; exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.synthese_representativite --sceau $(SCEAU) \
 	  $(if $(PRECEDENT),--precedent $(PRECEDENT),) $(if $(VIVIER),--vivier $(VIVIER),) \
-	  $(if $(AUDIT),--audit $(AUDIT),) --out $(if $(OUT),$(OUT),$(SCEAU)/synthese_representativite.html) \
+	  $(if $(AUDIT),--audit $(AUDIT),) $(if $(VELO),--velo $(VELO),) $(if $(VELO_VIVIER),--velo-vivier $(VELO_VIVIER),) \
+	  --out $(if $(OUT),$(OUT),$(SCEAU)/synthese_representativite.html) \
 	  $(if $(COPIE),--copie $(COPIE),)
+
+.PHONY: synthese-generation-population
+
+## Page « Comment la population du jeu de test est fabriquée » (eqasim, notebook, sélection, routage,
+## traits, contrôle, sceau — et les résultats de chaque étage), chiffres lus dans les mêmes fichiers que la
+## synthèse de représentativité plus la méta du graphe OSMnx et les mesures du graphe.
+##   make synthese-generation-population SCEAU=data/population/population_1000_AAMAS_v4 \
+##        VIVIER=… AUDIT=… VELO=… VELO_VIVIER=… MESURES_GRAPHE=docs/traces/<d>_mesures_graphe_perimetre_v4/mesures.json \
+##        OUT=docs/traces/<d>/fabrication_population.html COPIE=docs/paper/population/fabrication_population_v4_<date>.html
+synthese-generation-population:
+	@test -n "$(SCEAU)" || { echo "SCEAU=<dossier scellé> obligatoire"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.synthese_generation_population --sceau $(SCEAU) \
+	  $(if $(VIVIER),--vivier $(VIVIER),) $(if $(AUDIT),--audit $(AUDIT),) \
+	  $(if $(VELO),--velo $(VELO),) $(if $(VELO_VIVIER),--velo-vivier $(VELO_VIVIER),) \
+	  $(if $(MESURES_GRAPHE),--mesures-graphe $(MESURES_GRAPHE),) \
+	  --out $(if $(OUT),$(OUT),$(SCEAU)/fabrication_population.html) $(if $(COPIE),--copie $(COPIE),)
 
 .PHONY: reference-marges control-population select-population seal-population
 
