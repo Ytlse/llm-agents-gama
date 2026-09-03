@@ -42,9 +42,17 @@ def init_worker(
     with (cache / f"boundary_{cache_key}.pkl").open("rb") as f:
         _boundary = pickle.load(f)
 
+    # Zones de congestion des nœuds (ticket 031, décision 4) : portées par le pickle du graphe du
+    # polygone ; calculées à chaud sinon (graphe de 30 km d'avant le changement), sans réécrire le
+    # pickle depuis un worker.
+    from trip_helper.congestion_zones import ensure_zones
+    counts = ensure_zones(_graphs, _boundary)
+
     pid = os.getpid()
     elapsed = time.monotonic() - t0
-    print(f"[worker pid={pid}] graphs loaded in {elapsed:.1f}s  (simulation_date={simulation_date_iso})", flush=True)
+    print(f"[worker pid={pid}] graphs loaded in {elapsed:.1f}s  (simulation_date={simulation_date_iso})"
+          + (f" — zones de congestion calculées à chaud : {({m: dict(c) for m, c in counts.items()})}" if counts
+             else " — zones de congestion lues dans le pickle"), flush=True)
 
 
 def compute_route_worker(args: tuple) -> tuple:

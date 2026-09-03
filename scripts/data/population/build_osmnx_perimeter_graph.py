@@ -27,9 +27,11 @@ CE QUE LE SCRIPT GARANTIT.
   * **Une clé de cache distincte.** `graphs_<clé>.pkl` / `boundary_<clé>.pkl` dans
     `data/cache/osmnx/`, clé = md5(`PERIMETER_GRAPH_LABEL`)[:12] — le label dit le périmètre, la
     version de la table des communes et la date des pbf. Le disque de 30 km reste intact.
-  * **La frontière `_in_city` ne change pas.** `boundary_<clé>.pkl` est la commune de Toulouse,
-    copiée depuis le cache du disque de 30 km (aucun géocodage réseau) ; c'est la frontière du
-    facteur de congestion « ville / agglomération » de `_route_sync`.
+  * **Les zones de congestion sont posées sur les nœuds** (`zone` : `city` = commune de Toulouse,
+    `agglo` = couronnes Toulouse + 1ʳᵉ + 2ᵉ hors Toulouse, `outside` = le reste ; ticket 031,
+    décision 4) : `_route_sync` congestionne chaque arête selon la zone de son nœud d'origine.
+    `boundary_<clé>.pkl` est la commune de Toulouse, copiée depuis le cache du disque de 30 km
+    (aucun géocodage réseau). `--zones-only` (re)pose les zones sur un pickle existant.
   * **Un journal qui se relit.** Durées de chaque étape, nœuds et arêtes par mode, taille du
     pickle, mémoire de pointe, écrits sur stderr et, avec `--trace`, dans un dossier horodaté
     (`mesures.json`, `README.md`). Un fichier `graphs_<clé>.meta.json` porte la provenance à
@@ -273,6 +275,30 @@ def build_graphs(xml_path: Path, speeds: dict, fallbacks: dict) -> tuple[dict, d
     return graphs, journal
 
 
+def city_geometry(cache_dir: Path):
+    """La commune de Toulouse (frontière géocodée du graphe de production)."""
+    b_path = cache_dir / f"boundary_{PRODUCTION_CACHE_KEY}.pkl"
+    if not b_path.exists():
+        raise FileNotFoundError(f"frontière de Toulouse absente : {b_path}")
+    with b_path.open("rb") as fh:
+        return pickle.load(fh).geometry.iloc[0]
+
+
+def assign_zones(graphs: dict, cache_dir: Path) -> dict:
+    """Zones de congestion des nœuds (ticket 031, décision 4) : ville / agglomération / extérieur."""
+    from trip_helper.congestion_zones import agglo_polygon, assign_node_zones
+
+    city = city_geometry(cache_dir)
+    agglo = agglo_polygon()
+    journal = {}
+    for mode, G in graphs.items():
+        t0 = time.monotonic()
+        counts = assign_node_zones(G, city, agglo)
+        journal[mode] = {**dict(counts), "duree_s": round(time.monotonic() - t0, 1)}
+        logger.info("zones de congestion %-5s : %s (%.1fs)", mode, dict(counts), time.monotonic() - t0)
+    return journal
+
+
 def production_speeds() -> tuple[dict, dict]:
     """`_SPEEDS` / `_FALLBACKS` de la production — importés, jamais recopiés."""
     from trip_helper.osmnx_direct import _FALLBACKS, _SPEEDS
@@ -332,6 +358,8 @@ def write_trace(mesures: dict, trace_dir: Path) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--force", action="store_true", help="refaire l'extrait et réécrire le pickle")
+    parser.add_argument("--zones-only", action="store_true",
+                        help="ne (re)poser que les zones de congestion sur le pickle existant, sans reconstruire")
     parser.add_argument("--trace", type=Path, default=None, help="dossier de trace horodaté (docs/traces/…)")
     parser.add_argument("--cache-dir", type=Path, default=OSMNX_CACHE_DIR)
     parser.add_argument("--work-dir", type=Path, default=WORK_DIR)
@@ -347,6 +375,22 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.error("[ALARME] osmium introuvable (%s) — `brew install osmium-tool`", OSMIUM)
         return 2
     g_path = args.cache_dir / f"graphs_{PERIMETER_CACHE_KEY}.pkl"
+    if args.zones_only:
+        if not g_path.exists():
+            logger.error("[ALARME] --zones-only : pas de pickle %s", g_path)
+            return 2
+        with g_path.open("rb") as fh:
+            graphs = pickle.load(fh)
+        zones = assign_zones(graphs, args.cache_dir)
+        with g_path.open("wb") as fh:
+            pickle.dump(graphs, fh)
+        meta_path = args.cache_dir / f"graphs_{PERIMETER_CACHE_KEY}.meta.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+        meta.setdefault("graphes", {})["zones_congestion"] = zones
+        meta["zones_posees_le"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+        logger.info("zones posées et pickle réécrit (%.0f Mo) en %.1fs", _mb(g_path), time.monotonic() - t0)
+        return 0
     if g_path.exists() and not args.force:
         logger.info("graphes déjà en cache : %s (%.0f Mo) — --force pour reconstruire", g_path, _mb(g_path))
         return 0
@@ -356,6 +400,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     xml_path, extract_journal = extract_highways_xml(polygon_path, OSM_PBF_SOURCES, args.work_dir, args.force)
     speeds, fallbacks = production_speeds()
     graphs, build_journal = build_graphs(xml_path, speeds, fallbacks)
+    build_journal["zones_congestion"] = assign_zones(graphs, args.cache_dir)
     cache_journal = write_cache(graphs, args.cache_dir, PERIMETER_CACHE_KEY, args.force)
 
     ram_mo = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1_048_576 if sys.platform == "darwin" else 1024)

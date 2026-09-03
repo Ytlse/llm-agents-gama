@@ -1,3 +1,28 @@
+## [2026-09-03] La congestion routière s'applique par zone d'arête : ville, agglomération, rien dehors
+
+Le facteur de congestion TomTom ne s'applique plus à un trajet entier mais **arête par arête**,
+selon la zone du nœud d'origine de l'arête : profil « ville » dans la commune de Toulouse, profil
+« agglomération » dans les couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête, **facteur 1,0 au-delà**
+(3ᵉ couronne). Les zones sont posées une fois sur les nœuds du graphe — à la construction du
+graphe du polygone des 453 communes, ou paresseusement au premier chargement du graphe historique
+de 30 km — puis mises en cache dans le pickle ; un nœud sans zone est une erreur explicite, pas un
+facteur deviné. Décision de l'auteur du dépôt (ticket 031, question 4), livrée avant le routage
+des plannings de la v4 pour que le sceau porte des horaires recalés sur ces durées.
+
+**Avant :** un trajet Cazères → Muret un lundi à 8 h était multiplié par 1,84 (profil
+« agglomération ») sur toute sa longueur, comme un trajet Colomiers → Blagnac ; un trajet
+touchant Toulouse par un bout était à 2,04 partout.
+**Après :** Cazères → Muret n'est congestionné que sur ses kilomètres agglomérés (facteur global
+≈ 1,1 à 1,3 selon la part), un village → village de 3ᵉ couronne roule à vitesse libre, et un
+trajet 3ᵉ couronne → centre de Toulouse cumule 1,0 sur la campagne, 1,84 dans l'agglomération et
+2,04 dans la ville.
+
+Sur le graphe du polygone des 453 communes (zones posées le 2026-09-03, 18 s) : marche 176 340
+nœuds — 32 342 en ville, 102 858 en agglomération, 41 140 dehors ; vélo 23 202 / 89 453 / 39 178 ;
+voiture 8 878 / 38 447 / 17 825 (`graphs_444ca7e6a515.meta.json`).
+
+---
+
 ## [2026-09-03] Les trajets trop courts pour le graphe durent à la vitesse de leur mode, et une activité hors périmètre sort de la chaîne
 
 **Repli « même nœud » du routage OSMnx.** Quand l'origine et la destination d'un trajet se

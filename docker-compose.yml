@@ -59,6 +59,10 @@ x-osmnx-service: &osmnx-service
   volumes:
     - ./data/cache/osmnx:/app/osmnx_cache
     - ./llm-agents/config:/app/config:ro
+    # Ticket 031 (décision 4) : la congestion s'applique par zone du nœud (ville / agglomération /
+    # extérieur) ; la géométrie de l'agglomération vient des couronnes de l'enquête. Sans ce
+    # fichier, un graphe sans zones ne se charge pas (erreur explicite, pas de repli).
+    - ./llm_module/data/couronne_perimetre.geojson:/app/llm_module/data/couronne_perimetre.geojson:ro
   environment:
     APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
   healthcheck:
@@ -148,6 +152,8 @@ services:
       # data/hts ; monté comme les autres stages pour que le code du fork soit celui qui tourne,
       # sans reconstruire l'image.
       - ./eqasim-toulouse/data/hts:/eqasim/data/hts:ro
+      # Ticket 031 : lecture de BATI/BATIMENT.shp dans les archives .7z « TOUSTHEMES_SHP » de l'IGN.
+      - ./eqasim-toulouse/data/bdtopo:/eqasim/data/bdtopo:ro
       - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro

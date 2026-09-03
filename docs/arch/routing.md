@@ -66,9 +66,31 @@ Chaque instance OSMnx charge trois graphes topologiques en RAM au démarrage (4 
 |------|---------|-----------------|----------------------|
 | Marche (`walk`) | Fixe (config) | 15 km | Non |
 | Vélo (`bike`) | Paramétrable | 30 km | Non |
-| Voiture (`drive`) | Dynamique | Aucune | Profils horaires TomTom Toulouse |
+| Voiture (`drive`) | Dynamique | Aucune | Profils horaires TomTom Toulouse, **par zone d'arête** |
 
 Les requêtes au-delà des coupures spatiales sont rejetées sans calcul Dijkstra.
+
+### Congestion par zone d'arête (ticket 031, décision 4)
+
+Chaque nœud du graphe porte une **zone** (`trip_helper/congestion_zones.py`) : `city` — la commune
+de Toulouse (frontière géocodée du graphe) ; `agglo` — l'agglomération hors Toulouse, union des
+couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête (`llm_module/data/couronne_perimetre.geojson`) ;
+`outside` — le reste (la 3ᵉ couronne et au-delà). La durée congestionnée d'un trajet voiture est la
+**somme des temps libres de ses arêtes, chacun multiplié par le facteur TomTom de la zone de son
+nœud d'origine à l'heure de départ** : profil « ville » (`city_raw`) en ville, « agglomération »
+(`metro_raw`) en agglomération, **1,0 dehors**. Un trajet 3ᵉ couronne → Toulouse n'est donc
+congestionné que sur sa part agglomérée ; un village → village de 3ᵉ couronne ne l'est pas.
+
+Avant le 2026-09-03, un seul facteur s'appliquait à tout le trajet : « ville » si un bout touchait
+Toulouse, « agglomération » sinon — soit 1,84 un lundi à 8 h sur un trajet rural que rien ne
+congestionne. Les zones sont posées une fois : à la construction du graphe du polygone des 453
+communes (`make osmnx-perimeter-graph`, option `--zones-only` pour un pickle existant) et, pour le
+graphe historique de 30 km, paresseusement au premier chargement (`_GraphStore`, `route_worker`,
+réplicas), puis mises en cache dans le pickle. Un nœud sans zone est une erreur explicite (pas de
+facteur deviné) ; la géométrie des couronnes doit être visible du service (montage
+`llm_module/data/couronne_perimetre.geojson` dans les réplicas `osmnx`). Le repli « même nœud »
+(deux bouts rabattus sur le même nœud) rend une durée à la vitesse de repli du mode sur la
+distance à vol d'oiseau × 1,3, minimum 1 s — plus 70 km/h pour tous les modes.
 
 ### Calcul `arrive_by` (modes directs)
 

@@ -37,6 +37,8 @@ from shapely.geometry import Point
 from models import Location, Transit, TransitLocation, TravelPlan
 from geography import TOULOUSE_CENTER_DIST_M
 from settings import settings
+from trip_helper.congestion_zones import (NODE_ZONE_KEY, ZONE_AGGLO, ZONE_CITY, ZONE_OUTSIDE,
+                                          ZoneError, ensure_zones)
 from trip_helper.terminal_time import (TERMINAL_ACCESS_ROUTE, TERMINAL_EGRESS_ROUTE,
                                       data_version, terminal_profile)
 from utils import create_background_task, random_uuid
@@ -431,6 +433,22 @@ class _GraphStore:
                 pickle.dump(boundary, f)
             logger.info(f"OSMnx: boundary saved to {b_path.name}")
 
+        # Zones de congestion (ticket 031, décision 4) : calculées une fois pour un graphe qui n'en
+        # a pas — le graphe historique de 30 km téléchargé avant ce changement — puis mises en
+        # cache dans le pickle. Le graphe du polygone les porte dès sa construction.
+        t_zones = _time.monotonic()
+        counts = ensure_zones(graphs, boundary, log=logger)
+        if counts:
+            with g_path.open("wb") as f:
+                pickle.dump(graphs, f)
+            logger.info(f"OSMnx: zones de congestion calculées en {_time.monotonic() - t_zones:.1f}s et "
+                        f"mises en cache dans {g_path.name} — "
+                        + " ; ".join(f"{m}: " + ", ".join(f"{z} {n}" for z, n in c.items()) for m, c in counts.items()))
+        else:
+            logger.info("OSMnx: zones de congestion déjà présentes sur les nœuds — "
+                        + " ; ".join(f"{m}: " + ", ".join(f"{z} {n}" for z, n in _zone_counts(G).items())
+                                     for m, G in graphs.items()))
+
         return graphs, boundary
 
     @classmethod
@@ -459,18 +477,46 @@ def _crow_flies_m(origin: Location, destination: Location) -> float:
     return math.hypot(dlat, dlon)
 
 
-def _in_city(lon: float, lat: float, boundary: gpd.GeoDataFrame) -> bool:
-    # Check whether the given point is inside the provided city boundary polygon.
-    return boundary.geometry.iloc[0].contains(Point(lon, lat))
+def _zone_counts(G) -> dict:
+    counts: dict = {}
+    for _, data in G.nodes(data=True):
+        z = data.get(NODE_ZONE_KEY, "?")
+        counts[z] = counts.get(z, 0) + 1
+    return counts
 
 
-def _congestion_factor(dt: datetime, in_city: bool) -> float:
-    # Compute a congestion multiplier based on time of day and whether the route is inside city limits.
+def _zone_factor(zone: str, dt: datetime) -> float:
+    """Facteur de congestion d'une arête selon la zone de son nœud d'origine (ticket 031, décision 4).
+
+    ``city`` → profil TomTom « ville », ``agglo`` → profil « agglomération », ``outside`` → 1,0.
+    Un nœud sans zone n'a pas de facteur devinable : erreur explicite (les zones se posent au
+    chargement du graphe, cf. `congestion_zones.ensure_zones`).
+    """
+    if zone == ZONE_OUTSIDE:
+        return 1.0
     hour = f"{dt.hour:02d}:00"
     day  = dt.strftime("%a")
-    if in_city:
-        return _CITY_FF  / float(_CITY_DF.loc[hour, day])
-    return _METRO_FF / float(_METRO_DF.loc[hour, day])
+    if zone == ZONE_CITY:
+        return _CITY_FF / float(_CITY_DF.loc[hour, day])
+    if zone == ZONE_AGGLO:
+        return _METRO_FF / float(_METRO_DF.loc[hour, day])
+    raise ZoneError(f"nœud sans zone de congestion ({zone!r}) : le graphe n'a pas été préparé "
+                    "(congestion_zones.ensure_zones)")
+
+
+def _congested_travel_time(G, gdf, dt: datetime) -> tuple[float, float]:
+    """``(durée congestionnée, durée libre)`` d'un itinéraire : Σ arêtes travel_time × facteur(zone, heure).
+
+    ``gdf`` est la sortie de `ox.routing.route_to_gdf` (index (u, v, key)) ; la zone est celle du
+    nœud d'origine ``u``. Le facteur global rapporté ailleurs est le rapport des deux durées, soit
+    la moyenne des facteurs pondérée par le temps libre.
+    """
+    free_s = 0.0
+    cong_s = 0.0
+    for (u, _v, _k), tt in zip(gdf.index, gdf["travel_time"].to_numpy(dtype=float)):
+        free_s += tt
+        cong_s += tt * _zone_factor(G.nodes[u].get(NODE_ZONE_KEY), dt)
+    return cong_s, free_s
 
 
 def _infra_penalty(G, route_nodes: list, osmnx_mode: str) -> float:
@@ -540,6 +586,12 @@ def _route_sync_process(
 
         with b_path.open("rb") as fh:
             _worker_boundary = pickle.load(fh)
+        # Zones de congestion : normalement déjà dans le pickle (_GraphStore les met en cache) ;
+        # sinon calculées ici, sans réécrire le pickle depuis un worker (pas de course d'écriture).
+        counts = ensure_zones({osmnx_mode: _worker_graph}, _worker_boundary, log=logger)
+        if counts:
+            logger.warning(f"[osmnx-worker] pid={pid} mode={osmnx_mode} zones de congestion calculées à "
+                           f"chaud ({dict(counts[osmnx_mode])}) — le pickle {g_path.name} ne les portait pas")
 
         logger.info(
             f"[osmnx-worker] pid={pid} mode={osmnx_mode} READY — "
@@ -586,6 +638,11 @@ def _route_sync(
     cas qui disparaît avec le graphe du polygone des 453 communes. Désormais : distance à vol
     d'oiseau × 1,3 de détour, durée à la vitesse de repli du MODE (`_FALLBACKS` : marche 5,
     vélo 14, voiture 30 km/h), minimum 1 s — la distance rendue est celle du détour.
+
+    Congestion (voiture) : par arête, selon la zone du nœud d'origine — `city` (profil ville),
+    `agglo` (profil agglomération), `outside` (1,0) — voir `_congested_travel_time` et
+    `trip_helper.congestion_zones`. `boundary` n'est plus lue ici : elle sert à poser les zones
+    au chargement du graphe.
     """
     # Find the nearest nodes on the graph to the origin and destination coordinates.
     orig = ox.distance.nearest_nodes(G, origin.lon, origin.lat)
@@ -618,16 +675,18 @@ def _route_sync(
     # exogène documenté (config/terminal_time.yaml), porté par des jambes nommées
     # que le gabarit décompose — cf. `_make_travel_plan`.
 
-    # Congestion only affects driving mode and is based on whether the trip is inside city limits.
-    cong = 1.0
+    # Congestion (voiture seulement), PAR ARÊTE selon la zone de son nœud d'origine — ville,
+    # agglomération, extérieur (facteur 1) — à l'heure de départ (ticket 031, décision 4). Un
+    # trajet 3ᵉ couronne → Toulouse n'est congestionné que sur sa part agglomérée ; un village →
+    # village de 3ᵉ couronne ne l'est pas. Avant : un seul facteur pour tout le trajet, « ville »
+    # si un bout touchait Toulouse, « agglomération » sinon — 1,84 un lundi à 8 h en pleine campagne.
+    cong_s = free_s
     if osmnx_mode == "drive":
-        dest_city = _in_city(destination.lon, destination.lat, boundary)
-        orig_city = _in_city(origin.lon, origin.lat, boundary)
-        cong = _congestion_factor(congestion_dt, orig_city or dest_city)
+        cong_s, _ = _congested_travel_time(G, gdf, congestion_dt)
 
     # Round up to at least one second and apply all modifiers.
     return {
-        "duration_s": max(1, int(free_s * cong + infra_s)),
+        "duration_s": max(1, int(cong_s + infra_s)),
         "distance_m": dist_m,
     }
 
