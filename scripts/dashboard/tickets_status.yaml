@@ -1258,3 +1258,18 @@ tickets:
       2026-09-03) : le 033 garde un score ordinal 1-4 seuillé à 10 %, là où le 032 s'interdit tout
       score et applique un maillon faible sans seuil. Retirés du scope v1 (leviers) : stairs_count,
       crossings_count, lit (28 % de couverture OSM), dénivelé (MNT).
+
+  ticket_034_velo_cle_stable_une_seule_loi:
+    status: à faire
+    note: >-
+      DÉCISION NON PRISE (2026-09-03) : l'auteur n'est pas certain de l'implémenter ; le ticket
+      consigne le constat pour trancher sur des chiffres. Deux mesures du 2026-09-03 au soir :
+      (1) le vélo d'un persona dépend de sa position dans le fichier — l'attribution et le type
+      de vélo hachent l'index de fichier et une clé d'adresse suffixée en cas de collision ;
+      201 des 1 000 personas de la v4 scellée portent un `personal_bike` différent de celui
+      qu'ils avaient dans le vivier pré-imputé (logement, permis, abonnement, couronne : 0),
+      distribution globale inchangée ; (2) la loi vit à deux endroits contre la décision du
+      2026-08-24 (lot 4 du ticket 015 rejeté) : `_assign_personal_bike` est actif dans le fork
+      eqasim et l'étape 8 réécrit 4,7 % du vivier. Proposé : clé `person_id` + `household.id`,
+      sel personal_bike_v2, au prochain scellement (v5) ; retrait de la loi du fork ; clôture
+      du 015. Options (a) déclarer seulement, (b) lot 1, (c) lots 1 et 2 — recommandation (c).

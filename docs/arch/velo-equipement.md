@@ -190,6 +190,15 @@ vélo seraient corrélés et les VAE iraient systématiquement aux hautes propen
 Changer `DRAW_SALT` rebat tout le parc : c'est un acte délibéré et daté, pas un effet de
 bord.
 
+⚠ **Limite mesurée le 2026-09-03** : l'« index de personne » des étages 2 et 3 est la
+**position du persona dans le fichier**, et la clé de ménage est l'adresse, suffixée quand
+deux ménages la partagent. Le tirage est donc stable à ordre et à sous-ensemble fixés, pas
+pour une personne donnée : **201 des 1 000 personas** de la v4 scellée portent un vélo
+différent de celui qu'ils avaient dans le vivier pré-imputé (distribution globale inchangée ;
+logement, permis, abonnement : 0 différence). Clé stable (`person_id`, `household.id`) et sel
+`personal_bike_v2` : [ticket 034](../tickets/ticket_034_velo_cle_stable_une_seule_loi.md),
+décision non prise.
+
 ---
 
 ## Voie 1 — le post-traitement (livré, mesuré)
@@ -487,11 +496,13 @@ population intégralement « Pas de vélo », valeur parfaitement plausible et d
 indétectable. C'est la même famille d'erreur que le `bool(nan) == True` qui distribuait des
 permis à toute personne non appariée (`llm_agents.py`, `_flag()`).
 
-⚠ **Non rejoué.** Les données sources sont présentes (`eqasim-toulouse/data`, 7 Go) et la
-chaîne est donc exécutable, mais elle n'a pas été régénérée après ce correctif. Pour le
-faire : `docker compose build eqasim` (l'image doit reprendre le nouveau montage) puis le
-notebook de génération. Le mécanisme, lui, est celui de la voie 1, validé sur
-`toulouse_population_1000.json`.
+⚠ **Rejoué depuis — et c'est le problème.** Le lot 4 du ticket 015 a été **rejeté** le
+2026-08-24 (une loi à deux endroits est une ceinture par-dessus les bretelles), mais le code
+est resté et tourne : le vivier brut du 2026-09-03 sort d'eqasim avec 5 769 « Pas de vélo »,
+5 063 « vélo normal » et 497 « VAE », puis l'étape 8 réécrit le trait pour 538 personnes sur
+11 329 (4,7 %) parce que ses clés (adresse, index) ne sont pas celles du fork (`household_id`,
+identifiant de personne). Retrait de la voie 2 ou alignement des clés :
+[ticket 034](../tickets/ticket_034_velo_cle_stable_une_seule_loi.md), décision non prise.
 
 ---
 

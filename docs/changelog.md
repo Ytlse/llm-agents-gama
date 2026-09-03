@@ -1,3 +1,16 @@
+## [2026-09-03] Ticket 034 : le vélo d'un persona dépend de l'ordre du fichier, et deux lois cohabitent
+
+Constat consigné, sans changement de comportement (décision non prise). L'attribution du vélo
+personnel et le choix VAE / vélo normal hachent la position du persona dans le fichier et une clé
+d'adresse : entre le vivier pré-imputé et la cohorte v4 qui en est extraite, 201 personas sur
+1 000 changent de vélo alors que la distribution globale et les douze contrôles ne bougent pas.
+Et la loi apprise sur EMC² tourne à deux endroits — dans le fork eqasim, contre la décision du
+24 août, et à l'étape 8 du notebook, qui réécrit 4,7 % du vivier. Le ticket propose une clé
+stable (identifiant de personne et de ménage, sel `personal_bike_v2`) au prochain scellement et
+le retrait de la loi du fork ; les deux pages d'architecture disent désormais ce que le code fait.
+
+---
+
 ## [2026-09-03] Une page raconte comment la population du jeu de test est fabriquée
 
 `docs/paper/population/fabrication_population_v4_2026-09-03.html` suit le fichier de bout en bout :
