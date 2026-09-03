@@ -39,8 +39,10 @@ llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
 EPSG:4326 comme `routes.shp`). `Settings.gaml` en fait l'emprise du monde —
 `geometry shape <- envelope(perimetre_shape_file)`, **86 × 93 km** (mesuré en Lambert-93 sur le
 polygone dissous : 85,8 × 92,9 km, 5 428 km² de communes dans une enveloppe de 7 971 km² ; GAMA
-annonce 87 × 94 km dans sa propre projection) — à la place de l'enveloppe des lignes Tisséo, qui
-laissait 163 domiciles de la population dehors. Le rapport de périmètre annonçait « 106 × 93 km » :
+annonce 87 × 94 km dans sa propre projection) — à la place de l'enveloppe des lignes Tisséo. Ce que
+cette dernière laissait dehors, mesuré sur la population scellée v4 : **201 des 1 000 domiciles**
+(le rapport de périmètre citait 163, mesurés sur la v3, moins riche en 3ᵉ couronne) ; sur le monde
+actuel, **0 / 1 000**. Le rapport de périmètre annonçait « 106 × 93 km » :
 c'est un degré de longitude compté à 111 km sans le cosinus de la latitude (à 43,5°, un degré de
 longitude vaut 80,8 km) — la hauteur était juste, la largeur surestimée de 23 %. Au chargement, GAMA écrit la part
 du monde couverte par les lignes TC (`[PERIMETRE] … les lignes TC n'en couvrent que N %`) et, à la

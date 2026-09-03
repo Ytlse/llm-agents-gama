@@ -28,6 +28,13 @@ et toute la 3ᵉ couronne hors du rectangle avant. Reste à publier comme limite
 (cars interurbains, non téléchargé), les 2ᵉ et 3ᵉ couronnes n'ont qu'une fraction de leur offre
 réelle en transports collectifs — 364 des 2 580 points n'ont aucun arrêt à portée.
 
+Côté GAMA, le monde passe de l'emprise des lignes Tisséo à celle du périmètre : **201 des 1 000
+domiciles de la v4 étaient hors de l'ancien monde, 0 le sont du nouveau**. Un run headless d'une
+journée sur la v4 le vérifie de bout en bout à l'initialisation — 1 000 agents chargés, aucun
+« Couldn't link », aucun agent hors du monde, **aucune alarme de périmètre**. La journée simulée
+elle-même n'était pas terminée à la rédaction : le run continue, et la comparaison des parts
+modales aux cibles attend de toute façon le GTFS liO et le transport scolaire.
+
 ---
 
 ## [2026-09-03] Un vélo sur trois roulait à la vitesse de repli ; les durées de trajet changent de version

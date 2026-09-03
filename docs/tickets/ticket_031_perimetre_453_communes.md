@@ -382,6 +382,7 @@ mesure + journal de construction OTP).
 | GAMA G4 | **tranché autrement** | les coordonnées de `roads.shp` ne sont valides dans aucune zone UTM : le `.prj` ne se corrige pas, il se documente |
 | GAMA G2 / G3 | **reporté** | G2 dépend de T2 ; G3 (rendu) n'est pas mesurable en headless |
 | Caches et jeux gelés | **déclaré** | caches d'itinéraires par population (v4 vierge) ; `routing_version` r2 ; aucun jeu gelé touché |
+| Run headless (critère 2) | **partiel, mesuré** | 1 000 agents chargés, 0 « Couldn't link », **0 / 1 000 hors monde GAMA** (201 sous l'ancien monde), 0 `[ALARME]` — journée simulée non terminée |
 | Documentation | **fait** | `agents-lifecycle.md`, `cache-memory.md`, `routing.md`, `setup/population.md`, `setup/data-pipeline.md`, changelog |
 | Article (`docs/paper/`) | **à faire, hors de cette session** | § 2.2, annexe F, et la largeur « 106 × 93 km » à corriger en 86 × 93 |
 
@@ -536,10 +537,35 @@ voiture 8 878 / 38 447 / 17 825.
 ### Critères d'acceptation — partie 2 (à préciser après l'analyse)
 1. Chaque ligne du tableau a une mesure consignée dans une trace horodatée, et une décision
    (faire / déclarer / reporter) inscrite dans ce ticket.
+   **Tenu** : trace unique `docs/traces/2026-09-03_22-46_ticket031_partie2_portage_chaine/`
+   (README + neuf fichiers de mesure), et chaque ligne du tableau porte sa décision et son chiffre.
 2. Un run complet d'une journée sur la v4 tourne de bout en bout : 1 000 agents chargés, zéro
    « Couldn't link », zéro agent hors monde GAMA, alarmes de périmètre silencieuses.
+   **Les quatre éléments sont tenus ; le run est PARTIEL et c'est dit.** Run
+   `experiments/archive/2026-09-03_22_54` (`make run OFFLINE=1`, lundi 16 mars 2026 simulé,
+   `part_of_llm=1.0`) : (a) **1 000 / 1 000 agents chargés**, 0 écarté, sceau pris entier ;
+   (b) **0 « Couldn't link »** — 0 `LOCATION_NOT_FOUND` sur les 2 580 domiciles et lieux d'activité,
+   les 8 avertissements `No usable itinerary` du run portent `otp_patterns=[]` et
+   `origin_in_bbox=True dest_in_bbox=True`, c'est une absence de desserte, pas un défaut de graphe ;
+   (c) **0 / 1 000 agent hors du monde GAMA**, recalculé indépendamment en rejouant le test
+   `world.shape covers each.location` sur la population du run — contre-épreuve : **201 agents
+   auraient été hors de l'ancien monde** (`envelope(routes.shp)`, l'emprise Tisséo ; le ticket
+   citait 163, mesurés sur la v3) ; (d) **0 `[ALARME]`** dans tout le journal, la seule `ERROR` étant
+   l'échec du message de bienvenue à 22:54:51, antérieur à la connexion du WebSocket GAMA.
+   ⚠ **La journée simulée n'était pas terminée** : à 23:43 la phase 4/5 attendait encore 759 tâches
+   de pré-planification `act[N+1]`. Les quatre éléments du critère portent sur le chargement et le
+   périmètre, pas sur le déroulement de la journée, d'où le verdict. Initialisation mesurée :
+   population 19 min 30 (3 335 routes, 17 `None` = 0,5 %), bootstrap 20 min (1 000 / 1 000) avec
+   **0 succès de cache sur 1 000** — la preuve que le passage à `r2` n'a rien resservi de `r1`.
+   ⚠ **Observabilité** : la vague `act[N+1]` n'a aucun compteur de progression (le bootstrap en a un
+   tous les 200) — neuf minutes de journal sans autre signal que des avertissements, contraire à la
+   règle « journaliser le succès explicitement » du dépôt. À corriger.
 3. Le rapport de run compare les parts modales aux cibles 453 communes, avec le transport
    scolaire déclaré (ou livré).
+   **Non tenu, et bloqué en amont** : il demande une journée simulée complète (voir 2) et, surtout,
+   le GTFS liO — qui porte 57 à 65 % du TC des 2ᵉ et 3ᵉ couronnes et n'est pas téléchargé
+   (question ouverte n° 11) — plus le transport scolaire du ticket 030. Comparer les parts modales
+   aux cibles avant d'avoir cette offre mesurerait le manque de données, pas le modèle.
 
 ## Ce que ce ticket ne fait pas
 - Il ne remplace pas l'ENTD 2008 par l'EMC² 2023 comme enquête d'appariement (levier 3, autre
