@@ -507,6 +507,31 @@ voiture 8 878 / 38 447 / 17 825.
     des 2ᵉ et 3ᵉ couronnes. **Recommandation : autoriser le téléchargement du GTFS liO (T2,
     22,7 Mo, ODbL)** avant de comparer les parts modales aux cibles (critère d'acceptation 3), ou
     déclarer la limite dans le manuscrit.
+12. **Importer `settings` depuis un script détourne `experiments/current` pendant un run.**
+    Constaté en direct le 2026-09-03 à 23:28 : un script d'analyse lancé sur l'hôte a importé
+    `llm-agents/settings.py`, dont `get()` / `save_static_config` crée un dossier d'expérience
+    horodaté et **re-pointe le lien**. Le run n'a pas bougé (les conteneurs résolvent leur chemin
+    au démarrage) mais l'écriture des échanges LLM, qui résout le lien à chaque appel, a versé
+    **1 037 échanges** dans le dossier parasite pendant une minute. Récupérés dans le run sous
+    `llm_exchanges_detournes_23-28_incident_lien_current.jsonl`, incident consigné dans
+    `experiments/archive/2026-09-03_22_54/INCIDENT_lien_current_2026-09-03_23-28.md`, dossier
+    parasite renommé `…_23_28_PARASITE_import_settings`. Même famille que la course entre workers
+    corrigée le matin. **Recommandation : rendre l'import de `settings` sans effet de bord** (le
+    re-pointage devrait être un appel explicite, pas une conséquence de l'import) — sinon tout
+    script d'analyse lancé pendant un run corrompt la trace de ce run.
+13. **61 % des libellés de zone servis au prompt nomment la mauvaise commune.** Trouvé en
+    dépouillant les avertissements du run. Le champ `identity.activities[].location.zone` du
+    fichier de population — celui que lit le prompt de l'agent — ne nomme que **2 communes
+    distinctes** dans tout le fichier : 3 383 des 3 441 libellés disent « sur la commune de
+    Toulouse », dont **2 073 (61,3 %) portent sur une activité qui n'est pas dans Toulouse** (une
+    activité à 70 km du Capitole est décrite comme « quartier de bourg rural sur la commune de
+    Toulouse ») ; 54 disent « zone inconnue hors aire d'attraction urbaine ». **Le portage n'en est
+    pas la cause** : la v3 porte le même défaut à 62,0 %, et le libellé est écrit à l'export, pas au
+    runtime. Mais il devient visible maintenant que les trajets ruraux existent. Corriger change le
+    prompt, donc les résultats et le cache de décisions : **décision de l'auteur**.
+    Recommandation : renseigner la commune réelle depuis `household.commune_id` (déjà présent pour
+    tous) au prochain scellement, et déclarer la limite d'ici là. Trace :
+    `libelle_zone_activite.json`.
 
 ### Critères d'acceptation — partie 2 (à préciser après l'analyse)
 1. Chaque ligne du tableau a une mesure consignée dans une trace horodatée, et une décision
