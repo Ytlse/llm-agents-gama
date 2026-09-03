@@ -25,13 +25,41 @@ this polygon will cause OTP to raise a "Couldn't link" error, so the polygon
 is used as a pre-flight guard before sending transit queries.
 
 Source: scripts/general/otp_shape.ipynb
+
+⚠ Depuis le 2026-09-03 (ticket 031, partie 2), le périmètre de la simulation n'est plus un
+disque ni un rectangle : c'est le **polygone des 453 communes** de l'enquête EMC² 2023
+(`llm_module/data/couronne_perimetre.geojson`, table `commune_couronne.json`). Le chargement
+filtre par commune du domicile (`inputs/population/perimeter.py`), le graphe OSMnx servi au
+runtime est celui du polygone (`PERIMETER_CACHE_KEY`), et `TOULOUSE_CENTER_DIST_M` /
+`TOULOUSE_OSM_ROUTES_30K_BBOX` ne gardent qu'un rôle d'AUDIT : identifier le graphe
+historique de 30 km (`PRODUCTION_CACHE_KEY_30KM`) et mesurer ce que le rectangle écartait.
 """
 
-# Radius used to query the OSMnx road-network graph (metres).
+import hashlib
+
+# Radius used to query the OSMnx road-network graph (metres). Audit only since 2026-09-03 :
+# it identifies the historical 30 km disk graph (`PRODUCTION_CACHE_KEY_30KM`).
 TOULOUSE_CENTER_DIST_M: int = 30_000
+
+# ── Graphe OSMnx servi au runtime (ticket 031, partie 2) ─────────────────────
+# Le label dit ce que le graphe couvre et d'où il vient ; la clé de cache en dérive
+# (`graphs_<clé>.pkl` / `boundary_<clé>.pkl` dans le cache OSMnx). Changer les pbf
+# (millésime), la table des communes (`cc1`) ou le périmètre change la clé — et donc le
+# cache — au lieu de resservir un vieux graphe sous un nom neuf. Construit par
+# `scripts/data/population/build_osmnx_perimeter_graph.py` (`make osmnx-perimeter-graph`),
+# sans téléchargement, depuis les pbf OSM régionaux du fork eqasim.
+PERIMETER_GRAPH_LABEL: str = "perimetre_453_communes:cc1:osm-220101"
+PERIMETER_CACHE_KEY: str = hashlib.md5(PERIMETER_GRAPH_LABEL.encode()).hexdigest()[:12]  # 444ca7e6a515
+
+# Clé du graphe historique : disque de 30 km téléchargé par Overpass (`ox.graph_from_address`).
+# Gardée pour l'audit (mesures « disque contre polygone ») ; ce n'est plus le graphe du runtime.
+PRODUCTION_CACHE_KEY_30KM: str = hashlib.md5(
+    f"Toulouse, France_{TOULOUSE_CENTER_DIST_M}".encode()).hexdigest()[:12]  # ecb40f20a303
 
 # Largest rectangle inscribed in the OSMnx convex hull defined above.
 # Format: (min_lon, min_lat, max_lon, max_lat) — WGS-84, ready for eqasim.
+# ⚠ AUDIT ONLY since 2026-09-03: the runtime no longer filters on it (it dropped every
+# 3rd-ring home of the v4 sealed population). Kept to measure what the rectangle excluded.
 TOULOUSE_OSM_ROUTES_30K_BBOX: tuple[float, float, float, float] = (
     1.085,   # min_lon  (west)
     43.336,  # min_lat  (south)
@@ -54,9 +82,27 @@ TOULOUSE_TRANSIT_SERVICE_WKT_OLD = (
 )
 
 
-# Convcave hull of the OTP/GTFS transit network stop coordinates (WGS-84, lon lat).
-# Points outside this polygon cannot be linked to the transit graph by OTP.
+# ── Enveloppe de desserte TC (ticket 031, T4 — 2026-09-03) ───────────────────
+# Enveloppe concave (shapely.concave_hull, ratio 0,3) des 5 661 arrêts Tisséo et des 68 arrêts
+# TER situés dans le polygone des 453 communes (le feed TER couvre toute l'Occitanie ; un arrêt
+# hors du polygone est atteignable en train mais son voisinage n'est pas dans le graphe de rue
+# d'OTP, construit sur l'extrait OSM du polygone). 23 sommets, ≈ 2 100 km². Recette :
+#     llm-agents/.venv/bin/python scripts/data/gtfs/transit_service_hull.py
+# Sert à la visualisation (vizpop) et à la documentation ; le runtime ne filtre pas dessus —
+# le graphe de rue d'OTP couvre désormais tout le polygone, un point hors de cette enveloppe
+# n'est pas « Couldn't link », il est simplement loin de tout arrêt.
 TOULOUSE_TRANSIT_SERVICE_WKT = (
+    "POLYGON ((1.2761 43.86553, 1.3024 43.82709, 1.34182 43.7862, 1.48182 43.71809, "
+    "1.61988 43.75125, 1.73046 43.81965, 1.6807 43.77507, 1.60554 43.6012, 1.69054 43.4804, "
+    "1.78727 43.36388, 1.71473 43.39854, 1.52118 43.30538, 1.52048 43.30541, 1.46883 43.34899, "
+    "1.25166 43.35647, 1.21251 43.29822, 1.08311 43.21283, 0.97254 43.17962, 1.01642 43.19625, "
+    "1.16198 43.51514, 1.08983 43.61719, 1.18678 43.66132, 1.2761 43.86553))"
+)
+
+# Enveloppe concave des seuls arrêts Tisséo (otp_shape.ipynb, 2026-05) — AUDIT : c'était
+# l'emprise TC jusqu'au 2026-09-03 ; hors d'elle, OTP ne pouvait pas rattacher un point au
+# graphe de rue du rectangle de 30 km (« Couldn't link »). Conservée pour comparaison.
+TOULOUSE_TRANSIT_SERVICE_WKT_TISSEO_ONLY_2026_05 = (
     "POLYGON ((1.15066 43.63699, 1.15058 43.63709, 1.17492 43.65297, 1.17645 43.65404, "
     "1.17678 43.65427, 1.17932 43.65605, 1.19025 43.66384, 1.19733 43.66904, 1.19749 43.66914, "
     "1.19761 43.66903, 1.2386 43.61652, 1.23866 43.61654, 1.2407 43.6171, 1.24082 43.61711, "

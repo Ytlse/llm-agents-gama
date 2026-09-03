@@ -148,14 +148,22 @@ def init_dynamic_scenario(
         simulation_max_days=simulation_max_days,
     )
 
+    # Emprise du monde (ticket 031, partie 2) : le POLYGONE des 453 communes de l'enquête, uni à
+    # l'emprise des arrêts GTFS ± 0,05° (~5 km). Avant ce jour, le monde était ce seul rectangle
+    # d'arrêts Tisséo — 221 communes sur 453 — et `WorldGrid` assertionnait qu'aucune localisation
+    # n'en sorte : un domicile de 3ᵉ couronne le faisait tomber. Le filtre d'admission, lui, ne
+    # lit pas cette emprise : il lit le trait `residence_zone` (eqasim_loader.perimeter_verdict).
+    from inputs.population.perimeter import world_extent
+
     min_lon, min_lat, max_lon, max_lat = gtfs_data.get_bounding_box()
     buffer = 0.05  # degrees ~ 5km
-    world_bbox = BBox(
+    stops_bbox = BBox(
         min_lon=min_lon - buffer,
         min_lat=min_lat - buffer,
         max_lon=max_lon + buffer,
         max_lat=max_lat + buffer,
     )
+    world_bbox = world_extent(stops_bbox)
 
     world_grid = WorldGrid(world_bbox)
     time_grid = TimeGrid()

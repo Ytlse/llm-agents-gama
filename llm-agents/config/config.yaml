@@ -42,8 +42,9 @@ cache:
 # 1 à publier — motorisation en base ménage —, 10,6 % d'immobiles, 88,5 % des écoliers mobiles
 # avec une activité d'études), sha256 9f05c655c3ad2cf4… — cf.
 # data/population/population_1000_AAMAS_v4/MANIFEST.yaml et
-# docs/arch/controle-population-jeu-de-test.md. ⚠ Le runtime filtre encore sur le rectangle du
-# graphe de 30 km (ticket 031, partie 2) : ce sceau ne se charge entier qu'après ce portage.
+# docs/arch/controle-population-jeu-de-test.md. Depuis le 2026-09-03 au soir (ticket 031, partie 2),
+# le runtime filtre par COMMUNE du domicile (453 communes) et route sur le graphe OSMnx du polygone :
+# ce sceau se charge entier (1 000 / 1 000, 0 écarté, mesuré).
 # Les sceaux précédents restent disponibles : population_1000_AAMAS_v3 (sha256 8d8bfa3645fa77fb…,
 # Haute-Garonne seule) et population_1000_AAMAS (v2, sha256 f67b07772f3dced9…).
 data:

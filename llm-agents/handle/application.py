@@ -36,7 +36,8 @@ from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTEN
 from urban_mobility_agents.factory.factory import init_static_data, init_dynamic_scenario
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from utils import create_background_task
-from geography import TOULOUSE_OSM_ROUTES_30K_BBOX
+from inputs.population.perimeter import (PopulationPerimeter, filter_population,
+                                         load_population_perimeter, sealed_population_complete)
 from population_utils import fix_activities, merge_consecutive_activities, ajuster_planning
 
 # Compteurs des endpoints du contrôleur
@@ -152,11 +153,22 @@ def _find_population_json(population_size: int | None = None) -> str | None:
     return max(candidates)[1] if candidates else None
 
 
+def _population_perimeter() -> PopulationPerimeter:
+    """Le périmètre des 453 communes, ou une [ALARME] et l'exception — jamais un rectangle à sa place."""
+    try:
+        return load_population_perimeter()
+    except Exception as exc:
+        logger.error(f"[ALARME] [population] Périmètre des 453 communes indisponible ({exc!r}) : le "
+                     "chargement refuse plutôt que de retomber sur un rectangle. Vérifiez "
+                     "llm_module/data/couronne_perimetre.geojson et commune_couronne.json.")
+        raise
+
+
 async def _prepare_population(
     population_size: int,
     stop_coords: np.ndarray,
     sim_base_timestamp: int,
-    bbox,
+    perimeter: PopulationPerimeter | None,
 ) -> str | None:
     """Ensure workdir/population_{N}.json exists, contains exactly N enriched agents.
 
@@ -166,6 +178,11 @@ async def _prepare_population(
 
     Idempotence: if workdir/population_{N}.json already exists in enriched eqasim
     format it is used as-is (no re-generation, no re-enrichment).
+
+    Périmètre (ticket 031, partie 2) : `perimeter` — les 453 communes de l'enquête — filtre les
+    agents par **commune du domicile** (`inputs/population/perimeter.py`) ; une activité hors du
+    polygone se compte et s'alarme mais n'écarte pas l'agent ; un fichier scellé se charge entier
+    ou se refuse. Avant : un rectangle de 30 km qui écartait toute la 3ᵉ couronne.
     """
     import random as _random
     from trip_helper.osmnx_direct import get_direct_plan, init_persistent_cache
@@ -232,39 +249,17 @@ async def _prepare_population(
         with open(raw_json_path, encoding="utf-8") as f:
             raw_data = json.load(f)
 
-        # Bbox filter then random sample to exactly population_size.
-        # All locations (home + every activity) must be within the OSMnx graph area
-        # so that routing never falls back to the "orig == dest" out-of-graph path.
-        if bbox is not None:
-            min_lon, min_lat, max_lon, max_lat = bbox
-            def _all_locs_in_bbox(entry: dict) -> bool:
-                identity = entry.get("identity", {})
-                home = identity.get("home")
-                if not home or home.get("lon") is None:
-                    return False
-                if not (min_lon <= home["lon"] <= max_lon and min_lat <= home["lat"] <= max_lat):
-                    return False
-                for act in identity.get("activities", []):
-                    loc = act.get("location")
-                    if loc and loc.get("lon") is not None:
-                        if not (min_lon <= loc["lon"] <= max_lon and min_lat <= loc["lat"] <= max_lat):
-                            return False
-                return True
-            before = len(raw_data)
-            raw_data = [e for e in raw_data if _all_locs_in_bbox(e)]
-            logger.info(
-                f"[population] Bbox filter: {before} → {len(raw_data)} agents "
-                f"(dropped {before - len(raw_data)} with home or activity outside OSMnx area)"
-            )
-        if sealed and len(raw_data) != population_size:
-            # Un sceau se prend entier. Ré-échantillonner 1 000 agents dans un fichier scellé
-            # de 1 000 dont la bbox a écarté 12 reviendrait à publier une population qui
-            # n'est plus celle du MANIFEST — et rien ne le signalerait.
-            logger.error(
-                f"[ALARME] [population] Population scellée {sealed} : {len(raw_data)} agents "
-                f"après filtre bbox pour population_size={population_size}. Un sceau ne se "
-                "rogne pas : alignez population_size sur l'effectif scellé, ou retirez la "
-                "bbox. Rien n'est chargé.")
+        # Filtre de PÉRIMÈTRE puis tirage à exactement population_size (ticket 031, partie 2).
+        # Le domicile fait le périmètre : `household.commune_id` ∈ 453 communes (repli : trait
+        # `residence_zone`, puis géométrie du polygone avec alarme). Une activité hors du polygone
+        # (école, travail hors périmètre) ne fait PAS écarter l'agent : elle se compte et s'alarme
+        # au-dessus d'un seuil. Avant ce jour, un rectangle de 30 km écartait tout agent dont le
+        # domicile OU une activité sortait : 79 agents de la v3, toute la 3ᵉ couronne de la v4.
+        perimeter_stats = None
+        if perimeter is not None:
+            raw_data, perimeter_stats = filter_population(raw_data, perimeter, source="population")
+        if sealed and not sealed_population_complete(sealed, len(raw_data), population_size, perimeter_stats):
+            # Un sceau se prend entier : l'alarme est émise par sealed_population_complete.
             return None
         if population_size < len(raw_data):
             # Local seeded RNG (n'affecte pas l'état global de `random`) : le même
@@ -723,7 +718,7 @@ async def init(request: WorldInitRequest):
         population_size=effective_population_size,
         stop_coords=stop_coords,
         sim_base_timestamp=request.timestamp,
-        bbox=TOULOUSE_OSM_ROUTES_30K_BBOX,
+        perimeter=_population_perimeter(),
     )
     if population_json_path is None:
         raise RuntimeError(
@@ -838,7 +833,7 @@ async def test_init(population_size: int = None, timestamp: int = 1_775_800_000)
         population_size=effective_size,
         stop_coords=stop_coords,
         sim_base_timestamp=timestamp,
-        bbox=TOULOUSE_OSM_ROUTES_30K_BBOX,
+        perimeter=_population_perimeter(),
     )
     if population_json_path is None:
         return MessageResponse(success=False, error="Population preparation failed")
