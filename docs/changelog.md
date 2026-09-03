@@ -1,3 +1,43 @@
+## [2026-09-03] Population scellée v4 : le périmètre des 453 communes, six départements, appariement national
+
+Le jeu de test de l'article est rescellé — `data/population/population_1000_AAMAS_v4/`, sha256
+`9f05c655c3ad2cf4…` — sur le **périmètre exact de l'enquête EMC² 2023** : 453 communes de six
+départements, délimitées par le polygone des communes. Ce que porte ce sceau et que les
+précédents n'avaient pas :
+
+- **Le périmètre entier.** BD TOPO 2025-03-15 et BAN des six départements dans le fork ; six
+  départements représentés dans la cohorte (31 : 939, 32 : 9, 81 : 30, 82 : 19, 09 : 2, 11 : 1),
+  53 des 154 habitants de 3ᵉ couronne hors Haute-Garonne comme les 35 % de l'enquête. Au passage,
+  un biais du cadre par liste de communes est corrigé : les personnes du recensement à commune
+  « undefined » (communes sans IRIS) étaient toutes gardées puis versées dans les communes du cadre
+  — 17 986 personnes pour 10 000 demandées et 42,5 % en 3ᵉ couronne au premier essai ; elles sont
+  désormais pondérées par la part du cadre dans la population sans IRIS du département.
+- **Des chaînes d'activités appariées sur l'ENTD nationale**, un jour de classe, avec une borne
+  d'âge à 17 ans : 88,5 % des écoliers mobiles ont une activité d'études (v3 : 54 %) ; les 15-17 ans
+  passent de 80 à 92 % dans le vivier.
+- **Des horaires recalés sur le graphe du polygone**, avec la congestion par zone d'arête et le
+  repli « même nœud » à la vitesse du mode : 3 291 paires, 3 274 routées, 17 `None`, 582 s à
+  3 workers (177 ms par route, sans swap une fois les conteneurs non nécessaires arrêtés).
+- **Une hypothèse déclarée** : une activité hors du polygone sortirait de la chaîne (0 ce jour),
+  et le MANIFEST le dit.
+
+**Avant (v3) :** 346 communes haut-garonnaises, 308 donneurs de chaînes, 54 % des écoliers à l'école,
+13 marges conformes, 2,88 déplacements par agent mobile.
+**Après (v4) :** 453 communes, ENTD nationale, **88,5 %** des écoliers à l'école, **12 marges
+conformes et 1 à publier** (motorisation en base ménage : sans voiture 22,8 % contre 19,2 %),
+immobiles 10,6 %, 2,73 déplacements par agent mobile (enquête 3,95) ; audit A2 / A4 / A9 conformes.
+À publier aussi : la pente de l'équipement vélo par taille de ménage n'est pas monotone entre les
+tailles 3 et 4 (chaque taille dans sa tolérance, 55-69 foyers).
+
+Sauvegarde `data/population/sauvegardes/population_1000_AAMAS_v4_2026-09-03.tar.gz` (sceau + vivier),
+`config.yaml` repointé, synthèse HTML v3 dans `docs/paper/population/`. ⚠ Le runtime filtre encore
+sur le rectangle du graphe de 30 km : le sceau ne se charge entier qu'après le portage de la
+partie 2 du ticket 031. Deux robustesses au passage : le notebook ne sollicite plus eqasim quand
+ses viviers bruts sont en cache, et le lien `experiments/current` se repointe atomiquement (trois
+workers de routage spawnés dans la même seconde faisaient tomber le pool).
+
+---
+
 ## [2026-09-03] La congestion routière s'applique par zone d'arête : ville, agglomération, rien dehors
 
 Le facteur de congestion TomTom ne s'applique plus à un trajet entier mais **arête par arête**,

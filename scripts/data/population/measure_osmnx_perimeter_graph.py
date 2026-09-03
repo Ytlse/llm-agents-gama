@@ -63,7 +63,13 @@ def _load(cache_dir: Path, key: str):
         graphs = pickle.load(fh)
     with (cache_dir / f"boundary_{key}.pkl").open("rb") as fh:
         boundary = pickle.load(fh)
-    logger.info("graphes %s chargés en %.1fs", key, time.monotonic() - t0)
+    # Zones de congestion (ticket 031, décision 4) : le graphe historique de 30 km ne les porte
+    # pas tant que le runtime ne l'a pas chargé une fois ; on les pose en mémoire, sans réécrire
+    # le pickle (outil de mesure, pas de cache).
+    from trip_helper.congestion_zones import ensure_zones
+    counts = ensure_zones(graphs, boundary, log=logger)
+    logger.info("graphes %s chargés en %.1fs%s", key, time.monotonic() - t0,
+                " — zones de congestion posées en mémoire" if counts else " — zones lues dans le pickle")
     return graphs, boundary
 
 

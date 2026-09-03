@@ -416,6 +416,14 @@ Jamais en tant que « supposé négligeable » :
    l'extension aux cinq autres départements le ramènerait à ≈ 2,7 pt. **Un `--check` vert
    après le ticket 026 ne vaudra pas conformité** : l'écart de la 3ᵉ couronne y vaut 4,8
    points pour une tolérance de 5,0.
+   **Levée le 2026-09-03 (ticket 031)** : les BD TOPO 2025-03-15 et BAN des six départements sont
+   dans le fork, le cadre est celui des 453 communes. Au passage, un biais du cadre par liste de
+   communes a été mesuré et corrigé : les personnes du recensement à commune « undefined »
+   (communes sans IRIS) étaient toutes gardées puis réparties sur les seules communes sans IRIS du
+   cadre — 17 986 personnes pour 10 000 demandées et 42,5 % en 3ᵉ couronne sur les six
+   départements ; en Haute-Garonne seule, +13 % sur la 3ᵉ couronne rurale, invisible. Leur poids
+   est désormais multiplié par la part de la population sans IRIS du département qui vit dans le
+   cadre (`data/census/filtered.py` du fork).
 
 ## Voir aussi
 

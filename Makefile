@@ -460,6 +460,21 @@ osmnx-perimeter-graph:
 	$(SYNTHESIS_PYTHON) -m scripts.data.population.build_osmnx_perimeter_graph \
 	  $(if $(FORCE),--force,) $(if $(TRACE),--trace $(TRACE),)
 
+.PHONY: synthese-representativite
+
+## Synthèse HTML de représentativité d'une population scellée (identité visuelle de la synthèse v2,
+## chiffres lus dans report.json / selection.json / MANIFEST du sceau, le contrôle du vivier et l'audit).
+##   make synthese-representativite SCEAU=data/population/population_1000_AAMAS_v4 \
+##        PRECEDENT=data/population/population_1000_AAMAS_v3 VIVIER=docs/traces/<d>_controle_vivier/report.json \
+##        AUDIT=docs/traces/<d>_audit/audit_perimetre.json OUT=docs/traces/<d>/synthese_representativite_v3.html \
+##        COPIE=docs/paper/population/synthese_representativite_v3_population_v4_<date>.html
+synthese-representativite:
+	@test -n "$(SCEAU)" || { echo "SCEAU=<dossier scellé> obligatoire"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.synthese_representativite --sceau $(SCEAU) \
+	  $(if $(PRECEDENT),--precedent $(PRECEDENT),) $(if $(VIVIER),--vivier $(VIVIER),) \
+	  $(if $(AUDIT),--audit $(AUDIT),) --out $(if $(OUT),$(OUT),$(SCEAU)/synthese_representativite.html) \
+	  $(if $(COPIE),--copie $(COPIE),)
+
 .PHONY: reference-marges control-population select-population seal-population
 
 ## Contrôle de la population du jeu de test (article AAMAS, jalon 0 du protocole).

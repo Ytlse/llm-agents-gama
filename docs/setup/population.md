@@ -148,18 +148,39 @@ ni moins ». Et le cadre **échoue** s'il est vide ou ne recoupe pas les départ
 sans ce garde-fou, une faute de frappe ferait peupler tout le département en silence.
 
 **Le périmètre d'étude est celui des 453 communes sur six départements** (ticket 031, option A,
-rapport `docs/paper/population/RAPPORT_PERIMETRE_453_COMMUNES.html`) : `DEPARTMENTS = None` (ou
-`EQASIM_DEPARTMENTS=31,32,81,82,09,11`) les sert tous, à condition que les BD TOPO et BAN des
-départements 32, 81, 82, 09 et 11 soient dans `eqasim-toulouse/data/` (accord de l'auteur du
-dépôt requis : 1 à 2 Go de BD TOPO par département, 4 à 8 Mo de BAN). Le service journalise le
-cadre par département (346 / 38 / 27 / 22 / 10 / 10) et refuse de générer si un département
-demandé n'a pas ses données.
+rapport `docs/paper/population/RAPPORT_PERIMETRE_453_COMMUNES.html`). Depuis le 2026-09-03 les
+données des six départements sont dans `eqasim-toulouse/data/` — BD TOPO 3-4 TOUSTHEMES SHP LAMB93
+**édition 2025-03-15** pour les six (la 2024-09-15 n'est plus servie par l'IGN ; la Haute-Garonne a
+été reprise dans la même édition, l'ancienne livraison est rangée dans `data/bdtopo_archive_2024-09-15/`,
+hors du chemin lu par eqasim), BAN `adresses-<dep>.csv.gz` du 2026-09-03 — et le service part
+des six départements par défaut (`EQASIM_DEPARTMENTS=31,32,81,82,09,11`, `DEPARTMENTS = None` ou
+la liste explicite dans le notebook). Il journalise le cadre par département (346 / 38 / 27 / 22 /
+10 / 10) et refuse de générer si un département demandé n'a pas ses données.
 
-⚠ **Tant que ces données ne sont pas là**, `DEPARTMENTS = ['31']` est une **répétition** sur les
-346 communes haut-garonnaises : la 3ᵉ couronne y plafonne à **10,6 %** de la population quand
-l'enquête en compte **15,4 %** (100 de ses 275 communes sont hors du 31). Une population tirée
-sur ce cadre ne se scelle pas en v4. Voir
-[`../arch/perimetre-population.md`](../arch/perimetre-population.md), limite n°6.
+**Les communes sans IRIS sont pondérées.** Le recensement ne nomme pas la commune des personnes qui
+vivent dans une commune sans IRIS (il ne donne que le département) ; eqasim les garde et leur tire
+ensuite une commune sans IRIS **du cadre**. Avec une liste de communes, cela versait la population
+rurale de tout le département dans quelques villages — mesuré le 2026-09-03 : 17 986 personnes
+pour 10 000 demandées, 42,5 % en 3ᵉ couronne, 1 682 personas pour les dix villages audois du cadre.
+Le fork multiplie désormais leur poids RP par la part de la population sans IRIS du département qui
+vit dans le cadre (31 : 86,7 %, 32 : 9,4 %, 81 : 9,0 %, 82 : 20,1 %, 09 : 4,0 %, 11 : 1,0 %), et le
+journal de génération l'imprime (`Commune frame: … reweighted …`). Réglage `census_undefined_reweighting`
+de `config_toulouse.yml` (défaut `true`) : il entre dans l'empreinte synpp du stage — un changement
+de code seul ne devalide pas un cache synpp, une valeur de configuration si.
+
+`DEPARTMENTS = ['31']` reste possible : c'est la **répétition** sur les 346 communes
+haut-garonnaises, où la 3ᵉ couronne plafonne à **10,6 %** de la population quand l'enquête en
+compte **15,4 %** (100 de ses 275 communes sont hors du 31). Une population tirée sur ce cadre ne
+se scelle pas en v4. Voir [`../arch/perimetre-population.md`](../arch/perimetre-population.md),
+limite n°6.
+
+**Trois réglages du fork décidés le 2026-09-03** (ticket 031) : les journées donneuses ENTD sont
+des jours de classe (`hts_school_days_only`, mercredi exclu pour les moins de 11 ans) et un donneur
+dont la journée est écartée sort du vivier ; la classe d'âge de l'appariement a une **borne à
+17 ans** (`matching_age_boundaries: [14, 17, 29, 44, 59, 74, 1000]`) pour que les lycéens n'héritent
+plus des chaînes des 18-29 ans ; une **activité hors du polygone des 453 communes est supprimée**
+de la chaîne à l'étape 2 du notebook (jamais le domicile), comptée, alarmée si > 0 et déclarée
+dans le MANIFEST du sceau.
 
 ### Régénérer une population avec ce cadre
 

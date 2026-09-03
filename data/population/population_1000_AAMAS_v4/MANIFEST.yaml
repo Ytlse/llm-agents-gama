@@ -1,0 +1,162 @@
+# Population scellée pour l'article AAMAS — ne pas modifier (cf. `regle`).
+version: sceau1
+nom: population_1000_AAMAS_v4
+scelle_le: '2026-09-03T16:16:44+00:00'
+population:
+  fichier: population.json
+  sha256: 9f05c655c3ad2cf4d8c71cc3c34238417718cec742b42ef94a21eb33f694639f
+  n: 1000
+  source: data/population/toulouse_population_1000_AAMAS.json
+  source_sha256: 9f05c655c3ad2cf4d8c71cc3c34238417718cec742b42ef94a21eb33f694639f
+perimetre:
+  definition: 453 communes de l'enquête EMC² Toulouse 2023, six départements (31,
+    32, 81, 82, 09, 11), polygone communal — pas de rayon
+  table_communes: llm_module/data/commune_couronne.json
+  departements_attendus:
+    '31': 346
+    '32': 38
+    '81': 27
+    '82': 22
+    09: 10
+    '11': 10
+  retenus_par_departement:
+    09: 2
+    '11': 1
+    '31': 939
+    '32': 9
+    '81': 30
+    '82': 19
+  departements_representes: 6
+  retenus_sans_commune: 0
+  communes_distinctes: 141
+  activites_hors_perimetre:
+    controle: true
+    personas_controles: 1000
+    activites_hors_perimetre_supprimees: 0
+    personas_touches: 0
+selection:
+  fichier: selection.json
+  version: aamas_seal_v4
+  regle: 'unité = ménage (household.id) ; allocation proportionnelle à la cible jointe
+    couronne × motorisation (base personne), effectifs par plus fort reste, ménages
+    dans l''ordre sha256(''aamas_seal_v4:'' + household_id) s''ils tiennent dans la
+    cellule ; exclus : hors périmètre, moins de 5 ans, sans motorisation ; puis descente
+    par échanges de ménages de même taille et même cellule minimisant la somme des
+    écarts absolus (en points) aux marges : occupation, classe_age, age_quinquennal,
+    genre, taille_menage_personne, permis_adultes, abonnement_tc, logement, immobile'
+  vivier:
+    n: 11329
+    eligibles: 10979
+    exclus:
+      moins_de_5_ans: 335
+      sans_couronne: 14
+      hors_perimetre: 1
+    menages: 5652
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/data/population/Temp/4_zone_enriched/toulouse_population_10000.json
+    sha256: 487ff00c136743d2b9acb95901d9c4c2a3a04c784f4f74fa67493f5bb0a198b5
+    residence_zone:
+      deja_pose: 11315
+      pose_sans_domicile: 14
+  menages_retenus:
+    n: 513
+    par_taille:
+      '1': 223
+      '2': 167
+      '3': 66
+      '4': 45
+      '5': 10
+      '6': 1
+      '9': 1
+    membres_declares: 1052
+    membres_presents: 1000
+  deficits: {}
+  reports: 0
+  descente:
+    echanges: 393
+    passes: 3
+    perte_avant_pt: 73.96
+    perte_apres_pt: 4.97
+    candidats_par_menage: 150
+    marges_non_mesurees: []
+    duree_s: 2.81
+controle:
+  rapport: CONTROLE.md
+  verdicts:
+    conforme: 12
+    à publier: 1
+    à corriger: 0
+    non mesurable: 0
+  borne_tost_pt: 1.0
+  n_min: 30
+  n_min_cellule: 50
+  cible_jointe:
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/AAMAS/cible_jointe_couronne_motorisation.yaml
+    version: cj1
+    sha256: bbf9c36e59ea19b4ac26e5f5cbe15e86a77f55c33c4c124905af089edcbecaa4
+  cibles_marges:
+    fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/AAMAS/cibles_marges_personne.yaml
+    version: cm1
+    sha256: 1406c2cb403307678273dc004393108e3713b347b9b32739a0182d313a4e1e8b
+  menages_et_mobilite:
+    scolaires_6_17: 151
+    scolaires_mobiles: 148
+    scolaires_avec_activite_etudes: 131
+    part_scolaires_avec_etudes_pct: 88.5
+    part_scolaires_avec_etudes_seuil_pct: 88.0
+    n_menages: 513
+    menages_complets_taille_declaree: 469
+    part_menages_complets_pct: 91.4
+    membres_presents: 1000
+    membres_declares: 1052
+    part_membres_presents_pct: 95.1
+    sans_household_id: 0
+    deplacements_par_persona: 2.441
+    deplacements_par_persona_mobile: 2.73
+    immobiles: 106
+    part_immobiles_pct: 10.6
+    reference_enquete:
+      deplacements_par_personne: 3.53
+      part_immobiles_pct: 10.6
+      deplacements_par_personne_mobile: 3.95
+      part_scolaires_avec_etudes_pct:
+      - 90.0
+      - 95.0
+      source: 'microdonnées EMC² 2023, PENQ = 1, COEP ; scolaires : 6-17 ans scolarisés
+        mobiles avec un déplacement vers l''école un jour de semaine'
+  synthese_des_ecarts:
+  - ecart: mobilité quotidienne
+    amplitude: 2.44 déplacements par persona contre 3.53 dans l'enquête ; 10.6 % d'immobiles
+      contre 10.6 %
+    nature: chaînes d'activités (ENTD 2008 appariée par eqasim)
+    verdict: à publier
+    refermable_au_scellement: non — enquête d'appariement (levier eqasim)
+  - ecart: motorisation_menage
+    amplitude: 'sans voiture : 22.8 % contre 19.2 % (+3.6 pt)'
+    nature: base ménage (pondération 1/taille)
+    verdict: à publier
+    refermable_au_scellement: non — à déclarer
+depot:
+  git_head: 425fdb85a11e09c7628cfabd7ca1c3cda311d0e9
+  branche: feat_cache_population
+  arbre_propre: false
+regle: Ce dossier ne se modifie pas. Toute correction de la population produit un
+  nouveau dossier scellé ; les jeux gelés et les runs qui citent celui-ci citent son
+  sha256.
+note: 'Périmètre : les 453 communes de l''EMC² 2023 sur six départements (31, 32,
+  81, 82, 09, 11), polygone communal. Vivier eqasim 11 329 personnes (population_size
+  10000, EQASIM_RANDOM_SEED 1234, généré le 2026-09-03 18:01 ; BD TOPO 3-4 TOUSTHEMES
+  SHP LAMB93 édition 2025-03-15 pour les six départements, BAN du 2026-09-03, RP 2022,
+  ENTD 2008 nationale ; filter_hts false, matching_age_boundaries [14, 17, 29, 44,
+  59, 74], journées donneuses = jours de classe hors mercredi des moins de 11 ans,
+  personnes à commune undefined pondérées par la part du cadre dans la population
+  sans IRIS du département). Règle aamas_seal_v4 : ménages entiers, allocation 12
+  cellules couronne × motorisation (cj1), descente sur 9 marges (occupation, classe_age
+  p. 11 + cm1) — 393 échanges, perte 74,0 → 5,0 pt ; vivier pré-imputé (3ter-a). Plannings
+  recalés sur le graphe OSMnx du polygone des 453 communes (clé 444ca7e6a515, zones
+  de congestion ville/agglomération/extérieur, repli même nœud à la vitesse du mode)
+  : 3 291 paires, 3 274 routées, 17 None, 3 workers, 582 s. Activités hors du polygone
+  supprimées : 0. À publier : motorisation en base ménage (1/taille) ; équipement
+  vélo — chaque taille de ménage dans sa tolérance mais pente non monotone entre les
+  tailles 3 et 4 (63,4 % > 55,5 %, 69 et 55 foyers, IC ± 12-13 pt : enrich_personal_bike
+  code 2) ; mobilité 2,44 déplacements par persona (enquête 3,53). Notebook generate_population
+  du 2026-09-03, réchauffage OSMnx différé.'

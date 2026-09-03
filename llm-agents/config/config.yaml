@@ -37,10 +37,14 @@ cache:
 # Le run prend ce fichier ENTIER, à la place de la recherche par taille et de tout appel à
 # eqasim ; s'il ne compte pas exactement `population_size` agents (sim_params.yaml : 1000),
 # le chargement refuse au lieu de ré-échantillonner. Chemin vu du conteneur controller
-# (./data/population est monté sur /data/eqasim-output). Scellé le 2026-09-03 (règle v3 :
-# ménages entiers, 13 marges conformes, 10,6 % d'immobiles), sha256 8d8bfa3645fa77fb… —
-# cf. data/population/population_1000_AAMAS_v3/MANIFEST.yaml et
-# docs/arch/controle-population-jeu-de-test.md. Le sceau v2 du 2026-09-02 reste disponible :
-# data/population/population_1000_AAMAS/population.json (sha256 f67b07772f3dced9…).
+# (./data/population est monté sur /data/eqasim-output). Scellé le 2026-09-03 (règle v4 :
+# périmètre des 453 communes sur six départements, ménages entiers, 12 marges conformes et
+# 1 à publier — motorisation en base ménage —, 10,6 % d'immobiles, 88,5 % des écoliers mobiles
+# avec une activité d'études), sha256 9f05c655c3ad2cf4… — cf.
+# data/population/population_1000_AAMAS_v4/MANIFEST.yaml et
+# docs/arch/controle-population-jeu-de-test.md. ⚠ Le runtime filtre encore sur le rectangle du
+# graphe de 30 km (ticket 031, partie 2) : ce sceau ne se charge entier qu'après ce portage.
+# Les sceaux précédents restent disponibles : population_1000_AAMAS_v3 (sha256 8d8bfa3645fa77fb…,
+# Haute-Garonne seule) et population_1000_AAMAS (v2, sha256 f67b07772f3dced9…).
 data:
-  population_file: /data/eqasim-output/population_1000_AAMAS_v3/population.json
+  population_file: /data/eqasim-output/population_1000_AAMAS_v4/population.json

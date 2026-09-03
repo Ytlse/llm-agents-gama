@@ -300,7 +300,41 @@ vivent dans le fichier, pas dans l'agent.
 
 ---
 
-## 6. La population scellée v3 du 2026-09-03
+## 6. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
+
+`data/population/population_1000_AAMAS_v4/` — sha256 `9f05c655c3ad2cf4…`, **1 000 personas en
+513 ménages entiers** (469 complets au sens strict, 95,1 % des membres déclarés présents), tirés
+par la règle `aamas_seal_v4` dans un vivier eqasim de **11 329** (`population_size` 10 000, six
+départements, BD TOPO 2025-03-15, BAN 2026-09-03, ENTD nationale, jours de classe, borne d'âge 17,
+personnes à commune « undefined » pondérées ; 335 enfants de moins de 5 ans, 14 sans domicile et
+1 domicile hors des 453 communes exclus). Aucun déficit ; descente 393 échanges en 3 passes, perte
+74,0 → 5,0 pt. **Périmètre** : six départements représentés (31 : 939, 32 : 9, 81 : 30, 82 : 19,
+09 : 2, 11 : 1 ; 141 communes), 53 des 154 habitants de 3ᵉ couronne (34 %) hors Haute-Garonne
+comme les 35 % de l'enquête ; 0 activité hors du polygone. Plannings recalés sur le graphe du
+polygone (3 291 paires, 17 `None`, congestion par zone, repli à la vitesse du mode). Traces :
+`docs/traces/2026-09-03_18-16_controle_toulouse_population_1000_AAMAS_v4/`,
+`…_18-16_audit_perimetre_v4/`, `…_18-03_controle_vivier_10000_v4/`. Sauvegarde
+`data/population/sauvegardes/population_1000_AAMAS_v4_2026-09-03.tar.gz` ; `config.yaml` repointé.
+
+**Contrôle : 12 marges conformes, 0 à corriger, 1 à publier, 0 non mesurable.** La marge à publier
+est la motorisation en **base ménage** (1/taille, n efficace 752) : ménages sans voiture 22,8 %
+contre 19,2 % (+3,6 pt) — la seule marge que la sélection n'alloue pas ; en base personne elle est
+conforme. Immobiles **10,6 %** ; **scolaires (6-17 ans) avec activité d'études 131 / 148 =
+88,5 %** (seuil 88, enquête 90-95 ; v3 : 54 %) ; mobilité 2,44 déplacements par persona et 2,73
+par mobile (enquête 3,53 / 3,95). Audit de périmètre : A1, A2, A4, A9 conformes, A3, A5, A8 à
+publier, A6 et A7 propriétés d'un run. À publier aussi : l'équipement vélo, chaque taille de
+ménage dans sa tolérance mais pente non monotone entre les tailles 3 et 4 (63,4 % > 55,5 %, sur
+69 et 55 foyers, IC ± 12-13 pt — `enrich_personal_bike` rend le code 2 sur ce seul critère).
+Le vivier, lui, avait 9 marges à corriger (65 ans et + +3,4 pt, étudiants −2,8 pt, immobiles
+19,4 %, Toulouse −1,8 pt) : la distance entre les deux est ce que la sélection fait.
+
+**Ce que la v4 change dans la lecture.** Le périmètre est celui de l'enquête, exactement ; les
+chaînes d'activités viennent pour la première fois de l'ENTD nationale appariée par classe d'âge
+(la v3 et ses devancières tiraient dans 308 donneurs résidents du 31) ; les écoliers vont à
+l'école. Les runs v3 et v4 ne sont pas comparables. Synthèse HTML :
+`docs/paper/population/synthese_representativite_v3_population_v4_2026-09-03.html`.
+
+## 6 bis. La population scellée v3 du 2026-09-03 (historique)
 
 `data/population/population_1000_AAMAS_v3/` — sha256 `8d8bfa3645fa77fb…`, **1 000 personas en
 514 ménages entiers**, tirés par la règle `aamas_seal_v3` dans un vivier eqasim de **11 922**
@@ -353,7 +387,7 @@ persona contre 3,53) et de la moitié des scolaires sans école. Le service part
 `config_toulouse.yml` (source unique) ; la v4 sera la première population appariée sur l'ENTD
 nationale avec la classe d'âge tenue.
 
-## 6 bis. La population scellée v2 du 2026-09-02 (historique)
+## 6 ter. La population scellée v2 du 2026-09-02 (historique)
 
 `data/population/population_1000_AAMAS/` — sha256 `f67b07772f3dced9…`, **1 000 personas**,
 tirés dans un vivier eqasim de **5 063** (`population_size` 5 000, périmètre par liste de

@@ -598,8 +598,15 @@ class FactorySettings:
         cls.save_static_config()
 
         current_link = experiments_dir / "current"
-        current_link.unlink(missing_ok=True)
-        current_link.symlink_to(Path("archive") / cls._instance.workdir.name)
+        # Plusieurs processus importent ce module dans la même seconde (workers de routage du
+        # notebook, workers hypercorn) : unlink puis symlink n'est pas atomique, et le second
+        # arrivant tombait sur FileExistsError — trois workers spawnés ensemble, deux morts à
+        # l'initialisation, BrokenProcessPool (2026-09-03). Un lien temporaire propre à ce
+        # processus, puis os.replace : atomique, et le dernier écrit gagne.
+        _tmp_link = experiments_dir / f".current.{os.getpid()}"
+        _tmp_link.unlink(missing_ok=True)
+        _tmp_link.symlink_to(Path("archive") / cls._instance.workdir.name)
+        os.replace(_tmp_link, current_link)
 
         # Redirect GAMA results into this experiment's workdir.
         gama_results_dir = cls._instance.workdir / "gama_results"

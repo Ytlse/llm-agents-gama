@@ -43,11 +43,13 @@ Aucune dépendance au ticket 030 : ses lots A à D sont du runtime. Son ancien l
 - [x] § 1.3 règle `aamas_seal_v4` (namespace distinct, six classes d'âge, journal du périmètre),
   tests étendus (17 verts).
 - [x] § 1.4 graphes OSMnx du polygone (`make osmnx-perimeter-graph`) et mesures O1, O2, O4.
-- [ ] § 1.0 données des cinq départements : **porte d'approbation 1, non levée** — URL, tailles et
-  commandes prêtes ci-dessous ; l'édition 2024-09-15 n'est plus servie par l'IGN.
-- [ ] § 1.5 sceau v4 : impossible sans § 1.0. Une **répétition** de la chaîne complète a tourné
-  sur la Haute-Garonne (`toulouse_population_1000_AAMAS_v4_repetition_HG.json`, non scellée) ;
-  résultats ci-dessous.
+- [x] § 1.0 données des cinq départements : **porte 1 levée le 2026-09-03 après-midi**, BD TOPO
+  2025-03-15 (six départements, D031 compris) et BAN téléchargées et vérifiées (md5).
+- [x] § 1.5 **sceau v4 livré** : `data/population/population_1000_AAMAS_v4/` (sha256
+  `9f05c655c3ad2cf4…`), 12 marges conformes + 1 à publier (motorisation base ménage), immobiles
+  10,6 %, scolaires 88,5 %, six départements, A2/A4/A9 conformes ; sauvegarde tar.gz, `config.yaml`
+  repointé, synthèse HTML v3. Détail au § « Sceau v4 » ci-dessous. Une répétition Haute-Garonne
+  avait précédé (13:20, non scellée).
 
 ### 1.0 Données à obtenir — avec l'accord de l'auteur du dépôt
 | Donnée | Source | Volume |
@@ -287,14 +289,55 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
   (propriétés d'un run). Critères 1 et 2 de la partie 1 tenus **sur le cadre Haute-Garonne** ;
   le critère « six départements représentés » ne peut l'être qu'après la porte 1.
 
+### Sceau v4 (2026-09-03, 18:16)
+
+- **Vivier** : 11 329 personnes (eqasim 18:01, 3 min avec les caches BD TOPO/BAN ; 8 min à froid),
+  couronnes 34,5 / 35,5 / 14,6 / 15,3 %, six départements, 35 % de la 3ᵉ couronne hors 31, A4 = 1
+  (exclu), 14 sans domicile (exclus), immobiles 19,4 %, scolaires 92,8 % (15-17 : 91,6 %). Contrôle du
+  vivier : 9 à corriger, 1 à publier, 3 conformes (trace `…_18-03_controle_vivier_10000_v4/`).
+- **Sélection v4** : 1 000 personas en **513 ménages entiers**, aucun déficit, 393 échanges en
+  3 passes, perte 74,0 → 5,0 pt ; **six départements représentés** (31 : 939, 32 : 9, 81 : 30,
+  82 : 19, 09 : 2, 11 : 1), 141 communes, 53 des 154 habitants de 3ᵉ couronne hors Haute-Garonne
+  (34 %) ; 0 activité hors du polygone (1 000 personas contrôlés).
+- **Routage** sur le graphe du polygone avec la congestion par zone et le repli à la vitesse du
+  mode : 3 291 paires, 3 274 routées, 17 `None` (0,5 %), 3 workers, **582 s (177 ms par route)** sans
+  swap — Docker relancé pour le seul service eqasim, otp1-3 / worker / osmnx1 arrêtés ; 1 000
+  plannings valides, 3 335 activités planifiées, 2 660 desservies en TC. Premier essai à 3 workers
+  tombé sur une course du lien `experiments/current` entre workers (corrigée dans `settings.py`,
+  re-pointage atomique).
+- **Traits (étape 8)** : sept post-traitements ; `enrich_personal_bike` rend le **code 2** sur un
+  seul critère — la pente de l'équipement par taille de ménage n'est pas monotone entre les tailles
+  3 et 4 (63,4 % > 55,5 %, sur 69 et 55 foyers, IC ± 12-13 pt) alors que chaque taille et les
+  douze autres cibles sont dans leur tolérance ; trait posé sur 1 000 / 1 000, audit de complétude
+  **POPULATION COMPLÈTE**. Déclaré « à publier » dans le MANIFEST et la synthèse (question n° 7).
+- **Contrôle** (trace `…_18-16_controle_toulouse_population_1000_AAMAS_v4/`) : **12 conformes,
+  0 à corriger, 1 à publier** — motorisation en base ménage (1/taille, n_eff 752) : sans voiture
+  22,8 % contre 19,2 % (+3,6 pt), la seule marge non allouée ; immobiles 10,6 % ; **scolaires
+  131 / 148 = 88,5 %** (seuil 88) ; 2,44 déplacements par persona, 2,73 par mobile (enquête 3,53 /
+  3,95). **Audit** (`…_18-16_audit_perimetre_v4/`) : A1, A2, A4, A9 conformes ; A3, A5, A8 à
+  publier ; A6, A7 propriétés d'un run.
+- **Sceau** : MANIFEST avec `perimetre` (définition, départements attendus / retenus, activités hors
+  polygone contrôlées : 0) ; sauvegarde `population_1000_AAMAS_v4_2026-09-03.tar.gz` (sha256
+  `41f9514231b5013d…`, sceau + vivier brut et pré-imputé + sélection) ; `config.yaml` →
+  `population_1000_AAMAS_v4/population.json` ; synthèse
+  `docs/paper/population/synthese_representativite_v3_population_v4_2026-09-03.html` (générateur
+  `scripts/AAMAS/synthese_representativite.py`, `make synthese-representativite`).
+- ⚠ Le runtime filtre encore sur `TOULOUSE_OSM_ROUTES_30K_BBOX` : ce sceau ne se charge entier
+  qu'après le portage de la partie 2 (chargement par commune du domicile).
+
 ### Critères d'acceptation — partie 1
 1. Vivier : 0 persona hors des 453 communes ; six départements représentés ; ≥ 88 % des 6-17 ans
-   mobiles avec activité `education`.
+   mobiles avec activité `education`. **Tenu** : A4 = 1 sur 11 329 (exclu par la sélection, 0 dans
+   la cohorte), six départements, 92,8 % (cohorte : 88,5 %).
 2. Sceau v4 : 1 000 personas en ménages entiers, 13 marges + classe_age conformes, immobiles
-   ≈ 10,6 %, `household.commune_id` renseigné pour tous.
-3. Plannings recalés sur un routage effectif : part de paires « même nœud » < 1 % en 3ᵉ couronne.
+   ≈ 10,6 %, `household.commune_id` renseigné pour tous. **Tenu à une marge près** : 12 conformes,
+   la motorisation en base ménage à publier (+3,6 pt sur « sans voiture », marge non allouée) ;
+   immobiles 10,6 % ; `commune_id` 1 000 / 1 000 ; 513 ménages entiers.
+3. Plannings recalés sur un routage effectif : paires distantes de plus de 500 m à vol d'oiseau
+   rabattues sur le même nœud ≈ 0 (≤ 0,5 %) par couronne — reformulé le 2026-09-03 (les paires
+   « même nœud » plus courtes sont de vrais trajets courts, servis par le repli à la vitesse du mode).
 4. Documentation et changelog à jour ; synthèse de représentativité v3 (HTML) produite et
-   inventoriée dans `docs/paper/README.md`.
+   inventoriée dans `docs/paper/README.md`. **Tenu.**
 
 ---
 
@@ -306,7 +349,7 @@ manque pour en faire une spécification. Actions numérotées du rapport entre p
 | Maillon | Impact identifié | Mesuré ou constaté le 2026-09-03 (code vérifié) → décision proposée |
 |---|---|---|
 | **Chargement runtime** (`handle/application.py`) | Le filtre rectangulaire `TOULOUSE_OSM_ROUTES_30K_BBOX` doit devenir un filtre par **commune du domicile** (liste des 453) et un `contains` du polygone pour les activités ; un fichier scellé se charge entier ou se refuse | **Deux filtres successifs.** (1) `_prepare_population` (lignes 238-268) écarte tout agent dont le domicile **ou une activité** sort du rectangle 30 km, puis refuse un sceau dont l'effectif a bougé — 79 agents v3 écartés (67 par le domicile), sceau refusé ; la v4 en écartera davantage (3ᵉ couronne complète). (2) `world/population.py` → `eqasim_loader.perimeter_verdict` : trait `residence_zone` dans une couronne → admis ; `hors périmètre` → rejeté ; trait absent → bbox `world_bbox` = arrêts GTFS ± 0,05° (`factory.py:151`) — ce second filtre est déjà **par périmètre** et n'a rien à changer. `WorldGrid(world_bbox)` (`world_data.py:38`) borne l'index spatial sur les arrêts GTFS : à élargir au polygone. **Décision : faire** — remplacer le rectangle de (1) par `household.commune_id ∈ 453` (renseigné pour tous depuis ce jour) et, pour les activités, un `contains` du polygone (`CommunalZones`) ; une activité hors polygone (école, travail hors périmètre) n'écarte **pas** l'agent mais se compte et s'alarme (question ouverte n° 3) ; mesurer « aucun agent v4 écarté » au premier chargement. |
-| **OSMnx runtime** (`osmnx_server.py`, `trip_helper/osmnx_direct.py`, `geography.py`) | Graphes sur le polygone (même construction qu'en 1.4) ; `TOULOUSE_CENTER_DIST_M` disparaît au profit d'une emprise ; frontière `_in_city` et facteur de congestion à revérifier hors du disque (O3) ; vitesses de repli moins sollicitées | **O1/O4 mesurés** (§ 1.4) : pickle 223 Mo contre 245, worker 1 828 Mo contre 1 754 (+4 %) hors pression mémoire (0,85-1,6 Go lus sous swap : `ru_maxrss` n'est pas fiable quand la machine swappe), chargement 7 s ; `MAX_WORKERS` se règle sur la RAM libre — 6 sur une machine dédiée, 3 quand la VM Docker en prend 23 Go. **O2 mesuré** (§ 1.4, trace `docs/traces/2026-09-03_13-20_mesures_graphe_perimetre/`) : paires « même nœud » en 3ᵉ couronne **26,5 % → 3,9 %** (plancher urbain 2,1-3,4 %), rabattement p95 2 951 m → 264 m, routes `None` 1,5 % → 0,7 %, 884 → 699 ms par route. **O3 vérifié dans le code** : `_in_city` = commune de Toulouse (géocodage, inchangé et copié pour la nouvelle clé) ; **hors de la commune, le facteur n'est pas 1 mais celui de l'agglomération TomTom** (`metro_raw`) — lundi 8 h : 2,04 en ville, **1,84 hors ville**, appliqué tel quel à un trajet rural de 3ᵉ couronne, ce que le rapport n'attendait pas. Vitesses de repli : le mode vélo n'a pas de vitesse pour `track`, `service`, `footway`, `pedestrian`, `trunk` → 32 % des arêtes du polygone en repli (14 km/h). Portage : `_GraphStore.get(city, dist)` et les deux `cache_key = md5(f"{city}_{dist}")` d'`osmnx_server.py` (l. 51-54, 131-134) deviennent une clé de graphe configurée (`PERIMETER_CACHE_KEY`), `TOULOUSE_CENTER_DIST_M` ne garde qu'un rôle d'audit. **Cache SQLite** (`osmnx_persistent_cache.make_key`) : clé = `routing_version` (`r1`) + mode + coordonnées (+ jour/heure en voiture), **indépendante du graphe** → une entrée calculée sur le disque de 30 km (dont les replis à 70 km/h) serait resservie sur le polygone ; le dossier de cache est par nom de population, donc une v4 part de zéro, mais **bumper `routing_version` à `r2`** au changement de graphe est le geste honnête. **Décision : faire** (partie 2), avec une passe sur `speeds.bike` et le facteur hors ville (question ouverte n° 4). |
+| **OSMnx runtime** (`osmnx_server.py`, `trip_helper/osmnx_direct.py`, `geography.py`) | Graphes sur le polygone (même construction qu'en 1.4) ; `TOULOUSE_CENTER_DIST_M` disparaît au profit d'une emprise ; frontière `_in_city` et facteur de congestion à revérifier hors du disque (O3) ; vitesses de repli moins sollicitées | **O1/O4 mesurés** (§ 1.4) : pickle 223 Mo contre 245, worker 1 828 Mo contre 1 754 (+4 %) hors pression mémoire (0,85-1,6 Go lus sous swap : `ru_maxrss` n'est pas fiable quand la machine swappe), chargement 7 s ; `MAX_WORKERS` se règle sur la RAM libre — 6 sur une machine dédiée, 3 quand la VM Docker en prend 23 Go. **O2 mesuré** (§ 1.4, trace `docs/traces/2026-09-03_13-20_mesures_graphe_perimetre/`) : paires « même nœud » en 3ᵉ couronne **26,5 % → 3,9 %** (plancher urbain 2,1-3,4 %), rabattement p95 2 951 m → 264 m, routes `None` 1,5 % → 0,7 %, 884 → 699 ms par route. **O3 vérifié dans le code** : `_in_city` = commune de Toulouse (géocodage, inchangé et copié pour la nouvelle clé) ; **hors de la commune, le facteur n'est pas 1 mais celui de l'agglomération TomTom** (`metro_raw`) — lundi 8 h : 2,04 en ville, **1,84 hors ville**, appliqué tel quel à un trajet rural de 3ᵉ couronne, ce que le rapport n'attendait pas. Vitesses de repli : le mode vélo n'a pas de vitesse pour `track`, `service`, `footway`, `pedestrian`, `trunk` → 32 % des arêtes du polygone en repli (14 km/h). Portage : `_GraphStore.get(city, dist)` et les deux `cache_key = md5(f"{city}_{dist}")` d'`osmnx_server.py` (l. 51-54, 131-134) deviennent une clé de graphe configurée (`PERIMETER_CACHE_KEY`), `TOULOUSE_CENTER_DIST_M` ne garde qu'un rôle d'audit. **Cache SQLite** (`osmnx_persistent_cache.make_key`) : clé = `routing_version` (`r1`) + mode + coordonnées (+ jour/heure en voiture), **indépendante du graphe** → une entrée calculée sur le disque de 30 km (dont les replis à 70 km/h) serait resservie sur le polygone ; le dossier de cache est par nom de population, donc une v4 part de zéro, mais **bumper `routing_version` à `r2`** au changement de graphe est le geste honnête. **Décision : faire** (partie 2), avec une passe sur `speeds.bike`. **Facteur hors ville : rien maintenant** (décision du 2026-09-03) ; trois pistes pour la partie 2 : (a) profil « metro » appliqué à la seule part du trajet dans l'agglomération — arêtes dans le polygone Toulouse + 1ʳᵉ + 2ᵉ couronne, facteur 1,0 ailleurs (une passe sur la géométrie de la route) ; (b) TomTom Traffic Stats (payant) pour des vitesses par tronçon sur tout le périmètre ; (c) comptages horaires ouverts — Cerema trafic-routier, les ≈ 100 stations permanentes du Département, Toulouse Métropole — pour calibrer un facteur de pointe sur les radiales. |
 | **OTP** (`otp-toulouse/`, `data/gtfs_year/`) | Extrait OSM sur le polygone (T1) ; GTFS liO en feed annuel (T2, 22,7 Mo, ODbL) ; cars TER éventuels (T6) ; `TOULOUSE_TRANSIT_SERVICE_WKT` recalculée (T4) ; calendrier liO (T5) ; trois instances plus lourdes | `otp-toulouse/toulouse/Toulouse.osm.pbf` (64 Mo, DVC, md5 `06099055…`) n'a **aucune recette** dans le dépôt (le `Makefile` ne fait que `--build` et `--load`) : son emprise ne se rejoue pas. L'extrait intermédiaire du § 1.4, `data/cache/osmnx/perimetre_453/perimetre_453.osm.pbf` (76 Mo, polygone exact, OSM 2022, toutes clés), **est** l'extrait T1 : à copier/renommer et à consigner dans un `Toulouse.osm.pbf.dvc` daté. `build-config.json` : `transitServiceStart/End` 2026 ; liO non chargé. Temps de construction et RAM par instance : **non mesurés** (pas de reconstruction sans décision sur liO). **Décision : reporter** dans un ticket OTP (T1 + T2 + T4 + T5 + T6 ensemble : une seule reconstruction des trois instances), après accord pour le téléchargement du GTFS liO (22,7 Mo). |
 | **GAMA** (`Settings.gaml`, `includes/`) | Monde = polygone du périmètre au lieu de l'enveloppe Tisséo (G1) ; `routes.shp`/`stops.shp` avec liO et TER (G2) ; performance sur 106 × 93 km (G3) ; projection `roads.prj` UTM 48N à contrôler (G4) ; avertissement au chargement si le shapefile de routes ne couvre pas le monde | Vérifié : `Settings.gaml:61` `geometry shape <- envelope(routes0_shape_file)` (lignes Tisséo, WGS84 — `routes.prj` GCS_WGS_1984) ; `roads.prj` déclare bien **UTM zone 48N** (G4 confirmé : Toulouse est en 31N ; la voirie GAMA n'étant pas exploitée, l'effet est nul aujourd'hui mais le fichier ment). Pas de simulation lancée (hors périmètre de cette partie) : G1 et G3 restent à mesurer. **Décision : reporter** (ticket GAMA : monde = `couronne_perimetre.geojson` dissous, avertissement de couverture, G3). |
 | **Ticket 030** (car scolaire) | Se branche ici : option `school_bus` pour les mineurs hors Tisséo ; sans elle, la 3ᵉ couronne simulée n'a pas de TC pour ses écoliers | Prérequis du ticket 030 (≥ 88 % des 6-17 ans mobiles avec activité `education`) **atteint sur le vivier de répétition : 89,0 %**. Le reste est inchangé (lots A à D). |
@@ -315,7 +358,60 @@ manque pour en faire une spécification. Actions numérotées du rapport entre p
 | **Visualisation** (`vizpop.py`, Grafana) | `vizpop` utilise la bbox 30 km ; emprises des cartes Grafana à vérifier | `llm-agents/vizpop.py:17,91` trace `TOULOUSE_OSM_ROUTES_30K_BBOX` (rectangle gris) et `TOULOUSE_TRANSIT_SERVICE_WKT` : à remplacer par le polygone des couronnes (`couronne_perimetre.geojson`) et l'enveloppe TC recalculée (T4). Grafana : **aucun panneau `geomap`** dans les huit tableaux de bord — rien à changer. **Décision : faire** (vizpop, avec le runtime). |
 | **Article** (`docs/paper/`) | Le périmètre déclaré devient exact ; tableau de conformité à remesurer sur la v4 ; limite « transport scolaire » à déclarer | À réécrire après le sceau v4 : § 2.2 (périmètre « 453 communes, six départements, polygone communal »), annexe F (conformité v4, ligne scolaires, mobilité 2,93 / 3,63 contre 3,53 / 3,95), et une note de méthode sur le vivier de donneurs (§ 1.2 bis) — le manuscrit décrit un appariement national que le service ne faisait pas. **Décision : faire** après le sceau. |
 
-### Questions ouvertes (à trancher avant la suite)
+### Décisions de l'auteur du dépôt (2026-09-03, après-midi) — les six questions sont tranchées
+1. BD TOPO **2025-03-15** pour les six départements, D031 compris (édition homogène) ; BAN des
+   cinq départements : **téléchargées** (journal ci-dessous), l'ancienne D031 2024-09-15 rangée
+   hors du chemin d'eqasim. Le service et le notebook servent les six départements par défaut.
+2. **Borne d'âge 17** dans l'appariement : livrée (`matching_age_boundaries` configurable dans le
+   fork, `[14, 17, 29, 44, 59, 74, 1000]` dans `config_toulouse.yml`) ; effet mesuré sur la v4.
+3. **Activité hors du polygone : supprimée** de la chaîne à l'étape 2, comptée, alarmée si > 0,
+   déclarée (page de contrôle, MANIFEST) ; garde-fou et tests livrés ; 0 mesuré.
+4. **Congestion hors ville : rien maintenant.** Trois pistes notées en partie 2.
+5. **Immobiles 19,3 % du vivier : acceptés**, déclarés dans la page de contrôle.
+6. **Critère 3 remplacé** par « paires distantes de plus de 500 m à vol d'oiseau rabattues sur le
+   même nœud ≤ 0,5 % », mesuré par le script ; et le repli « même nœud » de `_route_sync` rend
+   désormais une durée à la vitesse du mode (vol d'oiseau × 1,3, `_FALLBACKS`, minimum 1 s).
+
+**Journal des téléchargements (2026-09-03, 14:08 → 14:13, trace `docs/traces/2026-09-03_14-08_telechargements_porte1/`)** :
+D031 339 861 334 o (md5 `4975d547…` vérifié), D032 194 382 642 o (`e88b9a62…`), D081 225 133 383 o
+(`5bf903af…`), D082 158 893 048 o (`76412a13…`), D009 147 862 815 o (`4e33074d…`), D011
+230 399 808 o (`0ba65809…`) — six empreintes conformes aux `.md5` de l'IGN ; BAN 32/81/82/09/11 :
+4,3 / 8,0 / 5,3 / 3,9 / 8,4 Mo, archives gzip valides. Total 1,30 Go de BD TOPO, 30 Mo de BAN.
+L'ancienne livraison D031 2024-09-15 est rangée dans `eqasim-toulouse/data/bdtopo_archive_2024-09-15/`.
+
+**Première génération sur les six départements (14:23 → 14:31, 8 min) — anomalie et correction.**
+Le vivier livré comptait **17 986 personnes pour 10 000 demandées, 42,5 % en 3ᵉ couronne**
+(7 650, dont 6 905 des cinq départements extérieurs ; 1 682 personas pour les dix villages audois
+du cadre, 2 143 habitants) ; A4 = 5 domiciles hors des 453 communes (effet de bord des adresses
+BD TOPO en limite de commune), 29 sans domicile, `household.commune_id` renseigné pour tous
+(378 communes), immobiles 19,9 %, **6-17 ans mobiles avec activité d'études 91,3 %** — la borne 17
+porte les 15-17 ans de **80,4 % à 91,0 %** (6-10 : 91,8, 11-14 : 91,0). Cause du gonflement,
+vérifiée dans `data/census/filtered.py` : les personnes du recensement à commune « undefined »
+(communes sans IRIS, le RP ne donne que le département) sont gardées quel que soit le cadre, puis
+`home.zones` les répartit sur les communes sans IRIS **du cadre** — toute la population rurale du
+département versée dans quelques villages. Mesuré (RP 2022) : la part de la population sans IRIS
+du département qui vit dans le cadre vaut 86,7 % en Haute-Garonne mais 9,4 % (Gers), 9,0 % (Tarn),
+20,1 % (Tarn-et-Garonne), 4,0 % (Ariège) et **1,0 % (Aude)**. Correction (fork) : le poids RP de
+ces personnes est multiplié par cette part, par département, et journalisé (réglage explicite
+`census_undefined_reweighting` : la première relance avait resservi le cache synpp du stage — un
+changement de code ne le devalide pas, une valeur de configuration si) ; régénération à la suite. Ce biais existait déjà en Haute-Garonne seule (+13 % sur la 3ᵉ couronne rurale du 31 dans
+tous les viviers depuis le ticket 026) ; il était invisible parce que le cadre couvrait presque
+tout le département.
+
+**Vivier v4 régénéré avec la pondération (18:01, 3 min avec les caches BD TOPO/BAN)** :
+**11 329 personnes** ; couronnes Toulouse 34,5 %, 1ʳᵉ 35,5 %, 2ᵉ 14,6 %, **3ᵉ 15,3 %** (cibles
+36,4 / 34,1 / 14,2 / 15,4) ; départements de résidence 31 : 10 626, 32 : 151, 81 : 243, 82 : 256,
+09 : 46, 11 : 7 (361 communes) ; **600 des 1 730 habitants de 3ᵉ couronne (34,7 %) hors
+Haute-Garonne**, comme les 35 % de l'enquête ; A4 = 1 domicile hors des 453 communes (adresse en
+limite de commune, exclu par la sélection), 14 sans domicile ; immobiles 19,4 % ; **6-17 ans
+mobiles avec activité d'études 92,8 %** (6-10 : 92,6, 11-14 : 93,9, 15-17 : **91,6** contre 80,4
+avant la borne 17) ; 2,93 déplacements par personne, 3,63 par mobile.
+
+**Zones de congestion posées sur le graphe du polygone** (17:40, 18 s, `--zones-only`) : marche
+32 342 nœuds en ville, 102 858 en agglomération, 41 140 dehors ; vélo 23 202 / 89 453 / 39 178 ;
+voiture 8 878 / 38 447 / 17 825.
+
+### Questions ouvertes — telles que posées avant décision
 1. **Édition BD TOPO** : l'IGN ne sert plus la 2024-09-15 ; prendre la 2025-03-15 pour les cinq
    départements et retélécharger D031 dans la même édition (0,34 Go) — recommandation : oui,
    édition homogène notée dans le MANIFEST.
@@ -335,6 +431,12 @@ manque pour en faire une spécification. Actions numérotées du rapport entre p
 5. **Immobiles du vivier** : 19,3 % après correction (enquête 10,6 %, v3 15,1 %) ; la sélection
    les ramène à la cible, mais le vivier national ENTD porte plus d'immobiles que l'EMC². Rien à
    faire pour le sceau ; à déclarer dans la synthèse de représentativité.
+7. **Équipement vélo, pente par taille de ménage** : `enrich_personal_bike` rend le code 2 sur la
+   cohorte v4 parce que la taille 3 (63,4 %, 69 foyers) dépasse la taille 4 (55,5 %, 55 foyers),
+   chaque taille étant dans sa tolérance (IC ± 12-13 pt) — bruit d'échantillonnage sur des
+   sous-groupes de 50-70 foyers, pas un défaut du modèle. Déclaré « à publier » dans le MANIFEST ;
+   recommandation : rendre ce contrôle non bloquant sous 100 foyers par taille (ou le mesurer sur le
+   vivier, 5 652 ménages, où il est probant).
 6. **Critère 3 de la partie 1** (« même nœud < 1 % en 3ᵉ couronne ») : mesuré 3,9 % sur le polygone,
    égal au plancher des couronnes urbaines (trajets réellement courts, rabattement médian 52 m).
    Reformuler en « ≤ le taux des autres couronnes » ou ne compter que les paires distantes de plus

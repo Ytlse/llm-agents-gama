@@ -1199,7 +1199,9 @@ tickets:
       (make osmnx-perimeter-graph, +30 % de nœuds, worker 1,6 Go), règle aamas_seal_v4 avec
       journal du périmètre, ligne « scolaires avec activité d'études » au contrôle. Mesuré sur
       la Haute-Garonne : A4 = 0, 89 % des 6-17 ans mobiles avec activité d'études (57,5 % en v3).
-      EN ATTENTE (porte 1) : BD TOPO + BAN des départements 32/81/82/09/11 — l'édition
-      2024-09-15 n'est plus servie par l'IGN, seule la 2025-03-15 l'est (question ouverte) ;
-      sans elles, la chaîne v4 n'est qu'une répétition Haute-Garonne, non scellée. Partie 2 :
-      analyse écrite dans le ticket (runtime, OSMnx, OTP, GAMA, caches, jeux gelés, article).
+      PORTE 1 LEVÉE (après-midi) : BD TOPO 2025-03-15 et BAN des six départements ; biais du
+      cadre corrigé (personnes à commune undefined pondérées : 17 986 → 11 329 personnes) ;
+      congestion par zone d'arête livrée ; SCEAU v4 posé à 18:16 (population_1000_AAMAS_v4,
+      sha256 9f05c655…, 12 marges conformes + motorisation ménage à publier, six départements,
+      scolaires 88,5 %), sauvegarde, config.yaml repointé, synthèse HTML v3. Reste : partie 2
+      (runtime par commune, OSMnx/OTP/GAMA sur le polygone), analyse écrite dans le ticket.
