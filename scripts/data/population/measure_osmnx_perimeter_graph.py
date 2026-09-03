@@ -1,0 +1,248 @@
+"""measure_osmnx_perimeter_graph.py — Mesures O2 et O4 du rapport de périmètre (ticket 031 § 1.4).
+
+    llm-agents/.venv/bin/python -m scripts.data.population.measure_osmnx_perimeter_graph \\
+        --population data/population/population_1000_AAMAS_v3/population.json \\
+        --trace docs/traces/<date>_mesures_graphe_perimetre
+
+CE QUE ÇA MESURE, sur les paires d'activités qu'une population route à l'étape 4+5 du notebook
+(`collect_scheduling_pairs` : un mode par personne, voiture si le ménage en a une, vélo sinon) :
+
+  * **O2 — même nœud.** Pour chaque paire, origine et destination sont rabattues sur le nœud de
+    graphe le plus proche (`ox.distance.nearest_nodes`, en lot). Deux points sur le MÊME nœud ne
+    sont pas routés : `_route_sync` leur sert une vitesse de repli (70 km/h à vol d'oiseau) — ce
+    n'est pas un itinéraire. La part de ces paires est donnée par couronne d'origine, pour le
+    graphe de production (disque de 30 km) et pour le graphe du polygone des 453 communes.
+    Attendu : ≈ 0 en 3ᵉ couronne sur le polygone, contre la majorité sur le disque.
+  * **O2 — ms par route, routes None.** Chaque paire est routée avec `_route_sync` (le code de
+    production, congestion du lundi 8 janvier 2024) sur les deux graphes ; durée médiane et
+    moyenne par route, part de `None`, et distance au nœud le plus proche (médiane, p95).
+  * **O4 — mémoire d'un worker.** Un processus séparé charge le pickle comme `route_worker.init_worker`
+    (les trois graphes) et rend sa mémoire de pointe et son temps de chargement, pour chaque clé :
+    c'est la borne de `MAX_WORKERS` (RAM machine / RAM par worker).
+
+Rien n'est écrit dans la population ni dans le cache SQLite. Trace horodatée avec `--trace`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import pickle
+import statistics
+import subprocess
+import sys
+import time
+from collections import Counter, defaultdict
+from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+LLMAGENTS_PATH = REPO_ROOT / "llm-agents"
+for _p in (str(REPO_ROOT), str(LLMAGENTS_PATH), str(Path(__file__).resolve().parent)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from build_osmnx_perimeter_graph import (OSMNX_CACHE_DIR, PERIMETER_CACHE_KEY,  # noqa: E402
+                                         PRODUCTION_CACHE_KEY)
+
+logger = logging.getLogger("osmnx.mesures")
+
+GRAPHS = {"disque_30km": PRODUCTION_CACHE_KEY, "polygone_453": PERIMETER_CACHE_KEY}
+_MODE = {"foot": "walk", "bicycle": "bike", "car": "drive"}
+SIM_DATE = date(2024, 1, 8)   # lundi, comme route_worker
+
+
+def _load(cache_dir: Path, key: str):
+    t0 = time.monotonic()
+    with (cache_dir / f"graphs_{key}.pkl").open("rb") as fh:
+        graphs = pickle.load(fh)
+    with (cache_dir / f"boundary_{key}.pkl").open("rb") as fh:
+        boundary = pickle.load(fh)
+    logger.info("graphes %s chargés en %.1fs", key, time.monotonic() - t0)
+    return graphs, boundary
+
+
+def _couronne_of(zones, lat: float, lon: float) -> str:
+    return zones.classify(lat, lon) or "inconnue"
+
+
+def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> dict:
+    import numpy as np
+    import osmnx as ox
+    from llm_module.core.residence_zone import CommunalZones
+    from models import Location
+    from population_utils import collect_scheduling_pairs
+    from trip_helper.osmnx_direct import _route_sync
+
+    zones = CommunalZones.load()
+    pairs = sorted(collect_scheduling_pairs(population))
+    logger.info("%d paires de planification (%s)", len(pairs), dict(Counter(p[4] for p in pairs)))
+    couronne_o = [_couronne_of(zones, p[0], p[1]) for p in pairs]
+    out: dict = {"n_paires": len(pairs), "par_mode": dict(Counter(p[4] for p in pairs)),
+                 "par_couronne_origine": dict(Counter(couronne_o)), "graphes": {}}
+
+    for label, key in GRAPHS.items():
+        graphs, boundary = _load(cache_dir, key)
+        res: dict = {"cle": key, "modes": {}}
+        same_by_c: Counter = Counter()
+        n_by_c: Counter = Counter(couronne_o)
+        snap_dists: list[float] = []
+        durations_ms: list[float] = []
+        n_none = 0
+        n_routed = 0
+        for mode in ("car", "bicycle"):
+            idx = [i for i, p in enumerate(pairs) if p[4] == mode]
+            if not idx:
+                continue
+            G = graphs[_MODE[mode]]
+            X = [pairs[i][1] for i in idx] + [pairs[i][3] for i in idx]
+            Y = [pairs[i][0] for i in idx] + [pairs[i][2] for i in idx]
+            t0 = time.monotonic()
+            nodes, dists = ox.distance.nearest_nodes(G, X, Y, return_dist=True)
+            t_snap = time.monotonic() - t0
+            n = len(idx)
+            same = [nodes[k] == nodes[n + k] for k in range(n)]
+            for k, i in enumerate(idx):
+                if same[k]:
+                    same_by_c[couronne_o[i]] += 1
+            snap_dists.extend(float(d) for d in dists)
+            res["modes"][mode] = {"n": n, "meme_noeud": int(sum(same)),
+                                  "part_meme_noeud_pct": round(100.0 * sum(same) / n, 1),
+                                  "noeuds": G.number_of_nodes(), "aretes": G.number_of_edges(),
+                                  "rabattement_lot_s": round(t_snap, 1)}
+            # Routage effectif, code de production.
+            sample = idx if route_all else idx[:: max(1, len(idx) // 400)]
+            t0 = time.monotonic()
+            for i in sample:
+                lat1, lon1, lat2, lon2, m, hour = pairs[i]
+                h = int(hour) if hour is not None else 8
+                cdt = datetime(SIM_DATE.year, SIM_DATE.month, SIM_DATE.day, min(h, 23), 0)
+                t1 = time.monotonic()
+                r = _route_sync(G, boundary, Location(lat=lat1, lon=lon1), Location(lat=lat2, lon=lon2),
+                                _MODE[m], cdt)
+                durations_ms.append(1000.0 * (time.monotonic() - t1))
+                n_routed += 1
+                if r is None:
+                    n_none += 1
+            res["modes"][mode]["routes_mesurees"] = len(sample)
+            res["modes"][mode]["duree_routage_s"] = round(time.monotonic() - t0, 1)
+        res["meme_noeud_par_couronne"] = {
+            c: {"n": n_by_c[c], "meme_noeud": same_by_c[c],
+                "part_pct": round(100.0 * same_by_c[c] / n_by_c[c], 1) if n_by_c[c] else None}
+            for c in sorted(n_by_c)}
+        res["meme_noeud_total_pct"] = round(100.0 * sum(same_by_c.values()) / max(len(pairs), 1), 1)
+        res["distance_rabattement_m"] = {"mediane": round(statistics.median(snap_dists), 1),
+                                         "p95": round(float(np.percentile(snap_dists, 95)), 1),
+                                         "max": round(max(snap_dists), 1)}
+        res["routage"] = {"routes": n_routed, "none": n_none,
+                          "part_none_pct": round(100.0 * n_none / max(n_routed, 1), 2),
+                          "ms_par_route_mediane": round(statistics.median(durations_ms), 1),
+                          "ms_par_route_moyenne": round(statistics.fmean(durations_ms), 1),
+                          "ms_par_route_p95": round(float(np.percentile(durations_ms, 95)), 1)}
+        logger.info("%s : même nœud %.1f %% (%s) ; %d routes, %d None, %.1f ms/route (médiane)", label,
+                    res["meme_noeud_total_pct"],
+                    {c: v["part_pct"] for c, v in res["meme_noeud_par_couronne"].items()},
+                    n_routed, n_none, res["routage"]["ms_par_route_mediane"])
+        out["graphes"][label] = res
+        del graphs
+    return out
+
+
+_WORKER_PROBE = r"""
+import resource, sys, time, json
+sys.path.insert(0, sys.argv[1]); sys.path.insert(0, sys.argv[2])
+import route_worker
+t0 = time.monotonic()
+route_worker.init_worker(sys.argv[1], sys.argv[3], sys.argv[4])
+load_s = time.monotonic() - t0
+rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+rss_mo = rss / (1_048_576 if sys.platform == "darwin" else 1024)
+g = route_worker._graphs
+print(json.dumps({"ram_pointe_mo": round(rss_mo), "chargement_s": round(load_s, 1),
+                  "noeuds": {m: G.number_of_nodes() for m, G in g.items()}}))
+"""
+
+
+def measure_worker_memory(cache_dir: Path) -> dict:
+    out = {}
+    for label, key in GRAPHS.items():
+        proc = subprocess.run([sys.executable, "-c", _WORKER_PROBE, str(LLMAGENTS_PATH),
+                               str(Path(__file__).resolve().parent), str(cache_dir), key],
+                              capture_output=True, text=True, cwd=str(REPO_ROOT))
+        line = [l for l in proc.stdout.splitlines() if l.startswith("{")]
+        if proc.returncode != 0 or not line:
+            logger.error("[ALARME] sonde mémoire %s : code %d — %s", label, proc.returncode, proc.stderr[-600:])
+            out[label] = {"erreur": proc.stderr[-600:]}
+            continue
+        out[label] = {"cle": key, **json.loads(line[-1])}
+        logger.info("worker %s : %d Mo de pointe, chargement %.1fs", label, out[label]["ram_pointe_mo"],
+                    out[label]["chargement_s"])
+    return out
+
+
+def write_trace(mesures: dict, trace_dir: Path) -> None:
+    trace_dir.mkdir(parents=True, exist_ok=True)
+    (trace_dir / "mesures.json").write_text(json.dumps(mesures, ensure_ascii=False, indent=1), encoding="utf-8")
+    L = [f"# Mesures O2 / O4 — graphe du polygone contre disque de 30 km — {mesures['date']}", "",
+         f"Population : `{mesures['population']}` ({mesures['paires']['n_paires']} paires de planification, "
+         f"{mesures['paires']['par_mode']}). Script : `scripts/data/population/measure_osmnx_perimeter_graph.py`.", "",
+         "## O2 — paires « même nœud » (repli vitesse, pas un itinéraire) par couronne d'origine", "",
+         "| Couronne d'origine | Paires | Disque 30 km | Polygone 453 |", "|---|---:|---:|---:|"]
+    g = mesures["paires"]["graphes"]
+    for c, v in g["disque_30km"]["meme_noeud_par_couronne"].items():
+        w = g["polygone_453"]["meme_noeud_par_couronne"].get(c, {})
+        L.append(f"| {c} | {v['n']} | {v['meme_noeud']} ({v['part_pct']} %) | {w.get('meme_noeud')} ({w.get('part_pct')} %) |")
+    L += ["", "## O2 — routage effectif (`_route_sync`, code de production)", "",
+          "| Graphe | Routes | None | ms/route médiane | moyenne | p95 | rabattement médian (m) | p95 (m) |",
+          "|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for label, r in g.items():
+        L.append(f"| {label} | {r['routage']['routes']} | {r['routage']['none']} ({r['routage']['part_none_pct']} %) | "
+                 f"{r['routage']['ms_par_route_mediane']} | {r['routage']['ms_par_route_moyenne']} | "
+                 f"{r['routage']['ms_par_route_p95']} | {r['distance_rabattement_m']['mediane']} | "
+                 f"{r['distance_rabattement_m']['p95']} |")
+    L += ["", "## O4 — mémoire d'un worker (`route_worker.init_worker`, trois graphes chargés)", "",
+          "| Graphe | RAM de pointe (Mo) | Chargement (s) |", "|---|---:|---:|"]
+    for label, w in mesures["workers"].items():
+        L.append(f"| {label} | {w.get('ram_pointe_mo')} | {w.get('chargement_s')} |")
+    L.append("")
+    (trace_dir / "README.md").write_text("\n".join(L), encoding="utf-8")
+    logger.info("trace archivée → %s", trace_dir)
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--population", type=Path,
+                        default=REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v3" / "population.json")
+    parser.add_argument("--cache-dir", type=Path, default=OSMNX_CACHE_DIR)
+    parser.add_argument("--trace", type=Path, default=None)
+    parser.add_argument("--route-sample", action="store_true",
+                        help="ne router qu'un échantillon (≈ 400 paires par mode) au lieu de toutes")
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr,
+                        format="%(asctime)s %(levelname)s %(name)s — %(message)s")
+    t0 = time.monotonic()
+    for key in GRAPHS.values():
+        if not (args.cache_dir / f"graphs_{key}.pkl").exists():
+            logger.error("[ALARME] graphe absent : %s", args.cache_dir / f"graphs_{key}.pkl")
+            return 2
+    population = json.loads(args.population.read_text(encoding="utf-8"))
+    logger.info("mesures — début : %s (%d personas)", args.population, len(population))
+    mesures = {"date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "population": str(args.population), "n_personas": len(population),
+               "workers": measure_worker_memory(args.cache_dir),
+               "paires": measure_pairs(population, args.cache_dir, route_all=not args.route_sample),
+               "duree_s": round(time.monotonic() - t0, 1)}
+    if args.trace:
+        write_trace(mesures, args.trace)
+    print(json.dumps({k: v for k, v in mesures.items() if k != "paires"}, ensure_ascii=False, indent=1))
+    for label, r in mesures["paires"]["graphes"].items():
+        print(label, "même nœud :", r["meme_noeud_total_pct"], "%", {c: v["part_pct"] for c, v in r["meme_noeud_par_couronne"].items()},
+              "| routage :", r["routage"])
+    logger.info("mesures — fin en %.1fs", mesures["duree_s"])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
