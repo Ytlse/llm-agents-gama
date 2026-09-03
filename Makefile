@@ -444,6 +444,22 @@ audit-perimetre:
 	  $(if $(POP),--population $(POP),) $(if $(RUN),--run $(RUN),) \
 	  $(if $(TRACE),--trace $(TRACE),)
 
+.PHONY: osmnx-perimeter-graph
+
+## Graphes OSMnx (marche, vélo, voiture) du polygone des 453 communes du périmètre d'enquête
+## (ticket 031 § 1.4) : extrait des pbf OSM régionaux du fork eqasim par `osmium extract`, filtres
+## réseau et vitesses de la production, cache data/cache/osmnx/graphs_<clé>.pkl sous une clé
+## distincte du disque de 30 km. Aucun téléchargement. Le notebook generate_population exige ce
+## graphe pour les étapes 4+5. FORCE=1 reconstruit ; TRACE=<dossier> archive les mesures.
+##   make osmnx-perimeter-graph TRACE=docs/traces/$$(date +%Y-%m-%d_%H-%M)_graphe_osmnx_perimetre_453
+osmnx-perimeter-graph:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; exit 1; }
+	@command -v osmium >/dev/null || test -x /opt/homebrew/bin/osmium || { \
+	  echo "osmium introuvable : brew install osmium-tool"; exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.data.population.build_osmnx_perimeter_graph \
+	  $(if $(FORCE),--force,) $(if $(TRACE),--trace $(TRACE),)
+
 .PHONY: reference-marges control-population select-population seal-population
 
 ## Contrôle de la population du jeu de test (article AAMAS, jalon 0 du protocole).
@@ -477,8 +493,9 @@ select-population:
 	  --out $(if $(OUT),$(OUT),$(dir $(POOL))toulouse_population_$(if $(N),$(N),1000)_AAMAS.json)
 
 ## Scellement : contrôle puis copie dans un dossier immuable avec MANIFEST.yaml et CONTROLE.md.
-## REFUSE si une marge est « à corriger ». POP obligatoire ; OUT_DIR défaut : data/population/population_1000_AAMAS_v3
-## (règle de sélection v3 par ménage, ticket 029 ; le dossier v2 du 2026-09-02 reste intact)
+## REFUSE si une marge est « à corriger ». POP obligatoire ; OUT_DIR défaut : data/population/population_1000_AAMAS_v4
+## (règle de sélection v4 : ménages entiers + six classes d'âge + périmètre des 453 communes,
+## ticket 031 ; les dossiers v2 et v3 restent intacts)
 ##   make seal-population POP=data/population/toulouse_population_1000_AAMAS.json \
 ##        SELECTION=scripts/data/population/Temp/4_zone_enriched/toulouse_population_1000_AAMAS_selection.json
 seal-population:

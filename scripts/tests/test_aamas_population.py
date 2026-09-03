@@ -273,3 +273,89 @@ def test_controle_uniforme_est_a_corriger_sur_la_couronne(tmp_path):
     couronne = {m["marge"]: m for m in report["marges"]}["couronne"]
     assert couronne["verdict"] == ctl.A_CORRIGER
     assert report["verdicts"][ctl.A_CORRIGER] >= 1
+
+
+# ── Règle v4 : périmètre et ligne scolaires (ticket 031) ─────────────────────
+
+def test_regle_v4_journalise_le_perimetre_et_les_departements():
+    """La règle est `aamas_seal_v4`, tient les six classes d'âge, et le journal dit d'où
+    viennent les retenus (département de `household.commune_id`) et quel périmètre est déclaré."""
+    assert seal.SELECTION_RULE == "aamas_seal_v4"
+    assert seal.SELECTION_NAMESPACE == "aamas_seal_v4"
+    assert "classe_age" in seal.DESCENTE_MARGES and "occupation" in seal.DESCENTE_MARGES
+    assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v4"
+    pool = _pool_menages(25)
+    deps = ["31", "32", "81", "82", "09", "11"]
+    for i, rec in enumerate(pool):
+        rec["household"]["commune_id"] = f"{deps[int(rec['household']['id'][1:]) % 6]}123"
+    chosen, journal = seal.select(pool, 300)
+    per = journal["perimetre"]
+    assert "453 communes" in per["definition"] and "polygone" in per["definition"]
+    assert set(per["departements_attendus"]) == set(deps)
+    assert sum(per["retenus_par_departement"].values()) == 300
+    assert per["departements_representes"] == 6
+    assert per["retenus_sans_commune"] == 0
+    assert "aamas_seal_v4" in journal["regle"]
+
+
+def test_commune_du_domicile_lit_household_puis_le_trait():
+    rec = {"household": {"commune_id": "undefined"}, "identity": {"traits_json": {"residence_insee": "9038"}}}
+    assert seal._commune_of(rec) == "09038"
+    rec["household"]["commune_id"] = "31555"
+    assert seal._commune_of(rec) == "31555"
+    assert seal._commune_of({"household": {}, "identity": {"traits_json": {}}}) is None
+
+
+def test_independance_rend_non_mesurable_sur_une_table_degeneree(tmp_path):
+    """Une population où toute une colonne de motorisation est vide ne fait pas planter le
+    contrôle : le croisement sort `non mesurable`, avec la modalité vide nommée."""
+    pool = [p for p in _pool(40) if p["identity"]["traits_json"]["number_of_cars"] == 1]
+    path = tmp_path / "pop.json"
+    path.write_text(json.dumps(pool), encoding="utf-8")
+    report = ctl.run_control(path, borne=1.0, n_min=30, n_min_cellule=50)
+    assert report["independance"]["verdict"] == ctl.NON_MESURABLE
+    assert "sans voiture" in report["independance"]["raison"]
+
+
+def _pool_scolaires(n_menages: int = 30, part_etudes: float = 0.5) -> list[dict]:
+    """Un vivier avec des ménages parent + enfant scolaire ; `part_etudes` des enfants vont à l'école."""
+    from llm_module.core.population_reference import COURONNES
+    pool, pid = [], 0
+    for h in range(n_menages):
+        c = COURONNES[h % 4]
+        for age, occ in ((40, "Travail à plein temps"), (9 + h % 9, "Scolaire (jusqu'au Bac)")):
+            pid += 1
+            rec = _persona(pid, age, "Female" if pid % 2 else "Male", occ, h % 3, 2, c)
+            rec["household"] = {"id": f"h{h}", "iris_id": None, "commune_id": "31555"}
+            rec["immobile"] = False
+            if occ.startswith("Scolaire"):
+                purpose = "education" if (h / n_menages) < part_etudes else "leisure"
+            else:
+                purpose = "work"
+            rec["identity"]["activities"] = [{"purpose": "home"}, {"purpose": purpose}, {"purpose": "home"}]
+            pool.append(rec)
+    return pool
+
+
+def test_controle_mesure_les_scolaires_avec_activite_etudes(tmp_path):
+    """La ligne « scolaires avec activité d'études » compte les 6-17 ans scolaires mobiles, et un
+    taux sous 88 % sort dans la synthèse comme écart à publier (levier eqasim, pas la sélection)."""
+    path = tmp_path / "pop.json"
+    path.write_text(json.dumps(_pool_scolaires(30, 0.5)), encoding="utf-8")
+    report = ctl.run_control(path, borne=1.0, n_min=30, n_min_cellule=50)
+    m = report["menages_et_mobilite"]
+    assert m["scolaires_6_17"] == 30 and m["scolaires_mobiles"] == 30
+    assert m["scolaires_avec_activite_etudes"] == 15
+    assert m["part_scolaires_avec_etudes_pct"] == 50.0
+    assert m["reference_enquete"]["part_scolaires_avec_etudes_pct"] == [90.0, 95.0]
+    rows = [r for r in report["synthese"] if r["ecart"] == "scolaires sans activité d'études"]
+    assert len(rows) == 1 and rows[0]["verdict"] == ctl.A_PUBLIER
+    assert "eqasim" in rows[0]["refermable_au_scellement"]
+    assert "Scolaires (6-17 ans) avec activité d'études : 15/30" in ctl.render_text(report)
+    assert "50.0 %" in ctl.render_markdown(report)
+
+    # Au-dessus du seuil : pas d'écart dans la synthèse.
+    path.write_text(json.dumps(_pool_scolaires(30, 0.95)), encoding="utf-8")
+    report = ctl.run_control(path, borne=1.0, n_min=30, n_min_cellule=50)
+    assert report["menages_et_mobilite"]["part_scolaires_avec_etudes_pct"] >= 88.0
+    assert not [r for r in report["synthese"] if r["ecart"] == "scolaires sans activité d'études"]

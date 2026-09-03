@@ -82,6 +82,16 @@ TOST_EQUIVALENT = "équivalent"
 TOST_INCONCLUSIF = "non concluant"
 TOST_ECART = "écart"
 
+# Ligne « scolaires avec activité d'études » (ticket 031 § 1.2). Référence : microdonnées EMC² 2023,
+# 90 à 95 % des 6-17 ans scolarisés mobiles ont un déplacement vers l'école un jour de semaine ;
+# le fork eqasim vise ≥ 88 % en restreignant les journées donneuses ENTD aux jours de classe.
+# Ce n'est pas une marge de la sélection : la descente n'échange pas sur ce critère, il se règle
+# dans l'appariement (eqasim). En dessous du seuil, l'écart est « à publier ».
+SCOLAIRE_AGE_MIN, SCOLAIRE_AGE_MAX = 6, 17
+SCOLAIRE_OCCUPATION = "Scolaire (jusqu'au Bac)"
+SCOLAIRES_ETUDES_REFERENCE_PCT = (90.0, 95.0)
+SCOLAIRES_ETUDES_SEUIL_PCT = 88.0
+
 # Ce que la sélection stratifiée (seal_population.py) sait refermer : ce qui se tire.
 REFERMABLE_AU_SCELLEMENT = {"couronne", "motorisation_personne", "couronne_x_motorisation",
                             "classe_age", "occupation", *MARGES_PERSONNE}
@@ -173,6 +183,8 @@ class Persona:
     immobile: bool = False
     household_id: Optional[str] = None
     n_activites: int = 0
+    scolaire: bool = False          # 6-17 ans, occupation « Scolaire (jusqu'au Bac) »
+    activite_etudes: bool = False   # au moins une activité `education` dans la journée
 
 
 # ── Chargement et normalisation ───────────────────────────────────────────────
@@ -275,6 +287,13 @@ def normalize(records: list[dict], zones=None) -> tuple[list[Persona], Counter]:
         household_id = (rec.get("household") or {}).get("id")
         if not household_id:
             counters["sans_household_id"] += 1
+        # Scolaires (ticket 031 § 1.2) : 6-17 ans déclarés scolaires ; « activité d'études » = un
+        # motif `education` dans la journée. L'EMC² 2023 en compte 90 à 95 % un jour de semaine.
+        scolaire = (age is not None and SCOLAIRE_AGE_MIN <= age <= SCOLAIRE_AGE_MAX
+                    and str(traits.get("main_occupation")) == SCOLAIRE_OCCUPATION)
+        activite_etudes = any(str(a.get("purpose")) == "education" for a in activities)
+        if scolaire:
+            counters["scolaires_6_17"] += 1
 
         out.append(Persona(pid, age, classe, genre, occupation, taille, nb_voitures, motor,
                            couronne, permis, poids,
@@ -282,7 +301,8 @@ def normalize(records: list[dict], zones=None) -> tuple[list[Persona], Counter]:
                            taille_cls=taille_menage_class(taille), abonnement=abonnement,
                            logement=logement, immobile=immobile,
                            household_id=str(household_id) if household_id else None,
-                           n_activites=len(activities)))
+                           n_activites=len(activities), scolaire=scolaire,
+                           activite_etudes=activite_etudes))
     counters["total"] = len(out)
     return out, counters
 
@@ -340,7 +360,17 @@ def households_and_mobility(personas: list[Persona]) -> dict:
     trips = [max(p.n_activites - 1, 0) for p in personas]
     n = len(personas) or 1
     mobiles = [t for t in trips if t > 0]
+    scolaires = [p for p in personas if p.scolaire]
+    scolaires_mobiles = [p for p in scolaires if not p.immobile and p.n_activites > 1]
+    scolaires_etudes = [p for p in scolaires_mobiles if p.activite_etudes]
+    part_scolaires = (round(100.0 * len(scolaires_etudes) / len(scolaires_mobiles), 1)
+                      if scolaires_mobiles else None)
     return {
+        "scolaires_6_17": len(scolaires),
+        "scolaires_mobiles": len(scolaires_mobiles),
+        "scolaires_avec_activite_etudes": len(scolaires_etudes),
+        "part_scolaires_avec_etudes_pct": part_scolaires,
+        "part_scolaires_avec_etudes_seuil_pct": SCOLAIRES_ETUDES_SEUIL_PCT,
         "n_menages": n_hh,
         "menages_complets_taille_declaree": complets,
         "part_menages_complets_pct": round(100.0 * complets / n_hh, 1) if n_hh else None,
@@ -355,7 +385,9 @@ def households_and_mobility(personas: list[Persona]) -> dict:
         "part_immobiles_pct": round(100.0 * sum(1 for p in personas if p.immobile) / n, 1),
         "reference_enquete": {"deplacements_par_personne": 3.53, "part_immobiles_pct": 10.6,
                               "deplacements_par_personne_mobile": 3.95,
-                              "source": "microdonnées EMC² 2023, PENQ = 1, COEP"},
+                              "part_scolaires_avec_etudes_pct": list(SCOLAIRES_ETUDES_REFERENCE_PCT),
+                              "source": "microdonnées EMC² 2023, PENQ = 1, COEP ; scolaires : 6-17 ans "
+                                        "scolarisés mobiles avec un déplacement vers l'école un jour de semaine"},
     }
 
 
@@ -507,6 +539,13 @@ def independence_check(personas: list[Persona], n_min_cellule: int) -> dict:
     n = table.sum()
     if n == 0:
         return {"n": 0, "verdict": NON_MESURABLE}
+    if (table.sum(axis=0) == 0).any() or (table.sum(axis=1) == 0).any():
+        # Une couronne ou une motorisation absente rend la table dégénérée : le χ² n'existe pas,
+        # et le dire vaut mieux qu'une exception au milieu du contrôle.
+        vides = [m for j, m in enumerate(MOTORISATION) if table[:, j].sum() == 0] + \
+                [c for i, c in enumerate(COURONNES) if table[i, :].sum() == 0]
+        return {"n": int(n), "verdict": NON_MESURABLE,
+                "raison": f"modalité(s) sans aucun persona : {vides} — table de contingence dégénérée"}
     chi2, p, ddl, expected = stats.chi2_contingency(table, correction=False)
     v = math.sqrt(chi2 / (n * (min(table.shape) - 1)))
     cells = []
@@ -571,6 +610,16 @@ def synthese(rapports: dict[str, RapportMarge], counters: Counter,
                          "nature": "sélection", "verdict": A_PUBLIER,
                          "refermable_au_scellement": "oui — sélection par ménage (v3)"})
         ref = menages["reference_enquete"]
+        part_sc = menages.get("part_scolaires_avec_etudes_pct")
+        if part_sc is not None and part_sc < SCOLAIRES_ETUDES_SEUIL_PCT:
+            lo, hi = SCOLAIRES_ETUDES_REFERENCE_PCT
+            rows.append({"ecart": "scolaires sans activité d'études",
+                         "amplitude": f"{menages['scolaires_avec_activite_etudes']}/{menages['scolaires_mobiles']} "
+                                      f"scolaires (6-17 ans) mobiles avec une activité d'études = {part_sc} % "
+                                      f"contre {lo:.0f} à {hi:.0f} % dans l'enquête (seuil {SCOLAIRES_ETUDES_SEUIL_PCT:.0f} %)",
+                         "nature": "journées donneuses ENTD 2008 et appariement eqasim (jours de classe, ticket 031 § 1.2)",
+                         "verdict": A_PUBLIER,
+                         "refermable_au_scellement": "non — appariement HTS (levier eqasim)"})
         if menages["deplacements_par_persona"] < ref["deplacements_par_personne"] - 0.3:
             rows.append({"ecart": "mobilité quotidienne",
                          "amplitude": f"{menages['deplacements_par_persona']:.2f} déplacements par persona "
@@ -608,6 +657,17 @@ def _fmt(v, nd=1, suffix=""):
     return "—" if v is None else f"{v:.{nd}f}{suffix}"
 
 
+def _scolaires_line(m: dict) -> str:
+    """La ligne « scolaires avec activité d'études », ou son absence dite."""
+    lo, hi = m["reference_enquete"].get("part_scolaires_avec_etudes_pct", SCOLAIRES_ETUDES_REFERENCE_PCT)
+    if m.get("scolaires_mobiles"):
+        return (f"Scolaires (6-17 ans) avec activité d'études : {m['scolaires_avec_activite_etudes']}/"
+                f"{m['scolaires_mobiles']} mobiles = {m['part_scolaires_avec_etudes_pct']} % (enquête "
+                f"{lo:.0f} à {hi:.0f} %, seuil {SCOLAIRES_ETUDES_SEUIL_PCT:.0f} %) · scolaires {m['scolaires_6_17']}")
+    return (f"Scolaires (6-17 ans) avec activité d'études : non mesurable — {m.get('scolaires_6_17', 0)} "
+            f"scolaire(s), aucun mobile")
+
+
 def render_text(report: dict) -> str:
     L: list[str] = []
     L.append("═" * 78)
@@ -628,6 +688,7 @@ def render_text(report: dict) -> str:
                  f"{ref['deplacements_par_personne']}) · {_fmt(m['deplacements_par_persona_mobile'], 2)} par "
                  f"persona mobile (enquête {ref['deplacements_par_personne_mobile']}) · immobiles "
                  f"{m['part_immobiles_pct']} % (enquête {ref['part_immobiles_pct']} %)")
+        L.append(_scolaires_line(m))
     for r in report["marges"]:
         L.append("─" * 78)
         L.append(f"{r['marge']}   [{r['verdict'].upper()}]   base {r['unite']} · {r['echelle']} · n={r['n']}"
@@ -692,6 +753,7 @@ def render_markdown(report: dict) -> str:
         L.append(f"- **Mobilité** : {m['deplacements_par_persona']:.2f} déplacements par persona (enquête "
                  f"{ref['deplacements_par_personne']}) ; immobiles {m['part_immobiles_pct']} % "
                  f"(enquête {ref['part_immobiles_pct']} %)")
+        L.append("- **" + _scolaires_line(m).replace(" : ", "** : ", 1))
     L.append("")
     L.append("## Marges")
     for r in report["marges"]:

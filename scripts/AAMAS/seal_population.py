@@ -8,7 +8,7 @@
     # 2. scellement du fichier final, APRÈS post-traitements et contrôle
     llm-agents/.venv/bin/python -m scripts.AAMAS.seal_population seal \\
         --population data/population/toulouse_population_1000_AAMAS.json \\
-        --out-dir data/population/population_1000_AAMAS_v3
+        --out-dir data/population/population_1000_AAMAS_v4
 
 POURQUOI UNE SÉLECTION. Le service eqasim tire `population_size × 1,15` personnes et renomme
 le fichier à la taille DEMANDÉE : `toulouse_population_1000.json` en contient 1 021. Un
@@ -16,7 +16,13 @@ effectif rond ne se règle donc pas à la génération. Et une sélection au has
 précision : la note de dimensionnement (§ 4.3.1) demande un tirage STRATIFIÉ sur les strates
 mêmes qui serviront à la validation — « 1 000 agents stratifiés valent ≈ 2 000 tirés au hasard ».
 
-LA RÈGLE v3 (`aamas_seal_v3`, ticket 029), en trois temps.
+LA RÈGLE v4 (`aamas_seal_v4`, ticket 031). Même mécanique que la v3 (ticket 029), avec les
+SIX CLASSES D'ÂGE publiées par le rapport AUAT (p. 11) dans la descente — la v3 tenait les quinze
+classes quinquennales, qui ne tiennent pas la part des 5-17 ans (+1,2 pt mesuré) —, un espace de
+noms de hachage distinct (`aamas_seal_v4:`), et un journal du PÉRIMÈTRE : la définition (453
+communes de l'EMC² 2023, polygone communal, table `commune_couronne.json` cc1) et les
+départements de résidence des retenus, lus sur `household.commune_id`. Les cibles `cj1` / `cm1`
+ne changent pas : elles sont calculées sur les 453 communes. En trois temps :
 
 1. **L'unité est le ménage** (`household.id`, à la racine des enregistrements depuis l'export
    élargi). La v2 sélectionnait des personnes : 1 000 retenus venaient de 865 ménages dont 308
@@ -28,15 +34,16 @@ LA RÈGLE v3 (`aamas_seal_v3`, ticket 029), en trois temps.
 
 2. **Allocation par cellule** : les 12 cellules couronne × motorisation de la cible jointe sur
    base personne (`cible_jointe_couronne_motorisation.yaml`), effectifs en personnes par plus
-   fort reste ; les ménages entrent dans l'ordre de `sha256("aamas_seal_v3:" + household_id)`,
+   fort reste ; les ménages entrent dans l'ordre de `sha256("aamas_seal_v4:" + household_id)`,
    un ménage n'entre que s'il tient dans le reste de sa cellule. Une cellule que le vivier ne
    remplit pas est un DÉFICIT : comblé d'abord dans la même couronne, puis dans le vivier
    entier, journalisé, alarmé, et code de sortie 1.
 
 3. **Descente sur marges multiples** : tant qu'un échange de deux ménages de MÊME TAILLE et de
    MÊME CELLULE — l'un retenu, l'autre non — réduit la perte, on l'applique. La perte est la
-   somme, sur toutes les marges contrôlées (occupation publiée p. 11 ; âge quinquennal, genre,
-   taille de ménage, permis, abonnement TC, logement, immobiles : recalculs gelés `cm1`), des
+   somme, sur toutes les marges contrôlées (occupation et six classes d'âge publiées p. 11 ; âge
+   quinquennal, genre, taille de ménage, permis, abonnement TC, logement, immobiles : recalculs
+   gelés `cm1`), des
    écarts absolus en points entre la part observée et la cible. Ordre de parcours et de
    candidature = hachage : déterministe, rejouable. Les effectifs des cellules ne bougent pas
    d'une unité ; les traits imputés doivent donc être posés SUR LE VIVIER avant la sélection
@@ -83,10 +90,22 @@ from scripts.AAMAS.reference_marges import (  # noqa: E402
 
 logger = logging.getLogger("aamas.seal")
 
-SELECTION_NAMESPACE = "aamas_seal_v3"   # sel du hachage des MÉNAGES
-SELECTION_RULE = "aamas_seal_v3"
+SELECTION_NAMESPACE = "aamas_seal_v4"   # sel du hachage des MÉNAGES
+SELECTION_RULE = "aamas_seal_v4"
 SEAL_VERSION = "sceau1"
-DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v3"
+DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v4"
+
+# Périmètre de la population (ticket 031, option A) : les 453 communes de l'EMC² 2023, six
+# départements, délimitées par le POLYGONE DES COMMUNES (table `commune_couronne.json`), pas par
+# un rayon. La sélection exclut les domiciles hors de ces communes ; le journal dit combien de
+# retenus viennent de chaque département, pour qu'un cadre de tirage amputé (Haute-Garonne
+# seule, ticket 026) se lise dans le sceau au lieu de s'y cacher.
+PERIMETRE = {
+    "definition": "453 communes de l'enquête EMC² Toulouse 2023, six départements "
+                  "(31, 32, 81, 82, 09, 11), polygone communal — pas de rayon",
+    "table_communes": "llm_module/data/commune_couronne.json",
+    "departements_attendus": {"31": 346, "32": 38, "81": 27, "82": 22, "09": 10, "11": 10},
+}
 
 # Marges de la descente : l'occupation et les SIX classes d'âge publiées par le rapport (p. 11),
 # plus les marges personne gelées (cm1). Les six classes publiées ET les quinze quinquennales :
@@ -204,6 +223,34 @@ def group_households(records: list[dict]) -> tuple[list[Menage], Counter]:
         menages.append(Menage(hid, cells.pop(), membres, declared, _rank(hid)))
     menages.sort(key=lambda m: m.rank)
     return menages, excluded
+
+
+def _commune_of(rec: dict) -> Optional[str]:
+    """Commune INSEE du domicile : `household.commune_id` (export eqasim), sinon le trait."""
+    hh = rec.get("household") or {}
+    code = hh.get("commune_id")
+    if code is None or str(code) in ("", "undefined", "None"):
+        code = _traits(rec).get("residence_insee")
+    return str(code).zfill(5) if code not in (None, "") else None
+
+
+def perimeter_journal(retenus: list[dict]) -> dict:
+    """Le périmètre déclaré, et les départements de résidence des retenus (`household.commune_id`)."""
+    by_dep: Counter = Counter()
+    sans_commune = 0
+    for rec in retenus:
+        code = _commune_of(rec)
+        if code is None:
+            sans_commune += 1
+            continue
+        by_dep[code[:2]] += 1
+    return {
+        **PERIMETRE,
+        "retenus_par_departement": dict(sorted(by_dep.items())),
+        "departements_representes": len(by_dep),
+        "retenus_sans_commune": sans_commune,
+        "communes_distinctes": len({c for c in (_commune_of(r) for r in retenus) if c}),
+    }
 
 
 # ── Allocation ────────────────────────────────────────────────────────────────
@@ -424,8 +471,15 @@ def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tupl
                     by_cell_n.get(cell, 0), taken[cell])
 
     sizes = Counter(m.size for m in chosen.values())
+    perimetre = perimeter_journal(retenus)
+    if perimetre["departements_representes"] < len(PERIMETRE["departements_attendus"]):
+        logger.warning("périmètre : %d département(s) représenté(s) sur %d attendus — cadre de "
+                       "tirage restreint (%s) ; la 3ᵉ couronne est amputée de ses communes "
+                       "extérieures", perimetre["departements_representes"],
+                       len(PERIMETRE["departements_attendus"]), perimetre["retenus_par_departement"])
     journal = {
         "version": SELECTION_RULE,
+        "perimetre": perimetre,
         "regle": ("unité = ménage (household.id) ; allocation proportionnelle à la cible jointe "
                   "couronne × motorisation (base personne), effectifs par plus fort reste, ménages "
                   f"dans l'ordre sha256('{SELECTION_NAMESPACE}:' + household_id) s'ils tiennent dans "
@@ -484,6 +538,11 @@ def cmd_select(args) -> int:
     d = journal["descente"]
     print(f"{len(chosen)} personas retenus ({journal['menages_retenus']['n']} ménages) sur "
           f"{journal['vivier']['eligibles']} éligibles ({journal['vivier']['n']} au vivier) → {args.out}")
+    per = journal["perimetre"]
+    print(f"périmètre : {per['definition']} ; retenus par département : {per['retenus_par_departement']} "
+          f"({per['departements_representes']}/{len(PERIMETRE['departements_attendus'])} départements, "
+          f"{per['communes_distinctes']} communes"
+          + (f", {per['retenus_sans_commune']} sans commune" if per['retenus_sans_commune'] else "") + ")")
     print(f"descente : {d['echanges']} échange(s) en {d['passes']} passe(s), perte {d['perte_avant_pt']} → "
           f"{d['perte_apres_pt']} pt" + (f" ; marges non mesurées : {d['marges_non_mesurees']}"
                                         if d["marges_non_mesurees"] else ""))
@@ -556,6 +615,7 @@ def cmd_seal(args) -> int:
                        "source": str(args.population), "source_sha256": report["population"]["sha256"]},
         "selection": ({"fichier": "selection.json", "version": selection.get("version"),
                        "regle": selection.get("regle"),
+                       "perimetre": selection.get("perimetre"),
                        "vivier": {k: v for k, v in selection.get("vivier", {}).items() if k != "par_cellule"},
                        "menages_retenus": selection.get("menages_retenus"),
                        "deficits": selection.get("deficits"), "reports": len(selection.get("reports", [])),
