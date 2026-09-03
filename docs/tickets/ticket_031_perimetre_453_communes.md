@@ -322,6 +322,17 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
   `population_1000_AAMAS_v4/population.json` ; synthèse
   `docs/paper/population/synthese_representativite_v3_population_v4_2026-09-03.html` (générateur
   `scripts/AAMAS/synthese_representativite.py`, `make synthese-representativite`).
+- **Critère 3 mesuré sur la cohorte v4** (3 300 paires de planification : 2 932 voiture, 368
+  vélo ; trace `docs/traces/2026-09-03_18-18_mesures_graphe_perimetre_v4/`). Sur le **disque de
+  30 km** : 6,9 % de paires « même nœud », 24,9 % en 3ᵉ couronne ; paires **distantes de plus de
+  500 m** rabattues sur le même nœud : 2,24 % au total, **15,51 % en 3ᵉ couronne** (0 ailleurs) —
+  critère **non tenu**, comme attendu : un trajet de 3ᵉ couronne sur six n'était pas un
+  itinéraire ; 787 routes échantillonnées, 9 `None`, 370 ms par route (médiane, un seul processus).
+  Sur le **polygone des 453 communes** : 4,2 % de paires « même nœud » (Toulouse 2,2, 1ʳᵉ 4,2,
+  2ᵉ 8,0, 3ᵉ 5,9 — de vrais trajets courts, rabattement médian ≈ 50 m) et **0,03 % de paires
+  distantes de plus de 500 m** (3ᵉ couronne **0,0 %**, 2ᵉ 0,23 %, 0 ailleurs) — **critère 3 tenu**
+  (≤ 0,5 % par couronne) ; 5 `None` (0,6 %), 423 ms par route. Les 3 300 paires de la cohorte ont
+  toutes deux bouts sur le graphe : plus aucun trajet de 3ᵉ couronne n'est une vitesse de repli.
 - ⚠ Le runtime filtre encore sur `TOULOUSE_OSM_ROUTES_30K_BBOX` : ce sceau ne se charge entier
   qu'après le portage de la partie 2 (chargement par commune du domicile).
 
@@ -336,6 +347,8 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
 3. Plannings recalés sur un routage effectif : paires distantes de plus de 500 m à vol d'oiseau
    rabattues sur le même nœud ≈ 0 (≤ 0,5 %) par couronne — reformulé le 2026-09-03 (les paires
    « même nœud » plus courtes sont de vrais trajets courts, servis par le repli à la vitesse du mode).
+   **Tenu sur la cohorte v4** : 0,03 % au total, 0,0 % en 3ᵉ couronne (contre 15,5 % sur le disque
+   de 30 km).
 4. Documentation et changelog à jour ; synthèse de représentativité v3 (HTML) produite et
    inventoriée dans `docs/paper/README.md`. **Tenu.**
 
