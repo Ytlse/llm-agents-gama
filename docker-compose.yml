@@ -134,10 +134,19 @@ services:
     volumes:
       - ./eqasim-toulouse/generate_population.py:/eqasim/generate_population.py:ro
       - ./eqasim-toulouse/server.py:/eqasim/server.py:ro
+      # Ticket 031 : la config synpp du service part de config_toulouse.yml — seule source des
+      # réglages d'appariement HTS (filter_hts, matching_attributes, seuil) et des journées
+      # donneuses. Sans ce montage, le wrapper refuse de générer (code 5) : avant, il retombait
+      # en silence sur les défauts de synpp (308 donneurs ENTD résidents de Haute-Garonne).
+      - ./eqasim-toulouse/config_toulouse.yml:/eqasim/config_toulouse.yml:ro
       - ./llm-agents/config:/app/config:ro
       - ./eqasim-toulouse/data:/eqasim-data:rw
       - ./eqasim-toulouse/data/bpe:/eqasim/data/bpe:ro
       - ./eqasim-toulouse/data/census:/eqasim/data/census:ro
+      # Ticket 031 § 1.2 : le nettoyage de l'ENTD (journées donneuses = jours de classe) vit dans
+      # data/hts ; monté comme les autres stages pour que le code du fork soit celui qui tourne,
+      # sans reconstruire l'image.
+      - ./eqasim-toulouse/data/hts:/eqasim/data/hts:ro
       - ./eqasim-toulouse/data/spatial:/eqasim/data/spatial:ro
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
