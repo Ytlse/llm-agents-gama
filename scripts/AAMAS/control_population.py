@@ -111,18 +111,26 @@ NATURE = {
     "immobile": "chaînes d'activités (ENTD 2008) et export eqasim",
 }
 
-# Lignes du tableau §2.1 de docs/paper/PROTOCOLE_SCIENTIFIQUE.md (v1.3), recopiées pour
-# être RECOUPÉES — règle 5 de docs/paper/README.md : chiffre publié = chiffre recoupé.
+# Lignes du tableau §2.1 de docs/paper/PROTOCOLE_SCIENTIFIQUE.md (v1.5, 2026-09-03), recopiées
+# pour être RECOUPÉES — règle 5 de docs/paper/README.md : chiffre publié = chiffre recoupé.
+# (label, marge de référence, modalité, valeur publiée). Les valeurs du protocole v1.3
+# (51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2) n'avaient pas de source et ont été
+# remplacées le 2026-09-03 ; le recoupement les signalait « à consigner », il compare désormais
+# le tableau corrigé.
 PROTOCOLE_2_1 = [
-    ("Genre — Femmes", "genre", "Femmes", 51.8),
-    ("Genre — Hommes", "genre", "Hommes", 48.2),
-    ("Âge — Moins de 18 ans", "age_3", "5-17 ans", 19.4),
-    ("Âge — 18-64 ans", "age_3", "18-64 ans", 62.1),
-    ("Âge — 65 ans et plus", "age_3", "65 ans et +", 18.5),
-    ("Ménages sans voiture", "motorisation_menage", "sans voiture", 22.3),
-    ("Ménages avec 1 voiture", "motorisation_menage", "une voiture", 46.1),
-    ("Ménages avec 2+ voitures", "motorisation_menage", "deux voitures et +", 31.6),
-    ("Détention du permis (adultes)", "permis_adultes", "Oui", 84.2),
+    ("Genre — Femmes", "genre", "Femmes", 51.3),
+    ("Genre — Hommes", "genre", "Hommes", 48.7),
+    ("Âge — 5-17 ans", "classe_age", "5-17 ans", 16.0),
+    ("Âge — 18-24 ans", "classe_age", "18-24 ans", 13.0),
+    ("Âge — 25-34 ans", "classe_age", "25-34 ans", 14.0),
+    ("Âge — 35-49 ans", "classe_age", "35-49 ans", 22.0),
+    ("Âge — 50-64 ans", "classe_age", "50-64 ans", 19.0),
+    ("Âge — 65 ans et plus", "classe_age", "65 ans et +", 16.0),
+    ("Ménages sans voiture", "motorisation_menage", "sans voiture", 19.0),
+    ("Ménages avec 1 voiture", "motorisation_menage", "une voiture", 45.0),
+    ("Ménages avec 2 voitures et +", "motorisation_menage", "deux voitures et +", 35.0),
+    ("Détention du permis (18 ans et +)", "permis_adultes", "Oui", 85.9),
+    ("Personnes sans déplacement la veille", "immobile", "Oui", 10.6),
 ]
 
 
@@ -562,37 +570,44 @@ def independence_check(personas: list[Persona], n_min_cellule: int) -> dict:
 
 def recoupement(rapports: dict[str, RapportMarge], personas: list[Persona],
                 joint_doc: dict) -> list[dict]:
-    """Chaque ligne du tableau §2.1 du protocole face à la valeur de référence recalculée."""
-    cand = joint_doc.get("candidats_non_publies", {})
-    out = []
-    # Âge à 3 postes : agrégation des 6 classes publiées (p. 11).
-    age_ref = rapports["classe_age"]
-    ref3 = {"5-17 ans": 0.0, "18-64 ans": 0.0, "65 ans et +": 0.0}
-    for c in age_ref.constats:
-        if c.cible_pct is None:
-            continue
-        if c.modalite == "5-17 ans":
-            ref3["5-17 ans"] += c.cible_pct
-        elif c.modalite == "65 ans et +":
-            ref3["65 ans et +"] += c.cible_pct
-        else:
-            ref3["18-64 ans"] += c.cible_pct
+    """Chaque ligne du tableau §2.1 du protocole face à la valeur de référence recalculée.
+
+    La référence est la CIBLE de la marge correspondante (rapports `cm1` gelés pour genre, permis,
+    immobile ; six classes publiées p. 11 pour l'âge ; base ménage p. 21 pour la motorisation),
+    jamais la valeur observée sur la population : on vérifie que le manuscrit cite la bonne
+    cible, pas qu'il cite la population.
+    """
+    sources = {
+        "genre": "recalcul microdonnées (P2, COEP) — non publié (cm1)",
+        "classe_age": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+        "motorisation_menage": "rapport p. 21 (base ménage)",
+        "permis_adultes": "recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié (cm1)",
+        "immobile": "recalcul microdonnées (aucun déplacement la veille, COEP) — non publié (cm1)",
+    }
     ht = household_targets()
     menage_ref = {"sans voiture": ht["sans_voiture_pct"], "une voiture": ht["une_voiture_pct"],
                   "deux voitures et +": ht["deux_voitures_plus_pct"]}
+    cand = joint_doc.get("candidats_non_publies", {})
+
+    def cible(marge: str, modalite: str) -> Optional[float]:
+        if marge == "motorisation_menage":
+            return menage_ref.get(modalite)
+        rapport = rapports.get(marge)
+        if rapport is not None:
+            for c in rapport.constats:
+                if c.modalite == modalite and c.cible_pct is not None:
+                    return float(c.cible_pct)
+        # Repli : candidats non publiés du cadrage joint (populations contrôlées avant cm1).
+        key = {"genre": "genre_pct", "permis_adultes": "permis_adultes_pct"}.get(marge)
+        return (cand.get(key) or {}).get(modalite) if key else None
+
+    out = []
     for label, kind, modalite, publie in PROTOCOLE_2_1:
-        if kind == "genre":
-            ref, src = (cand.get("genre_pct") or {}).get(modalite), "recalcul microdonnées (P2, COEP) — non publié"
-        elif kind == "age_3":
-            ref, src = ref3.get(modalite), "rapport p. 11 (6 classes agrégées) — population de 5 ans et +"
-        elif kind == "motorisation_menage":
-            ref, src = menage_ref.get(modalite), "rapport p. 21 (base ménage)"
-        else:
-            ref, src = (cand.get("permis_adultes_pct") or {}).get(modalite), "recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié"
+        ref = cible(kind, modalite)
         out.append({"ligne": label, "valeur_publiee_protocole": publie,
                     "reference": None if ref is None else round(float(ref), 1),
                     "ecart_pt": None if ref is None else round(float(ref) - publie, 1),
-                    "source_reference": src,
+                    "source_reference": sources[kind],
                     "statut": ("aucune référence" if ref is None
                                else "concordant" if round(abs(float(ref) - publie), 1) <= 0.5
                                else "ÉCART — à consigner (Annexe F)")})

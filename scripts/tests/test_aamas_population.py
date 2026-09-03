@@ -261,7 +261,7 @@ def test_controle_rend_non_mesurable_et_jamais_zero_sans_cible(tmp_path):
     # La synthèse liste le hors périmètre comme refermable au scellement.
     assert any("hors des 453 communes" in row["ecart"] for row in report["synthese"])
     # Le journal de recoupement porte les neuf lignes du protocole.
-    assert len(report["recoupement"]) == 9
+    assert len(report["recoupement"]) == 13  # tableau §2.1 du protocole v1.5 (13 lignes)
 
 
 def test_controle_uniforme_est_a_corriger_sur_la_couronne(tmp_path):

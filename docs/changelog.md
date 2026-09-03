@@ -1,3 +1,20 @@
+## [2026-09-03] Le recoupement du protocole compare enfin le tableau corrigé
+
+Le rapport de contrôle d'une population recoupe chaque chiffre du tableau de conformité
+démographique du protocole (§ 2.1) avec sa référence recalculée. Il comparait encore les neuf
+valeurs de la v1.3 du protocole, retirées le matin même parce qu'elles n'avaient pas de source
+(51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2), et produisait des lignes « écart à
+consigner » sur des chiffres qui n'existent plus. Il recoupe désormais les treize lignes du
+tableau v1.5 — genre, six classes d'âge publiées, motorisation en base ménage, permis, personnes
+sans déplacement — contre les cibles gelées `cm1`, les six classes de la p. 11 et la base ménage
+de la p. 21.
+
+**Avant :** sur la population scellée v4, 9 lignes de recoupement dont 8 « ÉCART — à consigner ».
+**Après :** 13 lignes, toutes concordantes ; un manuscrit qui citerait une autre cible que celle du
+dépôt serait signalé, ce qui est le rôle du recoupement.
+
+---
+
 ## [2026-09-03] Population scellée v4 : le périmètre des 453 communes, six départements, appariement national
 
 Le jeu de test de l'article est rescellé — `data/population/population_1000_AAMAS_v4/`, sha256
