@@ -1,3 +1,60 @@
+## [2026-09-03] Le périmètre des 453 communes entre dans la chaîne de population : six départements, graphe du polygone, règle v4
+
+Le périmètre d'étude est désormais celui de l'enquête EMC² 2023 — **453 communes sur six
+départements, délimitées par le polygone des communes** — et la chaîne de population le porte de
+bout en bout (ticket 031, partie 1). Ce qui change pour qui génère, sélectionne ou contrôle une
+population :
+
+- **eqasim tire dans les 453 communes.** `config_toulouse.yml` demande les six départements et la
+  liste des communes ; le stage des codes spatiaux journalise le cadre par département
+  (346 / 38 / 27 / 22 / 10 / 10) et refuse une commune inconnue du référentiel. Le service Docker
+  vérifie **avant** de générer que chaque département demandé a sa BD TOPO et sa BAN : un
+  département sans données ne se « saute » pas. Tant que les données des cinq départements hors
+  Haute-Garonne ne sont pas là (accord de l'auteur requis), la chaîne tourne en **répétition**
+  sur les 346 communes du 31, et une population tirée sur ce cadre ne se scelle pas en v4.
+- **`household.commune_id` et `iris_id` sont renseignés pour tous les ménages** (36 % valaient
+  « undefined ») : le runtime pourra filtrer par commune du domicile (partie 2).
+- **Le service Docker applique enfin les réglages d'appariement de `config_toulouse.yml`.**
+  Constaté ce jour : sa configuration synpp ne portait ni `filter_hts: false`, ni les attributs
+  d'appariement, ni le seuil — synpp retombait sur **308 donneurs ENTD** résidents de
+  Haute-Garonne pour 12 000 personnes, classe d'âge abandonnée par la dégradation. Les chaînes
+  d'activités de toutes les populations générées par le service, **v3 comprise**, viennent de ce
+  vivier réduit : c'est une part de l'écart de mobilité « à publier » et de la moitié des écoliers
+  sans école. Le service part maintenant du fichier de configuration (monté) et refuse de générer
+  sans lui.
+- **Les journées donneuses sont des jours de classe, sans effet de bord.** La première version du
+  filtre (matin) laissait les donneurs en vacances dans le vivier comme immobiles : 40,6 %
+  d'immobiles générés. Ils en sortent désormais.
+- **Le routage des plannings (étapes 4+5 du notebook) se fait sur les graphes du polygone des
+  453 communes** — `make osmnx-perimeter-graph` les construit sans téléchargement depuis les pbf
+  OSM du fork, avec les filtres réseau d'OSMnx et les vitesses de la production, sous une clé de
+  cache distincte du disque de 30 km (qui reste celui du runtime : partie 2).
+- **La sélection passe à la règle `aamas_seal_v4`** : six classes d'âge du rapport dans la
+  descente, journal du périmètre et des départements de résidence des retenus dans le sceau.
+  Le contrôle gagne la ligne **« scolaires (6-17 ans) avec activité d'études »** face à l'EMC²
+  (90 à 95 %, seuil 88 %).
+
+**Avant :** vivier v3 tiré sur la Haute-Garonne avec 308 donneurs de chaînes ; 57,5 % des 6-17 ans
+mobiles avec une activité d'études ; 2,58 déplacements par persona ; trajets de 3ᵉ couronne
+rabattus sur un même nœud du graphe de 30 km (98 des 154 agents dehors) ; `household.commune_id`
+« undefined » pour 36 % des personnes.
+**Après (vivier de répétition Haute-Garonne, 11 922 personnes, 6 min) :** 0 domicile hors des
+453 communes, `household.commune_id` renseigné pour tous, **89,0 %** des 6-17 ans mobiles avec une
+activité d'études (6-10 ans 91,9 %, 15-17 ans 80,4 %), 2,93 déplacements par persona et 3,63 par
+mobile (enquête 3,53 / 3,95) ; graphes du polygone : marche 176 k nœuds, vélo 152 k, voiture 65 k
+(+30 % de voirie pour une surface × 1,9), pickle 223 Mo, 1,6 Go par worker de routage. La chaîne
+complète en répétition (sélection v4 de 1 000 personas en 505 ménages entiers, routage sur le
+polygone, export, traits, audit) donne un contrôle à **13 marges conformes**, immobiles 10,6 %,
+**89,3 %** des scolaires mobiles avec une activité d'études, audit A2 / A4 / A9 conformes — sans
+sceau, parce que le cadre est encore la Haute-Garonne.
+
+Ce qui reste : les données BD TOPO et BAN des départements 32, 81, 82, 09 et 11 (porte
+d'approbation ; l'IGN ne sert plus l'édition 2024-09-15 de la Haute-Garonne, seule la 2025-03-15
+est disponible) ; le sceau v4 ; le portage du runtime, d'OTP et de GAMA sur le polygone (partie 2
+du ticket, analysée, non spécifiée).
+
+---
+
 ## [2026-09-03] Les chaînes d'activités des agents viennent de jours de classe
 
 Le générateur de population prend ses chaînes d'activités dans l'ENTD 2008, qui couvre l'année

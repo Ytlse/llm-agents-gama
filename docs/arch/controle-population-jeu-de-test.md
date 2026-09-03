@@ -30,6 +30,29 @@ doit pas être aléatoire : la [note de dimensionnement](../paper/JUSTIFICATION_
 (§ 4.3.1) demande un tirage **stratifié sur les strates mêmes qui serviront à la validation**,
 à allocation proportionnelle — 1 000 agents stratifiés valent ≈ 2 000 tirés au hasard.
 
+### La règle v4 — le périmètre des 453 communes et les six classes d'âge (`aamas_seal_v4`, ticket 031)
+
+Même mécanique que la v3 ci-dessous, trois différences :
+
+- **Le périmètre est déclaré et journalisé.** La population est celle des **453 communes de
+  l'EMC² 2023, six départements, délimitées par le polygone des communes** (table
+  `commune_couronne.json`, version `cc1`) — pas par un rayon. La sélection exclut toujours les
+  domiciles hors de ces communes ; le journal (`selection.json`, repris dans `MANIFEST.yaml`)
+  ajoute la définition du périmètre et les **départements de résidence des retenus**, lus sur
+  `household.commune_id` (renseigné pour tous les ménages par l'export eqasim depuis le
+  2026-09-03). Un cadre de tirage amputé — la Haute-Garonne seule du ticket 026 — se lit donc
+  dans le sceau (`departements_representes: 1/6`, avertissement à la sélection) au lieu de s'y
+  cacher. Une population tirée sur ce cadre est une **répétition**, pas une v4.
+- **Les six classes d'âge publiées (p. 11) entrent dans la descente.** Tenir les quinze classes
+  quinquennales ne tenait pas la part des 5-17 ans (+1,2 pt sur la v3 : la classe 15-19
+  chevauche la frontière 17/18). Le référentiel de l'article étant le rapport AUAT, ses classes
+  sont des marges de la sélection.
+- **Espace de noms de hachage distinct** (`aamas_seal_v4:`) : l'ordre des ménages change, la v3
+  reste rejouable telle quelle.
+
+Cibles `cj1` et `cm1` inchangées — elles sont calculées sur les 453 communes. Dossier :
+`data/population/population_1000_AAMAS_v4/`.
+
 ### La règle v3 — par ménage, à marges multiples (`aamas_seal_v3`, ticket 029)
 
 Trois changements sur la v2, chacun pour un écart mesuré sur la population scellée du
@@ -159,7 +182,19 @@ sur 13 000 il rejette tout) ; **EMD** sur l'ordinal, **JSD** sur le nominal — 
 **Le croisement**, en deux lectures : le joint observé contre la **cible jointe** (marge
 `couronne_x_motorisation`), et contre le **produit des marges observées** — le null d'une
 synthèse par marges. Un χ² élevé sur le second dit que la population porte une dépendance
-couronne–motorisation ; seul le premier dit si c'est la bonne.
+couronne–motorisation ; seul le premier dit si c'est la bonne. Une table dégénérée (une
+couronne ou une motorisation sans aucun persona) rend `non mesurable` avec la modalité vide
+nommée, au lieu d'interrompre le contrôle.
+
+**La ligne « scolaires avec activité d'études »** (section ménages et mobilité, ticket 031
+§ 1.2) : part des 6-17 ans déclarés scolaires et mobiles qui ont au moins une activité
+`education` dans la journée, face à l'EMC² 2023 (90 à 95 % un jour de semaine ; seuil 88 %).
+Ce n'est pas une marge de la sélection — la descente n'échange pas sur ce critère — mais un
+témoin des **chaînes d'activités** : sous le seuil, l'écart sort dans la synthèse comme
+« à publier », nature « journées donneuses ENTD et appariement eqasim ». Ce qui l'a fait
+monter : les journées donneuses restreintes aux jours de classe (fork eqasim, 2026-09-03), et
+surtout l'appariement sur l'ENTD nationale — le service Docker appariait jusqu'ici sur
+**308 donneurs** résidents de Haute-Garonne (cf. § 6, « ce que la v3 portait sans le dire »).
 
 ### Les verdicts, et ce qu'ils engagent
 
@@ -292,6 +327,17 @@ cellules. Ce qui reste probant sans allocation : la motorisation en base ménage
 les classes d'âge à 6 postes lorsqu'elles ne sont pas incluses — ici, l'âge quinquennal l'est,
 donc les 6 classes le sont par construction. La représentativité « réelle » du générateur se lit
 sur le **vivier** (9 marges à corriger), pas sur la cohorte scellée.
+
+**Ce que la v3 portait sans le dire (constaté le 2026-09-03, ticket 031).** La configuration
+synpp construite par le service Docker ne portait ni `filter_hts: false`, ni les attributs
+d'appariement, ni le seuil de `config_toulouse.yml` (ticket 008, A1.a) : synpp retombait sur ses
+défauts, `filter_hts: True`, soit **308 donneurs ENTD** résidents de Haute-Garonne pour 12 000
+personnes à apparier, et une dégradation qui abandonnait la classe d'âge avant le sexe. Les
+chaînes d'activités de la v3 — et des populations précédentes générées par le service — viennent
+de ce vivier réduit ; c'est une part de l'écart de mobilité « à publier » (2,58 déplacements par
+persona contre 3,53) et de la moitié des scolaires sans école. Le service part désormais de
+`config_toulouse.yml` (source unique) ; la v4 sera la première population appariée sur l'ENTD
+nationale avec la classe d'âge tenue.
 
 ## 6 bis. La population scellée v2 du 2026-09-02 (historique)
 

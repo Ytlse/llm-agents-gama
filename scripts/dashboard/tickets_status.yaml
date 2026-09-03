@@ -1189,13 +1189,17 @@ tickets:
       horaires et durées calibrés sur l'enquête ; remplaçable par les circuits réels de la
       Région si obtenus.
   ticket_031_perimetre_453_communes:
-    status: à faire
+    status: en cours
     note: >-
-      OUVERT le 2026-09-03 (rapport de périmètre, option A retenue en principe). Partie 1 :
-      construire le fichier de population des 453 communes / six départements — données BD TOPO
-      et BAN à obtenir (accord requis), eqasim six départements + filtre par liste de communes,
-      journées donneuses ENTD hors vacances scolaires (−21 % de donneurs, mesuré), vivier,
-      sélection v4 avec classe_age, routage des plannings sur le polygone, audit, sceau v4.
-      Partie 2 : inventaire des impacts sur la chaîne (runtime, OSMnx, OTP + liO, GAMA,
-      résultats, caches, jeux gelés, article) — analyse à approfondir avant spécification.
-      Absorbe l'ancien lot 0 du ticket 030.
+      OUVERT le 2026-09-03 (rapport de périmètre, option A). Partie 1, livré le 2026-09-03 :
+      eqasim six départements + filtre par liste de communes journalisé, household.commune_id
+      renseigné, journées donneuses = jours de classe (donneurs écartés sortent du vivier),
+      service Docker enfin sur config_toulouse.yml (le vivier de donneurs était réduit à 308
+      résidents du 31 depuis mai — v3 comprise), graphes OSMnx du polygone des 453 communes
+      (make osmnx-perimeter-graph, +30 % de nœuds, worker 1,6 Go), règle aamas_seal_v4 avec
+      journal du périmètre, ligne « scolaires avec activité d'études » au contrôle. Mesuré sur
+      la Haute-Garonne : A4 = 0, 89 % des 6-17 ans mobiles avec activité d'études (57,5 % en v3).
+      EN ATTENTE (porte 1) : BD TOPO + BAN des départements 32/81/82/09/11 — l'édition
+      2024-09-15 n'est plus servie par l'IGN, seule la 2025-03-15 l'est (question ouverte) ;
+      sans elles, la chaîne v4 n'est qu'une répétition Haute-Garonne, non scellée. Partie 2 :
+      analyse écrite dans le ticket (runtime, OSMnx, OTP, GAMA, caches, jeux gelés, article).
