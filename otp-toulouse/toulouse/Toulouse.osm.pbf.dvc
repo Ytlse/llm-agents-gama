@@ -1,5 +1,21 @@
 outs:
-- md5: 06099055aa7b5ec8e378b60940e67238
-  size: 64473423
+- md5: 62d45fe568aa822b794603149d4e492d
+  size: 76475294
   hash: md5
   path: Toulouse.osm.pbf
+meta:
+  date: '2026-09-03'
+  ticket: 031 partie 2 (T1)
+  provenance: >-
+    Extrait OSM du polygone exact des 453 communes de l'enquête EMC² 2023 (six départements),
+    produit sans téléchargement par scripts/data/population/build_osmnx_perimeter_graph.py
+    (osmium extract --polygon sur eqasim-toulouse/data/osm_toulouse/midi-pyrenees-220101.osm.pbf
+    et languedoc-roussillon-220101.osm.pbf, millésime OSM 2022-01-01, toutes clés), fichier
+    data/cache/osmnx/perimetre_453/perimetre_453.osm.pbf. Copie identique dans data/gtfs/Toulouse.osm.pbf,
+    le dossier que les instances OTP (docker-compose, --load /var/otp/toulouse) chargent.
+  remplace: >-
+    Toulouse_bbox30km_2026-05-06.osm.pbf (88 204 065 o, md5 cc9520bf0200752d031f65b9f6c3b4ae, rectangle
+    1.085/43.336 → 1.815/43.868 = TOULOUSE_OSM_ROUTES_30K_BBOX), conservé à côté. L'ancien .dvc
+    déclarait md5 06099055aa7b5ec8e378b60940e67238 / 64 473 423 o : le fichier avait déjà été remplacé
+    sans `dvc add` (dvc n'est pas installé sur la machine ; ce .dvc est écrit à la main, md5 et taille
+    calculés avec `md5 -q` et `stat -f %z`).

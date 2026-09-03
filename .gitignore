@@ -88,6 +88,15 @@ llm_module/llm_gateway.egg-info/SOURCES.txt
 otp-toulouse/toulouse/*
 otp-toulouse/source/*
 scripts/data/gtfs/*
+# Ces deux dossiers portent des DONNÉES (pbf, graph.obj, feeds, notebooks de fouille)
+# qu'on ne versionne pas — mais la provenance d'un extrait et les recettes que la
+# documentation cite doivent, elles, se rejouer. Exceptions explicites (ticket 031, T1/T3/T4) :
+# `Toulouse.osm.pbf.dvc` et son README disent d'où vient l'extrait OSM servi à OTP ;
+# `transit_service_hull.py` recalcule `geography.TOULOUSE_TRANSIT_SERVICE_WKT` ;
+# `otp_link_check.py` compte les « Couldn't link » d'une population.
+!otp-toulouse/toulouse/README_Toulouse.osm.pbf.md
+!scripts/data/gtfs/transit_service_hull.py
+!scripts/data/gtfs/otp_link_check.py
 # Feeds annuels reconstruits par `make gtfs-year` : 280 Mo décompressés,
 # entièrement régénérables depuis les exports archivés. Le code du pipeline
 # (scripts/data/gtfs_year/) et la trace de build restent versionnés, et
