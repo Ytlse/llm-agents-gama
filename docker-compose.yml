@@ -71,7 +71,7 @@ x-osmnx-service: &osmnx-service
     timeout: 10s
     retries: 20
     start_period: 300s
-  mem_limit: 4g
+  mem_limit: 8g   # relevé de 4g → 8g : le warmup charge foot+bike+car simultanément (OOM 137 à 4g)
 
 x-otp-service: &otp-service
   image: eclipse-temurin:21-jre-jammy

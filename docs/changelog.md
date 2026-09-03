@@ -1,3 +1,23 @@
+## [2026-09-04] Le périmètre mesure 86 km de large, pas 106, et les couches de voirie mortes quittent GAMA
+
+Le rapport de décision sur le périmètre annonçait un monde de 106 × 93 km : un degré de longitude
+y était compté à 111 km, comme à l'équateur, sans le cosinus de la latitude. Mesuré en Lambert-93
+sur le polygone des couronnes, le périmètre fait **86 × 93 km** (85,8 × 92,9). La hauteur était
+juste. Correction consignée dans l'historique du rapport (v1.4), comme le veut la règle du dépôt.
+
+Par ailleurs, `roads.*` et `nodes.*` quittent le dossier `includes/` de GAMA pour une archive datée.
+Ce sont les sorties d'un modèle d'exemple de la bibliothèque GAMA exécuté une fois en mai ; aucun
+modèle de la simulation ne les lit, et leur fichier de projection déclarait une zone UTM dans
+laquelle leurs coordonnées ne peuvent pas exister. Les corriger aurait remplacé un fichier faux par
+un autre : ils sont mis de côté avec la note qui l'explique.
+
+**Avant :** un rapport de décision surestimait la largeur du périmètre de 23 %, et deux couches
+mensongères traînaient parmi les données que GAMA charge.
+**Après :** la largeur est mesurée, la correction est datée, et `includes/` ne contient que ce que
+la simulation lit.
+
+---
+
 ## [2026-09-03] La simulation tourne sur le périmètre de l'enquête, pas sur un rectangle de 30 km
 
 Le périmètre d'étude — les **453 communes** de l'enquête EMC² 2023, sur six départements — est
