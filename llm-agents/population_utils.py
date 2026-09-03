@@ -326,6 +326,51 @@ def fix_activities(person: dict) -> tuple[dict, list[str]]:
     return person, fixes
 
 
+# ── Activités hors du périmètre des 453 communes (ticket 031, décision du 2026-09-03) ────
+# Hypothèse assumée : une activité située HORS du polygone des 453 communes de l'enquête est
+# SUPPRIMÉE de la chaîne de la personne (jamais le domicile, qui fait le périmètre). Elle est
+# comptée sur l'enregistrement (`perimetre.activites_hors_perimetre_supprimees`, à la racine),
+# journalisée par le notebook et alarmée si > 0, et reprise dans le MANIFEST du sceau. Le graphe
+# de routage et les cibles de l'enquête ne couvrent pas ces lieux : les garder, c'était router à
+# vol d'oiseau vers un point sans référence. Mesuré le 2026-09-03 : 0 sur les viviers Haute-
+# Garonne ; le garde-fou existe pour le jour où eqasim placera une école ou un emploi dehors.
+PERIMETRE_ROOT_KEY = "perimetre"
+OUT_OF_PERIMETER_LABEL = "hors périmètre"
+
+
+def drop_out_of_perimeter_activities(person: dict, classify) -> int:
+    """Retire les activités hors périmètre d'une personne ; rend le nombre retiré.
+
+    `classify(lat, lon)` rend la couronne, ou `OUT_OF_PERIMETER_LABEL` dehors, ou une chaîne vide
+    si le point est inconnu (alors on ne décide rien). Le domicile n'est jamais retiré. L'activité
+    précédente absorbe la plage horaire retirée (la personne reste où elle était) ; si la première
+    activité de la journée est retirée, la suivante commence à son heure de début. Le compte est
+    posé à la racine de l'enregistrement, même quand il vaut 0 : l'absence de clé voudrait dire
+    « non contrôlé », pas « rien à retirer ».
+    """
+    acts = person.get("identity", {}).get("activities", []) or []
+    kept, removed = [], 0
+    for act in acts:
+        loc = act.get("location") or {}
+        lat, lon = loc.get("lat"), loc.get("lon")
+        if act.get("purpose") != "home" and lat is not None and lon is not None \
+                and classify(lat, lon) == OUT_OF_PERIMETER_LABEL:
+            removed += 1
+            if kept:
+                kept[-1]["end_time"] = act.get("end_time", kept[-1].get("end_time"))
+                kept[-1]["scheduled_start_time"] = None
+            continue
+        if removed and not kept and act.get("start_time") is not None:
+            # Une ou plusieurs activités retirées en tête : la première conservée ouvre la journée.
+            act = dict(act); act["start_time"] = 0.0; act["scheduled_start_time"] = None
+        kept.append(act)
+    if removed:
+        person.setdefault("identity", {})["activities"] = kept
+    person[PERIMETRE_ROOT_KEY] = {**(person.get(PERIMETRE_ROOT_KEY) or {}),
+                                  "activites_hors_perimetre_supprimees": removed}
+    return removed
+
+
 def _same_loc(a: dict, b: dict) -> bool:
     la, lb = a.get("location"), b.get("location")
     if la is None or lb is None:

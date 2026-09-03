@@ -1,3 +1,77 @@
+## [2026-09-03] Les trajets trop courts pour le graphe durent à la vitesse de leur mode, et une activité hors périmètre sort de la chaîne
+
+**Repli « même nœud » du routage OSMnx.** Quand l'origine et la destination d'un trajet se
+rabattent sur le même nœud du graphe, il n'y a rien à router. Le repli calculait la durée à
+70 km/h quel que soit le mode : écrit pour des points hors du graphe de 30 km (trajets lointains
+de 3ᵉ couronne), il servait aussi aux vrais trajets courts. Avec le graphe du polygone des
+453 communes, il ne reste que ces derniers — la durée vient désormais de la vitesse de repli du
+mode (marche 5, vélo 14, voiture 30 km/h) sur la distance à vol d'oiseau × 1,3 de détour,
+minimum 1 s ; la distance rendue est celle du détour. Ce repli sert aussi au recalage des
+horaires du notebook (étape 4+5).
+
+**Avant :** 200 m à pied = 10 s, affiché « 0 minute » ; 200 m à vélo ou en voiture, 10 s aussi.
+**Après :** 200 m à pied ≈ 3 min (187 s), à vélo 67 s, en voiture 31 s ; 0 m = 1 s.
+
+**Activités hors du polygone des 453 communes** (hypothèse assumée du ticket 031) : une activité
+située hors du périmètre d'enquête est supprimée de la chaîne de la personne à l'étape 2 du
+notebook, avant le recalage des horaires — jamais le domicile —, comptée à la racine de
+l'enregistrement, alarmée si le compte dépasse 0, reprise dans le journal de sélection et le
+MANIFEST du sceau (« activités hors périmètre : n supprimées », ou « non contrôlé » pour une
+population produite avant le garde-fou). Mesuré : 0 sur les viviers du jour.
+
+**Critère 3 du ticket 031 reformulé** : ce qui mesure un défaut de graphe, ce sont les paires
+« même nœud » distantes de plus de 500 m à vol d'oiseau (≤ 0,5 % attendu par couronne) ; les
+paires plus courtes sont de vrais trajets courts. Le script de mesure les distingue.
+
+---
+
+## [2026-09-03] Car scolaire synthétique pour les mineurs périurbains (ticket 030)
+
+Les personas de 5 à 17 ans dont le domicile est hors du ressort Tisséo reçoivent désormais, sur
+leurs trajets vers ou depuis l'école, une option **« car scolaire liO (gratuit) »** — le premier
+mode collectif des 2ᵉ et 3ᵉ couronnes, absent de tous les GTFS. L'option est synthétique (aucun
+appel OTP/OSMnx) : horaire calé sur l'activité scolaire (± 30 min), durée calibrée sur l'EMC²
+(médiane ≈ 30 min), coût nul. Elle est **comptée en transport collectif** partout — journal
+`moves.csv`, cibles EMC², oracle LightGBM — et n'apparaît jamais pour un adulte, ni pour un trajet
+sans lien avec l'école, ni pour un domicile desservi par Tisséo.
+
+**Avant :** un écolier de 3ᵉ couronne sans arrêt Tisséo à proximité n'avait aucune option de
+transport collectif ; sa part TC était nulle par construction, et la 3ᵉ couronne simulée était
+structurellement « tout voiture ».
+**Après :** il se voit proposer un car scolaire gratuit, arrivant 30 min avant le début des cours,
+et le choix revient au modèle comme pour tout autre mode.
+
+Éligibilité : **âge seul** (5-17) + zone hors ressort Tisséo, sans critère de sectorisation ni de
+distance minimale (les circuits réels ne sont pas demandés à la Région). Rendu GAMA hors périmètre :
+l'agent se déplace correctement (interpolation point-à-point via le marqueur `__DIRECT_CAR__`) mais
+s'affiche en rouge (couleur voiture), sans effet en run headless. Caches de décision et sémantique
+vidés à la livraison (le jeu d'options change).
+
+---
+
+## [2026-09-03] Plan expérimental AAMAS : incertitude quantifiée, seeds explicites, symétrie presse et bras de sensibilité λ
+
+Le plan expérimental (`docs/paper/experience_plan/`) devient auto-porteur sur les points qui
+faisaient réagir en revue. L'unité d'évaluation est clarifiée : la cohorte scellée est de
+**1 000 personnes** (894 mobiles) produisant **≈ 2 579 trajets** (2,58/pers, mesuré), et non
+« 1 000 trajets ». Chaque métrique se publie désormais avec son incertitude, chaque expérience
+porte un `seed`, les trois événements de presse ont la même batterie de contrôles, et le critère
+de réfutation de l'hystérésis est réellement exécutable.
+
+**Avant :** `trip_count: 1000` ambigu (personnes ou trajets ?) ; métriques en point-estimate nu,
+sans IC ni test ; seed présent seulement sur les LLM ; conditions paraphrase/placebo/oracle sur le
+seul événement Minotaure ; un unique λ, donc impossible de tester « diviser λ par trois déplace la
+courbe » ; nom de modèle « Gemini 2.5 » incohérent avec le reste.
+
+**Après :** `person_count: 1000` + `trip_count: 2579` (dérivé, recalculé au gel) ; bloc
+`scoring.uncertainty` (cluster bootstrap par agent → IC95 ; McNemar apparié pour Phases 4-5 ;
+TOST ±1 pt pour le calage macro) ; `seed: 42` sur tous les moteurs (heuristiques, tabulaires,
+LLM) ; Canicule et Rocade complétés aux **5 conditions** (Canicule = « pire cas » de suivi de
+consigne) ; nouveau bras `exp_04d` (λ=0,13 = λ÷3) ; nommage `gemini-3.1-flash-lite-preview`
+partout. Plan porté à **29 expériences**.
+
+---
+
 ## [2026-09-03] Le périmètre des 453 communes entre dans la chaîne de population : six départements, graphe du polygone, règle v4
 
 Le périmètre d'étude est désormais celui de l'enquête EMC² 2023 — **453 communes sur six

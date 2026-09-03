@@ -53,6 +53,20 @@ Même mécanique que la v3 ci-dessous, trois différences :
 Cibles `cj1` et `cm1` inchangées — elles sont calculées sur les 453 communes. Dossier :
 `data/population/population_1000_AAMAS_v4/`.
 
+**Deux hypothèses assumées de la v4** (décisions de l'auteur du dépôt, 2026-09-03) :
+
+- **Une activité hors du polygone des 453 communes est supprimée de la chaîne** de la personne
+  (étape 2 du notebook, avant le recalage des horaires ; jamais le domicile, qui fait le
+  périmètre). Le graphe de routage et les cibles de l'enquête ne couvrent pas ces lieux. Le compte
+  est posé à la racine de chaque enregistrement (`perimetre.activites_hors_perimetre_supprimees`),
+  journalisé et alarmé s'il dépasse 0, repris dans le journal de sélection et dans le MANIFEST
+  (`perimetre.activites_hors_perimetre`). Mesuré : 0 sur les viviers du 2026-09-03 — le garde-fou
+  existe pour le jour où eqasim placera une école ou un emploi dehors. Une population sans cette
+  clé n'a **pas été contrôlée** (le MANIFEST le dit : `controle: false`), ce n'est pas un 0.
+- **Le vivier porte plus d'immobiles que l'enquête** (19,3 % contre 10,6 %) : l'ENTD nationale
+  restreinte aux jours de classe en compte davantage que l'EMC² toulousaine. La cohorte scellée
+  est tenue à 10,6 % par la descente ; l'écart du vivier est déclaré ici, non corrigé.
+
 ### La règle v3 — par ménage, à marges multiples (`aamas_seal_v3`, ticket 029)
 
 Trois changements sur la v2, chacun pour un écart mesuré sur la population scellée du

@@ -234,8 +234,28 @@ def _commune_of(rec: dict) -> Optional[str]:
     return str(code).zfill(5) if code not in (None, "") else None
 
 
+def count_removed_out_of_perimeter(records: list[dict]) -> dict:
+    """Activités hors du polygone retirées à l'étape 2 du notebook (`perimetre` à la racine).
+
+    `controle: False` quand aucun enregistrement ne porte la clé : la population a été produite
+    avant le garde-fou, et « 0 » serait alors une invention."""
+    total, touches, controles = 0, 0, 0
+    for rec in records:
+        per = rec.get("perimetre") or {}
+        if "activites_hors_perimetre_supprimees" not in per:
+            continue
+        controles += 1
+        k = int(per["activites_hors_perimetre_supprimees"] or 0)
+        total += k
+        touches += 1 if k else 0
+    return {"controle": controles == len(records) and bool(records),
+            "personas_controles": controles, "activites_hors_perimetre_supprimees": total,
+            "personas_touches": touches}
+
+
 def perimeter_journal(retenus: list[dict]) -> dict:
-    """Le périmètre déclaré, et les départements de résidence des retenus (`household.commune_id`)."""
+    """Le périmètre déclaré, les départements de résidence des retenus (`household.commune_id`) et
+    les activités hors polygone retirées de leurs chaînes."""
     by_dep: Counter = Counter()
     sans_commune = 0
     for rec in retenus:
@@ -250,6 +270,7 @@ def perimeter_journal(retenus: list[dict]) -> dict:
         "departements_representes": len(by_dep),
         "retenus_sans_commune": sans_commune,
         "communes_distinctes": len({c for c in (_commune_of(r) for r in retenus) if c}),
+        "activites_hors_perimetre": count_removed_out_of_perimeter(retenus),
     }
 
 
@@ -597,6 +618,17 @@ def cmd_seal(args) -> int:
     selection = None
     if args.selection_json and args.selection_json.exists():
         selection = json.loads(args.selection_json.read_text(encoding="utf-8"))
+    records = ctl.load_population(args.population)
+    hors_perimetre = count_removed_out_of_perimeter(records)
+    perimetre_manifest = {**PERIMETRE, **((selection or {}).get("perimetre") or {}),
+                          "activites_hors_perimetre": hors_perimetre}
+    if hors_perimetre["activites_hors_perimetre_supprimees"]:
+        logger.warning("périmètre : %d activité(s) hors du polygone retirée(s) chez %d persona(s) — "
+                       "hypothèse assumée, déclarée dans le MANIFEST",
+                       hors_perimetre["activites_hors_perimetre_supprimees"], hors_perimetre["personas_touches"])
+    if not hors_perimetre["controle"]:
+        logger.warning("périmètre : les activités hors polygone n'ont PAS été contrôlées sur cette "
+                       "population (clé `perimetre` absente : produite avant le garde-fou de l'étape 2)")
 
     out_dir.mkdir(parents=True, exist_ok=False)
     target = out_dir / "population.json"
@@ -613,9 +645,9 @@ def cmd_seal(args) -> int:
         "scelle_le": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "population": {"fichier": "population.json", "sha256": digest, "n": n,
                        "source": str(args.population), "source_sha256": report["population"]["sha256"]},
+        "perimetre": perimetre_manifest,
         "selection": ({"fichier": "selection.json", "version": selection.get("version"),
                        "regle": selection.get("regle"),
-                       "perimetre": selection.get("perimetre"),
                        "vivier": {k: v for k, v in selection.get("vivier", {}).items() if k != "par_cellule"},
                        "menages_retenus": selection.get("menages_retenus"),
                        "deficits": selection.get("deficits"), "reports": len(selection.get("reports", [])),

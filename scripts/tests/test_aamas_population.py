@@ -359,3 +359,18 @@ def test_controle_mesure_les_scolaires_avec_activite_etudes(tmp_path):
     report = ctl.run_control(path, borne=1.0, n_min=30, n_min_cellule=50)
     assert report["menages_et_mobilite"]["part_scolaires_avec_etudes_pct"] >= 88.0
     assert not [r for r in report["synthese"] if r["ecart"] == "scolaires sans activité d'études"]
+
+
+def test_le_compte_des_activites_hors_perimetre_distingue_controle_et_zero():
+    """Sans la clé `perimetre`, la population n'a pas été contrôlée : le journal le dit, il n'invente pas 0."""
+    pool = _pool_menages(5)
+    j = seal.count_removed_out_of_perimeter(pool)
+    assert j["controle"] is False and j["personas_controles"] == 0
+    for i, rec in enumerate(pool):
+        rec["perimetre"] = {"activites_hors_perimetre_supprimees": 2 if i < 3 else 0}
+    j = seal.count_removed_out_of_perimeter(pool)
+    assert j == {"controle": True, "personas_controles": len(pool),
+                 "activites_hors_perimetre_supprimees": 6, "personas_touches": 3}
+    chosen, journal = seal.select(pool, 60)
+    assert "activites_hors_perimetre" in journal["perimetre"]
+    assert journal["perimetre"]["activites_hors_perimetre"]["controle"] is True

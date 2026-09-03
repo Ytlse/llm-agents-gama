@@ -9,10 +9,12 @@ CE QUE ÇA MESURE, sur les paires d'activités qu'une population route à l'éta
 
   * **O2 — même nœud.** Pour chaque paire, origine et destination sont rabattues sur le nœud de
     graphe le plus proche (`ox.distance.nearest_nodes`, en lot). Deux points sur le MÊME nœud ne
-    sont pas routés : `_route_sync` leur sert une vitesse de repli (70 km/h à vol d'oiseau) — ce
-    n'est pas un itinéraire. La part de ces paires est donnée par couronne d'origine, pour le
-    graphe de production (disque de 30 km) et pour le graphe du polygone des 453 communes.
-    Attendu : ≈ 0 en 3ᵉ couronne sur le polygone, contre la majorité sur le disque.
+    sont pas routés : `_route_sync` leur sert le repli « même nœud » (vol d'oiseau × 1,3 à la
+    vitesse du mode) — ce n'est pas un itinéraire. La part de ces paires est donnée par couronne
+    d'origine, pour le graphe de production (disque de 30 km) et pour le graphe du polygone des
+    453 communes. **Critère 3 du ticket 031** : les paires « même nœud » distantes de plus de
+    500 m à vol d'oiseau — celles qu'un graphe complet aurait séparées — doivent être ≈ 0
+    (≤ 0,5 %) ; les paires plus courtes sont de vrais trajets courts, pas un défaut de graphe.
   * **O2 — ms par route, routes None.** Chaque paire est routée avec `_route_sync` (le code de
     production, congestion du lundi 8 janvier 2024) sur les deux graphes ; durée médiane et
     moyenne par route, part de `None`, et distance au nœud le plus proche (médiane, p95).
@@ -50,6 +52,7 @@ from build_osmnx_perimeter_graph import (OSMNX_CACHE_DIR, PERIMETER_CACHE_KEY,  
 logger = logging.getLogger("osmnx.mesures")
 
 GRAPHS = {"disque_30km": PRODUCTION_CACHE_KEY, "polygone_453": PERIMETER_CACHE_KEY}
+SAME_NODE_FAR_M = 500.0   # au-delà : deux points qu'un graphe complet aurait séparés (critère 3)
 _MODE = {"foot": "walk", "bicycle": "bike", "car": "drive"}
 SIM_DATE = date(2024, 1, 8)   # lundi, comme route_worker
 
@@ -74,19 +77,22 @@ def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> d
     from llm_module.core.residence_zone import CommunalZones
     from models import Location
     from population_utils import collect_scheduling_pairs
-    from trip_helper.osmnx_direct import _route_sync
+    from trip_helper.osmnx_direct import _crow_flies_m, _route_sync
 
     zones = CommunalZones.load()
     pairs = sorted(collect_scheduling_pairs(population))
     logger.info("%d paires de planification (%s)", len(pairs), dict(Counter(p[4] for p in pairs)))
     couronne_o = [_couronne_of(zones, p[0], p[1]) for p in pairs]
+    crow_m = [_crow_flies_m(Location(lat=p[0], lon=p[1]), Location(lat=p[2], lon=p[3])) for p in pairs]
     out: dict = {"n_paires": len(pairs), "par_mode": dict(Counter(p[4] for p in pairs)),
-                 "par_couronne_origine": dict(Counter(couronne_o)), "graphes": {}}
+                 "par_couronne_origine": dict(Counter(couronne_o)),
+                 "seuil_meme_noeud_lointain_m": SAME_NODE_FAR_M, "graphes": {}}
 
     for label, key in GRAPHS.items():
         graphs, boundary = _load(cache_dir, key)
         res: dict = {"cle": key, "modes": {}}
         same_by_c: Counter = Counter()
+        far_same_by_c: Counter = Counter()     # même nœud ET > SAME_NODE_FAR_M à vol d'oiseau
         n_by_c: Counter = Counter(couronne_o)
         snap_dists: list[float] = []
         durations_ms: list[float] = []
@@ -107,6 +113,8 @@ def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> d
             for k, i in enumerate(idx):
                 if same[k]:
                     same_by_c[couronne_o[i]] += 1
+                    if crow_m[i] > SAME_NODE_FAR_M:
+                        far_same_by_c[couronne_o[i]] += 1
             snap_dists.extend(float(d) for d in dists)
             res["modes"][mode] = {"n": n, "meme_noeud": int(sum(same)),
                                   "part_meme_noeud_pct": round(100.0 * sum(same) / n, 1),
@@ -130,9 +138,13 @@ def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> d
             res["modes"][mode]["duree_routage_s"] = round(time.monotonic() - t0, 1)
         res["meme_noeud_par_couronne"] = {
             c: {"n": n_by_c[c], "meme_noeud": same_by_c[c],
-                "part_pct": round(100.0 * same_by_c[c] / n_by_c[c], 1) if n_by_c[c] else None}
+                "part_pct": round(100.0 * same_by_c[c] / n_by_c[c], 1) if n_by_c[c] else None,
+                "meme_noeud_lointain": far_same_by_c[c],
+                "part_lointain_pct": round(100.0 * far_same_by_c[c] / n_by_c[c], 2) if n_by_c[c] else None}
             for c in sorted(n_by_c)}
         res["meme_noeud_total_pct"] = round(100.0 * sum(same_by_c.values()) / max(len(pairs), 1), 1)
+        res["meme_noeud_lointain_total_pct"] = round(100.0 * sum(far_same_by_c.values()) / max(len(pairs), 1), 2)
+        res["critere_3_ok"] = all((v["part_lointain_pct"] or 0) <= 0.5 for v in res["meme_noeud_par_couronne"].values())
         res["distance_rabattement_m"] = {"mediane": round(statistics.median(snap_dists), 1),
                                          "p95": round(float(np.percentile(snap_dists, 95)), 1),
                                          "max": round(max(snap_dists), 1)}
@@ -141,9 +153,13 @@ def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> d
                           "ms_par_route_mediane": round(statistics.median(durations_ms), 1),
                           "ms_par_route_moyenne": round(statistics.fmean(durations_ms), 1),
                           "ms_par_route_p95": round(float(np.percentile(durations_ms, 95)), 1)}
-        logger.info("%s : même nœud %.1f %% (%s) ; %d routes, %d None, %.1f ms/route (médiane)", label,
+        logger.info("%s : même nœud %.1f %% (%s) ; lointain (> %d m) %.2f %% (%s) — critère 3 %s ; "
+                    "%d routes, %d None, %.1f ms/route (médiane)", label,
                     res["meme_noeud_total_pct"],
                     {c: v["part_pct"] for c, v in res["meme_noeud_par_couronne"].items()},
+                    SAME_NODE_FAR_M, res["meme_noeud_lointain_total_pct"],
+                    {c: v["part_lointain_pct"] for c, v in res["meme_noeud_par_couronne"].items()},
+                    "tenu" if res["critere_3_ok"] else "NON tenu",
                     n_routed, n_none, res["routage"]["ms_par_route_mediane"])
         out["graphes"][label] = res
         del graphs
@@ -189,11 +205,16 @@ def write_trace(mesures: dict, trace_dir: Path) -> None:
          f"Population : `{mesures['population']}` ({mesures['paires']['n_paires']} paires de planification, "
          f"{mesures['paires']['par_mode']}). Script : `scripts/data/population/measure_osmnx_perimeter_graph.py`.", "",
          "## O2 — paires « même nœud » (repli vitesse, pas un itinéraire) par couronne d'origine", "",
-         "| Couronne d'origine | Paires | Disque 30 km | Polygone 453 |", "|---|---:|---:|---:|"]
+         "| Couronne d'origine | Paires | Disque 30 km | dont > 500 m | Polygone 453 | dont > 500 m |", "|---|---:|---:|---:|---:|---:|"]
     g = mesures["paires"]["graphes"]
     for c, v in g["disque_30km"]["meme_noeud_par_couronne"].items():
         w = g["polygone_453"]["meme_noeud_par_couronne"].get(c, {})
-        L.append(f"| {c} | {v['n']} | {v['meme_noeud']} ({v['part_pct']} %) | {w.get('meme_noeud')} ({w.get('part_pct')} %) |")
+        L.append(f"| {c} | {v['n']} | {v['meme_noeud']} ({v['part_pct']} %) | {v['meme_noeud_lointain']} ({v['part_lointain_pct']} %) | "
+                 f"{w.get('meme_noeud')} ({w.get('part_pct')} %) | {w.get('meme_noeud_lointain')} ({w.get('part_lointain_pct')} %) |")
+    L.append("")
+    L.append(f"Critère 3 (paires « même nœud » distantes de plus de 500 m ≤ 0,5 % par couronne) : "
+             f"disque {'tenu' if g['disque_30km']['critere_3_ok'] else 'NON tenu'}, "
+             f"polygone {'tenu' if g['polygone_453']['critere_3_ok'] else 'NON tenu'}.")
     L += ["", "## O2 — routage effectif (`_route_sync`, code de production)", "",
           "| Graphe | Routes | None | ms/route médiane | moyenne | p95 | rabattement médian (m) | p95 (m) |",
           "|---|---:|---:|---:|---:|---:|---:|---:|"]

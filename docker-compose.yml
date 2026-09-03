@@ -96,13 +96,14 @@ x-eqasim-env: &eqasim-env
   EQASIM_GENERATE_PERSONALITY: ${EQASIM_GENERATE_PERSONALITY:-false}
   EQASIM_RANDOM_SEED: ${EQASIM_RANDOM_SEED:-1234}
   # Cadre de tirage = le périmètre d'enquête EMC² (liste de communes), et non un
-  # rectangle (ticket 026). `EQASIM_DEPARTMENTS` le restreint : la version livrée ne sert
-  # que la Haute-Garonne, faute des données BD TOPO/BAN des cinq autres départements du
-  # périmètre. La limite est chiffrée dans docs/arch/perimetre-population.md (limite n°6).
-  # Mettre EQASIM_PERIMETER=false pour revenir au comportement d'avant (département entier
-  # ou filtrage par bbox).
+  # rectangle (ticket 026). `EQASIM_DEPARTMENTS` le restreint ; depuis le 2026-09-03 (ticket
+  # 031, porte 1 levée : BD TOPO 2025-03-15 et BAN des six départements présentes) le défaut
+  # est le périmètre entier — 453 communes. `31` seul redonne la répétition Haute-Garonne
+  # (346 communes, limite n°6 de docs/arch/perimetre-population.md). Le service refuse de
+  # générer si un département demandé n'a pas ses données. Mettre EQASIM_PERIMETER=false pour
+  # revenir au comportement d'avant (département entier ou filtrage par bbox).
   EQASIM_PERIMETER: ${EQASIM_PERIMETER:-true}
-  EQASIM_DEPARTMENTS: ${EQASIM_DEPARTMENTS:-31}
+  EQASIM_DEPARTMENTS: ${EQASIM_DEPARTMENTS:-31,32,81,82,09,11}
   OTP_ENDPOINT: http://otp1:8080
 
 services:

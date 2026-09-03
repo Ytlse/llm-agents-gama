@@ -556,6 +556,18 @@ def _route_sync_process(
     return result
 
 
+# Détour appliqué à la distance à vol d'oiseau quand le graphe ne sépare pas les deux points
+# (même ratio que l'approximation euclidienne d'eqasim : `routed_distance / 1.3`).
+SAME_NODE_DETOUR = 1.3
+
+
+def _same_node_fallback(origin: Location, destination: Location, osmnx_mode: str) -> dict:
+    """Durée et distance d'un trajet trop court pour le graphe : vol d'oiseau × détour, vitesse du mode."""
+    dist_m = _crow_flies_m(origin, destination) * SAME_NODE_DETOUR
+    speed_ms = float(_FALLBACKS[osmnx_mode]) * 1000.0 / 3600.0
+    return {"duration_s": max(1, int(round(dist_m / speed_ms))), "distance_m": dist_m}
+
+
 def _route_sync(
     G:            object,
     boundary:     gpd.GeoDataFrame,
@@ -564,19 +576,23 @@ def _route_sync(
     osmnx_mode:   str,
     congestion_dt: datetime,
 ) -> Optional[dict]:
-    """Pure-sync OSMnx routing. Returns {duration_s, distance_m} or None."""
+    """Pure-sync OSMnx routing. Returns {duration_s, distance_m} or None.
+
+    Repli « même nœud » (ticket 031, décision du 2026-09-03). Quand origine et destination se
+    rabattent sur le même nœud du graphe, il n'y a pas d'itinéraire à calculer : le trajet est
+    plus court que la maille du graphe. Avant, la durée venait d'une vitesse de 70 km/h quel que
+    soit le mode — un trajet de 200 m à pied durait 10 s, affiché « 0 minute » ; ce repli avait
+    été écrit pour des points HORS du graphe de 30 km (98 des 154 agents de 3ᵉ couronne de la v3),
+    cas qui disparaît avec le graphe du polygone des 453 communes. Désormais : distance à vol
+    d'oiseau × 1,3 de détour, durée à la vitesse de repli du MODE (`_FALLBACKS` : marche 5,
+    vélo 14, voiture 30 km/h), minimum 1 s — la distance rendue est celle du détour.
+    """
     # Find the nearest nodes on the graph to the origin and destination coordinates.
     orig = ox.distance.nearest_nodes(G, origin.lon, origin.lat)
     dest = ox.distance.nearest_nodes(G, destination.lon, destination.lat)
 
-    # Both points map to the same graph node — either too close or outside the graph area.
-    # Use 70 km/h as a highway-speed approximation (typical for out-of-zone long-distance trips).
     if orig == dest:
-        dlat = (destination.lat - origin.lat) * 111_320
-        dlon = (destination.lon - origin.lon) * 111_320 * math.cos(math.radians(origin.lat))
-        dist_m = math.hypot(dlat, dlon)
-        speed_ms = 70 * 1000 / 3600  # 70 km/h
-        return {"duration_s": max(1, int(dist_m / speed_ms)), "distance_m": dist_m}
+        return _same_node_fallback(origin, destination, osmnx_mode)
 
     # Compute the fastest route using edge travel times as weights.
     route = ox.routing.shortest_path(G, orig, dest, weight="travel_time")
