@@ -1,3 +1,21 @@
+## [2026-09-03] Le compte des déplacements inclut le retour au domicile
+
+Le contrôle de population comptait `n − 1` déplacements pour `n` activités, comme si la journée
+était une chaîne ouverte. Or la chaîne est cyclique : l'étape 2 du notebook fusionne le domicile du
+soir et celui du matin en une seule activité, et le routage des horaires calcule bien `n` trajets,
+le dernier ramenant au domicile. Une journée domicile → travail → domicile, deux activités, faisait
+un seul déplacement au lieu de deux. Chaque persona mobile était sous-compté d'un déplacement, et
+l'« écart de mobilité » déclaré à publier depuis la v2 était pour l'essentiel cet artefact.
+
+**Avant :** v4 : 2,44 déplacements par persona, 2,73 par persona mobile ; v3 : 2,58 / 2,88 —
+contre 3,53 / 3,95 dans l'enquête, écart « à publier ».
+**Après :** v4 : 3,33 / 3,73 ; v3 : 3,47 / 3,88. L'écart restant (0,2 par persona) passe sous le
+seuil de 0,3 : la mobilité n'est plus un écart à publier, elle se lit dans la section ménages et
+mobilité du rapport. Le sceau v4 est rescellé avec le rapport corrigé, même population, même
+empreinte.
+
+---
+
 ## [2026-09-03] Le recoupement du protocole compare enfin le tableau corrigé
 
 Le rapport de contrôle d'une population recoupe chaque chiffre du tableau de conformité

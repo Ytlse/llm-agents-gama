@@ -374,3 +374,35 @@ def test_le_compte_des_activites_hors_perimetre_distingue_controle_et_zero():
     chosen, journal = seal.select(pool, 60)
     assert "activites_hors_perimetre" in journal["perimetre"]
     assert journal["perimetre"]["activites_hors_perimetre"]["controle"] is True
+
+
+def test_deplacements_comptent_le_retour_au_domicile(tmp_path):
+    """La chaîne d'activités est cyclique (domicile du soir fusionné avec celui du matin) :
+    n activités = n déplacements pour un mobile, 0 pour un immobile (une seule activité)."""
+    def acts(purposes):
+        return [{"id": str(i), "purpose": p, "start_time": 3600.0 * (8 + 3 * i),
+                 "end_time": 3600.0 * (10 + 3 * i), "scheduled_start_time": None,
+                 "location": {"lon": 1.44, "lat": 43.6}} for i, p in enumerate(purposes)]
+    pool = _pool_menages(n_menages_par_cellule=10)
+    for k, rec in enumerate(pool):
+        if k % 10 == 0:
+            rec["identity"]["activities"] = acts(["home"])          # immobile
+            rec["immobile"] = True
+        elif k % 2 == 0:
+            rec["identity"]["activities"] = acts(["home", "work"])  # 2 déplacements (aller, retour)
+            rec["immobile"] = False
+        else:
+            rec["identity"]["activities"] = acts(["home", "work", "shop"])  # 3 déplacements
+            rec["immobile"] = False
+    path = tmp_path / "pop.json"
+    path.write_text(json.dumps(pool), encoding="utf-8")
+    report = ctl.run_control(path, borne=1.0, n_min=30, n_min_cellule=50)
+    m = report["menages_et_mobilite"]
+    n_imm = sum(1 for k in range(len(pool)) if k % 10 == 0)
+    n_two = sum(1 for k in range(len(pool)) if k % 10 != 0 and k % 2 == 0)
+    n_three = len(pool) - n_imm - n_two
+    attendu_mobile = (2 * n_two + 3 * n_three) / (n_two + n_three)
+    assert m["immobiles"] == n_imm
+    # Le rapport arrondit à 3 décimales.
+    assert abs(m["deplacements_par_persona_mobile"] - attendu_mobile) < 5e-4
+    assert abs(m["deplacements_par_persona"] - (2 * n_two + 3 * n_three) / len(pool)) < 5e-4

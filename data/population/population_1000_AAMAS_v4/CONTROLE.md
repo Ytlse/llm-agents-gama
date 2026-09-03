@@ -1,11 +1,11 @@
-# Contrôle de population — `toulouse_population_1000_AAMAS.json`
+# Contrôle de population — `population.json`
 
 - **Effectif** : 1000 personas — sha256 `9f05c655c3ad2cf4d8c71cc3c34238417718cec742b42ef94a21eb33f694639f`
-- **Date** : 2026-09-03T16:16:44+00:00
+- **Date** : 2026-09-03T16:57:38+00:00
 - **Borne TOST** : ± 1.0 pt · n_min 30 · n_min cellule 50
 - **Verdicts** : conforme 12 · à publier 1 · à corriger 0 · non mesurable 0
 - **Ménages** : 513 ; complets (taille déclarée) 469 (91.4 %) ; membres présents / déclarés 1000/1052 (95.1 %)
-- **Mobilité** : 2.44 déplacements par persona (enquête 3.53) ; immobiles 10.6 % (enquête 10.6 %)
+- **Mobilité** : 3.33 déplacements par persona (enquête 3.53) ; immobiles 10.6 % (enquête 10.6 %)
 - **Scolaires (6-17 ans) avec activité d'études** : 131/148 mobiles = 88.5 % (enquête 90 à 95 %, seuil 88 %) · scolaires 151
 
 ## Marges
@@ -188,19 +188,22 @@ Base personne, nominale, n = 1000. Cible : recalcul microdonnées EMC² 2023 (Pr
 
 | Ligne | Publié | Référence | Écart | Statut | Source |
 |---|---:|---:|---:|---|---|
-| Genre — Femmes | 51.8 % | 51.3 % | -0.5 | concordant | recalcul microdonnées (P2, COEP) — non publié |
-| Genre — Hommes | 48.2 % | 48.7 % | 0.5 | concordant | recalcul microdonnées (P2, COEP) — non publié |
-| Âge — Moins de 18 ans | 19.4 % | 16.0 % | -3.4 | ÉCART — à consigner (Annexe F) | rapport p. 11 (6 classes agrégées) — population de 5 ans et + |
-| Âge — 18-64 ans | 62.1 % | 68.0 % | 5.9 | ÉCART — à consigner (Annexe F) | rapport p. 11 (6 classes agrégées) — population de 5 ans et + |
-| Âge — 65 ans et plus | 18.5 % | 16.0 % | -2.5 | ÉCART — à consigner (Annexe F) | rapport p. 11 (6 classes agrégées) — population de 5 ans et + |
-| Ménages sans voiture | 22.3 % | 19.0 % | -3.3 | ÉCART — à consigner (Annexe F) | rapport p. 21 (base ménage) |
-| Ménages avec 1 voiture | 46.1 % | 45.0 % | -1.1 | ÉCART — à consigner (Annexe F) | rapport p. 21 (base ménage) |
-| Ménages avec 2+ voitures | 31.6 % | 35.0 % | 3.4 | ÉCART — à consigner (Annexe F) | rapport p. 21 (base ménage) |
-| Détention du permis (adultes) | 84.2 % | 85.9 % | 1.7 | ÉCART — à consigner (Annexe F) | recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié |
+| Genre — Femmes | 51.3 % | 51.3 % | -0.0 | concordant | recalcul microdonnées (P2, COEP) — non publié (cm1) |
+| Genre — Hommes | 48.7 % | 48.7 % | 0.0 | concordant | recalcul microdonnées (P2, COEP) — non publié (cm1) |
+| Âge — 5-17 ans | 16.0 % | 16.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Âge — 18-24 ans | 13.0 % | 13.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Âge — 25-34 ans | 14.0 % | 14.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Âge — 35-49 ans | 22.0 % | 22.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Âge — 50-64 ans | 19.0 % | 19.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Âge — 65 ans et plus | 16.0 % | 16.0 % | 0.0 | concordant | rapport p. 11 (6 classes publiées) — population de 5 ans et + |
+| Ménages sans voiture | 19.0 % | 19.0 % | 0.0 | concordant | rapport p. 21 (base ménage) |
+| Ménages avec 1 voiture | 45.0 % | 45.0 % | 0.0 | concordant | rapport p. 21 (base ménage) |
+| Ménages avec 2 voitures et + | 35.0 % | 35.0 % | 0.0 | concordant | rapport p. 21 (base ménage) |
+| Détention du permis (18 ans et +) | 85.9 % | 85.9 % | -0.0 | concordant | recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié (cm1) |
+| Personnes sans déplacement la veille | 10.6 % | 10.6 % | 0.0 | concordant | recalcul microdonnées (aucun déplacement la veille, COEP) — non publié (cm1) |
 
 ## Synthèse des écarts
 
 | Écart | Amplitude | Nature | Verdict | Refermable au scellement |
 |---|---|---|---|---|
-| mobilité quotidienne | 2.44 déplacements par persona contre 3.53 dans l'enquête ; 10.6 % d'immobiles contre 10.6 % | chaînes d'activités (ENTD 2008 appariée par eqasim) | à publier | non — enquête d'appariement (levier eqasim) |
 | motorisation_menage | sans voiture : 22.8 % contre 19.2 % (+3.6 pt) | base ménage (pondération 1/taille) | à publier | non — à déclarer |

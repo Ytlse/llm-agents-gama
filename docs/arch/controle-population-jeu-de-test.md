@@ -320,7 +320,7 @@ polygone (3 291 paires, 17 `None`, congestion par zone, repli à la vitesse du m
 est la motorisation en **base ménage** (1/taille, n efficace 752) : ménages sans voiture 22,8 %
 contre 19,2 % (+3,6 pt) — la seule marge que la sélection n'alloue pas ; en base personne elle est
 conforme. Immobiles **10,6 %** ; **scolaires (6-17 ans) avec activité d'études 131 / 148 =
-88,5 %** (seuil 88, enquête 90-95 ; v3 : 54 %) ; mobilité 2,44 déplacements par persona et 2,73
+88,5 %** (seuil 88, enquête 90-95 ; v3 : 54 %) ; mobilité 3,33 déplacements par persona et 3,73
 par mobile (enquête 3,53 / 3,95). Audit de périmètre : A1, A2, A4, A9 conformes, A3, A5, A8 à
 publier, A6 et A7 propriétés d'un run. À publier aussi : l'équipement vélo, chaque taille de
 ménage dans sa tolérance mais pente non monotone entre les tailles 3 et 4 (63,4 % > 55,5 %, sur
@@ -361,7 +361,7 @@ en avait 9 à corriger (3ᵉ couronne −5,2 pt, immobiles 15,1 %, temps partiel
 **Ménages** : 514, dont 485 complets au sens strict de la taille déclarée (94,4 %) — les 29 autres
 n'ont que des enfants de moins de 5 ans absents, hors population enquêtée ; 96,7 % des membres
 déclarés présents ; audit A8 : 2,5 % de membres absents (54,6 % en v2, 11,2 % sur la population
-de référence). **Mobilité** : 2,58 déplacements par persona, 2,88 par persona mobile (enquête 3,53
+de référence). **Mobilité** : 3,47 déplacements par persona, 3,88 par persona mobile (enquête 3,53
 et 3,95) — l'écart restant est celui des chaînes ENTD 2008, seul « à publier » de la synthèse.
 Depuis le 2026-09-03, les journées donneuses ENTD sont des **jours de classe** (hors vacances
 scolaires, hors mercredi des moins de 11 ans — fork eqasim, ticket 031 § 1.2) : la v3 avait été
@@ -382,7 +382,7 @@ d'appariement, ni le seuil de `config_toulouse.yml` (ticket 008, A1.a) : synpp r
 défauts, `filter_hts: True`, soit **308 donneurs ENTD** résidents de Haute-Garonne pour 12 000
 personnes à apparier, et une dégradation qui abandonnait la classe d'âge avant le sexe. Les
 chaînes d'activités de la v3 — et des populations précédentes générées par le service — viennent
-de ce vivier réduit ; c'est une part de l'écart de mobilité « à publier » (2,58 déplacements par
+de ce vivier réduit ; c'est une part de l'écart de mobilité « à publier » (3,47 déplacements par
 persona contre 3,53) et de la moitié des scolaires sans école. Le service part désormais de
 `config_toulouse.yml` (source unique) ; la v4 sera la première population appariée sur l'ENTD
 nationale avec la classe d'âge tenue.

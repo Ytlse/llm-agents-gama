@@ -279,7 +279,7 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
   (cible 10,6) ; **scolaires (6-17 ans) avec activité d'études 133 / 149 = 89,3 %** (seuil 88,
   enquête 90-95 ; v3 : 54 %) ; 505 ménages, 457 complets au sens de la taille déclarée (90,5 %),
   95,1 % des membres déclarés présents ; mobilité 2,47 déplacements par persona et 2,76 par mobile
-  (v3 : 2,58 / 2,88 ; enquête 3,53 / 3,95) — l'écart de mobilité reste à publier, il ne tient
+  (v3 : 2,58 / 2,88 ; enquête 3,53 / 3,95 — chiffres sous l'ancienne convention n − 1, corrigée le soir : voir § mobilité) — l'écart de mobilité reste à publier, il ne tient
   plus au vivier de donneurs mais aux chaînes ENTD 2008 après fusion des activités consécutives.
   Le recoupement du tableau § 2.1 du protocole garde ses 7 lignes en écart (Annexe F).
 - **Audit de périmètre** (`make audit-perimetre`, trace
@@ -313,7 +313,7 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
 - **Contrôle** (trace `…_18-16_controle_toulouse_population_1000_AAMAS_v4/`) : **12 conformes,
   0 à corriger, 1 à publier** — motorisation en base ménage (1/taille, n_eff 752) : sans voiture
   22,8 % contre 19,2 % (+3,6 pt), la seule marge non allouée ; immobiles 10,6 % ; **scolaires
-  131 / 148 = 88,5 %** (seuil 88) ; 2,44 déplacements par persona, 2,73 par mobile (enquête 3,53 /
+  131 / 148 = 88,5 %** (seuil 88) ; 3,33 déplacements par persona, 3,73 par mobile sous la convention cyclique corrigée le 2026-09-03 au soir (2,44 / 2,73 avec l'ancienne convention n − 1 ; enquête 3,53 /
   3,95). **Audit** (`…_18-16_audit_perimetre_v4/`) : A1, A2, A4, A9 conformes ; A3, A5, A8 à
   publier ; A6, A7 propriétés d'un run.
 - **Sceau** : MANIFEST avec `perimetre` (définition, départements attendus / retenus, activités hors

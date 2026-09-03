@@ -365,7 +365,14 @@ def households_and_mobility(personas: list[Persona]) -> dict:
     complets = sum(1 for h, n in present.items() if h in declared and n >= int(declared[h]))
     membres_declares = sum(int(declared[h]) for h in present if h in declared)
     membres_presents = sum(present.values())
-    trips = [max(p.n_activites - 1, 0) for p in personas]
+    # Déplacements par persona. La chaîne d'activités est CYCLIQUE : l'étape 2 du notebook
+    # fusionne le domicile du soir et celui du matin en une seule activité (0 chaîne commençant
+    # et finissant par `home` dans les sceaux v3 et v4), et l'étape 4+5 route n paires pour n
+    # activités, la dernière étant le retour vers la première. Une journée domicile → travail →
+    # domicile fait donc 2 activités et 2 déplacements — pas n − 1, qui oubliait le retour et
+    # sous-comptait d'un déplacement chaque persona mobile (mesuré le 2026-09-03 : 2,44 au lieu
+    # de 3,33 par persona sur la v4, pour 3,53 dans l'enquête). Un immobile (une activité) : 0.
+    trips = [p.n_activites if p.n_activites > 1 and not p.immobile else 0 for p in personas]
     n = len(personas) or 1
     mobiles = [t for t in trips if t > 0]
     scolaires = [p for p in personas if p.scolaire]

@@ -1,7 +1,7 @@
 {
- "date": "2026-09-03T16:16:44+00:00",
+ "date": "2026-09-03T16:57:38+00:00",
  "population": {
-  "path": "data/population/toulouse_population_1000_AAMAS.json",
+  "path": "/private/tmp/claude-504/-Users-yvesb-Documents-Projects-llm-agents-gama/0af5ab11-ae01-48e8-aad7-2fd71ade9450/scratchpad/population_1000_AAMAS_v4_avant_rescellement/population.json",
   "n": 1000,
   "sha256": "9f05c655c3ad2cf4d8c71cc3c34238417718cec742b42ef94a21eb33f694639f"
  },
@@ -39,8 +39,8 @@
   "membres_declares": 1052,
   "part_membres_presents_pct": 95.1,
   "sans_household_id": 0,
-  "deplacements_par_persona": 2.441,
-  "deplacements_par_persona_mobile": 2.73,
+  "deplacements_par_persona": 3.335,
+  "deplacements_par_persona_mobile": 3.73,
   "immobiles": 106,
   "part_immobiles_pct": 10.6,
   "reference_enquete": {
@@ -1409,85 +1409,110 @@
  "recoupement": [
   {
    "ligne": "Genre — Femmes",
-   "valeur_publiee_protocole": 51.8,
+   "valeur_publiee_protocole": 51.3,
    "reference": 51.3,
-   "ecart_pt": -0.5,
-   "source_reference": "recalcul microdonnées (P2, COEP) — non publié",
+   "ecart_pt": -0.0,
+   "source_reference": "recalcul microdonnées (P2, COEP) — non publié (cm1)",
    "statut": "concordant"
   },
   {
    "ligne": "Genre — Hommes",
-   "valeur_publiee_protocole": 48.2,
+   "valeur_publiee_protocole": 48.7,
    "reference": 48.7,
-   "ecart_pt": 0.5,
-   "source_reference": "recalcul microdonnées (P2, COEP) — non publié",
+   "ecart_pt": 0.0,
+   "source_reference": "recalcul microdonnées (P2, COEP) — non publié (cm1)",
    "statut": "concordant"
   },
   {
-   "ligne": "Âge — Moins de 18 ans",
-   "valeur_publiee_protocole": 19.4,
+   "ligne": "Âge — 5-17 ans",
+   "valeur_publiee_protocole": 16.0,
    "reference": 16.0,
-   "ecart_pt": -3.4,
-   "source_reference": "rapport p. 11 (6 classes agrégées) — population de 5 ans et +",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
   },
   {
-   "ligne": "Âge — 18-64 ans",
-   "valeur_publiee_protocole": 62.1,
-   "reference": 68.0,
-   "ecart_pt": 5.9,
-   "source_reference": "rapport p. 11 (6 classes agrégées) — population de 5 ans et +",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "ligne": "Âge — 18-24 ans",
+   "valeur_publiee_protocole": 13.0,
+   "reference": 13.0,
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
+  },
+  {
+   "ligne": "Âge — 25-34 ans",
+   "valeur_publiee_protocole": 14.0,
+   "reference": 14.0,
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
+  },
+  {
+   "ligne": "Âge — 35-49 ans",
+   "valeur_publiee_protocole": 22.0,
+   "reference": 22.0,
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
+  },
+  {
+   "ligne": "Âge — 50-64 ans",
+   "valeur_publiee_protocole": 19.0,
+   "reference": 19.0,
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
   },
   {
    "ligne": "Âge — 65 ans et plus",
-   "valeur_publiee_protocole": 18.5,
+   "valeur_publiee_protocole": 16.0,
    "reference": 16.0,
-   "ecart_pt": -2.5,
-   "source_reference": "rapport p. 11 (6 classes agrégées) — population de 5 ans et +",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "ecart_pt": 0.0,
+   "source_reference": "rapport p. 11 (6 classes publiées) — population de 5 ans et +",
+   "statut": "concordant"
   },
   {
    "ligne": "Ménages sans voiture",
-   "valeur_publiee_protocole": 22.3,
+   "valeur_publiee_protocole": 19.0,
    "reference": 19.0,
-   "ecart_pt": -3.3,
+   "ecart_pt": 0.0,
    "source_reference": "rapport p. 21 (base ménage)",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "statut": "concordant"
   },
   {
    "ligne": "Ménages avec 1 voiture",
-   "valeur_publiee_protocole": 46.1,
+   "valeur_publiee_protocole": 45.0,
    "reference": 45.0,
-   "ecart_pt": -1.1,
+   "ecart_pt": 0.0,
    "source_reference": "rapport p. 21 (base ménage)",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "statut": "concordant"
   },
   {
-   "ligne": "Ménages avec 2+ voitures",
-   "valeur_publiee_protocole": 31.6,
+   "ligne": "Ménages avec 2 voitures et +",
+   "valeur_publiee_protocole": 35.0,
    "reference": 35.0,
-   "ecart_pt": 3.4,
+   "ecart_pt": 0.0,
    "source_reference": "rapport p. 21 (base ménage)",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "statut": "concordant"
   },
   {
-   "ligne": "Détention du permis (adultes)",
-   "valeur_publiee_protocole": 84.2,
+   "ligne": "Détention du permis (18 ans et +)",
+   "valeur_publiee_protocole": 85.9,
    "reference": 85.9,
-   "ecart_pt": 1.7,
-   "source_reference": "recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié",
-   "statut": "ÉCART — à consigner (Annexe F)"
+   "ecart_pt": -0.0,
+   "source_reference": "recalcul microdonnées (P7 = 1, 18 ans et +, COEP) — non publié (cm1)",
+   "statut": "concordant"
+  },
+  {
+   "ligne": "Personnes sans déplacement la veille",
+   "valeur_publiee_protocole": 10.6,
+   "reference": 10.6,
+   "ecart_pt": 0.0,
+   "source_reference": "recalcul microdonnées (aucun déplacement la veille, COEP) — non publié (cm1)",
+   "statut": "concordant"
   }
  ],
  "synthese": [
-  {
-   "ecart": "mobilité quotidienne",
-   "amplitude": "2.44 déplacements par persona contre 3.53 dans l'enquête ; 10.6 % d'immobiles contre 10.6 %",
-   "nature": "chaînes d'activités (ENTD 2008 appariée par eqasim)",
-   "verdict": "à publier",
-   "refermable_au_scellement": "non — enquête d'appariement (levier eqasim)"
-  },
   {
    "ecart": "motorisation_menage",
    "amplitude": "sans voiture : 22.8 % contre 19.2 % (+3.6 pt)",
@@ -1502,5 +1527,5 @@
   "à corriger": 0,
   "non mesurable": 0
  },
- "duree_s": 1.21
+ "duree_s": 1.11
 }
