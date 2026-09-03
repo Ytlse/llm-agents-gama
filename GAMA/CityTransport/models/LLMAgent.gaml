@@ -138,6 +138,13 @@ species llm_agent_sync skills:[network] {
 						INHABITANT_MAP[self.person_id] <- self;
 					}
 				}
+				// Ticket 031 (G1) : aucun agent ne doit être hors du monde GAMA. Compté et journalisé
+				// une fois, à la création — c'est la mesure « zéro agent hors monde GAMA » du run.
+				int hors_monde <- length(inhabitant where (!(world.shape covers each.location)));
+				write "[PERIMETRE] " + length(people) + " habitants créés, " + hors_monde + " hors du monde GAMA.";
+				if (hors_monde > 0) {
+					write "[ALARME] " + hors_monde + " habitant(s) hors du monde GAMA : le périmètre de la population et l'emprise du monde (perimetre_453.shp) ne coïncident pas.";
+				}
 			} else if messageType = "calibration_started" {
 				// Accusé de démarrage de la calibration du prompt
 				map<string, unknown> data <- json["data"];

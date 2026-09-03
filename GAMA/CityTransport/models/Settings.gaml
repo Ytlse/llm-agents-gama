@@ -51,14 +51,22 @@ global {
 	string display_time_info -> current_day_name + " " + current_date+ " | Écoulé : " + (elapsed_days > 0 ? string(elapsed_days) + "j " : "") + string(elapsed_hours) + "h " + string(elapsed_minutes) + "m";
 
 	// Shape
+	// Monde = enveloppe du POLYGONE des 453 communes de l'enquête EMC² 2023 (ticket 031, G1),
+	// exporté par scripts/data/gama/export_perimetre_shapefile.py (WGS84, comme routes.shp).
+	// Avant le 2026-09-03 : envelope(routes0_shape_file), l'emprise des lignes Tisséo — 163 domiciles
+	// de la population en étaient dehors (rapport de périmètre). Ce fichier est chargé le PREMIER :
+	// c'est lui qui fixe la projection interne de GAMA (WGS84 → UTM, comme routes.shp avant lui).
+	file perimetre_shape_file <- shape_file("../includes/perimetre_453.shp");
 	file routes0_shape_file <- shape_file("../includes/routes.shp");
 	//file shape_file_buildings <- file("../includes/building.shp");
 	file stops0_shape_file <- shape_file("../includes/stops.shp");
 	file trip_info_file <- json_file("../includes/trip_info.json");
 	map<string, unknown> TRIP_INFO <- trip_info_file.contents;
 	list<map<string, unknown>> TRIP_LIST <- TRIP_INFO["trip_list"];
-	
-	geometry shape <- envelope(routes0_shape_file);
+
+	geometry shape <- envelope(perimetre_shape_file);
+	// Emprise des lignes TC (Tisséo), pour l'avertissement de couverture au chargement.
+	geometry ROUTES_ENVELOPE <- envelope(routes0_shape_file);
 	
 	map<float, float> ROUTE_DISPLAY_WIDTH <- [
 		0::20, // T1: 
@@ -137,6 +145,15 @@ global {
 	
 	init {
 		do load_sim_config;
+		// Couverture du monde par le réseau TC (ticket 031, G1). Attendu depuis le passage au
+		// polygone des 453 communes : Tisséo ne dessert pas la 3ᵉ couronne, ses lignes ne couvrent
+		// pas le monde — l'avertissement dit de combien, pour qu'on ne le découvre pas agent par agent.
+		if (!(ROUTES_ENVELOPE covers shape)) {
+			float part_couverte <- shape.area > 0 ? (shape inter ROUTES_ENVELOPE).area / shape.area : 0.0;
+			write "[PERIMETRE] Monde = enveloppe du périmètre des 453 communes (" + int(shape.width / 1000) + " x " + int(shape.height / 1000) + " km) ; les lignes TC (routes.shp) n'en couvrent que " + int(part_couverte * 100) + " % — les agents hors de leur emprise n'ont pas de transport collectif Tisséo.";
+		} else {
+			write "[PERIMETRE] Monde = enveloppe du périmètre des 453 communes, entièrement couvert par les lignes TC.";
+		}
 	}
 
 }

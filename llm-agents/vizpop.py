@@ -12,14 +12,23 @@ import folium
 import osmnx as ox
 from flask import Flask, Response
 from shapely import wkt
-from shapely.geometry import box, mapping
 
-from geography import TOULOUSE_TRANSIT_SERVICE_WKT, TOULOUSE_OSM_ROUTES_30K_BBOX
+from geography import TOULOUSE_TRANSIT_SERVICE_WKT
 
 app = Flask(__name__)
 
 _HERE = Path(__file__).resolve().parent
 _HG_CACHE = _HERE / ".hg_boundary.geojson"
+
+# Géométrie des quatre couronnes de l'enquête EMC² 2023 = le périmètre des 453 communes (ticket
+# 031, partie 2). Dépôt (dev local) ou montage du conteneur controller (/opt/llm_module).
+_COURONNES_CANDIDATES = (
+    _HERE.parent / "llm_module" / "data" / "couronne_perimetre.geojson",
+    Path("/opt/llm_module/data/couronne_perimetre.geojson"),
+)
+_COURONNE_COLORS = {
+    "Toulouse": "#7c3aed", "1ere couronne": "#2563eb", "2eme couronne": "#0891b2", "3eme couronne": "#64748b",
+}
 
 
 def _experiments_current() -> Path:
@@ -70,6 +79,20 @@ def _transit_polygon_coords() -> list[tuple[float, float]]:
     return [(lat, lon) for lon, lat in poly.exterior.coords]
 
 
+def _get_couronnes_geojson() -> dict | None:
+    """Les quatre couronnes (WGS84) en GeoJSON, ou None si la ressource manque (le fond dit pourquoi)."""
+    for cand in _COURONNES_CANDIDATES:
+        if cand.exists():
+            try:
+                return json.loads(cand.read_text(encoding="utf-8"))
+            except Exception as exc:
+                print(f"[vizpop] couronne_perimetre.geojson illisible ({cand}) : {exc}", file=sys.stderr)
+                return None
+    print("[vizpop] couronne_perimetre.geojson introuvable : le périmètre des 453 communes n'est pas tracé",
+          file=sys.stderr)
+    return None
+
+
 def _build_map(files: list[Path]) -> tuple[folium.Map, int, int]:
     m = folium.Map(location=[43.6, 1.44], zoom_start=11, tiles="CartoDB positron")
 
@@ -88,21 +111,25 @@ def _build_map(files: list[Path]) -> tuple[folium.Map, int, int]:
             tooltip="Haute-Garonne (31)",
         ).add_to(m)
 
-    # ── Simulation area — OSMnx bbox (light grey rectangle) ─────────────────
-    min_lon, min_lat, max_lon, max_lat = TOULOUSE_OSM_ROUTES_30K_BBOX
-    folium.Rectangle(
-        bounds=[[min_lat, min_lon], [max_lat, max_lon]],
-        color="#94a3b8",
-        weight=1.5,
-        dash_array="6 4",
-        fill=True,
-        fill_color="#94a3b8",
-        fill_opacity=0.06,
-        tooltip="Zone simulation (OSMnx 30 km)",
-        name="Zone simulation",
-    ).add_to(m)
+    # ── Périmètre de simulation : les quatre couronnes des 453 communes (ticket 031) ──
+    # Avant le 2026-09-03 : le rectangle gris du graphe OSMnx de 30 km, qui n'était pas le
+    # périmètre d'étude et laissait la 3ᵉ couronne dehors.
+    couronnes = _get_couronnes_geojson()
+    if couronnes:
+        folium.GeoJson(
+            couronnes,
+            name="Périmètre 453 communes",
+            style_function=lambda feat: {
+                "color": _COURONNE_COLORS.get(feat["properties"].get("couronne"), "#94a3b8"),
+                "weight": 1.5,
+                "dashArray": "6 4",
+                "fillColor": _COURONNE_COLORS.get(feat["properties"].get("couronne"), "#94a3b8"),
+                "fillOpacity": 0.05,
+            },
+            tooltip=folium.GeoJsonTooltip(fields=["couronne"], aliases=["Couronne EMC²"]),
+        ).add_to(m)
 
-    # ── Tisseo transit zone (yellow polygon) ────────────────────────────────
+    # ── Desserte TC : enveloppe des arrêts Tisséo + TER dans le polygone (T4, jaune) ─
     folium.Polygon(
         locations=_transit_polygon_coords(),
         color="#eab308",
@@ -110,8 +137,8 @@ def _build_map(files: list[Path]) -> tuple[folium.Map, int, int]:
         fill=True,
         fill_color="#eab308",
         fill_opacity=0.12,
-        tooltip="Zone Tisseo (OTP)",
-        name="Zone Tisseo",
+        tooltip="Desserte TC (arrêts Tisséo + TER dans le périmètre)",
+        name="Desserte TC",
     ).add_to(m)
 
     # ── Population layers ────────────────────────────────────────────────────
@@ -225,15 +252,15 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <h1>Population Visualizer — Haute-Garonne</h1>
+    <h1>Population Visualizer — périmètre EMC² (453 communes)</h1>
     <span id="status">Chargement…</span>
     <button id="refresh" onclick="loadMap()" disabled>↻ Actualiser</button>
   </header>
   <div class="legend">
     <div class="legend-item"><div class="dot" style="background:#3b82f6"></div> Domicile</div>
     <div class="legend-item"><div class="dot" style="background:#22c55e"></div> Activité</div>
-    <div class="legend-item"><div class="rect" style="background:#eab308;opacity:.6"></div> Zone Tisseo</div>
-    <div class="legend-item"><div class="rect" style="background:#94a3b8;opacity:.5"></div> Zone simulation</div>
+    <div class="legend-item"><div class="rect" style="background:#eab308;opacity:.6"></div> Desserte TC (Tisséo + TER)</div>
+    <div class="legend-item"><div class="rect" style="background:#2563eb;opacity:.5"></div> Périmètre 453 communes (couronnes)</div>
     <div class="legend-item">
       <div style="width:18px;height:0;border-top:2px dashed #ef4444"></div>
       Haute-Garonne
