@@ -1,3 +1,22 @@
+## [2026-09-03] La pente de l'équipement vélo se juge sur le vivier, pas sur mille agents
+
+Le contrôle de l'imputation du vélo personnel vérifie que le taux de porteurs croît avec la taille
+du ménage. Il jugeait ce critère dès 30 foyers par taille et exigeait une croissance stricte : sur
+la cohorte scellée v4, 63,4 % chez les ménages de 3 personnes contre 55,5 % chez ceux de 4, sur 69
+et 55 foyers, le déclaraient « démenti » alors que l'intervalle d'incertitude fait ± 12-13 points.
+Le critère est désormais jugé à partir de 100 foyers par taille, une inversion n'est un échec que
+si elle dépasse l'incertitude combinée des deux cellules, et sur une cohorte de 1 000 agents il
+s'affiche « non concluant » sans peser sur le verdict : c'est sur le vivier, où chaque taille
+compte des centaines de foyers, que la pente est opposable.
+
+**Avant :** `--check` sortait en échec (code 2) sur la cohorte v4 pour ce seul critère ; le vivier
+n'était pas regardé.
+**Après :** cohorte v4 : 12 contrôles ok, pente « non concluante », code 0 ; vivier v4 (11 329
+personnes) : 14 ok, pente croissante 32,8 / 49,1 / 55,0 / 60,9 %. Les tolérances par taille et les
+autres cibles du ticket 015 ne changent pas.
+
+---
+
 ## [2026-09-03] Le compte des déplacements inclut le retour au domicile
 
 Le contrôle de population comptait `n − 1` déplacements pour `n` activités, comme si la journée

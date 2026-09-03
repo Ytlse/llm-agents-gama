@@ -295,7 +295,7 @@ Vérifiés sur `toulouse_population_1000.json` (976 personas dotés du trait sur
 - [x] personnes dotées d'un vélo : **50,9 %** (± 3 pts) → obtenu **50,3 %**
 - [x] gradient de taille de ménage **croissant** → obtenu **34,8 / 49,7 / 60,9 / 67,5 %**
       pour les tailles 1 à 4, contre 33,4 / 47,7 / 54,3 / 63,2 attendus sous les règles du
-      mécanisme. **La pente est croissante** : le défaut central du ticket est corrigé.
+      mécanisme. **La pente est croissante** : le défaut central du ticket est corrigé. *(Règle de jugement précisée le 2026-09-03 : pente jugée à partir de 100 foyers par taille, inversion tolérée dans l'incertitude combinée — `slope_verdict` ; sur une cohorte de 1 000 le critère s'affiche « non concluant » et se juge sur le vivier.)*
       Les tailles 5 et 6 restent **non concluantes** (19 et 10 ménages seulement)
 - [x] pratiquants par vélo : courbe 0,84 / 0,62 / 0,56 / 0,54 → **reproduite à
       l'identique** par le rejeu du mécanisme sur l'enquête (`validation.targets`)

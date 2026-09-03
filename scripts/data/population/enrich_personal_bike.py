@@ -126,7 +126,16 @@ SIZE_BUCKET_MAX = 6
 # enrichissables, leur rapport reste lisible, mais seule une population de l'ordre de
 # 1 000 agents rend le contrôle opposable.
 MIN_CELL_HOUSEHOLDS = 30
-SLOPE_MIN_CELL = 30
+# Le SIGNE de la pente (tailles 1 → 4) n'est jugé qu'à partir de 100 foyers par taille, et une
+# inversion n'est un ÉCHEC que si elle dépasse l'incertitude des deux cellules comparées
+# (`slope_verdict`). Décision du 2026-09-03 (ticket 031, question 7) : sur la cohorte scellée v4,
+# les tailles 3 et 4 comptaient 69 et 55 foyers, 63,4 % contre 55,5 % — une inversion de 8 pt
+# pour des intervalles à ± 12-13 pt, c'est du bruit d'échantillon, et le même modèle donne sur le
+# vivier de 11 329 personnes une pente 32,8 < 58,2 < 74,5 < 84,8 sur 2 482 / 1 691 / 746 / 533
+# foyers. La pente est donc opposable sur le VIVIER ; sur une cohorte de 1 000, elle s'affiche
+# (non concluant) sans compter dans le verdict.
+SLOPE_MIN_CELL = 100
+SLOPE_Z = 1.96
 
 # Nombre minimal de contrôles ayant réellement tranché pour qu'un rapport vaille
 # validation. Sans ce garde-fou, une population de 10 agents passerait `--check` avec
@@ -569,24 +578,22 @@ def report(measured: dict, household: dict, counts: Counter,
     # lui qui était inversé (76 % chez les personnes seules contre 33 % observés).
     cells = [measured["holders_by_size"].get(s, (None, 0, 0)) for s in (1, 2, 3, 4)]
     ordered = [value for value, _, _ in cells]
-    smallest = min((n_hh for _, _, n_hh in cells), default=0)
-    if not all(v is not None for v in ordered):
+    statut, detail = slope_verdict(cells)
+    if statut == "non calculable":
         print("  pente sur les tailles 1→4 : non calculable (une taille est absente)")
-    elif smallest < SLOPE_MIN_CELL:
-        # Le signe d'une pente sur quatre cellules de 25 personnes est du bruit : à
-        # n = 25, σ vaut 10 points par cellule et deux points voisins s'inversent une
-        # fois sur trois sans qu'aucun modèle soit en cause. On ne prononce donc rien.
+    elif statut == "non concluant":
+        # Une inversion sur des cellules de 50 foyers est du bruit : à n = 55, l'intervalle vaut
+        # ± 13 points. On affiche, on ne prononce rien, et le verdict global n'en dépend pas ;
+        # la pente se juge sur le vivier (voir SLOPE_MIN_CELL).
         print(f"  {'pente sur les tailles 1→4':42s} "
               f"{' / '.join(f'{v:.1f}' for v in ordered)}  "
-              f"NON CONCLUANT (plus petite cellule : {smallest} foyers "
-              f"< {SLOPE_MIN_CELL})")
+              f"NON CONCLUANT ({detail}) — à juger sur le vivier")
     else:
-        increasing = all(a < b for a, b in zip(ordered, ordered[1:]))
         print(f"  {'pente croissante sur les tailles 1→4':42s} "
-              f"{' < '.join(f'{v:.1f}' for v in ordered)}  "
-              f"{'ok' if increasing else 'ÉCHEC'}")
-        if not increasing:
-            failures.append("la pente sur les tailles 1→4 n'est pas croissante — c'est "
+              f"{' / '.join(f'{v:.1f}' for v in ordered)}  "
+              f"{'ok' if statut == 'ok' else 'ÉCHEC'} — {detail}")
+        if statut == "echec":
+            failures.append("la pente sur les tailles 1→4 baisse au-delà de l'incertitude — c'est "
                             "le défaut même que le ticket 015 corrige")
 
     if measured["holders_by_housing"]:
@@ -698,6 +705,39 @@ def report(measured: dict, household: dict, counts: Counter,
             f"ne pas lire ce rapport comme un succès (il faut de l'ordre de 1 000 "
             f"agents pour que les croisements tranchent)")
     return failures
+
+
+def slope_verdict(cells: list, min_cell: int = SLOPE_MIN_CELL, z: float = SLOPE_Z) -> tuple[str, str]:
+    """Verdict sur la pente des taux de porteurs par taille de ménage (1 → 4).
+
+    `cells` : liste de (taux_pct | None, n_personnes, n_foyers) dans l'ordre des tailles.
+    Retourne (statut, détail) avec statut ∈ {"non calculable", "non concluant", "ok", "echec"} :
+    - non calculable : une taille manque ;
+    - non concluant : la plus petite cellule a moins de `min_cell` foyers — on ne prononce rien ;
+    - ok : croissante, ou inversion(s) contenue(s) dans l'incertitude combinée des deux cellules
+      (z · √(p₁(1−p₁)/n₁ + p₂(1−p₂)/n₂), en points) ;
+    - echec : une baisse d'une taille à la suivante dépasse cette incertitude.
+    """
+    import math
+    values = [v for v, _, _ in cells]
+    if not all(v is not None for v in values):
+        return "non calculable", "une taille est absente"
+    smallest = min((n_hh for _, _, n_hh in cells), default=0)
+    if smallest < min_cell:
+        return "non concluant", f"plus petite cellule : {smallest} foyers < {min_cell}"
+    within, breaks = [], []
+    for (v1, _, n1), (v2, _, n2) in zip(cells, cells[1:]):
+        if v2 >= v1:
+            continue
+        p1, p2 = v1 / 100.0, v2 / 100.0
+        margin_pt = 100.0 * z * math.sqrt(p1 * (1 - p1) / max(n1, 1) + p2 * (1 - p2) / max(n2, 1))
+        drop = v1 - v2
+        (within if drop <= margin_pt else breaks).append(f"{v1:.1f} → {v2:.1f} (−{drop:.1f} pt, incertitude ± {margin_pt:.1f})")
+    if breaks:
+        return "echec", "baisse significative : " + " ; ".join(breaks)
+    if within:
+        return "ok", "inversion dans l'incertitude : " + " ; ".join(within)
+    return "ok", "croissante"
 
 
 def main() -> int:

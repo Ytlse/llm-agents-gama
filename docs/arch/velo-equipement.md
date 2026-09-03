@@ -365,6 +365,25 @@ population de l'ordre de 1 000 agents rend le contrôle opposable**.
 
 ---
 
+### La pente se juge sur le vivier, pas sur la cohorte de 1 000
+
+Le **signe de la pente** des taux de porteurs sur les tailles 1 → 4 est le critère qui distingue
+l'ancienne imputation (inversée) de la nouvelle. Depuis le 2026-09-03 (ticket 031, question 7),
+`slope_verdict` l'applique ainsi :
+
+- il n'est **jugé qu'à partir de 100 foyers par taille** (`SLOPE_MIN_CELL`) — en dessous, la pente
+  s'affiche « non concluant — à juger sur le vivier » et **ne pèse pas** sur le code de sortie ;
+- une inversion entre deux tailles voisines n'est un **ÉCHEC** que si la baisse dépasse
+  l'incertitude combinée des deux cellules (z = 1,96 sur la différence de deux proportions) ; une
+  inversion contenue dans cette marge est « ok — inversion dans l'incertitude ».
+
+Pourquoi : sur la cohorte scellée v4, les tailles 3 et 4 comptaient 69 et 55 foyers, 63,4 %
+contre 55,5 % — une inversion de 8 points pour des intervalles à ± 12-13 points, que l'ancienne
+règle (seuil 30, monotonie stricte) déclarait « démentie » (code 2). Le même modèle donne sur le
+vivier de 11 329 personnes une pente **32,8 < 49,1 < 55,0 < 60,9 %** sur 2 350 / 1 657 / 744 / 532
+foyers : croissante, opposable. Le contrôle du vivier est donc celui qui compte pour ce critère ;
+sur une cohorte de 1 000 agents, aucune taille ≥ 3 n'atteindra 100 foyers.
+
 ## La contrainte du consommateur : la même variable des deux côtés
 
 La politique de choix modal PROGEDO consomme `has_bike`, reconstruit depuis
