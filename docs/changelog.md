@@ -1,3 +1,60 @@
+## [2026-09-03] La simulation tourne sur le périmètre de l'enquête, pas sur un rectangle de 30 km
+
+Le périmètre d'étude — les **453 communes** de l'enquête EMC² 2023, sur six départements — est
+désormais celui de toute la chaîne, et non plus seulement celui du fichier de population. Le
+chargement admet un agent parce que **la commune de son domicile est l'une des 453**
+(`household.commune_id`), plus parce que ses coordonnées tombent dans un rectangle ; le graphe
+OSMnx du runtime, l'extrait OSM d'OTP et le monde GAMA prennent le polygone des communes.
+
+Une école ou un lieu de travail hors du polygone **n'écarte plus l'agent** — le domicile fait le
+périmètre : l'activité est comptée dans le journal et une alarme se lève au-delà de 1 % des
+activités localisées. Et un fichier scellé se charge entier ou se refuse : si l'effectif après
+filtre n'est pas celui attendu, rien n'est chargé plutôt qu'une population rognée qui n'est plus
+celle du MANIFEST.
+
+**Avant :** un rectangle de 30 km écartait tout agent dont le domicile **ou une seule activité**
+sortait — 77 des 1 000 agents de la population scellée v4 (60 domiciles, dont 55 de 3ᵉ couronne,
+et 105 activités), donc un sceau refusé et une 3ᵉ couronne absente de la simulation. Le monde
+(`WorldGrid`) s'arrêtait à l'emprise des arrêts Tisséo ± 5 km, qui ne contient que 221 des
+453 communes : un domicile de 3ᵉ couronne y faisait tomber une assertion.
+**Après :** 1 000 / 1 000 agents chargés, **0 écarté, 0 activité hors du polygone**, mesuré au
+premier chargement du sceau v4 puis confirmé sur un run d'une journée en mode headless. Le monde
+couvre le polygone (86 × 93 km) uni à l'emprise des arrêts. Un graphe OSMnx absent est une erreur
+explicite, plus un téléchargement silencieux d'un autre périmètre sous le même nom.
+
+Côté OTP, l'extrait OSM devient le polygone exact des 453 communes : **0 échec de rattachement**
+(« Couldn't link ») sur les 2 580 domiciles et lieux d'activité de la v4, contre trois gares TER
+et toute la 3ᵉ couronne hors du rectangle avant. Reste à publier comme limite : sans le GTFS liO
+(cars interurbains, non téléchargé), les 2ᵉ et 3ᵉ couronnes n'ont qu'une fraction de leur offre
+réelle en transports collectifs — 364 des 2 580 points n'ont aucun arrêt à portée.
+
+---
+
+## [2026-09-03] Un vélo sur trois roulait à la vitesse de repli ; les durées de trajet changent de version
+
+Sur le graphe du polygone des 453 communes, **32 % des arêtes cyclables** n'avaient pas de vitesse
+dans `config/osmnx.yaml` et tombaient au repli de 14 km/h : les chemins ruraux (`track`, 8 494 km
+de 3ᵉ couronne), les voies de desserte (`service`, 6 372 km), les bretelles, les aires piétonnes.
+Chaque type manquant a reçu sa vitesse **avec sa source citée** (profil `bike` de GraphHopper ;
+code de la route pour les sections où le vélo se pousse à pied, et pour la zone de rencontre à
+20 km/h) — aucune valeur muette.
+
+**Avant :** vélo 32,0 % des arêtes en repli, marche 5,1 %, voiture 1,2 % — un trajet cyclable de
+3ᵉ couronne était chronométré à une vitesse par défaut, pas à celle de sa voirie.
+**Après :** vélo **0,0 %** (2 arêtes sur 360 801, porteuses d'une valeur OSM aberrante), marche
+0,3 %, voiture 0,3 %. Les vitesses se reposent sur le graphe déjà construit en 26 s
+(`build_osmnx_perimeter_graph.py --respeed`) : le pickle porte les vitesses de sa construction, la
+configuration seule ne suffit pas.
+
+En conséquence, **`routing_version` passe de `r1` à `r2`**. La clé du cache SQLite des itinéraires
+directs ne porte pas le graphe : sans ce changement de version, une durée calculée sur l'ancien
+disque de 30 km — dont les replis à 70 km/h des trajets de 3ᵉ couronne — serait resservie sur le
+polygone. Les anciennes lignes restent lisibles pour l'audit, aucune n'est réutilisée. Rien à
+purger par ailleurs : les caches d'itinéraires sont par population, et une population nouvelle
+part vierge.
+
+---
+
 ## [2026-09-03] Ticket 034 : le vélo d'un persona dépend de l'ordre du fichier, et deux lois cohabitent
 
 Constat consigné, sans changement de comportement (décision non prise). L'attribution du vélo

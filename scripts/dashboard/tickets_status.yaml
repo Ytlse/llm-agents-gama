@@ -1204,8 +1204,28 @@ tickets:
       cadre corrigé (personnes à commune undefined pondérées : 17 986 → 11 329 personnes) ;
       congestion par zone d'arête livrée ; SCEAU v4 posé à 18:16 (population_1000_AAMAS_v4,
       sha256 9f05c655…, 12 marges conformes + motorisation ménage à publier, six départements,
-      scolaires 88,5 %), sauvegarde, config.yaml repointé, synthèse HTML v3. Reste : partie 2
-      (runtime par commune, OSMnx/OTP/GAMA sur le polygone), analyse écrite dans le ticket.
+      scolaires 88,5 %), sauvegarde, config.yaml repointé, synthèse HTML v3.
+      PARTIE 2 PORTÉE le 2026-09-03 au soir (trace
+      docs/traces/2026-09-03_22-46_ticket031_partie2_portage_chaine/). Chargement runtime : le
+      filtre rectangulaire de 30 km devient un filtre par COMMUNE du domicile
+      (inputs/population/perimeter.py, cascade commune → trait residence_zone → géométrie avec
+      [ALARME]) ; une activité hors polygone ne fait plus écarter l'agent (comptée, [ALARME] sur
+      front montant au-delà de 1 %) ; un sceau se charge entier ou se refuse ; WorldGrid élargi à
+      l'enveloppe du polygone. MESURÉ : 1 000 / 1 000 agents v4, 0 écarté, 0 activité hors polygone
+      sur 1 884 — l'ancien rectangle en écartait 77. OSMnx runtime : clé de graphe configurable
+      (défaut 444ca7e6a515 = polygone), graphe absent = GraphMissingError + [ALARME] au lieu d'un
+      téléchargement, passe O3 sur speeds.bike avec sources citées (arêtes vélo en vitesse de repli
+      32,0 % → 0,0 %), routing_version r1 → r2. OTP : T1 (extrait du polygone, ancien extrait et
+      graph.obj archivés), T4 (enveloppe TC Tisséo + TER recalculée) et T5 (fenêtre de service)
+      faits ; graphe reconstruit en 46 s / 2,0 Go ; 0 « Couldn't link » sur les 2 580 points de la
+      v4. GAMA : monde = perimetre_453.shp (86 × 93 km), avertissement de couverture TC (21 %),
+      compteur d'agents hors monde. vizpop sur les quatre couronnes. Caches : par population, rien
+      à purger, aucun jeu gelé touché. Tests 305 + 419 verts.
+      RESTE : T2/T6 (GTFS liO, 22,7 Mo — porte de téléchargement, question ouverte n° 11), G2/G3,
+      le manuscrit (§ 2.2 et annexe F, plus la largeur « 106 × 93 km » du rapport de périmètre à
+      corriger en 86 × 93), la mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider (question
+      n° 9), et le critère d'acceptation 3 (parts modales contre cibles 453) qui dépend de liO et du
+      ticket 030.
 
   ticket_032_lts_velo_propositions_gama:
     status: à faire

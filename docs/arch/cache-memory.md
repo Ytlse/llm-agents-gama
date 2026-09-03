@@ -218,7 +218,26 @@ population réutilise les routes déjà calculées au lieu de tout recalculer vi
 
 ## Cache des graphes OSMnx
 
-Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis OpenStreetMap au premier démarrage et mis en cache dans `data/osmnx_cache/`. Ce cache est persistant entre les redémarrages Docker (volume monté).
+Les graphes topologiques OSMnx (walk, bike, drive) vivent dans `data/cache/osmnx/` (monté dans les
+réplicas `osmnx` et le controller sous `/app/osmnx_cache`), sous la forme `graphs_<clé>.pkl` +
+`boundary_<clé>.pkl`. **Depuis le 2026-09-03 (ticket 031, partie 2), le graphe servi au runtime est
+celui du polygone des 453 communes** — clé `444ca7e6a515`, label
+`perimetre_453_communes:cc1:osm-220101` (`geography.PERIMETER_CACHE_KEY`), 225 Mo, construit hors
+ligne et sans téléchargement par `make osmnx-perimeter-graph` depuis les pbf OSM régionaux. La clé
+se configure (`gtfs.osmnx_graph_key`, vide = polygone) ; un graphe absent est une **erreur explicite**
+(`[ALARME]`, `GraphMissingError`), plus un téléchargement Overpass à sa place. Seul le graphe
+historique du disque de 30 km (clé `ecb40f20a303`, `PRODUCTION_CACHE_KEY_30KM`) garde sa recette de
+téléchargement, pour l'audit. Un changement des vitesses de `config/osmnx.yaml` se repose sur le
+pickle avec `build_osmnx_perimeter_graph.py --respeed` (26 s, 2,6 Go de pointe) : le pickle porte
+les vitesses de sa construction, la config seule ne suffit pas.
+
+**Les caches d'itinéraires sont par population**, pas par graphe : le cache SQLite OSMnx
+(`osmnx_persistent_cache_dir/<population>/`) et le cache OTP (`otp_persistent_cache_dir/<population>/`)
+d'une population nouvelle partent vierges — la v4 n'a rien à purger. Mais la clé SQLite OSMnx ne
+porte pas le graphe : une population déjà servie sur le disque de 30 km garderait ses durées (dont
+les replis à 70 km/h des trajets de 3ᵉ couronne). C'est pourquoi **`routing_version` passe de `r1` à
+`r2`** au changement de graphe et de vitesses vélo (`config/terminal_time.yaml`) : les anciennes
+lignes restent lisibles pour audit, aucune n'est resservie.
 
 ---
 
@@ -229,8 +248,8 @@ Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis Op
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
 | Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
 | Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | **version des données** + date + bucket 10 min + coords + mode |
-| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | **version des données** + coords + mode (+ jour-de-semaine/heure pour la voiture) |
-| Graphes OSMnx | Fichiers pickle | Volume Docker | Zone géographique + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque, par population | **`routing_version`** (`r2`) + coords + mode (+ jour-de-semaine/heure pour la voiture) |
+| Graphes OSMnx | Fichiers pickle | Volume Docker | Clé de graphe (`444ca7e6a515` = polygone des 453 communes) + mode |
 
 ### Version des données d'itinéraire dans les clés (ticket 013)
 

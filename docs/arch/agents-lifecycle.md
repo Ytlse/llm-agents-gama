@@ -87,9 +87,13 @@ pile de backpressure et du scan) :
 
 ```text
 [POST /init reçu]
-└── Lecture toulouse_population_N.json
-    └── Filtrage spatial (Bounding Box GTFS)
-    └── Filtrage PersonCloseToTheStopFilter (≤ 5 km d'un arrêt)
+└── Lecture de la population (fichier scellé `data.population_file`, ou toulouse_population_N.json)
+    └── Filtre de PÉRIMÈTRE par commune du domicile : household.commune_id ∈ 453 communes
+        (repli : trait residence_zone, puis géométrie du polygone + [ALARME]) ; une activité
+        hors polygone est comptée et alarmée au-delà de 1 %, l'agent est gardé ; un fichier
+        scellé se charge entier ou se refuse ([ALARME])            — inputs/population/perimeter.py
+    └── Second filtre au chargement des Person : trait residence_zone (eqasim_loader.perimeter_verdict)
+    └── (PersonCloseToTheStopFilter ≤ 5 km d'un arrêt : désactivé)
 └── Vérification enrichissement OSMnx dans le cache JSON
     ├── Présent → skip enrichissement
     └── Absent → calcul synchrone des routes inter-activités
@@ -102,6 +106,18 @@ pile de backpressure et du scan) :
     └── Initialisation de precomputed_horizon_act / precomputed_horizon_ts
         pour chaque agent (dernière activité calculée par les vagues)
 ```
+
+**Périmètre au chargement (ticket 031, partie 2 — 2026-09-03).** Jusqu'à ce jour, `_prepare_population`
+écartait tout agent dont le domicile **ou une seule activité** sortait du rectangle de 30 km du graphe
+OSMnx (`TOULOUSE_OSM_ROUTES_30K_BBOX`) : 77 des 1 000 agents de la population scellée v4 (60 domiciles,
+dont 55 de 3ᵉ couronne, et 105 activités), donc un sceau refusé. Le filtre porte désormais sur le
+**périmètre de l'enquête** — la commune du domicile est l'une des 453 (`household.commune_id`,
+renseigné pour tous depuis la v4). Une activité hors du polygone (école ou travail hors périmètre)
+n'écarte pas l'agent : elle est comptée dans le journal (`activités hors polygone k / n`) et une
+`[ALARME]` se lève sur front montant au-dessus de 1 % des activités localisées. Mesuré au premier
+chargement de la v4 : **1 000 / 1 000 admis par commune, 0 écarté, 0 activité hors polygone**. Le
+monde (`WorldGrid`) couvre l'enveloppe du polygone unie à celle des arrêts GTFS — avant, le seul
+rectangle des arrêts Tisséo ± 0,05°, qui ne contenait que 221 des 453 communes.
 
 **Lissage de la rafale (vague 1)** — au `/init`, tous les agents éligibles lancent leur
 premier itinéraire quasi simultanément. Sans plafond, cette rafale sature les quotas RPM/TPM

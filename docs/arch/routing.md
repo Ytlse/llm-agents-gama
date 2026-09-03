@@ -30,15 +30,24 @@ Pour garantir que l'agent arrive à l'heure à son activité, le système utilis
 ### API
 
 - Endpoint unique : `/otp/transmodel/v3` (GraphQL)
-- Données sources : OSM Toulouse (`.pbf`) + GTFS Tisséo, compilés en `graph.obj`
-- Le `graph.obj` est chargé en mémoire au démarrage (6 Go RAM par instance)
+- Données sources : extrait OSM du **polygone des 453 communes** (`data/gtfs/Toulouse.osm.pbf`,
+  OSM 2022, ticket 031 T1 — avant le 2026-09-03 : rectangle de 30 km, hors duquel un domicile de
+  3ᵉ couronne n'était pas rattachable, « Couldn't link ») + GTFS Tisséo et TER
+  (`data/gtfs/tisseo_gtfs/`, `ter_gtfs/`), compilés en `data/gtfs/graph.obj` (66 Mo, 46 s de
+  construction, 2,0 Go de pointe — [data-pipeline.md](../setup/data-pipeline.md))
+- Le `graph.obj` est chargé en mémoire au démarrage (1,2 à 1,4 Go mesurés par instance, limite 6 Go)
+- Contrôle de rattachement d'une population : `scripts/data/gtfs/otp_link_check.py` — sur la v4
+  (1 000 domiciles + 1 300 lieux d'activité distincts, lundi 8 h) : **0 `LOCATION_NOT_FOUND`**,
+  364 `noStopsInRange` et 171 `noTransitConnection` (des points sans TC, pas un défaut de graphe)
 
-> **Le TER n'est pas dans le graphe.** `data/gtfs/ter_gtfs/` existe, mais le
-> `graph.obj` en service ne contient qu'un seul feed (`tisseo`), et
-> `transportModes` ne demande pas le mode `rail` — un TER ne serait donc pas
-> proposé même s'il y était. Le feed TER annuel est désormais construit par
-> [`docs/arch/gtfs-annee.md`](gtfs-annee.md) ; son intégration au graphe reste
-> une étape à part, car elle change les résultats de simulation.
+> **Le TER est dans le graphe mais n'est pas demandé.** Le `graph.obj` contient les deux feeds
+> (autorités `Tisséo` et `SNCF VOYAGEURS` ; 68 des 234 arrêts TER sont dans le polygone, les
+> 167 autres restent isolés de la voirie), mais `transportModes` (`trip_helper/otp.py`) ne demande
+> que `bus`, `metro`, `tram`, `cableway` — pas `rail` : un TER n'est donc jamais proposé. Le feed
+> TER annuel est construit par [`docs/arch/gtfs-annee.md`](gtfs-annee.md) ; ajouter `rail` aux
+> modes demandés reste une décision à part, car elle change les résultats de simulation. Le GTFS
+> liO (cars interurbains régionaux, 22,7 Mo, ODbL) n'est **pas** chargé (porte de téléchargement
+> du ticket 031, T2).
 
 Le feed Tisséo consommé par la simulation est une **fenêtre** du feed annuel :
 GAMA encode le calendrier des services en masque binaire 64 bits et ne peut pas
@@ -58,7 +67,29 @@ La concurrence OTP est bornée côté controller : `otp_max_concurrent: 30`.
 
 ## Cluster OSMnx (modes directs)
 
-Chaque instance OSMnx charge trois graphes topologiques en RAM au démarrage (4 Go par instance).
+Chaque instance OSMnx charge trois graphes topologiques en RAM au démarrage — un worker par mode,
+1,0 à 1,4 Go de RSS chacun une fois son graphe isolé (pointe 2,8 à 3,0 Go au chargement du pickle),
+d'où la limite de 8 Go du service.
+
+### Le graphe : le polygone des 453 communes (ticket 031, partie 2)
+
+Depuis le 2026-09-03, le graphe servi est celui du **polygone des 453 communes** de l'enquête
+(`geography.PERIMETER_CACHE_KEY` = `444ca7e6a515`, label `perimetre_453_communes:cc1:osm-220101`,
+pickle de 225 Mo : marche 176 340 nœuds / 472 544 arêtes, vélo 151 833 / 360 801, voiture
+65 150 / 148 959), construit hors ligne par `make osmnx-perimeter-graph` depuis les pbf OSM régionaux
+— le même graphe que le notebook de population (étapes 4+5). La clé se configure
+(`gtfs.osmnx_graph_key`) ; `osmnx_server` et `_GraphStore` refusent de démarrer si son pickle manque
+(`[ALARME]`, `GraphMissingError`) au lieu de télécharger un disque de 30 km à sa place. Le disque
+historique (`ecb40f20a303`, `TOULOUSE_CENTER_DIST_M`) ne sert plus qu'à l'audit : sur lui, un trajet
+de 3ᵉ couronne sur six n'était pas un itinéraire mais un repli à 70 km/h (ticket 031 § 1.4).
+
+Les vitesses de `config/osmnx.yaml` sont posées sur le pickle à sa construction ; après une
+modification, `build_osmnx_perimeter_graph.py --respeed` les repose (26 s). Le 2026-09-03, le mode
+vélo a reçu ses vitesses pour `service`, `track`, `trunk`, `*_link`, `pedestrian`, `footway`, `road`,
+`bridleway`, `busway` (source GraphHopper, profil `bike`, et code de la route pour les sections
+poussées) : 32,0 % des arêtes vélo étaient en repli à 14 km/h, il en reste 2 (0,0 %) ; la voiture
+gagne `living_street` (20 km/h, zone de rencontre) et `motorway_link` (70). Toute modification de
+ces vitesses change la durée réseau : `routing_version` est passée à `r2`.
 
 ### Modes et coupures
 

@@ -200,17 +200,29 @@ dans le MANIFEST du sceau.
    ses agents de 3ᵉ couronne. Une population **non** enrichie déclenche une alarme
    `[ALARME] … sans trait residence_zone` et retombe sur l'ancien filtre.
 
-## Filtrage de la population par bounding box
+## Filtrage de la population par périmètre (453 communes)
 
-La zone de simulation est automatiquement dérivée de l'emprise géographique des arrêts GTFS, augmentée d'un tampon de **~5 km** (0,05°) :
+Depuis le 2026-09-03 (ticket 031, partie 2), le chargement (`handle/application.py` →
+`inputs/population/perimeter.py`) filtre par **commune du domicile** : `household.commune_id` doit
+être l'une des 453 communes de l'enquête EMC² 2023 (`llm_module/data/commune_couronne.json`). Sans
+commune, le trait `residence_zone` décide ; sans l'un ni l'autre, la géométrie du polygone des
+couronnes (`couronne_perimetre.geojson`) tranche et une `[ALARME]` dit que la commune n'a pas été
+vérifiée. Ce que cela change :
 
-```
-world_bbox = GTFS stops extent ± 0.05°
-```
+- **une activité hors du polygone n'écarte pas l'agent** (école ou travail hors périmètre) : elle est
+  comptée dans le journal et une `[ALARME]` se lève au-delà de 1 % des activités localisées ;
+- **un fichier scellé se charge entier ou se refuse** : si l'effectif après filtre n'est pas
+  `population_size`, `[ALARME]` et rien n'est chargé — un sceau ne se rogne pas ;
+- le **monde** (`WorldGrid`) couvre l'enveloppe du polygone unie à celle des arrêts GTFS ± 0,05°.
 
-Au chargement, seuls les agents dont le **domicile** est situé à l'intérieur de cette bbox sont retenus. Les agents qui travaillent ou étudient hors de la bbox restent dans la simulation mais leurs déplacements sont filtrés lors de la planification.
+Avant : un rectangle de 30 km (`TOULOUSE_OSM_ROUTES_30K_BBOX`) écartait tout agent dont le domicile
+**ou une seule activité** sortait — 77 des 1 000 agents de la v4 (60 domiciles, dont 55 de 3ᵉ
+couronne ; 105 activités), donc un sceau refusé. Mesuré au premier chargement de la v4 : **1 000 /
+1 000 admis par commune, 0 écarté, 0 activité hors polygone** (trace
+`docs/traces/2026-09-03_22-46_ticket031_partie2_portage_chaine/`). La constante reste dans
+`geography.py` pour l'audit.
 
-Pour analyser la distribution spatiale et choisir une bbox adaptée :
+Pour analyser la distribution spatiale d'une population :
 
 ```shell
 python scripts/data/gtfs/analyze_mobility_bbox.py \
@@ -264,8 +276,13 @@ d'OSMnx lui-même** (lus dans la version installée) et **les vitesses de la pro
 152 k / 361 k, voiture 65 k / 149 k ; 10 min de construction, 2,7 Go de pointe), frontière
 `_in_city` = commune de Toulouse copiée du cache de production. Les mesures O2/O4 du rapport de
 périmètre (paires « même nœud » par couronne, ms par route, RAM d'un worker) se rejouent avec
-`scripts/data/population/measure_osmnx_perimeter_graph.py`. Le runtime (`osmnx_server.py`,
-`osmnx_direct.py`) reste sur le disque de 30 km : c'est la partie 2 du ticket 031.
+`scripts/data/population/measure_osmnx_perimeter_graph.py`. **Depuis le 2026-09-03 au soir, le
+runtime (`osmnx_server.py`, `osmnx_direct.py`) sert ce même graphe** — clé `geography.PERIMETER_CACHE_KEY`,
+configurable par `gtfs.osmnx_graph_key` ; le disque de 30 km ne sert plus qu'à l'audit
+(`PRODUCTION_CACHE_KEY_30KM`). Les vitesses vélo manquantes (`track`, `service`, `trunk`, `*_link`… :
+32 % des arêtes en repli 14 km/h) sont posées dans `config/osmnx.yaml` avec leur source et
+reposées sur le pickle (`build_osmnx_perimeter_graph.py --respeed` : 24 627 arêtes vélo modifiées,
+2 en repli) ; `routing_version` passe à `r2`.
 
 ### Population scellée pour l'article (AAMAS)
 
