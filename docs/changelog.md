@@ -15,6 +15,11 @@ d'immobiles. Sept cibles que le rapport ne publie pas à ce pas sont recalculée
 microdonnées et gelées (`cm1`) ; genre et permis deviennent mesurables. Le vivier est
 pré-imputé avant la sélection pour que logement, permis et abonnement soient des marges.
 
+**Les six classes d'âge du rapport entrent dans la descente.** Tenir les quinze classes
+quinquennales ne tenait pas la part des 5-17 ans (+1,2 pt sur la v3 : la classe 15-19 chevauche
+la frontière 17/18). Le référentiel de l'article étant le rapport AUAT, ses six classes sont
+désormais des marges de la sélection ; effet au prochain scellement.
+
 **Les immobiles reviennent.** L'export eqasim écartait toute personne sans activité hors
 domicile ; l'enquête en compte 10,6 %. Ils restent (journée « domicile », drapeau `immobile`),
 la sélection les ramène exactement à **10,6 %**, et deux gardes de la chaîne qui plantaient sur

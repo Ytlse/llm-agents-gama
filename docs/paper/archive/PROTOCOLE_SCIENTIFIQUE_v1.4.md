@@ -3,7 +3,7 @@
 
 **Auteurs :** Yves B., Benoit Gaudou, Kamaldeep Singh Oberoi  
 **Cadre de recherche :** Projet LLM-Agents GAMA / Défis Clés Occitanie (MIDOC)  
-**Version :** `v1.5` (3 septembre 2026) — *Correction du tableau de conformité démographique (§ 2.1) : les cibles sont désormais celles du rapport AUAT/CEREMA (p. 10, 11, 21) ou des recalculs sur microdonnées gelés, et la cohorte est la population scellée v3 mesurée par `scripts/AAMAS/control_population.py` ; les chiffres précédents n'avaient pas de source (Annexe F du manuscrit, n° 12). Reprend `v1.4` : intégration du cadre de stress-test SILICA (Bin Tareaf et al., 2026) et de la dichotomie de Baronchelli (2025, 2026) : formalisation des trois niveaux de validation (Tier 1/2/3), règles de comparabilité (argmax, renormalisation sur l'offre, effectif), randomisation des options contre les biais de primauté, et critères de réfutation explicites*  
+**Version :** `v1.4` (2 septembre 2026) — *Intégration du cadre de stress-test SILICA (Bin Tareaf et al., 2026) et de la dichotomie de Baronchelli (2025, 2026) : formalisation des trois niveaux de validation (Tier 1/2/3), règles de comparabilité (argmax, renormalisation sur l'offre, effectif), randomisation des options contre les biais de primauté, et critères de réfutation explicites*  
 **Fichiers associés :** [`MANUSCRIT_DETAILLE_2026.md`](MANUSCRIT_DETAILLE_2026.md), [`PLAN_ARTICLE_2026.md`](PLAN_ARTICLE_2026.md), [`BIBLIOGRAPHIE.md`](BIBLIOGRAPHIE.md), [`references.bib`](references.bib), [`SLIDES_SEMINAIRE_2026_v1.0.html`](SLIDES_SEMINAIRE_2026_v1.0.html)  
 
 ---
@@ -56,27 +56,21 @@ Ce protocole prouve que si les agents LLM atteignent le **Tier 2** sur les régi
 Dans la simulation multi-agents GAMA, chaque agent est un **individu virtuel unique et équiprobable** (poids unitaire = 1). Aucun coefficient d'extrapolation $COEP$ n'est requis au runtime de la simulation, car le moteur de synthèse amont (EQASIM / Recensement Insee RP 2022 + FILOSOFI + ENTD) calibre directement la fréquence des profils pour reproduire la structure sociologique de la métropole.
 
 ### 2.1 Tableau de Conformité Démographique (Goodness-of-Fit)
-Le contrôle porte sur la **population scellée v3** (`data/population/population_1000_AAMAS_v3/`, sha256 `8d8bfa36…`, $N = 1\,000$ personas en 514 ménages entiers), mesurée par `scripts/AAMAS/control_population.py` (trace `docs/traces/2026-09-03_01-18_controle_toulouse_population_1000_AAMAS/`). Chaque cible porte sa source : la page du rapport AUAT/CEREMA « Enquête mobilité 2023 — bassin de vie toulousain », ou, quand le rapport ne publie pas la marge, un recalcul sur les microdonnées ProGEDO (poids COEP, personnes de 5 ans et +) gelé dans le dépôt et déclaré comme tel.
+Pour prouver que la cohorte synthétique ($N = 1\,000$ ou $N = 10\,000$ agents) reproduit fidèlement la population de référence publiée dans le rapport officiel CEREMA / Insee :
 
-| Variable démographique | Cible (source) | Cohorte scellée v3 ($N = 1\,000$) | Écart ($\Delta$) | Statut (TOST $\pm 1$ pt, IC95) |
+| Variable Démographique | Cible Référentielle (Rapport / Insee) | Population Synthétique ($N = 1\,000$) | Écart ($\Delta$) | Statut de validation |
 |---|---|---|---|---|
-| **Genre (Femmes / Hommes)** | 51,3 % / 48,7 % *(recalcul microdonnées — non publié)* | 51,3 % / 48,7 % | $0,0\text{ pt}$ | Conforme |
-| **Âge : 5-17 ans** | 16 % *(rapport p. 11)* | 17,2 % | $+1,2\text{ pt}$ | Conforme |
-| **Âge : 18-24 ans** | 13 % *(p. 11)* | 11,9 % | $-1,1\text{ pt}$ | Conforme |
-| **Âge : 25-34 ans** | 14 % *(p. 11)* | 14,4 % | $+0,4\text{ pt}$ | Conforme |
-| **Âge : 35-49 ans** | 22 % *(p. 11)* | 21,9 % | $-0,1\text{ pt}$ | Conforme |
-| **Âge : 50-64 ans** | 19 % *(p. 11)* | 18,5 % | $-0,5\text{ pt}$ | Conforme |
-| **Âge : 65 ans et plus** | 16 % *(p. 11)* | 16,1 % | $+0,1\text{ pt}$ | Conforme |
-| **Ménages sans voiture** | 19 % *(p. 21, base ménage)* | 21,4 % *(personas pondérés 1/taille)* | $+2,4\text{ pt}$ | Conforme (écart non établi) |
-| **Ménages avec 1 voiture** | 45 % *(p. 21)* | 44,2 % | $-0,8\text{ pt}$ | Conforme |
-| **Ménages avec 2 voitures et +** | 35 % *(p. 21)* | 34,4 % | $-0,6\text{ pt}$ | Conforme |
-| **Permis de conduire (18 ans et +)** | 85,9 % *(recalcul microdonnées — non publié)* | 85,9 % | $0,0\text{ pt}$ | Conforme |
-| **Personnes sans déplacement la veille** | 10,6 % *(recalcul microdonnées)* | 10,6 % | $0,0\text{ pt}$ | Conforme |
-
-Les treize marges du contrôle (dont couronne de résidence, croisement couronne × motorisation, occupation, âge quinquennal, taille de ménage, abonnement TC et type de logement, non reproduites ici) sont conformes ; aucune n'est « non mesurable ».
+| **Genre (Femmes / Hommes)** | 51,8 % / 48,2 % | 51,9 % / 48,1 % | $\pm 0,1\text{ pt}$ | Conforme |
+| **Âge : Moins de 18 ans** | 19,4 % | 19,2 % | $-0,2\text{ pt}$ | Conforme |
+| **Âge : 18 - 64 ans (Actifs)** | 62,1 % | 62,4 % | $+0,3\text{ pt}$ | Conforme |
+| **Âge : 65 ans et plus** | 18,5 % | 18,4 % | $-0,1\text{ pt}$ | Conforme |
+| **Ménages sans voiture** | 22,3 % | 22,1 % | $-0,2\text{ pt}$ | Conforme |
+| **Ménages avec 1 voiture** | 46,1 % | 46,5 % | $+0,4\text{ pt}$ | Conforme |
+| **Ménages avec 2+ voitures** | 31,6 % | 31,4 % | $-0,2\text{ pt}$ | Conforme |
+| **Taux de détention du permis** | 84,2 % (Adultes) | 84,0 % (Adultes) | $-0,2\text{ pt}$ | Conforme |
 
 ### 2.2 Statut du Jalon 0, Test d'Équivalence & Stabilité d'Échelle
-* **Ce que le tableau établit.** Douze marges sur treize sont **allouées** par la sélection stratifiée (allocation aux 12 cellules couronne × motorisation, puis descente par échanges de ménages sur les autres marges) : leur conformité mesure la règle de sélection, pas la fidélité du générateur. Seule la motorisation en base ménage est conforme sans allocation. La fidélité du générateur se lit sur le **vivier** de 11 922 personnes dont la cohorte est tirée : 9 marges y sont hors tolérance (3ᵉ couronne $-5,2$ pt, immobiles 15,1 % contre 10,6, actifs à temps partiel $+2,4$ pt). C'est un **contrôle de cohérence de la chaîne** — pas une preuve de fidélité sociologique.
+* **Ce que le tableau établit.** Les huit marges sont reproduites à $0,4$ pt près. Comme le moteur de synthèse amont cale directement ces distributions, les retrouver est un **contrôle de cohérence de la chaîne de génération** — pas une preuve de fidélité sociologique.
 * **Test retenu pour la publication : l'équivalence, pas la non-significativité.** Un $\chi^2$ non significatif échoue à détecter un écart, ce qui ne prouve pas son absence — et « seuil de non-rejet $p > 0,95$ » n'est pas un critère statistique. Le protocole retient donc un **test d'équivalence (TOST)** marge par marge avec une borne d'indifférence annoncée d'avance ($\pm 1$ pt), accompagné de l'écart absolu maximal et d'un $V$ de Cramér.
 * **Ce qui reste à tester.** Les **croisements** (âge × motorisation × zone fine) : c'est là qu'une synthèse par marges échoue sans qu'aucune marge ne bouge.
 * Grâce aux propriétés du tirage stratifié d'EQASIM, cette représentativité est invariante par changement d'échelle ($N = 1\,000 \to N = 10\,000$).

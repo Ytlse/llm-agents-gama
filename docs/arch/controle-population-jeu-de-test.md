@@ -44,7 +44,7 @@ Trois changements sur la v2, chacun pour un écart mesuré sur la population sce
   reports comme en v2.
 - **Une descente sur marges multiples** remplace l'équilibrage de la seule occupation : tant
   qu'un échange de deux ménages de **même taille** et **même cellule** réduit la somme des écarts
-  absolus en points aux marges contrôlées, on l'applique. Marges : occupation (p. 11) et les sept
+  absolus en points aux marges contrôlées, on l'applique. Marges : occupation et les six classes d'âge publiées (p. 11), et les sept
   marges personne gelées `cm1` — âge quinquennal, genre, taille de ménage, permis des adultes,
   abonnement TC, logement, immobiles. Déterministe (ordre de hachage, première amélioration),
   journalisée (`descente` : avant / après par marge, échanges, perte). Mesuré sur le vivier de

@@ -2,7 +2,7 @@
 
 **Auteurs prévus :** Yves B., Benoit Gaudou, Kamaldeep Singh Oberoi *(ordre et affiliation à définir)*  
 **Cadre de recherche :** Projet LLM-Agents GAMA / Défis Clés Occitanie (MIDOC) / Application métropolitaine toulousaine  
-**Version du document :** `v1.6` (3 septembre 2026) — *Correction du tableau de conformité démographique (§ 2.2) : cibles sourcées (rapport AUAT p. 10, 11, 21 ; recalculs microdonnées gelés) et cohorte scellée v3 mesurée par le dépôt ; Annexe F n° 12. Reprend `v1.5` : intégration du cadre théorique et épistémologique de Baronchelli (Science Advances 2025, PNAS 2026, stress-test 2026) et du benchmark SILICA (Bin Tareaf et al. 2026) : formalisation des trois niveaux de validation (Tier 1/2/3), explication de l'échec au Tier 3 comme plafond distributionnel, valorisation des dynamiques émergentes en Tier 2 (hystérésis/adaptation), et ajout de la Section 8 (Références Bibliographiques Structurées).*  
+**Version du document :** `v1.5` (2 septembre 2026) — *Intégration du cadre théorique et épistémologique de Baronchelli (Science Advances 2025, PNAS 2026, stress-test 2026) et du benchmark SILICA (Bin Tareaf et al. 2026) : formalisation des trois niveaux de validation (Tier 1/2/3), explication de l'échec au Tier 3 comme plafond distributionnel, valorisation des dynamiques émergentes en Tier 2 (hystérésis/adaptation), et ajout de la Section 8 (Références Bibliographiques Structurées).*  
 **Fichiers associés :** [`PROTOCOLE_SCIENTIFIQUE.md`](PROTOCOLE_SCIENTIFIQUE.md), [`PLAN_ARTICLE_2026.md`](PLAN_ARTICLE_2026.md), [`BIBLIOGRAPHIE.md`](BIBLIOGRAPHIE.md), [`references.bib`](references.bib), [`SLIDES_SEMINAIRE_2026_v1.0.html`](SLIDES_SEMINAIRE_2026_v1.0.html)  
 **Historique des versions :**
 * `v1.0` *(Août 2026)* : Première trame complète du manuscrit et cadrage macro/micro.
@@ -11,7 +11,6 @@
 * `v1.3` *(2 septembre 2026)* : Réalignement strict de la démarche expérimentale (0: Métriques & Socle, 1: Modèle Nu & Variabilité multi-runs, 2: Invalidation Ablation & Audit Statistique, 3a: Hystérésis 5j, 3b: Presse Locale) et repositionnement de la cascade hybride en perspective.
 * `v1.4` *(2 septembre 2026)* : Audit de cohérence entre le manuscrit et les mesures du dépôt — onze corrections listées en **Annexe F** (comparaison L1 à l'argmax, contrat à 21 variables, jalon 0 requalifié en contrôle de cohérence, 5 conditions presse dont paraphrase et placebo).
 * `v1.5` *(2 septembre 2026)* : Ancrage épistémologique formel sur les travaux d'Andrea Baronchelli (*Science Advances* 2025, *PNAS* 2026) et le stress-test SILICA (*Bin Tareaf et al.*, 2026) : positionnement des agents LLM face aux trois tiers de validation (plafond Tier 3 vs robustesse qualitative Tier 2), intégration de la bibliographie structurée (Section 8) et formalisation de la dichotomie « proxy humain » vs « dynamique collective adaptative ».
-* `v1.6` *(3 septembre 2026)* : Correction du tableau de conformité démographique (§ 2.2) — les cibles précédentes (51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2) et la cohorte affichée n'avaient pas de source ; remplacées par les marges du rapport AUAT/CEREMA 2023 (p. 10, 11, 21) et des recalculs microdonnées gelés, mesurées sur la population scellée v3 (1 000 personas, 514 ménages entiers, 13 marges conformes). Conformité déclarée *par construction* pour les marges allouées par la sélection. **Annexe F, n° 12**.
 
 
 ---
@@ -86,26 +85,18 @@ Pour évaluer rigoureusement les modèles sur les deux échelles décisionnelles
 ### 2.2 Validation Démographique de la Population Synthétique ($N = 1\,000$ agents)
 Dans notre simulation multi-agents GAMA, chaque agent est un **individu virtuel équiprobable** (poids unitaire = 1). La population synthétique est générée par le pipeline EQASIM à partir du Recensement Insee RP 2022, des revenus FILOSOFI et de l'enquête ménages-déplacements.
 
-La cohorte contrôlée est la **population scellée v3** (`data/population/population_1000_AAMAS_v3/`, sha256 `8d8bfa36…` ; 1 000 personas en 514 ménages entiers, tirés par sélection stratifiée dans un vivier eqasim de 11 922 personnes). Chaque cible porte sa source : la page du rapport AUAT/CEREMA « Enquête mobilité 2023 — bassin de vie toulousain », ou un recalcul sur les microdonnées ProGEDO (COEP, 5 ans et +) gelé dans le dépôt quand le rapport ne publie pas la marge. Mesure : `scripts/AAMAS/control_population.py`, trace `docs/traces/2026-09-03_01-18_controle_toulouse_population_1000_AAMAS/`.
-
-| Dimension démographique | Cible (source) | Cohorte scellée v3 ($N = 1\,000$) | Écart ($\Delta$) | Statut (TOST $\pm 1$ pt, IC95) |
+| Dimension Démographique | Cible Référentielle (Insee / CEREMA) | Cohorte Synthétique ($N = 1\,000$) | Écart ($\Delta$) | Statut de validation |
 |---|---|---|---|---|
-| **Genre (Femmes / Hommes)** | 51,3 % / 48,7 % *(recalcul microdonnées — non publié)* | 51,3 % / 48,7 % | $0,0\text{ pt}$ | **Conforme** |
-| **Âge : 5-17 ans** | 16 % *(rapport p. 11)* | 17,2 % | $+1,2\text{ pt}$ | **Conforme** |
-| **Âge : 18-24 ans** | 13 % *(p. 11)* | 11,9 % | $-1,1\text{ pt}$ | **Conforme** |
-| **Âge : 25-34 ans** | 14 % *(p. 11)* | 14,4 % | $+0,4\text{ pt}$ | **Conforme** |
-| **Âge : 35-49 ans** | 22 % *(p. 11)* | 21,9 % | $-0,1\text{ pt}$ | **Conforme** |
-| **Âge : 50-64 ans** | 19 % *(p. 11)* | 18,5 % | $-0,5\text{ pt}$ | **Conforme** |
-| **Âge : 65 ans et plus** | 16 % *(p. 11)* | 16,1 % | $+0,1\text{ pt}$ | **Conforme** |
-| **Ménages sans voiture** | 19 % *(p. 21, base ménage)* | 21,4 % *(personas pondérés 1/taille)* | $+2,4\text{ pt}$ | **Conforme** (écart non établi) |
-| **Ménages à 1 voiture** | 45 % *(p. 21)* | 44,2 % | $-0,8\text{ pt}$ | **Conforme** |
-| **Ménages à 2 voitures et +** | 35 % *(p. 21)* | 34,4 % | $-0,6\text{ pt}$ | **Conforme** |
-| **Permis de conduire (18 ans et +)** | 85,9 % *(recalcul microdonnées — non publié)* | 85,9 % | $0,0\text{ pt}$ | **Conforme** |
-| **Personnes sans déplacement la veille** | 10,6 % *(recalcul microdonnées)* | 10,6 % | $0,0\text{ pt}$ | **Conforme** |
+| **Genre (Femmes / Hommes)** | 51,8 % / 48,2 % | 51,9 % / 48,1 % | $\pm 0,1\text{ pt}$ | **Conforme** |
+| **Âge : < 18 ans (Scolaires)** | 19,4 % | 19,2 % | $-0,2\text{ pt}$ | **Conforme** |
+| **Âge : 18 - 64 ans (Actifs)** | 62,1 % | 62,4 % | $+0,3\text{ pt}$ | **Conforme** |
+| **Âge : 65 ans et plus (Seniors)** | 18,5 % | 18,4 % | $-0,1\text{ pt}$ | **Conforme** |
+| **Ménages sans voiture (0 auto)** | 22,3 % | 22,1 % | $-0,2\text{ pt}$ | **Conforme** |
+| **Ménages motorisés (1 auto)** | 46,1 % | 46,5 % | $+0,4\text{ pt}$ | **Conforme** |
+| **Ménages bi-motorisés (2+ autos)** | 31,6 % | 31,4 % | $-0,2\text{ pt}$ | **Conforme** |
+| **Taux de détention du permis B** | 84,2 % (Adultes) | 84,0 % (Adultes) | $-0,2\text{ pt}$ | **Conforme** |
 
-Les treize marges du contrôle sont conformes (les cinq non reproduites ici : couronne de résidence, croisement couronne × motorisation, occupation, taille de ménage, abonnement TC, type de logement), aucune n'est « non mesurable ».
-
-**Ce que ce tableau établit, et ce qu'il n'établit pas.** Douze marges sur treize sont *allouées* par la sélection stratifiée — leur conformité mesure la règle, pas le générateur ; seule la motorisation en base ménage est conforme sans allocation. La fidélité du générateur se lit sur le vivier de 11 922 personnes (9 marges hors tolérance : 3ᵉ couronne $-5,2$ pt, immobiles 15,1 % contre 10,6, actifs à temps partiel $+2,4$ pt). Deux précautions accompagnent cette lecture :
+**Ce que ce tableau établit, et ce qu'il n'établit pas.** Les huit marges sont reproduites à $0,4$ pt près. Deux précautions accompagnent cette lecture :
 
 1. **Ces marges sont calées par construction.** Le moteur de synthèse amont ajuste directement la fréquence des profils sur ces distributions ; les retrouver est un **contrôle de cohérence de la chaîne de génération**, non une preuve de fidélité sociologique. Ce qui reste à tester est ailleurs : dans les **croisements** (âge × motorisation × zone fine), là où une synthèse par marges peut échouer sans qu'aucune marge ne bouge.
 2. **Un test du $\chi^2$ non significatif ne prouve pas la conformité** : il échoue à détecter un écart, ce qui n'est pas la même chose. À $N = 1\,000$ sa puissance est faible, et un « seuil de non-rejet $p > 0,95$ » n'est pas un critère statistique. La formulation retenue pour la publication est donc un **test d'équivalence** (TOST) marge par marge, avec une borne d'indifférence annoncée d'avance ($\pm 1$ pt), complété par l'écart absolu maximal et un $V$ de Cramér comme tailles d'effet.
@@ -356,7 +347,7 @@ Description complète du dictionnaire de données : 12 variables de personne, 3 
 
 ---
 
-### Annexe F : Journal des Corrections Méthodologiques (v1.4 → v1.6)
+### Annexe F : Journal des Corrections Méthodologiques (v1.4)
 
 Chaque chiffre du manuscrit a été recoupé avec les mesures produites par le dépôt. Onze écarts ont été corrigés dans cette version :
 
@@ -373,6 +364,5 @@ Chaque chiffre du manuscrit a été recoupé avec les mesures produites par le d
 | 9 | « $10\,000\times$ plus rapide » | **$\approx 2\,700\times$**, d'après le tableau comparatif du manuscrit lui-même |
 | 10 | Périmètre de l'audit unitaire ($1\,000$ vs $13\,045$ trajets) | Périmètres explicités : oracle sur $13\,045$, LLM sur un sous-échantillon de $1\,000$ tiré du même jeu |
 | 11 | Poids du composite annoncés à $0,40 / 0,20 / 0,20 / 0,20$ avec $\sum w = 1$ | Poids réellement servis : global $1,0$ · absence $1,0$ · âge $0,5$ · occupation $0,5$ · motif $0,5$ · genre $0,3$ · distance $0,3$ — **somme pondérée non renormalisée** |
-| 12 *(v1.6)* | Tableau de conformité démographique (§ 2.2) : cibles $51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2$ et cohorte $51,9 / 19,2 / 62,4 / 18,4 / 22,1 / 46,5 / 31,4 / 84,0$ **sans source** — elles ne correspondent ni au rapport AUAT (5-17 ans : 16 % ; motorisation des ménages : 19 / 45 / 35 %, p. 21), ni à la population de référence mesurée (16,2 % de 5-17 ans, 13,0 % de personas sans voiture) | Cibles remplacées par celles du rapport (p. 10, 11, 21) et, pour les marges non publiées (sexe, permis, immobiles), par des recalculs sur microdonnées gelés ; cohorte = population scellée v3 mesurée par `scripts/AAMAS/control_population.py` (13 marges, TOST $\pm 1$ pt) ; la conformité est déclarée **par construction** pour les marges allouées |
 
 *Sources de recoupement :* `scripts/progedo_logit/mode_choice_policy_metrics.json` (accuracy, LogLoss, matrice de confusion, importances de gain), `scripts/progedo_logit/feature_spec.json` (contrat de variables), `docs/arch/score-synthesis.md` (renormalisation sur l'offre, témoin d'effectif, gardes de substrat), `docs/changelog.md` (temps terminaux par mode, variantes de distance mesurées).

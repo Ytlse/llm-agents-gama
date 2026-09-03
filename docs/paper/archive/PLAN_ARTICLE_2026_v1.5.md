@@ -4,7 +4,7 @@
 > *De la Décision Statistique au Comportement Adaptatif : Évaluation Empirique, Limites et Perspectives Hybrides des Agents LLM en Simulation de Mobilité Urbaine*  
 > *(Alternative EN: Generative Agents vs. Statistical Oracles in Urban Mobility Simulation: Empirical Limits, Unit-Level Evaluation, and Hybrid Perspectives)*
 
-**Version du document :** `v1.6` (3 septembre 2026 — § 2.3 réaligné sur la population scellée v3 et les cibles sourcées du rapport AUAT ; `v1.5` du 2 septembre 2026)  
+**Version du document :** `v1.5` (2 septembre 2026)  
 **Fichiers associés :** [`MANUSCRIT_DETAILLE_2026.md`](MANUSCRIT_DETAILLE_2026.md), [`PROTOCOLE_SCIENTIFIQUE.md`](PROTOCOLE_SCIENTIFIQUE.md), [`BIBLIOGRAPHIE.md`](BIBLIOGRAPHIE.md), [`references.bib`](references.bib), [`MANUSCRIT_DETAILLE_2026_SLIDES.html`](MANUSCRIT_DETAILLE_2026_SLIDES.html), [`SLIDES_SEMINAIRE_2026_v1.0.html`](SLIDES_SEMINAIRE_2026_v1.0.html)
 
 ---
@@ -23,8 +23,8 @@
 2. ÉTAPE 0 : DÉFINITION DES MÉTRIQUES & VALIDATION DÉMOGRAPHIQUE
    2.1 Cadre de mesure : Métriques macro (Parts modales, Erreur L1) & micro (Accuracy, Rappel, LogLoss)
    2.2 Trois règles de comparabilité : argmax contre argmax, renormalisation sur l'offre (IIA), effectif obligatoire
-   2.3 Cohérence démographique de la population scellée v3 (N=1 000, 514 ménages entiers) : 13 marges conformes au rapport AUAT 2023 (TOST ± 1 pt), croisement couronne × motorisation compris
-       -> contrôle de cohérence : 12 marges sur 13 allouées par la sélection stratifiée ; la fidélité du générateur se lit sur le vivier (9 marges hors tolérance)
+   2.3 Cohérence démographique de la population synthétique N=1 000 (RP 2022 / EMC² 2023, écart max 0,4 pt)
+       -> requalifiée en contrôle de cohérence ; test d'équivalence (TOST) et croisements à produire
    2.4 Dimensionnement de l'échantillon N=1 000 & justification statistique
        -> effectif efficace n_eff ≈ 1 750 (cluster bootstrap), plancher EMC² ±0,5 pt, arbitrage variance vs biais
    2.5 Stabilité d'échelle (N = 1 000 -> 10 000)

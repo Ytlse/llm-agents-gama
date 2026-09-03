@@ -88,9 +88,14 @@ SELECTION_RULE = "aamas_seal_v3"
 SEAL_VERSION = "sceau1"
 DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v3"
 
-# Marges de la descente : l'occupation publiée + les marges personne gelées (cm1). La cellule
-# couronne × motorisation n'en fait pas partie : elle est tenue exactement par l'allocation.
-DESCENTE_MARGES: tuple[str, ...] = ("occupation", *MARGES_PERSONNE)
+# Marges de la descente : l'occupation et les SIX classes d'âge publiées par le rapport (p. 11),
+# plus les marges personne gelées (cm1). Les six classes publiées ET les quinze quinquennales :
+# la classe 15-19 chevauche la frontière 17/18, et tenir les quinze ne tient pas la part des
+# 5-17 ans (mesuré sur la v3 : +1,2 pt sur les 5-17 avec 57 % de 15-17 dans les 15-19 contre
+# 45 % dans l'enquête). Le référentiel de l'article est le rapport AUAT : ses classes sont
+# tenues d'abord. La cellule couronne × motorisation n'en fait pas partie : elle est tenue
+# exactement par l'allocation.
+DESCENTE_MARGES: tuple[str, ...] = ("occupation", "classe_age", *MARGES_PERSONNE)
 # Candidats examinés par ménage retenu et par passe (ordre de hachage). Borne le coût sans
 # changer le déterminisme ; 150 suffit largement sur un vivier de 10 000.
 DESCENTE_CANDIDATS = 150

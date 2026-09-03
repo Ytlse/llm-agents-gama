@@ -1,0 +1,122 @@
+<title>Périmètre d'étude : 453 communes ou Haute-Garonne</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=Public+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --page:#F5F7FA; --card:#FFFFFF; --line:#D9DEE5; --line-soft:#E8ECF1;
+    --ink:#1B2430; --ink-2:#465262; --ink-3:#6E7A89;
+    --accent:#1F6F8B; --accent-soft:rgba(31,111,139,.16); --accent-ink:#17546A;
+    --ok:#2E7D4F; --ok-bg:#E6F2EA; --pub:#B26A00; --pub-bg:#FBF0DC; --ko:#B3261E; --ko-bg:#F9E3E1; --nm:#5F6B78; --nm-bg:#E9ECF0;
+    --tick:#1B2430; --focus:#1F6F8B;
+    --serif:"Literata",Georgia,"Times New Roman",serif; --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --page:#0F1519; --card:#171E25; --line:#2A3440; --line-soft:#212A34;
+      --ink:#E6EAF0; --ink-2:#B6C0CC; --ink-3:#8E99A6;
+      --accent:#5FB3CF; --accent-soft:rgba(95,179,207,.22); --accent-ink:#8FD0E6;
+      --ok:#5FBF82; --ok-bg:#16322A; --pub:#E0A146; --pub-bg:#3A2C14; --ko:#E57373; --ko-bg:#3D1F1D; --nm:#9AA3AD; --nm-bg:#232B33;
+      --tick:#E6EAF0; --focus:#8FD0E6;
+    }
+  }
+  :root[data-theme="dark"]{
+    --page:#0F1519; --card:#171E25; --line:#2A3440; --line-soft:#212A34;
+    --ink:#E6EAF0; --ink-2:#B6C0CC; --ink-3:#8E99A6;
+    --accent:#5FB3CF; --accent-soft:rgba(95,179,207,.22); --accent-ink:#8FD0E6;
+    --ok:#5FBF82; --ok-bg:#16322A; --pub:#E0A146; --pub-bg:#3A2C14; --ko:#E57373; --ko-bg:#3D1F1D; --nm:#9AA3AD; --nm-bg:#232B33;
+    --tick:#E6EAF0; --focus:#8FD0E6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-ink)} a:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 24px 72px}
+  .prose{max-width:74ch}
+  h1,h2,h3{font-family:var(--serif);font-weight:700;letter-spacing:-.005em;text-wrap:balance;margin:0}
+  h1{font-size:clamp(30px,4vw,44px);line-height:1.12;font-weight:700}
+  h2{font-size:26px;line-height:1.2;margin-top:64px;padding-top:20px;border-top:1px solid var(--line)}
+  h3{font-size:19px;line-height:1.3;margin-top:32px;font-weight:600}
+  p{margin:14px 0} p.lead{font-size:18px;color:var(--ink-2)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  .meta{font-family:var(--mono);font-size:13px;color:var(--ink-3);margin-top:12px;display:flex;flex-wrap:wrap;gap:6px 18px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:30px 0 8px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px}
+  .tile .k{font-family:var(--serif);font-size:34px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .tile .l{margin-top:8px;font-size:13px;color:var(--ink-2)}
+  .toc{display:flex;flex-wrap:wrap;gap:8px 20px;margin:24px 0 0;padding:0;list-style:none;font-size:14px}
+  .toc a{text-decoration:none;border-bottom:1px solid var(--line)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap;vertical-align:middle}
+  .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .ok{color:var(--ok);background:var(--ok-bg)} .pub{color:var(--pub);background:var(--pub-bg)} .ko{color:var(--ko);background:var(--ko-bg)} .nm{color:var(--nm);background:var(--nm-bg)}
+  .callout{border-left:3px solid var(--accent);background:var(--card);padding:14px 18px;border-radius:0 6px 6px 0;margin:22px 0}
+  .callout.warn{border-left-color:var(--pub)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin:22px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px 18px 12px}
+  .card h4{margin:0 0 2px;font-family:var(--sans);font-weight:600;font-size:15px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .card .sub{font-size:12.5px;color:var(--ink-3);margin:0 0 8px;font-family:var(--mono)}
+  .chart{width:100%;display:block;overflow:visible}
+  .chart text{font-family:var(--sans);font-size:12.5px;fill:var(--ink-2)}
+  .chart text.v{font-family:var(--mono);fill:var(--ink);font-size:12px}
+  .chart .bar{fill:var(--accent)} .chart .ic{stroke:var(--accent);stroke-opacity:.55;stroke-width:1.5} .chart .tk{stroke:var(--tick);stroke-width:2} .chart .grid{stroke:var(--line-soft);stroke-width:1}
+  .chart .hit{fill:transparent;cursor:crosshair}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--ink-2);margin:6px 0 0}
+  .legend span::before{content:"";display:inline-block;vertical-align:middle;margin-right:6px}
+  .legend .lb::before{width:16px;height:9px;background:var(--accent);border-radius:2px}
+  .legend .lt::before{width:2px;height:14px;background:var(--tick)}
+  .legend .li::before{width:16px;height:2px;background:var(--accent);opacity:.55}
+  .tip{position:fixed;pointer-events:none;z-index:9;background:var(--ink);color:var(--page);font-family:var(--mono);font-size:12px;line-height:1.45;padding:8px 10px;border-radius:4px;max-width:280px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  .tip[hidden]{display:none}
+  .tblwrap{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th{font-weight:600;color:var(--ink-2);font-size:12.5px;letter-spacing:.02em;background:var(--page)}
+  td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  .swap{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-family:var(--mono);font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px 16px;margin:14px 0}
+  .swap b{font-weight:500;color:var(--ink-3)}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .small{font-size:13.5px;color:var(--ink-2)}
+  footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-3)}
+  code{font-family:var(--mono);font-size:.92em;background:var(--card);border:1px solid var(--line-soft);padding:0 5px;border-radius:3px}
+  @media (prefers-reduced-motion:no-preference){.bar,.ic,.tk{transition:opacity .15s}}
+</style>
+<div class="wrap">
+<div class="eyebrow">Article AAMAS 2027 · population du jeu de test · rapport de décision · 3 septembre 2026</div>
+<h1>Quel périmètre d'étude ? Les 453 communes de l'enquête, la Haute-Garonne, ou l'empreinte de routage</h1>
+<p class="lead prose">La question n'est pas seulement « faut-il ajouter les cinq autres départements ? ». Mesuré sur la population scellée v3 : <strong>l'empreinte de routage actuelle (30 km autour du Capitole) ne couvre même pas le périmètre actuel</strong>. 10 % des agents habitent au-delà, 10 % des activités s'y déroulent, et le filtre géographique du runtime écarterait 79 agents — ce qui, pour un fichier scellé, vaut refus de chargement. Toute option commence donc par élargir l'empreinte ; le choix porte ensuite sur le périmètre que l'on assume.</p>
+<div class="meta"><span>population_1000_AAMAS_v3 · sha256 8d8bfa36…</span><span>enquête EMC² 2023 : 453 communes, 6 départements</span><span>mesures : géométrie des couronnes, graphes OSMnx, GTFS Tisséo et TER, emprise OSM d'OTP, microdonnées ProGEDO (COEP)</span></div>
+<div class="tiles"><div class="tile"><div class="k">63,6 %</div><div class="l">des agents de 3ᵉ couronne (v3) habitent au-delà de 30 km du Capitole — hors du graphe OSMnx</div></div><div class="tile"><div class="k">79</div><div class="l">agents de la v3 écartés par le filtre géographique du runtime (bbox 30 km) → le sceau serait refusé</div></div><div class="tile"><div class="k">35 %</div><div class="l">des habitants de la 3ᵉ couronne vivent hors Haute-Garonne — absents du cadre de tirage</div></div><div class="tile"><div class="k">0 %</div><div class="l">des domiciles de 3ᵉ couronne à moins de 1,5 km d'un arrêt Tisséo ; 18 % d'une gare TER</div></div></div>
+<ul class="toc"><li><a href="#etat">1 · Où en est chaque composant</a></li><li><a href="#constat">2 · Le constat qui précède la question</a></li><li><a href="#optA">3 · Option A — les 453 communes</a></li><li><a href="#optB">4 · Option B — la Haute-Garonne</a></li><li><a href="#optC">5 · Option C — l'empreinte de 30 km</a></li><li><a href="#tc">6 · Tisséo suffit-il ?</a></li><li><a href="#reco">7 · Recommandation</a></li></ul>
+<h2 id="etat">1 · Où en est chaque composant</h2>
+<div class="tblwrap"><table><thead><tr><th>Composant</th><th>Emprise actuelle</th><th>Couvre les 453 communes ?</th><th>Couvre la Haute-Garonne (346) ?</th></tr></thead><tbody><tr><td>Cadre de tirage eqasim</td><td>Haute-Garonne : 346 communes, 93,7 % de la population enquêtée (COEP) ; BD TOPO D031 (2,0 Go), BAN 31 (17 Mo)</td><td><span class="pill ko">non</span> 107 communes absentes (Gers 38, Tarn 27, Tarn-et-Garonne 22, Ariège 10, Aude 10)</td><td><span class="pill ok">oui</span></td></tr><tr><td>Graphe de routage OSMnx</td><td>disque de 30 km (2 827 km²) : 204 924 nœuds marche, 166 884 vélo, 60 705 voiture ; 245 Mo</td><td><span class="pill ko">non</span> le périmètre s'étend à 62 km (bbox 86 × 93 km, ≈ 8 000 km²)</td><td><span class="pill ko">non</span> la 3ᵉ couronne HG s'étend à 61 km : 98 des 154 agents v3 sont dehors</td></tr><tr><td>Filtre géographique du runtime</td><td>rectangle inscrit dans le graphe 30 km (1,085–1,815 · 43,336–43,868)</td><td><span class="pill ko">non</span></td><td><span class="pill ko">non</span> 79 agents v3 écartés (76 de 3ᵉ couronne) → refus du sceau</td></tr><tr><td>OTP (transports collectifs)</td><td>OSM 0,55–2,25 · 42,86–44,09 (7,4 M nœuds) ; GTFS Tisséo (5 662 arrêts) + TER (235 arrêts)</td><td><span class="pill ok">emprise oui</span> · <span class="pill pub">liO absent</span></td><td><span class="pill ok">emprise oui</span> · <span class="pill pub">liO absent</span></td></tr><tr><td>GAMA</td><td>monde = enveloppe du fichier de voirie chargé (suit l'empreinte de routage)</td><td>suit le routage</td><td>suit le routage</td></tr><tr><td>Cibles de référence</td><td>rapport AUAT et microdonnées : 453 communes</td><td><span class="pill ok">oui</span></td><td>à recalculer sur les résidents du 31 (mesuré : ≤ 0,9 pt d'écart)</td></tr></tbody></table></div>
+<h2 id="constat">2 · Le constat qui précède la question</h2><div class="prose">
+<p>La population scellée v3 met, par construction, 15,4 % de ses agents en 3ᵉ couronne. Or cette couronne — même réduite à sa partie haut-garonnaise — s'étend jusqu'à 61 km du Capitole : <strong>98 de ses 154 agents habitent au-delà des 30 km du graphe OSMnx</strong> (médiane 32 km), et 359 des 3 579 activités de la cohorte s'y déroulent. Pour ces trajets, le routage rabat origine et destination sur le nœud de graphe le plus proche : quand les deux tombent au même endroit, le trajet est traité comme « trop court ou hors du graphe » et sa durée vient d'une vitesse de repli (5 / 14 / 30 km/h). Ce ne sont pas des itinéraires.</p>
+<p>Le runtime, lui, filtre la population sur le rectangle inscrit dans le graphe : <strong>79 agents de la v3 en sortent</strong>. C'est ce filtre — et non un ré-échantillonnage aléatoire, comme je l'avais d'abord écrit — qui faisait 930 agents du fichier de 1 021 dans les runs précédents. Depuis hier, un fichier désigné comme scellé est pris entier ou refusé : la v3 serait refusée. Le premier geste, quel que soit le périmètre retenu, est donc d'aligner <em>l'empreinte de routage et le filtre</em> sur le périmètre de la population.</p></div>
+<h2 id="optA">3 · Option A — les 453 communes, six départements</h2><div class="prose"><p>Le périmètre de l'enquête, ni plus ni moins. Ce que ça coûte, composant par composant :</p></div>
+<div class="tblwrap"><table><thead><tr><th>Composant</th><th>À faire</th><th>Coût estimé</th><th>Risque</th></tr></thead><tbody><tr><td>eqasim</td><td>BD TOPO des départements 32, 81, 82, 09, 11 (≈ 1 à 2 Go chacun) et BAN correspondantes ; <code>DEPARTMENTS = None</code> (les 453 communes existent déjà dans la table)</td><td>5 à 8 Go de données, quelques heures de téléchargement ; génération 209 s → ≈ 5 min</td><td>faible — le pipeline filtre déjà par liste de communes</td></tr><tr><td>OSMnx</td><td>graphe sur la bbox du périmètre (86 × 93 km) ou un rayon de 62 km : surface × 2,8 à 4,3 ; densité rurale plus faible → nœuds × 2 à 3 (estimation, pas mesure)</td><td>pickle 0,5 à 0,8 Go ; mémoire par worker × 2 à 3 → <code>MAX_WORKERS</code> 4 à 6 ; routage des 1 000 : 1 à 2 h au lieu de 7 min–35 min</td><td>la pression mémoire déjà observée à 12 workers (23 Go de swap)</td></tr><tr><td>Filtre runtime</td><td>bbox = bbox du périmètre (ou désactivé pour un fichier scellé)</td><td>une constante</td><td>—</td></tr><tr><td>OTP</td><td>rien : l'extrait OSM couvre déjà 0,55–2,25 / 42,86–44,09</td><td>—</td><td>—</td></tr><tr><td>Réseaux TC</td><td>ajouter le GTFS <strong>liO</strong> (autocars régionaux) pour que les 2ᵉ et 3ᵉ couronnes aient une offre TC autre que le TER — disponibilité et licence à vérifier</td><td>un feed GTFS de plus dans OTP, reconstruction du graphe</td><td>sans liO, l'offre TC des couronnes externes reste sous-estimée</td></tr><tr><td>GAMA</td><td>le monde suit la voirie chargée : emprise × 3, affichage et voisinage plus lourds</td><td>à mesurer</td><td>performance de l'IHM</td></tr><tr><td>Scellement</td><td>resceller (v4) : les cibles ne changent pas (déjà à 453 communes) ; la composition de la 3ᵉ couronne change (35 % de ses habitants viennent enfin de l'extérieur du 31)</td><td>45 min à 2 h</td><td>—</td></tr></tbody></table></div>
+<div class="prose"><p><strong>Gain scientifique.</strong> Le périmètre de la population est celui de la référence, sans réserve : la composition de la 3ᵉ couronne (villages plus lointains du Gers et du Tarn) devient juste, les distances domicile-travail des périphériques aussi. <strong>Ce qui ne change pas</strong> : les parts modales cibles (elles sont déjà calculées sur les 453 communes) ; le gain sur les parts modales globales est de second ordre. Un à deux jours de travail, dominés par les données et le graphe.</p></div>
+<h2 id="optB">4 · Option B — la Haute-Garonne, 346 communes</h2><div class="prose"><p>Le cadre de la population scellée actuelle, assumé comme périmètre d'étude et rendu cohérent de bout en bout.</p>
+<p><strong>Ce qu'il faut quand même faire</strong> : la même extension du graphe OSMnx et du filtre runtime qu'en A — la 3ᵉ couronne haut-garonnaise va jusqu'à 61 km — sans les données eqasim supplémentaires. <strong>Ce qui change</strong> : les cibles se recalculent sur les résidents du 31, pour comparer la population à la population qu'elle représente. Mesuré sur les microdonnées : les parts modales des résidents du 31 diffèrent de celles des 453 communes de <strong>moins d'un point</strong> (voiture 52,8 % contre 53,7 ; marche 27,3 contre 27,0 ; TC 13,7 contre 13,4 ; vélo 4,1 contre 3,9) ; en 3ᵉ couronne, voiture 68,5 % contre 69,0. La population de référence perd 6,3 % de ses habitants, et la 3ᵉ couronne en perd 35 % — mais ceux qui restent ont les mêmes comportements à un point près.</p>
+<p><strong>Ce que ça déclare</strong> : « périmètre d'étude = les 346 communes haut-garonnaises du bassin d'enquête, 93,7 % de sa population ; cibles recalculées sur ce périmètre ». Une phrase honnête, et une comparaison à référence identique. Coût : un jour (graphe + cibles + rescellement), aucune donnée nouvelle.</p></div>
+<h2 id="optC">5 · Option C — rester dans l'empreinte de 30 km</h2><div class="prose"><p>Ne rien changer à l'infrastructure : le périmètre d'étude devient l'empreinte du graphe — Toulouse, la 1ʳᵉ couronne, l'essentiel de la 2ᵉ (max 30,6 km) et 36 % de la 3ᵉ couronne haut-garonnaise. Il faut alors <strong>resceller sur ce cadre</strong> (vivier filtré sur la bbox avant sélection, cibles recalculées sur les résidents des communes couvertes) pour que la population et sa référence désignent le même territoire.</p>
+<p><strong>Ce que ça perd</strong> : la 3ᵉ couronne pour l'essentiel — 15 % de la population, le pôle le plus routier du spectre modal (69 % de voiture, 20 % de marche), et la revendication « aire métropolitaine de 453 communes » du résumé. <strong>Ce que ça garde</strong> : un dispositif cohérent, un routage exact partout, une exécution rapide. C'est le choix le moins cher (une demi-journée) et le plus étroit.</p></div>
+<h2 id="tc">6 · Tisséo suffit-il ?</h2><div class="card"><h4>Accès aux transports collectifs, population v3, par couronne</h4><p class="sub">domicile à ≤ 1,5 km d'un arrêt (Tisséo : flag public_transport) · gare TER à ≤ 1,5 km et ≤ 5 km · abonnés TC (trait imputé)</p><svg class="chart" id="c-tc"></svg></div>
+<div class="prose"><p><strong>Oui à Toulouse et en 1ʳᵉ couronne</strong> (99 à 100 % des domiciles à moins de 1,5 km d'un arrêt), <strong>partiellement en 2ᵉ</strong> (32 %), <strong>non en 3ᵉ</strong> (0 %). Au-delà, l'offre TC de la simulation se réduit au TER : 18 % des domiciles de 3ᵉ couronne sont à moins de 1,5 km d'une gare, 44 % à moins de 5 km (médiane 6,2 km). L'enquête, elle, compte 7,7 % de déplacements en TC dans la 3ᵉ couronne, portés par le TER <em>et</em> par les autocars régionaux liO — absents d'OTP. La loi d'équipement impute pourtant 12,3 % d'abonnés TC en 3ᵉ couronne : des agents abonnés sans offre à proximité. Quel que soit le périmètre, <strong>l'ajout du GTFS liO est le levier TC des couronnes externes</strong> ; sans lui, la 3ᵉ couronne est structurellement plus « voiture » dans la simulation que dans l'enquête.</p></div>
+<h2 id="reco">7 · Recommandation</h2><div class="prose">
+<p><strong>Tout de suite, quel que soit le choix</strong> : élargir le graphe OSMnx et le filtre runtime au périmètre de la population (rayon 62 km ou bbox des 453 communes), avec <code>MAX_WORKERS</code> abaissé et le réchauffage laissé optionnel. Sans cela, la population scellée v3 ne charge pas, et les trajets de la 3ᵉ couronne ne sont pas des itinéraires.</p>
+<p><strong>Ensuite, l'option B</strong> : assumer le périmètre haut-garonnais, recalculer les cibles sur les résidents du 31 (écart ≤ 0,9 pt mesuré), resceller (v4, avec les six classes d'âge du rapport désormais dans la descente), et déclarer la limite (35 % des habitants de la 3ᵉ couronne hors cadre). C'est un jour de travail et une phrase honnête. <strong>L'option A</strong> vaut la peine si l'article analyse la 3ᵉ couronne pour elle-même ; elle demande en plus 5 à 8 Go de données, un graphe plus lourd et, pour être conséquente, le GTFS liO. <strong>L'option C</strong> n'est défendable que si l'on renonce explicitement à l'aire métropolitaine.</p>
+<div class="tblwrap"><table><thead><tr><th></th><th>A · 453 communes</th><th>B · Haute-Garonne</th><th>C · 30 km</th></tr></thead><tbody><tr><td>Population de référence couverte</td><td class="n">100 %</td><td class="n">93,7 %</td><td class="n">≈ 85 % (sans 3ᵉ couronne)</td></tr><tr><td>Cibles à recalculer</td><td>non</td><td>oui (≤ 0,9 pt)</td><td>oui (sans 3ᵉ couronne)</td></tr><tr><td>Graphe OSMnx / filtre</td><td>bbox 86 × 93 km</td><td>rayon 61–62 km</td><td>inchangé</td></tr><tr><td>Données eqasim</td><td>+ 5 départements</td><td>inchangées</td><td>inchangées</td></tr><tr><td>GTFS liO</td><td>nécessaire pour être conséquent</td><td>souhaitable</td><td>marginal</td></tr><tr><td>Rescellement</td><td>oui</td><td>oui</td><td>oui</td></tr><tr><td>Coût</td><td>1 à 2 jours + runs plus lourds</td><td>1 jour</td><td>½ journée</td></tr><tr><td>Limite à déclarer</td><td>liO si absent</td><td>35 % de la 3ᵉ couronne hors cadre</td><td>pas de 3ᵉ couronne</td></tr></tbody></table></div></div>
+<footer>Mesures du 3 septembre 2026 : géométrie des couronnes (<code>couronne_perimetre.geojson</code>), population scellée v3, graphes OSMnx en cache, GTFS Tisséo et TER, extrait OSM d'OTP (<code>osmium fileinfo</code>), microdonnées EMC² 2023 (ProGEDO lil-1750, COEP). Constantes : <code>TOULOUSE_CENTER_DIST_M</code>, <code>TOULOUSE_OSM_ROUTES_30K_BBOX</code> (<code>llm-agents/geography.py</code>). Les tailles de graphe et durées pour un périmètre élargi sont des estimations, signalées comme telles.</footer></div><div class="tip" id="tip" hidden></div>
+<script>
+const rows = [["Toulouse · arrêt Tisséo ≤ 1,5 km",100.0,null],["1ʳᵉ couronne · Tisséo ≤ 1,5 km",99.1,null],["2ᵉ couronne · Tisséo ≤ 1,5 km",32.4,null],["2ᵉ couronne · gare TER ≤ 1,5 km",15,null],["2ᵉ couronne · gare TER ≤ 5 km",53,null],["3ᵉ couronne · Tisséo ≤ 1,5 km",0.0,null],["3ᵉ couronne · gare TER ≤ 1,5 km",18,null],["3ᵉ couronne · gare TER ≤ 5 km",44,null],["3ᵉ couronne · abonnés TC (trait imputé)",12.3,null]];
+const tip = document.getElementById('tip');
+function showTip(e, html){ tip.innerHTML = html; tip.hidden = false; moveTip(e); }
+function moveTip(e){ const pad = 14; let x = e.clientX + pad, y = e.clientY + pad; const r = tip.getBoundingClientRect(); if (x + r.width > innerWidth - 8) x = e.clientX - r.width - pad; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - pad; tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+function hideTip(){ tip.hidden = true; }
+const fmt = v => v.toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:1});
+const svg = document.getElementById('c-tc'); const W = 560, lw = 250, pw = W - lw - 50, rowH = 24, top = 8, H = top + rows.length*rowH + 6, max = 108;
+const x = v => lw + v/max*pw; let s = '';
+for (let g = 0; g <= 100; g += 20) s += `<line class="grid" x1="${x(g)}" y1="${top}" x2="${x(g)}" y2="${H-6}"/>`;
+rows.forEach((r, i) => { const y = top + i*rowH, cy = y + rowH/2; s += `<text x="${lw-8}" y="${cy+4}" text-anchor="end">${r[0]}</text><rect class="bar" x="${lw}" y="${cy-6}" width="${Math.max(x(r[1])-lw,1)}" height="12"/><text class="v" x="${x(r[1])+8}" y="${cy+4}">${fmt(r[1])} %</text><rect class="hit" x="0" y="${y}" width="${W}" height="${rowH}" data-tip="<b>${r[0]}</b><br>${fmt(r[1])} % des domiciles"/>`; });
+svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
+svg.querySelectorAll('.hit').forEach(el => { el.addEventListener('mouseenter', e => showTip(e, el.dataset.tip)); el.addEventListener('mousemove', moveTip); el.addEventListener('mouseleave', hideTip); });
+</script>
