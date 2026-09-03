@@ -1182,9 +1182,20 @@ tickets:
     note: >-
       OUVERT le 2026-09-03 (rapport de périmètre § 6, action T7). Le transport scolaire porte
       65 % du TC de la 3ᵉ couronne et 57 % de la 2ᵉ (EMC² 2023) mais n'est dans aucun GTFS
-      (liO exclut les services scolaires, pas de données ouvertes). Lot 0 prérequis : dans le
+      (liO exclut les services scolaires, pas de données ouvertes). Prérequis porté par le ticket 031 (§ 1.2) : dans le
       vivier eqasim seuls 50-54 % des 6-17 ans ont une activité études (EMC² : 90-95 %) car les
       journées donneuses ENTD incluent vacances (V2_VAC_SCOL) et mercredis (V2_JOUR_DEP = 4).
       Puis option school_bus synthétique pour les mineurs hors Tisséo à > 2 km de l'école,
       horaires et durées calibrés sur l'enquête ; remplaçable par les circuits réels de la
       Région si obtenus.
+  ticket_031_perimetre_453_communes:
+    status: à faire
+    note: >-
+      OUVERT le 2026-09-03 (rapport de périmètre, option A retenue en principe). Partie 1 :
+      construire le fichier de population des 453 communes / six départements — données BD TOPO
+      et BAN à obtenir (accord requis), eqasim six départements + filtre par liste de communes,
+      journées donneuses ENTD hors vacances scolaires (−21 % de donneurs, mesuré), vivier,
+      sélection v4 avec classe_age, routage des plannings sur le polygone, audit, sceau v4.
+      Partie 2 : inventaire des impacts sur la chaîne (runtime, OSMnx, OTP + liO, GAMA,
+      résultats, caches, jeux gelés, article) — analyse à approfondir avant spécification.
+      Absorbe l'ancien lot 0 du ticket 030.

@@ -31,13 +31,12 @@
 
 ## Ce que le ticket fait
 
-### Lot 0 — Prérequis : les écoliers vont à l'école (fork `eqasim-toulouse`, `data/hts/entd/cleaned.py`)
-Pour les personnes `studies = True` de moins de 18 ans, ne garder comme journée donneuse qu'une
-journée de classe : `V2_VAC_SCOL = 0`, et `V2_JOUR_DEP ≠ 4` pour les moins de 11 ans (semaine
-de quatre jours de 2008). Journaliser le nombre de journées écartées et la part d'écoliers avec
-trajet vers l'école avant / après. Cible : ≥ 88 % des 6-17 ans mobiles du vivier ont une activité
-`education` (EMC² : 90 à 95 %). Le contrôle de population (`control_population.py`) gagne une
-ligne « scolaires avec activité d'études » dans la section ménages et mobilité.
+### Lot 0 — Prérequis : les écoliers vont à l'école → **ticket 031, § 1.2**
+Le filtre des journées donneuses ENTD (hors vacances scolaires `V2_VAC_SCOL`, mercredi des moins
+de 11 ans `V2_JOUR_DEP`) façonne la population : il est porté par le ticket 031 (construction du
+fichier de population du périmètre des 453 communes), avec sa cible (≥ 88 % des 6-17 ans mobiles
+avec une activité `education`) et sa ligne de contrôle. Les lots A à D ci-dessous sont du runtime
+et n'en dépendent que pour avoir des écoliers à transporter.
 
 ### Lot A — Éligibilité et calcul de l'option (`llm-agents/trip_helper/`, nouveau module)
 - **Éligible** : persona de 5 à 17 ans, domicile sans arrêt Tisséo à moins de 1,5 km
@@ -83,8 +82,8 @@ de la Région (antenne Haute-Garonne), sous convention de recherche ; données n
   déplacements, sans GTFS).
 
 ## Critères d'acceptation
-1. Lot 0 : ≥ 88 % des 6-17 ans mobiles du vivier ont une activité `education` ; la ligne de
-   contrôle existe et la trace le montre.
+1. Prérequis (ticket 031, § 1.2) livré : ≥ 88 % des 6-17 ans mobiles du vivier ont une activité
+   `education`.
 2. Tout persona éligible avec activité d'études un jour de classe reçoit exactement une option
    `school_bus` à l'aller et une au retour ; aucun adulte n'en reçoit.
 3. Médiane des durées synthétiques sur les éligibles de la v3 (ou v4) entre 25 et 35 min.
