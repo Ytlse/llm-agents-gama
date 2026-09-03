@@ -1,3 +1,21 @@
+## [2026-09-03] Les chaînes d'activités des agents viennent de jours de classe
+
+Le générateur de population prend ses chaînes d'activités dans l'ENTD 2008, qui couvre l'année
+entière ; l'EMC² 2023, référence du jeu de test, s'enquête hors vacances scolaires. Le fork
+eqasim ne garde plus comme journées donneuses que les jours de classe : hors vacances scolaires
+pour tout le monde, et hors mercredi pour les moins de 11 ans (les écoliers de 2008 n'avaient
+pas classe ce jour). Réglages `hts_school_days_only` et `hts_exclude_wednesday_under_age` ;
+le stage imprime la part des scolaires mobiles avec un trajet vers l'école et alarme sous 85 %.
+
+**Avant :** 50 à 54 % des 6-17 ans du vivier avaient une activité d'études un jour de semaine
+(EMC² : 90 à 95 %) ; dans la population scellée v3, 69 des 151 mineurs mobiles passaient un
+lundi sans école.
+**Après :** sur les journées donneuses, 72,0 % → 90,8 % des scolaires mobiles ont un trajet vers
+l'école ; 15 687 → 12 392 donneurs (−21 %), la plus petite classe d'âge en garde 858 pour un
+seuil de 5. Le vivier et le sceau v4 restent à régénérer (ticket 031).
+
+---
+
 ## [2026-09-03] La population scellée passe à 13 marges conformes : ménages entiers, marges multiples, immobiles rendus
 
 La règle de sélection v3 (ticket 029) remplace la v2 pour le jeu de test de l'article. Trois

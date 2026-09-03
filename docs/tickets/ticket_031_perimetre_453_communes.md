@@ -51,8 +51,11 @@ Aucune dépendance au ticket 030 : ses lots A à D sont du runtime. Son ancien l
 - Aujourd'hui : `V2_TYPJOUR == 1` (jour de semaine), première journée par personne.
 - Proposé : **`V2_VAC_SCOL == 0` pour tous les donneurs** — l'EMC² s'enquête elle-même hors
   vacances scolaires, la population entière y gagne en cohérence, pas seulement les écoliers.
-  Mesuré : 17 723 → 14 063 donneurs (−21 %) ; la plus petite classe d'âge garde 1 002 donneurs
-  pour un seuil `matching_minimum_observations` de 5.
+  **Livré le 2026-09-03** (fork, `hts_school_days_only`, `hts_exclude_wednesday_under_age: 11`).
+  Mesuré au fil du pipeline (jours de référence) : 15 687 → 12 392 donneurs (−21 %) ; la plus
+  petite classe d'âge garde 858 donneurs pour un seuil `matching_minimum_observations` de 5 ;
+  scolaires mobiles avec trajet vers l'école 72,0 % → 90,8 %. Reste : régénérer le vivier et
+  ajouter la ligne de contrôle.
 - À décider : exclure aussi le **mercredi** (`V2_JOUR_DEP == 4`) pour les moins de 11 ans ? En
   2008 les écoliers n'avaient pas classe ce jour (17 % de trajets vers l'école) ; l'EMC² 2023
   mesure 91 % d'écoliers de 6-10 ans avec école, mercredis inclus. Hors vacances et hors

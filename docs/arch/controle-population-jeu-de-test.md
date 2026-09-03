@@ -280,6 +280,11 @@ n'ont que des enfants de moins de 5 ans absents, hors population enquêtée ; 96
 déclarés présents ; audit A8 : 2,5 % de membres absents (54,6 % en v2, 11,2 % sur la population
 de référence). **Mobilité** : 2,58 déplacements par persona, 2,88 par persona mobile (enquête 3,53
 et 3,95) — l'écart restant est celui des chaînes ENTD 2008, seul « à publier » de la synthèse.
+Depuis le 2026-09-03, les journées donneuses ENTD sont des **jours de classe** (hors vacances
+scolaires, hors mercredi des moins de 11 ans — fork eqasim, ticket 031 § 1.2) : la v3 avait été
+générée avant ce filtre, avec 82 écoliers sur 151 mineurs mobiles en activité d'études ; le
+prochain vivier doit en compter ≥ 88 %, et le contrôle gagnera la ligne « scolaires avec
+activité d'études » face à l'EMC² (90 à 95 %).
 
 **Ce que la v3 change dans la lecture.** Genre, permis, abonnement, logement et immobiles sont
 désormais **alloués** (par la descente) : leur conformité mesure la sélection, comme celle des

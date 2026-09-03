@@ -59,7 +59,7 @@ Télécharger et placer les données dans `eqasim-toulouse/data/` (voir le [guid
 |---------|--------------|-------------|
 | FILOSOFI (revenus INSEE) | `filosofi_2019/` | Distribution des revenus par ménage → profil socio-économique des agents |
 | Recensement INSEE | `rp_2019/` | Structure démographique (âge, CSP, composition du ménage) → tirage des agents |
-| ENTD (enquête nationale déplacements) | `entd_2008/` | Comportements de mobilité (motifs, fréquences, modes) → génération des chaînes d'activités |
+| ENTD (enquête nationale déplacements) | `entd_2008/` | Comportements de mobilité (motifs, fréquences, modes) → génération des chaînes d'activités. **Journées donneuses = jours de classe** depuis le 2026-09-03 : hors vacances scolaires (`V2_VAC_SCOL`) et hors mercredi pour les moins de 11 ans (`V2_JOUR_DEP`), réglages `hts_school_days_only` / `hts_exclude_wednesday_under_age` du fork ; sans ce filtre, 50 à 54 % des 6-17 ans générés avaient une activité d'études un jour de semaine (EMC² : 90 à 95 %) ; le stage imprime la part des scolaires mobiles avec trajet vers l'école (72,0 % → 90,8 % sur les donneurs) et alarme sous 85 % |
 | BD TOPO | `bdtopo_toulouse/` | Localisation précise des bâtiments et adresses → affectation domicile/travail |
 | OSM Toulouse | `osm_toulouse/` | Réseau routier et piéton, POI → calcul des itinéraires OSMnx |
 | GTFS Tisséo | `gtfs_toulouse/` | Réseau TC (arrêts, lignes, horaires) → enrichissement du flag `public_transport` et calcul d'accessibilité TC |
