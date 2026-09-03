@@ -63,6 +63,7 @@ OTHER_MODE = "other"
 _MODE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("train", ("rail", "train", "ter", "intercités", "intercites")),
     ("public_transport", ("metro", "métro", "subway", "tram", "tramway", "bus",
+                          "school_bus",  # car scolaire synthétique (ticket 030)
                           "transit", "public_transport", "transports en commun",
                           "transport en commun", "transports_collectifs", "tc")),
     ("motorbike", ("scooter", "moto", "motorbike", "motorcycle", "deux-roues",

@@ -1178,16 +1178,17 @@ tickets:
       au premier run.
 
   ticket_030_car_scolaire_synthetique:
-    status: à faire
+    status: implémenté
     note: >-
-      OUVERT le 2026-09-03 (rapport de périmètre § 6, action T7). Le transport scolaire porte
-      65 % du TC de la 3ᵉ couronne et 57 % de la 2ᵉ (EMC² 2023) mais n'est dans aucun GTFS
-      (liO exclut les services scolaires, pas de données ouvertes). Prérequis porté par le ticket 031 (§ 1.2) : dans le
-      vivier eqasim seuls 50-54 % des 6-17 ans ont une activité études (EMC² : 90-95 %) car les
-      journées donneuses ENTD incluent vacances (V2_VAC_SCOL) et mercredis (V2_JOUR_DEP = 4).
-      Puis option school_bus synthétique pour les mineurs hors Tisséo à > 2 km de l'école,
-      horaires et durées calibrés sur l'enquête ; remplaçable par les circuits réels de la
-      Région si obtenus.
+      IMPLÉMENTÉ le 2026-09-03 (Lots A + B ; Lot C rendu GAMA hors périmètre, décision utilisateur).
+      Option school_bus synthétique pour les personas 5-17 ans hors ressort Tisséo, sur leurs
+      trajets école ; éligibilité = âge seul (sectorisation et seuil de distance abandonnés, cf.
+      règlement liO), durée calibrée EMC² (médiane ≈ 30 min), gratuit, horaire ± 30 min autour de
+      l'activité. Comptée en TC dans les 3 tables de métriques + pont oracle (test de non-régression
+      vu échouer d'abord), exclue de la mention d'abonnement. Rendu GAMA via marqueur __DIRECT_CAR__
+      (interpolation point-à-point, agent rouge, sans édition GAMA). Fichiers : trip_helper/school_bus.py,
+      config/school_bus.yaml, tests/test_school_bus.py (13 tests verts). Prérequis population porté
+      par le ticket 031 (§ 1.2). Circuits réels NON demandés à la Région (délais).
   ticket_031_perimetre_453_communes:
     status: en cours
     note: >-
@@ -1205,3 +1206,55 @@ tickets:
       sha256 9f05c655…, 12 marges conformes + motorisation ménage à publier, six départements,
       scolaires 88,5 %), sauvegarde, config.yaml repointé, synthèse HTML v3. Reste : partie 2
       (runtime par commune, OSMnx/OTP/GAMA sur le polygone), analyse écrite dans le ticket.
+
+  ticket_032_lts_velo_propositions_gama:
+    status: à faire
+    note: >-
+      SPEC rédigée le 2026-09-03, RESSERRÉE ce jour. Post-traite les itinéraires vélo OSMnx pour
+      exposer à l'agent LLM un PROFIL DE SÉCURITÉ DESCRIPTIF (bloc bike_safety, nom propre au mode)
+      dérivé des tags cycleway/highway/maxspeed, fallback vitesse par highway. Choix de rigueur :
+      PAS de LTS normé ni de score synthétique (le graphe n'a ni voies, ni stationnement, ni ADT) —
+      des faits OSM agrégés par distance (protected/calm/urban_pct, exposed_m, classified_pct) ;
+      worst_lts SUPPRIMÉ (« max pondéré distance » était auto-contradictoire) et remplacé par
+      exposed_m en maillon faible SANS seuil. NON routage : profil extrait dans _route_sync sur le
+      chemin déjà calculé. Profil TRANSITOIRE : il ne vit que jusqu'au rendu texte de l'option, pas
+      de remontée GAMA (déterministe, donc recalculable hors ligne). Pose la plomberie réutilisée par
+      le ticket 033. Cache : le profil voyage dans le dict retour (aucun versionnement, ne PAS bumper
+      routing_version) ; toute la chaîne est déjà transparente (réplica /route, client HTTP,
+      store/lookup, peupleur en masse) SAUF le CHEMIN DE CACHE HIT, qui déballe deux clés nommées et
+      jetterait le profil en silence — corrigé par un paramètre additif route_extras sur
+      _make_travel_plan (portant le dict retour complet ; défaut None, donc les 4 appels de
+      test_terminal_time.py restent intacts et le 033 n'ajoute aucune plomberie). Migration = SÉQUENCE
+      ORDONNÉE en 3 temps : reconstruire le graphe (volume partagé, une fois) → purger → repeupler
+      (étape 6 du notebook). L'ordre est contraignant : repeupler avant de reconstruire le graphe
+      donne un cache peuplé uniformément SANS profil, silencieusement. La purge est obligatoire non
+      pour les durées (identiques) mais parce que le peupleur est idempotent par couverture : sans
+      purge il saute les entrées existantes, qui survivent sans profil → cache durablement mixte,
+      biais silencieux dans la mesure de calibration. Spec testable : specs/profil_securite_velo.md
+      (R16 = aller-retour cache préserve le profil).
+
+  ticket_033_profil_confort_pieton_propositions_gama:
+    status: à faire
+    note: >-
+      SPEC rédigée le 2026-09-03, REQUALIFIÉE ce jour de « profil routier voiture » (hors sujet :
+      vitesse/autoroute/péage n'ont pas de sens à pied) vers « profil de confort piéton », puis
+      ALLÉGÉE. Post-traite les itinéraires piétons OSMnx (network_type=walk, déjà routés par
+      osmnx_direct.py) pour un score de confort 1-4, exposé en bloc comfort_metrics homogène au vélo.
+      Dépend du ticket 032, dont il RÉUTILISE la plomberie (profil calculé dans _route_sync, porté
+      TRANSITOIREMENT sur le TravelPlan, traversant le cache dans le dict retour avec le chemin de
+      cache hit corrigé, rendu en TEXTE dans un gabarit j2, graphe reconstruit une fois sur le volume
+      partagé + assertion au démarrage, RAZ LTM/caches) — PAS de middleware JSON, l'agent lit du
+      texte, pas du JSON (erreur d'architecture corrigée le 2026-09-03). Scope minimal : confort =
+      attribut STATIQUE d'arête posé dans la boucle qui pose déjà speed_kph (highway seul, pas de
+      sidewalk) ; agrégat = 3 sommes (comfort_x_pct + worst_comfort seuillé à 10 %). ALIGNÉ sur le 032
+      le 2026-09-03 (4 écarts corrigés) : profil transitoire, PAS de remontée GAMA via model_dump ;
+      pas de versionnement de cache (la RAZ du 032 suffit) ; bloc nommé comfort_metrics et vélo nommé
+      bike_safety (pas de champ générique route_characteristics) ; graphe walk régénéré UNE FOIS sur
+      le volume partagé, pas par réplica. Grâce au paramètre route_extras posé par le 032, le 033
+      n'ajoute AUCUNE plomberie : comfort_metrics voyage dans le même dict retour. Migration = même
+      séquence ordonnée en 3 temps (graphe walk → purge → repopulation), mutualisée avec celle du 032
+      si les deux tickets sortent dans la même fenêtre (une seule purge, une seule repopulation).
+      Seule divergence ASSUMÉE restante (choix utilisateur du
+      2026-09-03) : le 033 garde un score ordinal 1-4 seuillé à 10 %, là où le 032 s'interdit tout
+      score et applique un maillon faible sans seuil. Retirés du scope v1 (leviers) : stairs_count,
+      crossings_count, lit (28 % de couverture OSM), dénivelé (MNT).

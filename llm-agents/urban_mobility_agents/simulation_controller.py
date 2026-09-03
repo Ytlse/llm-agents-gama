@@ -37,6 +37,7 @@ from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.agents.llm_agent import Context, LlmAgent
 from text_helper import env_ob_to_text, parse_ob
 from trip_helper.base import TripHelper
+from trip_helper.school_bus import build_school_bus_option
 from utils import random_uuid
 from world.population import WorldPopulation
 from world.world_data import WorldModel
@@ -2193,6 +2194,22 @@ class SimulationLoopV1(BaseScenario):
         _blocked = {m for m, ok in (("bike", include_bike), ("car", include_car)) if not ok}
         if _blocked:
             itineraries = [it for it in itineraries if _primary_mode(it) not in _blocked]
+
+        # Car scolaire synthétique (ticket 030). Injecté APRÈS le post-filtre (jamais
+        # bloqué : `_primary_mode` renvoie « transit ») et AVANT le verrou de retour, de
+        # sorte qu'un élève venu en voiture reprenne la voiture (le verrou filtre alors
+        # le car scolaire), et qu'un élève venu en car scolaire le retrouve au retour
+        # (aucun véhicule garé à l'école → verrou inactif). Rien en cas de non-trajet.
+        if not same_location:
+            school_option = build_school_bus_option(
+                person=person,
+                from_location=from_location,
+                next_activity=next_activity,
+                timestamp=timestamp,
+                departure_time=departure_time,
+            )
+            if school_option is not None:
+                itineraries = list(itineraries) + [school_option]
 
         # Verrou de retour : on ne laisse pas un véhicule dormir sur place quand l'agent
         # rentre chez lui. Si le vélo ou la voiture est garé au point de départ et que ce

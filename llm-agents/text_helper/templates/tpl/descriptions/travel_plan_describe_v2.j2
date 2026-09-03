@@ -15,6 +15,7 @@
 {%- for label, seconds in plan.described_steps %}
 - {{ label }} : {{ seconds | duration_to_bucket_text }}.
 {%- endfor %}
+{%- elif plan.legs | length == 1 and plan.legs[0].mode == 'school_bus' %}{%- set leg = plan.legs[0] %} Car scolaire liO (gratuit). Durée estimée : {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}. Distance : {{ leg.distance | humanize_distance }}.
 {%- elif plan.legs | length == 1 and plan.legs[0].transit_route and '__DIRECT' in plan.legs[0].transit_route %}{%- set leg = plan.legs[0] %} Durée estimée : {{ ((leg.end_time | to_timestamp) - (leg.start_time | to_timestamp)) | duration_to_bucket_text }}. Distance : {{ leg.distance | humanize_distance }}.
 {%- else %} Temps de trajet : {{ ((plan.end_time | to_timestamp) - (plan.start_time | to_timestamp)) | duration_to_bucket_text }}, dont {{ plan.walking_time | duration_to_bucket_text }} de marche.
 {%- set ns = namespace(prev_transfer_walk=false) %}

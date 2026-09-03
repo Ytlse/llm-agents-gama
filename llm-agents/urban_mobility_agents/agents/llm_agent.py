@@ -198,6 +198,11 @@ def _pt_subscription_note(mode_label: str, has_pt: bool) -> str:
     réellement offert. Une ligne de persona la faisait lire même sans aucune option TC.
     """
     ml = (mode_label or "").lower()
+    # Car scolaire (ticket 030) : compté en TC pour les métriques, mais GRATUIT — pas
+    # d'abonnement. La garde passe avant le test _PT_LEG_MODES, dont la sous-chaîne
+    # « bus » capterait sinon « school_bus » et collerait une mention fausse.
+    if "school_bus" in ml:
+        return ""
     if not any(k in ml for k in _PT_LEG_MODES):
         return ""
     return (" Abonné aux transports en commun." if has_pt

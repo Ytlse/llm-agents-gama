@@ -19,7 +19,8 @@ from settings import settings
 # EMC², une valeur exotique y disparaîtrait sans être comptée.
 RESIDENCE_VALUES = frozenset((*COURONNES, OUT_OF_PERIMETER))
 
-_BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular"}
+_BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular",
+              "school_bus"}  # car scolaire synthétique (ticket 030), compté en TC
 _RAIL_MODES = {"rail"}
 _CAR_MODES = {"car", "__car__"}
 _BIKE_MODES = {"bicycle", "bike"}

@@ -195,6 +195,27 @@ restreint **avant** les appels de routage, dans `_compute_move_for_activity`
 plans revenus (un motif OTP peut contenir un tronçon vélo). Ils alimentent aussi la clé du
 cache de routage persistant : un trajet calculé sans vélo ne pollue pas celui calculé avec.
 
+### Option synthétique : le car scolaire (ticket 030)
+
+Le transport scolaire est le premier mode collectif des 2ᵉ et 3ᵉ couronnes mais n'existe dans
+aucun GTFS. Une **option synthétique** le supplée, produite par
+[`trip_helper/school_bus.py`](../../llm-agents/trip_helper/school_bus.py) — une fonction, pas un
+moteur : aucun appel OTP ni OSMnx. Elle est injectée dans `_compute_move_for_activity` après le
+post-filtre et **avant** le verrou de retour (un élève venu en voiture reprend la voiture ; venu en
+car scolaire, il le retrouve au retour).
+
+| Aspect | Règle |
+|--------|-------|
+| Éligibilité | persona **5-17 ans** + domicile **hors ressort Tisséo** (`home.public_transport is False`) + trajet lié à l'activité `education`. Ni sectorisation, ni seuil de distance. |
+| Horaire | calé sur l'activité scolaire, **± 30 min** (aller : arrive 30 min avant le début ; retour : part 30 min après la fin). |
+| Durée | `accès + distance_vol_d'oiseau × détour / vitesse + ramassage`, paramètres figés de [`config/school_bus.yaml`](../../llm-agents/config/school_bus.yaml), calés sur la médiane EMC² (≈ 30 min). |
+| Coût | nul (gratuité régionale) — porté par le libellé de rendu, aucun champ tarif dans le modèle. |
+| Mode / métriques | `mode="school_bus"` → compté en **transport collectif** (`move_logger._BUS_MODES`, `mode_choice.canonical_mode`, `categorize_mode`, pont oracle). **Exception** : `_pt_subscription_note` l'exclut (gratuit, pas d'abonnement). |
+| Rendu GAMA | `transit_route="__DIRECT_CAR__"` → GAMA l'interpole point-à-point comme une voiture, **sans édition GAMA** ; l'agent s'affiche en rouge (lot GAMA hors périmètre). Arrêts nommés non vides pour que `get_code()` diffère d'une vraie voiture (anti-collision de déduplication). |
+
+L'enquête EMC² reste la source de la **durée** (réalisme physique) ; l'**éligibilité** vient du
+règlement liО, pas de l'enquête. Détail et décisions : `docs/tickets/ticket_030_car_scolaire_synthetique.md`.
+
 ### Cohérence de chaîne des véhicules
 
 La possession seule ne suffit pas : un agent parti travailler en bus a laissé son vélo au
