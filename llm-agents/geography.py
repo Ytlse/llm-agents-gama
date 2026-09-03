@@ -19,12 +19,16 @@ How the convex hull was computed:
 
 The inscribed rectangle was then read from the otp_shape.ipynb notebook.
 
-TOULOUSE_TRANSIT_SERVICE_WKT is the convex hull of all GTFS stop coordinates
-(Tisseo + TER Occitanie) loaded by OTP.  Any origin or destination outside
-this polygon will cause OTP to raise a "Couldn't link" error, so the polygon
-is used as a pre-flight guard before sending transit queries.
+TOULOUSE_TRANSIT_SERVICE_WKT is the CONCAVE hull of the GTFS stop coordinates that OTP's
+street graph can reach — every Tisséo stop, plus the TER stops inside the perimeter polygon.
+It describes where transit service exists; it is **not** a routing guard. Recipe:
+scripts/data/gtfs/transit_service_hull.py (was: scripts/general/otp_shape.ipynb).
 
-Source: scripts/general/otp_shape.ipynb
+⚠ It used to be described here as a pre-flight guard against OTP's "Couldn't link" error.
+That has not been true since the 2026-09-03 port: OTP's street graph now covers the whole
+perimeter polygon, so a point outside this hull links fine — it is merely far from any stop.
+Measured on the v4 sealed population (2 580 homes and activity places): 0 "Couldn't link".
+The only reader of this constant is vizpop.py.
 
 ⚠ Depuis le 2026-09-03 (ticket 031, partie 2), le périmètre de la simulation n'est plus un
 disque ni un rectangle : c'est le **polygone des 453 communes** de l'enquête EMC² 2023
