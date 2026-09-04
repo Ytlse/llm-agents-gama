@@ -1,3 +1,76 @@
+## [2026-09-04] Le vélo d'un persona n'est plus posé par deux lois qui se contredisent
+
+La loi d'équipement vélo apprise sur l'EMC² 2023 vivait à deux endroits : dans le générateur
+eqasim et dans le post-traitement du notebook. Comme elles ne tiraient pas sur les mêmes clés,
+elles se contredisaient pour 4,7 % du vivier, et rien ne disait laquelle avait parlé. Le
+générateur ne pose plus le trait ; le post-traitement est la seule loi. C'est la décision du
+24 août appliquée.
+
+Vérifié avant de retirer quoi que ce soit : le trait final ne changeait que pour 14 personas,
+tous sans coordonnées de domicile — les seuls que le post-traitement ne peut pas servir, et
+ceux que la sélection écarte déjà. La sélection rend le même fichier au bit près.
+
+Deux silences fermés au passage. Un persona sans adresse résoluble n'entrait dans aucun foyer :
+le vélo qu'un enrichissement amont lui avait donné y survivait, et la population était pour lui
+moitié apprise, moitié recopiée. Et l'export JSON écrivait « Pas de vélo » à défaut de colonne,
+ce qui affirmait une absence de vélo là où personne ne s'était prononcé — en étouffant l'alarme
+du runtime, qui sait distinguer les deux.
+
+**Avant :** deux implémentations de la même loi, en désaccord sur 538 personnes, et un défaut
+d'export qui transformait « non renseigné » en « pas de vélo ».
+**Après :** une seule loi, un trait retiré partout où elle ne peut pas se prononcer, et
+l'alarme du runtime qui redevient audible. Cohorte scellée identique.
+
+---
+
+## [2026-09-04] Le car liO et le train roulent enfin : plus de la moitié du manque de transport en commun comblée
+
+Le graphe qui portait liO attendait depuis la nuit ; il est **en service**, et deux défauts
+silencieux découverts en l'installant sont réparés. Sur la population scellée v4, un lundi de
+mars à 8 h, les 2 580 domiciles et lieux d'activité sont réinterrogés : **670 points n'avaient
+aucun itinéraire en transports collectifs, il en reste 314**. En 3ᵉ couronne, 369 sur 374 → 148 ;
+en 2ᵉ, 160 sur 339 → 26.
+
+**Le train est désormais proposé.** Le TER était dans le graphe depuis la veille, ses arrêts
+comptaient dans les mesures de desserte, et aucun agent ne pouvait s'en voir offrir un : le mode
+`rail` n'était pas demandé au calculateur d'itinéraires. Il l'est, et un TER s'affiche « Train »
+au lieu d'« Unknown ». Sur les six itinéraires proposés par trajet, **1 883 des 11 288 passent
+par le rail** (17 %), et **833 points** en ont au moins un — dont 169 des 374 de 3ᵉ couronne, où
+58 % des itinéraires prennent le train.
+
+**Un export d'opérateur peut être tronqué ligne par ligne.** liO publiait 20 % de courses en
+moins au printemps 2027 qu'à l'automne 2026, et la question était : saison ou artefact ? La
+courbe le dit sans ambiguïté — une marche unique au changement de service SNCF du 13 décembre
+2026, suivie de vingt-six semaines d'un plateau parfaitement plat avec les creux de vacances
+scolaires à leur place. **Treize lignes s'arrêtent le 11 ou le 12 décembre et ne reviennent
+jamais**, alors que le réseau garde 94 % de ses lignes ; leur calendrier s'arrête là quand celui
+de leurs voisines court jusqu'en août. Dix des treize desservent le périmètre, et ce sont toutes
+des dessertes de gare : Muret, Carbonne, Noé, Villefranche, Castelnau-d'Estrétefonds, Boussens.
+Le pipeline de feed annuel sait maintenant les voir, et ce que la journée simulée reçoit change :
+**4 303 courses de car au lieu de 3 494**, 52 lignes dans le périmètre au lieu de 41, 267 départs
+de plus entre 6 h et 10 h. Le prix est déclaré : les journées de vacances et de juillet perdent
+leur journée donneuse réelle et passent en confiance basse — une approximation annoncée valant
+mieux qu'une sous-offre invisible sur la journée qu'on mesure.
+
+**Le calculateur ne regardait qu'un réseau sur trois pour décider s'il valait la peine de le
+consulter.** Le garde-fou qui saute l'appel quand aucun arrêt n'est à moins de 1,5 km ne
+connaissait que les arrêts Tisséo : **397 des 2 580 points** — 245 des 374 de 3ᵉ couronne, 150
+des 339 de 2ᵉ — sont à portée d'un car liO ou d'une gare TER sans l'être d'un arrêt urbain. Pour
+eux, tout le travail sur le graphe n'aurait rien produit. Le garde-fou compte désormais les
+arrêts des trois réseaux, 17 955 au lieu de 5 661, et le dit au démarrage.
+
+**Avant :** un habitant de Cazères voyait le car dans le graphe mais pas dans ses options, et le
+train nulle part ; la journée simulée servait une offre de car amputée d'un quart de ses
+dessertes de gare, sans que rien ne le signale.
+**Après :** les trois réseaux roulent le jour simulé, le train est proposé et nommé, la desserte
+tronquée est détectée et déclarée, et le manque de transport en commun est passé de 670 à 314
+points sur 2 580.
+
+⚠ **À faire à la prochaine relance** : recréer les conteneurs (`docker compose up -d api worker
+controller`) — c'est ce qui charge le nouveau code et le montage des trois réseaux.
+
+---
+
 ## [2026-09-04] Le car liO entre dans la chaîne : deux points sur trois sans transport en commun en trouvent un
 
 Le GTFS du réseau interurbain **liO** — 309 lignes d'autocars d'Occitanie, dont 56 traversent les

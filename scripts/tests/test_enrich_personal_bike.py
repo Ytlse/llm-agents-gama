@@ -525,3 +525,29 @@ class TestBoutEnBout:
         assert pop["pente_tailles_1_4"]["min_foyers_pour_juger"] == enrich_module.SLOPE_MIN_CELL
         assert set(pop["verdicts"]) == {"ok", "echec", "non_concluant"}
         assert isinstance(pop["echecs"], list)
+
+    def test_un_persona_sans_adresse_perd_le_trait_herite(self, tmp_path, monkeypatch):
+        """Un domicile non résoluble n'entre dans aucun foyer : le trait qu'un
+        enrichissement amont avait posé doit être RETIRÉ, pas laissé en place — sinon la
+        population est moitié apprise, moitié recopiée sans que rien ne le signale
+        (mesuré le 2026-09-04 : 14 personas du vivier, ticket 034 lot 2)."""
+        path = tmp_path / "pop.json"
+        sans_domicile = _person(43.61, household_size=1)
+        sans_domicile["identity"]["home"] = None
+        sans_domicile["identity"]["traits_json"][TRAIT_KEY] = "VAE"
+        population = [sans_domicile, _person(43.62, household_size=1)]
+        path.write_text(json.dumps(population, ensure_ascii=False), encoding="utf-8")
+
+        model = _certain_k(1)
+        object.__setattr__(model, "validation", {"targets": {}, "stock": {}})
+        monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
+                            classmethod(lambda cls, resource=None: model))
+        monkeypatch.setattr(
+            "llm_module.core.zone_resolver.ZoneResolver.load",
+            classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
+        monkeypatch.setattr("sys.argv", ["enrich", str(path)])
+
+        assert enrich_module.main() == 0
+        written = json.loads(path.read_text(encoding="utf-8"))
+        assert TRAIT_KEY not in written[0]["identity"]["traits_json"]
+        assert written[1]["identity"]["traits_json"][TRAIT_KEY] is not None

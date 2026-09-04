@@ -393,6 +393,11 @@ vivier de 11 329 personnes une pente **32,8 < 49,1 < 55,0 < 60,9 %** sur 2 350 /
 foyers : croissante, opposable. Le contrôle du vivier est donc celui qui compte pour ce critère ;
 sur une cohorte de 1 000 agents, aucune taille ≥ 3 n'atteindra 100 foyers.
 
+**Une seule loi.** Depuis le 2026-09-04 le post-traitement est le **seul** endroit où le
+trait est posé : le fork eqasim ne l'écrit plus (ticket 034, lot 2 — voir « Voie 2 » plus
+bas), et un `personal_bike` trouvé en entrée est retiré dans tous les cas, y compris pour
+un persona sans adresse résoluble.
+
 **Le rapport se lit aussi en JSON.** `--rapport-json <fichier>` écrit ce que la console affiche —
 chaque contrôle avec sa mesure, sa cible, sa marge (tolérance + 2 σ) et son verdict, la pente avec
 ses taux et ses effectifs de foyers, les compteurs de verdicts, le code de sortie, les règles
@@ -465,46 +470,46 @@ c'est une régression de la chaîne de génération, pas un cas normal à absorb
 
 ---
 
-## Voie 2 — la cause racine dans le fork eqasim (écrite, non rejouée)
+## Voie 2 — la loi a été retirée du fork (2026-09-04)
 
-[`enriched.py`](../../eqasim-toulouse/synthesis/population/enriched.py) applique désormais
-les mêmes trois étages, en s'appuyant sur le même module. Le foyer y existe nativement
-(`household_id`) : **aucune clé de ménage à reconstruire**, donc ni collision à scinder ni
-place absente à compléter. C'est l'avantage de fermer la cause plutôt que de corriger la
-surface. `number_of_bikes` reste calculé pour `bike_availability` (que MATSim consomme) mais
-ne détermine plus `personal_bike`.
+Le lot 4 du ticket 015 avait porté les trois étages dans
+[`enriched.py`](../../eqasim-toulouse/synthesis/population/enriched.py), pour qu'une
+génération neuve produise le trait nativement. **L'auteur du dépôt a rejeté ce lot le
+2026-08-24** — le post-traitement tourne de toute façon, une loi à deux endroits est une
+ceinture par-dessus les bretelles — et le code a été **retiré le 2026-09-04** (ticket 034,
+lot 2).
 
-Le stage déclare une dépendance nouvelle à `synthesis.population.spatial.home.locations`,
-pour obtenir la zone fine du domicile. Il n'y a pas de cycle : cette étape ne dépend que de
-`synthesis.population.sampled`.
+**Pourquoi c'était nécessaire, et pas seulement propre.** Les deux implémentations ne
+tiraient pas sur les mêmes clés : `household_id` et l'identifiant de personne dans le fork,
+adresse du domicile et index de fichier dans le post-traitement. Elles se contredisaient
+donc pour **538 personnes sur 11 329 (4,7 %)** du vivier — l'étape 8 réécrivait, et rien ne
+disait laquelle des deux lois avait parlé.
 
-**Une dépendance nouvelle entre dépôts, et c'est le point à valider.** `enriched.py` importe
-désormais `llm_module.core.bike_ownership` et `llm_module.core.zone_resolver` — c'est le seul
-endroit où le fork eqasim dépend de `llm_module`. Le paquet est donc monté dans le conteneur
-(`docker-compose.yml`, service `eqasim`), ce qui apporte du même coup ses ressources
-`llm_module/data/`. `WORKDIR` valant `/eqasim`, l'import se résout tel quel, et
-geopandas/shapely/pandas sont déjà des dépendances de l'image. Si l'on préfère ne pas
-franchir la frontière entre les deux dépôts, l'alternative est de garder le trait en voie 1
-seulement : la voie 1 doit de toute façon tourner, ne serait-ce que pour `housing_type`.
+**Ce que le retrait change, mesuré avant de le faire.** Deux copies du vivier brut du
+2026-09-04, l'une avec le trait posé par le fork, l'autre sans, passées dans la même chaîne
+de pré-imputation : le trait final ne différait que pour **14 personas**, tous **sans
+coordonnées de domicile**. Ce sont les seuls que le post-traitement ne peut pas servir
+(compteur `sans_adresse`) — et les 14 que la sélection exclut faute de couronne. La
+sélection rend donc **le même fichier au bit près** : même sha256, mêmes 513 ménages, mêmes
+393 échanges de descente, mêmes identifiants retenus. La représentativité est inchangée.
 
-Deux garde-fous y sont posés, et le second vaut d'être connu parce que le piège est en
-Python plutôt que dans les données : un domicile hors couche de zones fines est compté et
-alarmé, et une **loi de `k` inutilisable lève** au lieu de laisser passer. Écrire
-`if not stock: continue` aurait confondu `0` — un ménage qui n'a légitimement aucun vélo —
-avec `None` — une loi dégénérée dont on ne sait rien tirer. Le second cas aurait produit une
-population intégralement « Pas de vélo », valeur parfaitement plausible et donc
-indétectable. C'est la même famille d'erreur que le `bool(nan) == True` qui distribuait des
-permis à toute personne non appariée (`llm_agents.py`, `_flag()`).
+**Une fuite fermée au passage.** Ces 14 personas révélaient un défaut du post-traitement :
+n'entrant dans aucun foyer, ils échappaient à la boucle d'attribution, et un
+`personal_bike` posé en amont y **survivait**. La population était alors « moitié apprise,
+moitié recopiée » pour eux, ce que ce module dit refuser. Le trait leur est désormais retiré
+explicitement, avec son compteur (`trait_herite_retire_sans_adresse`). Une fois la fuite
+fermée, les deux variantes convergent à **0 différence** : le post-traitement est la seule
+loi, quoi qu'ait fait l'amont.
 
-⚠ **Rejoué depuis — et c'est le problème.** Le lot 4 du ticket 015 a été **rejeté** le
-2026-08-24 (une loi à deux endroits est une ceinture par-dessus les bretelles), mais le code
-est resté et tourne : le vivier brut du 2026-09-03 sort d'eqasim avec 5 769 « Pas de vélo »,
-5 063 « vélo normal » et 497 « VAE », puis l'étape 8 réécrit le trait pour 538 personnes sur
-11 329 (4,7 %) parce que ses clés (adresse, index) ne sont pas celles du fork (`household_id`,
-identifiant de personne). Retrait de la voie 2 ou alignement des clés :
-[ticket 034](../tickets/ticket_034_velo_cle_stable_une_seule_loi.md), décision non prise.
+**Et le défaut voisin, dans l'export JSON.** `llm_agents.py` écrivait
+`str(row.get("personal_bike", "Pas de vélo"))` : à défaut de colonne, il **affirmait**
+qu'un persona n'a pas de vélo là où la vérité est « personne ne s'est prononcé ». Ce défaut
+étouffait l'alarme du runtime, qui distingue précisément le trait **absent** (pas de vélo
+*et* `[ALARME]`) du trait qui **dit** « Pas de vélo ». La clé n'est plus écrite que si la
+colonne existe.
 
----
+Ce qui reste du ticket 034 — la clé de tirage, qui dépend encore de la position du persona
+dans le fichier — est traité dans une autre session.
 
 ## Hors périmètre
 

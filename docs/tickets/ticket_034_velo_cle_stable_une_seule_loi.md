@@ -1,9 +1,11 @@
 # Ticket 034 — Vélo personnel : une clé de tirage stable, et une seule loi
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
-> vérité. **Décision non prise** (2026-09-03) : l'auteur du dépôt n'est pas certain de
-> l'implémenter. Ce ticket consigne le constat mesuré, ce qu'il faudrait faire et ce que cela
-> coûte, pour que la décision se prenne sur des chiffres.
+> vérité.
+>
+> **Décisions de l'auteur du dépôt (2026-09-04)** : le **lot 2 est livré** (la loi est retirée
+> du fork, mesures ci-dessous) ; le **lot 1 — la clé de tirage — est reporté** et sera traité
+> dans une autre session.
 
 ## Le constat, en deux mesures (2026-09-03, soir)
 
@@ -81,7 +83,45 @@ avec ce ticket.
   resceller qu'une fois. Les rapports `--check` sur la cohorte et sur le vivier doivent rester
   au code 0, pente croissante sur le vivier.
 
-### Lot 2 — une seule loi
+### Lot 2 — une seule loi — **LIVRÉ le 2026-09-04**
+
+**Protocole de la vérification, demandée par l'auteur** (« retire le fork et vérifie que tu as
+les mêmes résultats de représentativité »). Deux copies du vivier brut du 2026-09-04
+(`Temp/1_raw/toulouse_population_10000.json`, 11 329 personas, tous porteurs du trait posé par
+le fork) : **A** telle quelle, **B** avec `personal_bike` retiré de chaque persona — l'état
+qu'aurait le vivier si la loi quittait le fork. Les deux passent dans la même chaîne de
+pré-imputation (`fix_minor_traits`, `enrich_housing_type`, `enrich_personal_bike`,
+`enrich_equipment`, `fix_minor_traits`), puis dans `seal_population select --n 1000`.
+
+| Mesure | Résultat |
+|---|---|
+| Traits qui diffèrent entre A et B | `personal_bike` seul, **14 personas** — aucun autre trait |
+| Nature des 14 | **tous sans coordonnées de domicile** (`home: None`), donc `sans_adresse` pour le post-traitement, et exclus par la sélection (`sans_couronne: 14`) |
+| Personas des 14 présents dans la cohorte | **0 sur 1 000** |
+| Sélection : sha256 du fichier retenu | **identique** (`9038d4de1e11edec…` des deux côtés) |
+| Sélection : ménages, échanges, identifiants retenus | **identiques** — 513 ménages, 393 échanges, même empreinte de la liste des `person_id` |
+
+**Conclusion : la représentativité est inchangée**, au bit près, et le retrait supprime
+14 valeurs qui venaient d'une loi qui n'est pas la loi de référence.
+
+**Deux défauts fermés au passage, que la mesure a révélés.**
+1. Ces 14 personas n'entraient dans **aucun foyer** du post-traitement : la boucle
+   d'attribution ne les voyait pas, et un `personal_bike` posé en amont y **survivait** — la
+   population était « moitié apprise, moitié recopiée » pour eux, ce que le module dit
+   refuser. Le trait leur est désormais retiré explicitement, avec son compteur
+   (`trait_herite_retire_sans_adresse`). Une fois cette fuite fermée, A et B convergent à
+   **0 différence** : le post-traitement est la seule loi, quoi qu'ait fait l'amont.
+2. L'export JSON écrivait `str(row.get("personal_bike", "Pas de vélo"))` : sans colonne, il
+   **affirmait** l'absence de vélo là où la vérité est « personne ne s'est prononcé », et
+   étouffait l'alarme du runtime, qui distingue le trait absent du trait qui dit « Pas de
+   vélo ». La clé n'est plus écrite que si la colonne existe.
+
+**Ce qui a changé** : `enriched.py` (fonction et appel retirés, dépendance de stage
+`spatial.home.locations` devenue inutile), `output.py` (colonne retirée de l'export),
+`llm_agents.py` (plus de défaut), `enrich_personal_bike.py` (fuite fermée + compteur), un test
+neuf. `grep _assign_personal_bike` ne rend plus rien.
+
+#### La spécification d'origine du lot 2
 - Retirer `_assign_personal_bike` du fork (ou le rendre inactif par configuration, journalisé) :
   l'export eqasim ne porte plus `personal_bike`, l'étape 8 le pose. Une population qui n'est
   pas passée par l'étape 8 n'a **aucun** vélo et le runtime l'alarme — c'est le comportement

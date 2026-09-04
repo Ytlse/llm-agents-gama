@@ -256,6 +256,16 @@ def enrich(population: list[dict], model: BikeOwnershipModel, resolver) -> Count
         traits.pop(TRAIT_KEY, None)
         counts[reason] += 1
 
+    # Un persona sans adresse résoluble n'entre dans AUCUN foyer : la boucle ci-dessous
+    # ne le voit jamais, et un `personal_bike` hérité d'un enrichissement antérieur y
+    # survivait — la population était alors « moitié apprise, moitié recopiée » pour ces
+    # agents, ce que ce module dit refuser. Mesuré le 2026-09-04 sur le vivier de
+    # 11 329 personnes : 14 personas, tous sans coordonnées de domicile, portaient encore
+    # la valeur posée en amont. Le trait leur est donc retiré ici, explicitement.
+    for index, key in enumerate(addresses):
+        if key is None and (traits_of(index) or {}).pop(TRAIT_KEY, None) is not None:
+            counts["trait_herite_retire_sans_adresse"] += 1
+
     for household in households:
         zone = zone_by_index.get(household.members[0])
         if zone is None:
@@ -500,7 +510,8 @@ def report(measured: dict, household: dict, counts: Counter,
 
     print(f"\nTrait posé sur {measured['with_trait']}/{measured['n']} personas "
           f"({100 * measured['coverage']:.1f} %)")
-    for key in ("hors_couche", "sans_loi", "sans_traits", "sans_adresse"):
+    for key in ("hors_couche", "sans_loi", "sans_traits", "sans_adresse",
+                "trait_herite_retire_sans_adresse"):
         if counts.get(key):
             print(f"  {key:22s} {counts[key]:5d} (trait absent)")
     for key in ("grappes_coherentes", "grappes_en_collision", "places_absentes"):
