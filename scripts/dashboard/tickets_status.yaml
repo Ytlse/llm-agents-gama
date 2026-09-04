@@ -1221,11 +1221,34 @@ tickets:
       v4. GAMA : monde = perimetre_453.shp (86 × 93 km), avertissement de couverture TC (21 %),
       compteur d'agents hors monde. vizpop sur les quatre couronnes. Caches : par population, rien
       à purger, aucun jeu gelé touché. Tests 305 + 419 verts.
-      RESTE : T2/T6 (GTFS liO, 22,7 Mo — porte de téléchargement, question ouverte n° 11), G2/G3,
-      le manuscrit (§ 2.2 et annexe F, plus la largeur « 106 × 93 km » du rapport de périmètre à
-      corriger en 86 × 93), la mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider (question
-      n° 9), et le critère d'acceptation 3 (parts modales contre cibles 453) qui dépend de liO et du
-      ticket 030.
+      T2/T6/G2 FAITS le 2026-09-04, porte de téléchargement levée (trace
+      docs/traces/2026-09-04_01-30_ticket031_gtfs_lio/). GTFS liO téléchargé (ODbL, 23 833 236 o,
+      sha256 d196b763…, validité lue dans calendar.txt 2026-08-01 → 2027-08-31, 309 lignes,
+      7 506 arrêts ; 1 485 arrêts et 56 lignes dans le périmètre) et étendu en feeds annuels
+      lio_2026/lio_2027 (code 0) — indispensable, l'export ne sert RIEN le 16 mars 2026 (la journée
+      simulée y est la copie du lundi 15 mars 2027, écart de saison 1 jour). Trois corrections du
+      pipeline gtfs_year, chacune testée : calendar.txt hebdomadaire déplié (457 services, 2 925
+      retraits), courses de contenu identique le même jour préservées (45 le 14/09, les fusionner
+      amputait l'offre), V7 reformulé en « la copie sert exactement l'offre de son donneur » et V6
+      distinguant un tracé chimère fabriqué d'un défaut recopié. NON-RÉGRESSION : les quatre feeds
+      Tisséo/TER rejoués sont identiques à l'octet près (feed_info excepté). GRAPHE reconstruit et
+      mesuré hors service (un run occupait otp1/2/3) : 55 s, 2,6 Go, 84,9 Mo, 11 562 arrêts,
+      3 228 patterns ; contrôle de rattachement de la v4 dans les mêmes conditions qu'avant :
+      670 → 339 points sans itinéraire TC (3ᵉ couronne 369 → 163, 2ᵉ 160 → 35, noStopsInRange
+      364 → 91), 0 échec de rattachement. T6 : le feed TER n'a aucune ligne routière, le GTFS SNCF
+      national n'en met que 3 courses dans le périmètre toutes le 2026-09-03 → NE PAS le charger ;
+      mais l'export TER en service ne sert AUCUN train le jour simulé (couverture 2026-04-29 →
+      2026-10-26) — le feed annuel ter_2026 le corrige et entre dans le graphe livré. G2 :
+      routes.shp 395 → 730 tracés, stops.shp 3 822 → 5 375 arrêts (nouveau script
+      scripts/data/gama/export_gtfs_layers.py, sans dépendance à settings.py) ; mailles de 5 km du
+      périmètre portant un arrêt 52/217 → 156/217, zones fines 394/785 → 571/785.
+      RESTE : la MISE EN SERVICE du graphe (data/gtfs/prochain_graphe_2026-09-04/, deux commandes,
+      dès qu'aucun run ne tourne — question n° 14), le mode rail à demander à OTP (n° 16),
+      l'avertissement de couverture GAMA devenu vide de sens (n° 15), G3 (rendu, non mesurable en
+      headless), le manuscrit (§ 2.2 et annexe F, plus la largeur « 106 × 93 km » du rapport de
+      périmètre à corriger en 86 × 93), la mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider
+      (question n° 9), et le critère d'acceptation 3 (parts modales contre cibles 453) qui dépend
+      désormais du seul ticket 030.
 
   ticket_032_lts_velo_propositions_gama:
     status: à faire

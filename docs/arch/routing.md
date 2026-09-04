@@ -37,17 +37,34 @@ Pour garantir que l'agent arrive à l'heure à son activité, le système utilis
   construction, 2,0 Go de pointe — [data-pipeline.md](../setup/data-pipeline.md))
 - Le `graph.obj` est chargé en mémoire au démarrage (1,2 à 1,4 Go mesurés par instance, limite 6 Go)
 - Contrôle de rattachement d'une population : `scripts/data/gtfs/otp_link_check.py` — sur la v4
-  (1 000 domiciles + 1 300 lieux d'activité distincts, lundi 8 h) : **0 `LOCATION_NOT_FOUND`**,
-  364 `noStopsInRange` et 171 `noTransitConnection` (des points sans TC, pas un défaut de graphe)
+  (1 000 domiciles + 1 580 lieux d'activité distincts, lundi 16 mars 2026 8 h) :
+  **0 `LOCATION_NOT_FOUND`**, 364 `noStopsInRange` et 171 `noTransitConnection` (des points sans
+  TC, pas un défaut de graphe). Le script ventile ses résultats **par couronne de résidence** :
+  c'est là que se lit le manque de desserte, invisible dans un total
 
-> **Le TER est dans le graphe mais n'est pas demandé.** Le `graph.obj` contient les deux feeds
-> (autorités `Tisséo` et `SNCF VOYAGEURS` ; 68 des 234 arrêts TER sont dans le polygone, les
-> 167 autres restent isolés de la voirie), mais `transportModes` (`trip_helper/otp.py`) ne demande
-> que `bus`, `metro`, `tram`, `cableway` — pas `rail` : un TER n'est donc jamais proposé. Le feed
-> TER annuel est construit par [`docs/arch/gtfs-annee.md`](gtfs-annee.md) ; ajouter `rail` aux
-> modes demandés reste une décision à part, car elle change les résultats de simulation. Le GTFS
-> liO (cars interurbains régionaux, 22,7 Mo, ODbL) n'est **pas** chargé (porte de téléchargement
-> du ticket 031, T2).
+> **Le GTFS liO est téléchargé et prêt, pas encore en service** (ticket 031, T2 — 2026-09-04).
+> Le réseau interurbain régional (309 lignes, 7 506 arrêts, ODbL) est archivé sous
+> `data/gtfs/archives/2026-09-04_lio_source/` et étendu en feed annuel
+> (`data/gtfs_year/lio_2026`, `lio_2027`). Le graphe qui le porte est construit et mesuré —
+> `data/gtfs/prochain_graphe_2026-09-04/graph.obj`, 84,9 Mo, 11 562 arrêts, 3 228 patterns, 55 s
+> de construction, 2,6 Go de pointe — mais **il n'est pas installé** : un run occupait les trois
+> instances, et le changer en cours de route aurait changé l'offre TC au milieu d'une expérience.
+> La procédure de bascule tient dans le README de ce dossier. Effet mesuré sur la v4 : les points
+> sans itinéraire TC passent de **670 à 339**, dont 369 → 163 en 3ᵉ couronne et 160 → 35 en 2ᵉ.
+
+> **Le TER est dans le graphe mais ni demandé, ni actif le jour simulé.** Le `graph.obj` contient
+> les deux feeds (autorités `Tisséo` et `SNCF VOYAGEURS` ; 68 des 234 arrêts TER sont dans le
+> polygone, les 167 autres restent isolés de la voirie), mais :
+> 1. `transportModes` (`trip_helper/otp.py`) ne demande que `bus`, `metro`, `tram`, `cableway` —
+>    pas `rail` : un TER n'est donc jamais proposé ;
+> 2. l'export TER en service ne couvre que **2026-04-29 → 2026-10-26** et ne sert **aucun train le
+>    16 mars 2026**, la journée simulée (mesuré le 2026-09-04). Le feed annuel
+>    `data/gtfs_year/ter_2026` y sert 80 services ; le graphe prêt à publier le porte.
+>
+> Les cars TER de substitution, eux, ont été cherchés dans le GTFS SNCF national (ticket 031, T6) :
+> **trois courses, toutes le 2026-09-03**, une substitution de travaux. Décision : ne pas charger
+> ce feed. Ajouter `rail` aux modes demandés reste une décision à part, car elle change les
+> résultats de simulation.
 
 Le feed Tisséo consommé par la simulation est une **fenêtre** du feed annuel :
 GAMA encode le calendrier des services en masque binaire 64 bits et ne peut pas

@@ -44,10 +44,10 @@ feed en production  : 12608 trips  empreinte a2244e86dce3975ee67d2333   ← dive
 ## Ce que produit le pipeline
 
 ```
-make gtfs-year          # Tisséo + TER, 2026 et 2027
+make gtfs-year          # Tisséo + TER + liO, 2026 et 2027
 ```
 
-Quatre feeds sous `data/gtfs_year/`, plus une trace de build sous
+Six feeds sous `data/gtfs_year/`, plus une trace de build sous
 `docs/traces/<date>_gtfs_annee/` :
 
 | Feed | Journées réelles | Extrapolées | Sans service | Trips | Services |
@@ -56,6 +56,8 @@ Quatre feeds sous `data/gtfs_year/`, plus une trace de build sous
 | `tisseo_2027` | 0 | 364 | 1 | 74 688 | 8 289 |
 | `ter_2026` | 181 | 184 | 0 | 1 137 | 351 |
 | `ter_2027` | 0 | 365 | 0 | 1 101 | 328 |
+| `lio_2026` | 153 | 212 | 0 | 6 858 | 379 |
+| `lio_2027` | 243 | 122 | 0 | 6 239 | 314 |
 
 2027 n'a aucune donnée réelle : c'est 2026 reporté par similarité de saison,
 avec le calendrier scolaire et les jours fériés propres à 2027.
@@ -67,7 +69,7 @@ a été publié par Tisséo, seulement pas ce jour-là.
 
 ---
 
-## Les six règles
+## Les sept règles
 
 ### 1. Couper la queue tronquée
 
@@ -158,6 +160,26 @@ fusionnée point par point. Exemple réel : la shape `15805` de la ligne 174 pas
 de 719 à 790 points entre juillet et août 2026 (déviation de tracé, +130 m) — les
 2 161 forks en découlent presque tous.
 
+**Deux courses de contenu identique le même jour sont deux courses.** liO en
+publie 45 le lundi 14/09/2026 — deux numéros de mission pour un même horaire sur
+une même ligne. Les fusionner amputerait l'offre de la journée, et V2 le
+refuserait. Chaque course prend donc la **première « place » dont les jours
+n'empiètent pas sur les siens** : identiques le même jour, elles restent deux ;
+identiques sur des jours disjoints, elles n'en font qu'une — c'est ce second cas
+qui comprime le feed, et le distinguer ferait passer `tisseo_2026.zip` de 22,1 à
+29,4 Mo pour la même offre.
+
+### 7. Lire les deux formes de calendrier
+
+Tisséo et le TER ne publient que des dates explicites (`calendar_dates.txt`).
+**liO publie 457 services hebdomadaires** dans `calendar.txt`, que
+`calendar_dates.txt` corrige ensuite dans les deux sens : 3 408 ajouts
+(`exception_type=1`) et **2 925 retraits** (`exception_type=2`). Le calendrier
+est déplié en dates explicites à l'indexation — ignorer les retraits ferait
+rouler des cars les jours où l'opérateur dit qu'ils ne roulent pas. Le feed
+produit, lui, reste toujours en dates explicites avec un `calendar.txt` vide
+(invariant V1).
+
 Arrêts, lignes et correspondances relèvent en revanche de l'**infrastructure** :
 le dernier export publié fait foi, et un arrêt qui bouge de plus de 25 m lève une
 `[ALARME]` plutôt que d'être arbitré en silence (47 cas sur 2026, le pire à
@@ -186,8 +208,9 @@ réécrits par construction. Ce qui doit être préservé, c'est l'offre.
 | **V1** | `calendar.txt` vide, `exception_type ⊆ {1}` | bloquant |
 | **V2** | Sur chaque journée réelle, empreinte **strictement égale** à celle de sa source | bloquant |
 | **V5** | Horaires monotones dans leur course, heures > 24:00:00 tolérées | bloquant |
-| **V6** | `shape_dist_traveled ≤` longueur de la géométrie + 1 m — **détecte les tracés chimères** | bloquant |
-| **V7** | Une journée copiée tombe dans l'enveloppe réelle de sa signature | bloquant |
+| **V6** | `shape_dist_traveled ≤` longueur de la géométrie + 1 m — **détecte les tracés chimères**. Bloquant si le build a fabriqué le dépassement ; **alarme** s'il est déjà dans la source (liO en publie 29 sur 7 715 courses) | bloquant / alarme |
+| **V7** | Une journée copiée sert **exactement** l'offre de son donneur, empreinte contre empreinte | bloquant |
+| **V7c** | Note : une journée copiée peut sortir de l'enveloppe de volume de sa signature dans l'année cible, quand son donneur vient d'une autre année | note |
 | **V7b** | Hétérogénéité de la source elle-même — informatif, pas un défaut du build | note |
 | **V8** | Aucune journée de l'année sans offre ; plancher de lignes calibré sur le réseau | alarme |
 | **V9** | `(service_id, date)` et `(trip_id, stop_sequence)` uniques | bloquant |
@@ -204,7 +227,7 @@ est réelle et vaut d'être connue.
 ### Les tests unitaires
 
 ```
-make test-gtfs-year        # 41 tests, feeds synthétiques, aucun accès réseau, <1 s
+make test-gtfs-year        # 50 tests, feeds synthétiques, aucun accès réseau, <1 s
 ```
 
 Chaque test porte sur une décision qui, prise à l'envers, produit un feed

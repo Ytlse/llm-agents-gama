@@ -4,30 +4,67 @@ Ce document couvre les trois sources de données géospatiales utilisées par la
 
 ---
 
-## 1. Données GTFS — Tisséo + TER
+## 1. Données GTFS — Tisséo + TER + liO
 
-La simulation utilise deux sources GTFS concaténées, placées dans `data/gtfs/` :
+Les trois réseaux du périmètre des 453 communes. OTP lit le dossier `data/gtfs/` au complet lors
+de la construction du graphe : tout sous-dossier qui contient un `trips.txt` est chargé comme un
+feed, et les feeds sont fusionnés automatiquement.
 
 | Source | Dossier | Lien |
 |--------|---------|------|
 | Tisséo (réseau urbain Toulouse) | `data/gtfs/tisseo_gtfs/` | https://data.toulouse-metropole.fr/explore/dataset/tisseo-gtfs/information/ |
 | TER SNCF (réseau régional) | `data/gtfs/ter_gtfs/` | https://www.data.gouv.fr/fr/datasets/horaires-des-lignes-ter-sncf/ |
+| **liO** (cars interurbains d'Occitanie) | `data/gtfs_year/lio_2026/` — **pas encore en service** | https://transport.data.gouv.fr/datasets/reseau-lio-occitanie |
 
-OTP lit directement le dossier `data/gtfs/` au complet lors de la construction du graphe. Les deux sources sont fusionnées automatiquement.
+**liO** (ticket 031, T2 — téléchargé le 2026-09-04, ODbL, 23 833 236 o, sha256 `d196b763…`,
+309 lignes, 7 506 arrêts, validité **2026-08-01 → 2027-08-31** lue dans `calendar.txt`) porte
+57 à 65 % des déplacements en transports collectifs des 2ᵉ et 3ᵉ couronnes. L'export brut est
+archivé sous `data/gtfs/archives/2026-09-04_lio_source/exports_bruts/` et sert de source au feed
+annuel. Son graphe est construit et mesuré ; la bascule est décrite dans
+`data/gtfs/prochain_graphe_2026-09-04/README.md`.
 
-Le notebook `scripts/data/gtfs/gtfs_merge.ipynb` permet de vérifier la cohérence des deux flux, d'analyser les routes et arrêts communs, et de produire un GTFS consolidé si besoin.
+> **Attention à la validité des exports.** Un feed présent dans `data/gtfs/` n'est pas un feed qui
+> sert : l'export TER en place ne couvre que 2026-04-29 → 2026-10-26 et ne sert **aucun train le
+> 16 mars 2026**, la date simulée ; l'export liO commence au 1ᵉʳ août 2026. C'est exactement ce que
+> le [feed annuel](../arch/gtfs-annee.md) répare — vérifier la date simulée dans
+> `calendar_dates.txt` avant de conclure qu'un réseau est chargé.
+
+Le notebook `scripts/data/gtfs/gtfs_merge.ipynb` permet de vérifier la cohérence des flux,
+d'analyser les routes et arrêts communs, et de produire un GTFS consolidé si besoin.
 
 ### Préparer les données GTFS pour GAMA
 
-Ce script génère le fichier `trip_info.json` consommé par le modèle GAMA et le copie dans `GAMA/CityTransport/includes/` :
+Deux couches et un calendrier. **Les couches de lignes et d'arrêts** (ticket 031, G2) :
+
+```shell
+llm-agents/.venv/bin/python scripts/data/gama/export_gtfs_layers.py
+```
+
+écrit `GAMA/CityTransport/includes/routes.shp` et `stops.shp` à partir des **trois** réseaux
+(730 tracés, 5 375 arrêts, contre 395 et 3 822 pour Tisséo seul), en déplaçant les couches
+précédentes dans un dossier `archives_<date>`. Trois choix à connaître :
+
+- les couches sont **restreintes au périmètre** — liO couvre toute l'Occitanie, ses 2 632 tracés
+  déborderaient dix fois le monde GAMA — mais les tracés retenus ne sont **jamais découpés** ;
+- le feed TER n'a pas de `shapes.txt` : ses 34 tracés sont la polyligne de ses arrêts, marquée
+  `trace=arrets` dans la couche — bonne pour l'affichage, absente de tout calcul de temps ;
+- les `shape_id` et `stop_id` ne sont jamais préfixés (ils servent de jointure avec les itinéraires
+  d'OTP) ; une collision entre réseaux lève une `[ALARME]`.
+
+Couverture mesurée du monde GAMA : l'enveloppe des lignes passe de 21 % à 100 %, **156 des
+217 mailles de 5 km du périmètre portent un arrêt** (52 avant) et **571 des 785 zones fines de
+l'enquête** (394 avant).
+
+**Le calendrier et les horaires** (`trip_info.json`) restent produits par :
 
 ```shell
 bash scripts/update_gtfs_data.sh
 ```
 
-Il exécute successivement :
-1. `llm-agents/inputs/gtfs/reader.py` — génère les shapefiles d'arrêts et de routes
-2. `llm-agents/inputs/gtfs/gama.py` — construit le calendrier et les horaires de chaque voyage au format JSON
+qui exécute `llm-agents/inputs/gtfs/reader.py` puis `llm-agents/inputs/gtfs/gama.py`. ⚠ Ces deux
+modules importent `llm-agents/settings.py` : les lancer depuis l'hôte pendant un run re-pointe
+`experiments/current` et détourne les traces du run (ticket 031, question ouverte n° 12).
+`export_gtfs_layers.py`, lui, n'en dépend pas.
 
 ### Le monde GAMA : le périmètre des 453 communes (ticket 031, G1)
 
@@ -82,9 +119,9 @@ OTP est le moteur de calcul d'itinéraires multi-modal (transit + marche/vélo/v
    2022 ; un extrait 2026 du même polygone demande un téléchargement régional (~270 Mo), non fait sans
    accord. Un autre extrait se pose au même endroit (`Toulouse.osm.pbf`), puis le graphe se reconstruit.
 
-3. Placer les dossiers GTFS (`tisseo_gtfs/`, `ter_gtfs/`) dans `data/gtfs/`. `data/gtfs/build-config.json`
-   fixe la fenêtre de service `[2026-01-01, 2027-12-31]` (T5), alignée sur les feeds annuels et la
-   date simulée.
+3. Placer les dossiers GTFS (`tisseo_gtfs/`, `ter_gtfs/`, et `lio_gtfs/` une fois basculé) dans
+   `data/gtfs/`. `data/gtfs/build-config.json` fixe la fenêtre de service
+   `[2026-01-01, 2027-12-31]` (T5), alignée sur les feeds annuels et la date simulée.
 
 ### Construction et démarrage (hors Docker)
 
@@ -103,7 +140,15 @@ arrêts TER hors du polygone (234 arrêts TER, 68 dedans). Puis `docker compose 
 (≈ 20 s jusqu'au healthcheck, 1,2 à 1,4 Go par instance chargée). Contrôle de rattachement d'une
 population : `scripts/data/gtfs/otp_link_check.py --population <fichier>` compte les
 `routingErrors` OTP (`LOCATION_NOT_FOUND` = « Couldn't link ») pour chaque domicile et lieu
-d'activité.
+d'activité, **ventilés par couronne de résidence** (`--sans-couronnes` pour ne pas ventiler).
+
+Avec liO, mesuré le 2026-09-04 dans les mêmes conditions (JDK 25, `-Xmx4G`, machine chargée par un
+run) : **55 s de construction, 2,6 Go de pointe, `graph.obj` de 84,9 Mo**, 268 131 sommets,
+666 759 arêtes, **11 562 arrêts et 3 228 patterns** (contre 4 056 et 588). Une instance qui sert ce
+graphe tient dans 1,0 Go au chargement et 2,2 à 2,6 Go après 2 580 requêtes : `mem_limit: 6g` et
+`-Xmx4G` gardent de la marge. Sur la population scellée v4, les points sans itinéraire TC passent
+de **670 à 339** (3ᵉ couronne 369 → 163, 2ᵉ couronne 160 → 35), toujours **zéro échec de
+rattachement**.
 
 ### Configuration dans le controller
 

@@ -1,3 +1,41 @@
+## [2026-09-04] Le car liO entre dans la chaîne : deux points sur trois sans transport en commun en trouvent un
+
+Le GTFS du réseau interurbain **liO** — 309 lignes d'autocars d'Occitanie, dont 56 traversent les
+453 communes — est téléchargé, vérifié, étendu à l'année entière et versé aux couches GAMA.
+C'est le réseau qui porte 57 à 65 % des déplacements en transports collectifs des 2ᵉ et 3ᵉ
+couronnes, et il manquait à la simulation.
+
+Sur la population scellée v4, un lundi de mars à 8 h, les 2 580 domiciles et lieux d'activité sont
+interrogés : **670 points n'avaient aucun itinéraire en transports collectifs ; il en reste 339**.
+En 3ᵉ couronne, 369 sur 374 → 163 ; en 2ᵉ, 160 sur 339 → 35. Les trois quarts des « aucun arrêt à
+portée » étaient à portée d'un arrêt liO que le graphe n'avait pas.
+
+En chemin, deux trous silencieux ont été trouvés et l'un est réparé. Le feed **TER** en service ne
+couvre que du 29 avril au 26 octobre : il ne servait **aucun train le 16 mars 2026**, la journée
+simulée, alors que ses arrêts étaient bien dans le graphe. Le feed annuel du TER, construit en août
+et jamais mis en service, y sert 80 services — il entre dans le graphe livré. Quant aux cars TER de
+substitution, cherchés dans le GTFS SNCF national : **trois courses, toutes le 3 septembre 2026**,
+une substitution de travaux. Décision écrite : ne pas charger ce feed.
+
+Le pipeline de feed annuel apprend à lire liO sans rien lâcher sur la fidélité : les calendriers
+hebdomadaires (457 services, 2 925 retraits de dates), les courses de contenu identique le même
+jour (45 le 14 septembre — les fusionner amputait l'offre), et deux contrôles qui refusaient un feed
+correct en dénonçant des défauts de la source. Les quatre feeds Tisséo et TER rejoués avec le
+pipeline modifié sont **identiques à l'octet près**.
+
+Côté GAMA, `routes.shp` et `stops.shp` portent les trois réseaux : 730 tracés et 5 375 arrêts au
+lieu de 395 et 3 822. **156 des 217 mailles de 5 km du périmètre portent désormais un arrêt, contre
+52.**
+
+**Avant :** un habitant de Cazères ou de L'Isle-Jourdain n'avait, dans la simulation, aucun
+transport en commun — pas parce qu'il n'en existe pas, mais parce que le réseau qui le dessert
+n'était pas chargé.
+**Après :** les cars liO sont là, mesurés, et la moitié du manque est comblée. Le graphe est
+construit et prêt (`data/gtfs/prochain_graphe_2026-09-04/`) ; sa mise en service attend la fin du
+run qui occupait les instances OTP.
+
+---
+
 ## [2026-09-04] Le périmètre mesure 86 km de large, pas 106, et les couches de voirie mortes quittent GAMA
 
 Le rapport de décision sur le périmètre annonçait un monde de 106 × 93 km : un degré de longitude
