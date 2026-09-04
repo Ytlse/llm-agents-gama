@@ -766,17 +766,23 @@ def test_la_config_de_production_est_alignee_sur_lenquete():
     assert car.provenance == "sourced" and bike.provenance == "sourced"
 
 
-def test_la_routing_version_de_production_est_r2_pour_le_graphe_du_polygone():
-    """Ticket 031, partie 2 : le graphe servi au runtime est celui du POLYGONE des
-    453 communes, et les vitesses vélo de `config/osmnx.yaml` ont été complétées.
+def test_la_routing_version_de_production_est_r3_pour_le_fuseau_du_reseau():
+    """Deux gestes verrouillés ici, pas une valeur cosmétique.
 
-    La clé du cache SQLite d'itinéraires directs ne porte PAS le graphe
+    `r2` (ticket 031, partie 2) : le graphe servi au runtime est celui du POLYGONE des
+    453 communes, et les vitesses vélo de `config/osmnx.yaml` ont été complétées. La
+    clé du cache SQLite d'itinéraires directs ne porte PAS le graphe
     (`osmnx_persistent_cache.make_key` = `routing_version` + mode + coordonnées) : un
     retour à `r1` resservirait des durées calculées sur l'ancien disque de 30 km — dont
     les replis à 70 km/h d'un trajet de 3ᵉ couronne sur six — sans que rien ne le
-    signale. Ce garde-fou verrouille le geste, pas une valeur cosmétique.
+    signale.
+
+    `r3` (2026-09-04) : l'heure de départ se lit dans le fuseau du RÉSEAU et non dans
+    celui du processus. La clé porte le créneau horaire du facteur de congestion, et
+    rien dans une ligne du cache ne dit sous quel fuseau elle a été calculée — les
+    réplicas `osmnx` tournent en UTC, le `controller` en Europe/Paris.
     """
-    assert terminal_time.routing_version() == "r2"
+    assert terminal_time.routing_version() == "r3"
 
 
 def test_le_bump_de_routing_version_change_la_cle_du_cache_direct(monkeypatch):

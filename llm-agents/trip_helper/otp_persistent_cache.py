@@ -4,7 +4,6 @@ import json
 import os
 import sqlite3
 import time as _time
-from datetime import datetime
 from typing import Optional
 
 from models import Location, TravelPlan
@@ -63,12 +62,27 @@ class OtpPersistentCache:
         # TODO: quand fixed_day est actif, remplacer date_str par la date fixe (ou le
         # jour de semaine) pour partager le cache entre dates simulées, comme le fait
         # déjà OsmnxPersistentCache (clé weekday, pas date absolue).
+        #
+        # ⚠ L'INSTANT, décalage compris, et non plus une date et une heure nues
+        # (2026-09-04). `datetime.fromtimestamp(departure_time)` lisait l'horloge
+        # murale de GAMA dans le fuseau du PROCESSUS : 5 h murales devenaient 6 h, et
+        # c'est à 6 h qu'OTP était interrogé. Ce cache ne mémorise pas des durées mais
+        # des TravelPlan sérialisés, et `lookup` les décale de
+        # `departure_time - stored_departure_time` : une entrée rangée sous l'étiquette
+        # « 06:00 » alors qu'elle répondait à un départ de 5 h murales serait
+        # resservie, puis décalée d'une heure de plus, à un départ de 6 h murales.
+        # Aucune version ne protégeait de ça — `data_version()` ne bouge pas et
+        # `routing_version` n'entre pas ici. Écrire l'instant complet
+        # (`2026-03-16T05:00:00+01:00`) change la FORME de la clé : plus aucune entrée
+        # de l'ancienne convention n'est atteignable, sans purge manuelle, et le
+        # décalage porté par la clé distingue enfin l'heure d'hiver de l'heure d'été
+        # — la même heure murale n'est pas le même instant selon la saison.
+        from sim_clock import to_network_datetime
         from trip_helper.terminal_time import data_version
 
-        dt = datetime.fromtimestamp(departure_time)
-        date_str = dt.strftime('%Y-%m-%d')
-        time_bucket = f"{dt.hour:02d}:{(dt.minute // 10) * 10:02d}"
-        raw = (f"{data_version()}|{date_str}|{time_bucket}|{origin.lat:.5f}|{origin.lon:.5f}"
+        dt = to_network_datetime(departure_time)
+        bucket = dt.replace(minute=(dt.minute // 10) * 10, second=0, microsecond=0)
+        raw = (f"{data_version()}|{bucket.isoformat()}|{origin.lat:.5f}|{origin.lon:.5f}"
                f"|{destination.lat:.5f}|{destination.lon:.5f}"
                f"|{int(include_car)}|{int(arrive_by)}|{int(include_bike)}")
         return hashlib.sha256(raw.encode()).hexdigest()

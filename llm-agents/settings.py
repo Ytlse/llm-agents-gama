@@ -321,6 +321,21 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     max_trip_candidates: int = 6 # maximum number of trip candidates to be selected
     fixed_day: Optional[str] = None
 
+    # Fuseau du RÉSEAU simulé, pour lire l'horloge murale que GAMA publie
+    # (`sim_clock`). Vide (défaut) = lu dans l'`agency_timezone` des feeds GTFS en
+    # service — la même source qu'OTP utilise pour interpréter ses horaires, donc
+    # celle qui ne peut pas s'en écarter. À poser explicitement dans deux cas
+    # seulement : les feeds ne déclarent pas le même fuseau, ou ils ne sont pas
+    # montés dans le service (les deux lèvent alors une [ALARME] et refusent, plutôt
+    # que de deviner une heure).
+    #
+    # ⚠ Ce n'est PAS le fuseau du processus. `TZ=Europe/Paris` dans le conteneur
+    # `controller` décidait de l'heure à laquelle les agents voyaient le réseau :
+    # 5 h murales étaient demandées à OTP comme 6 h locales (235 points sans
+    # itinéraire au lieu de 605 sur la population scellée v4). Un conteneur mal
+    # configuré ne doit pas déplacer les itinéraires.
+    network_timezone: Optional[str] = None
+
 
 class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[List[str]] = ["population_cache_prefix", "state_file"]

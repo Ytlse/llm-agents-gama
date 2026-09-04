@@ -25,6 +25,7 @@ from loguru import logger
 from backpressure import backlog_alarm_transition, compute_backpressure_interval, update_drain_mode, edf_feasibility, time_ewma
 from helper import setup_logging, humanize_date, to_timestamp_based_on_day, format_sim_timing
 from models import Location
+from sim_clock import to_network_datetime
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
@@ -327,7 +328,12 @@ async def _prepare_population(
                 int(origin_end) if origin_end > 0 else int(curr_act.get("start_time", 0)),
                 sim_base_timestamp,
             )
-            congestion_dt = datetime.fromtimestamp(departure_unix)
+            # Même horloge que le runtime : l'horodatage vient de GAMA, donc son
+            # heure est MURALE et se lit dans le fuseau du réseau, pas dans celui du
+            # processus (`sim_clock`). Sans cela, la passe qui ajuste les horaires de
+            # la population tarifait sa congestion une heure plus tard que les
+            # itinéraires que ces horaires servent à demander.
+            congestion_dt = to_network_datetime(departure_unix)
             tasks_meta.append((p_idx, prev_i, curr_i))
             coros.append(get_direct_plan(
                 origin=origin,

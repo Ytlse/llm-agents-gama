@@ -10,6 +10,14 @@ la 3ᵉ couronne rurale n'a pas de TC). Les instances sont interrogées en tourn
     llm-agents/.venv/bin/python scripts/data/gtfs/otp_link_check.py \
         --population data/population/population_1000_AAMAS_v4/population.json \
         --json docs/traces/<trace>/otp_link_check.json
+
+⚠ **`--date-time` contourne le chemin du runtime.** Passer une heure locale à la main est
+la bonne convention *pour un instrument*, mais c'est précisément ce qui a rendu le défaut
+de fuseau invisible du 2026-06 au 2026-09-04 : cette mesure interrogeait OTP en heure
+locale, le runtime lui envoyait la même heure murale estampillée UTC, et les deux ne
+parlaient pas de la même heure. Pour mesurer ce que les agents voient, passer
+``--gama-timestamp`` : l'horodatage est alors traduit par ``sim_clock``, la MÊME fonction
+que `trip_helper/otp.py`.
 """
 
 from __future__ import annotations
@@ -24,6 +32,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COURONNES_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
+# `llm-agents/` sur le path : `--gama-timestamp` traduit l'horodatage avec `sim_clock`,
+# le module que le runtime utilise. Recopier la conversion ici rétablirait l'asymétrie
+# qui a caché le défaut — un instrument qui ne tombe que si LUI change.
+if str(REPO_ROOT / "llm-agents") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "llm-agents"))
 
 DEFAULT_ENDPOINTS = ["http://localhost:8080/otp/transmodel/v3",
                      "http://localhost:8081/otp/transmodel/v3",
@@ -186,7 +199,16 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--population", type=Path, required=True)
     parser.add_argument("--endpoints", default=",".join(DEFAULT_ENDPOINTS))
-    parser.add_argument("--date-time", default="2026-03-16T08:00:00+01:00", help="lundi 16 mars 2026, 8 h")
+    parser.add_argument("--date-time", default=None,
+                        help="heure locale ISO-8601 passée telle quelle à OTP (défaut : "
+                             "2026-03-16T08:00:00+01:00, lundi 16 mars 2026 8 h). ⚠ "
+                             "contourne la conversion du runtime — voir --gama-timestamp")
+    parser.add_argument("--gama-timestamp", type=int, default=None,
+                        help="horodatage publié par GAMA (CURRENT_TIMESTAMP, ex. "
+                             "1773637200 = lundi 16 mars 2026 5 h murales), traduit par "
+                             "`sim_clock` comme le fait `trip_helper/otp.py`. C'est le "
+                             "CHEMIN DU RUNTIME : la seule façon de mesurer l'offre que "
+                             "les agents voient réellement")
     parser.add_argument("--concurrency", type=int, default=9)
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--sans-couronnes", action="store_true",
@@ -198,15 +220,32 @@ def main(argv=None) -> int:
                              "ce que l'agent se voit réellement proposer")
     args = parser.parse_args(argv)
 
+    if args.date_time and args.gama_timestamp is not None:
+        parser.error("--date-time et --gama-timestamp désignent la même chose de deux "
+                     "façons : n'en passer qu'une (préférer --gama-timestamp)")
+    if args.gama_timestamp is not None:
+        # Le chemin du runtime, à la fonction près.
+        from sim_clock import network_iso, network_timezone_name, wall_clock
+
+        date_time = network_iso(args.gama_timestamp)
+        origine_heure = (f"--gama-timestamp {args.gama_timestamp} → sim_clock "
+                         f"(heure murale {wall_clock(args.gama_timestamp).isoformat()}, "
+                         f"fuseau du réseau {network_timezone_name()})")
+    else:
+        date_time = args.date_time or "2026-03-16T08:00:00+01:00"
+        origine_heure = "--date-time (heure locale passée à la main, hors runtime)"
+
     pop = json.loads(args.population.read_text(encoding="utf-8"))
     homes, acts = _points(pop)
     points = homes + acts
-    print(f"{len(pop)} personas : {len(homes)} domiciles, {len(acts)} lieux d'activité distincts → OTP {args.date_time}",
+    print(f"{len(pop)} personas : {len(homes)} domiciles, {len(acts)} lieux d'activité distincts → OTP {date_time}",
           file=sys.stderr)
+    print(f"heure demandée : {origine_heure}", file=sys.stderr)
     couronnes = {} if args.sans_couronnes else classer_par_couronne(points)
-    result = asyncio.run(run(points, args.endpoints.split(","), args.date_time, args.concurrency,
+    result = asyncio.run(run(points, args.endpoints.split(","), date_time, args.concurrency,
                              couronnes, args.num_trip_patterns))
-    result.update({"population": str(args.population), "date_time": args.date_time, "reference": CAPITOLE})
+    result.update({"population": str(args.population), "date_time": date_time,
+                   "origine_heure": origine_heure, "reference": CAPITOLE})
     print(json.dumps({k: v for k, v in result.items() if k != "echecs_de_rattachement"}, ensure_ascii=False, indent=1))
     if result["echecs_de_rattachement"]:
         print(f"[ALARME] {result['n_echecs_de_rattachement']} point(s) non rattaché(s) au graphe OTP "

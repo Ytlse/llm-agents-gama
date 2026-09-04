@@ -4,13 +4,14 @@ import os
 import time
 from typing import List, Optional
 
-from datetime import datetime, timezone
+from datetime import datetime
 from loguru import logger
 from inputs.gtfs import GTFSData
 from settings import settings
 from models import Location, TransitLocation, TravelPlan, Transit
 import aiohttp
 import asyncio
+from sim_clock import gama_timestamp, network_iso, to_network_datetime
 from trip_helper.base import TripHelper
 from trip_helper.osmnx_direct import get_direct_plan
 from utils import random_uuid
@@ -378,8 +379,22 @@ class OTPTripHelper(TripHelper):
         return self._session
 
     def timestamp_from_isoformat(self, iso_format: str) -> int:
-        dt = datetime.fromisoformat(iso_format)
-        return int(dt.timestamp())
+        """Instant renvoyé par OTP (`2026-03-16T05:12:00+01:00`) → horodatage GAMA.
+
+        ⚠ Ce n'est pas `.timestamp()`, et la nuance décide de tout : GAMA n'a pas
+        d'instants, il a une heure MURALE encodée comme un epoch (`sim_clock`). Les
+        horaires d'un plan doivent revenir dans SON horloge, sinon `start_in` —
+        l'écart entre le départ demandé et le départ du plan, que le LLM lit pour
+        classer les options — se trompe du décalage du fuseau, et les jambes
+        poussées à GAMA arrivent une heure à côté de son propre `CURRENT_TIMESTAMP`.
+
+        Jusqu'au 2026-09-04, deux erreurs s'annulaient : OTP recevait l'heure murale
+        estampillée UTC (donc la mauvaise heure locale), mais son instant de réponse
+        retombait par construction dans l'horloge de GAMA. Corriger l'aller sans
+        corriger le retour aurait donné des plans « partant 55 minutes dans le
+        passé ».
+        """
+        return gama_timestamp(datetime.fromisoformat(iso_format))
     
     def parse_gtfs_entity_id(self, name: str) -> str:
         # OTP returns NeTEx IDs like "feedId:entityType:entityId" (e.g. "1:line:87")
@@ -557,23 +572,39 @@ class OTPTripHelper(TripHelper):
         # ── Fixed-day remapping ───────────────────────────────────────────────
         # Adjust departure time to a fixed day for consistent OTP queries,
         # while keeping the real day for congestion-aware routing.
-        congestion_dt    = datetime.fromtimestamp(departure_time)
+        #
+        # ⚠ L'heure de départ vient de GAMA, dont l'horloge est MURALE et locale
+        # (`sim_clock`) : elle se lit dans le fuseau du RÉSEAU, jamais dans celui du
+        # processus. `datetime.fromtimestamp(departure_time)` lisait 5 h murales
+        # comme 6 h — le facteur de congestion, la table TomTom par jour et heure,
+        # et la clé du cache de routage travaillaient donc tous une heure plus tard
+        # que les agents. Corrigé le 2026-09-04.
+        congestion_dt    = to_network_datetime(departure_time)
         real_day         = congestion_dt if self.fixed_day else None
         real_departure_time = departure_time
         if self.fixed_day is not None:
-            departure_time = self.fixed_day.replace(
+            # `gama_timestamp` et non `.timestamp()` : on reconstruit un horodatage
+            # DE GAMA (heure murale encodée comme un epoch), pas un instant réel.
+            departure_time = gama_timestamp(self.fixed_day.replace(
                 hour=real_day.hour, minute=real_day.minute, second=real_day.second
-            ).timestamp()
+            ))
             # logger.debug(
             #     f"Using fixed day {self.fixed_day.date()} for departure_time, "
             #     f"real day is {real_day}, new departure_time is {departure_time}"
             # )
-        real_day = real_day.replace(hour=0, minute=0, second=0, microsecond=0) if real_day else None
+        real_day = (real_day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+                    if real_day else None)
 
         # Create an HTTP session for API requests
         session  = await self.get_session()
-        # Convert departure time to ISO format for OTP API
-        start_at = datetime.fromtimestamp(departure_time, tz=timezone.utc).isoformat()
+        # Heure demandée à OTP : l'heure MURALE de GAMA, dans le fuseau du réseau.
+        # OTP est correct — il traduit l'instant reçu dans le fuseau de son réseau —
+        # donc lui envoyer `05:00+00:00` pour 5 h murales lui faisait planifier 6 h
+        # locales. Mesuré sur les 2 580 points de la population scellée v4 : 235
+        # points sans itinéraire TC à l'heure ainsi demandée, 605 à l'heure des
+        # agents (`docs/traces/2026-09-04_13-46_fuseau_correctif/`). Le réseau paraissait
+        # deux fois et demie plus disponible qu'à l'heure où les agents décident.
+        start_at = network_iso(departure_time)
 
         # Common variables for OTP GraphQL queries
         common_vars = {
