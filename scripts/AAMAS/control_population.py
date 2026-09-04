@@ -31,8 +31,9 @@ TROIS RÈGLES QUI NE SE NÉGOCIENT PAS.
 
 VERDICTS. `conforme` (TOST équivalent, ou écart sous la borne sans signification) ;
 `à corriger` (écart significatif sur une marge que la sélection stratifiée sait refermer :
-couronne, motorisation, joint, âge, occupation) ; `à publier` (écart significatif sur une
-marge que la sélection ne referme pas : base ménage sans identifiants) ; `non mesurable`.
+couronne, motorisation dans les DEUX bases depuis la règle v5, joint, âge, occupation, marges
+personne gelées) ; `à publier` (écart significatif sur une marge que la sélection ne referme
+pas — les chaînes d'activités, qui se règlent dans l'appariement eqasim) ; `non mesurable`.
 Code de sortie : 0 si tout axe mesuré est conforme, 1 s'il existe un `à corriger`, 2 si la
 population ou la référence est illisible. `seal_population.py` refuse de sceller sur 1.
 
@@ -93,13 +94,19 @@ SCOLAIRES_ETUDES_REFERENCE_PCT = (90.0, 95.0)
 SCOLAIRES_ETUDES_SEUIL_PCT = 88.0
 
 # Ce que la sélection stratifiée (seal_population.py) sait refermer : ce qui se tire.
+# `motorisation_menage` en fait partie depuis la règle v5 (2026-09-04) : la sélection alloue par
+# SOUS-CELLULE (cellule × effectif présent × taille déclarée), ce qui détermine exactement le
+# poids `1/taille` de chaque modalité — la marge est passée de 3,57 à 0,06 pt d'écart. Un écart
+# établi sur cette marge n'est donc plus un fait à publier mais un défaut à corriger, et il
+# refuse le scellement. Tant qu'elle n'était allouée par rien (v2 à v4), elle sortait « à
+# publier » : c'était vrai alors, ce serait un silence maintenant.
 REFERMABLE_AU_SCELLEMENT = {"couronne", "motorisation_personne", "couronne_x_motorisation",
-                            "classe_age", "occupation", *MARGES_PERSONNE}
+                            "classe_age", "occupation", "motorisation_menage", *MARGES_PERSONNE}
 NATURE = {
     "classe_age": "composition (tirage)",
     "occupation": "composition (tirage)",
     "motorisation_personne": "composition (tirage)",
-    "motorisation_menage": "base ménage (pondération 1/taille)",
+    "motorisation_menage": "base ménage (pondération 1/taille) — allouée par sous-cellule (v5)",
     "couronne": "cadre de tirage (Haute-Garonne : 346 des 453 communes)",
     "couronne_x_motorisation": "croisement (cadre de tirage × motorisation)",
     "age_quinquennal": "composition fine (tirage)",

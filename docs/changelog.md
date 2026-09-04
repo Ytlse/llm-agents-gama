@@ -1,3 +1,41 @@
+## [2026-09-04] Les ménages sans voiture pèsent enfin 19,2 % : la sélection alloue par cellule ET par taille
+
+Le dernier écart que la population du jeu de test déclarait « à publier » est fermé. Les ménages
+sans voiture pesaient 22,8 % contre 19,2 % dans l'enquête ; ils pèsent 19,19 % pour une cible de
+19,19 %. La population contrôlée passe de **douze marges conformes et une à publier à treize
+conformes**, et la synthèse des écarts est vide pour la première fois depuis la v3.
+
+Ce qui a changé : la strate du tirage. Elle était la cellule couronne × motorisation ; elle est
+maintenant la cellule **et** l'effectif du ménage — l'effectif présent et la taille déclarée. Ce
+détail décide de tout, parce que la motorisation lue par ménage pèse chaque personne par l'inverse
+de la taille de son foyer : sans connaître ce mix de tailles, on ne peut pas viser une part de
+ménages, seulement une part de personnes. Un programme entier compose les effectifs de chaque
+sous-cellule, tient les douze cellules exactement, et cherche par bissection la tolérance la plus
+fine que le vivier permette sur les deux marges de ménage — 0,06 point ici. Parmi les
+compositions qui la tiennent, il retient celle qui déplace le moins de ménages par rapport à ce
+que le vivier porte déjà : le tirage ne déforme pas plus que nécessaire.
+
+L'échange qui affine ensuite les autres marges apparie désormais des ménages de même sous-cellule.
+Conséquence utile : ce que l'allocation a fixé, l'affinage ne peut plus le défaire. La taille de
+ménage y gagne aussi, de 0,81 à 0,06 point d'écart, et la cohorte est plus entière — 95,0 % de
+ménages complets contre 91,4 %, 97,2 % des membres déclarés présents contre 95,1 %. Une marge se
+dégrade et c'est dit : les classes d'âge passent de 0,30 à 0,50 point, l'écart restant
+statistiquement non établi. Les six départements de l'enquête restent représentés.
+
+Un écart sur cette marge n'est plus non plus un fait à publier. Puisque la sélection sait le
+refermer, le contrôle le classe « à corriger » et refuse le scellement — rejouer le contrôle sur
+la sélection v4 sort maintenant en code 1, au lieu d'accepter l'écart.
+
+Rien n'est scellé : la population en service reste la v4. Le scellement v5 attend deux autres
+correctifs.
+
+**Avant :** ménages sans voiture 22,8 % (cible 19,2 %), écart « à publier », inatteignable par
+l'affinage — 12 marges conformes sur 13.
+**Après :** 19,19 % pour 19,19 %, tenu par construction — 13 marges conformes sur 13, aucun écart
+à publier.
+
+---
+
 ## [2026-09-04] La motorisation des ménages est enfin visée par la sélection — et le vivier peut la servir
 
 Le seul écart que la population scellée v4 déclarait « à publier » — 22,8 % de ménages sans

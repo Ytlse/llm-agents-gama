@@ -67,39 +67,92 @@ Cibles `cj1` et `cm1` inchangées — elles sont calculées sur les 453 communes
   restreinte aux jours de classe en compte davantage que l'EMC² toulousaine. La cohorte scellée
   est tenue à 10,6 % par la descente ; l'écart du vivier est déclaré ici, non corrigé.
 
-### La règle v5 — la motorisation en base ménage entre dans la descente (`aamas_seal_v5`)
+### La règle v5 — l'allocation par sous-cellule ferme la motorisation en base ménage (`aamas_seal_v5`)
 
 La v4 laissait un seul écart « à publier » : les ménages **sans voiture** pesaient 22,8 % contre
 19,2 % dans le rapport (p. 21). Il restait ouvert parce que **rien ne le visait** — l'allocation
-tient la motorisation en base *personne*, qu'elle atteint exactement (13,6 %), et les deux bases
+tenait la motorisation en base *personne*, qu'elle atteint exactement (13,6 %), et les deux bases
 ne disent pas la même chose. En base ménage chaque persona pèse l'inverse de la taille déclarée
 de son foyer : une personne seule sans voiture pèse 1, un membre d'un foyer de quatre pèse 0,25.
 La v4 concentrait ses ménages sans voiture sur les personnes seules — **97 des 114**, soit 43,5 %
 des 223 ménages d'une personne.
 
-La marge entre donc dans la fonction de perte de la descente, **comptée en base ménage** (le
-poids `1/taille` de `household_weight`, celui du contrôle). La compter à poids 1 comparerait une
-population de personnes à une cible de ménages : c'est l'erreur de base que la section 2 interdit.
-Le **sel** du hachage reste celui de la v4, délibérément : seule la perte change, pas l'ordre dans
-lequel les ménages se présentent, ce qui rend l'effet de la marge mesurable en isolation.
-
-**Ce que la descente seule ne peut pas faire, et pourquoi — mesuré le 2026-09-04.** L'opérateur
-d'échange apparie les ménages par effectif **présent** et même cellule. Pour changer le poids
-`1/taille` d'un ménage sans toucher au compte de personnes de sa cellule, il lui faut donc un
+**La descente seule ne pouvait pas le refermer, et c'est mesuré (2026-09-04).** L'opérateur
+d'échange appariait les ménages par effectif **présent** et même cellule. Pour changer le poids
+`1/taille` d'un ménage sans toucher au compte de personnes de sa cellule, il lui fallait donc un
 candidat de même effectif présent mais de **taille déclarée** différente — c'est-à-dire un foyer
 dont des membres manquent, et les seuls manquants sont les enfants de moins de 5 ans : 52 sur
-1 052 membres déclarés. Le levier est presque vide. Mesuré en pondérant la marge de 1 à 50 dans
-la perte : l'écart ne descend que de 3,4 à 2,2 pt, et la taille de ménage se dégrade de 0,9 à
-3,0 pt. Les deux marges sont en tension **pour cet opérateur**.
+1 052 membres déclarés. Le levier était presque vide. En pondérant la marge de 1 à 50 dans la
+perte, l'écart ne descendait que de 3,4 à 2,2 pt, et la taille de ménage se dégradait de 0,9 à
+3,0 pt. Les deux marges étaient en tension **pour cet opérateur** — pas dans le vivier : un
+programme linéaire sur son inventaire donnait une part de ménages sans voiture atteignable de
+**7,6 % à 27,9 %**, les 19,2 % du rapport largement à l'intérieur.
 
-**La cible est pourtant atteignable, et c'est démontré.** Programme linéaire sur l'inventaire du
-vivier — variables : le nombre de ménages retenus par (cellule, effectif présent, taille
-déclarée) ; contraintes : les douze effectifs de cellule en personnes **et** la marge de taille
-de ménage, toutes deux exactes. La part de ménages sans voiture y va de **7,6 % à 27,9 %** : les
-19,2 % du rapport sont largement à l'intérieur, et la v4 à 22,8 % n'était pas contrainte par son
-vivier. Fermer l'écart demande donc une **allocation sur une dimension de plus** — un effectif
-cible par (cellule, taille) et non par cellule seule — après quoi l'opérateur actuel, qui
-préserve la composition par construction, referme le reste.
+**La v5 alloue donc sur une dimension de plus.** La strate d'allocation n'est plus la cellule mais
+la **sous-cellule** — le triplet **(cellule couronne × motorisation, effectif présent `S`, taille
+déclarée `T`)**, 130 dans le vivier de 11 329, 70 servies. Ce triplet détermine *exactement* les
+deux marges que la cellule seule ne déterminait pas :
+
+* personnes d'une classe de taille de ménage = `Σ n(c,S,T) × S` sur les `T` de la classe ;
+* poids ménage d'une modalité de motorisation = `Σ n(c,S,T) × S/T` sur les cellules de cette
+  modalité — le poids `1/taille` du contrôle, sommé sur les `S` membres présents.
+
+Les effectifs `n(c,S,T)` viennent d'un **programme entier** (HiGHS via `scipy.optimize.milp`) :
+les douze effectifs de cellule en personnes sont des **égalités** ; la taille de ménage en base
+personne et la motorisation en base ménage sont **bornées en écart maximal** — la norme ∞, le
+critère même du contrôle — à la tolérance la plus fine que le vivier permette, trouvée par
+**bissection** au pas de 0,01 pt ; et parmi les allocations qui la tiennent, l'objectif retient
+celle qui **déplace le moins de ménages par rapport à la composition du vivier** (c'est le tirage
+qui déforme le moins ce que le vivier porte déjà, et il rend la solution reproductible plutôt
+qu'arbitraire). Sur le vivier du 2026-09-04 : tolérance **0,061 pt**, écart maximal obtenu
+**0,058 pt**, 41 ménages déplacés, 16 programmes entiers en 3,4 s.
+
+Deux choix de formulation, parce qu'ils décident du temps de calcul et du déterminisme :
+
+- La contrainte de motorisation s'écrit `|100·W_m − cible_m·W| ≤ tol·W`. Le dénominateur `W`
+  (somme des poids `S/T`) est lui-même une variable, et cette forme reste **linéaire** — ce qui
+  évite d'estimer `W` d'avance ou d'itérer sur un point fixe.
+- La tolérance est **bornée, pas minimisée**. Minimiser un écart continu à valeurs minuscules
+  laissait HiGHS incapable de fermer son écart de dualité (60 s sans preuve d'optimalité,
+  mesuré) ; avec la tolérance en contrainte et un objectif à valeurs entières, chaque programme
+  se résout en 0,2 s **avec preuve**, et le résultat ne dépend pas d'une limite de temps.
+
+**Et l'opérateur d'échange apparie désormais à sous-cellule constante.** Les deux marges allouées
+et les douze effectifs de cellule sortent donc de la descente **intacts, par construction** —
+deux assertions dans `select()` le vérifient, et un test le verrouille. La descente garde toute sa
+liberté sur ce que l'allocation ne fixe pas : occupation, six classes d'âge, âge quinquennal,
+genre, permis, abonnement TC, logement, immobiles (347 échanges en 3 passes, perte 61,0 → 3,5 pt).
+Le **sel** du hachage reste celui de la v4, délibérément : seule la strate change, pas l'ordre
+dans lequel les ménages se présentent, ce qui rend l'effet de l'allocation mesurable en isolation.
+
+**Ce qu'un déficit devient.** Une dimension de plus multiplie les sous-cellules, donc le risque
+qu'une soit sous-remplie. L'inventaire du vivier borne le programme, si bien que le cas est
+impossible par construction ; il est traité quand même — report d'abord dans la **même cellule**
+(les douze effectifs en personnes sont la contrainte à ne pas lâcher), puis dans la même couronne,
+puis dans le vivier —, journalisé dans `selection.json`, alarmé, et code de sortie 1. Même règle
+si la tolérance retenue dépasse la borne d'indifférence du contrôle (1 pt) : c'est alors le vivier
+qui ne porte pas la composition de ménages qu'il faudrait, et cela se déclare au lieu de
+s'arrondir. Un échec du solveur est une erreur explicite (code 2), jamais un repli sur
+l'allocation d'avant.
+
+**Résultat mesuré, à vivier identique (sha256 `487ff00c…`), sélection rejouée avant le routage :**
+la motorisation en base ménage passe de **3,57 à 0,06 pt** d'écart maximal (ménages sans voiture
+19,19 % pour une cible de 19,19 %) et devient **conforme** ; la taille de ménage en base personne
+gagne aussi, de 0,81 à 0,06 pt. **12 marges conformes + 1 à publier deviennent 13 conformes**, la
+synthèse des écarts est vide. Une marge se dégrade et il faut le dire : `classe_age` passe de 0,30
+à 0,50 pt (5-17 ans +0,50 pt, cinq personas) — verdict `conforme`, TOST `non concluant`, l'écart
+n'est pas établi à n = 1 000 ; la cause est mécanique (plus de grands ménages retenus, 10,1 % de
+personnes en ménages de 5 et + contre 9,4 %). Hors marges : 499 ménages dont **95,0 % complets**
+(91,4 % en v4), **97,2 % des membres déclarés présents** (95,1 %), immobiles 10,6 %, 3,30
+déplacements par persona et 3,69 par mobile, **six départements représentés** (31 : 947, 82 : 24,
+32 : 13, 81 : 12, 09 : 3, 11 : 1 ; 139 communes). Deux points de vigilance : les scolaires avec
+activité d'études tombent **pile sur le seuil** (88,0 % pour 88,0), et la présence des six
+départements reste un fait du tirage qu'aucune règle ne garantit — l'Aude ne pèse qu'un ménage
+d'une personne. Trace : `docs/traces/2026-09-04_08-41_allocation_sous_cellule_v5/`.
+
+Le scellement v5 n'a **pas** été fait : il attend deux autres correctifs (le libellé de commune du
+prompt, le drapeau de desserte enrichi par le car régional). `data/population/population_1000_AAMAS_v4/`
+reste le sceau en service.
 
 ### La règle v3 — par ménage, à marges multiples (`aamas_seal_v3`, ticket 029)
 
@@ -249,8 +302,8 @@ surtout l'appariement sur l'ENTD nationale — le service Docker appariait jusqu
 | Verdict | Sens | Effet sur le scellement |
 |---|---|---|
 | `conforme` | TOST équivalent, ou écart non établi | — |
-| `à corriger` | écart établi sur une marge que la **sélection sait refermer** (couronne, motorisation, joint, âge, occupation) | **refus** |
-| `à publier` | écart établi sur une marge que la sélection ne referme pas (base ménage sans identifiants) | scellé, écart dans la synthèse |
+| `à corriger` | écart établi sur une marge que la **sélection sait refermer** (couronne, motorisation **dans les deux bases** depuis la v5, joint, âge, occupation, marges personne gelées) | **refus** |
+| `à publier` | écart établi sur une marge que la sélection ne referme pas (les chaînes d'activités, qui se règlent dans l'appariement eqasim) | scellé, écart dans la synthèse |
 | `non mesurable` | pas de cible publiée, ou effectif insuffisant | scellé, déclaré |
 
 Code de sortie : 0 tout conforme · 1 au moins un `à corriger` · 2 population ou référence
