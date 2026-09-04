@@ -167,8 +167,9 @@ def test_selection_journalise_le_deficit_au_lieu_de_le_cacher():
 
 
 def test_descente_reduit_la_perte_sans_bouger_les_cellules():
-    """La descente échange des ménages de même taille dans la même cellule : la perte
-    multi-marges baisse, les 12 effectifs de cellule restent ceux de l'allocation."""
+    """La descente échange des ménages de même SOUS-CELLULE (cellule, effectif présent, taille
+    déclarée) : la perte multi-marges baisse, les 12 effectifs de cellule restent ceux de
+    l'allocation."""
     from collections import Counter
     pool = _pool(40)
     chosen, journal = seal.select(pool, 150)
@@ -287,6 +288,9 @@ def test_regle_v5_journalise_le_perimetre_et_les_departements():
     assert seal.SELECTION_NAMESPACE == "aamas_seal_v4"
     assert "classe_age" in seal.DESCENTE_MARGES and "occupation" in seal.DESCENTE_MARGES
     assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v5"
+    # Les deux marges que l'ALLOCATION tient (et non la descente) depuis la v5.
+    assert seal.ALLOCATION_MARGES == ("taille_menage_personne", "motorisation_menage")
+    assert seal.ALLOCATION_TOLERANCE_ALARME_PT == 1.0   # la borne d'indifférence du contrôle
     pool = _pool_menages(25)
     deps = ["31", "32", "81", "82", "09", "11"]
     for i, rec in enumerate(pool):
@@ -432,3 +436,214 @@ def test_la_motorisation_base_menage_est_une_marge_ponderee_de_la_descente():
     etat.add(_P(4))
     assert etat.fields["motorisation_menage"] == pytest.approx(1.25)
     assert etat.fields["genre"] == 2
+
+
+# ── Règle v5 : l'allocation par sous-cellule (cellule × présents × déclarés) ──
+
+def _pool_v5(par_taille: int = 26, avec_enfants_absents: bool = True) -> list[dict]:
+    """Un vivier en ménages de tailles déclarées 1 à 6, dans les 12 cellules.
+
+    Une partie des ménages porte un enfant de moins de 5 ans, hors population enquêtée : leur
+    effectif PRÉSENT est inférieur à leur taille DÉCLARÉE, ce qui est exactement la dimension
+    que la sous-cellule de la v5 distingue (et le seul levier de poids `1/taille` du vivier
+    réel : 52 membres sur 1 052 en v4).
+    """
+    from llm_module.core.population_reference import COURONNES
+    occupations = ["Travail à plein temps", "Retraité", "Scolaire (jusqu'au Bac)", "Étudiant",
+                   "Travail à temps partiel", "Chômeur/recherche d'emploi", "Personne au foyer"]
+    pool, pid, hid = [], 0, 0
+    for c in COURONNES:
+        for cars in (0, 1, 2):
+            for taille in (1, 2, 3, 4, 5, 6):
+                for k in range(par_taille):
+                    hid += 1
+                    bebe = avec_enfants_absents and taille >= 2 and k % 5 == 0
+                    ages = [18 + (hid * 7) % 60] + [5 + (hid * 3 + j * 11) % 70
+                                                    for j in range(taille - 1)]
+                    if bebe:
+                        ages[-1] = 3            # exclu de la population enquêtée
+                    for j, age in enumerate(ages):
+                        pid += 1
+                        rec = _persona(pid, age, "Female" if pid % 2 else "Male",
+                                       occupations[pid % 7], cars, taille, c)
+                        rec["household"] = {"id": f"h{hid}", "iris_id": None,
+                                            "commune_id": f"{(31, 32, 81, 82, 9, 11)[hid % 6]:02d}123"}
+                        rec["immobile"] = (hid % 9 == 0)
+                        rec["identity"]["activities"] = (
+                            [{"purpose": "home"}] if rec["immobile"] else
+                            [{"purpose": "home"}, {"purpose": "work"}, {"purpose": "home"}])
+                        pool.append(rec)
+    return pool
+
+
+def test_les_cibles_de_l_allocation_sont_lues_sur_les_cibles_gelees():
+    """Aucun littéral : les deux marges allouées prennent leur cible dans `cj1` / `cm1`,
+    renormalisées à 100 — une cible qui bouge doit bouger la sélection."""
+    cibles = seal.cibles_allocation()
+    assert set(cibles) == set(seal.ALLOCATION_MARGES)
+    reference = {m.nom: m for m in marges()}
+    for nom, row in cibles.items():
+        assert set(row) == set(reference[nom].cible_pct), nom
+        assert sum(row.values()) == pytest.approx(100.0), nom
+        brut = reference[nom].cible_pct
+        total = sum(brut.values())
+        assert row == pytest.approx({k: 100.0 * v / total for k, v in brut.items()})
+    # La motorisation ménage est bien la cible du rapport p. 21 (19 / 45 / 35), pas la base
+    # personne (13,6 / 37,8 / 48,7) — c'est la confusion de base que la v4 laissait ouverte.
+    assert 18.5 < cibles["motorisation_menage"]["sans voiture"] < 20.0
+
+
+def test_l_allocation_par_sous_cellule_somme_aux_cibles_de_cellule():
+    """Les effectifs par sous-cellule somment EXACTEMENT aux douze effectifs de cellule en
+    personnes, et donc à N : c'est la contrainte que la dimension de plus ne doit pas lâcher."""
+    from collections import Counter
+    pool = _pool_v5()
+    menages, _ = seal.group_households(pool)
+    targets = seal.largest_remainder(
+        {f"{c} × {m}": cible_jointe(JOINT_TARGET)["cible_pct"][c][m]
+         for c in cible_jointe(JOINT_TARGET)["cible_pct"] for m in MOTORISATION}, 400)
+    effectif, deficits, reports = seal.effectifs_par_cellule(menages, targets)
+    assert not deficits and not reports        # le vivier de test remplit toutes les cellules
+    cibles_sc, journal = seal.allouer_sous_cellules(seal.inventaire(menages), effectif, 400,
+                                                    seal.cibles_allocation())
+    par_cellule: Counter = Counter()
+    for (cellule, presents, _declares), n in cibles_sc.items():
+        par_cellule[cellule] += n * presents
+    assert dict(par_cellule) == {c: v for c, v in effectif.items() if v}
+    assert sum(par_cellule.values()) == 400 == journal["personnes"]
+    # Chaque sous-cellule reste dans l'inventaire du vivier : on n'alloue pas ce qui n'existe pas.
+    inv = seal.inventaire(menages)
+    assert all(n <= inv[key] for key, n in cibles_sc.items())
+    assert journal["sous_cellules"]["servies"] == len(cibles_sc) <= journal["sous_cellules"]["vivier"]
+
+
+def test_l_allocation_tient_les_deux_marges_dans_la_tolerance_qu_elle_annonce():
+    """La tolérance retenue est trouvée par bissection, et les écarts obtenus la respectent.
+
+    Le journal dit ce qui a été demandé (cibles), ce qui a été obtenu (parts), l'écart, la
+    tolérance et le nombre de programmes résolus — de quoi rejouer la décision."""
+    pool = _pool_v5()
+    _retenus, journal = seal.select(pool, 400)
+    a = journal["allocation"]
+    assert a["marges_allouees"] == list(seal.ALLOCATION_MARGES)
+    assert a["tolerance"]["retenue_pt"] <= seal.ALLOCATION_TOLERANCE_ALARME_PT
+    assert a["tolerance"]["depassee"] is False
+    assert a["ecart_max_pt"] <= a["tolerance"]["retenue_pt"] + 1e-6
+    for nom, cibles in a["cibles_pct"].items():
+        for modalite, cible in cibles.items():
+            assert abs(a["parts_obtenues_pct"][nom][modalite] - cible) <= a["tolerance"]["retenue_pt"] + 1e-6
+    # La bissection descend jusqu'au pas annoncé : la tolérance juste en dessous est infaisable.
+    essais = a["tolerance"]["essais"]
+    assert len(essais) >= 2 and essais[0]["tolerance_pt"] == seal.ALLOCATION_TOLERANCE_MAX_PT
+    assert any(not e["faisable"] for e in essais), "la bissection doit avoir touché l'infaisable"
+    assert a["tolerance"]["programmes_resolus"] == len(essais) + 1
+    assert a["duree_s"] >= 0
+
+
+def test_l_allocation_est_deterministe_et_independante_de_l_ordre_du_fichier():
+    """Même vivier, même allocation et mêmes retenus — quel que soit l'ordre des lignes."""
+    pool = _pool_v5()
+    retenus_a, journal_a = seal.select(pool, 400)
+    retenus_b, journal_b = seal.select(list(reversed(pool)), 400)
+    assert [p["person_id"] for p in retenus_a] == [p["person_id"] for p in retenus_b]
+    assert journal_a["household_ids"] == journal_b["household_ids"]
+    for cle in ("cibles_menages",):
+        assert journal_a["allocation"]["sous_cellules"][cle] == journal_b["allocation"]["sous_cellules"][cle]
+    assert journal_a["allocation"]["tolerance"]["retenue_pt"] == journal_b["allocation"]["tolerance"]["retenue_pt"]
+
+
+def test_la_descente_ne_deplace_aucune_sous_cellule():
+    """L'opérateur d'échange apparie à sous-cellule constante : les deux marges allouées
+    sortent de la descente INTACTES, et les douze effectifs de cellule aussi.
+
+    C'est ce qui remplace l'arbitrage impossible de la v4 entre la motorisation en base ménage
+    et la taille de ménage : ce que l'allocation fixe, la descente ne peut plus le défaire."""
+    from collections import Counter
+    pool = _pool_v5()
+    retenus, journal = seal.select(pool, 400)
+    d = journal["descente"]
+    assert d["echanges"] > 0, "la descente doit encore travailler sur les autres marges"
+    for nom in seal.ALLOCATION_MARGES:
+        marge = d["marges"][nom]
+        assert marge["mesuree"]
+        assert marge["avant_pct"] == marge["apres_pct"], nom
+        assert marge["ecart_max_apres_pt"] == marge["ecart_max_avant_pt"] <= 1.0, nom
+    # Les comptes par sous-cellule des retenus sont ceux que l'allocation a demandés.
+    par_sc: Counter = Counter()
+    for rec in retenus:
+        tr = rec["identity"]["traits_json"]
+        par_sc[(f"{tr['residence_zone']} × {seal.motorisation_class(tr['number_of_cars'])}",
+                rec["household"]["id"])] += 1
+    tailles = Counter()
+    for (cellule, _hid), presents in par_sc.items():
+        tailles[cellule] += presents
+    assert dict(tailles) == {c: v for c, v in journal["retenus_par_cellule"].items() if v}
+    assert journal["allocation"]["retenus_par_sous_cellule"] == \
+        journal["allocation"]["sous_cellules"]["cibles_menages"]
+
+
+def test_une_sous_cellule_sous_remplie_se_reporte_dans_sa_cellule_et_s_alarme(monkeypatch, caplog):
+    """Un déficit ne se comble jamais en silence. L'inventaire borne le programme, donc une
+    sous-cellule sous-remplie est impossible par construction : on force le cas et on vérifie
+    que le report est journalisé, alarmé, que les douze effectifs de cellule restent exacts,
+    et que la sélection sort en code 1."""
+    import logging
+    from collections import Counter
+    pool = _pool_v5()
+    vrai = seal.allouer_sous_cellules
+
+    def _sur_alloue(inv, effectif, n, cibles):
+        cibles_sc, journal = vrai(inv, effectif, n, cibles)
+        # On demande un ménage de PLUS qu'il n'en existe dans une sous-cellule, et autant de
+        # moins dans une sous-cellule de la MÊME cellule et du MÊME effectif présent : le
+        # compte de personnes de la cellule reste celui de l'allocation, mais une sous-cellule
+        # devient impossible à servir.
+        for cible in sorted(cibles_sc):
+            delta = inv[cible] + 1 - cibles_sc[cible]
+            jumelles = [k for k in sorted(cibles_sc)
+                        if k != cible and k[:2] == cible[:2] and cibles_sc[k] >= delta]
+            if delta >= 1 and jumelles:
+                cibles_sc[cible] = inv[cible] + 1
+                cibles_sc[jumelles[0]] -= delta
+                return cibles_sc, journal
+        raise AssertionError("le vivier de test ne permet pas de forcer une sous-cellule vide")
+
+    monkeypatch.setattr(seal, "allouer_sous_cellules", _sur_alloue)
+    with caplog.at_level(logging.ERROR, logger="aamas.seal"):
+        retenus, journal = seal.select(pool, 400)
+    a = journal["allocation"]
+    assert a["manques"] and a["manques"][0]["manque_menages"] == 1
+    assert any("[ALARME]" in r.message and "sous-remplie" in r.message for r in caplog.records)
+    reports = [r for r in journal["reports"] if r["portee"].startswith("même cellule")]
+    assert reports and sum(r["n"] for r in reports) == a["manques"][0]["manque_personnes"]
+    assert journal["deficits"], "un manque reporté reste un déficit visible"
+    # Les douze effectifs de cellule en personnes restent exacts malgré le report.
+    cellules: Counter = Counter()
+    for rec in retenus:
+        tr = rec["identity"]["traits_json"]
+        cellules[f"{tr['residence_zone']} × {seal.motorisation_class(tr['number_of_cars'])}"] += 1
+    assert dict(cellules) == {c: v for c, v in journal["cibles"].items() if v}
+    assert len(retenus) == 400
+
+
+def test_un_vivier_qui_ne_porte_pas_les_grands_menages_le_dit_et_sort_en_code_1(tmp_path, caplog):
+    """Le vivier de `_pool` n'a aucun ménage de taille déclarée 5 et plus : la marge de taille
+    ne peut PAS être tenue. L'allocation ne s'en approche pas « au mieux » en silence — elle
+    dit la tolérance qu'il a fallu, l'alarme, et la sélection sort en code 1."""
+    import argparse
+    import logging
+    pool = _pool(60)
+    path = tmp_path / "vivier.json"
+    path.write_text(json.dumps(pool), encoding="utf-8")
+    args = argparse.Namespace(pool=path, n=150, out=tmp_path / "out.json", selection_json=None)
+    with caplog.at_level(logging.ERROR, logger="aamas.seal"):
+        code = seal.cmd_select(args)
+    assert code == 1
+    assert any("[ALARME]" in r.message and "marges allouées" in r.message for r in caplog.records)
+    journal = json.loads((tmp_path / "out_selection.json").read_text(encoding="utf-8"))
+    a = journal["allocation"]
+    assert a["tolerance"]["depassee"] is True
+    assert a["ecart_max_pt"] > seal.ALLOCATION_TOLERANCE_ALARME_PT
+    # L'écart est celui de la modalité que le vivier ne porte pas, et il est nommé.
+    assert abs(a["ecarts_pt"]["taille_menage_personne"]["5 et +"]) > 1.0
+    assert (tmp_path / "out.json").exists(), "les N sont livrés, l'écart est déclaré"
