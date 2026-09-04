@@ -1,3 +1,28 @@
+## [2026-09-04] La motorisation des ménages est enfin visée par la sélection — et le vivier peut la servir
+
+Le seul écart que la population scellée v4 déclarait « à publier » — 22,8 % de ménages sans
+voiture contre 19,2 % dans l'enquête — restait ouvert parce qu'aucune étape de la sélection ne le
+visait : l'allocation tient la motorisation par personne, exactement, et la même population lue
+par ménage dit autre chose. La marge entre maintenant dans la descente, pondérée comme le
+contrôle la pondère (chaque persona pèse l'inverse de la taille de son foyer).
+
+Cela ne suffit pas, et la mesure le dit plutôt que de le taire. L'échange qui sert la descente
+apparie des ménages de même effectif présent : pour déplacer un poids de ménage il lui faudrait
+des foyers dont la taille déclarée diffère de l'effectif présent, et il n'y en a presque pas — 52
+membres absents sur 1 052. En pondérant la marge de 1 à 50, l'écart ne descend que de 3,4 à
+2,2 points et la taille de ménage se dégrade de 0,9 à 3,0.
+
+En revanche la cible est atteignable, et c'est démontré et non supposé : un programme linéaire sur
+l'inventaire du vivier, contraint par les douze effectifs de cellule **et** par la taille de
+ménage, place la part de ménages sans voiture entre 7,6 % et 27,9 %. Il faut allouer sur une
+dimension de plus — par cellule **et** par taille — ce qui est l'étape suivante.
+
+**Avant :** un écart déclaré à publier, sans qu'on sache s'il venait du vivier ou de la méthode.
+**Après :** on sait que c'est la méthode, on sait de combien le vivier permet de faire mieux, et
+la marge est mesurée à chaque sélection au lieu de n'apparaître qu'au contrôle final.
+
+---
+
 ## [2026-09-04] Le vélo d'un persona n'est plus posé par deux lois qui se contredisent
 
 La loi d'équipement vélo apprise sur l'EMC² 2023 vivait à deux endroits : dans le générateur

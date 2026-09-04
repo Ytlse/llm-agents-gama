@@ -66,6 +66,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -90,10 +91,16 @@ from scripts.AAMAS.reference_marges import (  # noqa: E402
 
 logger = logging.getLogger("aamas.seal")
 
-SELECTION_NAMESPACE = "aamas_seal_v4"   # sel du hachage des MÉNAGES
-SELECTION_RULE = "aamas_seal_v4"
+# Le sel du hachage des MÉNAGES reste celui de la v4, DÉLIBÉRÉMENT : la règle v5 ne change que
+# la fonction de perte de la descente (la motorisation en base ménage y entre), pas l'ordre dans
+# lequel les ménages se présentent. Garder le même ordre rend l'effet de la nouvelle marge
+# mesurable en isolation — un sel neuf mêlerait deux causes, et le tableau de conformité ne
+# dirait plus laquelle a agi. La v3 → v4 avait changé de sel parce que le cadre de tirage
+# changeait ; ici il ne change pas.
+SELECTION_NAMESPACE = "aamas_seal_v4"   # sel du hachage des MÉNAGES — inchangé, cf. ci-dessus
+SELECTION_RULE = "aamas_seal_v5"
 SEAL_VERSION = "sceau1"
-DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v4"
+DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v5"
 
 # Périmètre de la population (ticket 031, option A) : les 453 communes de l'EMC² 2023, six
 # départements, délimitées par le POLYGONE DES COMMUNES (table `commune_couronne.json`), pas par
@@ -114,7 +121,41 @@ PERIMETRE = {
 # 45 % dans l'enquête). Le référentiel de l'article est le rapport AUAT : ses classes sont
 # tenues d'abord. La cellule couronne × motorisation n'en fait pas partie : elle est tenue
 # exactement par l'allocation.
-DESCENTE_MARGES: tuple[str, ...] = ("occupation", "classe_age", *MARGES_PERSONNE)
+# La motorisation en BASE MÉNAGE entre dans la descente depuis la v5. Elle était la seule
+# marge « à publier » de la v4 — ménages sans voiture 22,8 % contre 19,2 % — et elle le
+# restait parce que rien ne la visait : l'allocation tient la motorisation en base PERSONNE
+# (exacte, 13,6 %), et les deux bases ne disent pas la même chose. Une personne seule sans
+# voiture pèse 1 en base ménage, un membre d'un foyer de quatre pèse 1/4 : la cohorte v4
+# concentrait ses ménages sans voiture sur les personnes seules (43,5 % des 223 ménages d'une
+# personne, 97 des 114 ménages sans voiture).
+#
+# Le levier existait déjà dans l'opérateur d'échange, sans qu'on l'ait vu : il apparie les
+# ménages par effectif PRÉSENT (`Menage.size`) et non par taille DÉCLARÉE, si bien qu'un
+# échange peut changer le poids `1/taille` d'un ménage sans toucher au compte de personnes de
+# sa cellule. Il ne manquait que la marge dans la fonction de perte.
+#
+# Mesuré sur le vivier du 2026-09-04 : la part de ménages sans voiture atteignable va de
+# 5,3 % à 45,5 % selon le mix de tailles retenu dans chaque cellule — la cible de 19,2 % est
+# largement à l'intérieur, l'écart de la v4 n'était pas une contrainte du vivier.
+DESCENTE_MARGES: tuple[str, ...] = ("occupation", "classe_age", "motorisation_menage",
+                                    *MARGES_PERSONNE)
+
+# Marges comptées en base MÉNAGE : chaque persona y pèse `1 / taille déclarée de son ménage`,
+# comme dans le contrôle (`llm_module.core.population_reference.household_weight`). Compter ces
+# marges à poids 1 comparerait une population de personnes à une cible de ménages — l'erreur
+# de base que la page de contrôle interdit explicitement.
+DESCENTE_MARGES_MENAGE: frozenset[str] = frozenset({"motorisation_menage"})
+
+# Poids de chaque marge dans la perte. Une marge pèse 1 par défaut. Le poids existe pour une
+# raison mesurée : la motorisation en base ménage et la taille de ménage en base personne sont
+# en TENSION sur ce vivier — fermer l'une déplace l'autre — et un poids de 1 laisse la descente
+# préférer la seconde, puisqu'un échange qui gagne 0,1 pt en base ménage en perd davantage sur
+# les cinq modalités de taille. Le poids dit lequel des deux écarts on accepte de publier.
+# Réglable par la variable d'environnement `DESCENTE_POIDS_MOTORISATION_MENAGE` pour tracer la
+# courbe d'arbitrage.
+DESCENTE_POIDS: dict[str, float] = {
+    "motorisation_menage": float(os.environ.get("DESCENTE_POIDS_MOTORISATION_MENAGE", "1.0")),
+}
 # Candidats examinés par ménage retenu et par passe (ordre de hachage). Borne le coût sans
 # changer le déterminisme ; 150 suffit largement sur un vivier de 10 000.
 DESCENTE_CANDIDATS = 150
@@ -331,32 +372,39 @@ class _Etat:
     def __init__(self, marges_defs: list[tuple[str, Callable, dict[str, float]]]):
         self.defs = marges_defs
         self.counts: dict[str, Counter] = {nom: Counter() for nom, _, _ in marges_defs}
-        self.fields: dict[str, int] = {nom: 0 for nom, _, _ in marges_defs}
+        self.fields: dict[str, float] = {nom: 0.0 for nom, _, _ in marges_defs}
 
     def add(self, persona, sign: int = 1) -> None:
         for nom, fn, _ in self.defs:
             mod = fn(persona)
             if mod is None:
                 continue
-            self.counts[nom][mod] += sign
-            self.fields[nom] += sign
+            # Base ménage : le persona pèse l'inverse de la taille déclarée de son foyer.
+            # Un poids nul (taille absente) retire la personne du champ de la marge sans la
+            # retirer des autres — c'est la règle de `household_weight`, pas un repli.
+            poids = persona.poids_menage if nom in DESCENTE_MARGES_MENAGE else 1.0
+            if not poids:
+                continue
+            self.counts[nom][mod] += sign * poids
+            self.fields[nom] += sign * poids
 
     def loss(self) -> float:
         total = 0.0
         for nom, _, target in self.defs:
             f = self.fields[nom]
-            if f <= 0:
+            if f <= 1e-9:
                 continue
             c = self.counts[nom]
+            poids = DESCENTE_POIDS.get(nom, 1.0)
             for mod, cible in target.items():
-                total += abs(100.0 * c[mod] / f - cible)
+                total += poids * abs(100.0 * c[mod] / f - cible)
         return total
 
     def snapshot(self) -> dict[str, dict[str, float]]:
         out = {}
         for nom, _, target in self.defs:
             f = self.fields[nom]
-            out[nom] = {mod: (round(100.0 * self.counts[nom][mod] / f, 2) if f else None)
+            out[nom] = {mod: (round(100.0 * self.counts[nom][mod] / f, 2) if f > 1e-9 else None)
                         for mod in target}
         return out
 
@@ -423,8 +471,9 @@ def descend(chosen: dict[str, Menage], menages: list[Menage], personas: dict[str
         marges_journal[nom] = {"cible_pct": target, "avant_pct": avant[nom], "apres_pct": apres[nom],
                                "ecart_max_avant_pt": round(ecart_avant, 2),
                                "ecart_max_apres_pt": round(ecart_apres, 2),
-                               "champ": etat.fields[nom],
-                               "mesuree": etat.fields[nom] > 0}
+                               "champ": round(etat.fields[nom], 2),
+                               "base": "menage" if nom in DESCENTE_MARGES_MENAGE else "personne",
+                               "mesuree": etat.fields[nom] > 1e-9}
     non_mesurees = [nom for nom, j in marges_journal.items() if not j["mesuree"]]
     if non_mesurees:
         logger.warning("descente : marges sans aucune valeur sur le vivier, ignorées — %s "
@@ -505,7 +554,7 @@ def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tupl
                   "couronne × motorisation (base personne), effectifs par plus fort reste, ménages "
                   f"dans l'ordre sha256('{SELECTION_NAMESPACE}:' + household_id) s'ils tiennent dans "
                   "la cellule ; exclus : hors périmètre, moins de 5 ans, sans motorisation ; puis "
-                  "descente par échanges de ménages de même taille et même cellule minimisant la "
+                  "descente par échanges de ménages de même effectif présent et même cellule minimisant la "
                   "somme des écarts absolus (en points) aux marges : " + ", ".join(DESCENTE_MARGES)),
         "cible_jointe": {"fichier": str(joint_path), "version": joint.get("version"),
                          "sha256": ctl.sha256_of(joint_path)},

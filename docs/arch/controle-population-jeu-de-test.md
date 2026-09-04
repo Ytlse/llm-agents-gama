@@ -67,6 +67,40 @@ Cibles `cj1` et `cm1` inchangées — elles sont calculées sur les 453 communes
   restreinte aux jours de classe en compte davantage que l'EMC² toulousaine. La cohorte scellée
   est tenue à 10,6 % par la descente ; l'écart du vivier est déclaré ici, non corrigé.
 
+### La règle v5 — la motorisation en base ménage entre dans la descente (`aamas_seal_v5`)
+
+La v4 laissait un seul écart « à publier » : les ménages **sans voiture** pesaient 22,8 % contre
+19,2 % dans le rapport (p. 21). Il restait ouvert parce que **rien ne le visait** — l'allocation
+tient la motorisation en base *personne*, qu'elle atteint exactement (13,6 %), et les deux bases
+ne disent pas la même chose. En base ménage chaque persona pèse l'inverse de la taille déclarée
+de son foyer : une personne seule sans voiture pèse 1, un membre d'un foyer de quatre pèse 0,25.
+La v4 concentrait ses ménages sans voiture sur les personnes seules — **97 des 114**, soit 43,5 %
+des 223 ménages d'une personne.
+
+La marge entre donc dans la fonction de perte de la descente, **comptée en base ménage** (le
+poids `1/taille` de `household_weight`, celui du contrôle). La compter à poids 1 comparerait une
+population de personnes à une cible de ménages : c'est l'erreur de base que la section 2 interdit.
+Le **sel** du hachage reste celui de la v4, délibérément : seule la perte change, pas l'ordre dans
+lequel les ménages se présentent, ce qui rend l'effet de la marge mesurable en isolation.
+
+**Ce que la descente seule ne peut pas faire, et pourquoi — mesuré le 2026-09-04.** L'opérateur
+d'échange apparie les ménages par effectif **présent** et même cellule. Pour changer le poids
+`1/taille` d'un ménage sans toucher au compte de personnes de sa cellule, il lui faut donc un
+candidat de même effectif présent mais de **taille déclarée** différente — c'est-à-dire un foyer
+dont des membres manquent, et les seuls manquants sont les enfants de moins de 5 ans : 52 sur
+1 052 membres déclarés. Le levier est presque vide. Mesuré en pondérant la marge de 1 à 50 dans
+la perte : l'écart ne descend que de 3,4 à 2,2 pt, et la taille de ménage se dégrade de 0,9 à
+3,0 pt. Les deux marges sont en tension **pour cet opérateur**.
+
+**La cible est pourtant atteignable, et c'est démontré.** Programme linéaire sur l'inventaire du
+vivier — variables : le nombre de ménages retenus par (cellule, effectif présent, taille
+déclarée) ; contraintes : les douze effectifs de cellule en personnes **et** la marge de taille
+de ménage, toutes deux exactes. La part de ménages sans voiture y va de **7,6 % à 27,9 %** : les
+19,2 % du rapport sont largement à l'intérieur, et la v4 à 22,8 % n'était pas contrainte par son
+vivier. Fermer l'écart demande donc une **allocation sur une dimension de plus** — un effectif
+cible par (cellule, taille) et non par cellule seule — après quoi l'opérateur actuel, qui
+préserve la composition par construction, referme le reste.
+
 ### La règle v3 — par ménage, à marges multiples (`aamas_seal_v3`, ticket 029)
 
 Trois changements sur la v2, chacun pour un écart mesuré sur la population scellée du

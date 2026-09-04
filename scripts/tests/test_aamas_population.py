@@ -275,15 +275,18 @@ def test_controle_uniforme_est_a_corriger_sur_la_couronne(tmp_path):
     assert report["verdicts"][ctl.A_CORRIGER] >= 1
 
 
-# ── Règle v4 : périmètre et ligne scolaires (ticket 031) ─────────────────────
+# ── Règle v5 : périmètre, ligne scolaires, motorisation en base ménage ───────
 
-def test_regle_v4_journalise_le_perimetre_et_les_departements():
-    """La règle est `aamas_seal_v4`, tient les six classes d'âge, et le journal dit d'où
-    viennent les retenus (département de `household.commune_id`) et quel périmètre est déclaré."""
-    assert seal.SELECTION_RULE == "aamas_seal_v4"
+def test_regle_v5_journalise_le_perimetre_et_les_departements():
+    """La règle est `aamas_seal_v5`, tient les six classes d'âge, et le journal dit d'où
+    viennent les retenus (département de `household.commune_id`) et quel périmètre est déclaré.
+
+    Le **sel** du hachage reste celui de la v4, délibérément : la v5 ne change que la fonction
+    de perte de la descente, pas l'ordre dans lequel les ménages se présentent."""
+    assert seal.SELECTION_RULE == "aamas_seal_v5"
     assert seal.SELECTION_NAMESPACE == "aamas_seal_v4"
     assert "classe_age" in seal.DESCENTE_MARGES and "occupation" in seal.DESCENTE_MARGES
-    assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v4"
+    assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v5"
     pool = _pool_menages(25)
     deps = ["31", "32", "81", "82", "09", "11"]
     for i, rec in enumerate(pool):
@@ -295,7 +298,7 @@ def test_regle_v4_journalise_le_perimetre_et_les_departements():
     assert sum(per["retenus_par_departement"].values()) == 300
     assert per["departements_representes"] == 6
     assert per["retenus_sans_commune"] == 0
-    assert "aamas_seal_v4" in journal["regle"]
+    assert "aamas_seal_v4" in journal["regle"]   # le sel du hachage, cité dans la règle
 
 
 def test_commune_du_domicile_lit_household_puis_le_trait():
@@ -406,3 +409,26 @@ def test_deplacements_comptent_le_retour_au_domicile(tmp_path):
     # Le rapport arrondit à 3 décimales.
     assert abs(m["deplacements_par_persona_mobile"] - attendu_mobile) < 5e-4
     assert abs(m["deplacements_par_persona"] - (2 * n_two + 3 * n_three) / len(pool)) < 5e-4
+
+
+def test_la_motorisation_base_menage_est_une_marge_ponderee_de_la_descente():
+    """La motorisation en base ménage entre dans la perte de la descente, et elle y est
+    comptée en **base ménage** — chaque persona pèse l'inverse de la taille déclarée de son
+    foyer. La compter à poids 1 comparerait une population de personnes à une cible de
+    ménages : c'est l'erreur de base que la page de contrôle interdit (ticket 031, v5)."""
+    assert "motorisation_menage" in seal.DESCENTE_MARGES
+    assert "motorisation_menage" in seal.DESCENTE_MARGES_MENAGE
+    assert "motorisation_personne" not in seal.DESCENTE_MARGES_MENAGE
+
+    # Deux personas de même modalité mais de tailles de ménage différentes ne pèsent pas
+    # pareil dans le champ de la marge ménage, et pèsent pareil dans une marge personne.
+    defs = [("motorisation_menage", lambda p: "sans voiture", {"sans voiture": 100.0}),
+            ("genre", lambda p: "Femmes", {"Femmes": 100.0})]
+    etat = seal._Etat(defs)
+
+    class _P:
+        def __init__(self, taille): self.poids_menage = 1.0 / taille
+    etat.add(_P(1))
+    etat.add(_P(4))
+    assert etat.fields["motorisation_menage"] == pytest.approx(1.25)
+    assert etat.fields["genre"] == 2
