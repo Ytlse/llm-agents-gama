@@ -106,6 +106,32 @@ Mesures du 2026-08-24 sur `toulouse_population_1000.json` (1 021 personas) et le
 | **A8** | Ménages | taille déclarée juste (2,10 / 2,08), **11,2 % de membres absents** | à publier |
 | **A9** | Représentativité spatiale | 76,0 % réel en cœur d'agglomération contre 70,5 % cible | à publier |
 
+### La population auditée est celle qui a tourné (2026-09-04)
+
+`make audit-perimetre` audite désormais **la population déposée par le run**
+(`<run>/population_1000.json`), et non plus un fichier du dossier `data/population/`.
+
+Ce qui l'a rendu nécessaire, et qui était invisible : le défaut historique pointait sur
+`data/population/toulouse_population_1000.json` — la sortie brute du générateur, 1 021
+personas — alors que le run simulait la cohorte scellée, 1 000 personas tirés séparément. Les
+deux populations n'ont **qu'un identifiant commun sur mille**. L'axe A2 joignait donc
+**6 déplacements sur les 5 322** du run, et publiait un écart de **154,3 pt** calculé sur ces
+six. Sur la population du run, la jointure est complète et l'écart vaut **41,2 pt**.
+
+⚠ **Ce n'est pas un ajustement de mesure, c'est un changement d'objet.** Les neuf axes
+mesuraient un fichier que personne n'avait simulé. Les verdicts publiés avant cette date sont
+donc **caducs, pas « améliorés »** — en particulier A4, qui passe de « à corriger » à
+« conforme » parce que la cohorte scellée n'a aucun domicile hors périmètre là où le fichier de
+référence en avait un, et le code de sortie, qui passe de 2 à 0. Mesuré le 2026-09-04 sur le run
+`2026-09-04_01_09` : **5 conformes, 4 à publier, code 0**.
+
+Auditer la chaîne de génération est le travail de `control_population.py` et du scellement ;
+auditer l'expérience qui a tourné est celui de ce script. `--population <fichier>` reste
+disponible pour auditer une population nommée, et le script dit alors explicitement qu'il porte
+peut-être sur une population que le run n'a pas simulée. Si le run n'a pas déposé sa population,
+le script **s'arrête** : il ne se replie pas sur un autre fichier, puisque c'est précisément le
+défaut qu'il ferme.
+
 ### A2 — Le classement en couronnes est faux, et il flatte le score
 
 [`geo_reference.residence_zone`](../../llm_module/core/geo_reference.py) classe un domicile

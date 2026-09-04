@@ -1,3 +1,23 @@
+## [2026-09-04] L'audit de périmètre porte enfin sur la population qui a tourné
+
+L'audit comparait le run à un fichier de population que personne n'avait simulé : la sortie brute
+du générateur, 1 021 personas, quand le run en simulait 1 000 tirés séparément. Les deux
+populations n'ont qu'un identifiant commun sur mille, si bien que l'axe des parts modales par
+couronne joignait six déplacements sur 5 322 et publiait un écart de 154 points calculé sur ces
+six. Il porte désormais sur la population que le run a déposée.
+
+Ce n'est pas un ajustement de mesure, et le dire compte : les neuf axes mesuraient le mauvais
+objet, donc leurs verdicts antérieurs sont caducs et non « améliorés ». Un axe passe de « à
+corriger » à « conforme » parce que la cohorte scellée n'a aucun domicile hors du périmètre là où
+le fichier de référence en avait un.
+
+**Avant :** un écart de 154 points calculé sur six déplacements, et neuf axes portant sur un
+fichier inutilisé.
+**Après :** jointure complète, écart de 41 points, cinq axes conformes et quatre à publier. Si le
+run n'a pas déposé sa population, l'audit s'arrête au lieu de se replier sur un autre fichier.
+
+---
+
 ## [2026-09-04] Le prompt nomme les lignes du car régional et du TER au lieu de « Unknown »
 
 Le lecteur GTFS ne chargeait qu'un réseau, Tisséo, alors que le graphe de routage en porte trois
