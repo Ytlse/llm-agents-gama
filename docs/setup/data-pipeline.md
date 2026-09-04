@@ -141,8 +141,24 @@ OTP est le moteur de calcul d'itinéraires multi-modal (transit + marche/vélo/v
 ### Construction et démarrage (hors Docker)
 
 ```shell
-# Construire le graphe de transport (une seule fois, résultat : data/gtfs/graph.obj)
-java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --build data/gtfs --save
+# Construire le graphe de transport (résultat : data/gtfs/graph.obj)
+make otp-graph
+
+> **Pourquoi une recette et pas la commande nue.** `data/gtfs/` est un répertoire de **travail**,
+> non versionné ; les configurations d'OTP, elles, sont versionnées dans
+> `otp-toulouse/toulouse/` (`build-config.json`, `router-config.json`, `otp-config.json`).
+> `make otp-graph` les y recopie avant de construire, puis archive l'ancien graphe. Le
+> 2026-09-04, une reconstruction faite à la main avec un `build-config.json` minimal écrit
+> directement dans `data/gtfs/` a **perdu en silence** quatre réglages — `embedRouterConfig`,
+> `boardingLocationTags`, `staticParkAndRide`, `maxStopToShapeSnapDistance` — et les trois
+> instances ont tourné une nuit sur les valeurs par défaut d'OTP, sans une ligne de journal
+> pour le dire. Le graphe reconstruit avec les réglages retrouvés compte **9 716
+> correspondances contraintes** là où le précédent n'en avait aucune.
+>
+> ⚠ Le contrôle de desserte (`scripts/data/gtfs/otp_link_check.py`) ne voit **pas** cette
+> différence : il mesure si un itinéraire existe, pas lequel est choisi. Mesuré avant et après
+> la correction : 314 points sans itinéraire des deux côtés, sur 2 580. Les correspondances
+> contraintes et le temps de battement changent l'itinéraire retenu, non son existence.
 
 # Démarrer le serveur OTP
 java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --load data/gtfs
@@ -206,7 +222,7 @@ OSMnx calcule les itinéraires directs (sans transport en commun) : marche, vél
 
 ### Fonctionnement
 
-Les graphes OSMnx sont téléchargés depuis OpenStreetMap au premier démarrage puis mis en cache dans `data/osmnx_cache/` (persistant entre les redémarrages). Le calcul Dijkstra est délégué à des workers de processus dédiés par mode pour contourner le GIL Python.
+Les graphes OSMnx sont téléchargés depuis OpenStreetMap au premier démarrage puis mis en cache dans `data/cache/osmnx/` (persistant entre les redémarrages ; le cache de *routes*, distinct, vit dans `data/cache/osmnx/<population>/osmnx_cache.db`). Le calcul Dijkstra est délégué à des workers de processus dédiés par mode pour contourner le GIL Python.
 
 ### Déploiement Docker
 

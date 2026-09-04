@@ -1,6 +1,10 @@
 {
+  // Fonctionnalités OTP activées. `APIBikeRental` a été RETIRÉE le 2026-09-04 : elle
+  // n'existe plus dans l'énumération d'OTP 2.8.1, et chaque démarrage d'instance sortait
+  // un WARN « The enum value 'APIBikeRental' is not legal » — trois fois par relance, pour
+  // un réglage sans effet. Le vélo en libre-service n'est de toute façon pas modélisé
+  // (limite déclarée du ticket 015).
   "otpFeatures": {
-    "APIBikeRental": false,
     "APIServerInfo": true
   }
 }

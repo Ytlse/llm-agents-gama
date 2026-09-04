@@ -93,6 +93,23 @@ api:
 otp:
 	docker compose up --build otp worker
 
+.PHONY: otp-graph
+## Construit le graphe OTP (data/gtfs/graph.obj) en partant des configurations VERSIONNÉES.
+## `data/gtfs/` est un répertoire de travail non versionné : sans cette recopie, une
+## reconstruction perd les réglages de `otp-toulouse/toulouse/*.json` sans le dire — c'est
+## arrivé le 2026-09-04 (embedRouterConfig, boardingLocationTags, staticParkAndRide et
+## maxStopToShapeSnapDistance perdus, donc des instances tournant sur les défauts d'OTP).
+## L'ancien graphe est archivé, jamais écrasé.  Usage: make otp-graph
+otp-graph:
+	@test -f data/gtfs/Toulouse.osm.pbf || { echo "data/gtfs/Toulouse.osm.pbf manquant"; exit 1; }
+	@cp -v otp-toulouse/toulouse/build-config.json otp-toulouse/toulouse/router-config.json \
+	       otp-toulouse/toulouse/otp-config.json data/gtfs/
+	@if [ -f data/gtfs/graph.obj ]; then \
+	  d=data/gtfs/archives/$$(date +%Y-%m-%d_%H-%M)_pre_build ; mkdir -p $$d ; \
+	  mv -v data/gtfs/graph.obj $$d/ ; fi
+	java -Xmx4G -jar otp-toulouse/bin/otp-shaded-*.jar --build data/gtfs --save
+	@ls -l data/gtfs/graph.obj && shasum -a 256 data/gtfs/graph.obj
+
 logs:
 	docker compose logs -f
 

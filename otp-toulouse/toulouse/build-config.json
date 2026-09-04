@@ -1,12 +1,28 @@
 {
+  // Configuration de CONSTRUCTION du graphe OTP. Source de vérité versionnée : la recette
+  // `make otp-graph` la recopie dans `data/gtfs/` (répertoire de travail, non versionné) avant
+  // d'appeler OTP. Avant le 2026-09-04, la reconstruction du graphe écrivait un build-config
+  // minimal directement dans `data/gtfs/` et PERDAIT en silence les quatre réglages ci-dessous.
+
+  // Le router-config est embarqué DANS le graphe à la construction : les instances démarrent
+  // avec `--load` et n'ont donc pas besoin du fichier à l'exécution. Sans cette clé, elles
+  // tournent sur les valeurs par défaut d'OTP sans qu'aucun journal ne le dise.
   "embedRouterConfig": true,
+
+  // Rattachement des arrêts à la voirie : les quais et poteaux OSM servent de point d'accès,
+  // ce qui évite qu'un arrêt se rattache au milieu d'une chaussée.
   "boardingLocationTags": [
     "public_transport=platform",
     "highway=bus_stop",
     "railway=tram_stop"
   ],
   "staticParkAndRide": true,
+  // 150 m : au-delà, un arrêt trop loin de sa trace n'est pas rattaché de force.
   "maxStopToShapeSnapDistance": 150,
+
+  // Fenêtre de service explicite, alignée sur les feeds annuels de `data/gtfs_year`
+  // (tisseo, ter et lio, 2026 et 2027) et sur la date simulée (`Settings.gaml` : 2026-03-16).
+  // Sans ces deux clés, OTP prend [date de build − 1 an, date de build + 3 ans].
   "transitServiceStart": "2026-01-01",
-  "transitServiceEnd": "2026-12-31"
+  "transitServiceEnd": "2027-12-31"
 }

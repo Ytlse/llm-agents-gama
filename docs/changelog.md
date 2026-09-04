@@ -1,3 +1,65 @@
+## [2026-09-04] Les instances de routage retrouvent leur configuration, qu'une reconstruction avait perdue
+
+Les trois instances OTP tournaient sur les valeurs par défaut du moteur. Leurs configurations sont
+versionnées, mais dans un dossier que le conteneur ne monte pas : la reconstruction du graphe de la
+veille avait écrit un fichier de construction minimal directement dans le répertoire de travail, ce
+qui a fait disparaître quatre réglages sans un mot dans le journal — dont celui qui embarque la
+configuration de routage dans le graphe, et les trois qui gouvernent le rattachement des arrêts à
+la voirie et aux quais.
+
+Une recette, `make otp-graph`, recopie désormais les configurations versionnées avant de
+construire et archive l'ancien graphe. L'oubli n'est plus possible. Le drapeau `APIBikeRental`,
+retiré du moteur depuis, sortait par ailleurs un avertissement à chaque démarrage : il est
+supprimé.
+
+**Avant :** un graphe sans correspondances contraintes, un temps de battement et une pénalité de
+ligne aux valeurs par défaut, et rien pour le signaler.
+**Après :** 9 716 correspondances contraintes, la configuration de routage chargée et visible dans
+le journal de démarrage, trois instances saines. Le contrôle de desserte ne bouge pas — 314 points
+sans itinéraire sur 2 580 avant comme après : il mesure l'existence d'un itinéraire, pas le choix
+entre plusieurs, et la nuance est écrite dans la page de la chaîne de données.
+
+---
+
+## [2026-09-04] Le cache de routes réchauffé est enfin celui que le run lit
+
+Le peupleur en masse (étape 6 du notebook) et le runtime écrivaient dans **deux fichiers
+différents** : `data/cache/osmnx/<population>/osmnx_cache.db` pour le premier,
+`llm-agents/data/osmnx_cache/<population>/osmnx_cache.db` pour le second. La cause est un défaut
+de configuration que rien ne montait : `gtfs.osmnx_persistent_cache_dir` valait
+`/app/data/osmnx_cache`, or `/app` est le bind du **code** (`./llm-agents`) — le runtime écrivait
+donc dans l'arborescence des sources, à côté du volume. Le cache OTP, lui, était correctement
+aligné depuis le début (`./data/cache/otp:/app/data/cache/otp`) : c'est son modèle qui est repris.
+
+**Avant :** 196 runs archivés journalisent tous `[osmnx-cache] Persistent cache enabled at
+/app/data/osmnx_cache/…`, pendant qu'un cache réchauffé de 83 478 routes dormait dans
+`data/cache/osmnx/`. La promesse « 100 % de hits au démarrage » de l'étape 6 du notebook n'a
+jamais été tenue une seule fois depuis le 2026-06-02. Un run sur population neuve repartait de
+zéro sans qu'aucune ligne de journal ne le dise.
+**Après :** un seul fichier, `data/cache/osmnx/<population>/osmnx_cache.db`, écrit par le peupleur
+et lu par le run. Les 9 340 routes déjà calculées par le runtime y ont été rapatriées sans rien
+écraser (fusion `INSERT OR IGNORE`, rejouable) : le fichier de la population de 1 000 agents
+compte 92 818 routes. Le démarrage journalise désormais **le chemin et le nombre de routes en
+base**, distingue « fichier existant » de « FICHIER CRÉÉ », lève une **`[ALARME]`** si le
+répertoire n'est pas un point de montage et un `WARNING` si le cache est vide. Côté notebook, la
+cellule des chemins **refuse de démarrer** si le montage a disparu — réchauffer 2 h 30 pour un
+fichier que personne ne lit doit échouer bruyamment.
+
+⚠ **Deux limites à connaître.** Les 83 478 routes du réchauffage du 2026-08-24 sont en
+`routing_version` **`r1`** : le bump `r2` du 2026-09-03 (graphe du polygone, vitesses vélo) les a
+rendues **définitivement inertes**, et l'alignement ne les ressuscite pas — elles restent en base
+pour l'audit. Et le sous-dossier est nommé d'après la **taille** de la population
+(`toulouse_population_1000`), pas d'après son identité : les sceaux v2, v3 et v4 y cohabitent sans
+risque de justesse (la clé porte coordonnées et version) mais sans lisibilité.
+
+**`SKIP_WARMUP` : la décision du 2026-09-02 tient, sa justification change.** Le réchauffage
+avait été rendu optionnel pour une raison de RAM (23 Go de swap à 12 workers). L'enquête montre
+qu'il ne servait de toute façon **à rien** : sa sortie n'était lue par aucun run. Le rallumer
+(`SKIP_WARMUP = False`) n'a donc de sens que depuis ce correctif — et pas avant que le controller
+ait été recréé (`docker compose up -d controller`), sans quoi il remplirait encore un fichier mort.
+
+---
+
 ## [2026-09-04] Les ménages sans voiture pèsent enfin 19,2 % : la sélection alloue par cellule ET par taille
 
 Le dernier écart que la population du jeu de test déclarait « à publier » est fermé. Les ménages
