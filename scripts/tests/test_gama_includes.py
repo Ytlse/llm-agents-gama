@@ -459,5 +459,126 @@ class TestRecettesAlignees(BaseTemporaire):
                         "produite par l'autre recette")
 
 
+class TestTableDesTracesPubliee(BaseTemporaire):
+    """La recette publie la correspondance qu'elle a UTILISÉE, et le runtime la lit.
+
+    Sans ce fichier annexe, `GTFSData.get_shape_id_from_route_info` ne connaît que
+    le feed primaire : mesuré le 2026-09-04, 80 des 199 lignes du fichier des
+    courses roulaient dans GAMA sans qu'aucun itinéraire ne puisse les désigner —
+    aucun agent ne pouvait monter dans un TER ni dans un car liO. Le refabriquer
+    côté runtime aurait fait vivre DEUX implémentations de la règle
+    `<route_id>:<sens>:<empreinte>` (le TER ne publie aucune géométrie), et le
+    runtime devrait en plus reproduire les courses que la recette écarte.
+    """
+
+    def _lancer_et_lire(self, **kwargs):
+        from inputs.gtfs import table_traces
+
+        couche = kwargs.pop("couche", None) or couche_depuis_feeds(
+            self.feeds, self.racine / "routes.shp")
+        self.assertEqual(self.lancer(couche=couche, **kwargs), 0)
+        annexe = self.sortie.parent / table_traces.NOM_FICHIER
+        self.assertTrue(annexe.exists(), "la table des tracés doit être publiée "
+                                         "à côté de trip_info.json")
+        return couche, annexe, table_traces
+
+    def test_la_table_est_publiee_et_relue_par_le_runtime(self):
+        _couche, annexe, table_traces = self._lancer_et_lire()
+        table, arrets, journal = table_traces.charger(annexe)
+        self.assertEqual(journal["recette"], "scripts/data/gama/export_trip_info.py")
+        self.assertEqual(sorted(journal["temoins"]),
+                         ["routes.dbf", "routes.shp", "trip_info.json"])
+        self.assertTrue(arrets, "le catalogue des arrêts doit être publié")
+
+    def test_toute_course_du_fichier_est_designable(self):
+        """L'invariant de bout en bout : chaque course a son couple dans la table."""
+        _couche, annexe, table_traces = self._lancer_et_lire()
+        table, _arrets, _j = table_traces.charger(annexe)
+        for trip in self.produit()["trip_list"]:
+            self.assertIn(trip["shape_id"], table.get(trip["route_id"], {}),
+                          f"la course {trip['trip_id']} n'est désignable par aucun "
+                          f"itinéraire")
+
+    def test_la_ligne_sans_geometrie_porte_le_shape_id_fabrique_par_la_recette(self):
+        """Le TER : l'identifiant vient du module partagé, pas d'un feed."""
+        _couche, annexe, table_traces = self._lancer_et_lire()
+        table, _arrets, _j = table_traces.charger(annexe)
+        attendu = gtfs_traces.shape_id_synthetique("R1", "0", ["R1", "R2", "R3", "R4"])
+        self.assertIn(attendu, table["R1"])
+        # Et il dessert ses arrêts dans l'ordre : c'est ce que teste
+        # `get_shape_id_from_route_info` pour choisir un tracé.
+        self.assertLess(table["R1"][attendu]["R1"], table["R1"][attendu]["R4"])
+
+    def test_les_traces_de_la_table_sont_tous_dans_la_couche(self):
+        couche, annexe, table_traces = self._lancer_et_lire()
+        table, _arrets, _j = table_traces.charger(annexe)
+        de_la_couche = set(recette.types_de_la_couche(couche)[0])
+        for route_id, par_trace in table.items():
+            for shape_id in par_trace:
+                self.assertIn(shape_id, de_la_couche,
+                              f"{shape_id} ({route_id}) est désignable mais absent de "
+                              f"la couche : `route first_with (...)` rendrait nil")
+
+    def test_une_course_ecartee_par_la_recette_n_est_pas_designable(self):
+        """Les écarts de la recette valent pour la table : sinon un itinéraire
+        proposerait un véhicule qui ne naîtra jamais."""
+        couche = couche_depuis_feeds(
+            self.feeds, self.racine / "routes.shp",
+            garder=lambda sid, rt: not sid.endswith(
+                gtfs_traces.empreinte_suite(["R1", "R2"])))
+        _c, annexe, table_traces = self._lancer_et_lire(couche=couche)
+        table, _arrets, _j = table_traces.charger(annexe)
+        ecarte = gtfs_traces.shape_id_synthetique("R1", "0", ["R1", "R2"])
+        self.assertNotIn(ecarte, table.get("R1", {}))
+
+    def test_une_couche_refaite_seule_depareille_la_table(self):
+        """`make gama-layers` seul, sur d'autres données : la fraîcheur refuse.
+
+        C'est le contrôle qui a manqué cinq mois : rien ne disait que la table et
+        la couche ne venaient pas de la même génération. Une réécriture à
+        l'identique, elle, ne déclenche rien — geopandas écrit les mêmes octets,
+        et une fausse alarme apprend à ignorer les alarmes.
+        """
+        couche, annexe, table_traces = self._lancer_et_lire()
+        import geopandas as gpd
+
+        identique = gpd.read_file(couche)
+        identique.to_file(couche)
+        table_traces.charger(annexe)  # ne lève pas : mêmes octets
+
+        # Une couche qui a VRAIMENT changé — un tracé de moins, comme après un
+        # nouveau périmètre — et la paire est dépareillée.
+        identique.iloc[1:].to_file(couche)
+        with self.assertRaises(table_traces.TableTracesInvalide) as capture:
+            table_traces.charger(annexe)
+        self.assertEqual(capture.exception.motif, "depareillee")
+
+    def test_des_courses_reecrites_seules_depareillent_la_table(self):
+        couche, annexe, table_traces = self._lancer_et_lire()
+        contenu = json.loads(self.sortie.read_text(encoding="utf-8"))
+        contenu["trip_list"] = contenu["trip_list"][:-1]
+        self.sortie.write_text(json.dumps(contenu), encoding="utf-8")
+        with self.assertRaises(table_traces.TableTracesInvalide) as capture:
+            table_traces.charger(annexe)
+        self.assertEqual(capture.exception.motif, "depareillee")
+
+    def test_courses_absentes_de_la_table_font_echouer_la_recette(self):
+        """Le garde-fou interne : la recette refuse de livrer une table trouée."""
+        from inputs.gtfs.reader import GTFSData
+
+        original = GTFSData.table_traces_serialisable
+
+        def tronquee(self):
+            table, arrets = original(self)
+            table.pop(next(iter(table)))
+            return table, arrets
+
+        GTFSData.table_traces_serialisable = tronquee
+        self.addCleanup(setattr, GTFSData, "table_traces_serialisable", original)
+        couche = couche_depuis_feeds(self.feeds, self.racine / "routes.shp")
+        self.assertEqual(self.lancer(couche=couche), recette.CODE_REFUS)
+        self.assertFalse(self.sortie.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
