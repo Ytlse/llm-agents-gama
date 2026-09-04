@@ -27,7 +27,7 @@ CE QU'IL GARANTIT
 
 USAGE
 -----
-    make gtfs-year                         # Tisséo + TER, 2026 et 2027
+    make gtfs-year                         # Tisséo + TER + liO, 2026 et 2027
     make gtfs-year ANNEES=2026 RESEAU=tisseo
     make gtfs-year DRY=1                   # plan et manifeste seulement
     make gtfs-year HOLDOUT=202605          # masque mai 2026 et mesure l'écart
@@ -74,7 +74,14 @@ CODE_CONFIANCE = 4
 IDENTITES = {
     "tisseo": {"feed_id": "tisseo", "publisher": "Tisséo", "url": "https://www.tisseo.fr"},
     "ter": {"feed_id": "ter", "publisher": "SNCF Voyageurs", "url": "https://www.sncf.com"},
+    "lio": {
+        "feed_id": "lio",
+        "publisher": "Région Occitanie / Pyrénées-Méditerranée",
+        "url": "https://www.lio-occitanie.fr",
+    },
 }
+
+RESEAUX = tuple(IDENTITES)
 
 
 def relatif(chemin: Path) -> str:
@@ -313,6 +320,7 @@ def construire_reseau(
         f"    écrit : {stats.trips_ecrits:,} trips, {stats.horaires_ecrits:,} horaires, "
         f"{stats.services:,} services, {stats.lignes_calendrier:,} lignes de calendrier "
         f"({stats.trips_fusionnes:,} trips fusionnés par contenu, {stats.trips_forkes} forks, "
+        f"{stats.doublons_de_contenu:,} doublons de contenu préservés, "
         f"{stats.shapes_dupliquees} géométries dupliquées)"
     )
 
@@ -368,7 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parseur.add_argument("--config", type=Path, default=CONFIG_DEFAUT, help="paramètres du build")
     parseur.add_argument(
-        "--reseau", action="append", choices=["tisseo", "ter"], help="réseau à construire (défaut : les deux)"
+        "--reseau", action="append", choices=list(RESEAUX),
+        help="réseau à construire (défaut : tous ceux déclarés)",
     )
     parseur.add_argument(
         "--annee", action="append", type=int, help="année cible, répétable (défaut : 2026 et 2027)"
@@ -389,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
         return CODE_RESSOURCE
     config = yaml.safe_load(args.config.read_text(encoding="utf-8"))
 
-    reseaux = args.reseau or ["tisseo", "ter"]
+    reseaux = args.reseau or list(RESEAUX)
     annees = args.annee or [2026, 2027]
     trace = args.trace or (REPO_ROOT / "docs" / "traces" / f"{dt.date.today():%Y-%m-%d}_gtfs_annee")
 

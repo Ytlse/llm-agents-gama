@@ -50,6 +50,48 @@ class Violation:
         return f"{marque}{self.code} — {self.message}"
 
 
+def _id_source(trip_id: str, etiquettes: set[str]) -> str:
+    """Retrouve l'identifiant d'origine d'une course forkée (`<id>__<export>`)."""
+    for etiquette in etiquettes:
+        suffixe = f"__{etiquette}"
+        if trip_id.endswith(suffixe):
+            return trip_id[: -len(suffixe)]
+    return trip_id
+
+
+def trips_hors_geometrie(export: Export) -> set[str]:
+    """Courses dont un `shape_dist_traveled` dépasse la longueur de leur tracé.
+
+    Sert deux fois : sur le feed produit (V6) et, quand il en porte, sur ses
+    sources — pour dire si le dépassement est un défaut du build (un tracé
+    chimère, deux géométries entrelacées sous un même identifiant) ou un défaut
+    déjà publié par l'opérateur et recopié fidèlement. liO en publie 29 sur
+    7 715 courses ; les confondre ferait refuser un feed correct.
+    """
+    longueur: dict[str, float] = {}
+    for ligne in gtfs_io.lire(export, "shapes.txt"):
+        try:
+            distance = float(ligne.get("shape_dist_traveled") or 0.0)
+        except ValueError:
+            continue
+        shape_id = ligne["shape_id"]
+        if distance > longueur.get(shape_id, -1.0):
+            longueur[shape_id] = distance
+    shape_par_trip = {l["trip_id"]: l.get("shape_id", "") for l in gtfs_io.lire(export, "trips.txt")}
+    hors: set[str] = set()
+    for ligne in gtfs_io.lire(export, "stop_times.txt"):
+        shape_id = shape_par_trip.get(ligne["trip_id"], "")
+        if not shape_id or shape_id not in longueur:
+            continue
+        try:
+            distance = float(ligne.get("shape_dist_traveled") or 0.0)
+        except ValueError:
+            continue
+        if distance > longueur[shape_id] + 1.0:
+            hors.add(ligne["trip_id"])
+    return hors
+
+
 def empreintes_par_date(
     export: Export,
     trips_par_date: dict[str, list[str]],
@@ -208,14 +250,37 @@ def controler(
             Violation("V5", BLOQUANT, f"{non_monotones} horaire(s) non monotone(s) dans leur course")
         )
     if depassements:
-        violations.append(
-            Violation(
-                "V6",
-                BLOQUANT,
-                f"{depassements} horaire(s) sur {len(trips_depassants)} course(s) dépassent la longueur "
-                f"de leur géométrie — signature d'un tracé chimère",
+        # Le défaut vient-il du build ou de la source ? Un tracé chimère est
+        # fabriqué par une fusion de géométries ; un `shape_dist_traveled`
+        # publié trop long par l'opérateur est recopié tel quel, et refuser le
+        # feed pour cela reviendrait à exiger du pipeline qu'il répare la
+        # source. La comparaison ne se fait que s'il y a quelque chose à
+        # expliquer : elle relit les exports.
+        herites: set[str] = set()
+        for index in index_par_export.values():
+            herites |= trips_hors_geometrie(index.export)
+        etiquettes = set(index_par_export)
+        fabriques = {_id_source(t, etiquettes) for t in trips_depassants} - herites
+        if fabriques:
+            violations.append(
+                Violation(
+                    "V6",
+                    BLOQUANT,
+                    f"{depassements} horaire(s) sur {len(trips_depassants)} course(s) dépassent la "
+                    f"longueur de leur géométrie, dont {len(fabriques)} course(s) que la source ne "
+                    f"portait pas — signature d'un tracé chimère",
+                )
             )
-        )
+        else:
+            violations.append(
+                Violation(
+                    "V6",
+                    ALARME,
+                    f"{depassements} horaire(s) sur {len(trips_depassants)} course(s) dépassent la "
+                    f"longueur de leur géométrie — toutes déjà défectueuses dans la source, recopiées "
+                    f"telles quelles et non fabriquées par le build",
+                )
+            )
 
     # V2 / V3 — l'offre des dates réelles est intacte.
     dates_reelles = {d for d, p in plan.items() if p.mode == REEL}
@@ -245,15 +310,52 @@ def controler(
     else:
         journal(f"    V2 : offre identique à la source sur les {len(dates_reelles)} dates réelles")
 
-    # V7 — une journée extrapolée est une copie : son volume doit tomber dans
-    # l'enveloppe réellement observée pour sa signature. En sortir signalerait
-    # que la copie s'est faite depuis la mauvaise journée.
+    # V7 — une journée extrapolée est une COPIE : elle doit servir exactement
+    # l'offre que son donneur a réellement servie, empreinte contre empreinte.
+    # C'est la formulation directe de la promesse du pipeline (« aucun horaire
+    # n'est synthétisé ») ; le volume comparé à l'enveloppe de la signature,
+    # qui en tenait lieu, est passé en note V7c : il dénonçait à tort les
+    # donneurs pris dans l'autre moitié de l'année scolaire (liO publie 4 300
+    # courses les jours ouvrés d'automne 2026 et 3 450 ceux du printemps 2027 —
+    # une copie fidèle du 15/03/2027 tombe alors « hors enveloppe »).
+    dates_extrapolees = {d for d, p in plan.items() if p.mode == EXTRAPOLE and p.date_source}
+    empreintes_copies = empreintes_par_date(
+        feed, index_sortie.trips_par_date, dates_extrapolees, config, journal
+    )
+    copies_infideles: list[str] = []
+    for etiquette, index in index_par_export.items():
+        cibles = {d for d in dates_extrapolees if plan[d].export == etiquette}
+        if not cibles:
+            continue
+        empreintes_donneurs = empreintes_par_date(
+            index.export, index.trips_par_date, {plan[d].date_source for d in cibles}, config, journal
+        )
+        for date in sorted(cibles):
+            if empreintes_copies.get(date) != empreintes_donneurs.get(plan[date].date_source):
+                copies_infideles.append(f"{date}←{plan[date].date_source}")
+    if copies_infideles:
+        violations.append(
+            Violation(
+                "V7",
+                BLOQUANT,
+                f"{len(copies_infideles)} journée(s) extrapolée(s) ne reproduisent pas l'offre de leur "
+                f"donneur : {', '.join(copies_infideles[:8])}{'…' if len(copies_infideles) > 8 else ''}",
+            )
+        )
+    elif dates_extrapolees:
+        journal(
+            f"    V7 : les {len(dates_extrapolees)} journées extrapolées servent exactement l'offre "
+            f"de leur donneur"
+        )
+
     enveloppe: dict[str, list[int]] = {}
     for date, provenance in plan.items():
         if provenance.mode != REEL:
             continue
         enveloppe.setdefault(provenance.signature, []).append(index_sortie.nb_trips(date))
 
+    # V7c — note : une copie fidèle peut sortir de l'enveloppe des journées
+    # réelles de l'année cible quand son donneur vient d'une autre année.
     hors_enveloppe: list[str] = []
     for date, provenance in sorted(plan.items()):
         if provenance.mode != EXTRAPOLE or "repli" in provenance.motif:
@@ -265,13 +367,10 @@ def controler(
         if not (min(bornes) <= nb <= max(bornes)):
             hors_enveloppe.append(f"{date} ({nb} hors [{min(bornes)}, {max(bornes)}])")
     if hors_enveloppe:
-        violations.append(
-            Violation(
-                "V7",
-                BLOQUANT,
-                f"{len(hors_enveloppe)} journée(s) extrapolée(s) hors de l'enveloppe réelle de leur "
-                f"signature : {', '.join(hors_enveloppe[:8])}{'…' if len(hors_enveloppe) > 8 else ''}",
-            )
+        journal(
+            f"    V7c : {len(hors_enveloppe)} journée(s) extrapolée(s) hors de l'enveloppe réelle de "
+            f"leur signature dans l'année cible (donneur d'une autre année) — "
+            f"{', '.join(hors_enveloppe[:5])}{'…' if len(hors_enveloppe) > 5 else ''}"
         )
 
     # V7b — hétérogénéité de la source elle-même. Informatif : ce n'est pas un

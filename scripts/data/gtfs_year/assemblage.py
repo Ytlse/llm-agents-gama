@@ -100,6 +100,7 @@ class Statistiques:
     trips_fusionnes: int = 0
     trips_forkes: int = 0
     collisions_meme_jour: int = 0
+    doublons_de_contenu: int = 0
     shapes_dupliquees: int = 0
     arrets_deplaces: list[tuple[str, float]] = field(default_factory=list)
     lignes_redefinies: int = 0
@@ -234,6 +235,45 @@ def construire(
         for horaires in horaires_par_trip.values():
             horaires.sort(key=lambda h: int(h["stop_sequence"]))
 
+        # ── Rang d'occurrence : deux courses identiques le même jour ──────────
+        # Deux courses de contenu identique dans un même export sont la même
+        # course quand elles roulent des jours disjoints (l'opérateur découpe
+        # son calendrier en périodes) — les fusionner est justement ce qui
+        # comprime le feed. Elles sont deux courses distinctes quand elles
+        # roulent le MÊME jour : liO en publie 45 le lundi 14/09/2026, deux
+        # numéros de mission pour un même horaire. Les confondre amputerait
+        # l'offre de la journée, et V2 le refuserait.
+        # D'où un rang par « place » : chaque course prend la première place
+        # dont les jours n'empiètent pas sur les siens. Le nombre de places est
+        # donc le nombre maximal de courses identiques un même jour.
+        dates_par_trip: dict[str, set[str]] = {}
+        for date in dates_sources:
+            for trip_id in index.trips_par_date.get(date, ()):
+                if trip_id in trips_voulus:
+                    dates_par_trip.setdefault(trip_id, set()).add(date)
+        cle_brute_par_trip: dict[str, str] = {}
+        for trip_id in sorted(trips_voulus):
+            horaires = horaires_par_trip.get(trip_id)
+            if not horaires:
+                continue
+            meta = index.trips[trip_id]
+            cle_brute_par_trip[trip_id] = cle_contenu(
+                meta, horaires, hash_par_shape.get(meta.get("shape_id", ""), "")
+            )
+        places_par_cle: dict[str, list[set[str]]] = {}
+        rang_par_trip: dict[str, int] = {}
+        for trip_id in sorted(cle_brute_par_trip):
+            cle_brute = cle_brute_par_trip[trip_id]
+            jours = dates_par_trip.get(trip_id, set())
+            places = places_par_cle.setdefault(cle_brute, [])
+            rang = next((i for i, prises in enumerate(places) if not (prises & jours)), len(places))
+            if rang == len(places):
+                places.append(set())
+            places[rang] |= jours
+            rang_par_trip[trip_id] = rang
+            if rang:
+                stats.doublons_de_contenu += 1
+
         # ── Identité par contenu ──────────────────────────────────────────────
         trip_local_vers_canon: dict[str, str] = {}
         for trip_id in sorted(trips_voulus):
@@ -245,7 +285,11 @@ def construire(
             shape_id = meta.get("shape_id", "")
             hash_shape = hash_par_shape.get(shape_id, "")
 
-            cle = cle_contenu(meta, horaires, hash_shape)
+            # Le rang de place entre dans la clé : deux exports qui décrivent la
+            # même course la partagent toujours, place par place.
+            cle_brute = cle_brute_par_trip[trip_id]
+            rang = rang_par_trip[trip_id]
+            cle = cle_brute if rang == 0 else f"{cle_brute}#{rang + 1}"
             deja = contenu_vers_trip.get(cle)
             if deja is not None:
                 trip_local_vers_canon[trip_id] = deja
@@ -305,12 +349,11 @@ def construire(
                 if t in trip_local_vers_canon
             ]
             distincts = sorted(set(mappes))
-            # Deux courses de contenu identique le MÊME jour existent en théorie
-            # (deux véhicules sur un même horaire, pour la capacité). Les
-            # confondre retirerait une course de l'offre de cette journée. Ce cas
-            # ne se produit sur aucun des exports 2026, mais il ne doit pas
-            # passer en silence s'il apparaît : V2 le bloquerait de toute façon,
-            # autant le nommer ici.
+            # Filet : depuis que le rang d'occurrence distingue les courses de
+            # contenu identique d'un même export, deux courses locales ne
+            # peuvent plus tomber sur la même course canonique. Si cela
+            # arrivait, l'offre de la journée serait amputée et V2 le
+            # bloquerait — autant le nommer ici.
             if len(distincts) != len(mappes):
                 stats.collisions_meme_jour += len(mappes) - len(distincts)
                 journal(

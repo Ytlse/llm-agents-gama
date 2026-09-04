@@ -100,12 +100,17 @@ def ecrire_feed(
     geometries: dict[str, list[tuple]] | None = None,
     agency_id: str = "network:1",
     correspondances: list[tuple[str, str]] | None = None,
+    calendrier_hebdo: list[dict] | None = None,
+    retraits: list[tuple[str, str]] | None = None,
 ) -> Path:
     """Écrit un jeu GTFS minimal mais conforme.
 
     `courses` : {id, ligne, service, sens, girouette, geometrie, horaires}
     où `horaires` est une suite de (stop_id, arrivee, depart, distance).
     `arrets` : (stop_id, lat, lon, parent_station|"").
+    `calendrier_hebdo` : lignes de `calendar.txt` (forme liO), chacune
+    {service_id, monday…sunday, start_date, end_date}.
+    `retraits` : (service_id, date) écrits en `exception_type=2`.
     """
     dossier.mkdir(parents=True, exist_ok=True)
 
@@ -120,7 +125,7 @@ def ecrire_feed(
           [{"agency_id": agency_id, "agency_name": "Test", "agency_timezone": "Europe/Paris"}])
     table("calendar.txt",
           ["service_id", "monday", "tuesday", "wednesday", "thursday", "friday",
-           "saturday", "sunday", "start_date", "end_date"], [])
+           "saturday", "sunday", "start_date", "end_date"], calendrier_hebdo or [])
     table("routes.txt", ["route_id", "agency_id", "route_short_name", "route_type"],
           [{"route_id": r, "agency_id": agency_id, "route_short_name": r, "route_type": "3"}
            for r in lignes])
@@ -142,7 +147,8 @@ def ecrire_feed(
            for c in courses for i, h in enumerate(c["horaires"])])
     table("calendar_dates.txt", ["service_id", "date", "exception_type"],
           [{"service_id": s, "date": d, "exception_type": "1"}
-           for s, dates in calendrier.items() for d in dates])
+           for s, dates in calendrier.items() for d in dates]
+          + [{"service_id": s, "date": d, "exception_type": "2"} for s, d in (retraits or [])])
     table("shapes.txt",
           ["shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence", "shape_dist_traveled"],
           [{"shape_id": sid, "shape_pt_lat": f"{p[0]:.6f}", "shape_pt_lon": f"{p[1]:.6f}",
@@ -243,15 +249,53 @@ class TestFenetreFiable(BaseTemporaire):
         index = self._export(self._semaines("20260302", profil))
         self.assertEqual(offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET), [])
 
-    def test_calendar_hebdomadaire_refuse(self):
+
+class TestCalendrierHebdomadaire(BaseTemporaire):
+    """`calendar.txt` hebdomadaire — la forme publiée par liO.
+
+    Tisséo et le TER n'emploient que des dates explicites ; liO déclare des
+    services hebdomadaires que `calendar_dates.txt` corrige dans les deux sens.
+    Chaque test porte sur une lecture qui, prise à l'envers, fait rouler des
+    cars un jour où l'opérateur dit qu'ils ne roulent pas — ou l'inverse.
+    """
+
+    SEMAINE = {"service_id": "S", "monday": "1", "tuesday": "1", "wednesday": "1",
+               "thursday": "1", "friday": "1", "saturday": "0", "sunday": "0",
+               "start_date": "20260316", "end_date": "20260322"}
+
+    def _indexer(self, calendrier=None, **extra):
         dossier = ecrire_feed(
-            self.racine / "hebdo", lignes=["L1"], arrets=ARRETS,
-            courses=[course("T1")], calendrier={"S": ["20260316"]}, geometries=GEOM,
+            self.racine / f"hebdo_{len(list(self.racine.iterdir()))}", lignes=["L1"],
+            arrets=ARRETS, courses=[course("T1")], calendrier=calendrier or {},
+            geometries=GEOM, **extra,
         )
-        with open(dossier / "calendar.txt", "a", encoding="utf-8") as fichier:
-            fichier.write("S,1,1,1,1,1,0,0,20260316,20260320\n")
-        with self.assertRaises(ValueError):
-            offre.indexer(export_de(dossier), MUET)
+        return offre.indexer(export_de(dossier), MUET)
+
+    def test_semaine_depliee_en_dates(self):
+        index = self._indexer(calendrier_hebdo=[dict(self.SEMAINE)])
+        # Du lundi 16 au vendredi 20 mars : cinq jours, samedi et dimanche exclus.
+        self.assertEqual(index.dates, ["20260316", "20260317", "20260318", "20260319", "20260320"])
+        self.assertEqual(index.nb_trips("20260318"), 1)
+
+    def test_exception_type_2_retire_une_date(self):
+        index = self._indexer(calendrier_hebdo=[dict(self.SEMAINE)], retraits=[("S", "20260318")])
+        self.assertNotIn("20260318", index.dates)
+        self.assertEqual(len(index.dates), 4)
+
+    def test_exception_type_1_ajoute_un_jour_hors_semaine(self):
+        index = self._indexer(calendrier_hebdo=[dict(self.SEMAINE)], calendrier={"S": ["20260321"]})
+        self.assertIn("20260321", index.dates)   # un samedi ajouté à la main
+        self.assertEqual(index.nb_trips("20260321"), 1)
+
+    def test_service_borne_a_l_envers_ignore(self):
+        borne = dict(self.SEMAINE, start_date="20260322", end_date="20260316")
+        index = self._indexer(calendrier_hebdo=[borne])
+        self.assertEqual(index.dates, [])
+
+    def test_dates_explicites_seules_inchangees(self):
+        """Sans `calendar.txt`, l'index reste celui de Tisséo et du TER."""
+        index = self._indexer(calendrier={"S": ["20260316", "20260317"]})
+        self.assertEqual(index.dates, ["20260316", "20260317"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -498,6 +542,64 @@ class TestAssemblage(BaseTemporaire):
         self.assertEqual(sortie.nb_trips("20260316"), 1)
         self.assertEqual(sortie.nb_trips("20260323"), 1)
 
+    def test_doublon_de_contenu_du_meme_export_preserve(self):
+        """Deux courses identiques d'un même export sont deux courses.
+
+        liO en publie 45 le lundi 14/09/2026 : deux numéros de mission pour un
+        même horaire sur une même ligne. Les confondre retirerait une course de
+        l'offre de la journée — et V2, qui compare l'offre produite à celle de
+        la source, le refuserait.
+        """
+        index = self._index(
+            "doublons", {"S": ["20260316"]},
+            [course("T1", service="S", depart="08:00:00"),
+             course("T1bis", service="S", depart="08:00:00")],
+        )
+        plan = {"20260316": self._reel("20260316", "doublons")}
+        _, stats, sortie = self._construire(plan, {"doublons": index})
+        self.assertEqual(stats.doublons_de_contenu, 1)
+        self.assertEqual(stats.trips_fusionnes, 0)
+        self.assertEqual(stats.collisions_meme_jour, 0)
+        self.assertEqual(sortie.nb_trips("20260316"), 2)
+
+    def test_jours_disjoints_restent_fusionnes(self):
+        """Le même contenu sur des jours disjoints reste UNE course.
+
+        C'est la compression du feed : un opérateur découpe son calendrier en
+        périodes et republie la même course dans chacune. Les distinguer
+        gonflerait le feed sans rien ajouter à l'offre — mesuré sur Tisséo
+        2026 : 29,4 Mo au lieu de 22,1 Mo.
+        """
+        index = self._index(
+            "periodes", {"S1": ["20260316"], "S2": ["20260323"]},
+            [course("T1", service="S1", depart="08:00:00"),
+             course("T2", service="S2", depart="08:00:00")],
+        )
+        plan = {"20260316": self._reel("20260316", "periodes"),
+                "20260323": self._reel("20260323", "periodes")}
+        _, stats, sortie = self._construire(plan, {"periodes": index})
+        self.assertEqual(stats.doublons_de_contenu, 0)
+        self.assertEqual(stats.trips_ecrits, 1)
+        self.assertEqual(sortie.nb_trips("20260316"), 1)
+        self.assertEqual(sortie.nb_trips("20260323"), 1)
+
+    def test_doublon_de_contenu_preserve_l_empreinte_de_la_journee(self):
+        """Le contrôle V2 passe : l'offre produite égale celle de la source."""
+        index = self._index(
+            "doublons_v2", {"S": ["20260316"]},
+            [course("T1", service="S", depart="08:00:00"),
+             course("T1bis", service="S", depart="08:00:00")],
+        )
+        plan = {"20260316": self._reel("20260316", "doublons_v2")}
+        _, _, sortie = self._construire(plan, {"doublons_v2": index})
+        produite = validation.empreintes_par_date(
+            sortie.export, sortie.trips_par_date, {"20260316"}, CONFIG, MUET
+        )
+        source = validation.empreintes_par_date(
+            index.export, index.trips_par_date, {"20260316"}, CONFIG, MUET
+        )
+        self.assertEqual(produite, source)
+
     def test_identifiant_recycle_est_forke(self):
         """Un `trip_id` réutilisé pour une autre course ne doit pas être arbitré.
 
@@ -691,6 +793,39 @@ class TestValidation(BaseTemporaire):
         )
         violations, _, _ = validation.controler(sortie, plan, {"src": source}, CONFIG, MUET)
         self.assertIn("V6", {v.code for v in violations if v.gravite == validation.BLOQUANT})
+
+    def test_v6_defaut_deja_publie_par_la_source_nest_pas_bloquant(self):
+        """Un `shape_dist_traveled` trop long chez l'opérateur n'est pas un
+        tracé chimère : le build l'a recopié, il ne l'a pas fabriqué. liO en
+        publie 29 sur 7 715 courses ; bloquer là-dessus reviendrait à exiger du
+        pipeline qu'il répare la source."""
+        source = self._index("src", {"S": ["20260316"]}, [course("T1", service="S")],
+                             geometries={"SH1": [(43.60, 1.44, 0.0), (43.61, 1.45, 10.0)]})
+        plan = {"20260316": TestAssemblage._reel("20260316", "src")}
+        sortie = self.racine / "sortie"
+        assemblage.construire(sortie, plan, {"src": source}, CONFIG, self.IDENTITE, MUET)
+        violations, _, _ = validation.controler(sortie, plan, {"src": source}, CONFIG, MUET)
+        codes_bloquants = {v.code for v in violations if v.gravite == validation.BLOQUANT}
+        self.assertNotIn("V6", codes_bloquants)
+        self.assertIn("V6", {v.code for v in violations if v.gravite == validation.ALARME})
+
+    def test_v7_demasque_une_copie_infidele(self):
+        """Une journée extrapolée doit servir exactement l'offre de son donneur."""
+        source = self._index("src", {"S": ["20260316"]}, [course("T1", service="S")])
+        plan = {"20260317": TestAssemblage._extrapole("20260317", "src", "20260316")}
+        sortie = self.racine / "sortie"
+        assemblage.construire(sortie, plan, {"src": source}, CONFIG, self.IDENTITE, MUET)
+        violations, _, _ = validation.controler(sortie, plan, {"src": source}, CONFIG, MUET)
+        self.assertNotIn("V7", {v.code for v in violations if v.gravite == validation.BLOQUANT})
+
+        # Une course de plus le jour copié : la copie n'est plus verbatim.
+        service = next(iter(gtfs_io.lire(export_de(sortie), "calendar_dates.txt")))["service_id"]
+        with open(sortie / "trips.txt", "a", encoding="utf-8") as fichier:
+            fichier.write(f"L1,{service},TDOUBLON,dest,0,SH1\n")
+        with open(sortie / "stop_times.txt", "a", encoding="utf-8") as fichier:
+            fichier.write("TDOUBLON,1,08:00:00,08:00:00,0,0,,0.0,A\n")
+        violations, _, _ = validation.controler(sortie, plan, {"src": source}, CONFIG, MUET)
+        self.assertIn("V7", {v.code for v in violations if v.gravite == validation.BLOQUANT})
 
     def test_v8_signale_une_journee_sans_offre(self):
         source = self._index("src", {"S": ["20260316"]}, [course("T1", service="S")])

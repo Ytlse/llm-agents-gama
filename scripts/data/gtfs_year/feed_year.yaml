@@ -30,6 +30,24 @@ reseaux:
       - "data/gtfs/ter_gtfs"
     dates_sans_service_confirme: []
 
+  lio:
+    libelle: "liO — réseau interurbain régional d'Occitanie (cars)"
+    # Le GTFS liO porte quatorze agences (les treize réseaux départementaux liO
+    # plus Hérault Transport). L'agence contrôlée est celle qui couvre le
+    # périmètre d'étude : `.liO 31`, la Haute-Garonne, 42 des 56 lignes qui
+    # touchent le polygone des 453 communes. Un export où elle manquerait ne
+    # serait pas le réseau attendu.
+    agency_id_attendu: "131"
+    exports:
+      # Déposer ici les livraisons suivantes : les doublons stricts (même md5)
+      # sont détectés et ignorés, comme pour Tisséo.
+      - "data/gtfs/archives/2026-09-04_lio_source/exports_bruts"
+    # L'export publié couvre l'année scolaire 2026-2027 (2026-08-01 →
+    # 2027-08-31) : rien avant le 1er août 2026. Les journées de la première
+    # moitié de 2026 — dont le 16 mars, jour simulé — sont donc copiées depuis
+    # une journée réelle de même signature de l'année scolaire suivante.
+    dates_sans_service_confirme: []
+
 # ── Détection de la queue tronquée ───────────────────────────────────────────
 # Chaque export « rolling » n'est complet que sur ses premières semaines ;
 # ensuite l'opérateur ne publie plus que les lignes structurantes (métro).

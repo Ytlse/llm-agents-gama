@@ -16,15 +16,35 @@ normales : un dimanche a légitimement trois fois moins de lignes qu'un mardi.
 Un plancher absolu très bas complète la règle, parce que la règle par type de
 jour est aveugle quand un type de jour n'apparaît jamais complet dans l'export —
 sa référence vaut alors le niveau de la queue elle-même.
+
+Les deux formes de calendrier GTFS sont lues. Tisséo et le TER n'emploient que
+`calendar_dates.txt`, une ligne par date de service ; liO publie un
+`calendar.txt` hebdomadaire que `calendar_dates.txt` corrige ensuite dans les
+deux sens (ajout `exception_type=1`, retrait `exception_type=2`). Le calendrier
+est déplié en dates explicites à l'indexation ; le feed produit, lui, reste
+toujours en dates explicites avec un `calendar.txt` vide (invariant V1).
 """
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass, field
 
 from . import gtfs_io
 from .calendar_fr import JOURS, to_date
 from .gtfs_io import Export
+
+# Colonnes de `calendar.txt`, dans l'ordre de `date.weekday()` (0 = lundi).
+COLONNES_JOURS_GTFS = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
+_UN_JOUR = dt.timedelta(days=1)
 
 
 @dataclass
@@ -65,28 +85,73 @@ def indexer(export: Export, journal=print) -> IndexExport:
         trips_par_service.setdefault(service_id, []).append(trip_id)
         lignes_par_service.setdefault(service_id, set()).add(ligne["route_id"])
 
-    exceptions_ignorees = 0
-    lignes_par_date: dict[str, set[str]] = {}
-    for ligne in gtfs_io.lire(export, "calendar_dates.txt"):
-        if ligne.get("exception_type") != "1":
-            exceptions_ignorees += 1
-            continue
-        date = ligne["date"]
-        service_id = ligne["service_id"]
-        index.trips_par_date.setdefault(date, []).extend(trips_par_service.get(service_id, ()))
-        lignes_par_date.setdefault(date, set()).update(lignes_par_service.get(service_id, ()))
-
+    # Les deux façons dont un GTFS déclare quand un service roule. Tisséo et le
+    # TER n'utilisent que `calendar_dates.txt` (une ligne par date) ; liO publie
+    # un `calendar.txt` hebdomadaire (457 services sur 396 jours) que
+    # `calendar_dates.txt` corrige ensuite dans les deux sens — 3 408 ajouts et
+    # 2 925 retraits. Ignorer les retraits ferait rouler des cars les jours où
+    # l'opérateur dit qu'ils ne roulent pas : le calendrier est déplié ici, et
+    # le feed produit reste, lui, en dates explicites (invariant V1).
+    dates_par_service: dict[str, set[str]] = {}
     calendrier_hebdo = list(gtfs_io.lire(export, "calendar.txt"))
+    jours_deplies = 0
+    for ligne in calendrier_hebdo:
+        service_id = ligne["service_id"]
+        debut, fin = ligne.get("start_date", ""), ligne.get("end_date", "")
+        if not debut or not fin:
+            journal(f"[ALARME] {export.etiquette} : service {service_id} sans bornes de validité")
+            continue
+        jour_courant, dernier = to_date(debut), to_date(fin)
+        if jour_courant > dernier:
+            journal(
+                f"[ALARME] {export.etiquette} : service {service_id} borné à l'envers "
+                f"({debut} → {fin}) — ignoré"
+            )
+            continue
+        actives = dates_par_service.setdefault(service_id, set())
+        while jour_courant <= dernier:
+            if ligne.get(COLONNES_JOURS_GTFS[jour_courant.weekday()]) == "1":
+                actives.add(f"{jour_courant:%Y%m%d}")
+                jours_deplies += 1
+            jour_courant += _UN_JOUR
+
+    ajouts = retraits = retraits_sans_effet = 0
+    for ligne in gtfs_io.lire(export, "calendar_dates.txt"):
+        service_id, date = ligne["service_id"], ligne["date"]
+        exception = ligne.get("exception_type")
+        if exception == "1":
+            dates_par_service.setdefault(service_id, set()).add(date)
+            ajouts += 1
+        elif exception == "2":
+            actives = dates_par_service.get(service_id)
+            if actives and date in actives:
+                actives.discard(date)
+                retraits += 1
+            else:
+                retraits_sans_effet += 1
+        else:
+            journal(
+                f"[ALARME] {export.etiquette} : exception_type {exception!r} inconnu "
+                f"(service {service_id}, {date}) — ligne ignorée"
+            )
+
+    lignes_par_date: dict[str, set[str]] = {}
+    for service_id, dates_actives in dates_par_service.items():
+        trips_du_service = trips_par_service.get(service_id, ())
+        routes_du_service = lignes_par_service.get(service_id, ())
+        for date in dates_actives:
+            index.trips_par_date.setdefault(date, []).extend(trips_du_service)
+            lignes_par_date.setdefault(date, set()).update(routes_du_service)
+
     if calendrier_hebdo:
-        raise ValueError(
-            f"[ALARME] {export.etiquette} : calendar.txt non vide "
-            f"({len(calendrier_hebdo)} services hebdomadaires). Ce pipeline ne "
-            f"gère que les calendriers en dates explicites."
-        )
-    if exceptions_ignorees:
         journal(
-            f"    {export.etiquette} : {exceptions_ignorees} ligne(s) de calendar_dates "
-            f"en exception_type≠1 ignorée(s)"
+            f"    {export.etiquette} : calendar.txt déplié — {len(calendrier_hebdo)} service(s) "
+            f"hebdomadaire(s), {jours_deplies:,} (service, date) produits"
+        )
+    if ajouts or retraits or retraits_sans_effet:
+        journal(
+            f"    {export.etiquette} : calendar_dates — {ajouts:,} ajout(s), {retraits:,} retrait(s), "
+            f"{retraits_sans_effet:,} retrait(s) sans effet"
         )
 
     for date in index.trips_par_date:
