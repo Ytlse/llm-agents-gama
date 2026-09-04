@@ -19,8 +19,11 @@ import asyncio
 import json
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+COURONNES_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
 
 DEFAULT_ENDPOINTS = ["http://localhost:8080/otp/transmodel/v3",
                      "http://localhost:8081/otp/transmodel/v3",
@@ -59,6 +62,34 @@ def _points(pop: list) -> tuple[list, list]:
     return homes, acts
 
 
+def classer_par_couronne(points: list, geojson: Path = COURONNES_GEOJSON) -> dict:
+    """point → couronne de résidence (Toulouse, 1ᵉ, 2ᵉ, 3ᵉ, ou « hors périmètre »).
+
+    Le manque de desserte n'est pas réparti au hasard : c'est la question posée
+    par le rapport de périmètre (« sans liO, les couronnes externes n'ont qu'un
+    dixième de leur offre TC »). Un total agrégé ne permet pas d'y répondre.
+    """
+    from shapely import contains_xy, prepare
+    from shapely.geometry import shape
+
+    if not geojson.exists():
+        return {}
+    couronnes = []
+    for feature in json.loads(geojson.read_text(encoding="utf-8"))["features"]:
+        polygone = shape(feature["geometry"])
+        prepare(polygone)
+        couronnes.append((feature["properties"].get("couronne", "?"), polygone))
+    classement = {}
+    for index, (_pid, _kind, lat, lon) in enumerate(points):
+        nom = "hors perimetre"
+        for libelle, polygone in couronnes:
+            if contains_xy(polygone, lon, lat):
+                nom = libelle
+                break
+        classement[index] = nom
+    return classement
+
+
 async def _query(session, url, lat, lon, date_time):
     variables = {"from": {"coordinates": {"latitude": lat, "longitude": lon}},
                  "to": {"coordinates": {"latitude": CAPITOLE[0], "longitude": CAPITOLE[1]}},
@@ -72,11 +103,13 @@ async def _query(session, url, lat, lon, date_time):
     return len(trip.get("tripPatterns") or []), errors
 
 
-async def run(points, endpoints, date_time, concurrency) -> dict:
+async def run(points, endpoints, date_time, concurrency, couronnes=None) -> dict:
     import aiohttp
 
+    couronnes = couronnes or {}
     sem = asyncio.Semaphore(concurrency)
     codes, per_kind, no_pattern, link_failures = Counter(), Counter(), Counter(), []
+    par_couronne = defaultdict(lambda: {"points": 0, "sans_itineraire": 0, "erreurs": Counter()})
     t0 = time.monotonic()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
         async def one(i, pt):
@@ -87,15 +120,25 @@ async def run(points, endpoints, date_time, concurrency) -> dict:
                 except Exception as exc:  # réseau, timeout
                     n, errs = -1, [f"EXC:{type(exc).__name__}"]
             per_kind[kind] += 1
+            couronne = couronnes.get(i)
+            if couronne:
+                par_couronne[couronne]["points"] += 1
             if n == 0:
                 no_pattern[kind] += 1
+                if couronne:
+                    par_couronne[couronne]["sans_itineraire"] += 1
             for c in errs:
                 codes[c] += 1
+                if couronne:
+                    par_couronne[couronne]["erreurs"][c] += 1
                 if c in ("LOCATION_NOT_FOUND", "OUTSIDE_BOUNDS") or c.startswith("EXC") or c.startswith("GRAPHQL"):
                     link_failures.append({"person_id": pid, "kind": kind, "lat": lat, "lon": lon, "code": c})
         await asyncio.gather(*(one(i, pt) for i, pt in enumerate(points)))
     return {"points": len(points), "par_type": dict(per_kind), "sans_itineraire": dict(no_pattern),
-            "routing_errors": dict(codes), "echecs_de_rattachement": link_failures,
+            "routing_errors": dict(codes),
+            "par_couronne": {nom: {**valeurs, "erreurs": dict(valeurs["erreurs"])}
+                             for nom, valeurs in sorted(par_couronne.items())},
+            "echecs_de_rattachement": link_failures,
             "n_echecs_de_rattachement": len(link_failures), "duree_s": round(time.monotonic() - t0, 1)}
 
 
@@ -106,13 +149,17 @@ def main(argv=None) -> int:
     parser.add_argument("--date-time", default="2026-03-16T08:00:00+01:00", help="lundi 16 mars 2026, 8 h")
     parser.add_argument("--concurrency", type=int, default=9)
     parser.add_argument("--json", type=Path, default=None)
+    parser.add_argument("--sans-couronnes", action="store_true",
+                        help="ne pas ventiler les résultats par couronne de résidence")
     args = parser.parse_args(argv)
 
     pop = json.loads(args.population.read_text(encoding="utf-8"))
     homes, acts = _points(pop)
+    points = homes + acts
     print(f"{len(pop)} personas : {len(homes)} domiciles, {len(acts)} lieux d'activité distincts → OTP {args.date_time}",
           file=sys.stderr)
-    result = asyncio.run(run(homes + acts, args.endpoints.split(","), args.date_time, args.concurrency))
+    couronnes = {} if args.sans_couronnes else classer_par_couronne(points)
+    result = asyncio.run(run(points, args.endpoints.split(","), args.date_time, args.concurrency, couronnes))
     result.update({"population": str(args.population), "date_time": args.date_time, "reference": CAPITOLE})
     print(json.dumps({k: v for k, v in result.items() if k != "echecs_de_rattachement"}, ensure_ascii=False, indent=1))
     if result["echecs_de_rattachement"]:
