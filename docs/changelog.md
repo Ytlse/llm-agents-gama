@@ -1,3 +1,28 @@
+## [2026-09-04] Le prompt nomme la vraie commune, et la desserte compte les trois réseaux
+
+Deux défauts du notebook de génération, corrigés avant le prochain scellement.
+
+Le libellé de zone lu par l'agent nommait l'aire d'attraction et non la commune. Comme l'aire de
+Toulouse couvre plus de quatre cents communes, une activité à 70 km du Capitole était décrite au
+modèle comme un « quartier de bourg rural sur la commune de Toulouse » : 2 073 des 3 383 libellés,
+soit 61 %. Un second défaut de la même expression comparait un entier à une chaîne, si bien que les
+communes hors de toute aire recevaient « sur la commune de Commune hors attraction des villes ».
+Le libellé nomme désormais la commune, mentionne l'aire à part, et refuse d'inventer un nom quand
+il n'en trouve pas.
+
+Le drapeau de desserte, lui, ne connaissait que Tisséo : 397 des 2 580 points de la population
+étaient déclarés sans transport en commun alors qu'un arrêt du car régional ou une gare est à
+moins de 1 500 mètres — dont 245 des 374 points de 3ᵉ couronne. Il énumère maintenant les feeds en
+service avec la même fonction que la porte de proximité du runtime, pour que le drapeau posé à la
+génération et le filtre appliqué à la simulation parlent des mêmes arrêts.
+
+**Avant :** deux noms de commune distincts dans tout le fichier de population, et 5 742 arrêts
+pour juger la desserte.
+**Après :** 447 noms distincts sur les 453 communes du périmètre, aucun manquant, et 17 955
+arrêts sur trois réseaux. Une alarme se lève si un seul réseau est lu.
+
+---
+
 ## [2026-09-04] Un agent peut enfin monter dans un train
 
 Depuis hier, le TER et le car régional liO sont routés, tracés dans les couches et pourvus de
