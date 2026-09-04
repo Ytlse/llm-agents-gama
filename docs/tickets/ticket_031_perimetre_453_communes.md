@@ -8,6 +8,29 @@
 > fichier de population de ce périmètre, puis porter le reste de la chaîne. La seconde partie
 > est un inventaire d'impacts **à approfondir**, pas encore une spécification.
 
+## Où en est ce ticket (4 septembre 2026, 18 h 20)
+
+**Les sept critères d'acceptation sont tenus, et les vingt-trois questions ouvertes sont tranchées
+sauf deux.** Partie 1 : les quatre critères tenus, le dernier écart de marge fermé par le sceau
+**v5** (13 marges conformes sur 13, synthèse des écarts vide). Partie 2 : les trois critères
+tenus, le run d'une journée complète du 2026-09-04 16 h 25 servant de preuve pour les critères 2
+et 3 (1 000 agents chargés, 0 « Couldn't link », 0 agent hors monde, alarmes de périmètre
+silencieuses, parts modales comparées aux cibles avec le détail et l'agrégat).
+
+**Ce qui reste, et qui n'est pas du travail mais deux décisions de l'auteur :**
+
+| # | Sujet | Recommandation |
+|---|---|---|
+| 8 | `roads.prj` annonce une zone UTM dans laquelle ses coordonnées ne sont valides nulle part | **ne rien réécrire** — ces deux couches ne sont lues par aucun modèle ; régénérer depuis une géométrie projetée si la voirie GAMA doit servir un jour |
+| 15 | l'avertissement de couverture TC de `Settings.gaml` teste une enveloppe, donc répond « couvert à 100 % » depuis que liO est dans la couche | **remplacer le test d'enveloppe par un maillage** (quelques lignes de GAML) ; les deux chiffres qui disent quelque chose sont 72 % des mailles de 5 km et 73 % des zones fines. Le blocage cité (« le seul GAMA disponible portait le run en cours ») est levé depuis le 2026-09-04 18 h 06 |
+
+**Hors de ce ticket, et déclaré comme tel** : le transport scolaire (ticket 030, en pause à la
+demande de l'auteur, aucun GTFS ouvert ne le porte), l'écart des parts modales au modèle de choix
+(tickets 018, 022 et 024), les arrivées perdues (ticket 011), et le remplacement de l'ENTD 2008 par
+l'EMC² 2023 comme enquête d'appariement.
+
+---
+
 ## Ce qui est mesuré (3 septembre 2026)
 
 - La population scellée v3 tire dans la seule Haute-Garonne (346 des 453 communes, 93,7 % de la
@@ -350,6 +373,13 @@ réchauffage sauté. Sortie : `data/population/toulouse_population_1000_AAMAS_v4
    ≈ 10,6 %, `household.commune_id` renseigné pour tous. **Tenu à une marge près** : 12 conformes,
    la motorisation en base ménage à publier (+3,6 pt sur « sans voiture », marge non allouée) ;
    immobiles 10,6 % ; `commune_id` 1 000 / 1 000 ; 513 ménages entiers.
+   **TENU EN ENTIER AU SCEAU v5 (2026-09-04)** : `population_1000_AAMAS_v5`, sha256
+   `de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce`, **13 marges conformes sur
+   13** et synthèse des écarts **vide** — les ménages sans voiture pèsent 19,19 % pour une cible de
+   19,19 %. C'est l'allocation par triplet cellule × effectif présent × taille déclarée (programme
+   en nombres entiers, règle `aamas_seal_v5`) qui a fermé la seule marge que la sélection ne visait
+   pas. 1 000 personas en 499 ménages entiers, immobiles 10,6 %, `commune_id` 1 000 / 1 000, six
+   départements, 139 communes de résidence.
 3. Plannings recalés sur un routage effectif : paires distantes de plus de 500 m à vol d'oiseau
    rabattues sur le même nœud ≈ 0 (≤ 0,5 %) par couronne — reformulé le 2026-09-03 (les paires
    « même nœud » plus courtes sont de vrais trajets courts, servis par le repli à la vitesse du mode).
@@ -496,23 +526,32 @@ voiture 8 878 / 38 447 / 17 825.
    `OSMLoadDriving.gaml` avec le `.prj` par défaut. Réécrire le `.prj` en 31N donnerait un fichier
    tout aussi faux, et ces deux couches ne sont lues par aucun modèle. **Recommandation : ne rien
    réécrire** ; documenter (fait) et, si la voirie GAMA doit servir un jour, la régénérer en
-   sauvegardant depuis une géométrie explicitement projetée. Décision de l'auteur attendue.
+   sauvegardant depuis une géométrie explicitement projetée. **Décision de l'auteur attendue — avec la question 15, le seul point de ce ticket qui ne soit ni fait ni tranché.**
 9. **`docker-compose.yml` : `mem_limit` du service osmnx, 4 → 8 Go.** À 4 Go, le warmup du
    graphe du polygone (trois modes chargés en parallèle, pointe de 2,8 à 3,0 Go) tombait en OOM
    137 : le service ne démarrait pas. La modification est sur le disque mais **non commitée** (ce
    fichier est hors du périmètre de commit de cette session). À valider et commiter par l'auteur,
    sinon le graphe du polygone ne se charge pas en conteneur.
+   **CLOSE** : `mem_limit: 8g` est committé (`docker-compose.yml`, service `osmnx`) et le
+   graphe du polygone se charge en conteneur — le run du 2026-09-04 16 h 25 en est la preuve.
 10. **La largeur du périmètre est fausse dans le rapport de périmètre** (`docs/paper/population/
     RAPPORT_PERIMETRE_453_COMMUNES.html`, §§ 7 et 8) : « 106 × 93 km » au lieu de **86 × 93 km**
     (mesure Lambert-93 : 85,8 × 92,9 km). Un degré de longitude y est compté à 111 km sans le
     cosinus de la latitude. Corrigé dans `docs/setup/data-pipeline.md` et le README de l'extrait
     OTP ; `docs/paper/` n'est pas modifié par cette session.
+    **CLOSE** : le rapport est passé en **v1.4** le 2026-09-04 et porte la correction en clair
+    (86 km, mesure Lambert-93 85,8 × 92,9 km, un degré de longitude compté à 111 km sans le
+    cosinus de la latitude). La seule occurrence restante de « 106 km » est celle de la note.
 11. **`otp_link_check` : 670 des 2 580 points de la v4 n'ont aucun itinéraire TC** (364
     `noStopsInRange`, 171 `noTransitConnection`, 124 `walkingBetterThanTransit`). Ce n'est pas un
     défaut d'emprise — 0 « Couldn't link » — mais l'absence du GTFS liO, qui porte 57 à 65 % du TC
     des 2ᵉ et 3ᵉ couronnes. **Recommandation : autoriser le téléchargement du GTFS liO (T2,
     22,7 Mo, ODbL)** avant de comparer les parts modales aux cibles (critère d'acceptation 3), ou
     déclarer la limite dans le manuscrit.
+    **CLOSE le 2026-09-04** : les trois feeds sont en service, les points sans itinéraire TC
+    sont passés de **670 à 314** sur 2 580, et la journée complète du run 16 h 25 ne laisse que
+    12 avertissements `OTP returned 0 patterns` et 33 `No usable itinerary`, tous avec origine
+    et destination dans l'emprise.
 12. **Importer `settings` depuis un script détourne `experiments/current` pendant un run.**
     Constaté en direct le 2026-09-03 à 23:28 : un script d'analyse lancé sur l'hôte a importé
     `llm-agents/settings.py`, dont `get()` / `save_static_config` crée un dossier d'expérience
@@ -525,6 +564,10 @@ voiture 8 878 / 38 447 / 17 825.
     corrigée le matin. **Recommandation : rendre l'import de `settings` sans effet de bord** (le
     re-pointage devrait être un appel explicite, pas une conséquence de l'import) — sinon tout
     script d'analyse lancé pendant un run corrompt la trace de ce run.
+    **CLOSE le 2026-09-04** : `settings.get()` ne fait plus que lire la configuration ;
+    l'ouverture d'un run est un appel explicite, `Settings.claim_run()`, qui crée le dossier
+    horodaté, écrit la configuration statique et déplace les deux liens. Quatre tests
+    (`llm-agents/tests/test_claim_run.py`) tiennent la séparation.
 13. **61 % des libellés de zone servis au prompt nomment la mauvaise commune.** Trouvé en
     dépouillant les avertissements du run. Le champ `identity.activities[].location.zone` du
     fichier de population — celui que lit le prompt de l'agent — ne nomme que **2 communes
@@ -538,6 +581,10 @@ voiture 8 878 / 38 447 / 17 825.
     Recommandation : renseigner la commune réelle depuis `household.commune_id` (déjà présent pour
     tous) au prochain scellement, et déclarer la limite d'ici là. Trace :
     `libelle_zone_activite.json`.
+    **CLOSE au scellement v5 (2026-09-04)** : la cellule 16 du notebook expose `LIBGEO` de la
+    grille de densité et n'utilise `LIBAAV2020` que comme *aire* — « quartier de centre urbain
+    intermédiaire sur la commune de L'Union (aire de Toulouse) ». La v5 nomme **420 communes
+    distinctes** contre 2 dans la v4.
 
 ### Questions ouvertes de T2 / T6 / G2 (2026-09-04)
 
@@ -656,6 +703,12 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     (stops, trips, shapes) pour ne pas perturber l'export GAMA. **Changement de texte de prompt,
     donc de résultats et de cache de décisions : décision de l'auteur**, même famille que la
     question 13.
+    **FAIT ET VÉRIFIÉ le 2026-09-04** : `init_route_lookup_maps` unionne les catalogues de
+    lignes des trois feeds en service par `route_id` (443 lignes, 319 venues de liO et du TER,
+    0 mode inconnu, `[ALARME]` sur collision). Le run d'une journée complète ne contient
+    **aucun « Unknown »** dans ses 2 065 échanges LLM, et les jambes portent le nom de leur
+    ligne : 618 occurrences de « Train », 113 de « liO », des raisonnements du type « train P4
+    vers Pins-Justaret est le seul compromis ».
 
 19. **La loss de calibration classe un train en MARCHE.** `calibration/metrics.categorize_mode`
     (dépôt autonome `prompt_calibration`) teste `bus, metro, subway, tram, cableway, gondola,
@@ -670,6 +723,12 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     de l'appliquer** (amendement A13). Non fait ici : la loss est l'instrument de mesure du
     prompt, et le dépôt `prompt_calibration` est hors du périmètre de cette session.
 
+    **FAIT ET VÉRIFIÉ le 2026-09-04** : le vocabulaire et l'ordre viennent de la hiérarchie
+    publiée en annexe p. 53 du rapport, gelée et servie par une source unique ; la parité avec
+    le journal de production est tenue par un test qui **lit** la source de production au lieu
+    d'en recopier un littéral. Vérifié à l'appel : « Train », « train K5 » et « TER » rendent
+    tous `transports_collectifs`.
+
 20. **`simulation_controller._primary_mode` fond `rail` dans `transit`.** La métrique
     `TRIP_MODE_BY_PURPOSE` et le post-filtre `_blocked` ne distinguent pas le train du bus. Plus
     largement, `move_logger._plan_transport_mode` teste `_BUS_MODES` **avant** `_RAIL_MODES` : un
@@ -681,6 +740,11 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     `scripts/data/population/audit_perimetre.py → MOVE_MODE_MAP`, sans entrée « Train » : la masse
     du train y disparaîtrait silencieusement.
 
+    **FAIT le 2026-09-04** : l'audit des parts modales rend le **détail** (« Train » est un
+    libellé à lui seul), l'**agrégat** et la table qui relie les deux, de sorte que le train se
+    recompose avec les transports collectifs sans être fondu à la source. Le contrôleur, lui,
+    sépare le rail au moment de choisir les options proposées (`GROUPE_RAIL`), ce qui a rendu
+    au train les 122 points sur 440 où il était évincé.
 21. **GAMA ne voit aucun train, et ne saurait pas quoi en faire.** `trip_info.json` est produit du
     seul feed Tisséo (`settings.gtfs.gtfs_file`), donc aucun `public_vehicle` de `route_type=2`
     n'est créé — les manques sont **latents, pas actifs**. Ils sont réels quand même :
@@ -695,6 +759,12 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     question 15, dans un ticket GAMA, et y ajouter les clés `2` des deux tables** — même si le
     train n'y roule pas encore, une table incomplète est une bombe à retardement.
 
+    **FAIT ET VÉRIFIÉ le 2026-09-04** : les tables de largeur et de capacité de `Settings.gaml`
+    portent le `route_type` 2 (largeur 25, 300 places) et le chargement journalise
+    `route_type=2 (Train) : 266 lignes, 68 arrêts, 884 courses` puis « 5 types dans les couches,
+    tous connus des tables de largeur ET de capacité ». Preuve de bout en bout : sur les 22
+    décisions ferroviaires du run, les **13 qui portaient sur le jour joué sont arrivées à
+    destination** (11 agents, 2,6 à 27,2 km, retard médian −6 min, aucun `timed_out`).
 22. **Les trois instances OTP tournent sans `router-config.json`.** Confirmé dans leur journal
     (« File '/var/otp/toulouse/router-config.json' is not present. Using default configuration »).
     Le fichier existe sous `otp-toulouse/toulouse/` — hors du répertoire de build — et fixerait
@@ -704,6 +774,9 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     les résultats : décision de l'auteur.** Déjà noté au § Publication de `gtfs-annee.md`,
     reconfirmé ici par la mesure.
 
+    **FAIT ET VÉRIFIÉ le 2026-09-04** : `make otp-graph` copie les configurations versionnées
+    avant de construire, et les trois instances journalisent au démarrage
+    `Load JSON configuration file '/var/otp/toulouse/router-config.json'`.
 23. **Les conteneurs `api`, `worker` et `controller` n'ont pas été recréés.** Le nouveau code
     (mode `rail`, porte de proximité) et le nouveau montage `./data/gtfs` ne prennent effet qu'au
     prochain `docker compose up -d api worker controller`. Non fait volontairement : le démarrage
@@ -711,6 +784,11 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
     `experiments/current`** (question 12) — cela aurait déplacé le lien loin du run que d'autres
     sessions analysent. **Recommandation : recréer les trois services au moment choisi par
     l'auteur, avant le prochain run.**
+
+    **FAIT le 2026-09-04** : la pile a été recréée en cinq étapes dans l'après-midi (Docker
+    Desktop ne survit pas à la recréation simultanée de plusieurs services lourds sur cette
+    machine), et le run de 16 h 25 tourne bien sur le nouveau code : porte de proximité,
+    modes ferroviaires et catalogues de lignes des trois feeds sont tous actifs dans son journal.
 
 ### Critères d'acceptation — partie 2 (à préciser après l'analyse)
 1. Chaque ligne du tableau a une mesure consignée dans une trace horodatée, et une décision

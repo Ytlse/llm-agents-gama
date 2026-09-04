@@ -25,6 +25,13 @@ GAMA, et l'audit ignorait silencieusement les déplacements ferroviaires.
 **Après :** une journée complète, le train jusqu'à l'arrivée, et un audit dont chaque ligne est
 comptée et nommée.
 
+Avec ce run, le **périmètre des 453 communes** est porté de bout en bout : les sept critères
+d'acceptation du chantier sont tenus et vingt-et-une de ses vingt-trois questions ouvertes sont
+tranchées. Il reste deux décisions, aucune n'étant du travail : ne rien réécrire dans un fichier
+de projection que plus aucun modèle ne lit, et remplacer l'avertissement de couverture des
+transports collectifs — qui teste une enveloppe, donc répond « couvert à 100 % » depuis que le
+réseau liO est dans la couche — par un maillage.
+
 ---
 
 ## [2026-09-04] Le rapport de run comparait deux dénominateurs différents
