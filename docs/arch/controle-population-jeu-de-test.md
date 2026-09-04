@@ -387,7 +387,46 @@ vivent dans le fichier, pas dans l'agent.
 
 ---
 
-## 6. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
+## 6. La population scellée v5 du 2026-09-04 — treize marges sur treize
+
+`data/population/population_1000_AAMAS_v5/` — sha256 `de73532e82c84f62…`, **1 000 personas en
+499 ménages entiers** (1 000 membres présents sur 1 029 déclarés, 97,2 %), tirés par la règle
+`aamas_seal_v5` dans le même vivier eqasim de **11 329** personnes que la v4 (six départements,
+BD TOPO 2025-03-15, ENTD nationale, jours de classe, borne d'âge 17). Aucun déficit ; descente
+347 échanges, perte 60,98 → 3,50 pt. **Périmètre** : six départements représentés (31 : 947,
+82 : 24, 32 : 13, 81 : 12, 09 : 3, 11 : 1 ; 139 communes).
+
+**Contrôle : 13 marges conformes sur 13, 0 à corriger, 0 à publier, 0 non mesurable.** La
+synthèse des écarts est **vide** — une première. Les ménages sans voiture pèsent 19,19 % pour
+une cible de 19,19 %, là où la v4 les portait à 22,8 % : c'est ce que l'allocation par
+(cellule, effectif présent, taille déclarée) a fermé. Immobiles **10,6 %** ; scolaires (6-17 ans)
+avec activité d'études **132 / 150 = 88,0 %** (seuil 88, enquête 90-95) ; mobilité 3,30
+déplacements par persona et 3,69 par mobile (enquête 3,53 / 3,95).
+
+**Trois correctifs amont que ce sceau porte, et qui ne se lisent pas dans les marges.**
+
+- **Le libellé de zone nomme la vraie commune.** Il nommait l'aire d'attraction : l'aire de
+  Toulouse couvrant plus de quatre cents communes, 61 % des libellés de la v4 disaient
+  « sur la commune de Toulouse » pour une activité qui n'y était pas. Mesuré sur le vivier v5 :
+  **420 communes distinctes nommées** contre **2** dans tout le fichier v4.
+- **La desserte se juge sur les trois réseaux.** Le drapeau `public_transport` ne lisait que les
+  arrêts Tisséo (5 742) ; il lit ceux des trois réseaux en service (**17 955**). Effet sur la
+  cohorte : **3 186 activités desservies sur 3 299 planifiées**, contre 2 660 sur 3 335 en v4.
+- **L'heure des itinéraires.** Le runtime interrogeait OTP une heure trop tard (deux en été) :
+  les plannings de la v4 ont été recalés sur une offre de transport qui n'était pas celle de
+  l'heure simulée. Ceux de la v5 le sont sur la bonne. Détail : `docs/arch/routing.md`.
+
+Équipement vélo : 12 contrôles ok, aucun échec, pente « non concluante » sur la cohorte et
+croissante sur le vivier — la règle du 2026-09-03. Le vivier, lui, garde **10 marges à corriger**
+sur 13 : la distance entre les deux est ce que la sélection fait. Audit de périmètre sur le sceau :
+A1, A2, A4, A9 conformes ; A3, A5, A8 à publier ; A6 et A7 non mesurables faute de run.
+
+Sauvegarde `data/population/sauvegardes/population_1000_AAMAS_v5_2026-09-04.tar.gz` (sha256
+`f141eaf29edc282f…`, sceau + vivier brut et pré-imputé + sélection) ; `config.yaml` repointé.
+Synthèses HTML : `docs/paper/population/synthese_representativite_v4_population_v5_2026-09-04.html`
+et `fabrication_population_v5_2026-09-04.html`.
+
+## 6 bis. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
 
 `data/population/population_1000_AAMAS_v4/` — sha256 `9f05c655c3ad2cf4…`, **1 000 personas en
 513 ménages entiers** (469 complets au sens strict, 95,1 % des membres déclarés présents), tirés
@@ -424,7 +463,7 @@ chaînes d'activités viennent pour la première fois de l'ENTD nationale appari
 l'école. Les runs v3 et v4 ne sont pas comparables. Synthèse HTML :
 `docs/paper/population/synthese_representativite_v3_population_v4_2026-09-03.html`.
 
-## 6 bis. La population scellée v3 du 2026-09-03 (historique)
+## 6 ter. La population scellée v3 du 2026-09-03 (historique)
 
 `data/population/population_1000_AAMAS_v3/` — sha256 `8d8bfa3645fa77fb…`, **1 000 personas en
 514 ménages entiers**, tirés par la règle `aamas_seal_v3` dans un vivier eqasim de **11 922**
@@ -477,7 +516,7 @@ persona contre 3,53) et de la moitié des scolaires sans école. Le service part
 `config_toulouse.yml` (source unique) ; la v4 sera la première population appariée sur l'ENTD
 nationale avec la classe d'âge tenue.
 
-## 6 ter. La population scellée v2 du 2026-09-02 (historique)
+## 6 quater. La population scellée v2 du 2026-09-02 (historique)
 
 `data/population/population_1000_AAMAS/` — sha256 `f67b07772f3dced9…`, **1 000 personas**,
 tirés dans un vivier eqasim de **5 063** (`population_size` 5 000, périmètre par liste de

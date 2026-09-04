@@ -1,3 +1,23 @@
+## [2026-09-04] La population du jeu de test est conforme sur ses treize marges
+
+`population_1000_AAMAS_v5` est scellée : 1 000 personas en 499 ménages entiers, **treize marges
+conformes sur treize**, et pour la première fois une synthèse des écarts vide. Les ménages sans
+voiture pèsent 19,19 % pour une cible de 19,19 %, contre 22,8 % dans la v4 — c'est l'allocation
+par cellule *et par taille de ménage* qui a fermé le dernier écart que la sélection ne visait pas.
+
+Elle porte aussi trois correctifs qui ne se lisent dans aucune marge. Le libellé de zone lu par
+l'agent nomme la vraie commune : 420 communes distinctes contre deux dans tout le fichier
+précédent. La desserte se juge sur les trois réseaux en service et non sur Tisséo seul, ce qui
+fait passer les activités desservies de 2 660 sur 3 335 à 3 186 sur 3 299. Et les horaires sont
+recalés sur l'offre de transport de l'heure simulée, non de l'heure suivante.
+
+**Avant :** un écart déclaré « à publier », un prompt qui situait six activités sur dix dans la
+mauvaise commune, et une desserte évaluée sur un tiers des arrêts.
+**Après :** treize marges conformes, la commune juste, les trois réseaux comptés. Sauvegarde et
+pages de synthèse à jour ; la configuration du runtime pointe sur ce sceau.
+
+---
+
 ## [2026-09-04] L'agent lit la météo et l'heure de sa propre horloge, plus celles de son conteneur
 
 Le matin, l'heure des itinéraires est passée sur l'horloge murale de GAMA. Deux familles de

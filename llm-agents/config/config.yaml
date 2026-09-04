@@ -48,4 +48,4 @@ cache:
 # Les sceaux précédents restent disponibles : population_1000_AAMAS_v3 (sha256 8d8bfa3645fa77fb…,
 # Haute-Garonne seule) et population_1000_AAMAS (v2, sha256 f67b07772f3dced9…).
 data:
-  population_file: /data/eqasim-output/population_1000_AAMAS_v4/population.json
+  population_file: /data/eqasim-output/population_1000_AAMAS_v5/population.json
