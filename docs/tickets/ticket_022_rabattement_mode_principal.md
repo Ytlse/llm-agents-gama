@@ -80,6 +80,131 @@ Les seules combinaisons observées sont `rail` seul (706), `bus+rail` (751), `bu
 (263) et `metro+rail` (163) — **aucun** itinéraire ne mêle `car` et un mode collectif, donc
 le M1 d'origine (voiture avant TC) reste bien latent.
 
+#### L'ARBITRAGE, rendu le 2026-09-04 : la hiérarchie du dépôt est celle de l'enquête
+
+*Décision de l'auteur du dépôt : « l'ordre des tests décide du mode principal : sur ce point
+il faut s'aligner à l'enquête ». Ce qui suit est cet alignement, livré. Trace :
+[`docs/traces/2026-09-04_10-17_hierarchie_modes_enquete/`](../traces/2026-09-04_10-17_hierarchie_modes_enquete/README.md).*
+
+**Il n'y avait rien à postuler : l'ordre est publié.** Le rapport AUAT/CEREMA de l'enquête
+donne en annexe, **page 53** (« Hiérarchie des modes »), les **36 modes enquêtés dans
+l'ordre** — celui qui, dit le même rapport p. 12, « découle d'une hiérarchisation des modes
+définie au niveau national ». Le paragraphe ci-dessus cherchait une convention ; c'était une
+citation.
+
+Ramené au vocabulaire des jambes de la simulation :
+
+| Rang | Famille | Rangs publiés | Libellé `moves.csv` | Cran mesuré sur les microdonnées |
+|---:|---|---|---|---|
+| 1 | `metro` | 1 | Transports_collectifs | bat tout, 0 exception sur ~2 000 obs. |
+| 2 | `tram` | 2 | Transports_collectifs | bat bus (62–0), car (20–0), rail (6–0) |
+| 3 | `cableway` | 3 (Téléo) | Transports_collectifs | bat bus (12–0), car (3–0) ; **vs tram : non tranché** (1 déplacement), rang pris à l'annexe |
+| 4 | `bus` | 4 bus/navette, 5 TAD, 6 autocars liO **et scolaires**, 7 TAD régional | Transports_collectifs | bat **rail (34–1)**, car (185–0), vélo (15–0) |
+| 5 | `rail` | 8 TER, 9 TGV, 10 autre TER, 11 Intercités | Train | bat car (58–0), vélo (15–0), 2RM (2–0) |
+| 6 | `car` | 14-15 taxi/VTC, 16-17 fourgon, 19-20 VP | Voiture Privée | bat vélo (24–0), 2RM (2–0) |
+| 7 | `motorbike` | 21-22 | Deux-roues motorisé | bat vélo (2–0) ; effectifs minces, rang confirmé par l'annexe |
+| 8 | `bicycle` | 23-29 | Vélo | perd contre tous les rangs ci-dessus |
+| 9 | `foot` | 36 « Marche à pied UNIQUEMENT » | Marche | **résidu mesuré** : `MODP = 01` ⇔ aucun trajet mécanisé (14 842 / 54 585, et 0 des 39 743 détaillés) |
+
+Rangs publiés **volontairement non importés**, faute de contrepartie dans la simulation :
+12 cars longue distance (Flixbus — hors graphe), 13 transport d'employeur, 18 autres modes,
+30-32 EDPM/roller/fauteuil, **33 « autre réseau urbain »**, 34 fluvial, 35 avion. Le rang 33
+mérite d'être signalé : il est **sous la voiture** (mesuré, 10 obs. sur 10), ce qui ferait
+un contresens si on l'importait dans la famille `bus`.
+
+**Le contrôle, généralisé depuis A7.** Pour chaque paire de modes co-présents dans un même
+déplacement de l'enquête, quel mode `MODP` retient-elle ? 39 743 déplacements détaillés,
+2 281 mixtes, **2 607 observations informatives**, **53 paires de codes tranchées** (seuil :
+3 observations concordantes), **53 conformes sur 53**. Une seule observation à contre-courant
+— et elle est *conforme à l'annexe* : un `Flixbus + TER` codé TER, le Flixbus étant au rang
+12, sous le TER. 70 paires restent non tranchées faute d'effectif ; leur rang vient de
+l'annexe seule, et la ressource gelée le dit paire par paire.
+
+**Réponse aux deux questions ouvertes du paragraphe précédent :**
+
+1. **Un déplacement mixte car/bus + train est un déplacement en BUS.** Rangs 4 et 8 ;
+   mesuré 34 sur 35. Le constat « la colonne Train de `moves.csv` sous-compte le rail de
+   62,5 % » **s'inverse** : les 1 177 itinéraires concernés sont *correctement* étiquetés
+   `Transports_collectifs`. L'ordre `_BUS_MODES` avant `_RAIL_MODES` était conforme ;
+   c'étaient `mode_choice` et `task_worker`, qui testaient le train **en tête**, qui
+   divergeaient de l'enquête.
+2. **La séparation TER / TC urbain des parts modales publiées n'est pas une hiérarchie.**
+   Le rapport publie le TER à part (≈ 10 % contre 24 % Tisséo) parce que c'est une lecture
+   par *réseau exploitant*, pas par mode principal — la même annexe p. 53 range les rangs
+   1 à 13 sous un seul libellé, « transports en commun », train compris.
+
+**La correction du tableau « quatre tables, trois réponses ».** Trois des quatre lignes
+étaient fautives, mais pas celles annoncées :
+
+| Table | Verdict pour car liO + TER | Conforme à l'enquête ? |
+|---|---|---|
+| `move_logger._plan_transport_mode` | `Transports_collectifs` | ✅ sur le train — ❌ sur la **voiture testée en premier** |
+| `mode_choice.canonical_mode` | `train` | ❌ le train était testé avant le collectif |
+| `task_worker._extract_primary_mode` | `train` | ❌ idem |
+| `simulation_controller._primary_mode` | `transit` | ✅ — ce sont les 4 catégories agrégées de l'enquête, où le train EST dans les TC. Fautif seulement sur la **voiture testée en premier** et sur `transit` comme **défaut muet** |
+
+Et **Grafana 07 ne compare pas quatre modes à cinq** : le `label_replace` mappe
+`public_transport|train → tc` d'un côté, `transit → tc` de l'autre. Les deux séries sont
+ramenées aux mêmes quatre catégories EMC². Cette phrase du paragraphe précédent est à
+retirer, pas à corriger.
+
+**Ce qui est livré** (lot 1, plus la moitié de C7) :
+
+- `llm_module/data/mode_hierarchy_emc2.json` — la hiérarchie **gelée**, avec sa provenance
+  (empreintes SHA-256 des deux fichiers de microdonnées, effectifs, date), les 36 rangs
+  publiés, la matrice complète des paires et les contrôles ;
+- `scripts/progedo_logit/export_mode_hierarchy.py` — l'export qui la produit et son
+  `--check` ;
+- `llm_module/core/mode_hierarchy.py` — **le seul endroit** où l'ordre est lu. Une famille
+  manquante, une version inattendue ou une ressource absente lèvent ; un mode inconnu rend
+  `None`, jamais le fourre-tout d'à côté ;
+- `move_logger` : les cinq listes littérales sont devenues des **vues** de la hiérarchie, la
+  cascade de `if` a disparu, et un mode hors hiérarchie lève une `[ALARME]` sur front
+  montant au lieu d'aller muettement dans « Autres modes » (qui est **exclu** du scoring) ;
+- `mode_choice` : la cascade est réordonnée et son ordre est **vérifié à l'import** contre la
+  ressource ;
+- `task_worker` : suit la hiérarchie ; le Téléo et le car scolaire cessent de tomber dans
+  `other` **avec un `logger.error` à chaque décision** ;
+- `simulation_controller` : `_primary_mode` (hiérarchie, métrique, regroupement) est séparé
+  de **`_vehicle_mode`** (chaîne de véhicules) — voir ci-dessous ;
+- tests : `llm_module/tests/test_mode_hierarchy.py` (22), `llm-agents/tests/test_hierarchie_modes.py`
+  (19), et les deux tests de parité étendus pour lire la **ressource de production** au lieu
+  d'un littéral.
+
+**La distinction qui manquait, et qui est la moitié du problème.** Un mode principal et un
+mode de véhicule sont deux grandeurs différentes. La chaîne du ticket 008 demande « où est la
+voiture », pas « quel est le mode principal » : sur un rabattement, l'enquête classe le
+déplacement en TC *et* la voiture doit être garée à destination. `_primary_mode` servait les
+deux usages — le jour où un itinéraire mixte apparaît, aligner la hiérarchie aurait fait
+**perdre la voiture au verrou de retour**. Les deux lectures sont désormais distinctes, et un
+test vérifie qu'elles divergent bien sur un plan `car + bus`.
+
+**Effet chiffré AVANT application** (versions « avant » extraites par `git show`, jamais
+recopiées ; six témoins vérifient que le rejeu reproduit le comportement d'avant avant de
+conclure) :
+
+| Table | Jeux gelés (385 888 occ.) | Décisions en cache (444 055) | Run `2026-09-04_01_09` (17 258) |
+|---|---|---|---|
+| `_plan_transport_mode` — colonne du scoring EMC² | **0** | **0** | **0** |
+| `canonical_mode` — colonnes `P(...) %` | **0** | **0** | **0** |
+| `_primary_mode` — `trip_mode_by_purpose_total` | 0 | 1 libellé / 10 occ. *(artefact de mesure)* | **0** |
+| `_extract_primary_mode` — compteurs de diagnostic | 17 / 686 (0,18 %) | 7 / 145 (0,03 %) | 10 / 150 (0,87 %) |
+
+**Le critère C2 est donc vérifié par la mesure, et non par argument** : rejouer le run
+archivé donne exactement les mêmes libellés de mode sur les 17 258 options que les agents ont
+vues ; le plafond de 6 reste atteint dans 44,7 % des décisions et la distribution des modes
+distincts offerts (22,6 / 28,6 / 35,1 / 13,7 %) est inchangée. **Aucun résultat publié ne
+bouge.** Aucun libellé des trois corpus ne contient `rail`, `train` ni `ter` : le cran
+bus/train n'a aucun effet rétroactif.
+
+**Ce qui n'est PAS livré, et pourquoi.** `_select_candidates` groupe les candidats par
+`_primary_mode` : un train pur et un bus + train partagent donc l'unique créneau `transit`,
+et le plus rapide des deux l'occupe. Sur les 440 points où une option de train pur existe,
+**122 (27,7 %)** sont écartés au profit d'un bus + train plus rapide, et le train ne s'offre
+jamais comme choix distinct à l'agent. De même, `numTripPatterns = 6` prive 45 points d'une
+option ferroviaire qu'un `20` leur rendrait. Les deux corrections **changent le prompt**,
+donc les décisions et le cache : elles restent des décisions de l'auteur.
+
 **Quatre tables, trois réponses, pour le même trajet.** C'est la forme la plus nette du
 problème :
 
@@ -205,8 +330,8 @@ plus important de ce ticket.
 
 | # | Axe | Question | Attendu |
 |---|---|---|---|
-| C1 | **Ordre de la hiérarchie** | Aligner `_plan_transport_mode` sur l'enquête (TC avant voiture) ? Et le train, le vélo ? | Reproduire l'ordre observé dans EMC², mesuré et non supposé — y compris pour vélo + TC (58 déplacements, **tous** codés TC) |
-| C2 | **Non-régression** | Le changement d'ordre déplace-t-il un seul déplacement du run courant ? | **Zéro attendu.** Si un déplacement bouge, c'est qu'un itinéraire mixte existe et le constat « latent » du ticket 020 est faux |
+| C1 | **Ordre de la hiérarchie** | Aligner `_plan_transport_mode` sur l'enquête (TC avant voiture) ? Et le train, le vélo ? | ✅ **RENDU le 2026-09-04** : neuf rangs, sourcés sur l'annexe p. 53 du rapport et contrôlés sur les microdonnées (53 paires / 53 conformes). Le bus passe **avant** le train ; le vélo + TC (58 déplacements, tous TC) est couvert par `bicycle` au rang 8 |
+| C2 | **Non-régression** | Le changement d'ordre déplace-t-il un seul déplacement du run courant ? | ✅ **ZÉRO, mesuré** sur les 17 258 options du run archivé, les 385 888 des jeux gelés et les 444 055 décisions en cache. Le constat « latent » du ticket 020 est confirmé |
 | C3 | **Forme du trait** | Booléen `rabattement_plausible`, ou propension continue ? | Trancher. Un booléen tiré par hachage est cohérent avec `personal_bike` / `housing_type` ; une propension évite de fabriquer un tirage là où on ne veut qu'une pondération |
 | C4 | **Bornes atteignables** | Où vivent-elles : dans `cerema_values.yaml`, ou dans une ressource séparée ? | **Séparée.** `cerema_values.yaml` porte ce que l'enquête mesure ; une borne d'atteignabilité est une propriété de *notre* instrument, pas de l'enquête. Les mélanger rendrait la cible non recoupable |
 | C5 | **Rendu dans le scoring** | Comment la page de synthèse affiche-t-elle un intervalle plutôt qu'un point ? | Une bande sur la dimension `distance` et sur `lieu_residence`, et un composite rapporté avec et sans neutralisation |
@@ -217,12 +342,15 @@ plus important de ce ticket.
 
 ## Lots
 
-1. **Lot 1 — La hiérarchie, mesurée puis corrigée.** Un export
-   (`scripts/progedo_logit/export_mode_hierarchy.py`) qui mesure l'ordre de priorité
-   observé dans EMC² sur tous les couples de modes co-présents, et le publie dans
-   `llm_module/data/`. Puis `_plan_transport_mode` suit cette table au lieu d'une cascade
-   de `if` écrite à la main. Test de non-régression : rejouer le run courant doit donner
-   **exactement** les mêmes modes (axe C2).
+1. ✅ **Lot 1 — La hiérarchie, mesurée puis corrigée. LIVRÉ le 2026-09-04.**
+   `scripts/progedo_logit/export_mode_hierarchy.py` mesure l'ordre de priorité observé dans
+   EMC² sur tous les couples de modes co-présents, le confronte à l'annexe **p. 53** du
+   rapport publié, et gèle le résultat dans
+   `llm_module/data/mode_hierarchy_emc2.json`. `llm_module/core/mode_hierarchy.py` le sert à
+   `move_logger`, `mode_choice`, `task_worker` et `simulation_controller` — plus une seule
+   cascade de `if` écrite à la main. Non-régression **mesurée à zéro** (axe C2). Portée
+   au-delà du lot : `_primary_mode` (mode principal) est séparé de `_vehicle_mode` (chaîne
+   de véhicules), sans quoi l'alignement aurait cassé le verrou de retour du ticket 008.
 
 2. **Lot 2 — La table d'atteignabilité.** `scripts/progedo_logit/export_reachable_targets.py`
    → `llm_module/data/reachable_targets.json` : pour chaque strate de `lieu_residence` et de
@@ -251,11 +379,15 @@ plus important de ce ticket.
 
 ## Critères d'acceptation
 
-- [ ] La hiérarchie de mode principal est **lue dans une table mesurée sur EMC²**, pas
+- [x] La hiérarchie de mode principal est **lue dans une table mesurée sur EMC²**, pas
       écrite en cascade de `if`. Le vélo + TC est traité, pas seulement voiture + TC.
-- [ ] Rejouer le run courant après le lot 1 donne **exactement** les mêmes modes. Si un seul
+      *(2026-09-04 — et l'ordre est en plus **sourcé** sur l'annexe p. 53 du rapport publié,
+      la mesure servant de contrôle : 53 paires tranchées, 53 conformes.)*
+- [x] Rejouer le run courant après le lot 1 donne **exactement** les mêmes modes. Si un seul
       déplacement bouge, le constat « divergence latente » du ticket 020 est faux et il faut
       le corriger là-bas avant de continuer.
+      *(2026-09-04 — zéro bascule sur les 17 258 options du run, les 385 888 des jeux gelés
+      et les 444 055 décisions en cache. Le constat « latent » est confirmé.)*
 - [ ] La cible TC est un **intervalle** partout où le rabattement pèse, et la borne haute est
       identiquement la cible de `cerema_values.yaml` — vérifié par un test.
 - [ ] `cerema_values.yaml` n'est **pas** modifié. Une borne d'atteignabilité décrit notre

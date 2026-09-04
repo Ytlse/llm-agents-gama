@@ -44,6 +44,7 @@ from world.world_data import WorldModel
 from settings import settings
 
 from prometheus_client import Counter, Gauge, Histogram
+from llm_module.core.mode_hierarchy import hierarchy as _mode_hierarchy
 from llm_module.telemetry.alarms import fire_alarme
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
@@ -260,7 +261,63 @@ def _record_trip_mode(move: PersonMove, activity: Optional[Activity]) -> None:
     TRIP_MODE_BY_PURPOSE.labels(mode=_primary_mode(move.plan), purpose=purpose).inc()
 
 
+# Famille de la hiérarchie de l'enquête → catégorie de la métrique. Ce sont les QUATRE
+# catégories agrégées de l'enquête (marche / vélo / véhicule particulier / transports en
+# commun, cf. rapport p. 53 : les rangs 1 à 13 forment « transports en commun » et le train
+# en fait partie). Fondre `rail` dans `transit` est donc CORRECT ici, et Grafana 07 mappe
+# des deux côtés vers les mêmes quatre catégories.
+MODE_HIERARCHY = _mode_hierarchy()
+
+_METRIC_MODE = {
+    "metro": "transit", "tram": "transit", "cableway": "transit", "bus": "transit",
+    "rail": "transit", "car": "car", "motorbike": "other", "bicycle": "bike",
+    "foot": "walk",
+}
+_unknown_metric_modes: set = set()
+
+
 def _primary_mode(plan: TravelPlan) -> str:
+    """Mode principal d'un plan, dans les quatre catégories agrégées de l'enquête.
+
+    L'ordre vient de `llm_module.core.mode_hierarchy` (annexe p. 53 du rapport, contrôlée
+    sur les microdonnées) et non plus d'une cascade écrite ici, qui testait la **voiture en
+    premier** alors qu'elle est au rang 19, sous tout le collectif (ticket 022).
+
+    ⚠ Ne sert PAS à répondre « ce plan utilise-t-il la voiture ? » — c'est
+    `_vehicle_mode`. Un mode principal et un mode de véhicule sont deux grandeurs
+    différentes ; les confondre est le défaut que ce ticket sépare.
+    """
+    modes = {(leg.mode or "").lower() for leg in plan.legs if not leg.is_transfer}
+    if not modes - {""}:
+        # Aucune jambe mécanisée = un déplacement à pied. Ce n'est pas un repli : c'est le
+        # rang 36 de l'enquête, « Marche à pied UNIQUEMENT », et il est mesuré — les
+        # 14 842 déplacements sans trajet détaillé des microdonnées sont TOUS codés 01.
+        return "walk"
+    family = MODE_HIERARCHY.primary_family(modes)
+    if family is None:
+        # `transit` était le DÉFAUT de la cascade : tout mode inconnu y atterrissait sans
+        # une ligne de journal, donc gonflait la part TC sans laisser de trace.
+        cle = ",".join(sorted(modes))
+        if cle not in _unknown_metric_modes:
+            _unknown_metric_modes.add(cle)
+            logger.error(
+                f"[ALARME] Modes hors hiérarchie dans un plan : {{{cle}}} — comptés "
+                "« other » dans trip_mode_by_purpose, et non plus « transit ». "
+                "Complétez llm_module/data/mode_hierarchy_emc2.json.")
+            fire_alarme("mode_hierarchie")
+        return "other"
+    return _METRIC_MODE[family]
+
+
+def _vehicle_mode(plan: TravelPlan) -> str:
+    """Le plan mobilise-t-il un véhicule personnel, et lequel ?
+
+    Question de **chaîne** (ticket 008), pas de mode principal : un véhicule est un lieu,
+    il reste où son propriétaire l'a garé. Un plan qui comporte une jambe voiture engage la
+    voiture, même si l'enquête classerait le déplacement en transports collectifs — c'est
+    précisément le cas du rabattement. Cette lecture est donc volontairement distincte de
+    `_primary_mode`, et son vocabulaire est celui de `_VEHICLE_MODES`.
+    """
     modes = {(leg.mode or "").lower() for leg in plan.legs if not leg.is_transfer}
     if modes & {"car"}:
         return "car"
@@ -278,7 +335,7 @@ def _primary_mode(plan: TravelPlan) -> str:
 #   2. stationnement     — après le choix, le véhicule suit l'agent s'il l'a utilisé, sinon il reste ;
 #   3. verrou de retour  — sur un trajet vers le domicile, si un véhicule est garé au point
 #                          de départ, l'agent le ramène (candidats restreints à ce mode).
-# Clés = sorties de `_primary_mode`, pour comparer directement au mode d'un plan.
+# Clés = sorties de `_vehicle_mode`, pour comparer directement au mode d'un plan.
 _VEHICLE_MODES: Tuple[str, ...] = ("bike", "car")
 
 # Seuil sous lequel le verrou de retour ne s'applique pas (A3). Sur le run de
@@ -456,7 +513,7 @@ def _park_vehicles(
     """
     if plan is None or destination is None:
         return
-    mode = _primary_mode(plan)
+    mode = _vehicle_mode(plan)
     if mode not in _VEHICLE_MODES:
         return
     if mode == "car" and _is_car_passenger(person):
@@ -2193,10 +2250,10 @@ class SimulationLoopV1(BaseScenario):
         # Post-filtre : OTP/OSMnx renvoient parfois un mode qu'on n'a pas demandé.
         _blocked = {m for m, ok in (("bike", include_bike), ("car", include_car)) if not ok}
         if _blocked:
-            itineraries = [it for it in itineraries if _primary_mode(it) not in _blocked]
+            itineraries = [it for it in itineraries if _vehicle_mode(it) not in _blocked]
 
         # Car scolaire synthétique (ticket 030). Injecté APRÈS le post-filtre (jamais
-        # bloqué : `_primary_mode` renvoie « transit ») et AVANT le verrou de retour, de
+        # bloqué : `_vehicle_mode` renvoie « transit ») et AVANT le verrou de retour, de
         # sorte qu'un élève venu en voiture reprenne la voiture (le verrou filtre alors
         # le car scolaire), et qu'un élève venu en car scolaire le retrouve au retour
         # (aucun véhicule garé à l'école → verrou inactif). Rien en cas de non-trajet.
@@ -2233,7 +2290,7 @@ class SimulationLoopV1(BaseScenario):
                     VEHICLE_CHAIN.labels(mode=_mode, event="short_return").inc()
                 _to_bring_back = set()
             if _to_bring_back:
-                _kept = [it for it in itineraries if _primary_mode(it) in _to_bring_back]
+                _kept = [it for it in itineraries if _vehicle_mode(it) in _to_bring_back]
                 for _mode in sorted(_to_bring_back):
                     VEHICLE_CHAIN.labels(
                         mode=_mode, event="forced_return" if _kept else "return_failed"
@@ -2341,7 +2398,7 @@ class SimulationLoopV1(BaseScenario):
         # (A2). Le mode reste « Voiture Privée » dans moves.csv — EMC² compte le
         # passager dans « voiture » — et la traçabilité passe par la colonne
         # « Contrainte de chaîne ».
-        if plan is not None and _is_passenger and _primary_mode(plan) == "car":
+        if plan is not None and _is_passenger and _vehicle_mode(plan) == "car":
             VEHICLE_CHAIN.labels(mode="car", event="passenger").inc()
             chain_constraint = "passager"
 

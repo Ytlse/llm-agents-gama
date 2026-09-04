@@ -716,30 +716,54 @@ def _count_mode_mismatches(rt, agent_resp, traj_modes: list, provider_name: str)
             )
 
 
+# Famille de la hiérarchie de l'enquête → étiquette des compteurs du worker. Le
+# vocabulaire de ces compteurs est FIN (métro, tram et bus distincts, contrairement aux
+# quatre catégories du scoring EMC²) : c'est un compteur de diagnostic, pas une part
+# modale. Les noms existants sont conservés pour que les séries Redis restent lisibles
+# d'un run à l'autre ; `cableway` est nouveau — le Téléo et le car scolaire tombaient
+# jusqu'ici dans `other`, avec un ERROR à chaque décision.
+_WORKER_MODE_LABEL = {
+    "metro": "metro", "tram": "tram", "cableway": "cableway", "bus": "bus",
+    "rail": "train", "car": "car", "motorbike": "motorbike",
+    "bicycle": "cycling", "foot": "walking",
+}
+# Synonymes en toutes lettres que la hiérarchie ne connaît pas (elle porte les modes de
+# JAMBE d'OTP/OSMnx, pas les libellés que le LLM peut écrire). Ils restent ici, faute de
+# quoi une réponse « voiture » tomberait dans `other`.
+_WORKER_MODE_ALIASES = {
+    "train": "rail", "ter": "rail", "intercités": "rail", "intercites": "rail",
+    "tc": "bus", "transports en commun": "bus", "transport en commun": "bus",
+    "voiture": "car", "driving": "car", "conducteur": "car",
+    "vélo": "bicycle", "velo": "bicycle", "cycling": "bicycle",
+    "marche": "foot", "walking": "foot", "à pied": "foot", "a pied": "foot",
+    "pied": "foot",
+}
+
+
 def _extract_primary_mode(mode: str) -> str:
-    """
-    Réduit une chaîne de modes composée ("foot,bus,foot") au mode principal.
-    Priorité : train > metro > tram > bus > car > cycling > walking > other
+    """Réduit une chaîne de modes composée (« foot,bus,foot ») au mode principal.
+
+    L'ordre de priorité n'est plus écrit ici : il vient de
+    `llm_module.core.mode_hierarchy`, donc de l'annexe « Hiérarchie des modes » du rapport
+    de l'enquête (p. 53), contrôlée sur les microdonnées. Concrètement, métro > tram >
+    téléphérique > bus > **train** > voiture > deux-roues motorisé > vélo > marche.
+
+    ⚠ Le train est passé DERRIÈRE le bus le 2026-09-04 (ticket 022). Une chaîne
+    « bus,train » comptait `train` ; elle compte désormais `bus`, comme l'enquête code
+    ses propres déplacements mixtes (34 sur 35). Ces compteurs sont des séries de
+    diagnostic, aucune part modale publiée n'en dépend.
     """
     if not mode or mode == "unknown":
         return "unknown"
+    from llm_module.core.mode_hierarchy import hierarchy
+
     parts = {m.strip().lower() for m in mode.split(",")}
-    if "rail" in parts or "train" in parts or "ter" in parts or "intercités" in parts:
-        return "train"
-    if "metro" in parts or "subway" in parts:
-        return "metro"
-    if "tram" in parts or "tramway" in parts:
-        return "tram"
-    if "bus" in parts or "tc" in parts or "transports en commun" in parts or "transport en commun" in parts:
-        return "bus"
-    if "car" in parts or "driving" in parts or "voiture" in parts:
-        return "car"
-    if "bicycle" in parts or "bike" in parts or "cycling" in parts or "vélo" in parts or "velo" in parts:
-        return "cycling"
-    if parts <= {"foot", "walk", "walking", "marche", "à pied", "a pied", "pied"}:
-        return "walking"
-    logger.error(f"Mode de transport inconnu ou non standard dans la réponse LLM | mode={mode}")
-    return "other"
+    jambes = {_WORKER_MODE_ALIASES.get(p, p) for p in parts}
+    family = hierarchy().primary_family(jambes)
+    if family is None:
+        logger.error(f"Mode de transport inconnu ou non standard dans la réponse LLM | mode={mode}")
+        return "other"
+    return _WORKER_MODE_LABEL[family]
 
 
 def _get_distance_bracket(distance_m: float) -> str:

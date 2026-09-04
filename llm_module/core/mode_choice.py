@@ -57,11 +57,18 @@ CANONICAL_MODES: tuple[str, ...] = (
 # reste 1 quoi qu'il arrive.
 OTHER_MODE = "other"
 
-# Mots-clés → mode canonique, du plus spécifique au plus générique. L'ordre compte :
-# une chaîne composée ("foot,bus,foot") contient aussi "foot", or c'est le tronçon
-# structurant (le bus) qui qualifie le trajet.
+# Mots-clés → mode canonique. **L'ORDRE EST LA HIÉRARCHIE DE L'ENQUÊTE**, plus une
+# convention de lecture : une chaîne composée (« foot,bus,foot ») contient aussi « foot »,
+# et c'est le mode de meilleur rang qui qualifie le déplacement.
+#
+# L'ordre a changé le 2026-09-04 (ticket 022) : `train` était testé EN PREMIER, donc une
+# option « autocar liO + TER » (« foot,bus,rail,foot ») était comptée en `train`. L'annexe
+# « Hiérarchie des modes » du rapport AUAT/CEREMA (p. 53) met le bus au rang 4 et le TER au
+# rang 8, et les microdonnées le confirment : 34 des 35 déplacements mixtes bus ↔ train
+# tranchés sont codés bus. `public_transport` passe donc devant `train`, et `car` devant
+# `motorbike` (rangs 19-20 contre 21-22). Le contrôle `_verifier_ordre()` ci-dessous
+# compare cet ordre à la ressource gelée : il ne peut plus dériver en silence.
 _MODE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("train", ("rail", "train", "ter", "intercités", "intercites")),
     ("public_transport", ("metro", "métro", "subway", "tram", "tramway", "bus",
                           "school_bus",  # car scolaire synthétique (ticket 030)
                           # Téléo (route_type=6) et téléportés cousins. AJOUTÉS le
@@ -79,12 +86,40 @@ _MODE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
                           "cableway", "gondola", "funicular",
                           "transit", "public_transport", "transports en commun",
                           "transport en commun", "transports_collectifs", "tc")),
+    ("train", ("rail", "train", "ter", "intercités", "intercites")),
+    ("car", ("car", "driving", "voiture", "conducteur", "taxi")),
     ("motorbike", ("scooter", "moto", "motorbike", "motorcycle", "deux-roues",
                    "deux_roues")),
-    ("car", ("car", "driving", "voiture", "conducteur", "taxi")),
     ("cycling", ("bicycle", "bike", "cycling", "vélo", "velo")),
     ("walking", ("foot", "walk", "walking", "marche", "à pied", "a pied", "pied")),
 )
+
+
+def _verifier_ordre() -> None:
+    """La cascade suit-elle la hiérarchie gelée de l'enquête ?
+
+    Vérifié à l'import, pas dans un test : un test qui recopie l'ordre attendu ne tombe
+    que si l'instrument change, jamais si la production change — c'est cette asymétrie qui
+    a laissé passer les défauts du Téléo et du rail (cf. `scripts/tests/test_parite_modes`).
+    """
+    from llm_module.core.mode_hierarchy import hierarchy
+
+    attendu = hierarchy().canonical_order()
+    observe = tuple(mode for mode, _ in _MODE_KEYWORDS)
+    if observe != attendu:
+        raise RuntimeError(
+            "L'ordre de `_MODE_KEYWORDS` ne suit plus la hiérarchie de l'enquête.\n"
+            f"  cascade    : {observe}\n  hiérarchie : {attendu}\n"
+            "Corrigez la cascade, ou ré-exportez la hiérarchie "
+            "(scripts/progedo_logit/export_mode_hierarchy.py) si l'enquête a changé.")
+    manquants = [mode for mode in attendu if mode not in CANONICAL_MODES]
+    if manquants:
+        raise RuntimeError(
+            f"La hiérarchie porte des modes canoniques absents de CANONICAL_MODES : "
+            f"{manquants} — leur masse de probabilité serait perdue.")
+
+
+_verifier_ordre()
 
 
 def canonical_mode(raw: Optional[str]) -> str:

@@ -1,3 +1,68 @@
+## [2026-09-04] Le prompt nomme les lignes du car régional et du TER au lieu de « Unknown »
+
+Le lecteur GTFS ne chargeait qu'un réseau, Tisséo, alors que le graphe de routage en porte trois
+depuis hier. Un identifiant de ligne du car régional ou du TER ne se trouvait donc dans aucune
+table, et l'agent lisait « Trajet en Unknown 392 » pour les 319 lignes des deux réseaux — le mode
+comme le numéro perdus, alors que la table des modes connaît le train depuis le même jour.
+
+Le catalogue des lignes réunit maintenant les trois réseaux, et rien de plus : pas les horaires,
+pas les arrêts, les tables lourdes du réseau principal restent intactes. La jointure se fait par
+identifiant de ligne, sans collision mesurée entre les trois. Les noms courts, eux, se
+télescopent — une ligne « 1 » existe partout — et restent au réseau principal ; la ligne
+régionale demeure joignable par son identifiant. Un identifiant revendiqué deux fois serait une
+ambiguïté réelle : il s'alarme.
+
+**Avant :** 319 lignes sur 443 sans nom ni mode dans le prompt.
+**Après :** 443 lignes au catalogue, aucune de mode inconnu — le TER s'affiche « Train K1 » avec
+sa destination, le car régional « Bus 392 » avec la sienne.
+
+---
+
+## [2026-09-04] Le mode principal d'un déplacement suit la hiérarchie de l'enquête
+
+Un déplacement qui mêle plusieurs modes reçoit **un** mode principal. Le dépôt en portait
+quatre tables et trois réponses pour le même trajet : un autocar régional suivi d'un TER
+était un déplacement en transports collectifs dans le journal, un déplacement en train dans
+la répartition de probabilités, un déplacement en train dans les compteurs du worker, et un
+déplacement en transports collectifs dans la métrique. Quatre chiffres plausibles pour un
+seul trajet, et aucun moyen de savoir lequel était le bon.
+
+**Il n'y avait rien à trancher : l'ordre est publié.** Le rapport de l'enquête donne en
+annexe la hiérarchie complète de ses 36 modes, « définie au niveau national ». Ramenée aux
+modes que le calculateur d'itinéraires sait produire, elle se lit : métro, puis tram, puis
+téléphérique, puis bus — cars régionaux et car scolaire compris —, puis train, puis voiture,
+puis deux-roues motorisé, puis vélo, puis marche. Elle vit désormais dans **un seul
+fichier**, gelé avec sa provenance, que toutes les tables consultent ; plus aucune cascade
+de tests écrite à la main, et une alarme si un mode inconnu apparaît au lieu d'un silence.
+
+**Deux surprises, et elles vont en sens contraire de ce qu'on attendait.** Le bus passe
+**avant** le train : pour l'enquête, un trajet « car régional + TER » est un déplacement en
+transports collectifs, et elle le code ainsi 34 fois sur 35. L'ordre du journal avait donc
+raison, et le soupçon de la veille — la colonne « Train » sous-compterait le rail de 62 % —
+s'inverse. C'est la **voiture** qui était mal placée : testée en premier, alors que
+l'enquête range 760 de ses 770 déplacements « voiture + transports collectifs » du côté des
+transports collectifs.
+
+**Aucun chiffre publié ne bouge, et c'est mesuré.** Rejouer les trois corpus qui épinglent
+des résultats — les jeux gelés de calibration, les décisions en cache, le dernier run
+archivé — donne exactement les mêmes libellés de mode : zéro déplacement déplacé sur 847 000
+options. Les seules corrections visibles portent sur des compteurs de diagnostic, où le
+téléphérique et le car scolaire cessaient d'être comptés comme des modes inconnus.
+
+**Avant :** un trajet car + train était compté dans quatre catégories différentes selon
+l'endroit où on le lisait ; l'ordre de priorité était écrit à la main dans quatre fichiers.
+**Après :** un seul ordre, sourcé sur l'annexe du rapport et vérifié sur les microdonnées de
+l'enquête (53 paires de modes tranchées, 53 conformes), lu par tout le dépôt.
+
+**Une limite chiffrée reste ouverte.** Le jeu d'options proposé à l'agent est plafonné à six
+itinéraires, en gardant le plus rapide de chaque famille de mode. Un train seul et un
+« bus + train » appartenant à la même famille, le train seul est écarté au profit du second
+dès qu'il est plus lent : sur 440 points où un trajet en train direct existe, il n'est jamais
+proposé dans 122 cas. Corriger cela change le contenu du prompt, donc les décisions : la
+mesure est publiée, la décision revient à l'auteur.
+
+---
+
 ## [2026-09-04] L'audit des parts modales compte le train, en détail et par catégorie
 
 L'audit de périmètre comparait les parts modales de la simulation aux cibles de l'enquête à

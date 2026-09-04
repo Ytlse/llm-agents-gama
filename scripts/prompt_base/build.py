@@ -136,8 +136,8 @@ from trip_helper.terminal_time import data_version  # noqa: E402
 # divergerait en silence et la base ne décrirait plus ce que le run décrit.
 from urban_mobility_agents.factory.factory import init_static_data  # noqa: E402
 from urban_mobility_agents.simulation_controller import (  # noqa: E402
-    _can_drive, _is_car_passenger, _owns_bike, _owns_car, _primary_mode,
-    _select_candidates)
+    _can_drive, _is_car_passenger, _owns_bike, _owns_car, _select_candidates,
+    _vehicle_mode)
 from urban_mobility_agents.agents.llm_agent import _build_profile_narrative  # noqa: E402
 
 from llm_module.core.models import AgentSpec  # noqa: E402
@@ -367,7 +367,7 @@ async def generate(args) -> int:
         # Post-filtre de production : OTP/OSMnx rendent parfois un mode non demandé.
         blocked = {m for m, ok in (("bike", include_bike), ("car", include_car)) if not ok}
         if blocked:
-            options = [o for o in options if _primary_mode(o) not in blocked]
+            options = [o for o in options if _vehicle_mode(o) not in blocked]
         if not options:
             stats["sans_itineraire"] += 1
             return

@@ -94,8 +94,18 @@ class TestExtractPrimaryMode:
     def test_bus_with_foot_is_bus(self):
         assert _extract_primary_mode("foot,bus,foot") == "bus"
 
-    def test_train_beats_bus(self):
-        assert _extract_primary_mode("bus,train") == "train"
+    def test_bus_beats_train(self):
+        """Le BUS gagne contre le train — c'est l'ordre de l'enquête, pas une intuition.
+
+        Inversé le 2026-09-04 (ticket 022). L'annexe « Hiérarchie des modes » du rapport
+        AUAT/CEREMA (p. 53) met le bus Tisséo au rang 4 et le TER au rang 8, et les
+        microdonnées le confirment : sur 35 déplacements mixtes bus/autocar ↔ train
+        tranchés par l'enquête, 34 sont codés bus. Un itinéraire « autocar liO + TER » est
+        donc un déplacement en transports collectifs de surface, pas un déplacement en
+        train.
+        """
+        assert _extract_primary_mode("bus,train") == "bus"
+        assert _extract_primary_mode("foot,bus,rail,foot") == "bus"
 
     def test_metro_beats_bus(self):
         assert _extract_primary_mode("bus,metro") == "metro"
@@ -105,6 +115,24 @@ class TestExtractPrimaryMode:
 
     def test_train_beats_car(self):
         assert _extract_primary_mode("car,rail") == "train"
+
+    def test_collectif_beats_car(self):
+        """La voiture est au rang 19, sous tout le collectif (rangs 1 à 13).
+
+        760 des 770 déplacements mixtes voiture + transports collectifs de l'enquête sont
+        codés « transports collectifs ».
+        """
+        assert _extract_primary_mode("car,bus") == "bus"
+        assert _extract_primary_mode("car,metro") == "metro"
+
+    def test_cableway_nest_plus_range_dans_other(self):
+        """Le Téléo et le car scolaire avaient leur propre étiquette nulle part.
+
+        Ils tombaient dans `other` **avec un ERROR à chaque décision** : un mode réellement
+        offert, journalisé comme une anomalie.
+        """
+        assert _extract_primary_mode("foot,cableway,foot") == "cableway"
+        assert _extract_primary_mode("school_bus") == "bus"
 
     def test_mixed_case_normalised(self):
         assert _extract_primary_mode("BUS") == "bus"

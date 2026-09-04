@@ -686,8 +686,47 @@ tickets:
       maintenant, A après le 026 livré et mesuré.
 
   ticket_022_rabattement_mode_principal:
-    status: à faire
+    status: en cours
     note: >-
+      LOT 1 LIVRÉ le 2026-09-04 — l'arbitrage de la hiérarchie est RENDU : celle du dépôt
+      est celle de l'enquête. Il n'y avait rien à postuler, l'ordre est PUBLIÉ : annexe
+      « Hiérarchie des modes », p. 53 du rapport AUAT/CEREMA, 36 modes dans l'ordre,
+      « défini au niveau national ». Ramené aux jambes de la simulation : métro > tram >
+      téléphérique > bus (car liO, car scolaire, TAD) > train > voiture > deux-roues
+      motorisé > vélo > marche. CONTRÔLÉ sur les microdonnées, pas seulement recopié :
+      53 paires de codes tranchées par 2 607 observations, 53 conformes sur 53, une seule
+      observation à contre-courant et elle est conforme à l'annexe (un Flixbus, rang 12,
+      perd contre un TER, rang 8). Gelé dans `llm_module/data/mode_hierarchy_emc2.json`
+      avec sa provenance ; servi par `llm_module/core/mode_hierarchy.py` à `move_logger`,
+      `mode_choice`, `task_worker` et `simulation_controller` — plus une seule cascade de
+      `if` écrite à la main.
+      DEUX SURPRISES. (1) LE BUS PASSE AVANT LE TRAIN (rangs 4 et 8 ; 34 déplacements
+      mixtes sur 35 codés bus) : un « autocar liO + TER » est un déplacement en TC, et le
+      constat déposé la veille — « la colonne Train de moves.csv sous-compte le rail de
+      62,5 % » — S'INVERSE. `_BUS_MODES` avant `_RAIL_MODES` était conforme ; c'étaient
+      `mode_choice` et `task_worker`, train en tête, qui divergeaient. (2) Grafana 07 NE
+      compare PAS quatre modes à cinq : les deux `label_replace` ramènent les deux séries
+      aux mêmes quatre catégories EMC², où le train est dans les TC (rangs 1 à 13, p. 53).
+      Fondre `rail` dans `transit` est correct pour cette métrique.
+      LA DISTINCTION QUI MANQUAIT : mode principal ≠ mode de véhicule. `_primary_mode`
+      servait aussi les verrous de chaîne du 008 ; aligner la hiérarchie sans séparer aurait
+      fait PERDRE LA VOITURE au verrou de retour sur un rabattement. `_vehicle_mode` est
+      désormais distinct, et un test vérifie qu'ils divergent bien sur un plan car+bus.
+      EFFET MESURÉ AVANT APPLICATION (versions « avant » par `git show`, six témoins de
+      rejeu) : ZÉRO bascule pour `_plan_transport_mode` et `canonical_mode` sur les 385 888
+      options des jeux gelés, les 444 055 décisions en cache et les 17 258 options du run
+      archivé — aucun résultat publié ne bouge, critère C2 vérifié par la mesure. Seules
+      bascules : les compteurs de diagnostic du worker, où le Téléo et le car scolaire
+      sortent de `other` (ils y tombaient AVEC un ERROR à chaque décision).
+      DEUX LIMITES CHIFFRÉES, NON CORRIGÉES parce qu'elles changent le prompt (décision de
+      l'auteur) : `_select_candidates` groupe par `_primary_mode`, donc un train pur et un
+      bus+train partagent l'unique créneau `transit` — sur 440 points où le train pur
+      existe, 122 (27,7 %) sont écartés au profit d'un bus+train plus rapide ; et
+      `numTripPatterns = 6` prive 45 points d'une option ferroviaire qu'un 20 leur rendrait
+      (833 → 878 points sur 2 580, plafond OTP atteint 59,7 % → 24,5 %, durée de requête
+      inchangée).
+      RESTENT les lots 2 à 5 (atteignabilité, trait `rabattement_plausible`, rendu, limite),
+      dont tout ce qui suit.
       OUVERT le 2026-08-24 à la suite du ticket 020, dont il traite l'axe A7. Le 020 lui
       avait donné le verdict « à publier » sur la base du chiffre GLOBAL de 1,41 pt ; la
       mesure PAR STRATE faite pour ce ticket-ci le rend nettement plus grave, donc plus

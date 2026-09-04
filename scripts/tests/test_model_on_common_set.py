@@ -91,20 +91,32 @@ def test_deux_roues_motorise_sort_du_perimetre_plutot_que_de_compter_pour_voitur
 
 
 def _canonical_fr() -> dict[str, str]:
-    """`_CANONICAL_FR` du journal de déplacements, lu SANS importer l'application.
+    """`_CANONICAL_FR` du journal de déplacements, reconstruite SANS importer l'application.
 
     `urban_mobility_agents` tire `settings` et `models`, donc tout l'environnement du
-    simulateur : l'importer ferait de ce test un test d'intégration. La table est un
-    littéral, on la relit à la source — ce qui suffit à détecter la divergence.
+    simulateur : l'importer ferait de ce test un test d'intégration. Depuis le ticket 022,
+    `move_logger._CANONICAL_FR` n'est plus un littéral : ses libellés viennent de la
+    hiérarchie gelée (`llm_module/data/mode_hierarchy_emc2.json`), plus le fourre-tout
+    `other` qui n'est pas une famille de l'enquête. On la reconstruit d'après la même
+    source — c'est bien la production qu'on lit, pas une copie —, et l'ORDRE des colonnes
+    est relu dans la source de `move_logger` puisque lui seul y vit encore.
     """
     import ast
+    from llm_module.core.mode_hierarchy import hierarchy
+
     source = (REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils"
               / "move_logger.py").read_text(encoding="utf-8")
+    ordre = None
     for node in ast.walk(ast.parse(source)):
         if (isinstance(node, ast.Assign)
-                and any(getattr(t, "id", None) == "_CANONICAL_FR" for t in node.targets)):
-            return ast.literal_eval(node.value)
-    raise AssertionError("_CANONICAL_FR introuvable dans move_logger.py")
+                and any(getattr(t, "id", None) == "_COLUMN_ORDER" for t in node.targets)):
+            ordre = list(ast.literal_eval(node.value))
+    assert ordre, "_COLUMN_ORDER introuvable dans move_logger.py"
+    h = hierarchy()
+    libelle = {h.canonical_mode[f]: h.journal_label[f] for f in h.families}
+    table = {canonique: libelle[canonique] for canonique in ordre}
+    table["other"] = "Autres modes"
+    return table
 
 
 def test_les_modes_canoniques_du_simulateur_sont_tous_couverts():

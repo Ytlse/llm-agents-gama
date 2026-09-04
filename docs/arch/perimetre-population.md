@@ -102,7 +102,7 @@ Mesures du 2026-08-24 sur `toulouse_population_1000.json` (1 021 personas) et le
 | **A4** | Périmètre | **45 personas (4,4 %)** hors des 453 communes, jusqu'à 114 km | **à corriger** |
 | **A5** | Fenêtre et variance | 0,0 % de trajets sous la pluie dans le run contre 44,7 % de jours pluvieux dans la fenêtre ; +5,3 °C sur le tirage des jeux gelés | à publier |
 | **A6** | Jour de semaine | aucun trajet de week-end ; parts modales stables à ±1,3 pt entre jours ouvrés | conforme |
-| **A7** | Objet compté | hiérarchie de mode principal inversée ; 1,4 pt de rabattement inatteignable globalement, mais **jusqu'à 59 % de la cible TC** sur la tranche 20-50 km | à publier → [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md) |
+| **A7** | Objet compté | hiérarchie de mode principal inversée (**refermée le 2026-09-04**, alignée sur l'annexe p. 53 du rapport) ; reste 1,4 pt de rabattement inatteignable globalement, mais **jusqu'à 59 % de la cible TC** sur la tranche 20-50 km | hiérarchie **conforme** ; rabattement à publier → [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md) |
 | **A8** | Ménages | taille déclarée juste (2,10 / 2,08), **11,2 % de membres absents** | à publier |
 | **A9** | Représentativité spatiale | 76,0 % réel en cœur d'agglomération contre 70,5 % cible | à publier |
 
@@ -270,7 +270,7 @@ d'EMC²** :
 ⚠ Sur un run de plus de cinq jours, le report empilerait les départs de week-end sur le
 lundi et fabriquerait un lundi atypique. Non exercé aujourd'hui, à surveiller.
 
-### A7 — L'objet compté : conforme sur la marche, inversé sur la hiérarchie
+### A7 — L'objet compté : conforme sur la marche, hiérarchie refermée le 2026-09-04
 
 **Ce qui est conforme.** Une ligne de `moves.csv` est un déplacement, pas une jambe (3 936
 lignes, 3 936 identifiants de trajet distincts). Les jambes terminales du ticket 013
@@ -280,16 +280,39 @@ non-transfert. L'enquête fait de même, et c'est **vérifié dans ses microdonn
 pied — l'accès y est une durée (`T2`/`T6`), pas un trajet. La marche n'est donc pas
 surestimée par construction, ce qui était le soupçon de départ.
 
-**Ce qui diverge.** La hiérarchie de mode principal est **inversée** :
-`_plan_transport_mode` teste la voiture *avant* les transports collectifs ; l'enquête code
-**760 de ses 770** déplacements mixtes voiture + TC en « transports collectifs », et 10
-seulement en « voiture ».
+**Ce qui divergeait, et ne diverge plus.** La hiérarchie de mode principal était
+**inversée** : `_plan_transport_mode` testait la voiture *avant* les transports collectifs,
+alors que l'enquête code **760 de ses 770** déplacements mixtes voiture + TC en
+« transports collectifs », et 10 seulement en « voiture ».
 
-La divergence est **latente** : OTP est interrogé mode par mode, donc aucun itinéraire
-simulé ne mêle les deux (vérifié sur les combinaisons de jambes du run — `car` et
-`foot,bus,foot` n'apparaissent jamais ensemble), et zéro déplacement est mal classé. Mais
-l'effet miroir est réel : la simulation ne peut structurellement pas produire les
-déplacements que la cible compte en TC *parce qu'ils sont mixtes*.
+**Refermé le 2026-09-04 par le [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md)**,
+et par la source plutôt que par une convention : le rapport publie en annexe **p. 53** la
+hiérarchie complète des 36 modes enquêtés, « définie au niveau national ». L'ordre est gelé
+dans [`mode_hierarchy_emc2.json`](../../llm_module/data/mode_hierarchy_emc2.json) et servi
+par [`mode_hierarchy.py`](../../llm_module/core/mode_hierarchy.py) à toutes les tables du
+dépôt — plus aucune cascade de `if` écrite à la main. Effet mesuré avant application :
+**zéro bascule** sur les 385 888 options des jeux gelés, les 444 055 décisions en cache et
+les 17 258 options du run archivé.
+
+**Deux enseignements de méthode, tirés de la mesure.**
+
+1. **Le rejeu de ce chiffre-ci est exact, et il révèle une inconsistance interne.** Les 770
+   déplacements voiture + TC se reproduisent à l'unité (770 / 760 / 10) *à condition* de
+   compter la voiture au sens large (deux-roues motorisés inclus) et une liste TC **sans le
+   téléphérique ni le transport d'employeur** ; les 58 déplacements vélo + TC, eux,
+   exigent la liste **complète**. Les deux chiffres d'A7 n'ont donc pas été calculés avec
+   la même liste — trace du défaut du Téléo corrigé le 2026-08-26. Les deux lectures sont
+   publiées dans la ressource gelée : avec les listes complètes, voiture + TC donne
+   767 / 757 / 10.
+2. **La hiérarchie a un cran contre-intuitif** : le **bus passe avant le train** (rangs 4
+   et 8 ; 34 déplacements mixtes sur 35 codés bus). L'ordre `_BUS_MODES` avant
+   `_RAIL_MODES` était donc conforme, et le constat déposé la veille — « la colonne Train
+   sous-compte le rail de 62,5 % » — s'inverse. Détail :
+   [`routing.md`](routing.md#la-hiérarchie-des-modes-une-seule-source).
+
+L'effet miroir, lui, **reste entier** : la simulation ne peut structurellement pas produire
+les déplacements que la cible compte en TC *parce qu'ils sont mixtes* — OTP est interrogé
+mode par mode. C'est l'objet des lots 2 à 5 du ticket 022, non traités ici.
 
 **Le chiffre global de 1,41 point (11,5 % de la cible de 12,2 %) masque l'essentiel.**
 Mesuré par strate pour le [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md) :

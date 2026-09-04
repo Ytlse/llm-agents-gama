@@ -1,4 +1,5 @@
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Optional
 from pydantic import BaseModel
 from models import BBox, Location
@@ -8,6 +9,7 @@ import os
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import LineString
+from loguru import logger
 from settings import settings
 
 
@@ -34,6 +36,24 @@ def _correct_color_hex_string(value):
     if len(value) == 3:
         return '#' + ''.join([c * 2 for c in value])
     return value
+
+def _lire_table_gtfs(feed: "Path", nom: str):
+    """Lit une table d'un feed GTFS, que le feed soit un répertoire ou un zip.
+
+    Rend `None` si la table n'existe pas : un feed sans `routes.txt` n'est pas une erreur,
+    c'est un feed qui n'a rien à dire sur les lignes.
+    """
+    if feed.is_dir():
+        chemin = feed / nom
+        return pd.read_csv(chemin, dtype=str) if chemin.exists() else None
+    if feed.suffix == ".zip":
+        with zipfile.ZipFile(feed) as archive:
+            if nom not in archive.namelist():
+                return None
+            with archive.open(nom) as f:
+                return pd.read_csv(f, dtype=str)
+    return None
+
 
 class GTFSData:
     def __init__(self, **kwargs):
@@ -74,6 +94,80 @@ class GTFSData:
             }
             for _, row in self.routes.iterrows()
         }
+        return self._joindre_catalogues_des_autres_feeds()
+
+    def _joindre_catalogues_des_autres_feeds(self) -> dict:
+        """Ajoute au dictionnaire des lignes le catalogue des AUTRES feeds en service.
+
+        Le lecteur ne charge qu'un feed (`settings.gtfs.gtfs_file`, Tisséo), alors que le
+        graphe OTP en porte trois depuis le 2026-09-04 : Tisséo, le TER et le car régional
+        liO. Un identifiant de ligne liO ou TER ne se trouvait donc dans aucune table, et le
+        prompt de l'agent lisait « Trajet en **Unknown 392** » pour les 319 lignes des deux
+        réseaux régionaux — le mode ET le numéro perdus, alors que la table des modes connaît
+        le train (`route_type` 2) et le bus (3) depuis le même jour.
+
+        Seul le CATALOGUE DES LIGNES est joint, pas les horaires ni les arrêts : c'est tout ce
+        dont le prompt a besoin, et les tables lourdes du feed primaire restent intactes.
+
+        La jointure se fait par `route_id`, mesuré **sans collision** entre les trois feeds ;
+        les noms courts, eux, collisionnent (une ligne « 1 » existe partout), d'où deux
+        dictionnaires traités différemment : par identifiant on complète, par nom court on
+        garde le feed primaire et on compte. Une collision d'identifiant, elle, est une
+        ambiguïté réelle : elle s'alarme.
+        """
+        from trip_helper.otp import feeds_en_service
+
+        primaire = Path(settings.gtfs.gtfs_file)
+        journal = {"feeds": {}, "lignes_ajoutees": 0,
+                   "collisions_identifiant": 0, "collisions_nom_court": 0}
+        for feed in feeds_en_service(str(primaire)):
+            if feed.resolve() == primaire.resolve():
+                continue
+            try:
+                routes = _lire_table_gtfs(feed, "routes.txt")
+            except (OSError, ValueError, KeyError) as exc:
+                logger.error(f"[ALARME] catalogue de lignes illisible dans {feed.name} : "
+                             f"{exc} — les lignes de ce réseau resteront « Unknown » dans le prompt")
+                continue
+            if routes is None:
+                continue
+            ajoutees = 0
+            for _, row in routes.iterrows():
+                rid = str(row['route_id'])
+                if rid in self.route_id_map:
+                    journal["collisions_identifiant"] += 1
+                    continue
+                self.route_id_map[rid] = {
+                    "route_short_name": str(row.get('route_short_name', '')),
+                    "route_long_name": str(row.get('route_long_name', '')),
+                    "route_type": settings.gtfs.gtfs_modality_name_map.get(
+                        str(row.get('route_type', '')), "Unknown"),
+                }
+                nom = str(row.get('route_short_name', ''))
+                if nom in self.route_name_id_map:
+                    journal["collisions_nom_court"] += 1
+                else:
+                    self.route_name_id_map[nom] = rid
+                ajoutees += 1
+            journal["feeds"][feed.name] = ajoutees
+            journal["lignes_ajoutees"] += ajoutees
+
+        if journal["collisions_identifiant"]:
+            logger.error(
+                f"[ALARME] {journal['collisions_identifiant']} identifiant(s) de ligne "
+                f"revendiqué(s) par deux feeds GTFS : le catalogue du feed primaire est "
+                f"conservé, l'autre ignoré. Le mode et le numéro affichés dans le prompt "
+                f"peuvent désigner la mauvaise ligne."
+            )
+        # Le succès se journalise aussi : sans cette ligne, on ne distingue pas « les trois
+        # réseaux sont là » de « le lecteur n'a rien trouvé à joindre ».
+        logger.info(
+            f"[GTFS] catalogue des lignes : {len(self.route_id_map)} ligne(s) au total, dont "
+            f"{journal['lignes_ajoutees']} venue(s) des autres feeds en service "
+            f"({journal['feeds'] or 'aucun'}) ; {journal['collisions_nom_court']} nom(s) court(s) "
+            f"déjà pris, gardés au feed primaire"
+        )
+        return journal
 
     def init_shape_lookup_maps(self):
         stops = self.trips.groupby('shape_id').agg({

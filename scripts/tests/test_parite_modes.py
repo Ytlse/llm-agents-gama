@@ -19,6 +19,12 @@ jamais si la PRODUCTION change. C'est cette asymétrie qui a laissé les deux d�
 former. Ici, les listes de production sont **lues dans leur source**, et le test échoue le
 jour où l'une d'elles gagne un mode que la loss ne connaît pas.
 
+**Depuis le 2026-09-04 (ticket 022), la source est unique.** Les cinq listes littérales de
+`move_logger` ont disparu : le dépôt lit `llm_module/data/mode_hierarchy_emc2.json`, gelé
+depuis l'annexe « Hiérarchie des modes » du rapport AUAT/CEREMA (p. 53) et contrôlé sur les
+microdonnées. Ce fichier de test lit donc **la ressource de production**, et il vérifie en
+plus qu'aucune cascade de modes n'a été réintroduite à la main dans `move_logger`.
+
 Deux gardes contre la vacuité (« l'absence de mesure produit le score parfait ») :
 une boucle sur une liste vide passe sans rien vérifier, donc les effectifs et quelques
 modes-témoins sont assertés avant d'itérer.
@@ -29,11 +35,13 @@ Lancement : PYTHONPATH=. llm-agents/.venv/bin/python -m pytest scripts/tests/tes
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
 import pytest
 
-from llm_module.core.mode_choice import canonical_mode
+from llm_module.core.mode_choice import _MODE_KEYWORDS, canonical_mode
+from llm_module.core.mode_hierarchy import DEFAULT_RESOURCE, hierarchy
 from scripts.models_influence.prompt_calibration_lib import MODE_KEYWORDS, categorize_mode
 from scripts.synthesis.frames import CHOSEN_MODE_MAP
 from scripts.synthesis.model_on_common_set import CANONICAL_TO_CAT
@@ -41,10 +49,18 @@ from scripts.synthesis.model_on_common_set import CANONICAL_TO_CAT
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MOVE_LOGGER = REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils" / "move_logger.py"
 
-# Ensembles de `move_logger` → catégorie EMC² attendue de la loss. Le rail va avec les
-# transports collectifs : la référence EMC² du dépôt (`cerema_values.yaml`) ne publie pas
-# de part « train » distincte, et `CHOSEN_MODE_MAP["Train"]` comme
+# Familles de la hiérarchie → nom historique de la liste de `move_logger` (les deux noms
+# sont cités dans la doc et dans `llm_agent`) → catégorie EMC² attendue de la loss. Le rail
+# va avec les transports collectifs : la référence EMC² du dépôt (`cerema_values.yaml`) ne
+# publie pas de part « train » distincte, et `CHOSEN_MODE_MAP["Train"]` comme
 # `CANONICAL_TO_CAT["train"]` appliquent déjà cette fusion.
+FAMILLES_PAR_LISTE = {
+    "_BUS_MODES": ("metro", "tram", "cableway", "bus"),
+    "_RAIL_MODES": ("rail",),
+    "_CAR_MODES": ("car",),
+    "_BIKE_MODES": ("bicycle",),
+    "_WALK_MODES": ("foot",),
+}
 PRODUCTION_VERS_CATEGORIE = {
     "_BUS_MODES": "transports_collectifs",
     "_RAIL_MODES": "transports_collectifs",
@@ -65,22 +81,16 @@ TEMOINS = {
 
 
 def _listes_de_production() -> dict[str, set[str]]:
-    """Les ensembles de modes de `move_logger`, LUS DANS LA SOURCE.
+    """Les modes de chaque famille, LUS DANS LA RESSOURCE DE PRODUCTION.
 
-    `urban_mobility_agents.utils.move_logger` importe `settings`, dont l'import repointe
-    le lien `experiments/current` — un effet de bord qui détournerait la trace d'un run en
-    cours. Les listes sont des littéraux : on les relit à la source, ce qui suffit à
-    détecter la divergence (même technique que `test_model_on_common_set._canonical_fr`).
+    `urban_mobility_agents.utils.move_logger` importe `settings` : on ne l'importe pas
+    depuis un test. Mais il n'y a plus de littéral à relire dans sa source — il dérive ses
+    cinq ensembles de `llm_module/data/mode_hierarchy_emc2.json`, exactement le fichier lu
+    ici. Le test compare donc la loss à la production elle-même.
     """
-    source = MOVE_LOGGER.read_text(encoding="utf-8")
-    trouvees: dict[str, set[str]] = {}
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.Assign):
-            continue
-        for cible in node.targets:
-            if isinstance(cible, ast.Name) and cible.id in PRODUCTION_VERS_CATEGORIE:
-                trouvees[cible.id] = set(ast.literal_eval(node.value))
-    return trouvees
+    familles = hierarchy().legs_by_family
+    return {nom: set().union(*(familles[f] for f in cles))
+            for nom, cles in FAMILLES_PAR_LISTE.items()}
 
 
 PRODUCTION = _listes_de_production()
@@ -88,13 +98,110 @@ PRODUCTION = _listes_de_production()
 
 def test_les_listes_de_production_sont_bien_lues():
     """Garde anti-vacuité : sans elle, tous les tests suivants passeraient à vide."""
-    assert MOVE_LOGGER.exists(), MOVE_LOGGER
+    assert DEFAULT_RESOURCE.exists(), DEFAULT_RESOURCE
     assert set(PRODUCTION) == set(PRODUCTION_VERS_CATEGORIE), (
-        "une liste de modes de move_logger.py a été renommée ou supprimée : "
+        "une famille de la hiérarchie a été renommée ou supprimée : "
         f"lues={sorted(PRODUCTION)}")
     for nom, (effectif_min, temoin) in TEMOINS.items():
         assert len(PRODUCTION[nom]) >= effectif_min, (nom, sorted(PRODUCTION[nom]))
         assert temoin in PRODUCTION[nom], (nom, temoin)
+
+
+def test_move_logger_ne_reecrit_pas_sa_propre_cascade():
+    """Aucune liste de modes littérale ne doit revenir dans `move_logger`.
+
+    C'est la garde qui empêche la régression de fond du ticket 022 : cinq listes écrites à
+    la main, dont une incomplète suffisait à faire disparaître un mode d'une part modale.
+    Le test lit la source (jamais l'import : `settings` a des effets de bord) et vérifie
+    que les cinq noms sont des vues de la hiérarchie, c'est-à-dire des affectations
+    calculées et non des littéraux.
+    """
+    source = MOVE_LOGGER.read_text(encoding="utf-8")
+    arbre = ast.parse(source)
+    litteraux = []
+    for node in ast.walk(arbre):
+        if not isinstance(node, ast.Assign):
+            continue
+        for cible in node.targets:
+            if not (isinstance(cible, ast.Name) and cible.id in PRODUCTION_VERS_CATEGORIE):
+                continue
+            if isinstance(node.value, (ast.Set, ast.List, ast.Tuple, ast.Dict)):
+                litteraux.append(cible.id)
+    assert not litteraux, (
+        f"{litteraux} sont redevenus des littéraux dans move_logger.py. La hiérarchie des "
+        "modes a UNE source : llm_module/data/mode_hierarchy_emc2.json.")
+    assert "primary_label" in source, (
+        "`_plan_transport_mode` ne consulte plus la hiérarchie : il a probablement "
+        "retrouvé une cascade de `if`.")
+
+
+def test_la_hierarchie_place_le_collectif_avant_la_voiture():
+    """Le cran mesuré par l'axe A7 : 760 des 770 déplacements mixtes sont codés TC.
+
+    Il était inversé dans `move_logger` — la voiture était testée EN PREMIER (ticket 022,
+    M1). Rang publié : voiture conducteur au 19, tout le collectif entre 1 et 13.
+    """
+    h = hierarchy()
+    for famille in ("metro", "tram", "cableway", "bus", "rail"):
+        assert h.family_rank[famille] < h.family_rank["car"], famille
+    assert h.family_rank["car"] < h.family_rank["motorbike"] < h.family_rank["bicycle"]
+    assert h.family_rank["bicycle"] < h.family_rank["foot"]
+
+
+def test_la_hierarchie_place_le_bus_avant_le_train():
+    """L'arbitrage du ticket 022, et il surprend : le BUS gagne contre le train.
+
+    Rapport p. 53 : bus Tisséo au rang 4, TER liO au rang 8. Mesuré sur les microdonnées :
+    34 des 35 déplacements mixtes bus/autocar ↔ train tranchés sont codés bus. Un
+    itinéraire « autocar liO + TER » est donc un déplacement en transports collectifs de
+    surface — ce que `move_logger` faisait déjà, et ce que `mode_choice` et `task_worker`
+    faisaient à l'envers.
+    """
+    h = hierarchy()
+    assert h.family_rank["bus"] < h.family_rank["rail"]
+    assert h.primary_label(("foot", "bus", "rail", "foot")) == "Transports_collectifs"
+    assert h.primary_label(("foot", "rail", "foot")) == "Train"
+    assert h.primary_canonical(("foot", "bus", "rail", "foot")) == "public_transport"
+    assert h.primary_canonical(("foot", "rail", "foot")) == "train"
+
+
+def test_la_hierarchie_est_sourcee_et_mesuree():
+    """Ni postulée, ni recopiée sans contrôle : la ressource porte sa provenance.
+
+    Garde anti-vacuité de second niveau : une hiérarchie exportée depuis des microdonnées
+    illisibles produirait « zéro exception », donc un accord parfait par absence de mesure.
+    """
+    doc = json.loads(DEFAULT_RESOURCE.read_text(encoding="utf-8"))
+    source = doc["source_publiee"]
+    assert source["page"] == 53 and "AUAT" in source["rapport"]
+    assert len(source["ordre"]) == 36, "l'annexe publie 36 modes"
+    accord = doc["mesure"]["accord_avec_l_ordre_publie"]
+    assert accord["observations_informatives"] >= 2000, accord
+    assert accord["paires_testees"] >= 40, accord
+    assert accord["paires_conformes"] == accord["paires_testees"], accord["exceptions"]
+    a7 = doc["controles"]["a7_voiture_tc_convention_ticket_020"]
+    assert (a7["n"], a7["collectif_au_sens_non_autre"], a7["autre"]) == (770, 760, 10), a7
+    assert doc["provenance"]["fichiers"], "empreintes des microdonnées absentes"
+
+
+def test_les_quatre_tables_de_production_suivent_la_hierarchie():
+    """Une seule définition, partout : les trois cascades du dépôt dérivent du même ordre.
+
+    `mode_choice._MODE_KEYWORDS` (répartition du LLM), la loss `MODE_KEYWORDS`, et les
+    ponts `CHOSEN_MODE_MAP` / `CANONICAL_TO_CAT` doivent tous ranger un mode comme la
+    hiérarchie. `mode_choice` est vérifiée à l'import ; ici on le redit côté test, et on
+    ajoute le cas qui distinguait les deux avant le ticket 022.
+    """
+    h = hierarchy()
+    assert tuple(mode for mode, _ in _MODE_KEYWORDS) == h.canonical_order()
+    for jambes in (("foot", "bus", "rail", "foot"), ("foot", "rail", "foot"),
+                   ("car",), ("bicycle",), ("foot",), ("foot", "cableway", "foot")):
+        libelle = h.primary_label(jambes)
+        canonique = h.primary_canonical(jambes)
+        chaine = ",".join(jambes)
+        assert canonical_mode(chaine) == canonique, chaine
+        assert CHOSEN_MODE_MAP[libelle] == CANONICAL_TO_CAT[canonique], chaine
+        assert categorize_mode(chaine) == CANONICAL_TO_CAT[canonique], chaine
 
 
 @pytest.mark.parametrize("nom", sorted(PRODUCTION_VERS_CATEGORIE))

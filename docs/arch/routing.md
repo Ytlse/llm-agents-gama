@@ -244,6 +244,32 @@ Après les appels OTP et OSMnx (parallèles), le controller :
 3. Mélange aléatoirement l'ordre de présentation au LLM (anti-biais de position)
 4. Transmet la liste au module de décision LLM
 
+### Le plafond de candidats, et où il pince
+
+`settings.gtfs.max_trip_candidates` (**6**) sert deux fois, et ce n'est pas la même chose :
+
+| Où | Ce que le 6 fait |
+|---|---|
+| `trip_helper/otp.py` → `numTripPatterns` | **combien OTP en cherche.** Il rend ses 6 meilleurs motifs au coût généralisé ; avec trois réseaux dans le graphe, ils peuvent tous être des bus, et l'option ferroviaire n'existe alors *pas* avant même la sélection |
+| `simulation_controller._select_candidates` | **combien l'agent en voit.** Le plus rapide par groupe de mode d'abord (groupe = `_primary_mode`), puis remplissage jusqu'à 6 — options directes marche/vélo/voiture incluses, qui occupent donc des créneaux |
+
+Mesuré le 2026-09-04 sur les 2 580 points de la population scellée v4 vers le Capitole,
+lundi 16 mars 2026 8 h (7 740 requêtes,
+[trace](../traces/2026-09-04_10-17_hierarchie_modes_enquete/README.md)) :
+
+| `numTripPatterns` | motifs rendus | points avec ≥ 1 train | plafond OTP atteint | ms/requête |
+|---:|---:|---:|---:|---:|
+| **6** (production) | 11 281 | **833 (32,3 %)** | 59,7 % | 236,6 |
+| 10 | 16 246 | 867 (33,6 %) | 42,2 % | 252,1 |
+| 20 | 24 204 | 878 (34,0 %) | 24,5 % | 207,6 |
+
+Côté sélection, sur le run archivé `2026-09-04_01_09` (4 768 décisions) : le plafond de 6
+est **atteint dans 44,7 %** des décisions, et l'agent voit 1 seul mode distinct dans 22,6 %
+des cas, 2 dans 28,6 %, 3 dans 35,1 %, 4 dans 13,7 %.
+
+⚠ Monter ce réglage change le prompt, donc les décisions et le cache de décisions : c'est
+une décision de l'auteur, pas un ajustement.
+
 ---
 
 ## Modes disponibles par agent
@@ -286,8 +312,12 @@ règlement liО, pas de l'enquête. Détail et décisions : `docs/tickets/ticket
 ### Les listes de modes, et où en est le train
 
 Un mode traverse une dizaine de tables avant d'arriver dans une part modale. Elles ne se
-déduisent pas l'une de l'autre : chacune est une liste littérale, et une liste incomplète
-produit un chiffre plausible et faux. État au 2026-09-04, après l'ajout de `rail`.
+déduisaient pas l'une de l'autre : chacune était une liste littérale, et une liste
+incomplète produit un chiffre plausible et faux. **Depuis le 2026-09-04 (ticket 022),
+l'ORDRE de priorité n'est plus qu'à un seul endroit** — voir
+[« La hiérarchie des modes »](#la-hiérarchie-des-modes-une-seule-source) plus bas. Les
+listes d'appartenance, elles, restent plurielles ; le tableau ci-dessous dit où elles en
+sont.
 
 | Table | Rôle | Train |
 |---|---|---|
@@ -295,15 +325,17 @@ produit un chiffre plausible et faux. État au 2026-09-04, après l'ajout de `ra
 | `trip_helper/otp.py` → `SUPPORTED_MODES` | ce qui est **accepté** en retour (assertion dure) | `rail` ✅ |
 | `settings.gtfs.gtfs_modality_name_map` | `route_type` → nom lu dans le prompt | `"2": "Train"` ✅ |
 | `llm_agent._PT_LEG_MODES` | déclenche la mention d'abonnement TC | `rail`, `train` ✅ |
-| `move_logger._RAIL_MODES` / `_CANONICAL_FR` | colonne « Train » de `moves.csv` | ✅ |
-| `mode_choice.CANONICAL_MODES` / `_MODE_KEYWORDS` | mode canonique de la répartition | `train` ✅ |
-| `task_worker._extract_primary_mode` | mode principal, priorité train > métro > tram > bus | ✅ |
+| **`llm_module/data/mode_hierarchy_emc2.json`** | **l'ordre de priorité, gelé depuis le rapport p. 53** | rang **5** ✅ *(2026-09-04)* |
+| `move_logger._RAIL_MODES` / `_CANONICAL_FR` | colonne « Train » de `moves.csv` | vues de la hiérarchie ✅ *(2026-09-04)* |
+| `mode_choice.CANONICAL_MODES` / `_MODE_KEYWORDS` | mode canonique de la répartition | `train`, ordre contrôlé à l'import ✅ *(2026-09-04)* |
+| `task_worker._extract_primary_mode` | compteurs de diagnostic ; suit la hiérarchie | ✅ *(2026-09-04)* |
 | `frames.PROBA_COLUMNS` / `CHOSEN_MODE_MAP`, pont oracle | libellé → catégorie EMC² | « Train » → TC ✅ |
 | Grafana 05 et 07, `scripts/dashboard/palette.py`, `scripts/analysis/mode_probabilities.py` | couleur du mode (violet, cf. la palette du dépôt) | ✅ |
 | `calibration/metrics.categorize_mode` et sa copie `prompt_calibration_lib` | **loss de calibration** | `rail`, `train`, `ter` ✅ *(2026-09-04)* |
 | `GAMA/…/Settings.gaml` → `ROUTE_DISPLAY_WIDTH`, `VEHICLE_MAX_CAPACITY`, `TYPE_RAIL` | largeur, capacité et filtres par `route_type` | clé `2` ✅ *(2026-09-04)* |
-| `simulation_controller._primary_mode` | métrique `TRIP_MODE_BY_PURPOSE` | ⚠ `rail` fondu dans `transit` |
-| `move_logger._plan_transport_mode` — **ordre** de la cascade | colonne « Mode de transport Choisi » | ⚠ `_BUS_MODES` testé avant `_RAIL_MODES` |
+| `simulation_controller._primary_mode` | métrique `TRIP_MODE_BY_PURPOSE`, et **regroupement de `_select_candidates`** | `rail` fondu dans `transit` — **correct** : ce sont les 4 catégories agrégées de l'enquête, où le train EST dans les TC (rangs 1 à 13, p. 53) ✅ *(2026-09-04)* |
+| `move_logger._plan_transport_mode` — **ordre** de la cascade | colonne « Mode de transport Choisi » | lit la hiérarchie ; `_BUS_MODES` avant `_RAIL_MODES` est **conforme à l'enquête** ✅ *(2026-09-04)* |
+| `simulation_controller._vehicle_mode` | chaîne des véhicules (ticket 008) : verrous, stationnement, passager | hors hiérarchie **par construction** — c'est « où est la voiture », pas « quel est le mode principal » |
 | `mode_labels.AGGREGATION` (audit de périmètre A7 et A2, carnet `selected_mode_stats`) | libellé fin → catégorie EMC², **et l'alarme sur tout libellé hors table** | « Train » → TC ✅ *(2026-09-04)* |
 
 **Deux corrections livrées le 2026-09-04, mesurées avant application.**
@@ -339,11 +371,65 @@ journal le dit maintenant :
 [ALARME] route_type tracé(s) dans routes.shp mais ABSENT(s) de trip_info.json : [2.0] — aucun véhicule de ce type ne roulera.
 ```
 
-**Les lignes ⚠ restantes** attendent chacune une décision. L'**ordre** de la
-cascade de `_plan_transport_mode` et `_primary_mode` relèvent de la hiérarchie des modes du
-**ticket 022**, où le constat est désormais chiffré : sur les 1 883 itinéraires portant un
-train, **1 177 (62,5 %)** portent aussi une jambe de bus ou de car et sont donc étiquetés
-`Transports_collectifs` — la colonne « Train » de `moves.csv` sous-compte le rail d'autant.
+### La hiérarchie des modes : une seule source
+
+**Arbitrage du ticket 022, rendu le 2026-09-04 : la hiérarchie du dépôt est celle de
+l'enquête.** L'ordre n'est plus écrit dans le code : il est gelé dans
+[`llm_module/data/mode_hierarchy_emc2.json`](../../llm_module/data/mode_hierarchy_emc2.json)
+et servi par [`llm_module/core/mode_hierarchy.py`](../../llm_module/core/mode_hierarchy.py).
+
+    métro > tram > téléphérique > bus (car liO, car scolaire, TAD) > train
+          > voiture > deux-roues motorisé > vélo > marche
+
+**Il n'y avait rien à postuler : l'ordre est publié.** Le rapport AUAT/CEREMA donne en
+annexe, **page 53** (« Hiérarchie des modes »), les 36 modes enquêtés dans l'ordre — celui
+qui, dit le même rapport p. 12, « découle d'une hiérarchisation des modes définie au niveau
+national ». Il est **contrôlé sur les microdonnées** par
+[`export_mode_hierarchy.py`](../../scripts/progedo_logit/export_mode_hierarchy.py) : 53
+paires de codes tranchées par 2 607 observations, **53 conformes sur 53**, une seule
+observation à contre-courant et elle est conforme à l'annexe (un Flixbus, rang 12, perd
+contre un TER, rang 8).
+
+**Le cran qui surprend : le bus passe AVANT le train** (rangs 4 et 8 ; mesuré, 34
+déplacements mixtes sur 35 codés bus). Un itinéraire « autocar liO + TER » est donc un
+déplacement en **transports collectifs**, pas en train. Le constat déposé la veille dans le
+ticket 022 — « la colonne Train de `moves.csv` sous-compte le rail de 62,5 % » —
+**s'inverse** : les 1 177 itinéraires concernés sont correctement étiquetés
+`Transports_collectifs`. `_BUS_MODES` avant `_RAIL_MODES` était conforme ; c'étaient
+`mode_choice` et `task_worker`, qui testaient le train **en tête**, qui divergeaient.
+
+**Le cran qui mordait : la voiture après tout le collectif** (rang 19, contre 1 à 13).
+`_plan_transport_mode` et `_primary_mode` la testaient **en premier**, alors que l'enquête
+code 760 de ses 770 déplacements mixtes voiture + TC en « transports collectifs » (axe A7,
+rejoué à l'unité). Latent jusqu'ici : OTP est interrogé mode par mode.
+
+**Ce que le mode principal N'EST PAS.** La chaîne de véhicules du ticket 008 demande « où
+est la voiture », pas « quel est le mode principal » : sur un rabattement, l'enquête classe
+le déplacement en TC *et* la voiture doit être garée à destination. Les deux lectures sont
+donc séparées — `_primary_mode` (hiérarchie, métrique, regroupement) et `_vehicle_mode`
+(verrous de sortie et de retour, stationnement, passager). Les confondre faisait perdre la
+voiture au verrou de retour.
+
+**Effet mesuré avant application** (`docs/traces/2026-09-04_10-17_hierarchie_modes_enquete/`,
+versions « avant » extraites par `git show`, jamais recopiées) : **zéro bascule** pour
+`_plan_transport_mode` et `canonical_mode` sur les 385 888 options des jeux gelés, les
+444 055 décisions en cache et les 17 258 options du run archivé. Aucun résultat publié ne
+bouge, et le critère de non-régression du ticket est vérifié par la mesure. Les seules
+bascules sont des corrections des compteurs de diagnostic du worker : le Téléo et le car
+scolaire sortent de `other`, où ils atterrissaient **avec un ERROR à chaque décision**.
+
+**Ce que la métrique à quatre catégories n'a pas de fautif.** Le ticket annonçait que
+Grafana 07 « compare une base à quatre modes à une base à cinq ». Vérification :
+`grafana/dashboards/07_metier_mobilite.json` mappe `public_transport|train → tc` d'un côté
+et `transit → tc` de l'autre. **Les deux séries sont ramenées aux mêmes quatre catégories
+EMC²** — celles que l'annexe p. 53 nomme, où les rangs 1 à 13 forment « transports en
+commun », train compris. Fondre `rail` dans `transit` est correct pour cette métrique.
+
+⚠ Reste une limite du regroupement, chiffrée et **non corrigée** : `_select_candidates`
+groupe par `_primary_mode`, donc un train pur et un bus + train partagent l'unique créneau
+`transit`. Sur les 440 points où une option de train pur existe, **122 (27,7 %)** sont
+écartés au profit d'un bus + train plus rapide, et le train ne s'offre jamais comme choix
+distinct. Corriger cela change le prompt : décision de l'auteur (ticket 022).
 
 **Le bout aval de la chaîne, corrigé le 2026-09-04.** `audit_perimetre.MOVE_MODE_MAP`
 écartait (`continue`) tout libellé hors de ses quatre entrées : un déplacement « Train »
@@ -357,6 +443,21 @@ dont la couverture est confrontée à
 hors table est compté sous `libelle_inconnu`, nommé, et alarmé en ERROR dans l'`app.log`
 du run — donc lu par `make error`. Détail : [`perimetre-population.md`](perimetre-population.md),
 axe A7.
+
+**Le catalogue des lignes réunit les trois réseaux depuis le 2026-09-04.** `GTFSData` ne
+charge qu'un feed (`settings.gtfs.gtfs_file`, Tisséo) alors que le graphe OTP en porte trois.
+Un identifiant de ligne liO ou TER ne se trouvait donc dans aucune table, et le prompt de
+l'agent lisait « Trajet en **Unknown 392** » pour les **319 lignes** des deux réseaux
+régionaux — le mode *et* le numéro perdus, alors que la table des modalités connaît le train
+(`route_type` 2) depuis le même jour. `init_route_lookup_maps` joint désormais le **catalogue
+des lignes** des autres feeds en service (`trip_helper.otp.feeds_en_service`, la même
+énumération que la porte de proximité), et rien d'autre : ni horaires, ni arrêts, les tables
+lourdes du feed primaire restant intactes. Mesuré : **443 lignes** au catalogue dont 319
+venues de liO (302) et du TER (17), **0 de mode inconnu**. La jointure se fait par
+`route_id` — sans collision entre les trois feeds ; les **noms courts**, eux, collisionnent
+(37 mesurés, une ligne « 1 » existant partout) et restent au feed primaire, la ligne
+régionale demeurant joignable par son identifiant. Une collision d'`route_id` serait une
+ambiguïté réelle : elle s'alarme.
 
 **Un troisième défaut du même genre, trouvé et corrigé en chemin** :
 `mode_choice.canonical_mode("foot,cableway,foot")` renvoyait **`walking`**. Le Téléo ne

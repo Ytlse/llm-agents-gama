@@ -1,11 +1,13 @@
 import asyncio
 import csv
 import itertools
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from llm_module.core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
+from llm_module.core.mode_hierarchy import hierarchy as _mode_hierarchy
 from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
 from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 from models import Person, TravelPlan
@@ -19,12 +21,29 @@ from settings import settings
 # EMC², une valeur exotique y disparaîtrait sans être comptée.
 RESIDENCE_VALUES = frozenset((*COURONNES, OUT_OF_PERIMETER))
 
-_BUS_MODES = {"bus", "metro", "subway","tram", "cableway", "gondola", "funicular",
-              "school_bus"}  # car scolaire synthétique (ticket 030), compté en TC
-_RAIL_MODES = {"rail"}
-_CAR_MODES = {"car", "__car__"}
-_BIKE_MODES = {"bicycle", "bike"}
-_WALK_MODES = {"foot", "walk"}
+logger = logging.getLogger(__name__)
+
+_MODE_HIERARCHY = _mode_hierarchy()
+
+# Jeux de modes inconnus déjà signalés — l'alarme se déclenche sur front montant.
+_UNKNOWN_MODES_SEEN: set[str] = set()
+
+# Familles de modes, DÉDUITES de la hiérarchie de l'enquête et non plus écrites ici
+# (ticket 022). Cinq listes littérales cohabitaient dans le dépôt et une seule d'entre
+# elles suffisait à faire dériver une part modale : une liste incomplète rend un chiffre
+# plausible et faux (le Téléo compté en marche, le TER compté en marche). L'ordre des
+# tests suit désormais l'annexe « Hiérarchie des modes » du rapport AUAT/CEREMA (p. 53),
+# contrôlée sur les microdonnées : métro > tram > téléphérique > bus > train > voiture >
+# deux-roues motorisé > vélo > marche.
+#
+# Les cinq noms survivent parce qu'ils sont cités ailleurs (`llm_agent`, le test de
+# parité) ; ils ne sont plus une source, seulement une vue.
+_BUS_MODES = frozenset().union(*(_MODE_HIERARCHY.legs_by_family[f]
+                                 for f in ("metro", "tram", "cableway", "bus")))
+_RAIL_MODES = _MODE_HIERARCHY.legs_by_family["rail"]
+_CAR_MODES = _MODE_HIERARCHY.legs_by_family["car"]
+_BIKE_MODES = _MODE_HIERARCHY.legs_by_family["bicycle"]
+_WALK_MODES = _MODE_HIERARCHY.legs_by_family["foot"]
 
 _PURPOSE_FR = {
     "work": "Travail",
@@ -36,16 +55,19 @@ _PURPOSE_FR = {
 }
 
 # Modes canoniques (llm_module.core.mode_choice) → libellés des colonnes, alignés sur
-# le vocabulaire de « Mode de transport Choisi ». L'ordre fixe les colonnes du CSV.
-_CANONICAL_FR = {
-    "walking": "Marche",
-    "cycling": "Vélo",
-    "car": "Voiture Privée",
-    "public_transport": "Transports_collectifs",
-    "train": "Train",
-    "motorbike": "Deux-roues motorisé",
-    "other": "Autres modes",
-}
+# le vocabulaire de « Mode de transport Choisi ». Les libellés viennent de la hiérarchie
+# (ticket 022) : une seule table les décide. L'ORDRE, en revanche, reste celui de
+# l'affichage et non celui de la hiérarchie — il fixe les colonnes du CSV, et les changer
+# rendrait les `moves.csv` archivés incomparables aux nouveaux. `other` n'est pas une
+# famille de l'enquête : c'est le fourre-tout du dépôt, il n'a donc pas de rang.
+_COLUMN_ORDER = ("walking", "cycling", "car", "public_transport", "train", "motorbike")
+_LABEL_BY_CANONICAL = {_MODE_HIERARCHY.canonical_mode[family]:
+                       _MODE_HIERARCHY.journal_label[family]
+                       for family in _MODE_HIERARCHY.families}
+# Un mode canonique absent de la hiérarchie lève ici, à l'import : une colonne muette
+# vaudrait mieux qu'un libellé faux, mais une colonne absente vaut mieux que les deux.
+_CANONICAL_FR = {canonical: _LABEL_BY_CANONICAL[canonical] for canonical in _COLUMN_ORDER}
+_CANONICAL_FR["other"] = "Autres modes"
 
 # Une colonne par mode : la répartition estimée par le LLM avant tirage (somme = 100).
 # Un mode non proposé vaut 0 (et non vide) — c'est ce qui distingue « était possible mais
@@ -149,6 +171,25 @@ def _housing_type(traits: dict) -> str:
     return label if key_for(label) else ""
 
 
+def _log_unknown_modes(modes: set) -> None:
+    """Alarme sur front montant : un mode que la hiérarchie ignore ne doit pas passer muet.
+
+    Un mode absent de la hiérarchie atterrit dans « Autres modes », qui est **exclu** du
+    scoring EMC² (`frames.CHOSEN_MODE_MAP` le range dans `autres`). Sa masse disparaît donc
+    d'une part modale sans rien casser : c'est le défaut du Téléo (2026-08-26) et celui du
+    TER (2026-09-04), deux fois le même mécanisme. Une seule ligne par jeu de modes inconnu,
+    pour ne pas noyer le journal d'un run de plusieurs milliers de déplacements.
+    """
+    cle = ",".join(sorted(str(m) for m in modes))
+    if cle in _UNKNOWN_MODES_SEEN:
+        return
+    _UNKNOWN_MODES_SEEN.add(cle)
+    logger.error(
+        "[ALARME] Modes hors hiérarchie dans un plan : {%s} → colonne « Autres modes », "
+        "donc hors scoring EMC². Ajoutez-les à llm_module/data/mode_hierarchy_emc2.json "
+        "(scripts/progedo_logit/export_mode_hierarchy.py, table FAMILLES).", cle)
+
+
 def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
     if plan is None:
         return ""
@@ -156,17 +197,14 @@ def _plan_transport_mode(plan: Optional[TravelPlan]) -> str:
     if not non_transfer:
         return "Marche"
     modes = {(leg.mode or "").lower() for leg in non_transfer}
-    if modes & _CAR_MODES:
-        return "Voiture Privée"
-    if modes & _BUS_MODES:
-        return "Transports_collectifs"
-    if modes & _RAIL_MODES:
-        return "Train"
-    if modes & _BIKE_MODES:
-        return "Vélo"
-    if modes <= _WALK_MODES:
-        return "Marche"
-    return "Autres modes"
+    # Un seul appel, un seul ordre : celui de l'enquête (cf. `llm_module.core.
+    # mode_hierarchy`). « Autres modes » n'est plus la sortie d'une cascade épuisée mais
+    # celle d'un mode que la hiérarchie ne connaît pas — un cas à voir, pas à absorber.
+    label = _MODE_HIERARCHY.primary_label(modes)
+    if label is None:
+        _log_unknown_modes(modes)
+        return "Autres modes"
+    return label
 
 
 def _available_modes_summary(options: Optional[list]) -> str:

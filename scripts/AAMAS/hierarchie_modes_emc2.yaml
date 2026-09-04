@@ -18,11 +18,13 @@
 # — qui teste le bus avant le rail — était déjà conforme sur ce point. Ce qui ne l'est pas :
 # `task_worker._extract_primary_mode`, qui déclare « train > métro > tram > bus ».
 #
-# RECOUPEMENT. La règle du dépôt veut qu'un chiffre publié soit recalculé depuis sa source
-# (docs/paper/README.md, règle 5). Le recoupement de cette table sur les microdonnées ProGEDO
-# lil-1750 — pour chaque paire de modes présents dans un même déplacement, quel mode principal
-# l'enquête retient — est en cours et sera consigné ici avec ses effectifs. Un cran contredit
-# par la mesure se déclare, il ne se corrige pas en silence.
+# RECOUPEMENT — FAIT le 2026-09-04, voir le bloc `recoupement:` en fin de fichier. La règle
+# du dépôt veut qu'un chiffre publié soit recalculé depuis sa source (docs/paper/README.md,
+# règle 5). Le recoupement sur les microdonnées ProGEDO lil-1750 — pour chaque paire de modes
+# présents dans un même déplacement, quel mode principal l'enquête retient — donne 53 paires
+# de codes tranchées par 2 607 observations informatives et **53 conformes sur 53**. La seule
+# observation à contre-courant confirme la table (un Flixbus, ordre 12, perd contre un TER,
+# ordre 8). Trois crans ne sont PAS tranchés par la mesure et le disent.
 # Déjà recoupé (axe A7 de `docs/arch/perimetre-population.md`) : sur 770 déplacements mixtes
 # voiture + transports collectifs, l'enquête en code 760 en « transports collectifs » et 10 en
 # « voiture ». Cohérent avec la table : les TC occupent les ordres 1 à 13, le véhicule
@@ -110,3 +112,54 @@ correspondance_simulation:
   car:      {ordre: 19, categorie: vehicule_particulier}
   bicycle:  {ordre: 28, categorie: velo}
   foot:     {ordre: 36, categorie: marche}
+
+# ── RECOUPEMENT SUR LES MICRODONNÉES — consigné le 2026-09-04 (ticket 022, lot 1) ──
+#
+# Le bloc que le commentaire d'en-tête annonçait. Méthode : pour chaque paire de modes
+# co-présents dans un même déplacement de l'enquête, quel mode `MODP` retient-elle ? Une
+# observation est INFORMATIVE pour la paire (a, b) quand le déplacement porte les deux et
+# que son `MODP` vaut a ou b ; sinon un troisième mode a gagné, et l'observation renseigne
+# les paires de ce troisième mode, pas celle-ci.
+#
+# Produit et vérifiable par `scripts/progedo_logit/export_mode_hierarchy.py`, qui LIT ce
+# fichier (il ne recopie pas l'ordre) et publie la matrice complète, paire par paire, dans
+# `llm_module/data/mode_hierarchy_emc2.json`. `--check` refait la mesure et refuse de
+# conclure si l'accord tombe faute d'observations plutôt que faute d'erreurs.
+recoupement:
+  mesure_le: '2026-09-04'
+  par: scripts/progedo_logit/export_mode_hierarchy.py
+  matrice_complete: llm_module/data/mode_hierarchy_emc2.json
+  trace: docs/traces/2026-09-04_10-17_hierarchie_modes_enquete/README.md
+  effectifs:
+    deplacements: 54585
+    deplacements_avec_trajets_detailles: 39743
+    deplacements_mixtes: 2281
+    observations_informatives: 2607
+    paires_de_codes_tranchees: 53
+    paires_conformes: 53
+    seuil_informatif_decisif: 3
+    paires_non_tranchees_faute_d_effectif: 70
+  # L'unique observation à contre-courant, et elle CONFIRME la table : le Flixbus est à
+  # l'ordre 12, sous les trains (8 à 11), donc un « Flixbus + TER » est bien un TER.
+  seule_exception: >-
+    1 déplacement mêlant un car longue distance (code 42, ordre 12) et un TER (code 52,
+    ordre 8), codé TER par l'enquête — conforme à l'ordre publié.
+  crans_les_mieux_mesures:
+    metro_avant_tout: "0 exception sur ~2 000 observations informatives"
+    bus_avant_train: "34 déplacements sur 35 codés bus (codes 31/41 contre 51/52/53)"
+    collectif_avant_voiture: "770 déplacements mixtes voiture + TC, 760 codés TC, 10 voiture (axe A7, rejoué à l'unité)"
+    voiture_avant_velo: "24 observations sur 24"
+    marche_en_dernier: >-
+      rang MESURÉ et non supposé : le fichier trajets ne porte aucun code 01 (l'accès à
+      pied est une durée T2/T6), et MODP = 01 désigne exactement les 14 842 déplacements
+      sans trajet mécanisé — aucun des 39 743 déplacements détaillés n'est codé marche.
+  # Crans que la mesure ne tranche pas : leur rang vient de la table publiée SEULE, et il
+  # faut le savoir plutôt que de croire qu'ils sont mesurés.
+  crans_non_tranches_par_la_mesure:
+    tram_vs_cableway: "1 déplacement les mêle, aucune observation informative"
+    voiture_vs_deux_roues_motorises: "2 observations (les deux pour la voiture)"
+    deux_roues_motorises_vs_velo: "2 observations (les deux pour le deux-roues)"
+  # ⚠ Un cran de la table publiée est CONTRE-INTUITIF et la mesure le confirme : l'ordre 33
+  # (« Passager autre réseau urbain », codes 38/39) est SOUS le véhicule particulier — 10
+  # observations sur 10 donnent la voiture. Ne pas le rattacher à la famille `bus` de la
+  # simulation : ce serait importer un contresens.
