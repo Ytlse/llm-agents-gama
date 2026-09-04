@@ -69,8 +69,30 @@ from scripts.analysis.mode_labels import (  # noqa: E402
     SCORED_CATEGORIES, SURVEY_CATEGORIES, UNKNOWN as UNKNOWN_MODE,
     aggregation_table, category_of, log_alarm, tally_labels)
 
-DEFAULT_POPULATION = REPO_ROOT / "data" / "population" / "toulouse_population_1000.json"
 DEFAULT_RUN = REPO_ROOT / "experiments" / "current"
+# La population auditée est CELLE QUI A TOURNÉ, prise dans le répertoire du run. Décision de
+# l'auteur du dépôt (2026-09-04) : « il faut prendre celui qui a tourné ; ça ne me paraît pas
+# correct de faire un audit sur un fichier pas utilisé. »
+#
+# Ce qui l'a rendue nécessaire. Le défaut historique pointait sur
+# `data/population/toulouse_population_1000.json` — la sortie brute du générateur qui traîne
+# dans ce dossier, 1 021 personas — alors que le run simulait la cohorte scellée, 1 000
+# personas tirés séparément. Les deux populations n'ont **qu'un identifiant commun sur mille** :
+# l'axe A2 joignait donc 6 déplacements sur les 5 322 du run et publiait un écart de 154,3 pt
+# calculé sur ces six. Sur la population du run, la jointure est complète et l'écart vaut
+# 41,2 pt.
+#
+# ⚠ Ce n'est pas un ajustement de mesure, c'est un changement d'OBJET : les neuf axes
+# mesuraient un fichier que personne n'avait simulé. Les verdicts publiés avant cette date sur
+# le défaut historique sont donc **caducs**, pas « améliorés » — en particulier A4, qui passe de
+# « à corriger » à « conforme », et le code de sortie, qui passe de 2 à 0. Auditer la chaîne de
+# génération est le travail de `control_population.py` et du scellement ; auditer l'expérience
+# qui a tourné est celui de ce script.
+#
+# `--population` reste là pour auditer un fichier nommé (une population de référence, un sceau
+# précis) : le défaut ne ferme aucune lecture, il choisit la bonne par défaut.
+DEFAULT_POPULATION_DANS_LE_RUN = "population_1000.json"
+DEFAULT_POPULATION = REPO_ROOT / "data" / "population" / "toulouse_population_1000.json"
 CEREMA_VALUES = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
 COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
 WEATHER_CSV = REPO_ROOT / "data" / "weather" / "meteo_toulouse_12_mois.csv"
@@ -1127,7 +1149,9 @@ def print_report(report: dict) -> None:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--population", type=Path, default=DEFAULT_POPULATION)
+    parser.add_argument("--population", type=Path, default=None,
+                        help="population à auditer ; par défaut celle du run "
+                             f"(<run>/{DEFAULT_POPULATION_DANS_LE_RUN})")
     parser.add_argument("--run", type=Path, default=DEFAULT_RUN)
     parser.add_argument("--trace", type=Path, default=None,
                         help="dossier d'archive (docs/traces/...) ; le JSON y est écrit")
@@ -1137,10 +1161,27 @@ def main(argv: Optional[list[str]] = None) -> int:
                              "EMC² (accès restreint) et les confronter au YAML")
     args = parser.parse_args(argv)
 
-    if not args.population.exists():
-        raise SystemExit(f"population introuvable : {args.population}")
+    population = args.population
+    if population is None:
+        population = args.run / DEFAULT_POPULATION_DANS_LE_RUN
+        if not population.exists():
+            # Pas de repli sur la population de référence : auditer un autre fichier que celui
+            # qui a tourné est exactement le défaut qu'on ferme, et le faire en silence serait
+            # pire que de s'arrêter.
+            raise SystemExit(
+                f"population du run introuvable : {population}\n"
+                f"Le run n'a pas déposé sa population ({DEFAULT_POPULATION_DANS_LE_RUN}). "
+                f"Nommez le fichier à auditer avec --population, en sachant que l'audit "
+                f"portera alors sur une population que ce run n'a pas simulée."
+            )
+        print(f"population auditée : celle du run ({population})", file=sys.stderr)
+    else:
+        if not population.exists():
+            raise SystemExit(f"population introuvable : {population}")
+        print(f"population auditée : nommée en argument ({population}) — vérifiez "
+              f"qu'elle est bien celle que le run a simulée", file=sys.stderr)
     recompute = recompute_from_microdata() if args.recompute else None
-    report = run_audit(args.population, args.run, recompute)
+    report = run_audit(population, args.run, recompute)
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=1))
