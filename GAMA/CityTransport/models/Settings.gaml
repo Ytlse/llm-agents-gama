@@ -68,20 +68,51 @@ global {
 	// Emprise des lignes TC (Tisséo), pour l'avertissement de couverture au chargement.
 	geometry ROUTES_ENVELOPE <- envelope(routes0_shape_file);
 	
+	// Nom lisible de chaque `route_type` GTFS servi par les couches. Aligné sur
+	// `settings.gtfs.gtfs_modality_name_map` (llm-agents/settings.py), qui est ce que le
+	// prompt de l'agent lit : deux libellés différents pour un même type rendraient le
+	// journal de GAMA et celui du prompt incomparables.
+	map<float, string> ROUTE_TYPE_NAME <- [
+		0::"T1/Tram",
+		1::"Metro",
+		2::"Train",   // TER (SNCF Voyageurs), entré dans les couches le 2026-09-04
+		3::"Bus",     // Tisséo urbain ET autocars liO
+		6::"Teleo"
+	];
+
+	// ⚠ Les deux tables ci-dessous sont indexées par le `route_type` GTFS. Une clé
+	// ABSENTE ne lève rien : la largeur devient nil (tracé sans épaisseur) et la capacité
+	// devient nil, donc `is_full` est vrai dès le premier passager — un véhicule où
+	// personne ne peut monter, sans un mot dans le journal. Le garde-fou qui recense les
+	// types réellement présents dans les couches vit dans `PublicTransport.gaml`
+	// (`recenser_les_route_types`) : c'est lui le correctif de fond, les clés ne sont que
+	// le cas du jour.
 	map<float, float> ROUTE_DISPLAY_WIDTH <- [
-		0::20, // T1: 
+		0::20, // T1:
 		1::30, // Metro A, B
+		2::25, // TER — choix d'affichage : entre le tram et le métro. Les 34 tracés du
+		       // TER traversent tout le périmètre (86 km de large) ; plus fin, un axe
+		       // régional disparaît à l'échelle du monde.
 		3::3, // Bus
 		6::8 // Teleo
 	];
-	
+
 	map<float, int> VEHICLE_MAX_CAPACITY <- [
 		0::200,
 		1::200,
+		// TER — ORDRE DE GRANDEUR, pas une mesure : le GTFS ne publie aucune capacité, et
+		// une rame n'est pas un bus. Le matériel réellement engagé en Occitanie encadre la
+		// valeur : Régiolis type M à quatre caisses, aménagement périurbain, monoclasse,
+		// **206 places assises dont 46 strapontins** (Rail Passion, « L'Occitanie commande
+		// de nouveaux Régiolis ») ; Regio 2N, **jusqu'à 500 places dont 343 assises**
+		// (Région Occitanie, laregion.fr/Les-nouvelles-rames-TER). 300 se tient entre les
+		// deux familles, places debout comprises — comme les autres entrées de cette table,
+		// qui comptent l'assis ET le debout (100 pour un bus articulé).
+		2::300,
 		3::100,
 		6::1500
 	];
-	
+
 	map<string, string> PURPOSE_ICON_MAP <- [
 		"home"::"🏠",
 		"work"::"🏢",

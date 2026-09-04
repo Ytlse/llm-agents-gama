@@ -300,17 +300,63 @@ produit un chiffre plausible et faux. État au 2026-09-04, après l'ajout de `ra
 | `task_worker._extract_primary_mode` | mode principal, priorité train > métro > tram > bus | ✅ |
 | `frames.PROBA_COLUMNS` / `CHOSEN_MODE_MAP`, pont oracle | libellé → catégorie EMC² | « Train » → TC ✅ |
 | Grafana 05 et 07, `scripts/dashboard/palette.py`, `scripts/analysis/mode_probabilities.py` | couleur du mode (violet, cf. la palette du dépôt) | ✅ |
-| `calibration/metrics.categorize_mode` et ses copies | **loss de calibration** | ❌ `rail` classé en marche |
+| `calibration/metrics.categorize_mode` et sa copie `prompt_calibration_lib` | **loss de calibration** | `rail`, `train`, `ter` ✅ *(2026-09-04)* |
+| `GAMA/…/Settings.gaml` → `ROUTE_DISPLAY_WIDTH`, `VEHICLE_MAX_CAPACITY`, `TYPE_RAIL` | largeur, capacité et filtres par `route_type` | clé `2` ✅ *(2026-09-04)* |
 | `simulation_controller._primary_mode` | métrique `TRIP_MODE_BY_PURPOSE` | ⚠ `rail` fondu dans `transit` |
+| `move_logger._plan_transport_mode` — **ordre** de la cascade | colonne « Mode de transport Choisi » | ⚠ `_BUS_MODES` testé avant `_RAIL_MODES` |
 | `audit_perimetre.MOVE_MODE_MAP` | audit de périmètre | ❌ pas d'entrée « Train » |
-| `GAMA/…/Settings.gaml` → `ROUTE_DISPLAY_WIDTH`, `VEHICLE_MAX_CAPACITY` | largeur et capacité par `route_type` | ❌ pas de clé `2` |
 
-Les quatre dernières lignes sont **latentes, pas inoffensives**, et chacune a sa raison
-d'attendre une décision : la loss de calibration est l'instrument de mesure du prompt (tout
-changement s'y chiffre avant de s'appliquer, amendement A13) ; le mode principal d'un trajet
-combinant car et train relève de la hiérarchie des modes du ticket 022 ; et GAMA ne voit
-aujourd'hui **aucun** train, parce que `trip_info.json` est produit du seul feed Tisséo
-(`settings.gtfs.gtfs_file`). Voir les questions ouvertes du ticket 031.
+**Deux corrections livrées le 2026-09-04, mesurées avant application.**
+
+* **La loss de calibration** (`categorize_mode`) n'avait de mot-clé ni pour `rail`, ni pour
+  `train`, ni pour `ter` : « foot,rail,foot » tombait sur le mot « foot » et le TER était
+  compté en **marche** — le défaut du Téléo du 2026-08-26, sur un mode dix fois plus offert.
+  La cascade cherche désormais ses mots-clés **par mot** et non par sous-chaîne, parce que
+  « car » désigne un autocar en français et que liO n'est composé que d'autocars : le
+  libellé « autocar » était rangé dans **voiture**. Effet chiffré sur les mesures déjà
+  publiées : **zéro** — aucun des 111 libellés des jeux gelés (385 888 options) ni des 86
+  libellés des décisions en cache (444 055 décisions) ne contient `rail`, `train` ni `ter`
+  (vocabulaire réel : `foot`, `bus`, `metro`, `tram`, `cableway`, `car`, `bicycle`).
+  Le test de parité **lit les listes de production dans leur source** au lieu d'en recopier
+  un littéral : un littéral ne tombe que si l'instrument change, jamais si la production
+  change, et c'est cette asymétrie qui avait laissé passer les deux défauts.
+* **Les tables `route_type` de GAMA** n'avaient pas de clé `2`, alors que les couches
+  régénérées portent **34 tracés** et **68 arrêts** en `route_type=2`. Une clé absente rend
+  `nil` : tracé sans épaisseur et capacité de zéro place. Les clés sont posées (largeur 25,
+  capacité 300 — ordre de grandeur sourcé sur le matériel roulant d'Occitanie, cf.
+  `Settings.gaml`), et surtout un **garde-fou** recense au chargement les `route_type`
+  présents dans les trois sources qui indexent ces tables (`routes.shp`, `stops.shp`,
+  `trip_info.json`) et alarme sur tout type qu'elles ignorent.
+
+**Ce que le garde-fou a immédiatement trouvé** : `trip_info.json` (28 Mo, produit du seul
+feed Tisséo) ne porte **aucune** course `route_type=2`, alors que `routes.shp` en trace 34.
+GAMA dessine donc 34 lignes de TER et 68 gares où **aucun train ne roulera** — une ligne
+visible et morte se lit comme une ligne sans passage, pas comme une donnée manquante. Le
+journal le dit maintenant :
+
+```
+[PERIMETRE] route_type=2 (Train) : 34 lignes, 68 arrêts, 0 courses — largeur 25.0, capacité 300 places.
+[ALARME] route_type tracé(s) dans routes.shp mais ABSENT(s) de trip_info.json : [2.0] — aucun véhicule de ce type ne roulera.
+```
+
+**Les trois lignes ⚠/❌ restantes** attendent chacune une décision. L'**ordre** de la
+cascade de `_plan_transport_mode` et `_primary_mode` relèvent de la hiérarchie des modes du
+**ticket 022**, où le constat est désormais chiffré : sur les 1 883 itinéraires portant un
+train, **1 177 (62,5 %)** portent aussi une jambe de bus ou de car et sont donc étiquetés
+`Transports_collectifs` — la colonne « Train » de `moves.csv` sous-compte le rail d'autant.
+`audit_perimetre.MOVE_MODE_MAP` écarte (`continue`) tout libellé hors table, donc un
+déplacement « Train » sort de l'audit de parts modales sans être compté.
+
+**Un troisième défaut du même genre, trouvé et corrigé en chemin** :
+`mode_choice.canonical_mode("foot,cableway,foot")` renvoyait **`walking`**. Le Téléo ne
+figurait dans aucune des six listes de `_MODE_KEYWORDS` ; la cascade descendait jusqu'à
+« walking », que le mot `foot` satisfait. La masse de probabilité d'une option de
+téléphérique **pur** était donc comptée en marche dans `mode_distribution`, donc dans les
+colonnes `P(...) %` de `moves.csv` et dans `llm_mode_probability_pct_total`. Sans exception
+et sans WARNING : la chaîne composée ne tombait même pas dans `other`. `cableway`,
+`gondola` et `funicular` sont ajoutés ; effet chiffré avant application : **120** des
+385 888 options des jeux gelés (0,031 %) et **5** des 17 258 du dernier run archivé — un
+seul libellé concerné.
 
 **Le libellé de ligne, lui, est un défaut actif** : `GTFSData.DEFAULT()` ne lit que
 `data/gtfs/tisseo_gtfs`, donc `route_id_map` ne connaît que les 124 lignes Tisséo et

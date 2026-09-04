@@ -12,15 +12,19 @@ import "Settings.gaml"
 import "utils/Bitwise.gaml"
 
 global {
-	// const
+	// const — `route_type` GTFS. Tout type déclaré ici doit avoir sa clé dans
+	// ROUTE_DISPLAY_WIDTH et VEHICLE_MAX_CAPACITY (Settings.gaml) ; `recenser_les_route_types`
+	// le vérifie au chargement et alarme sur les types présents dans les couches sans y être.
 	int TYPE_TRAM <- 0;
 	int TYPE_METRO <- 1;
+	int TYPE_RAIL <- 2;   // TER — 34 tracés et 68 arrêts dans les couches du 2026-09-04
 	int TYPE_BUS <- 3;
 	int TYPE_TELEO <- 6;
-	
+
 	// parameters/display
 	bool show_type_tram <- true;
 	bool show_type_metro <- true;
+	bool show_type_rail <- true;
 	bool show_type_bus <- true;
 	bool show_type_teleo <- true;
 	bool show_always_show_gtfs_routes <- true;
@@ -50,6 +54,81 @@ global {
 
 		ask stop {
 			ALL_STOPS <+ self.stop_id::self;
+		}
+
+		do recenser_les_route_types;
+	}
+
+	// ── Garde-fou : un `route_type` inconnu des tables ne doit plus passer en silence ──
+	//
+	// ROUTE_DISPLAY_WIDTH et VEHICLE_MAX_CAPACITY sont indexées par le `route_type` GTFS.
+	// Une clé absente rend `nil`, et `nil` est plausible : le tracé se dessine sans
+	// épaisseur (on le croit absent du réseau) et la capacité vaut zéro place, donc
+	// `is_full` est vrai avant le premier passager — un train où personne ne peut monter,
+	// sans une ligne de journal. C'est le motif « l'absence de mesure produit un résultat
+	// parfaitement plausible », et c'est arrivé : les couches régénérées le 2026-09-04
+	// portent 34 tracés et 68 arrêts en `route_type=2` (TER) que les deux tables
+	// ignoraient.
+	//
+	// Ce recensement porte sur les TROIS sources qui indexent ces tables — les lignes de
+	// `routes.shp`, les arrêts de `stops.shp` et les courses de `trip_info.json` (dont
+	// naissent les `public_vehicle`) — parce qu'elles ne sont pas régénérées ensemble :
+	// une couche neuve et un `trip_info.json` ancien ne portent pas les mêmes types, et
+	// c'est précisément ce que le journal doit dire.
+	//
+	// Le succès s'écrit aussi, pas seulement l'échec : un journal muet quand tout va bien
+	// ne permet pas de distinguer « les tables sont complètes » de « le contrôle ne tourne
+	// plus ».
+	action recenser_les_route_types {
+		list<float> types_lignes <- remove_duplicates(route collect each.route_type);
+		list<float> types_arrets <- remove_duplicates(stop collect each.route_type);
+		list<float> types_courses <- remove_duplicates(TRIP_LIST collect float(each["route_type"]));
+		list<float> tous_les_types <- remove_duplicates(types_lignes + types_arrets + types_courses);
+
+		loop t over: tous_les_types {
+			int nb_lignes <- length(route where (each.route_type = t));
+			int nb_arrets <- length(stop where (each.route_type = t));
+			int nb_courses <- length(TRIP_LIST where (float(each["route_type"]) = t));
+			string nom <- (ROUTE_TYPE_NAME.keys contains t) ? ROUTE_TYPE_NAME[t] : "SANS NOM";
+			bool a_largeur <- ROUTE_DISPLAY_WIDTH.keys contains t;
+			bool a_capacite <- VEHICLE_MAX_CAPACITY.keys contains t;
+			string recap <- "route_type=" + int(t) + " (" + nom + ") : "
+				+ nb_lignes + " lignes, " + nb_arrets + " arrêts, " + nb_courses + " courses";
+
+			if (a_largeur and a_capacite) {
+				write "[PERIMETRE] " + recap + " — largeur " + ROUTE_DISPLAY_WIDTH[t]
+					+ ", capacité " + VEHICLE_MAX_CAPACITY[t] + " places.";
+			} else {
+				write "[ALARME] " + recap + " — clé ABSENTE de "
+					+ (a_largeur ? "" : "ROUTE_DISPLAY_WIDTH ")
+					+ (a_capacite ? "" : "VEHICLE_MAX_CAPACITY ")
+					+ "(Settings.gaml). Conséquence silencieuse : "
+					+ (a_largeur ? "" : "tracé sans épaisseur ; ")
+					+ (a_capacite ? "" : "capacité nil, donc aucun passager ne peut monter ; ")
+					+ "ajouter la clé " + int(t) + " aux tables.";
+			}
+		}
+
+		list<float> types_sans_table <- tous_les_types where
+			(!(ROUTE_DISPLAY_WIDTH.keys contains each) or !(VEHICLE_MAX_CAPACITY.keys contains each));
+		if (empty(types_sans_table)) {
+			write "[PERIMETRE] route_type : " + length(tous_les_types) + " types dans les couches ("
+				+ string(tous_les_types) + "), tous connus des tables de largeur ET de capacité.";
+		} else {
+			write "[ALARME] route_type : " + length(types_sans_table) + " type(s) sur "
+				+ length(tous_les_types) + " inconnu(s) des tables — " + string(types_sans_table);
+		}
+
+		// Les couches d'affichage et la source des véhicules ne sont pas régénérées
+		// ensemble. Un type tracé sur la carte mais absent des courses ne fera rouler
+		// AUCUN véhicule : la ligne est visible et morte, ce qui se lit comme une ligne
+		// sans passage plutôt que comme une donnée manquante.
+		list<float> traces_sans_course <- types_lignes where (!(types_courses contains each));
+		if (!empty(traces_sans_course)) {
+			write "[ALARME] route_type tracé(s) dans routes.shp mais ABSENT(s) de trip_info.json : "
+				+ string(traces_sans_course) + " — aucun véhicule de ce type ne roulera. "
+				+ "trip_info.json est plus ancien que les couches : le régénérer "
+				+ "(scripts/data/gama/) pour que ces lignes portent des courses.";
 		}
 	}
 }
@@ -159,6 +238,9 @@ species travel_agent_factory {
 //			if route_type = TYPE_METRO and !show_type_metro {
 //				return;
 //			}
+//			if route_type = TYPE_RAIL and !show_type_rail {
+//				return;
+//			}
 //			if route_type = TYPE_BUS and !show_type_bus {
 //				return;
 //			}
@@ -234,6 +316,9 @@ species route {
 			if route_type = TYPE_METRO and !show_type_metro {
 				return;
 			}
+			if route_type = TYPE_RAIL and !show_type_rail {
+				return;
+			}
 			if route_type = TYPE_BUS and !show_type_bus {
 				return;
 			}
@@ -260,6 +345,9 @@ species stop {
 			return;
 		}
 		if route_type = TYPE_METRO and !show_type_metro {
+			return;
+		}
+		if route_type = TYPE_RAIL and !show_type_rail {
 			return;
 		}
 		if route_type = TYPE_BUS and !show_type_bus {
@@ -438,6 +526,9 @@ species public_vehicle skills: [moving] {
 		if route_type = TYPE_METRO and !show_type_metro {
 			return;
 		}
+		if route_type = TYPE_RAIL and !show_type_rail {
+			return;
+		}
 		if route_type = TYPE_BUS and !show_type_bus {
 			return;
 		}
@@ -452,6 +543,14 @@ species public_vehicle skills: [moving] {
 //			draw circle(5*display_size) + width color: #black;
 //			draw circle(2*display_size) + width color: color;
 			draw circle(3*display_size) + width color: color border: true;
+		} else if route_type = TYPE_RAIL {
+			// Le TER prend la couleur du MODE et non celle de la ligne : `color` est tiré
+			// au hasard (`rnd_color`) à la création du véhicule, il ne porte donc aucune
+			// information. Violet = le train dans la palette officielle du dépôt
+			// (.claude/CLAUDE.md, « Reference: Transport Mode Colors »), la même que dans
+			// Grafana 07 et scripts/dashboard/palette.py. Le TRACÉ de la ligne, lui, garde
+			// la couleur du GTFS (identité de la ligne SNCF), comme pour tous les réseaux.
+			draw circle(4*display_size) + width color: #purple border: true;
 		} else if route_type = TYPE_BUS {
 //			draw square(8*display_size) + width color: #black;
 //			draw square(4*display_size) + width color: color;

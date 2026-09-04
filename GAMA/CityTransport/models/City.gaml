@@ -101,6 +101,7 @@ experiment e type: gui {
     parameter "Always show GTFS Routes" category:"GTFS" var: show_always_show_gtfs_routes <- true;
     parameter "Show TRAM routes" category:"GTFS" var: show_type_tram <- false;
     parameter "Show METRO routes" category:"GTFS" var: show_type_metro <- false;
+    parameter "Show RAIL routes" category:"GTFS" var: show_type_rail <- false;
     parameter "Show BUS routes" category:"GTFS" var: show_type_bus <- false;
     parameter "Show TELEO routes" category:"GTFS" var: show_type_teleo <- false;
     parameter "Show Label density" category:"GTFS" var: show_label_density <- 0.5 among: [0.5, 1, 5, 10, 25, 50, 100];
@@ -276,7 +277,17 @@ experiment e type: gui {
                     wireframe: true width: 2;
 
                 draw "Bike "
-                    at: {20000, 39400} 
+                    at: {20000, 39400}
+                    anchor: #top_left
+                    border: #purple font: font("Geneva", 12, #bold)
+                    wireframe: true width: 2;
+
+                // Train (TER) — violet, comme le vélo : c'est la palette officielle du
+                // dépôt (.claude/CLAUDE.md, « Reference: Transport Mode Colors »), qui
+                // donne la même couleur aux deux. Les véhicules `route_type=2` sont dessinés
+                // avec cette couleur (cf. PublicTransport.gaml, aspect de public_vehicle).
+                draw "Train "
+                    at: {22000, 39400}
                     anchor: #top_left
                     border: #purple font: font("Geneva", 12, #bold)
                     wireframe: true width: 2;

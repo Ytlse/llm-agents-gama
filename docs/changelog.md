@@ -1,3 +1,56 @@
+## [2026-09-04] Le train cesse d'être compté en marche, et GAMA ne dessine plus de ligne muette
+
+Le TER et les 309 lignes d'autocar liO sont entrés dans le calculateur d'itinéraires la veille :
+un itinéraire sur six propose désormais un train, et près de six sur dix en 3ᵉ couronne. Deux
+tables ne le savaient pas.
+
+**La fonction qui note les modes.** Elle rangeait un itinéraire de train dans la **marche** :
+faute de mot-clé pour le rail, un libellé « foot,rail,foot » tombait sur le mot « foot ». Elle
+rangeait aussi un **autocar** dans la **voiture**, parce qu'elle cherchait ses mots-clés par
+morceau de texte et que « car » se trouve dans « autocar » — or le réseau régional n'est composé
+que d'autocars. Elle cherche maintenant des mots entiers, et connaît le train. Effet sur les
+mesures déjà publiées, chiffré avant d'appliquer quoi que ce soit : **aucun** — sur 385 888
+options des jeux de calibration et 444 055 décisions en cache, pas une ne change de catégorie,
+parce que ces jeux sont antérieurs à l'arrivée du train. Rien à recalculer, aucun résultat ne
+bouge.
+
+Le test qui devait empêcher cette dérive la laissait passer : il comparait la fonction à une
+liste recopiée dans le test lui-même, si bien qu'il tombait quand on touchait à la mesure, jamais
+quand on touchait au simulateur. C'est exactement ce qui s'est produit. Il **lit** désormais les
+listes du simulateur là où elles vivent, et refuse de passer si l'une d'elles a été vidée.
+
+**Un troisième défaut du même genre, trouvé par ce test.** La répartition des probabilités par
+mode comptait le téléphérique Téléo en **marche** — le défaut réparé le 26 août dans la mesure
+n'avait jamais été réparé dans le simulateur. Corrigé ; 120 options concernées sur 385 888.
+
+**Les tables de GAMA.** Le train n'y avait aucune entrée : ni largeur de tracé, ni capacité. Une
+clé absente ne provoque pas d'erreur, elle produit un résultat plausible — un tracé sans épaisseur
+et une rame de **zéro place**, où personne ne peut monter, sans un mot dans le journal. Les
+entrées sont posées (capacité de 300 places, ordre de grandeur encadré par le matériel roulant
+d'Occitanie et sourcé dans le modèle), le train a sa constante, son filtre d'affichage et sa
+couleur de palette (violet), et surtout : **tout type de ligne inconnu des tables est désormais
+recensé et alarmé au chargement**, avec le nombre de lignes, d'arrêts et de courses concernés. Les
+entrées ajoutées ne sont que le cas du jour ; le recensement est le correctif.
+
+Il a servi immédiatement. Le fichier des courses que GAMA rejoue date de mai et ne connaît que le
+réseau urbain : la carte trace **34 lignes de TER et 68 gares où aucun train ne roulera**. Une
+ligne visible et morte se lit comme une ligne sans passage, pas comme une donnée manquante.
+
+**Avant :** un itinéraire en train comptait pour de la marche et un autocar pour une voiture ; le
+train n'avait ni largeur ni capacité dans GAMA, et une ligne sans véhicule ne se distinguait pas
+d'une ligne sans desserte.
+**Après :** le train compte comme un transport collectif des deux côtés, la mesure et le
+simulateur sont verrouillés l'un sur l'autre par un test qui lit le code au lieu de le recopier,
+et le chargement de GAMA énumère les cinq types de lignes avec leur largeur, leur capacité et leur
+nombre de courses — en alarmant sur ce qui manque.
+
+Reste ouvert, et mesuré pour cela : le **mode principal** d'un trajet mêlant autocar et train.
+L'ordre des tests le range aujourd'hui en « transports collectifs », si bien que la colonne
+« Train » du journal des déplacements sous-compte le rail de **62,5 %** (1 177 des 1 883
+itinéraires concernés). Le choix relève du ticket 022, qui hérite du chiffre.
+
+---
+
 ## [2026-09-04] Lire la configuration ne vole plus la sortie du run en cours
 
 Importer le module de configuration du runtime suffisait à créer un répertoire d'expérience et à
