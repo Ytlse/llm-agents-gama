@@ -158,7 +158,7 @@ alarme apprend à ignorer les alarmes.
 
 État mesuré le 2026-09-04 (`docs/traces/2026-09-04_12-05_table_traces_runtime/`) : **199
 `route_id`, 904 tracés**, contre **124 `route_id`** quand la table venait du seul feed
-primaire. Voir [routing.md](../arch/routing.md#la-table-des-traces--ce-qui-permet-a-un-agent-de-monter)
+primaire. Voir [routing.md](../arch/routing.md#la-table-des-tracés--ce-qui-permet-à-un-agent-de-monter)
 pour la chaîne complète et les alarmes.
 
 ⚠ `export_trip_info.py` importe `llm-agents/inputs/gtfs/{reader,gama}.py`, donc
