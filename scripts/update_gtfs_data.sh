@@ -1,26 +1,41 @@
 #!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# RECETTE REMPLACÉE LE 2026-09-04 — ce script ne fait plus rien, et il le dit.
+#
+# Il produisait `routes.shp`, `stops.shp` et `trip_info.json` en lançant les blocs
+# `__main__` de `llm-agents/inputs/gtfs/{reader,gama}.py`, qui lisent EN DUR le seul
+# `data/gtfs/tisseo_gtfs`. C'est ce chemin qui a laissé `trip_info.json` cinq mois en
+# retard et à un seul réseau : 39 343 courses Tisséo et AUCUNE en `route_type=2`,
+# pendant que les couches, elles, portaient les trois réseaux et traçaient 34 lignes
+# de TER et 68 gares où aucun train ne roulerait.
+#
+# Le laisser exécutable réintroduirait le défaut en une commande, et en silence :
+# il écraserait les trois fichiers par des versions mono-réseau, sans un contrôle.
+# Il refuse donc, plutôt que de servir un réseau amputé.
+#
+#     make gama-trip-info     # les couches PUIS les courses, les trois réseaux,
+#                             # avec cinq contrôles bloquants
+#     make gama-layers        # les couches seules
+#     make test-gama-includes # le test de cohérence couches / courses
+#
+# Voir `docs/setup/data-pipeline.md` § « Préparer les données GTFS pour GAMA » et
+# `scripts/data/gama/export_trip_info.py`.
+# ─────────────────────────────────────────────────────────────────────────────
 
-ROOT_DIR=$(dirname "$(realpath "$0")")/..
-GTFS_DIR="$ROOT_DIR/data/gtfs/tisseo_gtfs"
-EXPORT_DIR="$ROOT_DIR/data/exports/gtfs"
-GAMA_DIR="$ROOT_DIR/GAMA/CityTransport"
+cat >&2 <<'FIN'
+Ce script est remplacé depuis le 2026-09-04 et ne s'exécute plus.
 
-if [ ! -d "$EXPORT_DIR" ]; then
-    echo "Export GTFS directory does not exist. Creating it..."
-    mkdir -p "$EXPORT_DIR"
-fi
+Il ne connaissait qu'un réseau (data/gtfs/tisseo_gtfs, en dur) et écrasait les trois
+fichiers de GAMA/CityTransport/includes/ par des versions mono-réseau, sans contrôle :
+c'est ainsi que trip_info.json a passé cinq mois sans une seule course de TER, alors
+que les couches en traçaient 34 lignes.
 
-# Extract GTFS data
-echo "==> Extracting GTFS data..."
-cd "$GTFS_DIR"
-# unzip -o -d "$GTFS_DIR" *.zip
+À la place :
 
-# Generate Shape and copy to GAMA folder
-echo "Generating GTFS shape files and trip info data..."
-cd "$ROOT_DIR/llm-agents"
-env PYTHONPATH=. python inputs/gtfs/reader.py
-env PYTHONPATH=. python inputs/gtfs/gama.py
+    make gama-trip-info      # couches + courses, les trois réseaux, contrôles bloquants
+    make gama-layers         # les couches seules
+    make test-gama-includes  # le test de cohérence couches / courses
 
-cd "$ROOT_DIR"
-echo "Copying the generated files to the GAMA directory..."
-cp ${EXPORT_DIR}/* ${GAMA_DIR}/includes/
+Documentation : docs/setup/data-pipeline.md § « Préparer les données GTFS pour GAMA ».
+FIN
+exit 2

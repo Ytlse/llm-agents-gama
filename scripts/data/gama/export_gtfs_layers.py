@@ -28,6 +28,10 @@ from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.data.gama import gtfs_traces  # noqa: E402
 
 INCLUDES = REPO_ROOT / "GAMA" / "CityTransport" / "includes"
 PERIMETRE = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
@@ -52,6 +56,21 @@ def _couleur(valeur) -> str:
     if texte in ("", "nan", "None"):
         return "#000000"
     return texte if texte.startswith("#") else f"#{texte}"
+
+
+def _a_des_geometries(feed: Path) -> bool:
+    """`shapes.txt` présent ne veut pas dire `shapes.txt` peuplé.
+
+    Le feed TER en publie un qui n'a que son en-tête (73 octets). Tester la seule
+    existence du fichier faisait passer le TER par la branche « géométries GTFS »,
+    qui rendait alors zéro tracé — sans un mot.
+    """
+    chemin = feed / "shapes.txt"
+    if not chemin.exists():
+        return False
+    with open(chemin, encoding="utf-8") as fh:
+        fh.readline()  # en-tête
+        return bool(fh.readline().strip())
 
 
 def _lire(feed: Path, nom: str, **kwargs):
@@ -79,10 +98,18 @@ def couches(feeds: dict[str, Path], journal=print):
         # ── Lignes : une entité par tracé ─────────────────────────────────────
         # Le feed TER ne publie aucun `shapes.txt`. Plutôt que de laisser ses
         # lignes hors de la couche, leur tracé est la polyligne de leurs arrêts
-        # desservis — une approximation du corridor, marquée `trace=arrets`,
-        # bonne pour l'affichage et pour la mesure de couverture du monde, et
-        # qui n'entre dans aucun calcul de temps de parcours.
-        if (feed / "shapes.txt").exists():
+        # desservis, marquée `trace=arrets` — une reconstruction, pas la
+        # géométrie de la voie ferrée.
+        #
+        # Depuis le 2026-09-04 : **un tracé par suite d'arrêts distincte**, et non
+        # plus un par (ligne, sens) tiré de la course la plus desservie. Ce tracé
+        # n'est plus seulement dessiné : c'est la géométrie le long de laquelle
+        # roulent les `public_vehicle` de `trip_info.json`, et `build_trips` force
+        # le dernier segment jusqu'au dernier point du tracé — une course
+        # Toulouse → Tarbes posée sur le tracé Toulouse → Pau roulerait jusqu'à
+        # Pau. Voir `gtfs_traces.py`, qui est l'endroit UNIQUE où ces `shape_id`
+        # sont fabriqués, pour que la couche et les courses ne divergent pas.
+        if (feed / "shapes.txt").exists() and _a_des_geometries(feed):
             origine_trace = "gtfs"
             shapes = _lire(feed, "shapes.txt")
             shapes["shape_pt_sequence"] = shapes["shape_pt_sequence"].astype(int)
@@ -95,23 +122,23 @@ def couches(feeds: dict[str, Path], journal=print):
         else:
             origine_trace = "arrets"
             journal(f"    {reseau} : aucun shapes.txt — tracés reconstruits depuis la suite des arrêts")
+            suites = gtfs_traces.suites_depuis_stop_times(
+                stop_times.to_dict("records"))
+            traces_arrets, course_vers_trace, _ = gtfs_traces.traces_par_suite_d_arrets(
+                trips.to_dict("records"), suites, journal=journal)
             trips_traces = trips.copy()
-            # Un tracé par (ligne, sens) : la course la plus desservie fait foi.
-            trips_traces["shape_id"] = (trips_traces["route_id"].astype(str) + ":"
-                                        + trips_traces.get("direction_id", "0").astype(str))
+            trips_traces["shape_id"] = trips_traces["trip_id"].map(course_vers_trace)
+            trips_traces = trips_traces.dropna(subset=["shape_id"])
             coords = stops.set_index("stop_id")[["stop_lon", "stop_lat"]].astype(float)
-            horaires = stop_times.merge(trips_traces[["trip_id", "shape_id"]], on="trip_id", how="inner")
-            horaires["stop_sequence"] = horaires["stop_sequence"].astype(int)
-            plus_longue = (horaires.groupby(["shape_id", "trip_id"]).size().reset_index(name="n")
-                           .sort_values(["shape_id", "n"], ascending=[True, False])
-                           .groupby("shape_id").first().reset_index())
-            retenues = horaires.merge(plus_longue[["shape_id", "trip_id"]], on=["shape_id", "trip_id"])
             lignes = {}
-            for shape_id, groupe in retenues.sort_values("stop_sequence").groupby("shape_id"):
+            for shape_id, suite in traces_arrets.items():
                 points = [(coords.at[s, "stop_lon"], coords.at[s, "stop_lat"])
-                          for s in groupe["stop_id"] if s in coords.index]
+                          for s in suite if s in coords.index]
                 if len(points) >= 2:
                     lignes[shape_id] = LineString(points)
+                else:
+                    journal(f"[ALARME] {reseau} : tracé {shape_id} sans coordonnées "
+                            f"({len(points)} point(s) sur {len(suite)} arrêts) — écarté")
             geometries = pd.Series(lignes)
             if geometries.empty:
                 journal(f"[ALARME] {reseau} : aucun tracé reconstructible depuis les arrêts")
