@@ -387,6 +387,33 @@ Elle **doit** contenir la date de simulation (`starting_date` dans
 aucune course. La fenêtre 2026-03-16 +64 j sert 63 dates, 34 356 trips, et passe
 les deux `assert` du lecteur ainsi que le masque binaire.
 
+`make gtfs-window` extrait la fenêtre **d'un** feed, à côté du jeu en service :
+c'est l'outil d'inspection. Ce que GAMA lit vraiment est produit par
+`make gama-trip-info`, qui fenêtre les **trois** réseaux, les fusionne et écrit
+`GAMA/CityTransport/includes/trip_info.json` avec les couches en regard. Trois
+choses y sont propres à la fusion, et non à un feed seul :
+
+- **la date simulée est lue dans `Settings.gaml`**, pas recopiée — deux sources
+  pour une même date finissent par diverger, et la conséquence d'une divergence
+  est un réseau vide sans message d'erreur ;
+- **`build_calendar_binary_map` compte un bit par JOUR de l'intervalle**
+  `min(date) … max(date)`, pas par date servie : c'est l'**étendue** du calendrier
+  fusionné qui doit tenir dans 64, et elle est vérifiée après la fusion ;
+- **les `service_id` sont préfixés par réseau.** `ter_2026` et `lio_2026`
+  numérotent tous deux leurs services `SVC_0001`… : **224 identifiants
+  collisionnent** (règle 5 — la renumérotation est locale à chaque feed). Fusionnés
+  tels quels, les cars liO liraient le calendrier des trains.
+
+La source Tisséo de `trip_info.json` reste l'**export en service**, pas le feed
+annuel : ce dernier forke les géométries divergentes en `<shape_id>__<export>`
+(règle 6), et **329 de ses 705 `shape_id` sont absents de `routes.shp`** — un
+`shape_id` de course sans tracé dans la couche rend `route first_with (…)` nil
+côté modèle. Publier le feed annuel Tisséo demandera donc de refaire les couches
+et les courses **ensemble**, ce que `make gama-trip-info` fait déjà.
+
+Voir [`docs/setup/data-pipeline.md`](../setup/data-pipeline.md) § « Préparer les
+données GTFS pour GAMA ».
+
 ---
 
 ## Recevoir de nouveaux exports

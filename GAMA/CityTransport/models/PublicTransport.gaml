@@ -17,7 +17,8 @@ global {
 	// le vérifie au chargement et alarme sur les types présents dans les couches sans y être.
 	int TYPE_TRAM <- 0;
 	int TYPE_METRO <- 1;
-	int TYPE_RAIL <- 2;   // TER — 34 tracés et 68 arrêts dans les couches du 2026-09-04
+	int TYPE_RAIL <- 2;   // TER — 266 tracés, 68 arrêts et 884 courses (couches du 2026-09-04,
+	                      // après le passage à un tracé par desserte : cf. scripts/data/gama/)
 	int TYPE_BUS <- 3;
 	int TYPE_TELEO <- 6;
 
@@ -67,7 +68,7 @@ global {
 	// `is_full` est vrai avant le premier passager — un train où personne ne peut monter,
 	// sans une ligne de journal. C'est le motif « l'absence de mesure produit un résultat
 	// parfaitement plausible », et c'est arrivé : les couches régénérées le 2026-09-04
-	// portent 34 tracés et 68 arrêts en `route_type=2` (TER) que les deux tables
+	// portent 266 tracés et 68 arrêts en `route_type=2` (TER) que les deux tables
 	// ignoraient.
 	//
 	// Ce recensement porte sur les TROIS sources qui indexent ces tables — les lignes de

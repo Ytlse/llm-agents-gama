@@ -622,6 +622,52 @@ gtfs-window:
 test-gtfs-year:
 	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_gtfs_year.py -q
 
+.PHONY: gama-layers gama-trip-info test-gama-includes
+
+## Reconstruit les COUCHES que GAMA dessine — GAMA/CityTransport/includes/routes.shp
+## et stops.shp — à partir des trois réseaux du périmètre (Tisséo, TER, liO). Les
+## couches précédentes sont déplacées dans un dossier archives_<date>, jamais
+## supprimées. `includes/` n'est pas versionné : cette recette est la seule trace.
+##   make gama-layers
+##   make gama-layers FEEDS="tisseo=data/gtfs/tisseo_gtfs ter=data/gtfs/ter_gtfs"
+gama-layers:
+	@$(SYNTHESIS_PYTHON) scripts/data/gama/export_gtfs_layers.py \
+	  $(foreach f,$(FEEDS),--feed $(f)) \
+	  $(if $(OUT),--sortie $(OUT),) $(if $(TOUT),--tout,) $(if $(JSON),--json $(JSON),)
+
+## Reconstruit les COURSES que GAMA fait rouler — GAMA/CityTransport/includes/trip_info.json —
+## à partir des trois réseaux et de la date simulée (lue dans Settings.gaml).
+##
+## Les couches sont refaites D'ABORD, dans la même recette : `trip_info.json` porte des
+## indices de sommets dans la géométrie de `routes.shp`, et produire l'un sans l'autre est
+## exactement le défaut qui a duré cinq mois — couches à trois réseaux, courses à un seul,
+## 34 lignes de TER dessinées où aucun train ne roulait. `COUCHES=0` saute cette étape
+## quand les couches viennent d'être faites.
+##
+## Contrôles bloquants (le fichier n'est pas écrit s'ils tombent) : la date simulée est
+## dans la fenêtre ET servie ; l'étendue des dates tient dans le masque binaire 64 bits de
+## GAMA ; chaque course a son tracé dans routes.shp avec le même nombre de points ; aucun
+## route_type de la couche n'est sans course le jour simulé.
+##   make gama-trip-info
+##   make gama-trip-info DATE=2026-03-16 DAYS=64 COUCHES=0
+## Codes de sortie : 0 écrit, 1 ressource absente, 2 invariant démenti.
+gama-trip-info:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make gama-trip-info SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	@if [ "$(COUCHES)" != "0" ]; then $(MAKE) --no-print-directory gama-layers ; fi
+	@$(SYNTHESIS_PYTHON) scripts/data/gama/export_trip_info.py \
+	  $(foreach f,$(FEEDS),--feed $(f)) \
+	  $(if $(DATE),--date-simulee $(DATE),) $(if $(START),--debut $(START),) \
+	  $(if $(DAYS),--jours $(DAYS),) $(if $(ROUTES),--routes $(ROUTES),) \
+	  $(if $(OUT),--sortie $(OUT),) $(if $(JSON),--json $(JSON),)
+
+## Tests unitaires des deux recettes ci-dessus, dont le contrôle de cohérence
+## couches/courses : feeds synthétiques minimaux, aucun gros fichier, aucun accès réseau.
+test-gama-includes:
+	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_gama_includes.py -q
+
 ## Rebuild the fine-zone resource read by llm_module.core.zone_resolver.
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 zones:

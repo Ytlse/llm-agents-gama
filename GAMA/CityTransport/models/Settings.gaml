@@ -90,9 +90,11 @@ global {
 	map<float, float> ROUTE_DISPLAY_WIDTH <- [
 		0::20, // T1:
 		1::30, // Metro A, B
-		2::25, // TER — choix d'affichage : entre le tram et le métro. Les 34 tracés du
+		2::25, // TER — choix d'affichage : entre le tram et le métro. Les 266 tracés du
 		       // TER traversent tout le périmètre (86 km de large) ; plus fin, un axe
-		       // régional disparaît à l'échelle du monde.
+		       // régional disparaît à l'échelle du monde. (266 et non 34 depuis le
+		       // 2026-09-04 : un tracé par desserte, cf. scripts/data/gama/gtfs_traces.py.
+		       // Ils se superposent sur les mêmes corridors, l'affichage ne change pas.)
 		3::3, // Bus
 		6::8 // Teleo
 	];

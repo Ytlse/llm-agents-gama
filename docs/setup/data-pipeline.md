@@ -47,37 +47,93 @@ d'analyser les routes et arrêts communs, et de produire un GTFS consolidé si b
 
 ### Préparer les données GTFS pour GAMA
 
-Deux couches et un calendrier. **Les couches de lignes et d'arrêts** (ticket 031, G2) :
+Deux couches et un fichier de courses, **produits par une seule recette** :
 
 ```shell
-llm-agents/.venv/bin/python scripts/data/gama/export_gtfs_layers.py
+make gama-trip-info          # les couches PUIS les courses
+make gama-layers             # les couches seules
+make test-gama-includes      # 19 tests, feeds synthétiques, < 2 s
 ```
 
-écrit `GAMA/CityTransport/includes/routes.shp` et `stops.shp` à partir des **trois** réseaux
-(730 tracés, 5 375 arrêts, contre 395 et 3 822 pour Tisséo seul), en déplaçant les couches
-précédentes dans un dossier `archives_<date>`. Trois choix à connaître :
+> **Pourquoi une seule recette pour les deux.** `trip_info.json` porte, pour chaque course,
+> des **indices de sommets dans la géométrie de `routes.shp`** (`shape_segments`), et
+> `PublicTransport.gaml` retrouve le tracé d'un véhicule par
+> `route first_with (each.shape_id = shape_id)`. Produire l'un sans l'autre, c'est le défaut
+> qui a duré **cinq mois** : les couches sont passées aux trois réseaux le 2026-09-04 tandis
+> que `trip_info.json`, écrit à la main le 27 mai depuis le seul Tisséo, ne portait **aucune
+> course en `route_type=2`** — GAMA dessinait 34 lignes de TER et 68 gares où aucun train ne
+> roulerait. `COUCHES=0` saute l'étape des couches quand elles viennent d'être faites.
 
-- les couches sont **restreintes au périmètre** — liO couvre toute l'Occitanie, ses 2 632 tracés
+**Les couches de lignes et d'arrêts** (`scripts/data/gama/export_gtfs_layers.py`, ticket 031,
+G2) : `routes.shp` et `stops.shp` à partir des **trois** réseaux — **962 tracés, 5 375 arrêts**
+(contre 395 et 3 822 pour Tisséo seul), les couches précédentes déplacées dans
+`archives_<date>`. Trois choix à connaître :
+
+- les couches sont **restreintes au périmètre** — liO couvre toute l'Occitanie, ses 2 553 tracés
   déborderaient dix fois le monde GAMA — mais les tracés retenus ne sont **jamais découpés** ;
-- le feed TER n'a pas de `shapes.txt` : ses 34 tracés sont la polyligne de ses arrêts, marquée
-  `trace=arrets` dans la couche — bonne pour l'affichage, absente de tout calcul de temps ;
+- le feed TER ne publie **aucune géométrie** (son `shapes.txt` n'a qu'un en-tête, ses
+  `trips.shape_id` sont vides) : ses tracés sont reconstruits depuis la suite des arrêts,
+  marqués `trace=arrets`, à raison d'**un tracé par suite d'arrêts distincte** — 266 motifs de
+  desserte pour 1 137 courses. Le module partagé
+  [`scripts/data/gama/gtfs_traces.py`](../../scripts/data/gama/gtfs_traces.py) est l'endroit
+  **unique** où ces `shape_id` sont fabriqués, pour que la couche et les courses ne puissent
+  pas diverger ;
 - les `shape_id` et `stop_id` ne sont jamais préfixés (ils servent de jointure avec les itinéraires
   d'OTP) ; une collision entre réseaux lève une `[ALARME]`.
 
+> **Un tracé par (ligne, sens) fabriquait du mouvement.** Jusqu'au 2026-09-04, le TER recevait
+> un tracé par couple (ligne, sens), celui de la course la plus desservie. Or `build_trips`
+> force le dernier segment d'une course **jusqu'au dernier point du tracé** : une course
+> Toulouse → Tarbes posée sur le tracé Toulouse → Pau roulerait jusqu'à Pau, dans le temps de
+> parcours de Tarbes. Mesuré : **168 des 1 137 courses TER (14,8 %)** n'étaient même pas une
+> sous-suite du tracé de leur couple, et **6 n'avaient aucun `direction_id`** — leur `shape_id`
+> valait `NaN` et elles étaient absentes de la couche, sans un mot. Avec un tracé par desserte,
+> les 1 137 courses sont placées et aucun segment n'est forcé.
+
 Couverture mesurée du monde GAMA : l'enveloppe des lignes passe de 21 % à 100 %, **156 des
 217 mailles de 5 km du périmètre portent un arrêt** (52 avant) et **571 des 785 zones fines de
-l'enquête** (394 avant).
+l'enquête** (394 avant) — inchangé par le passage à 962 tracés, qui n'ajoute aucun arrêt.
 
-**Le calendrier et les horaires** (`trip_info.json`) restent produits par :
+**Les courses et le calendrier** (`scripts/data/gama/export_trip_info.py`) : `trip_info.json`,
+à partir des mêmes trois feeds et de la **date simulée lue dans `Settings.gaml`**
+(`starting_date`, pas recopiée dans la recette). Cinq contrôles **bloquants** — le fichier n'est
+pas écrit s'ils tombent, et la recette sort en code 2 :
 
-```shell
-bash scripts/update_gtfs_data.sh
-```
+| Contrôle | Ce qu'il empêche |
+|---|---|
+| la date simulée est **dans** la fenêtre et **servie** par au moins un réseau | hors calendrier, `is_trip_available_today` se contente d'un `warn` et ne planifie plus **aucune** course : la simulation tourne, le réseau est vide, rien ne le dit |
+| l'**étendue** des dates servies tient dans les 64 bits du masque de GAMA | `build_calendar_binary_map` construit un bit par jour de l'intervalle, pas par date servie |
+| chaque course a son tracé dans `routes.shp`, **avec le même nombre de points** | un `shape_id` absent rend `route first_with (…)` nil ; un tracé plus court fait sortir les `shape_segments` de la liste des sommets |
+| aucun `route_type` de la couche n'est **sans course** | le défaut des cinq mois |
+| aucun `route_type` de la couche n'est sans course **le jour simulé** | porter des courses en juin ne fait pas rouler un train en mars |
 
-qui exécute `llm-agents/inputs/gtfs/reader.py` puis `llm-agents/inputs/gtfs/gama.py`. ⚠ Ces deux
-modules importent `llm-agents/settings.py` : les lancer depuis l'hôte pendant un run re-pointe
-`experiments/current` et détourne les traces du run (ticket 031, question ouverte n° 12).
-`export_gtfs_layers.py`, lui, n'en dépend pas.
+Deux points délicats, documentés dans l'en-tête du script :
+
+- **`service_id` est préfixé par réseau, et lui seul.** Les feeds annuels TER et liO numérotent
+  leurs services `SVC_0001`… : **224 identifiants collisionnent**. Fusionnés tels quels, les
+  cars liO liraient le calendrier des trains. Le préfixe est sans danger parce que `service_id`
+  n'est une clé de jointure avec rien (GAMA ne le lit que dans `trip_calendar_map`).
+- **La source Tisséo est l'export en service, pas le feed annuel.** Le feed annuel forke les
+  géométries divergentes en `<shape_id>__<export>` : **329 de ses 705 `shape_id` sont absents
+  de `routes.shp`**, et OTP sert l'export en service. Les trois feeds lus sont exactement ceux
+  du `FEEDS_DEFAUT` des couches.
+
+État mesuré le 2026-09-04 (`docs/traces/2026-09-04_10-30_trip_info_trois_reseaux/`) :
+
+| | avant (27 mai) | après |
+|---|---|---|
+| courses | 39 343 | **41 302** |
+| `route_type=2` (TER) | **0** | **884** (356 actives le 16/03) |
+| `route_type=3` (bus + cars liO) | 32 205 | 33 280 |
+| réseaux | Tisséo seul | Tisséo + TER + liO |
+| taille | 28 315 173 o | 30 121 074 o |
+| durée de génération | — | 57 s (46 s de `build_trips`) |
+
+⚠ `export_trip_info.py` importe `llm-agents/inputs/gtfs/{reader,gama}.py`, donc
+`llm-agents/settings.py`. **Depuis le 2026-09-04, cet import ne crée plus de répertoire de run
+et ne déplace plus `experiments/current`** — cela appartient à `claim_run()`, que seul le
+processus propriétaire appelle. La réserve du ticket 031 (question ouverte n° 12) est donc
+levée : la recette peut tourner pendant un run.
 
 ### Le monde GAMA : le périmètre des 453 communes (ticket 031, G1)
 
