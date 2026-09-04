@@ -278,7 +278,7 @@ def build(sceau: Path, vivier: Optional[Path], audit: Optional[Path], velo: Opti
     ecarts_txt = " ; ".join(f"{e.get('ecart')} — {e.get('amplitude')} ({e.get('verdict')})" for e in synth) or "aucun"
     v_verd = (pool or {}).get("verdicts") or {}
 
-    html = f"""<title>Fabrication de la population v4</title>
+    html = f"""<title>Fabrication de la population {nom.split('_')[-1]}</title>
 {head}
 {EXTRA_CSS}
 <div class="wrap">

@@ -16,6 +16,10 @@ mauvaise commune, et une desserte évaluée sur un tiers des arrêts.
 **Après :** treize marges conformes, la commune juste, les trois réseaux comptés. Sauvegarde et
 pages de synthèse à jour ; la configuration du runtime pointe sur ce sceau.
 
+Les deux pages se nomment enfin d'après le sceau qu'elles décrivent : le titre de la page de
+fabrication restait figé sur « v4 » quelle que soit la population lue, et son lien « synthèse
+précédente » renvoyait à l'avant-dernière.
+
 ---
 
 ## [2026-09-04] L'agent lit la météo et l'heure de sa propre horloge, plus celles de son conteneur
