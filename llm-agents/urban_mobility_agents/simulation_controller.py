@@ -37,7 +37,7 @@ from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.agents.llm_agent import Context, LlmAgent
 from text_helper import env_ob_to_text, parse_ob
 from trip_helper.base import TripHelper
-from trip_helper.school_bus import build_school_bus_option
+from trip_helper.school_bus import build_school_bus_option, is_school_bus_plan, SCHOOL_BUS_CHOSEN
 from utils import random_uuid
 from world.population import WorldPopulation
 from world.world_data import WorldModel
@@ -644,12 +644,45 @@ def _build_anticipation(
     }
 
 
+# Le train forme son propre groupe d'options, distinct du bus et de l'autocar. Décision de
+# l'auteur du dépôt (2026-09-04), sur mesure : sur les 440 points où un itinéraire
+# **ferroviaire direct** existe, 122 (27,7 %) le perdaient au profit d'un bus + train plus
+# rapide, parce que les deux partageaient le groupe « transit ». L'agent ne voyait alors jamais
+# le train comme un choix. La hiérarchie de l'enquête les distingue d'ailleurs : le bus et
+# l'autocar sont au rang 4, le train régional au rang 8 (annexe p. 53).
+GROUPE_RAIL = "transit:rail"
+
+
+def _selection_group(plan: TravelPlan) -> str:
+    """Clé de regroupement des options offertes à l'agent.
+
+    C'est la catégorie de `_primary_mode`, **sauf** le collectif, qui se scinde en deux : le
+    ferroviaire d'un côté, le reste du collectif de l'autre.
+
+    Pourquoi seulement le train, et pas une clé par famille (métro, tram, téléphérique, bus,
+    train). Parce que le plafond d'options est de 6, tenu à 6 par décision du 2026-09-04 : avec
+    huit groupes possibles, la passe de priorité — qui prend le plus rapide de chaque groupe
+    inédit, par durée croissante — pourrait remplir les six créneaux de variantes collectives et
+    **écarter la voiture**, le vélo ou la marche. Avec cinq groupes (marche, vélo, voiture,
+    collectif, ferroviaire), les cinq tiennent et il reste un créneau de remplissage.
+
+    ⚠ Ne sert PAS aux métriques : `trip_mode_by_purpose` et les parts modales restent sur les
+    quatre catégories de l'enquête, où le train est un transport collectif. Cette clé ne décide
+    que de ce que l'agent a sous les yeux.
+    """
+    categorie = _primary_mode(plan)
+    if categorie != "transit":
+        return categorie
+    modes = {(leg.mode or "").lower() for leg in plan.legs if not leg.is_transfer}
+    return GROUPE_RAIL if MODE_HIERARCHY.primary_family(modes) == "rail" else categorie
+
+
 def _select_candidates(itineraries: list[TravelPlan], max_n: int) -> list[TravelPlan]:
     """Cap to max_n itineraries, keeping the fastest plan per mode group first."""
     by_duration = sorted(itineraries, key=lambda p: p.duration or float("inf"))
     seen, priority, rest = set(), [], []
     for plan in by_duration:
-        mode = _primary_mode(plan)
+        mode = _selection_group(plan)
         if mode not in seen:
             seen.add(mode)
             priority.append(plan)
@@ -2393,6 +2426,12 @@ class SimulationLoopV1(BaseScenario):
 
             plan: TravelPlan = itineraries[plan_index]
             plan.purpose = next_activity.purpose
+
+            # Journalisation Lot B (ticket 030) : car scolaire effectivement retenu.
+            if is_school_bus_plan(plan):
+                _sb_dir = "outbound" if (next_activity.purpose or "").lower() == "education" else "return"
+                SCHOOL_BUS_CHOSEN.labels(direction=_sb_dir).inc()
+                logger.info(f"[school_bus] retenu ({_sb_dir}) par {person.person_id}")
 
         # Trajet en voiture retenu par un non-conducteur : c'est un trajet passager
         # (A2). Le mode reste « Voiture Privée » dans moves.csv — EMC² compte le

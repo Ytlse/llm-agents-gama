@@ -1,3 +1,64 @@
+## [2026-09-04] L'agent voit le train comme un choix, et non plus dilué dans le bus
+
+Les options offertes à l'agent sont plafonnées à six, en gardant le plus rapide de chaque groupe
+de modes. Le groupe était la catégorie agrégée de l'enquête, si bien qu'un train direct et un
+bus + train se disputaient le même créneau : sur les 440 points où un itinéraire ferroviaire
+direct existe, 122 le perdaient au profit d'un mixte plus rapide, et l'agent ne voyait jamais le
+train comme une possibilité. Le ferroviaire forme maintenant son propre groupe.
+
+Seul le train est scindé, et pour une raison mesurée : avec un groupe par famille — métro, tram,
+téléphérique, bus, train — huit groupes se disputeraient six créneaux, et la voiture, le vélo ou
+la marche pourraient être écartés par des variantes collectives plus rapides. Avec cinq groupes,
+les cinq tiennent. Le plafond, lui, reste à six.
+
+**Avant :** 122 des 440 itinéraires ferroviaires directs n'atteignaient pas l'agent.
+**Après :** ils l'atteignent tous, sans qu'aucun autre mode ne perde sa place. Les parts modales
+et les métriques restent sur les quatre catégories de l'enquête, où le train est un transport
+collectif : c'est l'affichage qui change, pas la mesure.
+
+---
+
+## [2026-09-04] Les trains roulent dans GAMA, et les couches et les courses se régénèrent ensemble
+
+Le fichier des courses que lit GAMA, `trip_info.json`, datait du 27 mai et ne portait qu'un
+réseau : 39 343 courses Tisséo, **aucune en `route_type=2`**. Les couches, refaites la veille,
+traçaient 34 lignes de TER et 68 gares. GAMA dessinait donc un réseau ferré où aucun train ne
+roulerait, et une ligne visible et morte se lit comme une ligne sans passage, pas comme une
+donnée manquante. Ce fichier n'avait aucune recette : il était produit à la main par le bloc
+d'exemple d'un module, qui lisait un seul dossier en dur — c'est pourquoi il a pris cinq mois
+de retard sans que rien ne le signale.
+
+`make gama-trip-info` le produit désormais à partir des **trois** réseaux du périmètre et de la
+date simulée, qu'il **lit dans `Settings.gaml`** au lieu de la recopier. Les couches sont
+refaites d'abord, dans la même recette : les courses portent des indices de sommets dans la
+géométrie des lignes, et produire l'une sans les autres est précisément le décalage qui a duré
+cinq mois. Cinq contrôles bloquent l'écriture du fichier plutôt que de livrer un réseau vide en
+silence — la date simulée doit être dans la fenêtre **et** servie, l'étendue des dates doit
+tenir dans le masque binaire de 64 bits du modèle, chaque course doit avoir son tracé dans la
+couche **avec le même nombre de points**, et aucun type de ligne tracé ne doit être sans course
+le jour simulé.
+
+Le TER ne publie aucune géométrie. Ses tracés étaient reconstruits à raison d'un par
+(ligne, sens), celui de la course la plus desservie — ce qui **fabriquait du mouvement** :
+le modèle prolonge le dernier segment d'une course jusqu'au bout du tracé, si bien qu'une
+course Toulouse → Tarbes posée sur le tracé Toulouse → Pau roulait jusqu'à Pau. Il y a
+maintenant un tracé par desserte distincte, comme dans un GTFS qui publie ses géométries :
+les 1 137 courses TER sont placées exactement sur la polyligne de leurs propres arrêts, et
+les six qui n'ont aucun sens déclaré — jusqu'ici absentes des couches sans un mot — sont
+revenues.
+
+**Avant :** `[ALARME] route_type tracé(s) dans routes.shp mais ABSENT(s) de trip_info.json :
+[2.0] — aucun véhicule de ce type ne roulera.`
+**Après :** `[PERIMETRE] route_type=2 (Train) : 266 lignes, 68 arrêts, 884 courses — largeur
+25.0, capacité 300 places.` Sur le lundi 16 mars 2026 simulé : 356 courses ferroviaires actives,
+et une simulation poussée jusqu'à 7 h 33 fait circuler une centaine de trains à la fois, entre
+36 et 106 km/h, dont 17 lignes présentes dans la table que consulte un habitant pour monter.
+
+Un test de cohérence échoue désormais si les couches et les courses ne portent pas les mêmes
+types de ligne, sur des feeds synthétiques et sans aucun gros fichier.
+
+---
+
 ## [2026-09-04] L'audit de périmètre porte enfin sur la population qui a tourné
 
 L'audit comparait le run à un fichier de population que personne n'avait simulé : la sortie brute

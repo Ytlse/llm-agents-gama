@@ -444,6 +444,23 @@ hors table est compté sous `libelle_inconnu`, nommé, et alarmé en ERROR dans 
 du run — donc lu par `make error`. Détail : [`perimetre-population.md`](perimetre-population.md),
 axe A7.
 
+**Le train est un groupe d'options à part depuis le 2026-09-04.** `_select_candidates` plafonne
+les itinéraires offerts à l'agent à `settings.gtfs.max_trip_candidates` (**6**, tenu à 6 par
+décision du même jour) en gardant d'abord le plus rapide de chaque **groupe**. Le groupe était la
+catégorie agrégée de l'enquête : un train direct et un bus + train y tombaient ensemble, et le
+plus lent des deux ne passait pas. Mesuré sur les 2 580 points de la population scellée v4 : sur
+les **440 points où un itinéraire ferroviaire direct existe, 122 (27,7 %)** le perdaient au
+profit d'un bus + train plus rapide — l'agent ne voyait donc jamais le train comme un choix.
+`_selection_group` scinde désormais le collectif en deux, ferroviaire et reste.
+
+**Seul le train est scindé, et c'est mesuré.** Avec une clé par famille (métro, tram,
+téléphérique, bus, train), huit groupes se disputeraient six créneaux, et la passe de priorité —
+qui prend le plus rapide de chaque groupe inédit par durée croissante — pourrait remplir les six
+de variantes collectives en **écartant la voiture**, le vélo ou la marche. Avec cinq groupes, les
+cinq tiennent et il reste un créneau de remplissage ; un test le vérifie. Cette clé ne sert qu'à
+l'affichage : `trip_mode_by_purpose` et les parts modales restent sur les **quatre catégories** de
+l'enquête, où le train est un transport collectif.
+
 **Le catalogue des lignes réunit les trois réseaux depuis le 2026-09-04.** `GTFSData` ne
 charge qu'un feed (`settings.gtfs.gtfs_file`, Tisséo) alors que le graphe OTP en porte trois.
 Un identifiant de ligne liO ou TER ne se trouvait donc dans aucune table, et le prompt de
