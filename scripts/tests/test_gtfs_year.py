@@ -12,6 +12,13 @@ Fenêtre fiable (offre.py)
     l'export de mars de six journées valides
   - un export réduit à presque rien est déclaré inutilisable, et sa propre queue
     ne contamine pas la référence qui sert à la détecter
+  - une queue tronquée PAR LIGNE est coupée elle aussi : l'export liO décrit tout
+    le réseau jusqu'au changement de service du 13/12/2026 puis ne prolonge que
+    les lignes déjà renseignées — treize lignes `.liO 31` disparaissent pendant
+    que 94 % du réseau continue de rouler, et aucun seuil global ne le voit
+  - mais une fin de saison n'est PAS une troncature : des lignes scolaires qui
+    s'arrêtent fin juin dans un export qui s'achève en août sont en vacances,
+    pas absentes
   - deux courses de contenu identique le MÊME jour lèvent une alarme au lieu
     d'être confondues (l'offre de la journée serait amputée)
 
@@ -188,8 +195,14 @@ class BaseTemporaire(unittest.TestCase):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-class TestFenetreFiable(BaseTemporaire):
-    """La queue tronquée doit tomber, le creux d'un férié doit rester."""
+class FabriqueOffreParDate(BaseTemporaire):
+    """Socle des deux familles de tests de fenêtre fiable, sans test propre.
+
+    Les deux formes de troncature — l'effondrement global et la falaise de lignes —
+    se décrivent avec le même outil : un profil « n lignes actives à cette date ».
+    Le socle ne porte aucun test, pour ne pas rejouer ceux de l'une en héritant
+    dans l'autre.
+    """
 
     def _export(self, offre_par_date: dict[str, int]) -> offre.IndexExport:
         """Un export où chaque date active `n` lignes distinctes."""
@@ -215,6 +228,10 @@ class TestFenetreFiable(BaseTemporaire):
             (premier + dt.timedelta(days=i)).strftime("%Y%m%d"): nb
             for i, nb in enumerate(profil)
         }
+
+
+class TestFenetreFiable(FabriqueOffreParDate):
+    """La queue tronquée doit tomber, le creux d'un férié doit rester."""
 
     def test_queue_tronquee_coupee(self):
         # 21 jours pleins (le profil de référence), puis 7 jours à 2 lignes.
@@ -248,6 +265,74 @@ class TestFenetreFiable(BaseTemporaire):
         profil = [20] * 3 + [2] * 25
         index = self._export(self._semaines("20260302", profil))
         self.assertEqual(offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET), [])
+
+
+class TestFalaiseDeLignes(FabriqueOffreParDate):
+    """La troncature PAR LIGNE : l'offre globale tient, des lignes disparaissent.
+
+    Mesuré sur l'export liO du 2026-09-04 (2026-08-01 → 2027-08-31) : treize lignes
+    `.liO 31` — dont dix desservent le périmètre d'étude, toutes des rabattements sur
+    gare — cessent le 11 ou le 12/12/2026 au changement de service SNCF et ne
+    reprennent jamais sur les trente-sept semaines suivantes. Leur `calendar.txt`
+    s'arrête là (services du 06 au 12/12) quand celui des lignes voisines court
+    jusqu'au 31/08/2027. Pendant ce temps l'offre globale tient : 4 303 → 4 165
+    courses le lundi, 260 lignes actives sur un maximum de 276. Aucun seuil global
+    ne pouvait le voir, et le donneur de la journée simulée servait 21 % de courses
+    en trop peu.
+
+    Ce qui sépare la falaise d'une fin de saison n'est pas la forme de la perte mais
+    ce que l'export fait ENSUITE — d'où les deux tests jumeaux ci-dessous.
+    """
+
+    def test_falaise_coupee_quand_l_export_couvre_encore_des_mois(self):
+        # 30 jours à 20 lignes, puis 120 jours à 14 : l'offre globale reste à 70 %
+        # du maximum (les seuils globaux, à 50 %, ne coupent rien) mais six lignes
+        # ont définitivement disparu alors qu'il reste quatre mois de couverture.
+        profil = [20] * 30 + [14] * 120
+        index = self._export(self._semaines("20260801", profil))
+        retenues = offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET)
+        self.assertEqual(len(retenues), 30, "la falaise de lignes n'a pas été coupée")
+        self.assertEqual(retenues[-1], "20260830")
+
+    def test_fin_de_saison_conservee_quand_l_export_s_acheve_peu_apres(self):
+        # Même falaise, mais l'export ne couvre plus que 30 jours après elle : des
+        # lignes scolaires qui s'arrêtent fin juin dans un export qui finit en août
+        # ne sont pas une troncature, elles sont en vacances.
+        profil = [20] * 30 + [14] * 30
+        index = self._export(self._semaines("20260801", profil))
+        retenues = offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET)
+        self.assertEqual(len(retenues), 60, "une fin de saison a été prise pour une troncature")
+
+    def test_renouvellement_saisonnier_sous_le_plancher_conserve(self):
+        # Trois lignes d'été qui s'arrêtent : sous le plancher absolu (5 lignes).
+        # liO en perd au plus quatre par semaine sur toute la période observée.
+        profil = [20] * 30 + [17] * 120
+        index = self._export(self._semaines("20260801", profil))
+        retenues = offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET)
+        self.assertEqual(len(retenues), 150, "un renouvellement saisonnier a été coupé")
+
+    def test_la_fin_de_l_export_n_est_pas_une_falaise(self):
+        # Toutes les lignes s'arrêtent le dernier jour, par construction : le
+        # contrôle doit ignorer cette date, sinon aucun export ne serait jamais
+        # utilisable.
+        index = self._export(self._semaines("20260801", [20] * 150))
+        self.assertEqual(len(offre.fenetre_fiable(index, CONFIG["fiabilite"], MUET)), 150)
+
+    def test_la_falaise_est_journalisee_et_alarmee(self):
+        messages = []
+        profil = [20] * 30 + [14] * 120
+        index = self._export(self._semaines("20260801", profil))
+        offre.fenetre_fiable(index, CONFIG["fiabilite"], lambda m, *a, **k: messages.append(str(m)))
+        joints = "\n".join(messages)
+        self.assertIn("falaise de lignes", joints)
+        self.assertIn("[ALARME]", joints)
+
+    def test_le_controle_se_desactive_par_configuration(self):
+        # Un seuil nul rend le contrôle inerte : la porte de sortie si un export
+        # légitime se faisait couper à tort.
+        config = {**CONFIG["fiabilite"], "falaise_lignes_part_min": 0}
+        index = self._export(self._semaines("20260801", [20] * 30 + [14] * 120))
+        self.assertEqual(len(offre.fenetre_fiable(index, config, MUET)), 150)
 
 
 class TestCalendrierHebdomadaire(BaseTemporaire):
@@ -907,6 +992,10 @@ class TestConfigurationLivree(unittest.TestCase):
             ("fiabilite", "ratio_lignes_min"),
             ("fiabilite", "ratio_plancher_lignes"),
             ("fiabilite", "jours_min_par_export"),
+            ("fiabilite", "falaise_lignes_part_min"),
+            ("fiabilite", "falaise_lignes_min"),
+            ("fiabilite", "falaise_fenetre_jours"),
+            ("fiabilite", "falaise_jours_apres_min"),
             ("calendrier", "localite"),
             ("calendrier", "decalages_debut_testes"),
             ("extrapolation", "repli_periodes"),

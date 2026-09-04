@@ -67,6 +67,28 @@ fiabilite:
   ratio_plancher_lignes: 0.15
   jours_min_par_export: 7      # sous ce seuil, l'export est déclaré inutilisable
 
+  # ── La falaise de lignes ──────────────────────────────────────────────────
+  # Une queue peut être tronquée SANS que l'offre globale s'effondre. L'export
+  # liO décrit tout le réseau jusqu'au changement de service du 13/12/2026,
+  # puis ne prolonge que les lignes dont le calendrier était déjà renseigné :
+  # treize lignes `.liO 31` (dix dans le périmètre, toutes des rabattements sur
+  # gare) s'arrêtent le 11 ou le 12/12/2026 et ne reprennent jamais, alors que
+  # 260 des 276 lignes d'un lundi continuent de rouler. Les seuils ci-dessus
+  # voient 94 % du réseau et ne coupent rien.
+  #
+  # Ce qui distingue une falaise d'une fin de saison est ce que l'export fait
+  # ENSUITE : les cinquante-deux lignes scolaires qui s'arrêtent le 30/06/2027
+  # ne reprennent pas davantage, mais l'export s'achève neuf semaines plus tard,
+  # en vacances d'été — leur absence est expliquée. D'où le troisième seuil :
+  # une saison dure au plus dix semaines, donc si l'export couvre encore treize
+  # semaines après la perte, la saison ne l'explique plus. Il met du même coup
+  # les exports glissants de Tisséo (35 jours) hors d'atteinte du contrôle.
+  falaise_lignes_part_min: 0.04   # part du maximum de lignes actives de l'export
+  falaise_lignes_min: 5           # plancher absolu : le renouvellement saisonnier
+                                  # de liO ne perd jamais plus de 4 lignes en 7 j
+  falaise_fenetre_jours: 7        # la falaise peut s'étaler sur quelques jours
+  falaise_jours_apres_min: 91     # treize semaines de couverture restante
+
 # ── Classification des journées ──────────────────────────────────────────────
 calendrier:
   zone: "Zone C"               # académie de Toulouse
