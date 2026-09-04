@@ -10,24 +10,37 @@ Les trois réseaux du périmètre des 453 communes. OTP lit le dossier `data/gtf
 de la construction du graphe : tout sous-dossier qui contient un `trips.txt` est chargé comme un
 feed, et les feeds sont fusionnés automatiquement.
 
-| Source | Dossier | Lien |
+| Source | Dossier en service | Lien |
 |--------|---------|------|
-| Tisséo (réseau urbain Toulouse) | `data/gtfs/tisseo_gtfs/` | https://data.toulouse-metropole.fr/explore/dataset/tisseo-gtfs/information/ |
-| TER SNCF (réseau régional) | `data/gtfs/ter_gtfs/` | https://www.data.gouv.fr/fr/datasets/horaires-des-lignes-ter-sncf/ |
-| **liO** (cars interurbains d'Occitanie) | `data/gtfs_year/lio_2026/` — **pas encore en service** | https://transport.data.gouv.fr/datasets/reseau-lio-occitanie |
+| Tisséo (réseau urbain Toulouse) | `data/gtfs/tisseo_gtfs/` — **export en service** | https://data.toulouse-metropole.fr/explore/dataset/tisseo-gtfs/information/ |
+| TER SNCF (réseau régional) | `data/gtfs/ter_gtfs/` = **feed annuel `ter_2026`** (depuis le 2026-09-04) | https://www.data.gouv.fr/fr/datasets/horaires-des-lignes-ter-sncf/ |
+| **liO** (cars interurbains d'Occitanie) | `data/gtfs/lio_gtfs/` = **feed annuel `lio_2026`** (depuis le 2026-09-04) | https://transport.data.gouv.fr/datasets/reseau-lio-occitanie |
 
 **liO** (ticket 031, T2 — téléchargé le 2026-09-04, ODbL, 23 833 236 o, sha256 `d196b763…`,
 309 lignes, 7 506 arrêts, validité **2026-08-01 → 2027-08-31** lue dans `calendar.txt`) porte
 57 à 65 % des déplacements en transports collectifs des 2ᵉ et 3ᵉ couronnes. L'export brut est
 archivé sous `data/gtfs/archives/2026-09-04_lio_source/exports_bruts/` et sert de source au feed
-annuel. Son graphe est construit et mesuré ; la bascule est décrite dans
-`data/gtfs/prochain_graphe_2026-09-04/README.md`.
+annuel.
 
 > **Attention à la validité des exports.** Un feed présent dans `data/gtfs/` n'est pas un feed qui
-> sert : l'export TER en place ne couvre que 2026-04-29 → 2026-10-26 et ne sert **aucun train le
-> 16 mars 2026**, la date simulée ; l'export liO commence au 1ᵉʳ août 2026. C'est exactement ce que
-> le [feed annuel](../arch/gtfs-annee.md) répare — vérifier la date simulée dans
-> `calendar_dates.txt` avant de conclure qu'un réseau est chargé.
+> sert : l'export TER en place ne couvrait que 2026-04-29 → 2026-10-26 et ne servait **aucun train
+> le 16 mars 2026**, la date simulée ; l'export liO ne commence qu'au 1ᵉʳ août 2026. C'est
+> exactement ce que le [feed annuel](../arch/gtfs-annee.md) répare, et c'est pourquoi les deux
+> réseaux régionaux sont servis par lui — vérifier la date simulée dans `calendar_dates.txt`
+> avant de conclure qu'un réseau est chargé.
+
+> **Un feed qui remplace un autre se DÉPLACE, il ne se juxtapose pas.** OTP charge tout feed du
+> premier niveau de `data/gtfs/` : y laisser l'ancien export à côté du nouveau servirait deux
+> calendriers pour un même réseau. Les exports remplacés vont sous
+> `data/gtfs/archives/<date>_…/` — l'export TER du 2026-04-29 est sous
+> `data/gtfs/archives/2026-09-04_pre_lio/ter_gtfs_export_2026-04-29/`, et l'ancien `graph.obj`
+> (Tisséo + TER export, 4 056 arrêts) au même endroit, comme retour arrière.
+
+> **Trois réseaux dans le graphe supposent trois réseaux montés dans les conteneurs.** `api`,
+> `worker` et `controller` montent `./data/gtfs:/data/gtfs` — pas le seul `tisseo_gtfs`. La
+> porte de proximité d'OTP (`_has_reachable_stop`, 1 500 m) énumère les feeds de ce répertoire :
+> montée sur le seul Tisséo, elle refusait l'appel à OTP pour **397 des 2 580 points** de la
+> population scellée v4, ceux qui n'ont à portée qu'un arrêt liO ou une gare TER.
 
 Le notebook `scripts/data/gtfs/gtfs_merge.ipynb` permet de vérifier la cohérence des flux,
 d'analyser les routes et arrêts communs, et de produire un GTFS consolidé si besoin.
@@ -119,9 +132,11 @@ OTP est le moteur de calcul d'itinéraires multi-modal (transit + marche/vélo/v
    2022 ; un extrait 2026 du même polygone demande un téléchargement régional (~270 Mo), non fait sans
    accord. Un autre extrait se pose au même endroit (`Toulouse.osm.pbf`), puis le graphe se reconstruit.
 
-3. Placer les dossiers GTFS (`tisseo_gtfs/`, `ter_gtfs/`, et `lio_gtfs/` une fois basculé) dans
-   `data/gtfs/`. `data/gtfs/build-config.json` fixe la fenêtre de service
-   `[2026-01-01, 2027-12-31]` (T5), alignée sur les feeds annuels et la date simulée.
+3. Placer les dossiers GTFS (`tisseo_gtfs/`, `ter_gtfs/`, `lio_gtfs/` — les trois en service
+   depuis le 2026-09-04) dans `data/gtfs/`. `data/gtfs/build-config.json` fixe la fenêtre de
+   service `[2026-01-01, 2027-12-31]` (T5), alignée sur les feeds annuels et la date simulée.
+   `router-config.json` n'est **pas** dans ce répertoire : les instances tournent sur la
+   configuration de routage par défaut d'OTP, ce qui est une limite connue.
 
 ### Construction et démarrage (hors Docker)
 
@@ -142,13 +157,26 @@ population : `scripts/data/gtfs/otp_link_check.py --population <fichier>` compte
 `routingErrors` OTP (`LOCATION_NOT_FOUND` = « Couldn't link ») pour chaque domicile et lieu
 d'activité, **ventilés par couronne de résidence** (`--sans-couronnes` pour ne pas ventiler).
 
-Avec liO, mesuré le 2026-09-04 dans les mêmes conditions (JDK 25, `-Xmx4G`, machine chargée par un
-run) : **55 s de construction, 2,6 Go de pointe, `graph.obj` de 84,9 Mo**, 268 131 sommets,
-666 759 arêtes, **11 562 arrêts et 3 228 patterns** (contre 4 056 et 588). Une instance qui sert ce
-graphe tient dans 1,0 Go au chargement et 2,2 à 2,6 Go après 2 580 requêtes : `mem_limit: 6g` et
-`-Xmx4G` gardent de la marge. Sur la population scellée v4, les points sans itinéraire TC passent
-de **670 à 339** (3ᵉ couronne 369 → 163, 2ᵉ couronne 160 → 35), toujours **zéro échec de
-rattachement**.
+**Le graphe en service depuis le 2026-09-04 porte les trois réseaux**, mesuré dans les mêmes
+conditions (JDK 25, `-Xmx4G`) : **55,3 s de construction, 2,09 Go de RSS de pointe, `graph.obj`
+de 84 438 867 o** (sha256 `f2820c59…`), 268 076 sommets, 666 759 arêtes, **11 507 arrêts,
+3 146 patterns et 9 716 correspondances contraintes** (contre 4 056 arrêts et 588 patterns avec
+Tisséo + TER seuls). Une instance qui le sert tient dans 1,0 Go au chargement et 2,2 à 2,6 Go
+après 2 580 requêtes : `mem_limit: 6g` et `-Xmx4G` gardent de la marge, et les trois
+*healthchecks* passent en une vingtaine de secondes.
+
+Sur la population scellée v4 (2 580 points, lundi 16 mars 2026 8 h, destination le Capitole),
+les points sans itinéraire TC passent de **670 à 314** — 3ᵉ couronne **369 → 148**, 2ᵉ couronne
+**160 → 26**, 1ʳᵉ 9 → 8, Toulouse inchangé à 132 (tous `walkingBetterThanTransit`, la marche bat
+le TC) — avec toujours **zéro échec de rattachement**. Sur les six itinéraires que le runtime
+demande par trajet, **1 883 des 11 288 rendus proposent un train** :
+`otp_link_check.py --num-trip-patterns 6` reproduit cette condition, et son champ
+`itineraires_avec_train` la chiffre.
+
+Ce passage de 339 à 314 vient de la **coupe de la queue tronquée de liO** : l'export cessait de
+décrire treize lignes `.liO 31` au changement de service du 13/12/2026, dont dix rabattements sur
+gare du périmètre. Voir [`gtfs-annee.md`](../arch/gtfs-annee.md) et
+`docs/traces/2026-09-04_07-17_ticket031_lio_queue_rail/`.
 
 ### Configuration dans le controller
 

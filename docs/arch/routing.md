@@ -8,7 +8,7 @@ Deux moteurs de calcul d'itinéraires coexistent avec des rôles strictement sé
 
 | Moteur | Modes | Technologie | Instances actives |
 |--------|-------|-------------|-------------------|
-| OTP | Transit (bus, tram, métro, TER) | GraphQL Transmodel v3 | 3 (`otp1/2/3`, ports 8080-8082) |
+| OTP | Transit (bus, tram, métro, téléphérique, **car interurbain liO**, **TER**) | GraphQL Transmodel v3 | 3 (`otp1/2/3`, ports 8080-8082) |
 | OSMnx | Marche, vélo, voiture | Dijkstra sur graphe NetworkX | 1 (`osmnx1`, port 8090) |
 
 Les deux moteurs sont interrogés **en parallèle** pour chaque agent, puis leurs résultats sont consolidés et dédupliqués avant la phase de décision LLM.
@@ -32,39 +32,58 @@ Pour garantir que l'agent arrive à l'heure à son activité, le système utilis
 - Endpoint unique : `/otp/transmodel/v3` (GraphQL)
 - Données sources : extrait OSM du **polygone des 453 communes** (`data/gtfs/Toulouse.osm.pbf`,
   OSM 2022, ticket 031 T1 — avant le 2026-09-03 : rectangle de 30 km, hors duquel un domicile de
-  3ᵉ couronne n'était pas rattachable, « Couldn't link ») + GTFS Tisséo et TER
-  (`data/gtfs/tisseo_gtfs/`, `ter_gtfs/`), compilés en `data/gtfs/graph.obj` (66 Mo, 46 s de
-  construction, 2,0 Go de pointe — [data-pipeline.md](../setup/data-pipeline.md))
-- Le `graph.obj` est chargé en mémoire au démarrage (1,2 à 1,4 Go mesurés par instance, limite 6 Go)
+  3ᵉ couronne n'était pas rattachable, « Couldn't link ») + **trois** feeds GTFS
+  (`data/gtfs/tisseo_gtfs/`, `ter_gtfs/`, `lio_gtfs/`), compilés en `data/gtfs/graph.obj`
+  (84,4 Mo, 55 s de construction, 2,1 Go de pointe — [data-pipeline.md](../setup/data-pipeline.md))
+- Le `graph.obj` est chargé en mémoire au démarrage (1,0 Go au chargement, 2,2 à 2,6 Go après
+  2 580 requêtes ; limite 6 Go)
 - Contrôle de rattachement d'une population : `scripts/data/gtfs/otp_link_check.py` — sur la v4
   (1 000 domiciles + 1 580 lieux d'activité distincts, lundi 16 mars 2026 8 h) :
-  **0 `LOCATION_NOT_FOUND`**, 364 `noStopsInRange` et 171 `noTransitConnection` (des points sans
-  TC, pas un défaut de graphe). Le script ventile ses résultats **par couronne de résidence** :
-  c'est là que se lit le manque de desserte, invisible dans un total
+  **0 `LOCATION_NOT_FOUND`**, 314 points sans itinéraire TC dont 91 `noStopsInRange` et 124
+  `walkingBetterThanTransit` (des points sans TC ou mieux servis à pied, pas un défaut de
+  graphe). Le script ventile ses résultats **par couronne de résidence** — c'est là que se lit le
+  manque de desserte, invisible dans un total — et compte les itinéraires qui **proposent un
+  train** ; `--num-trip-patterns 6` reproduit ce que le runtime demande réellement
 
-> **Le GTFS liO est téléchargé et prêt, pas encore en service** (ticket 031, T2 — 2026-09-04).
-> Le réseau interurbain régional (309 lignes, 7 506 arrêts, ODbL) est archivé sous
-> `data/gtfs/archives/2026-09-04_lio_source/` et étendu en feed annuel
-> (`data/gtfs_year/lio_2026`, `lio_2027`). Le graphe qui le porte est construit et mesuré —
-> `data/gtfs/prochain_graphe_2026-09-04/graph.obj`, 84,9 Mo, 11 562 arrêts, 3 228 patterns, 55 s
-> de construction, 2,6 Go de pointe — mais **il n'est pas installé** : un run occupait les trois
-> instances, et le changer en cours de route aurait changé l'offre TC au milieu d'une expérience.
-> La procédure de bascule tient dans le README de ce dossier. Effet mesuré sur la v4 : les points
-> sans itinéraire TC passent de **670 à 339**, dont 369 → 163 en 3ᵉ couronne et 160 → 35 en 2ᵉ.
+### Les trois réseaux, en service depuis le 2026-09-04
 
-> **Le TER est dans le graphe mais ni demandé, ni actif le jour simulé.** Le `graph.obj` contient
-> les deux feeds (autorités `Tisséo` et `SNCF VOYAGEURS` ; 68 des 234 arrêts TER sont dans le
-> polygone, les 167 autres restent isolés de la voirie), mais :
-> 1. `transportModes` (`trip_helper/otp.py`) ne demande que `bus`, `metro`, `tram`, `cableway` —
->    pas `rail` : un TER n'est donc jamais proposé ;
-> 2. l'export TER en service ne couvre que **2026-04-29 → 2026-10-26** et ne sert **aucun train le
->    16 mars 2026**, la journée simulée (mesuré le 2026-09-04). Le feed annuel
->    `data/gtfs_year/ter_2026` y sert 80 services ; le graphe prêt à publier le porte.
+| Réseau | Feed servi | Ce qu'il porte |
+|---|---|---|
+| Tisséo | `tisseo_gtfs` (export en service) | 124 lignes urbaines — bus, tram, métro, Téléo |
+| liO | `lio_gtfs` = **feed annuel `lio_2026`** | 302 lignes d'autocar interurbain (`route_type=3`), dont 56 touchent les 453 communes |
+| TER Occitanie | `ter_gtfs` = **feed annuel `ter_2026`** | 17 lignes ferroviaires (`route_type=2`), 234 arrêts |
+
+Les deux feeds régionaux passent par le **feed annuel** (`gtfs-annee.md`) pour une raison
+mesurée : l'export liO ne couvre rien avant le 1ᵉʳ août 2026, et l'export TER en service
+(2026-04-29 → 2026-10-26) ne faisait rouler **aucun train le 16 mars 2026**, la journée simulée.
+
+**Les modes demandés à OTP sont `bus`, `metro`, `tram`, `cableway` et `rail`**
+(`trip_helper/otp.py`), et `gtfs_modality_name_map` nomme les `route_type` 0, 1, **2**, 3 et 6.
+Un réseau présent dans le graphe dont le mode n'est pas demandé est **introuvable, sans aucun
+signal** : le TER est resté dans ce cas du 2026-09-03 au 2026-09-04, ses arrêts comptant dans
+l'enveloppe de desserte sans qu'aucun agent puisse s'en voir proposer un. Les cars liO, eux,
+sont en `route_type=3` et passent par `bus`.
+
+**La porte de proximité doit voir tous les réseaux.** `OTPTripHelper._has_reachable_stop`
+(1 500 m) saute l'appel à OTP quand ni l'origine ni la destination n'a d'arrêt à portée. Bâtie
+sur le seul feed primaire, elle **écartait 397 des 2 580 points de la v4** — 245 des 374 de
+3ᵉ couronne, 150 des 339 de 2ᵉ — qui n'ont à portée qu'un arrêt liO ou une gare TER. Elle
+énumère désormais les feeds comme OTP le fait (un répertoire ou un zip portant `stops.txt` au
+premier niveau du répertoire de build) : 17 955 arrêts au lieu de 5 661. Un seul feed trouvé
+lève un avertissement au démarrage, et un balayage plus pauvre que le feed primaire une
+`[ALARME]` avec repli sur celui-ci — la porte ne rétrécit jamais en silence.
+
+> **Ce que la journée simulée voit** (v4, lundi 16 mars 2026 8 h, destination le Capitole).
+> Points sans itinéraire TC : **670 → 314** entre l'état Tisséo+TER-export et l'état en service ;
+> par couronne, 3ᵉ **369 → 148**, 2ᵉ **160 → 26**, 1ʳᵉ 9 → 8, Toulouse inchangé à 132 (tous
+> `walkingBetterThanTransit`). Sur les six itinéraires que le runtime demande par trajet,
+> **1 883 des 11 288 rendus proposent un train** (16,7 %), et **833 points** en ont au moins un —
+> dont 169 des 374 de 3ᵉ couronne, où 58 % des itinéraires passent par le rail. Toutes les jambes
+> ferroviaires portent l'autorité SNCF VOYAGEURS.
 >
 > Les cars TER de substitution, eux, ont été cherchés dans le GTFS SNCF national (ticket 031, T6) :
 > **trois courses, toutes le 2026-09-03**, une substitution de travaux. Décision : ne pas charger
-> ce feed. Ajouter `rail` aux modes demandés reste une décision à part, car elle change les
-> résultats de simulation.
+> ce feed.
 
 Le feed Tisséo consommé par la simulation est une **fenêtre** du feed annuel :
 GAMA encode le calendrier des services en masque binaire 64 bits et ne peut pas
@@ -263,6 +282,44 @@ car scolaire, il le retrouve au retour).
 
 L'enquête EMC² reste la source de la **durée** (réalisme physique) ; l'**éligibilité** vient du
 règlement liО, pas de l'enquête. Détail et décisions : `docs/tickets/ticket_030_car_scolaire_synthetique.md`.
+
+### Les listes de modes, et où en est le train
+
+Un mode traverse une dizaine de tables avant d'arriver dans une part modale. Elles ne se
+déduisent pas l'une de l'autre : chacune est une liste littérale, et une liste incomplète
+produit un chiffre plausible et faux. État au 2026-09-04, après l'ajout de `rail`.
+
+| Table | Rôle | Train |
+|---|---|---|
+| `trip_helper/otp.py` → `transportModes` | ce qui est **demandé** à OTP | `rail` ✅ |
+| `trip_helper/otp.py` → `SUPPORTED_MODES` | ce qui est **accepté** en retour (assertion dure) | `rail` ✅ |
+| `settings.gtfs.gtfs_modality_name_map` | `route_type` → nom lu dans le prompt | `"2": "Train"` ✅ |
+| `llm_agent._PT_LEG_MODES` | déclenche la mention d'abonnement TC | `rail`, `train` ✅ |
+| `move_logger._RAIL_MODES` / `_CANONICAL_FR` | colonne « Train » de `moves.csv` | ✅ |
+| `mode_choice.CANONICAL_MODES` / `_MODE_KEYWORDS` | mode canonique de la répartition | `train` ✅ |
+| `task_worker._extract_primary_mode` | mode principal, priorité train > métro > tram > bus | ✅ |
+| `frames.PROBA_COLUMNS` / `CHOSEN_MODE_MAP`, pont oracle | libellé → catégorie EMC² | « Train » → TC ✅ |
+| Grafana 05 et 07, `scripts/dashboard/palette.py`, `scripts/analysis/mode_probabilities.py` | couleur du mode (violet, cf. la palette du dépôt) | ✅ |
+| `calibration/metrics.categorize_mode` et ses copies | **loss de calibration** | ❌ `rail` classé en marche |
+| `simulation_controller._primary_mode` | métrique `TRIP_MODE_BY_PURPOSE` | ⚠ `rail` fondu dans `transit` |
+| `audit_perimetre.MOVE_MODE_MAP` | audit de périmètre | ❌ pas d'entrée « Train » |
+| `GAMA/…/Settings.gaml` → `ROUTE_DISPLAY_WIDTH`, `VEHICLE_MAX_CAPACITY` | largeur et capacité par `route_type` | ❌ pas de clé `2` |
+
+Les quatre dernières lignes sont **latentes, pas inoffensives**, et chacune a sa raison
+d'attendre une décision : la loss de calibration est l'instrument de mesure du prompt (tout
+changement s'y chiffre avant de s'appliquer, amendement A13) ; le mode principal d'un trajet
+combinant car et train relève de la hiérarchie des modes du ticket 022 ; et GAMA ne voit
+aujourd'hui **aucun** train, parce que `trip_info.json` est produit du seul feed Tisséo
+(`settings.gtfs.gtfs_file`). Voir les questions ouvertes du ticket 031.
+
+**Le libellé de ligne, lui, est un défaut actif** : `GTFSData.DEFAULT()` ne lit que
+`data/gtfs/tisseo_gtfs`, donc `route_id_map` ne connaît que les 124 lignes Tisséo et
+`get_route_type_string_by_id` renvoie « Unknown » pour les **319 lignes liO et TER** — le prompt
+de l'agent lit « Trajet en Unknown 392 vers "MURET SNCF" ». Les `route_id` des trois feeds ne se
+collisionnent pas (0 collision mesurée), donc une union par `route_id` est sûre ; les
+`route_short_name`, eux, collisionnent (au moins 20 entre Tisséo et liO), donc
+`route_name_id_map` ne peut pas être unioné tel quel. Corriger change le texte du prompt, donc
+les résultats et le cache de décisions : question ouverte du ticket 031.
 
 ### Cohérence de chaîne des véhicules
 

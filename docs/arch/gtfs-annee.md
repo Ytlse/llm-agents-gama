@@ -56,11 +56,15 @@ Six feeds sous `data/gtfs_year/`, plus une trace de build sous
 | `tisseo_2027` | 0 | 364 | 1 | 74 688 | 8 289 |
 | `ter_2026` | 181 | 184 | 0 | 1 137 | 351 |
 | `ter_2027` | 0 | 365 | 0 | 1 101 | 328 |
-| `lio_2026` | 153 | 212 | 0 | 6 858 | 379 |
-| `lio_2027` | 243 | 122 | 0 | 6 239 | 314 |
+| `lio_2026` | 133 | 232 | 0 | 6 647 | 224 |
+| `lio_2027` | 0 | 365 | 0 | 6 647 | 223 |
 
 2027 n'a aucune donnée réelle : c'est 2026 reporté par similarité de saison,
-avec le calendrier scolaire et les jours fériés propres à 2027.
+avec le calendrier scolaire et les jours fériés propres à 2027. Pour liO, cela
+vaut depuis la coupe de la **falaise de lignes** du 2026-09-04 (règle 1) : la
+fenêtre fiable de son export s'arrête au 11/12/2026, donc rien de 2027 n'y est
+réel. Deux journées liO sur trois portent la même offre dans les deux feeds —
+c'est le même export qui les nourrit.
 
 **Chaque journée porte soit l'offre réellement publiée par l'opérateur, soit la
 copie verbatim d'une journée réelle de même signature.** Aucun horaire n'est
@@ -90,6 +94,66 @@ Et la coupe cherche le plus long **suffixe** entièrement sous le seuil, pas le
 premier creux : la troncature court jusqu'à la fin de l'export, alors qu'un jour
 férié est un creux isolé suivi d'un retour à la normale. Couper au premier creux
 amputerait l'export de mars de six journées valides, à cause du lundi de Pâques.
+
+#### La falaise de lignes — quand l'offre globale tient et que des lignes disparaissent
+
+Les deux seuils ci-dessus cherchent un **effondrement global**. Ils sont aveugles à
+la troncature *par ligne*, celle d'un export qui décrit le réseau entier jusqu'au
+prochain changement de service puis ne prolonge que les lignes dont le calendrier
+était déjà renseigné.
+
+Mesuré sur l'export liO du 2026-09-04 (2026-08-01 → 2027-08-31) : **treize lignes
+`.liO 31` cessent le 11 ou le 12/12/2026** et ne reprennent jamais sur les
+trente-sept semaines suivantes. Leurs 45 services ont un `end_date` compris entre le
+06 et le 12/12, quand celui des quarante autres lignes de l'agence court jusqu'au
+31/08/2027 : c'est l'**horizon de l'export**, arrêté au changement de service SNCF du
+dimanche 13 décembre, pas une décision d'exploitation — et aucune ligne de
+remplacement n'apparaît au printemps. Pendant ce temps l'offre globale perd 3 %
+(4 303 → 4 165 courses le lundi) et garde **94 % de ses lignes**.
+
+**Dix des treize desservent le périmètre d'étude, et ce sont toutes des rabattements
+sur gare** : Muret, Carbonne, Noé, Villefranche, Castelnau-d'Estrétefonds, Boussens.
+Sans la coupe, la journée simulée du 16 mars 2026 recevait un donneur amputé de ces
+dix lignes — **3 494 courses au lieu de 4 303**.
+
+Ce qui sépare une falaise d'une fin de saison n'est pas la forme de la perte, c'est
+**ce que l'export fait ensuite**. Les cinquante-deux lignes scolaires qui s'arrêtent
+le 30/06/2027 ne reprennent pas davantage, mais l'export s'achève neuf semaines plus
+tard, en vacances d'été : leur absence est expliquée. D'où le critère : une saison
+dure au plus dix semaines, donc si l'export couvre encore **treize semaines** après la
+perte, la saison ne l'explique plus. Le contrôle coupe alors juste après la plus
+précoce des pertes de la fenêtre, journalise et lève une `[ALARME]` nommant le nombre
+de lignes et la couverture restante.
+
+Lignes perdues par fenêtre de sept jours sur l'export liO, hors des 28 derniers jours :
+
+| Date | Lignes perdues | Part du max actif | Couverture restante | Verdict |
+|---|---:|---:|---:|---|
+| avant le 01/12/2026 | ≤ 4 | ≤ 1,4 % | — | saisonnier, sous le plancher |
+| **12/12/2026** | **14** | **5,0 %** | **262 j** | **falaise → coupe** |
+| 31/12/2026 | 19 | 6,8 % | 243 j | falaise (postérieure) |
+| 30/06 → 02/07/2027 | 43 → 52 | 15 → 19 % | 62 → 60 j | fin d'année scolaire, conservée |
+
+Ce critère met les **exports glissants de Tisséo (35 jours) hors d'atteinte par
+construction** : aucune de leurs dates n'a treize semaines de couverture derrière
+elle. Vérifié : leur pic maximal de pertes vaut 2 lignes (1,6 %), celui du TER 0, et
+les quatre feeds Tisséo/TER reconstruits sont identiques à l'octet près.
+
+Seuils dans `feed_year.yaml` : `falaise_lignes_part_min` (0,04 du maximum de lignes
+actives), `falaise_lignes_min` (plancher absolu 5 — liO ne perd jamais plus de 4
+lignes en sept jours par renouvellement saisonnier), `falaise_fenetre_jours` (7),
+`falaise_jours_apres_min` (91). Un `falaise_lignes_part_min` nul désactive le
+contrôle.
+
+**Le prix de la coupe est déclaré, pas caché.** Écarter les 263 dates postérieures au
+11/12/2026 prive `lio_2026` des classes `vac_hiver`, `vac_printemps`, `ete_juillet` et
+`vac_noel` de leur donneur réel, et `lio_2027` de toutes ses journées réelles : les
+journées en confiance basse passent de 5 à **192** pour 2026 et de 0 à **179** pour
+2027, et le build sort en code 4. Ces journées sont des vacances et du mois de
+juillet ; la journée simulée est un lundi scolaire, et elle y gagne 809 courses. Une
+approximation déclarée vaut mieux qu'une sous-offre silencieuse de 21 % sur la journée
+mesurée. **Un export liO publié après le changement de service de décembre 2026
+rendrait ces 263 dates réelles sans changer une ligne du pipeline.**
 
 ### 2. Une seule source autoritaire par date
 
@@ -275,8 +339,20 @@ ouvrés scolaires tombent sous 1,2 %.
   changer une ligne du pipeline.
 - **Les fériés du 01/01, du 15/08 et du 25/12 n'ont aucun donneur de même
   nature** et restent en confiance basse quoi qu'on fasse.
-- **97 journées de 2026 et 82 de 2027 sont en confiance basse** ; le build sort
-  alors en code 4, traduit en succès par la cible Make mais en le disant.
+- **97 journées de 2026 et 82 de 2027 sont en confiance basse** pour Tisséo ; le
+  build sort alors en code 4, traduit en succès par la cible Make mais en le
+  disant.
+- **liO n'a qu'un export, et il est tronqué au changement de service de décembre
+  2026.** Sa fenêtre fiable court du 01/08 au 11/12/2026 (133 journées), d'où
+  **192 journées en confiance basse sur `lio_2026` et 179 sur `lio_2027`** : les
+  classes `vac_hiver`, `vac_printemps`, `ete_juillet` et `vac_noel` n'ont aucun
+  donneur réel et passent par la chaîne de repli. La journée simulée du 16 mars
+  2026, elle, est un lundi scolaire copié du **lundi 07/12/2026** — signature
+  exacte, 99 jours de saison d'écart, **4 303 courses**. Sa confiance est déclarée
+  **basse** parce que l'écart de saison dépasse 60 jours, alors que l'écart d'offre
+  mesuré entre les deux périodes sur les 41 lignes du périmètre décrites dans les
+  deux vaut **1,2 %** : l'étiquette est conservatrice. **Un export liO publié après
+  décembre 2026 rendrait 263 dates réelles** et ferait tomber ces deux compteurs.
 - **Le 1er mai reste sans service.** Ce n'est pas un trou de couverture : les
   deux exports qui l'englobent l'omettent tous les deux. L'extrapoler
   inventerait de l'offre. La règle est reconduite d'année en année sur le jour et
@@ -339,24 +415,52 @@ de calendrier sont
 Les feeds sont produits **à côté** du jeu en service : ni `data/gtfs/` ni
 `graph.obj` ne sont touchés par `make gtfs-year`.
 
-Publier reste une décision explicite, et **change les résultats de simulation** :
+Publier reste une décision explicite, et **change les résultats de simulation**.
 
-1. Poser `tisseo_<année>.zip` et `ter_<année>.zip` **à la racine** de
-   `data/gtfs/` — OTP ne charge que les zips de premier niveau du répertoire de
-   construction.
-2. Y copier `build-config.json` et `router-config.json` : ils vivent aujourd'hui
-   dans `otp-toulouse/toulouse/`, hors du répertoire de build, donc leur
-   `transitServiceStart/End: 2026-01-01/2026-12-31` est inerte.
-3. Reconstruire le graphe. Il passe de 39 343 à ~75 000 trips : prévoir `-Xmx8G`
-   au build (`otp-toulouse/Makefile` est à 4 Go) et vérifier le `mem_limit: 6g`
-   des trois réplicas OTP.
-4. Le TER entrerait dans le graphe **pour la première fois** — il en est absent
-   aujourd'hui. Il faudrait alors ajouter le mode `rail` aux requêtes
-   (`llm-agents/trip_helper/otp.py`) et la clé `"2"` à
-   `gtfs_modality_name_map`, sans quoi un TER s'afficherait « Unknown ».
-5. Invalider les caches indexés sur le graphe, sinon un cache chaud resservirait
+### Ce qui est en service depuis le 2026-09-04
+
+| Répertoire de `data/gtfs/` | Contenu |
+|---|---|
+| `tisseo_gtfs` | l'**export en service** de Tisséo (la publication du feed annuel Tisséo reste une décision à part) |
+| `ter_gtfs` | **`ter_2026`, le feed annuel** — l'export en place (2026-04-29 → 2026-10-26) ne faisait rouler aucun train le 16 mars 2026 |
+| `lio_gtfs` | **`lio_2026`, le feed annuel** — l'export liO ne couvre rien avant le 1ᵉʳ août 2026 |
+
+Le graphe qui en résulte : 11 507 arrêts, 3 146 patterns, 84,4 Mo, construit en 55 s
+et 2,1 Go de pointe. Les seize autorités servies sont Tisséo, SNCF Voyageurs et les
+quatorze agences liO. Ancien graphe conservé sous
+`data/gtfs/archives/2026-09-04_pre_lio/`.
+
+### La procédure
+
+1. Poser le feed **à la racine** de `data/gtfs/`, dans un répertoire suffixé
+   `_gtfs` ou un zip de premier niveau — OTP ne regarde que ce niveau. Un ancien
+   export se **déplace** sous `data/gtfs/archives/<date>_…/`, il ne se supprime pas,
+   et il ne reste pas au premier niveau : deux calendriers pour un même réseau se
+   cumuleraient.
+2. `build-config.json` doit être **dans** `data/gtfs/` (c'est le cas depuis le
+   ticket 031, T5) : celui d'`otp-toulouse/toulouse/` est hors du répertoire de
+   build, donc inerte. `router-config.json` n'y est **toujours pas** — les trois
+   instances tournent sur la configuration de routage par défaut, ce qui est une
+   limite connue et non un choix.
+3. Reconstruire le graphe :
+   `java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --build data/gtfs --save`.
+   Une publication du feed annuel Tisséo porterait le graphe de 39 343 à ~75 000
+   trips : prévoir `-Xmx8G` et vérifier le `mem_limit: 6g` des trois réplicas.
+4. `docker compose up -d otp1 otp2 otp3`, et vérifier les trois *healthchecks*.
+5. **Vérifier les modes demandés à OTP.** Un réseau dans le graphe dont le mode
+   n'est pas demandé est **introuvable**, sans aucun signal : le TER est resté dans ce
+   cas du 2026-09-03 au 2026-09-04. `llm-agents/trip_helper/otp.py` demande
+   aujourd'hui `bus`, `metro`, `tram`, `cableway` et `rail`, et
+   `gtfs_modality_name_map` nomme les `route_type` 0, 1, **2**, 3 et 6.
+6. **Vérifier que les conteneurs voient le nouveau feed.** La porte de proximité
+   d'OTP (`_has_reachable_stop`, 1 500 m) énumère les feeds du premier niveau de
+   `data/gtfs` : montée sur le seul `tisseo_gtfs`, elle refusait l'appel à OTP pour
+   397 des 2 580 points de la population scellée v4. Le montage
+   `./data/gtfs:/data/gtfs` d'`api`, `worker` et `controller` couvre les trois
+   réseaux ; un seul feed trouvé lève un avertissement au démarrage.
+7. Invalider les caches indexés sur le graphe, sinon un cache chaud resservirait
    **en silence** des plans calculés sur l'ancien.
-6. `dvc add data/gtfs` — `data/gtfs` est un output DVC.
+8. `dvc add data/gtfs` — `data/gtfs` est un output DVC.
 
 ---
 

@@ -1242,13 +1242,44 @@ tickets:
       routes.shp 395 → 730 tracés, stops.shp 3 822 → 5 375 arrêts (nouveau script
       scripts/data/gama/export_gtfs_layers.py, sans dépendance à settings.py) ; mailles de 5 km du
       périmètre portant un arrêt 52/217 → 156/217, zones fines 394/785 → 571/785.
-      RESTE : la MISE EN SERVICE du graphe (data/gtfs/prochain_graphe_2026-09-04/, deux commandes,
-      dès qu'aucun run ne tourne — question n° 14), le mode rail à demander à OTP (n° 16),
-      l'avertissement de couverture GAMA devenu vide de sens (n° 15), G3 (rendu, non mesurable en
-      headless), le manuscrit (§ 2.2 et annexe F, plus la largeur « 106 × 93 km » du rapport de
-      périmètre à corriger en 86 × 93), la mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider
-      (question n° 9), et le critère d'acceptation 3 (parts modales contre cibles 453) qui dépend
-      désormais du seul ticket 030.
+      BASCULE FAITE le 2026-09-04 07:38 (questions n° 14, 16, 17 tranchées ; trace
+      docs/traces/2026-09-04_07-17_ticket031_lio_queue_rail/). Le graphe EN SERVICE porte Tisséo
+      export + TER annuel + liO annuel : 55,3 s, 2,09 Go, 84 438 867 o (sha256 f2820c59…),
+      11 507 arrêts, 3 146 patterns ; otp1/2/3 healthy. QUEUE TRONQUÉE DE liO (n° 17) : le creux de
+      20 % du printemps 2027 est un ARTEFACT, pas une saison — treize lignes .liO 31 cessent le
+      11-12/12/2026 au changement de service SNCF et ne reviennent jamais sur 37 semaines, leur
+      calendar.txt s'arrête là quand celui des voisines court jusqu'au 31/08/2027, et DIX des
+      treize sont des rabattements sur gare du périmètre (Muret, Carbonne, Noé, Villefranche,
+      Castelnau-d'Estrétefonds, Boussens) ; l'offre globale gardait 94 % de ses lignes, d'où
+      l'aveuglement des seuils globaux. La règle 1 gagne une seconde forme, la « falaise de
+      lignes » (seuil = part des lignes perdues définitivement + 13 semaines de couverture
+      restante, ce qui met les exports glissants Tisséo hors d'atteinte par construction) ;
+      6 tests neufs, non-régression Tisséo/TER à l'octet près. La journée simulée reçoit désormais
+      4 303 courses liO au lieu de 3 494 (751 dans le périmètre au lieu de 635, 52 lignes au lieu
+      de 41), donneur = lundi 07/12/2026, confiance déclarée BASSE (99 j de saison, pour 1,2 %
+      d'écart d'offre mesuré) ; prix déclaré : lio_2026 passe à 133 journées réelles et 192 en
+      confiance basse, lio_2027 à 0 réelle, code 4. MODE RAIL (n° 16) : demandé, accepté
+      (SUPPORTED_MODES) et nommé (gtfs_modality_name_map["2"] = "Train") ; 1 883 des 11 288
+      itinéraires rendus proposent un train (833 points, 58 % des itinéraires de 3ᵉ couronne).
+      DÉFAUT RÉPARÉ en chemin : la porte de proximité _has_reachable_stop ne voyait que les arrêts
+      Tisséo et écartait 397 des 2 580 points (245 de 3ᵉ couronne, 150 de 2ᵉ) — pour eux le runtime
+      SAUTAIT OTP et la bascule n'aurait rien produit ; elle énumère les trois feeds
+      (17 955 arrêts au lieu de 5 661) et docker-compose monte ./data/gtfs. CONTRÔLE FINAL de la
+      v4 : 670 → 314 points sans itinéraire TC (3ᵉ couronne 369 → 148, 2ᵉ 160 → 26, 1ʳᵉ 9 → 8,
+      Toulouse 132 inchangé — tous walkingBetterThanTransit), noTransitConnection 171 → 1,
+      0 échec de rattachement. Tests : llm-agents 325 verts (code 0), scripts 438 verts + les
+      2 échecs préexistants de test_weather_draw.
+      RESTE : recréer api/worker/controller pour charger le nouveau code et le montage
+      (question n° 23), le libellé « Unknown » des 319 lignes liO/TER dans le prompt (n° 18,
+      décision de l'auteur car elle change le prompt), categorize_mode de la loss qui classe rail
+      en marche (n° 19), le mode principal d'un trajet car+train = ticket 022 (n° 20), les clés
+      route_type=2 de Settings.gaml et TYPE_RAIL, latents car GAMA ne voit que Tisséo (n° 21),
+      router-config.json absent du répertoire de build (n° 22), l'avertissement de couverture GAMA
+      devenu vide de sens (n° 15), G3 (rendu, non mesurable en headless), le manuscrit (§ 2.2 et
+      annexe F, plus la largeur « 106 × 93 km » du rapport de périmètre à corriger en 86 × 93), la
+      mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider (question n° 9), et le critère
+      d'acceptation 3 (parts modales contre cibles 453) qui dépend désormais du seul ticket 030 et
+      d'une journée simulée complète.
 
   ticket_032_lts_velo_propositions_gama:
     status: à faire

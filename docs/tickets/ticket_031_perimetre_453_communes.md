@@ -370,7 +370,9 @@ manque pour en faire une spécification. Actions numérotées du rapport entre p
 Trace unique de toutes les mesures ci-dessous :
 `docs/traces/2026-09-03_22-46_ticket031_partie2_portage_chaine/` (README + cinq fichiers de
 mesure + journal de construction OTP). **T2, T6 et G2, faits le 2026-09-04 une fois la porte de
-téléchargement levée** : `docs/traces/2026-09-04_01-30_ticket031_gtfs_lio/`.
+téléchargement levée** : `docs/traces/2026-09-04_01-30_ticket031_gtfs_lio/`. **Mise en service du
+graphe, coupe de la queue tronquée de liO et mode `rail` (questions 14, 16, 17)** :
+`docs/traces/2026-09-04_07-17_ticket031_lio_queue_rail/`.
 
 | Maillon | État | Chiffre qui le prouve |
 |---|---|---|
@@ -378,7 +380,8 @@ téléchargement levée** : `docs/traces/2026-09-04_01-30_ticket031_gtfs_lio/`.
 | OSMnx runtime | **fait** | clé de graphe configurée (`444ca7e6a515`) ; arêtes vélo en vitesse de repli **32,0 % → 0,0 %** ; `routing_version` r2 |
 | vizpop | **fait** | quatre couronnes tracées à la place du rectangle, enveloppe TC de T4 |
 | OTP T1 / T4 / T5 | **fait** | extrait du polygone (76 Mo), graphe reconstruit en 46 s / 2,0 Go, **0 « Couldn't link »** sur 2 580 points |
-| OTP T2 / T6 | **fait le 2026-09-04, mise en service à faire** | GTFS liO téléchargé (23 833 236 o, sha256 `d196b763…`, ODbL, 2026-08-01 → 2027-08-31), feeds annuels `lio_2026`/`lio_2027` construits (code 0), graphe reconstruit et mesuré : **670 → 339 points sans itinéraire TC** (3ᵉ couronne 369 → 163, 2ᵉ 160 → 35), `noStopsInRange` 364 → 91. T6 : trois courses routières SNCF dans le périmètre, toutes le 2026-09-03 → **ne pas charger**. Le `graph.obj` attend sous `data/gtfs/prochain_graphe_2026-09-04/` : un run occupait `otp1/2/3` |
+| OTP T2 / T6 | **fait, EN SERVICE depuis le 2026-09-04 07:38** | Tisséo export + **TER annuel** + **liO annuel** dans `data/gtfs/`, graphe reconstruit (55,3 s, 2,09 Go, 84 438 867 o, sha256 `f2820c59…`, 11 507 arrêts, 3 146 patterns), `otp1/2/3` **healthy**. **670 → 314 points sans itinéraire TC** (3ᵉ couronne 369 → 148, 2ᵉ 160 → 26, 1ʳᵉ 9 → 8), `noStopsInRange` 364 → 91, `noTransitConnection` 171 → **1**, 0 échec de rattachement. Le mode `rail` est demandé : **1 883 des 11 288 itinéraires proposent un train** (six candidats par trajet, comme le runtime), 833 points concernés. T6 : trois courses routières SNCF dans le périmètre, toutes le 2026-09-03 → **ne pas charger**. Ancien graphe conservé sous `data/gtfs/archives/2026-09-04_pre_lio/` |
+| OTP — mode `rail` et porte de proximité | **fait le 2026-09-04** | `rail` demandé et accepté, `gtfs_modality_name_map["2"] = "Train"` ; la porte `_has_reachable_stop` énumère les trois feeds (**17 955 arrêts au lieu de 5 661**) — elle écartait **397 des 2 580 points** (245 de 3ᵉ couronne, 150 de 2ᵉ) qui n'ont à portée qu'un car liO ou une gare TER ; montage `./data/gtfs` des conteneurs. 19 tests neufs |
 | GAMA G1 | **fait** | monde = `perimetre_453.shp`, 86 × 93 km ; avertissement de couverture TC (21 %) ; compteur d'agents hors monde |
 | GAMA G4 | **tranché autrement** | les coordonnées de `roads.shp` ne sont valides dans aucune zone UTM : le `.prj` ne se corrige pas, il se documente |
 | GAMA G2 | **fait le 2026-09-04** | `routes.shp` 395 → **730 tracés**, `stops.shp` 3 822 → **5 375 arrêts** (Tisséo + TER + liO, restreints au périmètre) ; mailles de 5 km portant un arrêt 52 / 217 → **156 / 217** ; zones fines de l'enquête 394 / 785 → **571 / 785** |
@@ -538,18 +541,18 @@ voiture 8 878 / 38 447 / 17 825.
 
 ### Questions ouvertes de T2 / T6 / G2 (2026-09-04)
 
-14. **Le graphe OTP avec liO est construit mais pas en service.** Un run de 1 000 agents
-    (`experiments/archive/2026-09-04_01_09`, démarré à 01:09 par une autre session) occupait
-    `otp1/2/3` pendant toute la session : reconstruire `data/gtfs/graph.obj` et redémarrer les
-    conteneurs aurait changé l'offre TC **au milieu** de cette expérience. Le graphe recommandé
-    (Tisséo + TER annuel + liO annuel, 84,9 Mo, 11 562 arrêts, 3 228 patterns) attend sous
-    `data/gtfs/prochain_graphe_2026-09-04/` avec sa procédure de bascule et son retour arrière ;
-    l'ancien est conservé (`data/gtfs/archives/2026-09-04_pre_lio/graph.obj`, sha256 `30dc951b…`).
-    **Recommandation : basculer dès qu'aucun run ne tourne**, puis `docker compose up -d otp1 otp2
-    otp3` et vérifier les trois healthchecks. Deux décisions accompagnent la bascule :
-    (a) **mettre le TER annuel en service** — l'export en place ne sert aucun train le jour simulé ;
-    (b) le feed Tisséo reste son export brut, la publication des feeds annuels Tisséo étant une
-    décision à part (`docs/arch/gtfs-annee.md`, § Publication).
+14. **TRANCHÉE ET FAITE le 2026-09-04 à 07:38 — le graphe est en service.** Le run de 1 000 agents
+    (`experiments/archive/2026-09-04_01_09`) s'est arrêté à 02:37 (« Simulation stopped after 1
+    simulated day(s) »). La procédure préparée a été appliquée avec les deux décisions qui
+    l'accompagnaient : **TER annuel en service** (a) et **Tisséo laissé sur son export** (b). Le
+    graphe a été **reconstruit** plutôt que repris : celui qui attendait portait le feed liO
+    d'avant la coupe de la falaise de lignes (question 17). Mesuré : 55,3 s, 2,09 Go de pointe,
+    84 438 867 o, sha256 `f2820c59ea4dbc19ee68221245af7f095a2729312686ec09a78a225887dc07b4`,
+    268 076 sommets / 666 759 arêtes, **11 507 arrêts, 3 146 patterns**, 9 716 correspondances
+    contraintes, 16 autorités (Tisséo, SNCF Voyageurs, 14 agences liO) ; `otp1/2/3` **healthy** en
+    19 s, HTTP 200 sur 8080/8081/8082. Rien n'a été supprimé : ancien graphe et ancien export TER
+    sous `data/gtfs/archives/2026-09-04_pre_lio/`, graphe préparé périmé sous
+    `data/gtfs/archives/2026-09-04_graphe_prepare_avant_coupe_falaise/`.
 15. **L'avertissement de couverture TC de `Settings.gaml` devient vide de sens.** Il teste si
     l'enveloppe de `routes.shp` couvre le monde : vrai à 21 % avec Tisséo seul, **vrai à 100 % dès
     que liO entre dans la couche** — or une enveloppe qui couvre le monde n'y met pas un arrêt.
@@ -559,21 +562,155 @@ voiture 8 878 / 38 447 / 17 825.
     remplacer le test d'enveloppe par un maillage** (une passe sur `stops0_shape_file` au chargement,
     quelques lignes de GAML). Non fait ici : une erreur de syntaxe GAML ne se rattrape qu'en lançant
     GAMA, et le seul GAMA disponible portait le run en cours — **décision et validation de l'auteur**.
-16. **Le mode `rail` n'est toujours pas demandé à OTP** (`llm-agents/trip_helper/otp.py` :
-    `bus`, `metro`, `tram`, `cableway`). Le TER est dans le graphe, ses arrêts comptent dans
-    l'enveloppe de desserte T4, et le feed annuel le fait rouler le jour simulé — mais aucun agent
-    ne s'en verra jamais proposer un. liO, lui, est en `route_type=3` et passe par `bus` : rien à
-    changer pour lui. Le TER porte 10 % des déplacements TC de la 3ᵉ couronne (EMC² 2023).
-    **Recommandation : ajouter `rail` aux modes et la clé `"2"` à `gtfs_modality_name_map`** au même
-    moment que la bascule du graphe — c'est un changement de résultats, donc **décision de l'auteur**.
-17. **Le GTFS liO ne sert rien avant le 1ᵉʳ août 2026** ; la journée simulée du 16 mars 2026 est donc
-    une **copie verbatim du lundi 15 mars 2027** (même signature, écart de saison 1 jour, 3 494
-    courses, confiance moyenne). C'est le fonctionnement déclaré du feed annuel, et le donneur est
-    le meilleur possible — mais c'est une limite à écrire dans le manuscrit au même titre que les
-    journées extrapolées de Tisséo. À noter aussi : **liO publie 20 % de courses en moins au
-    printemps 2027 qu'à l'automne 2026** (3 450 contre 4 300 les jours ouvrés) ; la journée servie
-    est donc plutôt basse. Un export liO couvrant le premier semestre 2026 la remplacerait sans
-    changer une ligne du pipeline.
+16. **TRANCHÉE ET FAITE le 2026-09-04 — `rail` est demandé, et le train se nomme.** `rail`
+    ajouté aux `transportModes` et à `SUPPORTED_MODES` de `llm-agents/trip_helper/otp.py`, clé
+    `"2": "Train"` dans `gtfs_modality_name_map`. Un test de cohérence verrouille les deux listes
+    ensemble : un mode demandé et absent de `SUPPORTED_MODES` ne rend pas « moins d'itinéraires »,
+    il lève une `AssertionError` sur le premier trajet qui l'emprunte. **Mesuré** (v4, lundi
+    16 mars 2026 8 h, six candidats par trajet comme le runtime) : **1 883 des 11 288 itinéraires
+    proposent un train** (16,7 %), **833 des 2 580 points** en ont au moins un — 169 des 374 de
+    3ᵉ couronne, où **58,4 % des itinéraires** passent par le rail ; toutes les jambes portent
+    l'autorité SNCF VOYAGEURS. L'enquête donne 10 % des déplacements TC de la 3ᵉ couronne au TER :
+    le modèle **offre** le train bien plus souvent qu'elle ne le voit **choisi**, ce qui est
+    attendu — OTP propose, l'agent décide.
+
+    **Deux défauts trouvés en chemin, un réparé, un à trancher.**
+    *Réparé* : `OTPTripHelper._has_reachable_stop` (1 500 m) était bâtie sur le seul feed primaire
+    et **écartait 397 des 2 580 points** — 245 des 374 de 3ᵉ couronne, 150 des 339 de 2ᵉ — qui
+    n'ont à portée qu'un arrêt liO ou une gare TER : pour eux le runtime **sautait OTP**, et toute
+    la bascule du graphe n'aurait rien produit là où elle sert le plus. La porte énumère désormais
+    les feeds comme OTP le fait (répertoire ou zip portant `stops.txt` au premier niveau du
+    répertoire de build) : **17 955 arrêts au lieu de 5 661**, vérifié dans un conteneur. Corollaire
+    livré : `api`, `worker` et `controller` montent `./data/gtfs` et non le seul `tisseo_gtfs`
+    (`docker-compose.yml`) — **le montage ne prend effet qu'à la prochaine recréation des
+    conteneurs**, nécessaire de toute façon pour charger le nouveau code.
+    *À trancher* : voir les questions 18 à 21 ci-dessous.
+17. **TRANCHÉE ET FAITE le 2026-09-04 — c'était une TRONCATURE, et elle est coupée.** La
+    question était : le creux de 20 % du printemps 2027 est-il saisonnier ou un artefact ?
+    **Artefact**, et la courbe le prouve : ce n'est pas une décroissance de fin de période mais
+    une **marche unique** au changement de service SNCF du dimanche 13/12/2026, suivie d'un
+    plateau parfaitement plat sur vingt-six semaines, avec les creux de vacances scolaires zone C
+    exactement à leur place (S06-07 hiver, S14-15 printemps, S27+ été).
+
+    **Treize lignes `.liO 31` cessent le 11 ou le 12/12/2026** et ne reprennent jamais sur les
+    trente-sept semaines restantes, pendant que le réseau garde **94 % de ses lignes actives**
+    (260 sur un maximum de 276) — d'où l'aveuglement des seuils globaux de la règle 1, qui
+    cherchent un effondrement. **La preuve est dans `calendar.txt`** : les 45 services de ces
+    treize lignes ont un `end_date` entre le 06 et le 12/12/2026, quand celui des quarante autres
+    lignes de l'agence court jusqu'au 31/08/2027 ; et **aucune ligne de remplacement n'apparaît**
+    au printemps. **Dix des treize desservent le périmètre, et ce sont toutes des rabattements sur
+    gare** : Muret, Carbonne, Noé, Villefranche, Castelnau-d'Estrétefonds, Boussens — 24 % des
+    42 lignes `.liO 31` du périmètre. Contre-épreuve saisonnière : sur les 41 lignes du périmètre
+    décrites dans les deux périodes, l'offre du lundi vaut 666 courses le 07/12/2026 contre 658 le
+    15/03/2027, soit **1,2 % d'écart**.
+
+    **La règle 1 gagne donc une seconde forme, la « falaise de lignes »** (`offre._falaise_lignes`,
+    `feed_year.yaml → fiabilite.falaise_*`) : une date à laquelle une part notable des lignes cesse
+    **définitivement** alors que l'export couvre encore treize semaines. Ce seuil de couverture
+    restante n'est pas un réglage mais un raisonnement — une saison dure au plus dix semaines — et
+    il met les exports glissants de Tisséo (35 jours) **hors d'atteinte du contrôle par
+    construction**. Il distingue la falaise de la fin d'année scolaire : les 52 lignes scolaires
+    qui s'arrêtent le 30/06/2027 dans un export qui finit le 31/08 sont en vacances, pas absentes.
+    Six tests neufs, dont les deux jumeaux « coupe » / « ne coupe pas ». Non-régression : les
+    quatre feeds Tisséo/TER rejoués sont **identiques à l'octet près**, `feed_info.txt` excepté,
+    et le mot « falaise » n'apparaît pas dans leur journal.
+
+    **Les courses liO effectivement servies le 16 mars 2026** dans le feed en service, lues dans
+    les fichiers : **4 303 courses sur 273 lignes** (contre 3 494 sur 238), dont **751 courses et
+    52 lignes dans le périmètre** (contre 635 et 41), et **1 620 courses avec un départ entre 6 h
+    et 10 h** (contre 1 353). Le donneur devient le **lundi 07/12/2026** (signature exacte
+    `lun/scolaire`, 99 jours d'écart de saison).
+
+    **La confiance attachée à cette journée est déclarée BASSE**, mécaniquement, parce que l'écart
+    de saison dépasse le seuil de 60 jours de `feed_year.yaml` — alors que l'écart d'offre mesuré
+    entre les deux périodes vaut 1,2 %. L'étiquette est donc **conservatrice**, et elle est plus
+    honnête que l'ancienne « moyenne », qui reposait sur un donneur à un jour de saison mais
+    amputé de dix lignes de rabattement. **Le prix de la coupe, déclaré** : `lio_2026` passe de
+    153 à 133 journées réelles et de 5 à **192 journées en confiance basse** ; `lio_2027` de 243 à
+    **0 journée réelle** et de 0 à 179 en confiance basse ; le build sort en **code 4**. Les
+    journées concernées sont des vacances et le mois de juillet — les classes `vac_hiver`,
+    `vac_printemps`, `ete_juillet` et `vac_noel` perdent leur donneur réel et passent par la
+    chaîne de repli. La journée simulée, elle, est un lundi scolaire. **Un export liO publié après
+    le changement de service de décembre 2026 rendrait ces 263 dates réelles sans changer une
+    ligne du pipeline** — c'est le geste qui referme complètement cette question.
+
+### Questions ouvertes du mode `rail` (2026-09-04, matin)
+
+Toutes viennent du même constat : un mode traverse une dizaine de tables littérales avant
+d'arriver dans une part modale, et **une liste incomplète produit un chiffre plausible et faux**.
+L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes ».
+
+18. **Le prompt de l'agent lit « Trajet en Unknown 392 » pour tout car liO et tout TER.**
+    `GTFSData.DEFAULT()` ne lit que `data/gtfs/tisseo_gtfs`, donc `route_id_map` ne connaît que
+    les **124 lignes Tisséo** et `get_route_type_string_by_id` renvoie « Unknown » pour les
+    **319 lignes liO et TER** désormais en service. La clé `"2": "Train"` ajoutée aujourd'hui est
+    donc **inerte pour le TER** tant que le lecteur ne voit qu'un feed. Le mode de la jambe
+    (`bus`, `rail`) est correct, lui : les parts modales et le journal de production ne sont pas
+    faussés — c'est le **texte lu par le LLM** qui l'est, et un libellé « Unknown » n'est pas
+    neutre pour une décision. Mesuré : **0 collision de `route_id`** entre les trois feeds (une
+    union par `route_id` est donc sûre), mais **au moins 20 collisions de `route_short_name`**
+    entre Tisséo et liO (`route_name_id_map` ne peut pas être unioné tel quel). Le stop, lui,
+    garde un nom lisible : `_resolve_gtfs_stop` retombe sur le nom rendu par OTP, avec un
+    `logger.warning` et `stop_id=None`. **Recommandation : union par `route_id` des `routes.txt`
+    des feeds en service dans `init_route_lookup_maps`, sans toucher aux dataframes primaires**
+    (stops, trips, shapes) pour ne pas perturber l'export GAMA. **Changement de texte de prompt,
+    donc de résultats et de cache de décisions : décision de l'auteur**, même famille que la
+    question 13.
+
+19. **La loss de calibration classe un train en MARCHE.** `calibration/metrics.categorize_mode`
+    (dépôt autonome `prompt_calibration`) teste `bus, metro, subway, tram, cableway, gondola,
+    funicular, transit, public_transport` : une option `foot,rail,foot` tombe sur le mot « foot ».
+    C'est **exactement le défaut du Téléo corrigé le 2026-08-26**, et son correctif le signalait
+    déjà comme restant asymétrique pour `rail`. Trois copies divergentes existent
+    (`scripts/models_influence/prompt_calibration_lib.py` et deux notebooks), et le test de parité
+    `test_metrics.py` compare à un **littéral recopié** de `_BUS_MODES` — il faut l'étendre, sinon
+    la parité verrouille l'ancienne convention. Aucun effet immédiat : les jeux gelés v5 à v10c
+    sont construits sur des runs antérieurs, sans jambe ferroviaire. **Recommandation : corriger
+    avant le premier run qui produira des trajets en train, et chiffrer l'effet sur la loss avant
+    de l'appliquer** (amendement A13). Non fait ici : la loss est l'instrument de mesure du
+    prompt, et le dépôt `prompt_calibration` est hors du périmètre de cette session.
+
+20. **`simulation_controller._primary_mode` fond `rail` dans `transit`.** La métrique
+    `TRIP_MODE_BY_PURPOSE` et le post-filtre `_blocked` ne distinguent pas le train du bus. Plus
+    largement, `move_logger._plan_transport_mode` teste `_BUS_MODES` **avant** `_RAIL_MODES` : un
+    trajet car + train — précisément le rabattement que la coupe de la question 17 vient de
+    restaurer — est compté « Transports_collectifs » et le train disparaît. La hiérarchie des
+    modes de la méthodologie CEREMA place le train au-dessus du TC urbain. **C'est l'Écart n° 4,
+    déjà spécifié comme le ticket 022 (rabattement / mode principal), et rien n'a été touché
+    ici** : c'est sa place, pas celle de ce ticket. À noter aussi
+    `scripts/data/population/audit_perimetre.py → MOVE_MODE_MAP`, sans entrée « Train » : la masse
+    du train y disparaîtrait silencieusement.
+
+21. **GAMA ne voit aucun train, et ne saurait pas quoi en faire.** `trip_info.json` est produit du
+    seul feed Tisséo (`settings.gtfs.gtfs_file`), donc aucun `public_vehicle` de `route_type=2`
+    n'est créé — les manques sont **latents, pas actifs**. Ils sont réels quand même :
+    `ROUTE_DISPLAY_WIDTH` et `VEHICLE_MAX_CAPACITY` (`Settings.gaml`) n'ont **pas de clé `2`**
+    (largeur et capacité nulles → un véhicule qui ne peut embarquer personne), `TYPE_RAIL` et
+    `show_type_rail` n'existent pas (`PublicTransport.gaml`), un TER tomberait dans la branche
+    `else` du rendu (triangle, comme le Téléo), et le commentaire de `Inhabitant.gaml` annonce
+    « violet → en vélo / train » sans branche train. **Rien n'a été touché** : `Settings.gaml` est
+    hors du périmètre de cette session, une erreur de syntaxe GAML ne se rattrape qu'en lançant
+    GAMA, et faire rouler le TER dans GAMA demande d'abord de résoudre le masque binaire 64 bits
+    du calendrier (`gtfs-annee.md`, § La fenêtre GAMA). **Recommandation : traiter avec la
+    question 15, dans un ticket GAMA, et y ajouter les clés `2` des deux tables** — même si le
+    train n'y roule pas encore, une table incomplète est une bombe à retardement.
+
+22. **Les trois instances OTP tournent sans `router-config.json`.** Confirmé dans leur journal
+    (« File '/var/otp/toulouse/router-config.json' is not present. Using default configuration »).
+    Le fichier existe sous `otp-toulouse/toulouse/` — hors du répertoire de build — et fixerait
+    `numItineraries: 6`, `transferSlack: 120`, `otherThanPreferredRoutesPenalty: 300`,
+    `locale: fr`. Le runtime passe `numTripPatterns` dans sa requête, donc l'essentiel est couvert,
+    mais le `transferSlack` et la pénalité, non. **Le déplacer change les itinéraires rendus, donc
+    les résultats : décision de l'auteur.** Déjà noté au § Publication de `gtfs-annee.md`,
+    reconfirmé ici par la mesure.
+
+23. **Les conteneurs `api`, `worker` et `controller` n'ont pas été recréés.** Le nouveau code
+    (mode `rail`, porte de proximité) et le nouveau montage `./data/gtfs` ne prennent effet qu'au
+    prochain `docker compose up -d api worker controller`. Non fait volontairement : le démarrage
+    du controller passe par `archive_log.py` et l'import de `settings`, qui **re-pointent
+    `experiments/current`** (question 12) — cela aurait déplacé le lien loin du run que d'autres
+    sessions analysent. **Recommandation : recréer les trois services au moment choisi par
+    l'auteur, avant le prochain run.**
 
 ### Critères d'acceptation — partie 2 (à préciser après l'analyse)
 1. Chaque ligne du tableau a une mesure consignée dans une trace horodatée, et une décision
@@ -603,10 +740,14 @@ voiture 8 878 / 38 447 / 17 825.
    règle « journaliser le succès explicitement » du dépôt. À corriger.
 3. Le rapport de run compare les parts modales aux cibles 453 communes, avec le transport
    scolaire déclaré (ou livré).
-   **Non tenu, et bloqué en amont** : il demande une journée simulée complète (voir 2) et, surtout,
-   le GTFS liO — qui porte 57 à 65 % du TC des 2ᵉ et 3ᵉ couronnes et n'est pas téléchargé
-   (question ouverte n° 11) — plus le transport scolaire du ticket 030. Comparer les parts modales
-   aux cibles avant d'avoir cette offre mesurerait le manque de données, pas le modèle.
+   **Non tenu, mais le blocage d'offre est levé.** Il demandait une journée simulée complète
+   (voir 2) et, surtout, le GTFS liO — 57 à 65 % du TC des 2ᵉ et 3ᵉ couronnes. **Depuis le
+   2026-09-04, les trois réseaux sont en service et le train est proposé** : les points sans
+   itinéraire TC sont passés de 670 à 314 sur 2 580, et 1 883 des 11 288 itinéraires rendus
+   passent par le rail. Restent donc, pour tenir ce critère : une journée simulée complète, le
+   transport scolaire du ticket 030, et la recréation des conteneurs (question 23) pour que le
+   runtime charge les modes et la porte de proximité nouveaux. À surveiller au premier run :
+   les jambes de car et de train arrivent au prompt avec le libellé « Unknown » (question 18).
 
 ## Ce que ce ticket ne fait pas
 - Il ne remplace pas l'ENTD 2008 par l'EMC² 2023 comme enquête d'appariement (levier 3, autre
