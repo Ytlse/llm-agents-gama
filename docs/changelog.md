@@ -25,6 +25,9 @@ GAMA, et l'audit ignorait silencieusement les déplacements ferroviaires.
 **Après :** une journée complète, le train jusqu'à l'arrivée, et un audit dont chaque ligne est
 comptée et nommée.
 
+Le chantier du périmètre est **clos** dans son tableau de bord, avec les deux décisions qui
+restent inscrites dans son entrée plutôt que dans une tête de session.
+
 Avec ce run, le **périmètre des 453 communes** est porté de bout en bout : les sept critères
 d'acceptation du chantier sont tenus et vingt-et-une de ses vingt-trois questions ouvertes sont
 tranchées. Il reste deux décisions, aucune n'étant du travail : ne rien réécrire dans un fichier

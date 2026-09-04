@@ -1229,7 +1229,7 @@ tickets:
       config/school_bus.yaml, tests/test_school_bus.py (13 tests verts). Prérequis population porté
       par le ticket 031 (§ 1.2). Circuits réels NON demandés à la Région (délais).
   ticket_031_perimetre_453_communes:
-    status: en cours
+    status: terminé
     note: >-
       OUVERT le 2026-09-03 (rapport de périmètre, option A). Partie 1, livré le 2026-09-03 :
       eqasim six départements + filtre par liste de communes journalisé, household.commune_id
@@ -1308,17 +1308,35 @@ tickets:
       Toulouse 132 inchangé — tous walkingBetterThanTransit), noTransitConnection 171 → 1,
       0 échec de rattachement. Tests : llm-agents 325 verts (code 0), scripts 438 verts + les
       2 échecs préexistants de test_weather_draw.
-      RESTE : recréer api/worker/controller pour charger le nouveau code et le montage
-      (question n° 23), le libellé « Unknown » des 319 lignes liO/TER dans le prompt (n° 18,
-      décision de l'auteur car elle change le prompt), categorize_mode de la loss qui classe rail
-      en marche (n° 19), le mode principal d'un trajet car+train = ticket 022 (n° 20), les clés
-      route_type=2 de Settings.gaml et TYPE_RAIL, latents car GAMA ne voit que Tisséo (n° 21),
-      router-config.json absent du répertoire de build (n° 22), l'avertissement de couverture GAMA
-      devenu vide de sens (n° 15), G3 (rendu, non mesurable en headless), le manuscrit (§ 2.2 et
-      annexe F, plus la largeur « 106 × 93 km » du rapport de périmètre à corriger en 86 × 93), la
-      mem_limit osmnx 4 → 8 Go de docker-compose.yml à valider (question n° 9), et le critère
-      d'acceptation 3 (parts modales contre cibles 453) qui dépend désormais du seul ticket 030 et
-      d'une journée simulée complète.
+      TERMINÉ le 2026-09-04 : journée simulée COMPLÈTE sur le sceau v5 (run 2026-09-04_16_25,
+      1 h 41 de temps mur, « Simulation stopped after 1 simulated day(s) ») — 1 000/1 000 agents
+      chargés, 0 « Couldn't link », 0 agent hors monde, alarmes de périmètre silencieuses, 0 erreur
+      d'entrée-sortie, et 0 route de cache antérieure à la purge de 14 h 17 (8 333 routes, la plus
+      ancienne datée 15 h 51 min 36 s). Les 7 critères d'acceptation sont tenus. Partie 1 en entier
+      grâce au SCEAU v5 : 13 marges conformes sur 13, synthèse des écarts vide, ménages sans voiture
+      19,19 % pour une cible de 19,19 %, allocation par triplet cellule × effectif présent × taille
+      déclarée (règle aamas_seal_v5). Partie 2 en entier : traces horodatées, run complet, et parts
+      modales contre les cibles 453 avec le DÉTAIL et l'AGRÉGAT — voiture 38,7 % contre 56,7, TC
+      32,9 contre 12,4, marche 19,2 contre 26,8, vélo 9,2 contre 4,1 ; L1 = 51,3 pt sur comptages
+      non redressés ; 0 déplacement mal classé et invariant de comptage vérifié (5 257 = 5 257 =
+      5 257). LE RAIL VA JUSQU'À L'ARRIVÉE : 13 des 22 décisions ferroviaires portaient sur le jour
+      joué, les 13 sont arrivées à destination dans GAMA (11 agents, 2,6 à 27,2 km, retard médian
+      −6 min). Questions n° 9, 10, 11, 12, 13, 18, 19, 20, 21, 22 et 23 fermées ET vérifiées le
+      2026-09-04 : mem_limit 8g committé, largeur corrigée en v1.4 du rapport, trois feeds en
+      service (670 → 314 points sans TC), import de settings sans effet de bord (claim_run),
+      420 communes distinctes dans les libellés de zone contre 2, ZÉRO « Unknown » dans 2 065
+      échanges LLM, train classé en transports collectifs par la loss, clés route_type=2 de
+      Settings.gaml en place, router-config.json chargé par les 3 instances OTP, pile recréée.
+      RESTENT DEUX DÉCISIONS DE L'AUTEUR, hors critères et hors travail : n° 8 (roads.prj annonce
+      une zone UTM où ses coordonnées ne sont valides nulle part — recommandation : NE RIEN
+      RÉÉCRIRE, aucun modèle ne lit ces couches) et n° 15 (l'avertissement de couverture TC teste
+      une enveloppe, donc répond « couvert à 100 % » depuis que liO est dans la couche —
+      recommandation : le remplacer par un maillage, quelques lignes de GAML ; les deux chiffres
+      justes sont 72 % des mailles de 5 km et 73 % des zones fines ; le blocage « le seul GAMA
+      disponible porte le run » est levé depuis le 2026-09-04 18 h 06). Hors périmètre et déclarés
+      comme tels : transport scolaire (ticket 030, en pause à la demande de l'auteur), écart des
+      parts modales au modèle de choix (tickets 018, 022, 024), arrivées perdues 36 sur 3 139 pushs
+      = 1,15 % (ticket 011), G3 (rendu, non mesurable en headless), manuscrit § 2.2 et annexe F.
 
   ticket_032_lts_velo_propositions_gama:
     status: à faire
