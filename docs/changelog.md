@@ -1,3 +1,58 @@
+## [2026-09-04] L'audit des parts modales compte le train, en détail et par catégorie
+
+L'audit de périmètre comparait les parts modales de la simulation aux cibles de l'enquête à
+travers une table de **quatre** libellés. Le train, routé la veille, n'y figurait pas : un
+déplacement en train sortait du calcul **sans être compté ni signalé**. Ce n'est pas une
+mesure qui manque, c'est une mesure qui se déplace — le dénominateur baisse, et les parts
+des autres modes montent d'autant. Le carnet d'analyse des modes choisis faisait le même
+geste, par une table de normalisation incomplète suivie d'un tri qui éliminait le reste en
+silence.
+
+**L'audit rend maintenant deux niveaux de lecture, et la table pour passer de l'un à
+l'autre.** Le détail, un libellé par ligne tel qu'il est écrit dans le journal des
+déplacements ; puis l'agrégat vers les cinq catégories que l'enquête publie, le train rangé
+avec les transports collectifs et les deux-roues motorisés avec le résidu « autres ». Les
+deux sont côte à côte, de sorte que l'agrégat s'additionne à la main depuis le détail au
+lieu d'être cru. La comparaison aux cibles, elle, ne bouge pas : mêmes quatre catégories,
+mêmes chiffres, mêmes verdicts sur le dernier run.
+
+**Ce qui n'est pas un déplacement est compté quand même.** Près d'une ligne du journal sur
+dix (521 sur 5 322) dit « l'agent n'a pas bougé » : ce n'est pas une part modale, mais ce
+n'était pas non plus une raison de la faire disparaître. Elle est désormais nommée et
+chiffrée à côté des parts, comme l'est déjà un domicile hors périmètre.
+
+**Un libellé que les tables ne connaissent pas lève une alarme, et un libellé qui leur
+manque aussi.** Hors table, il est compté, nommé, l'axe passe « à corriger » et une ligne
+d'erreur part dans le journal du run — celle que `make error` affiche. Le contrôle ne
+regarde pas seulement les données : il confronte la table à la hiérarchie des modes de
+l'enquête, si bien qu'un mode ajouté en amont s'annonce **avant** qu'un run ne le produise.
+C'est la seule façon d'attraper le prochain « Train », dont l'absence n'était visible dans
+aucune donnée. La logique a quitté le carnet pour un module testé (24 tests dédiés) :
+un carnet ne se teste pas et n'écrit pas dans le journal du run.
+
+**Le même défaut, une jointure plus loin.** Le compteur ajouté pour ne plus rien jeter a
+trouvé son voisin immédiatement : lancé sans argument, l'audit compare la population de
+référence au dernier run alors que les deux ne partagent **qu'une seule personne**. Les
+parts modales par couronne étaient donc calculées sur **6 déplacements** et publiaient un
+écart de 154 points — un chiffre plausible et vide, sans un mot dans le journal. Avec la
+population du run, la jointure est complète et l'écart vaut 41 points. La table publie
+maintenant son taux de jointure, alarme dès 5 % de perte, et se déclare **non mesurable**
+plutôt que de rendre ce chiffre.
+
+**Avant :** un déplacement en train, en deux-roues motorisé ou sans mouvement disparaissait
+de l'audit et du carnet sans laisser de trace, et les parts par couronne pouvaient reposer
+sur six déplacements en annonçant un score.
+**Après :** chaque ligne lue tombe dans une catégorie nommée, la somme du détail est
+vérifiée égale au nombre de lignes lues, et tout ce qui sort des parts modales est publié
+avec son effectif — un libellé inconnu ou manquant faisant échouer l'audit et apparaître
+dans `make error`.
+
+⚠ **Une décision reste à prendre** : faire porter l'audit, par défaut, sur la population du
+run plutôt que sur la population de référence. Cela rendrait la jointure complète, mais
+changerait ce que les neuf axes mesurent — donc tous les chiffres déjà publiés.
+
+---
+
 ## [2026-09-04] Le train cesse d'être compté en marche, et GAMA ne dessine plus de ligne muette
 
 Le TER et les 309 lignes d'autocar liO sont entrés dans le calculateur d'itinéraires la veille :

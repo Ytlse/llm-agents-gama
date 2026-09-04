@@ -318,6 +318,91 @@ même, et feront un trajet soit tout voiture soit tout TC — on ne sait pas leq
 atteignable est un **intervalle** `[cible − rabattement ; cible]`, pas un point. À corriger
 **avant** d'introduire le parking-relais → [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md).
 
+#### Deux niveaux de lecture, et la table pour passer de l'un à l'autre (2026-09-04)
+
+Le journal écrit des libellés **fins** ; la référence publie des **catégories**. L'axe rend
+désormais les deux, plus la table qui les relie — de sorte que l'agrégat se **recompose**
+depuis le détail au lieu d'être cru. Trace :
+[`2026-09-04_10-37_modes_audit_detaille`](../traces/2026-09-04_10-37_modes_audit_detaille/README.md).
+
+Rendu sur le run `2026-09-04_01_09`, avec 800 lignes passées en « Train », 120 en
+« Deux-roues motorisé » et 37 en un libellé inventé — le run est antérieur au rail, donc
+le cas se **fabrique** plutôt que de se conclure de son absence :
+
+```
+détail par libellé de mode (tel qu'écrit dans moves.csv) :
+   libellé                  → catégorie                    n    part
+   Marche                   marche                       586   11.0 %
+   Vélo                     velo                         517    9.7 %
+   Voiture Privée           voiture                     2262   42.5 %
+   Transports_collectifs    transports_collectifs        479    9.0 %
+   Train                    transports_collectifs        800   15.0 %
+   Deux-roues motorisé      autres_modes                 120    2.3 %
+   Aucun                    non_deplacement              521    9.8 %
+   Trottinette partagée     libelle_inconnu               37    0.7 %
+agrégé vers les 5 catégories de l'enquête : marche 12.3 % · velo 10.9 % · voiture 47.5 %
+   · transports_collectifs 26.8 % · autres_modes 2.5 %
+puis restreint aux 4 catégories scorées, contre la cible globale renormalisée aux mêmes 4 :
+   voiture                    48.7 %  cible  56.7 %  écart  -8.0 pt
+   marche                     12.6 %  cible  26.8 %  écart -14.2 pt
+   transports_collectifs      27.5 %  cible  12.4 %  écart +15.2 pt
+   velo                       11.1 %  cible   4.1 %  écart  +7.0 pt
+hors parts modales, compté et nommé : non_deplacement 521 · libelle_inconnu 37
+invariant vérifié : 5322 ligne(s) lue(s) = 5322 en détail = 5322 en catégories
+```
+
+Trois propriétés, et aucune n'est décorative.
+
+- **Rien ne se jette.** `MOVE_MODE_MAP` n'avait que quatre entrées et pas de « Train » :
+  depuis le routage du TER, un déplacement en train sortait des parts modales par un
+  `continue` **muet**. Le dénominateur baissait, les parts des autres modes montaient. La
+  table vit maintenant dans [`scripts/analysis/mode_labels.py`](../../scripts/analysis/mode_labels.py),
+  partagée avec le carnet `selected_mode_stats` — deux copies d'une classification de
+  référence divergent, et c'est précisément ce qui s'était produit.
+- **Ce qui n'est pas un déplacement est compté quand même.** « Aucun » (même localisation,
+  l'agent n'a pas bougé) pèse **521 lignes sur 5 322**, soit 9,8 % ; la cellule vide de
+  « Plus rapide », 554. Ni l'un ni l'autre n'entre dans une part modale — mais ils sont
+  nommés, comme `hors périmètre` l'est pour les couronnes depuis le ticket 021.
+- **Un libellé inconnu alarme, et un libellé manquant aussi.** Hors table, il est compté
+  sous `libelle_inconnu`, nommé dans l'écart de l'axe, et l'axe passe à **à corriger**
+  (code de sortie 2). L'alarme s'écrit en ERROR dans l'`app.log` du run, au format que
+  `make error` relit :
+
+  ```
+  2026-09-04 10:31:09 | ERROR    | scripts.analysis.mode_labels - [ALARME] 1 libellé(s) de mode hors table d'agrégation dans moves.csv · Mode de transport Choisi : « Trottinette partagée » (37) — 37/5322 ligne(s) (0.7 %) comptées en « libelle_inconnu », hors de toute part modale. Corriger scripts/analysis/mode_labels.AGGREGATION.
+  ```
+
+  Le contrôle **ne regarde pas que les données** : il confronte aussi la table à
+  [`mode_hierarchy`](../../llm_module/core/mode_hierarchy.py) (ticket 022), qui décide les
+  libellés du journal. Une famille de modes ajoutée en amont sans entrée dans
+  l'agrégation alarme **avant** qu'un run ne la produise — c'est la seule façon d'attraper
+  le prochain « Train », dont l'absence n'était visible dans aucune donnée.
+
+**Ce que rendra le premier run avec du rail.** Une ligne de détail « Train →
+transports_collectifs » à côté de la ligne « Transports_collectifs », les deux additionnées
+dans l'agrégat. Aujourd'hui, 62,5 % des itinéraires portant un train portent aussi une
+jambe de bus ou de car et sont donc étiquetés `Transports_collectifs` par la hiérarchie de
+l'enquête (le bus passe avant le train, cf. ticket 022) : la ligne « Train » du détail
+comptera le rail **pur**, et sous-comptera le rail total d'autant. C'est une propriété de
+la hiérarchie, pas de l'audit, et le détail est justement ce qui la rend lisible.
+
+#### Le même défaut, une jointure plus loin
+
+Le compteur ajouté pour ne plus rien jeter a immédiatement trouvé son voisin :
+`make audit-perimetre` **sans argument** joint la population de référence
+(`toulouse_population_1000.json`, 1 021 personas) au run courant (1 000 personas) — et les
+deux ne partagent **qu'un seul identifiant de personne**. Le `continue` d'origine sur
+`per_person.get(...)` rendait donc un `l1_pondere = 154,3` calculé sur **6 déplacements**,
+sans un mot. Avec la population du run, la jointure est à 100 % et le L1 pondéré vaut
+**41,2 pt** sur les quatre couronnes.
+
+La sous-table publie désormais son **taux de jointure**, alarme au-delà de 5 % de perte, et
+se déclare **non mesurable** sous 50 % de jointure au lieu de rendre ce chiffre. Le verdict
+de l'axe A2 reste celui de ses trois portes — c'est bien ce qu'il mesure — mais son écart le
+dit. ⚠ **Reste une décision** : faire défaut `--population` sur la population du run
+(`<run>/population_1000.json`) changerait ce que **tous** les axes mesurent, y compris les
+chiffres publiés ci-dessus, et n'est donc pas un ajustement de mesure.
+
 ### A8 — La taille déclarée est juste, ce sont des membres qui manquent
 
 547 adresses distinctes pour 1 021 personas : **419 grappes complètes**, 121 incomplètes,
@@ -386,6 +471,13 @@ l'audit le vérifie à chaque exécution.
   D). Prérequis : le ticket 021, dont la couronne conditionne la propension. Produire les
   itinéraires de rabattement reste un ticket distinct et coûteux.
 - **Garantir l'âge minimum par une assertion**, au lieu d'en hériter.
+- **Quelle population l'audit joint-il au run ?** `make audit-perimetre` sans argument
+  prend `data/population/toulouse_population_1000.json` et le run courant, qui ne
+  partagent **qu'un identifiant de personne** : les parts par zone de l'axe A2 sont donc
+  non mesurables par défaut (elles le disent depuis le 2026-09-04, elles ne le disaient
+  pas avant). Basculer le défaut sur `<run>/population_1000.json` rendrait la jointure à
+  100 % — et changerait ce que **les neuf axes** mesurent, dont tous les chiffres publiés
+  ici. Décision à prendre, pas ajustement de mesure.
 
 ## Limites à publier, avec leur amplitude
 

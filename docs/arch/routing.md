@@ -304,7 +304,7 @@ produit un chiffre plausible et faux. État au 2026-09-04, après l'ajout de `ra
 | `GAMA/…/Settings.gaml` → `ROUTE_DISPLAY_WIDTH`, `VEHICLE_MAX_CAPACITY`, `TYPE_RAIL` | largeur, capacité et filtres par `route_type` | clé `2` ✅ *(2026-09-04)* |
 | `simulation_controller._primary_mode` | métrique `TRIP_MODE_BY_PURPOSE` | ⚠ `rail` fondu dans `transit` |
 | `move_logger._plan_transport_mode` — **ordre** de la cascade | colonne « Mode de transport Choisi » | ⚠ `_BUS_MODES` testé avant `_RAIL_MODES` |
-| `audit_perimetre.MOVE_MODE_MAP` | audit de périmètre | ❌ pas d'entrée « Train » |
+| `mode_labels.AGGREGATION` (audit de périmètre A7 et A2, carnet `selected_mode_stats`) | libellé fin → catégorie EMC², **et l'alarme sur tout libellé hors table** | « Train » → TC ✅ *(2026-09-04)* |
 
 **Deux corrections livrées le 2026-09-04, mesurées avant application.**
 
@@ -339,13 +339,24 @@ journal le dit maintenant :
 [ALARME] route_type tracé(s) dans routes.shp mais ABSENT(s) de trip_info.json : [2.0] — aucun véhicule de ce type ne roulera.
 ```
 
-**Les trois lignes ⚠/❌ restantes** attendent chacune une décision. L'**ordre** de la
+**Les lignes ⚠ restantes** attendent chacune une décision. L'**ordre** de la
 cascade de `_plan_transport_mode` et `_primary_mode` relèvent de la hiérarchie des modes du
 **ticket 022**, où le constat est désormais chiffré : sur les 1 883 itinéraires portant un
 train, **1 177 (62,5 %)** portent aussi une jambe de bus ou de car et sont donc étiquetés
 `Transports_collectifs` — la colonne « Train » de `moves.csv` sous-compte le rail d'autant.
-`audit_perimetre.MOVE_MODE_MAP` écarte (`continue`) tout libellé hors table, donc un
-déplacement « Train » sort de l'audit de parts modales sans être compté.
+
+**Le bout aval de la chaîne, corrigé le 2026-09-04.** `audit_perimetre.MOVE_MODE_MAP`
+écartait (`continue`) tout libellé hors de ses quatre entrées : un déplacement « Train »
+sortait de l'audit des parts modales sans être compté ni signalé. Le carnet
+`scripts/analysis/selected_mode_stats.ipynb` faisait le même geste par un `replace()`
+incomplet suivi d'un `reindex(mode_order)`. Les deux lisent désormais **une seule** table,
+[`scripts/analysis/mode_labels.py`](../../scripts/analysis/mode_labels.py), qui publie le
+**détail par libellé** et la **table d'agrégation** vers les catégories de l'enquête, et
+dont la couverture est confrontée à
+[`mode_hierarchy`](../../llm_module/core/mode_hierarchy.py) à chaque comptage. Un libellé
+hors table est compté sous `libelle_inconnu`, nommé, et alarmé en ERROR dans l'`app.log`
+du run — donc lu par `make error`. Détail : [`perimetre-population.md`](perimetre-population.md),
+axe A7.
 
 **Un troisième défaut du même genre, trouvé et corrigé en chemin** :
 `mode_choice.canonical_mode("foot,cableway,foot")` renvoyait **`walking`**. Le Téléo ne
