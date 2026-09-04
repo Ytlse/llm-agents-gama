@@ -420,7 +420,6 @@ class OTPTripHelper(TripHelper):
                 return t + dt * 24 * 60 * 60
             return t
 
-        _proute = self.parse_gtfs_entity_id
         _pstopid = self.parse_gtfs_entity_id
 
         def _location_from_place(place: OTPPlace) -> TransitLocation:
@@ -481,7 +480,11 @@ class OTPTripHelper(TripHelper):
             if is_car:
                 transit.transit_route = CAR_ROUTE_MARKER
             elif not is_transfer and leg.line:
-                transit.transit_route = _proute(leg.line.id)
+                # `resoudre_route_id` recoupe l'identifiant d'OTP avec le catalogue
+                # des lignes des trois feeds, au lieu de retirer un préfixe à
+                # l'aveugle : `lio:305` désigne la ligne `305`, et c'est SOUS CE NOM
+                # que GAMA la range dans `ROUTE_VEHICLE_MAP` (cf. reader.py).
+                transit.transit_route = self.gtfs_data.resoudre_route_id(leg.line.id)
                 transit.shape_id = self.gtfs_data.get_shape_id_from_route_info(
                     route_id=transit.transit_route,
                     from_stop_id=transit.start_location.stop_id,

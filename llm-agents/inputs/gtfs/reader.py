@@ -11,6 +11,9 @@ import geopandas as gpd
 from shapely.geometry import LineString
 from loguru import logger
 from settings import settings
+# `table_traces` ne dépend de rien du paquet : l'importer ici ne referme pas de
+# cycle, même si `inputs/gtfs/__init__.py` est en train d'importer CE fichier.
+from inputs.gtfs import table_traces
 
 
 STRING_COLUMNS = [
@@ -56,6 +59,14 @@ def _lire_table_gtfs(feed: "Path", nom: str):
 
 
 class GTFSData:
+    # D'où vient la table des tracés :
+    #   "annexe" — le fichier publié par la recette (le cas du runtime) ;
+    #   "feed"   — recalculée depuis les tables chargées, sans lire le fichier annexe.
+    #              C'est le mode de la RECETTE elle-même : c'est elle qui produit le
+    #              fichier, elle ne peut pas le lire pour l'écrire.
+    SOURCE_ANNEXE = "annexe"
+    SOURCE_FEED = "feed"
+
     def __init__(self, **kwargs):
         self.stop_times = kwargs["stop_times"]
         self.stops = kwargs["stops"]
@@ -64,7 +75,8 @@ class GTFSData:
         self.shapes = kwargs["shapes"]
         self.calendar_dates = kwargs["calendar_dates"]
         self.calendar = kwargs["calendar"]
-        
+        self._source_demandee = kwargs.get("table_traces", self.SOURCE_ANNEXE)
+
         # Init lookup maps
         self.init_route_lookup_maps()
         self.init_shape_lookup_maps()
@@ -170,6 +182,83 @@ class GTFSData:
         return journal
 
     def init_shape_lookup_maps(self):
+        """Charge la table des tracés — le fichier publié par la recette d'abord.
+
+        C'est cette table que `get_shape_id_from_route_info` interroge pour poser
+        un `shape_id` sur la jambe d'un itinéraire, et c'est ce `shape_id` que
+        `Inhabitant.gaml` compare à celui du véhicule pour faire MONTER l'agent.
+
+        Construite depuis le seul feed primaire — ce qu'elle a été jusqu'au
+        2026-09-04 — elle ignorait 80 des 199 lignes portant des courses (17 TER,
+        58 cars liO, 5 lignes circulaires) : `get_shape_id_from_route_info`
+        rendait `[]`, indistinguable d'« aucun tracé pour ce couple d'arrêts ».
+        Voir `inputs/gtfs/table_traces.py` pour le pourquoi du fichier annexe.
+
+        Le repli sur le feed primaire subsiste — sans lui, un fichier annexe
+        manquant priverait la simulation de TOUT transport en commun — mais il
+        est **annoncé en [ALARME]**, la table est marquée partielle, et chaque
+        ligne qu'elle ne sait pas désigner s'alarme à son tour (front montant).
+        Le silence était le défaut ; le repli muet en aurait été un autre.
+        """
+        # Compteurs des alarmes de désignation (voir `_alarme_ligne_indesignable`).
+        self._lignes_indesignables: set = set()
+        self._appels_sans_trace = 0
+        self._appels_sans_arret = 0
+
+        if self._source_demandee == self.SOURCE_FEED:
+            self.route_id_shape_lookup_map = self._table_traces_depuis_le_feed()
+            self.arrets_hors_feed_primaire = {}
+            self.source_table_traces = self.SOURCE_FEED
+            self.table_traces_partielle = False
+            self.journal_table_traces = {"source": self.SOURCE_FEED}
+            logger.info(
+                f"[GTFS] table des tracés recalculée depuis les tables chargées "
+                f"(mode recette) : {len(self.route_id_shape_lookup_map)} route_id, "
+                f"{sum(len(v) for v in self.route_id_shape_lookup_map.values())} tracé(s)")
+            return
+
+        chemin = Path(settings.gtfs.shape_lookup_file)
+        try:
+            table, arrets, journal = table_traces.charger(chemin)
+        except table_traces.TableTracesInvalide as exc:
+            self.route_id_shape_lookup_map = self._table_traces_depuis_le_feed()
+            self.arrets_hors_feed_primaire = {}
+            self.source_table_traces = f"feed_primaire:{exc.motif}"
+            self.table_traces_partielle = True
+            self.journal_table_traces = {"source": self.source_table_traces,
+                                         "motif": exc.motif, "detail": exc.detail}
+            logger.error(
+                f"[ALARME] table des tracés inutilisable ({exc.motif}) : {exc.detail}. "
+                f"Repli sur le SEUL feed primaire ({settings.gtfs.gtfs_file}) : "
+                f"{len(self.route_id_shape_lookup_map)} route_id désignables. Les lignes "
+                f"des autres réseaux (TER, cars liO) rouleront dans GAMA sans qu'aucun "
+                f"agent puisse y monter."
+            )
+            return
+
+        self.route_id_shape_lookup_map = table
+        self.arrets_hors_feed_primaire = arrets
+        self.source_table_traces = self.SOURCE_ANNEXE
+        self.table_traces_partielle = False
+        self.journal_table_traces = {"source": self.SOURCE_ANNEXE, **journal}
+        # Le succès se journalise explicitement : sans cette ligne, on ne distingue
+        # pas « la table des trois réseaux est en place » de « le runtime n'a rien lu ».
+        logger.info(
+            f"[GTFS] table des tracés lue dans {chemin} (générée le "
+            f"{journal.get('genere_le')} par {journal.get('recette')}) : "
+            f"{journal['comptes']['route_id']} route_id, {journal['comptes']['traces']} "
+            f"tracé(s), {journal['arrets_catalogue']} arrêt(s) au catalogue ; "
+            f"réseaux {journal.get('reseaux') or 'non détaillés'} ; fraîcheur vérifiée "
+            f"sur {', '.join(journal['temoins'])}"
+        )
+
+    def _table_traces_depuis_le_feed(self) -> dict:
+        """`route_id → {shape_id → {stop_id: stop_sequence}}` depuis les tables chargées.
+
+        Le calcul historique, désormais réservé à deux usages : la RECETTE, qui
+        s'en sert pour produire le fichier annexe depuis le feed fusionné des
+        trois réseaux, et le repli alarmé quand ce fichier manque.
+        """
         stops = self.trips.groupby('shape_id').agg({
             'route_id': 'first',
             'trip_id': 'first',
@@ -189,7 +278,34 @@ class GTFSData:
             if row['shape_id'] not in m[row['route_id']]:
                 m[row['route_id']][row['shape_id']] = {}
             m[row['route_id']][row['shape_id']][row['stop_id']] = row['stop_sequence']
-        self.route_id_shape_lookup_map = m
+        return m
+
+    def table_traces_serialisable(self) -> tuple[dict, dict]:
+        """La table et le catalogue d'arrêts, en types JSON — pour la recette.
+
+        `stop_sequence` arrive de pandas en `int64`, que `json` refuse ; les
+        `shape_id` d'un feed sans géométrie sont déjà des chaînes. La conversion
+        est faite ici, au plus près du calcul, et non dans la recette : c'est la
+        même table qui sert au runtime.
+        """
+        table = {
+            str(route_id): {
+                str(shape_id): {str(stop_id): int(rang) for stop_id, rang in stops.items()}
+                for shape_id, stops in par_trace.items()
+            }
+            for route_id, par_trace in self.route_id_shape_lookup_map.items()
+        }
+        arrets_utiles = {stop_id for par_trace in table.values()
+                         for stops in par_trace.values() for stop_id in stops}
+        arrets = {}
+        for _, row in self.stops.iterrows():
+            stop_id = str(row['stop_id'])
+            if stop_id not in arrets_utiles:
+                continue
+            arrets[stop_id] = {"stop_name": str(row['stop_name']),
+                               "stop_lat": float(row['stop_lat']),
+                               "stop_lon": float(row['stop_lon'])}
+        return table, arrets
 
     def load_world_bounding_box(self) -> BBox:
         min_lon, min_lat, max_lon, max_lat = self.get_bounding_box()
@@ -202,9 +318,29 @@ class GTFSData:
         )
 
     def get_shape_id_from_route_info(self, route_id: str, from_stop_id: Optional[str], to_stop_id: Optional[str]) -> list[str]:
+        """Les `shape_id` de la ligne `route_id` qui desservent les deux arrêts dans l'ordre.
+
+        Une liste vide veut dire « aucun véhicule de cette ligne ne peut être
+        désigné » : `Inhabitant.gaml` ne trouvera personne à faire monter. Deux
+        causes se confondaient dans ce silence — un couple d'arrêts qui n'existe
+        sur aucun tracé (normal), et une ligne que la table ne connaît pas du
+        tout (le défaut). La seconde s'alarme désormais, sur front montant :
+        une fois par `route_id`, pour dire la ligne sans noyer le journal.
+        """
         if not from_stop_id or not to_stop_id:
+            self._appels_sans_arret += 1
+            self._alarme_ligne_indesignable(
+                route_id, "arret non resolu",
+                f"jambe sans identifiant d'arrêt (de={from_stop_id!r}, vers={to_stop_id!r}) : "
+                f"l'arrêt rendu par OTP n'a pas été retrouvé dans les tables GTFS")
             return []
         if route_id not in self.route_id_shape_lookup_map:
+            self._appels_sans_trace += 1
+            self._alarme_ligne_indesignable(
+                route_id, "ligne absente de la table",
+                f"aucun tracé connu pour cette ligne ; la table vient de "
+                f"{self.source_table_traces} et porte "
+                f"{len(self.route_id_shape_lookup_map)} route_id")
             return []
 
         results = []
@@ -214,6 +350,68 @@ class GTFSData:
             if stops[from_stop_id] < stops[to_stop_id]:
                 results.append(shape_id)
         return results
+
+    def _alarme_ligne_indesignable(self, route_id: str, motif: str, detail: str) -> None:
+        """[ALARME] sur front montant : une fois par ligne, pas une fois par itinéraire.
+
+        Un agent peut demander des dizaines d'itinéraires sur la même ligne ; la
+        cause, elle, est unique. On alarme donc à la PREMIÈRE occurrence de
+        chaque `route_id` et on compte les suivantes, que le rapport de fin de
+        run relève (`resume_table_traces`).
+        """
+        cle = (route_id, motif)
+        if cle in self._lignes_indesignables:
+            return
+        self._lignes_indesignables.add(cle)
+        nom = self.get_route_short_name_by_id(route_id)
+        mode = self.get_route_type_string_by_id(route_id)
+        logger.error(
+            f"[ALARME] itinéraire indésignable — ligne {route_id} ({mode} {nom}) : {motif}. "
+            f"{detail}. Aucun agent ne pourra monter dans un véhicule de cette ligne : "
+            f"le véhicule roule dans GAMA, l'itinéraire ne le nomme pas."
+        )
+
+    def resume_table_traces(self) -> dict:
+        """De quoi reconstituer après coup ce que la table a su et n'a pas su désigner."""
+        return {
+            "source": getattr(self, "source_table_traces", "inconnue"),
+            "partielle": getattr(self, "table_traces_partielle", None),
+            "route_id_connus": len(self.route_id_shape_lookup_map),
+            "lignes_indesignables": sorted({rid for rid, _ in self._lignes_indesignables}),
+            "appels_ligne_absente": self._appels_sans_trace,
+            "appels_arret_non_resolu": self._appels_sans_arret,
+            "journal": getattr(self, "journal_table_traces", {}),
+        }
+
+    def resoudre_route_id(self, identifiant_otp: str) -> str:
+        """L'identifiant de ligne d'OTP ramené à celui du GTFS, par le CATALOGUE.
+
+        OTP préfixe ses identifiants du nom du feed : `tisseo:line:8`,
+        `ter:FR:Line::68c586ae-…`, `lio:305`. `parse_gtfs_entity_id` retire
+        « le premier segment quand il y a au moins deux `:` » — une règle qui
+        marche pour les deux premiers et **échoue pour le troisième** : le
+        `route_id` d'un car liO ne contient aucun `:`, donc `lio:305` traverse
+        intact et ne correspond à rien. Mesuré le 2026-09-04 sur un itinéraire
+        rendu par l'OTP en service : `transit_route='lio:305'` là où la ligne
+        s'appelle `305` dans le GTFS, dans `trip_info.json` et donc dans
+        `ROUTE_VEHICLE_MAP` — l'agent ne pouvait ni désigner le tracé ni trouver
+        le véhicule.
+
+        On ne devine donc plus la forme de l'identifiant : on essaie le brut,
+        puis on retire les préfixes un par un, et on garde le premier candidat
+        que le CATALOGUE DES LIGNES connaît (les trois feeds y sont depuis le
+        2026-09-04). Aucun candidat reconnu : on rend le brut débarrassé de son
+        premier segment — l'ancien comportement — et l'appel suivant alarmera.
+        """
+        candidats = [identifiant_otp]
+        reste = identifiant_otp
+        while ":" in reste:
+            reste = reste.split(":", 1)[1]
+            candidats.append(reste)
+        for candidat in candidats:
+            if candidat in self.route_id_map:
+                return candidat
+        return candidats[1] if len(candidats) > 1 else identifiant_otp
 
     def get_route_id_by_name(self, route_name: str) -> str:
         # Get the route id by route name
@@ -252,8 +450,27 @@ class GTFSData:
         return str(match.iloc[0]['stop_id'])
 
     def get_stop(self, stop_id: str) -> Stop:
+        """L'arrêt, cherché dans le feed primaire PUIS dans le catalogue annexe.
+
+        Le catalogue annexe porte les arrêts des trois réseaux servis par les
+        tracés publiés (gares TER, points d'arrêt des cars liO). Sans lui,
+        `_resolve_gtfs_stop` (`trip_helper/otp.py`) ne retrouvait pas la gare
+        rendue par OTP, la jambe partait avec `stop_id=None`, et
+        `get_shape_id_from_route_info` rendait `[]` avant même de consulter la
+        table : le second maillon de la chaîne qui empêchait de monter dans un
+        train.
+
+        ⚠ Ce catalogue est tenu à l'ÉCART de `self.stops`, exprès :
+        `get_bounding_box` en déduit l'emprise du monde de la simulation
+        (`urban_mobility_agents/factory/factory.py`), et y verser des gares de
+        toute l'Occitanie l'étendrait bien au-delà du périmètre d'enquête.
+        """
         stop = self.stops[self.stops['stop_id'] == stop_id]
         if stop.empty:
+            annexe = getattr(self, "arrets_hors_feed_primaire", {}).get(stop_id)
+            if annexe is not None:
+                return Stop(stop_id=stop_id, stop_name=annexe["stop_name"],
+                            stop_lat=annexe["stop_lat"], stop_lon=annexe["stop_lon"])
             raise ValueError(f"Stop {stop_id} not found")
         stop = stop.iloc[0]
         return Stop.model_validate(stop.to_dict())
@@ -294,8 +511,18 @@ class GTFSData:
         raise ValueError(f"Dir {dir} is not a directory or a zip file")
 
     @classmethod
-    def from_gtfs_files(cls, dir):
+    def from_gtfs_files(cls, dir, table_traces=SOURCE_ANNEXE):
+        """Charge un feed GTFS depuis un répertoire ou un zip.
+
+        `table_traces="feed"` recalcule la table des tracés depuis les tables
+        chargées au lieu de lire le fichier annexe : c'est le mode de la recette
+        `scripts/data/gama/export_trip_info.py`, qui lit le feed FUSIONNÉ des
+        trois réseaux pour produire ce fichier — elle ne peut pas le lire pour
+        l'écrire, et la table qu'elle publie doit venir du feed qu'elle a
+        réellement fusionné.
+        """
         data = GTFSData(**{
+            'table_traces': table_traces,
             # 'agency': read_file(dir, 'agency.txt'),
             'stops': cls.read_file(dir, 'stops.txt'),
             'shapes': cls.read_file(dir, 'shapes.txt'),

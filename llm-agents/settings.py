@@ -255,6 +255,21 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # GTFS settings
     gtfs_file: str = os.path.join(base_dir, "../data/gtfs/tisseo_gtfs/")
+    # Table des tracés publiée par `scripts/data/gama/export_trip_info.py` :
+    # `route_id → {shape_id → {stop_id: stop_sequence}}` pour les TROIS réseaux, plus
+    # le catalogue des arrêts qu'ils desservent. Sans elle, `get_shape_id_from_route_info`
+    # ne connaît que le feed primaire ci-dessus et rend `[]` pour 80 des 199 lignes qui
+    # portent des courses — aucun agent ne peut monter dans un TER ni dans un car liO.
+    #
+    # ⚠ INVARIANT : le fichier vit dans `GAMA/CityTransport/includes/`, à côté de
+    # `routes.shp` et `trip_info.json` dont il note l'empreinte pour prouver qu'il vient
+    # de la même génération. Le conteneur `controller` monte `./GAMA` sur `/GAMA`
+    # (docker-compose), et `base_dir` valant `/app` (= `./llm-agents`), ce chemin relatif
+    # se résout en `/GAMA/CityTransport/includes/shape_lookup.json` dans le conteneur
+    # comme dans le dépôt. Le déplacer hors de ce répertoire casserait le contrôle de
+    # fraîcheur, qui cherche ses témoins dans SON propre répertoire.
+    shape_lookup_file: str = os.path.join(
+        base_dir, "../GAMA/CityTransport/includes/shape_lookup.json")
     # `route_type` GTFS → nom du mode servi à l'agent dans son prompt (« Trajet en
     # Train 12 »). Une clé manquante s'affiche « Unknown » : le TER (route_type=2)
     # entre ici le 2026-09-04 avec le mode `rail` demandé à OTP (ticket 031, q. 16).

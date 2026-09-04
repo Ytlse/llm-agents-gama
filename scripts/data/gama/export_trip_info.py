@@ -1,4 +1,5 @@
-"""Produit `GAMA/CityTransport/includes/trip_info.json` — les courses que GAMA fait rouler.
+"""Produit `GAMA/CityTransport/includes/trip_info.json` — les courses que GAMA fait rouler
+— et `shape_lookup.json`, la table par laquelle un itinéraire désigne ces courses.
 
     llm-agents/.venv/bin/python scripts/data/gama/export_trip_info.py
     make gama-trip-info                     # les couches PUIS les courses
@@ -40,6 +41,17 @@ CE QUE LA RECETTE GARANTIT
    garde-fou de `PublicTransport.gaml` fait au chargement : les `route_type` de
    `routes.shp` doivent tous porter des courses. La recette sort en erreur si ce
    n'est pas le cas, pour que le défaut se voie ici et non cinq mois plus tard.
+5. **Un itinéraire peut DÉSIGNER ces courses.** La recette publie, à côté de
+   `trip_info.json`, la table `route_id → {shape_id → {stop_id: stop_sequence}}`
+   qu'elle a réellement utilisée : c'est la structure que consomme
+   `GTFSData.get_shape_id_from_route_info`, dont dépend la montée d'un agent
+   dans un véhicule (`Inhabitant.gaml`, `shape_id_list contains each.shape_id`).
+   Elle est prise TELLE QUELLE sur l'objet qui a produit les courses — mêmes
+   identifiants fabriqués, mêmes courses écartées — de sorte que le runtime n'ait
+   aucune règle à réappliquer. Voir `llm-agents/inputs/gtfs/table_traces.py`.
+   Sans elle, mesuré le 2026-09-04 : 80 des 199 lignes du fichier (17 TER,
+   58 cars liO, 5 lignes circulaires Tisséo) et 2 277 courses roulaient sans
+   qu'aucun itinéraire ne puisse les nommer.
 
 LES DEUX POINTS DÉLICATS
 ------------------------
@@ -396,6 +408,9 @@ def main(argv=None) -> int:
     parser.add_argument("--jours", type=int, default=LIMITE_MASQUE)
     parser.add_argument("--routes", type=Path, default=INCLUDES / "routes.shp")
     parser.add_argument("--sortie", type=Path, default=INCLUDES / "trip_info.json")
+    parser.add_argument("--table-traces", type=Path, default=None,
+                        help="table des tracés que lira le runtime "
+                             "(défaut : shape_lookup.json à côté de --sortie)")
     parser.add_argument("--feed-intermediaire", type=Path, default=None,
                         help="où garder le GTFS fusionné (défaut : temporaire, supprimé)")
     parser.add_argument("--json", type=Path, default=None, help="écrit les mesures dans ce fichier")
@@ -509,10 +524,14 @@ def main(argv=None) -> int:
         # que seul le processus propriétaire appelle. Un run en cours n'est pas touché.
         from inputs.gtfs.gama import GamaGTFS  # noqa: E402
         from inputs.gtfs.reader import GTFSData  # noqa: E402
+        from inputs.gtfs import table_traces  # noqa: E402
 
         t0 = time.monotonic()
         print("lecture du feed fusionné …")
-        gtfs = GTFSData.from_gtfs_files(str(temporaire))
+        # `table_traces="feed"` : la table des tracés se RECALCULE depuis le feed
+        # fusionné. Le mode par défaut lirait le fichier annexe — celui que cette
+        # recette est en train de produire, et qui décrit la génération PRÉCÉDENTE.
+        gtfs = GTFSData.from_gtfs_files(str(temporaire), table_traces=GTFSData.SOURCE_FEED)
         print(f"construction des courses ({len(fusion['trips.txt']):,} courses) …"
               .replace(",", " "))
         donnees = GamaGTFS(gtfs).build_data(use_cache=False)
@@ -548,6 +567,43 @@ def main(argv=None) -> int:
               file=sys.stderr)
         return CODE_REFUS
 
+    # ── La table des tracés que le runtime lira ──────────────────────────────
+    # Elle est prise TELLE QUELLE sur l'objet qui vient de produire les courses :
+    # mêmes `shape_id`, mêmes écarts, mêmes réseaux. Aucune règle n'est réappliquée.
+    table, arrets_catalogue = gtfs.table_traces_serialisable()
+    couples_courses = {(t["route_id"], t["shape_id"]) for t in donnees["trip_list"]}
+    absents = sorted({c for c in couples_courses
+                      if c[1] not in table.get(c[0], {})})[:5]
+    if absents:
+        print(f"[ALARME] {len(absents)} couple(s) (route_id, shape_id) porté(s) par une course "
+              f"mais absent(s) de la table des tracés — ex. {absents} ; un itinéraire ne "
+              f"pourrait pas désigner ces véhicules. trip_info.json n'est PAS écrit",
+              file=sys.stderr)
+        return CODE_REFUS
+    hors_couche = sorted({sid for par_trace in table.values() for sid in par_trace
+                          if sid not in points_couche})[:5]
+    if hors_couche:
+        print(f"[ALARME] la table des tracés désignerait des tracés absents de "
+              f"{args.routes.name} — ex. {hors_couche} ; `route first_with (each.shape_id = "
+              f"shape_id)` rendrait nil. trip_info.json n'est PAS écrit", file=sys.stderr)
+        return CODE_REFUS
+    print(f"table des tracés : {len(table)} route_id, "
+          f"{sum(len(v) for v in table.values())} tracé(s), "
+          f"{len(arrets_catalogue)} arrêt(s) au catalogue")
+
+    # Les témoins de fraîcheur doivent vivre dans le répertoire du fichier annexe :
+    # le runtime les cherche relativement à LUI, pas à un chemin absolu gravé dans
+    # le fichier (l'hôte et le conteneur `controller` ne voient pas le même arbre).
+    table_sortie = args.table_traces or (args.sortie.parent / table_traces.NOM_FICHIER)
+    noms_temoins = [args.routes.name, args.routes.with_suffix(".dbf").name, args.sortie.name]
+    for nom in noms_temoins[:-1]:
+        if not (table_sortie.parent / nom).exists():
+            print(f"[ALARME] témoin de fraîcheur introuvable à côté de {table_sortie} : "
+                  f"{nom}. La couche et les courses doivent vivre dans le MÊME répertoire "
+                  f"que la table, sinon sa fraîcheur n'est pas vérifiable ; "
+                  f"trip_info.json n'est PAS écrit", file=sys.stderr)
+            return CODE_REFUS
+
     # ── Écriture, l'ancien fichier archivé et daté ───────────────────────────
     args.sortie.parent.mkdir(parents=True, exist_ok=True)
     archive = None
@@ -562,9 +618,38 @@ def main(argv=None) -> int:
     with open(args.sortie, "w", encoding="utf-8") as fh:
         json.dump(donnees, fh)
     taille = args.sortie.stat().st_size
+    print(f"écrit : {args.sortie} — {taille:,} o ({taille / 1_048_576:.1f} Mo)"
+          .replace(",", " "))
+
+    # ── Le fichier annexe, APRÈS les courses : il note leur empreinte ────────
+    # L'ordre compte : la concordance se prouve sur les octets réellement écrits.
+    if args.table_traces is None and table_sortie.exists() and archive is not None:
+        shutil.move(str(table_sortie), str(archive.parent / table_sortie.name))
+        print(f"ancienne table conservée : "
+              f"{_court(archive.parent / table_sortie.name)}")
+    document = table_traces.construire(
+        table=table, arrets=arrets_catalogue, dossier_temoins=table_sortie.parent,
+        noms_temoins=noms_temoins,
+        genere_le=datetime.now().isoformat(timespec="seconds"),
+        recette="scripts/data/gama/export_trip_info.py",
+        reseaux={nom: {"courses_retenues": m.get("courses_retenues"),
+                       "traces_retenus": m.get("traces_retenus"),
+                       "lignes": m.get("lignes"),
+                       "origine_trace": m.get("origine_trace")}
+                 for nom, m in mesures_reseaux.items()},
+        comptes_supplementaires={"courses": len(donnees["trip_list"])},
+    )
+    notes = sorted(document["concordance"]["temoins"])
+    attendus = sorted(set(noms_temoins))
+    if notes != attendus:
+        print(f"[ALARME] témoins de fraîcheur notés {notes}, attendus {attendus} — "
+              f"la table serait publiée sans pouvoir être recoupée", file=sys.stderr)
+        return CODE_REFUS
+    taille_table = table_traces.ecrire(table_sortie, document)
     duree = round(time.monotonic() - depart, 1)
-    print(f"écrit : {args.sortie} — {taille:,} o ({taille / 1_048_576:.1f} Mo) "
-          f"en {duree} s".replace(",", " "))
+    print(f"écrit : {table_sortie} — {taille_table:,} o "
+          f"({taille_table / 1_048_576:.1f} Mo), fraîcheur notée sur {notes} ; "
+          f"total {duree} s".replace(",", " "))
 
     resultat = {
         "date": datetime.now().isoformat(timespec="seconds"),
@@ -582,6 +667,11 @@ def main(argv=None) -> int:
                       "dates_du_calendrier": len(donnees["calendar"]["dates"]),
                       "services": len(donnees["calendar"]["data"]),
                       "duree_construction_s": duree_build},
+        "table_traces": {"fichier": str(table_sortie), "octets": taille_table,
+                         "route_id": document["concordance"]["comptes"]["route_id"],
+                         "traces": document["concordance"]["comptes"]["traces"],
+                         "arrets_catalogue": len(arrets_catalogue),
+                         "temoins": document["concordance"]["temoins"]},
         "ancien_fichier": _court(archive) if archive else None,
         "duree_totale_s": duree,
     }
