@@ -38,6 +38,67 @@ courant — `car` et `foot,bus,foot` n'apparaissent jamais dans le même plan, e
 déplacement est mal classé**. C'est une bombe à retardement, pas un bug actif : le jour où
 un itinéraire mixte apparaît, le classement bascule en silence.
 
+#### M1 a explosé le 2026-09-03 — pas sur la voiture, sur le car et le train
+
+*Constat chiffré, déposé le 2026-09-04. Aucune décision prise : la hiérarchie des modes
+reste l'objet de ce ticket. Ce qui suit remplace l'intuition par des nombres.*
+
+L'itinéraire mixte que M1 attendait est arrivé. Pas `car` + `bus` — OTP est toujours
+interrogé mode par mode pour la voiture — mais **`bus` + `rail`** : depuis l'entrée du TER
+et des 309 lignes d'autocar liO dans le graphe OTP (ticket 031, q. 16), un même itinéraire
+porte couramment une jambe d'autocar ou de bus **et** une jambe de train. Or la cascade
+teste `_BUS_MODES` **avant** `_RAIL_MODES` :
+
+```
+if modes & _CAR_MODES:      return "Voiture Privée"
+if modes & _BUS_MODES:      return "Transports_collectifs"   ← gagne
+if modes & _RAIL_MODES:     return "Train"                   ← n'est jamais atteint
+```
+
+**Mesure** (sonde OTP du 2026-09-04, mêmes conditions que le ticket 031 q. 16 : population
+`population_1000_AAMAS_v4`, lundi 16 mars 2026 8 h, six candidats par trajet, 2 580 points
+→ 11 288 itinéraires ; rejeu `docs/traces/2026-09-04_09-10_rail_categorisation_et_gama/`) :
+
+| | Itinéraires | Part de l'offre |
+|---|---:|---:|
+| Itinéraires portant un train | 1 883 | 16,7 % |
+| dont **train + bus/car** → classés « Transports_collectifs » | **1 177** | **62,5 % de l'offre rail** |
+| dont train seul → classés « Train » | 706 | 37,5 % de l'offre rail |
+| **Total classé « Train » par l'ordre actuel** | **706** | 6,3 % des itinéraires |
+| **Total classé « Train » par la hiérarchie (train d'abord)** | **1 883** | 16,7 % des itinéraires |
+
+Par couronne de résidence, la part de l'offre rail que l'ordre actuel masque :
+
+| Couronne | Itinéraires avec train | dont train + bus | Part masquée |
+|---|---:|---:|---:|
+| Toulouse | 73 | 45 | 61,6 % |
+| 1ʳᵉ couronne | 1 215 | 838 | **69,0 %** |
+| 2ᵉ couronne | 351 | 223 | 63,5 % |
+| 3ᵉ couronne | 244 | 71 | 29,1 % |
+
+Les seules combinaisons observées sont `rail` seul (706), `bus+rail` (751), `bus+metro+rail`
+(263) et `metro+rail` (163) — **aucun** itinéraire ne mêle `car` et un mode collectif, donc
+le M1 d'origine (voiture avant TC) reste bien latent.
+
+**Quatre tables, trois réponses, pour le même trajet.** C'est la forme la plus nette du
+problème :
+
+| Table | Verdict pour un trajet car liO + TER |
+|---|---|
+| `move_logger._plan_transport_mode` (colonne « Mode de transport Choisi ») | `Transports_collectifs` |
+| `mode_choice.canonical_mode` (répartition `P(...)`) | `train` |
+| `task_worker._extract_primary_mode` (priorité déclarée train > métro > tram > bus) | `train` |
+| `simulation_controller._primary_mode` (métrique `trip_mode_by_purpose_total`) | `transit` — il n'émet JAMAIS `train` |
+
+Conséquences directement lisibles, à ne pas confondre avec le scoring EMC² : la colonne
+« Train » de `moves.csv` sous-compte de **62,5 %** l'usage du rail, et le graphe d'écart de
+Grafana 07 (`trip_mode_by_purpose_total` vs `llm_mode_probability_pct_total`) compare une
+base à **quatre** modes à une base à **cinq**. Le scoring EMC², lui, est indifférent :
+`frames.CHOSEN_MODE_MAP["Train"]` et `CANONICAL_TO_CAT["train"]` fusionnent tous deux le
+train dans `transports_collectifs`, et la référence du dépôt ne publie pas de part « train »
+distincte. **Ce constat ne change donc aucune part modale publiée** — il change ce que le
+journal permet de lire.
+
 ### M2 — Une partie de la cible « transports collectifs » est structurellement inatteignable
 
 C'est l'effet miroir, et c'est lui qui mord. Puisque la simulation ne peut pas produire de

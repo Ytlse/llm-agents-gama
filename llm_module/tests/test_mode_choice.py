@@ -201,6 +201,32 @@ class TestCanonicalMode:
     def test_mapping(self, raw, expected):
         assert canonical_mode(raw) == expected
 
+    @pytest.mark.parametrize("raw", [
+        "cableway", "foot,cableway,foot", "CABLEWAY",
+        "gondola", "foot,gondola,foot", "funicular", "foot,funicular,foot",
+    ])
+    def test_le_teleo_est_un_transport_collectif(self, raw):
+        """`cableway` = le Téléo, du réseau Tisséo. Il manquait aux SIX listes.
+
+        Une option de téléphérique PUR descendait donc la cascade jusqu'à « walking »,
+        que le mot « foot » de « foot,cableway,foot » satisfait : la masse de probabilité
+        du Téléo était comptée en MARCHE dans `mode_distribution`, donc dans les colonnes
+        `P(...) %` de `moves.csv` et dans `llm_mode_probability_pct_total`. Aucune
+        exception, aucun WARNING — la chaîne composée ne tombait même pas dans « other ».
+
+        `move_logger._BUS_MODES` et `calibration.metrics.categorize_mode` portaient déjà
+        ces trois modes : c'est une divergence corrigée le 2026-09-04, pas une convention
+        nouvelle. Effet chiffré avant application : 120 des 385 888 options des jeux gelés
+        de calibration (0,031 %) et 5 des 17 258 du dernier run archivé.
+        """
+        assert canonical_mode(raw) == "public_transport"
+
+    def test_la_masse_du_teleo_ne_part_plus_en_marche(self):
+        """Le défaut vu là où il se lisait : la répartition par mode."""
+        dist = mode_distribution([1.0], ["foot,cableway,foot"])
+        assert dist["public_transport"] == pytest.approx(1.0)
+        assert dist["walking"] == pytest.approx(0.0)
+
 
 # ── Tirage ──────────────────────────────────────────────────────────────────
 

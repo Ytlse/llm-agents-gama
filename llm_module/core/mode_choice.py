@@ -64,6 +64,19 @@ _MODE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("train", ("rail", "train", "ter", "intercités", "intercites")),
     ("public_transport", ("metro", "métro", "subway", "tram", "tramway", "bus",
                           "school_bus",  # car scolaire synthétique (ticket 030)
+                          # Téléo (route_type=6) et téléportés cousins. AJOUTÉS le
+                          # 2026-09-04 : ils manquaient aux SIX listes, si bien qu'une
+                          # option de téléphérique PUR (« foot,cableway,foot »)
+                          # descendait la cascade jusqu'à « walking », que le mot
+                          # « foot » satisfait — la masse de probabilité du Téléo était
+                          # comptée en MARCHE dans `mode_distribution`, donc dans les
+                          # colonnes P(...) de moves.csv et dans Grafana 07.
+                          # `move_logger._BUS_MODES` et `categorize_mode` les portaient
+                          # déjà (correctif du 2026-08-26) : divergence corrigée, pas
+                          # convention nouvelle. Effet mesuré avant application :
+                          # 120 des 385 888 options des jeux gelés (0,031 %), 5 des
+                          # 17 258 du dernier run archivé, un seul libellé concerné.
+                          "cableway", "gondola", "funicular",
                           "transit", "public_transport", "transports en commun",
                           "transport en commun", "transports_collectifs", "tc")),
     ("motorbike", ("scooter", "moto", "motorbike", "motorcycle", "deux-roues",

@@ -122,22 +122,61 @@ MODE_COLORS   = {"marche": "#00CCCC", "voiture": "#EE4444",
 EXCLUDE_MODES = {"autres_modes", "autres"}
 
 
+UNCATEGORIZED = "Autre"
+
+# ── Vocabulaire des modes, par catégorie EMC² ────────────────────────────────
+#
+# ⚠ RECOPIE de `prompt_calibration/calibration/metrics.py` (`MODE_KEYWORDS`), qui est
+# l'instrument de mesure de référence. Les deux ne peuvent pas s'importer l'une l'autre
+# (`prompt_calibration/` est un dépôt autonome, hors du suivi de celui-ci) : c'est
+# `scripts/tests/test_parite_modes.py` qui verrouille cette copie sur le journal de
+# production, LU DANS SA SOURCE. Un littéral recopié dans un test ne tombe que si
+# l'instrument change, jamais si la production change — l'asymétrie qui avait laissé
+# passer le Téléo (2026-08-26) puis le rail (2026-09-04).
+#
+# L'ORDRE du tuple EST celui de la cascade : un libellé composé porte plusieurs modes
+# (« foot,bus,foot » contient aussi « foot »), le tronçon structurant qualifie le trajet.
+# Le rail est rangé avec les transports collectifs, comme `frames.CHOSEN_MODE_MAP["Train"]`
+# et `model_on_common_set.CANONICAL_TO_CAT["train"]` — la référence EMC² du dépôt ne publie
+# pas de part « train » distincte.
+#
+# La correspondance se fait par MOT et non par sous-chaîne : « car » désigne un autocar en
+# français, et le réseau régional liO n'est composé que d'autocars.
+MODE_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("transports_collectifs", (
+        "bus", "autobus", "metro", "métro", "subway", "tram", "tramway",
+        "cableway", "gondola", "funicular",       # Téléo (route_type=6) et cousins portés
+        "school_bus", "car scolaire",             # car scolaire synthétique (ticket 030)
+        "rail", "train", "ter", "intercités", "intercites",   # TER (route_type=2)
+        "autocar", "car lio", "coach",                        # cars liO (route_type=3)
+        "transit", "public_transport", "transports_collectifs",
+        "transports en commun", "transport en commun", "tc",
+    )),
+    ("voiture", ("car", "__car__", "voiture", "conducteur", "driving", "taxi")),
+    ("velo", ("vélo", "velo", "bicycle", "bike", "cycling")),
+    ("marche", ("marche", "foot", "walk", "walking", "pied", "à pied", "a pied")),
+)
+
+
+def _motif(mots: tuple[str, ...]):
+    """Alternation encadrée de frontières de mot (lookarounds, pas `\\b` : « __car__ »
+    commence par un caractère de mot et ne franchirait jamais une frontière `\\b`)."""
+    alternation = "|".join(re.escape(mot) for mot in sorted(mots, key=len, reverse=True))
+    return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)")
+
+
+_MODE_PATTERNS = tuple((categorie, _motif(mots)) for categorie, mots in MODE_KEYWORDS)
+
+
 def categorize_mode(m: str) -> str:
+    """Normalise le mode brut renvoyé par le LLM vers une catégorie Cerema."""
     if not isinstance(m, str):
-        return "Autre"
+        return UNCATEGORIZED
     ml = m.lower()
-    # TC en premier (foot,bus,foot contient aussi 'foot')
-    if any(k in ml for k in ("bus", "metro", "métro", "tram", "transit", "public_transport")):
-        return "transports_collectifs"
-    if "foot,bus" in ml or "bus,foot" in ml:
-        return "transports_collectifs"
-    if any(k in ml for k in ("voiture", "car", "conducteur")):
-        return "voiture"
-    if any(k in ml for k in ("vélo", "velo", "bicycle", "cycling")):
-        return "velo"
-    if any(k in ml for k in ("marche", "foot", "walk", "pied")):
-        return "marche"
-    return "Autre"
+    for categorie, motif in _MODE_PATTERNS:
+        if motif.search(ml):
+            return categorie
+    return UNCATEGORIZED
 
 
 # ════════════════════════════════════════════════════════════════════════════

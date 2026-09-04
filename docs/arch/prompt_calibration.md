@@ -1801,6 +1801,55 @@ Effet mesuré du premier usage — 18 scores recalés sur 39 évals, deux stores
 LLM ; aucun verdict des campagnes 023 et 024 ne change. Chiffrage, réserves et rejeu :
 `prompt_calibration/docs/mesures/correctif_cableway_2026-08-26.md`.
 
+### Le même défaut sur le train, et la fin du test de parité recopié (2026-09-04)
+
+La réserve laissée par le correctif du Téléo s'est réalisée. Elle disait : « `rail` reste
+asymétrique — `move_logger._RAIL_MODES` range `rail` dans une catégorie « Train » distincte ;
+`categorize_mode` n'a aucun mot-clé pour lui, donc « foot,rail,foot » tomberait en marche.
+Effet mesuré aujourd'hui : nul, aucun jeu gelé ne contient `rail`. » Le 2026-09-03, le TER
+(`route_type=2`) et les 309 lignes d'autocar liO sont entrés dans le graphe OTP et `rail`
+dans les modes demandés : **1 883 des 11 288 itinéraires** de la sonde de périmètre
+proposent désormais un train, **58,4 % en 3ᵉ couronne**. Le défaut latent devenait actif à
+la prochaine campagne.
+
+**Ce qui change dans la fonction qui note.** `rail`, `train` et `ter` entrent dans la liste
+des transports collectifs — et non dans une catégorie à part : la référence EMC² du dépôt ne
+publie pas de part « train » distincte, et `frames.CHOSEN_MODE_MAP["Train"]` comme
+`model_on_common_set.CANONICAL_TO_CAT["train"]` appliquent déjà cette fusion. La
+correspondance passe surtout de la **sous-chaîne** au **mot** : « car » désigne un autocar
+en français, liO n'est composé que d'autocars, et le libellé « autocar » était rangé dans
+**voiture** — l'inverse exact de ce qu'il est. Le vocabulaire est désormais un tuple nommé
+(`MODE_KEYWORDS`), dont l'ordre EST la cascade et se vérifie par un test.
+
+**Effet chiffré avant application (A13) : zéro.** Sur les **385 888 options** des jeux gelés
+(111 libellés distincts, toutes versions et tous jeux) et les **444 055 décisions** en cache
+des huit stores (86 libellés), **aucune** ne change de catégorie. Le vocabulaire réellement
+présent est `foot`, `bus`, `metro`, `tram`, `cableway`, `car`, `bicycle` — les jeux gelés
+sont antérieurs à l'entrée du TER dans le graphe. Aucun score n'est à recaler, aucun verdict
+publié ne bouge. Rejeu et données :
+`docs/traces/2026-09-04_09-10_rail_categorisation_et_gama/effet_rail_sur_jeux_geles.py`.
+
+**La réserve de fond, elle, est levée.** Le correctif du Téléo notait : « le test de parité
+compare `categorize_mode` à un **littéral** qui reproduit `move_logger._BUS_MODES` ; il
+échoue si l'instrument de mesure change, pas si le journal de production change. La
+divergence peut donc se reformer côté production sans qu'aucun test ne tombe. » C'est
+exactement ce qui s'est passé. Le test **lit désormais les listes dans la source de
+production** (`move_logger.py`, par `ast` — l'importer tirerait `settings`, dont l'import
+repointe `experiments/current`), avec deux gardes anti-vacuité : les noms des cinq
+ensembles doivent tous être retrouvés, et chacun doit contenir son mode-témoin. Une boucle
+sur une liste vidée par accident passerait sinon sans rien vérifier — « l'absence de mesure
+produit le score parfait ».
+
+Le miroir côté dépôt hôte est `scripts/tests/test_parite_modes.py`, qui n'a pas besoin de
+`prompt_calibration/` (non suivi par le dépôt hôte) : il verrouille la **copie** de la
+fonction, `scripts/models_influence/prompt_calibration_lib.py`, sur les mêmes listes de
+production, et vérifie le pont avec `mode_choice.canonical_mode` et
+`frames.CHOSEN_MODE_MAP`. C'est ce test qui a trouvé un **troisième** défaut du même genre :
+`canonical_mode("foot,cableway,foot")` renvoyait `walking`, le Téléo n'étant dans aucune des
+six listes de `_MODE_KEYWORDS` — la masse de probabilité d'un téléphérique pur était comptée
+en marche dans la répartition de production. Corrigé, effet mesuré : 120 des 385 888 options
+des jeux gelés (0,031 %).
+
 ### Les deux gardes de traçabilité, enfin armés (2026-08-17)
 
 Les deux mécanismes ci-dessous étaient **écrits, documentés et testés unitairement** —
