@@ -88,13 +88,42 @@ class OtpPersistentCache:
         return hashlib.sha256(raw.encode()).hexdigest()
 
     @staticmethod
-    def make_blacklist_key(origin: Location, destination: Location) -> str:
-        # PAS de version ici, et c'est délibéré : la liste noire dit « OTP ne relie pas
-        # ces deux points », un fait de topologie du réseau qui ne dépend d'aucun temps
-        # terminal. La versionner ferait re-interroger OTP pour rien sur les paires
-        # connues comme non reliées — la moitié des avertissements « No usable
-        # itinerary » d'un run.
-        raw = f"{origin.lat:.5f}|{origin.lon:.5f}|{destination.lat:.5f}|{destination.lon:.5f}"
+    def make_blacklist_key(origin: Location, destination: Location,
+                           departure_time: Optional[int] = None) -> str:
+        """Clé de la liste noire : les deux points ET le créneau horaire.
+
+        ⚠ L'HEURE ENTRE DANS LA CLÉ depuis le 2026-09-04, et le commentaire qu'elle
+        remplace disait exactement le contraire : « la liste noire dit "OTP ne relie pas
+        ces deux points", un fait de topologie du réseau qui ne dépend d'aucun temps ».
+        L'intention était juste, le déclencheur ne l'était pas. `cached_triphelper`
+        noircit une paire dès que le résultat est **vide**, sans regarder pourquoi — et
+        `noTransitConnectionInSearchWindow` compte pour vide. Or ce motif est
+        éminemment horaire : mesuré le 2026-09-04, il vaut 29 points sans itinéraire à
+        6 h et **341 à 5 h** sur les mêmes 2 580 points. Une paire noircie parce
+        qu'aucun car ne passe à 5 h du matin rendait donc « aucun transport en commun »
+        à 17 h, sans appeler OTP et sans une ligne de journal. Les vagues de
+        pré-planification interrogent précisément la même paire à des heures
+        successives : le défaut se déclenchait **à l'intérieur d'un même run**.
+        Les 62 paires déjà noircies l'avaient été à la mauvaise heure ; elles ont été
+        archivées et purgées le même jour.
+
+        Le créneau est le même que celui de `make_key` — l'instant complet du réseau,
+        décalage compris, arrondi à dix minutes — pour que les deux caches parlent du
+        même temps. Sans `departure_time` la clé reste celle de la topologie seule,
+        pour les appelants qui n'ont pas d'heure à donner ; elle est alors marquée
+        comme telle, et ne peut pas collisionner avec une clé horaire.
+        """
+        if departure_time is None:
+            raw = (f"sans-heure|{origin.lat:.5f}|{origin.lon:.5f}"
+                   f"|{destination.lat:.5f}|{destination.lon:.5f}")
+            return hashlib.sha256(raw.encode()).hexdigest()
+
+        from sim_clock import to_network_datetime
+
+        dt = to_network_datetime(departure_time)
+        bucket = dt.replace(minute=(dt.minute // 10) * 10, second=0, microsecond=0)
+        raw = (f"{bucket.isoformat()}|{origin.lat:.5f}|{origin.lon:.5f}"
+               f"|{destination.lat:.5f}|{destination.lon:.5f}")
         return hashlib.sha256(raw.encode()).hexdigest()
 
     def lookup(self, key: str) -> Optional[tuple[list[TravelPlan], int]]:

@@ -293,7 +293,7 @@ class CachedTripHelper(TripHelper):
 
         if self.otp_cache_enabled:
             key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
-            bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
+            bl_key = OtpPersistentCache.make_blacklist_key(origin, destination, departure_time)
             is_blacklisted = await self.persistent_cache.is_blacklisted_async(bl_key)
             cached = None if is_blacklisted else await self.persistent_cache.lookup_async(key)
         else:
@@ -386,7 +386,7 @@ class OtpCachedTripHelper(TripHelper):
                 arrive_by=arrive_by, _timing_sink=_timing_sink, **kwargs)
 
         key = OtpPersistentCache.make_key(departure_time, origin, destination, include_car, arrive_by, include_bike)
-        bl_key = OtpPersistentCache.make_blacklist_key(origin, destination)
+        bl_key = OtpPersistentCache.make_blacklist_key(origin, destination, departure_time)
         is_blacklisted = await cache.is_blacklisted_async(bl_key)
         cached = None if is_blacklisted else await cache.lookup_async(key)
 

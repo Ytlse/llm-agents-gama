@@ -1,3 +1,28 @@
+## [2026-09-04] Une paire sans bus à cinq heures du matin n'est plus une paire sans bus
+
+La liste noire d'OTP évite de rappeler le routeur pour deux points qu'il ne relie pas. Sa clé ne
+portait que les coordonnées — « un fait de topologie », disait son commentaire — alors que le code
+y inscrit une paire dès que le résultat est **vide**, sans regarder pourquoi. Or l'absence
+d'itinéraire dans la fenêtre de recherche est éminemment horaire : 29 points concernés à six
+heures contre 341 à cinq heures, sur les mêmes 2 580. Une paire écartée au petit matin répondait
+donc « aucun transport en commun » à dix-sept heures, sans appel et sans une ligne de journal — et
+comme les vagues de pré-planification interrogent la même paire à des heures successives, le
+défaut se déclenchait à l'intérieur d'un seul run.
+
+La clé porte maintenant le même créneau de dix minutes que le cache de plans, lu sur l'horloge du
+réseau. Une paire reste écartée à son heure, et se rejoue à une autre.
+
+Tous les caches de résultats ont par ailleurs été archivés puis vidés avant le prochain run —
+263 572 lignes, plans OTP, liste noire, routes et décisions comprises. La journée a changé trois
+conventions qui touchent leur contenu, dont l'heure des itinéraires : plutôt que d'établir cache
+par cache si sa clé protège ce qu'il contient, le run repart à froid. Les graphes, eux, restent.
+
+**Avant :** 66 paires écartées sous une heure fausse, consultées sans expiration ni trace.
+**Après :** la liste noire distingue les heures, et sept tests le vérifient — dont celui qui
+montre qu'une paire écartée à cinq heures est réinterrogée à dix-sept.
+
+---
+
 ## [2026-09-04] Les agents voient enfin l'offre de transport de l'heure où ils décident
 
 Le runtime demandait ses itinéraires **une heure trop tard**. L'horloge de GAMA est une horloge
