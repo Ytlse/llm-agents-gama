@@ -13,9 +13,11 @@ Aucun appel réseau, aucun modèle chargé : SentenceTransformer est mocké.
 Qdrant tourne en mode fichier local dans un répertoire temporaire.
 """
 
+import calendar
 import sys
 import os
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -60,8 +62,15 @@ def make_embed_fn(vectors: dict):
 
 
 def ts(hour: int, minute: int) -> int:
-    """Timestamp Unix pour aujourd'hui à l'heure donnée."""
-    return int(datetime(2026, 5, 28, hour, minute, 0).timestamp())
+    """Horodatage GAMA (heure MURALE) du 28 mai 2026 à l'heure donnée.
+
+    ⚠ `calendar.timegm` et non `datetime(...).timestamp()` : la clé du cache de
+    décisions se lit en heure murale (`sim_clock.wall_clock`), pas dans le fuseau du
+    processus. Construire l'entrée avec `.timestamp()` ferait passer le test sous
+    `TZ=UTC` et échouer sous `TZ=Europe/Paris` — c'est exactement le défaut que la
+    clé portait jusqu'au 2026-09-04.
+    """
+    return calendar.timegm(datetime(2026, 5, 28, hour, minute, 0).timetuple())
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +100,7 @@ class TestStaticHelpers(unittest.TestCase):
         self.assertNotEqual(h_sun, h_rain)
 
     def test_time_slice_rounding(self):
-        """Arrondi au pas de 10 minutes vers le bas."""
+        """Arrondi au pas de 10 minutes vers le bas, sur l'heure MURALE de GAMA."""
         from llm.cache import LlmSemanticCache
 
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(8, 0)),  "08:00")
@@ -100,6 +109,43 @@ class TestStaticHelpers(unittest.TestCase):
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(8, 19)), "08:10")
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(18, 53)), "18:50")
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(23, 59)), "23:50")
+
+    def test_cle_independante_du_fuseau_du_processus(self):
+        """La clé du cache ne doit pas dépendre du `TZ` du processus.
+
+        Deux processus du même run n'ont pas le même fuseau — le `controller` tourne en
+        `TZ=Europe/Paris`, les réplicas `osmnx` en `TZ=UTC`. Tant que la clé passait par
+        `datetime.fromtimestamp(ts)`, ils calculaient deux tranches différentes pour le
+        même instant simulé et ne s'adressaient donc pas la même entrée.
+        """
+        from llm.cache import LlmSemanticCache
+
+        # 16 mars 2026 5 h murales (t0 du run archivé) et un vendredi 23 h 30 :
+        # le second est le cas où le fuseau du processus changeait aussi le JOUR.
+        cas = [calendar.timegm(datetime(2026, 3, 16, 5, 0, 0).timetuple()),
+               calendar.timegm(datetime(2026, 3, 20, 23, 30, 0).timetuple())]
+        attendu_par_tz = {}
+        initial = os.environ.get("TZ")
+        try:
+            for tz in ("UTC", "Europe/Paris", "Pacific/Kiritimati", "America/Los_Angeles"):
+                os.environ["TZ"] = tz
+                time.tzset()
+                attendu_par_tz[tz] = [
+                    (LlmSemanticCache._make_time_slice(t), LlmSemanticCache._make_weekday(t))
+                    for t in cas
+                ]
+        finally:
+            if initial is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = initial
+            time.tzset()
+
+        distincts = {tuple(v) for v in attendu_par_tz.values()}
+        self.assertEqual(len(distincts), 1,
+                         f"la clé du cache bouge avec le fuseau du processus : {attendu_par_tz}")
+        self.assertEqual(attendu_par_tz["UTC"],
+                         [("05:00", "Weekday"), ("23:30", "Weekday")])
 
 
 class TestCacheRoundTrip(unittest.IsolatedAsyncioTestCase):

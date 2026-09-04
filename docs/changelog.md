@@ -1,3 +1,49 @@
+## [2026-09-04] L'agent lit la météo et l'heure de sa propre horloge, plus celles de son conteneur
+
+Le matin, l'heure des itinéraires est passée sur l'horloge murale de GAMA. Deux familles de
+lectures étaient restées derrière : **l'heure affichée dans le prompt** et **la météo**. Elles
+étaient fausses depuis toujours, mais fausses *avec* le routage — donc cohérentes. Le correctif du
+matin les a rendues incohérentes, et c'est ce verrou qui est levé.
+
+Ce que l'agent lisait, pour un départ que GAMA situe à 5 h du matin : « départ 06:00 » dans son
+prompt, et le bulletin météo de 6 h — de 8 h pour une journée simulée en été. Rejoué sur les
+5 322 déplacements du dernier run archivé, code d'avant extrait par git : **100 %** des départs
+changent d'heure affichée, **43,8 %** de relevé météo (68,9 % en été), et **38,9 %** changent de
+phrase météo mot pour mot. Les **77 départs de 23 h** changeaient carrément de jour : le prompt
+leur annonçait mardi, la météo leur donnait la journée du mardi, et leur itinéraire était calculé
+le lundi. Après alignement, les trois parlent du même jour — vérifié départ par départ, zéro
+désaccord sur 5 322.
+
+Le fuseau du conteneur décidait de tout cela : à code constant, passer le processus d'Europe/Paris
+à UTC déplaçait 37 444 lectures. Il n'en déplace plus aucune. La météo, elle, portait son fuseau
+écrit en dur : elle était fausse de façon *stable*, ce qui l'a rendue invisible pendant des mois.
+Il n'y a plus aucun fuseau dans la météo — la source se lit par jour et par créneau de trois
+heures, seuls les champs de l'horloge comptent.
+
+La clé du cache de décisions suit, et il fallait le vérifier plutôt que le supposer : on avait
+jugé ce cache « auto-protégé, puisque le hachage des options change de toute façon ». Mesuré sur
+l'OTP en service, 200 origines-destinations × 5 heures : le hachage est **identique** malgré une
+heure d'écart pour **26,2 %** des contextes, et 47 % à 23 h. Un code d'option, c'est une ligne et
+deux arrêts — il ne porte aucune heure. Ce qui a protégé le dépôt n'était donc pas le hachage,
+c'était la purge manuelle de la veille au soir.
+
+Deux tests qui traînaient en échec depuis le matin sont diagnostiqués et remis d'aplomb : ils
+affirmaient que le tirage d'une météo par agent est « désactivé par défaut » en lisant la
+configuration du run, qui l'active exprès. Le défaut du code et la configuration du run sont deux
+choses différentes ; chacune est désormais vérifiée à sa source.
+
+**Avant :** un agent partant à 5 h lisait « 06:00 » et la météo de 6 h ; l'heure de son prompt
+dépendait du fuseau de son conteneur.
+**Après :** une seule horloge, celle de GAMA. Météo, itinéraire, jour affiché et clé de cache
+disent tous la même heure et le même jour, quel que soit le conteneur.
+
+⚠ Les jeux gelés de calibration ne bougent pas d'un octet — ils rejouent du texte enregistré, et
+aucun score publié ne change. Mais ce texte décrit une heure qui n'a jamais existé dans la
+simulation : « Départ : 10:06 » a été produit par un agent dont l'horloge disait 09:06. Les
+ré-extraire demande un run.
+
+---
+
 ## [2026-09-04] Une paire sans bus à cinq heures du matin n'est plus une paire sans bus
 
 La liste noire d'OTP évite de rappeler le routeur pour deux points qu'il ne relie pas. Sa clé ne

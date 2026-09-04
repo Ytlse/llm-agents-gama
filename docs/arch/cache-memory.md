@@ -394,6 +394,38 @@ rappelle.
 > chargeur refuse une configuration sans version, mais il ne peut pas devenir qu'une valeur
 > a changé sans que la version suive.
 
+> **Quatrième occurrence, et la mesure qui la chiffre — 2026-09-04.** La clé du cache de
+> décisions porte `weekday` + `time_slice`, et ces deux champs se lisaient
+> `datetime.fromtimestamp(ts)` — donc dans le fuseau du **processus**. Trois conséquences,
+> toutes mesurées dans
+> [`docs/traces/2026-09-04_14-30_horloge_prompt_meteo/`](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md) :
+>
+> - le `controller` (`TZ=Europe/Paris`) et les réplicas `osmnx` (`TZ=UTC`) calculaient
+>   **deux clés différentes pour le même instant simulé** : ils ne s'adressaient donc pas la
+>   même entrée ;
+> - un départ à **23 h murales un vendredi** basculait en `Weekend` et au lendemain
+>   (`day`/`month` du payload compris) : sa clé allait se confondre avec celle d'un vrai
+>   départ de week-end. 77 des 5 322 déplacements du run archivé `2026-09-04_01_09` partent
+>   dans l'heure murale 23 h ;
+> - **l'affirmation « le hachage des options change de toute façon » est FAUSSE.**
+>   `get_code()` vaut `route^arrêt^arrêt` : **aucune information d'heure**. Mesuré sur OTP
+>   en service, 200 couples origine-destination de la population scellée v4 × 5 heures
+>   murales : le `state_hash` est **identique** malgré le décalage d'une heure pour
+>   **259 / 990 contextes (26,2 %)** — et **47 %** à 23 h. Sur ceux-là, `time_slice` /
+>   `weekday` étaient le SEUL garde-fou contre un hit périmé, et comme ils portaient le même
+>   décalage que le routage… ils ne gardaient rien. Ce qui a protégé le dépôt le 2026-09-04
+>   n'est pas le hachage : c'est la **purge manuelle de 14 h 17**
+>   (`data/cache/llm` relevé à 0 octet, 0 fichier).
+>
+> Les deux champs lisent désormais `sim_clock.wall_clock`. Effet de bord : la tranche bouge
+> pour **100 %** des départs, donc tout point écrit avant le 2026-09-04 devient injoignable
+> pour son propre contexte — une invalidation par décalage, pas une garantie. ⚠ **Le texte
+> du prompt n'est toujours pas dans le `state_hash` sur l'axe de l'heure** : l'heure
+> affichée à l'agent (`current_time`, `departure_time`) n'y entre pas, seule `time_slice` la
+> couvre, au pas de 10 minutes. Question ouverte laissée à l'auteur du dépôt : la météo
+> (38,9 % des départs) et l'anticipation (31,7 %) entrent, elles, par `weather_key` et
+> `extra_key`.
+
 Le store de calibration, lui, était déjà correct : `RunConfig.eval_params_key()` contient
 `ds=<dataset_version>`, donc une éval sur `v4` ne peut pas lire le cache d'une éval sur `v3`.
 

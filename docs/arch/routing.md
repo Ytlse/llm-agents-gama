@@ -93,15 +93,55 @@ bascules : sa journée du dernier dimanche de mars compte 24 heures là où le r
 que 23. Une heure murale inexistante ou doublée lève une `[ALARME]` (une par journée
 simulée, front montant) et la conversion continue sur `fold=0` — un choix annoncé.
 
-**Les consommateurs alignés** (tous lisent `departure_time` par `sim_clock`) : le
-`dateTime` d'OTP, le facteur de congestion `congestion_dt` (donc les tables TomTom par
-jour et heure, et la clé du cache de routage), le remappage `gtfs.fixed_day`, la passe
-d'ajustement des plannings (`handle/application.py`), et la clé du cache de plans OTP.
-Restent sur le fuseau du processus, **volontairement et parce qu'ils changent le texte du
-prompt** : l'heure affichée à l'agent (`helper.humanize_time`, `time_window_generalize`,
-`categorize_date_time_short`, `time_to_bucket_text`) et la météo
-(`weather_loader`, `weather_draw`). Chiffré dans la trace : la tranche météo de 3 h
-basculerait pour **43,8 %** des départs du run archivé, l'heure affichée pour 100 %.
+**Tous les consommateurs sont alignés — il n'y a plus qu'une heure murale.** Ils lisent
+tous `sim_clock`, et aucun ne dépend du `TZ` de son processus :
+
+| famille | ce qui la traverse |
+|---|---|
+| **routage** | le `dateTime` d'OTP, le facteur de congestion `congestion_dt` (donc les tables TomTom par jour et heure, et la clé du cache de routage), le remappage `gtfs.fixed_day`, le retour des horaires (`timestamp_from_isoformat`), la clé du cache de plans OTP, la passe d'ajustement des plannings |
+| **texte du prompt** | l'heure et le jour affichés (`helper.humanize_time`, `humanize_date`, `humanize_date_short`), les trois fenêtres temporelles (`time_window_generalize`, `categorize_date_time_short`, `time_to_bucket_text`), la catégorie ouvré/week-end (`get_weekday_category`), l'horodatage des souvenirs (STM/LTM) et le jour affiché dans les souvenirs de réflexion |
+| **météo** | `weather_loader.get_weather` / `day_weather_outlook` et le tirage d'une date par agent (`weather_draw.timestamp_meteo`) |
+| **clés de cache** | `llm/cache.py::_make_time_slice` / `_make_weekday`, et le `day`/`month` du payload |
+| **journaux et jalons** | `agent_states.csv`, `agent_memory_events.csv`, le nom des checkpoints de population, l'alarme de calendrier de démarrage, le nom des fichiers de `chat_log_dir` |
+
+> **Le second volet, fermé le 2026-09-04 à 14 h 30 : le prompt et la météo parlaient d'une
+> autre heure que le routage.** Corriger l'aller d'OTP le matin avait rendu ces deux
+> familles *incohérentes* avec lui — elles étaient jusque-là fausses **avec** lui. Mesuré
+> sur les 5 322 déplacements du run archivé `2026-09-04_01_09`, en rejouant le code d'avant
+> extrait par `git archive`
+> ([trace](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md)) :
+>
+> | lecture | départs qui changent | hiver | été |
+> |---|---:|---:|---:|
+> | heure affichée à l'agent | 5 322 | **100 %** | 100 % |
+> | tranche de 10 min de la clé du cache de décisions | 5 322 | **100 %** | 100 % |
+> | relevé météo de 3 h ouvert | 2 332 / 3 668 | 43,8 % | **68,9 %** |
+> | phrase météo du prompt, mot pour mot | 2 070 / 3 317 | 38,9 % | 62,3 % |
+> | ligne « Météo plus tard » (dans la clé du cache) | 1 688 | 31,7 % | — |
+> | **JOUR** de la semaine affiché, et **JOUR** de la météo | 77 / 140 | 1,4 % | 2,6 % |
+>
+> **Le fuseau du processus décidait de ce que l'agent lisait** : à code constant, passer de
+> `TZ=Europe/Paris` (le `controller`) à `TZ=UTC` (les réplicas `osmnx`) déplaçait
+> **37 444** lectures. Après alignement : **0**. La météo, elle, ne bougeait pas avec `TZ`
+> — elle portait `ZoneInfo("Europe/Paris")` **en dur** et traitait donc l'heure murale de
+> GAMA comme un instant : fausse de façon stable, ce qui l'a rendue invisible. Il n'y a
+> plus aucun fuseau dans la météo, et un test le verrouille : la source est indexée par
+> (mois, jour) et lue par créneau, seuls les champs muraux comptent.
+>
+> **Météo, itinéraire et jour affiché parlent du même jour**, vérifié départ par départ :
+> avant, les 77 départs de l'heure murale 23 h portaient trois désaccords chacun (jour de
+> semaine affiché, date affichée, jour du bulletin) ; après, **0** sur les 5 322.
+
+**Ce qui reste volontairement en dehors de `sim_clock`, et pourquoi** — aucun de ces
+points ne dépend du fuseau du processus :
+
+| lecture | raison |
+|---|---|
+| `helper.format_sim_timing` (`real_time=`) | c'est l'heure RÉELLE du processus, et c'est ce qu'elle annonce : elle sert à mesurer la durée d'un run |
+| `sim_day` de `llm_exchanges.jsonl` et de `llm_cache_hits.jsonl`, colonne « Heure de départ » de `moves.csv` | `fromtimestamp(ts, tz=utc)` sur un horodatage GAMA rend **déjà** l'heure murale — c'est la définition de `wall_clock`. Laissés mot pour mot : `llm_module` est un paquet séparé qui n'importe pas `sim_clock`, et ces colonnes doivent rester comparables aux runs archivés |
+| la chaîne de jour de la graine du tirage de mode (`llm_agent.seed_parts`) | même raison, et la réécrire à valeur identique ne ferait que risquer de rebattre tous les tirages déjà mesurés |
+| `llm.shortterm.get_recent_entries` (`datetime.now()`) | code mort : aucun appelant dans le dépôt. Le corriger sans besoin ajouterait du risque sans lecteur |
+| les tris de souvenirs par `.timestamp()` (`llm_agent`, lignes 445 et 449) | seul l'ORDRE compte : n'importe quelle convention monotone donne le même tri |
 
 ---
 

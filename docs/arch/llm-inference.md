@@ -405,8 +405,8 @@ effet. La cause est instrumentale, pas substantielle : **sur une seule journée 
 les 1 000 agents partagent une seule météo** — le régresseur a une variance nulle, et
 « aucun effet mesuré » ne veut alors rien dire.
 
-`urban_mobility_agents/utils/weather_draw.py` (activé par `Settings.weather_per_agent_dates`,
-désactivé par défaut) tire, pour chaque agent, un jour de l'année dans la fenêtre déclarée
+`urban_mobility_agents/utils/weather_draw.py` (activé par `Settings.weather_per_agent_dates`)
+tire, pour chaque agent, un jour de l'année dans la fenêtre déclarée
 par `Settings.weather_window` (`"enquete"` par défaut — la fenêtre de collecte EMC²,
 lue depuis `llm_module.core.population_reference`, pas recopiée en dur), et ne substitue
 que la **date** du bulletin lu par `weather_loader.get_weather` : l'heure du départ est
@@ -420,6 +420,46 @@ porte sur la fenêtre météo des **jeux gelés de calibration** (hors ligne), q
 `weather_per_agent_dates` porte sur le tirage météo **en simulation GAMA**, pour rendre
 l'effet météo mesurable sur un run donné plutôt que de le confondre avec l'absence de
 variance de l'instrument.
+
+⚠ **« Par défaut » veut dire deux choses, et les confondre a fait échouer deux tests une
+journée entière** (2026-09-04). Le **défaut du code** est `weather_per_agent_dates = False`
+dans `settings.py` : rien ne bouge si personne ne le demande. La **configuration du run**,
+elle, l'active délibérément (`llm-agents/config/config.yaml`, depuis « une seule
+configuration de run »), parce que sans tirage la mesure de l'effet météo n'a aucune
+variance à mesurer. Un test qui lit `settings.agent.weather_per_agent_dates` lit la
+configuration du run, **pas** le défaut du code : `scripts/tests/test_weather_draw.py`
+vérifie désormais chaque affirmation à sa source (le champ pydantic d'un côté, `config.yaml`
+et le runtime de l'autre), et les tests du branchement forcent le drapeau au lieu de le
+supposer.
+
+#### L'heure de lecture du bulletin est l'heure MURALE de GAMA — 2026-09-04
+
+`weather_loader.get_weather`, `day_weather_outlook` et `weather_draw.timestamp_meteo`
+lisaient `datetime.fromtimestamp(ts, tz=ZoneInfo("Europe/Paris"))` : un fuseau explicite,
+immunisé au `TZ` du processus — et faux quand même, parce qu'il traitait l'heure **murale**
+de GAMA comme un instant. Pour 5 h murales, le bulletin ouvert était celui de **6 h** (et de
+8 h pour une journée simulée en été).
+
+Mesuré sur les 5 322 déplacements du run archivé `2026-09-04_01_09`, code d'avant extrait
+par `git archive`
+([trace](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md)) : **2 332 départs
+(43,8 %)** changeaient de relevé de 3 h — **3 668 (68,9 %)** en été —, **2 070 (38,9 %)**
+changeaient de **phrase météo mot pour mot**, et les **77 départs de l'heure murale 23 h**
+changeaient de **JOUR** de bulletin : ils lisaient la journée du mardi pendant que leur
+itinéraire était calculé le lundi.
+
+Ces trois fonctions passent désormais par `sim_clock.wall_clock`, et **il n'y a plus aucun
+fuseau dans la météo** : la source est indexée par (mois, jour) et lue par créneau de 3 h,
+donc seuls les champs muraux comptent. Un test le verrouille explicitement (aucun import de
+`zoneinfo` dans ces deux modules), parce que le fuseau écrit en dur était invisible aux
+tests d'indépendance au `TZ`.
+
+⚠ **`weather_loader` doit rester chargeable PAR CHEMIN.** `prompt_calibration` est un dépôt
+autonome : il charge ce fichier par `spec_from_file_location` pour vérifier que sa copie de
+`weather_to_natural_language` n'a pas dérivé, exprès pour ne pas faire entrer le contrôleur
+dans ses tests. L'import de `sim_clock` est donc **différé** dans `_heure_murale` — hisser
+cet import en tête de module casse 14 tests de la calibration (vécu le 2026-09-04). Un test
+du dépôt principal charge le module dans un `python -I` pour que la casse se voie ici.
 
 #### Isolation du cache LLM par version de prompt
 

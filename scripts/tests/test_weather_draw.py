@@ -26,26 +26,36 @@ Aucun accès réseau, aucun LLM.
 
 from __future__ import annotations
 
+import calendar
 import collections
 import datetime as dt
 import os
 import sys
+import time
 import unittest
 from pathlib import Path
-from zoneinfo import ZoneInfo
-
-TZ = ZoneInfo("Europe/Paris")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "llm-agents"))
 
+from sim_clock import wall_clock  # noqa: E402
 from urban_mobility_agents.utils.weather_draw import (  # noqa: E402
     date_meteo,
     indice_agent,
     jours_eligibles,
     timestamp_meteo,
 )
+
+
+def mur(annee, mois, jour, heure=0, minute=0, seconde=0) -> int:
+    """Horodatage GAMA d'une heure MURALE — l'inverse de `sim_clock.wall_clock`.
+
+    ⚠ Pas `datetime(...).timestamp()` : celui-là lit l'heure dans le fuseau du
+    PROCESSUS, et un test bâti dessus passe sous `TZ=UTC` en échouant sous
+    `TZ=Europe/Paris` (ou l'inverse selon la saison).
+    """
+    return calendar.timegm(dt.datetime(annee, mois, jour, heure, minute, seconde).timetuple())
 
 FENETRE_ENQUETE = ("2022-09-20", "2023-02-18")
 JOURS_OUVRES = (1, 2, 3, 4, 5)
@@ -132,45 +142,90 @@ class TestTirage(unittest.TestCase):
 
 
 class TestTimestamp(unittest.TestCase):
+    """⚠ Ces tests parlent en heure MURALE, la seule convention de l'horloge de GAMA.
+
+    Les horodatages d'entrée sont construits par :func:`mur` (`calendar.timegm`) et
+    relus par :func:`sim_clock.wall_clock`, jamais par `datetime(...).timestamp()` /
+    `datetime.fromtimestamp(...)` : ce couple passe par le fuseau du PROCESSUS et
+    s'annulait par chance en hiver, pas en été — c'est ce qui a laissé le décalage
+    invisible jusqu'au 2026-09-04.
+    """
+
     def setUp(self) -> None:
         self.jours = jours_eligibles(*FENETRE_ENQUETE, JOURS_OUVRES)
 
     def test_heure_du_depart_conservee(self):
         """Le bulletin se lit par créneaux de 3 h : l'heure ne doit pas bouger."""
-        for heure in (5, 8, 12, 17, 21):
-            depart = int(dt.datetime(2026, 3, 16, heure, 37, 12).timestamp())
+        for heure in (5, 8, 12, 17, 21, 23):
+            depart = mur(2026, 3, 16, heure, 37, 12)
             for person_id in ("p1", "p2", "p3", "p400"):
-                obtenu = dt.datetime.fromtimestamp(
-                    timestamp_meteo(depart, person_id, 42, self.jours)
-                )
+                obtenu = wall_clock(timestamp_meteo(depart, person_id, 42, self.jours))
                 self.assertEqual((obtenu.hour, obtenu.minute, obtenu.second), (heure, 37, 12))
 
     def test_seule_la_date_change(self):
-        depart = int(dt.datetime(2026, 3, 16, 8, 0, 0).timestamp())
+        depart = mur(2026, 3, 16, 8, 0, 0)
         attendu = date_meteo("p7", 42, self.jours)
-        obtenu = dt.datetime.fromtimestamp(timestamp_meteo(depart, "p7", 42, self.jours))
+        obtenu = wall_clock(timestamp_meteo(depart, "p7", 42, self.jours))
         self.assertEqual((obtenu.month, obtenu.day), attendu)
 
     def test_le_meme_agent_garde_sa_journee_quelle_que_soit_lheure(self):
         """La météo d'un agent ne doit pas dépendre de l'heure de son départ :
         sinon ses trajets du matin et du soir vivraient deux journées."""
-        matin = int(dt.datetime(2026, 3, 16, 8, 0, 0).timestamp())
-        soir = int(dt.datetime(2026, 3, 16, 18, 30, 0).timestamp())
-        a = dt.datetime.fromtimestamp(timestamp_meteo(matin, "p9", 42, self.jours))
-        b = dt.datetime.fromtimestamp(timestamp_meteo(soir, "p9", 42, self.jours))
+        matin = mur(2026, 3, 16, 8, 0, 0)
+        soir = mur(2026, 3, 16, 18, 30, 0)
+        a = wall_clock(timestamp_meteo(matin, "p9", 42, self.jours))
+        b = wall_clock(timestamp_meteo(soir, "p9", 42, self.jours))
         self.assertEqual((a.month, a.day), (b.month, b.day))
 
     def test_heure_conservee_au_franchissement_ete_hiver(self):
-        """Un départ réel en heure d'été tiré sur une météo d'hiver (ou l'inverse)
-        doit relire la même heure d'horloge — pas une heure décalée par un offset
-        UTC figé sur la date d'origine. Le fuseau appliqué doit être celui que
-        `weather_loader.get_weather` utilise pour relire le bulletin substitué."""
-        depart_ete = int(dt.datetime(2026, 9, 22, 8, 0, 0, tzinfo=TZ).timestamp())
-        jours_hiver = [(12, 8)]
-        obtenu = dt.datetime.fromtimestamp(
-            timestamp_meteo(depart_ete, "p-dst", 42, jours_hiver), tz=TZ
-        )
-        self.assertEqual((obtenu.month, obtenu.day, obtenu.hour), (12, 8, 8))
+        """La date tirée peut être d'une autre saison que la journée simulée : l'heure
+        MURALE doit être conservée à la seconde dans les deux sens.
+
+        La fenêtre d'enquête (20/09 → 18/02) traverse la bascule heure d'été/hiver.
+        L'ancienne version passait par des instants (`fromtimestamp(tz=...)` puis
+        `.timestamp()`), et devait donc raisonner sur des offsets UTC. L'horloge de
+        GAMA n'a pas de bascule : en champs muraux la conservation est exacte, et il
+        n'y a plus d'offset à recalculer.
+        """
+        for depart, jours_cibles in (
+            (mur(2026, 9, 22, 8, 0, 0), [(12, 8)]),    # journée d'été → météo d'hiver
+            (mur(2026, 12, 8, 8, 0, 0), [(9, 22)]),    # journée d'hiver → météo d'été
+            (mur(2026, 3, 29, 2, 30, 0), [(12, 8)]),   # heure murale INEXISTANTE en France
+        ):
+            obtenu = wall_clock(timestamp_meteo(depart, "p-dst", 42, jours_cibles))
+            attendu_mois, attendu_jour = jours_cibles[0]
+            depart_mur = wall_clock(depart)
+            self.assertEqual(
+                (obtenu.month, obtenu.day, obtenu.hour, obtenu.minute, obtenu.second),
+                (attendu_mois, attendu_jour, depart_mur.hour, depart_mur.minute,
+                 depart_mur.second))
+
+    def test_independant_du_fuseau_du_processus(self):
+        """Le même départ doit rendre le même bulletin sous n'importe quel `TZ`.
+
+        Le `controller` tourne en `TZ=Europe/Paris` et les réplicas `osmnx` en
+        `TZ=UTC` : une météo qui dépend du fuseau du processus n'est pas reproductible
+        d'un conteneur à l'autre, et une trace archivée ne se rejoue plus.
+        """
+        depart = mur(2026, 3, 16, 8, 37, 12)
+        obtenus = {}
+        initial = os.environ.get("TZ")
+        try:
+            for tz in ("UTC", "Europe/Paris", "Pacific/Kiritimati", "America/Los_Angeles"):
+                os.environ["TZ"] = tz
+                time.tzset()
+                obtenus[tz] = [timestamp_meteo(depart, f"p{i}", 42, self.jours)
+                               for i in range(50)]
+        finally:
+            if initial is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = initial
+            time.tzset()
+
+        distincts = {tuple(v) for v in obtenus.values()}
+        self.assertEqual(len(distincts), 1,
+                         "le tirage météo dépend du fuseau du processus")
 
 
 class TestVarianceLiberee(unittest.TestCase):
@@ -187,7 +242,7 @@ class TestVarianceLiberee(unittest.TestCase):
             self.skipTest(f"chargeur météo indisponible : {err}")
         self.get_weather = get_weather
         self.jours = jours_eligibles(*FENETRE_ENQUETE, JOURS_OUVRES)
-        self.depart = int(dt.datetime(2026, 3, 16, 8, 0, 0).timestamp())
+        self.depart = mur(2026, 3, 16, 8, 0, 0)
         if self.get_weather(self.depart) is None:
             self.skipTest("données météo absentes du dépôt")
 
@@ -209,18 +264,58 @@ class TestVarianceLiberee(unittest.TestCase):
 
 
 class TestNonRegression(unittest.TestCase):
-    """Drapeau à faux → l'horloge simulée, à l'identique."""
+    """Drapeau à faux → l'horloge simulée, à l'identique.
 
-    def test_dispositif_desactive_par_defaut(self):
+    ⚠ **« Par défaut » veut dire deux choses, et les confondre a fait échouer ces
+    tests pendant une journée** (2026-09-04). Le DÉFAUT DU CODE est
+    `Settings.weather_per_agent_dates = False` : rien ne bouge si personne ne le
+    demande. La CONFIGURATION DU RUN, elle, l'active délibérément
+    (`llm-agents/config/config.yaml`, ticket 023 lot 4 : sans tirage, les 1 000 agents
+    d'une journée simulée partagent une météo et l'effet météo est par construction
+    non mesurable). Un test qui lit `settings.agent.…` lit la configuration du run,
+    pas le défaut du code — il affirmait donc que le dépôt n'active pas un dispositif
+    que le dépôt active exprès. Chaque affirmation est ici vérifiée à sa source.
+    """
+
+    def test_defaut_du_code_desactive(self):
+        """Le défaut du CODE : rien ne bouge sans intention explicite."""
         from settings import settings
 
+        champ = type(settings.agent).model_fields["weather_per_agent_dates"]
         self.assertFalse(
+            champ.default,
+            "le défaut du code doit rester faux : rien ne bouge sans intention",
+        )
+
+    def test_configuration_de_run_active_le_dispositif(self):
+        """La configuration du run l'active, et c'est une décision, pas un accident.
+
+        Si ce test tombe, c'est que `config.yaml` a cessé d'activer le tirage : les
+        runs suivants mesureraient l'effet météo sur un régresseur de variance nulle
+        — « aucun effet » ne voudrait alors rien dire (ticket 023).
+        """
+        import yaml
+
+        chemin = REPO_ROOT / "llm-agents" / "config" / "config.yaml"
+        brut = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+        agent = brut.get("agent") or {}
+        self.assertTrue(
+            agent.get("weather_per_agent_dates"),
+            f"{chemin} doit activer le tirage d'une date météo par agent",
+        )
+
+        from settings import settings
+
+        self.assertTrue(
             settings.agent.weather_per_agent_dates,
-            "le dispositif doit être désactivé par défaut : rien ne bouge sans intention",
+            "la configuration lue par le runtime doit refléter config.yaml",
         )
 
     def test_agent_retombe_sur_lhorloge_simulee(self):
         """Drapeau à faux : `_weather_timestamp` rend l'horloge simulée, telle quelle.
+
+        Le drapeau est forcé ici, comme le fait le test symétrique : ce qui est sous
+        test est le BRANCHEMENT, pas la valeur que porte la configuration du run.
 
         Un doublon de contexte plutôt qu'un `Person` complet : ce qui est sous test
         est le branchement, pas la validation du modèle de personne — et un test
@@ -232,20 +327,24 @@ class TestNonRegression(unittest.TestCase):
         from settings import settings
         from urban_mobility_agents.agents.llm_agent import LlmAgent
 
-        self.assertFalse(settings.agent.weather_per_agent_dates)
         contexte = SimpleNamespace(
             timestamp=1773648000, person=SimpleNamespace(person_id="p1")
         )
-        self.assertEqual(LlmAgent._weather_timestamp(None, contexte), 1773648000)
+        initial = settings.agent.weather_per_agent_dates
+        settings.agent.weather_per_agent_dates = False
+        try:
+            self.assertEqual(LlmAgent._weather_timestamp(None, contexte), 1773648000)
+        finally:
+            settings.agent.weather_per_agent_dates = initial
 
     def test_agent_tire_une_date_quand_le_dispositif_est_actif(self):
-        """Drapeau à vrai : la date change, l'heure du départ non."""
+        """Drapeau à vrai : la date change, l'heure MURALE du départ non."""
         from types import SimpleNamespace
 
         from settings import settings
         from urban_mobility_agents.agents.llm_agent import LlmAgent
 
-        depart = int(dt.datetime(2026, 3, 16, 8, 0, 0).timestamp())
+        depart = mur(2026, 3, 16, 8, 0, 0)
         contexte = SimpleNamespace(timestamp=depart, person=SimpleNamespace(person_id="p1"))
         initial = settings.agent.weather_per_agent_dates
         settings.agent.weather_per_agent_dates = True
@@ -254,8 +353,8 @@ class TestNonRegression(unittest.TestCase):
         finally:
             settings.agent.weather_per_agent_dates = initial
 
-        tire = dt.datetime.fromtimestamp(obtenu)
-        reference = dt.datetime.fromtimestamp(depart)
+        tire = wall_clock(obtenu)
+        reference = wall_clock(depart)
         self.assertEqual((tire.hour, tire.minute), (reference.hour, reference.minute))
         self.assertIn(
             (tire.month, tire.day),

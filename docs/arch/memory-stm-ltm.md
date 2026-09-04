@@ -76,11 +76,24 @@ Deux sources écrivent dans la STM :
 
 La météo est injectée avant stockage selon la tranche horaire de la simulation (4 tranches : nuit / matin / midi / soir). Les précipitations ne sont incluses que si `precip_mm > 0`.
 
-**Exemple réel** (`agent_memory_events.csv`, 2026-03-16 06:00:01, agent `387324`) :
+**L'horodatage d'un souvenir est l'heure MURALE de GAMA** (`sim_clock.wall_clock`), depuis
+le 2026-09-04. Ce n'est pas un détail d'affichage : ce `datetime` est **lu par le modèle**
+(la ligne « `- Time 16 March 2026, 05:12: …` » des souvenirs passés à la réflexion, et le
+nom du jour des souvenirs de réflexion rappelés dans le prompt), et il sert de côté gauche
+aux filtres LTM par jour de semaine et par ancienneté. Relu dans le fuseau du **processus**,
+il annonçait une heure de trop (deux en été) et faisait passer un souvenir de 23 h au
+lendemain. Deux conventions se croisent ici et doivent s'annuler exactement : le stockage
+écrit `wall_clock(ts)`, la relecture repasse par `sim_clock.gama_timestamp(entry.timestamp)`
+— **jamais** `entry.timestamp.timestamp()`, qui rendrait la main au fuseau du processus.
+Détail et mesures : [trace](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md).
+
+**Exemple réel** (`agent_memory_events.csv`, agent `387324`) — la colonne `datetime` porte
+désormais l'heure que GAMA affiche, soit 05:00:01 pour l'horodatage 1773637201 (elle
+affichait `06:00:01` avant le 2026-09-04) :
 
 ```
 context          | timestamp  | datetime             | person_id | activity_id                          | message
-shortterm_memory | 1773637201 | 2026-03-16 06:00:01  | 387324    | 63ef6b85-810e-57aa-a59d-8a18b0a06a6f | [ TRAVEL_PLAN ] Plan to head <work> served from LLM cache.
+shortterm_memory | 1773637201 | 2026-03-16 05:00:01  | 387324    | 63ef6b85-810e-57aa-a59d-8a18b0a06a6f | [ TRAVEL_PLAN ] Plan to head <work> served from LLM cache.
                                                                                                          Durée estimée : 24 minutes. Distance : 19.7 km.
                                                                                                          Reasoning: Décision récupérée depuis le cache sémantique LLM.
 ```
@@ -387,9 +400,16 @@ Les entrées sans `tags` (ex. réflexions narratives) reçoivent le score par d�
 ```python
 def _time_decay_score(self, timestamp_str, query_at) -> float:
     decay = settings.agent.long_term_retrieval__time_decay  # 0.7
-    time_diff = (query_at - int(timestamp.timestamp())) / 86400  # en jours
+    # `gama_timestamp` et non `.timestamp()` : les deux côtés sont en heure MURALE
+    time_diff = (query_at - gama_timestamp(timestamp)) / 86400  # en jours
     return decay ** time_diff
 ```
+
+⚠ Les deux termes de la soustraction doivent porter **la même convention** : `query_at` est
+un horodatage GAMA (heure murale) et `timestamp` un `datetime` naïf aux champs muraux. Avant
+le 2026-09-04, les deux erreurs s'annulaient par construction (le souvenir était écrit et
+relu dans le fuseau du processus) ; corriger l'écriture sans corriger cette lecture aurait
+ajouté une heure d'ancienneté fictive à chaque souvenir.
 
 | Ancienneté | Score brut |
 |-----------|-----------|

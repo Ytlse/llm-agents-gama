@@ -4,7 +4,6 @@ import json
 import threading
 import time
 import uuid
-from datetime import datetime
 from typing import Optional
 
 from loguru import logger
@@ -12,6 +11,7 @@ from prometheus_client import Counter, Gauge, Histogram
 
 from llm_module.core.mode_choice import draw_index, mode_distribution
 from llm_module.telemetry.alarms import fire_alarme
+from sim_clock import wall_clock
 
 COLLECTION_NAME = "llm_decisions"
 VECTOR_SIZE = 384
@@ -252,15 +252,28 @@ class LlmSemanticCache:
 
     @staticmethod
     def _make_time_slice(timestamp: int) -> str:
-        """Convertit un timestamp Unix en tranche de 10 minutes (ex: "08:40") pour regrouper les entrées de cache."""
-        dt = datetime.fromtimestamp(timestamp)
+        """Tranche de 10 minutes de l'heure MURALE de GAMA (ex: "08:40").
+
+        ⚠ `datetime.fromtimestamp(timestamp)` lisait cet horodatage dans le fuseau du
+        PROCESSUS : la clé du cache portait 06:00 pour 5 h murales dans le `controller`
+        (`TZ=Europe/Paris`) et 05:00 dans un réplica en `TZ=UTC` — deux processus du même
+        run ne s'adressaient donc pas la même entrée. Corrigé le 2026-09-04.
+        """
+        dt = wall_clock(timestamp)
         minutes = (dt.minute // 10) * 10
         return f"{dt.hour:02d}:{minutes:02d}"
 
     @staticmethod
     def _make_weekday(timestamp: int) -> str:
-        """Catégorie de jour ("Weekday"/"Weekend") : deux jours de même catégorie partagent un contexte."""
-        return "Weekend" if datetime.fromtimestamp(timestamp).weekday() >= 5 else "Weekday"
+        """Catégorie de jour ("Weekday"/"Weekend") de l'heure MURALE de GAMA.
+
+        ⚠ Le décalage n'était pas seulement horaire : lu dans le fuseau du processus,
+        un départ à **23 h murales le vendredi** basculait au samedi, donc en
+        « Weekend » — la clé de son contexte allait se confondre avec celle d'un vrai
+        départ de week-end. 77 des 5 322 déplacements du run archivé
+        `2026-09-04_01_09` partent dans l'heure murale 23 h.
+        """
+        return "Weekend" if wall_clock(timestamp).weekday() >= 5 else "Weekday"
 
     def _make_filter(
         self,
@@ -410,11 +423,13 @@ class LlmSemanticCache:
         (diagnostic, et relecture par les lecteurs antérieurs à la bascule).
         """
         from qdrant_client.models import PointStruct
-        from datetime import datetime as _dt
 
         state_hash = self._make_state_hash(options, weather, extra_key, traits_key)
         time_slice = self._make_time_slice(timestamp)
-        dt = _dt.fromtimestamp(timestamp)
+        # `day`/`month` du payload : le JOUR SIMULÉ, celui dont la météo a été lue.
+        # `_dt.fromtimestamp(timestamp)` les prenait dans le fuseau du processus, donc
+        # inscrivait le lendemain pour un départ à 23 h murales.
+        dt = wall_clock(timestamp)
 
         trajectories = [
             {"code": opt.get_code(), "mode": opt.mode_label(), "duration_ms": opt.duration or 0}

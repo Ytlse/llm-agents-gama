@@ -168,6 +168,9 @@ def log_llm_exchange(
     entry = {
         "time": datetime.now(timezone.utc).isoformat(),
         "sim_ts": sim_ts,
+        # `tz=timezone.utc` sur un horodatage de l'horloge de GAMA rend le jour MURAL de
+        # la simulation, indépendamment du `TZ` du processus (c'est la définition de
+        # `llm-agents/sim_clock.py:wall_clock`, que ce paquet — séparé — n'importe pas).
         "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d") if sim_ts else None,
         "task_id": task_id,
         "provider": provider,

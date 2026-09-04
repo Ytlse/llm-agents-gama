@@ -19,6 +19,7 @@ from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
 from llm.shortterm import UserShortTermMemory
 from models import Person, TravelPlan
+from sim_clock import gama_timestamp, wall_clock
 from llm_module.core.mode_choice import (
     UniformFallback,
     draw_index,
@@ -59,7 +60,12 @@ def log_llm_cache_hit(agent_id: str, activity_id: Optional[str], sim_ts: float, 
         entry = {
             "time": datetime.now(timezone.utc).isoformat(),
             "sim_ts": sim_ts,
-            # sim_day en UTC pour s'aligner avec llm_exchanges.jsonl (cf. logger.log_llm_exchange)
+            # sim_day en UTC pour s'aligner avec llm_exchanges.jsonl (cf. logger.log_llm_exchange).
+            # `tz=timezone.utc` sur un horodatage GAMA donne DÉJÀ le jour MURAL — c'est la
+            # définition même de `sim_clock.wall_clock` — et ne dépend pas du `TZ` du
+            # processus : laissé tel quel exprès, pour rester octet pour octet le champ que
+            # `llm_module.telemetry.logger` écrit de son côté (paquet séparé, qui ne peut
+            # pas importer `sim_clock`).
             "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d") if sim_ts else None,
             "agent_id": str(agent_id),
             "activity_id": str(activity_id or ""),
@@ -131,7 +137,9 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
         os.makedirs(log_dir)
 
     type_suffix = f"-{context.data['type']}" if context.data and context.data.get('type') else ""
-    sim_time = datetime.strftime(datetime.fromtimestamp(context.timestamp), "%d_%H%M")
+    # Heure MURALE de GAMA (`sim_clock`) : le nom du fichier doit se relire à côté du
+    # prompt qu'il contient, et celui-ci porte la même heure.
+    sim_time = datetime.strftime(wall_clock(context.timestamp), "%d_%H%M")
     file_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}-{sim_time}-{context.person.person_id}-{context.activity_id}{type_suffix}.txt"
 
     with open(os.path.join(log_dir, file_name), "a") as f:
@@ -339,9 +347,14 @@ class LlmAgent:
 
     def add_short_term_memory(self, context: Context, msg: str, timestamp: Optional[int] = None):
         memory = self.get_short_term_memory(context.person.person_id)
+        # L'horodatage du souvenir est l'heure MURALE de GAMA. Ce n'est pas cosmétique :
+        # ce `datetime` finit dans le PROMPT (« - Time 16 March 2026, 05:12: … » via
+        # `humanize_date`, et le nom du jour des souvenirs de réflexion), et il sert de
+        # côté gauche aux filtres LTM par jour et par ancienneté. Lu dans le fuseau du
+        # processus, il annonçait 06:12 pour 5 h 12 murales.
         memory.add_message(
-            msg, 
-            datetime.fromtimestamp(timestamp or context.timestamp), 
+            msg,
+            wall_clock(timestamp or context.timestamp),
             activity_id=context.activity_id
         )
         history_log.log_shortterm_memory(
@@ -584,6 +597,11 @@ class LlmAgent:
         # Graine du tirage : le jour simulé en fait partie, donc un même contexte
         # rejoué le lendemain retire un autre mode (y compris sur un cache hit),
         # tandis qu'un run relancé à l'identique reproduit exactement les mêmes trajets.
+        # `tz=timezone.utc` rend déjà le JOUR MURAL de GAMA (la définition de
+        # `sim_clock.wall_clock`) et ne dépend pas du `TZ` du processus. Laissé mot pour
+        # mot : cette chaîne entre dans la graine du tirage de mode, et la réécrire — même
+        # à valeur identique — n'apporterait rien qu'un risque de rebattre tous les
+        # tirages déjà mesurés.
         seed_parts = (
             settings.agent.mode_draw_seed,
             context.person.person_id,
@@ -840,8 +858,12 @@ class LlmAgent:
             logger.info(f"No long-term memory available for reflection for {context.person.person_id}")
             return
 
+        # `gama_timestamp` et non `.timestamp()` : le `datetime` du souvenir porte des
+        # champs MURAUX, et `.timestamp()` les relirait dans le fuseau du processus —
+        # `humanize_date` retraduirait ensuite, et les deux conventions se cumuleraient
+        # en un décalage d'une heure dans le texte lu par le modèle.
         entries_text = "\n".join(
-            f"- Time {humanize_date(entry.timestamp.timestamp())}: {entry.content}"
+            f"- Time {humanize_date(gama_timestamp(entry.timestamp))}: {entry.content}"
             for entry in all_entries
         )
         identity_description = self.get_person_identity_description(context.person)
@@ -896,7 +918,7 @@ class LlmAgent:
             entry = MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,
-                timestamp=datetime.fromtimestamp(context.timestamp),
+                timestamp=wall_clock(context.timestamp),
                 memory_type=MemoryType.REFLECTION,
             )
             await self.aadd_long_term_memory(context, entry)

@@ -9,6 +9,7 @@ from pathlib import Path
 import hashlib
 from dataclasses import dataclass
 from settings import settings
+from sim_clock import gama_timestamp, wall_clock
 
 from loguru import logger
 import numpy as np
@@ -425,7 +426,12 @@ class MultiUserLongTermMemory:
         _t0 = time.monotonic()
         self.ensure_user_initialized(person_id)
         self.metrics["queries"] += 1
-        query_at_datetime = datetime.fromtimestamp(query_at) if query_at else None
+        # Heure MURALE de GAMA : le côté droit des filtres doit se comparer aux
+        # `datetime` des souvenirs, qui portent eux aussi des champs muraux
+        # (`llm_agent.add_short_term_memory`). Lu dans le fuseau du processus, il
+        # décalait d'une heure le jour de semaine et l'ancienneté d'un souvenir de
+        # fin de soirée.
+        query_at_datetime = wall_clock(query_at) if query_at else None
 
         logger.debug(f"Querying user long term memories for person {person_id}, at {query_at}")
 
@@ -528,9 +534,13 @@ class MultiUserLongTermMemory:
         except ValueError:
             return 0.0
 
-        # Calculate time decay based on the difference between query time and message time
+        # Calculate time decay based on the difference between query time and message time.
+        # `gama_timestamp` et non `.timestamp()` : `query_at` est un horodatage GAMA (heure
+        # murale) et `timestamp` un `datetime` naïf portant des champs muraux — les
+        # soustraire après un passage par le fuseau du processus ajouterait une heure
+        # d'ancienneté fictive à chaque souvenir.
         decay = settings.agent.long_term_retrieval__time_decay
-        time_diff = max(0, (query_at - int(timestamp.timestamp())) / (24*3600))  # Convert to days
+        time_diff = max(0, (query_at - gama_timestamp(timestamp)) / (24*3600))  # Convert to days
         return decay ** time_diff
 
     def _bleu_score(self, query: str, keyword: str) -> float:

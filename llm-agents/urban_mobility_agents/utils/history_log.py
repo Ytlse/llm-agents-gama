@@ -1,10 +1,10 @@
 import csv
 import json
-from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import Optional
 from settings import settings
+from sim_clock import wall_clock
 
 
 _CSV_COLUMNS = ["context", "timestamp", "datetime", "person_id", "activity_id", "message"]
@@ -48,7 +48,9 @@ class HistoryStreamLog:
         csv_path = settings.app.agent_memory_events_csv
         Path(csv_path).parent.mkdir(parents=True, exist_ok=True)
         csv_exists = Path(csv_path).exists() and Path(csv_path).stat().st_size > 0
-        dt_str = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S") if timestamp else ""
+        # Heure MURALE de GAMA (`sim_clock`) : la colonne double `timestamp`, qui est
+        # l'horodatage simulé — les deux doivent dire la même heure.
+        dt_str = wall_clock(timestamp).strftime("%Y-%m-%d %H:%M:%S") if timestamp else ""
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if not csv_exists:

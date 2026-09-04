@@ -367,6 +367,11 @@ class MoveLogger:
                 late_s,
                 computed_at,
                 simulated_time if simulated_time is not None else "",
+                # `tz=timezone.utc` sur un horodatage de l'horloge de GAMA rend l'heure
+                # MURALE — c'est la définition de `sim_clock.wall_clock` — et ne dépend
+                # pas du `TZ` du processus. Laissé tel quel : la colonne « Heure de
+                # départ » de moves.csv est déjà l'heure des agents, et la réécrire à
+                # valeur identique casserait la comparaison avec les runs archivés.
                 datetime.fromtimestamp(start_time / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if start_time is not None else "",
                 person.person_id,
                 activity_id if activity_id is not None else "",

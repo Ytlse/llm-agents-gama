@@ -25,7 +25,7 @@ from loguru import logger
 from backpressure import backlog_alarm_transition, compute_backpressure_interval, update_drain_mode, edf_feasibility, time_ewma
 from helper import setup_logging, humanize_date, to_timestamp_based_on_day, format_sim_timing
 from models import Location
-from sim_clock import to_network_datetime
+from sim_clock import to_network_datetime, wall_clock
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
@@ -605,7 +605,9 @@ class _AgentStateLog:
 
     def record(self, step: int, sim_timestamp: int, inactive: int, ready: int, active: int):
         path = self._ensure_file()
-        sim_time = datetime.fromtimestamp(sim_timestamp).strftime("%H:%M:%S") if sim_timestamp > 0 else ""
+        # Heure MURALE de GAMA (`sim_clock`) : cette colonne se lit à côté de
+        # `sim_timestamp` et des logs du contrôleur, qui portent la même heure.
+        sim_time = wall_clock(sim_timestamp).strftime("%H:%M:%S") if sim_timestamp > 0 else ""
         with open(path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([step, sim_timestamp, sim_time, inactive, ready, active, inactive + ready + active])
 

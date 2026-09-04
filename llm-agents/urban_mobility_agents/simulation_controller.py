@@ -32,6 +32,7 @@ from backpressure import ThroughputEwma
 
 from helper import humanize_duration, humanize_time, to_timestamp_based_on_day, humanize_date, to_24h_timestamp_full, shift_weekend_departure_to_monday, format_sim_timing
 from models import Activity, BBox, Location, Person, PersonMove, TravelPlan
+from sim_clock import wall_clock
 from urban_mobility_agents.core.scenario import Action, BaseScenario, Observation
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.agents.llm_agent import Context, LlmAgent
@@ -1564,7 +1565,10 @@ class SimulationLoopV1(BaseScenario):
         return self.model.bbox
 
     async def _write_population_checkpoint(self, checkpoint_ts: int) -> None:
-        date_str = datetime.datetime.fromtimestamp(checkpoint_ts).strftime("%Y-%m-%d")
+        # Le nom du fichier porte le JOUR SIMULÉ (heure murale de GAMA, `sim_clock`) :
+        # relu dans le fuseau du processus, un checkpoint de fin de soirée s'appelait du
+        # lendemain et deux journées simulées se retrouvaient dans le même fichier.
+        date_str = wall_clock(checkpoint_ts).strftime("%Y-%m-%d")
         fname = f"population_{settings.data.population_size}_checkpoint_{date_str}.json"
         path = str(settings.workdir / fname)
         loop = asyncio.get_event_loop()
@@ -1606,7 +1610,10 @@ class SimulationLoopV1(BaseScenario):
             # référence LUNDI à VENDREDI, jamais de week-end. Un run comparable démarre un
             # lundi et dure au plus cinq jours simulés ; tout autre calendrier est dit ici,
             # au moment où il est encore gratuit de le corriger.
-            weekday = datetime.datetime.fromtimestamp(timestamp).isoweekday()
+            # Jour de semaine MURAL (`sim_clock`) : c'est celui que GAMA affiche et celui
+            # dont les horaires GTFS sont chargés. Le lire dans le fuseau du processus
+            # aurait fait déclarer un départ « vendredi 23 h » comme un samedi.
+            weekday = wall_clock(timestamp).isoweekday()
             if weekday >= 6:
                 logger.error(
                     f"[ALARME] La simulation démarre un {humanize_date(timestamp)} — un "
@@ -1699,7 +1706,9 @@ class SimulationLoopV1(BaseScenario):
             elif timestamp >= self.next_self_reflection_at:
                 logger.info(f"[timestamp: {humanize_date(timestamp)}] Self reflecting the state of the world")
                 _duration_days = settings.agent.long_term_self_reflect_window_days
-                from_date = datetime.datetime.fromtimestamp(timestamp) - datetime.timedelta(days=_duration_days)
+                # Borne basse de la fenêtre de réflexion, en heure MURALE : elle est
+                # comparée aux `datetime` des souvenirs, qui portent des champs muraux.
+                from_date = wall_clock(timestamp) - datetime.timedelta(days=_duration_days)
                 from_date = from_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 self.next_self_reflection_at = timestamp + settings.agent.long_term_self_reflect_interval_days*24*3600
                 self._spawn(self.agent.trigger_long_term_reflection_for_all_people(timestamp=timestamp, from_date=from_date, people=self.population.get_people_list()))

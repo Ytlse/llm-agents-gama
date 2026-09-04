@@ -1,3 +1,21 @@
+"""Mises en forme de l'horloge simulée, et rien d'autre.
+
+⚠ **Tout horodatage qui arrive ici vient de GAMA : c'est une heure MURALE**, pas un
+instant. Ces fonctions se lisaient avec `datetime.fromtimestamp(ts)` — sans fuseau,
+donc dans celui du **processus** : dans le conteneur `controller` (`TZ=Europe/Paris`),
+5 h murales s'affichaient **06:00** dans le prompt, et 07:00 pour une journée simulée
+en été. Les 5 322 départs du run archivé `2026-09-04_01_09` étaient TOUS concernés
+(`docs/traces/2026-09-04_14-30_horloge_prompt_meteo/`).
+
+Elles passent désormais par :func:`sim_clock.wall_clock`, seul traducteur du dépôt :
+l'heure affichée à l'agent est celle de l'horloge de GAMA, à la minute, quel que soit
+le `TZ` du processus. `wall_clock` n'ouvre aucun fichier et ne lit aucun fuseau — seuls
+les CHAMPS muraux comptent ici, jamais un instant.
+
+Seule exception assumée : `format_sim_timing`, dont le champ `real_time` est l'heure
+RÉELLE du processus — c'est ce qu'il annonce et ce qui sert à mesurer la durée d'un run.
+"""
+
 import sys
 from typing import Tuple
 # from decorator import decorator
@@ -5,6 +23,7 @@ import datetime
 from loguru import logger
 import humanize
 from settings import Settings
+from sim_clock import wall_clock
 
 
 
@@ -29,7 +48,7 @@ def to_timestamp_based_on_day(target_24h_timestamp: int, based_on: int) -> int:
 
 def to_24h_timestamp_full(timestamp: int) -> Tuple[int, int]:
     """ :return: The converted timestamp in 24-hour format as a tuple of (day_of_week, total_seconds_in_day). """
-    d_ = datetime.datetime.fromtimestamp(timestamp)
+    d_ = wall_clock(timestamp)
     day_of_week = d_.weekday()  # Monday is 0 and Sunday is 6
     total_seconds_in_day = timestamp % (24 * 60 * 60)
     return day_of_week, total_seconds_in_day
@@ -54,7 +73,7 @@ def shift_weekend_departure_to_monday(timestamp: int) -> int:
     :param timestamp: Le timestamp Unix (secondes) du départ.
     :return: Le timestamp reporté au lundi si week-end, sinon inchangé.
     """
-    weekday = datetime.datetime.fromtimestamp(timestamp).weekday()  # 0=Lundi .. 6=Dimanche
+    weekday = wall_clock(timestamp).weekday()  # 0=Lundi .. 6=Dimanche
     if weekday == 5:      # Samedi
         return timestamp + 2 * 24 * 60 * 60
     if weekday == 6:      # Dimanche
@@ -69,7 +88,7 @@ def get_weekday_category(timestamp: int) -> int:
     :return: The category of the day (0: Monday, 1: Tuesday, 2: Wednesday, 3: Thursday, 4: Friday, 5: Saturday, 6: Sunday).
     """
     timestamp = ensure_timestamp_in_seconds(timestamp)
-    weekday = datetime.datetime.fromtimestamp(timestamp).weekday()
+    weekday = wall_clock(timestamp).weekday()
     return "Weekend" if weekday >= 5 else "Weekday"
 
 
@@ -82,7 +101,7 @@ def categorize_date_time_short(timestamp: int) -> int:
     timestamp = ensure_timestamp_in_seconds(timestamp)
 
     def _get_day_time():
-        hour = datetime.datetime.fromtimestamp(timestamp).hour
+        hour = wall_clock(timestamp).hour
         if 6 <= hour < 12:
             return "morning"
         elif 12 <= hour < 18:
@@ -92,7 +111,7 @@ def categorize_date_time_short(timestamp: int) -> int:
         else:
             return "night"
         
-    return datetime.datetime.fromtimestamp(timestamp).strftime('%A') + f" {_get_day_time()}"
+    return wall_clock(timestamp).strftime('%A') + f" {_get_day_time()}"
 
 
 def humanize_date(timestamp: int) -> str:
@@ -102,7 +121,7 @@ def humanize_date(timestamp: int) -> str:
     :return: The converted date string in the format "YYYY-MM-DD HH:MM:SS".
     """
     timestamp = ensure_timestamp_in_seconds(timestamp)
-    return datetime.datetime.fromtimestamp(timestamp).strftime('%d %B %Y, %H:%M')
+    return wall_clock(timestamp).strftime('%d %B %Y, %H:%M')
 
 
 def humanize_date_short(timestamp: int) -> str:
@@ -112,7 +131,7 @@ def humanize_date_short(timestamp: int) -> str:
     :return: The converted date string in the format "YYYY-MM-DD HH:MM:SS".
     """
     timestamp = ensure_timestamp_in_seconds(timestamp)
-    return datetime.datetime.fromtimestamp(timestamp).strftime('%A, %H:%M')
+    return wall_clock(timestamp).strftime('%A, %H:%M')
 
 
 def format_route_id(route_id: str) -> str:
@@ -135,7 +154,7 @@ def duration_to_bucket_text(seconds) -> str:
 
 
 def time_to_bucket_text(timestamp: int) -> str:
-    hour = datetime.datetime.fromtimestamp(timestamp).hour
+    hour = wall_clock(timestamp).hour
     if 6 <= hour <= 10:
         return "morning rush hour (6:00 - 10:00)"
     if 10 < hour <= 16:
@@ -152,7 +171,7 @@ def humanize_time(timestamp: int) -> str:
     :return: The converted hour string in the format "HH:MM".
     """
     timestamp = ensure_timestamp_in_seconds(timestamp)
-    return datetime.datetime.fromtimestamp(timestamp).strftime('%H:%M')
+    return wall_clock(timestamp).strftime('%H:%M')
 
 
 def humanize_duration(seconds: int) -> str:
@@ -190,7 +209,7 @@ def format_sim_timing(event: str, **fields) -> str:
 
 def time_window_generalize(timestamp: int) -> str:
     timestamp = ensure_timestamp_in_seconds(timestamp)
-    hour = datetime.datetime.fromtimestamp(timestamp).hour
+    hour = wall_clock(timestamp).hour
     if hour < 6:
         return "early morning"
     elif hour < 9:

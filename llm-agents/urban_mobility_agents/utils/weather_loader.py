@@ -13,6 +13,20 @@ Ce qui est annonçable est factuel : les créneaux dont le **code météo** est 
 millimètres sans qu'aucun créneau ne soit codé précipitant ; ils gardent la formulation
 d'origine plutôt que d'annoncer « pas de précipitations » sur un jour qui en porte. Mesuré
 dans `docs/traces/2026-08-25_premesure_meteo_v9/`.
+
+⚠ **L'heure de lecture est l'heure MURALE de GAMA** (:func:`sim_clock.wall_clock`), pas
+un instant relu dans un fuseau. Jusqu'au 2026-09-04 le bulletin se lisait par
+`datetime.fromtimestamp(ts, tz=ZoneInfo("Europe/Paris"))` : l'entier de GAMA valant 5 h
+murales désignait 6 h — donc le relevé de **6 h** au lieu de celui de **3 h**, et 7 h
+(relevé de 6 h) pour une journée simulée en été. Mesuré sur les 5 322 déplacements du run
+archivé `2026-09-04_01_09` : **2 332 départs (43,8 %)** changeaient de relevé de 3 h, et
+les **77 départs de l'heure murale 23 h** changeaient de **JOUR** météo — ils lisaient le
+bulletin du mardi pendant que leur itinéraire était calculé le lundi
+(`docs/traces/2026-09-04_14-30_horloge_prompt_meteo/`).
+
+Il n'y a plus de fuseau ici, et ce n'est pas un oubli : la source est indexée par (mois,
+jour) et lue par créneau horaire, donc seuls les CHAMPS muraux comptent. Un fuseau
+n'aurait servi qu'à déplacer l'heure de lecture.
 """
 
 import csv
@@ -20,14 +34,11 @@ import os
 import re
 from datetime import datetime
 from typing import Optional
-from zoneinfo import ZoneInfo
 
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.normpath(os.path.join(_base_dir, "../../../"))
 _WEATHER_CSV = os.path.join(_REPO_ROOT, "data", "weather", "meteo_toulouse_12_mois.csv")
 _CODES_CSV = os.path.join(_REPO_ROOT, "data", "weather", "meteo_toulouse_codes.csv")
-
-_TZ = ZoneInfo("Europe/Paris")
 
 # (month, day) → row dict from the CSV
 _weather_index: dict[tuple[int, int], dict] = {}
@@ -130,16 +141,36 @@ def _reading_bucket(hour: int) -> str:
     return _FINE_ORDER[max(0, min(7, int(hour) // 3))]
 
 
-def get_weather(timestamp: int) -> Optional[dict]:
-    """Return weather info for the given Unix timestamp (matched by month+day, ignoring year).
+def _heure_murale(timestamp: int) -> datetime:
+    """L'heure MURALE de GAMA de cet horodatage — le seul traducteur du dépôt.
 
-    Returns a dict with keys: temperature, weather_code, weather_label, precip_mm.
-    Returns None if data is missing.
+    ⚠ **L'import est différé exprès, et le déplacer en tête de module casse la suite de
+    tests de `prompt_calibration`.** Ce dépôt-là est autonome : il charge ce fichier
+    **par chemin** (`calibration/tests/test_weather.py::_load_production_formatter`)
+    pour vérifier que sa copie de `weather_to_natural_language` n'a pas dérivé, et il le
+    fait précisément pour ne PAS faire entrer le contrôleur et ses dépendances dans ses
+    tests. Un import en tête de module rend ce chargement impossible
+    (`ModuleNotFoundError: sim_clock`), et 14 tests de la calibration tombent.
+
+    Un repli local — relire l'horodatage sans fuseau si `sim_clock` manque — serait
+    pire que l'erreur : il rendrait une heure plausible tirée d'une convention absente,
+    c'est-à-dire exactement le défaut corrigé le 2026-09-04.
+    """
+    from sim_clock import wall_clock
+
+    return wall_clock(timestamp)
+
+
+def get_weather(timestamp: int) -> Optional[dict]:
+    """Bulletin du jour et du créneau de l'heure MURALE de GAMA (`timestamp`).
+
+    Apparié sur (mois, jour) — l'année est ignorée — et sur le relevé de 3 h le plus
+    proche en arrière de l'heure murale. Rend `None` quand la donnée manque.
     """
     _load()
     if _load_error:
         return None
-    dt = datetime.fromtimestamp(timestamp, tz=_TZ)
+    dt = _heure_murale(timestamp)
     row = _weather_index.get((dt.month, dt.day))
     if row is None:
         return None
@@ -288,7 +319,7 @@ def day_weather_outlook(timestamp: int) -> Optional[str]:
     _load()
     if _load_error:
         return None
-    dt = datetime.fromtimestamp(timestamp, tz=_TZ)
+    dt = _heure_murale(timestamp)
     row = _weather_index.get((dt.month, dt.day))
     if row is None:
         return None

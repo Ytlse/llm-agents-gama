@@ -44,13 +44,8 @@ import datetime as dt
 import hashlib
 from functools import lru_cache
 from typing import Optional, Sequence
-from zoneinfo import ZoneInfo
 
-# Même fuseau que `weather_loader.get_weather` : un décalage figé (`.astimezone()`
-# sur un datetime naïf) reste correct pour la date d'origine mais se trompe d'une
-# heure si la date tirée franchit la bascule heure d'été/hiver — la fenêtre de
-# tirage (20/09 → 18/02) la traverse justement.
-_TZ = ZoneInfo("Europe/Paris")
+from sim_clock import gama_timestamp, wall_clock
 
 # Année de référence pour l'arithmétique des jours : bissextile, afin que le
 # 29 février soit tirable quand la fenêtre le contient.
@@ -132,12 +127,17 @@ def timestamp_meteo(
     bulletin est lu par créneaux de 3 h, et un départ à 08:00 doit continuer de
     lire le relevé de 06 h quelle que soit la date tirée. L'année utilisée est un
     pivot arbitraire, puisque `get_weather` n'en tient pas compte.
+
+    ⚠ **Tout se passe en heure MURALE** (`sim_clock`), et c'est ce qui rend la
+    substitution exacte. La version d'avant le 2026-09-04 relisait l'horodatage de
+    GAMA dans `Europe/Paris` puis reconstruisait un instant par `.timestamp()` :
+    l'heure de lecture partait déjà décalée d'une heure (deux en été), et la
+    question de la bascule heure d'été/hiver — que la fenêtre 20/09 → 18/02
+    traverse — n'existait que parce qu'on passait par des instants. L'horloge de
+    GAMA ignore les bascules : en champs muraux, la conservation de l'heure est
+    exacte par construction, sur toute la fenêtre.
     """
     mois, jour = date_meteo(person_id, graine, jours)
-    # `tz=_TZ` (Europe/Paris, un vrai fuseau à bascule) et non `.astimezone()` (offset
-    # figé à la date d'origine) : `.timestamp()` recalcule l'offset UTC pour la date
-    # SUBSTITUÉE, donc reste juste même quand le tirage franchit la bascule heure
-    # d'été/hiver — comme le fait déjà `weather_loader.get_weather`.
-    reference = dt.datetime.fromtimestamp(timestamp_simule, tz=_TZ)
+    reference = wall_clock(timestamp_simule)
     substitue = reference.replace(year=_ANNEE_PIVOT, month=mois, day=jour)
-    return int(substitue.timestamp())
+    return gama_timestamp(substitue)
