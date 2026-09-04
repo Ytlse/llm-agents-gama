@@ -192,13 +192,52 @@ Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache`
 > passer la clé sur l'heure exacte (sans décalage).
 
 > ⚠️ **Limitation connue — `fixed_day` et date absolue** : la clé du cache OTP inclut la
-> **date simulée réelle** (`YYYY-MM-DD`), calculée avant le remapping `gtfs.fixed_day`
+> **date simulée réelle**, calculée avant le remapping `gtfs.fixed_day`
 > effectué dans `OTPTripHelper`. Avec `fixed_day` actif, deux dates simulées différentes
 > envoient pourtant la même requête à OTP (mêmes horaires GTFS) mais génèrent des clés
 > distinctes : un cache réchauffé pour le jour J est donc **intégralement raté** pour une
 > simulation au jour J+1. TODO (voir `OtpPersistentCache.make_key`) : baser la partie date
 > de la clé sur la date fixe (ou le jour de semaine) quand `fixed_day` est actif, à l'image
 > de la clé weekday d'`OsmnxPersistentCache`.
+
+### La clé porte l'INSTANT, décalage compris (2026-09-04)
+
+Depuis le 2026-09-04, la partie temporelle de `OtpPersistentCache.make_key` n'est plus une
+date et une heure nues mais **l'instant complet dans le fuseau du réseau**
+(`2026-03-16T05:00:00+01:00`, cf. [routing.md](routing.md#lhorloge--quelle-heure-les-moteurs-reçoivent-ils)).
+Ce n'est pas cosmétique, et c'est le seul cache des trois que le correctif de fuseau
+mettait vraiment en danger :
+
+- il ne mémorise pas des durées mais des **`TravelPlan` sérialisés**, et `lookup` les
+  **décale** de `departure_time - stored_departure_time` ;
+- sa clé était bâtie sur `datetime.fromtimestamp(departure_time)`, donc sur le fuseau du
+  **processus** : une entrée qui répondait à un départ de 5 h murales était rangée sous
+  l'étiquette « 06:00 ». Sous la nouvelle convention, elle aurait été resservie à un départ
+  de 6 h murales — puis décalée d'une heure de plus ;
+- **aucune version ne l'en empêchait** : `data_version()` (`tt4`) n'a pas bougé et
+  `routing_version` n'entre pas dans cette clé. Changer la **forme** de la chaîne rend
+  l'ancienne génération inatteignable sans purge manuelle. Mesuré sur
+  `data/cache/otp/toulouse_population_1000/` : 52 159 lignes, dont **5 318 étaient encore
+  vivantes** (écrites en `tt4`, les 2026-09-03 et 09-04) et sont désormais inertes.
+
+Le décalage porté par la clé distingue en outre **l'heure d'hiver de l'heure d'été** : la
+même heure murale n'est pas le même instant selon la saison, et l'ancienne clé les
+confondait.
+
+> ⚠️ **Ce que la liste noire n'est pas protégée par, et ce n'est pas réglé.**
+> `make_blacklist_key` ne porte **ni heure, ni version** — seulement les coordonnées — et
+> `get_itineraries` y ajoute une paire dès que `do_get_iteraries` rend une liste **vide**,
+> ce qui inclut « aucun service **à cette heure-là** »
+> (`noTransitConnectionInSearchWindow`) et pas seulement « ces deux points ne sont pas
+> reliés ». Le commentaire du code justifie l'absence de version par un « fait de topologie
+> du réseau » : c'est vrai du motif topologique, faux du motif horaire. Conséquence
+> concrète : les **62 paires** déjà noircies dans
+> `data/cache/otp/toulouse_population_1000/` l'ont été à l'ancienne heure et continuent de
+> rendre `[]` sans qu'OTP soit interrogé. Et la clé étant un SHA-256, **on ne peut pas
+> retrouver de quelles paires il s'agit** — une liste noire non auditable.
+> Recommandation : ne noircir que sur un motif indépendant de l'heure
+> (`LOCATION_NOT_FOUND`, `OUTSIDE_BOUNDS`, `noStopsInRange`), et stocker le motif en clair
+> à côté de la clé. Décision de l'auteur : cela change le nombre d'appels OTP d'un run.
 
 Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
 **toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`). La clé voiture
@@ -239,6 +278,22 @@ les replis à 70 km/h des trajets de 3ᵉ couronne). C'est pourquoi **`routing_v
 `r2`** au changement de graphe et de vitesses vélo (`config/terminal_time.yaml`) : les anciennes
 lignes restent lisibles pour audit, aucune n'est resservie.
 
+**`r3` (2026-09-04) — une précaution, et la mesure qui le dit.** L'heure de départ est passée au
+fuseau du **réseau** au lieu de celui du processus ([routing.md](routing.md#lhorloge--quelle-heure-les-moteurs-reçoivent-ils)) :
+sous `TZ=Europe/Paris` (le `controller`) l'entier de GAMA valant 5 h murales était lu 6 h, sous
+`TZ=UTC` (les réplicas `osmnx`) 5 h. Vérifié avant de bumper : **aucune durée mémorisée n'est
+fausse pour autant.** La clé de ce cache porte le créneau (`weekday` + heure pleine) qui SERT à
+calculer le facteur de congestion, et la valeur ne contient que `duration_s`/`distance_m`, aucun
+horaire absolu — une ligne est donc juste pour l'étiquette sous laquelle elle est rangée, quel que
+soit le fuseau qui l'a produite ; les lignes `foot`/`bicycle` n'ont pas d'heure du tout. Le bump
+achète deux choses : la couverture chaude se déplace de toute façon (le runtime interroge 5 h au
+lieu de 6 h), et **aucune ligne n'enregistre sous quelle convention elle a été lue** — une
+prochaine modification de cette lecture mélangerait donc deux générations en silence. Coût mesuré
+sur `data/cache/osmnx/toulouse_population_1000/` : **9 340 lignes** encore vivantes en `r2`
+(écrites les 2026-09-03 et 09-04) deviennent inertes, les 83 478 de `r1` l'étant déjà. Si ce coût
+pèse plus que la précaution, revenir à `r2` est défendable — la mesure ci-dessus est le seul
+argument qui compte.
+
 ---
 
 ## Résumé des caches par couche
@@ -247,8 +302,8 @@ lignes restent lisibles pour audit, aucune n'est resservie.
 |-------|-------------|------------|-----|
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
 | Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
-| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | **version des données** + date + bucket 10 min + coords + mode |
-| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque, par population | **`routing_version`** (`r2`) + coords + mode (+ jour-de-semaine/heure pour la voiture) |
+| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | **version des données** + **instant dans le fuseau du réseau** (bucket 10 min, décalage compris) + coords + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque, par population | **`routing_version`** (`r3`) + coords + mode (+ jour-de-semaine/heure **murale** pour la voiture) |
 | Graphes OSMnx | Fichiers pickle | Volume Docker | Clé de graphe (`444ca7e6a515` = polygone des 453 communes) + mode |
 
 ### Version des données d'itinéraire dans les clés (ticket 013)

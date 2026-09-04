@@ -15,6 +15,96 @@ Les deux moteurs sont interrogés **en parallèle** pour chaque agent, puis leur
 
 ---
 
+## L'horloge : quelle heure les moteurs reçoivent-ils ?
+
+**Un horodatage GAMA n'est pas un instant : c'est une heure MURALE locale.**
+`GAMA/CityTransport/models/Settings.gaml` publie son horloge comme
+
+```gaml
+date starting_date  <- date([2026,3,16,5,0,0]); // Lundi 5h
+date UTC_START_DATE <- date([1970,1,1,0,0,0]);
+int  CURRENT_TIMESTAMP -> int(current_date - UTC_START_DATE);
+```
+
+soit la différence de deux dates **naïves** — l'heure murale comptée comme si elle était
+UTC (**1773637200** pour lundi 16 mars 2026 5 h, valeur relevée dans la colonne « Temps
+simulé » de `experiments/archive/2026-09-04_01_09/moves.csv`).
+
+Un seul module traduit cet entier, [`llm-agents/sim_clock.py`](../../llm-agents/sim_clock.py) :
+
+| Fonction | Rend |
+|---|---|
+| `wall_clock(ts)` | un `datetime` **naïf** portant les champs muraux de GAMA |
+| `to_network_datetime(ts)` | le même instant, **conscient du fuseau** du réseau simulé |
+| `network_iso(ts)` | sa forme ISO-8601 — ce qu'OTP attend en `dateTime` |
+| `gama_timestamp(dt)` | l'inverse : d'un instant (ou d'une heure murale) vers l'horodatage GAMA |
+
+**Le fuseau est celui du RÉSEAU, jamais celui du processus.** Il est lu dans
+l'`agency_timezone` des `agency.txt` des feeds en service (`feeds_en_service`, la même
+énumération que la porte de proximité) — la seule source qui ne puisse pas s'écarter
+d'OTP, puisque c'est celle qu'OTP lui-même utilise. Les trois feeds déclarent
+`Europe/Paris`. `settings.gtfs.network_timezone` surcharge, pour un feed non monté ou des
+feeds contradictoires ; sans source lisible, la conversion **refuse** (`[ALARME]` +
+`NetworkTimezoneError`) au lieu de rendre une heure plausible.
+
+> **Le défaut, fermé le 2026-09-04 : le runtime demandait ses itinéraires une heure trop
+> tard.** `datetime.fromtimestamp(departure_time)` lisait l'heure murale dans le fuseau du
+> **processus** ; dans le conteneur `controller` (`TZ=Europe/Paris`), 5 h murales
+> devenaient 6 h. Le `dateTime` envoyé à OTP valait `05:00+00:00`, qu'OTP — correct —
+> traduisait en **6 h locales**. Mesuré sur les 2 580 points de la population scellée v4,
+> même graphe, seule l'heure changeant
+> ([trace](../traces/2026-09-04_13-46_fuseau_correctif/README.md)) :
+>
+> | heure envoyée à OTP | points sans itinéraire TC |
+> |---|---:|
+> | `2026-03-16T05:00:00+00:00` — ce que le runtime demandait | **235** / 2 580 |
+> | `2026-03-16T05:00:00+01:00` — l'heure des agents | **605** / 2 580 |
+>
+> Le runtime travaillait donc sur un réseau deux fois et demie plus disponible qu'à
+> l'heure où ses agents décident. Toute la différence est portée par
+> `noTransitConnectionInSearchWindow` (29 → 341) ; `noStopsInRange` et
+> `walkingBetterThanTransit` sont inchangés — l'horaire bougeait, pas la topologie. Le
+> biais était **optimiste le matin** et s'inversait à la pointe du soir (20 h demandées au
+> lieu de 19 h) ; il valait **une heure en mars et deux pour une journée simulée en été**.
+> Il n'était pas constant.
+>
+> **Pourquoi il est resté invisible** : `scripts/data/gtfs/otp_link_check.py` interrogeait
+> OTP en heure **locale** — la bonne convention pour un instrument — pendant que le
+> runtime envoyait la même heure murale estampillée UTC. L'instrument et le runtime ne
+> parlaient pas de la même heure, et aucun des deux ne pouvait le dire. Le script porte
+> désormais `--gama-timestamp`, qui passe par `sim_clock` : c'est le **chemin du runtime**,
+> et c'est le seul qui mesure l'offre que les agents voient.
+>
+> **Un décalage de JOUR, pas seulement d'heure.** Sur les 5 322 déplacements du run
+> archivé `2026-09-04_01_09`, **77 (1,45 %)** partent dans l'heure murale 23 h : leurs
+> itinéraires étaient cherchés le **mardi**, un autre jour de service GTFS et un autre
+> profil de congestion. En été la coupure remonte à 22 h — 140 départs (2,63 %).
+
+**Le retour compte autant que l'aller.** `OTPTripHelper.timestamp_from_isoformat` ramène
+les instants d'OTP (`2026-03-16T05:12:00+01:00`) **dans l'horloge de GAMA** au lieu d'en
+faire un epoch réel. Jusqu'au 2026-09-04 deux erreurs s'annulaient sur ce chemin : OTP
+recevait la mauvaise heure locale, mais son instant de réponse retombait par construction
+dans l'horloge murale. Corriger l'aller seul aurait donné des plans « partant 55 minutes
+dans le passé » en hiver (1 h 48 en été) et des jambes poussées à GAMA une heure à côté de
+son propre `CURRENT_TIMESTAMP`.
+
+**Les changements d'heure sont dits, jamais devinés.** L'horloge murale de GAMA ignore les
+bascules : sa journée du dernier dimanche de mars compte 24 heures là où le réseau n'en a
+que 23. Une heure murale inexistante ou doublée lève une `[ALARME]` (une par journée
+simulée, front montant) et la conversion continue sur `fold=0` — un choix annoncé.
+
+**Les consommateurs alignés** (tous lisent `departure_time` par `sim_clock`) : le
+`dateTime` d'OTP, le facteur de congestion `congestion_dt` (donc les tables TomTom par
+jour et heure, et la clé du cache de routage), le remappage `gtfs.fixed_day`, la passe
+d'ajustement des plannings (`handle/application.py`), et la clé du cache de plans OTP.
+Restent sur le fuseau du processus, **volontairement et parce qu'ils changent le texte du
+prompt** : l'heure affichée à l'agent (`helper.humanize_time`, `time_window_generalize`,
+`categorize_date_time_short`, `time_to_bucket_text`) et la météo
+(`weather_loader`, `weather_draw`). Chiffré dans la trace : la tranche météo de 3 h
+basculerait pour **43,8 %** des départs du run archivé, l'heure affichée pour 100 %.
+
+---
+
 ## OpenTripPlanner (transit)
 
 OTP est dédié exclusivement aux transports en commun en mode horaire contraint.
@@ -202,7 +292,10 @@ vélo a reçu ses vitesses pour `service`, `track`, `trunk`, `*_link`, `pedestri
 `bridleway`, `busway` (source GraphHopper, profil `bike`, et code de la route pour les sections
 poussées) : 32,0 % des arêtes vélo étaient en repli à 14 km/h, il en reste 2 (0,0 %) ; la voiture
 gagne `living_street` (20 km/h, zone de rencontre) et `motorway_link` (70). Toute modification de
-ces vitesses change la durée réseau : `routing_version` est passée à `r2`.
+ces vitesses change la durée réseau : `routing_version` est passée à `r2`, puis à **`r3`** le
+2026-09-04 quand l'heure de départ est passée au fuseau du réseau (cf.
+[cache-memory.md](cache-memory.md) pour ce que ce bump invalide — et ce qu'il n'était pas obligé
+d'invalider).
 
 ### Modes et coupures
 

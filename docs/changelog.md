@@ -1,3 +1,48 @@
+## [2026-09-04] Les agents voient enfin l'offre de transport de l'heure où ils décident
+
+Le runtime demandait ses itinéraires **une heure trop tard**. L'horloge de GAMA est une horloge
+murale locale — 5 h du matin, c'est 5 h du matin — mais elle voyage sous la forme d'un entier que
+le contrôleur relisait dans le fuseau de **son processus**. Dans le conteneur, réglé sur
+Europe/Paris, 5 h murales devenaient 6 h, et c'est 6 h qui partait à OpenTripPlanner. Le décalage
+valait une heure en mars, **deux** pour une journée simulée en été : il n'était même pas constant.
+
+Ce que ça coûtait, mesuré sur les 2 580 points de la population scellée v4, même graphe, seule
+l'heure changeant : à l'heure demandée par le runtime, 235 points n'avaient aucun itinéraire en
+transport collectif ; à l'heure de ses agents, **605**. Le modèle travaillait donc sur un réseau
+deux fois et demie plus disponible qu'au moment où ses habitants choisissaient leur mode. Le biais
+était optimiste le matin, et s'inversait à la pointe du soir. Sur le dernier run archivé, 77
+départs sur 5 322 changeaient même de **jour** : leurs itinéraires étaient cherchés le mardi.
+
+Le défaut était invisible parce que l'instrument de contrôle, lui, avait raison : il interrogeait
+OTP en heure locale. L'outil et le runtime ne parlaient pas de la même heure, et aucun des deux ne
+pouvait le dire. Le contrôle de rattachement accepte désormais un horodatage GAMA et le traduit
+**par la même fonction que le runtime** — c'est le seul chemin qui mesure ce que les agents voient.
+
+Une seule fonction traduit maintenant cette horloge, et le fuseau vient du **réseau simulé** : il
+est lu dans le fichier d'agence des feuilles GTFS en service, celle-là même dont OTP se sert pour
+interpréter ses horaires. Un conteneur mal réglé ne déplace donc plus les itinéraires. Sans source
+lisible, la conversion refuse au lieu de rendre une heure plausible. Tous les consommateurs de
+l'heure de départ suivent : le créneau envoyé à OTP, le facteur de congestion et ses tables par
+jour et heure, le retour des horaires dans l'horloge de GAMA, la passe qui ajuste les plannings, et
+la clé du cache d'itinéraires. Les changements d'heure, que l'horloge murale de GAMA ignore, sont
+désormais **dits** : une heure qui n'existe pas ou qui existe deux fois lève une alarme.
+
+**Avant :** un départ de 5 h murales était planifié sur le réseau de 6 h ; l'offre paraissait deux
+fois et demie plus riche qu'elle ne l'était, et le fuseau du conteneur décidait des itinéraires.
+**Après :** l'heure demandée aux moteurs est l'heure murale de GAMA, à la seconde près, en hiver
+comme en été (décalage résiduel mesuré : 0 s sur huit cas répartis sur l'année).
+
+Deux lectures d'horloge restent volontairement en arrière, parce qu'elles changent le texte du
+prompt et donc les mesures déjà publiées : l'heure affichée à l'agent et la tranche météo qu'il
+consulte. Chiffré : la tranche météo basculerait pour 43,8 % des départs du dernier run. À
+trancher séparément.
+
+Les itinéraires déjà en cache ne sont pas resservis : la clé du cache de plans porte maintenant
+l'instant complet avec son décalage — ce qui distingue enfin l'heure d'hiver de l'heure d'été — et
+la version de routage passe à `r3`. Aucun cache n'est purgé à la main.
+
+---
+
 ## [2026-09-04] Le prompt nomme la vraie commune, et la desserte compte les trois réseaux
 
 Deux défauts du notebook de génération, corrigés avant le prochain scellement.
