@@ -1,3 +1,45 @@
+## [2026-09-04] Un agent peut enfin monter dans un train
+
+Depuis hier, le TER et le car régional liO sont routés, tracés dans les couches et pourvus de
+courses : 884 courses ferroviaires, une centaine de trains vivants à la pointe du matin. Mais
+**aucun agent ne pouvait y monter.** Pour faire embarquer un habitant, GAMA compare l'identifiant
+de tracé du véhicule à celui que l'itinéraire a posé sur sa jambe ; or cet identifiant était
+cherché dans une table construite à partir du **seul réseau Tisséo**. Pour une ligne de TER ou de
+car liO, la réponse était une liste vide — c'est-à-dire la même réponse que « cette ligne ne
+dessert pas ces deux arrêts ». Le véhicule roulait, personne ne pouvait le nommer, et rien ne le
+disait. 80 des 199 lignes du fichier des courses et 2 277 de ses 41 302 courses étaient dans ce
+cas.
+
+La recette qui produit les couches et les courses publie maintenant, dans le même mouvement, la
+correspondance qu'elle a **réellement utilisée** : pour chaque ligne, ses tracés et l'ordre de
+leurs arrêts. Le runtime la lit au lieu de la recalculer. Ce choix n'est pas un détail : le TER
+ne publie aucune géométrie, ses identifiants de tracé sont donc *fabriqués* par la recette, qui
+écarte au passage des courses non plaçables. Deux implémentations de cette règle auraient dérivé
+au premier changement, et le runtime aurait dû reproduire les mêmes écarts pour rester d'accord
+avec la couche.
+
+Trois silences deviennent des alarmes. Si la table manque, est illisible ou ne vient pas de la
+même génération que les couches — les empreintes de ses deux fichiers frères le disent —, le
+runtime le crie au démarrage au lieu de se rabattre discrètement sur un seul réseau. Si un
+itinéraire porte une ligne que la table ne connaît pas, ou une jambe dont l'arrêt n'a pas été
+résolu, il le dit une fois par ligne, avec son nom et son mode. Et le succès se journalise aussi :
+un démarrage muet ne permet pas de distinguer « les trois réseaux sont là » de « rien n'a été lu ».
+
+Deux maillons voisins du même blocage tombent avec : une gare TER ou un arrêt de car ne se
+résolvait pas du tout côté Python, et l'identifiant de ligne rendu par le routeur pour un car liO
+(`lio:305`) ne correspondait à aucune ligne connue — il est désormais recoupé avec le catalogue
+des trois réseaux plutôt que deviné.
+
+**Avant :** 119 lignes désignables sur 199, aucune ferroviaire ni régionale ; un agent placé
+devant une gare attendait 30 minutes puis renonçait, sans trace.
+**Après :** 194 lignes sur 199, dont les 17 lignes de TER et les 58 lignes de car liO au complet.
+Mesuré en simulation : six agents sur six montent dans un TER et achèvent leur trajet
+ferroviaire. Restent les 318 courses circulaires de six lignes Tisséo, dont la montée à l'ancrage
+de la boucle n'est pas représentable dans cette table — défaut antérieur, désormais nommé et
+compté.
+
+---
+
 ## [2026-09-04] L'agent voit le train comme un choix, et non plus dilué dans le bus
 
 Les options offertes à l'agent sont plafonnées à six, en gardant le plus rapide de chaque groupe

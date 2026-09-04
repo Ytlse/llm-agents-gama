@@ -636,7 +636,16 @@ gama-layers:
 	  $(if $(OUT),--sortie $(OUT),) $(if $(TOUT),--tout,) $(if $(JSON),--json $(JSON),)
 
 ## Reconstruit les COURSES que GAMA fait rouler — GAMA/CityTransport/includes/trip_info.json —
-## à partir des trois réseaux et de la date simulée (lue dans Settings.gaml).
+## à partir des trois réseaux et de la date simulée (lue dans Settings.gaml), PUIS la table
+## des tracés que lit le runtime (includes/shape_lookup.json).
+##
+## La table publie la correspondance route_id -> shape_id -> ordre des arrêts que la recette
+## a RÉELLEMENT utilisée : c'est elle qui permet à un agent de monter dans un véhicule
+## (get_shape_id_from_route_info, puis `shape_id_list contains each.shape_id` côté GAMA).
+## Le runtime ne la recalcule pas — le TER ne publie aucune géométrie, ses shape_id sont
+## fabriqués ici, et la recette écarte des courses qu'il faudrait sinon réécarter à
+## l'identique. Elle note l'empreinte de routes.shp/.dbf et de trip_info.json : refaire
+## les couches SEULES la dépareille, et le runtime l'alarme au chargement.
 ##
 ## Les couches sont refaites D'ABORD, dans la même recette : `trip_info.json` porte des
 ## indices de sommets dans la géométrie de `routes.shp`, et produire l'un sans l'autre est
@@ -650,6 +659,7 @@ gama-layers:
 ## route_type de la couche n'est sans course le jour simulé.
 ##   make gama-trip-info
 ##   make gama-trip-info DATE=2026-03-16 DAYS=64 COUCHES=0
+##   make gama-trip-info TABLE=/tmp/shape_lookup.json     # table ailleurs qu'à côté des courses
 ## Codes de sortie : 0 écrit, 1 ressource absente, 2 invariant démenti.
 gama-trip-info:
 	@test -x $(SYNTHESIS_PYTHON) || { \
@@ -661,10 +671,12 @@ gama-trip-info:
 	  $(foreach f,$(FEEDS),--feed $(f)) \
 	  $(if $(DATE),--date-simulee $(DATE),) $(if $(START),--debut $(START),) \
 	  $(if $(DAYS),--jours $(DAYS),) $(if $(ROUTES),--routes $(ROUTES),) \
-	  $(if $(OUT),--sortie $(OUT),) $(if $(JSON),--json $(JSON),)
+	  $(if $(OUT),--sortie $(OUT),) $(if $(TABLE),--table-traces $(TABLE),) \
+	  $(if $(JSON),--json $(JSON),)
 
 ## Tests unitaires des deux recettes ci-dessus, dont le contrôle de cohérence
-## couches/courses : feeds synthétiques minimaux, aucun gros fichier, aucun accès réseau.
+## couches/courses et la table des tracés publiée : feeds synthétiques minimaux, aucun
+## gros fichier, aucun accès réseau.
 test-gama-includes:
 	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_gama_includes.py -q
 

@@ -89,6 +89,83 @@ Le feed Tisséo consommé par la simulation est une **fenêtre** du feed annuel 
 GAMA encode le calendrier des services en masque binaire 64 bits et ne peut pas
 en absorber davantage. Voir [`gtfs-annee.md`](gtfs-annee.md).
 
+### La table des tracés : ce qui permet à un agent de monter
+
+Un itinéraire rendu par OTP ne suffit pas à faire monter un agent. La chaîne complète :
+
+```
+OTP rend une jambe portant l'identifiant de sa ligne
+  → GTFSData.resoudre_route_id      recoupe cet identifiant avec le catalogue des lignes
+  → GTFSData.get_stop               résout les arrêts (feed primaire PUIS catalogue annexe)
+  → GTFSData.get_shape_id_from_route_info(route_id, de, vers)
+                                    rend les shape_id de la ligne qui desservent les
+                                    deux arrêts DANS L'ORDRE
+  → Transit.shape_id                posé sur la jambe, poussé à GAMA
+  → Inhabitant.gaml                 monte si `route_id in route_vehicle_map.keys`
+                                    ET `shape_id_list contains each.shape_id`
+```
+
+`get_shape_id_from_route_info` consulte `route_id_shape_lookup_map`, **lue dans le fichier
+annexe publié par la recette** (`GAMA/CityTransport/includes/shape_lookup.json`,
+`settings.gtfs.shape_lookup_file`). Voir
+[data-pipeline.md](../setup/data-pipeline.md#préparer-les-données-gtfs-pour-gama) pour sa
+production et son contrôle de fraîcheur.
+
+> **Le défaut, fermé le 2026-09-04.** Cette table était construite à partir du **seul feed
+> primaire** (Tisséo), alors que les couches et les courses portent trois réseaux depuis la
+> veille. Mesuré : **80 des 199 lignes** du fichier des courses et **2 277 des 41 302 courses**
+> ne pouvaient être désignées par aucun itinéraire — les véhicules roulaient dans GAMA, aucun
+> agent ne pouvait y monter. La fonction rendait `[]`, ce qui est **indistinguable** de
+> « aucun tracé pour ce couple d'arrêts ». Deux maillons du même silence l'accompagnaient :
+> une gare TER ou un arrêt liO ne se résolvait pas (`stop_id=None`, retour immédiat), et
+> l'identifiant `lio:305` rendu par OTP ne correspondait à aucune ligne.
+
+| | avant | après |
+|---|---:|---:|
+| `route_id` dans la table | 124 | **199** |
+| lignes du fichier des courses joignables | 119 | **194** |
+| courses joignables | 39 025 | **40 984** / 41 302 |
+| dont TER (17 lignes) | 0 / 884 | **884 / 884** |
+| dont cars liO (58 lignes) | 0 / 1 075 | **1 075 / 1 075** |
+
+Les **318 courses** restantes sont exactement les **318 courses circulaires** du fichier
+(6 lignes Tisséo : `line:81`, `line:87`, `line:107`, `line:138`, `line:198`, `line:268`). La
+table associe **un** `stop_sequence` à chaque `stop_id` : un arrêt desservi deux fois n'y garde
+que son dernier rang, donc `stops[de] < stops[vers]` est faux dès que la montée se fait à
+l'ancrage de la boucle. Défaut structurel du format, antérieur et inchangé.
+
+**Trois alarmes, sur front montant** (`inputs/gtfs/reader.py`, logger `loguru`) :
+
+| Alarme | Quand | Ce qu'elle empêche |
+|---|---|---|
+| `[ALARME] table des tracés inutilisable (<motif>)` | au chargement : fichier absent, illisible, format inconnu, témoin dépareillé, compteurs incohérents | le repli sur le seul feed primaire se faisait en silence ; il est désormais annoncé, et la table est marquée `partielle` |
+| `[ALARME] itinéraire indésignable — ligne X : ligne absente de la table` | premier itinéraire concernant une ligne inconnue de la table | la liste vide se confondait avec un couple d'arrêts sans tracé |
+| `[ALARME] itinéraire indésignable — ligne X : arret non resolu` | une jambe arrive sans `stop_id` | même silence, un maillon plus haut |
+
+Une ligne alarme **une seule fois** (la cause est unique, les itinéraires sont nombreux) ;
+`GTFSData.resume_table_traces()` rend l'état complet — source, lignes indésignables, nombre
+d'appels — de quoi reconstituer un run après coup. Le succès se journalise aussi, en `INFO` :
+sans cette ligne, « la table des trois réseaux est en place » ne se distingue pas de « le
+runtime n'a rien lu ».
+
+**L'identifiant de ligne d'OTP est recoupé, plus deviné.** OTP préfixe du nom du feed :
+`tisseo:line:8`, `ter:FR:Line::68c586ae-…`, `lio:305`. La règle « retirer le premier segment
+s'il y a au moins deux `:` » marchait pour les deux premiers et **échouait pour le troisième**,
+dont le `route_id` GTFS (`305`) ne contient aucun `:`. `resoudre_route_id` essaie le brut puis
+retire les préfixes un par un, et garde le premier candidat que le **catalogue des lignes**
+connaît — c'est sous ce nom que GAMA range la ligne dans `ROUTE_VEHICLE_MAP`.
+
+**Le catalogue d'arrêts du fichier annexe est tenu à l'écart de `self.stops`**, exprès :
+`get_bounding_box` en déduit l'emprise du monde GAMA, et y verser des gares de toute
+l'Occitanie l'étendrait bien au-delà du périmètre d'enquête. `get_stop` cherche donc dans le
+feed primaire **puis** dans ce catalogue.
+
+> **Preuve par l'exécution** (`docs/traces/2026-09-04_12-05_table_traces_runtime/`). Six agents,
+> itinéraires calculés par l'OTP en service, poussés dans un GAMA Server isolé : **6 agents sur
+> 6 sont montés dans un TER**, **22 segments ferroviaires achevés**, 22 arrivées, 0 erreur GAMA.
+> Témoin négatif — mêmes plans, listes de `shape_id` vidées, 3 h 45 simulées, jusqu'à 117 trains
+> en circulation : **0 embarquement**, et rien dans le journal de GAMA ne dit pourquoi.
+
 ### Load balancing
 
 Les trois instances OTP (`otp1`, `otp2`, `otp3`) reçoivent les requêtes via la variable :

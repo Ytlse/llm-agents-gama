@@ -47,12 +47,13 @@ d'analyser les routes et arrêts communs, et de produire un GTFS consolidé si b
 
 ### Préparer les données GTFS pour GAMA
 
-Deux couches et un fichier de courses, **produits par une seule recette** :
+Deux couches, un fichier de courses et **la table par laquelle un itinéraire les désigne**,
+**produits par une seule recette** :
 
 ```shell
-make gama-trip-info          # les couches PUIS les courses
+make gama-trip-info          # les couches PUIS les courses PUIS la table des tracés
 make gama-layers             # les couches seules
-make test-gama-includes      # 19 tests, feeds synthétiques, < 2 s
+make test-gama-includes      # 27 tests, feeds synthétiques, < 6 s
 ```
 
 > **Pourquoi une seule recette pour les deux.** `trip_info.json` porte, pour chaque course,
@@ -128,6 +129,37 @@ Deux points délicats, documentés dans l'en-tête du script :
 | réseaux | Tisséo seul | Tisséo + TER + liO |
 | taille | 28 315 173 o | 30 121 074 o |
 | durée de génération | — | 57 s (46 s de `build_trips`) |
+
+**La table des tracés, lue par le runtime** (`GAMA/CityTransport/includes/shape_lookup.json`,
+1,1 Mo) : la recette publie, à côté des courses, la correspondance
+`route_id → {shape_id → {stop_id: stop_sequence}}` **qu'elle a réellement utilisée**, plus le
+catalogue des arrêts desservis (5 956). C'est exactement la structure que consomme
+`GTFSData.get_shape_id_from_route_info`, dont dépend la montée d'un agent dans un véhicule
+(`Inhabitant.gaml` : `shape_id_list contains each.shape_id`). Le format et sa relecture vivent
+dans [`llm-agents/inputs/gtfs/table_traces.py`](../../llm-agents/inputs/gtfs/table_traces.py).
+
+> **Pourquoi la recette publie au lieu de laisser le runtime refabriquer.** Le TER ne publie
+> aucune géométrie : ses `shape_id` sont *fabriqués* par `gtfs_traces.py`
+> (`<route_id>:<sens>:<empreinte>`). Refabriquer côté runtime ferait vivre **deux**
+> implémentations de la même règle — le défaut fermé la veille sur la loi d'équipement vélo
+> (ticket 034, lot 2) — et il faudrait en plus reproduire les courses que la recette **écarte**
+> (tracé non reconstructible, arrêt répété, tracé hors périmètre) pour rester d'accord avec la
+> couche. Publiée, la correspondance concorde par construction.
+
+**Le contrôle de fraîcheur.** Le fichier note la **taille et l'empreinte sha256** de ses deux
+frères — `routes.shp`, `routes.dbf` et `trip_info.json` — sous leur seul **nom de fichier**,
+vérifiés relativement à son propre répertoire : le contrôle vaut donc à l'identique sur l'hôte
+et dans le conteneur `controller`, qui monte `./GAMA` sur `/GAMA`. Refaire les couches seules
+(`make gama-layers`) dépareille la paire, et le runtime l'alarme au chargement au lieu de servir
+une table qui ne désigne plus les bons tracés. Les compteurs sont recoupés en plus des
+empreintes : un fichier tronqué a les bonnes empreintes de ses frères. Une réécriture à
+l'identique de la couche ne déclenche **rien** (geopandas écrit les mêmes octets) — une fausse
+alarme apprend à ignorer les alarmes.
+
+État mesuré le 2026-09-04 (`docs/traces/2026-09-04_12-05_table_traces_runtime/`) : **199
+`route_id`, 904 tracés**, contre **124 `route_id`** quand la table venait du seul feed
+primaire. Voir [routing.md](../arch/routing.md#la-table-des-traces--ce-qui-permet-a-un-agent-de-monter)
+pour la chaîne complète et les alarmes.
 
 ⚠ `export_trip_info.py` importe `llm-agents/inputs/gtfs/{reader,gama}.py`, donc
 `llm-agents/settings.py`. **Depuis le 2026-09-04, cet import ne crée plus de répertoire de run
