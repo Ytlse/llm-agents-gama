@@ -285,8 +285,16 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Active le cache persistant des graphes OSMnx sur disque entre les redémarrages
     # (évite de re-télécharger/reconstruire les graphes ville+distance à chaque démarrage)
     osmnx_cache_enabled: bool = True
-    # Répertoire racine du cache persistant ; un sous-dossier par population y est créé
-    osmnx_persistent_cache_dir: str = "/app/data/osmnx_cache"
+    # Répertoire racine du cache de ROUTES (SQLite) ; un sous-dossier par population y est créé.
+    #
+    # ⚠ INVARIANT : ce chemin conteneur doit être un point de MONTAGE vers `./data/cache/osmnx`
+    # (docker-compose, service `controller`) — c'est le répertoire où le peupleur en masse
+    # (étape 6 du notebook `generate_population.ipynb`) écrit ses routes réchauffées. Sans ce
+    # montage, `/app` étant le bind de `./llm-agents`, le runtime écrit dans un
+    # `llm-agents/data/…` invisible du peupleur : c'est exactement ce qui s'est produit du
+    # 2026-06-02 au 2026-09-04, où 196 runs ont recalculé à froid des routes déjà en cache.
+    # Le nom est calqué sur `otp_persistent_cache_dir` ci-dessous, qui n'a jamais eu le défaut.
+    osmnx_persistent_cache_dir: str = "/app/data/cache/osmnx"
 
     # number of cached itineraries per grid cell
     n_trip_in_grid: int = 5
@@ -602,11 +610,83 @@ class FactorySettings:
             )
             return cls._instance
 
-        # Create workdir, write the full config into it, and update "current" symlink
+        # Un import LIT la configuration, il n'ouvre pas un run : ni répertoire créé, ni
+        # configuration figée sur disque, ni symlink déplacé. Tout cela appartient à
+        # `claim_run()`, que seul le processus propriétaire appelle.
+        logger.debug(
+            f"Configuration lue ; workdir de ce processus s'il ouvrait un run : "
+            f"{cls._instance.workdir.name} (aucun artefact créé, cf. claim_run())"
+        )
+
+        # logger.info(f"Settings loaded from: {yaml_files}")
+        # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
+        return cls._instance
+    
+    @classmethod
+    def save_static_config(cls) -> None:
+        """
+        Sauvegarde l'état actuel de la configuration dans le fichier static_config.yaml.
+        À appeler après que la simulation GAMA ait surchargé les paramètres.
+        """
+        # Le répertoire est créé ici plutôt qu'exigé : depuis le 2026-09-04, un import de ce
+        # module ne crée plus rien (cf. `claim_run`), donc exiger son existence ferait taire
+        # cette méthode au lieu de la faire travailler.
+        if cls._instance and cls._instance.workdir:
+            cls._instance.workdir.mkdir(parents=True, exist_ok=True)
+            static_config_path = cls._instance.workdir / "static_config.yaml"
+            with open(static_config_path, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    cls._instance.model_dump(mode="json"), 
+                    f, 
+                    default_flow_style=False, 
+                    allow_unicode=True,
+                    sort_keys=False
+                )
+            logger.info(f"Configuration statique mise à jour : {static_config_path}")
+
+    def __getattribute__(self, name):
+        """Délègue tous les accès d'attributs au singleton Settings sous-jacent."""
+        # Handle special methods and private attributes directly
+        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config', 'claim_run'):
+            return super().__getattribute__(name)
+        
+        # Delegate all other attributes to the Settings instance
+        return getattr(self.get(), name)
+    
+    @classmethod
+    def claim_run(cls) -> Settings:
+        """Déclare que CE processus ouvre le run : déplace les symlinks vers son workdir.
+
+        **À n'appeler que par le processus propriétaire du run** — le contrôleur, via
+        `handle/__init__.py`. Tout le reste (script d'analyse, contrôle de configuration,
+        shell dans un conteneur, notebook, worker de routage) importe ce module pour LIRE la
+        configuration, et ne doit pas toucher aux liens.
+
+        Pourquoi c'est un appel explicite et non un effet de l'import : jusqu'au 2026-09-04,
+        `get()` repointait `experiments/current` dès l'import. Un script d'analyse lancé
+        pendant un run faisait donc basculer le lien vers un répertoire vide, et tout ce qui
+        résout le lien à CHAQUE écriture — le journal des échanges avec le modèle — se mettait
+        à écrire à côté du run. Constaté quatre fois entre le 2026-09-03 au soir et le
+        2026-09-04 au matin, la première ayant détourné 1 037 échanges en une minute. Le
+        répertoire de run, lui, continue d'être préparé à l'import : le créer ne vole rien à
+        personne, le déplacer du lien si.
+
+        Idempotente : rappeler cette méthode sur le même workdir réécrit les mêmes liens.
+        """
+        cls.get()
+        # Le workdir vaut `<experiments>/archive/<nom>` : remonter deux niveaux redonne le
+        # dossier d'expériences exactement tel que `get()` l'a résolu, sans refaire la
+        # détection (qui dépend de `base_config_path`, local à `get()`).
+        experiments_dir = cls._instance.workdir.parent.parent
+        if _run_artifacts_disabled():
+            logger.info(
+                "claim_run() sous test : ni répertoire de run créé, ni symlinks "
+                "experiments/current et GAMA/CityTransport/results déplacés."
+            )
+            return cls._instance
+
         cls._instance.workdir.mkdir(parents=True, exist_ok=True)
-
         cls.save_static_config()
-
         current_link = experiments_dir / "current"
         # Plusieurs processus importent ce module dans la même seconde (workers de routage du
         # notebook, workers hypercorn) : unlink puis symlink n'est pas atomique, et le second
@@ -659,37 +739,10 @@ class FactorySettings:
                     f"{experiments_dir}). GAMA échouera sur `save` en I/O error."
                 )
 
-        # logger.info(f"Settings loaded from: {yaml_files}")
-        # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
+        logger.info(f"Run ouvert par ce processus : experiments/current → "
+                    f"archive/{cls._instance.workdir.name}")
         return cls._instance
-    
-    @classmethod
-    def save_static_config(cls) -> None:
-        """
-        Sauvegarde l'état actuel de la configuration dans le fichier static_config.yaml.
-        À appeler après que la simulation GAMA ait surchargé les paramètres.
-        """
-        if cls._instance and cls._instance.workdir and cls._instance.workdir.exists():
-            static_config_path = cls._instance.workdir / "static_config.yaml"
-            with open(static_config_path, "w", encoding="utf-8") as f:
-                yaml.dump(
-                    cls._instance.model_dump(mode="json"), 
-                    f, 
-                    default_flow_style=False, 
-                    allow_unicode=True,
-                    sort_keys=False
-                )
-            logger.info(f"Configuration statique mise à jour : {static_config_path}")
 
-    def __getattribute__(self, name):
-        """Délègue tous les accès d'attributs au singleton Settings sous-jacent."""
-        # Handle special methods and private attributes directly
-        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config'):
-            return super().__getattribute__(name)
-        
-        # Delegate all other attributes to the Settings instance
-        return getattr(self.get(), name)
-    
     @classmethod
     def force_reload(cls) -> Settings:
         """Force reload the settings."""

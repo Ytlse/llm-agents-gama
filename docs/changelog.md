@@ -1,3 +1,23 @@
+## [2026-09-04] Lire la configuration ne vole plus la sortie du run en cours
+
+Importer le module de configuration du runtime suffisait à créer un répertoire d'expérience et à
+faire pointer `experiments/current` dessus. Le comportement existe pour qu'un run installe sa
+sortie au démarrage, mais il se déclenchait à l'import — donc aussi pour un script d'analyse, un
+contrôle de configuration, ou un shell dans un conteneur. Le lien basculait vers un répertoire
+vide, et le journal des échanges avec le modèle, qui résout ce lien à chaque écriture, se mettait
+à écrire à côté du run. C'est arrivé quatre fois en une nuit ; la première a détourné 1 037
+échanges avant qu'on s'en aperçoive.
+
+Les deux gestes sont désormais séparés. L'import lit la configuration et ne touche à rien sur
+disque. Ouvrir un run est un appel explicite, que seul le contrôleur fait.
+
+**Avant :** n'importe quel script lancé pendant une simulation pouvait détourner sa trace, sans
+erreur ni avertissement, et il fallait s'en apercevoir dans les journaux.
+**Après :** l'import ne crée ni répertoire, ni configuration figée, ni lien ; quatre tests
+tiennent la frontière, dont celui qui vérifie qu'un run légitime déplace bien son lien.
+
+---
+
 ## [2026-09-04] Les instances de routage retrouvent leur configuration, qu'une reconstruction avait perdue
 
 Les trois instances OTP tournaient sur les valeurs par défaut du moteur. Leurs configurations sont
