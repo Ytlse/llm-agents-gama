@@ -59,6 +59,15 @@ from llm_module.core.population_reference import (  # noqa: E402
     couronne_population_shares, household_targets, household_weight,
     population_reference, survey_window, surveyed_weekdays)
 from llm_module.core.residence_zone import CommunalZones  # noqa: E402
+# Table de détail et table d'agrégation des libellés de mode. Elles vivent dans un
+# module partagé avec les carnets d'analyse (`scripts/analysis/mode_labels.py`) pour
+# la raison qui a fait monter `CommunalZones` dans `llm_module` au ticket 021 : deux
+# copies d'une classification de référence finissent par diverger, et c'est
+# exactement ce qui s'est produit ici — le carnet et l'audit ignoraient « Train »
+# chacun de son côté.
+from scripts.analysis.mode_labels import (  # noqa: E402
+    SCORED_CATEGORIES, SURVEY_CATEGORIES, UNKNOWN as UNKNOWN_MODE,
+    aggregation_table, category_of, log_alarm, tally_labels)
 
 DEFAULT_POPULATION = REPO_ROOT / "data" / "population" / "toulouse_population_1000.json"
 DEFAULT_RUN = REPO_ROOT / "experiments" / "current"
@@ -69,13 +78,24 @@ WEATHER_CSV = REPO_ROOT / "data" / "weather" / "meteo_toulouse_12_mois.csv"
 # lois sont stratifiées. C'est le troisième lieu où la distance pourrait revenir (A2).
 TERMINAL_TIME_JSON = REPO_ROOT / "llm_module" / "data" / "terminal_time_emc2.json"
 
-SCORED_MODES = ("voiture", "marche", "transports_collectifs", "velo")
-MOVE_MODE_MAP = {
-    "Voiture Privée": "voiture",
-    "Marche": "marche",
-    "Vélo": "velo",
-    "Transports_collectifs": "transports_collectifs",
-}
+# Les quatre catégories scorées, lues dans le module partagé. `MOVE_MODE_MAP` a été
+# retirée le 2026-09-04 : c'était une table de quatre entrées SANS « Train », et un
+# déplacement en train sortait de l'audit des parts modales par un `continue` muet.
+# Le remplacement compte tout, agrège vers les catégories de l'enquête et alarme sur
+# tout libellé hors table.
+SCORED_MODES = SCORED_CATEGORIES
+
+# Seuils de la jointure persona ↔ déplacement des parts par zone (A2). Au-delà de
+# JOIN_ALARM_PCT de déplacements sans persona, une [ALARME] part ; sous JOIN_VOID_PCT
+# de jointure, la table se déclare NON MESURABLE plutôt que de publier un L1 calculé
+# sur une poignée de lignes. « Un axe non mesuré est un axe qui passe » : ici c'était
+# une SOUS-TABLE non mesurée qui passait.
+JOIN_ALARM_PCT = 5.0
+JOIN_VOID_PCT = 50.0
+
+# Nom affiché dans l'app.log : `make error` doit renvoyer vers l'audit, pas vers le
+# module qui porte le handler.
+_ALARM_LOGGER = "scripts.data.population.audit_perimetre"
 
 CONFORME = "conforme"
 A_CORRIGER = "à corriger"
@@ -167,7 +187,8 @@ def axis_a1_age(people: list[dict]) -> Finding:
 
 
 def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
-                      moves: list[dict], cerema: dict) -> Finding:
+                      moves: list[dict], cerema: dict,
+                      run_dir: Optional[Path] = None) -> Finding:
     if zones is None:
         return Finding(
             "A2", "Définition des couronnes", "découpage par liste de communes",
@@ -214,7 +235,8 @@ def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
         "temps_terminal_crown_definition": crown_definition or "(ressource illisible)",
     }
     if moves:
-        tables["parts_par_zone"] = modal_shares_by_zone(moves, per_person, cerema)
+        tables["parts_par_zone"] = modal_shares_by_zone(moves, per_person, cerema,
+                                                        log_dir=run_dir)
 
     problems: list[str] = []
     if missing:
@@ -238,6 +260,15 @@ def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
         "historique : il garde les trois portes fermées.")
     ecart = "aucun écart : trait, géométrie et temps terminal sur le même découpage" \
         if not problems else " ; ".join(problems)
+    # La sous-table des parts par zone peut être vide de sens sans que les trois portes
+    # de l'axe soient ouvertes : il suffit que la population auditée et le run ne
+    # partagent pas leurs identifiants de personne. Le verdict de l'axe reste celui des
+    # trois portes — c'est bien ce qu'il mesure — mais l'écart le DIT, et une [ALARME]
+    # part depuis `modal_shares_by_zone`.
+    void = ((tables.get("parts_par_zone") or {}).get("communal") or {}).get(
+        "non_mesurable")
+    if void:
+        ecart += f" ⚠ parts modales par zone NON MESURABLES : {void}"
     return Finding(
         "A2", "Définition des couronnes",
         "découpage par liste de communes : "
@@ -249,22 +280,47 @@ def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
 
 
 def modal_shares_by_zone(moves: list[dict], per_person: dict[str, tuple[str, str]],
-                         cerema: dict) -> dict:
+                         cerema: dict, log_dir: Optional[Path] = None) -> dict:
     """Parts modales par couronne — sous le trait du persona et sous la géométrie —, plus
     l'écart L1 aux cibles. Les deux colonnes doivent coïncider ; l'écart entre elles est
-    exactement ce que l'axe A2 compte."""
+    exactement ce que l'axe A2 compte.
+
+    Le L1 se calcule sur les quatre catégories scorées, contre une cible renormalisée
+    aux mêmes quatre — la comparaison publiée depuis le ticket 020, inchangée. Ce qui
+    change le 2026-09-04, c'est le chemin qui y mène : un libellé fin est d'abord
+    agrégé vers sa catégorie d'enquête (« Train » → transports collectifs), et tout ce
+    qui n'entre PAS dans les parts modales est compté et nommé au lieu d'être
+    `continue`d. Un dénominateur qui maigrit fait monter les parts restantes : c'est un
+    faux score, pas une absence de score.
+    """
     targets = (cerema.get("parts_modales_2023") or {}).get("lieu_residence") or {}
     out: dict[str, Any] = {}
     for index, label in ((0, "trait"), (1, "communal")):
         mass: dict[str, Counter] = defaultdict(Counter)
+        ecarte: Counter = Counter()
         for row in moves:
-            mode = MOVE_MODE_MAP.get((row.get("Mode de transport Choisi") or "").strip())
-            if mode is None:
+            category = category_of(row.get("Mode de transport Choisi"))
+            if category is None:
+                ecarte[UNKNOWN_MODE] += 1
+                continue
+            if category not in SCORED_MODES:
+                # `autres_modes` (résidu de l'enquête), `non_deplacement` (« Aucun »)
+                # et la cellule vide : hors des quatre catégories scorées, mais dits.
+                ecarte[category] += 1
                 continue
             pair = per_person.get((row.get("ID Personne") or "").strip())
             if pair is None:
+                ecarte["persona_introuvable"] += 1
                 continue
-            mass[pair[index]][mode] += 1
+            mass[pair[index]][category] += 1
+        # L'égalité est vérifiée, pas espérée : tout ce qui est lu est soit dans une
+        # cellule zone × mode, soit dans un compteur d'écart nommé.
+        retenus = sum(sum(c.values()) for c in mass.values())
+        if retenus + sum(ecarte.values()) != len(moves):
+            raise AssertionError(
+                f"parts_par_zone[{label}] : {len(moves)} ligne(s) lue(s), "
+                f"{retenus} retenue(s) et {sum(ecarte.values())} écartée(s) — "
+                "un effectif s'est perdu, donc un dénominateur est faux.")
         zones: dict[str, Any] = {}
         for zone, counter in mass.items():
             total = sum(counter.values())
@@ -279,11 +335,49 @@ def modal_shares_by_zone(moves: list[dict], per_person: dict[str, tuple[str, str
                 l1 = sum(abs(shares[m] - target[m]) for m in SCORED_MODES)
             zones[zone] = {"n": total, "shares": shares, "l1": l1}
         weighted = [(z["l1"], z["n"]) for z in zones.values() if z["l1"] is not None]
+        # Taux de jointure persona ↔ déplacement. La jointure se fait sur « ID
+        # Personne » : une population et un run qui ne partagent pas leur espace
+        # d'identifiants ne joignent RIEN, et le `continue` d'origine rendait alors un
+        # L1 calculé sur une poignée de lignes — un chiffre plausible et vide de sens,
+        # sans un mot dans le journal. Le taux est donc publié, alarmé, et sous
+        # `JOIN_VOID_PCT` la table se déclare NON MESURABLE au lieu de rendre ce chiffre.
+        joinable = retenus + ecarte["persona_introuvable"]
+        join_pct = 100.0 * retenus / joinable if joinable else 0.0
+        void_reason = ""
+        if join_pct < JOIN_VOID_PCT:
+            void_reason = (
+                f"{ecarte['persona_introuvable']}/{joinable} déplacement(s) sans "
+                f"persona correspondant ({100.0 - join_pct:.1f} %) : la population "
+                f"auditée et le run ne partagent pas leurs identifiants de personne. "
+                f"Les parts par zone porteraient sur {retenus} ligne(s) — non mesurable.")
+            for zone in zones.values():
+                zone["l1"] = None
+            weighted = []
         out[label] = {
             "zones": zones,
             "l1_pondere": (sum(l * n for l, n in weighted) / sum(n for _, n in weighted)
                            if weighted else None),
+            # Ce que la table NE compte pas, nommé ligne par ligne. Clé ajoutée le
+            # 2026-09-04 : avant, ces lignes disparaissaient du dénominateur sans
+            # trace, et les parts des modes restants montaient d'autant.
+            "hors_parts_modales": dict(ecarte.most_common()),
+            "n_lignes_lues": len(moves),
+            "n_lignes_retenues": retenus,
+            "taux_jointure_persona_pct": join_pct,
+            "non_mesurable": void_reason,
         }
+        if void_reason and label == "communal":
+            log_alarm(f"[ALARME] A2 parts_par_zone : {void_reason}",
+                      log_dir=log_dir, logger_name=_ALARM_LOGGER)
+        elif ecarte["persona_introuvable"] and label == "communal":
+            perdu = 100.0 - join_pct
+            if perdu > JOIN_ALARM_PCT:
+                log_alarm(
+                    f"[ALARME] A2 parts_par_zone : "
+                    f"{ecarte['persona_introuvable']}/{joinable} déplacement(s) "
+                    f"({perdu:.1f} %) sans persona correspondant — autant de lignes "
+                    f"hors du dénominateur des parts par zone.",
+                    log_dir=log_dir, logger_name=_ALARM_LOGGER)
     return out
 
 
@@ -539,15 +633,32 @@ def axis_a6_jour(moves: list[dict]) -> Finding:
                                              for d, n in sorted(days.items())}})
 
 
-def axis_a7_objet_compte(moves: list[dict]) -> Finding:
+def axis_a7_objet_compte(moves: list[dict], cerema: dict,
+                         run_dir: Optional[Path] = None) -> Finding:
     if not moves:
         return Finding("A7", "Objet compté : le déplacement à mode principal",
                        "un déplacement = un mode principal", "—", "—", NON_MESURABLE,
                        "Aucun `moves.csv` exploitable.")
     trip_ids = [row.get("ID Trajet") for row in moves if row.get("ID Trajet")]
     unique = len(set(trip_ids))
-    modes = Counter((row.get("Mode de transport Choisi") or "").strip()
-                    for row in moves)
+    # Le comptage DÉTAILLÉ, par libellé tel qu'il apparaît dans `moves.csv`, plus la
+    # table qui l'agrège vers les catégories de l'enquête. Les deux niveaux sont
+    # publiés parce qu'ils ne répondent pas à la même question : le détail dit ce que
+    # la simulation a produit (combien de train, combien de non-déplacements), la
+    # catégorie dit à quoi le comparer. Un libellé hors table est compté sous
+    # `libelle_inconnu` et lève une [ALARME] dans l'app.log du run.
+    tally = tally_labels((row.get("Mode de transport Choisi") for row in moves),
+                         source="moves.csv · Mode de transport Choisi",
+                         log_dir=run_dir)
+    modes = tally.detail
+    shares = tally.shares(SCORED_MODES)
+    global_target = (cerema.get("parts_modales_2023") or {}).get("global") or {}
+    l1_global = None
+    cible: Optional[dict[str, float]] = None
+    if all(m in global_target for m in SCORED_MODES):
+        renorm = sum(float(global_target[m]) for m in SCORED_MODES)
+        cible = {m: 100.0 * float(global_target[m]) / renorm for m in SCORED_MODES}
+        l1_global = sum(abs(shares[m] - cible[m]) for m in SCORED_MODES)
     detail = (
         "Deux questions distinctes, et les réponses ne vont pas dans le même sens.\n\n"
         "CE QUI EST CONFORME. Une ligne de `moves.csv` est bien un DÉPLACEMENT, pas une "
@@ -567,17 +678,80 @@ def axis_a7_objet_compte(moves: list[dict]) -> Finding:
         "interrogé mode par mode, donc aucun itinéraire simulé ne mêle voiture et "
         "transports collectifs, et zéro déplacement est aujourd'hui mal classé. Mais "
         "l'effet miroir est réel : la simulation ne peut STRUCTURELLEMENT pas produire "
-        "les 1,4 point de rabattement que la cible compte en transports collectifs.")
+        "les 1,4 point de rabattement que la cible compte en transports collectifs.\n\n"
+        "DEUX NIVEAUX DE LECTURE, ET LA TABLE POUR PASSER DE L'UN À L'AUTRE. Le "
+        "journal écrit des libellés FINS (Marche, Vélo, Voiture Privée, "
+        "Transports_collectifs, Train, Deux-roues motorisé, Autres modes, Aucun) ; la "
+        "référence publie des CATÉGORIES (marche, velo, voiture, "
+        "transports_collectifs, autres_modes). L'audit rend les deux et la table qui "
+        "les relie, de sorte que l'agrégat se recompose depuis le détail — le train "
+        "va avec les transports collectifs, les deux-roues motorisés avec le résidu "
+        "`autres_modes` de l'enquête. Jusqu'au 2026-09-04, la table de l'audit "
+        "n'avait que quatre entrées et pas de « Train » : depuis le routage du TER "
+        "(16,7 % des itinéraires portent un train), un déplacement en train sortait "
+        "des parts modales par un `continue` MUET. Le dénominateur baissait, les "
+        "parts des autres modes montaient, et rien ne le disait. Deux valeurs du "
+        "journal ne sont pas des déplacements et n'entrent donc dans aucune part "
+        "modale — « Aucun » (même localisation, l'agent n'a pas bougé) et la cellule "
+        "vide (aucun itinéraire) : elles sont désormais comptées et nommées plutôt "
+        "que jetées. Un libellé hors table est compté sous « libelle_inconnu », "
+        "nommé, et lève une [ALARME] dans l'app.log du run — visible par "
+        "`make error`.")
+    ecart = ("0 déplacement mal classé aujourd'hui ; 1,4 pt de rabattement "
+             "inatteignable")
+    if l1_global is not None:
+        ecart += (f" ; L1 aux cibles globales sur les 4 catégories scorées "
+                  f"{l1_global:.1f} pt (comptages non redressés, cf. A3)")
+    verdict = A_PUBLIER
+    if tally.unknown:
+        named = ", ".join(f"« {k} » ({n})" for k, n in tally.unknown.most_common())
+        ecart += (f" ; {tally.n_unknown} ligne(s) sous un libellé hors table "
+                  f"d'agrégation : {named}")
+        verdict = A_CORRIGER
+    if tally.hierarchy_gap:
+        # Défaut LATENT : la table d'agrégation ne couvre pas toute la hiérarchie des
+        # modes du dépôt. Rien ne se perd dans CE run, tout se perdra au premier run qui
+        # portera le mode manquant — c'est exactement l'histoire du « Train ».
+        ecart += f" ⚠ {tally.hierarchy_gap}"
+        verdict = A_CORRIGER
     return Finding(
         "A7", "Objet compté : le déplacement à mode principal",
         "un déplacement, un mode principal ; hiérarchie plaçant les transports "
-        "collectifs au-dessus de la voiture (760/770 déplacements mixtes)",
+        "collectifs au-dessus de la voiture (760/770 déplacements mixtes) ; parts "
+        "publiées par catégorie : "
+        + " · ".join(f"{m} {float(global_target[m]):.0f} %" for m in SURVEY_CATEGORIES
+                     if m in global_target),
         f"{len(moves)} lignes pour {unique} identifiants de trajet distincts ; "
-        "aucune ligne de jambe",
-        "0 déplacement mal classé aujourd'hui ; 1,4 pt de rabattement inatteignable",
-        A_PUBLIER, detail,
+        f"aucune ligne de jambe ; {tally.n_trips} déplacement(s) en "
+        f"{len(tally.detail)} libellé(s) fin(s) → "
+        + " · ".join(f"{m} {shares[m]:.1f} %" for m in SCORED_MODES),
+        ecart,
+        verdict, detail,
         {"n_lignes": len(moves), "n_trajets_uniques": unique,
+         # Clé historique, inchangée : le comptage par libellé brut.
          "modes": dict(modes.most_common()),
+         # Le détail publiable — un libellé, sa catégorie, son effectif, sa part.
+         "modes_detail": tally.detail_rows(),
+         # La table d'agrégation elle-même : publier le résultat sans la table ne
+         # permet pas de vérifier l'agrégation, publier les deux si.
+         "agregation_libelle_vers_categorie": aggregation_table(),
+         # L'agrégat, sur les catégories de l'enquête puis sur les 4 scorées.
+         "effectifs_par_categorie": dict(tally.categories.most_common()),
+         "parts_par_categorie_enquete": tally.shares(SURVEY_CATEGORIES),
+         "parts_par_categorie_scoree": shares,
+         "cible_globale_scoree_pct": cible,
+         "l1_global_scorees_pt": l1_global,
+         # Ce qui n'entre pas dans une part modale, et l'invariant qui le garantit.
+         "hors_parts_modales": {c: n for c, n in tally.categories.items()
+                                if c not in SURVEY_CATEGORIES},
+         "libelles_inconnus": dict(tally.unknown.most_common()),
+         # Couverture de la table d'agrégation par la hiérarchie des modes du dépôt
+         # (`llm_module.core.mode_hierarchy`, ticket 022) : "" = tout couvert.
+         "couverture_hierarchie_modes": tally.hierarchy_gap or "complète",
+         "invariant_total": {"n_lignes_lues": tally.total,
+                             "somme_detail": sum(tally.detail.values()),
+                             "somme_categories": sum(tally.categories.values()),
+                             "verifie": True},
          "part_rabattement_dans_cible_tc_pct": 11.5,
          "part_rabattement_absolue_pct": 1.41})
 
@@ -833,12 +1007,12 @@ def run_audit(population_path: Path, run_dir: Path,
 
     findings = [
         axis_a1_age(people),
-        axis_a2_couronnes(people, zones, moves, cerema),
+        axis_a2_couronnes(people, zones, moves, cerema, run_dir),
         axis_a3_ponderation(people, moves),
         axis_a4_exclusions(people, zones),
         axis_a5_saison(moves),
         axis_a6_jour(moves),
-        axis_a7_objet_compte(moves),
+        axis_a7_objet_compte(moves, cerema, run_dir),
         axis_a8_menages(people),
         axis_a9_spatial(people, zones),
     ]
@@ -863,6 +1037,45 @@ def run_audit(population_path: Path, run_dir: Path,
     }
 
 
+def _print_mode_detail(tables: dict) -> None:
+    """Le détail par libellé, sa catégorie, et l'agrégat — l'un sous l'autre.
+
+    Rendu volontairement en deux blocs adjacents : le lecteur doit pouvoir additionner
+    les lignes du détail et retrouver la ligne de la catégorie. Une agrégation qu'on
+    ne peut pas refaire à la main est une agrégation qu'on croit.
+    """
+    rows = tables.get("modes_detail")
+    if not rows:
+        return
+    print("   détail par libellé de mode (tel qu'écrit dans moves.csv) :")
+    print(f"      {'libellé':24s} {'→ catégorie':24s} {'n':>7s} {'part':>7s}")
+    for row in rows:
+        print(f"      {row['libelle']:24s} {row['categorie']:24s} "
+              f"{row['n']:7d} {row['part_pct']:6.1f} %")
+    survey = tables.get("parts_par_categorie_enquete") or {}
+    if survey:
+        print("   agrégé vers les 5 catégories de l'enquête : "
+              + " · ".join(f"{k} {v:.1f} %" for k, v in survey.items()))
+    parts = tables.get("parts_par_categorie_scoree") or {}
+    cible = tables.get("cible_globale_scoree_pct") or {}
+    if parts:
+        print("   puis restreint aux 4 catégories scorées, contre la cible globale "
+              "renormalisée aux mêmes 4 :")
+        for mode, value in parts.items():
+            attendu = (f"  cible {cible[mode]:5.1f} %  écart {value - cible[mode]:+5.1f} pt"
+                       if mode in cible else "")
+            print(f"      {mode:24s} {value:6.1f} %{attendu}")
+    hors = tables.get("hors_parts_modales") or {}
+    if hors:
+        print("   hors parts modales, compté et nommé : "
+              + " · ".join(f"{k} {v}" for k, v in hors.items()))
+    invariant = tables.get("invariant_total") or {}
+    if invariant:
+        print(f"   invariant vérifié : {invariant['n_lignes_lues']} ligne(s) lue(s) = "
+              f"{invariant['somme_detail']} en détail = "
+              f"{invariant['somme_categories']} en catégories")
+
+
 def print_report(report: dict) -> None:
     inputs = report["inputs"]
     print("═" * 78)
@@ -882,6 +1095,7 @@ def print_report(report: dict) -> None:
         print(f"   enquête  : {finding['enquete']}")
         print(f"   simulé   : {finding['simule']}")
         print(f"   écart    : {finding['ecart']}")
+        _print_mode_detail(finding.get("tables") or {})
         if finding["detail"]:
             for line in finding["detail"].split("\n"):
                 print(f"   │ {line}" if line else "   │")
