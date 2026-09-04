@@ -289,7 +289,12 @@ services:
       GAMA_WS_URL: ${GAMA_WS_URL:-ws://host.docker.internal:3001}
     volumes:
       - ./llm_module:/app/llm_module
-      - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
+      # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
+      # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
+      # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait
+      # l'appel à OTP pour 397 des 2 580 points de la population scellée v4 — ceux
+      # qui n'ont à portée qu'un arrêt liO ou une gare TER (ticket 031, q. 16).
+      - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
@@ -330,7 +335,12 @@ services:
       - ./scripts:/app/scripts
       # Dépôt autonome prompt_calibration (endpoint POST /calibrate → CALIBRATION_DIR)
       - ./prompt_calibration:/app/prompt_calibration
-      - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
+      # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
+      # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
+      # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait
+      # l'appel à OTP pour 397 des 2 580 points de la population scellée v4 — ceux
+      # qui n'ont à portée qu'un arrêt liO ou une gare TER (ticket 031, q. 16).
+      - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
       - ./data/population:/data/eqasim-output:rw
       - ./data/cache/osmnx:/app/osmnx_cache
@@ -367,7 +377,12 @@ services:
       SERVICE_NAME: worker
     volumes:
       - ./llm_module:/app/llm_module
-      - ./data/gtfs/tisseo_gtfs:/data/gtfs/tisseo_gtfs
+      # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
+      # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
+      # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait
+      # l'appel à OTP pour 397 des 2 580 points de la population scellée v4 — ceux
+      # qui n'ont à portée qu'un arrêt liO ou une gare TER (ticket 031, q. 16).
+      - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
     depends_on:
       redis:

@@ -224,8 +224,85 @@ class OTPTripPattern(BaseModel):
 
 CAR_ROUTE_MARKER = "__CAR__"
 
+
+def feeds_en_service(feed_primaire: str) -> list["Path"]:
+    """Répertoires et zips GTFS que le graphe OTP charge, à côté du feed primaire.
+
+    `settings.gtfs.gtfs_file` ne nomme qu'UN feed (`data/gtfs/tisseo_gtfs`), alors
+    qu'OTP construit son graphe avec **tous** les feeds du premier niveau de son
+    répertoire de build — depuis le 2026-09-04, Tisséo *plus* liO *plus* le TER
+    annuel. La porte de proximité `_has_reachable_stop` était bâtie sur le seul feed
+    primaire : mesuré sur la population scellée v4, **397 des 2 580 points** (245 des
+    374 de 3ᵉ couronne, 150 des 339 de 2ᵉ) sont à moins de 1 500 m d'un arrêt liO ou
+    d'une gare TER sans l'être d'un arrêt Tisséo. Pour eux le runtime **sautait OTP**,
+    et tout le gain de la mise en service du graphe ne se produisait pas.
+
+    On énumère donc les feeds comme OTP le fait : au premier niveau du répertoire
+    parent, un répertoire ou un zip qui porte `stops.txt`. Rien n'est deviné d'un nom.
+    """
+    from pathlib import Path
+
+    primaire = Path(feed_primaire)
+    racine = primaire.parent if primaire.is_dir() or primaire.suffix == ".zip" else primaire
+    if not racine.is_dir():
+        return [primaire] if primaire.exists() else []
+
+    trouves: list[Path] = []
+    for entree in sorted(racine.iterdir()):
+        if entree.is_dir() and (entree / "stops.txt").exists():
+            trouves.append(entree)
+        elif entree.is_file() and entree.suffix == ".zip":
+            import zipfile
+
+            try:
+                with zipfile.ZipFile(entree) as archive:
+                    if "stops.txt" in archive.namelist():
+                        trouves.append(entree)
+            except zipfile.BadZipFile:
+                logger.warning(f"[GTFS] {entree.name} n'est pas un zip lisible, ignoré")
+    if primaire.exists() and primaire not in trouves:
+        trouves.append(primaire)
+    return trouves
+
+
+def coordonnees_arrets(feeds: list["Path"]) -> tuple["np.ndarray", dict]:
+    """Coordonnées (lat, lon) de tous les arrêts des feeds, et le compte par feed."""
+    import csv
+    import io
+    import zipfile
+
+    lignes: list[tuple[float, float]] = []
+    par_feed: dict = {}
+    for feed in feeds:
+        avant = len(lignes)
+        try:
+            if feed.is_dir():
+                flux = open(feed / "stops.txt", encoding="utf-8-sig", newline="")
+            else:
+                archive = zipfile.ZipFile(feed)
+                flux = io.TextIOWrapper(archive.open("stops.txt"), encoding="utf-8-sig", newline="")
+            with flux:
+                for row in csv.DictReader(flux):
+                    lat, lon = row.get("stop_lat"), row.get("stop_lon")
+                    if lat and lon:
+                        try:
+                            lignes.append((float(lat), float(lon)))
+                        except ValueError:
+                            continue
+        except (OSError, KeyError, zipfile.BadZipFile) as err:
+            logger.warning(f"[GTFS] arrêts illisibles dans {feed.name} : {err}")
+            continue
+        par_feed[feed.name] = len(lignes) - avant
+    if not lignes:
+        return np.empty((0, 2), dtype=float), par_feed
+    return np.array(lignes, dtype=float), par_feed
+
 class OTPTripHelper(TripHelper):
-    SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway", "car"]
+    # Modes qu'une jambe d'itinéraire peut porter. `rail` = TER Occitanie, entré dans
+    # le graphe OTP le 2026-09-04 (ticket 031, T2/T6) : le feed annuel le fait rouler
+    # le jour simulé, ce que l'export en service ne faisait pas. Sans `rail` ici,
+    # l'assertion de `to_travel_plan` refuserait le premier train renvoyé par OTP.
+    SUPPORTED_MODES = ["foot", "bus", "metro", "tram", "cableway", "rail", "car"]
     # Maximum walking distance (metres) to the nearest transit stop.
     # If both origin and destination have no stop within this radius, OTP is skipped.
     MAX_WALK_TO_STOP_M: int = 1_500
@@ -247,8 +324,44 @@ class OTPTripHelper(TripHelper):
         self._semaphore = asyncio.Semaphore(settings.gtfs.otp_max_concurrent)
 
         # Build stop coordinate array once for fast proximity checks (lat, lon).
+        #
+        # La porte doit refléter l'offre que le GRAPHE porte, pas celle du seul feed
+        # primaire : voir `feeds_en_service`. Un feed en service et absent d'ici rend
+        # son réseau introuvable pour les agents qui n'ont que lui à portée.
         stops_df = self.gtfs_data.stops[['stop_lat', 'stop_lon']].dropna()
-        self._stop_coords = stops_df.values.astype(float)  # shape (n, 2) — [lat, lon]
+        arrets_primaire = stops_df.values.astype(float)  # shape (n, 2) — [lat, lon]
+        feeds = feeds_en_service(settings.gtfs.gtfs_file)
+        coords, par_feed = coordonnees_arrets(feeds)
+        if len(coords) >= len(arrets_primaire):
+            self._stop_coords = coords
+            logger.info(
+                f"[GTFS] porte de proximité OTP : {len(coords)} arrêts sur "
+                f"{len(par_feed)} feed(s) en service — "
+                + ", ".join(f"{nom} {n}" for nom, n in par_feed.items())
+            )
+            if len(par_feed) <= 1:
+                # Cas vécu : les conteneurs `api`, `worker` et `controller` ne
+                # montaient que `data/gtfs/tisseo_gtfs`, alors que le graphe OTP
+                # est bâti sur les trois réseaux. Le balayage ne peut pas deviner
+                # ce que le graphe porte ; il peut au moins dire qu'il n'a vu
+                # qu'un réseau.
+                logger.warning(
+                    f"[GTFS] un seul feed GTFS à côté de {settings.gtfs.gtfs_file} : si le "
+                    f"graphe OTP en porte plusieurs (Tisséo + liO + TER depuis le "
+                    f"2026-09-04), les réseaux absents d'ici seront introuvables pour les "
+                    f"agents qui n'ont qu'eux à portée — vérifier les montages du service"
+                )
+        else:
+            # Le feed primaire porte plus d'arrêts que le balayage : on ne rétrécit
+            # jamais la porte en silence.
+            self._stop_coords = arrets_primaire
+            logger.error(
+                f"[ALARME] porte de proximité OTP : le balayage des feeds de "
+                f"{settings.gtfs.gtfs_file} n'a trouvé que {len(coords)} arrêts contre "
+                f"{len(arrets_primaire)} dans le feed primaire — repli sur le feed "
+                f"primaire, les réseaux régionaux seront invisibles pour les agents qui "
+                f"n'ont qu'eux à portée (feeds vus : {par_feed})"
+            )
 
     def _has_reachable_stop(self, lon: float, lat: float) -> bool:
         """Return True if a transit stop is within MAX_WALK_TO_STOP_M metres."""
@@ -470,7 +583,14 @@ class OTPTripHelper(TripHelper):
             "searchWindow": search_window_m,
         }
 
-        # Define transit modes for OTP query (bus, metro, tram, cableway)
+        # Modes demandés à OTP. `bus` porte les cars liO (route_type=3) comme les bus
+        # Tisséo, `cableway` le Téléo, `rail` le TER (route_type=2).
+        #
+        # ⚠ Un mode absent de cette liste n'est pas « moins probable » : il est
+        # INTROUVABLE. Le TER était dans le graphe depuis le 2026-09-03, ses arrêts
+        # comptaient dans l'enveloppe de desserte, et aucun agent ne pouvait s'en voir
+        # proposer un — c'est la question ouverte n° 16 du ticket 031. Le TER porte 10 %
+        # des déplacements en transport en commun de la 3ᵉ couronne (EMC² 2023).
         transit_modes = {
             "accessMode": access_egress_mode,
             "transportModes": [
@@ -478,6 +598,7 @@ class OTPTripHelper(TripHelper):
                 {"transportMode": "metro"},
                 {"transportMode": "tram"},
                 {"transportMode": "cableway"},
+                {"transportMode": "rail"},
             ],
             "egressMode": access_egress_mode,
         }

@@ -255,9 +255,13 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     # GTFS settings
     gtfs_file: str = os.path.join(base_dir, "../data/gtfs/tisseo_gtfs/")
+    # `route_type` GTFS → nom du mode servi à l'agent dans son prompt (« Trajet en
+    # Train 12 »). Une clé manquante s'affiche « Unknown » : le TER (route_type=2)
+    # entre ici le 2026-09-04 avec le mode `rail` demandé à OTP (ticket 031, q. 16).
     gtfs_modality_name_map: dict[str, str] = {
         "0": "T1/Tram",
         "1": "Metro",
+        "2": "Train",
         "3": "Bus",
         "6": "Teleo",
     }

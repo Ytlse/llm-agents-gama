@@ -29,16 +29,22 @@ DEFAULT_ENDPOINTS = ["http://localhost:8080/otp/transmodel/v3",
                      "http://localhost:8081/otp/transmodel/v3",
                      "http://localhost:8082/otp/transmodel/v3"]
 CAPITOLE = (43.6045, 1.4440)
+# Les modes demandés sont ceux du runtime (`llm-agents/trip_helper/otp.py`) : un mode
+# absent d'ici mesurerait une offre que les agents ne voient pas, et réciproquement.
+# `legs { mode authority }` sert à compter les itinéraires qui proposent un TRAIN —
+# le seul chiffre qui dise si l'ajout du mode `rail` change quelque chose.
 QUERY = """
-query ($from: Location!, $to: Location!, $dateTime: DateTime) {
-  trip(from: $from, to: $to, dateTime: $dateTime, numTripPatterns: 1,
+query ($from: Location!, $to: Location!, $dateTime: DateTime, $numTripPatterns: Int) {
+  trip(from: $from, to: $to, dateTime: $dateTime, numTripPatterns: $numTripPatterns,
        modes: {accessMode: foot, egressMode: foot, transportModes: [{transportMode: bus}, {transportMode: metro},
                {transportMode: tram}, {transportMode: rail}, {transportMode: cableway}]}) {
-    tripPatterns { duration }
+    tripPatterns { duration legs { mode authority { id name } } }
     routingErrors { code description inputField }
   }
 }
 """
+# Modes de jambe qui comptent comme du train (transmodel v3).
+MODES_TRAIN = {"rail"}
 
 
 def _points(pop: list) -> tuple[list, list]:
@@ -90,39 +96,67 @@ def classer_par_couronne(points: list, geojson: Path = COURONNES_GEOJSON) -> dic
     return classement
 
 
-async def _query(session, url, lat, lon, date_time):
+async def _query(session, url, lat, lon, date_time, num_trip_patterns=1):
     variables = {"from": {"coordinates": {"latitude": lat, "longitude": lon}},
                  "to": {"coordinates": {"latitude": CAPITOLE[0], "longitude": CAPITOLE[1]}},
-                 "dateTime": date_time}
+                 "dateTime": date_time, "numTripPatterns": num_trip_patterns}
     async with session.post(url, json={"query": QUERY, "variables": variables}) as resp:
         body = await resp.json()
     trip = (body.get("data") or {}).get("trip") or {}
     errors = [e.get("code") for e in trip.get("routingErrors") or []]
     if "errors" in body and not trip:
         errors = ["GRAPHQL_ERROR:" + str(body["errors"])[:80]]
-    return len(trip.get("tripPatterns") or []), errors
+    motifs = trip.get("tripPatterns") or []
+    # Modes de jambe rencontrés, et itinéraires portant au moins un train.
+    modes, avec_train, autorites_train = Counter(), 0, Counter()
+    for motif in motifs:
+        modes_motif = {(leg.get("mode") or "").lower() for leg in motif.get("legs") or []}
+        modes.update(modes_motif)
+        if modes_motif & MODES_TRAIN:
+            avec_train += 1
+            for leg in motif.get("legs") or []:
+                if (leg.get("mode") or "").lower() in MODES_TRAIN:
+                    autorites_train[((leg.get("authority") or {}).get("name") or "?")] += 1
+    return len(motifs), errors, modes, avec_train, autorites_train
 
 
-async def run(points, endpoints, date_time, concurrency, couronnes=None) -> dict:
+async def run(points, endpoints, date_time, concurrency, couronnes=None, num_trip_patterns=1) -> dict:
     import aiohttp
 
     couronnes = couronnes or {}
     sem = asyncio.Semaphore(concurrency)
     codes, per_kind, no_pattern, link_failures = Counter(), Counter(), Counter(), []
-    par_couronne = defaultdict(lambda: {"points": 0, "sans_itineraire": 0, "erreurs": Counter()})
+    modes_totaux, autorites_train = Counter(), Counter()
+    itineraires, itineraires_train, points_avec_train = 0, 0, 0
+    par_couronne = defaultdict(lambda: {"points": 0, "sans_itineraire": 0, "erreurs": Counter(),
+                                        "points_avec_train": 0, "itineraires": 0, "itineraires_avec_train": 0})
     t0 = time.monotonic()
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
         async def one(i, pt):
+            nonlocal itineraires, itineraires_train, points_avec_train
             pid, kind, lat, lon = pt
             async with sem:
                 try:
-                    n, errs = await _query(session, endpoints[i % len(endpoints)], lat, lon, date_time)
+                    n, errs, modes, avec_train, autorites = await _query(
+                        session, endpoints[i % len(endpoints)], lat, lon, date_time, num_trip_patterns)
                 except Exception as exc:  # réseau, timeout
-                    n, errs = -1, [f"EXC:{type(exc).__name__}"]
+                    n, errs, modes, avec_train, autorites = -1, [f"EXC:{type(exc).__name__}"], Counter(), 0, Counter()
             per_kind[kind] += 1
+            modes_totaux.update(modes)
+            autorites_train.update(autorites)
             couronne = couronnes.get(i)
             if couronne:
                 par_couronne[couronne]["points"] += 1
+            if n > 0:
+                itineraires += n
+                if couronne:
+                    par_couronne[couronne]["itineraires"] += n
+            if avec_train:
+                itineraires_train += avec_train
+                points_avec_train += 1
+                if couronne:
+                    par_couronne[couronne]["itineraires_avec_train"] += avec_train
+                    par_couronne[couronne]["points_avec_train"] += 1
             if n == 0:
                 no_pattern[kind] += 1
                 if couronne:
@@ -136,6 +170,12 @@ async def run(points, endpoints, date_time, concurrency, couronnes=None) -> dict
         await asyncio.gather(*(one(i, pt) for i, pt in enumerate(points)))
     return {"points": len(points), "par_type": dict(per_kind), "sans_itineraire": dict(no_pattern),
             "routing_errors": dict(codes),
+            "num_trip_patterns": num_trip_patterns,
+            "itineraires_rendus": itineraires,
+            "itineraires_avec_train": itineraires_train,
+            "points_avec_au_moins_un_itineraire_train": points_avec_train,
+            "modes_de_jambe": dict(modes_totaux.most_common()),
+            "autorites_du_train": dict(autorites_train.most_common()),
             "par_couronne": {nom: {**valeurs, "erreurs": dict(valeurs["erreurs"])}
                              for nom, valeurs in sorted(par_couronne.items())},
             "echecs_de_rattachement": link_failures,
@@ -151,6 +191,11 @@ def main(argv=None) -> int:
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--sans-couronnes", action="store_true",
                         help="ne pas ventiler les résultats par couronne de résidence")
+    parser.add_argument("--num-trip-patterns", type=int, default=1,
+                        help="itinéraires demandés par point. 1 (défaut) = la mesure de "
+                             "rattachement, comparable aux relevés antérieurs ; 6 = ce que "
+                             "le runtime demande (settings.gtfs.max_trip_candidates), donc "
+                             "ce que l'agent se voit réellement proposer")
     args = parser.parse_args(argv)
 
     pop = json.loads(args.population.read_text(encoding="utf-8"))
@@ -159,7 +204,8 @@ def main(argv=None) -> int:
     print(f"{len(pop)} personas : {len(homes)} domiciles, {len(acts)} lieux d'activité distincts → OTP {args.date_time}",
           file=sys.stderr)
     couronnes = {} if args.sans_couronnes else classer_par_couronne(points)
-    result = asyncio.run(run(points, args.endpoints.split(","), args.date_time, args.concurrency, couronnes))
+    result = asyncio.run(run(points, args.endpoints.split(","), args.date_time, args.concurrency,
+                             couronnes, args.num_trip_patterns))
     result.update({"population": str(args.population), "date_time": args.date_time, "reference": CAPITOLE})
     print(json.dumps({k: v for k, v in result.items() if k != "echecs_de_rattachement"}, ensure_ascii=False, indent=1))
     if result["echecs_de_rattachement"]:
