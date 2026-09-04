@@ -1,3 +1,49 @@
+## [2026-09-04] Un agent monte dans un train, et la journée entière tourne sur la population v5
+
+Premier run d'une **journée simulée complète** sur `population_1000_AAMAS_v5` : 1 h 41 de bout en
+bout, 1 000 agents sur 1 000 chargés depuis le sceau, 5 257 déplacements journalisés. Et le rail
+fonctionne de bout en bout — routage, véhicule GAMA, montée à bord, arrivée : **13 déplacements en
+train** exécutés par 11 agents, de 2,6 à 27,2 km, tous arrivés à destination et tous en avance
+(retard médian −6 min). Les neuf autres décisions ferroviaires portaient sur le 17 mars, un jour
+que le run ne joue pas.
+
+Les jambes de car et de train arrivent maintenant au prompt avec le nom de leur ligne : **zéro
+« Unknown »** dans les 2 065 échanges du run, et des raisonnements du type « train P4 vers
+Pins-Justaret est le seul compromis ». Les cinq types de lignes du périmètre — bus, tram, Téléo,
+métro, train — sont tous connus des tables de largeur et de capacité de GAMA.
+
+**L'audit des parts modales rend le détail et l'agrégat**, avec la table qui relie les deux, de
+sorte que le train se recompose avec les transports collectifs : Marche 907 · Vélo 438 · Voiture
+privée 1 834 · Transports collectifs 1 535 · **Train 22** · Aucun 521. Agrégé et comparé aux cibles
+de l'enquête sur les quatre catégories scorées : voiture 38,7 % contre 56,7 · transports collectifs
+32,9 contre 12,4 · marche 19,2 contre 26,8 · vélo 9,2 contre 4,1. L'écart est celui du **modèle de
+choix**, pas du classement : zéro déplacement mal classé, et l'invariant de comptage est vérifié
+(5 257 lignes lues = 5 257 en détail = 5 257 en catégories).
+
+**Avant :** aucun run n'allait au bout de sa journée, le train n'existait ni au routage ni dans
+GAMA, et l'audit ignorait silencieusement les déplacements ferroviaires.
+**Après :** une journée complète, le train jusqu'à l'arrivée, et un audit dont chaque ligne est
+comptée et nommée.
+
+---
+
+## [2026-09-04] Le rapport de run comparait deux dénominateurs différents
+
+Le rapport lève une alarme « Tirage modal dérivant » quand la répartition tirée s'écarte de plus de
+8 points de celle que le LLM annonce. Il sommait les probabilités annoncées sur les seules lignes
+qui en portent une, mais comptait les modes tirés sur **toutes** les lignes du journal — mono-choix,
+fallback, « Aucun ». Le mode le plus fréquent y perdait mécaniquement une dizaine de points, et
+l'alarme accusait le cache d'un défaut inexistant.
+
+**Avant :** « Transports_collectifs s'écarte de 11,9 pts — vérifier le cache (points hérités
+resservis sans tirage) et la normalisation ».
+**Après :** à dénominateur commun, le tirage colle à ce que le modèle annonce à moins d'un point
+près sur les 3 568 décisions probabilistes du run — transports collectifs +0,3 pt, voiture −0,7,
+marche +0,3, vélo +0,0, train +0,1. L'alarme reste armée pour un vrai biais : cinq tests fixent le
+dénominateur, le seuil et le silence sous 200 décisions.
+
+---
+
 ## [2026-09-04] La population du jeu de test est conforme sur ses treize marges
 
 `population_1000_AAMAS_v5` est scellée : 1 000 personas en 499 ménages entiers, **treize marges

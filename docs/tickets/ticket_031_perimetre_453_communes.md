@@ -738,6 +738,26 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
    ⚠ **Observabilité** : la vague `act[N+1]` n'a aucun compteur de progression (le bootstrap en a un
    tous les 200) — neuf minutes de journal sans autre signal que des avertissements, contraire à la
    règle « journaliser le succès explicitement » du dépôt. À corriger.
+
+   **TENU EN ENTIER LE 2026-09-04 SUR LA v5.** Run `experiments/archive/2026-09-04_16_25`
+   (`make run OFFLINE=1`, lundi 16 mars 2026, `part_of_llm=1.0`, `max_days=1`), **journée simulée
+   terminée** — `Simulation stopped after 1 simulated day(s)` — en **1 h 41** de temps mur.
+   (a) **1 000 / 1 000 agents chargés**, 0 écarté ; (b) **0 « Couldn't link »** côté GAMA (12
+   avertissements OTP `0 patterns` et 33 `No usable itinerary`, tous avec origine et destination
+   dans l'emprise : absence de desserte, pas défaut de graphe) ; (c) **0 agent hors du monde
+   GAMA** ; (d) **alarmes de périmètre silencieuses** — `[PERIMETRE] route_type : 5 types dans les
+   couches, tous connus des tables de largeur ET de capacité`, dont `route_type=2 (Train) : 266
+   lignes, 68 arrêts, 884 courses`. Les 72 `ERROR` du journal ne portent aucune alarme de
+   périmètre : 36 arrivées perdues (ticket 011), 19 échecs de tâches LLM et 12 alarmes de
+   disjoncteur ouvert-refermé en une seconde dans les trois premières minutes (saturation passagère
+   des fournisseurs, reprise automatique, aucune décision dégradée), 1 véhicules orphelins,
+   1 vecteur de probabilités à somme nulle, 1 faux positif de montage de cache, 1 message de
+   bienvenue antérieur au WebSocket. Le run **n'a réutilisé aucun cache antérieur à la purge de
+   14 h 17** : les 8 333 routes de la base sont datées du jour, la plus ancienne à 15 h 51 min 36 s.
+
+   ⚠ **Trois alarmes du rapport de run, réelles, hors périmètre de ce ticket** : latence de
+   pré-planification p95 = 3 853 s (la file s'accumule pendant les vagues d'amorçage) ; 2 034 des
+   7 185 activités-jours attendues non exécutées (28,3 %) ; 9 trajets `timed_out`.
 3. Le rapport de run compare les parts modales aux cibles 453 communes, avec le transport
    scolaire déclaré (ou livré).
    **Non tenu, mais le blocage d'offre est levé.** Il demandait une journée simulée complète
@@ -748,6 +768,38 @@ L'inventaire complet est dans `docs/arch/routing.md`, § « Les listes de modes 
    transport scolaire du ticket 030, et la recréation des conteneurs (question 23) pour que le
    runtime charge les modes et la porte de proximité nouveaux. À surveiller au premier run :
    les jambes de car et de train arrivent au prompt avec le libellé « Unknown » (question 18).
+
+   **TENU LE 2026-09-04, transport scolaire déclaré.** Run `2026-09-04_16_25`, audit
+   `docs/traces/2026-09-04_18-10_audit_run_v5/audit_perimetre.json`, axe A7. L'audit rend le
+   **détail** (libellés du journal), l'**agrégat** (catégories de l'enquête) et la **table** qui
+   relie les deux, de sorte que le train se recompose avec les transports collectifs :
+
+   | libellé du journal | catégorie | n | part des 5 257 lignes |
+   |---|---|---:|---:|
+   | Marche | marche | 907 | 17,3 % |
+   | Vélo | velo | 438 | 8,3 % |
+   | Voiture Privée | voiture | 1 834 | 34,9 % |
+   | Transports_collectifs | transports_collectifs | 1 535 | 29,2 % |
+   | **Train** | transports_collectifs | **22** | 0,4 % |
+   | Aucun | non_deplacement (hors parts) | 521 | 9,9 % |
+
+   Sur les 4 736 déplacements, agrégé puis comparé aux cibles 453 communes renormalisées aux
+   quatre catégories scorées : **voiture 38,7 % contre 56,7 (−18,0 pt)** · **transports collectifs
+   32,9 contre 12,4 (+20,5)** · **marche 19,2 contre 26,8 (−7,7)** · **vélo 9,2 contre 4,1
+   (+5,1)** ; L1 = 51,3 pt sur des comptages non redressés (cf. A3). **Zéro déplacement mal
+   classé** et invariant de comptage vérifié (5 257 lues = 5 257 en détail = 5 257 en catégories) :
+   l'écart est celui du modèle de choix, pas du classement — il relève des tickets 018, 022 et 024,
+   pas de celui-ci. Le transport scolaire est **déclaré** : le ticket 030 est en pause à la demande
+   de l'auteur, et aucun GTFS ouvert ne le porte.
+
+   **Question 18 close par ce run** : **zéro « Unknown »** dans les 2 065 échanges LLM ; les jambes
+   ferroviaires et les cars portent le nom de leur ligne (« train P4 vers Pins-Justaret », « train
+   K5 »), 618 occurrences de « Train » et 113 de « liO » dans les prompts. C'est l'union des
+   catalogues de lignes des trois feeds en service (`init_route_lookup_maps`) qui le permet.
+
+   **Le rail va jusqu'à l'arrivée** : 13 des 22 décisions ferroviaires portaient sur le 16 mars et
+   **les 13 sont arrivées à destination dans GAMA** (11 agents, 2,6 à 27,2 km, retard médian
+   −6 min, aucun `timed_out`) ; les 9 autres portaient sur le 17 mars, jour que le run ne joue pas.
 
 ## Ce que ce ticket ne fait pas
 - Il ne remplace pas l'ENTD 2008 par l'EMC² 2023 comme enquête d'appariement (levier 3, autre

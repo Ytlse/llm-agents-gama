@@ -378,24 +378,32 @@ TH_MODE_DRIFT_MIN_ROWS = 200
 
 
 def _decisions_expected_vs_drawn(expected: Counter, expected_rows: int,
-                                 modes: Counter, out: list[str], alarms: list[str]) -> None:
+                                 drawn: Counter, out: list[str], alarms: list[str]) -> None:
     """Compare la répartition annoncée par le LLM à celle réellement tirée.
 
     Le tirage doit reproduire la distribution en espérance. Un écart franc et durable
     ne vient donc pas du modèle : il vient du tirage lui-même, du cache (options
     disparues, points hérités resservis sans tirage) ou d'un biais de normalisation.
+
+    **Un seul dénominateur des deux côtés** : les lignes qui portent une répartition.
+    Compter les modes tirés sur TOUTES les lignes du journal — mono-choix, fallback,
+    « Aucun » — y mêlait des décisions sans tirage et fabriquait un écart de plus de
+    10 points sur le mode le plus fréquent, avec l'accusation infondée qui va avec
+    (« vérifier le cache »). Mesuré sur le run 2026-09-04_16_25 : -11,9 pt annoncés
+    pour les transports collectifs, +0,3 pt à dénominateur commun.
     """
     if not expected_rows:
         return
     out.append(
-        f"\n**Répartition attendue vs tirée** ({expected_rows} décisions probabilistes)\n")
+        f"\n**Répartition attendue vs tirée** ({expected_rows} décisions probabilistes, "
+        f"même dénominateur des deux côtés)\n")
     out.append("| Mode | attendu | tiré | écart |")
     out.append("|:--|--:|--:|--:|")
-    drawn_total = sum(modes.values()) or 1
+    drawn_total = sum(drawn.values()) or 1
     worst = (0.0, "")
     for mode, mass in expected.most_common():
         exp_pct = 100.0 * mass / expected_rows
-        got_pct = 100.0 * modes.get(mode, 0) / drawn_total
+        got_pct = 100.0 * drawn.get(mode, 0) / drawn_total
         delta = got_pct - exp_pct
         if exp_pct == 0 and got_pct == 0:
             continue
@@ -420,6 +428,9 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
     # « voulait ». Les modes tirés doivent la reproduire en espérance — un écart
     # persistant signale un biais du tirage ou du cache, pas du modèle.
     expected = Counter()
+    # Modes tirés sur les SEULES lignes qui portent une répartition : c'est le
+    # dénominateur de `expected`, et le seul avec lequel l'écart veut dire quelque chose.
+    drawn = Counter()
     expected_rows = 0
     total = 0
     fallbacks = 0
@@ -439,6 +450,7 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
             cells = {c: row.get(c, "") for c in prob_cols}
             if any(v not in ("", None) for v in cells.values()):
                 expected_rows += 1
+                drawn[row.get("Mode de transport Choisi", "?")] += 1
                 for col, val in cells.items():
                     try:
                         expected[col[2:-3]] += float(val) / 100.0
@@ -465,7 +477,7 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
         right = f"{sl[i][0][:32]} | {sl[i][1]}" if i < len(sl) else " | "
         out.append(f"| {left} | | {right} |")
 
-    _decisions_expected_vs_drawn(expected, expected_rows, modes, out, alarms)
+    _decisions_expected_vs_drawn(expected, expected_rows, drawn, out, alarms)
     if fallbacks / total >= TH_FALLBACK_SHARE:
         alarms.append(
             f"🟠 {fallbacks}/{total} décisions ({fallbacks / total:.1%}) en fallback "

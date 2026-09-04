@@ -43,9 +43,15 @@ de %, et un bandeau d'intégrité des étiquettes de mode. Trois clés de lectur
 
 - les deux vocabulaires sont ramenés à un socle commun par `label_replace`
   (marche/vélo/voiture/TC) — le **train est fondu dans les TC**, comme côté contrôleur ;
-- l'écart est **structurellement non nul** : les décisions mono-choix et les points de
-  cache hérités arrivent dans « tiré » sans exister dans « attendu ». C'est la
-  **tendance** qui compte, pas la valeur absolue ;
+- dans **Grafana**, l'écart est **structurellement non nul** : les décisions mono-choix et
+  les points de cache hérités arrivent dans « tiré » sans exister dans « attendu », les deux
+  compteurs Prometheus n'ayant pas le même dénominateur. C'est la **tendance** qui compte,
+  pas la valeur absolue. **`make report`, lui, ne mélange plus les dénominateurs** depuis le
+  2026-09-04 : il compte les modes tirés sur les seules lignes de `moves.csv` qui portent une
+  répartition, et son alarme `Tirage modal dérivant` (seuil 8 pt, muette sous 200 décisions)
+  ne se déclenche donc que sur un vrai biais de tirage. Sur le run `2026-09-04_16_25` elle
+  annonçait −11,9 pt pour les transports collectifs ; à dénominateur commun l'écart vaut
+  +0,3 pt. Un chiffre de Grafana et un chiffre du rapport ne se comparent pas ;
 - le bandeau `llm_mode_label_mismatch_total / llm_mode_label_checked_total` doit rester
   à **0 %**. Non nul = le modèle note une autre option que celle qu'il croit, donc ses
   probabilités partent sur les mauvais index et toute la répartition est fausse

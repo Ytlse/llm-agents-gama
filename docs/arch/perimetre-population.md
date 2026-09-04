@@ -309,7 +309,8 @@ surestimée par construction, ce qui était le soupçon de départ.
 **Ce qui divergeait, et ne diverge plus.** La hiérarchie de mode principal était
 **inversée** : `_plan_transport_mode` testait la voiture *avant* les transports collectifs,
 alors que l'enquête code **760 de ses 770** déplacements mixtes voiture + TC en
-« transports collectifs », et 10 seulement en « voiture ».
+« transports collectifs », et 10 seulement en « voiture » — 757 sur 767 en recomptant avec
+les listes de modes complètes, cf. l'enseignement 1 ci-dessous.
 
 **Refermé le 2026-09-04 par le [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md)**,
 et par la source plutôt que par une convention : le rapport publie en annexe **p. 53** la

@@ -42,6 +42,39 @@ message ponctuelle.
 - **H3 — Sérialisation/parsing** : un contenu de move particulier (itinéraire long,
   caractère spécial) silencieusement rejeté par le parsing GAML.
 
+## Mesure du 2026-09-04 — le phénomène s'aggrave et il n'est pas transport
+
+Deux journées complètes de 1 000 agents, tirées le même jour, avec le même GAMA et le même
+launcher :
+
+| Run | Pushs | Arrivées perdues | Taux | Journée simulée |
+|---|---:|---:|---:|---|
+| 2026-08-03_10_22 (référence du ticket) | 3 060 | 5 | **0,16 %** | complète |
+| 2026-09-04_01_09 (population v4) | 3 250 | 21 | **0,65 %** | complète |
+| 2026-09-04_16_25 (population v5) | 3 139 | 36 | **1,15 %** | complète |
+
+**Le transport est hors de cause, confirmé une seconde fois.** Sur le run du 16 h 25, les seules
+traces WebSocket sont **quatre tentatives de connexion entre 16:25:12 et 16:25:32**, avant que
+GAMA Server n'écoute — aucun 1006, aucune reconnexion pendant les 1 h 40 du run. La perte est
+applicative.
+
+**Ce que la répartition dans la journée apprend.** Les 21 pertes du run de 01 h 09 tiennent dans
+**vingt minutes** (02:17 → 02:37 réelles), ce qui allait dans le sens de H1 (rafale). Les 36 pertes
+du run de 16 h 25 sont au contraire **étalées sur toute la journée simulée** — de 09:21 le 16 mars
+à 02:22 le 17 — donc H1 seule n'explique pas ce profil-ci ; un run rapide (1 h 41 au lieu de 9 h 36,
+grâce au cache de routes enfin partagé) cycle vite en permanence, et pas seulement pendant la
+rafale d'amorçage. La corrélation reste avec la **vitesse de cyclage**, pas avec la rafale.
+
+**Le profil « agent bloqué » de H2 est reproduit, et plus marqué.** L'agent **461441** perd
+**6 arrivées** sur la journée (work, home, work, home, other, home, work), toutes suivies de
+`[worker] ANOMALIE push — Idle avec plan non envoyé → nouvelle tentative d'envoi` ; 279721 en perd
+4, cinq autres agents 2 chacun. Le filet tient à chaque fois — 36 pertes, 36 reprises forcées — au
+prix d'environ une heure simulée de retard par perte.
+
+**Conséquence pour le protocole** : à 1,15 %, l'ordre de grandeur reste faible mais le retard
+imposé (≈ 1 h simulée) touche 36 déplacements sur 5 257, soit 0,7 % du journal. À déclarer tant que
+l'ACK applicatif (A2) n'est pas livré.
+
 ## Actions
 
 ### A1 — Prérequis outillage : relais d'expressions dans le launcher headless
