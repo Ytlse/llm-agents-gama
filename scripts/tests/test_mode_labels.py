@@ -14,10 +14,13 @@ sur le même fil :
   par `reindex(mode_order)` — sans avertissement, alors que le même carnet avertissait
   (mal) pour une autre colonne.
 
-Trois gardes contre la vacuité : les effectifs sont assertés avant toute boucle, la
-table de production (`move_logger._CANONICAL_FR`) est **lue dans sa source** plutôt que
-recopiée, et le format de l'alarme est confronté à l'expression régulière de
-`scripts/errors.py` — une alarme que `make error` ne relit pas est une alarme inutile.
+Quatre gardes contre la vacuité : les effectifs sont assertés avant toute boucle ; les
+libellés de production sont **lus dans leur source** (`llm_module.core.mode_hierarchy`,
+ticket 022) plutôt que recopiés ; le format de l'alarme est confronté à l'expression
+régulière de `scripts/errors.py` — une alarme que `make error` ne relit pas est une
+alarme inutile ; et le garde-fou de couverture est exercé **dans les deux sens**, vert
+aujourd'hui et rouge quand on lui retire « Train ». Un contrôle qu'on n'a jamais vu
+échouer est un contrôle dont on ne sait pas s'il peut échouer.
 
 Lancement : PYTHONPATH=. llm-agents/.venv/bin/python -m pytest scripts/tests/test_mode_labels.py
 """
@@ -30,7 +33,6 @@ from pathlib import Path
 
 import pytest
 
-from llm_module.core.mode_hierarchy import hierarchy
 from scripts.analysis.mode_labels import (
     AGGREGATION, MODE_COLUMN, NON_TRIP, NO_LABEL, SCORED_CATEGORIES,
     SURVEY_CATEGORIES, UNKNOWN, ModeTally, ModeTallyError, aggregation_table,
@@ -67,8 +69,30 @@ def _journal_labels() -> dict[str, str]:
     s'importe sans tirer `settings` (donc sans repointer `experiments/current`), et un
     littéral recopié ici ne tomberait que si l'instrument change, jamais si la
     production change.
+
+    L'import est LOCAL et la ressource peut manquer : ce module et la hiérarchie ont
+    atterri le même jour, et un test qui ne collecte plus parce que l'autre moitié n'est
+    pas encore là ne mesure rien du tout. `_exiger_hierarchie` tranche : soit la
+    ressource est là et le contrôle est strict, soit elle manque et le test VÉRIFIE que
+    l'absence est dite avant de passer son tour.
     """
+    from llm_module.core.mode_hierarchy import hierarchy
+
     return dict(hierarchy().journal_label)
+
+
+def _exiger_hierarchie() -> None:
+    """Saute le test si la hiérarchie manque — mais seulement après l'avoir constaté.
+
+    Un `importorskip` nu serait le motif de vacuité : un contrôle absent passerait pour
+    un contrôle vert. Ici, l'absence doit d'abord se lire dans le retour de
+    `check_covers_hierarchy()`, qui refuse de rendre "" quand il n'a pas pu vérifier.
+    """
+    pytest.importorskip("llm_module.core.mode_hierarchy",
+                        reason="hiérarchie des modes (ticket 022) absente du dépôt")
+    raison = check_covers_hierarchy()
+    if "n'a PAS été vérifiée" in raison:
+        pytest.skip(f"hiérarchie des modes illisible, et le contrôle le dit : {raison}")
 
 
 def _error_regex() -> re.Pattern:
@@ -94,6 +118,7 @@ def test_la_table_couvre_tous_les_libelles_du_journal():
     C'est exactement ce qui est arrivé au train : le journal écrivait « Train » depuis
     le routage du TER, `MOVE_MODE_MAP` ne l'a jamais su.
     """
+    _exiger_hierarchie()
     labels = _journal_labels()
     assert len(labels) >= 9, labels                # garde anti-vacuité
     assert labels.get("rail") == "Train"
@@ -111,6 +136,7 @@ def test_le_controle_de_couverture_est_vert_et_sait_etre_rouge(monkeypatch):
     Un contrôle qu'on n'a jamais vu échouer est un contrôle dont on ne sait pas s'il
     peut échouer — le motif de vacuité appliqué aux garde-fous eux-mêmes.
     """
+    _exiger_hierarchie()
     assert check_covers_hierarchy() == ""
     from scripts.analysis import mode_labels
     sans_train = {k: v for k, v in AGGREGATION.items() if k != "Train"}
@@ -127,6 +153,7 @@ def test_lecart_de_couverture_alarme_et_remonte_sur_le_comptage(tmp_path, monkey
     l'absence de la clé ne se voyait donc nulle part. Le contrôle ne regarde pas les
     données, il regarde la table.
     """
+    _exiger_hierarchie()
     from scripts.analysis import mode_labels
     monkeypatch.setattr(mode_labels, "AGGREGATION",
                         {k: v for k, v in AGGREGATION.items() if k != "Train"})
