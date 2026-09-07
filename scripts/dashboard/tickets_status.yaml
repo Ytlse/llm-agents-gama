@@ -1447,3 +1447,17 @@ tickets:
       api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. Commits 2f27a27, a5b3c8c, 617c0f6 poussés le 07 ; e2e perception_filter réel OK ; CI verte
       (5 jobs, cliquet de couverture 70 %). RESTE : trancher la licence ; itérations suivantes = paramétrage en couches
       LLM_GATEWAY_, adapter OpenAI-compatible, exécuteur sans Celery, ticket 036 (auth).
+  ticket_038_licence_des_ressources_emc2_de_mobility_core:
+    status: en veille
+    note: >-
+      DÉCISION du 2026-09-07 : à trancher plus tard. Le gateway est sous Apache-2.0 ; la question porte sur
+      les ressources data/ de mobility_core, toutes dérivées des microdonnées ProGEDO lil-1750 (accès
+      restreint). Le ticket dresse le tableau des ressources et leur origine, distingue agrégés et
+      reproduction de découpage, et liste ce qu'il faut relire (convention lil-1750, publication AUAT/CEREMA).
+  ticket_039_organisation_du_depot:
+    status: en veille
+    note: >-
+      DÉCISION du 2026-09-07 : constat et vision consignés, plan détaillé à l'ouverture. Tailles mesurées
+      (eqasim 16 Go, experiments 10 Go, data 6,5 Go, scripts 560 Mo, docs 196 Mo, prompt_calibration
+      dépôt git imbriqué), cinq principes, cible packages/ services/ infra/ data/ experiments/ docs/
+      notebooks/, migration en trois pas indépendants.
