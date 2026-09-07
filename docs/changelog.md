@@ -1,3 +1,58 @@
+## [2026-09-07] Le gateway se règle par couches : préfixe, fichier de déploiement, limites apprises hors du paquet
+
+Deuxième itération du ticket 037, lot A. Les réglages du gateway LLM deviennent ceux d'une
+bibliothèque : groupés (`redis`, `executor`, `inference`, `batching`, `resilience`, `api`,
+`telemetry`), préfixés `LLM_GATEWAY_` avec `__` entre les niveaux, et lus dans un ordre fixe :
+constructeur, environnement, anciens noms, fichier `LLM_GATEWAY_CONFIG`, profil
+`LLM_GATEWAY_PROFILE` (`free-tier` = les valeurs mesurées en juillet, `paid`), défauts.
+
+Ce qui change pour la simulation : rien à faire dans `.env`. `PROVIDER_KEYS__<nom>` reste le
+nom des clés ; le compose passe `api`, `worker` et `flower` aux noms préfixés, et les anciens
+noms (`REDIS_URL`, `APP_WORKDIR`, `CELERY_*`, `SERVICE_NAME`) restent lus une version avec un
+avertissement au démarrage.
+
+**Avant :** `providers.yaml` vivait dans le paquet et le worker y réécrivait les plafonds de
+complétion appris sur HTTP 400 ; une clé mal orthographiée y était ignorée en silence.
+**Après :** le fichier des fournisseurs est une configuration de déploiement,
+`config/llm_gateway/providers.yaml`, désignée par `LLM_GATEWAY_PROVIDERS_FILE`, montée en lecture
+seule dans les conteneurs, jamais modifiée par le gateway ; une clé inconnue fait échouer le
+démarrage en nommant le fournisseur et la clé ; les limites apprises vivent dans Redis (hash
+partagé entre API et workers) et se fusionnent au démarrage sans jamais élargir un plafond
+déclaré. `make providers` écrit au nouveau chemin.
+
+`GET /config` et `GET /config/providers` publient la configuration effective, secrets masqués :
+le tableau de bord et les expériences peuvent s'y référer. La référence des réglages
+(`llm_gateway/docs/reference/reglages.md`) est désormais générée depuis les modèles.
+
+---
+
+## [2026-09-07] Une expérience s'enregistre avant que son jeu existe
+
+Écrire son plan aujourd'hui et lancer demain. Le bouton « Enregistrer » du formulaire d'expérience
+n'exige plus ni jeu de déplacements préparé, ni conteneur en marche.
+
+**Before :** le bouton « Enregistrer et valider » était grisé tant qu'aucun jeu n'était préparé
+pour la population, alors que le schéma de la plateforme accepte sans broncher une expérience qui
+nomme un jeu pas encore construit. Il fallait donc lancer une heure de warm-up avant de pouvoir
+seulement écrire son plan.
+**After :** l'expérience s'enregistre tout de suite, en nommant le jeu qu'elle attend, celui que le
+warm-up construira. Elle devient lançable sans retouche dès que ce jeu est clos.
+
+**L'enregistrement et la validation sont deux étapes.** L'écriture du fichier est locale ; la
+validation par la plateforme tourne dans le conteneur et n'est tentée que s'il tourne.
+
+**Before :** `controller` arrêté, le fichier était écrit et l'écran affichait une erreur Docker,
+qui se lisait comme un enregistrement raté.
+**After :** « enregistré, non validé : le service `controller` ne tourne pas ». Le message donne
+aussi le chemin écrit et l'état du jeu attendu, absent, en construction, ou clos et prêt.
+
+**Un nom déjà exécuté est gardé par une confirmation.** Réenregistrer sous ce nom change la
+définition pour les exécutions à venir ; les exécutions archivées gardent la copie figée de la
+définition qu'elles portent. Réenregistrer un fichier identique le dit et ne le réécrit pas, et la
+colonne « jeu_etat » de « Mes expériences » dit si le jeu d'une expérience est prêt.
+
+---
+
 ## [2026-09-07] Le module LLM devient trois bibliothèques : le gateway ne connaît plus la mobilité
 
 `llm_module` était deux bibliothèques dans un seul paquet : un gateway LLM générique et le domaine

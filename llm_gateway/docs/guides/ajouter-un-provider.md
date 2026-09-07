@@ -1,6 +1,6 @@
 # Ajouter un provider
 
-Un *provider* est une instance nommée dans `src/llm_gateway/config/providers.yaml` : un
+Un *provider* est une instance nommée dans le fichier des fournisseurs désigné par `LLM_GATEWAY_PROVIDERS_FILE` (dans ce dépôt : `config/llm_gateway/providers.yaml` ; le paquet ne livre qu'un `providers.example.yaml`) : un
 modèle, une URL, des quotas, un poids. Plusieurs instances peuvent partager le même
 *adapter* (le traducteur vers l'API du fournisseur). Trois cas, du plus simple au plus rare.
 

@@ -74,3 +74,15 @@ async def test_tache_acceptee_stockee_et_dispatch_planifie(client, memory_deps, 
 async def test_tache_inconnue_404(client):
     r = await client.get("/tasks/nope")
     assert r.status_code == 404
+
+
+async def test_config_expose_les_reglages_sans_secrets(client, memory_deps):
+    r = await client.get("/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert "batching" in body and "telemetry" in body
+    for key in memory_deps.settings.provider_keys.values():
+        assert key.get_secret_value() not in r.text
+    r2 = await client.get("/config/providers")
+    assert r2.status_code == 200 and set(r2.json()) == {"declared", "active"}
+    assert all("api_key" not in cfg for cfg in r2.json()["active"].values())

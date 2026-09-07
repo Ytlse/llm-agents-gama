@@ -106,26 +106,28 @@ to 8192 » chez Groq, « supports at most 16384 completion tokens » chez OpenAI
 8192 » chez Google), `learn_provider_max_output_tokens` :
 
 1. met à jour la config du processus courant (le prochain lot est plafonné) ;
-2. réécrit la ligne dans `providers.yaml` — `max_output_tokens: 8192  # auto-ajusté le
-   2026-09-07 (HTTP 400 du provider)` — par édition chirurgicale (commentaires préservés,
-   fichier temporaire puis `os.replace`) ;
+2. range la valeur dans le **store des limites apprises** (port `LearnedLimits`) : hash Redis
+   `llm_gateway:learned:max_output_tokens` partagé entre l'API et les workers
+   (`LLM_GATEWAY_LEARNED_LIMITS=redis`, défaut), fichier JSON sans Redis (`file`,
+   `LLM_GATEWAY_LEARNED_LIMITS_FILE`), ou rien (`none`) ;
 3. rend `True` si la limite est nouvelle et plus stricte : le lot est rejoué après 1 s.
    Sinon `False` : le worker bascule vers un autre provider au lieu de reboucler sur la même
    400.
 
-!!! warning "Le fichier réécrit est celui du paquet installé (H8)"
-    `providers.yaml` vit dans `src/llm_gateway/config/`. En editable et dans les conteneurs
-    (bind mount `./llm_gateway/src/llm_gateway:/app/llm_gateway`), c'est le fichier du
-    dépôt qui est modifié — à relire avant un commit. Sur une installation en wheel, ce
-    serait `site-packages`. Sur un système de fichiers en lecture seule, l'écriture échoue en
-    `[ALARME] Impossible de persister max_output_tokens…` mais la config mémoire est ajustée
-    et le lot rejoué. La sortie du fichier hors du paquet est reportée au paramétrage en
-    couches.
+Au démarrage, chaque processus fusionne les limites apprises par-dessus le fichier des
+fournisseurs (`apply_learned_limits`) : une limite apprise ne peut que **resserrer** un plafond
+déclaré, jamais l'élargir. Le fichier des fournisseurs n'est plus jamais réécrit par le
+gateway ; pour rendre une limite apprise définitive, recopiez-la dans `max_output_tokens`.
+
+!!! note "Si le store est injoignable"
+    L'apprentissage ajuste la config mémoire, rejoue le lot, et journalise
+    `[ALARME] Impossible de mémoriser la limite apprise` : les autres processus la réapprendront
+    à leur première 400. Rien n'est perdu, seulement réappris.
 
 ## Rafraîchir les quotas : `make providers`
 
 Depuis la racine du dépôt, `scripts/providers/refresh.py` relève les quotas **réels** et
-réécrit le YAML (mêmes règles d'édition chirurgicale) :
+réécrit `config/llm_gateway/providers.yaml` (édition chirurgicale, commentaires préservés) :
 
 ```bash
 make providers DRY_RUN=1      # bilan sans écrire

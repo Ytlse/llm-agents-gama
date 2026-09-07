@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from llm_gateway.balancer.router import LoadBalancer
-from llm_gateway.config import Settings, get_settings
+from llm_gateway.config import Settings, apply_learned_limits, get_settings
+from llm_gateway.config.learned_store import build_learned_store
 from llm_gateway.infra.redis import (
     RedisBatchQueue,
     RedisMetricsSink,
@@ -21,6 +22,7 @@ from llm_gateway.infra.redis import (
     RedisTaskStore,
     create_sync_redis,
 )
+from llm_gateway.ports.learned_limits import LearnedLimits
 from llm_gateway.prompts.registry import CategoryRegistry, get_registry
 
 
@@ -33,10 +35,13 @@ class WorkerRuntime:
     metrics: RedisMetricsSink
     balancer: LoadBalancer
     registry: CategoryRegistry
+    learned: LearnedLimits
 
 
 def build_worker_runtime(settings: Settings, registry: CategoryRegistry | None = None) -> WorkerRuntime:
-    sync_client = create_sync_redis(settings.redis_url)
+    sync_client = create_sync_redis(settings.redis.url)
+    learned = build_learned_store(settings, sync_client)
+    apply_learned_limits(settings, learned)
     store = RedisTaskStore(sync_client=sync_client)
     queue = RedisBatchQueue(task_store=store, sync_client=sync_client)
     limiter = RedisRateLimiter(sync_client, settings.providers)
@@ -50,6 +55,7 @@ def build_worker_runtime(settings: Settings, registry: CategoryRegistry | None =
         metrics=metrics,
         balancer=balancer,
         registry=registry if registry is not None else get_registry(),
+        learned=learned,
     )
 
 

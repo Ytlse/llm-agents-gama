@@ -19,6 +19,7 @@ from pydantic import SecretStr
 from llm_gateway.config import ProviderConfig
 from llm_gateway.infra.memory import (
     InMemoryBatchQueue,
+    InMemoryLearnedLimits,
     InMemoryMetricsSink,
     InMemoryRateLimiter,
     InMemoryTaskStore,
@@ -55,11 +56,13 @@ class Ports:
     queue: object
     limiter: object
     metrics: object
+    learned: object
 
 
 def _redis_ports(backend: str, sync_client, async_client) -> Ports:
     from llm_gateway.infra.redis import (
         RedisBatchQueue,
+        RedisLearnedLimits,
         RedisMetricsSink,
         RedisRateLimiter,
         RedisTaskStore,
@@ -68,7 +71,7 @@ def _redis_ports(backend: str, sync_client, async_client) -> Ports:
     queue = RedisBatchQueue(task_store=store, sync_client=sync_client, async_client=async_client)
     limiter = RedisRateLimiter(sync_client, providers_fixture())
     metrics = RedisMetricsSink(sync_client)
-    return Ports(backend, store, queue, limiter, metrics)
+    return Ports(backend, store, queue, limiter, metrics, RedisLearnedLimits(sync_client))
 
 
 @pytest.fixture(params=BACKENDS)
@@ -78,7 +81,7 @@ def ports(request) -> Ports:
         store = InMemoryTaskStore()
         return Ports(
             backend, store, InMemoryBatchQueue(store),
-            InMemoryRateLimiter(providers_fixture()), InMemoryMetricsSink(),
+            InMemoryRateLimiter(providers_fixture()), InMemoryMetricsSink(), InMemoryLearnedLimits(),
         )
     if backend == "fakeredis":
         fakeredis = pytest.importorskip("fakeredis")

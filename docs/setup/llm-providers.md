@@ -1,6 +1,6 @@
 # Providers LLM
 
-Configuration des fournisseurs LLM disponibles dans `llm_gateway/src/llm_gateway/config/providers.yaml`.
+Configuration des fournisseurs LLM disponibles dans `config/llm_gateway/providers.yaml` (configuration de déploiement, hors du paquet ; désignée par `LLM_GATEWAY_PROVIDERS_FILE`).
 
 La charge est distribuée entre les providers actifs selon leur `weight` via l'algorithme SWRR (Smooth Weighted Round Robin). Voir [docs/arch/llm-inference.md](../arch/llm-inference.md) pour le détail du mécanisme.
 
@@ -150,7 +150,7 @@ Si `provider` est absent, le load balancer SWRR distribue entre tous les provide
 
 ## Ajouter un nouveau provider
 
-1. Ajouter une entrée dans `llm_gateway/src/llm_gateway/config/providers.yaml`
+1. Ajouter une entrée dans `config/llm_gateway/providers.yaml` (configuration de déploiement, hors du paquet ; désignée par `LLM_GATEWAY_PROVIDERS_FILE`)
 2. Renseigner la clé dans `.env` : `PROVIDER_KEYS__<adapter>=...`
 3. Si l'adapter n'existe pas encore, implémenter la classe dans `llm_gateway/src/llm_gateway/adapters/`
 4. Lancer `make providers DRY_RUN=1` pour vérifier quotas et existence du modèle

@@ -8,6 +8,7 @@ from llm_gateway.balancer.router import LoadBalancer
 from llm_gateway.config import Settings
 from llm_gateway.testing import (
     InMemoryBatchQueue,
+    InMemoryLearnedLimits,
     InMemoryMetricsSink,
     InMemoryRateLimiter,
     InMemoryTaskStore,
@@ -18,8 +19,10 @@ from llm_gateway.worker.runtime import WorkerRuntime
 
 @pytest.fixture
 def settings(monkeypatch, tmp_path) -> Settings:
-    monkeypatch.setenv("APP_WORKDIR", str(tmp_path))   # journaux d'échanges dans un dossier jetable
-    return Settings()
+    return Settings(
+        telemetry={"workdir": str(tmp_path)},   # journaux d'échanges dans un dossier jetable
+        learned_limits="none",
+    )
 
 
 @pytest.fixture
@@ -34,6 +37,7 @@ def memory_deps(settings) -> GatewayDeps:
         metrics=InMemoryMetricsSink(),
         balancer=LoadBalancer(settings.providers, limiter),
         registry=build_registry(),
+        learned=InMemoryLearnedLimits(),
     )
 
 
@@ -42,5 +46,5 @@ def memory_runtime(memory_deps) -> WorkerRuntime:
     d = memory_deps
     return WorkerRuntime(
         settings=d.settings, store=d.store, queue=d.queue, limiter=d.limiter,
-        metrics=d.metrics, balancer=d.balancer, registry=d.registry,
+        metrics=d.metrics, balancer=d.balancer, registry=d.registry, learned=d.learned,
     )

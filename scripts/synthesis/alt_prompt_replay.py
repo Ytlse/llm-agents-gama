@@ -75,7 +75,7 @@ RPM = 15
 
 # Le fournisseur `google2_35` tire sa clé de PROVIDER_KEYS__google2_35, qui n'est
 # volontairement dans aucun fichier : le secret n'est pas dupliqué (cf. le commentaire
-# de llm_gateway/config/providers.yaml). On la dérive au lancement.
+# de config/llm_gateway/providers.yaml). On la dérive au lancement.
 KEY_ALIASES = {"PROVIDER_KEYS__google2_35": "PROVIDER_KEYS__google2"}
 
 TRACE_DIR = REPO_ROOT / "docs/traces/2026-08-26_report_marche_tc"

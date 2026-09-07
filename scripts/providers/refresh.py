@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Met à jour llm_gateway/config/providers.yaml depuis les quotas réels des providers.
+"""Met à jour config/llm_gateway/providers.yaml depuis les quotas réels des providers.
 
 Lancement : `make providers` (ou `make providers DRY_RUN=1` pour prévisualiser).
 
@@ -57,7 +57,7 @@ import requests
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROVIDERS_YAML = PROJECT_ROOT / "llm_gateway" / "src" / "llm_gateway" / "config" / "providers.yaml"
+PROVIDERS_YAML = PROJECT_ROOT / "config" / "llm_gateway" / "providers.yaml"
 ENV_FILE = PROJECT_ROOT / ".env"
 TIMEOUT = 30
 TODAY = dt.date.today().isoformat()

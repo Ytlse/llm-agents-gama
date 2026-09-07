@@ -28,14 +28,9 @@ def _cmd_worker(args: argparse.Namespace) -> int:
 
 
 def _redacted_settings() -> dict[str, Any]:
-    from llm_gateway.config import get_settings
+    from llm_gateway.config import get_settings, redacted_dump
 
-    settings = get_settings()
-    data = settings.model_dump(mode="json")
-    data["provider_keys"] = {k: "***" for k in settings.provider_keys}
-    for name, cfg in data.get("providers", {}).items():
-        cfg["api_key"] = "***" if settings.providers[name].api_key.get_secret_value() else ""
-    return data
+    return redacted_dump(get_settings())
 
 
 def _cmd_config_validate(_: argparse.Namespace) -> int:
@@ -46,7 +41,22 @@ def _cmd_config_validate(_: argparse.Namespace) -> int:
     except Exception as exc:  # pydantic.ValidationError, YAML illisible…
         print(f"CONFIGURATION INVALIDE : {exc}", file=sys.stderr)
         return 1
-    print(f"OK — {len(settings.providers)} provider(s) avec clé : {', '.join(sorted(settings.providers))}")
+    print(
+        f"OK — fichier {settings.resolved_providers_file()} : {len(settings.declared_providers)} "
+        f"déclaré(s), {len(settings.providers)} actif(s) avec clé : {', '.join(sorted(settings.providers)) or 'aucun'}"
+    )
+    return 0
+
+
+def _cmd_config_schema(args: argparse.Namespace) -> int:
+    if args.what == "providers":
+        from llm_gateway.config import providers_schema_json_text
+
+        print(providers_schema_json_text())
+    else:
+        from llm_gateway.config import GatewaySettings
+
+        print(json.dumps(GatewaySettings.model_json_schema(), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -89,6 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
     csub = c.add_subparsers(dest="config_command", required=True)
     csub.add_parser("validate", help="charge la configuration ; code 1 si invalide").set_defaults(func=_cmd_config_validate)
     csub.add_parser("show", help="affiche la configuration effective, secrets masqués").set_defaults(func=_cmd_config_show)
+    sc = csub.add_parser("schema", help="JSON Schema du fichier des fournisseurs (défaut) ou des réglages")
+    sc.add_argument("what", nargs="?", choices=["providers", "settings"], default="providers")
+    sc.set_defaults(func=_cmd_config_schema)
 
     sub.add_parser("categories", help="liste les catégories enregistrées par les bundles").set_defaults(func=_cmd_categories)
     return p

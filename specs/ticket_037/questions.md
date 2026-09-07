@@ -15,7 +15,7 @@ Convention : on avance sous hypothèse, on note ici, on pose à la fin.
 | H1 | Noms `llm_gateway`, `mobility_core`, `mobility_llm` | proposés dans le plan, non contestés | oui |
 | H2 | Trois répertoires à la racine du monorepo ; extraction du gateway plus tard | l'extraction dépend du versioning (second temps) | oui |
 | H3 | Français pour code, docstrings, documentation | cohérence avec le dépôt | oui |
-| H4 | Licence : aucun fichier LICENSE tant que la licence n'est pas choisie | décision de l'auteur | **question ouverte** |
+| H4 | Licence : Apache-2.0 pour le gateway (décision du 2026-09-07) | décision de l'auteur | fait |
 | H5 | Le contrat de réponse (`AgentResponse`, `OptionProbability`) reste typé « options » dans le gateway | le contrat HTTP consommé par le SDK ne bouge pas ; généricisation de la sortie en itération 2 | oui |
 | H6 | Les templates, schémas et `prompts.yaml` gardent leur disposition à plat dans `mobility_llm/prompts/` | prompt_calibration et les expériences citent `prompts.yaml` ; le rangement par catégorie viendra avec le registre complet | oui |
 | H7 | Le worker Celery reste dans `llm_gateway/worker/` ; `executor/` apparaîtra avec le port d'exécution | éviter un sous-paquet nommé `celery` et un déplacement de plus | oui |
@@ -31,9 +31,13 @@ Convention : on avance sous hypothèse, on note ici, on pose à la fin.
 | H13 | Le compteur Prometheus `alarme_total` du SDK est créé au premier `fire_alarme`, et hors registre si la famille est déjà exposée dans le processus | `import llm_gateway` dans le processus API faisait planter le démarrage (DuplicateTimeseries) | oui |
 | H14 | `ruff check` avec `UP` (modernisation des annotations) a été appliqué en `--fix` sur les trois paquets | 379 corrections sûres, les fichiers étaient déjà déplacés ; le reformatage (`ruff format`) reste différé (H10) | oui |
 | H15 | Relecture de la documentation (agent, 2026-09-07) : trois réglages ou mécanismes restent incomplets et sont laissés à l'itération « généricité » | `Settings.circuit_breaker_threshold` est déclaré mais jamais lu ; `_load_adapters()` énumère cinq modules codés en dur (un nouvel adapter exige d'éditer ce dictionnaire, ce que l'entry point `llm_gateway.adapters` remplacera) ; `configure_logging()` fait toujours `logger.remove()` (sans effet sur un hôte qui n'importe que le SDK, puisque seules les fabriques l'appellent) | oui |
+| H17 | Pas de sous-modèle `providers` : trois champs de premier niveau (`providers_file`, `learned_limits`, `learned_limits_file`) | `settings.providers` reste le dictionnaire des instances résolues, cité à vingt-deux endroits (worker, balancer, API, prompt_calibration) | oui |
+| H18 | Le contrôleur lit le fichier des fournisseurs monté (`LLM_GATEWAY_PROVIDERS_FILE`), pas `GET /config/providers` | l'API n'est pas prête quand le contrôleur charge ses réglages ; l'endpoint existe pour les outils | oui |
+| H19 | `PROVIDER_KEYS__<nom>` reste le nom canonique des clés d'API, sans avertissement | partagé avec le `.env` de l'auteur, la logique des seconds seaux Google du compose, `make providers` et prompt_calibration | oui |
+| H20 | Le journal des échanges garde son emplacement par défaut (`<workdir>/llm_exchanges.jsonl`) au lot A | sa désactivation par défaut est le lot D, avec le rédacteur | oui |
 
 ## Questions ouvertes (mise à jour 2026-09-07)
 
-1. Licence du gateway (MIT, Apache-2.0, propriétaire) ? Aucun fichier LICENSE tant que ce n'est pas tranché.
+1. ~~Licence du gateway ?~~ Tranchée le 2026-09-07 : **Apache-2.0** (LICENSE + NOTICE dans `llm_gateway/`, métadonnées pyproject). Titulaire du copyright écrit « les auteurs du dépôt » dans NOTICE : à préciser si une entité doit y figurer. La licence des ressources EMC² de `mobility_core` fait l'objet du ticket 038.
 2. ~~Pousser la branche pour la CI ?~~ Fait le 2026-09-07 : trois commits poussés, CI verte au troisième run.
 | H16 | Le seuil de couverture du gateway est un cliquet à 70 %, pas 80 % | 74 % mesurés ; adapters OpenAI-compatibles et worker peu couverts hors intégration, leurs tests arrivent avec l'adapter générique (itération 2) ; le seuil ne redescend jamais | oui |

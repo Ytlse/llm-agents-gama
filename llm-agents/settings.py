@@ -100,15 +100,15 @@ class WorkdirPathResolutionMixin:
 
 def _find_providers_yaml() -> Optional[Path]:
     """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
+    # Configuration de DÉPLOIEMENT du gateway (hors du paquet depuis le ticket 037, itération 2) :
+    # la variable qu'il lit lui-même, puis le dépôt, puis le montage du conteneur controller.
     candidates = []
-    try:
-        import llm_gateway  # installé (editable sur l'hôte, image ou montage dans le conteneur)
-        candidates.append(Path(llm_gateway.__file__).resolve().parent / "config" / "providers.yaml")
-    except ImportError:  # pragma: no cover
-        pass
+    from_env = os.environ.get("LLM_GATEWAY_PROVIDERS_FILE")
+    if from_env:
+        candidates.append(Path(from_env))
     candidates += [
-        Path(base_dir) / ".." / "llm_gateway" / "src" / "llm_gateway" / "config" / "providers.yaml",
-        Path("/opt/llm_gateway/config/providers.yaml"),
+        Path(base_dir) / ".." / "config" / "llm_gateway" / "providers.yaml",
+        Path("/app/config/llm_gateway/providers.yaml"),
     ]
     for p in candidates:
         if p.exists():

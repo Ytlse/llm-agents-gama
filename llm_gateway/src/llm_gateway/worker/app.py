@@ -23,11 +23,11 @@ def _close_shared_http_clients(**_kwargs) -> None:
 
 
 def create_celery_app(settings: Settings) -> Celery:
-    configure_logging()
+    configure_logging(settings.telemetry)
     app = Celery(
         "llm_worker",
-        broker=settings.celery_broker_url,
-        backend=settings.celery_result_backend,
+        broker=settings.executor.celery_broker_url,
+        backend=settings.executor.celery_result_backend,
     )
     app.conf.update(
         task_serializer="json",

@@ -1,4 +1,4 @@
-# llm_gateway/src/llm_gateway/config/providers.yaml
+# config/llm_gateway/providers.yaml — configuration de DÉPLOIEMENT des fournisseurs (hors du paquet llm_gateway).
 # Définition des fournisseurs LLM disponibles.
 #
 # Champs obligatoires : rpm_limit, base_url, default_model

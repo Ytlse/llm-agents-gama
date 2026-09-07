@@ -24,42 +24,50 @@ from loguru import logger
 _configured = False
 
 
-def configure_logging(level: str | None = None) -> None:
+def configure_logging(telemetry: Any = None, level: str | None = None) -> None:
     """
-    Remplace le handler loguru par défaut (DEBUG) par un handler qui respecte
-    LOG_LEVEL (défaut INFO). Idempotent — appelé par les entrypoints.
+    Remplace le handler loguru par défaut (DEBUG) par un handler au niveau demandé.
+    Idempotent — appelé par les points d'entrée (create_app, worker, CLI), jamais par un import.
 
-    Si la variable d'environnement SERVICE_NAME est définie, ajoute en plus un
-    sink fichier `APP_WORKDIR/<SERVICE_NAME>.log` (format aligné sur app.log du
-    controller) afin que les logs de chaque conteneur (api, worker, …) soient
-    centralisés dans le dossier du run et agrégeables par les outils de debug.
+    `telemetry` : les réglages `GatewaySettings.telemetry` (log_level, log_format, service_name,
+    workdir). Sans réglages, repli sur les anciennes variables d'environnement (LOG_LEVEL,
+    SERVICE_NAME, APP_WORKDIR), dépréciées. Si un nom de service est connu, un sink fichier
+    `<workdir>/<service>.log` centralise les logs du conteneur dans le dossier du run.
     """
     global _configured
     if _configured:
         return
     _configured = True
-    lvl = level or os.environ.get("LOG_LEVEL", "INFO")
+    lvl = level or _attr(telemetry, "log_level") or os.environ.get("LOG_LEVEL", "INFO")
     logger.remove()
-    logger.add(
-        sys.stderr,
-        level=lvl,
-        format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-    )
-    _add_service_file_sink(lvl)
+    if _attr(telemetry, "log_format") == "json":
+        logger.add(sys.stderr, level=lvl, serialize=True)
+    else:
+        logger.add(
+            sys.stderr,
+            level=lvl,
+            format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
+        )
+    _add_service_file_sink(lvl, telemetry)
 
 
-def _add_service_file_sink(level: str) -> None:
-    """Sink fichier par service dans APP_WORKDIR, activé si SERVICE_NAME est défini.
+def _attr(telemetry: Any, name: str) -> Any:
+    """Lecture tolérante d'un réglage de télémétrie (objet ou None)."""
+    return getattr(telemetry, name, None) if telemetry is not None else None
+
+
+def _add_service_file_sink(level: str, telemetry: Any = None) -> None:
+    """Sink fichier par service dans le workdir, activé si un nom de service est défini.
 
     Format identique aux logs du controller (`app.log`) pour que la même regex
     d'agrégation fonctionne. Tolérant : toute erreur (workdir absent, droits) est
     silencieuse — le logging console reste opérationnel.
     """
-    service = os.environ.get("SERVICE_NAME")
+    service = _attr(telemetry, "service_name") or os.environ.get("SERVICE_NAME")
     if not service:
         return
     try:
-        workdir = _workdir()
+        workdir = _workdir(telemetry)
         if not workdir.exists():
             return
         logger.add(
@@ -111,7 +119,11 @@ def log_llm_call(
 # Log des échanges LLM (prompt envoyé + réponse + tokens)
 # ---------------------------------------------------------------------------
 
-def _workdir() -> Path:
+def _workdir(telemetry: Any = None) -> Path:
+    """Dossier du run : `telemetry.workdir`, sinon APP_WORKDIR (déprécié), sinon le répertoire courant."""
+    configured = _attr(telemetry, "workdir")
+    if configured is not None:
+        return Path(configured)
     return Path(os.environ.get("APP_WORKDIR", "."))
 
 
@@ -122,11 +134,12 @@ def log_llm_error(
     error_message: str,
     http_status: int | None = None,
     ratelimit_reset: str | None = None,
+    telemetry: Any = None,
 ) -> None:
     """
-    Enregistre une erreur LLM dans APP_WORKDIR/llm_errors.jsonl.
+    Enregistre une erreur LLM dans <workdir>/llm_errors.jsonl.
     """
-    log_file = _workdir() / "llm_errors.jsonl"
+    log_file = _workdir(telemetry) / "llm_errors.jsonl"
 
     entry = {
         "time": datetime.now(UTC).isoformat(),
@@ -155,16 +168,24 @@ def log_llm_exchange(
     tokens_out: int,
     category: str = "",
     sim_ts: float | None = None,
+    telemetry: Any = None,
 ) -> None:
     """
     Enregistre un échange complet avec le LLM dans un fichier JSONL.
-    Chemin : LLM_EXCHANGES_FILE (env), sinon APP_WORKDIR/llm_exchanges.jsonl.
+    Chemin : `telemetry.exchanges_file`, sinon LLM_EXCHANGES_FILE (env, déprécié), sinon
+    <workdir>/llm_exchanges.jsonl.
 
     sim_ts : timestamp Unix *simulé* (heure du monde GAMA) de la décision, pour pouvoir
     ventiler la consommation par jour de simulation (l'horloge murale `time` ne le permet pas).
     """
+    configured = _attr(telemetry, "exchanges_file")
     override = os.environ.get("LLM_EXCHANGES_FILE")
-    log_file = Path(override) if override else _workdir() / "llm_exchanges.jsonl"
+    if configured is not None:
+        log_file = Path(configured)
+    elif override:
+        log_file = Path(override)
+    else:
+        log_file = _workdir(telemetry) / "llm_exchanges.jsonl"
 
     entry = {
         "time": datetime.now(UTC).isoformat(),

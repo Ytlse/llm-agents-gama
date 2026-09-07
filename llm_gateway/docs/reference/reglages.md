@@ -1,90 +1,184 @@
 # Réglages
 
-!!! note "Rédigé à la main le 2026-09-07"
-    Cette page recopie `config/settings.py`. Les variables d'environnement n'ont **pas de
-    préfixe** pour l'instant : `REDIS_URL`, `PROVIDER_KEYS__mistral`. Le préfixe
-    `LLM_GATEWAY_` viendra avec le paramétrage en couches (itération suivante du ticket 037).
-    Modèle : `llm_gateway/.env.example`.
+> Page **générée** par `tools/gen_settings_doc.py` depuis les modèles pydantic ; la relancer après
+> tout changement de `config/settings.py` ou `config/providers.py`.
 
-`Settings` est une `BaseSettings` pydantic-settings avec `env_nested_delimiter="__"`.
-Construite explicitement par les fabriques (`create_app`, `create_celery_app`, tests), jamais
-à l'import. Construire `Settings()` lit `providers.yaml` et l'environnement — aucun accès
-Redis ni réseau. `get_settings()` (`lru_cache`) y ajoute le filtre des providers sans clé.
-Les noms sont insensibles à la casse ; un `.env` n'est pas lu par pydantic (c'est
-docker-compose, ou `set -a; source .env`, qui l'injecte).
+Les réglages sont **groupés** et viennent de six sources, de la plus forte à la plus faible :
+arguments du constructeur, environnement `LLM_GATEWAY_*` (`__` sépare les niveaux :
+`LLM_GATEWAY_BATCHING__DELAY_SECONDS`), anciens noms non préfixés (dépréciés, une version, un
+avertissement par variable trouvée), fichier YAML désigné par `LLM_GATEWAY_CONFIG`, profil désigné par
+`LLM_GATEWAY_PROFILE` (`free-tier`, `paid`), défauts du code. Les clés d'API se lisent sous
+`LLM_GATEWAY_PROVIDER_KEYS__<nom>` **ou** `PROVIDER_KEYS__<nom>` (nom canonique partagé avec le compose,
+`make providers` et prompt_calibration, sans avertissement).
 
-## `Settings`
+## Champs de premier niveau
 
 | Champ | Type | Défaut | Variable | Sens |
 |---|---|---|---|---|
-| `redis_url` | `str` | `redis://localhost:6379/0` | `REDIS_URL` | store des tâches, files de lot, rate-limiter, hash `wmetrics` |
-| `celery_broker_url` | `str` | `redis://localhost:6379/1` | `CELERY_BROKER_URL` | broker Celery |
-| `celery_result_backend` | `str` | `redis://localhost:6379/2` | `CELERY_RESULT_BACKEND` | backend de résultats Celery |
-| `circuit_breaker_threshold` | `float` | `0.95` | `CIRCUIT_BREAKER_THRESHOLD` | déclaré ; **aucun usage dans le code** au 2026-09-07 |
-| `max_retries` | `int` | `50` | `MAX_RETRIES` | plafond de `self.retry()` Celery pour un lot (5xx, 429, 400 apprise) ; borne aussi le nombre de bascules |
-| `backoff_base_seconds` | `float` | `1.0` | `BACKOFF_BASE_SECONDS` | délai de retry `min(base × 2^tentative, 30 s)` |
-| `provider_switch_cooldown_seconds` | `int` | `30` | `PROVIDER_SWITCH_COOLDOWN_SECONDS` | cooldown du provider fautif lors d'une bascule (parse, 4xx), pour que la rotation en choisisse un autre |
-| `batch_max_agents` | `int` | `5` | `BATCH_MAX_AGENTS` | repli de `get_batch_max_agents` si aucun provider n'est configuré |
-| `batch_delay_seconds` | `float` | `3.0` | `BATCH_DELAY_SECONDS` | fenêtre d'accumulation d'un lot sous le seuil de dispatch ; calée sur l'inter-arrivée mesurée des prompts (run 2026-07-10 : p50 = 1,4 s) |
-| `batch_target_agents` | `int` | `10` | `BATCH_TARGET_AGENTS` | taille de file déclenchant un dispatch immédiat côté API, bornée par le plus gros provider ; découplée du min des providers (qui vaut 1) |
-| `assumed_prompt_tokens` | `int` | `2200` | `ASSUMED_PROMPT_TOKENS` | tokens d'entrée max supposés par agent (historique + 10 %) ; dimensionne `batch_max_agents` et la réservation TPM |
-| `assumed_output_tokens` | `int` | `800` | `ASSUMED_OUTPUT_TOKENS` | tokens de sortie estimés par agent ; avec le précédent, 3 000 tokens/agent (mesuré 2026-07-10 : ≈ 1 600, p90 ≈ 2 400, soit 25 % de marge) |
-| `token_chars_ratio` | `float` | `3.0` | `TOKEN_CHARS_RATIO` | tokens ≈ caractères / ratio, pour estimer le prompt rendu (mesuré sur 427 échanges : p50 = 3,24, p10 = 3,05 ; 3,0 laisse 8 % de marge) |
-| `max_batch_agents` | `int` | `20` | `MAX_BATCH_AGENTS` | plafond absolu du `batch_max_agents` calculé par provider |
-| `min_output_tokens` | `int` | `512` | `MIN_OUTPUT_TOKENS` | budget de sortie minimal par requête ; en dessous, le provider est exclu au démarrage ou le lot rejoué ailleurs |
-| `max_output_tokens` | `int` | `16384` | `MAX_OUTPUT_TOKENS` | plafond du `max_tokens` envoyé (limite de complétion de gpt-4o-mini, le plus contraint des providers configurés) |
-| `provider_keys` | `dict[str, SecretStr]` | `{}` | `PROVIDER_KEYS__<nom>` | une clé par instance de `providers.yaml` ou par adapter ; résolution `provider_keys[instance] or provider_keys[adapter]` |
-| `providers` | `dict[str, ProviderConfig]` | construit | — | **pas lu de l'env** : `build_providers` (validateur `after`) charge `providers.yaml`, calcule `batch_max_agents` et `tpm_estimate_per_request`, injecte la clé |
+| `providers_file` | `Path | NoneType` | `None` | `LLM_GATEWAY_PROVIDERS_FILE` | fichier des fournisseurs (configuration de déploiement). `None` = exemple livré chargé avec un avertissement. |
+| `learned_limits` | `Literal[redis, file, none]` | `'redis'` | `LLM_GATEWAY_LEARNED_LIMITS` | où vivent les limites apprises (`max_output_tokens` révélé par HTTP 400) : `redis`, `file`, `none`. |
+| `learned_limits_file` | `Path | NoneType` | `None` | `LLM_GATEWAY_LEARNED_LIMITS_FILE` | chemin du fichier JSON quand `learned_limits=file` ; défaut `<telemetry.workdir>/learned_limits.json`. |
+| `provider_keys` | `dict[str, SecretStr]` | `vide` | `LLM_GATEWAY_PROVIDER_KEYS__<nom>` ou `PROVIDER_KEYS__<nom>` | clés d'API par instance ou par adapter ; résolution `provider_keys[instance] or provider_keys[adapter]`. |
+| `providers` | `dict[str, ProviderConfig]` | `vide` | — | **construit** après validation : instances résolues (`ProviderConfig`), pas lu de l'environnement. |
+| `declared_providers` | `list[str]` | `vide` | — | **construit** : noms déclarés dans le fichier, avec ou sans clé. |
 
-Méthodes : `get_batch_max_agents(force_provider)` — limite du provider forcé, sinon le
-**minimum** des providers (conservateur, utilisé par le worker au pop) ;
-`get_dispatch_threshold(force_provider)` — capacité du provider forcé, sinon
-`min(batch_target_agents, max des batch_max_agents)` (utilisé par l'API).
+## `redis`
 
-## `ProviderConfig`
+Connexion Redis : store des tâches, files de lot, rate-limiter, compteurs, limites apprises.
 
-Une entrée de `providers.yaml` (`src/llm_gateway/config/providers.yaml`), après calcul.
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `url` | `str` | `'redis://localhost:6379/0'` | `LLM_GATEWAY_REDIS__URL` (ex-`REDIS_URL`) |  |
+
+## `executor`
+
+Exécution des lots. `celery` aujourd'hui ; un exécuteur in-process est prévu.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `kind` | `Literal[celery]` | `'celery'` | `LLM_GATEWAY_EXECUTOR__KIND` |  |
+| `celery_broker_url` | `str` | `'redis://localhost:6379/1'` | `LLM_GATEWAY_EXECUTOR__CELERY_BROKER_URL` (ex-`CELERY_BROKER_URL`) |  |
+| `celery_result_backend` | `str` | `'redis://localhost:6379/2'` | `LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND` (ex-`CELERY_RESULT_BACKEND`) |  |
+
+## `inference`
+
+Défauts d'inférence ; surchargés par provider (`inference:` du fichier) puis par requête.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `temperature` | `float` | `0.7` | `LLM_GATEWAY_INFERENCE__TEMPERATURE` |  |
+| `top_p` | `float | NoneType` | `None` | `LLM_GATEWAY_INFERENCE__TOP_P` |  |
+| `max_tokens` | `int` | `4096` | `LLM_GATEWAY_INFERENCE__MAX_TOKENS` |  |
+
+## `batching`
+
+Micro-batching : valeurs mesurées sur les runs de juillet 2026, à recalibrer ailleurs.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `max_agents` | `int` | `5` | `LLM_GATEWAY_BATCHING__MAX_AGENTS` (ex-`BATCH_MAX_AGENTS`) |  |
+| `delay_seconds` | `float` | `3.0` | `LLM_GATEWAY_BATCHING__DELAY_SECONDS` (ex-`BATCH_DELAY_SECONDS`) |  |
+| `target_agents` | `int` | `10` | `LLM_GATEWAY_BATCHING__TARGET_AGENTS` (ex-`BATCH_TARGET_AGENTS`) |  |
+| `assumed_prompt_tokens` | `int` | `2200` | `LLM_GATEWAY_BATCHING__ASSUMED_PROMPT_TOKENS` (ex-`ASSUMED_PROMPT_TOKENS`) |  |
+| `assumed_output_tokens` | `int` | `800` | `LLM_GATEWAY_BATCHING__ASSUMED_OUTPUT_TOKENS` (ex-`ASSUMED_OUTPUT_TOKENS`) |  |
+| `token_chars_ratio` | `float` | `3.0` | `LLM_GATEWAY_BATCHING__TOKEN_CHARS_RATIO` (ex-`TOKEN_CHARS_RATIO`) |  |
+| `max_batch_agents` | `int` | `20` | `LLM_GATEWAY_BATCHING__MAX_BATCH_AGENTS` (ex-`MAX_BATCH_AGENTS`) |  |
+| `min_output_tokens` | `int` | `512` | `LLM_GATEWAY_BATCHING__MIN_OUTPUT_TOKENS` (ex-`MIN_OUTPUT_TOKENS`) |  |
+| `max_output_tokens` | `int` | `16384` | `LLM_GATEWAY_BATCHING__MAX_OUTPUT_TOKENS` (ex-`MAX_OUTPUT_TOKENS`) |  |
+
+## `resilience`
+
+Réessais, bascule de fournisseur, désactivation après erreurs consécutives.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `max_retries` | `int` | `50` | `LLM_GATEWAY_RESILIENCE__MAX_RETRIES` (ex-`MAX_RETRIES`) |  |
+| `backoff_base_seconds` | `float` | `1.0` | `LLM_GATEWAY_RESILIENCE__BACKOFF_BASE_SECONDS` (ex-`BACKOFF_BASE_SECONDS`) |  |
+| `provider_switch_cooldown_seconds` | `int` | `30` | `LLM_GATEWAY_RESILIENCE__PROVIDER_SWITCH_COOLDOWN_SECONDS` (ex-`PROVIDER_SWITCH_COOLDOWN_SECONDS`) |  |
+| `disable_after_consecutive_errors` | `int` | `30` | `LLM_GATEWAY_RESILIENCE__DISABLE_AFTER_CONSECUTIVE_ERRORS` |  |
+
+## `api`
+
+Couche HTTP : CORS, taille de requête, jetons (ticket 036, non appliqués).
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `cors_origins` | `list[str]` | `vide` | `LLM_GATEWAY_API__CORS_ORIGINS` |  |
+| `max_request_bytes` | `int` | `2000000` | `LLM_GATEWAY_API__MAX_REQUEST_BYTES` |  |
+| `auth_tokens` | `list[SecretStr]` | `vide` | `LLM_GATEWAY_API__AUTH_TOKENS` |  |
+
+## `telemetry`
+
+Logs, dossier du run, journal des échanges.
+
+| Champ | Type | Défaut | Variable | Sens |
+|---|---|---|---|---|
+| `log_level` | `str` | `'INFO'` | `LLM_GATEWAY_TELEMETRY__LOG_LEVEL` (ex-`LOG_LEVEL`) |  |
+| `log_format` | `Literal[text, json]` | `'text'` | `LLM_GATEWAY_TELEMETRY__LOG_FORMAT` |  |
+| `service_name` | `str | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__SERVICE_NAME` (ex-`SERVICE_NAME`) |  |
+| `workdir` | `Path` | `PosixPath('.')` | `LLM_GATEWAY_TELEMETRY__WORKDIR` (ex-`APP_WORKDIR`) |  |
+| `exchanges_file` | `Path | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_FILE` (ex-`LLM_EXCHANGES_FILE`) |  |
+| `exchanges_max_bytes` | `int` | `200000000` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_MAX_BYTES` |  |
+| `redactor` | `str | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__REDACTOR` |  |
+
+## Fichier des fournisseurs
+
+Un objet `providers:` dont chaque entrée suit `ProviderEntry`. Toute clé inconnue fait échouer le
+chargement en nommant le fournisseur et la clé. Schéma JSON : `llm-gateway config schema providers`.
 
 | Champ | Type | Défaut | Sens |
 |---|---|---|---|
-| `api_key` | `SecretStr` | `""` | injectée depuis `provider_keys` ; vide → instance exclue de la rotation par `filter_providers_without_api_key` |
-| `rpm_limit` | `int` | obligatoire | requêtes/minute, fenêtre glissante 60 s, lissage `min_interval = 60 / rpm` |
-| `tpm_limit` | `int | None` | `None` | tokens/minute estimés réservés dans la même fenêtre ; borne `batch_max_agents` |
-| `rpd_limit` | `int | None` | `None` | requêtes/jour (UTC) ; atteint → écarté jusqu'à minuit UTC |
-| `tpd_limit` | `int | None` | `None` | tokens/jour (UTC), comptés a posteriori sur les tokens réels ; même mise à l'écart |
-| `max_tokens_per_request` | `int | None` | `None` | capacité d'une requête unique ; exclu au démarrage si `< batch_max_agents × assumed_prompt_tokens + min_output_tokens` ; garde-fou 413 au rendu |
-| `max_output_tokens` | `int | None` | `None` | plafond de complétion du modèle ; `None` = repli sur `settings.max_output_tokens` ; **appris sur HTTP 400 et persisté** dans le fichier |
-| `base_url` | `str` | obligatoire | racine de l'API du fournisseur |
-| `default_model` | `str` | obligatoire | modèle si la requête n'en impose pas |
-| `weight` | `float` | `1.0` | poids SWRR ; `0` = hors rotation |
-| `batch_max_agents` | `int` | `1` (calculé) | `max(1, min(tpm_limit // 3000 ou rpm, max_tokens_per_request // 3000 ou max_batch_agents, rpm_limit, max_batch_agents))` — ne pas écrire dans le fichier |
-| `tpm_estimate_per_request` | `int | None` | calculé | `batch_max_agents × 3000` si `tpm_limit`, sinon `None` ; réservation TPM initiale |
-| `concurrency_limit` | `int` | `2` | workers Celery simultanés sur ce provider |
-| `disable_timeout` | `int` | `180` | secondes de désactivation après 30 erreurs consécutives |
-| `adapter` | `str` | `""` (= nom de l'instance) | classe d'adapter (`openai`, `mistral`, `google`, `groq`, `cerebras`) et clé héritée |
+| `rpm_limit` | `int` | **obligatoire** | requêtes/minute, fenêtre glissante 60 s, lissage `60 / rpm` entre deux requêtes |
+| `base_url` | `str` | **obligatoire** | racine de l'API du fournisseur |
+| `default_model` | `str` | **obligatoire** | modèle envoyé si la requête n'en impose pas |
+| `tpm_limit` | `int | NoneType` | `None` | tokens/minute réservés dans la même fenêtre ; borne `batch_max_agents` |
+| `rpd_limit` | `int | NoneType` | `None` | requêtes/jour (UTC) ; atteint → écarté jusqu'à minuit UTC |
+| `tpd_limit` | `int | NoneType` | `None` | tokens/jour (UTC), comptés a posteriori ; même mise à l'écart |
+| `max_tokens_per_request` | `int | NoneType` | `None` | capacité d'une requête unique (HTTP 413 au-delà) ; borne le lot et le budget de sortie |
+| `max_output_tokens` | `int | NoneType` | `None` | plafond de complétion ; appris sur HTTP 400 et retenu par le store de limites apprises |
+| `weight` | `float` | `1.0` | poids SWRR : `min(rpm_limit, tpm_limit / 3000) / 15` |
+| `concurrency_limit` | `int` | `2` | workers simultanés autorisés sur l'instance |
+| `disable_timeout` | `int` | `180` | durée (s) de mise à l'écart après `disable_after_consecutive_errors` erreurs |
+| `adapter` | `str` | `''` | nom de l'adapter (openai, mistral, google, groq, cerebras) ; défaut = nom de l'entrée |
+| `inference` | `InferenceOverrides | NoneType` | `None` | surcharges `temperature`, `top_p`, `max_tokens` pour cette instance |
+| `batch_max_agents` | `int | NoneType` | `None` | toléré pour les anciens fichiers, **ignoré** avec un avertissement : le gateway le calcule |
 
-`repr(ProviderConfig)` n'affiche que la longueur de la clé. `llm-gateway config show`
-imprime la configuration effective avec les secrets masqués.
+### `inference` (surcharges par fournisseur)
 
-!!! warning "Clés inconnues"
-    `ProviderConfig` ne fixe pas `extra` : une clé YAML mal orthographiée est **ignorée sans
-    erreur**. Le refus des clés inconnues annoncé dans le ticket 037 n'est pas dans le code au
-    2026-09-07.
-
-## Variables lues ailleurs que dans `Settings`
-
-| Variable | Lue par | Sens |
+| Champ | Type | Défaut |
 |---|---|---|
-| `LOG_LEVEL` | `telemetry/logger.configure_logging` | niveau du handler loguru posé par les fabriques (défaut `INFO`) |
-| `SERVICE_NAME` | idem | si défini, sink fichier `APP_WORKDIR/<SERVICE_NAME>.log` (rotation 10 MB, rétention 7 jours, `enqueue=True`) ; docker-compose : `api`, `worker` |
-| `APP_WORKDIR` | `telemetry/logger` | dossier de `llm_exchanges.jsonl`, `llm_errors.jsonl` et du sink service (défaut `.`) ; docker-compose : `/app/experiments/current` |
-| `LLM_EXCHANGES_FILE` | `log_llm_exchange` | chemin complet du journal des échanges, prime sur `APP_WORKDIR/llm_exchanges.jsonl` |
-| `LLM_GATEWAY_TEST_REDIS_URL` | `tests/contract/conftest.py` | ajoute le backend Redis réel aux tests de contrat |
-| `LLM_GATEWAY_E2E_URL` | tests `e2e` | gateway en marche ; absent → sautés |
+| `temperature` | `float | NoneType` | `None` |
+| `top_p` | `float | NoneType` | `None` |
+| `max_tokens` | `int | NoneType` | `None` |
 
-## Ce qui n'est pas un réglage
+## `ProviderConfig` (instance résolue)
 
-Les délais d'attente d'un provider saturé (8 s, un essai toutes les 2 s, 2 retries de 12 s),
-le seuil de désactivation (30 erreurs consécutives), le cooldown 5xx (60 s), le plafond de
-backoff (30 s), le timeout HTTP d'un adapter (`request_timeout` de classe : 120 s, 240 s pour
-Google) et le seuil d'alarme du SDK (10 échecs) sont des constantes du code.
+Ce que le gateway manipule : l'entrée du fichier, la clé injectée et deux valeurs calculées.
+`batch_max_agents = max(1, min(tpm_limit / (assumed_prompt_tokens + assumed_output_tokens),
+max_tokens_per_request / idem, rpm_limit, batching.max_batch_agents))` ;
+`tpm_estimate_per_request = batch_max_agents × (assumed_prompt_tokens + assumed_output_tokens)` si `tpm_limit`.
+
+| Champ | Type | Défaut |
+|---|---|---|
+| `api_key` | `SecretStr` | `''` |
+| `rpm_limit` | `int` | **obligatoire** |
+| `tpm_limit` | `int | NoneType` | `None` |
+| `rpd_limit` | `int | NoneType` | `None` |
+| `tpd_limit` | `int | NoneType` | `None` |
+| `max_tokens_per_request` | `int | NoneType` | `None` |
+| `max_output_tokens` | `int | NoneType` | `None` |
+| `base_url` | `str` | **obligatoire** |
+| `default_model` | `str` | **obligatoire** |
+| `weight` | `float` | `1.0` |
+| `batch_max_agents` | `int` | `1` |
+| `tpm_estimate_per_request` | `int | NoneType` | `None` |
+| `concurrency_limit` | `int` | `2` |
+| `disable_timeout` | `int` | `180` |
+| `adapter` | `str` | `''` |
+| `inference` | `InferenceOverrides | NoneType` | `None` |
+
+## Anciens noms encore lus (dépréciés)
+
+| Ancien nom | Nouveau nom |
+|---|---|
+| `REDIS_URL` | `LLM_GATEWAY_REDIS__URL` |
+| `CELERY_BROKER_URL` | `LLM_GATEWAY_EXECUTOR__CELERY_BROKER_URL` |
+| `CELERY_RESULT_BACKEND` | `LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND` |
+| `LOG_LEVEL` | `LLM_GATEWAY_TELEMETRY__LOG_LEVEL` |
+| `SERVICE_NAME` | `LLM_GATEWAY_TELEMETRY__SERVICE_NAME` |
+| `APP_WORKDIR` | `LLM_GATEWAY_TELEMETRY__WORKDIR` |
+| `LLM_EXCHANGES_FILE` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_FILE` |
+| `MAX_RETRIES` | `LLM_GATEWAY_RESILIENCE__MAX_RETRIES` |
+| `BACKOFF_BASE_SECONDS` | `LLM_GATEWAY_RESILIENCE__BACKOFF_BASE_SECONDS` |
+| `PROVIDER_SWITCH_COOLDOWN_SECONDS` | `LLM_GATEWAY_RESILIENCE__PROVIDER_SWITCH_COOLDOWN_SECONDS` |
+| `BATCH_MAX_AGENTS` | `LLM_GATEWAY_BATCHING__MAX_AGENTS` |
+| `BATCH_DELAY_SECONDS` | `LLM_GATEWAY_BATCHING__DELAY_SECONDS` |
+| `BATCH_TARGET_AGENTS` | `LLM_GATEWAY_BATCHING__TARGET_AGENTS` |
+| `ASSUMED_PROMPT_TOKENS` | `LLM_GATEWAY_BATCHING__ASSUMED_PROMPT_TOKENS` |
+| `ASSUMED_OUTPUT_TOKENS` | `LLM_GATEWAY_BATCHING__ASSUMED_OUTPUT_TOKENS` |
+| `TOKEN_CHARS_RATIO` | `LLM_GATEWAY_BATCHING__TOKEN_CHARS_RATIO` |
+| `MAX_BATCH_AGENTS` | `LLM_GATEWAY_BATCHING__MAX_BATCH_AGENTS` |
+| `MIN_OUTPUT_TOKENS` | `LLM_GATEWAY_BATCHING__MIN_OUTPUT_TOKENS` |
+| `MAX_OUTPUT_TOKENS` | `LLM_GATEWAY_BATCHING__MAX_OUTPUT_TOKENS` |
+
+`PROVIDER_KEYS__<nom>` n'est pas déprécié : c'est le nom canonique des clés d'API.

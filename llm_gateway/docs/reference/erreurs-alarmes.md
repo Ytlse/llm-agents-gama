@@ -83,7 +83,7 @@ journaux et par `make error`, pas dans Grafana.
 
 ## Journaux d'erreur
 
-- `APP_WORKDIR/llm_errors.jsonl` : une ligne par appel LLM échoué (`time`, `task_id`,
+- `<telemetry.workdir>/llm_errors.jsonl` : une ligne par appel LLM échoué (`time`, `task_id`,
   `provider`, `error_type`, `error_message`, `http_status`, `ratelimit_reset`).
 - Ring buffer Redis `llm:recent_errors` (50 dernières), servi par `GET /errors/recent`.
 - `llm_call_completed | … status=failed` en ERROR à chaque appel échoué, `status=success`

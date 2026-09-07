@@ -54,8 +54,8 @@ Rien ne se construit à l'import. Les fabriques assemblent les dépendances et l
   clé. Aucun accès Redis ni réseau.
 - **Logging** : `configure_logging()` est appelé par les fabriques (`create_app`,
   `create_celery_app`), idempotent. Il remplace le handler loguru par défaut par un handler
-  au niveau `LOG_LEVEL` et, si `SERVICE_NAME` est défini, ajoute un fichier
-  `APP_WORKDIR/<SERVICE_NAME>.log`. Un hôte qui importe seulement le SDK garde ses handlers.
+  au niveau `telemetry.log_level` et, si `telemetry.service_name` est défini, ajoute un fichier
+  `<telemetry.workdir>/<service>.log`. Un hôte qui importe seulement le SDK garde ses handlers.
 
 ## Ce que le gateway ne sait pas
 

@@ -53,8 +53,8 @@ def _make_lifespan(deps: GatewayDeps):
 def create_app(config: Settings | None = None, deps: GatewayDeps | None = None) -> FastAPI:
     """Compose l'application. `deps` permet d'injecter des ports en mémoire (tests, mode embarqué)
     à la place des connexions Redis construites par build_deps()."""
-    configure_logging()
     settings = config or (deps.settings if deps is not None else get_settings())
+    configure_logging(settings.telemetry)
     deps = deps if deps is not None else build_deps(settings)
     install_collector(deps)
 
@@ -66,12 +66,13 @@ def create_app(config: Settings | None = None, deps: GatewayDeps | None = None) 
     )
     app.state.deps = deps
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # À restreindre en production
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    if settings.api.cors_origins:   # vide = aucun middleware CORS (défaut) ; ["*"] = tout autoriser
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.api.cors_origins,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.include_router(router)
     return app

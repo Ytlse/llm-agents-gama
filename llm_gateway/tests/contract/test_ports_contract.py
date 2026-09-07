@@ -150,3 +150,21 @@ class TestMetricsSinkContract:
         recent = m.recent_errors(2)
         assert len(recent) == 2
         assert recent[0]["message"] == "e2", "la plus récente d'abord"
+
+
+# ── LearnedLimits ────────────────────────────────────────────────────────────
+
+class TestLearnedLimitsContract:
+    def test_absent_puis_appris_puis_liste(self, ports):
+        st = ports.learned
+        assert st.get_max_output_tokens("p1") is None
+        st.set_max_output_tokens("p1", 8192)
+        st.set_max_output_tokens("p2", 4096)
+        assert st.get_max_output_tokens("p1") == 8192
+        assert st.all_max_output_tokens() == {"p1": 8192, "p2": 4096}
+
+    def test_la_derniere_valeur_gagne(self, ports):
+        st = ports.learned
+        st.set_max_output_tokens("p1", 8192)
+        st.set_max_output_tokens("p1", 2048)
+        assert st.get_max_output_tokens("p1") == 2048

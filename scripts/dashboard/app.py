@@ -1452,7 +1452,7 @@ def render_providers_tab() -> None:
     st.caption(
         "Interroge les en-têtes `x-ratelimit-*` (mistral/groq/cerebras, une requête "
         "sonde par instance) et l'API Cloud Quotas Google, puis réécrit "
-        "`llm_module/config/providers.yaml`. Chiffrez d'abord avec le bilan à blanc."
+        "`config/llm_gateway/providers.yaml`. Chiffrez d'abord avec le bilan à blanc."
     )
     dry, real = st.columns(2)
     with dry:

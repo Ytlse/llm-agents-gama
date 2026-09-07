@@ -125,16 +125,18 @@ Chaque modèle a sa propre limite du paramètre `max_tokens` (8 192 pour
 cette limite provoque un HTTP 400 non retryable (``"`max_tokens` must be less than or
 equal to `8192`"``) qui faisait échouer tout le batch. Trois mécanismes s'articulent :
 
-1. **Déclaration** : le champ optionnel `max_output_tokens` de `providers.yaml` porte
-   le plafond de complétion du modèle. Absent = pas de limite connue (fallback
-   `settings.max_output_tokens`). Le worker borne le `max_tokens` envoyé à cette valeur.
+1. **Déclaration** : le champ optionnel `max_output_tokens` du fichier des fournisseurs
+   (`config/llm_gateway/providers.yaml`) porte le plafond de complétion du modèle. Absent = pas
+   de limite connue (fallback `settings.batching.max_output_tokens`). Le worker borne le `max_tokens` envoyé à cette valeur.
 2. **Apprentissage automatique** : si un provider répond quand même 400 avec un message
    `max_tokens must be ≤ N` (formats Groq/OpenAI/Google reconnus par
    `_parse_max_tokens_limit`), le worker apprend N via
    `learn_provider_max_output_tokens()` : config en mémoire ajustée immédiatement
-   **et** ligne `max_output_tokens` écrite dans `providers.yaml` (édition chirurgicale
-   préservant les commentaires, écriture atomique — le bind mount `./llm_gateway/src/llm_gateway`
-   persiste la valeur sur l'hôte). Le batch est alors rejoué : le prochain essai est
+   **et** valeur rangée dans le store des limites apprises (port `LearnedLimits` : hash
+   Redis `llm_gateway:learned:max_output_tokens` partagé entre API et workers, fichier JSON
+   sans Redis). Depuis l'itération 2 du ticket 037, le fichier des fournisseurs n'est plus
+   réécrit : chaque processus fusionne les limites apprises au démarrage, sans jamais élargir
+   un plafond déclaré. Le batch est alors rejoué : le prochain essai est
    plafonné correctement ou part sur un autre provider via la rotation. Si la limite
    était déjà connue (rien de nouveau à apprendre), l'échec reste définitif pour ne
    pas boucler sur la même 400.

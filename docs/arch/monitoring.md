@@ -84,10 +84,11 @@ Deux mécanismes complémentaires :
    Sources : `backlog`, `event_loop`, `arrivee_perdue`, `cache_llm_stale`,
    `cache_llm_qdrant`, `gateway_llm`, `vehicule_orphelin` (controller) et `providers_satures`
    (worker, via Redis `alarme:{source}` relu par `WorkerMetricsCollector`).
-   Ne pas importer `alarms.py` dans le processus API : la famille y est déjà
-   émise par le collecteur Redis. Les deux sites `[ALARME]` de
-   `llm_gateway/src/llm_gateway/config/settings.py` (échec de persistance providers.yaml, rare et non
-   critique en live) restent hors compteur — visibles via `make error`.
+   Le compteur de `alarms.py` n'est créé qu'au premier `fire_alarme` et se range hors
+   registre si la famille est déjà exposée : le processus API peut importer le SDK sans
+   collision (ticket 037). Le site `[ALARME]` de `llm_gateway/src/llm_gateway/config/learned.py`
+   (limite apprise impossible à mémoriser dans le store, les autres processus la
+   réapprendront) reste hors compteur — visible via `make error`.
 2. **Alertes Grafana provisionnées** — `grafana/provisioning/alerting/simulation-alerts.yml`
    (7 règles, dossier « Alertes simulation ») : agents bloqués, fallback LLM
    >10 %, alarme `[ALARME]` émise, drainage >10 min, aucun provider actif,

@@ -1,59 +1,63 @@
 """
-config.py — Configuration du gateway (pydantic-settings).
+config/settings.py — les réglages du gateway, en couches et groupés.
 
-La configuration n'est JAMAIS construite comme effet de bord d'un import de
-module métier : les entrypoints (create_app, worker Celery, tests) appellent
-explicitement Settings() ou get_settings(). Construire Settings lit
-providers.yaml et l'environnement — aucun accès Redis/réseau.
+La configuration n'est JAMAIS construite comme effet de bord d'un import : les points d'entrée
+(create_app, worker Celery, CLI, tests) appellent explicitement `GatewaySettings()` ou
+`get_settings()`. Construire les réglages lit l'environnement et le fichier des fournisseurs ;
+aucun accès Redis ni réseau.
+
+Sources, de la plus forte à la plus faible (cf. `config/sources.py`) : arguments du
+constructeur, environnement `LLM_GATEWAY_*` (`__` sépare les niveaux :
+`LLM_GATEWAY_BATCHING__DELAY_SECONDS`), anciens noms non préfixés (dépréciés), fichier YAML
+`LLM_GATEWAY_CONFIG`, profil `LLM_GATEWAY_PROFILE`, défauts ci-dessous.
 """
-
 from __future__ import annotations
 
-import os
-import re
-from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, Literal
 
-import yaml
-from pydantic import BaseModel, ConfigDict, SecretStr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from llm_gateway.config.providers import (
+    DEFAULT_EXAMPLE_FILE,
+    InferenceOverrides,
+    ProviderEntry,
+    ProvidersFile,
+    load_providers_file,
+)
+from llm_gateway.config.sources import ENV_PREFIX, LegacyEnvSource, yaml_sources
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
 
-_PROVIDERS_YAML = Path(__file__).parent / "providers.yaml"
 
-
-def load_provider_defaults() -> dict[str, dict]:
-    """Charge la liste des providers depuis providers.yaml."""
-    with open(_PROVIDERS_YAML) as f:
-        data = yaml.safe_load(f)
-    return data.get("providers", {})
-
+# ---------------------------------------------------------------------------
+# Un fournisseur résolu : l'entrée du fichier + la clé + les valeurs calculées
+# ---------------------------------------------------------------------------
 
 class ProviderConfig(BaseModel):
-    # Une clé mal orthographiée (`tpm_limt`, `weigth`) était ignorée en silence : le provider
-    # tournait avec un autre réglage que celui écrit. Désormais elle fait échouer le démarrage
-    # en nommant le provider et la clé (LLM-04, ticket 037).
+    """Configuration effective d'une instance de fournisseur, telle que le gateway l'utilise."""
+
     model_config = ConfigDict(extra="forbid")
 
-    api_key:                  SecretStr    = SecretStr("")
-    rpm_limit:                int
-    tpm_limit:                int | None = None
-    rpd_limit:                int | None = None  # quota requêtes/jour (free tier) — appliqué : provider écarté jusqu'à minuit UTC une fois atteint
-    tpd_limit:                int | None = None  # quota tokens/jour (free tier) — appliqué (comptage a posteriori des tokens réellement consommés)
-    max_tokens_per_request:   int | None = None  # capacité max d'une requête unique (tokens) ; exclu si < batch_max_agents * assumed_prompt_tokens + min_output_tokens
-    max_output_tokens:        int | None = None  # plafond de complétion du modèle (param max_tokens) ; None = pas de limite connue (fallback settings.max_output_tokens) ; appris automatiquement sur HTTP 400 et persisté dans providers.yaml
-    base_url:                 str
-    default_model:            str
-    weight:                   float        = 1.0
-    batch_max_agents:         int          = 1   # calculé par Settings.build_providers — ne pas définir manuellement
-    tpm_estimate_per_request: int | None = None  # tokens (in+out) estimés d'une requête pleine ; calculé par Settings.build_providers — sert de garde-fou TPM glissant côté rate-limiter (None si tpm_limit absent)
-    concurrency_limit:        int          = 2   # nb workers Celery simultanés autorisés pour ce provider
-    disable_timeout:          int          = 180
-    adapter:                  str          = ""
+    api_key: SecretStr = SecretStr("")
+    rpm_limit: int
+    tpm_limit: int | None = None
+    rpd_limit: int | None = None
+    tpd_limit: int | None = None
+    max_tokens_per_request: int | None = None
+    max_output_tokens: int | None = None
+    base_url: str
+    default_model: str
+    weight: float = 1.0
+    batch_max_agents: int = 1            # calculé : min(tpm/tokens_par_agent, capacité requête, rpm, plafond)
+    tpm_estimate_per_request: int | None = None  # calculé : réservation TPM d'une requête pleine
+    concurrency_limit: int = 2
+    disable_timeout: int = 180
+    adapter: str = ""
+    inference: InferenceOverrides | None = None
 
     def __repr__(self) -> str:
         return (
@@ -63,138 +67,244 @@ class ProviderConfig(BaseModel):
         )
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_nested_delimiter='__')
+# ---------------------------------------------------------------------------
+# Les groupes de réglages
+# ---------------------------------------------------------------------------
 
-    redis_url:                  str   = "redis://localhost:6379/0"
-    celery_broker_url:          str   = "redis://localhost:6379/1"
-    celery_result_backend:      str   = "redis://localhost:6379/2"
-    circuit_breaker_threshold:  float = 0.95
-    max_retries:                int   = 50
-    backoff_base_seconds:       float = 1.0
-    # Cooldown court appliqué au provider fautif lors d'un basculement (parse error ou
-    # 4xx non récupérable) : force la rotation à choisir un AUTRE modèle au réessai.
+class RedisSettings(BaseModel):
+    url: str = "redis://localhost:6379/0"
+
+
+class ExecutorSettings(BaseModel):
+    kind: Literal["celery"] = "celery"   # « inprocess » viendra avec le port d'exécution
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
+
+class InferenceSettings(BaseModel):
+    """Défauts globaux d'inférence ; surchargés par provider (`inference:` du fichier) puis par requête."""
+
+    temperature: float = 0.7
+    top_p: float | None = None
+    max_tokens: int = 4096   # budget de sortie PAR TÂCHE ; le lot multiplie par son nombre d'agents
+
+
+class BatchingSettings(BaseModel):
+    """Micro-batching. Les valeurs sont celles mesurées sur les runs de juillet 2026 : à recalibrer
+    sur d'autres prompts ou d'autres fournisseurs (cf. guide des quotas)."""
+
+    max_agents: int = 5           # repli si aucun provider n'est configuré
+    # Fenêtre d'accumulation : une requête sous le seuil attend ce délai pour être fusionnée.
+    # Calée sur l'inter-arrivée mesurée des prompts (run 2026-07-10 : p50 = 1,4 s).
+    delay_seconds: float = 3.0
+    # Taille de file déclenchant un dispatch immédiat (cf. get_dispatch_threshold).
+    target_agents: int = 10
+    assumed_prompt_tokens: int = 2200   # tokens_in max par agent (historique +10 % de marge)
+    assumed_output_tokens: int = 800    # tokens_out estimés par agent (réservation TPM glissante)
+    # tokens ≈ caractères / ratio ; mesuré p50 = 3,24, p10 = 3,05 sur prompts FR + JSON.
+    token_chars_ratio: float = 3.0
+    max_batch_agents: int = 20          # plafond absolu du calcul de batch_max_agents
+    min_output_tokens: int = 512        # budget de sortie minimal acceptable par requête
+    max_output_tokens: int = 16384      # plafond du max_tokens envoyé (limite gpt-4o-mini)
+
+
+class ResilienceSettings(BaseModel):
+    max_retries: int = 50
+    backoff_base_seconds: float = 1.0
+    # Cooldown court du provider fautif lors d'une bascule (parse error, 4xx non récupérable).
     provider_switch_cooldown_seconds: int = 30
-    batch_max_agents:           int   = 5     # fallback si aucun provider configuré
-    # Fenêtre d'accumulation du micro-batching : une requête qui n'atteint pas le
-    # seuil de dispatch attend ce délai pour être fusionnée avec les suivantes.
-    # Calé sur l'inter-arrivée mesurée des prompts (run 2026-07-10 : p50 = 1,4s,
-    # p90 du débit = 40 prompts/min) — 1s ne captait quasiment rien.
-    batch_delay_seconds:        float = 3.0
-    # Seuil de dispatch immédiat (cf. get_dispatch_threshold) : taille de file à
-    # partir de laquelle on n'attend plus batch_delay_seconds. Découplé du min
-    # des providers, qui vaut 1 à cause des petits TPM Groq et court-circuitait
-    # toute accumulation (ratio agents/prompt ≈ 1 hors backlog).
-    batch_target_agents:        int   = 10
-    assumed_prompt_tokens:      int   = 2200  # tokens_in max par agent (historique +10% de marge)
-    assumed_output_tokens:      int   = 800   # tokens_out estimés par agent — sert (avec assumed_prompt_tokens) à dimensionner la réservation TPM glissante
-    # Estimation tokens_in depuis la taille du prompt rendu : tokens ≈ chars / ratio.
-    # Mesuré sur le run 2026-07-10 (427 échanges, prompts FR + JSON) : p50 = 3,24,
-    # p10 = 3,05 → 3,0 laisse ~8 % de marge. Sert à recaler la réservation TPM
-    # glissante sur la taille réelle de chaque requête (cf. worker/task_worker.py).
-    token_chars_ratio:          float = 3.0
-    max_batch_agents:           int   = 20    # plafond absolu du calcul automatique de batch_max_agents
-    min_output_tokens:          int   = 512   # budget output minimal acceptable par requête
-    max_output_tokens:          int   = 16384 # plafond du max_tokens envoyé au provider (16 384 = limite de complétion gpt-4o-mini, le plus contraint des providers configurés)
+    # Au-delà, le provider est désactivé pour `disable_timeout` secondes.
+    disable_after_consecutive_errors: int = 30
 
-    # Les api_key viennent de l'env : PROVIDER_KEYS__groq=gsk-...
-    provider_keys: dict[str, SecretStr] = {}
 
-    # Construit après validation — pas lu depuis l'env
-    providers: dict[str, ProviderConfig] = {}
+class ApiSettings(BaseModel):
+    cors_origins: list[str] = Field(default_factory=list)   # vide = pas de middleware CORS
+    max_request_bytes: int = 2_000_000
+    auth_tokens: list[SecretStr] = Field(default_factory=list)   # ticket 036 : non appliqué encore
+
+
+class TelemetrySettings(BaseModel):
+    log_level: str = "INFO"
+    log_format: Literal["text", "json"] = "text"
+    service_name: str | None = None      # ajoute un sink fichier <workdir>/<service>.log
+    workdir: Path = Path(".")
+    # None = <workdir>/llm_exchanges.jsonl (comportement historique ; désactivation explicite à venir)
+    exchanges_file: Path | None = None
+    exchanges_max_bytes: int = 200_000_000
+    redactor: str | None = None          # chemin pointé d'un rédacteur (itération 2, lot D)
+
+
+# ---------------------------------------------------------------------------
+# Les réglages du gateway
+# ---------------------------------------------------------------------------
+
+class GatewaySettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix=ENV_PREFIX, env_nested_delimiter="__", extra="ignore", case_sensitive=False,
+    )
+
+    redis: RedisSettings = Field(default_factory=RedisSettings)
+    executor: ExecutorSettings = Field(default_factory=ExecutorSettings)
+    inference: InferenceSettings = Field(default_factory=InferenceSettings)
+    batching: BatchingSettings = Field(default_factory=BatchingSettings)
+    resilience: ResilienceSettings = Field(default_factory=ResilienceSettings)
+    api: ApiSettings = Field(default_factory=ApiSettings)
+    telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)
+
+    # Fichier des fournisseurs (configuration de déploiement). None = exemple livré + avertissement.
+    providers_file: Path | None = None
+    # Où vivent les limites apprises (max_output_tokens révélés par HTTP 400).
+    learned_limits: Literal["redis", "file", "none"] = "redis"
+    learned_limits_file: Path | None = None   # défaut : <telemetry.workdir>/learned_limits.json
+
+    # Clés d'API : LLM_GATEWAY_PROVIDER_KEYS__<nom> ou PROVIDER_KEYS__<nom>.
+    provider_keys: dict[str, SecretStr] = Field(default_factory=dict)
+
+    # Construits après validation — pas lus depuis l'environnement.
+    providers: dict[str, ProviderConfig] = Field(default_factory=dict)
+    declared_providers: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings, env_settings, LegacyEnvSource(settings_cls), *yaml_sources(settings_cls))
+
+    # ── Construction des fournisseurs ────────────────────────────────────────
+
+    def resolved_providers_file(self) -> Path:
+        return Path(self.providers_file) if self.providers_file else DEFAULT_EXAMPLE_FILE
 
     @model_validator(mode="after")
-    def build_providers(self) -> Settings:
-        defaults = load_provider_defaults()
-        # Coût tokens (in+out) d'un agent dans un batch — dimensionne batch_max_agents.
-        # Mesuré sur le run 2026-07-10 : 1 282 in + 320 out ≈ 1 600/agent (p90 ≈ 2 400) ;
-        # assumed_prompt_tokens + assumed_output_tokens = 3 000 garde ~25 % de marge.
-        # (Historique : un 4096 codé en dur donnait 6 296/agent et écrasait à 1 le
-        # batch_max_agents des providers à petit TPM.)
-        tokens_per_agent = self.assumed_prompt_tokens + self.assumed_output_tokens
-        result = {}
-        for name, entry in defaults.items():
-            adapter_name = entry.get("adapter", name)
-            key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
-            tpm = entry.get("tpm_limit")
-            rpm = entry.get("rpm_limit", 1)
-            tpm_bound = int(tpm / tokens_per_agent) if tpm else rpm
-            # Capacité par requête unique (HTTP 413 au-delà) : borne le batch au même
-            # titre que le TPM — un batch qui ne tient pas dans une requête ne part jamais.
-            req_cap = entry.get("max_tokens_per_request")
-            req_bound = int(req_cap / tokens_per_agent) if req_cap else self.max_batch_agents
-            entry["batch_max_agents"] = max(1, min(tpm_bound, req_bound, rpm, self.max_batch_agents))
-            # Estimation de la consommation tokens (in+out) d'une requête pleine —
-            # garde-fou TPM glissant appliqué par le rate-limiter (None si pas de tpm_limit).
-            if tpm:
-                entry["tpm_estimate_per_request"] = entry["batch_max_agents"] * (
-                    self.assumed_prompt_tokens + self.assumed_output_tokens
-                )
-            logger.info(
-                f"Provider '{name}' — batch_max_agents={entry['batch_max_agents']} "
-                f"tpm_estimate_per_request={entry.get('tpm_estimate_per_request')} "
-                f"(tpm={tpm}, rpm={rpm}, cap={self.max_batch_agents})"
+    def build_providers(self) -> GatewaySettings:
+        if self.providers:   # déjà construits (copie, tests) : ne pas relire le fichier
+            return self
+        path = self.resolved_providers_file()
+        if self.providers_file is None:
+            logger.warning(
+                f"Aucun fichier des fournisseurs désigné ({ENV_PREFIX}PROVIDERS_FILE) : exemple livré "
+                f"chargé ({path.name}). Sans clé d'API, aucun fournisseur ne sera actif."
             )
-            result[name] = ProviderConfig(api_key=key, **entry)
-        self.providers = result
+        declared = load_providers_file(path)
+        self.declared_providers = sorted(declared.providers)
+        self.providers = {
+            name: self._resolve(name, entry) for name, entry in declared.providers.items()
+        }
         return self
 
-    def get_batch_max_agents(self, force_provider: str | None = None) -> int:
-        """
-        Limite de batch liée à la capacité du provider.
-        - Provider forcé : limite exacte de ce provider.
-        - Provider dynamique : minimum des providers disponibles (approche conservative,
-          car on ne connaît pas encore le provider qui sera sélectionné).
-        - Aucun provider configuré : fallback sur batch_max_agents.
-        """
-        if force_provider:
-            provider_cfg = self.providers.get(force_provider)
-            if provider_cfg:
-                return provider_cfg.batch_max_agents
+    def _resolve(self, name: str, entry: ProviderEntry) -> ProviderConfig:
+        b = self.batching
+        adapter_name = entry.adapter or name
+        key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+        # Coût tokens (in+out) d'un agent dans un lot — dimensionne batch_max_agents.
+        tokens_per_agent = b.assumed_prompt_tokens + b.assumed_output_tokens
+        tpm_bound = int(entry.tpm_limit / tokens_per_agent) if entry.tpm_limit else entry.rpm_limit
+        req_bound = int(entry.max_tokens_per_request / tokens_per_agent) if entry.max_tokens_per_request else b.max_batch_agents
+        batch_max = max(1, min(tpm_bound, req_bound, entry.rpm_limit, b.max_batch_agents))
+        if entry.batch_max_agents is not None:
+            logger.warning(
+                f"Provider '{name}' : batch_max_agents={entry.batch_max_agents} écrit dans le fichier "
+                f"est ignoré, le gateway le calcule ({batch_max})."
+            )
+        tpm_estimate = batch_max * tokens_per_agent if entry.tpm_limit else None
+        logger.info(
+            f"Provider '{name}' — batch_max_agents={batch_max} tpm_estimate_per_request={tpm_estimate} "
+            f"(tpm={entry.tpm_limit}, rpm={entry.rpm_limit}, cap={b.max_batch_agents})"
+        )
+        data = entry.model_dump(exclude={"batch_max_agents"})
+        return ProviderConfig(
+            api_key=key, batch_max_agents=batch_max, tpm_estimate_per_request=tpm_estimate, **data,
+        )
 
+    # ── Lecture des capacités ───────────────────────────────────────────────
+
+    def get_batch_max_agents(self, force_provider: str | None = None) -> int:
+        """Limite de lot du worker : celle du provider forcé, sinon le min des providers (conservateur)."""
+        if force_provider:
+            cfg = self.providers.get(force_provider)
+            if cfg:
+                return cfg.batch_max_agents
         if self.providers:
             return min(p.batch_max_agents for p in self.providers.values())
-
-        return self.batch_max_agents
+        return self.batching.max_agents
 
     def get_dispatch_threshold(self, force_provider: str | None = None) -> int:
-        """
-        Taille de file (en tâches) déclenchant un dispatch immédiat côté API.
-        En dessous, le dispatch est différé de batch_delay_seconds pour laisser
-        le micro-batching accumuler des tâches compatibles.
+        """Taille de file déclenchant un dispatch immédiat côté API.
 
-        - Provider forcé : sa capacité exacte (attendre au-delà ne sert à rien).
-        - Provider dynamique : batch_target_agents, borné par la capacité du plus
-          gros provider. Surtout PAS le min des providers (contrairement à
-          get_batch_max_agents, utilisé par le worker au pop) : les providers à
-          petit TPM ont batch_max_agents = 1, le seuil serait toujours atteint et
-          la fenêtre d'accumulation ne jouerait jamais.
+        Provider forcé : sa capacité. Sinon la cible de lot, bornée par le plus gros provider —
+        surtout PAS le min des providers, qui vaut 1 à cause des petits TPM et rendrait la fenêtre
+        d'accumulation inopérante.
         """
         if force_provider:
-            provider_cfg = self.providers.get(force_provider)
-            if provider_cfg:
-                return provider_cfg.batch_max_agents
-
+            cfg = self.providers.get(force_provider)
+            if cfg:
+                return cfg.batch_max_agents
         if self.providers:
-            return min(self.batch_target_agents, max(p.batch_max_agents for p in self.providers.values()))
+            return min(self.batching.target_agents, max(p.batch_max_agents for p in self.providers.values()))
+        return self.batching.target_agents
 
-        return self.batch_target_agents
+    # ── Alias à plat (compatibilité une version ; préférer les groupes) ─────
+
+    @property
+    def redis_url(self) -> str: return self.redis.url
+    @property
+    def celery_broker_url(self) -> str: return self.executor.celery_broker_url
+    @property
+    def celery_result_backend(self) -> str: return self.executor.celery_result_backend
+    @property
+    def max_retries(self) -> int: return self.resilience.max_retries
+    @property
+    def backoff_base_seconds(self) -> float: return self.resilience.backoff_base_seconds
+    @property
+    def provider_switch_cooldown_seconds(self) -> int: return self.resilience.provider_switch_cooldown_seconds
+    @property
+    def batch_max_agents(self) -> int: return self.batching.max_agents
+    @property
+    def batch_delay_seconds(self) -> float: return self.batching.delay_seconds
+    @property
+    def batch_target_agents(self) -> int: return self.batching.target_agents
+    @property
+    def assumed_prompt_tokens(self) -> int: return self.batching.assumed_prompt_tokens
+    @property
+    def assumed_output_tokens(self) -> int: return self.batching.assumed_output_tokens
+    @property
+    def token_chars_ratio(self) -> float: return self.batching.token_chars_ratio
+    @property
+    def max_batch_agents(self) -> int: return self.batching.max_batch_agents
+    @property
+    def min_output_tokens(self) -> int: return self.batching.min_output_tokens
+    @property
+    def max_output_tokens(self) -> int: return self.batching.max_output_tokens
 
 
-def filter_providers_without_api_key(settings: Settings) -> dict[str, ProviderConfig]:
-    valid = {}
+# Nom historique, conservé pour les imports existants.
+Settings = GatewaySettings
+
+
+# ---------------------------------------------------------------------------
+# Filtrage, exposition masquée, accès partagé
+# ---------------------------------------------------------------------------
+
+def filter_providers_without_api_key(settings: GatewaySettings) -> dict[str, ProviderConfig]:
+    valid: dict[str, ProviderConfig] = {}
+    b = settings.batching
     for name, provider in settings.providers.items():
         if not provider.api_key.get_secret_value():
             logger.warning(f"Fournisseur '{name}' exclu : clé API manquante.")
             continue
         if provider.max_tokens_per_request is not None:
-            min_needed = provider.batch_max_agents * settings.assumed_prompt_tokens + settings.min_output_tokens
+            min_needed = provider.batch_max_agents * b.assumed_prompt_tokens + b.min_output_tokens
             if provider.max_tokens_per_request < min_needed:
                 logger.warning(
                     f"Fournisseur '{name}' exclu : capacité insuffisante "
                     f"(max_tokens_per_request={provider.max_tokens_per_request} < "
-                    f"batch_max_agents={provider.batch_max_agents} × assumed_prompt_tokens={settings.assumed_prompt_tokens} "
-                    f"+ min_output_tokens={settings.min_output_tokens} = {min_needed})."
+                    f"batch_max_agents={provider.batch_max_agents} × assumed_prompt_tokens={b.assumed_prompt_tokens} "
+                    f"+ min_output_tokens={b.min_output_tokens} = {min_needed})."
                 )
                 continue
         valid[name] = provider
@@ -202,94 +312,53 @@ def filter_providers_without_api_key(settings: Settings) -> dict[str, ProviderCo
     return valid
 
 
-def learn_provider_max_output_tokens(provider_name: str, limit: int) -> bool:
-    """Enregistre la limite de complétion réelle d'un provider apprise via une
-    erreur HTTP 400 ("`max_tokens` must be less than or equal to N").
+def redacted_dump(settings: GatewaySettings) -> dict[str, Any]:
+    """La configuration effective, secrets masqués : ce que `/config` et `config show` publient."""
+    data = settings.model_dump(mode="json")
+    data["provider_keys"] = {k: "***" for k in settings.provider_keys}
+    data["api"]["auth_tokens"] = ["***" for _ in settings.api.auth_tokens]
+    for name, cfg in data.get("providers", {}).items():
+        cfg["api_key"] = "***" if settings.providers[name].api_key.get_secret_value() else ""
+    data["providers_file"] = str(settings.resolved_providers_file())
+    return data
 
-    Met à jour la config en mémoire du process courant (le prochain batch sera
-    plafonné correctement) et persiste la valeur dans providers.yaml pour que
-    les autres process / prochains démarrages en profitent.
 
-    Returns:
-        True si une nouvelle limite (plus stricte) a été apprise, False si la
-        config connaissait déjà une limite ≤ (rien à corriger → l'appelant ne
-        doit PAS retenter, sous peine de boucler sur la même 400).
+def load_provider_defaults(path: Path | None = None) -> dict[str, dict]:
+    """Les entrées BRUTES du fichier des fournisseurs (avec ou sans clé) — compatibilité.
+
+    Consommé par prompt_calibration pour connaître les instances déclarées. Sans chemin, celui des
+    réglages courants.
     """
-    if limit <= 0:
-        return False
-    settings = get_settings()
-    cfg = settings.providers.get(provider_name)
-    if cfg is None:
-        logger.warning(
-            f"Limite max_output_tokens apprise pour un provider inconnu | "
-            f"provider={provider_name} limit={limit}"
-        )
-        return False
-    if cfg.max_output_tokens is not None and cfg.max_output_tokens <= limit:
-        return False
-    logger.warning(
-        f"Limite de complétion apprise depuis l'erreur provider — config ajustée | "
-        f"provider={provider_name} max_output_tokens={cfg.max_output_tokens} -> {limit}"
-    )
-    cfg.max_output_tokens = limit
-    _persist_provider_max_output_tokens(provider_name, limit)
-    return True
-
-
-def _persist_provider_max_output_tokens(provider_name: str, limit: int) -> None:
-    """Écrit max_output_tokens dans providers.yaml (édition chirurgicale, ligne
-    remplacée ou insérée sous le bloc du provider — les commentaires du fichier
-    sont préservés). Écriture atomique via fichier temporaire + os.replace."""
-    try:
-        lines = _PROVIDERS_YAML.read_text().splitlines(keepends=True)
-
-        start = next(
-            (i for i, line in enumerate(lines)
-             if re.match(rf"^  {re.escape(provider_name)}:\s*(#.*)?$", line)),
-            None,
-        )
-        if start is None:
-            logger.error(
-                f"[ALARME] Provider introuvable dans providers.yaml — limite non persistée | "
-                f"provider={provider_name} max_output_tokens={limit}"
-            )
-            return
-
-        # Fin du bloc = prochaine ligne non vide/non commentaire indentée à 2 espaces max
-        end = len(lines)
-        for j in range(start + 1, len(lines)):
-            if re.match(r"^(  )?\S", lines[j]):
-                end = j
-                break
-
-        new_line = (
-            f"    max_output_tokens:       {limit}  "
-            f"# auto-ajusté le {date.today().isoformat()} (HTTP 400 du provider)\n"
-        )
-        for j in range(start + 1, end):
-            if re.match(r"^\s*max_output_tokens\s*:", lines[j]):
-                lines[j] = new_line
-                break
-        else:
-            lines.insert(start + 1, new_line)
-
-        tmp = _PROVIDERS_YAML.with_suffix(".yaml.tmp")
-        tmp.write_text("".join(lines))
-        os.replace(tmp, _PROVIDERS_YAML)
-        logger.warning(
-            f"providers.yaml mis à jour automatiquement | provider={provider_name} "
-            f"max_output_tokens={limit}"
-        )
-    except OSError as e:
-        logger.error(
-            f"[ALARME] Impossible de persister max_output_tokens dans providers.yaml | "
-            f"provider={provider_name} limit={limit} error={e}"
-        )
+    target = Path(path) if path else get_settings().resolved_providers_file()
+    declared: ProvidersFile = load_providers_file(target)
+    return {name: entry.model_dump(exclude_none=True) for name, entry in declared.providers.items()}
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Settings partagés du process — construits au premier appel, pas à l'import."""
-    settings = Settings()
+def get_settings() -> GatewaySettings:
+    """Réglages partagés du processus — construits au premier appel, pas à l'import.
+
+    Les fournisseurs sans clé (ou sans capacité) sont retirés ici ; `declared_providers` garde la
+    liste complète du fichier.
+    """
+    settings = GatewaySettings()
     settings.providers = filter_providers_without_api_key(settings)
     return settings
+
+
+__all__ = [
+    "ApiSettings",
+    "BatchingSettings",
+    "ExecutorSettings",
+    "GatewaySettings",
+    "InferenceSettings",
+    "ProviderConfig",
+    "RedisSettings",
+    "ResilienceSettings",
+    "Settings",
+    "TelemetrySettings",
+    "filter_providers_without_api_key",
+    "get_settings",
+    "load_provider_defaults",
+    "redacted_dump",
+]

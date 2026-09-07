@@ -12,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from llm_gateway.balancer.router import LoadBalancer
-from llm_gateway.config import Settings
+from llm_gateway.config import Settings, apply_learned_limits
+from llm_gateway.config.learned_store import build_learned_store
 from llm_gateway.infra.redis import (
     RedisBatchQueue,
     RedisMetricsSink,
@@ -21,6 +22,7 @@ from llm_gateway.infra.redis import (
     create_async_redis,
     create_sync_redis,
 )
+from llm_gateway.ports.learned_limits import LearnedLimits
 from llm_gateway.prompts.registry import CategoryRegistry, get_registry
 
 
@@ -33,11 +35,14 @@ class GatewayDeps:
     metrics: RedisMetricsSink
     balancer: LoadBalancer
     registry: CategoryRegistry
+    learned: LearnedLimits
 
 
 def build_deps(settings: Settings, registry: CategoryRegistry | None = None) -> GatewayDeps:
-    sync_client = create_sync_redis(settings.redis_url)
-    async_client = create_async_redis(settings.redis_url)
+    sync_client = create_sync_redis(settings.redis.url)
+    async_client = create_async_redis(settings.redis.url)
+    learned = build_learned_store(settings, sync_client)
+    apply_learned_limits(settings, learned)
 
     store = RedisTaskStore(sync_client=sync_client, async_client=async_client)
     queue = RedisBatchQueue(task_store=store, sync_client=sync_client, async_client=async_client)
@@ -53,4 +58,5 @@ def build_deps(settings: Settings, registry: CategoryRegistry | None = None) -> 
         metrics=metrics,
         balancer=balancer,
         registry=registry if registry is not None else get_registry(),
+        learned=learned,
     )

@@ -26,7 +26,7 @@ docker run -d --name redis-gateway -p 6379:6379 redis:7-alpine
 
 Le gateway attend Redis sur `redis://localhost:6379/0` (tâches, files, quotas), `/1`
 (broker Celery) et `/2` (résultats Celery). Ces trois URL sont des réglages
-(`REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`).
+(`LLM_GATEWAY_REDIS__URL`, `LLM_GATEWAY_EXECUTOR__CELERY_BROKER_URL`, `LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND` ; les anciens noms sans préfixe sont encore lus avec un avertissement).
 
 ## 3. Donner une clé API
 
@@ -145,7 +145,7 @@ brut dans `error`.
 ## 8. Voir ce qui a été envoyé
 
 Le worker journalise chaque échange (prompt rendu, réponse, tokens) en JSONL dans
-`APP_WORKDIR/llm_exchanges.jsonl` (répertoire courant du worker par défaut) et les erreurs
+`<telemetry.workdir>/llm_exchanges.jsonl` (`LLM_GATEWAY_TELEMETRY__WORKDIR`, répertoire courant du worker par défaut) et les erreurs
 dans `llm_errors.jsonl`. `GET /metrics` expose les compteurs Prometheus, dont
 `llm_prompts_sent_total{category="perception_filter"}` et `llm_agents_batched_total`.
 

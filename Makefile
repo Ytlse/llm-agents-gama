@@ -134,7 +134,7 @@ capacity:
 init:
 	python3 scripts/debug/init_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
 
-## Met à jour llm_gateway/src/llm_gateway/config/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
+## Met à jour config/llm_gateway/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
 .PHONY: providers
 providers:
 	python3 scripts/providers/refresh.py $(if $(DRY_RUN),--dry-run,)

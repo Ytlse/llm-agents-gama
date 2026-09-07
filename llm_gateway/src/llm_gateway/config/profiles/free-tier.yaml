@@ -1,0 +1,16 @@
+# Profil « free-tier » : les réglages mesurés sur les runs de juillet 2026 avec des fournisseurs
+# gratuits à petits quotas (Groq 8 000 TPM, Gemini 15 RPM…). Ce sont les défauts du code ;
+# le profil existe pour les nommer et servir de modèle à un profil payant.
+#   LLM_GATEWAY_PROFILE=free-tier
+batching:
+  delay_seconds: 3.0          # inter-arrivée mesurée des prompts : p50 = 1,4 s (run 2026-07-10)
+  target_agents: 10
+  assumed_prompt_tokens: 2200 # tokens_in max par agent, +10 % de marge
+  assumed_output_tokens: 800
+  token_chars_ratio: 3.0      # p10 mesuré = 3,05 sur des prompts FR + JSON
+  max_batch_agents: 20
+resilience:
+  max_retries: 50
+  backoff_base_seconds: 1.0
+  provider_switch_cooldown_seconds: 30
+  disable_after_consecutive_errors: 30

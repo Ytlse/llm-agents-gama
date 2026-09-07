@@ -161,79 +161,61 @@ class TestParseMaxTokensLimit:
 # ---------------------------------------------------------------------------
 
 class TestLearnProviderMaxOutputTokens:
-    _YAML = """providers:
+    """La limite apprise va dans le store et dans la config du processus, plus dans un YAML."""
 
-  groq_llama4:
-    adapter:           groq
-    rpm_limit:         30
-    base_url:          https://api.groq.com/openai/v1
-    default_model:     meta-llama/llama-4-scout-17b-16e-instruct
-    weight:            1.0
-
-  other:
-    rpm_limit:         10
-    base_url:          http://x
-    default_model:     m
-"""
-
-    def _setup(self, monkeypatch, tmp_path, yaml_text=None, max_output_tokens=None):
+    def _settings(self, max_output_tokens=None):
         from pydantic import SecretStr
 
-        import llm_gateway.config.settings as config_mod
+        from llm_gateway.config import ProviderConfig
 
-        yaml_file = tmp_path / "providers.yaml"
-        yaml_file.write_text(yaml_text or self._YAML)
-        monkeypatch.setattr(config_mod, "_PROVIDERS_YAML", yaml_file)
-
-        cfg = config_mod.ProviderConfig(
+        cfg = ProviderConfig(
             api_key=SecretStr("k"), rpm_limit=30, base_url="http://x",
             default_model="m", max_output_tokens=max_output_tokens,
         )
-        fake_settings = type("S", (), {"providers": {"groq_llama4": cfg}})()
-        monkeypatch.setattr(config_mod, "get_settings", lambda: fake_settings)
-        return config_mod, cfg, yaml_file
+        return type("S", (), {"providers": {"groq_llama4": cfg}})(), cfg
 
-    def test_learn_updates_memory_and_yaml(self, monkeypatch, tmp_path):
-        import yaml as yaml_lib
-        config_mod, cfg, yaml_file = self._setup(monkeypatch, tmp_path)
+    def test_learn_updates_memory_and_store(self):
+        from llm_gateway.config import learn_provider_max_output_tokens
+        from llm_gateway.testing import InMemoryLearnedLimits
 
-        assert config_mod.learn_provider_max_output_tokens("groq_llama4", 8192) is True
+        settings, cfg = self._settings()
+        store = InMemoryLearnedLimits()
+        assert learn_provider_max_output_tokens(settings, store, "groq_llama4", 8192) is True
         assert cfg.max_output_tokens == 8192
+        assert store.get_max_output_tokens("groq_llama4") == 8192
 
-        data = yaml_lib.safe_load(yaml_file.read_text())
-        assert data["providers"]["groq_llama4"]["max_output_tokens"] == 8192
-        # Le reste du fichier est préservé
-        assert data["providers"]["other"]["rpm_limit"] == 10
+    def test_already_known_limit_returns_false(self):
+        from llm_gateway.config import learn_provider_max_output_tokens
+        from llm_gateway.testing import InMemoryLearnedLimits
 
-    def test_learn_replaces_existing_yaml_line(self, monkeypatch, tmp_path):
-        import yaml as yaml_lib
-        yaml_text = self._YAML.replace(
-            "    weight:            1.0",
-            "    max_output_tokens: 16384\n    weight:            1.0",
-        )
-        config_mod, cfg, yaml_file = self._setup(
-            monkeypatch, tmp_path, yaml_text=yaml_text, max_output_tokens=16384,
-        )
+        settings, _ = self._settings(max_output_tokens=8192)
+        store = InMemoryLearnedLimits()
+        assert learn_provider_max_output_tokens(settings, store, "groq_llama4", 8192) is False
+        assert learn_provider_max_output_tokens(settings, store, "groq_llama4", 16384) is False
+        assert store.all_max_output_tokens() == {}
 
-        assert config_mod.learn_provider_max_output_tokens("groq_llama4", 8192) is True
-        data = yaml_lib.safe_load(yaml_file.read_text())
-        assert data["providers"]["groq_llama4"]["max_output_tokens"] == 8192
-        # Une seule occurrence de la clé dans le bloc
-        assert yaml_file.read_text().count("max_output_tokens") == 1
+    def test_unknown_provider_and_invalid_limit_return_false(self):
+        from llm_gateway.config import learn_provider_max_output_tokens
+        from llm_gateway.testing import InMemoryLearnedLimits
 
-    def test_already_known_limit_returns_false(self, monkeypatch, tmp_path):
-        config_mod, cfg, _ = self._setup(monkeypatch, tmp_path, max_output_tokens=8192)
-        # Même limite ou limite plus stricte déjà connue → rien à apprendre
-        assert config_mod.learn_provider_max_output_tokens("groq_llama4", 8192) is False
-        assert config_mod.learn_provider_max_output_tokens("groq_llama4", 16384) is False
+        settings, _ = self._settings()
+        store = InMemoryLearnedLimits()
+        assert learn_provider_max_output_tokens(settings, store, "nope", 8192) is False
+        assert learn_provider_max_output_tokens(settings, store, "groq_llama4", 0) is False
 
-    def test_unknown_provider_returns_false(self, monkeypatch, tmp_path):
-        config_mod, _, _ = self._setup(monkeypatch, tmp_path)
-        assert config_mod.learn_provider_max_output_tokens("nope", 8192) is False
+    def test_apply_learned_limits_only_tightens(self):
+        from llm_gateway.config import apply_learned_limits
+        from llm_gateway.testing import InMemoryLearnedLimits
 
-    def test_invalid_limit_returns_false(self, monkeypatch, tmp_path):
-        config_mod, _, _ = self._setup(monkeypatch, tmp_path)
-        assert config_mod.learn_provider_max_output_tokens("groq_llama4", 0) is False
+        settings, cfg = self._settings(max_output_tokens=16384)
+        store = InMemoryLearnedLimits()
+        store.set_max_output_tokens("groq_llama4", 8192)
+        store.set_max_output_tokens("inconnu", 100)
+        assert apply_learned_limits(settings, store) == 1
+        assert cfg.max_output_tokens == 8192
+        store.set_max_output_tokens("groq_llama4", 65536)   # plus large : ignoré
+        assert apply_learned_limits(settings, store) == 0
+        assert cfg.max_output_tokens == 8192
 
 
 # ---------------------------------------------------------------------------

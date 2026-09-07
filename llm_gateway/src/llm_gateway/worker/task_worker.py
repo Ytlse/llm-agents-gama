@@ -16,7 +16,7 @@ Retry avec backoff exponentiel sur les erreurs 5xx :
   tentative 1 → attente 1s
   tentative 2 → attente 2s
   tentative 3 → attente 4s
-  tentative 4 → attente 8s  (max_retries=settings.max_retries dans config)
+  tentative 4 → attente 8s  (max_retries=settings.resilience.max_retries dans config)
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ celery_app = create_celery_app(get_settings())
 @celery_app.task(
     name="process_batch_task",
     bind=True,
-    max_retries=get_settings().max_retries,
+    max_retries=get_settings().resilience.max_retries,
 )
 def process_batch_task(self, batch_key: str, force_provider: str | None = None, min_tpm_required: int | None = None, min_output_required: int | None = None) -> None:
     """
@@ -166,7 +166,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
         except ProviderServerError as e:
             # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
             rt.limiter.cooldown(e.provider, seconds=60)
-            delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+            delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
             logger.warning(
                 f"Erreur serveur provider, retry planifié | task_id={batch_id} "
                 f"provider={e.provider} http_status={e.status_code} "
@@ -184,7 +184,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 # Rate limit (Too Many Requests) → cooldown calé sur x-ratelimit-reset si disponible
                 cooldown_secs = _parse_ratelimit_reset_seconds(getattr(e, "ratelimit_reset", None))
                 rt.limiter.cooldown(e.provider, seconds=cooldown_secs)
-                delay = min(settings.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+                delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
                 logger.warning(
                     f"Rate limit (429) atteint, provider en cooldown, retry planifié | "
                     f"task_id={batch_id} provider={e.provider} "
@@ -197,7 +197,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 else:
                     for t in tasks:
                         _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) suite aux Rate Limits sur {e.provider}")
-            elif (limit := _parse_max_tokens_limit(str(e))) and learn_provider_max_output_tokens(e.provider, limit):
+            elif (limit := _parse_max_tokens_limit(str(e))) and learn_provider_max_output_tokens(rt.settings, rt.learned, e.provider, limit):
                 # 400 "max_tokens must be ≤ N" → limite de complétion apprise
                 # (config mémoire + providers.yaml). Le batch est rejoué : le
                 # prochain essai plafonne max_tokens à N (ou part sur un autre
@@ -286,8 +286,8 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     # tokens/agent). Sans scaling, un batch de 10 sature 4096 et le JSON est
     # tronqué en plein milieu → JSONDecodeError. Borné par max_output_tokens
     # (limite de complétion des modèles) puis par la capacité du provider.
-    per_task_tokens = base_req.parameters.get("max_tokens", 4096)
-    max_tokens = min(per_task_tokens * max(1, len(merged_agents)), settings.max_output_tokens)
+    per_task_tokens = base_req.parameters.get("max_tokens", settings.inference.max_tokens)
+    max_tokens = min(per_task_tokens * max(1, len(merged_agents)), settings.batching.max_output_tokens)
     provider_cfg = settings.providers.get(provider_name)
     if provider_cfg and provider_cfg.max_output_tokens:
         max_tokens = min(max_tokens, provider_cfg.max_output_tokens)
@@ -297,15 +297,15 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     # quota (38 HTTP 413 sur le run 2026-07-11). Si même la sortie minimale ne
     # tient plus dans le budget, on rejoue ailleurs AVANT de brûler l'appel.
     prompt_chars = sum(len(m.content or "") for m in messages)
-    prompt_tokens_est = int(prompt_chars / settings.token_chars_ratio)
+    prompt_tokens_est = int(prompt_chars / settings.batching.token_chars_ratio)
     max_tokens = _fit_request_budget(
-        provider_cfg, prompt_tokens_est, max_tokens, settings.min_output_tokens, provider_name
+        provider_cfg, prompt_tokens_est, max_tokens, settings.batching.min_output_tokens, provider_name
     )
     internal_req = InternalRequest(
         provider=provider_name,
         messages=messages,
         response_schema=schema,
-        temperature=base_req.parameters.get("temperature", 0.7),
+        temperature=base_req.parameters.get("temperature", settings.inference.temperature),
         max_tokens=max_tokens,
     )
 
@@ -320,7 +320,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     if provider_cfg and provider_cfg.tpm_limit:
         reserved_tokens = (
             prompt_tokens_est
-            + len(merged_agents) * settings.assumed_output_tokens
+            + len(merged_agents) * settings.batching.assumed_output_tokens
         )
         rt.limiter.adjust_tokens(
             provider_name,
@@ -347,6 +347,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
             error_message=str(exc),
             http_status=http_status,
             ratelimit_reset=getattr(exc, "ratelimit_reset", None),
+            telemetry=settings.telemetry,
         )
         rt.metrics.incr(f"llm_errors_by_type:{provider_name}:{error_type}")
         # Ring buffer texte relu par /errors/recent (cockpit Grafana).
@@ -359,7 +360,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
             "task_id": batch_id,
         })
         consecutive = rt.limiter.record_failure(provider_name)
-        if consecutive >= 30:
+        if consecutive >= settings.resilience.disable_after_consecutive_errors:
             cfg = settings.providers.get(provider_name)
             timeout = cfg.disable_timeout if cfg else 180
             rt.limiter.disable(provider_name, seconds=timeout)
@@ -443,11 +444,11 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     rt.limiter.record_tokens(provider_name, tokens_in + tokens_out)
 
     tokens_in_per_agent = tokens_in / len(merged_agents) if merged_agents else tokens_in
-    if tokens_in_per_agent > settings.assumed_prompt_tokens:
+    if tokens_in_per_agent > settings.batching.assumed_prompt_tokens:
         logger.warning(
             f"[worker] tokens_in dépasse assumed_prompt_tokens | "
             f"tokens_in_per_agent={tokens_in_per_agent:.0f} "
-            f"assumed={settings.assumed_prompt_tokens} "
+            f"assumed={settings.batching.assumed_prompt_tokens} "
             f"provider={provider_name} batch_id={batch_id}"
         )
 
@@ -466,6 +467,7 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         tokens_out=tokens_out,
         category=base_req.category,
         sim_ts=sim_ts,
+        telemetry=settings.telemetry,
     )
 
     # 7. Télémétrie métriques
@@ -580,7 +582,7 @@ def _switch_provider_or_fail(
     requête réellement invalide finit par échouer sur tous les providers).
     """
     settings = rt.settings
-    rt.limiter.cooldown(provider, seconds=settings.provider_switch_cooldown_seconds)
+    rt.limiter.cooldown(provider, seconds=settings.resilience.provider_switch_cooldown_seconds)
     max_switches = min(celery_task.max_retries, max(1, len(settings.providers) - 1))
     if celery_task.request.retries < max_switches:
         logger.warning(

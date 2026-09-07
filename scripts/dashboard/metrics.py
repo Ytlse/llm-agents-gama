@@ -5,7 +5,7 @@ HTTP vivent dans `live.py`) :
   * `docker compose ps`           → état des services
   * `experiments/**`              → santé des runs (logs, moves.csv, agents,
                                     erreurs LLM, cache sémantique)
-  * `llm_gateway/config/providers.yaml` → quotas déclarés des providers
+  * `config/llm_gateway/providers.yaml` → quotas déclarés des providers
   * `docs/synthesis/data.json`    → scores de la page de synthèse
   * `prompt_calibration/calibration_results/*.db` → avancement des campagnes
 """
@@ -811,7 +811,7 @@ def llm_cache_hit_rate(run_path: Path) -> tuple[float, int, int] | None:
 
 
 # ── Providers (lecture statique de providers.yaml) ───────────────────────────
-PROVIDERS_YAML = REPO_ROOT / "llm_gateway" / "src" / "llm_gateway" / "config" / "providers.yaml"
+PROVIDERS_YAML = REPO_ROOT / "config" / "llm_gateway" / "providers.yaml"
 
 
 @dataclass
@@ -827,7 +827,7 @@ def providers_static() -> ProvidersStatic:
     retirés — sont invisibles de yaml.safe_load, c'est voulu). Le mtime du
     fichier date le dernier `make providers`."""
     if not PROVIDERS_YAML.is_file():
-        return ProvidersStatic(False, error="llm_gateway/config/providers.yaml absent")
+        return ProvidersStatic(False, error="config/llm_gateway/providers.yaml absent")
     try:
         import yaml
 

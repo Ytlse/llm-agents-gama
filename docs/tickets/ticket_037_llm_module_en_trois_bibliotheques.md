@@ -114,3 +114,13 @@ racine sans le `PYTHONPATH` de llm-agents.
 - CI : 5 jobs verts (lint, types, contrats ; tests gateway avec Redis de service ; tests mobilité ;
   wheels ; mkdocs strict).
 - Reste ouvert : la licence du gateway (question 1 de `specs/ticket_037/questions.md`).
+
+## Itération 2 (plan soumis le 2026-09-07)
+
+Paramétrage en couches et généricité, cinq lots (A réglages, B cascade d'inférence, C adapters,
+D télémétrie, E rangement) : plan détaillé dans `specs/ticket_037/iteration_2.md`. GO le 2026-09-07.
+
+| Lot | État |
+|---|---|
+| A — réglages en couches | **livré le 2026-09-07** : `GatewaySettings` en sept groupes, six sources (constructeur, env `LLM_GATEWAY_*`, anciens noms dépréciés, `LLM_GATEWAY_CONFIG`, profil, défauts), fichier des fournisseurs hors du paquet (`config/llm_gateway/providers.yaml`, clé inconnue refusée en nommant provider et clé), limites apprises derrière le port `LearnedLimits` (Redis, fichier, mémoire), `GET /config` et `/config/providers` masqués, CORS configurable, `disable_after_consecutive_errors`, référence des réglages générée, ADR 0003, gateway 1.2.0. Écarts : H17 à H20 |
+| B à E | à venir |

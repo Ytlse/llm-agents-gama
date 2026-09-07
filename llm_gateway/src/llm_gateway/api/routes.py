@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from llm_gateway.api.deps import GatewayDeps
 from llm_gateway.api.metrics import AGENTS_RECEIVED
+from llm_gateway.config import redacted_dump
 from llm_gateway.core.batching import compute_batch_key
 from llm_gateway.core.models import LLMRequest, Task, TaskStatusResponse
 from llm_gateway.prompts.registry import UnknownCategoryError
@@ -115,12 +116,12 @@ async def create_task(payload: LLMRequest, request: Request) -> dict:
             None,
             lambda: process_batch_task.delay(batch_key, payload.force_provider, payload.min_tpm_required, min_output_required),
         )
-    elif await deps.queue.try_mark_scheduled(batch_key, ttl=int(settings.batch_delay_seconds) + 30):
+    elif await deps.queue.try_mark_scheduled(batch_key, ttl=int(settings.batching.delay_seconds) + 30):
         await loop.run_in_executor(
             None,
             lambda: process_batch_task.apply_async(
                 args=[batch_key, payload.force_provider, payload.min_tpm_required, min_output_required],
-                countdown=settings.batch_delay_seconds,
+                countdown=settings.batching.delay_seconds,
             ),
         )
 
@@ -207,6 +208,35 @@ async def recent_errors(request: Request, limit: int = 50) -> list[dict]:
     loop = asyncio.get_event_loop()
     metrics_sink = _deps(request).metrics
     return await loop.run_in_executor(None, metrics_sink.recent_errors, limit)
+
+
+@router.get(
+    "/config",
+    summary="Configuration effective du gateway, secrets masqués",
+    description=(
+        "Les réglages tels que le processus les a résolus (constructeur, environnement, fichier, "
+        "profil, défauts) et les fournisseurs déclarés. Les clés d'API et jetons sont masqués."
+    ),
+)
+async def effective_config(request: Request) -> dict:
+    return redacted_dump(_deps(request).settings)
+
+
+@router.get(
+    "/config/providers",
+    summary="Fournisseurs déclarés et leur configuration effective, sans secrets",
+    description=(
+        "Pour les outils (tableau de bord, expériences) qui lisaient providers.yaml : la même "
+        "information, résolue par le gateway (capacités calculées, limites apprises), sans clé."
+    ),
+)
+async def providers_config(request: Request) -> dict:
+    settings = _deps(request).settings
+    active = {
+        name: {**cfg.model_dump(mode="json", exclude={"api_key"}), "has_api_key": bool(cfg.api_key.get_secret_value())}
+        for name, cfg in settings.providers.items()
+    }
+    return {"declared": settings.declared_providers, "active": active}
 
 
 @router.get(

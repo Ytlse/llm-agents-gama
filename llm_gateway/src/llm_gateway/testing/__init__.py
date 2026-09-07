@@ -17,7 +17,9 @@ from typing import Any
 from llm_gateway.adapters.base import BaseAdapter
 from llm_gateway.core.models import AgentResponse, InternalRequest, LLMOutput
 from llm_gateway.infra.memory import (
+    FileLearnedLimits,
     InMemoryBatchQueue,
+    InMemoryLearnedLimits,
     InMemoryMetricsSink,
     InMemoryRateLimiter,
     InMemoryTaskStore,
@@ -92,7 +94,9 @@ __all__ = [
     "ECHO_SCHEMAS_FILE",
     "ECHO_TEMPLATES_DIR",
     "FakeAdapter",
+    "FileLearnedLimits",
     "InMemoryBatchQueue",
+    "InMemoryLearnedLimits",
     "InMemoryMetricsSink",
     "InMemoryRateLimiter",
     "InMemoryTaskStore",

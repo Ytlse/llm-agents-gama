@@ -4,6 +4,32 @@ Format : `## [version] - AAAA-MM-JJ`, entrées les plus récentes en tête. Le t
 l'usage : ce que le changement permet ou modifie pour qui s'en sert. Les fichiers touchés
 sont dans git.
 
+## [1.2.0] - 2026-09-07 (itération 2, lot A)
+
+Les réglages deviennent une configuration de bibliothèque : groupés, préfixés, en couches.
+
+- **Préfixe `LLM_GATEWAY_`** et groupes `redis`, `executor`, `inference`, `batching`, `resilience`,
+  `api`, `telemetry` (`LLM_GATEWAY_BATCHING__DELAY_SECONDS`). Six sources dans un ordre fixe :
+  constructeur, environnement, anciens noms (dépréciés, avertis), fichier `LLM_GATEWAY_CONFIG`,
+  profil `LLM_GATEWAY_PROFILE` (`free-tier`, `paid`), défauts. `PROVIDER_KEYS__<nom>` reste le
+  nom canonique des clés d'API.
+- **Le fichier des fournisseurs sort du paquet** : `LLM_GATEWAY_PROVIDERS_FILE` le désigne, le
+  paquet ne livre qu'un `providers.example.yaml`. Une clé inconnue fait échouer le démarrage en
+  nommant le fournisseur et la clé ; `llm-gateway config schema` publie le JSON Schema.
+- **Les plafonds de complétion appris** (`max_output_tokens` révélé par un HTTP 400) ne sont plus
+  réécrits dans un YAML : ils vivent dans Redis (partagés entre API et workers), un fichier JSON
+  ou la mémoire, et se fusionnent au démarrage sans jamais élargir un plafond déclaré.
+- **`GET /config`** et **`GET /config/providers`** : la configuration effective, secrets masqués.
+- Le CORS n'est plus `*` en dur : `api.cors_origins`, vide par défaut (le compose garde `["*"]`).
+- Le seuil de désactivation d'un fournisseur (`30` erreurs consécutives, codé dans le worker)
+  devient `resilience.disable_after_consecutive_errors` ; `circuit_breaker_threshold`, jamais lu,
+  disparaît.
+
+**Avant :** `REDIS_URL`, `APP_WORKDIR` partagés avec le contrôleur ; `providers.yaml` dans le paquet
+et réécrit par le worker ; `Settings` à plat.
+**Après :** `LLM_GATEWAY_REDIS__URL`, `LLM_GATEWAY_TELEMETRY__WORKDIR` ; fichier de déploiement
+désigné, jamais modifié ; `settings.batching.delay_seconds`, alias à plat conservés une version.
+
 ## [1.1.0] - 2026-09-07
 
 Le gateway devient une bibliothèque générique : il ne connaît plus la mobilité toulousaine.

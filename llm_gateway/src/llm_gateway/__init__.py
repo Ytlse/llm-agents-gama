@@ -16,7 +16,7 @@ catégories de prompts sont apportées par des bundles enregistrés sous l'entry
 """
 from __future__ import annotations
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 from typing import TYPE_CHECKING, Any  # noqa: E402
 

@@ -12,7 +12,6 @@ from prometheus_client import REGISTRY, Counter
 from prometheus_client.metrics_core import CounterMetricFamily, GaugeMetricFamily
 
 from llm_gateway.api.deps import GatewayDeps
-from llm_gateway.config import load_provider_defaults
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
@@ -213,7 +212,7 @@ class WorkerMetricsCollector:
             'État du provider: 0=sans_cle_api, 1=desactive_tmp, 2=cooldown, 3=actif',
             labels=['provider'],
         )
-        for provider in load_provider_defaults():
+        for provider in settings.declared_providers:
             if provider not in settings.providers:
                 state_fam.add_metric([provider], 0)
             elif deps.limiter.is_disabled(provider):

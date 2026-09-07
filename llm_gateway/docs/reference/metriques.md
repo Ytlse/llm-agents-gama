@@ -86,4 +86,4 @@ pour éviter `DuplicateTimeseries` — les alarmes restent visibles dans les log
 
 Les messages d'erreur bruts (texte) sont dans le ring buffer `llm:recent_errors`, servi par
 `GET /errors/recent`. Les échanges complets (prompt, réponse, tokens, `sim_ts`) sont dans
-`APP_WORKDIR/llm_exchanges.jsonl`, les erreurs dans `llm_errors.jsonl`.
+`<telemetry.workdir>/llm_exchanges.jsonl`, les erreurs dans `llm_errors.jsonl`.
