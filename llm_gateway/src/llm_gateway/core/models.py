@@ -182,4 +182,5 @@ class InternalRequest(BaseModel):
     messages: list[InternalMessage]
     response_schema: dict[str, Any]      # JSON Schema injecté pour Structured Output
     temperature: float = 0.7
+    top_p: float | None = None           # non envoyé quand None (cf. core.inference)
     max_tokens: int = 8192

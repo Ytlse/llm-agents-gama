@@ -32,6 +32,7 @@ from llm_gateway.adapters.base import (
     get_adapter,
 )
 from llm_gateway.config import get_settings, learn_provider_max_output_tokens
+from llm_gateway.core.inference import resolve_inference
 from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
 from llm_gateway.telemetry.logger import get_logger, log_llm_call, log_llm_error, log_llm_exchange
 from llm_gateway.worker.app import create_celery_app
@@ -286,9 +287,13 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     # tokens/agent). Sans scaling, un batch de 10 sature 4096 et le JSON est
     # tronqué en plein milieu → JSONDecodeError. Borné par max_output_tokens
     # (limite de complétion des modèles) puis par la capacité du provider.
-    per_task_tokens = base_req.parameters.get("max_tokens", settings.inference.max_tokens)
-    max_tokens = min(per_task_tokens * max(1, len(merged_agents)), settings.batching.max_output_tokens)
     provider_cfg = settings.providers.get(provider_name)
+    # Cascade requête > fournisseur > défauts (core.inference) ; max_tokens est un budget PAR tâche.
+    inference = resolve_inference(
+        base_req.parameters, provider_cfg.inference if provider_cfg else None, settings.inference
+    )
+    per_task_tokens = inference.max_tokens
+    max_tokens = min(per_task_tokens * max(1, len(merged_agents)), settings.batching.max_output_tokens)
     if provider_cfg and provider_cfg.max_output_tokens:
         max_tokens = min(max_tokens, provider_cfg.max_output_tokens)
     # Garde-fou 413 : la capacité par requête est confrontée à la taille RÉELLE du
@@ -305,7 +310,8 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         provider=provider_name,
         messages=messages,
         response_schema=schema,
-        temperature=base_req.parameters.get("temperature", settings.inference.temperature),
+        temperature=inference.temperature,
+        top_p=inference.top_p,
         max_tokens=max_tokens,
     )
 
