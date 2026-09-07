@@ -33,12 +33,14 @@ survivent aux redémarrages, un `FLUSHDB` les remet à zéro.
 | `llm_capacity_reroute_total` | `provider` | `capacity_reroute_total:<p>` | lots rejoués ailleurs parce que le prompt rendu dépassait `max_tokens_per_request` (413 évité) |
 | `alarme_total` | `source` | `alarme:<source>` | alarmes `[ALARME]` du worker et des bundles ; sources connues : `providers_satures`, `mode_label_mismatch` |
 
-## Côté API — relues depuis Redis, métier (mobilité)
+## Côté API — relues depuis Redis, déclarées par les bundles
 
-Ces familles sont écrites par le hook `observe` du bundle `mobility_llm`
-(`categories/itinary_multi_agent.py`) et **restent codées dans le collecteur du gateway**
-(hypothèse H11 du ticket 037) parce que les dashboards Grafana 04 et 07 les citent. Un
-gateway sans ce bundle les expose vides.
+Le gateway ne connaît aucune de ces familles : chaque bundle de catégories **déclare** les
+compteurs que son hook `observe` alimente (`CategoryBundle.metric_families`, une
+`MetricFamilySpec` par famille : nom Prometheus, aide, préfixe Redis, labels) et le collecteur
+les rend génériquement depuis les clés `<préfixe>:<label1>:<label2>…` du hash. Un gateway sans
+bundle n'expose rien de plus que les familles génériques ci-dessus. Celles du bundle
+`mobility_llm` (`METRIC_FAMILIES`) gardent les noms que lisent les dashboards Grafana 04 et 07 :
 
 | Famille | Labels | Clé Redis | Sens |
 |---|---|---|---|

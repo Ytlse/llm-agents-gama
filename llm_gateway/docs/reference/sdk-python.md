@@ -10,7 +10,7 @@ réutilisé entre les appels ; `aclose()` à l'arrêt du consommateur. Signature
 ```python
 LLMGatewayClient(
     base_url="http://localhost:8000", *,
-    wait_timeout=120.0, dialogue_log_file="prompt_dialogue.log", transport=None,
+    wait_timeout=120.0, dialogue_log_file=None, transport=None,
     backpressure_max_inflight=0, backpressure_release_ratio=0.2,
     circuit_failure_threshold=10, circuit_probe_interval=60.0,
 )
@@ -20,7 +20,7 @@ LLMGatewayClient(
 |---|---|---|
 | `base_url` | `http://localhost:8000` | racine du gateway ; le `/` final est retiré |
 | `wait_timeout` | `120.0` s | valeur passée à `GET /tasks/{id}/wait?timeout=` ; le timeout de lecture httpx vaut `wait_timeout + 30` |
-| `dialogue_log_file` | `"prompt_dialogue.log"` | fichier texte où chaque requête **et** sa réponse sont ajoutées ; `None` désactive |
+| `dialogue_log_file` | `None` | fichier texte où chaque requête **et** sa réponse sont ajoutées ; désactivé par défaut depuis 1.3.0, opt-in |
 | `transport` | `None` | `httpx.AsyncBaseTransport` injectable (tests : `MockTransport`) |
 | `backpressure_max_inflight` | `0` (désactivé) | quand l'alarme « 10 échecs consécutifs » est active, les nouvelles soumissions attendent que les tâches en vol retombent sous `release_ratio × max_inflight` |
 | `backpressure_release_ratio` | `0.2` | seuil de relâchement (au moins 1) |
@@ -30,9 +30,10 @@ LLMGatewayClient(
 !!! warning "`prompt_dialogue.log` contient des données personnelles potentielles"
     Le journal de dialogue écrit le payload complet (donc la fiche des personas : âge,
     profession, lieu de résidence, historique) et la réponse du modèle, en clair, dans le
-    répertoire courant du processus. Il n'est pas versionné (`*.log` dans `.gitignore`) mais
-    il est **activé par défaut**. Passer `dialogue_log_file=None` hors débogage, ou un
-    chemin dans le dossier du run.
+    répertoire courant du processus. Il n'est pas versionné (`*.log` dans `.gitignore`) et,
+    depuis 1.3.0, il est **désactivé par défaut** : ne le passer qu'en débogage, avec un chemin
+    dans le dossier du run. Le journal des échanges côté worker suit la même règle
+    (`telemetry.exchanges_enabled`, rédacteur `telemetry.redactor`).
 
 ## `execute(request) -> TaskResult`
 

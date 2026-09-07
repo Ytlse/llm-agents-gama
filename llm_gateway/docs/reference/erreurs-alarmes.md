@@ -25,8 +25,9 @@ JSON d'un 429 (Gemini : `error.details[].retryDelay` ou « Please retry in 11.1s
 
 | Erreur | Réaction | Puis |
 |---|---|---|
-| **Aucun provider disponible** (`RuntimeError` de `select_provider`) | attente locale jusqu'à 8 s, un essai toutes les 2 s ; 2 `retry` Celery (countdown 12 s) | `[ALARME] Tous les providers LLM saturés ou indisponibles`, compteur `alarme:providers_satures`, **échec** de jusqu'à 100 tâches de la file |
+| **Aucun provider disponible** (`RuntimeError` de `select_provider`) | attente locale `resilience.provider_wait_seconds` (8 s), un essai toutes les `saturation_poll_seconds` (2 s) ; `saturation_retries` (2) `retry` Celery espacés de `saturation_retry_seconds` (12 s) | si un provider éligible est seulement **occupé** (fenêtre RPM/TPM pleine, lissage, concurrence) : le lot **continue d'attendre** jusqu'à `max_retries`, `[ALARME] Providers occupés` une fois, compteur `alarme:providers_occupes` ; s'ils sont tous **indisponibles** (cooldown, désactivation, quota du jour) ou si `abandon_when_busy` : `[ALARME] Tous les providers LLM saturés ou indisponibles`, `alarme:providers_satures`, **échec** de jusqu'à 100 tâches |
 | `ProviderCapacityError` | slot RPM/TPM restitué, `capacity_reroute_total:<p>` | **bascule** |
+| **Erreur réseau** (délai dépassé, connexion refusée, réponse coupée) | classée par `BaseAdapter._post` en `ProviderServerError` 504 / 503 / 502, `error_type` `network_timeout`, `network_connect`, `network_protocol` | même chemin qu'un 5xx : cooldown et `retry` avec backoff |
 | `ProviderServerError` (5xx, troncature) | cooldown du provider **60 s**, `retry` Celery après `min(backoff_base_seconds × 2^tentative, 30 s)` tant que `retries < max_retries` (50) | sinon échec « Max retries dépassé suite à une erreur 5xx » |
 | `ProviderClientError` **429** | cooldown = délai annoncé par le provider (`_parse_ratelimit_reset_seconds`, +2 s de marge, borné à [10, 3600] s, défaut 60), même backoff et `retry` | sinon échec « Max retries dépassé … Rate Limits » |
 | `ProviderClientError` **400 max_tokens** | si le message donne une limite N (formats Groq, OpenAI, Google) **et** qu'elle est plus stricte que la connue : `learn_provider_max_output_tokens` (config mémoire + `providers.yaml`), `retry` après 1 s | si la limite était déjà connue : **bascule** (pour ne pas boucler sur la même 400) |
@@ -69,7 +70,8 @@ dépôt liste les `[ALARME]` des journaux du run.
 
 | Où | Source / compteur | Déclenchement | Réarmement |
 |---|---|---|---|
-| `worker/task_worker.py` | `alarme:providers_satures` | tous les providers saturés ou indisponibles après 8 s et 2 retries ; les tâches de la file échouent | à chaque épisode (pas de front montant explicite : l'événement est déjà rare) |
+| `worker/task_worker.py` | `alarme:providers_occupes` | après `saturation_retries`, les providers éligibles sont occupés mais pas en panne : le lot attend la fenêtre au lieu d'être abandonné (règle du 2026-09-07, run Prompt_Minimaliste : la moitié des sollicitations perdues sur une instance forcée à 15 RPM) | front montant : une fois par lot, à la tentative `saturation_retries` |
+| `worker/task_worker.py` | `alarme:providers_satures` | tous les providers éligibles indisponibles (cooldown, désactivation, quota) après l'attente ; les tâches de la file échouent | à chaque épisode |
 | `sdk/client.py` | `gateway_llm` | 10 tâches échouées d'affilée côté client ; arme la backpressure | premier succès |
 | `sdk/client.py` | `gateway_llm_circuit` | disjoncteur ouvert (10 échecs consécutifs) ; soumissions suspendues | sonde réussie |
 | `mobility_llm/categories/itinary_multi_agent.py` | `alarme:mode_label_mismatch` | plus de 5 % des étiquettes de mode en désaccord sur ≥ 200 options vérifiées | jamais (le compteur Redis persiste : une seule alarme par vie du hash) |

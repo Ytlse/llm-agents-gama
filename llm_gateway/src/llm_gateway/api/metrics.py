@@ -29,6 +29,21 @@ def _by_prefix(counters: dict[str, int], prefix: str) -> dict[str, int]:
     return {k[len(prefix):]: v for k, v in counters.items() if k.startswith(prefix)}
 
 
+def _bundle_family(spec, counters: dict[str, int]):
+    """Rend une famille déclarée par un bundle depuis les compteurs `<prefix>:<labels…>`."""
+    fam = CounterMetricFamily(spec.name, spec.help, labels=list(spec.labels))
+    if not spec.labels:
+        fam.add_metric([], counters.get(spec.redis_prefix, 0))
+        yield fam
+        return
+    n = len(spec.labels)
+    for suffix, val in _by_prefix(counters, spec.redis_prefix + ":").items():
+        parts = suffix.split(":", n - 1)
+        if len(parts) == n:
+            fam.add_metric(parts, val)
+    yield fam
+
+
 class WorkerMetricsCollector:
     """
     Collecteur Prometheus qui lit les compteurs persistants du Worker depuis Redis.
@@ -112,89 +127,14 @@ class WorkerMetricsCollector:
             reroute_fam.add_metric([provider], val)
         yield reroute_fam
 
-        # ── Mode de transport choisi ──────────────────────────────────────────
-        mode_fam = CounterMetricFamily(
-            'llm_transport_mode_chosen_total',
-            'Modes de transport principaux choisis par le LLM',
-            labels=['mode'],
-        )
-        for mode, val in _by_prefix(counters, "transport_mode_chosen:").items():
-            mode_fam.add_metric([mode], val)
-        yield mode_fam
-
-        # ── Masse de probabilité par mode ─────────────────────────────────────
-        # Le LLM note toutes les options (somme = 100) : ce compteur cumule les
-        # centièmes de probabilité attribués à chaque mode canonique, y compris les
-        # modes non proposés (0). À la différence de llm_transport_mode_chosen_total
-        # (option la plus probable), il donne la répartition *attendue* — celle que
-        # le tirage côté simulation reproduit en espérance.
-        mode_prob_fam = CounterMetricFamily(
-            'llm_mode_probability_pct_total',
-            'Somme des probabilités (en %) attribuées par le LLM à chaque mode',
-            labels=['mode'],
-        )
-        for mode, val in _by_prefix(counters, "mode_probability_pct:").items():
-            mode_prob_fam.add_metric([mode], val)
-        yield mode_prob_fam
-
-        # ── Intégrité des étiquettes de mode ──────────────────────────────────
-        # Le LLM recopie le mode de chaque option à côté de sa probabilité. Un
-        # désaccord avec le mode réel de l'option signale qu'il note une AUTRE option
-        # que celle qu'il croit : ses probabilités partent alors sur les mauvais index.
-        # Ratio à surveiller : mismatch / checked (attendu ≈ 0).
-        for name, metric in (("mode_label_checked", 'llm_mode_label_checked_total'),
-                             ("mode_label_mismatch", 'llm_mode_label_mismatch_total')):
-            fam = CounterMetricFamily(
-                metric,
-                'Options notées par le LLM : étiquettes de mode vérifiées / en désaccord',
-            )
-            fam.add_metric([], counters.get(name, 0))
-            yield fam
-
-        # ── Tranches de distance ──────────────────────────────────────────────
-        dist_fam = CounterMetricFamily(
-            'llm_trip_distance_bracket_total',
-            'Nombre de trajets par tranche de distance',
-            labels=['bracket'],
-        )
-        for bracket, val in _by_prefix(counters, "trip_distance_bracket:").items():
-            dist_fam.add_metric([bracket], val)
-        yield dist_fam
-
-        # ── Mode par tranche de distance ──────────────────────────────────────
-        mode_dist_fam = CounterMetricFamily(
-            'llm_mode_by_distance_total',
-            'Modes de transport par tranche de distance',
-            labels=['mode', 'bracket'],
-        )
-        for suffix, val in _by_prefix(counters, "mode_by_distance:").items():
-            parts = suffix.split(":", 1)
-            if len(parts) == 2:
-                mode_dist_fam.add_metric(parts, val)
-        yield mode_dist_fam
-
-        # ── Mode par provider ─────────────────────────────────────────────────
-        mode_prov_fam = CounterMetricFamily(
-            'llm_mode_by_provider_total',
-            'Modes de transport choisis par provider LLM',
-            labels=['mode', 'provider'],
-        )
-        for suffix, val in _by_prefix(counters, "mode_by_provider:").items():
-            parts = suffix.split(":", 1)
-            if len(parts) == 2:
-                mode_prov_fam.add_metric(parts, val)
-        yield mode_prov_fam
-
-        # ── Indice de trajectoire choisi ──────────────────────────────────────
-        idx_fam = CounterMetricFamily(
-            'llm_chosen_index_total',
-            'Distribution des indices de trajectoire choisis par le LLM (0 = premier choix proposé)',
-            labels=['index'],
-        )
-        for idx, val in _by_prefix(counters, "chosen_index:").items():
-            idx_fam.add_metric([idx], val)
-        yield idx_fam
-
+        # ── Familles déclarées par les bundles de catégories ─────────────────
+        # Le gateway ne sait pas ce qu'est un mode de transport : chaque bundle déclare les
+        # familles que son hook `observe` alimente (MetricFamilySpec) ; on les rend ici sous
+        # le nom qu'il a choisi, avec ses labels, depuis les compteurs Redis du worker.
+        registry = getattr(deps, "registry", None)
+        for bundle in (registry.bundles() if registry is not None else []):
+            for spec in bundle.metric_families:
+                yield from _bundle_family(spec, counters)
         # ── Alarmes [ALARME] worker (le controller expose les siennes en direct) ─
         alarme_fam = CounterMetricFamily(
             'alarme_total',

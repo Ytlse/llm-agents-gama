@@ -14,6 +14,29 @@ Température, `top_p` et budget de sortie par tâche viennent, dans l'ordre, de 
 aux fournisseurs quand il est défini, jamais sinon. Une valeur illisible dans la requête descend
 au niveau suivant au lieu de faire échouer le lot.
 
+### Lot D — télémétrie : rien n'est écrit sans le demander, et occupé n'est pas en panne
+
+- **Journal des échanges désactivé par défaut** (`telemetry.exchanges_enabled`) : prompts et
+  réponses complets sont des données personnelles potentielles. Activé, il passe par un
+  **rédacteur** configurable (`telemetry.redactor`, chemin pointé) : masquage ou hachage de
+  champs, troncature, ou le vôtre ; et il tourne par taille (`exchanges_max_bytes`). Le format
+  lu par `make report` ne change pas. Le journal de dialogue du SDK est lui aussi opt-in.
+- **Logging non intrusif** : `configure_logging` ne retire plus que le handler par défaut de
+  loguru, les sinks de l'hôte survivent ; `reset_logging` défait ce qu'il a posé.
+- **Familles Prometheus déclarées par les bundles** (`CategoryBundle.metric_families`) : le
+  collecteur ne connaît plus les modes de transport, il rend ce que le bundle déclare. Les noms
+  mobilité sont conservés, les dashboards Grafana ne bougent pas.
+- **Le worker n'abandonne plus une file quand les fournisseurs sont seulement occupés.** Fenêtre
+  RPM/TPM pleine, lissage ou concurrence ne sont pas des pannes : le lot attend la fenêtre,
+  borné par `max_retries`, avec une alarme `providers_occupes` sur front montant. L'abandon reste
+  pour cooldown, désactivation et quota du jour. Le budget d'attente devient réglable
+  (`provider_wait_seconds`, `saturation_poll_seconds`, `saturation_retries`,
+  `saturation_retry_seconds`, `abandon_when_busy`).
+
+  **Avant :** run Prompt_Minimaliste du 2026-09-07 : une instance forcée à 15 RPM, la moitié des
+  sollicitations abandonnées après 48 s, décisions perdues sans réessai.
+  **Après :** le lot attend son créneau ; la perte ne vient plus du gateway.
+
 ### Lot C — un seul traducteur pour toute API compatible OpenAI
 
 **Avant :** quatre adapters de cent lignes recopiés (OpenAI, Groq, Cerebras, Mistral), un

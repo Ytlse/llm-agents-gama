@@ -104,7 +104,7 @@ class LLMGatewayClient:
         base_url: str = "http://localhost:8000",
         *,
         wait_timeout: float = 120.0,
-        dialogue_log_file: str | None = "prompt_dialogue.log",
+        dialogue_log_file: str | None = None,   # journal texte des payloads : données personnelles potentielles, opt-in
         transport: httpx.AsyncBaseTransport | None = None,
         backpressure_max_inflight: int = 0,
         backpressure_release_ratio: float = 0.2,

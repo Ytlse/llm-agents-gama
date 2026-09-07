@@ -76,6 +76,11 @@ Réessais, bascule de fournisseur, désactivation après erreurs consécutives.
 | `backoff_base_seconds` | `float` | `1.0` | `LLM_GATEWAY_RESILIENCE__BACKOFF_BASE_SECONDS` (ex-`BACKOFF_BASE_SECONDS`) |  |
 | `provider_switch_cooldown_seconds` | `int` | `30` | `LLM_GATEWAY_RESILIENCE__PROVIDER_SWITCH_COOLDOWN_SECONDS` (ex-`PROVIDER_SWITCH_COOLDOWN_SECONDS`) |  |
 | `disable_after_consecutive_errors` | `int` | `30` | `LLM_GATEWAY_RESILIENCE__DISABLE_AFTER_CONSECUTIVE_ERRORS` |  |
+| `provider_wait_seconds` | `float` | `8.0` | `LLM_GATEWAY_RESILIENCE__PROVIDER_WAIT_SECONDS` |  |
+| `saturation_poll_seconds` | `float` | `2.0` | `LLM_GATEWAY_RESILIENCE__SATURATION_POLL_SECONDS` |  |
+| `saturation_retries` | `int` | `2` | `LLM_GATEWAY_RESILIENCE__SATURATION_RETRIES` |  |
+| `saturation_retry_seconds` | `float` | `12.0` | `LLM_GATEWAY_RESILIENCE__SATURATION_RETRY_SECONDS` |  |
+| `abandon_when_busy` | `bool` | `False` | `LLM_GATEWAY_RESILIENCE__ABANDON_WHEN_BUSY` |  |
 
 ## `api`
 
@@ -97,6 +102,7 @@ Logs, dossier du run, journal des échanges.
 | `log_format` | `Literal[text, json]` | `'text'` | `LLM_GATEWAY_TELEMETRY__LOG_FORMAT` |  |
 | `service_name` | `str | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__SERVICE_NAME` (ex-`SERVICE_NAME`) |  |
 | `workdir` | `Path` | `PosixPath('.')` | `LLM_GATEWAY_TELEMETRY__WORKDIR` (ex-`APP_WORKDIR`) |  |
+| `exchanges_enabled` | `bool` | `False` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_ENABLED` |  |
 | `exchanges_file` | `Path | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_FILE` (ex-`LLM_EXCHANGES_FILE`) |  |
 | `exchanges_max_bytes` | `int` | `200000000` | `LLM_GATEWAY_TELEMETRY__EXCHANGES_MAX_BYTES` |  |
 | `redactor` | `str | NoneType` | `None` | `LLM_GATEWAY_TELEMETRY__REDACTOR` |  |

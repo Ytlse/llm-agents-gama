@@ -24,31 +24,53 @@ from loguru import logger
 _configured = False
 
 
-def configure_logging(telemetry: Any = None, level: str | None = None) -> None:
+_handler_ids: list[int] = []
+_LOGURU_DEFAULT_HANDLER_ID = 0
+
+
+def configure_logging(telemetry: Any = None, level: str | None = None, *, replace_default_handler: bool = True) -> None:
     """
-    Remplace le handler loguru par défaut (DEBUG) par un handler au niveau demandé.
+    Pose le handler du gateway (niveau, format texte ou JSON, sink fichier par service).
     Idempotent — appelé par les points d'entrée (create_app, worker, CLI), jamais par un import.
 
-    `telemetry` : les réglages `GatewaySettings.telemetry` (log_level, log_format, service_name,
-    workdir). Sans réglages, repli sur les anciennes variables d'environnement (LOG_LEVEL,
-    SERVICE_NAME, APP_WORKDIR), dépréciées. Si un nom de service est connu, un sink fichier
-    `<workdir>/<service>.log` centralise les logs du conteneur dans le dossier du run.
+    Non intrusif : seul le handler **par défaut** de loguru (id 0, DEBUG sur stderr) est retiré,
+    et seulement si `replace_default_handler` ; les sinks qu'un hôte a posés lui-même restent en
+    place. `reset_logging()` défait ce que cette fonction a posé (tests, mode embarqué).
+
+    `telemetry` : les réglages `GatewaySettings.telemetry`. Sans réglages, repli sur les anciennes
+    variables d'environnement (LOG_LEVEL, SERVICE_NAME, APP_WORKDIR), dépréciées.
     """
     global _configured
     if _configured:
         return
     _configured = True
     lvl = level or _attr(telemetry, "log_level") or os.environ.get("LOG_LEVEL", "INFO")
-    logger.remove()
+    if replace_default_handler:
+        try:
+            logger.remove(_LOGURU_DEFAULT_HANDLER_ID)
+        except ValueError:
+            pass   # déjà retiré par l'hôte
     if _attr(telemetry, "log_format") == "json":
-        logger.add(sys.stderr, level=lvl, serialize=True)
+        _handler_ids.append(logger.add(sys.stderr, level=lvl, serialize=True))
     else:
-        logger.add(
+        _handler_ids.append(logger.add(
             sys.stderr,
             level=lvl,
             format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}",
-        )
+        ))
     _add_service_file_sink(lvl, telemetry)
+
+
+def reset_logging() -> None:
+    """Retire les handlers posés par `configure_logging` (le défaut de loguru n'est pas remis)."""
+    global _configured
+    for hid in _handler_ids:
+        try:
+            logger.remove(hid)
+        except ValueError:
+            pass
+    _handler_ids.clear()
+    _configured = False
 
 
 def _attr(telemetry: Any, name: str) -> Any:
@@ -70,14 +92,14 @@ def _add_service_file_sink(level: str, telemetry: Any = None) -> None:
         workdir = _workdir(telemetry)
         if not workdir.exists():
             return
-        logger.add(
+        _handler_ids.append(logger.add(
             str(workdir / f"{service}.log"),
             level=level,
             rotation="10 MB",
             retention="7 days",
             enqueue=True,  # écritures thread/process-safe (worker multi-threads)
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name} - {message}",
-        )
+        ))
     except OSError:
         pass
 
@@ -171,13 +193,17 @@ def log_llm_exchange(
     telemetry: Any = None,
 ) -> None:
     """
-    Enregistre un échange complet avec le LLM dans un fichier JSONL.
-    Chemin : `telemetry.exchanges_file`, sinon LLM_EXCHANGES_FILE (env, déprécié), sinon
-    <workdir>/llm_exchanges.jsonl.
+    Consigne un échange complet avec le LLM dans le journal des échanges (cf. telemetry/exchanges).
 
-    sim_ts : timestamp Unix *simulé* (heure du monde GAMA) de la décision, pour pouvoir
-    ventiler la consommation par jour de simulation (l'horloge murale `time` ne le permet pas).
+    Avec des réglages : rien n'est écrit tant que `telemetry.exchanges_enabled` est faux ; le
+    chemin est `telemetry.exchanges_file` sinon <workdir>/llm_exchanges.jsonl ; le rédacteur
+    `telemetry.redactor` transforme l'enregistrement avant écriture ; rotation par taille.
+    Sans réglages (appel historique) : repli sur LLM_EXCHANGES_FILE / APP_WORKDIR, dépréciés.
     """
+    from llm_gateway.telemetry.exchanges import ExchangeJournal, ExchangeRecord, load_redactor
+
+    if telemetry is not None and not _attr(telemetry, "exchanges_enabled"):
+        return
     configured = _attr(telemetry, "exchanges_file")
     override = os.environ.get("LLM_EXCHANGES_FILE")
     if configured is not None:
@@ -186,25 +212,15 @@ def log_llm_exchange(
         log_file = Path(override)
     else:
         log_file = _workdir(telemetry) / "llm_exchanges.jsonl"
-
-    entry = {
-        "time": datetime.now(UTC).isoformat(),
-        "sim_ts": sim_ts,
-        # `tz=timezone.utc` sur un horodatage de l'horloge de GAMA rend le jour MURAL de
-        # la simulation, indépendamment du `TZ` du processus (c'est la définition de
-        # `llm-agents/sim_clock.py:wall_clock`, que ce paquet — séparé — n'importe pas).
-        "sim_day": datetime.fromtimestamp(sim_ts, tz=UTC).strftime("%Y-%m-%d") if sim_ts else None,
-        "task_id": task_id,
-        "provider": provider,
-        "category": category,
-        "tokens_in": tokens_in,
-        "tokens_out": tokens_out,
-        "messages": messages,
-        "response": response,
-    }
-
     try:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False, default=str, indent=2) + "\n")
-    except OSError as e:
-        logger.warning(f"Impossible d'écrire dans {log_file}: {e}")
+        redactor = load_redactor(_attr(telemetry, "redactor"))
+    except Exception as e:  # un rédacteur mal configuré ne doit ni écrire en clair ni planter le lot
+        logger.error(f"[ALARME] Rédacteur du journal des échanges inchargeable, journal ignoré | error={e!r}")
+        return
+    journal = ExchangeJournal(
+        log_file, redactor=redactor, max_bytes=int(_attr(telemetry, "exchanges_max_bytes") or 200_000_000),
+    )
+    journal.write(ExchangeRecord(
+        task_id=task_id, provider=provider, category=category, tokens_in=tokens_in,
+        tokens_out=tokens_out, messages=messages, response=response, sim_ts=sim_ts,
+    ))

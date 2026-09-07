@@ -68,8 +68,14 @@ class CategoryRegistry:
     def __init__(self, bundles: Iterable[CategoryBundle]) -> None:
         self._handles: dict[str, CategoryHandle] = {}
         self._managers: dict[str, PromptManager] = {}
+        self._bundles: list[CategoryBundle] = []
         for bundle in bundles:
             self._register(bundle)
+            self._bundles.append(bundle)
+
+    def bundles(self) -> list[CategoryBundle]:
+        """Les bundles enregistrés, dans l'ordre de découverte."""
+        return list(self._bundles)
 
     def _register(self, bundle: CategoryBundle) -> None:
         manager = PromptManager(

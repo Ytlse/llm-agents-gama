@@ -86,3 +86,27 @@ async def test_config_expose_les_reglages_sans_secrets(client, memory_deps):
     r2 = await client.get("/config/providers")
     assert r2.status_code == 200 and set(r2.json()) == {"declared", "active"}
     assert all("api_key" not in cfg for cfg in r2.json()["active"].values())
+
+
+def test_les_familles_declarees_par_un_bundle_sont_exposees(memory_deps):
+    """Le collecteur rend les compteurs du worker sous les noms que le bundle déclare."""
+    import dataclasses
+
+    from llm_gateway.api.metrics import WorkerMetricsCollector
+    from llm_gateway.ports.category import MetricFamilySpec
+    from llm_gateway.testing import build_registry, echo_bundle
+
+    bundle = dataclasses.replace(echo_bundle(), metric_families=(
+        MetricFamilySpec("echo_par_provider_total", "test", "echo_by_provider", ("provider",)),
+        MetricFamilySpec("echo_total", "test", "echo_total"),
+    ))
+    memory_deps.registry = build_registry(bundle)
+    memory_deps.metrics.incr("echo_by_provider:fake", amount=3)
+    memory_deps.metrics.incr("echo_total", amount=7)
+    # prometheus_client retire le suffixe _total du nom d'une famille de compteurs ;
+    # les échantillons, eux, le portent.
+    families = {f.name: f for f in WorkerMetricsCollector(memory_deps).collect()}
+    par_provider = families["echo_par_provider"].samples[0]
+    assert par_provider.name == "echo_par_provider_total"
+    assert par_provider.labels == {"provider": "fake"} and par_provider.value == 3
+    assert families["echo"].samples[0].value == 7

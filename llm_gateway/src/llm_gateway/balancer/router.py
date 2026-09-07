@@ -158,6 +158,7 @@ class LoadBalancer:
             )
             status[name] = {
                 "current_rpm":     current,
+                "disabled":        self._limiter.is_disabled(name),
                 "rpm_limit":       cfg.rpm_limit,
                 "active_tasks":    self._limiter.active_workers(name),
                 "usage_pct":       round(current / cfg.rpm_limit * 100, 1) if cfg.rpm_limit else 0,

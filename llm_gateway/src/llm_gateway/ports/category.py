@@ -63,6 +63,21 @@ class CategorySpec:
 
 
 @dataclass(frozen=True)
+class MetricFamilySpec:
+    """Une famille Prometheus que le bundle veut voir exposée depuis les compteurs du worker.
+
+    Le worker n'expose pas de /metrics : ses compteurs vivent dans le sink de métriques (hash
+    Redis) sous des clés ``<prefix>:<label1>:<label2>…``. L'API les relit et les rend sous le nom
+    déclaré ici. Sans label, la clé est ``redis_prefix`` exactement.
+    """
+
+    name: str            # nom Prometheus, ex. llm_transport_mode_chosen_total
+    help: str
+    redis_prefix: str    # ex. transport_mode_chosen (sans le deux-points final)
+    labels: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class CategoryBundle:
     """Un jeu de catégories livré avec ses templates, schémas et variantes de prompt.
 
@@ -76,9 +91,11 @@ class CategoryBundle:
     schemas_file: Path
     categories: dict[str, CategorySpec] = field(default_factory=dict)
     prompts_file: Path | None = None
+    # Compteurs métier que ``observe`` alimente et que l'API doit exposer (cf. api/metrics.py).
+    metric_families: tuple[MetricFamilySpec, ...] = ()
 
     def spec(self, category: str) -> CategorySpec:
         return self.categories[category]
 
 
-__all__ = ["CategoryBundle", "CategorySpec", "ObserveContext"]
+__all__ = ["CategoryBundle", "CategorySpec", "MetricFamilySpec", "ObserveContext"]

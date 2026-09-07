@@ -86,11 +86,8 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
     # Attendre un slot provider en boucle locale plutôt que via self.retry().
     # self.retry() crée un nouveau message Celery + round-trips Redis à chaque tentative ;
     # un simple time.sleep() dans le même worker est bien moins coûteux.
-    _MAX_PROVIDER_WAIT_SECS = 8
-    _PROVIDER_POLL_SECS = 2.0
-    # 2 retries : 8s + 12s + 8s + 12s + 8s = 48s < 60s remote_llm_poll_timeout côté client.
-    _MAX_SATURATION_RETRIES = 2
-    deadline = time.monotonic() + _MAX_PROVIDER_WAIT_SECS
+    res = settings.resilience
+    deadline = time.monotonic() + res.provider_wait_seconds
     provider_name: str | None = None
     _p5_provider_wait_start = time.monotonic()
     while True:
@@ -99,16 +96,31 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
             break
         except RuntimeError:
             if time.monotonic() >= deadline:
-                if self.request.retries < _MAX_SATURATION_RETRIES:
+                if self.request.retries < res.saturation_retries:
                     logger.warning(
-                        f"Providers saturés depuis {_MAX_PROVIDER_WAIT_SECS}s, "
-                        f"retry dans 25s | batch_key={batch_key} "
-                        f"attempt={self.request.retries + 1}/{_MAX_SATURATION_RETRIES}"
+                        f"Providers saturés depuis {res.provider_wait_seconds:.0f}s, "
+                        f"retry dans {res.saturation_retry_seconds:.0f}s | batch_key={batch_key} "
+                        f"attempt={self.request.retries + 1}/{res.saturation_retries}"
                     )
-                    raise self.retry(countdown=12)
-                tasks = rt.queue.pop(batch_key, 100)
+                    raise self.retry(countdown=res.saturation_retry_seconds)
                 _statuses = rt.balancer.get_status()
-                _cooldowns = [n for n, s in _statuses.items() if s.get("cooldown")]
+                busy = _providers_merely_busy(_statuses, force_provider)
+                if busy and not res.abandon_when_busy and self.request.retries < self.max_retries:
+                    # Fenêtre RPM/TPM pleine, lissage ou concurrence : ce n'est pas une panne, c'est
+                    # une file d'attente. Abandonner ici perdait des décisions à chaque pointe
+                    # (run du 2026-09-07 : la moitié des sollicitations sur une instance forcée à
+                    # 15 RPM). On attend la fenêtre ; seul max_retries borne l'attente.
+                    if self.request.retries == res.saturation_retries:
+                        rt.metrics.incr("alarme:providers_occupes")
+                        logger.error(
+                            f"[ALARME] Providers occupés (fenêtre pleine, pas de panne) : le lot attend "
+                            f"la fenêtre au lieu d'être abandonné | batch_key={batch_key} "
+                            f"attempt={self.request.retries + 1}/{self.max_retries} "
+                            f"providers={[n for n, st in _statuses.items() if force_provider in (None, n)]}"
+                        )
+                    raise self.retry(countdown=res.saturation_retry_seconds)
+                tasks = rt.queue.pop(batch_key, 100)
+                _cooldowns = [n for n, st in _statuses.items() if st.get("cooldown")]
                 # Le worker n'expose pas de /metrics : l'alarme transite par Redis
                 # et ressort en alarme_total{source} via WorkerMetricsCollector.
                 rt.metrics.incr("alarme:providers_satures")
@@ -119,9 +131,9 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                     f"(quotas RPM/TPM épuisés ? voir /health)"
                 )
                 for t in tasks:
-                    _fail_task(rt, t, f"Providers saturés ou indisponibles après {_MAX_PROVIDER_WAIT_SECS}s ({_MAX_SATURATION_RETRIES} retries épuisés)")
+                    _fail_task(rt, t, f"Providers saturés ou indisponibles après {res.provider_wait_seconds:.0f}s ({self.request.retries} retries épuisés)")
                 return
-            time.sleep(_PROVIDER_POLL_SECS)
+            time.sleep(res.saturation_poll_seconds)
     _p5_provider_wait_ms = (time.monotonic() - _p5_provider_wait_start) * 1000
 
     # ------------------------------------------------------------------
@@ -544,6 +556,21 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
         f"provider={provider_name} latency_ms={latency_ms:.1f} agents_count={len(llm_output.agents)}"
     )
+
+
+def _providers_merely_busy(statuses: dict[str, dict], force_provider: str | None) -> bool:
+    """Vrai si au moins un provider éligible est seulement OCCUPÉ, pas en panne.
+
+    Éligible : le provider forcé, sinon tous. Occupé = ni désactivé, ni en cooldown, ni au
+    quota du jour — la fenêtre RPM/TPM pleine, le lissage ou la concurrence se libèrent seuls.
+    """
+    for name, st in statuses.items():
+        if force_provider is not None and name != force_provider:
+            continue
+        if st.get("disabled") or st.get("cooldown") or st.get("quota_exhausted"):
+            continue
+        return True
+    return False
 
 
 def _fit_request_budget(

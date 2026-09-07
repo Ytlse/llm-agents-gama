@@ -117,6 +117,17 @@ class ResilienceSettings(BaseModel):
     provider_switch_cooldown_seconds: int = 30
     # Au-delà, le provider est désactivé pour `disable_timeout` secondes.
     disable_after_consecutive_errors: int = 30
+    # Saturation : un lot attend `provider_wait_seconds` un créneau (sondé toutes les
+    # `saturation_poll_seconds`), puis `saturation_retries` réessais espacés de
+    # `saturation_retry_seconds`. Ensuite, si les fournisseurs éligibles sont seulement
+    # OCCUPÉS (fenêtre RPM/TPM pleine, lissage, concurrence), le lot continue d'attendre jusqu'à
+    # `max_retries` ; il n'est abandonné que s'ils sont réellement indisponibles (cooldown,
+    # désactivation, quota du jour) ou si `abandon_when_busy` est vrai.
+    provider_wait_seconds: float = 8.0
+    saturation_poll_seconds: float = 2.0
+    saturation_retries: int = 2
+    saturation_retry_seconds: float = 12.0
+    abandon_when_busy: bool = False
 
 
 class ApiSettings(BaseModel):
@@ -130,10 +141,12 @@ class TelemetrySettings(BaseModel):
     log_format: Literal["text", "json"] = "text"
     service_name: str | None = None      # ajoute un sink fichier <workdir>/<service>.log
     workdir: Path = Path(".")
-    # None = <workdir>/llm_exchanges.jsonl (comportement historique ; désactivation explicite à venir)
-    exchanges_file: Path | None = None
-    exchanges_max_bytes: int = 200_000_000
-    redactor: str | None = None          # chemin pointé d'un rédacteur (itération 2, lot D)
+    # Journal des échanges (prompts et réponses complets : données personnelles potentielles).
+    # DÉSACTIVÉ par défaut ; la simulation l'active dans son compose.
+    exchanges_enabled: bool = False
+    exchanges_file: Path | None = None    # défaut : <workdir>/llm_exchanges.jsonl
+    exchanges_max_bytes: int = 200_000_000  # rotation en .1 au-delà ; 0 = jamais
+    redactor: str | None = None           # chemin pointé d'un rédacteur (telemetry.exchanges)
 
 
 # ---------------------------------------------------------------------------

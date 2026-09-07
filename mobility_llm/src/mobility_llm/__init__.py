@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from llm_gateway.ports.category import CategoryBundle, CategorySpec
+from llm_gateway.ports.category import CategoryBundle, CategorySpec, MetricFamilySpec
 from llm_gateway.prompts.engine import PromptManager
 
 from mobility_llm.categories.itinary_multi_agent import observe_itinary
@@ -43,6 +43,21 @@ CATEGORIES: dict[str, CategorySpec] = {
 }
 
 
+# Compteurs alimentés par categories/itinary_multi_agent.observe_itinary, exposés par l'API
+# sous ces noms : ce sont ceux que lisent les dashboards Grafana 04 et 07. Ne pas les renommer
+# sans mettre à jour les dashboards.
+METRIC_FAMILIES: tuple[MetricFamilySpec, ...] = (
+    MetricFamilySpec("llm_transport_mode_chosen_total", "Modes de transport principaux choisis par le LLM", "transport_mode_chosen", ("mode",)),
+    MetricFamilySpec("llm_mode_probability_pct_total", "Somme des probabilités (en %) attribuées par le LLM à chaque mode", "mode_probability_pct", ("mode",)),
+    MetricFamilySpec("llm_mode_label_checked_total", "Options notées par le LLM : étiquettes de mode vérifiées", "mode_label_checked"),
+    MetricFamilySpec("llm_mode_label_mismatch_total", "Options notées par le LLM : étiquettes de mode en désaccord avec l'option", "mode_label_mismatch"),
+    MetricFamilySpec("llm_trip_distance_bracket_total", "Nombre de trajets par tranche de distance", "trip_distance_bracket", ("bracket",)),
+    MetricFamilySpec("llm_mode_by_distance_total", "Modes de transport par tranche de distance", "mode_by_distance", ("mode", "bracket")),
+    MetricFamilySpec("llm_mode_by_provider_total", "Modes de transport choisis par provider LLM", "mode_by_provider", ("mode", "provider")),
+    MetricFamilySpec("llm_chosen_index_total", "Distribution des indices de trajectoire choisis par le LLM (0 = premier choix proposé)", "chosen_index", ("index",)),
+)
+
+
 def bundle() -> CategoryBundle:
     """Le bundle que le gateway charge par entry point."""
     return CategoryBundle(
@@ -51,6 +66,7 @@ def bundle() -> CategoryBundle:
         schemas_file=SCHEMAS_FILE,
         prompts_file=PROMPTS_FILE,
         categories=dict(CATEGORIES),
+        metric_families=METRIC_FAMILIES,
     )
 
 
@@ -71,6 +87,7 @@ __all__ = [
     "AgentSpec",
     "BUNDLE_NAME",
     "CATEGORIES",
+    "METRIC_FAMILIES",
     "bundle",
     "departure_priority",
     "prompt_manager",

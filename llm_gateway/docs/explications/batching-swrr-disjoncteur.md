@@ -56,7 +56,11 @@ poids suit la capacité réellement soutenable, pas le RPM affiché.
 du curseur ; pour chaque candidat : provider connu, `tpm_limit ≥ min_tpm` (si les deux sont
 définis), `max_output_tokens ≥ min_output` (idem), puis `limiter.try_reserve`. Le premier qui
 réserve gagne. Aucun sur un tour complet → `RuntimeError` « Tous les fournisseurs LLM sont
-saturés… », que le worker gère par attente locale (8 s, un essai toutes les 2 s) puis retry.
+saturés… », que le worker gère par attente locale (`provider_wait_seconds`, un essai toutes les
+`saturation_poll_seconds`) puis `saturation_retries` réessais. Ensuite, **occupé n'est pas en
+panne** : si un provider éligible n'est ni en cooldown, ni désactivé, ni au quota du jour, le lot
+continue d'attendre la fenêtre (borné par `max_retries`) au lieu d'être abandonné ; il n'est
+échoué que si tous sont réellement indisponibles, ou si `abandon_when_busy` l'impose.
 
 ## Réservation RPM/TPM atomique
 

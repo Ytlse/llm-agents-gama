@@ -35,6 +35,9 @@ Convention : on avance sous hypothèse, on note ici, on pose à la fin.
 | H18 | Le contrôleur lit le fichier des fournisseurs monté (`LLM_GATEWAY_PROVIDERS_FILE`), pas `GET /config/providers` | l'API n'est pas prête quand le contrôleur charge ses réglages ; l'endpoint existe pour les outils | oui |
 | H19 | `PROVIDER_KEYS__<nom>` reste le nom canonique des clés d'API, sans avertissement | partagé avec le `.env` de l'auteur, la logique des seconds seaux Google du compose, `make providers` et prompt_calibration | oui |
 | H20 | Le journal des échanges garde son emplacement par défaut (`<workdir>/llm_exchanges.jsonl`) au lot A | sa désactivation par défaut est le lot D, avec le rédacteur | oui |
+| H21 | Le journal des échanges est désactivé par défaut ; le compose de la simulation l'active (`LLM_GATEWAY_TELEMETRY__EXCHANGES_ENABLED=true`) | données personnelles potentielles ; `make report` et le tableau de bord en dépendent, d'où l'activation explicite côté déploiement | oui |
+| H22 | Le worker n'abandonne plus une file quand les fournisseurs éligibles sont seulement occupés ; il attend jusqu'à `max_retries` | run Prompt_Minimaliste : 120 sollicitations sur 240 perdues sur une instance forcée à 15 RPM, alors qu'elle n'était ni en cooldown ni au quota ; `abandon_when_busy` rétablit l'ancien comportement | oui |
+| H23 | Les familles Prometheus métier sont déclarées par le bundle et rendues génériquement ; leurs noms ne changent pas | dashboards Grafana 04 et 07 | oui |
 
 ## Questions ouvertes (mise à jour 2026-09-07)
 
