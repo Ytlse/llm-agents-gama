@@ -123,4 +123,7 @@ D télémétrie, E rangement) : plan détaillé dans `specs/ticket_037/iteration
 | Lot | État |
 |---|---|
 | A — réglages en couches | **livré le 2026-09-07** : `GatewaySettings` en sept groupes, six sources (constructeur, env `LLM_GATEWAY_*`, anciens noms dépréciés, `LLM_GATEWAY_CONFIG`, profil, défauts), fichier des fournisseurs hors du paquet (`config/llm_gateway/providers.yaml`, clé inconnue refusée en nommant provider et clé), limites apprises derrière le port `LearnedLimits` (Redis, fichier, mémoire), `GET /config` et `/config/providers` masqués, CORS configurable, `disable_after_consecutive_errors`, référence des réglages générée, ADR 0003, gateway 1.2.0. Écarts : H17 à H20 |
-| B à E | à venir |
+| B — cascade d'inférence | livré le 2026-09-07 (branche `ticket-037-iteration-2`, commit 47e57dd) |
+| C — adapter OpenAI-compatible, erreurs réseau, entry points, couverture 81 % → cliquet 80 | livré (2879123) |
+| D — journal des échanges opt-in + rédacteur, logging non intrusif, familles déclarées par le bundle, règle « occupé n'est pas en panne » | livré (1ca82bf) |
+| E — rangement par catégorie, gateway 1.3.0, mobility-llm 0.2.0 | livré (e069ccc) ; fusion et recréation des conteneurs après la fin de l'expérience en cours |

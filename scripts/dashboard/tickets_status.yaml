@@ -1447,7 +1447,11 @@ tickets:
       api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. Commits 2f27a27, a5b3c8c, 617c0f6 poussés le 07 ; e2e perception_filter réel OK ; CI verte
       (5 jobs, cliquet de couverture 70 %). Licence Apache-2.0 posée. ITÉRATION 2 : lot A LIVRÉ le 07
       (réglages en couches LLM_GATEWAY_, fichier des fournisseurs hors du paquet, limites apprises
-      dans Redis, /config ; gateway 1.2.0 ; CI verte run 34090531486). RESTE : lots B à E ; itérations suivantes = paramétrage en couches
+      dans Redis, /config ; gateway 1.2.0 ; CI verte run 34090531486). Lots B à E LIVRÉS le 07 sur la branche
+      ticket-037-iteration-2 (CI verte run 34115618770) et fusionnés : cascade d'inférence, adapter
+      OpenAI-compatible générique + entry points, journal des échanges opt-in + rédacteur, familles
+      Prometheus déclarées par le bundle, règle « occupé n'est pas en panne », rangement par catégorie ;
+      gateway 1.3.0, mobility-llm 0.2.0, couverture 82 %. RESTE : itération 3 (versioning) ; itérations suivantes = paramétrage en couches
       LLM_GATEWAY_, adapter OpenAI-compatible, exécuteur sans Celery, ticket 036 (auth).
   ticket_038_licence_des_ressources_emc2_de_mobility_core:
     status: en veille

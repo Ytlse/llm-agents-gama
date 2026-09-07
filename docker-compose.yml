@@ -7,6 +7,9 @@ x-gateway-env: &gateway-env
   LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND: redis://redis:6379/2
   LLM_GATEWAY_PROVIDERS_FILE: /app/config/llm_gateway/providers.yaml
   LLM_GATEWAY_TELEMETRY__WORKDIR: /app/experiments/current
+  # Journal des échanges : désactivé par défaut dans le gateway (données personnelles potentielles) ;
+  # la simulation l'active parce que make report et le tableau de bord le lisent.
+  LLM_GATEWAY_TELEMETRY__EXCHANGES_ENABLED: "true"
   # Le contrôleur (hypercorn, Grafana Infinity côté serveur) n'a pas besoin de CORS ; ["*"]
   # reproduit l'ancien comportement pour les outils qui interrogent l'API depuis un navigateur.
   LLM_GATEWAY_API__CORS_ORIGINS: '["*"]'

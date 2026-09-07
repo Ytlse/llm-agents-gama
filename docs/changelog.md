@@ -1,3 +1,143 @@
+## [2026-09-07] Le gateway se règle par couches et un fournisseur occupé n'est plus abandonné
+
+Itération 2 du ticket 037, lots B à E, livrée sur la branche `ticket-037-iteration-2` pendant
+qu'une expérience tournait, puis fusionnée. Gateway 1.3.0, mobility-llm 0.2.0.
+
+- **Cascade d'inférence** : température, `top_p` et budget de sortie viennent de la requête,
+  puis du fournisseur (`inference:` dans son entrée), puis des défauts. Plus de littéraux dans
+  le worker.
+- **Un seul traducteur OpenAI-compatible** : OpenAI, Groq, Cerebras et Mistral deviennent des
+  réglages ; Ollama, vLLM ou OpenRouter s'ajoutent par configuration (`adapter:
+  openai_compatible`). Les pannes réseau se réessaient comme un 5xx. `ping()` a disparu.
+- **Journal des échanges désactivé par défaut**, activé explicitement dans le compose parce que
+  `make report` et le tableau de bord le lisent ; rédacteur configurable ; rotation par taille.
+- **Occupé n'est pas en panne** : le worker n'abandonne plus une file de tâches quand les
+  fournisseurs sont seulement lissés ou à fenêtre pleine, il attend leur créneau. Motif : le run
+  Prompt_Minimaliste du 2026-09-07 perdait une sollicitation sur deux sur une instance forcée à
+  15 requêtes par minute qui n'était ni en cooldown ni au quota.
+- **Familles Prometheus déclarées par le bundle**, noms inchangés pour Grafana ; **chaque
+  catégorie** range template, schéma et hook dans `mobility_llm/categories/<nom>/`.
+
+**Avant :** 48 s d'attente puis abandon de la file, décisions perdues sans réessai côté runner.
+**Après :** attente de la fenêtre bornée par `max_retries`, alarme `providers_occupes` sur front
+montant, réglages `resilience.provider_wait_seconds`, `saturation_*`, `abandon_when_busy`.
+
+---
+
+## [2026-09-07] L'onglet Expériences démarre les conteneurs dont l'expérience se sert
+
+Un bouton pour démarrer Docker était revenu dans l'onglet Métriques seulement, hérité du volet
+« Commandes » supprimé. Celui de l'onglet Expériences n'apparaissait que si `controller` manquait
+précisément, et on ne savait pas, en composant une expérience, de quoi elle avait besoin.
+
+**Before :** `make up`, ou rien. Toute la pile, y compris Prometheus, Grafana, cAdvisor,
+node-exporter et Flower, dont une expérience n'a aucun usage.
+**After :** un bloc au-dessus des boutons dit les services que **cette** expérience utilise et
+l'état de chacun, et un bouton démarre exactement ceux-là. La métrologie reste arrêtée.
+
+**Ce qui est requis se déduit des réglages.** `controller` toujours, puisque la plateforme s'y
+exécute. La passerelle seulement pour un décideur « modèle de langage » : une heuristique, un
+tirage graîné ou un rejeu n'attend rien d'elle. Les moteurs de routage seulement quand il reste un
+jeu à construire.
+
+**Les dépendances sont nommées, pas cachées.** Le compose démarre aussi les dépendances des
+services nommés ; la page les liste, sinon elle laisserait croire qu'elle démarre trois conteneurs
+quand elle en démarre huit. Ce graphe est lu dans `docker-compose.yml`, jamais recopié dans le
+code.
+
+La nouvelle cible `make up-services SERVICES="…"` refuse une liste vide plutôt que de démarrer
+toute la pile, et la tuile « Services » de la vue d'ensemble porte enfin un bouton là où elle
+n'affichait qu'un texte.
+
+**Et une case rend la RAM quand l'expérience est finie.** Décochée par défaut, elle arrête les
+services que l'expérience utilisait dès qu'elle se termine, pour ne pas laisser une pile inactive
+squatter la mémoire des autres applications.
+
+**Before :** une expérience terminée laissait neuf conteneurs debout, dont `osmnx1` avec 3,5 Gio de
+graphe en mémoire et trois OTP de 1,2 à 1,5 Gio chacun.
+**After :** un arrêt chaîné dans la commande lancée, donc effectif même navigateur fermé, ce qui
+est précisément le cas où l'on coche la case. C'est `docker compose stop` et non `down` : les
+conteneurs et les volumes restent, le redémarrage ne recharge que ce qu'il faut. L'arrêt couvre les
+dépendances, là où est la mémoire, et le code de retour de l'expérience est conservé pour qu'un
+échec reste un échec dans le journal.
+
+---
+
+## [2026-09-07] Un refus de lancement dit quel fichier de fournisseurs il a lu
+
+`make experience-lancer EXP=Prompt_Minimaliste` refusait : « aucune instance de passerelle ne sert
+le modèle 'gemini-3.5-flash-lite' → vérifiez providers.yaml et /health ». Deux instances le
+servent pourtant, `google_gemini35` et `google2_35`. Le conteneur `controller`, lancé avant que le
+fichier des fournisseurs ne sorte du paquet, n'avait ni la variable `LLM_GATEWAY_PROVIDERS_FILE`
+ni le montage : il ne lisait aucun fichier, sa liste d'instances était vide, et le message
+envoyait chercher une panne de quota.
+
+**Avant :** le refus nommait « providers.yaml » sans dire lequel il avait lu, ni combien
+d'instances il y avait trouvées. Un fichier introuvable et un modèle réellement absent donnaient
+le même message.
+**Après :** le refus cite le chemin lu, le nombre d'instances et la liste des modèles servis.
+Quand aucun fichier n'est lisible, il liste les emplacements sondés et la valeur de
+`LLM_GATEWAY_PROVIDERS_FILE`, et une ligne `[ALARME]` part au chargement.
+
+**La recherche du fichier ne dépend plus d'un nombre de crans.** Elle remontait un `parents[N]`
+fixe, juste sur l'hôte et faux dans le conteneur, où `llm-agents/` est monté sur `/app` : la
+racine n'y est pas au même niveau. Les ancêtres sont désormais parcourus jusqu'à trouver le
+fichier, dans le contrôleur comme sur l'hôte.
+
+**À faire une fois, après cette mise à jour :** `docker compose up -d controller` recrée le
+contrôleur avec la variable et le montage. Sans cette recréation, un contrôleur déjà en marche
+continue de tourner sans fichier de fournisseurs — le nouveau message le dira désormais.
+
+---
+
+## [2026-09-07] Un nom d'expérience écrit à la main n'est plus un cul-de-sac
+
+Le nom d'une expérience devient un dossier et la valeur de `EXP=` passée à `make`, qui développe
+`$(EXP)` sans guillemets dans une commande shell. La validation refusait donc tout ce qui n'était
+pas une lettre non accentuée, un chiffre, un tiret, un souligné ou un point.
+
+**Before :** « Prompt Minimaliste » était refusé — à juste titre, les espaces cassent la commande —
+mais « Prompt_Éco » l'était aussi, alors qu'un accent est sans danger. Et le motif disait ce qui
+était permis sans aider à corriger : le bouton restait grisé, sans issue.
+**After :** les caractères de mot Unicode sont acceptés, accents compris. Seuls les espaces, les
+séparateurs de chemin et les métacaractères restent refusés. Et la page propose l'identifiant sûr
+dérivé de ce qui a été tapé : « Prompt Minimaliste » propose « Prompt_Minimaliste », majuscules et
+accents conservés, un clic remplit le champ. Rien n'est renommé en silence.
+
+**Le lanceur du Finder sait redémarrer.** `tableau-de-bord.command` voyait le port occupé et se
+contentait d'ouvrir le navigateur : double-cliquer ne prenait donc jamais un changement de code.
+
+**Before :** « Le tableau de bord tourne déjà », et la page servait indéfiniment l'ancien code.
+**After :** il annonce qu'un changement de code demande un redémarrage et le propose, en
+avertissant que les lancements suivis par la page seront arrêtés — le registre des jobs vit dans
+le processus Streamlit. Sans réponse en quinze secondes, il laisse le serveur en place.
+
+---
+
+## [2026-09-07] Un lancement n'entre plus en concurrence avec un survivant
+
+Cliquer « Lancer » alors qu'une exécution tourne encore mettait deux runners sur le même quota LLM
+et le même contrôleur. Le cas est courant : une exécution survit à ce qui l'a lancée, son
+`docker compose exec` tué sur l'hôte ne tuant pas le processus dans le conteneur.
+
+**Before :** rien ne signalait ces survivants au moment du lancement. Il fallait aller les chercher
+dans l'onglet des expériences, ou constater après coup que deux runners se disputaient le quota.
+**After :** quand quelque chose tourne, une case cochée d'avance apparaît au-dessus des boutons et
+nomme ce qu'elle arrêtera. Rien ne tourne, aucune case n'apparaît.
+
+**L'arrêt reste coopératif.** Un fichier `STOP` dans le dossier de l'exécution, honoré au prochain
+point sûr, le résultat partiel restant exploitable. Aucun processus n'est tué dans le conteneur :
+un signal y laisserait l'état à « en cours » pour toujours.
+
+**La construction d'un jeu n'est jamais arrêtée.** Elle ne consomme pas de quota, son produit est
+précisément ce que le lancement attend, et l'interrompre jetterait une heure de calcul reprenable.
+
+**Le lancement attend, puis refuse.** Trente secondes au plus pour que les exécutions quittent
+« en cours ». Passé ce délai, le lancement est refusé en nommant celles qui tournent encore. Ce qui
+a été arrêté est écrit dans la page, refus ou pas.
+
+---
+
 ## [2026-09-07] Le gateway se règle par couches : préfixe, fichier de déploiement, limites apprises hors du paquet
 
 Deuxième itération du ticket 037, lot A. Les réglages du gateway LLM deviennent ceux d'une

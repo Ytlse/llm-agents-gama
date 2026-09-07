@@ -98,21 +98,40 @@ class WorkdirPathResolutionMixin:
                     setattr(self, field_name, str(resolved_path))
 
 
-def _find_providers_yaml() -> Optional[Path]:
-    """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
-    # Configuration de DÉPLOIEMENT du gateway (hors du paquet depuis le ticket 037, itération 2) :
-    # la variable qu'il lit lui-même, puis le dépôt, puis le montage du conteneur controller.
-    candidates = []
+def _candidats_providers_yaml() -> List[Path]:
+    """Emplacements sondés pour providers.yaml, dans l'ordre de priorité.
+
+    Configuration de DÉPLOIEMENT du gateway (hors du paquet depuis le ticket 037, itération 2) :
+    la variable que le gateway lit lui-même, puis la racine du dépôt, puis le montage conteneur.
+    On remonte les ancêtres de `base_dir` au lieu d'un `..` fixe : `base_dir` vaut
+    `<dépôt>/llm-agents` sur l'hôte (racine à UN cran) mais `/app` dans le conteneur, où
+    `/app/../config` = `/config` n'existe pas et où le fichier est monté sous `/app/config`.
+    """
+    candidates: List[Path] = []
     from_env = os.environ.get("LLM_GATEWAY_PROVIDERS_FILE")
     if from_env:
         candidates.append(Path(from_env))
-    candidates += [
-        Path(base_dir) / ".." / "config" / "llm_gateway" / "providers.yaml",
-        Path("/app/config/llm_gateway/providers.yaml"),
-    ]
+    racine = Path(base_dir).resolve()
+    for ancetre in [racine, *racine.parents[:3]]:
+        candidates.append(ancetre / "config" / "llm_gateway" / "providers.yaml")
+    candidates.append(Path("/app/config/llm_gateway/providers.yaml"))
+    vus: set = set()
+    return [c for c in candidates if not (str(c) in vus or vus.add(str(c)))]
+
+
+def _find_providers_yaml() -> Optional[Path]:
+    """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
+    candidates = _candidats_providers_yaml()
     for p in candidates:
         if p.exists():
             return p.resolve()
+    # Sans ce fichier, `settings.llm.providers` reste VIDE et tout appel passerelle échoue :
+    # le dire ici évite de chercher une panne de quota (panne du 2026-09-07, conteneur non recréé).
+    logger.error(
+        "[ALARME] providers.yaml introuvable — LLM_GATEWAY_PROVIDERS_FILE={} ; sondés : {}",
+        os.environ.get("LLM_GATEWAY_PROVIDERS_FILE") or "non définie",
+        ", ".join(str(c) for c in candidates),
+    )
     return None
 
 
