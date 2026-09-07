@@ -11,6 +11,7 @@ import json
 import re
 import threading
 from abc import ABC, abstractmethod
+from typing import Any
 
 try:
     from json_repair import repair_json as _repair_json
@@ -84,20 +85,29 @@ class BaseAdapter(ABC):
         """
         ...
 
-    def ping(self) -> bool:
-        """
-        Health check minimal : envoie "Hello" sans JSON schema et vérifie que
-        le provider répond avec un HTTP < 400.
+    def _post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> httpx.Response:
+        """POST vers le fournisseur, erreurs réseau classées pour le worker.
 
-        Doit être surchargé dans chaque adapter concret.
-        Par défaut, retourne True (fail-open) pour ne pas bloquer les adapters
-        qui n'ont pas encore implémenté la méthode.
+        Un délai dépassé, une connexion refusée ou une coupure en cours de réponse sont des
+        pannes **transitoires** : elles deviennent des `ProviderServerError` (réessayées avec
+        backoff et cooldown, comme un 5xx) au lieu de tomber dans l'exception générique du
+        worker, qui échouait la tâche sans réessai.
         """
-        _base_logger.warning(
-            f"ping() non implémenté pour cet adapter — provider inclus par défaut | "
-            f"provider={self._instance_name}"
-        )
-        return True
+        try:
+            return self._http().post(url, headers=headers, json=json)
+        except httpx.TimeoutException as exc:
+            raise ProviderServerError(
+                self._instance_name, 504, f"Délai dépassé ({self.request_timeout:.0f}s) : {exc}",
+                error_type="network_timeout",
+            ) from exc
+        except httpx.ConnectError as exc:
+            raise ProviderServerError(
+                self._instance_name, 503, f"Connexion impossible : {exc}", error_type="network_connect",
+            ) from exc
+        except httpx.RemoteProtocolError as exc:
+            raise ProviderServerError(
+                self._instance_name, 502, f"Réponse interrompue : {exc}", error_type="network_protocol",
+            ) from exc
 
     def _resolve_model(self, request: InternalRequest) -> str:
         """Retourne le modèle spécifié ou le défaut du provider."""
@@ -405,6 +415,8 @@ def extract_retry_delay_from_body(response_text: str) -> str | None:
 # Registre des adapters (auto-découverte par nom de fournisseur)
 # ---------------------------------------------------------------------------
 
+ADAPTERS_ENTRY_POINT = "llm_gateway.adapters"
+
 _REGISTRY: dict[str, type[BaseAdapter]] = {}
 
 # Instances mises en cache par nom de provider : le client httpx partagé
@@ -470,6 +482,7 @@ def _load_adapters() -> None:
     _logger = get_logger(__name__)
 
     _known_adapters = {
+        "openai_compatible": "llm_gateway.adapters.openai_compatible",
         "openai":   "llm_gateway.adapters.openai_adapter",
         "google":   "llm_gateway.adapters.google_adapter",
         "mistral":  "llm_gateway.adapters.mistral_adapter",
@@ -477,9 +490,27 @@ def _load_adapters() -> None:
         "cerebras": "llm_gateway.adapters.cerebras_adapter",
     }
 
+    import importlib
     for name, module_path in _known_adapters.items():
         try:
-            import importlib
             importlib.import_module(module_path)
         except ImportError as e:
             _logger.warning(f"Adapter non disponible (module manquant) | provider={name} reason={e}")
+
+    # Adapters apportés par d'autres paquets : entry point `llm_gateway.adapters`
+    # (nom = valeur du champ `adapter` du fichier des fournisseurs, cible = classe BaseAdapter).
+    from importlib.metadata import entry_points
+    for ep in entry_points(group=ADAPTERS_ENTRY_POINT):
+        try:
+            cls = ep.load()
+        except Exception as e:  # un paquet cassé ne doit pas empêcher les autres adapters
+            _logger.error(f"[ALARME] Adapter externe inchargeable | entry_point={ep.name} value={ep.value} error={e!r}")
+            continue
+        if not (isinstance(cls, type) and issubclass(cls, BaseAdapter)):
+            _logger.error(f"[ALARME] Entry point {ep.name!r} ({ep.value}) n'est pas une sous-classe de BaseAdapter")
+            continue
+        if not getattr(cls, "provider_name", None):
+            cls.provider_name = ep.name
+        _REGISTRY.setdefault(cls.provider_name, cls)
+        if ep.name != cls.provider_name:
+            _REGISTRY.setdefault(ep.name, cls)

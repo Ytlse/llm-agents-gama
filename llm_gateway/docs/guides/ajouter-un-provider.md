@@ -94,60 +94,83 @@ projet est un autre seau de 500 requêtes/jour : c'est l'instance `google2` (cl�
 que de dupliquer le secret dans `.env`). Le nom d'instance **doit** correspondre à la
 variable : sinon la résolution retombe sur `PROVIDER_KEYS__google`, la clé 1, sans avertir.
 
-## Cas 3 — un nouvel adapter
+## Cas 3 — une API compatible OpenAI, sans écrire de code
 
-Quand l'API cible n'est compatible avec aucun des cinq formats. Créer
-`src/llm_gateway/adapters/<nom>_adapter.py` :
+Ollama, vLLM, OpenRouter, LM Studio, Together, Fireworks… parlent le dialecte
+`POST {base_url}/chat/completions` : c'est le traducteur `openai_compatible`, dont OpenAI, Groq,
+Cerebras et Mistral ne sont que des réglages. Une entrée dans le fichier des fournisseurs suffit :
+
+```yaml
+mon_ollama:
+  adapter: openai_compatible
+  structured_output: json_object     # json_schema (natif OpenAI) | json_object | none
+  schema_in_system: true             # recopie le schéma JSON dans le message system
+  base_url: http://ollama:11434/v1
+  default_model: qwen3:8b
+  rpm_limit: 60
+  weight: 1.0
+```
+
+puis la clé `PROVIDER_KEYS__mon_ollama` (une valeur quelconque si l'API n'en exige pas : une
+instance sans clé est exclue de la rotation). Les deux réglages d'adapter valent aussi pour les
+quatre dialectes livrés : `mistral` avec `structured_output: json_schema` bascule un modèle
+récent sur la sortie structurée native, sans code.
+
+| Dialecte livré | `structured_output` | `schema_in_system` |
+|---|---|---|
+| `openai` | `json_schema` | non |
+| `groq` | `json_object` | non (le schéma vient du prompt) |
+| `cerebras` | `json_object` | oui |
+| `mistral` | `json_object` | oui |
+
+Les erreurs réseau (délai dépassé, connexion refusée, réponse coupée) sont classées par la base en
+`ProviderServerError` avec `error_type` `network_timeout`, `network_connect`, `network_protocol` :
+le worker les réessaie avec backoff et cooldown, comme un 5xx.
+
+## Cas 4 — un nouvel adapter, dans votre paquet
+
+Quand l'API n'est compatible avec aucun dialecte connu. Sous-classez `BaseAdapter` (ou
+`OpenAICompatibleAdapter` si seul un détail diffère : surchargez `build_payload` ou `_headers`) :
 
 ```python
-from llm_gateway.adapters.base import BaseAdapter, register_adapter
+from llm_gateway.adapters.base import BaseAdapter
 from llm_gateway.core.models import InternalRequest, LLMOutput
 
 
-@register_adapter
 class MonAdapter(BaseAdapter):
-    provider_name = "monfournisseur"     # = valeur du champ `adapter` dans providers.yaml
+    provider_name = "monfournisseur"     # = valeur du champ `adapter` dans le fichier des fournisseurs
     request_timeout = 120.0              # surcharger si le fournisseur est lent (Google : 240 s)
 
     def call(self, request: InternalRequest) -> tuple[LLMOutput, int, int]:
-        response = self._http().post(                       # client httpx partagé (keep-alive)
+        response = self._post(                              # erreurs réseau → ProviderServerError
             f"{self._get_base_url()}/…",
             headers={"Authorization": f"Bearer {self._get_api_key().get_secret_value()}"},
-            json={"model": self._resolve_model(request),
-                  "messages": [{"role": m.role, "content": m.content} for m in request.messages],
-                  "max_tokens": request.max_tokens, "temperature": request.temperature},
+            json={"model": self._resolve_model(request), "prompt": "…", "top_p": request.top_p},
         )
         self._raise_for_status(response)                    # 5xx → ProviderServerError, 4xx → ProviderClientError
         data = response.json()
-        self._check_openai_finish_reason(data)              # si format OpenAI : troncature → erreur 503 retryable
-        raw = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
-        return self._parse_output(raw), usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+        return self._parse_output(data["text"]), data["in"], data["out"]
 ```
 
 Le contrat de `call` : rendre `(LLMOutput, tokens_in, tokens_out)` ou lever
-`ProviderServerError` (5xx, rejoué avec backoff), `ProviderClientError` (4xx),
-`ProviderParseError` (JSON hors schéma). `_parse_output` fait le nettoyage tolérant
-(balises Markdown, réparation `json-repair`, détection de boucle de répétition, clé `agents`).
-`_raise_for_status` capture le délai de reprise des 429 (en-tête `retry-after`,
-`x-ratelimit-reset-*`, ou corps JSON à la Gemini) pour le cooldown. Le schéma de sortie est
-dans `request.response_schema` : l'injecter selon ce que l'API propose (`response_format`
-chez OpenAI/Groq, `responseSchema` chez Google, texte dans le message système chez Mistral).
+`ProviderServerError` (réjoué avec backoff), `ProviderClientError` (4xx), `ProviderParseError`
+(JSON hors schéma). `_parse_output` fait le nettoyage tolérant (balises Markdown, réparation
+`json-repair`, boucle de répétition, clé `agents`) ; `_raise_for_status` capture le délai de
+reprise des 429 ; `request.top_p` peut être `None` : ne l'envoyez que s'il est défini.
 
-`ping()` est facultatif : la base avertit et rend `True` (le provider est inclus par défaut).
+Déclarez la classe dans le `pyproject.toml` de **votre** paquet, le gateway la découvre au
+premier appel sans que rien ne change chez lui :
 
-!!! warning "Le chargement des adapters est une liste fermée"
-    `get_adapter` charge les modules à la demande via `_load_adapters()` dans
-    `adapters/base.py`, qui énumère **cinq** modules connus (`openai`, `google`,
-    `mistral`, `groq`, `cerebras`). Un adapter nouveau n'est trouvé que si son module a été
-    importé avant — il faut donc **ajouter votre module à ce dictionnaire**. C'est une
-    limite connue, à lever avec l'adapter OpenAI-compatible générique reporté à l'itération
-    suivante (ticket 037). Sans cela : `KeyError: Adapter inconnu pour le fournisseur '…'`.
+```toml
+[project.entry-points."llm_gateway.adapters"]
+monfournisseur = "mon_paquet.adapters:MonAdapter"
+```
 
-Ensuite : bloc dans `providers.yaml` avec `adapter: monfournisseur`, clé
-`PROVIDER_KEYS__monfournisseur`, un test d'intégration sur `httpx.MockTransport` à la manière
-de `tests/integration/test_google_adapter.py`, et une entrée dans le corpus
-`tests/data/llm_outputs.json` si le fournisseur produit des sorties d'une forme nouvelle.
+Le nom de l'entry point devient le `provider_name` si la classe n'en fixe pas. Un adapter
+inchargeable est journalisé en `[ALARME]` et n'empêche pas les autres de servir. Testez sur un
+client httpx doublé, à la manière de `tests/integration/test_openai_compatible_adapter.py`, et
+ajoutez une entrée au corpus `tests/data/llm_outputs.json` si le fournisseur produit des sorties
+d'une forme nouvelle.
 
 ## Retirer un provider
 

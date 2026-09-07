@@ -102,6 +102,7 @@ class GoogleAdapter(BaseAdapter):
             "generationConfig": {
                 "temperature":      request.temperature,
                 "maxOutputTokens":  request.max_tokens,
+                **({"topP": request.top_p} if request.top_p is not None else {}),
                 "response_mime_type": "application/json",
                 "response_json_schema":   self._clean_schema(request.response_schema),
             },
@@ -240,27 +241,3 @@ class GoogleAdapter(BaseAdapter):
         if isinstance(schema, list):
             return [self._clean_schema(i) for i in schema]
         return schema
-
-    def ping(self) -> bool:
-        from llm_gateway.config import get_settings
-        try:
-            model = get_settings().providers[self._instance_name].default_model
-            api_key = self._get_api_key().get_secret_value()
-            url = f"{self._get_base_url()}/models/{model}:generateContent"
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.post(
-                    url,
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": api_key,
-                    },
-                    json={
-                        "contents": [{"parts": [{"text": "Hello"}]}],
-                        "generationConfig": {"maxOutputTokens": 5},
-                    },
-                )
-            ok = resp.status_code < 400
-            return ok
-        except Exception as exc:
-            _logger.warning(f"ping EXCEPTION | provider={self._instance_name} error={exc}")
-            return False

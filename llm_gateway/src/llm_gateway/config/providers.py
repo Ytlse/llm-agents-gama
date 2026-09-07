@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -51,6 +51,10 @@ class ProviderEntry(BaseModel):
     concurrency_limit: int = 2
     disable_timeout: int = 180
     adapter: str = ""
+    # Sortie structurée de l'adapter OpenAI-compatible : json_schema (natif), json_object,
+    # none ; et injection du schéma dans le message system. None = défauts de l'adapter.
+    structured_output: Literal["json_schema", "json_object", "none"] | None = None
+    schema_in_system: bool | None = None
     inference: InferenceOverrides | None = None
     # Toléré parce que d'anciens fichiers le portent ; recalculé par les réglages, jamais lu.
     batch_max_agents: int | None = None   # ignoré et signalé au chargement : le gateway le calcule

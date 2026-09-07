@@ -4,6 +4,29 @@ Format : `## [version] - AAAA-MM-JJ`, entrées les plus récentes en tête. Le t
 l'usage : ce que le changement permet ou modifie pour qui s'en sert. Les fichiers touchés
 sont dans git.
 
+## [1.3.0] - 2026-09-07 (itération 2, lots B à E)
+
+### Lot B — les paramètres d'inférence se résolvent en cascade
+
+Température, `top_p` et budget de sortie par tâche viennent, dans l'ordre, de la requête
+(`parameters`), du fournisseur (bloc `inference:` de son entrée) puis des défauts globaux
+(`inference` des réglages). Le worker n'a plus de littéral `0.7` ni `4096` ; `top_p` est envoyé
+aux fournisseurs quand il est défini, jamais sinon. Une valeur illisible dans la requête descend
+au niveau suivant au lieu de faire échouer le lot.
+
+### Lot C — un seul traducteur pour toute API compatible OpenAI
+
+**Avant :** quatre adapters de cent lignes recopiés (OpenAI, Groq, Cerebras, Mistral), un
+`ping()` défini partout et appelé nulle part, une liste fermée de modules à éditer pour ajouter
+un fournisseur, et les pannes réseau qui échouaient la tâche sans réessai.
+**Après :** `OpenAICompatibleAdapter` porte le dialecte `/chat/completions` ; les quatre
+deviennent des réglages (`structured_output`, `schema_in_system`) que l'instance du fichier des
+fournisseurs peut surcharger. Un fournisseur compatible (Ollama, vLLM, OpenRouter…) s'ajoute par
+configuration seule : `adapter: openai_compatible`. Un paquet tiers apporte son adapter par
+l'entry point `llm_gateway.adapters`. Délai dépassé, connexion refusée et réponse coupée sont
+des `ProviderServerError` (`network_timeout`, `network_connect`, `network_protocol`) : réessayées
+avec backoff et cooldown. `ping()` a disparu.
+
 ## [1.2.0] - 2026-09-07 (itération 2, lot A)
 
 Les réglages deviennent une configuration de bibliothèque : groupés, préfixés, en couches.

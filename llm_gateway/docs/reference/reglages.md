@@ -119,7 +119,9 @@ chargement en nommant le fournisseur et la clé. Schéma JSON : `llm-gateway con
 | `weight` | `float` | `1.0` | poids SWRR : `min(rpm_limit, tpm_limit / 3000) / 15` |
 | `concurrency_limit` | `int` | `2` | workers simultanés autorisés sur l'instance |
 | `disable_timeout` | `int` | `180` | durée (s) de mise à l'écart après `disable_after_consecutive_errors` erreurs |
-| `adapter` | `str` | `''` | nom de l'adapter (openai, mistral, google, groq, cerebras) ; défaut = nom de l'entrée |
+| `adapter` | `str` | `''` | nom de l'adapter (openai_compatible, openai, mistral, google, groq, cerebras, ou un entry point `llm_gateway.adapters`) ; défaut = nom de l'entrée |
+| `structured_output` | `Union[Literal[json_schema, json_object, none], NoneType]` | `None` | sortie structurée du traducteur OpenAI-compatible : `json_schema`, `json_object`, `none` ; None = défaut de l'adapter |
+| `schema_in_system` | `bool | NoneType` | `None` | recopier le schéma JSON dans le message system ; None = défaut de l'adapter |
 | `inference` | `InferenceOverrides | NoneType` | `None` | surcharges `temperature`, `top_p`, `max_tokens` pour cette instance |
 | `batch_max_agents` | `int | NoneType` | `None` | toléré pour les anciens fichiers, **ignoré** avec un avertissement : le gateway le calcule |
 
@@ -155,6 +157,8 @@ max_tokens_per_request / idem, rpm_limit, batching.max_batch_agents))` ;
 | `concurrency_limit` | `int` | `2` |
 | `disable_timeout` | `int` | `180` |
 | `adapter` | `str` | `''` |
+| `structured_output` | `Union[Literal[json_schema, json_object, none], NoneType]` | `None` |
+| `schema_in_system` | `bool | NoneType` | `None` |
 | `inference` | `InferenceOverrides | NoneType` | `None` |
 
 ## Anciens noms encore lus (dépréciés)

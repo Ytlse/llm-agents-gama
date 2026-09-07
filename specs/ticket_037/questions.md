@@ -40,4 +40,4 @@ Convention : on avance sous hypothèse, on note ici, on pose à la fin.
 
 1. ~~Licence du gateway ?~~ Tranchée le 2026-09-07 : **Apache-2.0** (LICENSE + NOTICE dans `llm_gateway/`, métadonnées pyproject). Titulaire du copyright écrit « les auteurs du dépôt » dans NOTICE : à préciser si une entité doit y figurer. La licence des ressources EMC² de `mobility_core` fait l'objet du ticket 038.
 2. ~~Pousser la branche pour la CI ?~~ Fait le 2026-09-07 : trois commits poussés, CI verte au troisième run.
-| H16 | Le seuil de couverture du gateway est un cliquet à 70 %, pas 80 % | 74 % mesurés ; adapters OpenAI-compatibles et worker peu couverts hors intégration, leurs tests arrivent avec l'adapter générique (itération 2) ; le seuil ne redescend jamais | oui |
+| H16 | ~~Cliquet à 70 %~~ Remonté à 80 % au lot C (81 % mesurés) | 74 % mesurés ; adapters OpenAI-compatibles et worker peu couverts hors intégration, leurs tests arrivent avec l'adapter générique (itération 2) ; le seuil ne redescend jamais | oui |

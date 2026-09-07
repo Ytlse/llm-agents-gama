@@ -3,7 +3,7 @@
 La suite du gateway est rangée en quatre étages, chacun dans son dossier de `tests/`. Le
 dossier **pose le marqueur** (`tests/conftest.py`) ; `--strict-markers` refuse tout marqueur
 non déclaré dans `pyproject.toml`. 233 tests collectés le 2026-09-07 ; couverture exigée
-70 % (cliquet : 74 % mesurés le 2026-09-07, cible 80 % à l'itération 2) (`fail_under`), `testing/`, `cli.py` et `main.py` exclus du calcul.
+80 % (cliquet : 74 % le 2026-09-07 matin, 81 % après le lot C de l'itération 2) (`fail_under`), `testing/`, `cli.py` et `main.py` exclus du calcul.
 
 | Étage | Dossier | Ce qu'il exige | Ce qu'il couvre |
 |---|---|---|---|

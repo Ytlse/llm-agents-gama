@@ -57,6 +57,8 @@ class ProviderConfig(BaseModel):
     concurrency_limit: int = 2
     disable_timeout: int = 180
     adapter: str = ""
+    structured_output: Literal["json_schema", "json_object", "none"] | None = None
+    schema_in_system: bool | None = None
     inference: InferenceOverrides | None = None
 
     def __repr__(self) -> str:

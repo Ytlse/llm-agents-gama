@@ -124,7 +124,9 @@ def main() -> int:
         "max_output_tokens": "plafond de complétion ; appris sur HTTP 400 et retenu par le store de limites apprises",
         "weight": "poids SWRR : `min(rpm_limit, tpm_limit / 3000) / 15`", "concurrency_limit": "workers simultanés autorisés sur l'instance",
         "disable_timeout": "durée (s) de mise à l'écart après `disable_after_consecutive_errors` erreurs",
-        "adapter": "nom de l'adapter (openai, mistral, google, groq, cerebras) ; défaut = nom de l'entrée",
+        "adapter": "nom de l'adapter (openai_compatible, openai, mistral, google, groq, cerebras, ou un entry point `llm_gateway.adapters`) ; défaut = nom de l'entrée",
+        "structured_output": "sortie structurée du traducteur OpenAI-compatible : `json_schema`, `json_object`, `none` ; None = défaut de l'adapter",
+        "schema_in_system": "recopier le schéma JSON dans le message system ; None = défaut de l'adapter",
         "inference": "surcharges `temperature`, `top_p`, `max_tokens` pour cette instance",
         "batch_max_agents": "toléré pour les anciens fichiers, **ignoré** avec un avertissement : le gateway le calcule",
     }
