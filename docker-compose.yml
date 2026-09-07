@@ -396,6 +396,7 @@ services:
       LLM_GATEWAY_TELEMETRY__SERVICE_NAME: worker
     volumes:
       - ./llm_gateway/src/llm_gateway:/app/llm_gateway
+      - ./config/llm_gateway:/app/config/llm_gateway:ro
       - ./mobility_core/src/mobility_core:/app/mobility_core
       - ./mobility_llm/src/mobility_llm:/app/mobility_llm
       # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
@@ -406,7 +407,6 @@ services:
       - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
     depends_on:
-      - ./config/llm_gateway:/app/config/llm_gateway:ro
       redis:
         condition: service_healthy
       otp1:
@@ -430,9 +430,9 @@ services:
     volumes:
       # Mêmes sources montées que api/worker : flower importe l'application Celery du worker.
       - ./llm_gateway/src/llm_gateway:/app/llm_gateway
+      - ./config/llm_gateway:/app/config/llm_gateway:ro
       - ./mobility_core/src/mobility_core:/app/mobility_core
       - ./mobility_llm/src/mobility_llm:/app/mobility_llm
-      - ./config/llm_gateway:/app/config/llm_gateway:ro
     depends_on:
       redis:
         condition: service_healthy
