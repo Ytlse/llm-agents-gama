@@ -15,8 +15,10 @@ Le gateway découvre ce paquet par l'entry point déclaré dans `pyproject.toml`
 mobility = "mobility_llm:bundle"
 ```
 
-`bundle()` rend un `CategoryBundle` nommé `mobility`, avec `prompts/templates/`,
-`prompts/schemas.json`, `prompts/prompts.yaml`, et quatre `CategorySpec` :
+`bundle()` rend un `CategoryBundle` nommé `mobility` : chaque catégorie vit dans
+`categories/<nom>/` (`template.md.j2`, `output_schema.json`, et `observe.py` pour les métriques
+métier de l'itinéraire) ; les variantes de prompt restent dans `prompts/prompts.yaml`. Quatre
+`CategorySpec` :
 
 | Catégorie | Item | Priorité du lot | Hook `observe` |
 |---|---|---|---|

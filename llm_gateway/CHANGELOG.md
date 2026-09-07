@@ -14,6 +14,14 @@ Température, `top_p` et budget de sortie par tâche viennent, dans l'ordre, de 
 aux fournisseurs quand il est défini, jamais sinon. Une valeur illisible dans la requête descend
 au niveau suivant au lieu de faire échouer le lot.
 
+### Lot E — chaque catégorie range ses pièces dans son dossier
+
+Le moteur de prompts accepte un nom de template et un fichier de schéma **par catégorie**
+(`CategorySpec.template_name`, `schema_path`) ; `schemas_file` devient facultatif. `mobility_llm`
+adopte le rangement `categories/<nom>/template.md.j2` + `output_schema.json` + `observe.py` ;
+`prompts.yaml` ne bouge pas (prompt_calibration et les expériences le citent). Le rangement à
+plat reste possible et les deux cohabitent dans un même bundle.
+
 ### Lot D — télémétrie : rien n'est écrit sans le demander, et occupé n'est pas en panne
 
 - **Journal des échanges désactivé par défaut** (`telemetry.exchanges_enabled`) : prompts et

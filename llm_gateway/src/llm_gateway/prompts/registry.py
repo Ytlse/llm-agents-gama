@@ -82,6 +82,8 @@ class CategoryRegistry:
             templates_dir=bundle.templates_dir,
             schemas_file=bundle.schemas_file,
             prompts_file=bundle.prompts_file,
+            template_names={n: sp.template_name for n, sp in bundle.categories.items() if sp.template_name},
+            schema_paths={n: sp.schema_path for n, sp in bundle.categories.items() if sp.schema_path},
         )
         self._managers[bundle.name] = manager
         for name, spec in bundle.categories.items():

@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dynamic = ["version"]
 dependencies = [
-    "llm-gateway>=1.1",
+    "llm-gateway>=1.3",
     "mobility-core>=0.1",
     "pydantic>=2.9,<3",
     "loguru>=0.7,<0.8",
@@ -30,7 +30,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-mobility_llm = ["py.typed", "prompts/*.yaml", "prompts/*.json", "prompts/templates/*.j2"]
+mobility_llm = ["py.typed", "prompts/*.yaml", "categories/*/*.j2", "categories/*/*.json"]
 
 [tool.setuptools.dynamic]
 version = { attr = "mobility_llm.__version__" }

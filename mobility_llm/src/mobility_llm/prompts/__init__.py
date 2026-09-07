@@ -1,12 +1,13 @@
-"""prompts — le contenu : templates Jinja2, schémas de sortie, variantes de prompt système.
+"""prompts — les variantes de prompt système (`prompts.yaml`, clés `active:` et `prompts:`).
 
-Le moteur est dans ``llm_gateway.prompts.engine`` ; ce paquet n'apporte que les fichiers.
+Depuis l'itération 2 du ticket 037, templates et schémas de sortie vivent avec chaque catégorie,
+dans `mobility_llm/categories/<nom>/` (`template.md.j2`, `output_schema.json`). Ce fichier-ci
+reste ici parce que prompt_calibration et les expériences le citent par ce chemin.
 """
 from pathlib import Path
 
 PROMPTS_DIR = Path(__file__).resolve().parent
-TEMPLATES_DIR = PROMPTS_DIR / "templates"
 PROMPTS_FILE = PROMPTS_DIR / "prompts.yaml"
-SCHEMAS_FILE = PROMPTS_DIR / "schemas.json"
+CATEGORIES_DIR = PROMPTS_DIR.parent / "categories"
 
-__all__ = ["PROMPTS_DIR", "PROMPTS_FILE", "SCHEMAS_FILE", "TEMPLATES_DIR"]
+__all__ = ["CATEGORIES_DIR", "PROMPTS_DIR", "PROMPTS_FILE"]

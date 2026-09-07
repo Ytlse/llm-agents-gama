@@ -3,6 +3,15 @@
 Format : `## [version] - AAAA-MM-JJ`, entrées les plus récentes en tête. Le ton est celui de
 l'usage. Les fichiers touchés sont dans git.
 
+## [0.2.0] - 2026-09-07
+
+Chaque catégorie range ses pièces dans `categories/<nom>/` : `template.md.j2`,
+`output_schema.json`, et `observe.py` pour l'itinéraire. `prompts/schemas.json` et
+`prompts/templates/` disparaissent ; `prompts/prompts.yaml` reste au même endroit. Le bundle
+déclare ses familles Prometheus (`METRIC_FAMILIES`) sous leurs noms actuels, et
+`build_prompt_manager(prompts_file=…)` construit un moteur avec un autre jeu de variantes.
+Exige llm-gateway ≥ 1.3.
+
 ## [0.1.0] - 2026-09-07
 
 Première version : les catégories LLM de la simulation de mobilité, sorties du gateway

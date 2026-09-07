@@ -7,16 +7,16 @@ Pas besoin de Redis ni de LLM — teste uniquement la logique de templating.
 
 import pytest
 from llm_gateway.core.models import InternalMessage
-from llm_gateway.prompts.engine import _SECTION_SYSTEM, _SECTION_USER, PromptManager
+from llm_gateway.prompts.engine import _SECTION_SYSTEM, _SECTION_USER
 
+from mobility_llm import build_prompt_manager
 from mobility_llm.persona import AgentSpec
-from mobility_llm.prompts import PROMPTS_FILE, SCHEMAS_FILE, TEMPLATES_DIR
 
 
 # Fixture : instance isolée (on évite le singleton pour les tests)
 @pytest.fixture
 def manager():
-    return PromptManager(templates_dir=TEMPLATES_DIR, schemas_file=SCHEMAS_FILE, prompts_file=PROMPTS_FILE)
+    return build_prompt_manager()
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,6 @@ class TestPromptChecksum:
 
     def test_checksum_changes_when_prompt_changes(self, manager, tmp_path):
         import yaml
-        from llm_gateway.prompts.engine import PromptManager
 
         base = manager.active_prompt_checksum("itinary_multi_agent")
         # Store alternatif avec un contenu de prompt différent → checksum différent
@@ -205,15 +204,14 @@ class TestPromptChecksum:
             "active": {"itinary_multi_agent": "v"},
             "prompts": {"v": {"content": "Un prompt système totalement différent."}},
         }), encoding="utf-8")
-        other = PromptManager(templates_dir=TEMPLATES_DIR, schemas_file=SCHEMAS_FILE, prompts_file=alt).active_prompt_checksum("itinary_multi_agent")
+        other = build_prompt_manager(prompts_file=alt).active_prompt_checksum("itinary_multi_agent")
         assert base != other
 
     def test_checksum_empty_when_no_active(self, tmp_path):
         import yaml
-        from llm_gateway.prompts.engine import PromptManager
 
         empty = tmp_path / "prompts.yaml"
         empty.write_text(yaml.safe_dump({"active": {}, "prompts": {}}), encoding="utf-8")
         # Aucune catégorie active → empreinte du vide, mais déterministe et non vide
-        cs = PromptManager(templates_dir=TEMPLATES_DIR, schemas_file=SCHEMAS_FILE, prompts_file=empty).active_prompt_checksum()
+        cs = build_prompt_manager(prompts_file=empty).active_prompt_checksum()
         assert isinstance(cs, str) and len(cs) == 12

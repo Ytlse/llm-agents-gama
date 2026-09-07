@@ -319,9 +319,12 @@ def replay_variant(variant: dict, pairs: list[dict], base_prompt: str,
     config = RunConfig(eval_provider=provider, eval_model=MODEL, eval_temp=0.0,
                        eval_batch_max=BATCH, prod_option_handling=True,
                        max_retry_wait=30.0,
-                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/prompts/schemas.json"),
+                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json"),
                        category="itinary_multi_agent")
-    schema = json.loads(Path(config.schemas_path).read_text(encoding="utf-8"))[config.category]
+    # Depuis le ticket 037 (itération 2) le schéma vit avec sa catégorie
+    # (categories/<nom>/output_schema.json) ; l'ancien schemas.json combiné reste accepté.
+    _loaded = json.loads(Path(config.schemas_path).read_text(encoding="utf-8"))
+    schema = _loaded[config.category] if config.category in _loaded and "type" not in _loaded else _loaded
     call = make_provider_call(config, schema)
 
     # Un record est identifié par (agent_id, task_id d'origine, entry) : deux trajets

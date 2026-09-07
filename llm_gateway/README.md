@@ -61,7 +61,7 @@ llm-gateway worker --concurrency 25 --pool threads   # 5. worker Celery, autre t
 
 Le gateway découvre ses catégories par l'entry point `llm_gateway.categories`. Un bundle
 est un `CategoryBundle` (répertoire de templates `<catégorie>.md.j2`, fichier
-`schemas.json`, `prompts.yaml` facultatif) qui déclare des `CategorySpec` (modèle d'item,
+schémas de sortie, `prompts.yaml` facultatif) qui déclare des `CategorySpec` (modèle d'item,
 fonction de priorité, hook d'observation des métriques). Le registre valide chaque
 catégorie **au démarrage** : template ou schéma manquant → `ValueError` avant la première
 requête.

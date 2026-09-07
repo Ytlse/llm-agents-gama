@@ -15,24 +15,41 @@ from llm_gateway import CategoryBundle, CategorySpec
 
 CategoryBundle(
     name="mon_bundle",                    # nom unique ; apparaît dans les logs et `llm-gateway categories`
-    templates_dir=Path(".../templates"),  # un <catégorie>.md.j2 par catégorie
-    schemas_file=Path(".../schemas.json"),# objet JSON {catégorie: JSON Schema de la sortie}
+    templates_dir=Path(".../categories"), # racine des templates (un ou plusieurs répertoires)
     prompts_file=Path(".../prompts.yaml"),# facultatif : variantes de prompt système (active: / prompts:)
-    categories={"ma_categorie": CategorySpec(name="ma_categorie")},
+    categories={
+        "ma_categorie": CategorySpec(
+            name="ma_categorie",
+            template_name="ma_categorie/template.md.j2",              # relatif à templates_dir
+            schema_path=Path(".../categories/ma_categorie/output_schema.json"),
+        ),
+    },
 )
 ```
 
-Un `CategorySpec` porte trois choses, toutes facultatives sauf le nom :
+Deux rangements sont possibles, et cohabitent : **par dossier** (ci-dessus, ce que fait
+`mobility_llm` : `categories/<nom>/template.md.j2`, `output_schema.json` et le code du hook
+côte à côte) ou **à plat** (`templates_dir/<nom>.md.j2` et un `schemas_file` JSON
+`{catégorie: schéma}`, ce que fait la catégorie `echo` de `llm_gateway.testing`). Sans
+`template_name`, le moteur cherche `<nom>.md.j2` ; sans `schema_path`, il lit `schemas_file`.
+
+Un `CategorySpec` porte cinq choses, toutes facultatives sauf le nom :
 
 | Champ | Défaut | Rôle |
 |---|---|---|
 | `item_model` | `AgentItem` (un `agent_id`, champs libres conservés) | modèle pydantic qui valide chaque item du payload ; un item invalide → 422 côté API |
 | `priority` | `None` (pas de priorité) | `Callable[[Sequence[BaseModel]], float | None]` : score du lot, **plus bas = plus urgent** |
 | `observe` | `None` | `Callable[[ObserveContext], None]` : appelé par le worker après validation de la réponse, pour compter des métriques métier dans `ctx.metrics` |
+| `template_name` | `<nom>.md.j2` | nom du template, relatif à `templates_dir` |
+| `schema_path` | `None` (lit `schemas_file`) | fichier JSON du schéma de sortie de cette catégorie |
+
+Les compteurs qu'`observe` alimente s'exposent en Prometheus en les déclarant dans
+`CategoryBundle.metric_families` (une `MetricFamilySpec` : nom, aide, préfixe Redis, labels) ;
+le collecteur de l'API les rend sans rien connaître du métier.
 
 ## Étape 1 — le template
 
-`templates/ma_categorie.md.j2`, Jinja2 (`trim_blocks`, `lstrip_blocks`, pas d'autoescape sur
+`categories/ma_categorie/template.md.j2` (ou `templates/ma_categorie.md.j2` à plat), Jinja2 (`trim_blocks`, `lstrip_blocks`, pas d'autoescape sur
 `.md.j2`). Deux marqueurs découpent le rendu en messages ; sans marqueur, tout devient un
 message `user`.
 
@@ -66,7 +83,7 @@ Deux conventions comptent pour le worker :
 
 ## Étape 2 — le schéma de sortie
 
-`schemas.json`, un objet par catégorie. La réponse du modèle doit être un objet avec une
+`categories/ma_categorie/output_schema.json` (ou une entrée de `schemas.json` à plat). La réponse du modèle doit être un objet avec une
 clé `agents` (liste), chaque élément portant `agent_id` ; le parseur du gateway
 (`_parse_output`) exige cette forme, puis chaque élément est validé en `AgentResponse`
 (`extra="allow"` : vos champs voyagent jusqu'au client).
@@ -158,7 +175,7 @@ mon_bundle = "mon_paquet:bundle"
 
 où `bundle()` rend le `CategoryBundle` (un objet déjà construit est accepté aussi). Ne pas
 oublier les fichiers de données dans `[tool.setuptools.package-data]` :
-`prompts/*.yaml`, `prompts/*.json`, `prompts/templates/*.j2`. Réinstaller (`pip install
+`prompts/*.yaml`, `categories/*/*.j2`, `categories/*/*.json`. Réinstaller (`pip install
 -e .`) pour que `importlib.metadata` voie l'entry point.
 
 ## Ce qui est vérifié au démarrage
@@ -166,8 +183,8 @@ oublier les fichiers de données dans `[tool.setuptools.package-data]` :
 `CategoryRegistry` est construit par `build_deps` (API) et `build_worker_runtime` (worker),
 à partir de tous les entry points trouvés. Pour chaque catégorie déclarée :
 
-- template `<catégorie>.md.j2` absent → `ValueError: Catégorie 'x' : template x.md.j2 absent de …` ;
-- schéma absent de `schemas.json` → `ValueError: Catégorie 'x' : schéma de sortie absent de …` ;
+- template absent → `ValueError: Catégorie 'x' : template x/template.md.j2 absent de […]` ;
+- schéma absent (ni `schema_path` ni entrée de `schemas_file`) → `ValueError: Catégorie 'x' : schéma de sortie absent (…)` ;
 - même nom dans deux bundles → `ValueError: Catégorie 'x' déclarée par deux bundles (…)` ;
 - entry point qui ne rend pas un `CategoryBundle` → `TypeError`.
 

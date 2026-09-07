@@ -138,7 +138,7 @@ Attendu, après 3 s de fenêtre plus la latence du modèle :
 ```
 
 `P4_4_ms` est l'attente en file (la fenêtre de 3 s), `P5_4_ms` l'appel LLM. Le champ
-`summary` est celui exigé par `schemas.json` pour cette catégorie ; une réponse hors schéma
+`summary` est celui exigé par le schéma de sortie de cette catégorie (`categories/perception_filter/output_schema.json`) ; une réponse hors schéma
 aurait été rejouée sur un autre provider puis, à défaut, rendue en `status: failed` avec le
 brut dans `error`.
 

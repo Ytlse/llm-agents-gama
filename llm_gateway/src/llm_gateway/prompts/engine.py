@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -73,21 +73,38 @@ class PromptManager:
 
     def __init__(
         self,
-        templates_dir: Path,
-        schemas_file: Path,
+        templates_dir: Path | Sequence[Path],
+        schemas_file: Path | None = None,
         prompts_file: Path | None = None,
+        *,
+        template_names: Mapping[str, str] | None = None,
+        schema_paths: Mapping[str, Path] | None = None,
     ) -> None:
-        self._templates_dir = Path(templates_dir)
-        self._schemas_file = Path(schemas_file)
+        """
+        `templates_dir` : un répertoire (ou plusieurs) où Jinja2 cherche les templates ;
+        `schemas_file` : objet JSON {catégorie: schéma} (facultatif si `schema_paths` couvre tout) ;
+        `template_names` : nom de template par catégorie (défaut `<catégorie>.md.j2`, relatif à
+        `templates_dir`, ex. `itinary_multi_agent/template.md.j2`) ;
+        `schema_paths` : fichier JSON du schéma de sortie par catégorie (prime sur `schemas_file`).
+        """
+        dirs = [Path(templates_dir)] if isinstance(templates_dir, (str, Path)) else [Path(d) for d in templates_dir]
+        self._templates_dirs = dirs
+        self._schemas_file = Path(schemas_file) if schemas_file else None
         self._prompts_file = Path(prompts_file) if prompts_file else None
+        self._template_names: dict[str, str] = dict(template_names or {})
         self._env = Environment(
-            loader=FileSystemLoader(str(templates_dir)),
+            loader=FileSystemLoader([str(d) for d in dirs]),
             autoescape=select_autoescape(disabled_extensions=("md.j2", "txt.j2")),
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        self._store = _load_prompts_store(prompts_file)
-        self._schemas = _load_schemas(schemas_file)
+        self._store = _load_prompts_store(self._prompts_file)
+        self._schemas: dict[str, dict[str, Any]] = _load_schemas(self._schemas_file) if self._schemas_file else {}
+        for category, path in (schema_paths or {}).items():
+            self._schemas[category] = json.loads(Path(path).read_text(encoding="utf-8"))
+
+    def template_name(self, category: str) -> str:
+        return self._template_names.get(category, f"{category}.md.j2")
 
     def render(
         self,
@@ -98,7 +115,7 @@ class PromptManager:
         """
         Rend le template associé à `category` et retourne une liste de messages.
         """
-        template_name = f"{category}.md.j2"
+        template_name = self.template_name(category)
 
         try:
             schema = self.get_output_schema(category)
@@ -126,14 +143,14 @@ class PromptManager:
         première requête.
         """
         if category not in self._schemas:
-            raise ValueError(
-                f"Catégorie {category!r} : schéma de sortie absent de {self._schemas_file}"
-            )
+            where = self._schemas_file or "aucun schemas_file ni schema_path"
+            raise ValueError(f"Catégorie {category!r} : schéma de sortie absent ({where})")
+        name = self.template_name(category)
         try:
-            self._env.get_template(f"{category}.md.j2")
+            self._env.get_template(name)
         except TemplateNotFound:
             raise ValueError(
-                f"Catégorie {category!r} : template {category}.md.j2 absent de {self._templates_dir}"
+                f"Catégorie {category!r} : template {name} absent de {[str(d) for d in self._templates_dirs]}"
             ) from None
 
     @property

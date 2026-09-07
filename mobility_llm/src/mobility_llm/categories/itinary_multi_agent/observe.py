@@ -1,4 +1,4 @@
-"""categories/itinary_multi_agent.py — ce que le worker observe d'une décision d'itinéraire.
+"""categories/itinary_multi_agent/observe.py — ce que le worker observe d'une décision d'itinéraire.
 
 Le LLM renvoie une distribution sur les options proposées, pas un choix : le tirage effectif
 a lieu côté simulation (``mobility_llm.mode_choice.draw_index`` dans le contrôleur). Le

@@ -24,7 +24,7 @@ flowchart LR
         worker --> registry
     end
     subgraph ml["mobility_llm 0.1.0 — catégories"]
-        bundle["bundle()<br/>4 CategorySpec · templates · schemas.json · prompts.yaml"]
+        bundle["bundle()<br/>4 CategorySpec · categories/&lt;nom&gt;/ · prompts.yaml"]
     end
     subgraph mc["mobility_core 0.1.0 — domaine EMC²"]
         dom["mode_hierarchy · zone_resolver · residence_zone<br/>bike_ownership · housing_type · population_reference"]

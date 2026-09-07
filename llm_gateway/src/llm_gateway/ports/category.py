@@ -51,6 +51,10 @@ class CategorySpec:
     priority: Callable[[Sequence[BaseModel]], float | None] | None = None
     # Métriques métier tirées d'une réponse réussie.
     observe: Callable[[ObserveContext], None] | None = None
+    # Rangement par catégorie (facultatif) : nom du template relatif à `templates_dir` (défaut
+    # `<catégorie>.md.j2`) et fichier JSON du schéma de sortie (prime sur `schemas_file`).
+    template_name: str | None = None
+    schema_path: Path | None = None
 
     def validate_items(self, raw_items: Sequence[Any]) -> list[BaseModel]:
         """Valide les items du payload avec le modèle de la catégorie."""
@@ -88,7 +92,7 @@ class CategoryBundle:
 
     name: str
     templates_dir: Path
-    schemas_file: Path
+    schemas_file: Path | None = None
     categories: dict[str, CategorySpec] = field(default_factory=dict)
     prompts_file: Path | None = None
     # Compteurs métier que ``observe`` alimente et que l'API doit exposer (cf. api/metrics.py).

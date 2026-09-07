@@ -1,14 +1,13 @@
 """Ticket 035 — une requête peut désigner sa variante de prompt système (`parameters.prompt_variant`)."""
 
 import pytest
-from llm_gateway.prompts.engine import PromptManager
 
-from mobility_llm.prompts import PROMPTS_FILE, SCHEMAS_FILE, TEMPLATES_DIR
+from mobility_llm import build_prompt_manager
 
 
 @pytest.fixture(scope="module")
 def pm():
-    return PromptManager(templates_dir=TEMPLATES_DIR, schemas_file=SCHEMAS_FILE, prompts_file=PROMPTS_FILE)
+    return build_prompt_manager()
 
 
 def test_variante_designee_remplace_l_active(pm):
