@@ -5,7 +5,9 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # Toute branche : les paquets doivent être verts avant même la PR (le filtre de chemins
+    # évite de faire tourner la CI pour un run de simulation ou une page de synthèse).
+    branches: ["**"]
     paths:
       - "llm_gateway/**"
       - "mobility_core/**"
