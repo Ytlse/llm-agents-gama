@@ -1444,6 +1444,6 @@ tickets:
       mobility_core 0.1.0, mobility_llm 0.1.0) installés en editable ; coquille llm_module dépréciée (53
       shims) ; hook de catégorie par entry point (validation 422 à la soumission, observe côté worker) ;
       suites 233 + 199 + 134, llm-agents 551 ; import-linter 5/5 ; ruff et mypy strict à zéro ; images
-      api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. RESTE : faire
-      tourner la CI (push), trancher la licence ; itérations suivantes = paramétrage en couches
+      api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. Commits 2f27a27, a5b3c8c, 617c0f6 poussés le 07 ; e2e perception_filter réel OK ; CI verte
+      (5 jobs, cliquet de couverture 70 %). RESTE : trancher la licence ; itérations suivantes = paramétrage en couches
       LLM_GATEWAY_, adapter OpenAI-compatible, exécuteur sans Celery, ticket 036 (auth).

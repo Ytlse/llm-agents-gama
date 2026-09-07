@@ -165,3 +165,8 @@ data/experiences/*/executions/
 .mypy_cache/
 .hypothesis/
 llm_gateway/site/
+
+# Artefacts de couverture (pytest-cov)
+.coverage
+coverage.xml
+htmlcov/

@@ -35,4 +35,5 @@ Convention : on avance sous hypothèse, on note ici, on pose à la fin.
 ## Questions ouvertes (mise à jour 2026-09-07)
 
 1. Licence du gateway (MIT, Apache-2.0, propriétaire) ? Aucun fichier LICENSE tant que ce n'est pas tranché.
-2. Faut-il pousser la branche pour faire tourner la CI maintenant, ou attendre la fin de `feat_cache_population` ?
+2. ~~Pousser la branche pour la CI ?~~ Fait le 2026-09-07 : trois commits poussés, CI verte au troisième run.
+| H16 | Le seuil de couverture du gateway est un cliquet à 70 %, pas 80 % | 74 % mesurés ; adapters OpenAI-compatibles et worker peu couverts hors intégration, leurs tests arrivent avec l'adapter générique (itération 2) ; le seuil ne redescend jamais | oui |

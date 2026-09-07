@@ -95,7 +95,7 @@ Trois paquets installables, répertoires frères à la racine du dépôt :
 | ruff, mypy strict (core, ports, sdk) | 0 erreur |
 | Images `api`/`worker` reconstruites (`llm_gateway/Dockerfile`, contexte racine, utilisateur non-root) | `/health` 200 ; catégorie inconnue → 422 avec la liste des catégories ; persona sans `perception` → 422 ; une seule famille `alarme_total` au scrape |
 | Tests en quatre étages, contrats paramétrés mémoire + fakeredis (+ Redis réel en CI), hypothesis, corpus du parseur, intégration API et lot sans Redis | fait |
-| CI (`.github/workflows/ci.yml`), pre-commit, cibles Makefile | écrits ; la CI n'a pas encore tourné (pas de push) |
+| CI (`.github/workflows/ci.yml`), pre-commit, cibles Makefile | CI **verte** le 2026-09-07 (run 34086849095, cinq jobs) après deux corrections : déclencheur étendu à toute branche, cliquet de couverture posé à 70 % (74 % mesurés, cible 80 % en itération 2) |
 | Documentation : README des trois paquets, site mkdocs (17 pages, `mkdocs build --strict` à zéro avertissement), CHANGELOG des paquets, deux ADR, `.env.example`, pages du dépôt mises à jour, entrée du changelog | fait |
 | Refus des clés inconnues dans `providers.yaml` (`extra="forbid"`) | fait le 2026-09-07, après relecture : l'annonce du 06 était prématurée |
 
@@ -103,3 +103,14 @@ Trois paquets installables, répertoires frères à la racine du dépôt :
 Les sept échecs de `scripts/tests/test_qualification_60_tickets.py` (car scolaire, tf22-tf29) sont
 antérieurs et indépendants : `ModuleNotFoundError: trip_helper` quand le fichier est lancé depuis la
 racine sans le `PYTHONPATH` de llm-agents.
+
+## Clôture de l'itération 1 (2026-09-07)
+
+- Commits sur `feat_cache_population` : `2f27a27` (le découpage), `a5b3c8c` (déclencheur CI),
+  `617c0f6` (cliquet de couverture). Poussés ; le travail en cours de l'auteur sur les tickets
+  030, 032, 033 et 035 reste non commité, volontairement séparé.
+- Pile complète relancée ; test de bout en bout `perception_filter` contre le gateway réel et un
+  fournisseur réel : tâche acceptée, traitée en 6,1 s, deux synthèses valides.
+- CI : 5 jobs verts (lint, types, contrats ; tests gateway avec Redis de service ; tests mobilité ;
+  wheels ; mkdocs strict).
+- Reste ouvert : la licence du gateway (question 1 de `specs/ticket_037/questions.md`).
