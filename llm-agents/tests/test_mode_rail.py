@@ -31,7 +31,7 @@ import pytest
 from settings import settings
 from trip_helper.otp import OTPTripHelper, coordonnees_arrets, feeds_en_service
 from urban_mobility_agents.utils.move_logger import _plan_transport_mode
-from llm_module.core.mode_choice import canonical_mode
+from mobility_llm.mode_choice import canonical_mode
 from models import TransitLocation, Transit, TravelPlan
 
 

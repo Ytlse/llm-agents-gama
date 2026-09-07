@@ -36,7 +36,7 @@ taille, et on compare à son `M1` réel. C'est cette mesure — erreur absolue m
 les 20 cellules (5 modalités × 4 tailles) — qui dit si le mécanisme vaut mieux que le
 précédent, et elle est écrite dans la ressource pour être relisible sans les données.
 
-Ce que le script écrit dans `llm_module/data/zf_housing_type.json` : les modalités, la
+Ce que le script écrit dans `mobility_core/data/zf_housing_type.json` : les modalités, la
 loi d'ensemble, la loi par secteur, la loi par zone, les leviers de taille et leurs
 effectifs, le bloc de validation, et un bloc `meta` de provenance. **Aucune
 microdonnée** — uniquement des lois agrégées, comme la couche de zones fines exportée
@@ -58,7 +58,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from llm_module.core.housing_type import (
+from mobility_core.housing_type import (
     DEFAULT_RESOURCE,
     MODALITY_KEYS,
     SECTOR_PREFIX_LEN,

@@ -2,7 +2,7 @@
 
 Le trait traverse trois modules écrits séparément — la génération de population le
 pose, le journal l'écrit, la page le joint à la référence — et la seule chose qui les
-tienne ensemble est la table de modalités de `llm_module.core.housing_type`. Les tests
+tienne ensemble est la table de modalités de `mobility_core.housing_type`. Les tests
 ci-dessous vérifient les deux bouts de la chaîne côté page :
 
 - **la jointure**. La colonne porte le libellé de l'enquête, la référence l'indexe par
@@ -23,7 +23,7 @@ import csv
 import numpy as np
 import pytest
 
-from llm_module.core.housing_type import LABEL_BY_KEY, MODALITY_KEYS
+from mobility_core.housing_type import LABEL_BY_KEY, MODALITY_KEYS
 from scripts.synthesis import build, frames
 
 HEADERS = ["Mode de transport Choisi", "Méthode de sélection", "Type de logement",
@@ -231,7 +231,7 @@ class TestLoiExportee:
     def test_la_ressource_est_versionnee_pour_le_module(self, export, households):
         """Le module refuse une v1 : l'export doit donc annoncer la v2, et servir les
         quatre leviers — sans quoi la ressource produite serait illisible pour lui."""
-        from llm_module.core.housing_type import MIN_RESOURCE_VERSION, SIZE_MAX
+        from mobility_core.housing_type import MIN_RESOURCE_VERSION, SIZE_MAX
         table = export.build_table(households)
         assert table["version"] >= MIN_RESOURCE_VERSION
         assert sorted(table["size_leverage"]) == [
@@ -320,7 +320,7 @@ class TestLevierDeTailleExporte:
         assert table["validation"]["passes"] is True
 
     def test_le_test_interne_publie_les_20_cellules(self, export, households):
-        from llm_module.core.housing_type import SIZE_MAX
+        from mobility_core.housing_type import SIZE_MAX
         table = export.build_table(households)
         cells = table["validation"]["delivered"]["cells"]
         # Deux tailles peuplées dans ce jeu : 5 modalités chacune.

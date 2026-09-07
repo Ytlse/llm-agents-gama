@@ -5,8 +5,8 @@
 
 CE QUE ÇA SERT. Un déplacement qui mêle plusieurs modes reçoit **un** mode principal. Le
 dépôt en portait quatre tables et trois réponses pour le même trajet (ticket 022, M1). Ce
-script gèle **une** hiérarchie dans `llm_module/data/mode_hierarchy_emc2.json`, que
-`llm_module.core.mode_hierarchy` sert à tout le reste du dépôt. Le code n'a alors plus
+script gèle **une** hiérarchie dans `mobility_core/data/mode_hierarchy_emc2.json`, que
+`mobility_core.mode_hierarchy` sert à tout le reste du dépôt. Le code n'a alors plus
 besoin des microdonnées d'accès restreint pour tourner.
 
 ## DEUX SOURCES, ET LEUR ORDRE
@@ -92,7 +92,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 DATA = ROOT / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
-OUT = ROOT / "llm_module" / "data" / "mode_hierarchy_emc2.json"
+OUT = ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "mode_hierarchy_emc2.json"
 
 logger = logging.getLogger("progedo.mode_hierarchy")
 
@@ -159,7 +159,7 @@ CODES_PAR_ORDRE: dict[int, tuple[str, ...]] = {
 # (`trip_helper/school_bus.py`), plus les alias historiques encore présents dans les
 # caches et les libellés (`subway`, `bike`, `walk`, `__car__`).
 # `libelle_journal` = colonne « Mode de transport Choisi » de `moves.csv`.
-# `mode_canonique` = vocabulaire de `llm_module.core.mode_choice.CANONICAL_MODES`.
+# `mode_canonique` = vocabulaire de `mobility_llm.mode_choice.CANONICAL_MODES`.
 #
 # Aucun mode spéculatif : `trip_helper/otp.py` **assert** que toute jambe rendue est dans
 # `SUPPORTED_MODES`, donc un mode absent de cette liste ne peut pas arriver, et l'inscrire

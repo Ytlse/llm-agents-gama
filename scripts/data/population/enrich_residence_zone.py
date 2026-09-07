@@ -81,9 +81,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.population_reference import (
+from mobility_core.population_reference import (
     COURONNES, OUT_OF_PERIMETER, couronne_population_shares)
-from llm_module.core.residence_zone import (
+from mobility_core.residence_zone import (
     COMMUNE_TRAIT_KEY,
     INSEE_TRAIT_KEY,
     TRAIT_KEY,
@@ -191,7 +191,7 @@ def audit(population, table: CouronneTable, zones: Optional[CommunalZones]) -> d
     sans_valeur = 0
     metrique_divergent = 0
 
-    from llm_module.core.geo_reference import residence_zone as classement_metrique
+    from mobility_core.geo_reference import residence_zone as classement_metrique
 
     for person in people:
         traits = traits_of(person)
@@ -333,9 +333,9 @@ def main() -> int:
     parser.add_argument("population", type=Path, nargs="+",
                         help="Fichiers de population JSON (modifiés en place sauf --out)")
     parser.add_argument("--table", type=Path, default=None,
-                        help="Table des couronnes (défaut : llm_module/data/)")
+                        help="Table des couronnes (défaut : mobility_core/data/)")
     parser.add_argument("--zones", type=Path, default=None,
-                        help="Couche de zones fines (défaut : llm_module/data/)")
+                        help="Couche de zones fines (défaut : mobility_core/data/)")
     parser.add_argument("--geojson", type=Path, default=None,
                         help="Géométrie des couronnes, pour le contrôle d'accord")
     parser.add_argument("--out", type=Path, default=None,
@@ -347,7 +347,7 @@ def main() -> int:
                         help="Sort en échec si une porte du ticket 021 est démentie")
     args = parser.parse_args()
 
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.zone_resolver import ZoneResolver
 
     feature_spec = REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"
     try:

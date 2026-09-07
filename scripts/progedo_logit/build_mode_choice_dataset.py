@@ -302,7 +302,7 @@ def build_has_bike(person: pd.DataFrame, geo: pd.DataFrame,
     Le tirage reste déterministe (hachage sur la clé de ménage de l'enquête), donc le
     jeu d'entraînement est reproductible sans graine.
     """
-    from llm_module.core.bike_ownership import (
+    from mobility_core.bike_ownership import (
         K_MAX, MIN_AGE_ELIGIBLE, Member, assign)
 
     zone = geo.reindex(person["ZF"]).reset_index(drop=True)
@@ -542,7 +542,7 @@ def main() -> None:
     # et retomber sur `M21 > 0` produirait silencieusement un jeu d'entraînement qui
     # mesure autre chose que ce que le persona porte. On refuse donc, plutôt que de
     # replier.
-    from llm_module.core.bike_ownership import BikeOwnershipModel
+    from mobility_core.bike_ownership import BikeOwnershipModel
     bike_model = BikeOwnershipModel.load()
     person["has_bike"] = build_has_bike(person, geo, bike_model)
     print(f"has_bike construit (attribution nominative) : "

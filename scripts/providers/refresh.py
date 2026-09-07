@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Met à jour llm_module/config/providers.yaml depuis les quotas réels des providers.
+"""Met à jour llm_gateway/config/providers.yaml depuis les quotas réels des providers.
 
 Lancement : `make providers` (ou `make providers DRY_RUN=1` pour prévisualiser).
 
@@ -39,7 +39,7 @@ Règles :
 
 Édition chirurgicale du YAML : seules les valeurs changées sont réécrites, les
 commentaires du fichier sont préservés (même approche que
-llm_module/config.py::_persist_provider_max_output_tokens), écriture atomique.
+llm_gateway/config/settings.py::_persist_provider_max_output_tokens), écriture atomique.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ import requests
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROVIDERS_YAML = PROJECT_ROOT / "llm_module" / "config" / "providers.yaml"
+PROVIDERS_YAML = PROJECT_ROOT / "llm_gateway" / "src" / "llm_gateway" / "config" / "providers.yaml"
 ENV_FILE = PROJECT_ROOT / ".env"
 TIMEOUT = 30
 TODAY = dt.date.today().isoformat()

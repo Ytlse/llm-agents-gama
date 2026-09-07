@@ -80,13 +80,13 @@ restreindre la plage au run courant pour une lecture propre.
 Deux mécanismes complémentaires :
 
 1. **Compteur `alarme_total{source}`** — chaque log ERROR `[ALARME]` incrémente
-   le compteur (module `llm_module/telemetry/alarms.py`, `fire_alarme(source)`).
+   le compteur (module `llm_gateway/src/llm_gateway/telemetry/alarms.py`, `fire_alarme(source)`).
    Sources : `backlog`, `event_loop`, `arrivee_perdue`, `cache_llm_stale`,
    `cache_llm_qdrant`, `gateway_llm`, `vehicule_orphelin` (controller) et `providers_satures`
    (worker, via Redis `alarme:{source}` relu par `WorkerMetricsCollector`).
    Ne pas importer `alarms.py` dans le processus API : la famille y est déjà
    émise par le collecteur Redis. Les deux sites `[ALARME]` de
-   `llm_module/config.py` (échec de persistance providers.yaml, rare et non
+   `llm_gateway/src/llm_gateway/config/settings.py` (échec de persistance providers.yaml, rare et non
    critique en live) restent hors compteur — visibles via `make error`.
 2. **Alertes Grafana provisionnées** — `grafana/provisioning/alerting/simulation-alerts.yml`
    (7 règles, dossier « Alertes simulation ») : agents bloqués, fallback LLM
@@ -95,7 +95,7 @@ Deux mécanismes complémentaires :
 
 ## Métriques notables
 
-**Gateway** (`llm_module/api/metrics.py`) : appels/erreurs/tokens par provider
+**Gateway** (`llm_gateway/src/llm_gateway/api/metrics.py`) : appels/erreurs/tokens par provider
 (`__all__` = agrégat), `llm_provider_state/…_limit/…_today`,
 `llm_provider_disable_ttl_seconds` (secondes avant réactivation — couvre la
 désactivation temporaire **et** le cooldown 429/5xx, valeur = max des deux
@@ -158,8 +158,8 @@ Prometheus ne stocke que du numérique. Les messages d'erreur bruts vivent dans
 un **ring buffer Redis** plafonné (`llm:recent_errors`, 50 entrées) :
 
 - écriture : `RedisMetricsSink.push_error()`, appelé au point de capture d'erreur
-  du worker (`llm_module/worker/task_worker.py`) ;
-- lecture : `GET /errors/recent?limit=N` (`llm_module/api/routes.py`) ;
+  du worker (`llm_gateway/src/llm_gateway/worker/task_worker.py`) ;
+- lecture : `GET /errors/recent?limit=N` (`llm_gateway/src/llm_gateway/api/routes.py`) ;
 - affichage : datasource *Infinity* (`yesoreyeram-infinity-datasource`, installée
   via `GF_INSTALL_PLUGINS`), provisionnée dans
   `grafana/provisioning/datasources/prometheus.yml` — dashboards 01 et 04.

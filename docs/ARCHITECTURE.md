@@ -44,9 +44,9 @@ L'arbre suivant représente l'ordre strict de validation des services requis pou
 *   `redis` (`redis:7-alpine`) : Port `6379`. Triple usage : persistance d'état (DB0), broker Celery (DB1), backend de résultats (DB2).
 *   `otp1` / `otp2` / `otp3` (`./otp-toulouse`) : Ports `8080`/`8081`/`8082`. API GraphQL Transmodel v3 pour le transit multimodal (6 Go RAM chacune).
 *   `osmnx1` (`./llm-agents`) : Port `8090`. Serveur FastAPI exécutant le calcul Dijkstra sur graphes topologiques (4 Go RAM). Des replicas `osmnx2`/`osmnx3` peuvent être activés dans `docker-compose.yml`.
-*   `api` (`./llm_module`) : Port `8000`. Passerelle d'orchestration asynchrone des requêtes LLM.
-*   `worker` (`./llm_module`) : Processus d'inférence Celery (concurrence : 8).
-*   `flower` (`./llm_module`) : Port `5555`. UI de monitoring des tâches Celery.
+*   `api` (`llm_gateway/Dockerfile`, contexte racine) : Port `8000`. Passerelle d'orchestration asynchrone des requêtes LLM.
+*   `worker` (`llm_gateway/Dockerfile`, contexte racine) : Processus d'inférence Celery (concurrence : 8).
+*   `flower` (`llm_gateway/Dockerfile`, contexte racine) : Port `5555`. UI de monitoring des tâches Celery.
 *   `controller` (`./llm-agents`) : Port `8002` (Hypercorn HTTP/2) + `5050` (Visualisation Folium).
 *   `gama` (Hôte physique) : Instance de simulation GAML hors conteneur reliant le contrôleur via `ws://host.docker.internal:3001`.
 

@@ -998,7 +998,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     manifest = load_manifest(args.config)
     global PROVIDER_MODELS
-    PROVIDER_MODELS = load_provider_models(REPO_ROOT / "llm_module/config/providers.yaml")
+    PROVIDER_MODELS = load_provider_models(REPO_ROOT / "llm_gateway/config/providers.yaml")
 
     cerema_src = manifest.track("cerema", manifest.get("cerema"),
                                 "Référence EMC² 2023 — parts modales cibles")

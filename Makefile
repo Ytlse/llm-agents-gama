@@ -134,7 +134,7 @@ capacity:
 init:
 	python3 scripts/debug/init_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
 
-## Met à jour llm_module/config/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
+## Met à jour llm_gateway/src/llm_gateway/config/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
 .PHONY: providers
 providers:
 	python3 scripts/providers/refresh.py $(if $(DRY_RUN),--dry-run,)
@@ -177,13 +177,37 @@ purge_cache:
 # Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-.PHONY: tests burst analysis
+.PHONY: tests test-gateway test-mobility test-all lint-imports lint typecheck analysis
 
-tests:
-	python llm_module/tests/test_main.py
+# Interpréteur des paquets (installés en editable dans le venv de llm-agents).
+PKG_PYTHON ?= llm-agents/.venv/bin/python
 
-burst:
-	python llm_module/tests/test_e2e.py --scenario 1 --burst 80
+## Tests du gateway LLM générique (unit + contract + integration ; e2e si LLM_GATEWAY_E2E_URL)
+test-gateway:
+	cd llm_gateway && ../$(PKG_PYTHON) -m pytest
+
+## Tests du domaine mobilité (mobility_core) et des catégories LLM (mobility_llm)
+test-mobility:
+	cd mobility_core && ../$(PKG_PYTHON) -m pytest
+	cd mobility_llm && ../$(PKG_PYTHON) -m pytest
+
+## Les trois paquets, puis les contrats d'architecture
+test-all: test-gateway test-mobility lint-imports
+
+## Alias historique
+tests: test-all
+
+## Contrats import-linter des trois paquets (.importlinter à la racine)
+lint-imports:
+	$(PKG_PYTHON) -c "from importlinter.cli import lint_imports_command; lint_imports_command()"
+
+## ruff sur les trois paquets
+lint:
+	$(PKG_PYTHON) -m ruff check llm_gateway mobility_core mobility_llm
+
+## mypy : contrat public du gateway (core, ports, sdk) en strict
+typecheck:
+	cd llm_gateway && ../$(PKG_PYTHON) -m mypy src/llm_gateway/core src/llm_gateway/ports src/llm_gateway/sdk
 
 # Les notebooks tournent via papermill, installé dans le venv du projet : le
 # python du système ne suffit pas. Surchargeable comme les autres interpréteurs.
@@ -390,7 +414,7 @@ test-alt-prompt:
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 ## C'est la DONNÉE MANQUANTE du ticket : l'enquête découpe ses couronnes par LISTE DE
 ## COMMUNES (1 / 69 / 108 / 275), là où `geo_reference.residence_zone` classe par
-## distance à l'hypercentre. Produit llm_module/data/commune_couronne.json et
+## distance à l'hypercentre. Produit mobility_core/src/mobility_core/data/commune_couronne.json et
 ## couronne_perimetre.geojson, tous deux versionnés.
 communes-couronnes:
 	@test -d "data/PROGEDO 2023" || { \
@@ -680,7 +704,7 @@ gama-trip-info:
 test-gama-includes:
 	@$(SYNTHESIS_PYTHON) -m pytest scripts/tests/test_gama_includes.py -q
 
-## Rebuild the fine-zone resource read by llm_module.core.zone_resolver.
+## Rebuild the fine-zone resource read by mobility_core.zone_resolver.
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 zones:
 	@test -d "data/PROGEDO 2023" || { \
@@ -949,6 +973,69 @@ status:
 	else \
 		echo "run=inactif"; \
 	fi
+## ── Plateforme d'expériences (ticket 035) ──────────────────────────────────────────────
+## Tout passe par `python -m experiences` dans le conteneur controller (services requis pour
+## préparer un jeu — OTP/OSMnx — et pour un décideur passerelle ; un décideur local n'a besoin
+## de rien). Design : docs/arch/plateforme-experiences.md.
+EXPERIENCES_PY = docker compose exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml controller python -m experiences
+
+## Prépare un jeu de déplacements enregistré. Usage : make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1 [JOUR=2026-03-16] [CONCURRENCE=8]
+jeu:
+	@test -n "$(POP)" -a -n "$(NOM)" || { echo "Usage : make jeu POP=<dossier ou fichier population> NOM=<nom du jeu> [JOUR=AAAA-MM-JJ]"; exit 1; }
+	@mkdir -p data/jeux
+	$(EXPERIENCES_PY) preparer-jeu --population $(POP:data/population/%=/data/eqasim-output/%) --nom $(NOM) $(if $(JOUR),--jour $(JOUR),) $(if $(CONCURRENCE),--concurrence $(CONCURRENCE),)
+
+## Consulte un jeu : make jeu-consulter NOM=v5_j1 [PERSONNE=418]
+jeu-consulter:
+	$(EXPERIENCES_PY) consulter-jeu --nom $(NOM) $(if $(PERSONNE),--personne $(PERSONNE),)
+
+## Vérifie la péremption d'un jeu : make jeu-verifier NOM=v5_j1
+jeu-verifier:
+	$(EXPERIENCES_PY) verifier-jeu --nom $(NOM)
+
+## L'offre TC d'un autre jour est-elle celle du jeu ? METHODE=gtfs (défaut : les courses proposées
+## existent-elles ce jour dans les feeds, validité par déplacement, aucun service requis) ou
+## METHODE=moteurs (OTP sur un échantillon). DECLARER=1 écrit EQUIVALENCES.yaml à côté du jeu.
+## make jeu-verifier-jours NOM=v5_j1 JOUR=2026-03-17 [METHODE=gtfs|moteurs] [ECHANTILLON=100] [DECLARER=1]
+jeu-verifier-jours:
+	$(EXPERIENCES_PY) verifier-jours --nom $(NOM) --jour $(JOUR) $(if $(METHODE),--methode $(METHODE),) $(if $(ECHANTILLON),--echantillon $(ECHANTILLON),) $(if $(DECLARER),--declarer,)
+
+## Recharge la passerelle LLM (api + worker) — nécessaire après un ajout dans mobility_llm/src/mobility_llm/prompts/prompts.yaml
+passerelle-recharger:
+	docker compose restart api worker
+
+## Valide et range une expérience : make experience-definir FICHIER=chemin/experience.yaml
+experience-definir:
+	$(EXPERIENCES_PY) definir $(FICHIER)
+
+## Estime le coût avant lancement : make experience-estimer EXP=<nom>
+experience-estimer:
+	$(EXPERIENCES_PY) estimer --experience $(EXP)
+
+## Lance (ou reprend avec REPRENDRE=1) une expérience sans simulateur : make experience-lancer EXP=<nom> [REPRENDRE=1] [ACCEPTER_PERIME=1]
+experience-lancer:
+	@mkdir -p data/experiences
+	$(EXPERIENCES_PY) lancer --experience $(EXP) $(if $(REPRENDRE),--reprendre,) $(if $(ACCEPTER_PERIME),--accepter-perime,)
+
+experience-reprendre:
+	@$(MAKE) experience-lancer EXP=$(EXP) REPRENDRE=1
+
+## Pause / arrêt propre de l'exécution en cours : make experience-pause EXP=<nom> · make experience-arreter EXP=<nom>
+experience-pause:
+	$(EXPERIENCES_PY) pause --experience $(EXP)
+experience-arreter:
+	$(EXPERIENCES_PY) arreter --experience $(EXP)
+
+## Registre des expériences et exécutions : make registre [TRIER=couverture] [FILTRER=decideur=gemini]
+registre:
+	$(EXPERIENCES_PY) registre $(if $(TRIER),--trier $(TRIER),) $(if $(FILTRER),--filtrer $(FILTRER),)
+
+## Compare deux exécutions (refuse si non comparables) : make comparer A=<dossier> B=<dossier>
+comparer:
+	$(EXPERIENCES_PY) comparer $(A) $(B)
+
+.PHONY: passerelle-recharger jeu jeu-consulter jeu-verifier jeu-verifier-jours experience-definir experience-estimer experience-lancer experience-reprendre experience-pause experience-arreter registre comparer
+
 	@echo "current=$$(readlink experiments/current 2>/dev/null || echo '-')"
 
 ## Arrête le run GAMA en cours SANS toucher au reste de la pile (api, worker, redis…).

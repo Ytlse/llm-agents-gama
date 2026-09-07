@@ -63,7 +63,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.population_reference import (  # noqa: E402
+from mobility_core.population_reference import (  # noqa: E402
     COURONNES, MIN_AGE, OUT_OF_PERIMETER, household_targets, household_weight)
 from scripts.AAMAS.reference_marges import (  # noqa: E402
     AGE_CLASSES, GENRES, JOINT_TARGET, MARGES_PERSONNE, MARGES_TARGET, MOTORISATION,
@@ -835,7 +835,7 @@ def run_control(population_path: Path, borne: float, n_min: int, n_min_cellule: 
 
     zones = None
     try:
-        from llm_module.core.residence_zone import CommunalZones
+        from mobility_core.residence_zone import CommunalZones
         zones = CommunalZones.load()
     except Exception as exc:  # ressource absente : le trait fait foi, la géométrie est un secours
         logger.warning("géométrie des couronnes indisponible (%s) — le trait `residence_zone` seul fait foi", exc)

@@ -78,9 +78,10 @@ llm-agents/data/otp_cache/*
 scripts/general/cache/*
 data/cache/*
 
-# Build artefact non stable (régénéré à chaque `pip install -e`) ; le reste
-# du répertoire egg-info reste versionné.
-llm_module/llm_gateway.egg-info/SOURCES.txt
+# Métadonnées de build (régénérées à chaque `pip install -e`) : jamais versionnées.
+*.egg-info/
+build/
+dist/
 
 # ============================================================
 # Données OTP / GTFS / réseau temporaires
@@ -112,12 +113,12 @@ scripts/data/population/Temp/*
 # Couche de zones fines dérivée de l'enquête EMC² (ProGEDO / lil-1750, accès
 # restreint). Même statut que sa source, qui n'est pas versionnée : on la
 # régénère avec `make zones` plutôt que de la committer.
-llm_module/data/zf_zones.gpkg
-llm_module/data/zf_zones.meta.json
+mobility_core/src/mobility_core/data/zf_zones.gpkg
+mobility_core/src/mobility_core/data/zf_zones.meta.json
 
 # Loi du type de logement par zone fine, dérivée de la même enquête (action A2).
 # Même statut, même raison : `make housing-type` la régénère.
-llm_module/data/zf_housing_type.json
+mobility_core/src/mobility_core/data/zf_housing_type.json
 
 data/insee/*
 data/PROGEDO 2023/*
@@ -151,3 +152,16 @@ docs/slides/README.md
 # pas dans git — décision du 2026-09-02. Ce qui se versionne dans git est l'artefact scellé
 # (data/population/population_1000_AAMAS/) et sa documentation.
 docs/traces/*
+
+# Ticket 035 — jeux de déplacements enregistrés et résultats d'exécution : sur disque, pas dans git
+# (les définitions d'expériences, elles, se versionnent : data/experiences/<nom>/experience.yaml)
+data/jeux/
+data/experiences/*/executions/
+# copie de llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
+.config.yaml.applique
+
+# Caches d'outillage
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+llm_gateway/site/

@@ -1,0 +1,21 @@
+# Contexte de build = racine du dépôt pour les images du gateway (llm_gateway/Dockerfile,
+# services api/worker/flower). Seuls les trois paquets Python entrent dans le contexte :
+# sans cette liste, Docker enverrait les données, caches et expériences (plusieurs Go).
+# Les autres images (controller, eqasim, otp) ont leur propre contexte et ne lisent pas ce fichier.
+#
+# Pas de motif `**/…` global : il forcerait BuildKit à parcourir tout le dépôt pour l'évaluer.
+*
+!llm_gateway/pyproject.toml
+!llm_gateway/README.md
+!llm_gateway/requirements.txt
+!llm_gateway/src
+!mobility_core/pyproject.toml
+!mobility_core/README.md
+!mobility_core/src
+!mobility_llm/pyproject.toml
+!mobility_llm/README.md
+!mobility_llm/src
+llm_gateway/src/**/__pycache__
+mobility_core/src/**/__pycache__
+mobility_llm/src/**/__pycache__
+mobility_core/src/mobility_core/data/zf_zones.gpkg

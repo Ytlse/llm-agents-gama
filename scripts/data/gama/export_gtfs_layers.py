@@ -34,7 +34,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.data.gama import gtfs_traces  # noqa: E402
 
 INCLUDES = REPO_ROOT / "GAMA" / "CityTransport" / "includes"
-PERIMETRE = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
+PERIMETRE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 
 # Les trois réseaux du périmètre. Tisséo et le TER dans leur export en service ;
 # liO dans son feed annuel, le seul qui couvre la date simulée (l'export de
@@ -264,7 +264,7 @@ def couverture(couche_routes, couche_stops, journal=print) -> dict:
               "mailles_5km": {"dans_le_perimetre": len(dans_le_perimetre), "avec_arret": len(mailles),
                               "part": round(part_mailles, 4)}}
 
-    zones = REPO_ROOT / "llm_module" / "data" / "zf_zones.gpkg"
+    zones = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
     if zones.exists():
         zf = gpd.read_file(zones).to_crs("EPSG:4326")
         avec = gpd.sjoin(zf[["geometry"]], couche_stops[["geometry"]], predicate="contains", how="inner")

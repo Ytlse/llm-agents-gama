@@ -67,7 +67,7 @@ ACTIONS = [
              "l'écart résiduel diminuant avec la taille comme du bruit de tirage. Côté "
              "journal, move_logger.py écrit le libellé porté par le persona et vide "
              "quand il n'y en a pas ; les modalités sont déclarées EN UN SEUL POINT "
-             "(llm_module/core/housing_type.py), partagé par la génération, le journal "
+             "(mobility_core/src/mobility_core/housing_type.py), partagé par la génération, le journal "
              "et la page. L'AXE EST PEUPLÉ depuis que la page épingle le run du "
              "2026-07-31 : 302 individuel isolé, 219 petit collectif, 211 grand "
              "collectif, 143 individuel accolé. Il a fallu attendre un run, et c'était "
@@ -222,7 +222,7 @@ ACTIONS = [
                "centre) exigent un point → zone fine. La couche ZF existe dans les "
                "données PROGEDO mais n'est pas exploitable à l'exécution.",
      "cost": "1 j", "unlocks": "Variables géo du volet 3",
-     "done": "llm_module/core/zone_resolver.py rattache un point à sa zone par jointure "
+     "done": "mobility_core/src/mobility_core/zone_resolver.py rattache un point à sa zone par jointure "
              "point-dans-polygone, et en dérive les six variables géo à la formule de "
              "l'entraînement — distance entre centroïdes, imputation intra-zone — et non "
              "à vol d'oiseau, qui donnait un facteur 2 sur les trajets intra-zone. La "
@@ -275,7 +275,7 @@ ACTIONS = [
                "move_logger.py : 820 m d'écart, qui déplacent les couronnes de résidence.",
      "cost": "15 min", "unlocks": "Cohérence lieu de résidence entre volets 1 et 3",
      "done": "move_logger.py ne déclare plus de centre : il lit celui de "
-             "feature_spec.json via llm_module/core/geo_reference.py, unique point de "
+             "feature_spec.json via mobility_core/src/mobility_core/geo_reference.py, unique point de "
              "lecture du bloc geo_reference — le même que celui sur lequel le résolveur "
              "de zone fine (A7) refuse de démarrer en cas de divergence. Le spec étant "
              "produit depuis des données d'accès restreint, son absence est prévue : le "
@@ -1191,7 +1191,7 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
         })
 
     prompts_path = manifest.path_of("arms.calibration.prompts_yaml")
-    src = manifest.track("calibration.prompts", prompts_path or "llm_module/prompts/prompts.yaml",
+    src = manifest.track("calibration.prompts", prompts_path or "mobility_llm/prompts/prompts.yaml",
                          "Variantes de prompt livrées à la simulation")
     variants = frames.read_prompt_variants(src.path) if src.exists else {}
 

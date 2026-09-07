@@ -213,7 +213,7 @@ def strip_user_block(text: str) -> tuple[str, dict]:
 def bare_system_prompt() -> str:
     """La variante `b_min` de prompts.yaml — le rôle est déjà défini là-bas."""
     import yaml
-    doc = yaml.safe_load((REPO_ROOT / "llm_module/prompts/prompts.yaml")
+    doc = yaml.safe_load((REPO_ROOT / "mobility_llm/prompts/prompts.yaml")
                          .read_text(encoding="utf-8")) or {}
     node = (doc.get("prompts") or {}).get(SYSTEM_VARIANT)
     if not node:
@@ -397,7 +397,7 @@ def cmd_replay(args) -> int:
     config = RunConfig(eval_provider=args.provider, eval_model=args.model,
                        eval_temp=0.0, eval_batch_max=BATCH,
                        prod_option_handling=True, max_retry_wait=30.0,
-                       schemas_path=str(REPO_ROOT / "llm_module/prompts/schemas.json"),
+                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/prompts/schemas.json"),
                        category="itinary_multi_agent")
     schema = json.loads(Path(config.schemas_path).read_text(
         encoding="utf-8"))[config.category]

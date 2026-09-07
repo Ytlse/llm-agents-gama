@@ -2,6 +2,10 @@
 
 **Date** : 2026-07-07
 **Statut** : ✅ implémenté le 2026-07-07 (phases 0 à 5, cf. §5 pour les écarts au plan)
+**Suite** : le 2026-09-07, le [ticket 037](../tickets/ticket_037_llm_module_en_trois_bibliotheques.md)
+a découpé ce package en trois (`llm_gateway`, `mobility_core`, `mobility_llm`) ; `llm_module/` est
+devenu une coquille de compatibilité dépréciée. Ce CR reste l'historique de l'étape précédente ;
+les chemins `llm_module/...` qu'il cite sont ceux de juillet 2026.
 **Origine** : relecture complète du module (~5 300 lignes) du 2026-07-07, qui a aussi produit
 4 correctifs de bugs (cf. [changelog](../changelog.md)). Ce CR traite le chantier structurel
 identifié à cette occasion.

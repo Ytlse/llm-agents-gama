@@ -10,6 +10,21 @@
 
 ---
 
+## Paquets Python du dépôt (hors Docker)
+
+Depuis le 2026-09-07 (ticket 037), le code LLM vit dans trois paquets installables, à la racine :
+`llm_gateway/` (gateway générique), `mobility_core/` (domaine EMC²), `mobility_llm/` (catégories LLM
+de la mobilité). Le contrôleur, les scripts et les tests les importent ; en local il faut les
+installer en editable dans le venv de `llm-agents` :
+
+```bash
+llm-agents/.venv/bin/python -m pip install -e ./mobility_core -e ./llm_gateway[test] -e ./mobility_llm
+```
+
+Puis `make test-all` (les trois suites + contrats d'architecture), `make lint`, `make typecheck`.
+Les images Docker `api`/`worker` embarquent les trois paquets (`llm_gateway/Dockerfile`, contexte
+racine) ; en développement, `docker-compose.yml` monte les sources par-dessus.
+
 ## Ordre de démarrage (mode IHM)
 
 ```
@@ -145,7 +160,7 @@ docker compose up --build
 | `travel_time.py` | Calcul des temps de trajet pour la population |
 | `route_worker.py` | Worker de calcul d'itinéraires en batch |
 | `cerema_values.yaml` | Valeurs de référence CEREMA EMC² 2023 pour calibration |
-| `population_emc2_2023.yaml` | **Cadrage** de la population interrogée par l'enquête CEREMA — périmètre, âge minimum, poids de redressement, couronnes. Chargé et validé par `llm_module.core.population_reference` ; toute valeur y est recoupée sur les microdonnées (cf. [périmètre de population](../arch/perimetre-population.md)) |
+| `population_emc2_2023.yaml` | **Cadrage** de la population interrogée par l'enquête CEREMA — périmètre, âge minimum, poids de redressement, couronnes. Chargé et validé par `mobility_core.population_reference` ; toute valeur y est recoupée sur les microdonnées (cf. [périmètre de population](../arch/perimetre-population.md)) |
 | `audit_perimetre.py` | `make audit-perimetre` — les neuf écarts de base entre population enquêtée et population simulée. Sortie 0 conforme / 2 à corriger / **3 axe non mesurable** |
 
 ### Infrastructure / debug (`scripts/infra/`)

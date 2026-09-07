@@ -2,8 +2,8 @@
 
 Ajoute au sys.path :
 - la **racine du dépôt**, pour les tests qui importent la chaîne complète du
-  contrôleur (laquelle importe `llm_module`, packagé à la racine) — comme en
-  Docker où `llm_module` est installé sur le path ;
+  contrôleur (laquelle importe `mobility_core`, packagé à la racine) — comme en
+  Docker où `mobility_core` est installé sur le path ;
 - le dossier **`llm-agents/`** lui-même, où vivent les modules top-level
   `backpressure`, `settings`, `world`, etc. Sans lui, `pytest` lancé depuis la
   racine du dépôt échoue à la collecte (`ModuleNotFoundError: backpressure` /

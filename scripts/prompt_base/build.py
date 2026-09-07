@@ -140,8 +140,8 @@ from urban_mobility_agents.simulation_controller import (  # noqa: E402
     _vehicle_mode)
 from urban_mobility_agents.agents.llm_agent import _build_profile_narrative  # noqa: E402
 
-from llm_module.core.models import AgentSpec  # noqa: E402
-from llm_module.prompts.manager import PromptManager  # noqa: E402
+from llm_gateway.core.models import AgentSpec  # noqa: E402
+from mobility_llm import prompt_manager as _mobility_prompt_manager  # noqa: E402
 
 CATEGORY = "itinary_multi_agent"
 
@@ -327,7 +327,7 @@ async def generate(args) -> int:
     # 100 % des routages (`max_transfers` inconnu d'`OTPTripHelper`). Reproduire ce choix
     # à la main serait une divergence en attente : on appelle la fabrique.
     helper = init_static_data().trip_helper
-    manager = PromptManager()
+    manager = _mobility_prompt_manager()
     rng = random.Random(args.shuffle_seed)
     semaphore = asyncio.Semaphore(args.concurrency)
 

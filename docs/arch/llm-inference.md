@@ -1,6 +1,17 @@
 # Architecture LLM — Inférence et load balancing
 
-Le module LLM (`llm_module/`) fait office de répartiteur de charge haute performance pour les appels vers les API LLM externes. Il découple le controller des fournisseurs et absorbe les variations de débit.
+Le gateway LLM (paquet `llm_gateway/`, ex-`llm_module`) fait office de répartiteur de charge haute performance pour les appels vers les API LLM externes. Il découple le controller des fournisseurs et absorbe les variations de débit.
+
+> **Depuis le 2026-09-07 (ticket 037), `llm_module` est découpé en trois paquets** : `llm_gateway`
+> (le gateway générique décrit ici, sans aucun mot de mobilité), `mobility_core` (le domaine de
+> l'enquête EMC² : couronnes, zones fines, hiérarchie des modes, vélo, logement) et `mobility_llm`
+> (les catégories LLM de la mobilité : persona, templates, schémas, variantes de prompt, choix modal,
+> métriques métier — enregistrées auprès du gateway par l'entry point `llm_gateway.categories`).
+> `llm_module/` n'est plus qu'une coquille de compatibilité qui réexporte et émet un
+> `DeprecationWarning`. La documentation propre au gateway (tutoriel, guides, référence des
+> réglages, métriques, ADR) vit dans `llm_gateway/docs/` (`mkdocs serve`) ; cette page garde
+> l'explication du pipeline vu depuis la simulation. Les chemins ci-dessous sont ceux des
+> nouveaux paquets.
 
 ---
 
@@ -122,7 +133,7 @@ equal to `8192`"``) qui faisait échouer tout le batch. Trois mécanismes s'arti
    `_parse_max_tokens_limit`), le worker apprend N via
    `learn_provider_max_output_tokens()` : config en mémoire ajustée immédiatement
    **et** ligne `max_output_tokens` écrite dans `providers.yaml` (édition chirurgicale
-   préservant les commentaires, écriture atomique — le bind mount `./llm_module`
+   préservant les commentaires, écriture atomique — le bind mount `./llm_gateway/src/llm_gateway`
    persiste la valeur sur l'hôte). Le batch est alors rejoué : le prochain essai est
    plafonné correctement ou part sur un autre provider via la rotation. Si la limite
    était déjà connue (rien de nouveau à apprendre), l'échec reste définitif pour ne
@@ -159,7 +170,7 @@ avec `finishReason == MAX_TOKENS`. Ce check attrape aussi le cas des modèles «
 #### Source des prompts système
 
 Le texte du prompt système n'est plus codé en dur dans les templates Jinja. Il provient
-d'une **source unique** : `llm_module/prompts/prompts.yaml`, fusionnée avec l'historique
+d'une **source unique** : `mobility_llm/src/mobility_llm/prompts/prompts.yaml`, fusionnée avec l'historique
 du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipynb`, qui y
 écrit chaque variante calibrée).
 
@@ -177,7 +188,7 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
 
 Pour la catégorie `itinary_multi_agent`, le LLM **ne choisit plus** d'itinéraire : il
 attribue à *chaque* option proposée la probabilité (en %) que le persona la retienne, la
-somme valant 100. Le schéma (`llm_module/prompts/schemas.json`) exige donc un tableau
+somme valant 100. Le schéma (`mobility_llm/src/mobility_llm/prompts/schemas.json`) exige donc un tableau
 `probabilities` de `{index, mode, probability, reason}` — une entrée par option, `0` pour
 une option jugée impossible — en lieu et place de l'ancien `chosen_index`.
 
@@ -191,7 +202,7 @@ sa raison — « une phrase justifiant la probabilité de CETTE option par rappo
 autres ». Conséquence à ne pas oublier : la sortie est ~5 fois plus longue, d'où le
 relèvement de `max_tokens` (voir ci-dessus).
 
-Le post-traitement vit dans `llm_module/core/mode_choice.py`, partagé par tous les
+Le post-traitement vit dans `mobility_llm/src/mobility_llm/mode_choice.py`, partagé par tous les
 consommateurs pour qu'ils appliquent la **même** politique de décision :
 
 | Étape | Fonction | Rôle |
@@ -408,7 +419,7 @@ les 1 000 agents partagent une seule météo** — le régresseur a une variance
 `urban_mobility_agents/utils/weather_draw.py` (activé par `Settings.weather_per_agent_dates`)
 tire, pour chaque agent, un jour de l'année dans la fenêtre déclarée
 par `Settings.weather_window` (`"enquete"` par défaut — la fenêtre de collecte EMC²,
-lue depuis `llm_module.core.population_reference`, pas recopiée en dur), et ne substitue
+lue depuis `mobility_core.population_reference`, pas recopiée en dur), et ne substitue
 que la **date** du bulletin lu par `weather_loader.get_weather` : l'heure du départ est
 conservée (le bulletin se lit par créneaux de 3 h, cf. ci-dessus), et tout le reste de la
 simulation — horaires GTFS, véhicules, itinéraires, agendas — reste sur la journée
@@ -569,7 +580,7 @@ un pipeline LLM qui ne draine plus :
 
 - **Worker gateway** : quand tous les providers sont saturés/en cooldown et qu'un batch
   est abandonné, avec la liste des providers en cooldown (`task_worker.py`).
-- **SDK client** (`llm_module/sdk.py`) : après 10 tâches échouées d'affilée côté
+- **SDK client** (`llm_gateway/src/llm_gateway/sdk/client.py`) : après 10 tâches échouées d'affilée côté
   controller (timeouts gateway inclus). Cette alarme **arme la backpressure SDK**
   (ci-dessous).
 - **Backpressure `/sync`** (`handle/application.py`) : alignée sur les seuils du mode
@@ -599,7 +610,7 @@ problèmes distincts :
    itinéraire de la liste » (`llm_fallback`) — sur 24 h de rupture, un biais modal
    massif et non maîtrisé dans `moves.csv`.
 
-Le **disjoncteur client** (`llm_module/sdk.py`, réglages
+Le **disjoncteur client** (`llm_gateway/src/llm_gateway/sdk/client.py`, réglages
 `agent.remote_llm_circuit_failure_threshold` / `remote_llm_circuit_probe_interval`)
 répond aux deux en choisissant **l'attente, pas la dégradation** : après N échecs
 consécutifs (défaut 10) — **erreurs réseau incluses** (gateway injoignable, 5xx à la
@@ -731,7 +742,7 @@ deadlock (`Inhabitant.gaml`).
 ### Backpressure SDK (drainage sur alarme)
 
 Distincte de la backpressure `/sync` (qui freine le rythme des steps GAMA), la
-backpressure **SDK** (`llm_module/sdk.py`) protège la gateway déjà saturée. Quand
+backpressure **SDK** (`llm_gateway/src/llm_gateway/sdk/client.py`) protège la gateway déjà saturée. Quand
 l'alarme « 10 tâches échouées d'affilée » se déclenche, le client suspend toute nouvelle
 soumission LLM (`_await_backpressure_drain`) tant que la pile in-flight n'est pas retombée
 sous `remote_llm_backpressure_ratio × worker_concurrency` (défaut **20 %**, soit 4 tâches

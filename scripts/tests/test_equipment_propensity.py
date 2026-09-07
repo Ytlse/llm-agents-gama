@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_module.core.equipment_propensity import (
+from mobility_core.equipment_propensity import (
     DRIVING_AGE,
     DRIVING_LICENSE,
     FEATURE_BASE,
@@ -150,7 +150,7 @@ class TestRessource:
 
     @pytest.mark.parametrize("spec", [PT_SUBSCRIPTION, DRIVING_LICENSE])
     def test_ressource_du_depot_se_charge_et_predit(self, spec):
-        resource = Path("llm_module/data") / spec.resource
+        resource = Path("mobility_core/src/mobility_core/data") / spec.resource
         if not resource.exists():
             pytest.skip(f"{resource} absente — `make equipment-propensity`")
         law = PropensityLaw.load(spec)
@@ -161,7 +161,7 @@ class TestRessource:
     def test_les_paliers_sont_retenus_pour_labonnement_et_pas_pour_le_permis(self):
         """L'arbitrage a tranché dans les deux sens — c'est ce qui le rend crédible."""
         for spec, expected in ((PT_SUBSCRIPTION, True), (DRIVING_LICENSE, False)):
-            resource = Path("llm_module/data") / spec.resource
+            resource = Path("mobility_core/src/mobility_core/data") / spec.resource
             if not resource.exists():
                 pytest.skip(f"{resource} absente")
             law = PropensityLaw.load(spec)

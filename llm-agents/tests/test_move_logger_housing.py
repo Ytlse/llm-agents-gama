@@ -19,7 +19,7 @@ import asyncio
 
 import pytest
 
-from llm_module.core.housing_type import LABEL_BY_KEY, REFERENCE_KEYS, TRAIT_KEY
+from mobility_core.housing_type import LABEL_BY_KEY, REFERENCE_KEYS, TRAIT_KEY
 from models import Location, PersonalIdentity, Person
 from urban_mobility_agents.utils.move_logger import CSV_HEADERS, MoveLogger, _housing_type
 

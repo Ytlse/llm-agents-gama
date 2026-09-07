@@ -15,7 +15,7 @@ sur le même fil :
   (mal) pour une autre colonne.
 
 Quatre gardes contre la vacuité : les effectifs sont assertés avant toute boucle ; les
-libellés de production sont **lus dans leur source** (`llm_module.core.mode_hierarchy`,
+libellés de production sont **lus dans leur source** (`mobility_core.mode_hierarchy`,
 ticket 022) plutôt que recopiés ; le format de l'alarme est confronté à l'expression
 régulière de `scripts/errors.py` — une alarme que `make error` ne relit pas est une
 alarme inutile ; et le garde-fou de couverture est exercé **dans les deux sens**, vert
@@ -63,7 +63,7 @@ INCONNU = "Trottinette partagée"
 def _journal_labels() -> dict[str, str]:
     """Libellés de « Mode de transport Choisi », LUS DANS LEUR SOURCE DE PRODUCTION.
 
-    Depuis le ticket 022, `llm_module.core.mode_hierarchy` est le seul endroit du dépôt
+    Depuis le ticket 022, `mobility_core.mode_hierarchy` est le seul endroit du dépôt
     où ces libellés sont décidés : `move_logger._CANONICAL_FR` les y lit, et n'est plus
     un littéral relisible par AST. On interroge donc la source elle-même — elle
     s'importe sans tirer `settings` (donc sans repointer `experiments/current`), et un
@@ -76,7 +76,7 @@ def _journal_labels() -> dict[str, str]:
     ressource est là et le contrôle est strict, soit elle manque et le test VÉRIFIE que
     l'absence est dite avant de passer son tour.
     """
-    from llm_module.core.mode_hierarchy import hierarchy
+    from mobility_core.mode_hierarchy import hierarchy
 
     return dict(hierarchy().journal_label)
 
@@ -88,7 +88,7 @@ def _exiger_hierarchie() -> None:
     un contrôle vert. Ici, l'absence doit d'abord se lire dans le retour de
     `check_covers_hierarchy()`, qui refuse de rendre "" quand il n'a pas pu vérifier.
     """
-    pytest.importorskip("llm_module.core.mode_hierarchy",
+    pytest.importorskip("mobility_core.mode_hierarchy",
                         reason="hiérarchie des modes (ticket 022) absente du dépôt")
     raison = check_covers_hierarchy()
     if "n'a PAS été vérifiée" in raison:

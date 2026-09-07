@@ -20,7 +20,7 @@ former. Ici, les listes de production sont **lues dans leur source**, et le test
 jour où l'une d'elles gagne un mode que la loss ne connaît pas.
 
 **Depuis le 2026-09-04 (ticket 022), la source est unique.** Les cinq listes littérales de
-`move_logger` ont disparu : le dépôt lit `llm_module/data/mode_hierarchy_emc2.json`, gelé
+`move_logger` ont disparu : le dépôt lit `mobility_core/data/mode_hierarchy_emc2.json`, gelé
 depuis l'annexe « Hiérarchie des modes » du rapport AUAT/CEREMA (p. 53) et contrôlé sur les
 microdonnées. Ce fichier de test lit donc **la ressource de production**, et il vérifie en
 plus qu'aucune cascade de modes n'a été réintroduite à la main dans `move_logger`.
@@ -40,8 +40,8 @@ from pathlib import Path
 
 import pytest
 
-from llm_module.core.mode_choice import _MODE_KEYWORDS, canonical_mode
-from llm_module.core.mode_hierarchy import DEFAULT_RESOURCE, hierarchy
+from mobility_llm.mode_choice import _MODE_KEYWORDS, canonical_mode
+from mobility_core.mode_hierarchy import DEFAULT_RESOURCE, hierarchy
 from scripts.models_influence.prompt_calibration_lib import MODE_KEYWORDS, categorize_mode
 from scripts.synthesis.frames import CHOSEN_MODE_MAP
 from scripts.synthesis.model_on_common_set import CANONICAL_TO_CAT
@@ -85,7 +85,7 @@ def _listes_de_production() -> dict[str, set[str]]:
 
     `urban_mobility_agents.utils.move_logger` importe `settings` : on ne l'importe pas
     depuis un test. Mais il n'y a plus de littéral à relire dans sa source — il dérive ses
-    cinq ensembles de `llm_module/data/mode_hierarchy_emc2.json`, exactement le fichier lu
+    cinq ensembles de `mobility_core/data/mode_hierarchy_emc2.json`, exactement le fichier lu
     ici. Le test compare donc la loss à la production elle-même.
     """
     familles = hierarchy().legs_by_family
@@ -129,7 +129,7 @@ def test_move_logger_ne_reecrit_pas_sa_propre_cascade():
                 litteraux.append(cible.id)
     assert not litteraux, (
         f"{litteraux} sont redevenus des littéraux dans move_logger.py. La hiérarchie des "
-        "modes a UNE source : llm_module/data/mode_hierarchy_emc2.json.")
+        "modes a UNE source : mobility_core/data/mode_hierarchy_emc2.json.")
     assert "primary_label" in source, (
         "`_plan_transport_mode` ne consulte plus la hiérarchie : il a probablement "
         "retrouvé une cascade de `if`.")

@@ -95,7 +95,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.population_reference import COURONNES, MIN_AGE, OUT_OF_PERIMETER  # noqa: E402
+from mobility_core.population_reference import COURONNES, MIN_AGE, OUT_OF_PERIMETER  # noqa: E402
 from scripts.AAMAS import control_population as ctl  # noqa: E402
 from scripts.AAMAS.reference_marges import (  # noqa: E402
     JOINT_TARGET, MARGES_PERSONNE, MARGES_TARGET, MOTORISATION, Marge, ReferenceError,
@@ -122,7 +122,7 @@ DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v5
 PERIMETRE = {
     "definition": "453 communes de l'enquête EMC² Toulouse 2023, six départements "
                   "(31, 32, 81, 82, 09, 11), polygone communal — pas de rayon",
-    "table_communes": "llm_module/data/commune_couronne.json",
+    "table_communes": "mobility_core/src/mobility_core/data/commune_couronne.json",
     "departements_attendus": {"31": 346, "32": 38, "81": 27, "82": 22, "09": 10, "11": 10},
 }
 
@@ -140,7 +140,7 @@ DESCENTE_MARGES: tuple[str, ...] = ("occupation", "classe_age", "motorisation_me
                                     *MARGES_PERSONNE)
 
 # Marges comptées en base MÉNAGE : chaque persona y pèse `1 / taille déclarée de son ménage`,
-# comme dans le contrôle (`llm_module.core.population_reference.household_weight`). Compter ces
+# comme dans le contrôle (`mobility_core.population_reference.household_weight`). Compter ces
 # marges à poids 1 comparerait une population de personnes à une cible de ménages — l'erreur
 # de base que la page de contrôle interdit explicitement.
 DESCENTE_MARGES_MENAGE: frozenset[str] = frozenset({"motorisation_menage"})
@@ -218,8 +218,8 @@ def ensure_residence_zone(records: list[dict]) -> Counter:
     counts: Counter = Counter(deja_pose=len(records) - len(missing))
     if not missing:
         return counts
-    from llm_module.core.residence_zone import CouronneTable
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.residence_zone import CouronneTable
+    from mobility_core.zone_resolver import ZoneResolver
     from scripts.data.population.enrich_residence_zone import enrich
 
     feature_spec = REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"

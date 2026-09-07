@@ -20,7 +20,7 @@ deux ressources.
 
 ## Ce qu'il écrit
 
-`llm_module/data/pt_subscription.json` et `llm_module/data/driving_license.json` :
+`mobility_core/data/pt_subscription.json` et `mobility_core/data/driving_license.json` :
 coefficients du logit, vocabulaire d'occupation, médiane de densité du périmètre, tables
 de recette hors-échantillon, bloc de provenance. **Aucune microdonnée** — c'est ce qui
 permet de committer les ressources alors que leur source est d'accès restreint
@@ -63,7 +63,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupKFold
 
-from llm_module.core.equipment_propensity import (
+from mobility_core.equipment_propensity import (
     DRIVING_LICENSE,
     FEATURE_BASE,
     FEATURE_KNOTS,
@@ -145,7 +145,7 @@ def load_people(root: Path) -> pd.DataFrame:
 
     men = men.copy()
     men["cars"] = pd.to_numeric(men["M6"], errors="coerce")
-    geo, _, _ = build_geo(root / "llm_module" / "data" / "zf_zones.gpkg", men)
+    geo, _, _ = build_geo(root / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
     zone = geo.reindex(men["ZFM"]).reset_index(drop=True)
     men["density"] = zone["density_hh_km2"].values
     men["dist_center"] = zone["dist_center_km"].values

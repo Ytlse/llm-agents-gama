@@ -80,7 +80,7 @@ def _couronne_of(zones, lat: float, lon: float) -> str:
 def measure_pairs(population: list[dict], cache_dir: Path, route_all: bool) -> dict:
     import numpy as np
     import osmnx as ox
-    from llm_module.core.residence_zone import CommunalZones
+    from mobility_core.residence_zone import CommunalZones
     from models import Location
     from population_utils import collect_scheduling_pairs
     from trip_helper.osmnx_direct import _crow_flies_m, _route_sync

@@ -29,7 +29,7 @@ import math
 
 import pytest
 
-from llm_module.core.bike_ownership import (
+from mobility_core.bike_ownership import (
     ELECTRIC_BIKE,
     K_CLASSES,
     NO_BIKE,
@@ -284,7 +284,7 @@ class TestHorsCouche:
 
     def test_une_loi_degeneree_ne_rend_pas_la_derniere_classe(self):
         """Le garde-fou, vu depuis le tirage lui-même."""
-        from llm_module.core.bike_ownership import draw_index
+        from mobility_core.bike_ownership import draw_index
         nan = float("nan")
         assert draw_index([nan] * 5, 0.5) is None
         assert draw_index([float("inf")] * 5, 0.5) is None
@@ -451,7 +451,7 @@ class TestBoutEnBout:
         monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
                             classmethod(lambda cls, resource=None: model))
         monkeypatch.setattr(
-            "llm_module.core.zone_resolver.ZoneResolver.load",
+            "mobility_core.zone_resolver.ZoneResolver.load",
             classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
         monkeypatch.setattr("sys.argv", ["enrich", str(path)])
 
@@ -472,7 +472,7 @@ class TestBoutEnBout:
         monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
                             classmethod(lambda cls, resource=None: model))
         monkeypatch.setattr(
-            "llm_module.core.zone_resolver.ZoneResolver.load",
+            "mobility_core.zone_resolver.ZoneResolver.load",
             classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
         monkeypatch.setattr("sys.argv", ["enrich", str(path), "--dry-run"])
 
@@ -505,7 +505,7 @@ class TestBoutEnBout:
         monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
                             classmethod(lambda cls, resource=None: model))
         monkeypatch.setattr(
-            "llm_module.core.zone_resolver.ZoneResolver.load",
+            "mobility_core.zone_resolver.ZoneResolver.load",
             classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
         monkeypatch.setattr("sys.argv", ["enrich", str(path), "--dry-run", "--check",
                                          "--rapport-json", str(rapport)])
@@ -543,7 +543,7 @@ class TestBoutEnBout:
         monkeypatch.setattr(enrich_module.BikeOwnershipModel, "load",
                             classmethod(lambda cls, resource=None: model))
         monkeypatch.setattr(
-            "llm_module.core.zone_resolver.ZoneResolver.load",
+            "mobility_core.zone_resolver.ZoneResolver.load",
             classmethod(lambda cls, resource=None, spec=None: _FakeResolver()))
         monkeypatch.setattr("sys.argv", ["enrich", str(path)])
 

@@ -35,7 +35,10 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 | [docs/arch/velo-equipement.md](docs/arch/velo-equipement.md) | Équipement vélo du persona : les trois étages appris sur EMC² (stock du ménage, attribution nominative, VAE), et les cibles réellement opposables à une population synthétique |
 | [docs/arch/vehicle-chain.md](docs/arch/vehicle-chain.md) | Cohérence de chaîne vélo/voiture : le véhicule reste où l'agent l'a garé |
 | [docs/arch/cache-memory.md](docs/arch/cache-memory.md) | Mémoire court/long terme, cache sémantique LLM |
-| [docs/arch/llm-module-package-refactor.md](docs/arch/llm-module-package-refactor.md) | CR (implémenté) : restructuration de llm_module en package (ports, injection, pyproject) |
+| [docs/arch/llm-module-package-refactor.md](docs/arch/llm-module-package-refactor.md) | CR de juillet 2026 (historique) : restructuration de l'ancien `llm_module` en package (ports, injection, pyproject) |
+| [llm_gateway/README.md](llm_gateway/README.md) · [docs mkdocs](llm_gateway/docs/) | **Gateway LLM générique** (paquet `llm-gateway`, ticket 037) : micro-batching, SWRR, disjoncteur, catégories enfichables par entry point, SDK. Aucun mot de mobilité dedans |
+| [mobility_core/README.md](mobility_core/README.md) | **Domaine EMC² Toulouse** (paquet `mobility-core`) : couronnes, zones fines, hiérarchie des modes, vélo, logement, cadrage de population et leurs ressources `data/` |
+| [mobility_llm/README.md](mobility_llm/README.md) | **Catégories LLM de la mobilité** (paquet `mobility-llm`) : persona, templates, schémas, variantes de prompt, choix modal, métriques métier — le bundle que le gateway charge |
 
 ### Observabilité et mesure
 

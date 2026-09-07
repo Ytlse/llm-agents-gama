@@ -13,7 +13,7 @@ de déplacements est écrite vide et l'axe correspondant de la page de synthèse
 **Le trait est imputé, pas observé.** Aucune source de la chaîne de génération ne le
 porte : ni eqasim, ni les tables INSEE mobilisées par le notebook. Il est donc tiré
 dans la loi que l'enquête EMC² observe **pour la zone fine du domicile, corrigée de la
-taille du ménage** (cf. `llm_module/core/housing_type.py` pour le détail, le levier de
+taille du ménage** (cf. `mobility_core/src/mobility_core/housing_type.py` pour le détail, le levier de
 taille du ticket 019 et les garde-fous). Trois conséquences à ne jamais taire :
 
 - la ventilation par type de logement de la page mesure un axe **imputé**, dont la
@@ -55,7 +55,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.housing_type import (
+from mobility_core.housing_type import (
     MODALITY_KEYS,
     SIZE_MAX,
     SIZE_TRAIT_KEY,
@@ -295,16 +295,16 @@ def main() -> int:
     parser.add_argument("population", type=Path, nargs="+",
                         help="Fichiers de population JSON à enrichir (modifiés en place)")
     parser.add_argument("--table", type=Path, default=None,
-                        help="Table du type de logement (défaut : llm_module/data/)")
+                        help="Table du type de logement (défaut : mobility_core/data/)")
     parser.add_argument("--zones", type=Path, default=None,
-                        help="Couche de zones fines (défaut : llm_module/data/)")
+                        help="Couche de zones fines (défaut : mobility_core/data/)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Calcule et rapporte sans réécrire les fichiers")
     parser.add_argument("--check", action="store_true",
                         help="Sort en échec si une cible du ticket 019 est hors tolérance")
     args = parser.parse_args()
 
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.zone_resolver import ZoneResolver
 
     feature_spec = REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"
     try:

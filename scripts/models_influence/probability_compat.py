@@ -7,7 +7,7 @@ itinéraire (`chosen_index`). Le prompt demande désormais une **probabilité pa
 `decision_index()` restitue l'ancienne grandeur — l'option que le modèle privilégie,
 c'est-à-dire la plus probable — pour que les analyses existantes continuent de mesurer
 ce qu'elles mesuraient. **Attention** : ce n'est pas ce que fait la simulation, qui
-*tire au sort* dans la distribution (`llm_module.core.mode_choice.draw_index`).
+*tire au sort* dans la distribution (`mobility_llm.mode_choice.draw_index`).
 
 ⚠ Ce que la bascule change pour ces notebooks, et qui mérite une reformulation :
 
@@ -37,7 +37,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from llm_module.core.mode_choice import (  # noqa: E402
+from mobility_llm.mode_choice import (  # noqa: E402
     argmax_index,
     canonical_mode,
     draw_index,

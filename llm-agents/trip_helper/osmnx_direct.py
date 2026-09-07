@@ -181,14 +181,14 @@ def _communal_zones():
     """Géométrie des couronnes, chargée une fois.
 
     ⚠ Import PARESSEUX, et c'est nécessaire : les réplicas `osmnx` embarquent ce module
-    dans leur image mais n'ont PAS `llm_module` sur leur path (ils ne montent que
+    dans leur image mais n'ont PAS `mobility_core` sur leur path (ils ne montent que
     `config/`). Un import en tête de fichier les ferait mourir au démarrage dès la
     prochaine reconstruction de l'image — panne différée, déclenchée par un
     `docker compose build` sans rapport. En mode HTTP, le réplica ne calcule que la
     durée réseau et n'appelle jamais `_make_travel_plan` : l'import n'a lieu que là où
-    `llm_module` existe (controller, tests).
+    `mobility_core` existe (controller, tests).
     """
-    from llm_module.core.residence_zone import CommunalZones
+    from mobility_core.residence_zone import CommunalZones
 
     return CommunalZones.load()
 
@@ -196,7 +196,7 @@ def _communal_zones():
 def _terminal_zone(lat: float, lon: float, end: str) -> str:
     """Couronne d'un bout de trajet ; `hors périmètre` est compté et alarmé une fois."""
     global _out_of_perimeter_alarm_on
-    from llm_module.core.population_reference import OUT_OF_PERIMETER
+    from mobility_core.population_reference import OUT_OF_PERIMETER
 
     zone = _communal_zones().classify(lat, lon)
     if zone == OUT_OF_PERIMETER:
@@ -243,7 +243,7 @@ def _make_travel_plan(
     # définition que le trait `residence_zone` du persona et que la colonne « Lieu de
     # résidence » du journal (ticket 028) : deux classements divergents feraient
     # facturer un stationnement de centre à un agent que le journal dit en 1ʳᵉ
-    # couronne, incohérence invisible dans les logs. L'import de `llm_module` reste
+    # couronne, incohérence invisible dans les logs. L'import de `mobility_core` reste
     # paresseux, dans `_communal_zones` — voir pourquoi là-bas.
     origin_zone = _terminal_zone(origin.lat, origin.lon, "access")
     dest_zone = _terminal_zone(destination.lat, destination.lon, "egress")

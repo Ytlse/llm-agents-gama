@@ -28,7 +28,7 @@ import json
 
 import pytest
 
-from llm_module.core.housing_type import (
+from mobility_core.housing_type import (
     MIN_RESOURCE_VERSION,
     MODALITY_KEYS,
     SIZE_MAX,
@@ -327,7 +327,7 @@ class TestCommande:
         monkeypatch.setattr(HousingTypeTable, "load",
                             classmethod(lambda cls, p=None: table))
         monkeypatch.setattr(
-            "llm_module.core.zone_resolver.ZoneResolver.load",
+            "mobility_core.zone_resolver.ZoneResolver.load",
             classmethod(lambda cls, r=None, s=None: _FakeResolver()))
 
     def test_dry_run_rapporte_sans_reecrire(self, tmp_path, monkeypatch, table, capsys):

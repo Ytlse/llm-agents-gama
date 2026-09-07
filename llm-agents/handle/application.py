@@ -29,7 +29,7 @@ from sim_clock import to_network_datetime, wall_clock
 from gama_models import GamaPersonData, MessageResponse, MessageType, WorldInitRequest, WorldInitResponse, WorldSyncRequest
 from urban_mobility_agents.core.scenario import BaseScenario, Observation
 from handle.websocket import WebSocketClient
-from llm_module.telemetry.alarms import fire_alarme
+from llm_gateway.telemetry.alarms import fire_alarme
 from settings import settings, FactorySettings
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import ORJSONResponse
@@ -161,7 +161,7 @@ def _population_perimeter() -> PopulationPerimeter:
     except Exception as exc:
         logger.error(f"[ALARME] [population] Périmètre des 453 communes indisponible ({exc!r}) : le "
                      "chargement refuse plutôt que de retomber sur un rectangle. Vérifiez "
-                     "llm_module/data/couronne_perimetre.geojson et commune_couronne.json.")
+                     "mobility_core/data/couronne_perimetre.geojson et commune_couronne.json.")
         raise
 
 

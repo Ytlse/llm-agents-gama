@@ -55,7 +55,7 @@ import pandas as pd
 
 from scripts.progedo_logit.build_mode_choice_dataset import find_project_root
 
-DEFAULT_RESOURCE = (Path(__file__).resolve().parents[2] / "llm_module" / "data"
+DEFAULT_RESOURCE = (Path(__file__).resolve().parents[2] / "mobility_core" / "src" / "mobility_core" / "data"
                     / "terminal_time_emc2.json")
 
 # `T3` du fichier trajets : mode utilisé. 21 = conducteur de véhicule particulier.
@@ -98,7 +98,7 @@ def crown_of_zone():
     code inconnu de la table rend `None` : la ligne sort des strates et reste dans la loi
     d'ensemble, comme avant — on ne devine pas une couronne.
     """
-    from llm_module.core.residence_zone import CouronneTable
+    from mobility_core.residence_zone import CouronneTable
 
     return CouronneTable.load().couronne_of_zf
 
@@ -241,7 +241,7 @@ def build(legs: pd.DataFrame) -> dict:
                       "recherche du stationnement)",
             "scope": "conducteur de véhicule particulier (T3 = 21) ; le passager ne "
                      "cherche pas de place",
-            "crown_definition": "llm_module.core.residence_zone.CouronneTable — zone "
+            "crown_definition": "mobility_core.residence_zone.CouronneTable — zone "
                                 "fine → secteur de tirage → couronne, la liste de "
                                 "communes de l'enquête (ticket 028) ; même définition "
                                 "que le trait `residence_zone` des personas",
@@ -298,8 +298,8 @@ def emit_yaml(doc: dict) -> str:
 
     Le bloc est **embarqué dans le YAML** plutôt que lu depuis la ressource JSON, et
     c'est une contrainte de déploiement, pas un choix : les réplicas `osmnx` ne montent
-    que `config/` et n'ont pas `llm_module` sur leur path (cf. l'import paresseux de
-    `osmnx_direct`). Une config qui dépendrait de `llm_module/data/` les tuerait au
+    que `config/` et n'ont pas `mobility_core` sur leur path (cf. l'import paresseux de
+    `osmnx_direct`). Une config qui dépendrait de `mobility_core/data/` les tuerait au
     prochain `docker compose build`.
 
     Il est donc **généré**, pas recopié : `make terminal-time --emit-config` le réémet

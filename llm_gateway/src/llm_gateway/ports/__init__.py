@@ -1,0 +1,16 @@
+"""ports — les interfaces (Protocol) du gateway. Contrats sans implémentation."""
+
+from llm_gateway.ports.batch_queue import BatchQueue
+from llm_gateway.ports.llm_adapter import LLMAdapter
+from llm_gateway.ports.metrics import MetricsSink
+from llm_gateway.ports.rate_limiter import RateLimiter
+from llm_gateway.ports.task_store import SyncTaskStore, TaskStore
+
+__all__ = [
+    "BatchQueue",
+    "LLMAdapter",
+    "MetricsSink",
+    "RateLimiter",
+    "SyncTaskStore",
+    "TaskStore",
+]

@@ -10,12 +10,12 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 [Événements de simulation et décisions]
 └── Mémoire Court Terme (Python RAM — isolation par activity_id)
     └── Seuil atteint (stm_reflection_min_entries entrées dans le buffer)
-        └── Appel gateway llm_module (catégorie stm_reflection)
+        └── Appel gateway llm_gateway (catégorie stm_reflection)
             └── Réflexion narrative + concepts extraits
                 └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
                     └── Index partagé / partitionnement logique par person_id
                         └── Self-reflection multi-jours (intervalle temps : long_term_self_reflect_interval_days)
-                            └── Appel gateway llm_module (catégorie ltm_self_reflection)
+                            └── Appel gateway llm_gateway (catégorie ltm_self_reflection)
 ```
 
 ### Court terme (STM)

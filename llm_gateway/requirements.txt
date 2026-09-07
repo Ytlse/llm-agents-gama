@@ -1,0 +1,18 @@
+# Dépendances tierces des trois paquets embarqués dans l'image du gateway — miroir de
+# llm_gateway/pyproject.toml [project.dependencies] (source canonique) + mobility_core +
+# mobility_llm. Utilisé par le Dockerfile pour la couche de cache pip.
+fastapi>=0.115,<0.116
+uvicorn>=0.34
+celery>=5.4
+redis>=5.0
+httpx>=0.27
+jinja2>=3.1.4
+pydantic>=2.9,<3
+pydantic-settings>=2.9,<3
+loguru>=0.7,<0.8
+prometheus-client>=0.20
+PyYAML>=6.0
+json-repair>=0.30
+
+# Monitoring Celery (service flower du docker-compose, même image)
+flower>=2.0

@@ -1,13 +1,14 @@
-"""infra.memory — implémentations en mémoire des ports, pour les tests."""
+"""Shim de compatibilité — `llm_module.infra.memory` a déménagé dans `llm_gateway.infra.memory`.
 
-from llm_module.infra.memory.batch_queue import InMemoryBatchQueue
-from llm_module.infra.memory.metrics import InMemoryMetricsSink
-from llm_module.infra.memory.rate_limiter import InMemoryRateLimiter
-from llm_module.infra.memory.task_store import InMemoryTaskStore
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.infra.memory`.
+"""
+import warnings as _warnings
 
-__all__ = [
-    "InMemoryBatchQueue",
-    "InMemoryMetricsSink",
-    "InMemoryRateLimiter",
-    "InMemoryTaskStore",
-]
+_warnings.warn(
+    "llm_module.infra.memory est déprécié : importez llm_gateway.infra.memory (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from llm_gateway.infra.memory import *  # noqa: E402,F401,F403

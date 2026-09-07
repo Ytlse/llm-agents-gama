@@ -92,7 +92,7 @@ OUT_OF_SURVEY_CATEGORIES = (NON_TRIP, NO_LABEL, UNKNOWN)
 # Libellé fin (tel qu'écrit dans `moves.csv`) → catégorie. L'ordre fixe l'ordre
 # d'affichage du détail.
 #
-# D'OÙ VIENNENT LES LIBELLÉS. De `llm_module.core.mode_hierarchy` (ticket 022), qui est
+# D'OÙ VIENNENT LES LIBELLÉS. De `mobility_core.mode_hierarchy` (ticket 022), qui est
 # le seul endroit du dépôt où les libellés de la colonne « Mode de transport Choisi »
 # sont décidés — `move_logger._CANONICAL_FR` les lit là aussi. Cette table ne les
 # recopie pas pour le plaisir : elle y ajoute la DÉCISION D'AGRÉGATION, que la
@@ -160,7 +160,7 @@ def check_covers_hierarchy() -> str:
         mesuré est un axe qui passe » vaut aussi pour les contrôles.
     """
     try:
-        from llm_module.core.mode_hierarchy import hierarchy
+        from mobility_core.mode_hierarchy import hierarchy
     except ImportError as exc:                            # pragma: no cover
         return (f"hiérarchie des modes non importable ({exc}) : la couverture de la "
                 f"table d'agrégation n'a PAS été vérifiée.")

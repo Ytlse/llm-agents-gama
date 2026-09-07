@@ -1,6 +1,6 @@
 # Providers LLM
 
-Configuration des fournisseurs LLM disponibles dans `llm_module/config/providers.yaml`.
+Configuration des fournisseurs LLM disponibles dans `llm_gateway/src/llm_gateway/config/providers.yaml`.
 
 La charge est distribuée entre les providers actifs selon leur `weight` via l'algorithme SWRR (Smooth Weighted Round Robin). Voir [docs/arch/llm-inference.md](../arch/llm-inference.md) pour le détail du mécanisme.
 
@@ -22,7 +22,7 @@ providers:
                                # 0 = HORS ROTATION : défini mais jamais tiré par le
                                # load balancer ; utilisable via `llm.provider` forcé
     concurrency_limit: 3       # batches simultanés max
-    disable_timeout: 180       # timeout HTTP en secondes
+    disable_timeout: 180       # durée (s) de mise à l’écart du provider après 30 erreurs consécutives (pas un timeout HTTP)
 ```
 
 `batch_max_agents` est calculé automatiquement au démarrage :
@@ -150,7 +150,7 @@ Si `provider` est absent, le load balancer SWRR distribue entre tous les provide
 
 ## Ajouter un nouveau provider
 
-1. Ajouter une entrée dans `llm_module/config/providers.yaml`
+1. Ajouter une entrée dans `llm_gateway/src/llm_gateway/config/providers.yaml`
 2. Renseigner la clé dans `.env` : `PROVIDER_KEYS__<adapter>=...`
-3. Si l'adapter n'existe pas encore, implémenter la classe dans `llm_module/providers/`
+3. Si l'adapter n'existe pas encore, implémenter la classe dans `llm_gateway/src/llm_gateway/adapters/`
 4. Lancer `make providers DRY_RUN=1` pour vérifier quotas et existence du modèle

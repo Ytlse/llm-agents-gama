@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
 from models import BBox, Location, PersonalIdentity, Person, PersonState
 
 # Le rectangle historique : emprise des arrêts Tisséo ± 0,05°.
@@ -135,7 +135,7 @@ def test_le_filtre_porte_sur_les_453_pas_sur_le_cadre_restreint():
     filtre d'admission ne l'est pas : sinon l'élargissement du cadre demanderait de
     modifier le runtime, et la limitation serait gravée là où personne ne la cherche.
     """
-    from llm_module.core.residence_zone import CommuneTable
+    from mobility_core.residence_zone import CommuneTable
 
     table = CommuneTable.load()
     hors_31 = [c for c in table.communes() if not c.startswith("31")]

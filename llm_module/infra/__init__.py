@@ -1,1 +1,1 @@
-"""infra — implémentations concrètes des ports (Redis, mémoire, adapters LLM)."""
+"""Shim de compatibilité (paquet vide) — voir llm_gateway / mobility_core / mobility_llm."""

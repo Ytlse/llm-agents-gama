@@ -17,13 +17,13 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-from llm_module.core.population_reference import OUT_OF_PERIMETER
+from mobility_core.population_reference import OUT_OF_PERIMETER
 from pathlib import Path
 from typing import Any, Optional
 
 import yaml
 
-from llm_module.core.housing_type import (
+from mobility_core.housing_type import (
     MODALITY_KEYS as HOUSING_MODALITY_KEYS,
     REFERENCE_KEYS as HOUSING_REFERENCE_KEYS,
     key_for as housing_key_for,
@@ -226,7 +226,7 @@ def normalize_housing(value: str) -> tuple[Optional[str], bool]:
 
     Le journal écrit le **libellé** de l'enquête (« Petit habitat collectif ») ; la
     référence l'indexe par clé (`petit_habitat_collectif`). La correspondance vient de
-    `llm_module.core.housing_type`, unique déclaration des modalités, partagée avec la
+    `mobility_core.housing_type`, unique déclaration des modalités, partagée avec la
     génération de population et le journal — trois recopies indépendantes finiraient
     par diverger sans que rien ne le signale.
 
@@ -306,7 +306,7 @@ def simulated_day(value: str) -> Optional[str]:
     """Jour simulé (``YYYY-MM-DD``) d'une ligne, depuis « Temps simulé ».
 
     Même convention que le champ ``sim_day`` de ``llm_exchanges.jsonl`` (UTC, cf.
-    ``llm_module/telemetry/logger.py``) : c'est ce qui permet aux volets 1/3 et au
+    ``llm_gateway/src/llm_gateway/telemetry/logger.py``) : c'est ce qui permet aux volets 1/3 et au
     volet 2 de découper le run sur la même frontière de journée.
     """
     text = (value or "").strip()

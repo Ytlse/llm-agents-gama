@@ -1,3 +1,280 @@
+## [2026-09-07] Le module LLM devient trois bibliothèques : le gateway ne connaît plus la mobilité
+
+`llm_module` était deux bibliothèques dans un seul paquet : un gateway LLM générique et le domaine
+métier de l'enquête EMC² Toulouse, le second ayant colonisé le premier (le worker comptait des
+modes de transport, le modèle d'entrée imposait un persona, les prompts voyageaient avec le moteur).
+Le ticket 037 les sépare en trois paquets installables, à la racine du dépôt :
+
+- **`llm_gateway`** (1.1.0) — le gateway : API, worker Celery, adapters, load balancer, moteur de
+  prompts *sans contenu*, SDK, réglages. Il ne contient plus un mot de mobilité ; les catégories de
+  prompts lui sont apportées par des **bundles** découverts par l'entry point `llm_gateway.categories`.
+  Une catégorie inconnue ou un item invalide est refusé en **422 à la soumission**, plus dans le worker.
+- **`mobility_core`** (0.1.0) — le domaine : couronnes, zones fines, hiérarchie des modes, vélo,
+  logement, propensions, cadrage de population, et leurs ressources `data/`. Aucune dépendance LLM.
+- **`mobility_llm`** (0.1.0) — la colle : persona (`AgentSpec`), templates, schémas, variantes de
+  prompt, choix modal probabiliste, métriques métier du worker. C'est le bundle que le gateway charge.
+
+`llm_module/` reste une coquille de compatibilité : chaque ancien import fonctionne encore et émet un
+`DeprecationWarning` (retrait à la version majeure suivante). Le contrôleur, les scripts et les tests
+du dépôt importent déjà les nouveaux noms.
+
+**Avant :** `from llm_module.core.mode_hierarchy import hierarchy` ; le worker importait le choix
+modal et hachait des chemins vers `/app/scripts` ; `providers.yaml`, prompts et données dans le même
+paquet ; 504 tests dans `llm_module/tests`, aucune CI, aucun linter.
+**Après :** `from mobility_core.mode_hierarchy import hierarchy` ; le worker appelle le hook `observe`
+du bundle et ne connaît que l'`agent_id` ; ressources du domaine dans `mobility_core/data/`, fichiers
+de référence cherchés par `mobility_core.resources` ; 566 tests en quatre étages (unit, contract sur
+mémoire **et** Redis, integration sans Redis ni réseau, e2e), import-linter (5 contrats), ruff, mypy
+strict sur le contrat public, CI GitHub Actions, site mkdocs du gateway (`llm_gateway/docs/`).
+
+Trois changements de comportement à connaître : le parseur tolérant des réponses LLM utilise
+`json-repair` à la place de `demjson3` ; l'horodatage simulé du journal des échanges (`sim_ts`) est le
+score de priorité du lot (le départ le plus tôt) et non le départ du premier agent ; `import
+llm_gateway` est paresseux et ne charge ni httpx ni prometheus tant qu'on n'utilise pas le SDK.
+Les cibles `make tests` et `make burst` qui pointaient vers des fichiers supprimés sont remplacées par
+`make test-gateway`, `make test-mobility`, `make test-all`, `make lint`, `make typecheck`,
+`make lint-imports`. Reporté aux itérations suivantes : paramétrage en couches préfixé
+`LLM_GATEWAY_`, adapter OpenAI-compatible générique, exécuteur sans Celery, authentification
+(ticket 036).
+
+---
+
+## [2026-09-07] Le pilotage montre ce qui tourne, et le statut d'un ticket se change d'un clic
+
+Quatre changements au tableau de bord (`make dashboard`), plus la correction de trois pièges du
+formulaire d'expérience relevés sur le warm-up du 6 septembre.
+
+**La vue d'ensemble montre les expériences en cours.** Une septième tuile, sur toute la largeur,
+liste chaque exécution d'expérience et chaque jeu de déplacements en préparation, avec sa barre
+d'avancement. Sans rien en cours, elle compte les expériences définies et les exécutions
+terminées. Ce qu'elle montre est lu sur le disque : une exécution lancée depuis un terminal, ou
+survivante d'un redémarrage du tableau de bord, y figure aussi.
+
+**Before :** la vue d'ensemble répondait « est-ce que ça tourne ? » pour Docker, GAMA, les
+providers, la calibration et git — mais pas pour les expériences, qui sont pourtant ce qui tourne
+le plus longtemps. Il fallait ouvrir l'onglet 🧪 Expériences pour savoir où en était un warm-up.
+**After :** la réponse tient sur la première page, rafraîchie toutes les 10 secondes.
+
+**L'onglet ▶ Commandes disparaît, 📟 Lancements devient 📟 Activités en cours.** Le catalogue des
+80 cibles `make` faisait doublon avec les boutons désormais placés dans chaque onglet. Les
+Makefile restent lus — c'est ce qui résout la cible derrière chaque bouton — mais ils ne sont plus
+affichés en liste. L'onglet des lancements porte maintenant son nom : il montre d'abord ce qui
+tourne d'après le disque, puis les cibles `make` lancées depuis cette session.
+
+**Le statut d'un ticket se change depuis la page.** Dans le tiroir de chaque ticket : un sélecteur
+au vocabulaire fermé, la note à côté, un bouton qui écrit `tickets_status.yaml`.
+
+**Before :** changer un statut demandait d'ouvrir un fichier de 1 470 lignes et de retrouver la
+bonne entrée parmi 38. **After :** deux clics, et le tableau se met à jour aussitôt. L'écriture ne
+touche que l'entrée visée — les notes des autres tickets sont préservées à l'octet —, enregistrer
+sans rien changer n'écrit pas le fichier, et le fichier est relu au moment du clic pour ne pas
+écraser une édition faite à la main entre-temps.
+
+**Un jeu qui se construit est visible, et sa fin est vue.** Le bloc de progression du formulaire se
+rafraîchit seul toutes les 5 secondes tant qu'une construction tourne, et la page se recharge une
+fois d'elle-même quand un jeu apparaît ou devient clos.
+
+**Before :** le warm-up du 6 septembre s'est terminé à 21 h 36 ; le formulaire affichait encore
+l'état de 20 h 33, « aucun jeu de déplacements préparé » et un bouton de construction actif, alors
+que le jeu était clos et exploitable. **After :** le jeu devient sélectionnable dans les 5 secondes
+qui suivent sa clôture, sans recharger la page.
+
+**Plus aucun bouton grisé sans motif.** Sous les boutons du formulaire, une ligne par bouton
+indisponible dit ce qui lui manque : nom d'expérience vide, aucun jeu, jeu pas encore clos, service
+`controller` arrêté. Et le bouton de construction est désactivé, avec son motif, tant qu'une
+construction écrit la progression de ce jeu — passé deux minutes sans écriture il redevient actif,
+la construction reprenant où elle s'était arrêtée.
+
+**Before :** « ▶ Lancer » était interdit sans qu'on sache pourquoi ; il ne manquait qu'un nom
+d'expérience. **After :** « ▶ Lancer indisponible : le nom de l'expérience est vide ».
+
+**Le formulaire retient ses choix.** Population, jeu, prompt, décideur, mode et réglages avancés
+sont relus au démarrage suivant du tableau de bord. C'est un brouillon : aucune expérience n'est
+créée sans clic, et toute valeur qui n'existe plus revient à son défaut sans emporter les autres.
+
+**Before :** un redémarrage du tableau de bord ramenait les quinze champs du formulaire à leurs
+valeurs par défaut. **After :** ils sont là où on les avait laissés.
+
+**Une faute de frappe dans le fichier des statuts n'abat plus deux onglets.** Le vocabulaire des
+statuts reste fermé — une valeur hors liste lève toujours une erreur plutôt que de passer
+inaperçue — mais cette erreur s'arrête maintenant dans l'onglet Tickets, où elle nomme la valeur
+fautive et les valeurs admises.
+
+**Before :** un `a faire` sans accent écrit à la main interrompait le script Streamlit ; l'onglet
+🧪 Expériences disparaissait avec l'onglet Tickets, sous forme de traceback. **After :** l'erreur
+est affichée dans l'onglet Tickets, les autres onglets restent utilisables.
+
+**Une exécution qui n'écrit plus le dit.** L'arrêt d'une exécution est coopératif : une exécution
+dont le conteneur a été tué garde `en_cours` dans son état. Chaque ligne porte donc l'âge de sa
+progression, et au-delà de dix minutes sans écriture le signale. Aucun gel n'est diagnostiqué :
+une pénurie de quota peut légitimement faire attendre, seul le fait est écrit.
+
+**`make help` liste les cibles documentées.** L'onglet supprimé était le seul endroit qui montrait
+les 79 cibles `make` du dépôt. La nouvelle cible les liste avec le bloc `##` qui les documente.
+
+**Un ticket sans entrée dans le fichier des statuts le dit** avant tout enregistrement, avec la
+source de son statut affiché : `à faire` pré-sélectionné est le point de départ du sélecteur, pas
+une décision déjà prise. Et la note d'un ticket n'est réécrite que si on l'a effectivement
+modifiée, pour qu'une édition faite à la main dans le fichier lui survive.
+
+**Le texte tapé dans une note ne peut plus être perdu.** Le champ portait une identité qui
+dépendait de son contenu : si le fichier changeait entre l'ouverture du tiroir et le clic, le
+texte saisi était jeté et le tableau de bord annonçait « rien à enregistrer ».
+
+**Before :** on tapait une note, le fichier bougeait, la note tapée disparaissait avec un message
+qui disait que tout allait bien. **After :** le texte saisi est écrit ; s'il n'a pas été touché,
+c'est la valeur du fichier qui est conservée et le tiroir le dit.
+
+**Une clé de statut doit désigner exactement un ticket.** Une clé courte comme `ticket_005`
+appliquait un seul statut aux deux tickets qui portent ce numéro, et une clé mal orthographiée ne
+s'appliquait à rien sans le dire. Les deux sont maintenant refusées en nommant les tickets visés.
+
+**Le nom d'une expérience ne peut plus sortir de son dossier.** Il construit
+`data/experiences/<nom>/` : il ne porte donc que lettres, chiffres, tiret, souligné et point.
+
+**Before :** un nom comme `../../evade` écrivait le fichier d'expérience ailleurs dans le dépôt.
+**After :** le nom est refusé, avec son motif, dans le formulaire comme à l'écriture.
+
+**Ce qui tourne passe devant ce qui est terminé** dans la liste des lancements, et chaque ligne
+d'avancement écrit son pourcentage en chiffres, pas seulement en longueur de barre.
+
+**Un jeu en construction n'affiche plus « None/None ».** Le nombre de déplacements couverts et
+attendus n'entre dans le manifeste qu'à la clôture du jeu.
+
+**Before :** tout jeu en préparation apparaissait dans la liste du formulaire comme
+« j — jour 2026-03-16 · None/None déplacements (EN PRÉPARATION) », c'est-à-dire précisément le
+jeu que ce travail rend visible. **After :** « ?/? déplacements (EN PRÉPARATION) ».
+
+**Un warm-up qui n'écrit plus le dit aussi.** La péremption existait pour les exécutions, pas
+pour les jeux : un warm-up dont le conteneur avait été tué gardait son manifeste ouvert et sa
+dernière barre indéfiniment.
+
+**Une retouche d'espaces ne mène plus à un message trompeur.** Les espaces d'une note sont
+normalisés à l'écriture ; une retouche qui ne change que cela n'écrit donc rien, et le tiroir dit
+que ce sont les espaces au lieu d'annoncer « rien à enregistrer ». Une clé de statut invalide et
+un statut inconnu s'affichent désormais chacun avec sa propre cause.
+
+---
+
+## [2026-09-06] Le mardi joue l'offre du mardi, et la relecture d'une décision dit tout
+
+Suite de la relecture du ticket 035 : huit points tranchés, appliqués dans le code.
+
+**Un autre jour simulé joue l'offre de transport de ce jour — sans tout recalculer.** L'offre
+est réputée identique si, et seulement si, la **grille horaire** des deux jours est identique :
+`make jeu-verifier-jours NOM=… JOUR=2026-03-17 DECLARER=1` compare dans les feeds GTFS tous les
+passages (ligne, arrêt, heure) des courses actives l'un des deux jours seulement. Si la grille
+diffère, un déplacement n'est servi du jeu que si **aucun passage différent ne tombe dans sa
+fenêtre** (du départ programmé au départ + 4 h) : une course ajoutée ou supprimée hors de cette
+fenêtre ne peut entrer dans aucun de ses itinéraires. Les autres déplacements recalculent leurs
+transports collectifs ce jour-là (source `recalculee:offre_jour`), comme ceux d'un jour jamais
+vérifié : on ne suppose rien. Le résultat, déplacement par déplacement, vit à côté du jeu qui
+reste intact. Sans simulateur, une date ni celle du jeu ni vérifiée est refusée au lancement.
+Constat au passage : le feed Tisséo n'a que des `calendar_dates.txt`, ses services diffèrent
+chaque jour, et la vérification sur la population v5 attend un jeu réel (OTP requis).
+
+**Les déplacements sans aucune proposition sont exclus, et dits.** Au dernier run, 85 trajets sur
+5 257 n'avaient aucune option (trajets longs, médiane 19,8 km, depuis des lieux sans arrêt) : ils
+sont désormais tracés « inexploitables », exclus du dénominateur de la couverture, affichés à
+côté d'elle, et remontés en WARNING à la préparation du jeu comme à l'exécution.
+
+Mesure sur le dernier run : 85,3 % des départs sont à moins de 10 minutes de l'heure programmée
+et 7,4 % changent d'heure pleine — le retard de départ est un sujet GAMA préexistant, traité à
+part ; les tolérances proposées sont maintenues.
+
+**`moves.csv` dit pourquoi une option manquait.** Deux colonnes de plus en fin de ligne :
+« Écartées (motifs) » (`vehicule_ailleurs:car;plafond:2`) et « Identifiant lot » (le lot de la
+passerelle qui a porté la décision), dans la simulation comme sans simulateur.
+
+**`make run` recrée le contrôleur quand `config.yaml` a changé.** Jusqu'ici `make run CACHE=0`
+écrivait le réglage sans qu'un contrôleur déjà lancé le relise. Une copie du dernier fichier
+appliqué (`.config.yaml.applique`) sert de témoin.
+
+**Une expérience choisit son prompt.** `gabarit.variante` (par exemple `b_min`, le prompt
+minimaliste) désigne une entrée de `prompts.yaml` ; la requête la porte à la passerelle, qui la
+rend à la place de la variante active — une variante inconnue est refusée, jamais remplacée.
+L'empreinte du gabarit est celle du texte effectivement présenté.
+
+**Le tableau de bord compose et lance les expériences.** L'onglet Expériences n'est plus une
+lecture : un formulaire (nom, population, jeu, prompt, décideur, mode, jour, réglages avancés)
+écrit le fichier d'expérience, le fait valider, estime le coût et lance — sans éditer un YAML.
+Une exécution en cours montre sa barre d'avancement (déplacements, personnes, temps restant,
+sollicitations, erreurs) avec Pause et Arrêter ; sous la table, Reprendre, Rejouer et Dupliquer ;
+« S'inspirer de » recopie une expérience existante dans le formulaire. Les mêmes cibles restent
+disponibles avec leurs champs dans l'onglet Commandes, et `run` accepte `JEU`. Le pas à pas est
+dans `docs/setup/quickstart.md`.
+
+**Le prompt se lit, se retouche et se sauve depuis le tableau de bord.** Le texte de la variante
+choisie s'affiche en entier ; « Éditer et enregistrer sous un autre nom » écrit une nouvelle
+entrée dans `prompts.yaml` (jamais d'écrasure, provenance notée), puis « Recharger la passerelle »
+la rend disponible. Une variante minimaliste avec persona, `minimal_persona`, est livrée. La liste
+des modèles affiche les requêtes du jour restantes par instance, lues sur la passerelle. Le
+formulaire vérifie que le contrôleur tourne avant de lancer, propose de démarrer les services
+sinon, et montre l'avancement des jeux en préparation et des lancements en cours.
+
+**Un lanceur pour le tableau de bord.** `tableau-de-bord.command` à la racine : un double-clic
+lance `make dashboard` et ouvre le navigateur, ou rouvre l'onglet si le tableau tourne déjà.
+
+**Les événements ont leur format.** `evenements:` accepte des incidents et informations
+(type, jour, heures, cible, description, source) — archivés, mais l'exécution reste refusée tant
+que GAMA ne les joue pas.
+
+**Avant :** le mardi rejouait l'offre TC du lundi ; une option absente n'avait pas de motif dans
+`moves.csv` ; un changement de cache dans `config.yaml` n'atteignait pas le contrôleur.
+**Après :** l'offre est celle du jour ou l'équivalence est mesurée ; chaque écart est nommé ;
+tout changement de configuration prend effet au lancement suivant.
+
+Questions restantes, réécrites avec des exemples : `specs/ticket_035/questions.md` (1, 2, 3, 6,
+8, 9, 11).
+
+---
+
+## [2026-09-05] Un jeu de déplacements enregistré, une seule manière de décider, des expériences sans simulateur
+
+Le ticket 035 sort de la spécification : on peut désormais **préparer une fois** toutes les
+propositions d'itinéraires d'une population (`make jeu POP=… NOM=…`), les **consulter**, les
+**transporter**, puis les rejouer soit **sans GAMA** — une journée entière d'une cohorte décidée
+en quelques minutes par le modèle de langage, une heuristique ou un tirage — soit **avec GAMA**
+(`make run JEU=<nom>`), la simulation servant le jeu au lieu d'appeler OTP et OSMnx.
+
+**Une seule décision, tracée.** Le filtre de la chaîne des véhicules (possession, conducteur,
+position, verrou de retour) et le plafond d'options vivent dans une fonction unique, appelée à
+l'identique par la simulation et par le mode sans simulateur. Chaque décision archive ce qui a été
+présenté (texte compris), ce qui a été écarté **et pourquoi** (`non_possede`, `pas_de_conducteur`,
+`vehicule_ailleurs`, `retour_force`, `plafond`), la distribution et la réponse brute du décideur.
+L'ordre des options dans le prompt est déterministe (graine + agent + activité) — un même
+déplacement se présente dans le même ordre d'un run à l'autre.
+
+**Des expériences nommées, comparables, reprenables.** Une expérience est un fichier YAML dont
+tous les champs sont obligatoires ; population, jeu, gabarit et décideur y sont désignés par leur
+empreinte. Avant de lancer : estimation du coût citant ses sources et refus motivés (jeu d'une
+autre population, date hors des feeds, jeu périmé, mémoire ou événement sans simulateur). Le
+décideur distant est épinglé à son modèle : une réponse servie par un autre modèle est refusée,
+jamais archivée. Quand le quota est épuisé, l'exécution s'arrête proprement, dit pourquoi et à
+quelle heure elle pourra reprendre ; à la reprise, les décisions archivées sont resservies et rien
+n'est repayé. Pause et arrêt : `make experience-pause`, `make experience-arreter`. Le registre
+(`make registre`, onglet « 🧪 Expériences » du tableau de bord) montre chaque exécution avec sa
+couverture — un résultat partiel n'est jamais présenté comme complet — et la comparaison de deux
+exécutions est refusée si leurs empreintes partagées diffèrent. La synthèse lit les valeurs
+d'enquête dans `scripts/data/population/cerema_values.yaml` et cite chemin et empreinte : la
+plateforme n'en détient aucune.
+
+**Avant :** chaque expérience relançait GAMA et recalculait tous les itinéraires (1 h 41 pour une
+journée) ; une option écartée ne laissait qu'une valeur agrégée ; reprendre un run rejouait la
+journée en comptant sur un cache désactivé ; deux runs se comparaient sur des noms de fichiers.
+**Après :** les itinéraires se calculent une fois par population ; chaque écart a son motif ;
+une exécution interrompue reprend sans redemander une décision acquise ; deux exécutions ne sont
+« comparables » que sur la foi d'empreintes. En simulation sur jeu complet, `make report` affiche
+zéro appel moteur, les propositions par source et les déclencheurs jamais déclenchés.
+
+Ce qui n'est pas encore là : les événements (incident de réseau) sont acceptés puis refusés au
+lancement plutôt que simulés ; la pause à chaud de GAMA garde sa granularité « début de journée »
+et ne ressert pas encore les décisions archivées ; l'égalité stricte simulation ↔ sans simulateur
+(D8) attend un run réel. Les quinze points à trancher sont dans `specs/ticket_035/questions.md`,
+chacun avec l'hypothèse retenue pour avancer.
+
+---
+
 ## [2026-09-04] Un agent monte dans un train, et la journée entière tourne sur la population v5
 
 Premier run d'une **journée simulée complète** sur `population_1000_AAMAS_v5` : 1 h 41 de bout en

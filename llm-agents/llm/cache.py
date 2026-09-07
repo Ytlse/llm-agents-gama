@@ -9,8 +9,8 @@ from typing import Optional
 from loguru import logger
 from prometheus_client import Counter, Gauge, Histogram
 
-from llm_module.core.mode_choice import draw_index, mode_distribution
-from llm_module.telemetry.alarms import fire_alarme
+from mobility_llm.mode_choice import draw_index, mode_distribution
+from llm_gateway.telemetry.alarms import fire_alarme
 from sim_clock import wall_clock
 
 COLLECTION_NAME = "llm_decisions"

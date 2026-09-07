@@ -3,7 +3,7 @@
     llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
 
 Produit `GAMA/CityTransport/includes/perimetre_453.shp` (+ .shx/.dbf/.prj/.cpg), une seule entité :
-le polygone dissous des quatre couronnes de `llm_module/data/couronne_perimetre.geojson` (EPSG:4326,
+le polygone dissous des quatre couronnes de `mobility_core/data/couronne_perimetre.geojson` (EPSG:4326,
 comme `routes.shp` et `stops.shp`). `Settings.gaml` en fait l'emprise du monde
 (`geometry shape <- envelope(perimetre_shape_file)`) à la place de l'enveloppe des lignes Tisséo,
 qui laissait 163 domiciles de la population dehors (rapport de périmètre du 2026-09-03).

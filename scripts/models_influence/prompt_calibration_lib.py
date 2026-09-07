@@ -44,10 +44,10 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from llm_module.adapters.base import (
+from llm_gateway.adapters.base import (
     get_adapter, ProviderClientError, ProviderServerError, ProviderParseError,
 )
-from llm_module.settings.models import InternalMessage, InternalRequest
+from llm_gateway.core.models import InternalMessage, InternalRequest
 
 __all__ = [
     "MODES", "MODE_COLORS", "EXCLUDE_MODES", "configure",

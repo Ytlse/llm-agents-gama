@@ -32,8 +32,8 @@ import json
 
 import pytest
 
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
-from llm_module.core.residence_zone import (
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.residence_zone import (
     COMMUNE_TRAIT_KEY,
     INSEE_TRAIT_KEY,
     TRAIT_KEY,

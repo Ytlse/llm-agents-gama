@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
-from llm_module.core.mode_hierarchy import hierarchy as _mode_hierarchy
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
-from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
+from mobility_core.housing_type import TRAIT_KEY as HOUSING_TRAIT_KEY, key_for
+from mobility_core.mode_hierarchy import hierarchy as _mode_hierarchy
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 from models import Person, TravelPlan
 from settings import settings
 
@@ -54,7 +54,7 @@ _PURPOSE_FR = {
     "accompany": "Accompagnement",
 }
 
-# Modes canoniques (llm_module.core.mode_choice) → libellés des colonnes, alignés sur
+# Modes canoniques (mobility_llm.mode_choice) → libellés des colonnes, alignés sur
 # le vocabulaire de « Mode de transport Choisi ». Les libellés viennent de la hiérarchie
 # (ticket 022) : une seule table les décide. L'ORDRE, en revanche, reste celui de
 # l'affichage et non celui de la hiérarchie — il fixe les colonnes du CSV, et les changer
@@ -186,7 +186,7 @@ def _log_unknown_modes(modes: set) -> None:
     _UNKNOWN_MODES_SEEN.add(cle)
     logger.error(
         "[ALARME] Modes hors hiérarchie dans un plan : {%s} → colonne « Autres modes », "
-        "donc hors scoring EMC². Ajoutez-les à llm_module/data/mode_hierarchy_emc2.json "
+        "donc hors scoring EMC². Ajoutez-les à mobility_core/data/mode_hierarchy_emc2.json "
         "(scripts/progedo_logit/export_mode_hierarchy.py, table FAMILLES).", cle)
 
 

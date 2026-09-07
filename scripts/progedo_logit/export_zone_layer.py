@@ -7,7 +7,7 @@ information est donnée par l'enquête (`D3`/`D7`) ; en simulation il n'y a que 
 coordonnées. Il faut donc rejouer la jointure spatiale au runtime — d'où cette
 ressource (ticket 005 §2.1, action A7).
 
-Ce que le script écrit dans `llm_module/data/` :
+Ce que le script écrit dans `mobility_core/data/` :
 
 - `zf_zones.gpkg` — les 785 polygones de zones fines, avec par zone le centroïde
   Lambert 93, la surface, la densité de ménages et la distance à l'hypercentre ;
@@ -24,7 +24,7 @@ définitions concurrentes de la même variable — exactement le défaut que
 Pourquoi une ressource dérivée plutôt que le shapefile source : `data/PROGEDO 2023`
 contient les microdonnées d'accès restreint (lil-1750), n'est pas versionné et n'est
 pas monté dans le conteneur `controller`. La couche exportée ici ne porte que des
-agrégats à la zone, et vit sous `llm_module/`, déjà monté partout où le résolveur
+agrégats à la zone, et vit sous `mobility_core/`, déjà monté partout où le résolveur
 tourne.
 
 Usage :
@@ -47,7 +47,7 @@ from scripts.progedo_logit.build_mode_choice_dataset import (
     load_raw,
 )
 
-# Nom de couche attendu par le résolveur (llm_module/core/zone_resolver.py).
+# Nom de couche attendu par le résolveur (mobility_core/src/mobility_core/zone_resolver.py).
 LAYER_NAME = "zf"
 
 # Colonnes de la ressource. `ZF` est la clé, les cinq suivantes sont tout ce dont
@@ -101,14 +101,14 @@ def build_layer(sig_zf: Path, men) -> tuple[gpd.GeoDataFrame, dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, default=None,
-                        help="Répertoire de sortie (défaut : llm_module/data/)")
+                        help="Répertoire de sortie (défaut : mobility_core/data/)")
     args = parser.parse_args()
 
     root = find_project_root()
     progedo_dir = root / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
     sig_zf = (root / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
               / "EMC2_Toulouse_2023_ZF_26052023.shp")
-    out_dir = args.out_dir or (root / "llm_module" / "data")
+    out_dir = args.out_dir or (root / "mobility_core" / "src" / "mobility_core" / "data")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     _, men, _ = load_raw(progedo_dir)

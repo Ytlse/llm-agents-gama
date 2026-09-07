@@ -53,15 +53,15 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.geo_reference import haversine_km, hypercenter  # noqa: E402
-from llm_module.core.population_reference import (  # noqa: E402
+from mobility_core.geo_reference import haversine_km, hypercenter  # noqa: E402
+from mobility_core.population_reference import (  # noqa: E402
     COURONNES, MIN_AGE, OUT_OF_PERIMETER, couronne_commune_counts,
     couronne_population_shares, household_targets, household_weight,
     population_reference, survey_window, surveyed_weekdays)
-from llm_module.core.residence_zone import CommunalZones  # noqa: E402
+from mobility_core.residence_zone import CommunalZones  # noqa: E402
 # Table de détail et table d'agrégation des libellés de mode. Elles vivent dans un
 # module partagé avec les carnets d'analyse (`scripts/analysis/mode_labels.py`) pour
-# la raison qui a fait monter `CommunalZones` dans `llm_module` au ticket 021 : deux
+# la raison qui a fait monter `CommunalZones` dans `mobility_core` au ticket 021 : deux
 # copies d'une classification de référence finissent par diverger, et c'est
 # exactement ce qui s'est produit ici — le carnet et l'audit ignoraient « Train »
 # chacun de son côté.
@@ -94,11 +94,11 @@ DEFAULT_RUN = REPO_ROOT / "experiments" / "current"
 DEFAULT_POPULATION_DANS_LE_RUN = "population_1000.json"
 DEFAULT_POPULATION = REPO_ROOT / "data" / "population" / "toulouse_population_1000.json"
 CEREMA_VALUES = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
-COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
+COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 WEATHER_CSV = REPO_ROOT / "data" / "weather" / "meteo_toulouse_12_mois.csv"
 # Ressource du temps terminal : son `meta.crown_definition` dit sur quel découpage les
 # lois sont stratifiées. C'est le troisième lieu où la distance pourrait revenir (A2).
-TERMINAL_TIME_JSON = REPO_ROOT / "llm_module" / "data" / "terminal_time_emc2.json"
+TERMINAL_TIME_JSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "terminal_time_emc2.json"
 
 # Les quatre catégories scorées, lues dans le module partagé. `MOVE_MODE_MAP` a été
 # retirée le 2026-09-04 : c'était une table de quatre entrées SANS « Train », et un
@@ -175,7 +175,7 @@ def home(person: dict) -> dict:
 
 # ── Classement communal (la définition de l'enquête) ──────────────────────────
 
-# `CommunalZones` a vécu ici. Elle est montée dans `llm_module.core.residence_zone` au
+# `CommunalZones` a vécu ici. Elle est montée dans `mobility_core.residence_zone` au
 # ticket 021, lot 1, quand un second appelant est apparu (le post-traitement qui pose la
 # couronne sur le persona) : deux copies d'une classification de référence finissent par
 # diverger, et celle-ci définit ce qui est « hors périmètre ». L'audit la lit désormais au
@@ -215,7 +215,7 @@ def axis_a2_couronnes(people: list[dict], zones: Optional[CommunalZones],
         return Finding(
             "A2", "Définition des couronnes", "découpage par liste de communes",
             "—", "—", NON_MESURABLE,
-            "Ressource `llm_module/data/couronne_perimetre.geojson` absente : "
+            "Ressource `mobility_core/data/couronne_perimetre.geojson` absente : "
             "`make communes-couronnes` l'exige, et cette cible exige les données "
             "PROGEDO d'accès restreint.")
 
@@ -699,8 +699,8 @@ def axis_a7_objet_compte(moves: list[dict], cerema: dict,
         "listes de modes complètes). Refermé le 2026-09-04 par le ticket 022, et par la "
         "source plutôt que par une convention : le rapport publie en annexe p. 53 la "
         "hiérarchie des 36 modes enquêtés, gelée dans "
-        "`llm_module/data/mode_hierarchy_emc2.json` et servie par "
-        "`llm_module.core.mode_hierarchy` à toutes les tables du dépôt — "
+        "`mobility_core/data/mode_hierarchy_emc2.json` et servie par "
+        "`mobility_core.mode_hierarchy` à toutes les tables du dépôt — "
         "`_plan_transport_mode` appelle `primary_label`, il n'y a plus de cascade de "
         "`if`. Un mode que la hiérarchie ne connaît pas lève une [ALARME] au lieu d'être "
         "absorbé. Mais l'effet miroir reste ENTIER : OTP est interrogé mode par mode, "
@@ -775,7 +775,7 @@ def axis_a7_objet_compte(moves: list[dict], cerema: dict,
                                 if c not in SURVEY_CATEGORIES},
          "libelles_inconnus": dict(tally.unknown.most_common()),
          # Couverture de la table d'agrégation par la hiérarchie des modes du dépôt
-         # (`llm_module.core.mode_hierarchy`, ticket 022) : "" = tout couvert.
+         # (`mobility_core.mode_hierarchy`, ticket 022) : "" = tout couvert.
          "couverture_hierarchie_modes": tally.hierarchy_gap or "complète",
          "invariant_total": {"n_lignes_lues": tally.total,
                              "somme_detail": sum(tally.detail.values()),

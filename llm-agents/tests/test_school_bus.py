@@ -15,7 +15,7 @@ Deux familles de tests :
 Lancement : cd llm-agents && .venv/bin/python -m pytest tests/test_school_bus.py
 """
 
-from llm_module.core.mode_choice import canonical_mode
+from mobility_llm.mode_choice import canonical_mode
 from urban_mobility_agents.utils.move_logger import _plan_transport_mode
 from scripts.models_influence.prompt_calibration_lib import categorize_mode
 from scripts.synthesis.model_on_common_set import CANONICAL_TO_CAT

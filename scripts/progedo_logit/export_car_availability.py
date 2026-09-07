@@ -60,7 +60,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
-OUT = ROOT / "llm_module" / "data" / "car_availability_emc2.json"
+OUT = ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "car_availability_emc2.json"
 
 LEVELS = ("all", "some", "none")
 

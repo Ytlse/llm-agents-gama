@@ -1,13 +1,13 @@
 """export_bike_ownership.py — Les trois étages de l'équipement vélo, appris sur EMC².
 
-Produit `llm_module/data/bike_ownership.json` : les coefficients des deux logit du
+Produit `mobility_core/data/bike_ownership.json` : les coefficients des deux logit du
 ticket 015, plus les tables de validation qui servent à juger le résultat.
 
 **Étage 1 — combien de vélos dans le ménage.** Logit multinomial sur `k = M21` écrêté à
 `4+`, 10 783 ménages, pondération `COE0`. Covariables : taille du ménage, nombre de VP
 (`M6`), et la zone de résidence par sa densité de ménages et sa distance à l'hypercentre.
 Ni `M1` (type d'habitat) ni `M2` (occupation du logement) — les raisons sont écrites dans
-`llm_module/core/bike_ownership.py`, elles ne sont pas les mêmes : `M1` est moins
+`mobility_core/src/mobility_core/bike_ownership.py`, elles ne sont pas les mêmes : `M1` est moins
 informatif que la zone dont il est imputé, `M2` n'existe pas côté persona.
 
 **Étage 2 — qui, dans le ménage, tient les vélos.** Logit binaire sur `P20 ∈ {plusieurs
@@ -47,7 +47,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GroupKFold
 
-from llm_module.core.bike_ownership import (
+from mobility_core.bike_ownership import (
     DEFAULT_RESOURCE,
     K_CLASSES,
     K_MAX,
@@ -62,7 +62,7 @@ from llm_module.core.bike_ownership import (
     propensity_design,
     stock_design,
 )
-from llm_module.core.housing_type import MODALITY_KEYS, HousingTypeTable, draw
+from mobility_core.housing_type import MODALITY_KEYS, HousingTypeTable, draw
 from scripts.progedo_logit.build_mode_choice_dataset import (
     GENDER,
     MAIN_OCCUPATION,
@@ -164,7 +164,7 @@ def load_frames(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     men["size"] = key.map(sizes)
     men["n_eligible"] = key.map(eligibles).fillna(0)
 
-    geo, _, _ = build_geo(root / "llm_module" / "data" / "zf_zones.gpkg", men)
+    geo, _, _ = build_geo(root / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
     zone = geo.reindex(men["ZFM"]).reset_index(drop=True)
     men["density"] = zone["density_hh_km2"].values
     men["dist_center"] = zone["dist_center_km"].values
@@ -694,7 +694,7 @@ def mechanism_check(men: pd.DataFrame, people: pd.DataFrame,
     persona porte une attribution nominative (~51 %), et le coefficient appris
     s'applique à autre chose que ce qu'il mesure.
     """
-    from llm_module.core.bike_ownership import LogitModel
+    from mobility_core.bike_ownership import LogitModel
 
     model = LogitModel.from_doc(propensity_doc)
     columns = list(propensity_doc["features"])

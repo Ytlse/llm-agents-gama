@@ -96,13 +96,13 @@ def _canonical_fr() -> dict[str, str]:
     `urban_mobility_agents` tire `settings` et `models`, donc tout l'environnement du
     simulateur : l'importer ferait de ce test un test d'intégration. Depuis le ticket 022,
     `move_logger._CANONICAL_FR` n'est plus un littéral : ses libellés viennent de la
-    hiérarchie gelée (`llm_module/data/mode_hierarchy_emc2.json`), plus le fourre-tout
+    hiérarchie gelée (`mobility_core/data/mode_hierarchy_emc2.json`), plus le fourre-tout
     `other` qui n'est pas une famille de l'enquête. On la reconstruit d'après la même
     source — c'est bien la production qu'on lit, pas une copie —, et l'ORDRE des colonnes
     est relu dans la source de `move_logger` puisque lui seul y vit encore.
     """
     import ast
-    from llm_module.core.mode_hierarchy import hierarchy
+    from mobility_core.mode_hierarchy import hierarchy
 
     source = (REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils"
               / "move_logger.py").read_text(encoding="utf-8")
@@ -269,7 +269,7 @@ class _FakeResolver:
         self.refuse = set(refuse)
 
     def geo_features_many(self, origins, destinations):
-        from llm_module.core.zone_resolver import GeoFeatures
+        from mobility_core.zone_resolver import GeoFeatures
         return [None if i in self.refuse else
                 GeoFeatures(od_km=2.0, same_zone=False, dist_center_orig_km=3.0,
                             dist_center_dest_km=4.0, density_orig=100.0,

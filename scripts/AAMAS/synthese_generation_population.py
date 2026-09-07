@@ -40,7 +40,7 @@ from scripts.AAMAS.synthese_representativite import (TEMPLATE_V2, TITRES, fr, lo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_EQASIM = REPO_ROOT / "eqasim-toulouse" / "config_toulouse.yml"
-COMMUNES = REPO_ROOT / "llm_module" / "data" / "commune_couronne.json"
+COMMUNES = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
 GRAPHE_META = REPO_ROOT / "data" / "cache" / "osmnx" / "graphs_444ca7e6a515.meta.json"
 
 # Chiffres du journal de génération eqasim et du notebook, sans fichier structuré. Chacun porte

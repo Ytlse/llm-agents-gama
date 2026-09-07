@@ -65,7 +65,7 @@ SCHEMA = "progedo_on_common_set/v1"
 #
 #   classes de la politique   bike · car · transit · walk
 #   modes canoniques du sim   walking · cycling · car · public_transport · train ·
-#                             motorbike · other        (llm_module.core.mode_choice)
+#                             motorbike · other        (mobility_llm.mode_choice)
 #   libellés du moves.csv     Marche · Vélo · Voiture Privée · Transports_collectifs ·
 #                             Train · Deux-roues motorisé · Autres modes
 #   catégories de la page     marche · velo · voiture · transports_collectifs · autres
@@ -522,7 +522,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     resolver_error = ""
     if zones_path is not None and zones_path.exists():
         try:
-            from llm_module.core.zone_resolver import ZoneResolver
+            from mobility_core.zone_resolver import ZoneResolver
             resolver = ZoneResolver.load(zones_path, feature_spec=spec_path)
         except Exception as exc:  # ressource illisible, geopandas absent…
             resolver_error = str(exc)

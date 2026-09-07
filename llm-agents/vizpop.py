@@ -21,11 +21,20 @@ _HERE = Path(__file__).resolve().parent
 _HG_CACHE = _HERE / ".hg_boundary.geojson"
 
 # Géométrie des quatre couronnes de l'enquête EMC² 2023 = le périmètre des 453 communes (ticket
-# 031, partie 2). Dépôt (dev local) ou montage du conteneur controller (/opt/llm_module).
-_COURONNES_CANDIDATES = (
-    _HERE.parent / "llm_module" / "data" / "couronne_perimetre.geojson",
-    Path("/opt/llm_module/data/couronne_perimetre.geojson"),
-)
+# 031, partie 2). Ressource du paquet mobility_core (editable sur l'hôte, montée sous /opt dans
+# le conteneur controller).
+def _couronnes_candidates() -> tuple[Path, ...]:
+    cands: list[Path] = []
+    try:
+        from mobility_core.resources import data_path
+        cands.append(data_path("couronne_perimetre.geojson"))
+    except ImportError:  # pragma: no cover
+        pass
+    cands.append(Path("/opt/mobility_core/data/couronne_perimetre.geojson"))
+    return tuple(cands)
+
+
+_COURONNES_CANDIDATES = _couronnes_candidates()
 _COURONNE_COLORS = {
     "Toulouse": "#7c3aed", "1ere couronne": "#2563eb", "2eme couronne": "#0891b2", "3eme couronne": "#64748b",
 }

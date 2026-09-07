@@ -27,7 +27,7 @@ BORDEAUX = (44.8378, -0.5792)   # hors périmètre
 
 
 class TestClassementCouronnes(unittest.TestCase):
-    GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
+    GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 
     def _classer(self, coordonnees, geojson=None):
         points = [("p", "home", lat, lon) for lat, lon in coordonnees]

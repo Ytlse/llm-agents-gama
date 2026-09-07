@@ -49,16 +49,16 @@ from typing import Optional
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER  # noqa: E402
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER  # noqa: E402
 
 EXIT_OK, EXIT_RESOURCE_MISSING, EXIT_GATE_FAILED, EXIT_NOT_MEASURABLE = 0, 1, 2, 3
 
 SIG = REPO_ROOT / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
 SIG_DTIR = SIG / "EMC2_Toulouse_2023_DTIR_17072023.shp"
 SIG_ZF = SIG / "EMC2_Toulouse_2023_ZF_26052023.shp"
-ZF_GPKG = REPO_ROOT / "llm_module" / "data" / "zf_zones.gpkg"
-COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
-ZF_TABLE = REPO_ROOT / "llm_module" / "data" / "zf_couronne.json"
+ZF_GPKG = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
+COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+ZF_TABLE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_couronne.json"
 DEFAULT_POPULATION = (REPO_ROOT / "data" / "population"
                       / "toulouse_population_1000.json")
 DEFAULT_ARCHIVE = (REPO_ROOT / "docs" / "traces" / "2026-08-24_perimetre_population"
@@ -90,7 +90,7 @@ def secteur_couronne_map() -> tuple[Optional[dict], str]:
     plutôt que sautées en silence.
     """
     if ZF_TABLE.exists():
-        from llm_module.core.residence_zone import CouronneTable
+        from mobility_core.residence_zone import CouronneTable
         return (CouronneTable.load(ZF_TABLE).secteurs,
                 f"{ZF_TABLE.name} (table versionnée)")
     if SIG_DTIR.exists():
@@ -119,8 +119,8 @@ def main() -> int:
     import geopandas as gpd
     from pyproj import Transformer
 
-    from llm_module.core.residence_zone import CommunalZones
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.residence_zone import CommunalZones
+    from mobility_core.zone_resolver import ZoneResolver
 
     secteurs, source = secteur_couronne_map()
     report: dict = {"generated_at": date.today().isoformat(), "ticket": "021",
@@ -283,7 +283,7 @@ def main() -> int:
         portes["F · ZF → INSEE reproduit la commune archivée"] = NOT_MEASURABLE
     else:
         if ZF_TABLE.exists():
-            from llm_module.core.residence_zone import CouronneTable
+            from mobility_core.residence_zone import CouronneTable
             table = CouronneTable.load(ZF_TABLE)
             zf_insee = {z: table.commune_of_zf(z)[0]
                         for z in {r["zf"] for r in rows if r["zf"]}

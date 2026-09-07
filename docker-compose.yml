@@ -62,7 +62,7 @@ x-osmnx-service: &osmnx-service
     # Ticket 031 (décision 4) : la congestion s'applique par zone du nœud (ville / agglomération /
     # extérieur) ; la géométrie de l'agglomération vient des couronnes de l'enquête. Sans ce
     # fichier, un graphe sans zones ne se charge pas (erreur explicite, pas de repli).
-    - ./llm_module/data/couronne_perimetre.geojson:/app/llm_module/data/couronne_perimetre.geojson:ro
+    - ./mobility_core/src/mobility_core/data/couronne_perimetre.geojson:/app/mobility_core/data/couronne_perimetre.geojson:ro
   environment:
     APP_CONFIG_PATH: /app/config/${CONFIG_FILE:-config.yaml}
   healthcheck:
@@ -158,13 +158,13 @@ services:
       - ./eqasim-toulouse/data/sirene:/eqasim/data/sirene:ro
       - ./eqasim-toulouse/synthesis:/eqasim/synthesis:ro
       # Ticket 015, lot 4 : `synthesis/population/enriched.py` apprend l'équipement
-      # vélo avec `llm_module.core.bike_ownership` (et `zone_resolver` pour la zone
+      # vélo avec `mobility_core.bike_ownership` (et `zone_resolver` pour la zone
       # fine du domicile), au lieu de recopier le nombre de vélos d'un ménage ENTD.
       # WORKDIR est /eqasim, donc le paquet est importable tel quel ; le montage
-      # apporte aussi ses ressources `llm_module/data/` (bike_ownership.json,
+      # apporte aussi ses ressources `mobility_core/data/` (bike_ownership.json,
       # zf_zones.gpkg), que le module résout relativement à son propre fichier.
       # geopandas/shapely/pandas sont déjà des dépendances de l'image.
-      - ./llm_module:/eqasim/llm_module:ro
+      - ./mobility_core/src/mobility_core:/eqasim/mobility_core:ro
       - ./data/cache/eqasim:/eqasim-cache:rw
       - ./data/population:/eqasim-output:rw
     healthcheck:
@@ -273,9 +273,9 @@ services:
 
   api:
     build:
-      context: ./llm_module
-      dockerfile: Dockerfile
-    command: uvicorn llm_module.main:app --host 0.0.0.0 --port 8000 --reload --log-level warning
+      context: .
+      dockerfile: llm_gateway/Dockerfile
+    command: uvicorn llm_gateway.main:app --host 0.0.0.0 --port 8000 --reload --log-level warning
     ports:
       - "8000:8000"
     env_file: ./.env
@@ -288,7 +288,9 @@ services:
       # ws://gama:3001 en mode offline (make run OFFLINE=1), IHM sur l'hôte sinon
       GAMA_WS_URL: ${GAMA_WS_URL:-ws://host.docker.internal:3001}
     volumes:
-      - ./llm_module:/app/llm_module
+      - ./llm_gateway/src/llm_gateway:/app/llm_gateway
+      - ./mobility_core/src/mobility_core:/app/mobility_core
+      - ./mobility_llm/src/mobility_llm:/app/mobility_llm
       # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
       # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
       # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait
@@ -331,7 +333,9 @@ services:
       PYTHONPATH: /app:/opt
     volumes:
       - ./llm-agents:/app
-      - ./llm_module:/opt/llm_module
+      - ./llm_gateway/src/llm_gateway:/opt/llm_gateway
+      - ./mobility_core/src/mobility_core:/opt/mobility_core
+      - ./mobility_llm/src/mobility_llm:/opt/mobility_llm
       - ./scripts:/app/scripts
       # Dépôt autonome prompt_calibration (endpoint POST /calibrate → CALIBRATION_DIR)
       - ./prompt_calibration:/app/prompt_calibration
@@ -365,9 +369,9 @@ services:
 
   worker:
     build:
-      context: ./llm_module
-      dockerfile: Dockerfile
-    command: celery -A llm_module.worker.task_worker.celery_app worker --loglevel=info --concurrency=25 -P threads
+      context: .
+      dockerfile: llm_gateway/Dockerfile
+    command: celery -A llm_gateway.worker.task_worker.celery_app worker --loglevel=info --concurrency=25 -P threads
     env_file: ./.env
     environment:
       <<: *shared-env
@@ -376,7 +380,9 @@ services:
       APP_WORKDIR: /app/experiments/current
       SERVICE_NAME: worker
     volumes:
-      - ./llm_module:/app/llm_module
+      - ./llm_gateway/src/llm_gateway:/app/llm_gateway
+      - ./mobility_core/src/mobility_core:/app/mobility_core
+      - ./mobility_llm/src/mobility_llm:/app/mobility_llm
       # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
       # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
       # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait
@@ -397,9 +403,9 @@ services:
 
   flower:
     build:
-      context: ./llm_module
-      dockerfile: Dockerfile
-    command: celery -A llm_module.worker.task_worker.celery_app flower --port=5555
+      context: .
+      dockerfile: llm_gateway/Dockerfile
+    command: celery -A llm_gateway.worker.task_worker.celery_app flower --port=5555
     ports:
       - "5555:5555"
     env_file: ./.env

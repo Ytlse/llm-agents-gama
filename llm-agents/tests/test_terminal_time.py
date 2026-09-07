@@ -589,7 +589,7 @@ def test_les_deux_classements_convergent_depuis_tt4():
     from pathlib import Path
 
     import urban_mobility_agents.utils.move_logger as move_logger
-    from llm_module.core.geo_reference import residence_zone as classement_metrique
+    from mobility_core.geo_reference import residence_zone as classement_metrique
     from trip_helper import osmnx_direct
 
     blagnac = (43.635, 1.39)
@@ -599,9 +599,9 @@ def test_les_deux_classements_convergent_depuis_tt4():
 
     # La ressource est stratifiée sur la même définition — sinon les durées tirées
     # seraient comparées à des strates qui ne désignent pas les mêmes territoires.
+    from mobility_core.resources import data_path
     repo = Path(__file__).resolve().parents[2]
-    meta = json.loads((repo / "llm_module" / "data" / "terminal_time_emc2.json")
-                      .read_text(encoding="utf-8"))["meta"]
+    meta = json.loads(data_path("terminal_time_emc2.json").read_text(encoding="utf-8"))["meta"]
     assert "CouronneTable" in meta["crown_definition"]
     assert "geo_reference" not in meta["crown_definition"]
 
@@ -628,7 +628,7 @@ def test_hors_perimetre_est_compte_et_tombe_sur_la_loi_default():
     `default` lui est servie, et le cas est COMPTÉ — un volume élevé signalerait une
     population ou un périmètre qui a changé, pas un cas normal à absorber.
     """
-    from llm_module.core.population_reference import OUT_OF_PERIMETER
+    from mobility_core.population_reference import OUT_OF_PERIMETER
     from trip_helper import osmnx_direct
 
     lot = (44.50, 1.00)   # département du Lot, ~100 km au nord — hors des 453 communes

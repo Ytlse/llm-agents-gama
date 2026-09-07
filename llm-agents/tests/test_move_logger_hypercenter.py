@@ -24,13 +24,13 @@ from pathlib import Path
 
 import pytest
 
-from llm_module.core.geo_reference import (
+from mobility_core.geo_reference import (
     FALLBACK_GEO_REFERENCE,
     geo_reference,
     hypercenter,
 )
-from llm_module.core.geo_reference import haversine_km
-from llm_module.core.geo_reference import residence_zone as classement_metrique
+from mobility_core.geo_reference import haversine_km
+from mobility_core.geo_reference import residence_zone as classement_metrique
 from urban_mobility_agents.utils.move_logger import _residence_zone
 
 FEATURE_SPEC = Path(__file__).resolve().parents[2] / "scripts/progedo_logit/feature_spec.json"
@@ -70,9 +70,8 @@ class TestSourceDeLHypercentre:
 
     def test_spec_absent_replie_sur_la_valeur_publiee_pas_sur_l_ancienne(self, monkeypatch, tmp_path):
         """Les données PROGEDO sont d'accès restreint : le module doit rester utilisable."""
-        monkeypatch.setattr("llm_module.core.geo_reference._REPO_SPEC", tmp_path / "absent.json")
-        monkeypatch.setattr("llm_module.core.geo_reference._CONTAINER_SPEC", tmp_path / "absent.json")
-        monkeypatch.delenv("MODE_CHOICE_FEATURE_SPEC", raising=False)
+        # Un chemin explicite mais absent : find_repo_file rend None (spec introuvable).
+        monkeypatch.setenv("MODE_CHOICE_FEATURE_SPEC", str(tmp_path / "absent.json"))
         geo_reference.cache_clear()
         assert hypercenter() == SPEC_CENTER
         assert hypercenter() != _LEGACY_CENTER

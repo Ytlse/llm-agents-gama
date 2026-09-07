@@ -75,7 +75,7 @@ RPM = 15
 
 # Le fournisseur `google2_35` tire sa clé de PROVIDER_KEYS__google2_35, qui n'est
 # volontairement dans aucun fichier : le secret n'est pas dupliqué (cf. le commentaire
-# de llm_module/config/providers.yaml). On la dérive au lancement.
+# de llm_gateway/config/providers.yaml). On la dérive au lancement.
 KEY_ALIASES = {"PROVIDER_KEYS__google2_35": "PROVIDER_KEYS__google2"}
 
 TRACE_DIR = REPO_ROOT / "docs/traces/2026-08-26_report_marche_tc"
@@ -319,7 +319,7 @@ def replay_variant(variant: dict, pairs: list[dict], base_prompt: str,
     config = RunConfig(eval_provider=provider, eval_model=MODEL, eval_temp=0.0,
                        eval_batch_max=BATCH, prod_option_handling=True,
                        max_retry_wait=30.0,
-                       schemas_path=str(REPO_ROOT / "llm_module/prompts/schemas.json"),
+                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/prompts/schemas.json"),
                        category="itinary_multi_agent")
     schema = json.loads(Path(config.schemas_path).read_text(encoding="utf-8"))[config.category]
     call = make_provider_call(config, schema)

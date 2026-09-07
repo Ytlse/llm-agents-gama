@@ -32,7 +32,7 @@ The only reader of this constant is vizpop.py.
 
 ⚠ Depuis le 2026-09-03 (ticket 031, partie 2), le périmètre de la simulation n'est plus un
 disque ni un rectangle : c'est le **polygone des 453 communes** de l'enquête EMC² 2023
-(`llm_module/data/couronne_perimetre.geojson`, table `commune_couronne.json`). Le chargement
+(`mobility_core/data/couronne_perimetre.geojson`, table `commune_couronne.json`). Le chargement
 filtre par commune du domicile (`inputs/population/perimeter.py`), le graphe OSMnx servi au
 runtime est celui du polygone (`PERIMETER_CACHE_KEY`), et `TOULOUSE_CENTER_DIST_M` /
 `TOULOUSE_OSM_ROUTES_30K_BBOX` ne gardent qu'un rôle d'AUDIT : identifier le graphe

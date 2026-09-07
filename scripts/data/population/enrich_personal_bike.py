@@ -9,7 +9,7 @@ Ce que ça remplace : eqasim tirait `p = min(1, vélos_du_donneur / taille)` où
 vélos est **recopié** d'un ménage de l'ENTD 2008 apparié sans la taille du foyer ni
 l'habitat. Le total sortait à peu près juste et la répartition était fausse — gradient de
 taille de ménage **inversé**. Le détail des trois étages et des décisions de
-conditionnement est dans `llm_module/core/bike_ownership.py`.
+conditionnement est dans `mobility_core/src/mobility_core/bike_ownership.py`.
 
 ## L'adresse comme clé de ménage : utilisable, imparfaite, et il faut le savoir
 
@@ -67,7 +67,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.bike_ownership import (
+from mobility_core.bike_ownership import (
     ELECTRIC_BIKE,
     K_MAX,
     MIN_AGE_ELIGIBLE,
@@ -633,7 +633,7 @@ def report(measured: dict, household: dict, counts: Counter,
         print("\n── Équipement par type d'habitat ───────────────────────────────────────")
         attainable = housing_ref.get("attainable_on_imputed_housing") or {}
         published = housing_ref.get("published_on_observed_housing") or {}
-        from llm_module.core.housing_type import key_for
+        from mobility_core.housing_type import key_for
         if not attainable:
             print("  [cible diluée non servie : ré-exportez la ressource avec la table "
                   "du type de logement présente (make housing-type)]")
@@ -779,9 +779,9 @@ def main() -> int:
     parser.add_argument("population", type=Path, nargs="+",
                         help="Fichiers de population JSON à enrichir (modifiés en place)")
     parser.add_argument("--model", type=Path, default=None,
-                        help="Modèle d'équipement vélo (défaut : llm_module/data/)")
+                        help="Modèle d'équipement vélo (défaut : mobility_core/data/)")
     parser.add_argument("--zones", type=Path, default=None,
-                        help="Couche de zones fines (défaut : llm_module/data/)")
+                        help="Couche de zones fines (défaut : mobility_core/data/)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Calcule et rapporte sans réécrire les fichiers")
     parser.add_argument("--check", action="store_true",
@@ -791,7 +791,7 @@ def main() -> int:
                              "sortie) dans ce fichier — lu par la synthèse de représentativité")
     args = parser.parse_args()
 
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.zone_resolver import ZoneResolver
 
     feature_spec = REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"
     try:

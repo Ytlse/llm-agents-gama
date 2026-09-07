@@ -20,14 +20,14 @@ from llm.memory import MemoryEntry, MemoryType
 from llm.shortterm import UserShortTermMemory
 from models import Person, TravelPlan
 from sim_clock import gama_timestamp, wall_clock
-from llm_module.core.mode_choice import (
+from mobility_llm.mode_choice import (
     UniformFallback,
     draw_index,
     mode_distribution,
     normalize_option_probabilities,
 )
-from llm_module.sdk import LLMGatewayClient
-from llm_module.prompts.manager import prompt_manager as llm_module_prompt_manager
+from llm_gateway.sdk import LLMGatewayClient
+from mobility_llm import prompt_manager as _mobility_prompt_manager
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from text_helper import env_ob_to_text
 from settings import settings
@@ -95,14 +95,14 @@ def _weather_eligible_days() -> tuple[tuple[int, int], ...]:
 
     Résolue une fois : la fenêtre ne change pas en cours de run, et la relire à
     chaque décision coûterait une lecture de YAML par agent et par activité.
-    `"enquete"` délègue les bornes à `llm_module.core.population_reference`
+    `"enquete"` délègue les bornes à `mobility_core.population_reference`
     plutôt que de les recopier — renommer une clé du cadrage ne doit pas casser
     ce dispositif en silence.
     """
     fenetre = settings.agent.weather_window
     jours_semaine = None
     if fenetre == "enquete":
-        from llm_module.core.population_reference import survey_window, surveyed_weekdays
+        from mobility_core.population_reference import survey_window, surveyed_weekdays
 
         debut, fin = survey_window()
         if settings.agent.weather_weekdays_only:
@@ -289,9 +289,9 @@ class LlmAgent:
         if settings.cache.enabled:
             population_name = f"{settings.data.synthetic_file_prefix}population_{settings.data.population_size}"
             # Isolation du cache par version de prompt système : si le prompt actif
-            # (llm_module/prompts/prompts.yaml) change, le checksum change et le cache
+            # (mobility_llm/prompts/prompts.yaml) change, le checksum change et le cache
             # repart à neuf au lieu de réutiliser des décisions obsolètes.
-            prompt_checksum = llm_module_prompt_manager.active_prompt_checksum()
+            prompt_checksum = _mobility_prompt_manager().active_prompt_checksum()
             cache_dir = os.path.join(settings.cache.cache_dir, prompt_checksum, population_name)
             logger.info(f"LLM cache isolé par prompt — checksum={prompt_checksum}, dir={cache_dir}")
             self.llm_cache = LlmSemanticCache(

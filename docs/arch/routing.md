@@ -351,7 +351,7 @@ Les requêtes au-delà des coupures spatiales sont rejetées sans calcul Dijkstr
 
 Chaque nœud du graphe porte une **zone** (`trip_helper/congestion_zones.py`) : `city` — la commune
 de Toulouse (frontière géocodée du graphe) ; `agglo` — l'agglomération hors Toulouse, union des
-couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête (`llm_module/data/couronne_perimetre.geojson`) ;
+couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête (`mobility_core/src/mobility_core/data/couronne_perimetre.geojson`) ;
 `outside` — le reste (la 3ᵉ couronne et au-delà). La durée congestionnée d'un trajet voiture est la
 **somme des temps libres de ses arêtes, chacun multiplié par le facteur TomTom de la zone de son
 nœud d'origine à l'heure de départ** : profil « ville » (`city_raw`) en ville, « agglomération »
@@ -365,7 +365,7 @@ communes (`make osmnx-perimeter-graph`, option `--zones-only` pour un pickle exi
 graphe historique de 30 km, paresseusement au premier chargement (`_GraphStore`, `route_worker`,
 réplicas), puis mises en cache dans le pickle. Un nœud sans zone est une erreur explicite (pas de
 facteur deviné) ; la géométrie des couronnes doit être visible du service (montage
-`llm_module/data/couronne_perimetre.geojson` dans les réplicas `osmnx`). Le repli « même nœud »
+`mobility_core/src/mobility_core/data/couronne_perimetre.geojson` dans les réplicas `osmnx`). Le repli « même nœud »
 (deux bouts rabattus sur le même nœud) rend une durée à la vitesse de repli du mode sur la
 distance à vol d'oiseau × 1,3, minimum 1 s — plus 70 km/h pour tous les modes.
 
@@ -396,7 +396,7 @@ Trois propriétés structurent le dispositif :
 - **Paramètre exogène**, valeurs et provenance dans `llm-agents/config/terminal_time.yaml`
   (NCHRP 716, COMPASS, Shoup, Millard-Ball, Cerema) — jamais ajusté pour améliorer un score.
 - Les couronnes sont celles de l'enquête — appartenance aux couronnes par liste de
-  communes (`llm_module.core.residence_zone.CommunalZones`, ticket 028), **la même
+  communes (`mobility_core.residence_zone.CommunalZones`, ticket 028), **la même
   définition** que le trait `residence_zone` du persona et que la colonne « Lieu de
   résidence » du move-log : deux classements divergents factureraient un stationnement de
   centre-ville à un agent que le journal dit en 1ʳᵉ couronne. Les lois de
@@ -535,7 +535,7 @@ sont.
 | `trip_helper/otp.py` → `SUPPORTED_MODES` | ce qui est **accepté** en retour (assertion dure) | `rail` ✅ |
 | `settings.gtfs.gtfs_modality_name_map` | `route_type` → nom lu dans le prompt | `"2": "Train"` ✅ |
 | `llm_agent._PT_LEG_MODES` | déclenche la mention d'abonnement TC | `rail`, `train` ✅ |
-| **`llm_module/data/mode_hierarchy_emc2.json`** | **l'ordre de priorité, gelé depuis le rapport p. 53** | rang **5** ✅ *(2026-09-04)* |
+| **`mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`** | **l'ordre de priorité, gelé depuis le rapport p. 53** | rang **5** ✅ *(2026-09-04)* |
 | `move_logger._RAIL_MODES` / `_CANONICAL_FR` | colonne « Train » de `moves.csv` | vues de la hiérarchie ✅ *(2026-09-04)* |
 | `mode_choice.CANONICAL_MODES` / `_MODE_KEYWORDS` | mode canonique de la répartition | `train`, ordre contrôlé à l'import ✅ *(2026-09-04)* |
 | `task_worker._extract_primary_mode` | compteurs de diagnostic ; suit la hiérarchie | ✅ *(2026-09-04)* |
@@ -585,8 +585,8 @@ journal le dit maintenant :
 
 **Arbitrage du ticket 022, rendu le 2026-09-04 : la hiérarchie du dépôt est celle de
 l'enquête.** L'ordre n'est plus écrit dans le code : il est gelé dans
-[`llm_module/data/mode_hierarchy_emc2.json`](../../llm_module/data/mode_hierarchy_emc2.json)
-et servi par [`llm_module/core/mode_hierarchy.py`](../../llm_module/core/mode_hierarchy.py).
+[`mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`](../../mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json)
+et servi par [`mobility_core/mode_hierarchy.py`](../../mobility_core/src/mobility_core/mode_hierarchy.py).
 
     métro > tram > téléphérique > bus (car liO, car scolaire, TAD) > train
           > voiture > deux-roues motorisé > vélo > marche
@@ -649,7 +649,7 @@ incomplet suivi d'un `reindex(mode_order)`. Les deux lisent désormais **une seu
 [`scripts/analysis/mode_labels.py`](../../scripts/analysis/mode_labels.py), qui publie le
 **détail par libellé** et la **table d'agrégation** vers les catégories de l'enquête, et
 dont la couverture est confrontée à
-[`mode_hierarchy`](../../llm_module/core/mode_hierarchy.py) à chaque comptage. Un libellé
+[`mode_hierarchy`](../../mobility_core/src/mobility_core/mode_hierarchy.py) à chaque comptage. Un libellé
 hors table est compté sous `libelle_inconnu`, nommé, et alarmé en ERROR dans l'`app.log`
 du run — donc lu par `make error`. Détail : [`perimetre-population.md`](perimetre-population.md),
 axe A7.

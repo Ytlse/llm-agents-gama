@@ -1404,3 +1404,46 @@ tickets:
       eqasim et l'étape 8 réécrit 4,7 % du vivier. Proposé : clé `person_id` + `household.id`,
       sel personal_bike_v2, au prochain scellement (v5) ; retrait de la loi du fork ; clôture
       du 015. Options (a) déclarer seulement, (b) lot 1, (c) lots 1 et 2 — recommandation (c).
+
+  ticket_035_plateforme_gestion_experiences_decouplage_spec_fonctionnelle:
+    status: en cours
+    note: >-
+      RÉÉCRIT le 2026-09-05 en spécification FONCTIONNELLE pure (45 EF, 7 RG, 12 CAF, 7 points à
+      trancher) ; six specs testables dans specs/ticket_035/ (86 règles J/D/S/G/Q/E). IMPLÉMENTÉ le
+      2026-09-05 sous hypothèses explicites (specs/ticket_035/questions.md, 18 questions vivantes) :
+      chaîne des véhicules et plafond extraits du contrôleur (vehicle_chain.py, candidats.py) ;
+      décision unique tracée (experiences/decision.py) appelée par le contrôleur ET le runner ;
+      ordre de présentation déterministe dans LlmAgent ; jeu enregistré (experiences/jeu.py, make
+      jeu) ; exécution sans simulateur avec épinglage du décideur, épuisement propre, pause/reprise
+      depuis l'archive (runner.py, decideurs.py, ressources.py, archive.py) ; expérience YAML,
+      empreintes, estimation, refus, registre, comparaison, synthèse (experience.py, registre.py) ;
+      CLI python -m experiences + cibles make ; onglet dashboard « Expériences » ; simulation GAMA
+      sur jeu (make run JEU=, tolérances par groupe, jeu_stats.json, rubrique make report).
+      Relecture du 2026-09-06 (deux tours) : 17 questions tranchées et appliquées — offre TC du jour
+      lue dans le GTFS par déplacement (experiences/offre_jour.py, make jeu-verifier-jours), moves.csv
+      enrichi, recréation du contrôleur, format des événements, unité = déplacement, empreinte du jeu
+      suffit ; règle du jour rigoureuse (grille horaire identique, sinon fenêtre temporelle par déplacement) ;
+      déplacements sans proposition inexploitables, exclus et remontés en WARNING. Plus aucune question
+      ouverte ; reste à faire la vérification GTFS sur un jeu réel v5 (OTP requis). 80 tests test_035_*
+      verts, suite complète verte (573). RESTE : D8/G12 (égalité des modes sur run
+      réel), G8/G9 événements (refusés au lancement), G10 pause à chaud GAMA (DecideurRejeu non
+      câblé sur CONT=1), S5 taille des lots, E21, validation humaine du design
+      (docs/arch/plateforme-experiences.md) et des 18 questions.
+  ticket_036_authentification_gateway_llm:
+    status: en veille
+    note: >-
+      DÉCISION du 2026-09-06 : à traiter dans un second temps, après le découpage de llm_module
+      en bibliothèque (paramétrage préfixé LLM_GATEWAY_). Le ticket fixe le périmètre pour ne pas
+      redécider : jeton bearer optionnel en liste (rotation), /health exempté, /metrics
+      protégeable, SDK qui envoie l'en-tête et ne compte pas 401/403 comme une panne, aucune
+      trace du jeton dans les logs, CORS configurable à la place du `*` codé en dur. Effort S.
+  ticket_037_llm_module_en_trois_bibliotheques:
+    status: en cours
+    note: >-
+      GO du 2026-09-06. Itération 1 LIVRÉE le 2026-09-07 : trois paquets en layout src (llm_gateway 1.1.0,
+      mobility_core 0.1.0, mobility_llm 0.1.0) installés en editable ; coquille llm_module dépréciée (53
+      shims) ; hook de catégorie par entry point (validation 422 à la soumission, observe côté worker) ;
+      suites 233 + 199 + 134, llm-agents 551 ; import-linter 5/5 ; ruff et mypy strict à zéro ; images
+      api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. RESTE : faire
+      tourner la CI (push), trancher la licence ; itérations suivantes = paramétrage en couches
+      LLM_GATEWAY_, adapter OpenAI-compatible, exécuteur sans Celery, ticket 036 (auth).

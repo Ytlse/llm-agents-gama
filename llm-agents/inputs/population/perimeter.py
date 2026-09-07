@@ -1,8 +1,8 @@
 """Périmètre d'admission de la population au chargement (ticket 031, partie 2).
 
 Le périmètre d'étude est celui de l'enquête EMC² 2023 : les **453 communes** de six départements,
-délimitées par le polygone des communes (`llm_module/data/couronne_perimetre.geojson`, table
-`llm_module/data/commune_couronne.json`). Jusqu'au 2026-09-03, `_prepare_population` filtrait
+délimitées par le polygone des communes (`mobility_core/data/couronne_perimetre.geojson`, table
+`mobility_core/data/commune_couronne.json`). Jusqu'au 2026-09-03, `_prepare_population` filtrait
 sur un RECTANGLE — `TOULOUSE_OSM_ROUTES_30K_BBOX`, le plus grand rectangle inscrit dans le graphe
 OSMnx de 30 km — et écartait tout agent dont le domicile ou UNE SEULE activité sortait du
 rectangle : 79 agents de la v3, toute la 3ᵉ couronne de la v4, donc un sceau refusé.
@@ -43,8 +43,8 @@ from loguru import logger
 
 from models import BBox
 
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
-from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 
 PERIMETER_LABEL = "453 communes, six départements, polygone communal"
 
@@ -104,7 +104,7 @@ class PopulationPerimeter:
     def __init__(self, communes, polygon, label: str = PERIMETER_LABEL) -> None:
         from shapely import prepare
 
-        self.communes = communes          # llm_module.core.residence_zone.CommuneTable
+        self.communes = communes          # mobility_core.residence_zone.CommuneTable
         self.polygon = polygon            # shapely (Multi)Polygon, EPSG:4326
         prepare(self.polygon)
         min_lon, min_lat, max_lon, max_lat = polygon.bounds
@@ -114,7 +114,7 @@ class PopulationPerimeter:
     @classmethod
     def load(cls, geojson: Optional[Path] = None, commune_table: Optional[Path] = None) -> "PopulationPerimeter":
         """Charge la géométrie des couronnes et la table des communes. Jamais de repli sur un rectangle."""
-        from llm_module.core.residence_zone import (DEFAULT_GEOJSON, CommuneTable,
+        from mobility_core.residence_zone import (DEFAULT_GEOJSON, CommuneTable,
                                                      ResidenceZoneError)
 
         path = Path(geojson) if geojson else DEFAULT_GEOJSON

@@ -10,7 +10,7 @@ Ce module est le seul endroit où ces cibles sont assemblées ; le contrôle ne 
 :class:`Marge`.
 
 DEUX SOURCES, ET LEUR ORDRE. (1) Le cadrage versionné `population_emc2_2023.yaml`, lu par
-`llm_module.core.population_reference`, porte les marges PUBLIÉES par le rapport AUAT/CEREMA
+`mobility_core.population_reference`, porte les marges PUBLIÉES par le rapport AUAT/CEREMA
 (classes d'âge et occupation p. 11, motorisation des ménages p. 21, population par couronne
 et taille des ménages p. 10). (2) La cible JOINTE couronne × motorisation, sur base PERSONNE,
 n'est publiée nulle part : le rapport donne la motorisation par couronne en base MÉNAGE
@@ -49,7 +49,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from llm_module.core.population_reference import (  # noqa: E402
+from mobility_core.population_reference import (  # noqa: E402
     COURONNES, couronne_population_shares, household_targets, population_reference)
 
 logger = logging.getLogger("aamas.reference")

@@ -6,7 +6,7 @@ son nœud d'origine :
 - ``city`` — la commune de Toulouse (la frontière géocodée ``boundary`` du graphe) : profil de
   congestion TomTom « ville » (``city_raw`` de ``config/osmnx.yaml``) ;
 - ``agglo`` — l'agglomération hors Toulouse : union des couronnes ``Toulouse``, ``1ere couronne``
-  et ``2eme couronne`` de l'enquête EMC² (``llm_module/data/couronne_perimetre.geojson``), moins
+  et ``2eme couronne`` de l'enquête EMC² (``mobility_core/data/couronne_perimetre.geojson``), moins
   la ville : profil « agglomération » (``metro_raw``) ;
 - ``outside`` — le reste du polygone des 453 communes (la 3ᵉ couronne) et au-delà : facteur 1,0.
 
@@ -37,13 +37,22 @@ ZONES = (ZONE_CITY, ZONE_AGGLO, ZONE_OUTSIDE)
 NODE_ZONE_KEY = "zone"
 AGGLO_COURONNES = ("Toulouse", "1ere couronne", "2eme couronne")
 
-# Où trouver la géométrie des couronnes selon l'endroit où le code tourne : dépôt (notebook,
-# tests), controller Docker (`/opt/llm_module`), réplicas osmnx (`/app/llm_module/data`).
+# Où trouver la géométrie des couronnes selon l'endroit où le code tourne : la ressource du
+# paquet mobility_core quand il est importable (dépôt, controller), sinon le fichier monté
+# dans les réplicas osmnx (`/app/mobility_core/data`) ou sous /opt.
+def _packaged_geojson() -> str:
+    try:
+        from mobility_core.resources import data_path
+        return str(data_path("couronne_perimetre.geojson"))
+    except ImportError:  # pragma: no cover - image osmnx sans le paquet
+        return ""
+
+
 GEOJSON_CANDIDATES = (
     os.environ.get("AGGLO_GEOJSON", ""),
-    str(Path(__file__).resolve().parents[2] / "llm_module" / "data" / "couronne_perimetre.geojson"),
-    "/opt/llm_module/data/couronne_perimetre.geojson",
-    "/app/llm_module/data/couronne_perimetre.geojson",
+    _packaged_geojson(),
+    "/opt/mobility_core/data/couronne_perimetre.geojson",
+    "/app/mobility_core/data/couronne_perimetre.geojson",
 )
 
 
@@ -59,7 +68,7 @@ def geojson_path(explicit: Optional[str] = None) -> Path:
         "géométrie des couronnes introuvable (couronne_perimetre.geojson) : cherché "
         + ", ".join(c for c in (explicit, *GEOJSON_CANDIDATES) if c)
         + ". Sans elle, les zones de congestion du graphe ne se calculent pas ; montez "
-          "llm_module/data ou posez AGGLO_GEOJSON.")
+          "mobility_core/data ou posez AGGLO_GEOJSON.")
 
 
 def agglo_polygon(explicit: Optional[str] = None):

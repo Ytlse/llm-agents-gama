@@ -1,0 +1,75 @@
+# Documentation du paquet llm_gateway — `mkdocs serve` depuis ce dossier,
+# `mkdocs build --strict` en CI (job docs de .github/workflows/ci.yml).
+site_name: llm-gateway
+site_description: Gateway asynchrone multi-fournisseur LLM — micro-batching, SWRR, catégories enfichables
+docs_dir: docs
+site_dir: site
+strict: true
+use_directory_urls: true
+
+theme:
+  name: material
+  language: fr
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Passer en sombre
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Passer en clair
+
+plugins:
+  - search:
+      lang: fr
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Accueil: index.md
+  - Tutoriels:
+      - Première requête: tutoriels/premiere-requete.md
+  - Guides:
+      - Ajouter un provider: guides/ajouter-un-provider.md
+      - Ajouter une catégorie: guides/ajouter-une-categorie.md
+      - Régler les quotas: guides/regler-les-quotas.md
+      - Tester: guides/tester.md
+  - Référence:
+      - Réglages: reference/reglages.md
+      - API HTTP: reference/api-http.md
+      - SDK Python: reference/sdk-python.md
+      - API Python (docstrings): reference/api-python.md
+      - Métriques Prometheus: reference/metriques.md
+      - Erreurs et alarmes: reference/erreurs-alarmes.md
+  - Explications:
+      - Architecture: explications/architecture.md
+      - Batching, SWRR, disjoncteur: explications/batching-swrr-disjoncteur.md
+  - Décisions (ADR):
+      - 0001 — Trois paquets: adr/0001-trois-paquets.md
+      - 0002 — Hook de catégorie: adr/0002-hook-de-categorie.md
+  - Changelog: changelog.md

@@ -76,8 +76,8 @@ logger = logging.getLogger("osmnx.perimetre")
 from geography import PERIMETER_CACHE_KEY, PERIMETER_GRAPH_LABEL  # noqa: E402
 from geography import PRODUCTION_CACHE_KEY_30KM as PRODUCTION_CACHE_KEY  # noqa: E402  (disque de 30 km : frontière réutilisée)
 
-COURONNE_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
-COMMUNE_TABLE = REPO_ROOT / "llm_module" / "data" / "commune_couronne.json"
+COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+COMMUNE_TABLE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
 OSM_PBF_SOURCES = [
     REPO_ROOT / "eqasim-toulouse" / "data" / "osm_toulouse" / "midi-pyrenees-220101.osm.pbf",
     REPO_ROOT / "eqasim-toulouse" / "data" / "osm_toulouse" / "languedoc-roussillon-220101.osm.pbf",

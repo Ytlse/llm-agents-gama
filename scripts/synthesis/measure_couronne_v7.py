@@ -54,10 +54,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "prompt_calibration"))
 
-from llm_module.core.geo_reference import residence_zone as metric_zone  # noqa: E402
-from llm_module.core.population_reference import (  # noqa: E402
+from mobility_core.geo_reference import residence_zone as metric_zone  # noqa: E402
+from mobility_core.population_reference import (  # noqa: E402
     COURONNES, OUT_OF_PERIMETER, couronne_population_shares)
-from llm_module.core.residence_zone import CouronneTable  # noqa: E402
+from mobility_core.residence_zone import CouronneTable  # noqa: E402
 from scripts.synthesis.frames import (  # noqa: E402
     MODES, load_cerema, reference_shares)
 
@@ -251,7 +251,7 @@ def main() -> int:
     parser.add_argument("--population", type=Path, default=POPULATION)
     args = parser.parse_args()
 
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.zone_resolver import ZoneResolver
 
     sha_avant = sha256_of(args.population)
     table = CouronneTable.load()

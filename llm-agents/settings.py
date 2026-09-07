@@ -100,9 +100,15 @@ class WorkdirPathResolutionMixin:
 
 def _find_providers_yaml() -> Optional[Path]:
     """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
-    candidates = [
-        Path(base_dir) / ".." / "llm_module" / "config" / "providers.yaml",
-        Path("/opt/llm_module/config/providers.yaml"),
+    candidates = []
+    try:
+        import llm_gateway  # installé (editable sur l'hôte, image ou montage dans le conteneur)
+        candidates.append(Path(llm_gateway.__file__).resolve().parent / "config" / "providers.yaml")
+    except ImportError:  # pragma: no cover
+        pass
+    candidates += [
+        Path(base_dir) / ".." / "llm_gateway" / "src" / "llm_gateway" / "config" / "providers.yaml",
+        Path("/opt/llm_gateway/config/providers.yaml"),
     ]
     for p in candidates:
         if p.exists():
@@ -135,7 +141,7 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
     provider_switch_cooldown_seconds: int = 30
     batch_max_agents:          int   = 5
-    batch_delay_seconds:       float = 3.0  # miroir de llm_module.config (fenêtre d'accumulation du micro-batching)
+    batch_delay_seconds:       float = 3.0  # miroir de llm_gateway.config (fenêtre d'accumulation du micro-batching)
 
     # Clés API lues depuis l'env : PROVIDER_KEYS__groq=gsk-...
     provider_keys: Dict[str, SecretStr] = {}
@@ -420,7 +426,7 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # DÉSACTIVÉ PAR DÉFAUT : rien ne bouge sans intention explicite.
     weather_per_agent_dates: bool = False
     # "enquete" lit la fenêtre de collecte EMC² et ses jours enquêtés depuis
-    # llm_module.core.population_reference (pas de bornes recopiées) ; "annee"
+    # mobility_core.population_reference (pas de bornes recopiées) ; "annee"
     # prend les 365 jours ; sinon un couple ["AAAA-MM-JJ", "AAAA-MM-JJ"].
     weather_window: Any = "enquete"
     # L'enquête ne porte que des jours ouvrés ; sans effet si la fenêtre est

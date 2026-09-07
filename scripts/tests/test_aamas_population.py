@@ -48,7 +48,7 @@ def _persona(pid: int, age: int, gender: str, occupation: str, cars: int, size: 
 
 def _pool(n_per_cell: int = 40) -> list[dict]:
     """Un vivier synthétique : chaque cellule couronne × motorisation peuplée de `n_per_cell`."""
-    from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
+    from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
     pool, pid = [], 0
     occupations = ["Travail à plein temps", "Retraité", "Scolaire (jusqu'au Bac)", "Étudiant",
                    "Travail à temps partiel", "Chômeur/recherche d'emploi", "Personne au foyer"]
@@ -188,7 +188,7 @@ def test_descente_reduit_la_perte_sans_bouger_les_cellules():
 
 def _pool_menages(n_menages_par_cellule: int = 25) -> list[dict]:
     """Un vivier en MÉNAGES : tailles 1 à 3, une cellule par ménage, household.id à la racine."""
-    from llm_module.core.population_reference import COURONNES
+    from mobility_core.population_reference import COURONNES
     pool, pid, hid = [], 0, 0
     occupations = ["Travail à plein temps", "Retraité", "Scolaire (jusqu'au Bac)", "Étudiant",
                    "Travail à temps partiel", "Chômeur/recherche d'emploi", "Personne au foyer"]
@@ -326,7 +326,7 @@ def test_independance_rend_non_mesurable_sur_une_table_degeneree(tmp_path):
 
 def _pool_scolaires(n_menages: int = 30, part_etudes: float = 0.5) -> list[dict]:
     """Un vivier avec des ménages parent + enfant scolaire ; `part_etudes` des enfants vont à l'école."""
-    from llm_module.core.population_reference import COURONNES
+    from mobility_core.population_reference import COURONNES
     pool, pid = [], 0
     for h in range(n_menages):
         c = COURONNES[h % 4]
@@ -448,7 +448,7 @@ def _pool_v5(par_taille: int = 26, avec_enfants_absents: bool = True) -> list[di
     que la sous-cellule de la v5 distingue (et le seul levier de poids `1/taille` du vivier
     réel : 52 membres sur 1 052 en v4).
     """
-    from llm_module.core.population_reference import COURONNES
+    from mobility_core.population_reference import COURONNES
     occupations = ["Travail à plein temps", "Retraité", "Scolaire (jusqu'au Bac)", "Étudiant",
                    "Travail à temps partiel", "Chômeur/recherche d'emploi", "Personne au foyer"]
     pool, pid, hid = [], 0, 0

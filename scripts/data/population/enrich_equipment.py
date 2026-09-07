@@ -65,7 +65,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
-from llm_module.core.equipment_propensity import (
+from mobility_core.equipment_propensity import (
     DRIVING_LICENSE,
     PT_SUBSCRIPTION,
     PropensityLaw,
@@ -379,7 +379,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("population", type=Path, nargs="+",
                         help="fichiers de population à enrichir en place")
     parser.add_argument("--zones", type=Path, default=None,
-                        help="couche de zones fines (défaut : llm_module/data/zf_zones.gpkg)")
+                        help="couche de zones fines (défaut : mobility_core/data/zf_zones.gpkg)")
     parser.add_argument("--spec", type=Path, default=None,
                         help="spec du modèle, pour l'hypercentre")
     parser.add_argument("--dry-run", action="store_true",
@@ -388,7 +388,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="confronte aux cibles des tickets 016/017 et sort en échec")
     args = parser.parse_args(argv)
 
-    zones = args.zones or REPO_ROOT / "llm_module" / "data" / "zf_zones.gpkg"
+    zones = args.zones or REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
     spec_path = args.spec or REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"
     if not zones.exists():
         print(f"[erreur] Couche de zones absente : {zones} — `make zones`",
@@ -405,7 +405,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"[erreur] {exc}", file=sys.stderr)
         return EXIT_RESOURCE_MISSING
 
-    from llm_module.core.zone_resolver import ZoneResolver
+    from mobility_core.zone_resolver import ZoneResolver
     resolver = ZoneResolver.load(zones, feature_spec=spec_path)
     hypercenter = _hypercenter(spec_path)
     for spec in SPECS:

@@ -2,7 +2,7 @@
 export_commune_couronne.py — La donnée manquante du ticket 020 : quelle commune est
 dans quelle couronne, et où s'arrête le périmètre d'enquête.
 
-CE QUE ÇA PRODUIT. Trois ressources, dans `llm_module/data/` :
+CE QUE ÇA PRODUIT. Trois ressources, dans `mobility_core/data/` :
 
 1. `commune_couronne.json` — les 453 communes du périmètre EMC² 2023 avec leur code
    INSEE et leur couronne (`Toulouse` / `1ere couronne` / `2eme couronne` /
@@ -11,7 +11,7 @@ CE QUE ÇA PRODUIT. Trois ressources, dans `llm_module/data/` :
    permettant de classer un domicile par **appartenance** et non par distance.
 3. `zf_couronne.json` — les 785 zones fines avec leur secteur de tirage, leur couronne,
    leur code INSEE et leur commune (ticket 021). C'est la ressource que lit
-   `llm_module.core.residence_zone` : elle rend la couronne d'un domicile SANS géométrie
+   `mobility_core.residence_zone` : elle rend la couronne d'un domicile SANS géométrie
    au runtime, puisque `zone_resolver` en donne déjà la zone fine. Le grain est la zone
    fine et non le secteur, parce qu'une table `secteur → couronne` de 88 lignes ne
    porterait pas la commune — et la commune est ce qui rend le classement auditable.
@@ -54,7 +54,7 @@ SIG_DIR = REPO_ROOT / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
 DTIR_SHP = SIG_DIR / "EMC2_Toulouse_2023_DTIR_17072023.shp"
 ZF_SHP = SIG_DIR / "EMC2_Toulouse_2023_ZF_26052023.shp"
 
-OUT_DIR = REPO_ROOT / "llm_module" / "data"
+OUT_DIR = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data"
 OUT_TABLE = OUT_DIR / "commune_couronne.json"
 OUT_GEOJSON = OUT_DIR / "couronne_perimetre.geojson"
 OUT_ZF_TABLE = OUT_DIR / "zf_couronne.json"

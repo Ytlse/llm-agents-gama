@@ -22,8 +22,8 @@ from models import Activity, BBox, Location, Person, PersonalIdentity, PersonSta
 from settings import settings
 from utils import fake
 
-from llm_module.core.population_reference import COURONNES, OUT_OF_PERIMETER
-from llm_module.core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
+from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 
 # Filtre d'ADMISSION de la population (ticket 026, étage 3).
 #

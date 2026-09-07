@@ -1,20 +1,14 @@
+"""Shim de compatibilité — `llm_module.ports.metrics` a déménagé dans `llm_gateway.ports.metrics`.
+
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.ports.metrics`.
 """
-ports/metrics.py — Contrat des compteurs de métriques worker.
+import warnings as _warnings
 
-Le worker Celery n'expose pas de /metrics : ses compteurs sont persistés
-(sans TTL) et relus par le collecteur Prometheus custom de l'API.
-Les noms sont composés « metrique:label[:label2] », ex. "llm_calls_ok_total:groq_llama4".
-"""
+_warnings.warn(
+    "llm_module.ports.metrics est déprécié : importez llm_gateway.ports.metrics (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-from __future__ import annotations
-from typing import Protocol
-
-
-class MetricsSink(Protocol):
-    def incr(self, name: str, amount: int = 1) -> None: ...
-
-    def get(self, name: str) -> int: ...
-
-    def items(self) -> dict[str, int]:
-        """Snapshot de tous les compteurs — une seule lecture par scrape."""
-        ...
+from llm_gateway.ports.metrics import *  # noqa: E402,F401,F403

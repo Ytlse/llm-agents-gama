@@ -14,7 +14,7 @@ if __name__ == "__main__":
     logger.info(f"---- Starting server ... ----")
 
     uvicorn.run(
-        "llm_module.main:app", 
+        "llm_gateway.main:app",
         host=settings.server.http_host, 
         port=settings.server.http_port, 
         http="h11", 

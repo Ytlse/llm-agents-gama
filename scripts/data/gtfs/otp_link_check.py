@@ -31,7 +31,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-COURONNES_GEOJSON = REPO_ROOT / "llm_module" / "data" / "couronne_perimetre.geojson"
+COURONNES_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 # `llm-agents/` sur le path : `--gama-timestamp` traduit l'horodatage avec `sim_clock`,
 # le module que le runtime utilise. Recopier la conversion ici rétablirait l'asymétrie
 # qui a caché le défaut — un instrument qui ne tombe que si LUI change.
