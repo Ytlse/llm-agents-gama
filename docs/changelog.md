@@ -1,3 +1,119 @@
+## [2026-09-11] Un modèle local et un modèle distant du même nom sont deux expériences
+
+Le même identifiant de modèle vit parfois des deux côtés : `qwen/qwen3.8-27b` est servi par Groq
+et par LM Studio, en deux quantifications différentes. Les expériences ne se désignaient que par
+le nom du modèle, alors les deux instances étaient admises ensemble — et quand le quota Groq
+s'épuisait en cours de route, la suite des décisions était prise par le modèle local, sous le
+même nom d'expérience et dans la même archive.
+
+Le décideur porte maintenant une **portée**, `local` ou `distant`. Le formulaire la demandait
+déjà — les deux entrées « modèle de langage (distant) » et « (local, LM Studio) » — mais la
+réponse n'était pas écrite dans le fichier. Elle l'est, et elle sert à trois choses : restreindre
+les instances sollicitées, nommer l'expérience (`exp_qwen38-27b_local_…`), et dire l'archive.
+Les deux usages restent ouverts : ce sont deux expériences, deux dossiers, deux mesures.
+
+Une expérience dont le modèle est servi des deux côtés sans que la portée soit posée est refusée
+au lancement, avec les deux instances nommées. Rien ne change pour les autres : une portée
+absente sans ambiguïté ne modifie ni le nom, ni l'empreinte, ni le comportement.
+
+Le fournisseur affiché pour une exécution est désormais lu dans ses décisions, et non recalculé
+depuis la configuration du jour.
+
+**Avant :** l'exécution `exp_qwen38-27b_minper_jtir_t0_nosim` du 2026-09-09, servie de bout en
+bout par Groq, s'affichait `groq · local` — la configuration avait gagné une instance LM Studio
+le lendemain. Relancée aujourd'hui, elle aurait mélangé les deux quantifications sans le dire.
+
+**Après :** elle s'affiche `groq`, parce que c'est ce que ses 210 décisions déclarent. Une
+définition encore ambiguë s'affiche `⚠ groq ou local` — une incertitude, pas un fournisseur.
+
+---
+
+## [2026-09-10] Un second oracle, et un score qui dit si le prompt raisonne comme lui
+
+Le logit multinomial que l'article annonçait depuis le début existe : `make logit` l'estime
+sur les mêmes microdonnées d'enquête que le booster LightGBM, à parité stricte sur les
+21 variables du contrat. `make bi-oracle` s'en sert pour produire deux mesures que le
+composite ne portait pas — l'accord **décision par décision** du prompt avec un modèle de
+comportement, et la **cohérence du sens** de ses variations.
+
+**Avant :** le composite mesurait une seule chose, l'écart des parts modales à l'enquête. Un
+prompt pouvait coller aux parts agrégées par compensation entre sous-populations sans qu'aucun
+chiffre ne le dise, et « l'oracle supervisé est un plafond de référence » restait une
+hypothèse — le second terme de la comparaison n'était pas estimé.
+**Après :** trois blocs publiés côte à côte. Sur le run épinglé : fidélité 16,16 (inchangée),
+accord au logit **899 %** de la distance qui sépare les deux oracles entre eux, désaccord de
+sens **5,0 %** (1 transition de distance sur 20). Le prompt est donc neuf fois plus loin du
+logit que le booster ne l'est, et suit néanmoins le bon sens de variation presque partout.
+
+**Ce que la comparaison des deux oracles apprend.** Sur le split test scellé de 13 045
+trajets, le booster devance le logit sur **les deux** familles d'indicateurs — exactitude
+0,785 contre 0,766, L1 des parts modales 0,027 contre 0,029. L'inversion que la littérature
+comparative décrit (Martín-Baos et al. 2023 : les arbres gagnent en désagrégé et perdent en
+parts agrégées) ne se produit pas ici : le plafond de référence est bien le booster, et ce
+n'est plus une hypothèse.
+
+**Les poids des deux nouveaux termes valent 0, volontairement.** Ils sont mesurés, journalisés
+et publiés, mais ne sélectionnent aucun prompt : un prompt choisi sous un terme mesuré contre
+un modèle serait ajusté à ce modèle, pas à l'enquête. Le composite étant linéaire, les
+promouvoir plus tard s'appliquera à tout l'historique par simple addition, sans repayer un
+appel LLM.
+
+**Deux chiffres qui auraient menti sans être faux.** Les 665 décisions à **une seule option**
+sortent du score : le prompt n'y a pas été interrogé et les trois décideurs y sont forcés sur
+le même mode — un accord parfait gratuit, soit de la vacuité prise pour de la perfection. Et
+la grandeur de tête est une divergence de Jensen-Shannon, non de Kullback-Leibler : 1 923
+décisions sur 2 584 déclenchent le plancher de cette dernière, dont la valeur mesurerait alors
+le plancher autant que les décisions. Le rapport de KL reste publié en second, avec le compte
+des décisions concernées.
+
+**Au passage :** le manifeste de la page de synthèse pointait encore la couche de zones fines
+dans `llm_module/data/`, où elle n'est plus depuis le découpage du module en bibliothèques. Le
+volet 3 se régénérait « couche absente » sans que rien ne dise que c'était le manifeste, et
+non la ressource, qui manquait.
+
+Détail, pièges et limites déclarées (ni valeur du temps ni disposition à payer : le contrat
+des 21 variables ne porte aucun coût) : [ticket 042](tickets/ticket_042_second_oracle_logit_multinomial.md).
+
+---
+
+## [2026-09-10] Mistral Large 3 rejoint les modèles de l'interface de pilotage
+
+Le sélecteur de modèles de l'onglet 🧪 Expériences propose désormais **`mistral-large-2512`**
+(Mistral Large 3, contexte 262 144), en plus du `mistral-small-latest` déjà servi par la même
+clé. Le modèle entre aussi dans la rotation de la simulation GAMA, avec un poids de 2.0.
+
+**Avant :** un seul modèle Mistral distant, `mistral-small-latest`.
+**Après :** deux, choisissables indépendamment dans une expérience — et l'ajout ne coûte rien
+au premier.
+
+**Conséquence à connaître sur le mode GAMA.** Le routage de la simulation est une *cascade*, pas
+un étalement : le poids 2.0 place Large 3 **au 2ᵉ rang de priorité**, derrière `mistral_key1` et
+devant les instances Google. Dès que la première instance est en cooldown, c'est Large 3 qui
+reçoit les décisions, à 30 requêtes/minute. Un `weight: 0` le sortirait de cette cascade sans rien
+retirer aux expériences, qui désignent l'instance nommément.
+
+**Il ne prend rien à l'instance existante.** Les limites par minute de Mistral sont comptées
+**par modèle**, mesuré aux en-têtes le jour de l'ajout : 30 req/min et 800 000 jetons/min pour
+Large 3, contre 1 000 req/min et 500 000 jetons/min pour Small, sur une seule et même clé. Ce
+qui reste partagé, c'est la facture mensuelle (1 milliard de jetons du palier gratuit) : le
+garde-fou journalier de la nouvelle instance est donc posé au simple prorata (33 M jetons/jour),
+pas au triple comme celui de sa voisine.
+
+**Ce que l'aptitude en dit.** Pour la charge de référence d'une expérience du plan courant
+(2 285 sollicitations, ~1 689 jetons par sollicitation), le contrôle a priori ne rend **ni refus
+ni avertissement** : ~1,3 h d'exécution à 30 req/min, sous le seuil des 6 h au-delà duquel une
+exécution traverse une fenêtre de renouvellement de quota.
+
+**Le nom du modèle est daté, pas aliasé.** L'instance déclare `mistral-large-2512` et non
+`mistral-large-latest` : un alias déplacé sur un autre modèle ferait porter à l'empreinte scellée
+d'une expérience un nom faux sans que rien ne le signale — c'est l'incident constaté le matin
+même sur un alias Gemini.
+
+Au passage, `docs/setup/llm-providers.md` affirmait que Mistral ne compte pas ses quotas par
+modèle. C'était faux, et c'est corrigé : la mesure dit l'inverse.
+
+---
+
 ## [2026-09-10] Le résumé devient le chapitre 0, et GAMA Days redevient l'exception
 
 Le rangement livré plus tôt dans la journée ouvrait un dossier `soumissions/` à deux branches,

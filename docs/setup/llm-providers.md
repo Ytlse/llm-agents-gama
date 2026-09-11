@@ -91,6 +91,7 @@ Quotas free tier relevés par `make providers` (2026-08-03) :
 |----------|---------|-------------------|-----|-----|-----|-----|-------|
 | `openai` | openai | gpt-4o-mini | 15 | 200K | — | 2M | 1.0 |
 | `mistral` | mistral | mistral-small-latest | 60 | 500K | — | 100M† | 4.0 |
+| `mistral_large3_key1` | mistral | mistral-large-2512 | 30 | 800K | — | 33M† | 2.0 |
 | `google_gemini31_key1` | google | gemini-3.1-flash-lite | 15 | 250K | 500 | — | 1.0 |
 | `google_gemini35_key1` | google | gemini-3.5-flash-lite | 15 | 250K | 500 | — | 1.0 |
 | `google_gemini31_key2` | google | gemini-3.1-flash-lite | 15 | 250K | 500 | — | 1.0 |
@@ -113,8 +114,22 @@ Quotas free tier relevés par `make providers` (2026-08-03) :
 \* ajoutés automatiquement par `make providers` le 2026-08-03 (seaux de quota indépendants : le gemma-4-31b Cerebras ne consomme pas le quota Google de `google_gemma43_key1`).
 
 Cerebras applique aussi une limite **horaire** (150 req/h, 1 M tokens/h) non
-modélisée dans le YAML. Mistral n'a pas de seau par modèle : le quota est
-partagé entre tous les modèles du compte.
+modélisée dans le YAML. Mistral, en revanche, compte bien **par modèle** ses
+limites par minute : mesuré aux en-têtes le 2026-09-10 sur une seule clé,
+`mistral-small-latest` annonce 1 000 req/min et 500 K jetons/min quand
+`mistral-large-2512` annonce 30 req/min et 800 K jetons/min. Ajouter une
+instance Mistral n'enlève donc rien aux autres. Ce qui reste commun au compte,
+c'est la facture **mensuelle** (1 Md jetons free tier) — les `tpd_limit` des
+instances Mistral sont des garde-fous locaux qui se cumulent, à surveiller
+ensemble.
+Avec son `weight: 2.0`, `mistral_large3_key1` se place **2ᵉ de la cascade** du
+mode GAMA, juste derrière `mistral_key1` et devant les instances Google : dès
+que la première est en cooldown, c'est Large 3 qui prend le trafic de
+simulation (constaté au démarrage de la passerelle, ligne « Routage en
+CASCADE »). Le mettre à `weight: 0` le sortirait de la rotation sans rien
+changer aux expériences, qui l'appellent par `force_provider`.
+(Correction du 2026-09-10 : ce paragraphe affirmait l'inverse — « Mistral n'a
+pas de seau par modèle ».)
 
 ---
 

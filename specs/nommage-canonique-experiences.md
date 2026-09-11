@@ -21,7 +21,7 @@ sont *la même expérience*, avec deux exécutions.
 - **N1** — Le nom n'est plus saisi. Le formulaire l'affiche, calculé, et ne le laisse pas
   modifier. Le champ texte disparaît, avec sa validation et sa proposition de correction.
 - **N2** — Grammaire, segments séparés par `_`, ordre fixe :
-  `exp_<décideur>[_<prompt>][_<calendrier>][_<écarts>][_t<T>]_<mode>`.
+  `exp_<décideur>[_<portée>][_<prompt>][_<calendrier>][_<écarts>][_t<T>]_<mode>`.
 - **N3** — Le **décideur** est toujours nommé : `passerelle` → le slug de son modèle (N4) ;
   `antigravity` → `agy-<slug-du-modele>` ; `aleatoire` → `alea` ; `duree_minimale` → `durmin` ;
   `majoritaire_voiture` → `majvoiture` ; `modele` → `lgbm` ; `rejeu` → `rejeu`. Un artefact LightGBM
@@ -34,6 +34,12 @@ sont *la même expérience*, avec deux exécutions.
   premier tombent à leur initiale ; si c'est encore trop long, on tronque.
   `gemini-3.1-flash-lite-preview` → `gemini-31-fl` · `mistral-small-latest` → `mistral-s` ·
   `qwen/qwen3.6-27b` → `qwen36-27b` · `gpt-oss-120b` → `gpt-oss-120b`.
+- **N4b** — La **portée** d'un décideur `passerelle` (`decideur.portee`) se nomme juste après le
+  modèle qu'elle qualifie : `local` donne le segment `local`, `distant` et l'absence de champ
+  restent **muets** (valeur de référence, N7) — aucun nom existant ne bouge.
+  `qwen/qwen3.8-27b` en local → `exp_qwen38-27b_local_minper_jtir_t0_nosim`. Sans ce segment, le
+  même modèle servi par Groq et par LM Studio donnerait deux fois le même nom, donc le même
+  dossier d'archives pour deux quantifications différentes.
 - **N5** — Le **prompt** est nommé si et seulement si le décideur est `passerelle` ou `antigravity` :
   ailleurs la variante n'a aucun effet sur la décision, et la nommer ferait croire à un prompt
   (`Light_GBM` portait `minimal_persona`). Abréviation = trois premières lettres de chaque

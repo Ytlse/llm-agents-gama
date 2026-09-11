@@ -865,6 +865,136 @@ publié par `feature_spec.json`, celui-là même que le volet 1 utilise pour ses
 couronnes de résidence depuis l'action A9 : les deux volets parlent désormais du
 même centre-ville.
 
+## 4 bis. Le score à deux oracles — le logit multinomial en arbitre
+
+`make bi-oracle` produit une mesure que les trois volets ne portaient pas, et qui répond à
+une question différente de la leur : **le prompt décide-t-il comme un modèle de
+comportement, décision par décision ?** Sortie : `scripts/synthesis/data/bi_oracle.json`.
+
+### Pourquoi un second oracle
+
+Les trois volets mesurent tous la même chose — la fidélité des **parts modales agrégées** à
+l'enquête. C'est nécessaire et insuffisant, pour une raison que la littérature comparative
+établit : le classement des modèles de choix modal **s'inverse selon la famille
+d'indicateurs**. Martín-Baos et al. (2023) mesurent XGBoost au-dessus du logit multinomial de
+2,2 à 5,6 points sur l'exactitude désagrégée, et **moins bon** sur les parts agrégées et les
+indicateurs comportementaux ; Zhao et al. (2020) qualifient les élasticités des modèles à
+arbres de *behaviorally unreasonable*. Comme notre H0 se joue sur une L1 de parts, le plafond
+de référence pouvait être le logit — et tant qu'il n'était pas estimé, personne ne pouvait le
+dire.
+
+Il l'est depuis le [ticket 042](../tickets/ticket_042_second_oracle_logit_multinomial.md) :
+`make logit` (`scripts/progedo_logit/fit_mode_choice_logit.py` → `mnl_model.json`). **La
+parité avec le booster est vraie par construction**, pas promise : même parquet, même colonne
+`split` étanche au ménage, même `sample_weight`, même `encode_features`, et surtout les
+**mêmes métriques** — `mode_choice_eval.py` est importé par les deux scripts, si bien qu'une
+métrique ajoutée d'un côté ne peut pas manquer de l'autre.
+
+Verdict sur le split test scellé (13 045 trajets, pondéré COEP) :
+
+| | CEL | GMPCA | Exactitude | L1 masse | L1 mode élu |
+|---|---|---|---|---|---|
+| Booster LightGBM | 0,5402 | 0,583 | **0,785** | **0,0269** | **0,0730** |
+| Logit multinomial | 0,5954 | 0,551 | 0,766 | 0,0286 | 0,1003 |
+
+Le booster devance le logit sur **les deux** familles : l'inversion décrite par la
+littérature ne se produit pas sur ces données. GMPCA = exp(−CEL) est la « moyenne géométrique
+de la probabilité d'affectation correcte » de Martín-Baos ; elle se lit comme une
+probabilité, ce que le log-loss ne fait pas.
+
+⚠ **Ce logit n'est pas un modèle d'utilité aléatoire.** Le contrat des 21 variables ne porte
+aucune variable de coût ni de niveau de service par mode : c'est une logistique multinomiale
+sur caractéristiques individuelles, de motif et de géographie. Ni valeur du temps ni
+disposition à payer n'en sortent — et ce n'est pas un oubli, c'est le prix de la parité
+d'information (voie 1, tranchée le 2026-09-10).
+
+### Les trois blocs
+
+| Bloc | Grandeur | Oracle | Run épinglé |
+|---|---|---|---|
+| **A** — fidélité | composite `emd_jsd`, **inchangé** | l'enquête | 16,16 |
+| **B** — accord désagrégé | JSD(prompt, MNL) ÷ JSD inter-oracles | le logit, à l'échelle du booster | 899 % |
+| **C1** — sens de variation | part des transitions de distance à signe contredit | le logit | 5,0 % (1/20) |
+| **C2** — élasticités A/B | signes d'élasticité d'arc | le logit | non mesuré |
+
+Le composite reste **linéaire** : `S₂ = Σ w_dim·s_dim + w_B·s_B + w_C·s_C`, tous termes
+orientés « perte, plus petit vaut mieux ».
+
+**`w_B` et `w_C` valent 0** (`score.bi_oracle` du manifeste). Les termes sont calculés,
+journalisés et publiés, mais ne sélectionnent aucun prompt : un prompt choisi sous un terme
+mesuré contre un modèle serait ajusté à ce modèle, pas à l'enquête. La linéarité rend la
+promotion ultérieure exacte et rétroactive — il suffit d'ajouter `w·s` au composite stocké,
+sans repayer un appel LLM. Même précédent que le retrait d'`absent_penalty` (A5).
+
+### Ce que `s_B` veut dire, et pourquoi il a un dénominateur
+
+`s_B = 899` se lit : **le prompt est neuf fois plus loin du logit que le booster ne l'est**
+(0,1847 bit contre 0,0205, sur 2 584 décisions). Le dénominateur est la divergence **entre
+les deux oracles**, mesurée sur les mêmes décisions : sans lui, il faudrait arbitrer si
+0,18 bit « fait beaucoup », et le chiffre publié serait une convention. Avec lui, l'échelle
+est mesurée.
+
+Le MNL n'est **pas** la vérité individuelle. Aucune sortie ne qualifie `s_B` d'erreur : c'est
+un **accord**, et il est publié avec son dénominateur.
+
+### Trois pièges que la mesure a révélés, et comment ils sont fermés
+
+**1. Le plancher de la divergence de Kullback-Leibler décidait du score.** 1 923 des 2 584
+décisions déclenchent le plancher `ε = 1e-4`, et 1 109 distributions du prompt sont quasi
+dégénérées (un mode au-dessus de 0,999) — le LLM répond volontiers « 90 / 10 / 0 / 0 ». Le
+rapport de KL vaut alors **2 338 %**, un nombre qui mesure `ε` autant que les décisions. La
+grandeur de tête est donc la **JSD** : définie sur les zéros, bornée par 1 bit, sans
+constante. Le rapport de KL reste publié en second (`s_B_kl`) avec `n_plancher_applique`,
+parce que c'est lui qui se compare à la littérature.
+
+**2. Une offre à un seul mode est un accord parfait gratuit.** 665 décisions du run n'ont
+qu'un itinéraire (méthode « Un seul itinéraire disponible ») : le prompt n'a pas été
+interrogé — aucune de ces lignes ne porte de distribution — et les trois décideurs sont
+forcés sur le même mode. Les inclure aurait **fait baisser** le score sans qu'aucun accord
+n'ait été mesuré : vacuité prise pour perfection, le motif récurrent de ce dépôt. Elles sont
+écartées **des deux côtés** et comptées (`ecartees_prompt`), et la couverture publiée est
+rapportée aux 3 249 décisions du périmètre, soit 80 %.
+
+**3. La modalité « absente » n'est pas toujours identifiée.** Un logit ne route pas les
+manquants : l'encodage leur donne une modalité `__missing__`, une indicatrice pour les
+numériques (`density_orig`, `density_dest`). Mais quand le train n'en contient aucune — cas
+de `socioprofessional_class`, absente de 498 décisions du run parce que la population
+synthétique porte des modalités hors spec d'enquête — le coefficient reste nul et la valeur
+absente se comporte comme la **modalité de référence**. L'artefact publie donc
+`logit.missing_category_support` : quelle modalité `__missing__` est identifiée, et par
+combien de lignes.
+
+### Le bloc C, et ce qu'il ne peut pas mesurer
+
+`C1` compare le **signe** des variations de parts modales le long de l'axe ordinal de
+distance — celui-là même que la dimension `distance` du composite utilise. Le logit est
+monotone par construction sur ses variables continues : c'est ce qui le qualifie comme
+arbitre. Deux garde-fous : une transition dont une strate compte moins de 30 décisions est
+écartée, et une transition où **l'arbitre lui-même** bouge de moins de 0,5 point sort du
+score — comparer un signe à du bruit reviendrait à noter le prompt sur un tirage. Les deux
+comptes sont publiés.
+
+`C2` exige des décisions **rejouées** sous perturbation, donc des appels LLM. Le module n'en
+fait aucun : il exploite une paire A/B déjà payée quand on lui en désigne une
+(`--ab-variable`, `--ab-llm-before/after`, `--ab-mnl-before/after`), et rend « non mesuré »
+sinon. La variable perturbée doit appartenir aux 21 du contrat : une élasticité météo n'est
+pas comparable, le logit ne voit pas la météo.
+
+### Reproduire
+
+```bash
+make logit                # estime le second oracle (~1 min, hors ligne)
+make common-set-predict   # booster sur le run épinglé
+make mnl-predict          # logit sur le MÊME run, par le MÊME chemin de prédiction
+make bi-oracle            # les trois blocs → data/bi_oracle.json
+```
+
+`bi_oracle` refuse de composer un chiffre si le numérateur et le dénominateur ne viennent pas
+du même substrat : il compare run **et** empreinte `moves.csv` des deux parquets à ceux du
+run épinglé, lève une `[ALARME]` et publie les blocs en « non mesuré ». L'empreinte n'est pas
+redondante avec le nom du run — une reprise à chaud réécrit `moves.csv` dans le même dossier,
+donc sous le même nom.
+
 ## 5. Organisation du code
 
 | Fichier | Rôle |
@@ -875,6 +1005,10 @@ même centre-ville.
 | `scripts/synthesis/common_set_eval.py` | Producteur : rejoue graine et feuille sur le jeu commun (`make common-set-eval`) — **consomme du quota LLM** |
 | `scripts/synthesis/heldout_eval.py` | Producteur : rejoue la lignée sur un jeu gelé de retenue et écrit dans le store (`make heldout-eval`) — **consomme du quota LLM** ; porte aussi la description des jeux gelés (découpage par personne ou par déplacement) |
 | `scripts/synthesis/model_on_common_set.py` | Producteur : applique la politique PROGEDO au jeu commun, renormalisée sur l'offre OTP (`make common-set-predict`) — hors ligne, déterministe |
+| `scripts/synthesis/bi_oracle.py` | Score à deux oracles : accord désagrégé au logit et cohérence de sens (`make bi-oracle`) — hors ligne, déterministe |
+| `scripts/progedo_logit/fit_mode_choice_logit.py` | Producteur : estime le second oracle (`make logit`) |
+| `scripts/progedo_logit/mode_choice_logit.py` | Contrat et évaluateur pur numpy du logit — prédit sans scikit-learn |
+| `scripts/progedo_logit/mode_choice_eval.py` | Métriques **partagées** par les deux oracles (CEL, GMPCA, parts modales, L1) |
 | `scripts/synthesis/charts.py` | SVG en ligne (bullet, profils ordinaux, matrice) |
 | `scripts/synthesis/render.py` | Assemblage HTML — page complète (`render()`) et pages dédiées « Détail par sous-catégorie » (`render_detail()`, spécifiées par `DETAIL_PAGES`) |
 | `scripts/synthesis/build.py` | Orchestration + CLI + liste d'actions |

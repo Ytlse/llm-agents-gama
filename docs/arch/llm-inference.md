@@ -72,6 +72,23 @@ gardent la bascule.
 > et le lot était perdu — l'exécution `2026-09-07_19_45_31` a enchaîné 8 sollicitations, 8 refus et
 > 0 décision archivée sans qu'aucune ERROR ne sorte.
 
+**Un modèle servi des deux côtés se désigne par sa portée.** L'épinglage se fait par égalité de
+`default_model`, or le même identifiant existe parfois en local et à distance : `qwen/qwen3.8-27b`
+est déclaré chez Groq **et** dans LM Studio (deux quantifications, 27B MXFP4 contre MLX 4 bit).
+Les deux instances étaient alors admises ensemble, et l'épuisement du quota Groq faisait passer
+l'expérience en local sans que rien ne le dise. Depuis le 2026-09-11, `decideur.portee`
+(`local` / `distant`) choisit le bord ; une expérience qui ne la pose pas alors que son modèle
+est servi des deux côtés est refusée au lancement. Voir
+[plateforme-experiences.md §5](plateforme-experiences.md).
+
+**Une réponse rendue par un autre modèle que celui demandé est rejetée en 502.** Contrôle côté
+adaptateur (`openai_compatible._refuser_substitution_de_modele`), distinct de la bascule
+ci-dessus : LM Studio répond **200** à un identifiant de modèle inconnu et sert un autre modèle
+chargé (`qwen3.8-27b-local`, inexistant, servi par `qwen3-vl-8b-instruct-mlx` le 2026-09-10 —
+un 8B de vision au lieu d'un 27B). L'archive portait un nom de modèle faux, sans signal. Le
+contrôle ne s'applique que si la réponse déclare un modèle : les serveurs conformes qui n'en
+renvoient pas passent.
+
 **Variante de prompt par requête.** `parameters.prompt_variant` (clé de `prompts:` dans
 `prompts.yaml`) remplace la variante active pour cette requête ; `PromptManager.get_system_prompt`
 lève si elle est inconnue. `parameters` entrant dans la clé de lot, deux variantes ne partagent

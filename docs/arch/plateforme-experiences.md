@@ -236,6 +236,15 @@ durée et six compteurs (S8).
   `default_model` = modèle demandé ; le runner tourne sur ces instances, en `force_provider`. Une
   réponse dont `provider_used` n'est pas admis est **refusée** et comptée `substitution_refusee` (Q3 —
   la passerelle rejoue un lot sans `force_provider` sur erreur de parse).
+  **Portée** (`decideur.portee`, depuis le 2026-09-11) : le même identifiant de modèle est parfois
+  servi des deux côtés — `qwen/qwen3.8-27b` est chez Groq **et** dans LM Studio, deux
+  quantifications. L'épinglage par égalité de modèle admettait alors les deux, et la bascule en
+  série (ci-dessous) faisait finir en local ce qui avait commencé chez Groq, sous un seul nom.
+  `portee: local | distant` restreint les instances au bord voulu ; les deux usages restent
+  ouverts, ce sont **deux expériences** (le nom porte `_local`, cf. N4b). Une définition qui ne la
+  pose pas alors que son modèle est servi des deux côtés est **refusée au lancement**, en nommant
+  les deux instances — on ne choisit pas à la place de l'expérimentateur. Absente et sans
+  ambiguïté, elle ne change rien : les archives d'avant le champ gardent leur empreinte.
 - `DecideurDureeMinimale` : déterministe, local, `sans quota` (S10/Q12) — plancher `exp_00c`.
 - `DecideurRejeu(execution)` : sert `reponse_brute`/`distribution` archivées par `(person_id, activity_id)`.
 - `DecideurAleatoire(graine)` : uniforme, graîné (plancher `exp_00a` du plan).
@@ -598,7 +607,7 @@ API**, pas par instance.
 
 **Règle.** Deux expériences tournent en parallèle **si et seulement si leurs jeux de clés sont
 disjoints** (R1). Le jeu de clés se dérive du **modèle** épinglé (`experiences/cles.py`) :
-modèle → instances qui le servent (`instances_pour_modele`) → **identité de clé** de chaque
+modèle **et portée** → instances qui le servent (`instances_pour_modele`) → **identité de clé** de chaque
 instance = `adapter` (à défaut le nom d'instance), un override par instance dans
 l'environnement étant respecté. L'identité par adapter est **conservatrice** : deux modèles
 d'un même fournisseur (ex. plusieurs `gemini*`, adapter `google`) sont réputés partager une clé
