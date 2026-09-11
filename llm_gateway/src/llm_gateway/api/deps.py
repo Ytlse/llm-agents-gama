@@ -48,7 +48,7 @@ def build_deps(settings: Settings, registry: CategoryRegistry | None = None) -> 
     queue = RedisBatchQueue(task_store=store, sync_client=sync_client, async_client=async_client)
     limiter = RedisRateLimiter(sync_client, settings.providers)
     metrics = RedisMetricsSink(sync_client)
-    balancer = LoadBalancer(settings.providers, limiter)
+    balancer = LoadBalancer(settings.providers, limiter, policy=settings.routing.policy)
 
     return GatewayDeps(
         settings=settings,

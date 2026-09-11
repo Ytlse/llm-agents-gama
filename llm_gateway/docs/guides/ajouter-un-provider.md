@@ -10,7 +10,7 @@ Adapters livrés : `openai`, `mistral`, `google`, `groq`, `cerebras`. Ajouter un
 `providers:` :
 
 ```yaml
-  groq_qwen_qwen3_6_27b:
+  groq_qwen_qwen3_6_27b_key1:
     adapter:                groq                       # nom de l'adapter (défaut = nom de l'instance)
     rpm_limit:              30
     tpm_limit:              8000
@@ -43,10 +43,12 @@ make providers DRY_RUN=1           # depuis la racine : sonde les quotas réels 
 |---|---|---|---|
 | `rpm_limit` | oui | — | rate-limiter : fenêtre glissante 60 s, lissage `min_interval = 60 / rpm` (une réservation trop rapprochée est refusée) |
 | `base_url` | oui | — | adapter (`_get_base_url`) |
+| `wait_timeout` | non | défaut du client | **personne côté gateway** : recopié tel quel et publié, le SDK le reçoit par appel (`execute(wait_timeout=…)`). Pour un modèle local, l'attente d'une tâche est celle de la file, pas de la génération. |
 | `default_model` | oui | — | adapter (`_resolve_model`) si la requête n'en impose pas |
 | `adapter` | non | nom de l'instance | `get_adapter` : classe d'adapter et héritage de clé `PROVIDER_KEYS__<adapter>` |
 | `tpm_limit` | non | `None` | rate-limiter : réservation de tokens estimés dans la même fenêtre 60 s ; borne aussi `batch_max_agents` |
-| `rpd_limit` | non | `None` | rate-limiter : compteur requêtes/jour UTC ; atteint → provider écarté jusqu'à minuit UTC |
+| `rpd_limit` | non | `None` | rate-limiter : compteur requêtes/jour dans le fuseau du provider ; atteint → provider écarté jusqu'à son reset |
+| `quota_reset_tz` | non | `UTC` | fuseau où le provider situe minuit (`America/Los_Angeles` pour Google) |
 | `tpd_limit` | non | `None` | rate-limiter : tokens/jour UTC comptés a posteriori (tokens réels) ; même mise à l'écart |
 | `max_tokens_per_request` | non | `None` | démarrage : exclusion si `< batch_max_agents × assumed_prompt_tokens + min_output_tokens` ; worker : garde-fou 413 sur le prompt rendu (`ProviderCapacityError`) |
 | `max_output_tokens` | non | `None` | worker : borne le `max_tokens` envoyé ; balancer : exclut le provider si `< parameters.max_tokens` de la requête ; **appris** sur HTTP 400 et réécrit dans le fichier |
@@ -77,7 +79,7 @@ weight = min(rpm_limit, tpm_limit / 3000) / 15
 ```
 
 3 000 ≈ tokens (entrée + sortie) d'une requête moyenne, 15 = RPM de référence (poids 1,0).
-Pour un provider à petit TPM c'est le TPM qui borne : `groq_openai_120` affiche 30 RPM mais
+Pour un provider à petit TPM c'est le TPM qui borne : `groq_openai_120_key1` affiche 30 RPM mais
 8 000 TPM ne soutient que ~2,7 requêtes/min, d'où `0.18`. Recalculer à chaque changement de
 `rpm_limit` ou `tpm_limit` ; `make providers` le fait. Le recalage du 2026-07-10 a montré
 l'enjeu : Mistral portait 47 % de la capacité totale et recevait 8 % du trafic.
@@ -88,11 +90,19 @@ La séquence SWRR ([explication](../explications/batching-swrr-disjoncteur.md)) 
 ## Cas 2 — une seconde clé pour le même fournisseur
 
 Les quotas free tier Google sont comptés **par projet et par modèle**. Une clé d'un autre
-projet est un autre seau de 500 requêtes/jour : c'est l'instance `google2` (clé
-`PROVIDER_KEYS__google2`), et `google2_35` réutilise la même clé sur le modèle 3.5
+projet est un autre seau de 500 requêtes/jour : c'est l'instance `google_gemini31_key2` (clé
+`PROVIDER_KEYS__google2`), et `google_gemini35_key2` réutilise la même clé sur le modèle 3.5
 (`docker-compose.yml` dérive `PROVIDER_KEYS__google2_35` de `PROVIDER_KEYS__google2` plutôt
-que de dupliquer le secret dans `.env`). Le nom d'instance **doit** correspondre à la
-variable : sinon la résolution retombe sur `PROVIDER_KEYS__google`, la clé 1, sans avertir.
+que de dupliquer le secret dans `.env`).
+
+Nommez l'instance `<modèle>_key<N>` : le suffixe rend la clé physique lisible, et il **interdit
+le repli** sur `PROVIDER_KEYS__<adapter>`. Sans `PROVIDER_KEYS__<nom_instance>`, l'instance est
+écartée de la rotation et le démarrage le signale — au lieu de servir en silence la clé 1, ce
+qui a déjà fait partir des appels sur la mauvaise clé. Ajoutez donc la ligne de mapping dans
+`docker-compose.yml` en même temps que l'instance dans `providers.yaml`.
+
+Pour un fournisseur qui ne situe pas minuit en UTC, posez aussi
+`quota_reset_tz` (cf. `regler-les-quotas.md`).
 
 ## Cas 3 — une API compatible OpenAI, sans écrire de code
 
@@ -115,6 +125,16 @@ puis la clé `PROVIDER_KEYS__mon_ollama` (une valeur quelconque si l'API n'en ex
 instance sans clé est exclue de la rotation). Les deux réglages d'adapter valent aussi pour les
 quatre dialectes livrés : `mistral` avec `structured_output: json_schema` bascule un modèle
 récent sur la sortie structurée native, sans code.
+
+!!! note "LM Studio n'accepte pas `json_object`"
+    Vérifié le 2026-09-08 : `response_format.type` doit valoir `json_schema` ou `text`, sinon
+    HTTP 400 « 'response_format.type' must be 'json_schema' or 'text' ». Déclarez donc
+    `structured_output: json_schema`. Depuis un conteneur, LM Studio sur l'hôte se joint via
+    `http://host.docker.internal:1234/v1`, et `default_model` est l'identifiant de `lms ls`.
+    Posez `weight: 0` si un seul modèle est chargé à la fois : hors rotation, l'instance ne sert
+    qu'aux requêtes qui la forcent (`force_provider`), et la cascade ne provoque pas de
+    chargement à la volée. Déploiement de référence : section LM Studio de
+    `config/llm_gateway/providers.yaml` et `docs/setup/llm-providers.md`.
 
 | Dialecte livré | `structured_output` | `schema_in_system` |
 |---|---|---|

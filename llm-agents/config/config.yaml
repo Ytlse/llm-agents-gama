@@ -49,3 +49,17 @@ cache:
 # Haute-Garonne seule) et population_1000_AAMAS (v2, sha256 f67b07772f3dced9…).
 data:
   population_file: /data/eqasim-output/population_1000_AAMAS_v5/population.json
+
+  # ── Jeu de déplacements enregistré (ticket 035, spec 04) ────────────────────────────────
+  # `make run JEU=<nom>` écrit `jeu_enregistre` ici et recrée le contrôleur ; sans lui, calcul en
+  # vol inchangé. Les tolérances horaires par groupe de modes sont OBLIGATOIRES dès qu'un jeu est
+  # désigné (aucun défaut dans le code) : décommentez et validez ces valeurs PROPOSÉES
+  # (specs/ticket_035/questions.md, question 8) — marche et vélo insensibles à l'heure, voiture à
+  # l'heure pleine (tables de congestion horaires), transports collectifs et train au pas de 10 min.
+  # jeu_enregistre: /app/data/jeux/<nom>
+  # jeu_tolerances_horaires:
+  #   walk: insensible
+  #   bike: insensible
+  #   car: heure
+  #   transit: {pas_min: 10}
+  #   rail: {pas_min: 10}

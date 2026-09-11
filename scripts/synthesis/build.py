@@ -1223,7 +1223,7 @@ def build_calibration(manifest, cerema: dict, scorer) -> dict:
                       f"« {heldout_dataset} » sous le régime "
                       f"{pinned.get('regime') or 'épinglé'} : la calibration n'a de "
                       f"score que sur le jeu qui a servi à l'optimiser.",
-            "action": f"make heldout-eval PROVIDER=google2 "
+            "action": f"make heldout-eval PROVIDER=google_gemini31_key2 "
                       f"(chiffrer d'abord : make heldout-eval DRY_RUN=1)",
         }
 

@@ -6,6 +6,12 @@ x-gateway-env: &gateway-env
   LLM_GATEWAY_EXECUTOR__CELERY_BROKER_URL: redis://redis:6379/1
   LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND: redis://redis:6379/2
   LLM_GATEWAY_PROVIDERS_FILE: /app/config/llm_gateway/providers.yaml
+  # Les sources montées sous /app/<paquet> doivent PRÉCÉDER les copies installées dans
+  # site-packages. WORKDIR ne suffit pas : `celery` et `uvicorn` sont des scripts console,
+  # sys.path[0] est /usr/local/bin, pas le répertoire courant. Sans cette ligne, api et
+  # worker servaient le code et le prompts.yaml figés à la construction de l'image
+  # (constaté le 2026-09-08 : variante ajoutée invisible après `make passerelle-recharger`).
+  PYTHONPATH: /app
   LLM_GATEWAY_TELEMETRY__WORKDIR: /app/experiments/current
   # Journal des échanges : désactivé par défaut dans le gateway (données personnelles potentielles) ;
   # la simulation l'active parce que make report et le tableau de bord le lisent.
@@ -35,35 +41,82 @@ x-shared-env: &shared-env
   # dispose de ses propres 500 requêtes/jour et par modèle. La simulation tourne sur
   # la CLÉ 2, ce qui laisse intactes les 500 requêtes/jour de la clé 1 pour les
   # mesures du lot C (`common-set-eval`, `heldout-eval`), qui interrogent
-  # `google_gemini31` — c'est-à-dire la clé 1.
+  # `google_gemini31_key1` — c'est-à-dire la clé 1.
   #
   # Un provider sans clé est simplement exclu de la rotation
   # (`filter_providers_without_api_key`) : blanchir la clé 1 retire donc
-  # `google_gemini31` et `google_gemini35` de la cascade, sans toucher à mistral,
+  # `google_gemini31_key1` et `google_gemini35_key1` de la cascade, sans toucher à mistral,
   # groq ni cerebras — la cascade multi-providers reste en place (décision D4).
   #
-  # Pour rendre la clé 1 à la simulation le temps d'un run :
-  #   SIM_PROVIDER_KEYS__google="$PROVIDER_KEYS__google" make run
-  PROVIDER_KEYS__google: ${SIM_PROVIDER_KEYS__google:-}
-  # `google2_35` (clé 2, modèle 3.5) est un second seau de 500 requêtes/jour. Il
-  # n'a pas de secret propre : on le dérive de la clé 2 plutôt que de dupliquer le
-  # secret dans .env.
-  PROVIDER_KEYS__google2_35: ${PROVIDER_KEYS__google2:-}
-  # Redéclarée ici (et pas seulement via env_file) pour être surchargeable depuis
-  # le shell : `make run NO_GOOGLE=1` exporte PROVIDER_KEYS__google2="" et blanchit
-  # ainsi google2 ET google2_35 — toutes les instances google* sortent alors de la
-  # rotation (filter_providers_without_api_key). Sans surcharge, l'interpolation
-  # compose lit .env : comportement inchangé.
-  PROVIDER_KEYS__google2: ${PROVIDER_KEYS__google2:-}
-  # Même mécanique pour mistral/cerebras : redéclarées pour être blanchissables
-  # depuis le shell quand leurs crédits sont épuisés (HTTP 402). Un fournisseur
-  # mort laissé en rotation coûte des décisions dégradées : le balancer le
-  # re-sonde à l'expiration du retrait et des tâches y épuisent leurs relances
-  # (155 replis « Default index » sur le run 2026-08-19_11_01). Usage :
+  # Décision du 2026-09-07 : la clé 1 REJOINT la rotation. Elle était retenue par défaut
+  # (lue dans SIM_PROVIDER_KEYS__google, donc vide sauf export explicite), ce qui laissait
+  # `gemini-3.5-flash-lite` sur une seule instance à 15 requêtes/minute — la moitié des
+  # sollicitations d'une expérience repartait en « Providers saturés ».
+  # Pour la retirer le temps d'un run (la réserver à la simulation, par exemple) :
+  #   PROVIDER_KEYS__google="" make run
+  # Routage entre fournisseurs (décision du 2026-09-07). `cascade` épuise le premier
+  # fournisseur avant de toucher au suivant : il n'est dépassé que s'il REFUSE — quota du
+  # jour, cooldown, débit par minute saturé — et le basculement est journalisé. `swrr`
+  # étalerait la charge et entamerait les deux seaux de 500 requêtes en parallèle.
+  # Le fichier des fournisseurs n'accepte QUE des fournisseurs : la politique passe donc par
+  # l'environnement, comme les autres réglages du gateway.
+  LLM_GATEWAY_ROUTING__POLICY: ${LLM_GATEWAY_ROUTING__POLICY:-cascade}
+  # ── Une clé par instance (convention <modèle>_key<N>, 2026-09-08) ──────────
+  # Le gateway résout la clé d'une instance par PROVIDER_KEYS__<nom d'instance>.
+  # Une instance suffixée _keyN n'a PLUS de repli sur la clé de son adapter : sans
+  # sa ligne ci-dessous elle est refusée au démarrage, au lieu de taper en silence
+  # la clé d'un autre projet (incident google2_36, cf. providers.yaml).
+  # Ce qui s'édite dans .env reste les SOURCES, en fin de bloc ; ici, le mapping.
+  #
+  # Clé 1 Google — 9 instances, un seau de quota par modèle.
+  PROVIDER_KEYS__google_gemini31_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini35_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemma42_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemma43_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini_3_flash_preview_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini_3_5_flash_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini_3_6_flash_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini_3_7_flash_key1: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google_gemini_3_8_flash_key1: ${PROVIDER_KEYS__google:-}
+  # Clé 2 Google — le secret n'est pas dupliqué dans .env, il est dérivé de la
+  # source. `make run NO_GOOGLE=1` exporte PROVIDER_KEYS__google2="" et blanchit
+  # ces deux instances (filter_providers_without_api_key les sort de la cascade).
+  PROVIDER_KEYS__google_gemini31_key2: ${PROVIDER_KEYS__google2:-}
+  PROVIDER_KEYS__google_gemini35_key2: ${PROVIDER_KEYS__google2:-}
+  # Mistral / Groq / Cerebras — une clé chacun, blanchissable de la même façon
+  # quand leurs crédits sont épuisés (HTTP 402). Un fournisseur mort laissé en
+  # rotation coûte des décisions dégradées : le balancer le re-sonde à
+  # l'expiration du retrait et des tâches y épuisent leurs relances (155 replis
+  # « Default index » sur le run 2026-08-19_11_01). Usage :
   #   PROVIDER_KEYS__mistral="" PROVIDER_KEYS__cerebras="" make run
-  # Sans surcharge, l'interpolation lit .env : comportement inchangé.
+  PROVIDER_KEYS__mistral_key1: ${PROVIDER_KEYS__mistral:-}
+  # Même clé : les deux instances Mistral se distinguent par leur modèle, pas par leur clé.
+  PROVIDER_KEYS__mistral_large3_key1: ${PROVIDER_KEYS__mistral:-}
+  PROVIDER_KEYS__groq_openai_120_key1: ${PROVIDER_KEYS__groq:-}
+  PROVIDER_KEYS__groq_qwen_qwen3_6_27b_key1: ${PROVIDER_KEYS__groq:-}
+  PROVIDER_KEYS__groq_qwen_qwen3_8_27b_key1: ${PROVIDER_KEYS__groq:-}
+  PROVIDER_KEYS__cerebras_gptoss120b_key1: ${PROVIDER_KEYS__cerebras:-}
+  PROVIDER_KEYS__cerebras_gemma_4_31b_key1: ${PROVIDER_KEYS__cerebras:-}
+  # ── LM Studio (modèles locaux servis par l'hôte, port 1234 ; weight 0 = épinglage seul) ──
+  # Un seul interrupteur : PROVIDER_KEYS__lmstudio dans .env (valeur libre, LM Studio ne
+  # vérifie pas la clé). Vide ou absent, toutes les instances lmstudio_* sont exclues au démarrage.
+  PROVIDER_KEYS__lmstudio_mistral_small_3_2_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_mistral_nemo_12b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_mistral_7b_v0_3_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_gemma_4_e4b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_qwen3_vl_8b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_qwen3_vl_32b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_qwen3_8_27b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  PROVIDER_KEYS__lmstudio_muse_glimmer_28b_key1: ${PROVIDER_KEYS__lmstudio:-}
+  # Sources — les seules à renseigner dans .env. Conservées dans l'environnement
+  # du conteneur pour les outils hors gateway (scripts/synthesis/*) qui résolvent
+  # leurs clés eux-mêmes, et pour rester surchargeables depuis le shell.
+  PROVIDER_KEYS__google: ${PROVIDER_KEYS__google:-}
+  PROVIDER_KEYS__google2: ${PROVIDER_KEYS__google2:-}
   PROVIDER_KEYS__mistral: ${PROVIDER_KEYS__mistral:-}
+  PROVIDER_KEYS__groq: ${PROVIDER_KEYS__groq:-}
   PROVIDER_KEYS__cerebras: ${PROVIDER_KEYS__cerebras:-}
+  PROVIDER_KEYS__lmstudio: ${PROVIDER_KEYS__lmstudio:-}
 
 x-osmnx-service: &osmnx-service
   build:
@@ -332,7 +385,12 @@ services:
     build:
       context: ./llm-agents
       dockerfile: Dockerfile
-    command: sh -c "python /app/archive_log.py && python /app/vizpop.py 5050 & hypercorn handle.application:app --bind 0.0.0.0:8002"
+    # `exec` est indispensable : sans lui, PID1 reste `sh`, qui ne relaie pas SIGTERM à
+    # hypercorn. Tout `docker stop`/`compose restart` dégénérait alors en SIGKILL après le
+    # délai de grâce (exit 137), emportant sans préavis le runner d'expérience lancé en
+    # `docker compose exec` dans ce conteneur. Avec `exec`, hypercorn EST PID1 et s'arrête
+    # proprement. Les jobs d'arrière-plan sont forkés avant le `exec` : ils sont préservés.
+    command: sh -c "python /app/archive_log.py && python /app/vizpop.py 5050 & exec hypercorn handle.application:app --bind 0.0.0.0:8002"
     ports:
       - "8002:8002"
       - "5050:5050"
@@ -351,6 +409,10 @@ services:
       EXPERIENCES_DIR: /app/data/experiences
       JEUX_DIR: /app/data/jeux
       REFERENTIEL_ENQUETE: /app/scripts/data/population/cerema_values.yaml
+      # Interruptions d'exécution : délai de grâce laissé aux sollicitations en vol avant de les
+      # abandonner, et inactivité au-delà de laquelle l'exécution se met en pause seule (0 = jamais).
+      EXP_PAUSE_GRACE_S: ${EXP_PAUSE_GRACE_S:-15}
+      EXP_INACTIVITE_PAUSE_S: ${EXP_INACTIVITE_PAUSE_S:-420}
     volumes:
       - ./llm-agents:/app
       - ./llm_gateway/src/llm_gateway:/opt/llm_gateway
@@ -368,11 +430,21 @@ services:
       - ./data/gtfs:/data/gtfs
       - ./experiments:/app/experiments
       - ./data/population:/data/eqasim-output:rw
+      # Pickles des GRAPHES (`graphs_<clé>.pkl`) — chemin partagé avec les réplicas `osmnx`,
+      # dont l'image a ce chemin cuit (`gtfs.osmnx_cache_dir`).
       - ./data/cache/osmnx:/app/osmnx_cache
+      # Cache de ROUTES SQLite (`<population>/osmnx_cache.db`) — MÊME répertoire hôte, monté
+      # une seconde fois sur le chemin qu'attend `gtfs.osmnx_persistent_cache_dir`. Ce montage
+      # est ce qui fait que le peupleur en masse et le runtime écrivent le MÊME fichier ; sans
+      # lui, le runtime repart de zéro dans `llm-agents/data/osmnx_cache/` (cf. 2026-09-04).
+      - ./data/cache/osmnx:/app/data/cache/osmnx
       - ./data/cache/llm:/app/data/llm_cache
       - ./data/cache/otp:/app/data/cache/otp
       - ./data/weather:/app/data/weather
       - ./data/weather:/data/weather
+      # Ticket 035 — jeux de déplacements enregistrés et expériences (plateforme)
+      - ./data/jeux:/app/data/jeux
+      - ./data/experiences:/app/data/experiences
       - ./GAMA:/GAMA
     depends_on:
       api:
@@ -433,9 +505,9 @@ services:
     volumes:
       # Mêmes sources montées que api/worker : flower importe l'application Celery du worker.
       - ./llm_gateway/src/llm_gateway:/app/llm_gateway
-      - ./config/llm_gateway:/app/config/llm_gateway:ro
       - ./mobility_core/src/mobility_core:/app/mobility_core
       - ./mobility_llm/src/mobility_llm:/app/mobility_llm
+      - ./config/llm_gateway:/app/config/llm_gateway:ro
     depends_on:
       redis:
         condition: service_healthy

@@ -11,12 +11,32 @@ rafraîchir les chiffres. Les valeurs par défaut sont celles de `config/setting
 |---|---|---|
 | `rpm_limit` | 60 s glissantes | réservation atomique avant chaque appel (script Lua) ; lissage : deux appels espacés de moins de `60 / rpm` s sont refusés (à 15 RPM : 4 s) |
 | `tpm_limit` | 60 s glissantes | réservation des tokens **estimés** avant l'appel, recalée sur le prompt rendu puis sur la consommation réelle ; dépassement → refus, le balancer passe au provider suivant |
-| `rpd_limit` | jour UTC | compté à la réservation ; atteint → provider écarté jusqu'à minuit UTC (`quota_exhausted`), plus re-sondé |
-| `tpd_limit` | jour UTC | compté **après** l'appel sur les tokens facturés ; même mise à l'écart |
+| `rpd_limit` | jour du fournisseur | compté à la réservation ; atteint → provider écarté jusqu'à son reset (`quota_exhausted`), plus re-sondé |
+| `tpd_limit` | jour du fournisseur | compté **après** l'appel sur les tokens facturés ; même mise à l'écart |
+| `quota_reset_tz` | — | fuseau où le fournisseur situe minuit. Défaut `UTC` ; `America/Los_Angeles` sur les instances Google |
 
 Un appel échoué restitue sa réservation RPM et TPM : les erreurs ne consomment pas de quota.
 Les compteurs du jour sont des clés Redis à TTL 25 h ; les fenêtres 60 s sont remises à zéro
 au démarrage de l'API (lifespan), jamais par un worker.
+
+### Le fuseau du reset journalier compte
+
+Le free tier Gemini situe minuit en heure du **Pacifique** : sa journée de facturation se
+termine à 09:00 à Paris l'été, 08:00 l'hiver. Compter en UTC vidait donc les compteurs sept
+heures trop tôt. Le 2026-09-08, à 08:44, `/health` annonçait 49 requêtes sur 500 pendant que
+Google refusait pour dépassement des 500 — l'instance passait pour disponible et une expérience
+a attendu quinze minutes une clé fermée. D'où `quota_reset_tz`, par instance.
+
+### Le compteur local n'est qu'un garde-fou
+
+Il ne voit que le trafic de cette passerelle, alors qu'une clé est aussi consommée par
+`scripts/synthesis/*` et `prompt_calibration` : il sous-compte par construction. Ce qui fait
+autorité, c'est la réponse du fournisseur. Un 429 dont le corps désigne un quota **journalier**
+(`quotaId` en `…PerDay…`) écarte l'instance jusqu'au reset, sans consulter le compteur.
+
+Le `retryDelay` que Gemini renvoie alors est à jeter : 0,7 s à 57 s relevés pour une fenêtre qui
+ne rouvrait que sept heures plus tard. Il n'est pris en compte que pour un 429 de débit par
+minute, où il est juste.
 
 ## Combien d'agents dans un lot
 
@@ -36,17 +56,17 @@ Sur le fichier livré :
 |---|---|---|---|---|---|
 | `mistral` | 500 000 | — | 60 | min(166, 20, 60, 20) = **20** | 60 000 |
 | `openai` | 200 000 | — | 15 | min(66, 20, 15, 20) = **15** | 45 000 |
-| `google_gemini31` | 250 000 | — | 15 | **15** | 45 000 |
-| `google_gemma42` | 16 000 | 16 000 | 30 | min(5, 5, 30, 20) = **5** | 15 000 |
-| `groq_openai_120` | 8 000 | 8 000 | 30 | min(2, 2, 30, 20) = **2** | 6 000 |
-| `cerebras_gpt-oss-120b` | 30 000 | — | 5 | min(10, 20, 5, 20) = **5** | 15 000 |
+| `google_gemini31_key1` | 250 000 | — | 15 | **15** | 45 000 |
+| `google_gemma42_key1` | 16 000 | 16 000 | 30 | min(5, 5, 30, 20) = **5** | 15 000 |
+| `groq_openai_120_key1` | 8 000 | 8 000 | 30 | min(2, 2, 30, 20) = **2** | 6 000 |
+| `cerebras_gptoss120b_key1` | 30 000 | — | 5 | min(10, 20, 5, 20) = **5** | 15 000 |
 
 Ces valeurs se lisent dans le log au démarrage (`Provider 'x' — batch_max_agents=… tpm_estimate_per_request=…`)
 et dans `llm-gateway config show`.
 
 **Exclusion au démarrage.** Un provider avec `max_tokens_per_request` est écarté si
 `max_tokens_per_request < batch_max_agents × assumed_prompt_tokens + min_output_tokens` : pour
-`groq_openai_120`, 2 × 2 200 + 512 = 4 912 ≤ 8 000, il reste. Le message est un WARNING
+`groq_openai_120_key1`, 2 × 2 200 + 512 = 4 912 ≤ 8 000, il reste. Le message est un WARNING
 « Fournisseur 'x' exclu : capacité insuffisante (…) » avec le calcul.
 
 **Deux seuils, deux rôles.** L'API décide *quand* dispatcher avec `get_dispatch_threshold` :
@@ -154,5 +174,5 @@ dans le bilan. Un bloc déjà présent, même commenté, n'est jamais ré-ajout�
 - `GET /metrics` : `llm_provider_state`, `llm_provider_daily_usage_ratio`,
   `llm_provider_quota_exhausted`, `celery_worker_utilization_ratio`,
   `llm_task_queue_depth_by_category`.
-- Journal du worker : `Quota journalier RPD épuisé — provider écarté jusqu'à minuit UTC |
+- Journal du worker : `Quota journalier RPD épuisé (compteur local) — provider écarté jusqu'au reset |
   provider=… used=… limit=… reset_in=…s`.

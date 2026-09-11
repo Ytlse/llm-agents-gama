@@ -9,6 +9,7 @@ Regroupe tout l'état « santé provider » partagé entre workers :
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 
@@ -47,12 +48,25 @@ class RateLimiter(Protocol):
     # ── Quotas journaliers (RPD / TPD) ──────────────────────────────────
     def record_tokens(self, provider: str, tokens: int) -> None:
         """Comptabilise les tokens consommés pour l'application du quota tpd_limit
-        (fenêtre journalière UTC). Appelé après chaque appel LLM réussi."""
+        (fenêtre journalière du provider, cf. `quota_reset_tz`). Appelé après chaque
+        appel LLM réussi."""
         ...
 
     def is_quota_exhausted(self, provider: str) -> bool:
         """True si le provider a épuisé son quota journalier (RPD/TPD) et reste
-        écarté jusqu'à minuit UTC."""
+        écarté jusqu'au reset de sa journée."""
+        ...
+
+    def mark_quota_exhausted_until(
+        self, provider: str, kind: str = "rpd", until: datetime | None = None
+    ) -> int:
+        """Écarte le provider jusqu'au reset de sa journée, sur la parole du FOURNISSEUR.
+
+        Appelé sur un 429 dont le corps désigne un quota journalier : c'est la voie qui fait
+        autorité, le compteur local ne voyant que le trafic de cette passerelle. `until` par
+        défaut : le prochain minuit dans le fuseau du provider. Rend le TTL appliqué, en
+        secondes.
+        """
         ...
 
     def daily_requests(self, provider: str) -> int: ...

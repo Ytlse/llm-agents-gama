@@ -118,7 +118,8 @@ chargement en nommant le fournisseur et la clé. Schéma JSON : `llm-gateway con
 | `base_url` | `str` | **obligatoire** | racine de l'API du fournisseur |
 | `default_model` | `str` | **obligatoire** | modèle envoyé si la requête n'en impose pas |
 | `tpm_limit` | `int | NoneType` | `None` | tokens/minute réservés dans la même fenêtre ; borne `batch_max_agents` |
-| `rpd_limit` | `int | NoneType` | `None` | requêtes/jour (UTC) ; atteint → écarté jusqu'à minuit UTC |
+| `rpd_limit` | `int | NoneType` | `None` | requêtes/jour (fuseau du provider) ; atteint → écarté jusqu'à son reset |
+| `quota_reset_tz` | `str` | `UTC` | fuseau où le provider situe minuit (`America/Los_Angeles` pour Google) |
 | `tpd_limit` | `int | NoneType` | `None` | tokens/jour (UTC), comptés a posteriori ; même mise à l'écart |
 | `max_tokens_per_request` | `int | NoneType` | `None` | capacité d'une requête unique (HTTP 413 au-delà) ; borne le lot et le budget de sortie |
 | `max_output_tokens` | `int | NoneType` | `None` | plafond de complétion ; appris sur HTTP 400 et retenu par le store de limites apprises |

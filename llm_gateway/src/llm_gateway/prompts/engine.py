@@ -58,12 +58,99 @@ def _load_prompts_store(path: Path | None) -> dict[str, Any]:
         data = yaml.safe_load(f) or {}
     data.setdefault("active", {})
     data.setdefault("prompts", {})
+    # Familles (specs/hygiene-prompts-et-plateforme-experiences.md §4.1) : la règle appliquée
+    # à un prompt dépend de sa famille, la même phrase étant licite dans l'une et fautive dans
+    # l'autre. Déclarée, jamais devinée du nom.
+    data.setdefault("familles", {"minimale": [], "defaut": "experte"})
     return data
 
 
 def _strip_schema_block(content: str) -> str:
     """Retire le bloc « Schéma JSON attendu : {...} » d'un prompt calibré."""
     return _SCHEMA_HEADING.sub("", content).rstrip()
+
+
+class VariantePromptInvalide(ValueError):
+    """Une variante portant `_invalidation` a été demandée pour être SERVIE à un modèle.
+
+    Sous-classe de ValueError : les appelants qui filtraient déjà les variantes inconnues
+    continuent de fonctionner. Le refus ne vaut que pour le service — calculer une empreinte
+    ou relire une archive passe par `verifier_validite=False`, sinon les empreintes scellées
+    des exécutions passées cesseraient d'être reproductibles.
+    """
+
+    def __init__(self, variante: str, invalidation: Mapping[str, Any]) -> None:
+        self.variante = variante
+        self.regle = invalidation.get("regle")
+        self.motif = (invalidation.get("motif") or "").strip()
+        self.remplace_par = invalidation.get("remplace_par")
+        self.le = invalidation.get("le")
+        remplacant = (
+            f" Utiliser {self.remplace_par!r} à la place."
+            if self.remplace_par
+            else " Aucun remplaçant déclaré."
+        )
+        super().__init__(
+            f"variante de prompt {variante!r} INVALIDÉE le {self.le or '?'} "
+            f"(règle {self.regle or '?'}) : {self.motif}{remplacant}"
+        )
+
+
+class AvisNeutraliteManquant(ValueError):
+    """La variante n'a pas d'avis de neutralité valide, en mode strict (spec hygiène §4.2)."""
+
+
+def _sha_contenu(contenu: str) -> str:
+    return hashlib.sha256(contenu.encode("utf-8")).hexdigest()
+
+
+def _neutralite_de(entry: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Bloc `_neutralite` d'une entrée, ou None."""
+    if not isinstance(entry, Mapping):
+        return None
+    bloc = entry.get("_neutralite")
+    return dict(bloc) if isinstance(bloc, Mapping) else None
+
+
+def _etat_neutralite(entry: Mapping[str, Any]) -> tuple[str, str]:
+    """(état, explication) de l'avis de neutralité d'une variante.
+
+    États : `conforme`, `reserve`, `refus`, `absent`, `perime`. Le sceau compte autant que le
+    verdict : un avis rendu sur un texte qui a changé depuis ne vaut plus rien, sans quoi il
+    suffirait de faire valider une version puis d'en servir une autre.
+    """
+    avis = _neutralite_de(entry)
+    if avis is None:
+        return "absent", "aucun avis de neutralité (agent prompt-auditor)"
+    verdict = str(avis.get("verdict") or "")
+    scelle = str(avis.get("sha256_texte") or "")
+    if scelle and scelle != _sha_contenu(str(entry.get("content") or "")):
+        return (
+            "perime",
+            f"avis rendu le {avis.get('le') or '?'} sur un texte différent "
+            f"(sceau {scelle[:12]}…) — le contenu a changé depuis",
+        )
+    if verdict == "non_conforme":
+        constats = avis.get("constats") or []
+        regles = ", ".join(
+            str(c.get("regle")) for c in constats if isinstance(c, Mapping) and c.get("regle")
+        )
+        return "refus", f"verdict non_conforme{f' (règles {regles})' if regles else ''}"
+    if verdict == "conforme_avec_reserve":
+        return "reserve", "verdict conforme_avec_reserve"
+    if verdict == "conforme":
+        return "conforme", "verdict conforme"
+    return "absent", f"verdict {verdict!r} non reconnu"
+
+
+def _invalidation_de(entry: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """Bloc `_invalidation` d'une entrée de prompt, si elle est déclarée invalide."""
+    if not isinstance(entry, Mapping):
+        return None
+    bloc = entry.get("_invalidation")
+    if isinstance(bloc, Mapping) and bloc.get("statut") == "invalide":
+        return dict(bloc)
+    return None
 
 
 class PromptManager:
@@ -79,6 +166,7 @@ class PromptManager:
         *,
         template_names: Mapping[str, str] | None = None,
         schema_paths: Mapping[str, Path] | None = None,
+        exiger_avis_neutralite: bool = True,
     ) -> None:
         """
         `templates_dir` : un répertoire (ou plusieurs) où Jinja2 cherche les templates ;
@@ -92,6 +180,11 @@ class PromptManager:
         self._schemas_file = Path(schemas_file) if schemas_file else None
         self._prompts_file = Path(prompts_file) if prompts_file else None
         self._template_names: dict[str, str] = dict(template_names or {})
+        # ARMÉ depuis le 2026-09-10 : les 18 variantes ont été auditées par l'agent
+        # `prompt-auditor` et portent un `_neutralite` scellé. Servir un prompt non audité est
+        # désormais un refus, pas un avertissement. Se désarme explicitement pour un bac à
+        # sable ou un test qui fabrique ses propres variantes.
+        self.exiger_avis_neutralite = bool(exiger_avis_neutralite)
         self._env = Environment(
             loader=FileSystemLoader([str(d) for d in dirs]),
             autoescape=select_autoescape(disabled_extensions=("md.j2", "txt.j2")),
@@ -152,6 +245,11 @@ class PromptManager:
             raise ValueError(
                 f"Catégorie {category!r} : template {name} absent de {[str(d) for d in self._templates_dirs]}"
             ) from None
+        # Un prompt actif invalidé doit tomber au démarrage, pas à la millième requête.
+        key = self._store["active"].get(category)
+        bloc = _invalidation_de(self._store["prompts"].get(key)) if key else None
+        if bloc is not None:
+            raise VariantePromptInvalide(key, bloc)
 
     @property
     def categories(self) -> list[str]:
@@ -164,7 +262,13 @@ class PromptManager:
             raise ValueError(f"Schéma inconnu pour la catégorie '{category}'")
         return self._schemas[category]
 
-    def get_system_prompt(self, category: str, variante: str | None = None) -> str | None:
+    def get_system_prompt(
+        self,
+        category: str,
+        variante: str | None = None,
+        *,
+        verifier_validite: bool = True,
+    ) -> str | None:
         """
         Retourne le texte du prompt système pour `category` — la variante ACTIVE, ou `variante`.
 
@@ -192,6 +296,11 @@ class PromptManager:
                     f"variante de prompt {variante!r} introuvable dans prompts.yaml "
                     f"(connues : {', '.join(sorted(self._store['prompts']))})"
                 )
+            if verifier_validite:
+                bloc = _invalidation_de(entry)
+                if bloc is not None:
+                    raise VariantePromptInvalide(variante, bloc)
+                self._verifier_neutralite(variante, entry)
             return _strip_schema_block(entry["content"])
         key = self._store["active"].get(category)
         if not key:
@@ -199,10 +308,67 @@ class PromptManager:
         entry = self._store["prompts"].get(key)
         if not entry or "content" not in entry:
             logger.warning(
-                "Prompt actif '%s' introuvable pour la catégorie '%s'", key, category
+                f"Prompt actif {key!r} introuvable pour la catégorie {category!r}"
             )
             return None
+        if verifier_validite:
+            bloc = _invalidation_de(entry)
+            if bloc is not None:
+                raise VariantePromptInvalide(key, bloc)
+            self._verifier_neutralite(key, entry)
         return _strip_schema_block(entry["content"])
+
+    def _verifier_neutralite(self, variante: str, entry: Mapping[str, Any]) -> None:
+        """Applique l'avis du `prompt-auditor` sur le chemin de SERVICE.
+
+        Un verdict `non_conforme`, ou un avis périmé par une retouche du texte, refuse
+        toujours : ce sont des constats, pas des lacunes. En revanche un avis **absent** ne
+        refuse que si `exiger_avis_neutralite` est armé — sinon la mise en place de la règle
+        aurait rendu inutilisables les 25 variantes existantes, l'active comprise, avant même
+        qu'un audit ait pu être rendu. Le rattrapage se fait variante par variante, puis on arme.
+        """
+        etat, pourquoi = _etat_neutralite(entry)
+        if etat in ("refus", "perime"):
+            raise AvisNeutraliteManquant(
+                f"variante de prompt {variante!r} refusée par l'audit de neutralité : "
+                f"{pourquoi} → faire réexaminer par l'agent prompt-auditor "
+                f"(specs/hygiene-prompts-et-plateforme-experiences.md §4.2)"
+            )
+        if etat == "absent":
+            if self.exiger_avis_neutralite:
+                raise AvisNeutraliteManquant(
+                    f"variante de prompt {variante!r} sans avis de neutralité valide "
+                    f"({pourquoi}) → faire auditer par l'agent prompt-auditor, ou désarmer "
+                    f"`exiger_avis_neutralite`"
+                )
+            # loguru : pas d'interpolation %s — le message doit être formé avant l'appel.
+            logger.warning(
+                f"Prompt {variante!r} servi sans avis de neutralité ({pourquoi}) — "
+                "audit prompt-auditor à rendre"
+            )
+
+    def neutralite(self, variante: str) -> dict[str, Any] | None:
+        """Avis de neutralité déclaré pour une variante, tel quel. Ne lève jamais."""
+        return _neutralite_de(self._store["prompts"].get(variante))
+
+    def etat_neutralite(self, variante: str) -> tuple[str, str]:
+        """(état, explication) — `conforme`, `reserve`, `refus`, `absent` ou `perime`."""
+        entry = self._store["prompts"].get(variante)
+        if not entry:
+            return "absent", "variante inconnue"
+        return _etat_neutralite(entry)
+
+    def invalidation(self, variante: str) -> dict[str, Any] | None:
+        """Bloc `_invalidation` d'une variante, ou None si elle est valide. Ne lève jamais."""
+        return _invalidation_de(self._store["prompts"].get(variante))
+
+    def famille(self, variante: str) -> str:
+        """Famille déclarée d'une variante : « minimale » ou « experte » (défaut du store)."""
+        fam = self._store.get("familles") or {}
+        if variante in (fam.get("minimale") or []):
+            return "minimale"
+        entry = self._store["prompts"].get(variante) or {}
+        return str(entry.get("famille") or fam.get("defaut") or "experte")
 
     def variantes(self) -> list[str]:
         """Clés de `prompts:` disponibles (pour valider une expérience avant de la lancer)."""
@@ -218,7 +384,12 @@ class PromptManager:
         prompt produit un nouveau checksum → un nouveau répertoire de cache.
         """
         cats = list(categories) if categories else sorted(self._store["active"])
-        parts = [f"{cat}:{self.get_system_prompt(cat) or ''}" for cat in cats]
+        # Empreinte, pas service : ne refuse pas une variante invalidée, sinon un prompt actif
+        # invalidé ferait tomber le calcul de clé de cache au lieu de le faire tomber au rendu.
+        parts = [
+            f"{cat}:{self.get_system_prompt(cat, verifier_validite=False) or ''}"
+            for cat in cats
+        ]
         raw = "\n".join(parts)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:length]
 

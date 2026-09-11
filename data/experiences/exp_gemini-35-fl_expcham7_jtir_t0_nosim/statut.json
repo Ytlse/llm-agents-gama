@@ -1,0 +1,16 @@
+{
+ "statut": "invalide",
+ "motif": "mesure produite sous le gabarit expert_chaine_m7, invalidé le 2026-09-10 (règle C1, audit indépendant) : « Quand un transport collectif double ou triple la durée porte-à-porte […] l'usager arbitre en faveur du mode le plus économe en temps de vie » — multiplicateur de durée suivi d'une consigne de rang. Composite 10,1997 non citable sans ce motif. Archive intacte et vérifiable ; à rejouer sur expert_chaine_m7.1.",
+ "le": "2026-09-10T09:01:12+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "invalide",
+   "le": "2026-09-10T09:01:12+00:00",
+   "motif": "mesure produite sous le gabarit expert_chaine_m7, invalidé le 2026-09-10 (règle C1, audit indépendant) : « Quand un transport collectif double ou triple la durée porte-à-porte […] l'usager arbitre en faveur du mode le plus économe en temps de vie » — multiplicateur de durée suivi d'une consigne de rang. Composite 10,1997 non citable sans ce motif. Archive intacte et vérifiable ; à rejouer sur expert_chaine_m7.1."
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+{
+ "statut": "archivee",
+ "motif": "exécution partielle (244/2 645) sous gabarit minimal_persona invalidé ; aucun score publié. Arrêt sur `passerelle_occupee: Timeout expiré` via groq_qwen_qwen3_8_27b_key1 — saturation Groq (OTPM 1 000 non modélisé par la passerelle, mesuré le 2026-09-08), et non l'instance LM Studio.",
+ "le": "2026-09-10T08:19:51+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "exécution partielle (244/2 645, epuisee) sous gabarit minimal_persona invalidé ; aucun score publié. Cause probable de l'arrêt : lmstudio_qwen3_8_27b déclare un modèle absent de LM Studio."
+  },
+  {
+   "de": "archivee",
+   "vers": "archivee",
+   "le": "2026-09-10T08:19:51+00:00",
+   "motif": "exécution partielle (244/2 645) sous gabarit minimal_persona invalidé ; aucun score publié. Arrêt sur `passerelle_occupee: Timeout expiré` via groq_qwen_qwen3_8_27b_key1 — saturation Groq (OTPM 1 000 non modélisé par la passerelle, mesuré le 2026-09-08), et non l'instance LM Studio."
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+{
+  "steps": 87,
+  "tool_calls": 39,
+  "total_chars": 314231,
+  "user_input_tokens_est": 836,
+  "thinking_tokens_est": 1582,
+  "tool_output_tokens_est": 9968,
+  "planner_response_tokens_est": 2032,
+  "total_tokens_est": 14419
+}

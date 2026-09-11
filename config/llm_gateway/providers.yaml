@@ -29,7 +29,7 @@
 #   weight = min(rpm_limit, tpm_limit / 3000) / 15
 # où 3000 ≈ tokens (in+out) d'une requête moyenne et 15 = RPM de référence (weight 1.0).
 # Pour les providers à petit TPM, c'est le TPM qui borne le débit réel, pas le RPM
-# (ex : groq_openai_120 à 30 RPM mais 8 000 TPM ne soutient que ~2,7 req/min).
+# (ex : groq_openai_120_key1 à 30 RPM mais 8 000 TPM ne soutient que ~2,7 req/min).
 # Recalculer le weight à chaque changement de rpm_limit/tpm_limit.
 # (Recalé le 2026-07-10 : les poids historiques étaient décorrélés des quotas —
 # mistral, 47 % de la capacité totale, ne recevait que ~8 % du trafic.)
@@ -39,20 +39,25 @@ providers:
   #
   # ── OpenAI ───────────────────────────────────────────────
   #
-  openai:
-    rpm_limit:         15
-    tpm_limit:         200000 # TBC
-    tpd_limit:         2000000 # TBC
-    base_url:          https://api.openai.com/v1
-    default_model:     gpt-4o-mini
-    max_output_tokens: 16384  # limite de complétion gpt-4o-mini
-    weight:            1.0   # min(15, 200000/3000)/15 = 1.0
-    concurrency_limit: 3   # 3 × 10 agents = 30 évalués simultanément, RPM=15 contrôle la cadence
+  # Désactivée le 2026-09-08 : aucune clé fournie (PROVIDER_KEYS__openai jamais
+  # définie) et zéro requête servie. La garde anti-repli refuse désormais une
+  # instance sans clé propre — la réactiver demande PROVIDER_KEYS__openai_key1.
+  # openai_key1:
+  #   adapter:           openai
+  #   rpm_limit:         15
+  #   tpm_limit:         200000 # TBC
+  #   tpd_limit:         2000000 # TBC
+  #   base_url:          https://api.openai.com/v1
+  #   default_model:     gpt-4o-mini
+  #   max_output_tokens: 16384  # limite de complétion gpt-4o-mini
+  #   weight:            1.0   # min(15, 200000/3000)/15 = 1.0
+  #   concurrency_limit: 3
 
   #
   # ── Mistral ───────────────────────────────────────────────
   #
-  mistral:
+  mistral_key1:
+    adapter:           mistral   # requis : le nom d'instance ne sert plus d'adapter (suffixe _key1)
     rpm_limit:         60  # 1 req/s (doc free tier) — les en-têtes annoncent plus, borné par prudence
     tpm_limit:         500000  # vérifié 2026-08-03 (en-têtes x-ratelimit)
     tpd_limit:         100000000  # GARDE-FOU : 3× le prorata journalier du quota mensuel free tier (1 Md tokens/mois)
@@ -64,29 +69,63 @@ providers:
     # de workers = pops plus gros, même débit (le RPM 90 est loin d'être saturé).
     concurrency_limit: 3
 
+  # Mistral Large 3 (2026-09-10). Seau de quotas PROPRE, mesuré aux en-têtes le jour de
+  # l'ajout : 30 req/min et 800 000 jetons/min, là où mistral-small-latest sur la MÊME clé
+  # annonce 1 000 req/min et 500 000 jetons/min. Les limites par minute sont donc comptées
+  # par modèle — cette instance n'enlève rien à mistral_key1. Seule la facture MENSUELLE
+  # (1 Md jetons free tier) est commune aux deux, d'où un garde-fou journalier au simple
+  # prorata (33 M) et non au triple comme pour mistral_key1.
+  mistral_large3_key1:
+    adapter:           mistral
+    rpm_limit:         30   # en-tête x-ratelimit-limit-req-minute, mesuré 2026-09-10
+    tpm_limit:         800000  # en-tête x-ratelimit-limit-tokens-minute, mesuré 2026-09-10
+    tpd_limit:         33000000  # GARDE-FOU : prorata journalier du quota mensuel, PARTAGÉ avec mistral_key1
+    base_url:          https://api.mistral.ai/v1
+    # L'ID DATÉ, pas l'alias `mistral-large-latest` : un alias déplacé sur un autre modèle
+    # ferait porter à l'empreinte scellée d'une expérience un nom de modèle faux, sans que
+    # rien ne le signale (incident du 2026-09-10 sur `gemini-3.1-flash-lite-preview`,
+    # détecté par _refuser_substitution_de_modele).
+    default_model:     mistral-large-2512
+    weight:            2.0   # min(30, 800000/3000)/15 = 2.0
+    concurrency_limit: 2   # 30 req/min : ouvrir plus de workers ne fait que les faire attendre
+
   #
   # ── Google ───────────────────────────────────────────────
   #
-  google_gemini31:
+  google_gemini31_key1:
     adapter:           google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:           America/Los_Angeles
     rpm_limit:         15
     tpm_limit:         250000
     rpd_limit:         500    # quota requêtes/jour (free tier)
     base_url:          https://generativelanguage.googleapis.com/v1beta
-    default_model:     gemini-3.1-flash-lite-preview
+    # `-preview` RETIRÉ : l'alias était servi par `gemini-3.1-flash-lite` sans que rien
+    # ne le signale, et l'empreinte scellée portait donc un nom de modèle faux (incident
+    # du 2026-09-10, détecté par _refuser_substitution_de_modele). Le modèle EFFECTIF n'a
+    # pas changé — seul son nom est redevenu exact.
+    default_model:     gemini-3.1-flash-lite
     weight:            1.0   # min(15, 250000/3000)/15 = 1.0
     concurrency_limit: 2   # batches de 40 agents = déjà très dense, inutile d'augmenter
     disable_timeout:   120
 
   # Quotas relevés sur le dashboard AI Studio (free tier, 2026-07-27) : RPM 15 ·
-  # TPM 250 000 · RPD 500 — identiques à google_gemini31, mais comptabilisés dans
+  # TPM 250 000 · RPD 500 — identiques à google_gemini31_key1, mais comptabilisés dans
   # un SEAU DE QUOTA DISTINCT. C'est tout l'intérêt : en dédiant gemini31 à
   # l'évaluation et gemini35 à la mutation, la campagne dispose de 500 + 500
   # requêtes/jour au lieu de 500 partagées.
   # gemini-3.5-flash-lite est aussi le successeur annoncé de gemini-3.1-flash-lite
   # (arrêt prévu 2027-05-07), donc la cible de migration à terme du modèle d'éval.
-  google_gemini35:
+  google_gemini35_key1:
+    # Niveaux relevés dans ai.google.dev/gemini-api/docs/thinking (2026-09-10).
+    thinking_levels:        [minimal, low, medium, high]
     adapter:           google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:           America/Los_Angeles
     rpm_limit:         15
     tpm_limit:         250000
     rpd_limit:         500    # quota requêtes/jour (free tier)
@@ -108,13 +147,21 @@ providers:
   # La résolution de clé est `provider_keys[nom_instance] or provider_keys[adapter]`
   # (llm_gateway/src/llm_gateway/config/settings.py). Le nom d'instance DOIT donc correspondre à la variable
   # d'env, sinon on retombe silencieusement sur PROVIDER_KEYS__google (clé 1).
-  google2:
+  google_gemini31_key2:
     adapter:           google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:           America/Los_Angeles
     rpm_limit:         15
     tpm_limit:         250000
     rpd_limit:         500
     base_url:          https://generativelanguage.googleapis.com/v1beta
-    default_model:     gemini-3.1-flash-lite-preview
+    # `-preview` RETIRÉ : l'alias était servi par `gemini-3.1-flash-lite` sans que rien
+    # ne le signale, et l'empreinte scellée portait donc un nom de modèle faux (incident
+    # du 2026-09-10, détecté par _refuser_substitution_de_modele). Le modèle EFFECTIF n'a
+    # pas changé — seul son nom est redevenu exact.
+    default_model:     gemini-3.1-flash-lite
     weight:            1.0
     concurrency_limit: 2
     disable_timeout:   120
@@ -122,8 +169,14 @@ providers:
   # Même clé 2, modèle 3.5 : le quota étant PAR MODÈLE, c'est un second seau de
   # 500. Alimenté par PROVIDER_KEYS__google2_35, à exporter au lancement depuis
   # PROVIDER_KEYS__google2 (ne pas dupliquer le secret dans un fichier).
-  google2_35:
+  google_gemini35_key2:
+    # Niveaux relevés dans ai.google.dev/gemini-api/docs/thinking (2026-09-10).
+    thinking_levels:        [minimal, low, medium, high]
     adapter:           google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:           America/Los_Angeles
     rpm_limit:         15
     tpm_limit:         250000
     rpd_limit:         500
@@ -138,8 +191,12 @@ providers:
   #   pas le RPM ni le RPD — d'où weight = min(30, 16000/3000)/15 ≈ 0.36 et un
   #   max_tokens_per_request calé sur le TPM (une requête > 16k tokens → HTTP 413).
   #   batch_max_agents s'auto-borne alors à ~tpm/tokens_per_agent (≈ 5 agents).
-  google_gemma42:
+  google_gemma42_key1:
     adapter:                google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:                America/Los_Angeles
     rpm_limit:              30
     tpm_limit:              16000
     max_tokens_per_request: 16000  # TPM free tier = 16 000 → requête unique > 16 000 tokens → HTTP 413
@@ -151,8 +208,12 @@ providers:
     concurrency_limit:      1
     disable_timeout:        180
 
-  google_gemma43:
+  google_gemma43_key1:
     adapter:                google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:                America/Los_Angeles
     rpm_limit:              30
     tpm_limit:              16000
     max_tokens_per_request: 16000  # TPM free tier = 16 000 → requête unique > 16 000 tokens → HTTP 413
@@ -236,7 +297,7 @@ providers:
   #   concurrency_limit:       3
   #   disable_timeout:         120
 
-  groq_openai_120:
+  groq_openai_120_key1:
     adapter:           groq
     rpm_limit:         30
     tpm_limit:         8000
@@ -298,7 +359,7 @@ providers:
   #   disable_timeout:   120
 
 
-  cerebras_gpt-oss-120b:
+  cerebras_gptoss120b_key1:
     adapter:           cerebras
     rpm_limit:         5
     tpm_limit:         30000
@@ -341,7 +402,7 @@ providers:
   #   disable_timeout:   120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  cerebras_gemma_4_31b:
+  cerebras_gemma_4_31b_key1:
     adapter:            cerebras
     rpm_limit:          5
     tpm_limit:          30000
@@ -354,7 +415,7 @@ providers:
     disable_timeout:    120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  groq_qwen_qwen3_6_27b:
+  groq_qwen_qwen3_6_27b_key1:
     adapter:            groq
     rpm_limit:          30
     tpm_limit:          8000
@@ -367,8 +428,12 @@ providers:
     disable_timeout:    120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  google_gemini_3_flash_preview:
+  google_gemini_3_flash_preview_key1:
     adapter:            google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:            America/Los_Angeles
     rpm_limit:          5
     tpm_limit:          250000
     rpd_limit:          20  # quota requêtes/jour (free tier)
@@ -379,8 +444,12 @@ providers:
     disable_timeout:    120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  google_gemini_3_5_flash:
+  google_gemini_3_5_flash_key1:
     adapter:            google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:            America/Los_Angeles
     rpm_limit:          5
     tpm_limit:          250000
     rpd_limit:          20  # quota requêtes/jour (free tier)
@@ -391,8 +460,14 @@ providers:
     disable_timeout:    120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  google_gemini_3_6_flash:
+  google_gemini_3_6_flash_key1:
+    # Niveaux relevés dans ai.google.dev/gemini-api/docs/thinking (2026-09-10).
+    thinking_levels:        [minimal, low, medium, high]
     adapter:            google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:            America/Los_Angeles
     rpm_limit:          5
     tpm_limit:          250000
     rpd_limit:          20  # quota requêtes/jour (free tier)
@@ -403,8 +478,14 @@ providers:
     disable_timeout:    120
 
   # Ajouté par make providers le 2026-08-18 — quotas free tier relevés
-  google_gemini_3_7_flash:
+  google_gemini_3_7_flash_key1:
+    # Niveaux relevés dans ai.google.dev/gemini-api/docs/thinking (2026-09-10).
+    thinking_levels:        [low, medium, high]
     adapter:            google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:            America/Los_Angeles
     rpm_limit:          5
     tpm_limit:          250000
     rpd_limit:          20  # quota requêtes/jour (free tier)
@@ -413,3 +494,191 @@ providers:
     weight:             0.0  # HORS ROTATION : RPD free tier 20/j < 100 — llm.provider forcé uniquement
     concurrency_limit:  2
     disable_timeout:    120
+
+  # Ajouté par make providers le 2026-09-08 — quotas free tier relevés
+  # `thinking_budget_max` (profondeur de réflexion) : à relever dans la documentation du
+  # fournisseur, instance par instance, JAMAIS deviné. Déclaré, il rend « maximum » proposable
+  # au formulaire et fait refuser d'avance un budget supérieur ; absent, aucun maximum n'est
+  # proposé — un budget au-delà du plafond réel est raboté silencieusement par le fournisseur,
+  # et la réponse ne rapporte que les jetons de pensée consommés, jamais le budget appliqué.
+  # Exemple, à décommenter une fois la valeur vérifiée :
+  #   thinking_budget_max: 24576
+  google_gemini_3_8_flash_key1:
+    # Niveaux relevés dans ai.google.dev/gemini-api/docs/thinking (2026-09-10).
+    thinking_levels:        [low, medium, high]
+    adapter:            google
+    # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
+    # de facturation Gemini se termine à 09:00 à Paris (l'été). Compter en UTC
+    # vidait le compteur 7 h trop tôt (incident du 2026-09-08).
+    quota_reset_tz:            America/Los_Angeles
+    rpm_limit:          5
+    tpm_limit:          250000
+    rpd_limit:          20  # quota requêtes/jour (free tier)
+    base_url:           https://generativelanguage.googleapis.com/v1beta
+    default_model:      gemini-3.8-flash
+    weight:             0.0  # HORS ROTATION : RPD free tier 20/j < 100 — llm.provider forcé uniquement
+    concurrency_limit:  2
+    disable_timeout:    120
+
+  # Ajouté par make providers le 2026-09-08 — quotas free tier relevés
+  groq_qwen_qwen3_8_27b_key1:
+    adapter:            groq
+    rpm_limit:          30
+    tpm_limit:          8000
+    rpd_limit:          1000  # quota requêtes/jour (free tier)
+    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
+    base_url:           https://api.groq.com/openai/v1
+    default_model:      qwen/qwen3.8-27b
+    weight:             0.18  # min(30, 8000/3000)/15
+    concurrency_limit:  3
+    disable_timeout:    120
+
+  #
+  # ── LM Studio — modèles locaux servis par l'hôte (port 1234) ──────────────
+  #
+  # Ajouté le 2026-09-08. Tout modèle chargé dans LM Studio parle le dialecte OpenAI
+  # (adapter `openai_compatible`) ; depuis les conteneurs, l'hôte se joint via
+  # host.docker.internal. Contraintes VÉRIFIÉES sur LM Studio le 2026-09-08 :
+  #   - `response_format` n'accepte QUE json_schema ou text — json_object est refusé
+  #     (« 'response_format.type' must be 'json_schema' or 'text' ») → structured_output: json_schema.
+  #   - default_model = identifiant tel que `lms ls` / GET /v1/models le donne ; il doit être
+  #     recopié à l'identique dans `decideur.modele` de l'expérience (épinglage strict).
+  #   - Le contexte est fixé au CHARGEMENT (4 096 par défaut : trop court) :
+  #     `make lmstudio-charger MODELE=<id>` charge avec 16 384 jetons.
+  # Réglages :
+  #   - weight 0 : HORS ROTATION. Ni la cascade (mode GAMA) ni une autre expérience ne les
+  #     touchent ; seule une expérience épinglée sur leur modèle (force_provider) les sollicite.
+  #     Sans cela, la cascade ferait charger plusieurs modèles à la volée (JIT) et saturerait
+  #     la mémoire de la machine.
+  #   - max_tokens_per_request 6000 → 2 agents par requête (≈ 4 400 jetons de prompt) : borne
+  #     le lot SANS brider le débit à la minute comme le ferait tpm_limit.
+  #   - rpm_limit 30 : jamais atteint en local ; le vrai frein est concurrency_limit.
+  #   - pas de rpd/tpd : un modèle local n'a pas de quota journalier.
+  #   - wait_timeout 600 : attente du CLIENT, pas du routage — le gateway ne la lit pas, il la
+  #     publie et le SDK la reçoit par appel. Un appel à la fois ⇒ l'attente d'une tâche est celle
+  #     de la FILE, pas de la génération (40-120 s). Au défaut de 120 s, toute tâche au-delà de la
+  #     première expirait et le disjoncteur s'ouvrait (2026-09-08, Muse Glimmer).
+  # Clé : PROVIDER_KEYS__lmstudio (valeur libre) dans .env active toutes ces instances via
+  # docker-compose.yml ; vide ou absente, elles sont exclues au démarrage.
+  # Non déclarés (spécialisés, hors périmètre) : olmocr-2-7b (OCR), minicpm-v-4_5 (vision),
+  # text-embedding-nomic (embeddings). À compléter au fil des téléchargements.
+  #
+  lmstudio_mistral_small_3_2_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          mistralai/mistral-small-3.2   # 24B, 4 bit, ctx max 131k
+    rpm_limit:              30
+    max_tokens_per_request: 6000   # 2 agents par requête
+    max_output_tokens:      4096
+    weight:                 0.0    # HORS ROTATION : épinglage par expérience uniquement
+    concurrency_limit:      2
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_mistral_nemo_12b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          mistralai/mistral-nemo-instruct-2407   # 12B, Q4_K_M, ctx max 1M
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      2
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_mistral_7b_v0_3_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          mistralai/mistral-7b-instruct-v0.3   # 7B, Q4_K_M, ctx max 32k
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      2
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_gemma_4_e4b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          google/gemma-4-e4b   # 7.5B (4B effectifs), Q4_K_M, ctx max 131k
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      2
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_qwen3_vl_8b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          qwen3-vl-8b-instruct-mlx   # 8B, MLX 6 bit, ctx max 262k
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      2
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_qwen3_vl_32b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          qwen3-vl-32b-instruct-mlx   # 32B, MLX 4 bit, ctx max 262k — lent : 1 appel à la fois
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      1
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  # Ajoutés le 2026-09-08 (second lot). MODÈLE DES DEUX CÔTÉS : `qwen/qwen3.8-27b` est aussi le
+  # default_model de groq_qwen_qwen3_8_27b_key1. C'est LÉGITIME et les deux restent utilisables —
+  # ce sont deux quantifications du même modèle, deux mesures distinctes. Ce qui les sépare est
+  # `decideur.portee` (`local` / `distant`) dans l'expérience, depuis le 2026-09-11 : elle
+  # restreint les instances, nomme l'expérience (`..._local_...`) et se refuse à être devinée.
+  # Ne PAS revenir à un alias suffixé `-local` : LM Studio répondait 200 en servant
+  # `qwen3-vl-8b-instruct-mlx` à la place (substitution du 2026-09-10, désormais rejetée en 502
+  # par `openai_compatible._refuser_substitution_de_modele`).
+  lmstudio_qwen3_8_27b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          qwen/qwen3.8-27b   # identifiant EXACT servi par LM Studio — 27B, MLX 4 bit, ctx max 262k
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      1    # ≥ 27B : un appel à la fois pour rester sous les 120 s de l'adaptateur
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60
+
+  lmstudio_muse_glimmer_28b_key1:
+    adapter:                openai_compatible
+    structured_output:      json_schema
+    schema_in_system:       true
+    base_url:               http://host.docker.internal:1234/v1
+    default_model:          meta/muse-glimmer   # 28B, Q4_K_M, ctx max 131k
+    rpm_limit:              30
+    max_tokens_per_request: 6000
+    max_output_tokens:      4096
+    weight:                 0.0
+    concurrency_limit:      1
+    wait_timeout:           600   # attente CLIENT (s) : un appel à la fois, les tâches font la file
+    disable_timeout:        60

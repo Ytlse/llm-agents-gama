@@ -77,7 +77,7 @@ EVAL_RPM       = 20
 EVAL_WORKERS   = 4
 
 # Génération des mutations : Gemini (generativelanguage). Plus aucune dépendance Mistral.
-MUTATION_MODEL = "gemini-3.1-flash-lite-preview"
+MUTATION_MODEL = "gemini-3.1-flash-lite"   # `-preview` retiré côté Google (2026-09-10)
 MUTATION_TEMP  = 0.8
 GEMINI_API_KEY   = ""
 GEMINI_BASE_URL  = "https://generativelanguage.googleapis.com/v1beta"

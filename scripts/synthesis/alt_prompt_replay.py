@@ -69,11 +69,11 @@ BATCH = 8
 # quand les dix bras en demandent ~620. Les variantes sont donc réparties entre les
 # deux clés, qui tournent en parallèle. Ce n'est pas un changement de modèle — même
 # nom, même version, même température — seulement un second seau de quota.
-PROVIDERS = ["google2_35", "google_gemini35"]
+PROVIDERS = ["google_gemini35_key2", "google_gemini35_key1"]
 MODEL = "gemini-3.5-flash-lite"
 RPM = 15
 
-# Le fournisseur `google2_35` tire sa clé de PROVIDER_KEYS__google2_35, qui n'est
+# Le fournisseur `google_gemini35_key2` tire sa clé de PROVIDER_KEYS__google2_35, qui n'est
 # volontairement dans aucun fichier : le secret n'est pas dupliqué (cf. le commentaire
 # de config/llm_gateway/providers.yaml). On la dérive au lancement.
 KEY_ALIASES = {"PROVIDER_KEYS__google2_35": "PROVIDER_KEYS__google2"}

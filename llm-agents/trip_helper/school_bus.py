@@ -48,6 +48,22 @@ SCHOOL_BUS_OPTIONS = Counter(
     ["direction"],  # 'outbound' | 'return'
 )
 
+# Volet « choisies » de la journalisation (Lot B) : combien d'options car scolaire
+# proposées ont été effectivement retenues par le LLM. Le rapprocher de
+# `school_bus_options_total` donne le taux d'adoption du mode.
+SCHOOL_BUS_CHOSEN = Counter(
+    "school_bus_chosen_total",
+    "Options car scolaire retenues par le modèle (ticket 030)",
+    ["direction"],  # 'outbound' | 'return'
+)
+
+
+def is_school_bus_plan(plan) -> bool:
+    """Vrai si le plan retenu est un car scolaire synthétique (jambe mode=school_bus)."""
+    return bool(plan) and any(
+        (leg.mode or "") == "school_bus" for leg in (getattr(plan, "legs", None) or [])
+    )
+
 
 @dataclass(frozen=True)
 class _SchoolBusConfig:

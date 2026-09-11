@@ -10,18 +10,18 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from llm_gateway.config import ProviderConfig
+from llm_gateway.core.quota import (
+    DEFAUT_FUSEAU_QUOTA,
+    next_quota_reset,
+    quota_day,
+    seconds_until_quota_reset,
+)
 
 RPM_WINDOW_SECONDS = 60
 
 
-def _utc_day() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d")
-
-
-def _seconds_until_utc_midnight() -> int:
-    now = datetime.now(UTC)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return max(1, int(86400 - (now - midnight).total_seconds()))
+# Jour de quota et durée de retrait : dans le fuseau du FOURNISSEUR (cf. core.quota),
+# comme l'implémentation Redis — les deux doivent rester interchangeables.
 
 
 class InMemoryRateLimiter:
@@ -35,7 +35,7 @@ class InMemoryRateLimiter:
         self._disabled_until: dict[str, float] = {}
         self._consecutive_errors: dict[str, int] = defaultdict(int)
         self._active: dict[str, int] = defaultdict(int)
-        # Quotas journaliers (clé = provider|jour UTC) et flag d'épuisement.
+        # Quotas journaliers (clé = provider|jour DU FOURNISSEUR) et flag d'épuisement.
         self._daily_req: dict[tuple[str, str], int] = defaultdict(int)
         self._daily_tok: dict[tuple[str, str], int] = defaultdict(int)
         self._quota_exhausted_until: dict[str, float] = {}
@@ -79,10 +79,15 @@ class InMemoryRateLimiter:
         self._rpm[provider] += 1
         self._tpm[provider] += est_tokens
         self._last_req[provider] = time.time()
-        self._daily_req[(provider, _utc_day())] += 1
+        self._daily_req[(provider, quota_day(self._tz(provider)))] += 1
         return True
 
     # ── Quotas journaliers (RPD / TPD) ──────────────────────────────────
+
+    def _tz(self, provider: str) -> str:
+        """Fuseau du reset journalier de ce fournisseur (défaut prudent : UTC)."""
+        cfg = self._providers.get(provider)
+        return getattr(cfg, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
 
     def _daily_quota_exhausted(self, provider: str, cfg: ProviderConfig) -> bool:
         if cfg.rpd_limit is None and cfg.tpd_limit is None:
@@ -90,22 +95,34 @@ class InMemoryRateLimiter:
         if time.time() < self._quota_exhausted_until.get(provider, 0.0):
             return True
         if cfg.rpd_limit is not None and self.daily_requests(provider) >= cfg.rpd_limit:
-            self._quota_exhausted_until[provider] = time.time() + _seconds_until_utc_midnight()
+            self._quota_exhausted_until[provider] = time.time() + seconds_until_quota_reset(self._tz(provider))
             return True
         if cfg.tpd_limit is not None and self.daily_tokens(provider) >= cfg.tpd_limit:
-            self._quota_exhausted_until[provider] = time.time() + _seconds_until_utc_midnight()
+            self._quota_exhausted_until[provider] = time.time() + seconds_until_quota_reset(self._tz(provider))
             return True
         return False
 
     def record_tokens(self, provider: str, tokens: int) -> None:
         if tokens > 0:
-            self._daily_tok[(provider, _utc_day())] += tokens
+            self._daily_tok[(provider, quota_day(self._tz(provider)))] += tokens
 
     def daily_requests(self, provider: str) -> int:
-        return self._daily_req[(provider, _utc_day())]
+        return self._daily_req[(provider, quota_day(self._tz(provider)))]
 
     def daily_tokens(self, provider: str) -> int:
-        return self._daily_tok[(provider, _utc_day())]
+        return self._daily_tok[(provider, quota_day(self._tz(provider)))]
+
+    def mark_quota_exhausted_until(
+        self, provider: str, kind: str = "rpd", until: datetime | None = None
+    ) -> int:
+        """Écarte le provider jusqu'au reset de sa journée — sur la parole du fournisseur.
+
+        Pendant du `mark_quota_exhausted_until` de l'implémentation Redis (cf. sa docstring).
+        """
+        cible = until or next_quota_reset(self._tz(provider))
+        ttl = max(1, int((cible - datetime.now(UTC)).total_seconds()))
+        self._quota_exhausted_until[provider] = time.time() + ttl
+        return ttl
 
     def is_quota_exhausted(self, provider: str) -> bool:
         return time.time() < self._quota_exhausted_until.get(provider, 0.0)

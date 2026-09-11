@@ -15,17 +15,17 @@ import statistics
 
 # Providers configuration
 PROVIDERS_CONFIG = {
-    "google_gemini31": {"rpm_limit": 15, "tpm_limit": 250000},
-    "google_gemini35": {"rpm_limit": 15, "tpm_limit": 250000},
-    "google_gemma42": {"rpm_limit": 15, "tpm_limit": float('inf')},
-    "google_gemma43": {"rpm_limit": 15, "tpm_limit": float('inf')},
+    "google_gemini31_key1": {"rpm_limit": 15, "tpm_limit": 250000},
+    "google_gemini35_key1": {"rpm_limit": 15, "tpm_limit": 250000},
+    "google_gemma42_key1": {"rpm_limit": 15, "tpm_limit": float('inf')},
+    "google_gemma43_key1": {"rpm_limit": 15, "tpm_limit": float('inf')},
     "groq_llama3": {"rpm_limit": 30, "tpm_limit": 12000},
     "groq_llama4": {"rpm_limit": 30, "tpm_limit": 30000},
     "groq_qwen": {"rpm_limit": 2, "tpm_limit": 6000},
     "groq_llama31": {"rpm_limit": 2, "tpm_limit": 6000},
-    "groq_openai_120": {"rpm_limit": 30, "tpm_limit": 8000},
+    "groq_openai_120_key1": {"rpm_limit": 30, "tpm_limit": 8000},
     "groq_openai_20": {"rpm_limit": 30, "tpm_limit": 8000},
-    "cerebras_gpt-oss-120b": {"rpm_limit": 5, "tpm_limit": 30000},
+    "cerebras_gptoss120b_key1": {"rpm_limit": 5, "tpm_limit": 30000},
     "cerebras_zai-glm-4.7": {"rpm_limit": 5, "tpm_limit": 30000},
     "openai": {"rpm_limit": 15, "tpm_limit": 200000},
     "mistral": {"rpm_limit": 90, "tpm_limit": 500000},

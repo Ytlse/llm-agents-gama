@@ -1,0 +1,45 @@
+nom: exp_meta-mg_minper_jtir_t0_nosim_2
+population:
+  chemin: /data/eqasim-output/population_1000_AAMAS
+jeu:
+  nom: population_1000_AAMAS_20260316
+  dossier: null
+gabarit:
+  categorie: itinary_multi_agent
+  variante: minimal_persona
+decideur:
+  type: passerelle
+  modele: meta/muse-glimmer
+  parametres:
+    temperature: 0.0
+    top_p: 1.0
+    max_tokens: 4096
+  rejeu_de: null
+  graine: null
+  artefact: null
+mode: sans_simulateur
+calendrier:
+  politique: aleatoire
+  date: '2026-03-16'
+  graine: 42
+horizon_jours: 1
+memoire: false
+evenements: []
+graine_ordre: 42
+graine_tirage: 42
+regroupement:
+  parallelisme: 8
+tolerances_horaires:
+  bike: insensible
+  car: heure
+  rail:
+    pas_min: 10
+  transit:
+    pas_min: 10
+  walk: insensible
+max_candidats: 6
+attente_max_s: 120
+derive_de: exp_gemini-31-fl_expcha_jtir_t0_nosim
+renomme_de: null
+executions_connues:
+- 2026-09-08_20_51_45

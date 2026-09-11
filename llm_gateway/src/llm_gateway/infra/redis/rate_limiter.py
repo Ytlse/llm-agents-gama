@@ -17,6 +17,12 @@ from datetime import UTC, datetime
 import redis as sync_redis
 
 from llm_gateway.config import ProviderConfig
+from llm_gateway.core.quota import (
+    DEFAUT_FUSEAU_QUOTA,
+    next_quota_reset,
+    quota_day,
+    seconds_until_quota_reset,
+)
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,23 +34,18 @@ CONS_ERR_KEY_PREFIX     = "cons_err:"
 DISABLED_KEY_PREFIX     = "disabled:"
 ACTIVE_WORKER_PREFIX    = "active_workers:"
 LAST_REQUEST_KEY_PREFIX = "last_req:"
-RPD_KEY_PREFIX          = "rpd:"              # compteur requêtes/jour (UTC)
-TPD_KEY_PREFIX          = "tpd:"              # compteur tokens/jour (UTC)
-QUOTA_EXHAUSTED_PREFIX  = "quota_exhausted:"  # provider écarté jusqu'à minuit UTC
+RPD_KEY_PREFIX          = "rpd:"              # compteur requêtes/jour (fuseau du provider)
+TPD_KEY_PREFIX          = "tpd:"              # compteur tokens/jour (fuseau du provider)
+QUOTA_EXHAUSTED_PREFIX  = "quota_exhausted:"  # provider écarté jusqu'au reset de SA journée
 
 RPM_WINDOW_SECONDS = 60
 DAILY_KEY_TTL_SECONDS = 90000  # ~25 h : couvre le jour + marge, purge automatique
 
 
-def _utc_day() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d")
-
-
-def _seconds_until_utc_midnight() -> int:
-    now = datetime.now(UTC)
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    elapsed = (now - midnight).total_seconds()
-    return max(1, int(86400 - elapsed))
+# Les compteurs du jour et le retrait pour quota épuisé sont datés dans le fuseau du
+# FOURNISSEUR (cf. llm_gateway.core.quota) : compter en UTC face à un quota qui se
+# réinitialise en heure du Pacifique vidait le compteur 7 h trop tôt, et une clé refusée
+# par Google passait pour disponible (incident du 2026-09-08, expérience arrêtée à 10 %).
 
 # Réservation atomique RPM + TPM (fenêtre glissante 60s) avec lissage temporel.
 # Ordre : lissage → réservation TPM (tokens estimés) → réservation RPM. Toute
@@ -128,6 +129,11 @@ class RedisRateLimiter:
     # Réservation RPM
     # ------------------------------------------------------------------
 
+    def _tz(self, provider: str) -> str:
+        """Fuseau du reset journalier de ce fournisseur (défaut prudent : UTC)."""
+        cfg = self._providers.get(provider)
+        return getattr(cfg, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
+
     def try_reserve(self, provider: str, est_tokens: int | None = None) -> bool:
         """
         Vérifie les pré-conditions (désactivé, cooldown, concurrence, quota)
@@ -208,31 +214,56 @@ class RedisRateLimiter:
         return False
 
     def _mark_quota_exhausted(self, provider: str, kind: str, used: int, limit: int) -> None:
-        ttl = _seconds_until_utc_midnight()
+        tz = self._tz(provider)
+        ttl = seconds_until_quota_reset(tz)
         self._r.set(f"{QUOTA_EXHAUSTED_PREFIX}{provider}", kind, ex=ttl)
         logger.warning(
-            f"Quota journalier {kind.upper()} épuisé — provider écarté jusqu'à minuit UTC "
-            f"| provider={provider} used={used} limit={limit} reset_in={ttl}s"
+            f"Quota journalier {kind.upper()} épuisé (compteur local) — provider écarté jusqu'au "
+            f"reset | provider={provider} used={used} limit={limit} tz={tz} "
+            f"reset={next_quota_reset(tz).isoformat(timespec='seconds')} reset_in={ttl}s"
         )
 
+    def mark_quota_exhausted_until(
+        self, provider: str, kind: str = "rpd", until: datetime | None = None
+    ) -> int:
+        """Écarte le provider jusqu'au reset de sa journée — sur la parole du FOURNISSEUR.
+
+        Appelée sur un 429 dont le corps désigne un quota journalier. C'est la voie qui fait
+        autorité : le compteur local ne voit que le trafic de ce gateway, alors qu'une clé est
+        aussi consommée par `scripts/synthesis/*` et `prompt_calibration` — le 2026-09-08 il
+        affichait 49 requêtes sur 500 pendant que Google refusait pour dépassement des 500.
+
+        Rend le TTL appliqué, en secondes.
+        """
+        tz = self._tz(provider)
+        cible = until or next_quota_reset(tz)
+        ttl = max(1, int((cible - datetime.now(UTC)).total_seconds()))
+        self._r.set(f"{QUOTA_EXHAUSTED_PREFIX}{provider}", kind, ex=ttl)
+        logger.error(
+            f"[ALARME] Quota journalier {kind.upper()} épuisé, annoncé par le fournisseur — "
+            f"provider écarté jusqu'au reset | provider={provider} tz={tz} "
+            f"reset={cible.isoformat(timespec='seconds')} reset_in={ttl}s"
+        )
+        return ttl
+
     def _incr_daily_requests(self, provider: str) -> None:
-        key = f"{RPD_KEY_PREFIX}{provider}:{_utc_day()}"
+        key = f"{RPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}"
         if self._r.incr(key) == 1:
             self._r.expire(key, DAILY_KEY_TTL_SECONDS)
 
     def record_tokens(self, provider: str, tokens: int) -> None:
         if tokens <= 0:
             return
-        key = f"{TPD_KEY_PREFIX}{provider}:{_utc_day()}"
+        key = f"{TPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}"
         if self._r.incrby(key, tokens) == tokens:
             self._r.expire(key, DAILY_KEY_TTL_SECONDS)
 
     def daily_requests(self, provider: str) -> int:
-        val = self._r.get(f"{RPD_KEY_PREFIX}{provider}:{_utc_day()}")
+        val = self._r.get(f"{RPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}")
         return int(val) if val else 0
 
     def daily_tokens(self, provider: str) -> int:
-        val = self._r.get(f"{TPD_KEY_PREFIX}{provider}:{_utc_day()}")
+        val = self._r.get(f"{TPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}")
         return int(val) if val else 0
 
     def is_quota_exhausted(self, provider: str) -> bool:

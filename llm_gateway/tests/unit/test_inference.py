@@ -44,3 +44,47 @@ def test_top_p_reste_none_si_personne_ne_le_donne():
 @pytest.mark.parametrize("params", [None, {}])
 def test_parametres_absents(params):
     assert resolve_inference(params, None, DEFAULTS).max_tokens == 4096
+
+
+# ── Profondeur de réflexion (2026-09-10) ─────────────────────────────────────
+
+
+def test_reflexion_absente_reste_none():
+    """`None` ≠ `0` : rien n'est demandé, le fournisseur applique SON défaut de réflexion."""
+    p = resolve_inference(None, None, DEFAULTS)
+    assert p.thinking_budget is None
+
+
+def test_reflexion_depuis_la_requete():
+    p = resolve_inference({"thinking_budget": 1024}, None, DEFAULTS)
+    assert p.thinking_budget == 1024
+
+
+def test_reflexion_zero_est_une_valeur_pas_une_absence():
+    """0 désactive explicitement la réflexion — il ne doit pas retomber sur le défaut."""
+    prov = SimpleNamespace(temperature=None, top_p=None, max_tokens=None, thinking_budget=512)
+    p = resolve_inference({"thinking_budget": 0}, prov, DEFAULTS)
+    assert p.thinking_budget == 0
+
+
+def test_reflexion_surcharge_fournisseur():
+    prov = SimpleNamespace(temperature=None, top_p=None, max_tokens=None, thinking_budget=256)
+    assert resolve_inference(None, prov, DEFAULTS).thinking_budget == 256
+    assert resolve_inference({"thinking_budget": 64}, prov, DEFAULTS).thinking_budget == 64
+
+
+def test_reflexion_coercee_depuis_une_chaine():
+    p = resolve_inference({"thinking_budget": "2048"}, None, DEFAULTS)
+    assert p.thinking_budget == 2048
+
+
+def test_reflexion_illisible_retombe_sans_exception():
+    """Un paramètre d'inférence illisible ne lève jamais : il descend d'un niveau."""
+    p = resolve_inference({"thinking_budget": "profond"}, None, DEFAULTS)
+    assert p.thinking_budget is None
+
+
+def test_defauts_sans_la_cle_ne_font_pas_tomber():
+    """DEFAULTS de ce test ne déclare pas `thinking_budget` : la cascade doit tenir."""
+    assert not hasattr(DEFAULTS, "thinking_budget")
+    assert resolve_inference({"temperature": 0.1}, None, DEFAULTS).thinking_budget is None

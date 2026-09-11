@@ -49,6 +49,16 @@ score:
     distance: 0.3
     length_penalty: 0.0
 
+  # ── Termes du second oracle, à POIDS NUL (tranché le 2026-09-10) ────────────
+  # `accord_mnl` (bloc B) et `coherence_mnl` (bloc C) sont calculés, journalisés et
+  # publiés, mais ne pèsent pas dans le composite : un prompt sélectionné sous un
+  # terme mesuré contre un modèle serait ajusté à ce modèle, pas à l'enquête. Les
+  # promouvoir demande d'abord de mesurer leur échelle sur plusieurs runs — le
+  # composite étant linéaire, le changement se rétro-applique par simple addition.
+  bi_oracle:
+    accord_mnl: 0.0
+    coherence_mnl: 0.0
+
 # ── Volets ───────────────────────────────────────────────────────────────────
 arms:
   simulation:
@@ -89,7 +99,7 @@ arms:
     # prompts — et `screen` est un sous-ensemble strict du `train` : ni l'un ni
     # l'autre ne peut porter un score de généralisation.
     # Produire la mesure (elle vit dans le store, pas dans un fichier) :
-    #   make heldout-eval PROVIDER=google2      # chiffrer d'abord : DRY_RUN=1
+    #   make heldout-eval PROVIDER=google_gemini31_key2      # chiffrer d'abord : DRY_RUN=1
     # Nom sous lequel l'éval est rangée dans le store. Qualifié par la version des
     # jeux gelés depuis la v2 : « test » désignait deux jeux différents (météo du
     # run en v1, météo tirée dans l'année en v2) et le store, qui n'indexe que sur
@@ -104,4 +114,17 @@ arms:
     # Couche de zones fines du résolveur (action A7) : c'est elle qui rend les six
     # variables géographiques calculables sur le jeu commun. Hors dépôt comme sa
     # source PROGEDO — régénérable avec `make zones`.
-    zones: llm_module/data/zf_zones.gpkg
+    #
+    # Le chemin a suivi le découpage du module LLM en bibliothèques (commit 2f27a27) :
+    # la couche est voisine de son consommateur, `mobility_core.zone_resolver`. Tant
+    # qu'il pointait `llm_module/data/`, le volet 3 se régénérait « couche absente »
+    # sans que rien ne dise que c'était le manifeste, et non la ressource, qui manquait.
+    zones: mobility_core/src/mobility_core/data/zf_zones.gpkg
+
+  # ── Second oracle : logit multinomial (parité stricte, voie 1) ──────────────
+  # Même contrat de variables, même jeu, même split que `model` — c'est la condition
+  # de la comparaison. Il ne sert PAS de cible de fidélité : c'est un arbitre
+  # comportemental, cf. docs/arch/score-synthesis.md § « Score à deux oracles ».
+  model_mnl:
+    policy: scripts/progedo_logit/mnl_model.json
+    predictions: scripts/synthesis/data/mnl_on_common_set.parquet

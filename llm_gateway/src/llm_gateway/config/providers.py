@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 
 DEFAULT_EXAMPLE_FILE = Path(__file__).resolve().parent / "providers.example.yaml"
 
@@ -32,6 +33,10 @@ class InferenceOverrides(BaseModel):
     temperature: float | None = None
     top_p: float | None = None
     max_tokens: int | None = None
+    # Surcharge par fournisseur : utile pour éteindre la réflexion sur une instance qui la
+    # facture ou la supporte mal, sans toucher aux autres.
+    thinking_budget: int | None = None
+    thinking_level: str | None = None
 
 
 class ProviderEntry(BaseModel):
@@ -43,12 +48,35 @@ class ProviderEntry(BaseModel):
     base_url: str
     default_model: str
     tpm_limit: int | None = None
-    rpd_limit: int | None = None   # requêtes/jour : appliqué, provider écarté jusqu'à minuit UTC
+    rpd_limit: int | None = None   # requêtes/jour : appliqué, provider écarté jusqu'au reset du quota
+    # Fuseau du reset journalier du fournisseur. Gemini free tier compte sa journée en
+    # heure du Pacifique : avec le défaut UTC, les compteurs se vidaient 7 h trop tôt et
+    # une clé refusée passait pour disponible (incident du 2026-09-08).
+    quota_reset_tz: str = DEFAUT_FUSEAU_QUOTA
     tpd_limit: int | None = None   # tokens/jour : appliqué, comptage a posteriori des tokens réels
     max_tokens_per_request: int | None = None  # capacité d'une requête unique (HTTP 413 au-delà)
     max_output_tokens: int | None = None       # plafond de complétion ; appris sur HTTP 400 (cf. learned)
+    # Plafond de RÉFLEXION du modèle servi, en jetons de pensée. À relever dans la
+    # documentation du fournisseur, jamais deviné : un budget au-dessus du plafond est raboté
+    # SILENCIEUSEMENT côté fournisseur, et la réponse ne rapporte que les jetons de pensée
+    # consommés — jamais le budget appliqué. Rien ne permettrait donc de rattraper l'écart
+    # après coup, et l'empreinte de l'expérience porterait un budget qui n'a pas été appliqué.
+    # Déclaré → « maximum » devient proposable au formulaire et un budget supérieur est refusé
+    # d'avance. Absent → aucun maximum n'est proposé (on ne remplace pas une mesure par un
+    # chiffre plausible).
+    thinking_budget_max: int | None = None
+    # Niveaux de réflexion acceptés par le modèle servi (`minimal`, `low`, `medium`, `high`).
+    # Relevés dans la documentation du fournisseur : ils varient d'un modèle à l'autre, et
+    # demander un niveau absent rend 400. Déclarés → le formulaire n'offre que ceux-là et un
+    # niveau inconnu est refusé d'avance ; absents → aucun niveau n'est proposé.
+    thinking_levels: list[str] | None = None
     weight: float = 1.0
     concurrency_limit: int = 2
+    # Attente maximale du CLIENT pour une tâche servie par cette instance (secondes).
+    # Réglage d'appelant, pas de routage : le gateway ne le lit pas, le SDK le reçoit par appel
+    # (cf. `sdk.client.execute(wait_timeout=…)`). Un modèle local ne sert qu'un appel à la fois :
+    # l'attente d'une tâche est celle de la FILE, pas de la génération. None = défaut du client.
+    wait_timeout: float | None = None
     disable_timeout: int = 180
     adapter: str = ""
     # Sortie structurée de l'adapter OpenAI-compatible : json_schema (natif), json_object,

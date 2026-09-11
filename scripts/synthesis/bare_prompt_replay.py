@@ -87,7 +87,7 @@ TRACE_DIR = REPO_ROOT / "docs/traces/2026-08-28_prompt_nu"
 # fournisseurs sont écartés en amont et l'erreur qui remonte est « Adapter inconnu » —
 # message dont la cause réelle est ailleurs.
 ENV_FILES = (REPO_ROOT / "prompt_calibration" / ".env", REPO_ROOT / ".env")
-# `google2_35` partage la clé de `google2` : le quota est PAR MODÈLE, donc la même clé
+# `google_gemini35_key2` partage la clé de `google_gemini31_key2` : le quota est PAR MODÈLE, donc la même clé
 # ouvre un second seau (cf. le commentaire de providers.yaml).
 KEY_ALIASES = {"PROVIDER_KEYS__google2_35": "PROVIDER_KEYS__google2"}
 
@@ -513,10 +513,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     # ⚠ C'est une CLÉ de providers.yaml, pas un nom d'adaptateur. Si sa clé API n'est
     # pas exportée, `llm_module.config` l'écarte en amont et l'erreur qui remonte est
     # « Adapter inconnu » — message trompeur dont la vraie cause est la clé absente.
-    p_r.add_argument("--provider", default="google2",
-                     help="clé de fournisseur dans providers.yaml (défaut : google2) ; "
+    p_r.add_argument("--provider", default="google_gemini31_key2",
+                     help="clé de fournisseur dans providers.yaml (défaut : google_gemini31_key2) ; "
                           "sa variable PROVIDER_KEYS__<clé> doit être exportée")
-    p_r.add_argument("--model", default="gemini-3.1-flash-lite-preview")
+    p_r.add_argument("--model", default="gemini-3.1-flash-lite")
     p_r.add_argument("--limit", type=int, help="essai court sur N décisions")
     p_r.add_argument("--dry-run", action="store_true")
     p_r.set_defaults(func=cmd_replay)

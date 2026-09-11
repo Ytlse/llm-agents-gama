@@ -72,6 +72,13 @@ class Task(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     result: list[AgentResponse] | None = None
     error: str | None = None
+    # Nature de l'échec, quand elle est connue et exploitable par l'appelant. Le seul cas
+    # servi aujourd'hui : "quota_journalier" — le fournisseur a refusé pour son quota du jour,
+    # et `resume_at` dit quand la fenêtre rouvre. Sans ce champ, le message d'erreur du worker
+    # (« Providers saturés ou indisponibles ») était classé « occupée, ça va revenir » côté
+    # expériences, qui attendait indéfiniment une clé fermée pour 7 h (incident 2026-09-08).
+    error_kind: str | None = None
+    resume_at: datetime | None = None
     # Unix timestamp of earliest agent departure — lower score = higher priority
     priority_score: float = _FALLBACK_PRIORITY_SCORE
 
@@ -157,6 +164,9 @@ class TaskStatusResponse(BaseModel):
     updated_at: datetime
     result: list[AgentResponse] | None = None
     error: str | None = None
+    # Nature de l'échec + réouverture de fenêtre (cf. Task.error_kind)
+    error_kind: str | None = None
+    resume_at: datetime | None = None
     # Métriques exposées au client (utile pour debug / monitoring)
     provider_used: str | None = None
     latency_ms: float | None = None
@@ -184,3 +194,14 @@ class InternalRequest(BaseModel):
     temperature: float = 0.7
     top_p: float | None = None           # non envoyé quand None (cf. core.inference)
     max_tokens: int = 8192
+    # Profondeur de réflexion, en jetons de pensée. None : rien n'est demandé, le fournisseur
+    # applique son défaut (ce qui était le cas de TOUS les appels jusqu'au 2026-09-10 —
+    # `thoughtsTokenCount` était compté sans être piloté). 0 désactive la réflexion, -1 laisse
+    # le modèle arbitrer. Tous les adapters ne savent pas l'appliquer : cf. `applique_reflexion`.
+    thinking_budget: int | None = None
+    # Niveau de réflexion — le réglage COURANT de l'API Gemini 3 : `minimal`, `low`, `medium`,
+    # `high` (« high » = réflexion maximale). Il remplace `thinking_budget`, qui reste accepté
+    # pour compatibilité ascendante mais que la doc recommande d'abandonner. Les deux ne
+    # peuvent PAS coexister dans une requête : le fournisseur rend 400. `core.inference` le
+    # refuse donc en amont, plutôt que de le découvrir en vol.
+    thinking_level: str | None = None

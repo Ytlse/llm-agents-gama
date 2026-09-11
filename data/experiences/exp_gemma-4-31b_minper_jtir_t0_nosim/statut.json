@@ -1,0 +1,16 @@
+{
+ "statut": "archivee",
+ "motif": "exécution sans aucune décision (epuisee) sous gabarit minimal_persona invalidé ; rien mesuré.",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "exécution sans aucune décision (epuisee) sous gabarit minimal_persona invalidé ; rien mesuré."
+  }
+ ]
+}

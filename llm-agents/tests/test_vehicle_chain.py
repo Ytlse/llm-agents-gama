@@ -110,7 +110,7 @@ class TestPossession:
         dont la part modale est la plus scrutée du projet. Le repli prive désormais
         l'agent d'un mode plutôt que de lui en offrir un qu'il n'a pas, et il est
         bruyant."""
-        import urban_mobility_agents.simulation_controller as controller
+        import urban_mobility_agents.vehicle_chain as controller  # le drapeau d'alarme vit dans vehicle_chain (ticket 035)
 
         fired = []
         monkeypatch.setattr(controller, "fire_alarme", fired.append)
@@ -127,7 +127,7 @@ class TestPossession:
     def test_lalarme_champ_absent_ne_sonne_quune_fois(self, monkeypatch):
         """Sinon elle est émise à chaque décision de chaque agent et noie `make error`.
         Le compteur Prometheus, lui, compte bien tous les cas."""
-        import urban_mobility_agents.simulation_controller as controller
+        import urban_mobility_agents.vehicle_chain as controller  # le drapeau d'alarme vit dans vehicle_chain (ticket 035)
 
         fired = []
         monkeypatch.setattr(controller, "fire_alarme", fired.append)
@@ -142,7 +142,7 @@ class TestPossession:
         assert len(fired) == 5
 
     def test_un_velo_declare_ne_declenche_aucune_alarme(self, monkeypatch):
-        import urban_mobility_agents.simulation_controller as controller
+        import urban_mobility_agents.vehicle_chain as controller  # le drapeau d'alarme vit dans vehicle_chain (ticket 035)
 
         fired = []
         monkeypatch.setattr(controller, "fire_alarme", fired.append)

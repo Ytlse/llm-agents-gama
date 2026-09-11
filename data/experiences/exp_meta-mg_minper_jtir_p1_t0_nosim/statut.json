@@ -1,0 +1,16 @@
+{
+ "statut": "archivee",
+ "motif": "exécution partielle (55/2 645) sous gabarit minimal_persona invalidé ; aucun score publié.",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "exécution partielle (55/2 645) sous gabarit minimal_persona invalidé ; aucun score publié."
+  }
+ ]
+}

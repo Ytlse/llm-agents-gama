@@ -1,0 +1,16 @@
+{
+ "statut": "archivee",
+ "motif": "définition vide, doublon de nommage de `…_minper_jtir_t0_nosim_2` qui porte la mesure ; gabarit minimal_persona invalidé. Non renommée (N12 : le nom écrit fait foi).",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "définition vide, doublon de nommage de `…_minper_jtir_t0_nosim_2` qui porte la mesure ; gabarit minimal_persona invalidé. Non renommée (N12 : le nom écrit fait foi)."
+  }
+ ]
+}

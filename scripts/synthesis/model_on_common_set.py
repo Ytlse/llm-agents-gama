@@ -234,23 +234,36 @@ def offered_mass(probabilities: dict[str, float], offered: list[str]) -> float:
 
 # ── Chargement du modèle ─────────────────────────────────────────────────────
 
-def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
-    """Recharge le booster depuis l'artefact, après vérification du contrat.
+#: Formats d'artefact acceptés — un par oracle. Le premier est le booster supervisé
+#: (« référence haute »), le second le logit multinomial de parité stricte, qui sert
+#: d'arbitre comportemental et non de cible de fidélité.
+POLICY_FORMATS = ("lightgbm_mode_choice_policy", "mnl_mode_choice_policy")
 
-    Le rechargement se fait par ``model_text`` (format natif LightGBM), qui restitue le
-    booster à l'identique. La forme ``dump_model`` du même artefact existe pour
-    l'évaluateur pur Python du conteneur ``controller``, qui n'a pas ``libgomp1`` ;
-    ici, l'interpréteur de la page a LightGBM.
+
+def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
+    """Recharge un oracle depuis son artefact, après vérification du contrat.
+
+    **Deux formats, un seul chemin de prédiction.** Le booster LightGBM se recharge par
+    ``model_text`` (format natif, qui le restitue à l'identique) ; le logit multinomial se
+    recharge en ``LogitPredictor``, un évaluateur pur numpy construit sur les coefficients
+    de l'artefact. Les deux exposent ``predict`` et ``feature_name``, donc tout ce qui suit
+    — encodage, renormalisation sur l'offre OTP, écriture du parquet — est le **même code**
+    pour les deux. C'est la condition pour que leurs deux parquets soient comparables :
+    deux colonnes mesurées par deux chemins ne se comparent pas (règle R7 de
+    `specs/score_composite_deux_oracles.md`).
+
+    La forme ``dump_model`` de l'artefact LightGBM avait été prévue pour un évaluateur pur
+    Python destiné au conteneur ``controller`` ; cet évaluateur n'a jamais été écrit et la
+    décision E9 a été révisée le 2026-09-08 — ``lightgbm`` et ``libgomp1`` sont maintenant
+    dans l'image du ``controller``, qui appelle donc cette fonction comme tout le monde.
 
     Trois refus, tous silencieux si on ne les pose pas : un format d'artefact inconnu,
     un ``spec_version`` qui diverge de celui du spec lu, et un ordre de variables ou de
     classes qui ne serait pas celui du spec — un décalage d'une colonne donne des
     probabilités parfaitement plausibles.
     """
-    import lightgbm as lgb
-
     artefact = json.loads(Path(path).read_text(encoding="utf-8"))
-    if artefact.get("format") != "lightgbm_mode_choice_policy":
+    if artefact.get("format") not in POLICY_FORMATS:
         raise ValueError(f"Format d'artefact inattendu : {artefact.get('format')!r}.")
     if artefact.get("spec_version") != spec.get("spec_version"):
         raise ValueError(
@@ -269,10 +282,15 @@ def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
     if unknown:
         raise ValueError(f"Classes sans correspondance de mode : {unknown}.")
 
-    booster = lgb.Booster(model_str=artefact["booster"]["model_text"])
-    if list(booster.feature_name()) != names:
-        raise ValueError("Le booster rechargé n'attend pas les variables du spec.")
-    return booster, artefact
+    if artefact["format"] == "mnl_mode_choice_policy":
+        from scripts.progedo_logit.mode_choice_logit import LogitPredictor
+        model: Any = LogitPredictor(artefact)
+    else:
+        import lightgbm as lgb
+        model = lgb.Booster(model_str=artefact["booster"]["model_text"])
+    if list(model.feature_name()) != names:
+        raise ValueError("Le modèle rechargé n'attend pas les variables du spec.")
+    return model, artefact
 
 
 # ── Construction du jeu de prédiction ────────────────────────────────────────
@@ -472,13 +490,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", help="manifeste de sources (défaut : sources.yaml)")
     parser.add_argument("--out", help="parquet de sortie (défaut : celui du manifeste)")
+    parser.add_argument("--policy", help=(
+        "artefact d'oracle (défaut : arms.model.policy — le booster LightGBM). "
+        "Pour le second oracle : --policy scripts/progedo_logit/mnl_model.json "
+        "--out scripts/synthesis/data/mnl_on_common_set.parquet"))
     parser.add_argument("--dry-run", action="store_true",
                         help="affiche le périmètre et les comptes, sans rien écrire")
     args = parser.parse_args(argv)
 
     manifest = load_manifest(args.config)
     spec_path = manifest.path_of("arms.model.feature_spec")
-    policy_path = manifest.path_of("arms.model.policy")
+    policy_path = (Path(args.policy) if args.policy
+                   else manifest.path_of("arms.model.policy"))
+    if args.policy and not policy_path.is_absolute():
+        policy_path = REPO_ROOT / policy_path
     zones_path = manifest.path_of("arms.model.zones")
     out_path = Path(args.out or manifest.get("arms.model.predictions"))
     if not out_path.is_absolute():
@@ -512,10 +537,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"Périmètre du volet 1 : {len(moves)} décisions, "
           f"{len({m['agent_id'] for m in moves})} personnes "
           f"(sur {stats.get('total')} lignes du journal)")
-    print(f"Modèle : spec v{spec['spec_version']}, "
+    if artefact["format"] == "mnl_mode_choice_policy":
+        fitted = (f"logit multinomial, {artefact['training']['n_design_columns']} "
+                  f"colonnes de dessin, C = {artefact['training']['C']}")
+    else:
+        fitted = f"booster, {artefact['booster']['best_iteration']} itérations"
+    print(f"Oracle : {artefact['format']} | spec v{spec['spec_version']}, "
           f"{len(spec['features'])} variables, "
-          f"{len(spec['target']['classes'])} classes, "
-          f"{artefact['booster']['best_iteration']} itérations")
+          f"{len(spec['target']['classes'])} classes | {fitted}")
 
     # ── Résolveur de zone fine ───────────────────────────────────────────────
     resolver = None
@@ -568,6 +597,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         "run": run.get("path"),
         "moves_sha256": (run.get("moves") or {}).get("sha256"),
         "spec_version": spec["spec_version"],
+        "policy_format": artefact.get("format"),
+        "policy_path": str(policy_path.relative_to(REPO_ROOT)
+                           if policy_path.is_relative_to(REPO_ROOT) else policy_path),
         "policy_generated_at": artefact.get("generated_at"),
         # Empreinte de la POLITIQUE, et pas seulement sa date. `spec_version` ne bouge
         # que si le contrat de variables change : un ré-entraînement à variables

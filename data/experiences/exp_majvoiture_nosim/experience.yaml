@@ -1,0 +1,43 @@
+nom: exp_majvoiture_nosim
+population:
+  chemin: /data/eqasim-output/population_1000_AAMAS
+jeu:
+  nom: population_1000_AAMAS_20260316
+  dossier: null
+gabarit:
+  categorie: itinary_multi_agent
+  variante: null
+decideur:
+  type: majoritaire_voiture
+  modele: null
+  parametres:
+    temperature: 0.0
+  rejeu_de: null
+  graine: null
+  artefact: null
+mode: sans_simulateur
+calendrier:
+  politique: commune
+  date: '2026-03-16'
+  graine: 42
+horizon_jours: 1
+memoire: false
+evenements: []
+graine_ordre: 42
+graine_tirage: 42
+regroupement:
+  parallelisme: 8
+tolerances_horaires:
+  walk: insensible
+  bike: insensible
+  car: heure
+  transit:
+    pas_min: 10
+  rail:
+    pas_min: 10
+max_candidats: 6
+attente_max_s: 120
+derive_de: null
+executions_connues:
+- 2026-09-07_21_22_45
+renomme_de: exp_00b_majority_car

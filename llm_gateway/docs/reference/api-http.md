@@ -81,6 +81,11 @@ connu (donc `pending` ou `running` : c'est au client de traiter ce cas ; le SDK 
 `available` = ni désactivé, ni en cooldown, ni quota du jour épuisé, RPM courant sous la
 limite, workers actifs sous `concurrency_limit`. Seuls les providers **avec clé** figurent.
 
+`available` répond à « peut prendre une requête *maintenant* » : il vaut aussi `false` quand le
+provider est seulement **occupé** (`active_tasks` ≥ `concurrency_limit`, cas normal d'un modèle
+local à un appel à la fois). Un client qui veut savoir si le provider est **hors service** lit
+`disabled` et `cooldown`, pas `available` — la plateforme d'expériences l'a appris le 2026-09-08.
+
 ## `GET /errors/recent`
 
 Paramètre `limit` (défaut 50, borné à [1, 50]). Les dernières erreurs LLM lues dans le ring

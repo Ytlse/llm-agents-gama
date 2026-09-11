@@ -125,11 +125,52 @@ def get_osmnx_cache_stats() -> tuple[int, int]:
     return _OSMNX_CACHE_HITS, _OSMNX_CACHE_LOOKUPS
 
 
+def _cache_dir_is_mounted(cache_dir: str) -> Optional[bool]:
+    """Le répertoire du cache est-il un point de montage ? ``None`` si indéterminable.
+
+    Le seul test fiable dans un conteneur : deux binds venant du même disque hôte
+    partagent leur ``st_dev``, donc ni ``st_dev`` ni ``os.path.ismount`` ne les
+    distinguent — la cible du montage se lit dans ``/proc/self/mountinfo``.
+    Hors Linux (hôte macOS, tests), la question ne se pose pas : ``None``.
+    """
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as fh:
+            targets = {line.split()[4] for line in fh}
+    except (OSError, IndexError):
+        return None
+    return os.path.realpath(cache_dir) in targets
+
+
 def init_persistent_cache(cache_dir: str) -> None:
     global _persistent_cache
     from trip_helper.osmnx_persistent_cache import OsmnxPersistentCache
+
+    db_path = os.path.join(cache_dir, "osmnx_cache.db")
+    existed = os.path.exists(db_path)
     _persistent_cache = OsmnxPersistentCache(cache_dir)
-    logger.info(f"[osmnx-cache] Persistent cache enabled at {cache_dir}")
+    n_routes = _persistent_cache.count()
+    logger.info(
+        f"[osmnx-cache] Cache de routes actif : {db_path} — {n_routes} routes en base "
+        f"({'fichier existant' if existed else 'FICHIER CRÉÉ'})"
+    )
+
+    # Le cache de routes doit tomber sur son volume, pas dans le bind du CODE : c'est ce
+    # montage qui le rend commun avec le peupleur en masse. Un cache vide sur un chemin non
+    # monté, c'est ~2 h 30 de routage à froid pour 1 000 personas — silencieux jusqu'ici.
+    mounted = _cache_dir_is_mounted(cache_dir)
+    if mounted is False:
+        logger.error(
+            f"[ALARME] Cache de routes OSMnx hors volume : {cache_dir} n'est pas un point de "
+            f"montage — les routes réchauffées par le peupleur (data/cache/osmnx/) sont "
+            f"invisibles et ce run va tout recalculer. Vérifier le montage "
+            f"`./data/cache/osmnx:{cache_dir}` du service controller (docker-compose.yml)."
+        )
+    elif not existed or n_routes == 0:
+        logger.warning(
+            f"[osmnx-cache] Cache VIDE au démarrage ({db_path}) : ce run calculera toutes ses "
+            f"routes à froid. Attendu pour une population neuve ; sinon, réchauffer avec "
+            f"l'étape 6 de generate_population.ipynb (SKIP_WARMUP = False)."
+        )
 
 
 def _terminal_leg(route_marker: str, at: Location, start_s: int,

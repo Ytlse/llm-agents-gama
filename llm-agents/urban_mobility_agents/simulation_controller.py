@@ -20,8 +20,11 @@ Modèle de planification :
 import asyncio
 import contextlib
 import heapq
+import json
 import math
 import time
+from collections import Counter as _Compteur
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable, Coroutine, Optional, Tuple
 import datetime
@@ -50,6 +53,47 @@ from llm_gateway.telemetry.alarms import fire_alarme
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
+from experiences.decision import (  # ticket 035, spec 02 — la décision unique
+    PREFIXE_RECALCUL_HORAIRE,
+    PREFIXE_RECALCUL_OFFRE_JOUR,
+    resumer_ecartees,
+    Proposition,
+    SOURCE_EN_VOL,
+    SOURCE_HORS_JEU,
+    SOURCE_LOCALE,
+    eligibilite,
+    modes_vehicules_eligibles,
+    plafonner,
+)
+from urban_mobility_agents.candidats import (  # noqa: F401 — ré-exportés (ticket 035)
+    MODE_HIERARCHY,
+    _METRIC_MODE,
+    _unknown_metric_modes,
+    _primary_mode,
+    GROUPE_RAIL,
+    _selection_group,
+    _select_candidates,
+)
+from urban_mobility_agents.vehicle_chain import (  # noqa: F401 — ré-exportés (ticket 035, D1)
+    VEHICLE_CHAIN,
+    _road_distance_km,
+    _vehicle_mode,
+    _VEHICLE_MODES,
+    RETURN_LOCK_MIN_DISTANCE_KM,
+    DRIVING_AGE,
+    _can_drive,
+    _is_car_passenger,
+    _owns_bike,
+    _owns_car,
+    _owns_vehicle,
+    _same_place,
+    _vehicle_position,
+    _vehicle_available,
+    _vehicles_parked_at,
+    _park_vehicles,
+    _orphaned_vehicles,
+    _chain_stake_modes,
+)
 
 history_logger = HistoryStreamLog.get_instance()
 
@@ -105,22 +149,6 @@ TRIP_MODE_BY_PURPOSE = Counter(
     'trip_mode_by_purpose_total',
     'Trajets poussés vers GAMA par mode principal et motif d\'activité',
     ['mode', 'purpose'],
-)
-# Cohérence de chaîne des véhicules personnels (vélo, voiture). event ∈
-#   unavailable   : mode écarté des options — véhicule garé ailleurs qu'au point de départ
-#   no_driver     : voiture écartée faute de conducteur (mineur, ou sans permis) — cause
-#                   distincte de `unavailable`, qui reste réservé à la position du véhicule
-#   passenger     : trajet en voiture retenu pour un non-conducteur — un adulte du foyer
-#                   conduit, la voiture ne se gare pas à destination
-#   short_return  : verrou de retour non appliqué, trajet sous le seuil de distance
-#   forced_return : trajet de retour au domicile restreint à ce mode (l'agent ramène son véhicule)
-#   return_failed : verrou de retour inapplicable (aucun itinéraire dans ce mode) → options rendues
-#   orphaned      : agent rentré au domicile, véhicule resté ailleurs (cas résiduel du modèle)
-#   reset_home    : véhicule orphelin ramené au domicile par le rattrapage de fin de boucle
-VEHICLE_CHAIN = Counter(
-    'agent_vehicle_chain_total',
-    'Événements de cohérence de chaîne des véhicules personnels, par mode et type',
-    ['mode', 'event'],
 )
 EVALUATE_PLAN_CALLS = Counter('gama_evaluate_plan_calls_total', 'Total calls to evaluate_and_choose_travel_plan')
 ACTIONS_CREATED = Counter('gama_actions_created_total', 'Total actions created')
@@ -228,23 +256,6 @@ def _next_checkpoint_ts(after_ts: int, hour_24h: int = _POPULATION_CHECKPOINT_HO
     return candidate
 
 
-def _road_distance_km(origin, destination) -> Optional[float]:
-    """Distance routière estimée (km) : vol d'oiseau × 1,3.
-
-    Seule estimation disponible **avant** l'appel à OTP — `plan.distance` n'existe
-    qu'une fois un itinéraire choisi. Le facteur 1,3 est la convention historique de
-    `_estimate_fallback_duration` ; la factoriser ici évite que le verrou de retour
-    (A3) et l'estimation de durée divergent un jour.
-    """
-    if origin is None or destination is None:
-        return None
-    lat1, lon1 = math.radians(origin.lat), math.radians(origin.lon)
-    lat2, lon2 = math.radians(destination.lat), math.radians(destination.lon)
-    a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
-    distance_m = 2 * 6_371_000 * math.asin(math.sqrt(a))
-    return distance_m * 1.3 / 1000.0
-
-
 def _estimate_fallback_duration(origin, destination) -> int:
     """Estimate travel time in seconds from crow-flies distance at 30 km/h with 1.3 detour factor."""
     road_distance_km = _road_distance_km(origin, destination)
@@ -332,56 +343,10 @@ def _build_anticipation(
     }
 
 
-# Le train forme son propre groupe d'options, distinct du bus et de l'autocar. Décision de
-# l'auteur du dépôt (2026-09-04), sur mesure : sur les 440 points où un itinéraire
-# **ferroviaire direct** existe, 122 (27,7 %) le perdaient au profit d'un bus + train plus
-# rapide, parce que les deux partageaient le groupe « transit ». L'agent ne voyait alors jamais
-# le train comme un choix. La hiérarchie de l'enquête les distingue d'ailleurs : le bus et
-# l'autocar sont au rang 4, le train régional au rang 8 (annexe p. 53).
-GROUPE_RAIL = "transit:rail"
-
-
-def _selection_group(plan: TravelPlan) -> str:
-    """Clé de regroupement des options offertes à l'agent.
-
-    C'est la catégorie de `_primary_mode`, **sauf** le collectif, qui se scinde en deux : le
-    ferroviaire d'un côté, le reste du collectif de l'autre.
-
-    Pourquoi seulement le train, et pas une clé par famille (métro, tram, téléphérique, bus,
-    train). Parce que le plafond d'options est de 6, tenu à 6 par décision du 2026-09-04 : avec
-    huit groupes possibles, la passe de priorité — qui prend le plus rapide de chaque groupe
-    inédit, par durée croissante — pourrait remplir les six créneaux de variantes collectives et
-    **écarter la voiture**, le vélo ou la marche. Avec cinq groupes (marche, vélo, voiture,
-    collectif, ferroviaire), les cinq tiennent et il reste un créneau de remplissage.
-
-    ⚠ Ne sert PAS aux métriques : `trip_mode_by_purpose` et les parts modales restent sur les
-    quatre catégories de l'enquête, où le train est un transport collectif. Cette clé ne décide
-    que de ce que l'agent a sous les yeux.
-    """
-    categorie = _primary_mode(plan)
-    if categorie != "transit":
-        return categorie
-    modes = {(leg.mode or "").lower() for leg in plan.legs if not leg.is_transfer}
-    return GROUPE_RAIL if MODE_HIERARCHY.primary_family(modes) == "rail" else categorie
-
-
-def _select_candidates(itineraries: list[TravelPlan], max_n: int) -> list[TravelPlan]:
-    """Cap to max_n itineraries, keeping the fastest plan per mode group first."""
-    by_duration = sorted(itineraries, key=lambda p: p.duration or float("inf"))
-    seen, priority, rest = set(), [], []
-    for plan in by_duration:
-        mode = _selection_group(plan)
-        if mode not in seen:
-            seen.add(mode)
-            priority.append(plan)
-        else:
-            rest.append(plan)
-    selected = priority[:max_n]
-    for plan in rest:
-        if len(selected) >= max_n:
-            break
-        selected.append(plan)
-    return selected
+def _resume_sources(sources: dict, plans: list) -> str:
+    """« enregistree:5,recalculee:2 » — la ventilation des propositions présentées par source (G6)."""
+    compte: _Compteur = _Compteur(sources.get(id(pl), SOURCE_EN_VOL).split(":")[0] for pl in plans)
+    return ",".join(f"{k}:{v}" for k, v in sorted(compte.items()))
 
 
 @dataclass
@@ -441,6 +406,16 @@ class SimulationLoopV1(BaseScenario):
         self._vehicle_home_returns = 0
         self._vehicle_orphan_returns = 0
         self._vehicle_orphan_alarm_on = False
+        # Jeu de déplacements enregistré (ticket 035, spec 04) : servi à la place des moteurs
+        # quand il couvre le déplacement et que l'heure réelle reste dans la tolérance du mode.
+        # `None` = comportement historique (calcul en vol). Les compteurs alimentent
+        # `jeu_stats.json` du run et la rubrique « Jeu enregistré » de `make report` (G14).
+        self.jeu = None
+        self.jeu_tolerances: dict = {}
+        self._jeu_stats: _Compteur = _Compteur()
+        self._jeu_propositions_par_source: _Compteur = _Compteur()
+        self._jeu_alarme_sterile_on = False
+        self._jeu_stats_depuis_ecriture = 0
         # Calendrier du run (audit de périmètre, axe A6). L'enquête ne compte que des
         # jours de semaine ; un départ de week-end reporté au lundi s'EMPILE sur le lundi
         # et en fait un jour atypique. Le report est journalisé en info à chaque fois ;
@@ -1877,6 +1852,155 @@ class SimulationLoopV1(BaseScenario):
         elif self._vehicle_orphan_alarm_on and ratio < threshold / 2:
             self._vehicle_orphan_alarm_on = False
 
+    # ── Jeu de déplacements enregistré (ticket 035, spec 04) ─────────────────────────
+    GROUPES_TOLERANCE = ("walk", "bike", "car", "transit", "rail")
+
+    def charger_jeu(self, chemin: str, info_population) -> None:
+        """G1/G2/G5 — charge le jeu désigné, refuse s'il n'est pas celui de la population ou
+        si les tolérances horaires ne sont pas déclarées. Lève RuntimeError avec la raison."""
+        from experiences.experience import ToleranceHoraire
+        from experiences.jeu import Jeu
+
+        jeu = Jeu.charger(chemin)
+        mismatch = jeu.verifier_population(info_population)
+        if mismatch:
+            raise RuntimeError(f"jeu refusé : {mismatch}")
+        declarees = settings.data.jeu_tolerances_horaires or {}
+        manquants = [g for g in self.GROUPES_TOLERANCE if g not in declarees]
+        if manquants:
+            raise RuntimeError(
+                "jeu refusé : tolérances horaires non déclarées pour "
+                f"{manquants} (réglage data.jeu_tolerances_horaires — aucun défaut dans le code, spec 04 G5)"
+            )
+        self.jeu_tolerances = {g: ToleranceHoraire.depuis_yaml(v) for g, v in declarees.items()}
+        self.jeu = jeu
+        self._jeu_stats = _Compteur()
+        self._jeu_propositions_par_source = _Compteur()
+        couv = jeu.couverture()
+        logger.info(
+            f"[jeu] Jeu enregistré {jeu.nom!r} chargé (empreinte {str(jeu.empreinte)[:12]}…) : "
+            f"{couv['deplacements_couverts']}/{couv['deplacements_attendus']} déplacements couverts, "
+            f"tolérances {{{', '.join(f'{g}: {t.type}' + (f' {t.pas_min} min' if t.pas_min else '') for g, t in self.jeu_tolerances.items())}}} — "
+            f"régime nominal : aucun appel moteur pour les déplacements couverts"
+        )
+        self._ecrire_jeu_stats(force=True)
+
+    @staticmethod
+    def _groupe_tolerance(plan: TravelPlan) -> str:
+        g = _selection_group(plan)
+        return "rail" if g == GROUPE_RAIL else g
+
+    @staticmethod
+    def _ecart_horaire(departure_time: int, reference_ts: int) -> int:
+        """Écart réel − référence, ramené dans la journée (±12 h) : le jeu vaut pour chaque jour simulé."""
+        e = (int(departure_time) - int(reference_ts)) % 86400
+        return e - 86400 if e >= 43200 else e
+
+    def _propositions_du_jeu(self, person: Person, next_activity: Activity, departure_time: int) -> Optional[dict]:
+        """Propositions enregistrées du déplacement, et les groupes à recalculer (G3, G5).
+
+        `None` si le jeu ne couvre pas ce déplacement (source `hors_jeu`, question 9)."""
+        ligne = self.jeu.ligne(person.person_id, next_activity.id)
+        if ligne is None:
+            return None
+        propositions = ligne.vers_propositions()
+        ecart = self._ecart_horaire(departure_time, ligne.depart_ts)
+        presents = {self._groupe_tolerance(p.plan) for p in propositions}
+        motifs: dict[str, str] = {}
+        for g, tol in self.jeu_tolerances.items():
+            if g in presents and tol.hors_tolerance(ecart, ligne.depart_ts):
+                motifs[g] = "horaire"
+        # Décision de l'auteur (2026-09-06, question 18) : un autre jour simulé joue l'offre de
+        # transport de CE jour. Les groupes transit/rail sont recalculés dès que le jour de départ
+        # n'est pas celui du jeu — sauf si l'équivalence des deux offres a été mesurée et déclarée
+        # (`EQUIVALENCES.yaml` du jeu, cf. `verifier-jours`). Marche, vélo, voiture : servis.
+        jour_depart = wall_clock(int(departure_time)).date().isoformat()
+        if jour_depart != self.jeu.jour_simule:
+            # Vérifié dans le GTFS par déplacement (`verifier-jours`, EQUIVALENCES.yaml) : la grille
+            # horaire de ce jour est-elle identique dans la fenêtre du déplacement ? True → servi ;
+            # False → TC recalculés ; None (jamais vérifié) → TC recalculés aussi, on ne suppose rien.
+            valide = self.jeu.ligne_valide_le(jour_depart, ligne.cle)
+            if valide is not True:
+                for g in ("transit", "rail"):
+                    if g in presents:
+                        motifs[g] = f"offre_jour:{jour_depart}"
+                self._jeu_stats["offre_jour_non_verifiee" if valide is None else "offre_jour_grille_differente"] += 1
+        return {"ligne": ligne, "propositions": propositions, "ecart_s": ecart, "a_recalculer": set(motifs), "motifs": motifs}
+
+    def _fusionner_recalcul(self, du_jeu: dict, recalculees: list) -> tuple[list, dict]:
+        """G5/G6/G7 — groupes hors tolérance : recalculés ; autres : servis du jeu ; recalcul stérile compté."""
+        a_recalculer = du_jeu["a_recalculer"]
+        ecart_min = du_jeu["ecart_s"] // 60
+        plans, sources = [], {}
+        for prop in du_jeu["propositions"]:
+            if self._groupe_tolerance(prop.plan) not in a_recalculer:
+                plans.append(prop.plan)
+                sources[id(prop.plan)] = prop.source
+        motifs = du_jeu.get("motifs") or {}
+        for it in recalculees or []:
+            g = self._groupe_tolerance(it)
+            if g in a_recalculer:
+                plans.append(it)
+                motif = motifs.get(g, "horaire")
+                if motif.startswith("offre_jour"):
+                    sources[id(it)] = f"{PREFIXE_RECALCUL_OFFRE_JOUR}:{motif.split(':', 1)[1]}"
+                else:
+                    tol = self.jeu_tolerances.get(g)
+                    tol_txt = tol.type + (f"{tol.pas_min}min" if tol and tol.pas_min else "") if tol else "?"
+                    sources[id(it)] = f"{PREFIXE_RECALCUL_HORAIRE}:{ecart_min:+d}/{tol_txt}"
+        # G7 — recalcul sans effet : mêmes modes et mêmes durées à la minute que l'enregistré.
+        def _signature(items):
+            return sorted((pl.mode_label(), (pl.duration or 0) // 60) for pl in items)
+        for g in a_recalculer:
+            avant = [p.plan for p in du_jeu["propositions"] if self._groupe_tolerance(p.plan) == g]
+            apres = [it for it in (recalculees or []) if self._groupe_tolerance(it) == g]
+            cle = "recalculs_offre_jour" if str(motifs.get(g, "")).startswith("offre_jour") else "recalculs_horaire"
+            self._jeu_stats[cle] += 1
+            if _signature(avant) == _signature(apres):
+                self._jeu_stats["recalcul_sans_effet" if cle == "recalculs_horaire" else "recalcul_offre_jour_sans_effet"] += 1
+        rec = self._jeu_stats["recalculs_horaire"]
+        part = self._jeu_stats["recalcul_sans_effet"] / rec if rec else 0.0
+        seuil = settings.data.jeu_seuil_recalcul_sans_effet
+        if rec >= 20 and part > seuil and not self._jeu_alarme_sterile_on:
+            self._jeu_alarme_sterile_on = True
+            logger.error(
+                f"[ALARME] Jeu {self.jeu.nom!r} : {self._jeu_stats['recalcul_sans_effet']}/{rec} recalculs horaires "
+                f"sans effet ({100 * part:.0f} % > {100 * seuil:.0f} %) — la tolérance horaire est trop sensible (G7)"
+            )
+            fire_alarme("jeu_recalcul_sterile")
+        elif self._jeu_alarme_sterile_on and part < seuil / 2:
+            self._jeu_alarme_sterile_on = False
+        return plans, sources
+
+    def _ecrire_jeu_stats(self, force: bool = False) -> None:
+        """`jeu_stats.json` dans le workdir du run — lu par `make report` (G3, G14)."""
+        if self.jeu is None:
+            return
+        self._jeu_stats_depuis_ecriture += 1
+        if not force and self._jeu_stats_depuis_ecriture < 25:
+            return
+        self._jeu_stats_depuis_ecriture = 0
+        jamais = ["offre (événements non implémentés)"]
+        if not self._jeu_stats["recalculs_horaire"]:
+            jamais.append("horaire")
+        if not self._jeu_stats["recalculs_offre_jour"]:
+            jamais.append("offre_jour (aucun autre jour simulé que celui du jeu)")
+        contenu = {
+            "jeu": self.jeu.nom, "empreinte": self.jeu.empreinte, "population": self.jeu.population.get("nom"),
+            "tolerances": {g: (t.type if t.type != "pas" else {"pas_min": t.pas_min}) for g, t in self.jeu_tolerances.items()},
+            **{k: int(v) for k, v in self._jeu_stats.items()},
+            "propositions_par_source": {k: int(v) for k, v in self._jeu_propositions_par_source.items()},
+            "declencheurs_jamais_declenches": jamais,
+            "couverture_jeu": self.jeu.couverture(),
+        }
+        try:
+            chemin = Path(settings.app.log_file).parent / "jeu_stats.json"
+            tmp = chemin.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(contenu, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+            tmp.replace(chemin)
+        except OSError as e:
+            logger.warning(f"[jeu] jeu_stats.json non écrit : {e}")
+
     async def _compute_move_for_activity(
         self,
         person: Person,
@@ -1923,10 +2047,13 @@ class SimulationLoopV1(BaseScenario):
                 departure_time = shifted
         # Verrou de sortie : un véhicule ne se conduit que là où il est garé — et la
         # voiture, que par quelqu'un qui a l'âge et le permis (A2).
-        _traits = person.identity.traits_json
+        # Ticket 035 (spec 02, RG-1) : le verrou de sortie est calculé par la décision
+        # unique — ici seulement pour ne pas demander à OTP ce qui sera écarté ; le filtre
+        # complet (motifs, verrou de retour, événements) s'applique plus bas via `eligibilite`.
         _is_passenger = _is_car_passenger(person)
-        include_car = _vehicle_available(person, "car", from_location)
-        include_bike = _vehicle_available(person, "bike", from_location)
+        _eligibles = modes_vehicules_eligibles(person, from_location)
+        include_car = _eligibles["car"]
+        include_bike = _eligibles["bike"]
         # Contrainte de chaîne appliquée à ce trajet, journalisée dans moves.csv (A4).
         # Une seule valeur par ligne ; `passager` prime, puis `retour_force`, puis
         # `sortie_bloquee`. Ces lignes restent dans le scoring : la colonne explique,
@@ -1935,58 +2062,72 @@ class SimulationLoopV1(BaseScenario):
         # Anticipation (ticket 014) : construit seulement si la décision atteint le
         # LLM — les chemins cache/mono-option n'affichent aucun prompt.
         anticipation: Optional[dict] = None
-        for _mode, _owned, _included in (
-            ("car", _owns_car(_traits), include_car),
-            ("bike", _owns_bike(_traits), include_bike),
-        ):
-            if _owned and not _included:
-                if _mode == "car" and not _can_drive(_traits):
-                    # Cause « pas de conducteur », distincte d'un véhicule mal garé :
-                    # les confondre ferait exploser `unavailable` sans rien dire.
-                    VEHICLE_CHAIN.labels(mode="car", event="no_driver").inc()
-                else:
-                    VEHICLE_CHAIN.labels(mode=_mode, event="unavailable").inc()
-                    chain_constraint = "sortie_bloquee"
 
         same_location = (
             from_location is not None and next_activity.location is not None
             and from_location.lat == next_activity.location.lat
             and from_location.lon == next_activity.location.lon
         )
+        # Source de chaque proposition (ticket 035, spec 04 G6) : enregistree / locale /
+        # recalculee:horaire / en_vol / hors_jeu — tracée dans moves.csv et jeu_stats.json.
+        _sources: dict[int, str] = {}
+        _jeu_servi = False
         if same_location:
             itineraries = []
         else:
-            _timing_sink: dict | None = {} if _pipeline_rec is not None else None
-            if _pipeline_rec is not None:
-                _pipeline_rec.T_otp_start = time.time()
-            itineraries = await self.trip_helper.get_itineraries(
-                origin=from_location,
-                destination=next_activity.location,
-                departure_time=departure_time,
-                include_car=include_car,
-                include_bike=include_bike,
-                arrive_by=False,
-                _timing_sink=_timing_sink,
-            )
-            if _pipeline_rec is not None:
-                _pipeline_rec.T_otp_end = time.time()
+            _du_jeu = self._propositions_du_jeu(person, next_activity, departure_time) if self.jeu is not None else None
+            if _du_jeu is not None and not _du_jeu["a_recalculer"]:
+                # G3 — régime nominal : servi du jeu, AUCUN appel moteur.
+                itineraries = [prop.plan for prop in _du_jeu["propositions"]]
+                _sources.update({id(prop.plan): prop.source for prop in _du_jeu["propositions"]})
+                _jeu_servi = True
+                self._jeu_stats["deplacements_servis"] += 1
+            else:
+                _timing_sink: dict | None = {} if _pipeline_rec is not None else None
+                if _pipeline_rec is not None:
+                    _pipeline_rec.T_otp_start = time.time()
+                itineraries = await self.trip_helper.get_itineraries(
+                    origin=from_location,
+                    destination=next_activity.location,
+                    departure_time=departure_time,
+                    include_car=include_car,
+                    include_bike=include_bike,
+                    arrive_by=False,
+                    _timing_sink=_timing_sink,
+                )
+                self._jeu_stats["appels_moteur"] += 1
                 if _timing_sink:
-                    _pipeline_rec.T_transit_sem = _timing_sink.get("transit_sem_end")
-                    _pipeline_rec.T_transit_end = _timing_sink.get("transit_end")
-                    _pipeline_rec.T_osmnx_sem   = _timing_sink.get("osmnx_sem_end")
-                    _pipeline_rec.T_osmnx_end   = _timing_sink.get("osmnx_end")
+                    if _timing_sink.get("transit_end") is not None:
+                        self._jeu_stats["appels_otp"] += 1
+                    if _timing_sink.get("osmnx_end") is not None:
+                        self._jeu_stats["appels_osmnx"] += 1
+                if _pipeline_rec is not None:
+                    _pipeline_rec.T_otp_end = time.time()
+                    if _timing_sink:
+                        _pipeline_rec.T_transit_sem = _timing_sink.get("transit_sem_end")
+                        _pipeline_rec.T_transit_end = _timing_sink.get("transit_end")
+                        _pipeline_rec.T_osmnx_sem   = _timing_sink.get("osmnx_sem_end")
+                        _pipeline_rec.T_osmnx_end   = _timing_sink.get("osmnx_end")
+                if _du_jeu is not None:
+                    # G5 — recalcul limité aux groupes hors tolérance ; les autres restent servis du jeu.
+                    itineraries, _maj = self._fusionner_recalcul(_du_jeu, itineraries)
+                    _sources.update(_maj)
+                    _jeu_servi = True
+                elif self.jeu is not None:
+                    # Question 9 : déplacement que le jeu ne couvre pas (pré-calcul au-delà de la
+                    # journée, activité replanifiée) — légitime, compté à part, jamais « enregistré ».
+                    self._jeu_stats["hors_jeu"] += 1
+                    _sources.update({id(it): SOURCE_HORS_JEU for it in itineraries})
 
-        # Post-filtre : OTP/OSMnx renvoient parfois un mode qu'on n'a pas demandé.
-        _blocked = {m for m, ok in (("bike", include_bike), ("car", include_car)) if not ok}
-        if _blocked:
-            itineraries = [it for it in itineraries if _vehicle_mode(it) not in _blocked]
+        # Post-filtre (OTP/OSMnx renvoient parfois un mode non demandé) : porté par
+        # `eligibilite`, plus bas, avec le verrou de retour — une seule implémentation.
 
         # Car scolaire synthétique (ticket 030). Injecté APRÈS le post-filtre (jamais
         # bloqué : `_vehicle_mode` renvoie « transit ») et AVANT le verrou de retour, de
         # sorte qu'un élève venu en voiture reprenne la voiture (le verrou filtre alors
         # le car scolaire), et qu'un élève venu en car scolaire le retrouve au retour
         # (aucun véhicule garé à l'école → verrou inactif). Rien en cas de non-trajet.
-        if not same_location:
+        if not same_location and not _jeu_servi:
             school_option = build_school_bus_option(
                 person=person,
                 from_location=from_location,
@@ -1996,45 +2137,30 @@ class SimulationLoopV1(BaseScenario):
             )
             if school_option is not None:
                 itineraries = list(itineraries) + [school_option]
+                _sources[id(school_option)] = SOURCE_LOCALE
 
-        # Verrou de retour : on ne laisse pas un véhicule dormir sur place quand l'agent
-        # rentre chez lui. Si le vélo ou la voiture est garé au point de départ et que ce
-        # trajet ramène au domicile, les options sont restreintes à ces modes — l'agent
-        # ramène son véhicule. Aucun appel LLM supplémentaire : c'est un filtre sur les
-        # options, le choix (entre vélo et voiture s'ils sont tous deux là) reste au LLM.
-        if (
-            settings.agent.vehicle_chain_enabled
-            and settings.agent.vehicle_return_home_lock
-            and itineraries
-            and (next_activity.purpose or "").lower() == "home"
-        ):
-            _to_bring_back = _vehicles_parked_at(person, from_location)
-            # A3 — sous le seuil, le verrou ne s'applique pas : on ne fait pas
-            # reprendre sa voiture à un agent pour rentrer de deux cents mètres. Le
-            # véhicule devient alors orphelin s'il rentre autrement ; c'est le
-            # compromis accepté, et `_settle_vehicles_at_home` le rattrape.
-            _od_km = _road_distance_km(from_location, next_activity.location)
-            if _to_bring_back and _od_km is not None and _od_km < RETURN_LOCK_MIN_DISTANCE_KM:
-                for _mode in sorted(_to_bring_back):
-                    VEHICLE_CHAIN.labels(mode=_mode, event="short_return").inc()
-                _to_bring_back = set()
-            if _to_bring_back:
-                _kept = [it for it in itineraries if _vehicle_mode(it) in _to_bring_back]
-                for _mode in sorted(_to_bring_back):
-                    VEHICLE_CHAIN.labels(
-                        mode=_mode, event="forced_return" if _kept else "return_failed"
-                    ).inc()
-                if _kept:
-                    itineraries = _kept
-                    chain_constraint = "retour_force"
-                else:
-                    # Aucun itinéraire dans le mode du véhicule (OTP muet, distance hors
-                    # portée vélo…) : on rend la main plutôt que de bloquer l'agent — il
-                    # rentre par un autre mode et le véhicule devient orphelin.
-                    logger.debug(
-                        f"[vehicle] Retour au domicile impossible en {'/'.join(sorted(_to_bring_back))} "
-                        f"pour {person.person_id} — véhicule laissé sur place"
-                    )
+        # Filtre d'éligibilité (ticket 035, spec 02) : verrou de sortie (post-filtre des modes
+        # non demandés), verrou de retour au seuil de 1 km, motifs d'écart et événements de
+        # la métrique `agent_vehicle_chain_total` — la MÊME fonction que le mode sans
+        # simulateur. Le choix entre les modes restants reste au décideur.
+        _filtre = eligibilite(
+            person, from_location,
+            [Proposition(it, _sources.get(id(it), SOURCE_EN_VOL)) for it in itineraries],
+            next_activity.purpose, next_activity.location,
+        )
+        for _mode, _event in _filtre.evenements:
+            VEHICLE_CHAIN.labels(mode=_mode, event=_event).inc()
+            if _event == "return_failed":
+                # Aucun itinéraire dans le mode du véhicule (OTP muet, distance hors
+                # portée vélo…) : on rend la main plutôt que de bloquer l'agent — il
+                # rentre par un autre mode et le véhicule devient orphelin.
+                logger.debug(
+                    f"[vehicle] Retour au domicile impossible en {_mode} "
+                    f"pour {person.person_id} — véhicule laissé sur place"
+                )
+        chain_constraint = _filtre.contrainte or chain_constraint
+        _ecartees = list(_filtre.ecartees)
+        itineraries = [prop.plan for prop in _filtre.eligibles]
 
         for itinerary in itineraries:
             itinerary.purpose = next_activity.purpose
@@ -2089,7 +2215,11 @@ class SimulationLoopV1(BaseScenario):
                 if faster_itinerary is None or itinerary.duration < faster_itinerary.duration:
                     faster_itinerary = itinerary
 
-            itineraries = _select_candidates(itineraries, settings.gtfs.max_trip_candidates)
+            _retenues, _ecartees_plafond = plafonner(
+                [Proposition(it, _sources.get(id(it), SOURCE_EN_VOL)) for it in itineraries], settings.gtfs.max_trip_candidates
+            )
+            _ecartees.extend(_ecartees_plafond)
+            itineraries = [prop.plan for prop in _retenues]
 
             if len(itineraries) == 1:
                 reasoning = "Un seul itinéraire disponible, sélection automatique"
@@ -2194,7 +2324,13 @@ class SimulationLoopV1(BaseScenario):
             available_options=itineraries,
             activity_id=next_activity.id,
             mode_probabilities=mode_probabilities,
+            sources=_resume_sources(_sources, itineraries),
+            ecartees=resumer_ecartees(_ecartees),
         )
+        if self.jeu is not None:
+            for it in itineraries:
+                self._jeu_propositions_par_source[_sources.get(id(it), SOURCE_EN_VOL).split(":")[0]] += 1
+            self._ecrire_jeu_stats()
 
 
         return move, reasoning

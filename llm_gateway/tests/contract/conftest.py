@@ -46,6 +46,13 @@ def providers_fixture() -> dict[str, ProviderConfig]:
             api_key=SecretStr("k"), rpm_limit=1_000_000, base_url="http://z", default_model="m",
             concurrency_limit=5, rpd_limit=3,
         ),
+        # Fournisseur dont la journée de quota se termine en heure du Pacifique, comme le
+        # free tier Gemini : sert à vérifier que le retrait vise SON reset, pas minuit UTC.
+        "p_pacifique": ProviderConfig(
+            api_key=SecretStr("k"), rpm_limit=1_000_000, base_url="http://pac",
+            default_model="m", concurrency_limit=5, rpd_limit=500,
+            quota_reset_tz="America/Los_Angeles",
+        ),
     }
 
 

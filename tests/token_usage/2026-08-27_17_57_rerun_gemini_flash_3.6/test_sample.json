@@ -1,0 +1,61 @@
+{
+  "agents": [
+    {
+      "agent_id": "325763",
+      "probabilities": [
+        {
+          "index": 0,
+          "mode": "foot",
+          "probability": 0
+        },
+        {
+          "index": 1,
+          "mode": "car",
+          "probability": 95
+        },
+        {
+          "index": 2,
+          "mode": "bicycle",
+          "probability": 5
+        }
+      ],
+      "reason": "Denis a une longue chaîne de 5 déplacements totalisant plus de 33 km jusqu'en soirée avec pluie matinale : la marche est impossible (0%), le vélo très peu attractif (5%) et la voiture indispensable pour la journée (95%)."
+    },
+    {
+      "agent_id": "286048",
+      "probabilities": [
+        {
+          "index": 0,
+          "mode": "foot,bus,foot,bus,foot",
+          "probability": 20
+        },
+        {
+          "index": 1,
+          "mode": "car",
+          "probability": 0
+        },
+        {
+          "index": 2,
+          "mode": "foot,bus,foot,bus,foot",
+          "probability": 45
+        },
+        {
+          "index": 3,
+          "mode": "foot",
+          "probability": 0
+        },
+        {
+          "index": 4,
+          "mode": "foot,bus,foot,metro,foot,bus,foot",
+          "probability": 15
+        },
+        {
+          "index": 5,
+          "mode": "foot,bus,foot,bus,foot",
+          "probability": 20
+        }
+      ],
+      "reason": "À 16 ans, Jérôme n'a pas le permis (0%) et la marche de 9 km sous la pluie est irréaliste (0%) ; il privilégie le trajet bus [2] limitant la marche intermédiaire (45%), suivi des autres combinaisons de bus [0] (20%), [5] (20%) et métro [4] (15%)."
+    }
+  ]
+}

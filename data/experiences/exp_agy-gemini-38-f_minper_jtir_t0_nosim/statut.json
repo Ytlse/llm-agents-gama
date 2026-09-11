@@ -1,0 +1,16 @@
+{
+ "statut": "invalide",
+ "motif": "mesure produite sous le gabarit minimal_persona, invalidé le 2026-09-10 (règle M1 : la consigne de sortie n° 4 nomme la marche et présuppose son rang). Composite 10,32 non citable sans ce motif. Archive intacte et vérifiable.",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "invalide",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "mesure produite sous le gabarit minimal_persona, invalidé le 2026-09-10 (règle M1 : la consigne de sortie n° 4 nomme la marche et présuppose son rang). Composite 10,32 non citable sans ce motif. Archive intacte et vérifiable."
+  }
+ ]
+}

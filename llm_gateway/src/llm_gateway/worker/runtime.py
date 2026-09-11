@@ -46,7 +46,7 @@ def build_worker_runtime(settings: Settings, registry: CategoryRegistry | None =
     queue = RedisBatchQueue(task_store=store, sync_client=sync_client)
     limiter = RedisRateLimiter(sync_client, settings.providers)
     metrics = RedisMetricsSink(sync_client)
-    balancer = LoadBalancer(settings.providers, limiter)
+    balancer = LoadBalancer(settings.providers, limiter, policy=settings.routing.policy)
     return WorkerRuntime(
         settings=settings,
         store=store,

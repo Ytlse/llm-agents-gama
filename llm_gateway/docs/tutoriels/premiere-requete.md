@@ -32,7 +32,7 @@ Le gateway attend Redis sur `redis://localhost:6379/0` (tâches, files, quotas),
 
 Les clés ne sont jamais dans `providers.yaml` : elles viennent de l'environnement, une par
 fournisseur, sous la forme `PROVIDER_KEYS__<nom>`. Le nom est celui de l'instance dans
-`providers.yaml` (`google2`), sinon celui de l'adapter (`mistral`, `groq`, `google`,
+`providers.yaml` (`google_gemini31_key2`), sinon celui de l'adapter (`mistral`, `groq`, `google`,
 `cerebras`, `openai`).
 
 ```bash

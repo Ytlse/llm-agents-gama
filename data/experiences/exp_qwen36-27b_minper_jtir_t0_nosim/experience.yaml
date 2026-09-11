@@ -1,0 +1,44 @@
+nom: exp_qwen36-27b_minper_jtir_t0_nosim
+population:
+  chemin: /data/eqasim-output/population_1000_AAMAS
+jeu:
+  nom: population_1000_AAMAS_20260316
+  dossier: null
+gabarit:
+  categorie: itinary_multi_agent
+  variante: minimal_persona
+decideur:
+  type: passerelle
+  modele: qwen/qwen3.6-27b
+  parametres:
+    temperature: 0.0
+    top_p: 1.0
+    max_tokens: 4096
+  rejeu_de: null
+  graine: null
+  artefact: null
+mode: sans_simulateur
+calendrier:
+  politique: aleatoire
+  date: '2026-03-16'
+  graine: 42
+horizon_jours: 1
+memoire: false
+evenements: []
+graine_ordre: 42
+graine_tirage: 42
+regroupement:
+  parallelisme: 8
+tolerances_horaires:
+  bike: insensible
+  car: heure
+  rail:
+    pas_min: 10
+  transit:
+    pas_min: 10
+  walk: insensible
+max_candidats: 6
+attente_max_s: 120
+derive_de: null
+executions_connues: []
+renomme_de: Prompt_Minimaliste_qwen3.6-27b

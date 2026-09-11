@@ -192,11 +192,38 @@ def type_plateforme(choix: str) -> str:
     return "passerelle" if str(choix).startswith("passerelle") else str(choix)
 
 
-def choix_decideur(type_fichier: str, modele: Optional[str], locaux) -> str:
-    """Le choix du formulaire depuis un `decideur` de fichier : `passerelle` devient local ou distant selon qui sert le modèle."""
+def portee_plateforme(choix: str) -> Optional[str]:
+    """Le `decideur.portee` du fichier depuis le choix du formulaire, `None` hors passerelle.
+
+    Le formulaire a toujours demandé le bord (deux entrées « modèle de langage », deux
+    sélecteurs de modèle) ; jusqu'au 2026-09-11 la réponse mourait dans `type_plateforme`, qui
+    écrasait les deux en `passerelle`. Le fichier ne gardait que le nom du modèle, et
+    `instances_pour_modele` ré-élargissait ensuite aux deux bords.
+    """
+    c = str(choix)
+    if not c.startswith("passerelle"):
+        return None
+    return "local" if c == "passerelle_local" else "distant"
+
+
+def choix_decideur(
+    type_fichier: str, modele: Optional[str], locaux, portee: Optional[str] = None
+) -> str:
+    """Le choix du formulaire depuis un `decideur` de fichier.
+
+    La portée ÉCRITE fait foi quand elle existe. À défaut (définition antérieure au champ) on
+    retombe sur qui sert le modèle aujourd'hui — heuristique qui se trompe sur un modèle servi
+    des deux côtés : elle rangeait `qwen/qwen3.8-27b` du côté local, y compris pour une archive
+    entièrement servie par Groq. Le distant l'emporte donc dans le doute, les instances locales
+    étant les plus récemment déclarées.
+    """
     if type_fichier != "passerelle":
         return str(type_fichier)
-    return "passerelle_local" if modele and str(modele) in locaux else "passerelle_distant"
+    if portee in ("local", "distant"):
+        return f"passerelle_{portee}"
+    distants = modeles_par_portee()[1] if modele else {}
+    servi_local = bool(modele) and str(modele) in locaux
+    return "passerelle_local" if servi_local and str(modele) not in distants else "passerelle_distant"
 POLITIQUES = ("commune", "propre", "aleatoire")
 
 
@@ -484,9 +511,14 @@ FOURNISSEUR_LOCAL = "local"
 FOURNISSEUR_ANTIGRAVITY = "antigravity"
 FOURNISSEUR_INCONNU = "inconnu"
 SANS_FOURNISSEUR = "—"
+# Une définition sans portée dont le modèle est servi des deux côtés : on ne SAIT pas qui
+# répondra. `groq · local` se lisait comme un fournisseur composé — ce qui n'existe pas — alors
+# qu'il disait « l'un ou l'autre ». Le marquer comme une incertitude, pas comme un fait.
+MARQUE_AMBIGU = "⚠"
 
 _PORTEE_CACHE: dict = {}
 _FAMILLES_CACHE: dict = {}
+_FOURNISSEUR_EXEC_CACHE: dict = {}
 
 
 def modeles_par_portee() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
@@ -695,6 +727,11 @@ def fournisseur_de(dec: Optional[dict]) -> str:
     sans LLM (tirage, durée minimale, modèle statistique, rejeu) ne sollicite personne et rend
     `—` : la colonne `decideur` dit déjà l'heuristique. Un modèle qu'aucune instance de
     `providers.yaml` ne sert rend `inconnu` — le dire vaut mieux que l'inventer.
+
+    La **portée** du décideur tranche quand elle est écrite. Sans elle, un modèle servi des
+    deux côtés est rendu comme une incertitude (`⚠ groq ou local`) et non comme un fait :
+    cette fonction lit le providers.yaml d'AUJOURD'HUI, elle ne peut pas dire ce qui a servi
+    une archive. Pour une exécution, `fournisseur_execute` lit les décisions elles-mêmes.
     """
     dec = dec or {}
     if dec.get("type") == "antigravity":
@@ -702,7 +739,69 @@ def fournisseur_de(dec: Optional[dict]) -> str:
     if dec.get("type") != "passerelle":
         return SANS_FOURNISSEUR
     familles = familles_par_modele().get(str(dec.get("modele") or ""))
-    return " · ".join(familles) if familles else FOURNISSEUR_INCONNU
+    if not familles:
+        return FOURNISSEUR_INCONNU
+    portee = dec.get("portee")
+    if portee == "local":
+        return FOURNISSEUR_LOCAL if FOURNISSEUR_LOCAL in familles else FOURNISSEUR_INCONNU
+    if portee == "distant":
+        distantes = [f for f in familles if f != FOURNISSEUR_LOCAL]
+        # Plusieurs familles distantes (`gpt-oss-120b` chez Cerebras et Groq) restent une
+        # liste : ce sont des seaux de quota interchangeables, pas deux quantifications.
+        return " · ".join(distantes) if distantes else FOURNISSEUR_INCONNU
+    if FOURNISSEUR_LOCAL in familles and len(familles) > 1:
+        return f"{MARQUE_AMBIGU} " + " ou ".join(familles)
+    return " · ".join(familles)
+
+
+_MOTIF_FOURNISSEUR = re.compile(r'"fournisseur"\s*:\s*"([^"]+)"')
+
+
+def famille_instance(nom: str, providers: Optional[dict] = None) -> str:
+    """La famille d'une instance archivée : `local`, `groq`, `google`…
+
+    `providers` absent ou instance disparue : le préfixe du nom fait foi
+    (`groq_qwen_qwen3_8_27b_key1` → `groq`, `lmstudio_…` → `local`). Une archive doit rester
+    lisible quand l'instance qui l'a servie n'est plus déclarée.
+    """
+    cfg = (providers or {}).get(nom)
+    if isinstance(cfg, dict):
+        return (FOURNISSEUR_LOCAL if lmstudio.est_instance_lmstudio(cfg)
+                else str(cfg.get("adapter") or str(nom).split("_")[0]))
+    prefixe = str(nom).split("_")[0]
+    return FOURNISSEUR_LOCAL if prefixe == "lmstudio" else prefixe
+
+
+def fournisseur_execute(dossier) -> Optional[str]:
+    """Qui a RÉELLEMENT servi cette exécution, lu dans ses décisions — None si on ne peut pas le dire.
+
+    `fournisseur_de` interroge le providers.yaml d'aujourd'hui : elle dit ce qui POURRAIT servir
+    ce modèle, pas ce qui l'a servi. L'écart n'est pas théorique — l'exécution
+    `exp_qwen38-27b_minper_jtir_t0_nosim` du 2026-09-09, servie à 100 % par Groq, s'affichait
+    `groq · local` parce qu'une instance LM Studio portant le même identifiant de modèle a été
+    déclarée le lendemain. Chaque décision, elle, porte l'instance qui a répondu.
+
+    Lecture par motif plutôt que par `json.loads` ligne à ligne : le fichier fait couramment
+    1 Mo et la vue en rend une par expérience. Mis en cache sur la taille et la date du fichier.
+    """
+    fichier = Path(dossier) / "decisions.jsonl"
+    try:
+        st = fichier.stat()
+        cle = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+    if _FOURNISSEUR_EXEC_CACHE.get(str(fichier), {}).get("cle") != cle:
+        try:
+            noms = set(_MOTIF_FOURNISSEUR.findall(fichier.read_text(encoding="utf-8")))
+        except OSError:
+            return None
+        providers = _yaml(PROVIDERS_YAML).get("providers") or {}
+        familles = sorted({famille_instance(n, providers) for n in noms if n})
+        # Plusieurs familles sur une même exécution : c'est le mélange qu'on veut voir, pas
+        # masquer — une reprise après épuisement de quota a pu changer de bord.
+        valeur = " · ".join(familles) if familles else None
+        _FOURNISSEUR_EXEC_CACHE[str(fichier)] = {"cle": cle, "valeur": valeur}
+    return _FOURNISSEUR_EXEC_CACHE[str(fichier)]["valeur"]
 
 
 def modeles() -> dict[str, list[str]]:
@@ -1073,8 +1172,12 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
             # Le fournisseur suit le décideur FIGÉ, comme lui et comme le prompt : deux
             # exécutions d'une même expérience peuvent avoir tourné sur des fournisseurs
             # différents, et afficher celui de la définition courante mentirait sur l'archive.
-            fournisseur_fige = (fournisseur_de(exp_fige.get("decideur")) if exp_fige.get("decideur")
-                                else base["fournisseur"])
+            # …et la source la plus sûre reste l'archive elle-même : les décisions nomment
+            # l'instance qui a répondu. On ne retombe sur la définition que si elles se taisent
+            # (exécution sans décision LLM, fichier absent).
+            fournisseur_fige = fournisseur_execute(d) or (
+                fournisseur_de(exp_fige.get("decideur")) if exp_fige.get("decideur")
+                else base["fournisseur"])
             lignes.append({**base, "decideur": dec_fige, "prompt": prompt_fige,
                            "fournisseur": fournisseur_fige,
                            "execution": nom, "etat": etat.get("etat", "?"), "raison": etat.get("raison"),
@@ -1783,7 +1886,8 @@ def depuis_experience(e: dict) -> dict:
     d.update({
         "population": chemin_hote(str((e.get("population") or {}).get("chemin", d["population"]))),
         "jeu": (e.get("jeu") or {}).get("nom", d["jeu"]), "variante": gab.get("variante") or d["variante"],
-        "decideur_type": choix_decideur(dec.get("type", "passerelle"), dec.get("modele"), modeles_par_portee()[0]),
+        "decideur_type": choix_decideur(dec.get("type", "passerelle"), dec.get("modele"),
+                                         modeles_par_portee()[0], dec.get("portee")),
         "modele": dec.get("modele") or d["modele"],
         "temperature": float((dec.get("parametres") or {}).get("temperature", d["temperature"])),
         "reflexion": (dec.get("parametres") or {}).get("thinking_budget", None),
@@ -1905,6 +2009,10 @@ def construire_experience(v: dict) -> dict:
     type_ = type_plateforme(v["decideur_type"])  # « distant » et « local » s'écrivent tous deux `passerelle`
     decideur = {"type": type_, "modele": None, "parametres": {}, "rejeu_de": None, "graine": None}
     if type_ == "passerelle":
+        # Le bord choisi est ÉCRIT : c'est lui qui restreint les instances au lancement, qui
+        # nomme l'expérience (`_local`) et qui dit l'archive. Sans lui, un modèle servi des deux
+        # côtés bascule du distant au local à l'épuisement du quota, sous un seul nom.
+        decideur["portee"] = portee_plateforme(v["decideur_type"])
         params = {"temperature": float(v["temperature"]), "top_p": 1.0, "max_tokens": 4096}
         # Clé ABSENTE quand la réflexion n'est pas pilotée : une clé à None donnerait deux
         # empreintes différentes pour un même réglage, selon qu'on a ouvert le formulaire ou non.

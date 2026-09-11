@@ -686,6 +686,45 @@ def section_quotas(run: Path, out: list[str], alarms: list[str]) -> None:
         pass  # Silencieusement ignorer les erreurs de quota_validator
 
 
+def section_jeu(run: Path, out: list[str], alarms: list[str]) -> None:
+    """Jeu de déplacements enregistré (ticket 035, spec 04, G14) : appels moteurs, sources,
+    recalculs sans effet, déclencheurs jamais déclenchés, couverture. Rien sans `jeu_stats.json`."""
+    path = run / "jeu_stats.json"
+    if not path.exists():
+        return
+    try:
+        st = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        out.append("\n## 📼 Jeu enregistré\n\n`jeu_stats.json` illisible.\n")
+        return
+    out.append("\n## 📼 Jeu enregistré\n")
+    out.append(f"Jeu **{st.get('jeu')}** (empreinte `{str(st.get('empreinte'))[:12]}…`) · population {st.get('population')}\n")
+    out.append("| Rubrique | Valeur |")
+    out.append("|:--|--:|")
+    out.append(f"| Appels au trip helper (moteurs) | {st.get('appels_moteur', 0)} |")
+    out.append(f"| — dont OTP / OSMnx (quand mesuré) | {st.get('appels_otp', 0)} / {st.get('appels_osmnx', 0)} |")
+    sources = st.get("propositions_par_source") or {}
+    for k in sorted(sources):
+        out.append(f"| Propositions `{k}` | {sources[k]} |")
+    out.append(f"| Déplacements servis du jeu | {st.get('deplacements_servis', 0)} |")
+    out.append(f"| Déplacements recalculés (horaire) | {st.get('recalculs_horaire', 0)} |")
+    out.append(f"| Recalculs sans effet | {st.get('recalcul_sans_effet', 0)} |")
+    out.append(f"| Recalculs illégitimes | {st.get('recalcul_illegitime', 0)} |")
+    out.append(f"| Déplacements hors jeu (calcul en vol) | {st.get('hors_jeu', 0)} |")
+    jamais = st.get("declencheurs_jamais_declenches") or []
+    out.append(f"| Déclencheurs jamais déclenchés | {', '.join(jamais) if jamais else 'aucun'} |")
+    couv = st.get("couverture_jeu") or {}
+    if couv:
+        out.append(f"| Couverture du jeu | {couv.get('deplacements_couverts')} / {couv.get('deplacements_attendus')} |")
+    if st.get("recalcul_illegitime"):
+        alarms.append(f"🔴 {st['recalcul_illegitime']} appel(s) moteur hors des conditions admises (spec 04, G4).")
+    rec = st.get("recalculs_horaire", 0)
+    if rec and st.get("recalcul_sans_effet", 0) / rec > 0.3:
+        alarms.append(f"🟠 {st['recalcul_sans_effet']}/{rec} recalculs horaires sans effet — tolérance trop sensible (G7).")
+    if jamais:
+        alarms.append(f"🟡 déclencheur(s) de recalcul jamais déclenché(s) : {', '.join(jamais)} — fonction fantôme ? (EF-44)")
+
+
 def section_alarms(out: list[str], alarms: list[str]) -> None:
     banner = ["\n## 🚨 ALARMES\n"]
     if not alarms:
@@ -732,6 +771,7 @@ def main() -> int:
     section_activity_coverage(run, out, alarms)
     section_arrivals(run, out, alarms)
     section_quotas(run, out, alarms)
+    section_jeu(run, out, alarms)
     section_alarms(out, alarms)  # doit rester en dernier (insère en tête)
 
     report = "\n".join(out).rstrip() + "\n"

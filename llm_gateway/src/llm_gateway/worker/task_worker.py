@@ -31,6 +31,7 @@ from llm_gateway.adapters.base import (
     ProviderServerError,
     get_adapter,
 )
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA, is_daily_quota_error, next_quota_reset
 from llm_gateway.config import get_settings, learn_provider_max_output_tokens
 from llm_gateway.core.inference import resolve_inference
 from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
@@ -174,6 +175,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 reason="Prompt trop volumineux pour la capacité par requête",
                 min_tpm_required=min_tpm_required,
                 min_output_required=min_output_required,
+                force_provider=force_provider,
             )
 
         except ProviderServerError as e:
@@ -193,8 +195,41 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                     _fail_task(rt, t, f"Max retries dépassé suite à une erreur 5xx sur {e.provider}")
 
         except ProviderClientError as e:
-            if e.status_code == 429:
-                # Rate limit (Too Many Requests) → cooldown calé sur x-ratelimit-reset si disponible
+            if e.status_code == 429 and is_daily_quota_error(str(e)):
+                # Quota du JOUR épuisé, de la bouche du fournisseur (`quotaId` en
+                # …PerDayPerProjectPerModel…). Son `retryDelay` ne vaut rien ici : 0,7 s à 57 s
+                # relevés le 2026-09-08 pour une fenêtre qui ne rouvrait que 7 h plus tard. Un
+                # cooldown court faisait donc boucler l'instance sur des 429 pendant 15 min,
+                # pendant que le compteur local affichait 49 requêtes sur 500 (il ne voit pas le
+                # trafic des autres outils). C'est la réponse du fournisseur qui tranche.
+                cfg_p = settings.providers.get(e.provider)
+                tz = getattr(cfg_p, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
+                reprise = next_quota_reset(tz)
+                ttl = rt.limiter.mark_quota_exhausted_until(e.provider, kind="rpd", until=reprise)
+                logger.error(
+                    f"[ALARME] Quota journalier épuisé sur '{e.provider}' — instance écartée "
+                    f"jusqu'à {reprise.isoformat(timespec='seconds')} ({ttl}s) | task_id={batch_id} "
+                    f"tz={tz} retry_delay_annonce={getattr(e, 'ratelimit_reset', None)!r} (ignoré : "
+                    f"il ne mesure pas le temps jusqu'au reset)"
+                )
+                if force_provider is None and self.request.retries < self.max_retries:
+                    # Instance non épinglée : le lot repart, le balancer écartera celle-ci et
+                    # prendra la suivante de la cascade (autre clé, autre seau de quota).
+                    rt.queue.requeue(batch_key, tasks)
+                    raise self.retry(exc=e, countdown=1)
+                # Instance épinglée (une expérience épingle son décideur) : aucune alternative
+                # admissible. On le DIT à l'appelant — `quota_journalier` + l'heure de reprise —
+                # pour qu'il attende la fenêtre au lieu de réessayer toutes les 30 s.
+                for t in tasks:
+                    _fail_task(
+                        rt, t,
+                        f"Quota journalier épuisé sur {e.provider}, fenêtre rouverte à "
+                        f"{reprise.isoformat(timespec='seconds')}",
+                        error_kind="quota_journalier",
+                        resume_at=reprise,
+                    )
+            elif e.status_code == 429:
+                # Rate limit par minute/seconde → cooldown calé sur x-ratelimit-reset si disponible
                 cooldown_secs = _parse_ratelimit_reset_seconds(getattr(e, "ratelimit_reset", None))
                 rt.limiter.cooldown(e.provider, seconds=cooldown_secs)
                 delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
@@ -210,6 +245,17 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 else:
                     for t in tasks:
                         _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) suite aux Rate Limits sur {e.provider}")
+            elif e.status_code == 402:
+                # Crédits épuisés (« payment required ») : ni saturation, ni requête
+                # invalide. L'instance ne redeviendra pas servable d'elle-même dans la
+                # minute — on la désactive au lieu d'un cooldown court, et on alarme sur
+                # front montant : c'est un événement qui coûte une campagne entière.
+                _credits_epuises(
+                    self, rt, tasks, batch_key, e,
+                    force_provider=force_provider,
+                    min_tpm_required=min_tpm_required,
+                    min_output_required=min_output_required,
+                )
             elif (limit := _parse_max_tokens_limit(str(e))) and learn_provider_max_output_tokens(rt.settings, rt.learned, e.provider, limit):
                 # 400 "max_tokens must be ≤ N" → limite de complétion apprise
                 # (config mémoire + providers.yaml). Le batch est rejoué : le
@@ -236,6 +282,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                     reason="Erreur 4xx non récupérable",
                     min_tpm_required=min_tpm_required,
                     min_output_required=min_output_required,
+                    force_provider=force_provider,
                 )
 
         except RuntimeError as e:
@@ -256,6 +303,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 min_tpm_required=min_tpm_required,
                 min_output_required=min_output_required,
                 final_error_msg=f"{str(e)}\nRaw LLM response:\n{e.raw}",
+                force_provider=force_provider,
             )
 
         except Exception as e:
@@ -325,6 +373,12 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
         temperature=inference.temperature,
         top_p=inference.top_p,
         max_tokens=max_tokens,
+        # Budget de RÉFLEXION, distinct du budget de sortie : il n'est pas multiplié par la
+        # taille du lot ni borné par les plafonds du fournisseur, il vaut par appel. C'est
+        # l'adapter qui décide s'il sait le transmettre (`applique_reflexion`) et qui réserve
+        # la sortie en conséquence.
+        thinking_budget=inference.thinking_budget,
+        thinking_level=inference.thinking_level,
     )
 
     # ── Recalage de la réservation TPM sur la taille réelle du batch ────────
@@ -594,6 +648,60 @@ def _fit_request_budget(
     return min(max_tokens, output_budget)
 
 
+def _credits_epuises(
+    celery_task,
+    rt: WorkerRuntime,
+    tasks: list[Task],
+    batch_key: str,
+    exc: ProviderClientError,
+    force_provider: str | None,
+    min_tpm_required: int | None,
+    min_output_required: int | None,
+) -> None:
+    """HTTP 402 : le compte du fournisseur n'a plus de crédit.
+
+    Deux différences avec une 4xx ordinaire :
+
+    - **Durée.** Un cooldown de 30 s n'a aucun sens : les crédits reviennent après une
+      action humaine (facturation), pas après une minute. L'instance est donc DÉSACTIVÉE
+      pour son `disable_timeout`, ce que `/health` publie en `available: false`.
+    - **Visibilité.** L'événement coûte une campagne entière et se noyait en WARNING dans
+      le journal du worker (panne 2026-09-07 sur `cerebras_gpt-oss-120b`). Il sort en
+      ERROR `[ALARME]`, sur **front montant** : une seule ligne à la première 402, pas une
+      par lot tant que l'instance reste désactivée.
+
+    Un appelant qui a épinglé son instance (expérience) reçoit une erreur franche : pas de
+    bascule vers un autre modèle. Un appelant sans épinglage (GAMA) garde la bascule.
+    """
+    provider = exc.provider
+    deja_hors_service = rt.limiter.is_disabled(provider)
+    cfg = rt.settings.providers.get(provider)
+    timeout = cfg.disable_timeout if cfg else 180
+    rt.limiter.disable(provider, seconds=timeout)
+    if not deja_hors_service:
+        rt.metrics.incr("alarme:credits_epuises")
+        logger.error(
+            f"[ALARME] Crédits épuisés (HTTP 402) sur {provider} — instance désactivée "
+            f"{timeout}s, à recharger côté fournisseur | batch_key={batch_key} "
+            f"taches={len(tasks)} force_provider={force_provider or 'aucun'} "
+            f"message={str(exc)[:200]}"
+        )
+    if force_provider:
+        motif = (
+            f"Crédits épuisés (HTTP 402) sur l'instance épinglée {force_provider!r} — "
+            f"aucune bascule vers un autre modèle : {exc}"
+        )
+        for t in tasks:
+            _fail_task(rt, t, motif)
+        return
+    _switch_provider_or_fail(
+        celery_task, rt, tasks, batch_key, exc, provider,
+        reason="Crédits épuisés (HTTP 402)",
+        min_tpm_required=min_tpm_required,
+        min_output_required=min_output_required,
+    )
+
+
 def _switch_provider_or_fail(
     celery_task,
     rt: WorkerRuntime,
@@ -605,6 +713,7 @@ def _switch_provider_or_fail(
     min_tpm_required: int | None,
     min_output_required: int | None,
     final_error_msg: str | None = None,
+    force_provider: str | None = None,
 ) -> None:
     """Bascule le batch vers un AUTRE modèle plutôt que d'échouer sec.
 
@@ -613,8 +722,30 @@ def _switch_provider_or_fail(
     SANS force_provider, pour que la rotation SWRR sélectionne un autre modèle. Borné à
     ~len(providers) tentatives afin de ne pas boucler sur une erreur déterministe (une
     requête réellement invalide finit par échouer sur tous les providers).
+
+    EXCEPTION — `force_provider` non nul : la bascule est REFUSÉE. Un appelant qui épingle
+    une instance mesure ce modèle-là (expériences du ticket 035, `decideurs.py`) ; lui
+    répondre avec un autre modèle invalide la mesure. Le client refusait déjà la réponse
+    substituée, mais après coup : le lot était perdu et l'exécution tournait à vide
+    (run 2026-09-07_19_45_31, 8 sollicitations, 8 refus, 0 décision archivée). On échoue
+    donc ici, franchement, avec un motif qui nomme l'instance épinglée.
     """
     settings = rt.settings
+    if force_provider:
+        rt.limiter.cooldown(provider, seconds=settings.resilience.provider_switch_cooldown_seconds)
+        msg = (
+            f"{reason} sur l'instance épinglée {force_provider!r} — aucune bascule "
+            f"(décideur épinglé, substitution interdite) : {exc}"
+        )
+        logger.error(
+            f"[ALARME] {reason} sur {provider} — bascule REFUSÉE, instance épinglée par "
+            f"l'appelant | batch_key={batch_key} force_provider={force_provider} "
+            f"taches={len(tasks)} error={str(exc)[:200]}"
+        )
+        rt.metrics.incr("alarme:bascule_refusee")
+        for t in tasks:
+            _fail_task(rt, t, final_error_msg or msg)
+        return
     rt.limiter.cooldown(provider, seconds=settings.resilience.provider_switch_cooldown_seconds)
     max_switches = min(celery_task.max_retries, max(1, len(settings.providers) - 1))
     if celery_task.request.retries < max_switches:
@@ -639,13 +770,29 @@ def _switch_provider_or_fail(
         _fail_task(rt, t, terminal_msg)
 
 
-def _fail_task(rt: WorkerRuntime, task: Task, error_msg: str) -> None:
+def _fail_task(
+    rt: WorkerRuntime,
+    task: Task,
+    error_msg: str,
+    *,
+    error_kind: str | None = None,
+    resume_at: datetime | None = None,
+) -> None:
+    """Marque la tâche en échec. `error_kind`/`resume_at` disent à l'appelant CE QU'il doit
+    faire : un « quota_journalier » n'est pas une passerelle occupée, il s'attend jusqu'à
+    `resume_at` au lieu d'être réessayé toutes les 30 s (incident du 2026-09-08)."""
     task.status     = TaskStatus.FAILED
     task.error      = error_msg
+    task.error_kind = error_kind
+    task.resume_at  = resume_at
     task.updated_at = datetime.now(UTC)
     rt.store.save_sync(task)
     rt.store.publish_done_sync(task)
-    logger.error(f"Tâche échouée | task_id={task.task_id} error={error_msg}")
+    logger.error(
+        f"Tâche échouée | task_id={task.task_id} error={error_msg}"
+        + (f" kind={error_kind}" if error_kind else "")
+        + (f" resume_at={resume_at.isoformat(timespec='seconds')}" if resume_at else "")
+    )
 
 
 # Messages 400 renvoyés quand max_tokens dépasse le plafond de complétion du modèle.

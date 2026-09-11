@@ -1,0 +1,16 @@
+{
+ "statut": "archivee",
+ "motif": "définie, jamais exécutée, sur gabarit minimal_persona invalidé ; à redéfinir sur prompt_minimal si le besoin revient.",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "définie, jamais exécutée, sur gabarit minimal_persona invalidé ; à redéfinir sur prompt_minimal si le besoin revient."
+  }
+ ]
+}

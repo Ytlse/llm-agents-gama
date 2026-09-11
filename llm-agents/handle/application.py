@@ -753,6 +753,19 @@ async def init(request: WorldInitRequest):
     )
     loop_container.set_scenario(scenario)
 
+    # Ticket 035 (spec 04) — jeu de déplacements enregistré désigné (`make run JEU=<nom>`) :
+    # servi à la place des moteurs. Refus AVANT tout calcul si le jeu n'est pas celui de la
+    # population chargée ou si les tolérances horaires ne sont pas déclarées (G1, G5).
+    if settings.data.jeu_enregistre:
+        from experiences.population import info_population
+        try:
+            _info_pop = info_population(settings.data.population_file or population_json_path)
+            scenario.charger_jeu(settings.data.jeu_enregistre, _info_pop)
+        except Exception as e:  # noqa: BLE001 — la raison est celle du refus, remontée telle quelle
+            logger.error(f"[ALARME] [jeu] Jeu enregistré {settings.data.jeu_enregistre!r} refusé : {e}")
+            raise RuntimeError(f"[jeu] jeu enregistré refusé : {e}") from e
+        await loop_container.send_log(f"[3/{_N_STEPS}] Jeu enregistré {scenario.jeu.nom!r} chargé — régime nominal sans appel moteur.")
+
     if settings.app.pipeline_log_enabled:
         from pathlib import Path
         PipelineLogger.init(Path(settings.app.pipeline_log_file))

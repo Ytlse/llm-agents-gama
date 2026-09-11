@@ -126,6 +126,15 @@ CSV_HEADERS = [
     "Heure de départ",
     "ID Personne",
     "ID Activité",
+    # Ticket 035 (spec 04, G6) : d'où viennent les propositions présentées — « enregistree:5 »,
+    # « enregistree:3,recalculee:horaire:2 », « en_vol:6 » (calcul en vol, pas de jeu), « hors_jeu:… ».
+    # Ajoutées en DERNIÈRE position : aucun consommateur ne lit moves.csv par index.
+    "Source des propositions",
+    # Propositions écartées avant présentation, par motif (spec 02, D2/D6) :
+    # « vehicule_ailleurs:car;retour_force:foot,bus;plafond:2 » — vide si rien n'a été écarté.
+    "Écartées (motifs)",
+    # Identifiant du lot de la passerelle qui a porté la décision (spec 03, S5) — vide sinon.
+    "Identifiant lot",
 ]
 
 
@@ -323,6 +332,9 @@ class MoveLogger:
         available_options: Optional[list] = None,
         activity_id: Optional[str] = None,
         mode_probabilities: Optional[dict] = None,
+        sources: str = "",
+        ecartees: str = "",
+        lot: str = "",
     ):
         async with self._lock:
             computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -375,6 +387,9 @@ class MoveLogger:
                 datetime.fromtimestamp(start_time / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if start_time is not None else "",
                 person.person_id,
                 activity_id if activity_id is not None else "",
+                sources or "",
+                ecartees or "",
+                lot or "",
             ]
 
             # Écriture déportée hors de l'event loop (open/write bloquants)

@@ -25,7 +25,11 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from llm_gateway.adapters.base import BaseAdapter, register_adapter
+from llm_gateway.adapters.base import (
+    BaseAdapter,
+    ProviderClientError,
+    register_adapter,
+)
 from llm_gateway.core.models import InternalRequest, LLMOutput
 
 StructuredOutput = Literal["json_schema", "json_object", "none"]
@@ -108,7 +112,35 @@ class OpenAICompatibleAdapter(BaseAdapter):
 
     # ── Appel ───────────────────────────────────────────────────────────────
 
+    def _refuser_substitution_de_modele(self, request: InternalRequest, data: dict) -> None:
+        """Refuse une réponse rendue par un AUTRE modèle que celui demandé.
+
+        Constaté le 2026-09-10 sur LM Studio : un identifiant de modèle inconnu ne produit pas
+        d'erreur — le serveur répond 200 et sert un autre modèle chargé. `qwen3.8-27b-local`
+        (inexistant) était servi par `qwen3-vl-8b-instruct-mlx`, un 8B de vision au lieu d'un
+        27B. L'archive portait alors un nom de modèle faux, sans que rien ne le signale : c'est
+        exactement la substitution que `allowed_providers` refuse ailleurs (llm_agent.py:711).
+
+        Le contrôle ne s'applique que si la réponse déclare un modèle. Les serveurs qui n'en
+        renvoient pas passent : refuser sur un champ absent bloquerait des fournisseurs
+        conformes.
+        """
+        servi = str(data.get("model") or "").strip()
+        if not servi:
+            return
+        demande = str(self._resolve_model(request)).strip()
+        if servi == demande:
+            return
+        raise ProviderClientError(
+            self._instance_name,
+            502,
+            f"substitution de modèle : {demande!r} demandé, {servi!r} servi — la mesure "
+            f"porterait un nom de modèle faux. Vérifiez `default_model` de cette instance "
+            f"contre les modèles réellement exposés par le serveur.",
+        )
+
     def call(self, request: InternalRequest) -> tuple[LLMOutput, int, int]:
+        self._signaler_reflexion_ignoree(request.thinking_budget)
         response = self._post(
             f"{self._get_base_url()}/chat/completions",
             headers=self._headers(),
@@ -117,6 +149,7 @@ class OpenAICompatibleAdapter(BaseAdapter):
         self._raise_for_status(response)
         data = response.json()
         self._check_openai_finish_reason(data)
+        self._refuser_substitution_de_modele(request, data)
         raw_content = data["choices"][0]["message"]["content"]
         usage = data.get("usage", {}) or {}
         tokens_in = usage.get("prompt_tokens", 0)

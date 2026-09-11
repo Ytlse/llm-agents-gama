@@ -13,8 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Les trois paquets, installés sans re-résoudre les dépendances (déjà dans la couche
 # précédente). Les métadonnées (entry point llm_gateway.categories) viennent de là ; en
-# développement, docker-compose monte les sources par-dessus sous /app/<paquet>, qui
-# précède site-packages sur le sys.path (WORKDIR).
+# développement, docker-compose monte les sources par-dessus sous /app/<paquet> et met
+# /app en tête du sys.path via PYTHONPATH (WORKDIR seul ne le fait pas pour les scripts
+# console celery/uvicorn : leur sys.path[0] est /usr/local/bin, pas le répertoire courant).
 COPY mobility_core ./build/mobility_core
 COPY llm_gateway   ./build/llm_gateway
 COPY mobility_llm  ./build/mobility_llm

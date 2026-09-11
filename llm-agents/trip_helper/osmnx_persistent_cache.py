@@ -137,6 +137,16 @@ class OsmnxPersistentCache:
             )
             conn.commit()
 
+    def count(self) -> int:
+        """Nombre de routes en base — journalisé au démarrage.
+
+        C'est le seul chiffre qui distingue « cache réchauffé trouvé » de « je repars de
+        zéro ». Son absence a laissé 196 runs recalculer à froid un cache de 83 478 routes
+        qui existait sur le disque, dans un fichier que le runtime ne lisait pas.
+        """
+        with self._get_conn() as conn:
+            return conn.execute("SELECT count(*) FROM osmnx_cache").fetchone()[0]
+
     async def lookup_async(self, key: str) -> OsmnxCacheEntry:
         return await asyncio.to_thread(self.lookup, key)
 

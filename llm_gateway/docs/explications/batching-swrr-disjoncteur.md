@@ -33,8 +33,8 @@ batch_max_agents  = max(1, min(tpm_limit // 3 000  (ou rpm_limit si pas de TPM),
                                rpm_limit, max_batch_agents = 20))
 ```
 
-Mistral (500 000 TPM, 60 RPM) → 20 ; `google_gemma42` (16 000 TPM) → 5 ;
-`groq_openai_120` (8 000 TPM) → 2. C'est pourquoi le seuil de dispatch ne prend pas le
+Mistral (500 000 TPM, 60 RPM) → 20 ; `google_gemma42_key1` (16 000 TPM) → 5 ;
+`groq_openai_120_key1` (8 000 TPM) → 2. C'est pourquoi le seuil de dispatch ne prend pas le
 *minimum* des providers (1, à cause des petits TPM) : la fenêtre d'accumulation ne jouerait
 jamais. Après un lot réussi, s'il reste des tâches dans la file, le worker relance
 immédiatement un `process_batch_task` pour la même clé.
@@ -44,7 +44,7 @@ immédiatement un `process_batch_task` pour la même clé.
 `core/selection.build_swrr_sequence(weights)` construit une séquence de rotation une fois :
 100 créneaux répartis proportionnellement aux poids (au moins un par provider), entrelacés
 à la manière de NGINX pour éviter les rafales sur un même fournisseur. `{"mistral": 4.0,
-"openai": 1.0, "google_gemini31": 1.0}` donne une séquence où Mistral revient deux fois sur
+"openai": 1.0, "google_gemini31_key1": 1.0}` donne une séquence où Mistral revient deux fois sur
 trois, jamais deux fois d'affilée si un autre est disponible. Le `LoadBalancer` garde un
 curseur circulaire sous verrou ; **`weight: 0` retire le provider de la séquence** (hors
 rotation, utilisable seulement en `force_provider`).
@@ -85,7 +85,8 @@ de quota. Si le réel dépasse la réservation de plus de 25 %, un WARNING invit
 
 **Quotas journaliers.** `rpd_limit` est compté à la réservation (`rpd:<p>:<jourUTC>`),
 `tpd_limit` a posteriori sur les tokens réels (`record_tokens`). Le premier dépassement pose
-un flag `quota_exhausted:<p>` avec TTL jusqu'à minuit UTC : le provider sort de la rotation
+un flag `quota_exhausted:<p>` avec TTL jusqu'au reset de la journée du provider (`quota_reset_tz`,
+minuit Pacifique pour Google) : le provider sort de la rotation
 sans être re-sondé toutes les `disable_timeout` secondes.
 
 ## Cooldown, désactivation, bascule
@@ -96,7 +97,7 @@ Trois durées d'exclusion, du plus court au plus long :
 |---|---|---|---|
 | **cooldown** | 5xx ou troncature → 60 s ; 429 → délai annoncé par le provider (borné à [10, 3600] s, défaut 60) ; bascule → `provider_switch_cooldown_seconds` (30 s) | clé Redis `cooldown:<p>` à TTL | `try_reserve` refuse tant que la clé existe |
 | **désactivation** | 30 appels échoués consécutifs (`record_failure`) | `disable_timeout` du provider (180 s par défaut, 120 pour la plupart des instances) ; compteur remis à zéro | `disabled:<p>` à TTL ; `llm_provider_state` = 1 |
-| **quota du jour** | `rpd_limit` ou `tpd_limit` atteint | jusqu'à minuit UTC | `quota_exhausted:<p>` |
+| **quota du jour** | `rpd_limit`/`tpd_limit` atteint, **ou** 429 « per day » du fournisseur | jusqu'au reset du provider | `quota_exhausted:<p>` |
 
 **La bascule** (`_switch_provider_or_fail`) traite les erreurs qui tiennent au *modèle*
 plutôt qu'à sa charge : réponse hors schéma, 4xx non récupérable, prompt trop volumineux pour

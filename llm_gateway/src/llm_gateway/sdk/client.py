@@ -20,6 +20,8 @@ Usage :
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncio
 import json
 import time
@@ -77,9 +79,19 @@ class TaskResult(BaseModel):
     status: TaskStatus
     agents: list[AgentResponse] = []
     error: str | None = None
+    # Nature de l'échec quand le gateway la connaît : "quota_journalier" + l'heure de
+    # réouverture de la fenêtre. Permet à l'appelant d'ATTENDRE la fenêtre au lieu de
+    # relancer toutes les 30 s une clé fermée pour la journée (incident du 2026-09-08).
+    error_kind: str | None = None
+    resume_at: datetime | None = None
     provider_used: str | None = None
     timing: TaskTiming | None = None
     task_id: str | None = None
+
+    @property
+    def quota_journalier_epuise(self) -> bool:
+        """L'échec est-il un quota journalier confirmé par le fournisseur ?"""
+        return self.error_kind == "quota_journalier"
 
     @property
     def ok(self) -> bool:
@@ -164,12 +176,22 @@ class LLMGatewayClient:
 
     # ------------------------------------------------------------------
 
-    async def execute(self, request: LLMRequest | dict[str, Any]) -> TaskResult:
+    async def execute(
+        self, request: LLMRequest | dict[str, Any], *, wait_timeout: float | None = None
+    ) -> TaskResult:
         """
         Soumet une tâche et attend son état terminal (long-poll Pub/Sub côté serveur).
 
         Ne lève pas sur un échec de tâche : le TaskResult porte status/error.
         Lève httpx.HTTPStatusError si le gateway refuse la soumission (4xx/5xx).
+
+        `wait_timeout` surcharge l'attente pour CET appel. Le défaut du client vaut pour un
+        fournisseur distant ; un modèle local sert un appel à la fois et fait patienter les
+        suivants, si bien que l'attente d'une tâche n'est pas sa durée de génération mais
+        celle de la file. Le 2026-09-08, une course sur Muse Glimmer (28B, une génération de
+        40 à 120 s, un seul appel simultané) a vu chaque tâche au-delà de la première expirer
+        à 120 s, puis le disjoncteur s'ouvrir. L'appelant qui épingle une instance lui passe
+        donc son `wait_timeout` (champ du fichier des fournisseurs).
         """
         payload = request.model_dump(exclude_none=True) if isinstance(request, LLMRequest) else request
         category = payload.get("category", "unknown")
@@ -218,7 +240,7 @@ class LLMGatewayClient:
             post_ms = (time.monotonic() - _e2e_start) * 1000
 
             wait_start = time.monotonic()
-            result = await self._wait(task_id)
+            result = await self._wait(task_id, wait_timeout)
             wait_ms = (time.monotonic() - wait_start) * 1000
 
             result.task_id = task_id
@@ -320,13 +342,19 @@ class LLMGatewayClient:
                 await asyncio.sleep(wait)
         raise RuntimeError("unreachable: la dernière tentative relève ou retourne")  # pragma: no cover
 
-    async def _wait(self, task_id: str) -> TaskResult:
-        """GET /tasks/{id}/wait — attend l'état terminal ou le timeout."""
+    async def _wait(self, task_id: str, wait_timeout: float | None = None) -> TaskResult:
+        """GET /tasks/{id}/wait — attend l'état terminal ou le timeout.
+
+        Le délai de lecture httpx est posé PAR REQUÊTE : le client partagé est construit sur
+        l'attente par défaut, et une attente plus longue serait sinon coupée par lui avant
+        que le long-poll ne rende la main."""
+        attente = self._wait_timeout if wait_timeout is None else float(wait_timeout)
         client = await self._http()
         try:
             resp = await client.get(
                 f"{self._base_url}/tasks/{task_id}/wait",
-                params={"timeout": self._wait_timeout},
+                params={"timeout": attente},
+                timeout=httpx.Timeout(attente + 30),
             )
         except _TRANSIENT as e:
             logger.error(f"LLM gateway wait request failed | task_id={task_id} error={e}")
@@ -354,6 +382,8 @@ class LLMGatewayClient:
             status=status,
             agents=[AgentResponse(**a) for a in (data.get("result") or [])],
             error=data.get("error"),
+            error_kind=data.get("error_kind"),
+            resume_at=data.get("resume_at"),
             provider_used=data.get("provider_used"),
             timing=TaskTiming(timing_p5=data.get("timing_p5")),
         )

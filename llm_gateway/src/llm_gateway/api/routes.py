@@ -45,6 +45,8 @@ def _to_response(task: Task) -> TaskStatusResponse:
         updated_at=task.updated_at,
         result=task.result,
         error=task.error,
+        error_kind=task.error_kind,
+        resume_at=task.resume_at,
         provider_used=task.provider_used,
         latency_ms=task.latency_ms,
         timing_p5=task.timing_p5,

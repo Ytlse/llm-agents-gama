@@ -1,0 +1,1671 @@
+[
+  {
+    "batch_index": 4,
+    "task_id": "batch_9d1c778f_15",
+    "agents": [
+      {
+        "agent_id": "286047",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          }
+        ],
+        "reason": "La voiture est la seule option viable pour enchaîner les multiples trajets de la journée sous la pluie avec un confort optimal."
+      },
+      {
+        "agent_id": "386779",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 80
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 5
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 5
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 5
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 3
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 2
+          }
+        ],
+        "reason": "La distance est négligeable, la marche est le mode le plus simple et rapide pour une enfant de 10 ans."
+      },
+      {
+        "agent_id": "386781",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 10
+          },
+          {
+            "index": 1,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot,metro,foot",
+            "probability": 10
+          },
+          {
+            "index": 3,
+            "mode": "car",
+            "probability": 70
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 10
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La distance de 22km rend la voiture indispensable pour la gestion du temps et la fatigue sur une journée de travail complète."
+      },
+      {
+        "agent_id": "314165",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La multiplicité des trajets courts impose l'usage de la voiture pour garantir la ponctualité et la faisabilité de la chaîne de déplacements."
+      },
+      {
+        "agent_id": "274478",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 10
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 80
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 5
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 5
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Le risque de verglas et les températures négatives rendent la voiture beaucoup plus sécurisante et confortable que la marche."
+      },
+      {
+        "agent_id": "286049",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 90
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 10
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La pluie persistante et le besoin de confort pour une journée de travail privilégient largement l'usage de la voiture."
+      },
+      {
+        "agent_id": "314166",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La voiture est le choix le plus efficace pour enchaîner les trajets de la journée malgré la pluie."
+      },
+      {
+        "agent_id": "378524",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 90
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 3
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 4
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 3
+          }
+        ],
+        "reason": "Les rafales de vent à 44 km/h rendent le vélo dangereux et les transports en commun trop longs par rapport à la voiture."
+      },
+      {
+        "agent_id": "110779",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 60
+          },
+          {
+            "index": 1,
+            "mode": "foot,tram,foot",
+            "probability": 20
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 10
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 10
+          }
+        ],
+        "reason": "Le budget limité oriente vers les transports en commun pour éviter la fatigue de la marche sous la bruine."
+      },
+      {
+        "agent_id": "263993",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 20
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 20
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 60
+          }
+        ],
+        "reason": "À 74 ans, la voiture offre le confort nécessaire pour les déplacements, bien que la marche soit possible pour les très courtes distances."
+      },
+      {
+        "agent_id": "239897",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 50
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 50
+          }
+        ],
+        "reason": "Le revenu très faible impose la marche comme mode de transport gratuit et fiable malgré le risque de verglas."
+      },
+      {
+        "agent_id": "386782",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La densité des trajets prévus dans la journée rend l'usage de la voiture indispensable pour maintenir le planning."
+      },
+      {
+        "agent_id": "363906",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La pluie et la distance importante imposent la voiture pour assurer la sécurité et le confort d'une enfant de 5 ans."
+      },
+      {
+        "agent_id": "293014",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 80
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 20
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La voiture est privilégiée pour la gestion des courses et des trajets domicile-travail, le vélo étant une alternative secondaire."
+      },
+      {
+        "agent_id": "314164",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 90
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 2
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 2
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "bicycle",
+            "probability": 6
+          }
+        ],
+        "reason": "La voiture est le mode le plus sûr et rapide pour une adolescente, surtout avec des trajets tardifs et de la pluie prévue."
+      }
+    ]
+  },
+  {
+    "batch_index": 5,
+    "task_id": "batch_fad376b5_11",
+    "agents": [
+      {
+        "agent_id": "405234",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "bicycle",
+            "probability": 0
+          }
+        ],
+        "reason": "Honoré privilégie le confort et l'efficacité en voiture pour enchaîner ses multiples allers-retours de 12.7 km prévus dans la journée."
+      },
+      {
+        "agent_id": "386784",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 10
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,metro,foot,tram,foot",
+            "probability": 90
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Guillaume est abonné aux transports en commun et utilise efficacement le réseau multimodal pour se rendre en cours malgré la distance."
+      },
+      {
+        "agent_id": "386783",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Isaac, âgé de 7 ans, est véhiculé par sa famille en voiture pour un trajet court par temps froid et pluvieux."
+      },
+      {
+        "agent_id": "479934",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 50
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 10
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 40
+          },
+          {
+            "index": 4,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Étant abonnée aux transports en commun avec de multiples retours prévus dans la journée, Sylvie privilégie le bus."
+      },
+      {
+        "agent_id": "413484",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "bicycle",
+            "probability": 0
+          }
+        ],
+        "reason": "Léon-Stéphane utilise sa voiture pour un déplacement rapide en zone rurale avec un retour très rapproché."
+      },
+      {
+        "agent_id": "415112",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 10
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 10
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 20
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 20
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 20
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 20
+          }
+        ],
+        "reason": "Claire a un revenu très faible et privilégie les options courtes à pied ou les bus les plus rapides sans abonnement."
+      },
+      {
+        "agent_id": "392775",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 50
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 50
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "bicycle",
+            "probability": 0
+          }
+        ],
+        "reason": "Gérard effectue un très court trajet de moins de 600 mètres et préfère marcher."
+      },
+      {
+        "agent_id": "405235",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 50
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 50
+          }
+        ],
+        "reason": "Adèle opte pour la marche sur cette très courte distance de moins d'un kilomètre."
+      },
+      {
+        "agent_id": "412467",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 40
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 60
+          },
+          {
+            "index": 3,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "bicycle",
+            "probability": 0
+          }
+        ],
+        "reason": "Manon est abonnée aux transports en commun et utilise les lignes de bus performantes face aux prévisions de pluie."
+      },
+      {
+        "agent_id": "386878",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 0
+          }
+        ],
+        "reason": "Grégoire enchaîne plusieurs courses sous une météo pluvieuse et choisit le confort de la voiture."
+      },
+      {
+        "agent_id": "401023",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          }
+        ],
+        "reason": "Éric utilise sa voiture pour optimiser sa chaîne de déplacements multiples par temps de pluie."
+      }
+    ]
+  },
+  {
+    "batch_index": 6,
+    "task_id": "batch_2dd4c3a2_9",
+    "agents": [
+      {
+        "agent_id": "478650",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,metro,foot,metro,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "David a des revenus élevés et un emploi du temps chargé nécessitant une voiture pour gérer ses multiples déplacements quotidiens sur de longues distances."
+      },
+      {
+        "agent_id": "480979",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La voiture est indispensable pour enchaîner efficacement les cinq trajets prévus dans la journée avec un confort optimal."
+      },
+      {
+        "agent_id": "273338",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 80
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 5
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 5
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 5
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 5
+          }
+        ],
+        "reason": "Virginie est abonnée aux transports et privilégie l'option la plus rapide et directe pour rentrer chez elle."
+      },
+      {
+        "agent_id": "466712",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La voiture est le seul mode réaliste pour une adolescente en zone rurale dispersée devant enchaîner plusieurs trajets courts."
+      },
+      {
+        "agent_id": "352232",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 90
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 10
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La marche est l'option la plus économique et adaptée aux très courtes distances pour ce profil à faibles revenus."
+      },
+      {
+        "agent_id": "497594",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 100
+          }
+        ],
+        "reason": "À 75 ans, le confort et la sécurité de la voiture sont privilégiés pour un trajet de 10 km par temps pluvieux."
+      },
+      {
+        "agent_id": "483656",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 100
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "car",
+            "probability": 0
+          }
+        ],
+        "reason": "La distance est extrêmement courte (267m), rendant la marche la plus simple et sûre malgré le risque de verglas."
+      },
+      {
+        "agent_id": "507256",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "La voiture offre le meilleur compromis confort/sécurité pour une personne âgée par temps pluvieux."
+      },
+      {
+        "agent_id": "503935",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "À 92 ans, la voiture est la seule option garantissant la sécurité face au risque de verglas et à la fatigue physique."
+      }
+    ]
+  },
+  {
+    "batch_index": 7,
+    "task_id": "batch_faa93c2d_15",
+    "agents": [
+      {
+        "agent_id": "480978",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "car",
+            "probability": 100
+          }
+        ],
+        "reason": "Christophe privilégie la voiture pour ses nombreux trajets quotidiens longs et complexes."
+      },
+      {
+        "agent_id": "506141",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,tram,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot,tram,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Sylvie utilise sa voiture pour enchaîner ses multiples courses avec un emploi du temps chargé."
+      },
+      {
+        "agent_id": "507114",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,bus,foot,tram,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,bus,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,bus,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,bus,bus,foot,tram,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Anne opte pour la voiture pour ce trajet très long de plus de 35 km."
+      },
+      {
+        "agent_id": "506138",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "car",
+            "probability": 100
+          }
+        ],
+        "reason": "Alphonse choisit la voiture pour sa rapidité et son confort sur une distance moyenne."
+      },
+      {
+        "agent_id": "506234",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "bicycle",
+            "probability": 100
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Anaïs privilégie le vélo pour cette courte distance et ses nombreux déplacements de la journée."
+      },
+      {
+        "agent_id": "506140",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "bicycle",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Jacqueline utilise le vélo comme mode principal adapté à son profil scolaire."
+      },
+      {
+        "agent_id": "483657",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot,bus,foot,metro,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot,bus,foot,metro,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot,bus,foot,metro,foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Timothée choisit la voiture pour éviter la fatigue excessive des transports multiples à son âge."
+      },
+      {
+        "agent_id": "425764",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "bicycle",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Léon prend le vélo pour sa rapidité et son coût modéré."
+      },
+      {
+        "agent_id": "506232",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "bicycle",
+            "probability": 100
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Adrienne utilise le vélo pour se rendre à l'école rapidement."
+      },
+      {
+        "agent_id": "506233",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 5,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Paul choisit la voiture pour ce trajet de shopping matinal par temps frais."
+      },
+      {
+        "agent_id": "507255",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Robert utilise la voiture pour minimiser l'effort physique lié à son âge."
+      },
+      {
+        "agent_id": "446263",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Marine choisit la voiture pour enchaîner ses nombreux déplacements de la journée sans perdre de temps."
+      },
+      {
+        "agent_id": "453662",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot,metro,foot,metro,foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Lucy privilégie la voiture pour ses nombreux trajets familiaux et professionnels."
+      },
+      {
+        "agent_id": "507112",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 2,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 3,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Adrien utilise la voiture pour effectuer ce trajet rapidement."
+      },
+      {
+        "agent_id": "497593",
+        "probabilities": [
+          {
+            "index": 0,
+            "mode": "bicycle",
+            "probability": 0
+          },
+          {
+            "index": 1,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 2,
+            "mode": "car",
+            "probability": 100
+          },
+          {
+            "index": 3,
+            "mode": "foot,bus,foot",
+            "probability": 0
+          },
+          {
+            "index": 4,
+            "mode": "foot",
+            "probability": 0
+          },
+          {
+            "index": 5,
+            "mode": "foot",
+            "probability": 0
+          }
+        ],
+        "reason": "Émilie préfère le confort de la voiture pour ses courses malgré son âge."
+      }
+    ]
+  }
+]

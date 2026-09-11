@@ -497,6 +497,7 @@ test-alt-prompt:
 # ──────────────────────────────────────────────────────────────────────────────
 
 .PHONY: zones housing-type bike-ownership terminal-time car-availability avancement policy policy-tune common-set-predict equipment-propensity
+.PHONY: logit mnl-predict bi-oracle
 .PHONY: communes-couronnes audit-perimetre audit-couronnes residence-zone couronne-v7
 
 ## ──────────────────────────────────────────────────────────────────────────────
@@ -934,7 +935,43 @@ common-set-predict:
 	  echo "Surchargez-le : make common-set-predict SYNTHESIS_PYTHON=/chemin/vers/python"; \
 	  exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.synthesis.model_on_common_set \
-	  $(if $(DRY_RUN),--dry-run,)
+	  $(if $(DRY_RUN),--dry-run,) $(if $(POLICY),--policy $(POLICY),) $(if $(OUT),--out $(OUT),)
+
+## Estimate the SECOND oracle: multinomial logit at strict parity (21 variables)
+## → scripts/progedo_logit/mnl_model.json + mnl_model_metrics.json
+## Même jeu, même split par ménage, même sample_weight et mêmes métriques que
+## `make policy` : la comparaison des deux oracles ne mesure que les deux modèles.
+## La régularisation est choisie en validation croisée groupée DANS le train.
+##   make logit C=1.0        # impose C au lieu de le choisir (diagnostic)
+logit:
+	@test -f scripts/progedo_logit/progedo_mode_choice_v2.parquet || { \
+	  echo "Jeu d'entraînement absent : scripts/progedo_logit/progedo_mode_choice_v2.parquet"; \
+	  echo "Il est versionné ; s'il manque, régénérez-le avec build_mode_choice_dataset.py"; \
+	  exit 1; }
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make logit SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_logit $(if $(C),--C $(C),)
+
+## Apply the SECOND oracle to the pinned common set (same code path as the booster)
+## → scripts/synthesis/data/mnl_on_common_set.parquet
+mnl-predict:
+	@$(MAKE) --no-print-directory common-set-predict \
+	  POLICY=scripts/progedo_logit/mnl_model.json \
+	  OUT=scripts/synthesis/data/mnl_on_common_set.parquet
+
+## Two-oracle composite score → scripts/synthesis/data/bi_oracle.json
+## Bloc A fidélité EMC² (inchangé), bloc B accord désagrégé au logit rapporté à la
+## distance inter-oracles, bloc C sens de variation. Poids B et C à 0 : les termes sont
+## publiés, ils ne sélectionnent aucun prompt. Aucun appel LLM, aucun réseau.
+## Prérequis : make logit && make common-set-predict && make mnl-predict
+bi-oracle:
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make bi-oracle SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.synthesis.bi_oracle
 
 # ──────────────────────────────────────────────────────────────────────────────
 # GAMA

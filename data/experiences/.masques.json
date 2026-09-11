@@ -1,0 +1,27 @@
+[
+ {
+  "experience": "exp_qwen36-27b_minper_jtir_t0_nosim",
+  "execution": null,
+  "retiree_le": "2026-09-08T06:42:51+00:00"
+ },
+ {
+  "experience": "exp_gemini-35-fl_minper_jtir_t0_nosim",
+  "execution": null,
+  "retiree_le": "2026-09-08T06:43:09+00:00"
+ },
+ {
+  "experience": "exp_gemini-35-fl_expcham5_jtir_t0_nosim",
+  "execution": "2026-09-08_19_25_11",
+  "retiree_le": "2026-09-09T05:44:55+00:00"
+ },
+ {
+  "experience": "exp_meta-mg_minper_jtir_p1_t0_nosim",
+  "execution": "2026-09-08_12_01_16",
+  "retiree_le": "2026-09-09T05:45:28+00:00"
+ },
+ {
+  "experience": "exp_gemini-31-fl_promin_jtir_t0_nosim",
+  "execution": "2026-09-10_11_16_47",
+  "retiree_le": "2026-09-10T12:01:21+00:00"
+ }
+]

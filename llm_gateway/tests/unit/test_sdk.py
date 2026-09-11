@@ -322,3 +322,56 @@ class TestCircuitBreaker:
             await client.aclose()
 
         asyncio.run(run())
+
+
+class TestAttenteParAppel:
+    """L'attente d'une tâche est surchargeable par appel (`execute(wait_timeout=…)`).
+
+    Le défaut du client est calé sur un fournisseur distant. Un modèle local ne sert qu'un
+    appel à la fois : l'attente d'une tâche n'est pas sa durée de génération mais celle de la
+    FILE. Le 2026-09-08, sur Muse Glimmer (28B, 40 à 120 s par génération, un seul appel
+    simultané), toute tâche au-delà de la première expirait à 120 s et le disjoncteur
+    s'ouvrait. L'appelant qui épingle une instance lui passe donc son attente, lue dans le
+    fichier des fournisseurs (`wait_timeout`).
+    """
+
+    @staticmethod
+    def _client_espion(vus: list):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/tasks" and request.method == "POST":
+                return httpx.Response(202, json={"task_id": "t-123", "status": "pending"})
+            if request.url.path == "/tasks/t-123/wait":
+                vus.append(request.url.params.get("timeout"))
+                return httpx.Response(200, json={"task_id": "t-123", "status": "success",
+                                                 "result": [{"agent_id": "a", "chosen_index": 0}]})
+            return httpx.Response(404)
+
+        return LLMGatewayClient(transport=httpx.MockTransport(handler), wait_timeout=120.0)
+
+    def test_sans_surcharge_le_defaut_du_client_est_transmis(self):
+        vus: list = []
+        client = self._client_espion(vus)
+        asyncio.run(client.execute({"category": "c", "agents": [{"agent_id": "a"}]}))
+        assert vus == ["120.0"]
+
+    def test_la_surcharge_par_appel_est_transmise_au_long_poll(self):
+        vus: list = []
+        client = self._client_espion(vus)
+        asyncio.run(client.execute({"category": "c", "agents": [{"agent_id": "a"}]}, wait_timeout=600))
+        assert vus == ["600.0"], "l'instance épinglée impose son attente, pas le défaut du client"
+
+    def test_une_surcharge_plus_longue_ne_se_fait_pas_couper_par_le_client_http(self):
+        """Le client httpx partagé est construit sur l'attente par DÉFAUT (+30 s) : sans délai
+        posé par requête, il couperait un long-poll de 600 s bien avant sa fin."""
+        vus: list = []
+        client = self._client_espion(vus)
+
+        async def scenario():
+            await client.execute({"category": "c", "agents": [{"agent_id": "a"}]}, wait_timeout=600)
+            http = await client._http()
+            return http.timeout
+
+        timeout_partage = asyncio.run(scenario())
+        # Le client partagé garde le délai du défaut ; la requête, elle, a porté le sien.
+        assert timeout_partage.read == 150.0
+        assert vus == ["600.0"]

@@ -1,0 +1,16 @@
+{
+ "statut": "archivee",
+ "motif": "exécution avortée sans aucune décision ; doublon de nommage de `…_expcham5_jtir_t0_nosim_2` qui porte la mesure. Gabarit expert_chaine_m5 valide — c'est le doublon qui motive l'archivage.",
+ "le": "2026-09-10T07:35:09+00:00",
+ "reference": "specs/hygiene-prompts-et-plateforme-experiences.md",
+ "donnees": "conservees",
+ "visible_par_defaut": false,
+ "historique": [
+  {
+   "de": "actif",
+   "vers": "archivee",
+   "le": "2026-09-10T07:35:09+00:00",
+   "motif": "exécution avortée sans aucune décision ; doublon de nommage de `…_expcham5_jtir_t0_nosim_2` qui porte la mesure. Gabarit expert_chaine_m5 valide — c'est le doublon qui motive l'archivage."
+  }
+ ]
+}

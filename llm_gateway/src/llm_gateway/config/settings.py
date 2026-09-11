@@ -13,6 +13,7 @@ constructeur, environnement `LLM_GATEWAY_*` (`__` sépare les niveaux :
 """
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -27,10 +28,14 @@ from llm_gateway.config.providers import (
     ProvidersFile,
     load_providers_file,
 )
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 from llm_gateway.config.sources import ENV_PREFIX, LegacyEnvSource, yaml_sources
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Instances nommées <modèle>_key<N> : leur clé est nominative (pas de repli adapter).
+_INSTANCE_KEY_SUFFIX = re.compile(r"_key\d+$")
 
 
 # ---------------------------------------------------------------------------
@@ -47,14 +52,27 @@ class ProviderConfig(BaseModel):
     tpm_limit: int | None = None
     rpd_limit: int | None = None
     tpd_limit: int | None = None
+    quota_reset_tz: str = DEFAUT_FUSEAU_QUOTA   # fuseau du reset journalier (cf. core.quota)
     max_tokens_per_request: int | None = None
     max_output_tokens: int | None = None
+    # Plafond de réflexion du modèle servi (cf. `ProviderEntry.thinking_budget_max` pour le
+    # pourquoi). Lu par l'adapter Google, qui refuse un budget au-dessus.
+    thinking_budget_max: int | None = None
+    # Niveaux de réflexion acceptés par le modèle servi (`minimal`, `low`, `medium`, `high`).
+    # Relevés dans la documentation du fournisseur : ils varient d'un modèle à l'autre, et
+    # demander un niveau absent rend 400. Déclarés → le formulaire n'offre que ceux-là et un
+    # niveau inconnu est refusé d'avance ; absents → aucun niveau n'est proposé.
+    thinking_levels: list[str] | None = None
     base_url: str
     default_model: str
     weight: float = 1.0
     batch_max_agents: int = 1            # calculé : min(tpm/tokens_par_agent, capacité requête, rpm, plafond)
     tpm_estimate_per_request: int | None = None  # calculé : réservation TPM d'une requête pleine
     concurrency_limit: int = 2
+    # Réglage d'APPELANT, recopié tel quel du fichier des fournisseurs : le gateway ne le lit
+    # pas, il le publie pour que le client sache combien de temps attendre une tâche servie
+    # par cette instance (cf. `sdk.client.execute(wait_timeout=…)`).
+    wait_timeout: float | None = None
     disable_timeout: int = 180
     adapter: str = ""
     structured_output: Literal["json_schema", "json_object", "none"] | None = None
@@ -89,6 +107,13 @@ class InferenceSettings(BaseModel):
     temperature: float = 0.7
     top_p: float | None = None
     max_tokens: int = 4096   # budget de sortie PAR TÂCHE ; le lot multiplie par son nombre d'agents
+    # Profondeur de réflexion par défaut. `None` : rien n'est demandé, chaque fournisseur
+    # applique la sienne — c'est le comportement qui prévalait avant le 2026-09-10, conservé
+    # comme défaut pour ne pas déplacer toutes les mesures existantes d'un coup.
+    thinking_budget: int | None = None
+    # Niveau de réflexion par défaut. `None` : rien n'est envoyé, le modèle applique le sien
+    # (`high` pour Flash et Pro, `minimal` pour Flash-Lite d'après la doc du 2026-09-10).
+    thinking_level: str | None = None
 
 
 class BatchingSettings(BaseModel):
@@ -108,6 +133,19 @@ class BatchingSettings(BaseModel):
     max_batch_agents: int = 20          # plafond absolu du calcul de batch_max_agents
     min_output_tokens: int = 512        # budget de sortie minimal acceptable par requête
     max_output_tokens: int = 16384      # plafond du max_tokens envoyé (limite gpt-4o-mini)
+
+
+class RoutingSettings(BaseModel):
+    """Comment le balancer répartit les requêtes entre fournisseurs.
+
+    `swrr` étale la charge sur tous les fournisseurs en rotation (débit maximal).
+    `cascade` les épuise dans l'ordre : le premier tant qu'il accepte, le suivant seulement
+    quand il refuse — quota du jour atteint, cooldown, ou débit par minute saturé. C'est ce
+    qu'on veut quand deux clés servent le même modèle et qu'on préfère consommer la première
+    en entier avant de toucher à la seconde (demande du 2026-09-07).
+    """
+
+    policy: Literal["swrr", "cascade"] = "swrr"
 
 
 class ResilienceSettings(BaseModel):
@@ -163,6 +201,7 @@ class GatewaySettings(BaseSettings):
     inference: InferenceSettings = Field(default_factory=InferenceSettings)
     batching: BatchingSettings = Field(default_factory=BatchingSettings)
     resilience: ResilienceSettings = Field(default_factory=ResilienceSettings)
+    routing: RoutingSettings = Field(default_factory=RoutingSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     telemetry: TelemetrySettings = Field(default_factory=TelemetrySettings)
 
@@ -212,10 +251,42 @@ class GatewaySettings(BaseSettings):
         }
         return self
 
+    def _resolve_key(self, name: str, adapter_name: str) -> SecretStr:
+        """Clé d'API d'une instance : PROVIDER_KEYS__<instance>, sinon celle de l'adapter.
+
+        Le repli sur l'adapter est REFUSÉ pour une instance suffixée `_key<N>` : son nom
+        annonce une clé nominative, et replier ferait taper la clé d'un autre projet sans
+        rien dire — c'est l'incident `google2_36`, où la convention de nommage a fait
+        partir les appels sur la mauvaise clé. Sans clé propre, l'instance ressort avec
+        une clé vide et `filter_providers_without_api_key` l'écarte de la rotation.
+
+        Une variable présente mais VIDE (`PROVIDER_KEYS__x=""`, cf. `make run NO_GOOGLE=1`)
+        est un blanchiment volontaire : pas de repli, pas d'alarme.
+        """
+        propre = self.provider_keys.get(name)
+        if propre is not None:
+            return propre
+        if _INSTANCE_KEY_SUFFIX.search(name):
+            if self.provider_keys.get(adapter_name):
+                # Config incohérente : avant la garde, cette instance fonctionnait « par
+                # accident » sur la clé de l'adapter. Elle est désormais écartée — le dire
+                # fort, sinon la disparition d'une instance ne se lit nulle part.
+                logger.error(
+                    f"[ALARME] Instance '{name}' sans PROVIDER_KEYS__{name}, alors que la clé de "
+                    f"l'adapter '{adapter_name}' existe : instance EXCLUE, aucun repli (le nom "
+                    f"annonce une clé nominative). Déclarez PROVIDER_KEYS__{name} pour la servir."
+                )
+            else:
+                logger.warning(
+                    f"Instance '{name}' sans PROVIDER_KEYS__{name} : exclue de la rotation."
+                )
+            return SecretStr("")
+        return self.provider_keys.get(adapter_name, SecretStr(""))
+
     def _resolve(self, name: str, entry: ProviderEntry) -> ProviderConfig:
         b = self.batching
         adapter_name = entry.adapter or name
-        key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+        key = self._resolve_key(name, adapter_name)
         # Coût tokens (in+out) d'un agent dans un lot — dimensionne batch_max_agents.
         tokens_per_agent = b.assumed_prompt_tokens + b.assumed_output_tokens
         tpm_bound = int(entry.tpm_limit / tokens_per_agent) if entry.tpm_limit else entry.rpm_limit

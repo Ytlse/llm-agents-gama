@@ -66,7 +66,7 @@ bundle n'expose rien de plus que les familles génériques ci-dessus. Celles du 
 | `llm_provider_rpm_limit`, `llm_provider_rpd_limit`, `llm_provider_tpd_limit` | `provider` | limites configurées (0 = illimité) |
 | `llm_provider_requests_today`, `llm_provider_tokens_today` | `provider` | consommation du jour UTC |
 | `llm_provider_daily_usage_ratio` | `provider` | `requests_today / rpd_limit` (absent si pas de `rpd_limit`) |
-| `llm_provider_quota_exhausted` | `provider` | 1 si écarté jusqu'à minuit UTC |
+| `llm_provider_quota_exhausted` | `provider` | 1 si écarté jusqu'au reset de sa journée (`quota_reset_tz`) |
 
 ## Côté SDK
 

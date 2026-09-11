@@ -178,7 +178,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--workers", type=int, default=0,
                         help="requêtes en vol (défaut : eval_workers de la config)")
     parser.add_argument("--provider", default=None,
-                        help="surcharge eval_provider (ex. google2 : seconde clé, "
+                        help="surcharge eval_provider (ex. google_gemini31_key2 : seconde clé, "
                              "seau de quota distinct — clé de cache distincte, "
                              "réservé aux mesures)")
     parser.add_argument("--dry-run", action="store_true",

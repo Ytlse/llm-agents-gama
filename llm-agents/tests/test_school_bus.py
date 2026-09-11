@@ -83,7 +83,7 @@ def test_real_bus_still_gets_subscription_note():
 
 # ── 2. La fabrique d'options ──────────────────────────────────────────────────
 
-from trip_helper.school_bus import build_school_bus_option, SCHOOL_BUS_ROUTE_MARKER
+from trip_helper.school_bus import build_school_bus_option, SCHOOL_BUS_ROUTE_MARKER, is_school_bus_plan
 from text_helper import env_ob_to_text
 from models import Activity, Location, Person, PersonalIdentity
 
@@ -168,3 +168,16 @@ def test_rendering_shows_free_school_bus():
     text = env_ob_to_text("travel_plan", plan.model_dump())
     assert "Car scolaire" in text
     assert "gratuit" in text.lower()
+
+
+def test_is_school_bus_plan_detects_chosen():
+    from models import Transit, TransitLocation, TravelPlan
+    sb = build_school_bus_option(_person(), _HOME, _edu_activity(), _TS, _TS)
+    assert is_school_bus_plan(sb) is True
+    car = TravelPlan(id="c", start_location=_HOME, end_location=_SCHOOL, start_time=0, end_time=1,
+                     legs=[Transit(start_time=0, end_time=1,
+                                   start_location=TransitLocation(stop="", lat=43.2, lon=1.1),
+                                   end_location=TransitLocation(stop="", lat=43.25, lon=1.15),
+                                   is_transfer=False, transit_route="__DIRECT_CAR__", mode="car")])
+    assert is_school_bus_plan(car) is False
+    assert is_school_bus_plan(None) is False

@@ -42,6 +42,7 @@ from utils import create_background_task
 from world.population import PersonScheduler
 from loguru import logger
 from llm.cache import LlmSemanticCache
+from experiences.decision import ordre_presentation
 from llm.reflection_store import ReflectionMemoStore
 
 
@@ -570,8 +571,21 @@ class LlmAgent:
     async def evaluate_and_choose_travel_plan(
         self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0,
         anticipation: Optional[dict] = None,
+        *,
+        force_provider: Optional[str] = None,
+        allowed_providers: Optional[set] = None,
+        trace: Optional[dict] = None,
+        presentation_figee: bool = False,
+        option_order_seed: Optional[int] = None,
     ) -> tuple[int, str, str, dict]:
         """Choisit un itinéraire et renvoie (index, justification, provider, répartition).
+
+        Ticket 035 (spec 02/05) — kwargs optionnels, sans effet quand ils sont absents :
+        `force_provider` épingle une instance de passerelle ; `allowed_providers` refuse
+        toute réponse servie par une instance hors de cet ensemble (substitution refusée,
+        Q3) ; `trace` (dict fourni par l'appelant) reçoit ce qui a été présenté, la réponse
+        brute, les poids et le fournisseur (D6) ; `presentation_figee` garde l'ordre reçu
+        (l'appelant l'a déjà ordonné) ; `option_order_seed` remplace la graine des réglages.
 
         La répartition est la distribution de probabilité par mode canonique qui a servi
         au tirage (modes non proposés inclus, à 0) — vide si la décision n'en vient pas
@@ -587,9 +601,18 @@ class LlmAgent:
 
         # Ordre déterministe pour les clés de cache (indépendant du shuffle)
         sorted_options = sorted(options, key=lambda p: p.get_code() or "")
-        # Shuffle séparé pour le payload LLM (évite le biais de position)
-        shuffled_options = list(options)
-        random.shuffle(shuffled_options)
+        # Ordre de présentation DÉTERMINISTE (ticket 035, D7) : dérivé de la graine, de
+        # l'agent et de l'activité — le biais de position est toujours mélangé, mais le
+        # même déplacement est présenté dans le même ordre dans les deux modes d'exécution.
+        if presentation_figee:
+            shuffled_options = list(options)
+        else:
+            shuffled_options = ordre_presentation(
+                options,
+                settings.agent.option_order_seed if option_order_seed is None else option_order_seed,
+                context.person.person_id,
+                context.activity_id,
+            )
 
         activity_purpose = options[0].purpose or ""
         weather = get_weather(self._weather_timestamp(context))
@@ -639,6 +662,8 @@ class LlmAgent:
                 traits_key=_traits_signature(context.person.identity.traits_json),
             )
             if cache_hit is not None:
+                if trace is not None:
+                    trace["cache"] = True
                 chosen_plan = sorted_options[cache_hit["index"]]
                 original_index = options.index(chosen_plan)
                 if cache_hit.get("distribution"):
@@ -673,9 +698,37 @@ class LlmAgent:
         try:
             if _rec is not None:
                 _rec.T_llm_start = time.time()
-            llm_result = await self.llm_client.execute(payload)
+            attente_instance = None
+            if force_provider:
+                payload["force_provider"] = force_provider
+                # L'instance épinglée porte son attente : un modèle local ne sert qu'un appel
+                # à la fois, les tâches suivantes patientent en file et le défaut du client
+                # (calé sur un fournisseur distant) les ferait expirer avant leur tour.
+                _cfg = settings.llm.providers.get(force_provider)
+                attente_instance = getattr(_cfg, "wait_timeout", None) if _cfg else None
+            llm_result = await self.llm_client.execute(payload, wait_timeout=attente_instance)
             _t_after_llm = time.time()
             provider_used = llm_result.provider_used or ""
+            if trace is not None:
+                trace["payload"] = payload
+                trace["fournisseur"] = provider_used
+                trace["identifiant_lot"] = llm_result.task_id
+                trace["souvenirs"] = list(payload["agents"][0].get("history", []) or [])
+                trace["presentees_modes"] = [t.get("mode") for t in payload["agents"][0]["trajectories"]]
+                trace["reponse_brute"] = (
+                    json.dumps([a.model_dump() for a in llm_result.agents], ensure_ascii=False, default=str)
+                    if llm_result.agents else None
+                )
+            if allowed_providers is not None and llm_result.ok and provider_used not in allowed_providers:
+                # Substitution silencieuse de la passerelle (bascule vers un autre modèle
+                # après erreur de parse) : refusée, jamais archivée comme décision (Q3).
+                if trace is not None:
+                    trace["substitution_refusee"] = provider_used
+                logger.warning(
+                    f"[035] Réponse servie par {provider_used!r}, hors des instances admises "
+                    f"{sorted(allowed_providers)} — substitution refusée pour {context.person.person_id}"
+                )
+                return -1, f"substitution_refusee:{provider_used}", provider_used, {}
 
             if _rec is not None:
                 _post_ms = (llm_result.timing.post_ms if llm_result.timing else 0) or 0
@@ -708,6 +761,9 @@ class LlmAgent:
                     # pour CE trajet, mais la distribution n'est pas une décision du modèle
                     # — elle ne doit jamais atteindre le cache persistant.
                     weights_are_fallback = isinstance(shuffled_weights, UniformFallback)
+                    if trace is not None:
+                        trace["poids_presentes"] = [float(w) for w in shuffled_weights]
+                        trace["repli_uniforme"] = weights_are_fallback
                     position_in_sorted = {id(opt): i for i, opt in enumerate(sorted_options)}
                     weights = [0.0] * len(sorted_options)
                     for opt, w in zip(shuffled_options, shuffled_weights):
@@ -798,6 +854,10 @@ class LlmAgent:
                         )
                         logger.debug(f"Cache store task created for person {context.person.person_id}, activity {context.activity_id}, chosen plan mode: {mode}")
 
+                    if trace is not None:
+                        trace["distribution"] = distribution
+                        trace["index_presente"] = shuffled_options.index(chosen_plan)
+                        trace["raison"] = reason
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
                     return original_index, reason, provider_used, distribution
 
@@ -806,10 +866,22 @@ class LlmAgent:
 
             error_msg = llm_result.error or "Format de réponse invalide ou timeout."
             logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")
+            if trace is not None:
+                trace["erreur"] = error_msg
+                # Nature de l'échec telle que le gateway l'a qualifiée. Le texte seul ne
+                # suffit pas : « Providers saturés ou indisponibles » décrit aussi bien une
+                # file d'attente qu'un quota mort pour la journée, et l'appelant doit
+                # attendre dans un cas, patienter quelques secondes dans l'autre.
+                if llm_result.error_kind:
+                    trace["genre_erreur"] = llm_result.error_kind
+                if llm_result.resume_at:
+                    trace["reprise_a"] = llm_result.resume_at
             return -1, error_msg, provider_used, {}
 
         except Exception as e:
             logger.exception(f"Erreur lors de l'appel à l'API Gateway LLM: {e}")
+            if trace is not None:
+                trace["erreur"] = str(e)
             return -1, str(e), "", {}
 
     async def trigger_short_term_reflection_for_all_people(self, timestamp: int, people: list[Person]):

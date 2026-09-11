@@ -33,12 +33,28 @@ class LoadBalancer:
     un slot RPM (via le RateLimiter injecté) avant de retourner son nom.
     """
 
-    def __init__(self, providers: dict[str, ProviderConfig], limiter: RateLimiter) -> None:
+    def __init__(self, providers: dict[str, ProviderConfig], limiter: RateLimiter,
+                 policy: str = "swrr") -> None:
         self._providers = providers
         self._limiter = limiter
+        self._policy = policy
         self._lock = threading.Lock()
         self._cursor: int = 0
         self._sequence: list[str] = self._build_sequence()
+        if policy == "cascade":
+            logger.info(f"Routage en CASCADE : ordre de priorité = {self._cascade()}")
+
+    def _cascade(self) -> list[str]:
+        """L'ordre de priorité en mode cascade : celui de la configuration, doublons ôtés.
+
+        On épuise le premier fournisseur avant de toucher au suivant, au lieu d'étaler la
+        charge : deux clés sur un même modèle se consomment ainsi l'une après l'autre.
+        """
+        vus: list[str] = []
+        for nom in self._sequence:
+            if nom not in vus:
+                vus.append(nom)
+        return vus
 
     # ------------------------------------------------------------------
     # Construction de la séquence pondérée
@@ -97,6 +113,24 @@ class LoadBalancer:
                 return force
             raise RuntimeError(
                 f"Fournisseur forcé '{force}' indisponible (quota atteint ou désactivé)."
+            )
+
+        if self._policy == "cascade":
+            # Cascade : toujours repartir du premier. Il n'est dépassé que s'il REFUSE
+            # (quota du jour, cooldown, débit par minute saturé), et le refus est journalisé
+            # pour qu'un basculement se lise dans les logs.
+            ordre = self._cascade()
+            for rang, candidate in enumerate(ordre):
+                if self._try_reserve(candidate, min_tpm=min_tpm, min_output=min_output):
+                    if rang:
+                        logger.info(
+                            f"Cascade : bascule sur '{candidate}' (rang {rang + 1}/{len(ordre)}) — "
+                            f"les précédents ont refusé : {', '.join(ordre[:rang])}"
+                        )
+                    return candidate
+            raise RuntimeError(
+                "Tous les fournisseurs LLM sont saturés ou ont atteint leur limite de concurrence. "
+                f"Cascade épuisée dans l'ordre : {', '.join(ordre)}."
             )
 
         # Rotation normale — le lock ne protège que la lecture/écriture du curseur.

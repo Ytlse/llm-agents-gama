@@ -8,10 +8,11 @@ autoportant : `mode_choice_policy.json`.
 l'évaluateur d'exécution de la phase 3b) ne doit rien avoir à deviner ni à relire :
 l'artefact embarque l'ordre exact des variables, la table d'encodage de chaque
 modalité catégorielle, l'ordre des classes de sortie, la version du contrat de
-features, et le booster lui-même sous deux formes — le `dump_model()` JSON que
-l'évaluateur pur Python traversera (décision E9 : le conteneur `controller` n'a pas
-`libgomp1`, `import lightgbm` y échouerait) et le format texte natif de LightGBM,
-qui permet de recharger le booster à l'identique là où la bibliothèque est présente.
+features, et le booster lui-même sous deux formes — le `dump_model()` JSON prévu pour
+un évaluateur pur Python (décision E9, révisée le 2026-09-08 : `lightgbm` et `libgomp1`
+sont désormais dans l'image du `controller`, l'évaluateur n'a jamais été écrit ; la forme
+reste exportée, elle ne coûte rien) et le format texte natif de LightGBM, qui permet de
+recharger le booster à l'identique là où la bibliothèque est présente.
 Le parquet n'est nécessaire qu'ici.
 
 **Trois garde-fous, avant toute chose.** Ils tiennent le modèle sur ses rails :
@@ -50,8 +51,9 @@ from typing import Optional
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, confusion_matrix, log_loss
 from sklearn.model_selection import GroupShuffleSplit
+
+from scripts.progedo_logit.mode_choice_eval import evaluate_proba, format_shares
 
 # --- Version du format de l'artefact ----------------------------------------
 # Décrit la *structure* de mode_choice_policy.json, indépendamment de
@@ -301,65 +303,17 @@ def train_booster(X: pd.DataFrame, y: np.ndarray, w: np.ndarray,
 # Évaluation
 # ---------------------------------------------------------------------------
 
-def mode_shares(labels: np.ndarray, weights: np.ndarray, n_classes: int) -> list[float]:
-    """Parts modales pondérées, depuis des étiquettes dures."""
-    total = weights.sum()
-    return [float(weights[labels == k].sum() / total) for k in range(n_classes)]
-
-
 def evaluate(booster: lgb.Booster, X: pd.DataFrame, y: np.ndarray, w: np.ndarray,
              classes: list[str]) -> dict:
-    """Métriques du split test — toutes pondérées par le redressement d'enquête.
+    """Métriques du split test — calculées par le module partagé, jamais ici.
 
-    Les parts modales sont rapportées de **deux** façons, parce que les deux ont un
-    usage : en masse de probabilité (ce que le pipeline consomme réellement, cf.
-    ticket 005 §4) et en mode élu (ce que produirait un argmax). La seconde est
-    systématiquement plus contrastée — un classifieur bien calibré exagère les parts
-    quand on le durcit.
+    `mode_choice_eval.evaluate_proba` juge une **matrice de probabilités**, donc le
+    booster et le logit multinomial du second oracle sont notés par le même code : sans
+    quoi la comparaison publiée mêlerait l'écart entre deux modèles à l'écart entre deux
+    implémentations de métriques.
     """
     proba = booster.predict(X, num_iteration=booster.best_iteration)
-    hard = proba.argmax(axis=1)
-    k = len(classes)
-
-    observed = mode_shares(y, w, k)
-    predicted_hard = mode_shares(hard, w, k)
-    predicted_mass = list((proba * w[:, None]).sum(axis=0) / w.sum())
-
-    cm = confusion_matrix(y, hard, labels=list(range(k)), sample_weight=w)
-    cm_counts = confusion_matrix(y, hard, labels=list(range(k)))
-
-    # Rappel/précision par classe, pondérés. Le vélo (4 % des déplacements) est la
-    # classe où la calibration se joue : c'est elle que toute repondération casse.
-    per_class = {}
-    for i, name in enumerate(classes):
-        tp = cm[i, i]
-        support = cm[i, :].sum()
-        predicted = cm[:, i].sum()
-        per_class[name] = {
-            "support_share": float(support / cm.sum()),
-            "recall": float(tp / support) if support else None,
-            "precision": float(tp / predicted) if predicted else None,
-        }
-
-    return {
-        "n_rows": int(len(y)),
-        "log_loss_weighted": float(log_loss(y, proba, labels=list(range(k)), sample_weight=w)),
-        "log_loss_unweighted": float(log_loss(y, proba, labels=list(range(k)))),
-        "accuracy_weighted": float(accuracy_score(y, hard, sample_weight=w)),
-        "accuracy_unweighted": float(accuracy_score(y, hard)),
-        "classes": classes,
-        "mode_shares": {
-            "observed": observed,
-            "predicted_probability_mass": predicted_mass,
-            "predicted_argmax": predicted_hard,
-            "l1_probability_mass": float(np.abs(np.array(predicted_mass) - np.array(observed)).sum()),
-            "l1_argmax": float(np.abs(np.array(predicted_hard) - np.array(observed)).sum()),
-        },
-        "per_class": per_class,
-        # Lignes = vrai, colonnes = prédit, dans l'ordre de `classes`.
-        "confusion_matrix_weighted": [[float(v) for v in row] for row in cm],
-        "confusion_matrix_counts": [[int(v) for v in row] for row in cm_counts],
-    }
+    return evaluate_proba(proba, y, w, classes)
 
 
 def importances(booster: lgb.Booster, names: list[str]) -> list[dict]:
@@ -423,14 +377,6 @@ def build_policy(booster: lgb.Booster, spec: dict, spec_path: Path,
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-
-def format_shares(classes: list[str], observed: list[float],
-                  mass: list[float], hard: list[float]) -> str:
-    lines = [f"  {'mode':10s} {'observé':>9s} {'masse p.':>9s} {'mode élu':>9s}"]
-    for i, name in enumerate(classes):
-        lines.append(f"  {name:10s} {observed[i]:8.1%} {mass[i]:8.1%} {hard[i]:8.1%}")
-    return "\n".join(lines)
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

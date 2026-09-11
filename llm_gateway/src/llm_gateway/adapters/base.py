@@ -43,6 +43,27 @@ class BaseAdapter(ABC):
     # Timeout des appels LLM — surchargeable par adapter (Google : 240s).
     request_timeout: float = 120.0
 
+    # Applique-t-il `request.thinking_budget` ? Faux par défaut : demander une profondeur de
+    # réflexion à un adapter qui ne sait pas la transmettre serait un réglage scellé dans
+    # l'empreinte et jamais appliqué — le défaut exact que l'audit du 2026-09-10 a trouvé sur
+    # `temperature` du canal antigravity. Les adapters qui savent le font passer à True.
+    applique_reflexion: bool = False
+    _reflexion_signalee: bool = False
+
+    def _signaler_reflexion_ignoree(self, budget: int | None) -> None:
+        """Avertit UNE fois qu'une profondeur de réflexion demandée n'est pas appliquée."""
+        if budget is None or self.applique_reflexion or self._reflexion_signalee:
+            return
+        self._reflexion_signalee = True
+        _logger = __import__("llm_gateway.telemetry.logger", fromlist=["get_logger"]).get_logger(
+            __name__
+        )
+        _logger.warning(
+            f"[{self._instance_name}] thinking_budget={budget} demandé mais cet adapter ne sait "
+            "pas le transmettre : le fournisseur applique son propre défaut de réflexion. "
+            "Le réglage est scellé dans l'empreinte, il n'est PAS appliqué."
+        )
+
     def __init__(self):
         # Par défaut, l'instance name = le nom de la classe d'adapter.
         # get_adapter() le remplace par le nom de l'instance configurée (ex: "groq_1").

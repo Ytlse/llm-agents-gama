@@ -1517,3 +1517,22 @@ tickets:
       formule gamma/lambda du manuscrit n'existe pas dans le code (devient descriptive). Coût
       mesuré : 0,64 requête/agent-jour (bras mémoire), 0,23 (amnésique) ; palier étendu à 5 bras,
       N = 200 : 14 jours de quota à 1 000 RPD. Questions ouvertes dans specs/ticket_041/questions.md.
+
+  ticket_042_second_oracle_logit_multinomial:
+    status: terminé
+    note: >-
+      Livré le 2026-09-10 (spec specs/score_composite_deux_oracles.md, 20 règles, 40 tests).
+      Le logit multinomial annoncé par C1/C2 existe : `make logit` l'estime à parité stricte
+      (21 variables, même parquet, split par ménage, sample_weight COEP, régularisation en
+      validation croisée groupée DANS le train), et les métriques des deux oracles sortent du
+      même module partagé. Test scellé (13 045 trajets) : logit 0,766 / CEL 0,5954 / GMPCA
+      0,551 / L1 masse 0,0286 contre booster 0,785 / 0,5402 / 0,583 / 0,0269 — l'inversion
+      de Martín-Baos et al. (2023) sur les parts agrégées ne se produit pas, le plafond de
+      référence est bien l'oracle supervisé. `make bi-oracle` publie trois blocs sur le run
+      épinglé : fidélité 16,16 (inchangée), accord désagrégé au logit 899 % de la distance
+      inter-oracles (JSD 0,1847 bit contre 0,0205), désaccord de sens 5,0 % (1 transition de
+      distance sur 20). Poids des deux nouveaux termes à 0 : mesurés et publiés, ils ne
+      sélectionnent aucun prompt (sinon le prompt est ajusté au modèle). Restent : bloc C2
+      (élasticités A/B, exige une paire déjà payée — store car_availability absent de cette
+      machine), la phrase de limite « pas un RUM, ni VOT ni WTP » au chapitre 2, et mesurer
+      s_B sur deux ou trois runs de plus avant d'envisager un poids non nul.
