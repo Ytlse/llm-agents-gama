@@ -16,6 +16,8 @@ import json
 import shutil
 import sqlite3
 import subprocess
+import csv
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -857,6 +859,92 @@ def providers_static() -> ProvidersStatic:
 
 
 # ── Divers ────────────────────────────────────────────────────────────────────
+# ── Sonde des conteneurs (scripts/debug/watch_containers.py) ─────────────────
+DOSSIER_SONDE = REPO_ROOT / "experiments" / ".dashboard" / "conteneurs"
+
+
+@dataclass
+class SondeConteneurs:
+    """Ce que la dernière sonde a relevé. Lecture de fichiers seulement, jamais de réseau."""
+
+    dossier: Path | None = None
+    debut: str | None = None
+    mesures: int = 0
+    chutes: list[str] = field(default_factory=list)
+    appelants: list[dict] = field(default_factory=list)
+    pics: dict[str, int] = field(default_factory=dict)
+    alarmes: list[str] = field(default_factory=list)
+
+    @property
+    def presente(self) -> bool:
+        return self.dossier is not None
+
+
+def _lignes_appelant(chemin: Path) -> dict:
+    """Un fichier `appelant-*.txt` : le service, l'action, et les commandes photographiées.
+
+    On ne garde que les lignes qui ressemblent à une commande docker ou make : ce sont celles
+    qui nomment le coupable. Le reste de la photo est du bruit d'environnement.
+    """
+    nom = chemin.stem  # appelant-<conteneur>-<action>-<HH_MM_SS>
+    morceaux = nom.split("-")
+    action = morceaux[-2] if len(morceaux) >= 3 else "?"
+    heure = morceaux[-1].replace("_", ":") if len(morceaux) >= 2 else "?"
+    service = "-".join(morceaux[1:-2]).replace("llm-agents-gama-", "")
+    commandes = []
+    for ligne in chemin.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if ligne.startswith("#") or not ligne.strip():
+            continue
+        # « pid ppid Jour Mois JJ HH:MM:SS AAAA commande… »
+        morceaux_l = ligne.split()
+        commande = " ".join(morceaux_l[7:]) if len(morceaux_l) > 7 else ligne
+        if re.search(r"docker\s+(compose\s+)?(stop|kill|down|restart)|make\s+\S*(down|stop|restart)", commande):
+            commandes.append(f"pid {morceaux_l[0]} (parent {morceaux_l[1]}) : {commande[:160]}")
+    return {"service": service, "action": action, "heure": heure, "commandes": commandes,
+            "fichier": chemin}
+
+
+def sonde_conteneurs(dossier: Path | None = None) -> SondeConteneurs:
+    """La dernière campagne de la sonde : mesures, chutes, appelants pris en photo."""
+    racine = Path(dossier) if dossier is not None else DOSSIER_SONDE
+    if not racine.is_dir():
+        return SondeConteneurs()
+    campagnes = sorted((p for p in racine.iterdir() if p.is_dir()), key=lambda p: p.name)
+    if not campagnes:
+        return SondeConteneurs()
+    d = campagnes[-1]
+
+    mesures, pics = 0, {}
+    csv_chemin = d / "memoire.csv"
+    if csv_chemin.is_file():
+        try:
+            with csv_chemin.open(encoding="utf-8") as f:
+                for ligne in csv.DictReader(f):
+                    mesures += 1
+                    if ligne.get("octets"):
+                        nom = (ligne["service"] or "").replace("llm-agents-gama-", "")
+                        pics[nom] = max(pics.get(nom, 0), int(ligne["octets"]))
+        except (OSError, ValueError):
+            pass
+
+    alarmes = []
+    log = d / "sonde.log"
+    debut = None
+    if log.is_file():
+        for ligne in log.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if "[ALARME]" in ligne:
+                alarmes.append(ligne)
+            elif debut is None and "début de la sonde" in ligne:
+                debut = ligne.split("|")[0].strip()
+
+    return SondeConteneurs(
+        dossier=d, debut=debut, mesures=mesures, pics=pics, alarmes=alarmes[-6:],
+        chutes=sorted(p.stem.replace("chute-", "").replace("llm-agents-gama-", "")
+                      for p in d.glob("chute-*.txt")),
+        appelants=[_lignes_appelant(p) for p in sorted(d.glob("appelant-*.txt"))[-6:]],
+    )
+
+
 def git_state() -> dict[str, str]:
     def run(*args: str) -> str:
         try:

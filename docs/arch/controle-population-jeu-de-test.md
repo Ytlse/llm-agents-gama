@@ -423,7 +423,7 @@ A1, A2, A4, A9 conformes ; A3, A5, A8 à publier ; A6 et A7 non mesurables faute
 
 Sauvegarde `data/population/sauvegardes/population_1000_AAMAS_v5_2026-09-04.tar.gz` (sha256
 `f141eaf29edc282f…`, sceau + vivier brut et pré-imputé + sélection) ; `config.yaml` repointé.
-Synthèses HTML : `docs/paper/population/synthese_representativite_v4_population_v5_2026-09-04.html`
+Synthèses HTML : `docs/paper/methode/population/synthese_representativite_v4_population_v5_2026-09-04.html`
 et `fabrication_population_v5_2026-09-04.html`.
 
 ## 6 bis. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
@@ -461,7 +461,7 @@ Le vivier, lui, avait 9 marges à corriger (65 ans et + +3,4 pt, étudiants −2
 chaînes d'activités viennent pour la première fois de l'ENTD nationale appariée par classe d'âge
 (la v3 et ses devancières tiraient dans 308 donneurs résidents du 31) ; les écoliers vont à
 l'école. Les runs v3 et v4 ne sont pas comparables. Synthèse HTML :
-`docs/paper/population/synthese_representativite_v3_population_v4_2026-09-03.html`.
+`docs/paper/methode/population/synthese_representativite_v3_population_v4_2026-09-03.html`.
 
 ## 6 ter. La population scellée v3 du 2026-09-03 (historique)
 

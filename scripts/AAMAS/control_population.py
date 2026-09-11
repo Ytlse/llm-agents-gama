@@ -118,7 +118,7 @@ NATURE = {
     "immobile": "chaînes d'activités (ENTD 2008) et export eqasim",
 }
 
-# Lignes du tableau §2.1 de docs/paper/PROTOCOLE_SCIENTIFIQUE.md (v1.5, 2026-09-03), recopiées
+# Lignes du tableau §2.1 de docs/paper/methode/PROTOCOLE_SCIENTIFIQUE.md (v1.5, 2026-09-03), recopiées
 # pour être RECOUPÉES — règle 5 de docs/paper/README.md : chiffre publié = chiffre recoupé.
 # (label, marge de référence, modalité, valeur publiée). Les valeurs du protocole v1.3
 # (51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2) n'avaient pas de source et ont été

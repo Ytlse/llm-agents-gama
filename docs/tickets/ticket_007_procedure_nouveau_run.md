@@ -245,13 +245,13 @@ déclenche davantage d'alarmes de backlog et de 429.
 
 #### Clé Google de la simulation
 
-La simulation tourne sur la **clé 2** (`google2`, `google2_35`) : `docker-compose.yml`
+La simulation tourne sur la **clé 2** (`google_gemini31_key2`, `google_gemini35_key2`) : `docker-compose.yml`
 blanchit `PROVIDER_KEYS__google` pour les conteneurs `api`, `controller` et `worker`. Un
-provider sans clé est exclu de la rotation, donc `google_gemini31` et `google_gemini35`
+provider sans clé est exclu de la rotation, donc `google_gemini31_key1` et `google_gemini35_key1`
 sortent de la cascade — mistral, groq et cerebras restent en place (décision D4).
 
 L'intérêt : les quotas free tier Gemini se comptent par projet **et par modèle**, et les
-mesures du lot C (`common-set-eval`, `heldout-eval`) interrogent `google_gemini31`,
+mesures du lot C (`common-set-eval`, `heldout-eval`) interrogent `google_gemini31_key1`,
 c'est-à-dire la **clé 1**. Elles tournent sur l'hôte, hors conteneurs, et gardent donc
 leurs 500 requêtes/jour intactes pendant que la simulation consomme celles de la clé 2.
 
@@ -464,7 +464,7 @@ l'éval n'est pas complète. Seul le 429 lu dans le corps de la réponse est fia
 
 **Le cooldown est global, les seaux ne le sont pas.** À l'épuisement d'une clé, le script
 écrit une ligne `cooldown` de portée `global` dans `calibration.db` — qui bloque aussi
-`PROVIDER=google2`, dont le seau est pourtant distinct. Pour basculer sur la seconde clé
+`PROVIDER=google_gemini31_key2`, dont le seau est pourtant distinct. Pour basculer sur la seconde clé
 sans attendre le reset, effacer la ligne :
 
 ```bash

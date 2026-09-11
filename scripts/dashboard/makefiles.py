@@ -75,6 +75,13 @@ _META: dict[tuple[str, str], tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     ("root", "up"): ("Docker", (), ()),
     ("root", "down"): ("Docker", (), ()),
     ("root", "restart"): ("Docker", (), ()),
+    ("root", "up-services"): ("Docker", (), ("SERVICES",)),
+    ("root", "stop-services"): ("Docker", (), ("SERVICES",)),
+    ("root", "watch-containers"): ("Docker", ("long",), ("INTERVAL", "SEUIL", "SERVICES", "DUREE")),
+    ("root", "experience-lancer-arret"): ("Plateforme d'expériences", ("long", "llm"), ("EXP", "SERVICES", "REQUIS")),
+    ("root", "experience-ordonnancer"): ("Plateforme d'expériences", ("long",), ("INTERVALLE",)),
+    ("root", "experience-defiler"): ("Plateforme d'expériences", (), ("EXP",)),
+    ("root", "run-arret"): ("Plateforme d'expériences", ("long", "llm"), ("JEU", "SERVICES")),
     ("root", "ps"): ("Docker", (), ()),
     ("root", "logs"): ("Docker", ("long",), ()),
     ("root", "rebuild"): ("Docker", ("long",), ()),
@@ -112,13 +119,30 @@ _META: dict[tuple[str, str], tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     # `run` et `run-offline` purgent Grafana/Prometheus et les compteurs Redis
     # avant de démarrer → danger.
     ("root", "wait-ready"): ("GAMA", ("long",), ()),
-    ("root", "run"): ("GAMA", ("long", "gui", "danger"), ("EXPERIMENT_NAME",)),
+    ("root", "run"): ("GAMA", ("long", "gui", "danger"), ("EXPERIMENT_NAME", "JEU")),
     ("root", "run-offline"): ("GAMA", ("long", "danger"), ("EXPERIMENT_NAME",)),
     ("root", "status"): ("GAMA", (), ()),
     ("root", "stop-run"): ("GAMA", (), ()),
     # racine — pilotage
     ("root", "dashboard"): ("Pilotage", ("long", "gui"), ("DASHBOARD_PORT",)),
+    # racine — plateforme d'expériences (ticket 035) : `python -m experiences` dans le contrôleur
+    ("root", "passerelle-recharger"): ("Plateforme d'expériences", (), ()),
+    ("root", "jeu"): ("Plateforme d'expériences", ("long",), ("POP", "NOM", "JOUR", "CONCURRENCE", "REQUIS")),
+    ("root", "jeu-consulter"): ("Plateforme d'expériences", (), ("NOM", "PERSONNE")),
+    ("root", "jeu-verifier"): ("Plateforme d'expériences", (), ("NOM",)),
+    ("root", "jeu-verifier-jours"): ("Plateforme d'expériences", ("long",), ("NOM", "JOUR", "METHODE", "DECLARER")),
+    ("root", "experience-definir"): ("Plateforme d'expériences", (), ("FICHIER",)),
+    ("root", "experience-estimer"): ("Plateforme d'expériences", (), ("EXP",)),
+    ("root", "experience-lancer"): ("Plateforme d'expériences", ("long",), ("EXP", "REPRENDRE", "ACCEPTER_PERIME", "REQUIS")),
+    ("root", "experience-reprendre"): ("Plateforme d'expériences", ("long",), ("EXP", "ACCEPTER_PERIME", "REQUIS")),
+    ("root", "experience-pause"): ("Plateforme d'expériences", (), ("EXP",)),
+    ("root", "experience-arreter"): ("Plateforme d'expériences", (), ("EXP",)),
+    ("root", "registre"): ("Plateforme d'expériences", (), ("TRIER", "FILTRER")),
+    ("root", "comparer"): ("Plateforme d'expériences", (), ("A", "B")),
     ("root", "providers"): ("Pilotage", (), ("DRY_RUN",)),
+    ("root", "lmstudio-charger"): ("Pilotage", (), ("MODELE", "IDENTIFIANT", "CTX", "RECHARGER")),
+    ("root", "lmstudio-decharger"): ("Pilotage", (), ("MODELE",)),
+    ("root", "lmstudio-etat"): ("Pilotage", (), ()),
     # racine — maintenance
     ("root", "purge_cache"): ("Maintenance", ("danger",), ()),
     ("root", "clean"): ("Maintenance", ("danger", "interactive"), ()),
@@ -203,13 +227,52 @@ def _root_variables() -> dict[str, Variable]:
         "OUT": Variable("OUT", "Écrire le rapport dans ce fichier", "text", placeholder="rapport.md"),
         "LOG_DIR": Variable("LOG_DIR", "Dossier de run pour les notebooks", "choice", _run_choices()),
         "DRY_RUN": Variable("DRY_RUN", "Chiffrer sans exécuter (DRY_RUN=1)", "bool"),
-        "PROVIDER": Variable("PROVIDER", "Fournisseur LLM d'évaluation", "text", placeholder="google2"),
+        "PROVIDER": Variable("PROVIDER", "Fournisseur LLM d'évaluation", "text", placeholder="google_gemini31_key2"),
         "BATCH": Variable("BATCH", "Taille de lot d'évaluation", "text", placeholder="10"),
         "NODES": Variable("NODES", "Nœuds évalués", "text", placeholder="all"),
         "DATASET": Variable("DATASET", "Jeu gelé visé", "text", placeholder="test"),
         "EXPERIMENT_NAME": Variable("EXPERIMENT_NAME", "Expérience GAMA", "text", placeholder="e"),
         "DASHBOARD_PORT": Variable("DASHBOARD_PORT", "Port du présent dashboard", "text", placeholder="8503"),
+        # ── Plateforme d'expériences (ticket 035) ──
+        "POP": Variable("POP", "Population (dossier scellé ou fichier)", "choice", _population_choices()),
+        "NOM": Variable("NOM", "Nom du jeu de déplacements", "text", placeholder="v5_j1"),
+        "JOUR": Variable("JOUR", "Jour simulé (AAAA-MM-JJ)", "text", placeholder="2026-03-16"),
+        "CONCURRENCE": Variable("CONCURRENCE", "Déplacements calculés en parallèle", "text", placeholder="8"),
+        "PERSONNE": Variable("PERSONNE", "Identifiant de personne à consulter", "text", placeholder="418"),
+        "METHODE": Variable("METHODE", "Vérification de l'offre : gtfs ou moteurs", "choice", ("gtfs", "moteurs")),
+        "DECLARER": Variable("DECLARER", "Enregistrer le résultat à côté du jeu (DECLARER=1)", "bool"),
+        "FICHIER": Variable("FICHIER", "Fichier experience.yaml à valider", "text", placeholder="data/experiences/exemple/experience.yaml"),
+        "EXP": Variable("EXP", "Nom de l'expérience", "choice", _experience_choices()),
+        "REPRENDRE": Variable("REPRENDRE", "Reprendre l'exécution en cours (REPRENDRE=1)", "bool"),
+        "ACCEPTER_PERIME": Variable("ACCEPTER_PERIME", "Accepter un jeu périmé (ACCEPTER_PERIME=1)", "bool"),
+        "JEU": Variable("JEU", "Jeu enregistré servi par la simulation (make run)", "choice", _jeu_choices()),
+        "TRIER": Variable("TRIER", "Colonne de tri du registre", "text", placeholder="couverture"),
+        "FILTRER": Variable("FILTRER", "Filtre champ=valeur", "text", placeholder="decideur=gemini"),
+        "A": Variable("A", "Dossier de la première exécution", "text", placeholder="data/experiences/<exp>/executions/<horodatage>"),
+        "B": Variable("B", "Dossier de la seconde exécution", "text", placeholder="data/experiences/<exp>/executions/<horodatage>"),
     }
+
+
+def _population_choices() -> tuple[str, ...]:
+    racine = Path(__file__).resolve().parents[2] / "data" / "population"
+    if not racine.is_dir():
+        return ()
+    scellees = sorted(str(p.relative_to(racine.parents[1])) for p in racine.iterdir() if (p / "MANIFEST.yaml").is_file())
+    return tuple(scellees)
+
+
+def _experience_choices() -> tuple[str, ...]:
+    racine = Path(__file__).resolve().parents[2] / "data" / "experiences"
+    if not racine.is_dir():
+        return ()
+    return tuple(sorted(p.name for p in racine.iterdir() if (p / "experience.yaml").is_file()))
+
+
+def _jeu_choices() -> tuple[str, ...]:
+    racine = Path(__file__).resolve().parents[2] / "data" / "jeux"
+    if not racine.is_dir():
+        return ()
+    return tuple(sorted(p.name for p in racine.iterdir() if (p / "MANIFEST.yaml").is_file()))
 
 
 def _calib_variables() -> dict[str, Variable]:

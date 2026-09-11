@@ -170,3 +170,7 @@ llm_gateway/site/
 .coverage
 coverage.xml
 htmlcov/
+
+# Recueil de PDF de l état de l art (145 Mo, PDF d éditeurs) : seul le README est suivi
+docs/paper/sources/etat_de_lart/*.pdf
+docs/paper/sources/etat_de_lart/.DS_Store

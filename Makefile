@@ -80,6 +80,84 @@ down:
 restart:
 	docker compose restart
 
+.PHONY: watch-containers
+## Sonde la mémoire des conteneurs et capture celui qui tombe. Existe parce que trois runs ont
+## été perdus le 2026-09-07 sur un `controller` tué (code 137) sans trace dans ses journaux et
+## sans OOM signalé par Docker. Écrit memoire.csv, chute-<service>.txt et sonde.log dans
+## experiments/.dashboard/conteneurs/<horodatage>/. Ne modifie aucun conteneur.
+## Usage: make watch-containers [INTERVAL=10] [SEUIL=85] [SERVICES=controller,osmnx1] [DUREE=0]
+watch-containers:
+	$(DASHBOARD_PYTHON) scripts/debug/watch_containers.py \
+	  --interval $(or $(INTERVAL),10) --seuil-pct $(or $(SEUIL),85) \
+	  $(if $(SERVICES),--services $(SERVICES),) $(if $(DUREE),--duree $(DUREE),)
+
+.PHONY: stop-services
+## Arrête SEULEMENT les services nommés, sans supprimer conteneurs ni volumes : rend la RAM
+## (osmnx1 porte 3,5 Gio, chaque OTP 1,2 à 1,5 Gio) et un redémarrage reste rapide.
+## Usage: make stop-services SERVICES="controller api worker otp1 otp2 otp3 osmnx1 eqasim redis"
+stop-services:
+	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à arrêter"; exit 2; }
+	docker compose stop $(SERVICES)
+
+.PHONY: experience-lancer-arret
+## Lance une expérience PUIS arrête les services qu'elle utilisait. L'arrêt est chaîné dans la
+## commande : il a lieu même si le tableau de bord est fermé entre-temps. Le code de retour de
+## l'expérience est conservé, pour qu'un échec reste un échec dans le journal du job.
+## Usage: make experience-lancer-arret EXP=<nom> SERVICES="controller api worker …" [REQUIS="…"]
+## SERVICES = ce qu'on ARRÊTE à la fin ; REQUIS = ce qu'on garantit AVANT de lancer.
+experience-lancer-arret:
+	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à arrêter"; exit 2; }
+	@$(MAKE) --no-print-directory services-pretes REQUIS="$(if $(REQUIS),$(REQUIS),controller)"
+	@set +e; \
+	$(EXPERIENCES_PY) lancer --experience $(EXP); code=$$?; \
+	if $(EXPERIENCES_PY) actives --est-vide; then \
+		echo "[arret-fin] (code $$code) plus aucune expérience active — arrêt de : $(SERVICES)"; \
+		docker compose stop $(SERVICES); \
+	else \
+		echo "[arret-fin] (code $$code) d'autres expériences tiennent une clé — services laissés up (R5) :"; \
+		$(EXPERIENCES_PY) actives; \
+	fi; \
+	exit $$code
+
+.PHONY: run-arret
+## Idem pour un lancement avec GAMA : le service `gama` du profil offline est arrêté aussi.
+## Usage: make run-arret JEU=<jeu> SERVICES="controller api worker …"
+run-arret:
+	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à arrêter"; exit 2; }
+	@set +e; \
+	$(MAKE) run OFFLINE=1 JEU=$(JEU); code=$$?; \
+	echo "[arret-fin] run terminé (code $$code) — arrêt de : $(SERVICES) gama"; \
+	docker compose --profile offline stop $(SERVICES) gama; \
+	exit $$code
+
+.PHONY: up-services services-pretes
+## Démarre SEULEMENT les services nommés, avec leurs dépendances du compose : une expérience
+## n'a pas besoin du monitoring (Prometheus, Grafana, cAdvisor, node-exporter, Flower). Ne
+## rend pas la main sur des services sains — pour cela, voir `services-pretes`.
+## Usage: make up-services SERVICES="controller api worker"
+up-services:
+	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à démarrer"; exit 2; }
+	docker compose up -d $(SERVICES)
+
+## Garantit que les services nommés tournent ET sont sains, puis rend la main. Idempotent :
+## sur une pile déjà debout, docker compose ne recrée rien et la cible passe en une seconde.
+## Chaînée en tête de `experience-lancer` et de `jeu` : plus besoin de penser à démarrer la
+## pile avant de lancer une expérience, depuis le tableau de bord comme depuis un terminal.
+## `--wait` attend les healthchecks : `controller` dépend d'`api`, `otp1-3`, `eqasim` et
+## `osmnx1` en bonne santé, et le chargement des graphes OTP/OSMnx prend plusieurs minutes à
+## froid. ATTENTE borne cette attente pour échouer bruyamment plutôt que de pendre.
+## `--no-recreate` est NON NÉGOCIABLE : un `up -d` nu recrée un conteneur dont la configuration
+## a bougé depuis son démarrage, ce qui TUERAIT le runner d'une expérience qui tourne dans
+## `controller` (lancé par `docker compose exec`). Cette cible est chaînée à chaque lancement,
+## y compris pendant qu'une autre expérience travaille : elle démarre ce qui manque et ne
+## touche à rien de ce qui tourne. Pour appliquer un changement de configuration, c'est
+## `make run` (qui recrée explicitement) ou `docker compose up -d --force-recreate` à la main.
+## Usage: make services-pretes REQUIS="controller api worker" [ATTENTE=600]
+services-pretes:
+	@test -n "$(REQUIS)" || { echo "REQUIS= est vide : nommez les services à garantir"; exit 2; }
+	@echo "🐳 Services requis : $(REQUIS) — démarrage de ce qui manque, sans toucher à ce qui tourne (max $(if $(ATTENTE),$(ATTENTE),600)s)"
+	docker compose up -d --no-recreate --wait --wait-timeout $(if $(ATTENTE),$(ATTENTE),600) $(REQUIS)
+
 ## Rebuild all images from scratch and restart
 rebuild:
 	docker compose build --no-cache
@@ -122,6 +200,10 @@ error:
 warning:
 	python3 scripts/warnings.py $(if $(LOG),$(LOG),experiments/current/app.log)
 
+## Parité des chapitres de l'article : mêmes versions dans article/en, article/fr et article/overleaf. Usage: make paper-parite
+paper-parite:
+	python3 scripts/paper/verifier_parite.py
+
 ## Rapport de santé « agent-ready » du dernier run. Usage: make report [RUN=experiments/archive/<date>] [OUT=rapport.md]
 report:
 	python3 scripts/debug/run_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
@@ -134,8 +216,8 @@ capacity:
 init:
 	python3 scripts/debug/init_report.py $(if $(RUN),$(RUN),) $(if $(OUT),--out $(OUT),)
 
-## Met à jour config/llm_gateway/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
 .PHONY: providers
+## Met à jour config/llm_gateway/providers.yaml depuis les quotas réels (headers x-ratelimit + Cloud Quotas Google). Usage: make providers [DRY_RUN=1]
 providers:
 	python3 scripts/providers/refresh.py $(if $(DRY_RUN),--dry-run,)
 
@@ -233,7 +315,18 @@ DASHBOARD_PORT   ?= 8503
 # dessus. Le laisser vide ferait diverger l'UI et les couleurs de texte.
 DASHBOARD_THEME  ?= light
 
-## Tableau de bord de pilotage : cibles make, tickets, métriques de run.
+.PHONY: help
+## Liste les cibles documentées : le nom de chaque cible et le bloc `##` qui la précède.
+## Utile depuis que le tableau de bord n'affiche plus le catalogue des cibles.
+help:
+	@awk '\
+	  /^## / { if (doc == "") doc = substr($$0, 4); next } \
+	  /^\.PHONY/ { next } \
+	  /^[a-zA-Z0-9_.-]+:/ { if (doc != "") { split($$0, cible, ":"); printf "  %-24s %s\n", cible[1], doc }; doc = ""; next } \
+	  /^[[:space:]]*$$/ { doc = "" } \
+	' $(firstword $(MAKEFILE_LIST))
+
+## Tableau de bord de pilotage : état des services, expériences en cours, tickets, métriques de run.
 ## Usage: make dashboard [DASHBOARD_THEME=dark] [DASHBOARD_PORT=8503] [DASHBOARD_PYTHON=/chemin/python]
 dashboard:
 	@test -x $(DASHBOARD_PYTHON) || { \
@@ -509,7 +602,7 @@ osmnx-perimeter-graph:
 ##        PRECEDENT=data/population/population_1000_AAMAS_v3 VIVIER=docs/traces/<d>_controle_vivier/report.json \
 ##        AUDIT=docs/traces/<d>_audit/audit_perimetre.json OUT=docs/traces/<d>/synthese_representativite_v3.html \
 ##        VELO=docs/traces/<d>/velo_cohorte.json VELO_VIVIER=docs/traces/<d>/velo_vivier.json \
-##        COPIE=docs/paper/population/synthese_representativite_v3_population_v4_<date>.html
+##        COPIE=docs/paper/methode/population/synthese_representativite_v3_population_v4_<date>.html
 ## Les deux rapports vélo viennent de `enrich_personal_bike <population> --dry-run --check --rapport-json <fichier>`
 ## sur la cohorte scellée et sur le vivier pré-imputé (Temp/4_zone_enriched) : la pente se juge sur le vivier.
 synthese-representativite:
@@ -527,7 +620,7 @@ synthese-representativite:
 ## synthèse de représentativité plus la méta du graphe OSMnx et les mesures du graphe.
 ##   make synthese-generation-population SCEAU=data/population/population_1000_AAMAS_v4 \
 ##        VIVIER=… AUDIT=… VELO=… VELO_VIVIER=… MESURES_GRAPHE=docs/traces/<d>_mesures_graphe_perimetre_v4/mesures.json \
-##        OUT=docs/traces/<d>/fabrication_population.html COPIE=docs/paper/population/fabrication_population_v4_<date>.html
+##        OUT=docs/traces/<d>/fabrication_population.html COPIE=docs/paper/methode/population/fabrication_population_v4_<date>.html
 synthese-generation-population:
 	@test -n "$(SCEAU)" || { echo "SCEAU=<dossier scellé> obligatoire"; exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.AAMAS.synthese_generation_population --sceau $(SCEAU) \
@@ -777,10 +870,10 @@ terminal-time:
 avancement:
 	$(SYNTHESIS_PYTHON) -m scripts.synthesis.render_avancement $(if $(CHECK),--check,)
 
+.PHONY: ab-detail
 ## Détail par sous-catégorie d'un A/B de jeux gelés — un mini-graphe par mode, une
 ## courbe par bras, plus les tableaux L1. Reconstruit depuis les décisions DÉJÀ dans le
 ## store : aucun appel LLM. Usage: make ab-detail [DATASET=val|screen]
-.PHONY: ab-detail
 ab-detail:
 	$(SYNTHESIS_PYTHON) -m scripts.synthesis.build_ab_detail --dataset $(if $(DATASET),$(DATASET),val)
 	$(if $(DATASET),,$(SYNTHESIS_PYTHON) -m scripts.synthesis.build_ab_detail --dataset screen)
@@ -913,7 +1006,29 @@ ifneq ($(CACHE),)
 	@perl -0pi -e 's/^(cache:\n(?:.*\n)*?\s*enabled:).*/$$1 $(if $(filter 0,$(CACHE)),false,true)/m' $(APP_CONFIG)
 	@echo "💾 Cache sémantique LLM : $(if $(filter 0,$(CACHE)),DÉSACTIVÉ — chaque décision sera journalisée (~4x plus d'appels),activé) — écrit dans $(APP_CONFIG)"
 endif
+ifneq ($(JEU),)
+	@# Ticket 035 (spec 04, G2) : la simulation consomme le jeu enregistré data/jeux/$(JEU) —
+	@# régime nominal sans appel moteur. Écrit `data.jeu_enregistre` dans $(APP_CONFIG) ; les
+	@# tolérances horaires doivent y être déclarées (bloc commenté).
+	@test -f data/jeux/$(JEU)/MANIFEST.yaml || { echo "❌ Jeu introuvable : data/jeux/$(JEU)/MANIFEST.yaml (préparez-le : make jeu POP=… NOM=$(JEU))"; exit 1; }
+	@grep -q '^  jeu_tolerances_horaires:' $(APP_CONFIG) || { echo "❌ data.jeu_tolerances_horaires n'est pas déclaré dans $(APP_CONFIG) — décommentez et validez le bloc (spec 04, G5)"; exit 1; }
+	@perl -0pi -e 's/^  #? ?jeu_enregistre:.*\n//m; s/^(data:\n)/$$1  jeu_enregistre: \/app\/data\/jeux\/$(JEU)\n/m' $(APP_CONFIG)
+	@echo "📼 Jeu enregistré : data/jeux/$(JEU) — écrit dans $(APP_CONFIG)"
+else
+	@if grep -q '^  jeu_enregistre:' $(APP_CONFIG); then \
+		perl -0pi -e 's/^  jeu_enregistre:.*\n//m' $(APP_CONFIG); \
+		echo "📼 Aucun jeu désigné : calcul en vol (data.jeu_enregistre retiré de $(APP_CONFIG))"; \
+	fi
+endif
 	@$(MAKE) up
+	@# Les réglages de $(APP_CONFIG) sont lus au DÉMARRAGE du contrôleur, jamais à chaud : tant que
+	@# le fichier diffère de la copie appliquée au dernier lancement (.config.yaml.applique), le
+	@# contrôleur est recréé — CACHE=, JEU= et toute édition manuelle prennent ainsi effet
+	@# (décision de l'auteur du 2026-09-06, question 17 du ticket 035).
+	@if ! cmp -s $(APP_CONFIG) .config.yaml.applique; then \
+		echo "♻️  $(APP_CONFIG) a changé depuis le dernier lancement : recréation du contrôleur"; \
+		docker compose up -d --force-recreate --no-deps controller && cp $(APP_CONFIG) .config.yaml.applique; \
+	fi
 	@$(MAKE) wait-ready
 ifneq ($(OFFLINE),)
 	@if pgrep -f "launch_headless.py" > /dev/null; then \
@@ -935,10 +1050,157 @@ else
 	fi
 endif
 
-## Alias : make run-offline == make run OFFLINE=1
 .PHONY: run-offline
+## Alias : make run-offline == make run OFFLINE=1
 run-offline:
 	@$(MAKE) run OFFLINE=1
+
+## ── Plateforme d'expériences (ticket 035) ──────────────────────────────────────────────
+## Tout passe par `python -m experiences` dans le conteneur controller (services requis pour
+## préparer un jeu — OTP/OSMnx — et pour un décideur passerelle ; un décideur local n'a besoin
+## de rien). Design : docs/arch/plateforme-experiences.md.
+EXPERIENCES_PY = docker compose exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml controller python -m experiences
+
+## Prépare un jeu de déplacements enregistré. Usage : make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1 [JOUR=2026-03-16] [CONCURRENCE=8] [REQUIS="…"]
+## Les moteurs de routage (défaut : controller otp1 otp2 otp3 osmnx1) sont démarrés et attendus sains d'abord.
+jeu:
+	@test -n "$(POP)" -a -n "$(NOM)" || { echo "Usage : make jeu POP=<dossier ou fichier population> NOM=<nom du jeu> [JOUR=AAAA-MM-JJ]"; exit 1; }
+	@mkdir -p data/jeux
+	@$(MAKE) --no-print-directory services-pretes REQUIS="$(if $(REQUIS),$(REQUIS),controller otp1 otp2 otp3 osmnx1)"
+	$(EXPERIENCES_PY) preparer-jeu --population $(POP:data/population/%=/data/eqasim-output/%) --nom $(NOM) $(if $(JOUR),--jour $(JOUR),) $(if $(CONCURRENCE),--concurrence $(CONCURRENCE),)
+
+## Consulte un jeu : make jeu-consulter NOM=v5_j1 [PERSONNE=418]
+jeu-consulter:
+	$(EXPERIENCES_PY) consulter-jeu --nom $(NOM) $(if $(PERSONNE),--personne $(PERSONNE),)
+
+## Vérifie la péremption d'un jeu : make jeu-verifier NOM=v5_j1
+jeu-verifier:
+	$(EXPERIENCES_PY) verifier-jeu --nom $(NOM)
+
+## L'offre TC d'un autre jour est-elle celle du jeu ? METHODE=gtfs (défaut : les courses proposées
+## existent-elles ce jour dans les feeds, validité par déplacement, aucun service requis) ou
+## METHODE=moteurs (OTP sur un échantillon). DECLARER=1 écrit EQUIVALENCES.yaml à côté du jeu.
+## make jeu-verifier-jours NOM=v5_j1 JOUR=2026-03-17 [METHODE=gtfs|moteurs] [ECHANTILLON=100] [DECLARER=1]
+jeu-verifier-jours:
+	$(EXPERIENCES_PY) verifier-jours --nom $(NOM) --jour $(JOUR) $(if $(METHODE),--methode $(METHODE),) $(if $(ECHANTILLON),--echantillon $(ECHANTILLON),) $(if $(DECLARER),--declarer,)
+
+## Recharge la passerelle LLM (api + worker) — nécessaire après un ajout dans mobility_llm/src/mobility_llm/prompts/prompts.yaml
+passerelle-recharger:
+	docker compose restart api worker
+
+## LM Studio (modèles locaux, hôte) — charge un modèle avec un contexte suffisant pour la passerelle.
+## LM Studio charge à 4 096 jetons par défaut : trop court pour un lot de 2 agents (~4 400 de prompt + réponse).
+## L'identifiant est celui de `lms ls` (ex. mistralai/mistral-small-3.2) = default_model dans providers.yaml.
+## IDENTIFIANT=<alias> charge le modèle sous un autre nom d'API : requis quand le même identifiant existe chez
+## un fournisseur distant (qwen/qwen3.8-27b est aussi servi par Groq) — l'alias est alors le default_model local.
+## RECHARGER=1 décharge d'abord ce qui est en mémoire sous ce nom (contexte trop court, mauvais identifiant).
+## Usage : make lmstudio-charger MODELE=mistralai/mistral-small-3.2 [CTX=16384] [RECHARGER=1]
+##         make lmstudio-charger MODELE=qwen/qwen3.8-27b IDENTIFIANT=qwen3.8-27b-local
+LMS ?= $(shell command -v lms 2>/dev/null || echo $(HOME)/.lmstudio/bin/lms)
+CTX ?= 16384
+lmstudio-charger:
+	@test -n "$(MODELE)" || { echo "❌ MODELE= requis (identifiant tel que 'lms ls' le donne, ex. mistralai/mistral-small-3.2)"; exit 1; }
+	@command -v $(LMS) >/dev/null || { echo "❌ CLI '$(LMS)' introuvable — installez-la depuis LM Studio (Developer → lms) ou passez LMS=/chemin/vers/lms"; exit 1; }
+	@if [ -n "$(RECHARGER)" ]; then \
+	  for id in "$(or $(IDENTIFIANT),$(MODELE))" $(if $(IDENTIFIANT),"$(MODELE)",); do \
+	    if $(LMS) ps 2>/dev/null | awk '{print $$1}' | grep -q -x -F "$$id"; then echo "⏏️  Déchargement de $$id…"; $(LMS) unload "$$id"; fi; \
+	  done; \
+	fi
+	@if $(LMS) ps 2>/dev/null | awk '{print $$1}' | grep -q -x -F "$(or $(IDENTIFIANT),$(MODELE))"; then \
+	  echo "ℹ️  $(or $(IDENTIFIANT),$(MODELE)) est déjà chargé — pour changer son contexte : relancer avec RECHARGER=1"; \
+	else \
+	  echo "⏳ Chargement de $(MODELE) sous l'identifiant $(or $(IDENTIFIANT),$(MODELE)) (contexte $(CTX) jetons)…"; \
+	  $(LMS) load "$(MODELE)" -c $(CTX) -y $(if $(IDENTIFIANT),--identifier "$(IDENTIFIANT)",); \
+	fi
+	@$(LMS) ps
+
+## Décharge un modèle de LM Studio (rend la mémoire) : make lmstudio-decharger MODELE=<identifiant chargé, colonne IDENTIFIER de `lms ps`>
+lmstudio-decharger:
+	@test -n "$(MODELE)" || { echo "❌ MODELE= requis (identifiant chargé, colonne IDENTIFIER de 'lms ps')"; exit 1; }
+	@command -v $(LMS) >/dev/null || { echo "❌ CLI '$(LMS)' introuvable — installez-la depuis LM Studio (Developer → lms) ou passez LMS=/chemin/vers/lms"; exit 1; }
+	$(LMS) unload "$(MODELE)"
+	@$(LMS) ps
+
+## État LM Studio : modèles chargés (identifiant, contexte) et instances lmstudio_* vues par la passerelle
+lmstudio-etat:
+	@command -v $(LMS) >/dev/null && $(LMS) ps || echo "CLI lms introuvable"
+	@echo "— Passerelle (/health), instances lmstudio_* :"
+	@curl -sf localhost:8000/health | python3 -c "import sys,json; p=json.load(sys.stdin).get('providers',{}); [print(f'  {k:36s} available={v.get(\"available\")}  rpm={v.get(\"current_rpm\")}') for k,v in sorted(p.items()) if k.startswith('lmstudio_')] or print('  aucune instance lmstudio_* (PROVIDER_KEYS__lmstudio absent de .env ? make passerelle-recharger ?)')" || echo "  passerelle injoignable (make up ?)"
+
+## Valide et range une expérience : make experience-definir FICHIER=chemin/experience.yaml
+experience-definir:
+	$(EXPERIENCES_PY) definir $(FICHIER)
+
+## Estime le coût avant lancement : make experience-estimer EXP=<nom>
+experience-estimer:
+	$(EXPERIENCES_PY) estimer --experience $(EXP)
+
+## Lance (ou reprend avec REPRENDRE=1) une expérience sans simulateur : make experience-lancer EXP=<nom> [REPRENDRE=1] [REQUIS="controller api worker"] [ACCEPTER_PERIME=1] [ATTENDRE_FENETRE=1]
+## Les services de REQUIS (défaut : `controller`) sont démarrés et attendus sains avant le lancement.
+## ATTENDRE_FENETRE=1 : à l'épuisement du quota, dort en process jusqu'à minuit UTC puis repart seul (R4).
+experience-lancer:
+	@mkdir -p data/experiences
+	@$(MAKE) --no-print-directory services-pretes REQUIS="$(if $(REQUIS),$(REQUIS),controller)"
+	$(EXPERIENCES_PY) lancer --experience $(EXP) $(if $(REPRENDRE),--reprendre,) $(if $(ACCEPTER_PERIME),--accepter-perime,) $(if $(ATTENDRE_FENETRE),--attendre-fenetre,)
+
+experience-reprendre:
+	@$(MAKE) experience-lancer EXP=$(EXP) REPRENDRE=1 REQUIS="$(REQUIS)"
+
+## File d'attente par clé (spec parallelisation_experiences) :
+## experience-file            expériences en attente d'une clé (FIFO)
+## experience-actives         expériences qui tiennent une clé (parallèle en cours)
+## experience-defiler EXP=<n> retire une expérience de la file avant sa promotion
+experience-file:
+	$(EXPERIENCES_PY) file
+experience-actives:
+	$(EXPERIENCES_PY) actives
+experience-defiler:
+	$(EXPERIENCES_PY) defiler --experience $(EXP)
+
+## Ordonnanceur (HÔTE) : réconcilie les fantômes et démarre les expériences en file dès qu'une
+## clé se libère. À laisser tourner (le tableau de bord le supervise aussi). Ctrl-C pour arrêter.
+experience-ordonnancer:
+	cd llm-agents && .venv/bin/python -m experiences ordonnancer $(if $(INTERVALLE),--intervalle $(INTERVALLE),)
+
+## Pause / arrêt propre de l'exécution en cours : make experience-pause EXP=<nom> · make experience-arreter EXP=<nom>
+experience-pause:
+	$(EXPERIENCES_PY) pause --experience $(EXP)
+experience-arreter:
+	$(EXPERIENCES_PY) arreter --experience $(EXP)
+
+## Rapproche decisions.jsonl du jeu (aucun déplacement sauté ?) : make experience-erreurs EXP=<nom> [EXEC=<dossier>]
+experience-erreurs:
+	$(EXPERIENCES_PY) erreurs $(if $(EXEC),$(EXEC),--experience $(EXP))
+
+## Aligne les noms d'expériences sur leurs paramètres (spec nommage-canonique-experiences) :
+##   make experiences-renommer                            vérifie et dit ce qui bougerait
+##   make experiences-renommer APPLIQUER=1 FUSIONNER=1     renomme, et réunit les définitions identiques
+experiences-renommer:
+	$(PKG_PYTHON) scripts/migrations/renommer_experiences.py $(if $(APPLIQUER),--appliquer,) $(if $(FUSIONNER),--fusionner,)
+
+## Registre des expériences et exécutions : make registre [TRIER=couverture] [FILTRER=decideur=gemini] [TOUT=1]
+## TOUT=1 réaffiche les expériences archivées ou invalidées (masquées par défaut).
+registre:
+	$(EXPERIENCES_PY) registre $(if $(TRIER),--trier $(TRIER),) $(if $(FILTRER),--filtrer $(FILTRER),) $(if $(TOUT),--inclure-masquees,)
+
+## Statut de toutes les expériences (masquées comprises) : make experience-statuts
+experience-statuts:
+	$(EXPERIENCES_PY) statuts
+
+## Pose le statut d'une expérience SANS RIEN SUPPRIMER ni déplacer :
+##   make experience-statuer EXP=<nom> STATUT=archivee|invalide|actif MOTIF="..." [REF=specs/x.md]
+## Les exécutions, traces, scores et empreintes restent sur le disque ; seule la visibilité change.
+experience-statuer:
+	@test -n "$(EXP)" || (echo "ERREUR : EXP=<nom d'expérience> manquant" >&2; exit 2)
+	@test -n "$(STATUT)" || (echo "ERREUR : STATUT=archivee|invalide|actif manquant" >&2; exit 2)
+	$(EXPERIENCES_PY) statuer $(EXP) $(STATUT) $(if $(MOTIF),--motif "$(MOTIF)",) $(if $(REF),--reference $(REF),)
+
+## Compare deux exécutions (refuse si non comparables) : make comparer A=<dossier> B=<dossier> [TOUT=1]
+## Refuse aussi d'apparier une expérience invalidée ou archivée ; TOUT=1 force en rappelant le motif.
+comparer:
+	$(EXPERIENCES_PY) comparer $(A) $(B) $(if $(TOUT),--inclure-invalides,)
+
+.PHONY: services-pretes passerelle-recharger jeu jeu-consulter lmstudio-charger lmstudio-decharger lmstudio-etat jeu-verifier jeu-verifier-jours experience-definir experience-estimer experience-lancer experience-reprendre experience-pause experience-arreter experience-erreurs experience-file experience-actives experience-defiler experience-ordonnancer experiences-renommer registre comparer experience-statuts experience-statuer
 
 ## Régénère la base de prompts d'itinéraire SANS simulation ni appel LLM (mode rapide).
 ## ⛔ ABANDONNÉ POUR LA CALIBRATION (2026-08-17) : sans appel LLM, la chaîne de véhicules
@@ -962,9 +1224,9 @@ prompt-base:
 		--day $(DAY) \
 		$(if $(LIMIT),--limit $(LIMIT),)
 
+.PHONY: status
 ## Statut du run GAMA en cours. Sortie parsable clé=valeur :
 ## run=actif|inactif, mode=offline|ihm, pid, current=<cible du symlink experiments/current>
-.PHONY: status
 status:
 	@if pgrep -f "launch_headless.py" > /dev/null; then \
 		echo "run=actif mode=offline pid=$$(pgrep -f launch_headless.py | head -1)"; \
@@ -973,76 +1235,13 @@ status:
 	else \
 		echo "run=inactif"; \
 	fi
-## ── Plateforme d'expériences (ticket 035) ──────────────────────────────────────────────
-## Tout passe par `python -m experiences` dans le conteneur controller (services requis pour
-## préparer un jeu — OTP/OSMnx — et pour un décideur passerelle ; un décideur local n'a besoin
-## de rien). Design : docs/arch/plateforme-experiences.md.
-EXPERIENCES_PY = docker compose exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml controller python -m experiences
-
-## Prépare un jeu de déplacements enregistré. Usage : make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1 [JOUR=2026-03-16] [CONCURRENCE=8]
-jeu:
-	@test -n "$(POP)" -a -n "$(NOM)" || { echo "Usage : make jeu POP=<dossier ou fichier population> NOM=<nom du jeu> [JOUR=AAAA-MM-JJ]"; exit 1; }
-	@mkdir -p data/jeux
-	$(EXPERIENCES_PY) preparer-jeu --population $(POP:data/population/%=/data/eqasim-output/%) --nom $(NOM) $(if $(JOUR),--jour $(JOUR),) $(if $(CONCURRENCE),--concurrence $(CONCURRENCE),)
-
-## Consulte un jeu : make jeu-consulter NOM=v5_j1 [PERSONNE=418]
-jeu-consulter:
-	$(EXPERIENCES_PY) consulter-jeu --nom $(NOM) $(if $(PERSONNE),--personne $(PERSONNE),)
-
-## Vérifie la péremption d'un jeu : make jeu-verifier NOM=v5_j1
-jeu-verifier:
-	$(EXPERIENCES_PY) verifier-jeu --nom $(NOM)
-
-## L'offre TC d'un autre jour est-elle celle du jeu ? METHODE=gtfs (défaut : les courses proposées
-## existent-elles ce jour dans les feeds, validité par déplacement, aucun service requis) ou
-## METHODE=moteurs (OTP sur un échantillon). DECLARER=1 écrit EQUIVALENCES.yaml à côté du jeu.
-## make jeu-verifier-jours NOM=v5_j1 JOUR=2026-03-17 [METHODE=gtfs|moteurs] [ECHANTILLON=100] [DECLARER=1]
-jeu-verifier-jours:
-	$(EXPERIENCES_PY) verifier-jours --nom $(NOM) --jour $(JOUR) $(if $(METHODE),--methode $(METHODE),) $(if $(ECHANTILLON),--echantillon $(ECHANTILLON),) $(if $(DECLARER),--declarer,)
-
-## Recharge la passerelle LLM (api + worker) — nécessaire après un ajout dans mobility_llm/src/mobility_llm/prompts/prompts.yaml
-passerelle-recharger:
-	docker compose restart api worker
-
-## Valide et range une expérience : make experience-definir FICHIER=chemin/experience.yaml
-experience-definir:
-	$(EXPERIENCES_PY) definir $(FICHIER)
-
-## Estime le coût avant lancement : make experience-estimer EXP=<nom>
-experience-estimer:
-	$(EXPERIENCES_PY) estimer --experience $(EXP)
-
-## Lance (ou reprend avec REPRENDRE=1) une expérience sans simulateur : make experience-lancer EXP=<nom> [REPRENDRE=1] [ACCEPTER_PERIME=1]
-experience-lancer:
-	@mkdir -p data/experiences
-	$(EXPERIENCES_PY) lancer --experience $(EXP) $(if $(REPRENDRE),--reprendre,) $(if $(ACCEPTER_PERIME),--accepter-perime,)
-
-experience-reprendre:
-	@$(MAKE) experience-lancer EXP=$(EXP) REPRENDRE=1
-
-## Pause / arrêt propre de l'exécution en cours : make experience-pause EXP=<nom> · make experience-arreter EXP=<nom>
-experience-pause:
-	$(EXPERIENCES_PY) pause --experience $(EXP)
-experience-arreter:
-	$(EXPERIENCES_PY) arreter --experience $(EXP)
-
-## Registre des expériences et exécutions : make registre [TRIER=couverture] [FILTRER=decideur=gemini]
-registre:
-	$(EXPERIENCES_PY) registre $(if $(TRIER),--trier $(TRIER),) $(if $(FILTRER),--filtrer $(FILTRER),)
-
-## Compare deux exécutions (refuse si non comparables) : make comparer A=<dossier> B=<dossier>
-comparer:
-	$(EXPERIENCES_PY) comparer $(A) $(B)
-
-.PHONY: passerelle-recharger jeu jeu-consulter jeu-verifier jeu-verifier-jours experience-definir experience-estimer experience-lancer experience-reprendre experience-pause experience-arreter registre comparer
-
 	@echo "current=$$(readlink experiments/current 2>/dev/null || echo '-')"
 
+.PHONY: stop-run
 ## Arrête le run GAMA en cours SANS toucher au reste de la pile (api, worker, redis…).
 ## Offline : tue le launcher dans le conteneur controller puis stoppe le service gama
 ## (GAMA Server tue l'expérience dont le client s'est déconnecté). IHM : SIGTERM à GAMA.
 ## Pour tout arrêter, y compris les services : make down.
-.PHONY: stop-run
 stop-run:
 	@if docker compose ps --status running controller 2>/dev/null | grep -q controller; then \
 		docker compose exec -T controller pkill -f launch_headless.py 2>/dev/null || true; \

@@ -29,7 +29,7 @@ phase 2 le 2026-07-31 (§7), réglage des hyperparamètres le 2026-08-30 (§9).
 | E6 | Split **par ménage** (`hh_id = ZF_ECH`) | Un split par déplacement fuit : plusieurs déplacements du même individu |
 | E7 | Pas de `is_unbalance` / `class_weight` | Détruit la calibration (cf. précision vélo 0.14 pour rappel 0.61 du smoke test). Métriques de sélection : log-loss, ECE, L1 sur parts par cellule — **pas** l'accuracy |
 | E8 | Contrat de features versionné `feature_spec.json` | Seule garantie contre le train/serve skew — voir §2 |
-| E9 | Évaluateur **pur Python** du booster exporté au runtime | Le conteneur `controller` est un `python:3.12-slim` sans `libgomp1` : `import lightgbm` y échouerait. Voir §3 |
+| E9 | ~~Évaluateur **pur Python** du booster exporté au runtime~~ — **révisée le 2026-09-08 : option A retenue** | L'évaluateur n'a jamais été écrit et bloquait les expériences à décideur modèle. `lightgbm==4.7.0` est désormais dans `llm-agents/requirements.txt` et `libgomp1` dans le `Dockerfile`. Voir §3 |
 | E10 | Renormalisation sur le choice set offert par OTP | C'est l'hypothèse **IIA**, assumée et documentée |
 | E11 | **Réglages cherchés, pas posés** — arbres peu profonds et nombreux | Banc `tune_mode_choice_policy.py`, 96 configurations distinctes en CV groupée par ménage *dans le train*. `num_leaves` 31 → 5 : le vélo gagne significativement en vraisemblance sans que le log-loss global ni la L1 des parts modales bougent. Voir §9 |
 
@@ -228,7 +228,7 @@ Deux options :
 
 - **A** — ajouter `lightgbm` aux dépendances **et** `libgomp1` au `Dockerfile`. Simple,
   au prix d'un rebuild d'image et d'une dépendance C++ dans le conteneur de simulation.
-- **B** (retenue, E9) — exporter le booster (`dump_model()`) en JSON et écrire un
+- **B** — exporter le booster (`dump_model()`) en JSON et écrire un
   évaluateur pur Python (~120 lignes : traversée d'arbres, routage des valeurs manquantes,
   catégorielles). Aucune dépendance ajoutée, artefact diffable en git, coût négligeable
   devant les ~100 ms d'un appel OTP.
@@ -236,6 +236,20 @@ Deux options :
 **Garde-fou obligatoire de l'option B** : un test de parité prédit 5 000 lignes held-out
 avec LightGBM et avec l'évaluateur, et exige `max|Δ| < 1e-9`. Sans ce test, l'approche ne
 tient pas et on bascule sur l'option A.
+
+### Révision du 2026-09-08 — l'option A l'emporte
+
+B avait été retenue, mais son évaluateur n'a jamais été écrit. `DecideurModele` appelle
+`load_policy`, qui importe LightGBM : toute expérience à décideur modèle échouait au
+démarrage dans le `controller`. Le chiffrage a par ailleurs vidé l'argument du poids —
+le wheel `manylinux` aarch64 de `lightgbm==4.7.0` pèse **3,3 Mo** et ne compile rien,
+`libgomp1` en ajoute ~200 Ko, `numpy` et `scipy` étaient déjà là : **+0,05 %** sur une
+image de 7,02 Go.
+
+**A est donc retenue** : `lightgbm==4.7.0` dans `llm-agents/requirements.txt` (version
+épinglée sur le `booster.version` de l'artefact) et `libgomp1` dans le `Dockerfile` — qui
+sert aussi au service `osmnx1`, rebâti avec. `dump_model` reste dans l'artefact : il ne
+coûte rien et garde B ouverte si le poids devenait un jour un problème.
 
 ---
 
@@ -395,7 +409,8 @@ soupçonner une fuite : `od_km` à 37 % est attendu et mode-neutre par construct
 `format_version` (structure), `spec_version` (contrat de features), l'ordre exact des 21
 variables, la table modalité → code de chaque catégorielle, l'ordre des 4 classes, le bloc
 `geo_reference` recopié, les métriques, et le booster sous **deux** formes : `dump_model`
-pour l'évaluateur pur Python de la phase 3b (E9), et `model_text` pour un rechargement
+(prévu pour l'évaluateur pur Python de la phase 3b, abandonné avec E9 le 2026-09-08 mais
+conservé dans l'artefact), et `model_text` pour un rechargement
 exact via `lgb.Booster(model_str=…)` là où la bibliothèque est disponible. Un consommateur
 prédit sans jamais relire le parquet — c'est ce qu'a fait l'action A8 (§8). Taille : 6,8 Mo
 indentés.
@@ -411,9 +426,9 @@ spec (probabilités ≥ 0 sommant à 1 sur les 4 classes). Aucun ré-entraîneme
 modèle : skip propre si l'artefact est absent, modèle jouet de quelques arbres sinon.
 
 **Reste à faire** — la carte de règles annoncée en phase 2 (arbre de profondeur 4 +
-SHAP, instrument d'interprétation seulement) n'est pas produite. `lightgbm` et
-`scikit-learn` sont déclarés dans `scripts/requirements.txt`, volontairement **pas** dans
-`llm-agents/requirements.txt` (E9).
+SHAP, instrument d'interprétation seulement) n'est pas produite. `scikit-learn` reste
+déclaré dans le seul `scripts/requirements.txt` ; `lightgbm==4.7.0` est en revanche passé
+dans `llm-agents/requirements.txt` le 2026-09-08 (révision de E9, §3).
 
 ---
 
@@ -537,10 +552,12 @@ est un tirage unique de 13 045 lignes. La CV a servi à choisir — c'est le pro
 test est le chiffre de généralisation, et il donne la borne prudente.
 
 **Prix payé** — 6 000 arbres au lieu de 560, artefact 18,9 Mo au lieu de 12,2, prédiction
-43,9 µs/ligne au lieu de 9,9. Sans conséquence pour le pipeline actuel ; le point de
-vigilance est **l'évaluateur pur Python de la phase 3b** (E9), pas encore écrit, qui
-traversera environ six fois plus de travail. Repli documenté si ce coût gêne :
-`num_leaves = 10`, 2 688 arbres, les trois quarts du gain vélo.
+43,9 µs/ligne au lieu de 9,9. Sans conséquence pour le pipeline actuel. Le point de
+vigilance était **l'évaluateur pur Python de la phase 3b** (E9), qui aurait traversé environ
+six fois plus de travail ; il tombe avec la révision du 2026-09-08 (§3), le `controller`
+utilisant désormais LightGBM lui-même. Mesuré sur l'expérience `Light_GBM` (1 000 personnes,
+2 645 déplacements exploitables) : **26 s de bout en bout**. Repli documenté si le coût
+gênait malgré tout : `num_leaves = 10`, 2 688 arbres, les trois quarts du gain vélo.
 
 **Ce que le réglage ne corrige pas** — le vélo reste à 1,2 % en mode élu pour 4,0 %
 observés, avant comme après : c'est une propriété de l'argmax sur une classe rare (§7), pas

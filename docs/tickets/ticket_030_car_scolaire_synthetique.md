@@ -2,7 +2,7 @@
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité. Ce qui suit est une **spécification**. Issu du rapport de périmètre du 2026-09-03
-> (`docs/paper/population/RAPPORT_PERIMETRE_453_COMMUNES.html`, § 6 et action T7) : les GTFS
+> (`docs/paper/methode/population/RAPPORT_PERIMETRE_453_COMMUNES.html`, § 6 et action T7) : les GTFS
 > Tisséo, TER et liO couvrent toute l'offre régulière des 453 communes, mais aucun ne porte le
 > transport scolaire, qui est l'essentiel des transports collectifs des 2ᵉ et 3ᵉ couronnes.
 

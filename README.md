@@ -4,7 +4,7 @@ Modeling realistic human behavior using generative agents in a multimodal transp
 
 ## Architecture
 
-![architecture](docs/paper/raw_assets/architecture.png)
+![architecture](docs/paper/figures/architecture.png)
 
 Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -22,6 +22,8 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 | [docs/setup/quickstart.md](docs/setup/quickstart.md) | Lancer la simulation, ports, scripts disponibles |
 
 ### Architecture par sujet
+
+- [Plateforme d'expériences](docs/arch/plateforme-experiences.md) — jeu de déplacements enregistré, décision unique, exécution sans simulateur, registre (ticket 035) ; commandes dans le [guide de démarrage](docs/setup/quickstart.md#plateforme-dexpériences-ticket-035)
 
 | Document | Description |
 |----------|-------------|

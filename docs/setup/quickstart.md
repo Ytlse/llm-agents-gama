@@ -23,7 +23,7 @@ llm-agents/.venv/bin/python -m pip install -e ./mobility_core -e ./llm_gateway[t
 
 Puis `make test-all` (les trois suites + contrats d'architecture), `make lint`, `make typecheck`.
 Les images Docker `api`/`worker` embarquent les trois paquets (`llm_gateway/Dockerfile`, contexte
-racine) ; en développement, `docker-compose.yml` monte les sources par-dessus.
+racine) ; en développement, `docker-compose.yml` monte les sources par-dessus, avec `PYTHONPATH=/app` pour qu'elles précèdent les copies installées dans l'image (sans quoi `celery` et `uvicorn`, scripts console, servent le code figé à la construction).
 
 ## Ordre de démarrage (mode IHM)
 
@@ -92,6 +92,100 @@ Points d'attention :
 - Sans display, l'observation passe par Grafana, vizpop (port 5050) et `make report`. Le protocole GAMA Server permet aussi d'évaluer des expressions GAML à chaud (port 6868 exposé sur l'hôte).
 
 ---
+
+## Plateforme d'expériences (ticket 035)
+
+Préparer une fois les propositions d'itinéraires d'une population, puis les rejouer sans le
+simulateur ou avec GAMA. Tout passe par `python -m experiences` dans le conteneur `controller` ;
+les cibles `make` encapsulent les appels. Design : `docs/arch/plateforme-experiences.md`.
+
+```bash
+make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1   # tous modes, sans plafond (services requis)
+make jeu-consulter NOM=v5_j1 PERSONNE=418                         # les déplacements d'une personne et leurs propositions
+make jeu-verifier NOM=v5_j1                                       # péremption : dépendances changées depuis la préparation
+make jeu-verifier-jours NOM=v5_j1 JOUR=2026-03-17 DECLARER=1     # les courses TC proposées existent-elles le mardi ? lu dans le GTFS, déclaré par déplacement
+make experience-definir FICHIER=data/experiences/exp_durmin_nosim/experience.yaml   # refuse un `nom` qui ne dit pas ses paramètres
+make experience-estimer EXP=exp_durmin_nosim                      # sollicitations, jetons, part des quotas — sources citées
+make experience-lancer EXP=exp_durmin_nosim                       # sans simulateur ; REPRENDRE=1 pour reprendre
+                                                                  # démarre d'abord ses services : REQUIS="controller api worker" (défaut `controller`), ATTENTE=600
+make services-pretes REQUIS="controller api worker"               # les garantir sans rien lancer (docker compose up -d --wait, idempotent)
+make experience-pause EXP=exp_durmin_nosim · make experience-arreter EXP=exp_durmin_nosim
+make experiences-renommer                                         # les noms disent-ils leurs paramètres ? APPLIQUER=1 FUSIONNER=1 pour aligner
+make registre TRIER=couverture FILTRER=decideur=gemini
+make comparer A=<dossier exécution> B=<dossier exécution>         # refuse si les empreintes partagées diffèrent
+make run OFFLINE=1 JEU=v5_j1                                      # GAMA consomme le jeu : aucun appel moteur en régime nominal
+```
+
+Modèle local (LM Studio sur l'hôte) : `make lmstudio-charger MODELE=<id>` puis les mêmes cibles
+`experience-*` sur la définition `exp_<modèle>_minper_jtir_p2_t0_nosim` — voir
+`docs/setup/llm-providers.md`, section « Modèles locaux — LM Studio ».
+
+### Pas à pas : ma première expérience depuis le tableau de bord
+
+Onglet **🧪 Expériences**. Un bloc au-dessus des boutons dit les services Docker que l'expérience
+composée utilise et l'état de chacun ; un bouton démarre exactement ceux-là, sans la métrologie
+(`make up` reste la voie pour toute la pile). Rien à éditer à la main sauf, une
+fois, le texte d'un prompt. Les choix du formulaire sont retenus d'une session à l'autre.
+
+1. **Composer.** Le bloc « Nouvelle expérience » est un formulaire : population (liste des
+   dossiers scellés), jeu de déplacements (liste des jeux préparés, avec leur couverture), prompt
+   système (les variantes de `prompts.yaml`, `b_min` est le minimaliste), décideur (modèle de la
+   passerelle, heuristique, tirage, rejeu), mode (sans simulateur ou GAMA), jour, calendrier. Les
+   graines, le regroupement et les tolérances horaires sont dans « Réglages avancés », déjà
+   remplis. Le fichier qui sera écrit s'affiche en dessous.
+
+   **Le nom ne se saisit pas** : il se calcule de ces paramètres et s'affiche en tête —
+   `exp_gemini-31-fl_minper_jtir_t0_nosim` dit le modèle, le prompt, le calendrier, la
+   température et le mode. Changer de modèle change donc le nom, et deux expériences ne peuvent
+   plus se marcher dessus. Si ces paramètres sont **déjà** ceux d'une expérience enregistrée, la
+   page le dit : lancer lui ajoutera une exécution. Grammaire complète et cas de collision :
+   `specs/nommage-canonique-experiences.md`.
+2. **Préparer le jeu** si la population n'en a pas encore : bouton « Warm-up : construire le jeu »
+   (long, reprenable ; suivi dans **📟 Activités en cours**, et juste sous le formulaire). La barre
+   d'avancement se rafraîchit seule ; quand le jeu est clos, la page le voit sans qu'on la
+   recharge et il devient sélectionnable. Un bouton grisé dit toujours ce qui lui manque.
+   Vous n'avez pas à attendre pour **enregistrer** l'expérience : elle nomme le jeu qu'elle
+   attend, et devient lançable sans retouche dès qu'il est clos.
+3. **Décrire son propre prompt** (facultatif) : le texte de la variante choisie s'affiche en
+   entier ; « Éditer et enregistrer sous un autre nom » l'ajoute à `prompts.yaml` (jamais
+   d'écrasure), puis « Recharger la passerelle ». `prompt_minimal` est le point de départ
+   minimaliste : c'est le seul prompt de la **famille minimale** (tâche et format de sortie,
+   rien qui puisse influencer un mode) — toutes les autres variantes sont **expertes**, où
+   nommer et cadrer les modes est volontaire, seules les règles figées (« sous tel seuil,
+   tel mode ») et les formules mathématiques restant proscrites. `minimal_persona` est
+   **invalidée** depuis le 2026-09-10 : voir `specs/hygiene-prompts-et-plateforme-experiences.md`.
+4. **Enregistrer** : écrit `data/experiences/<nom>/experience.yaml` sans rien lancer, puis le fait
+   valider par la plateforme si le service `controller` tourne (tout champ manquant ou incohérent
+   est nommé). Le message donne le chemin écrit et l'état du jeu attendu. Réenregistrer sous un nom
+   qui porte déjà des exécutions demande une confirmation ; les exécutions archivées ne bougent pas.
+   **Estimer le coût** : nombre de sollicitations, jetons, part du quota du jour, refus éventuels.
+5. **Lancer.** Si une exécution tourne encore, une case cochée d'avance propose de l'arrêter
+   d'abord et nomme ce qu'elle arrêtera : l'arrêt est coopératif (fichier `STOP`, honoré en
+   quelques secondes, résultat partiel exploitable), la construction d'un jeu n'est jamais
+   arrêtée, et le lancement est refusé si l'arrêt n'aboutit pas en trente secondes plutôt que de
+   tourner en concurrence. Sans simulateur : l'exécution démarre, une barre d'avancement apparaît dans « Mes
+   expériences » (déplacements décidés, personnes, temps restant, sollicitations, erreurs), avec
+   **Pause** et **Arrêter**. **Pause** et **Arrêter** sont effectifs en quelques secondes : les
+   sollicitations encore en vol sont abandonnées passé un délai de grâce (`EXP_PAUSE_GRACE_S`,
+   15 s), leurs déplacements non archivés étant redemandés à la reprise. Et une exécution qui
+   n'avance plus pendant 7 minutes (`EXP_INACTIVITE_PAUSE_S`) se met **en pause d'elle-même**,
+   en `[ALARME]`, au lieu de rester « en cours » — elle reste reprenable. Avec GAMA : c'est `make run OFFLINE=1 JEU=<jeu>` qui est lancé, et
+   GAMA utilise le prompt actif de la passerelle, pas la variante choisie (limite connue).
+6. **Reprendre, rejouer, dupliquer.** Sous la table : « Reprendre » une exécution en pause ou
+   épuisée (rien n'est redemandé), « Rejouer » (nouvelle exécution, l'ancienne reste intacte),
+   « Dupliquer », ou choisir une expérience dans la liste « S'inspirer de » en tête du formulaire
+   (ses réglages sont recopiés dès le choix, sans autre clic ; changez ce que vous voulez : c'est
+   ainsi qu'on compare deux prompts ou deux modèles).
+7. **Lire.** Détail d'une exécution : couverture, parts modales face à l'enquête, puis personne →
+   déplacement → trace (options présentées, écartées et motifs, réponse brute).
+
+`make run JEU=` écrit `data.jeu_enregistre` dans `llm-agents/config/config.yaml` et **recrée le
+contrôleur** (les réglages sont lus au démarrage du processus). Les tolérances horaires par groupe
+de modes doivent y être déclarées (bloc commenté à décommenter) : sans elles, le jeu est refusé.
+Une exécution s'archive dans `data/experiences/<nom>/executions/<horodatage>/` (`decisions.jsonl`,
+`moves.csv`, `synthese.html`) ; le tableau de bord (`make dashboard`, ou double-clic sur
+`tableau-de-bord.command` à la racine, onglet « 🧪 Expériences ») liste le registre et descend
+jusqu'à la décision unitaire.
 
 ## Commandes Docker
 

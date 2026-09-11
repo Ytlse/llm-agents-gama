@@ -7,7 +7,7 @@
         --audit docs/traces/<date>_audit_perimetre_v4/audit_perimetre.json \\
         --velo docs/traces/<date>_…/velo_cohorte.json --velo-vivier docs/traces/<date>_…/velo_vivier.json \\
         --out docs/traces/<date>_controle_…/synthese_representativite_v3.html \\
-        --copie docs/paper/population/synthese_representativite_v3_population_v4_<date>.html
+        --copie docs/paper/methode/population/synthese_representativite_v3_population_v4_<date>.html
 
 CE QUE C'EST. Le document que le manuscrit cite pour dire ce que la population du jeu de test
 représente et ce qu'elle ne représente pas : verdicts du contrôle (`control_population.py`),
@@ -272,7 +272,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--version", default="v3", help="numéro de la synthèse (v3 pour la population v4)")
     ap.add_argument("--lien-precedent", default="synthese_representativite_v2_population_v3_2026-09-03.html")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--copie", type=Path, default=None, help="copie dans docs/paper/population/")
+    ap.add_argument("--copie", type=Path, default=None, help="copie dans docs/paper/methode/population/")
     args = ap.parse_args(argv)
     html = build(args.sceau, args.precedent, args.vivier, args.audit, args.template, args.version, args.lien_precedent,
                  velo=args.velo, velo_vivier=args.velo_vivier)

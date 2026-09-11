@@ -48,7 +48,9 @@ qu'`islands.py`), pas une réécriture. Il consomme la machinerie existante tell
 - **Scoring inchangé** : loss `emd_jsd` (EMD ordinal + JSD nominal), comptage **pondéré**
   (masse de probabilité, `policy=weighted`), poids de dimensions actuels, `eval_params_key()`
   et régime de mesure unique — modèle d'éval **épinglé** toute la campagne
-  (`gemini-3.1-flash-lite-preview`, temp min, `prod_option_handling: true`). Ne jamais changer
+  (`gemini-3.1-flash-lite` — l'alias `-preview` écrit ici jusqu'au 2026-09-10 désignait déjà
+  ce même modèle, servi en silence par Google —, temp min, `prod_option_handling: true`).
+  Ne jamais changer
   de modèle en cours de campagne (invalide les évals et le cache).
 - **Store SQLite / DAG content-addressed** : chaque individu = un nœud ; chaque
   génération = des arêtes de mutation (`ga_init` / `ga_cross` / `ga_mutate`). Dédoublonnage

@@ -137,23 +137,80 @@ option (durées en tranches, distances humanisées).
 - Mettre à jour le prompt système `itinary_multi_agent` (variante active `expert_chaine`,
   `llm_module/prompts/prompts.yaml`) pour qu'il pondère ce profil dans l'arbitrage.
 
-> Impact calibration (à cadrer, pas à ignorer). Éditer le texte des options / le prompt **purge
-> automatiquement** le cache de décisions LLM (isolation par `active_prompt_checksum()`). Mais
-> déplacer le texte déplace les parts modales, donc la loss de calibration bouge : **mesurer sur
-> jeux gelés avant/après** et n'ouvrir aucun run « de production » entre les deux.
+> **Impact calibration — et un piège de cache à corriger d'abord (vérifié le 2026-09-03).**
+>
+> ⚠ Contrairement à ce que disait la version initiale de ce ticket, éditer le texte des options
+> **ne purge PAS** le cache de décisions LLM. `_make_state_hash` (`llm/cache.py:207`) ne contient
+> que `data_version()`, les `get_code()` des options, la météo, `extra_key` et `traits_key` : le
+> texte rendu par le gabarit n'y entre **à aucun moment**, et `get_code()` est délibérément aveugle
+> aux durées/distances/jambes (`models.py:177`). `active_prompt_checksum()`, de son côté, ne hache
+> que les **prompts système** (`manager.py:164`) — pas le gabarit — et il est figé à la
+> construction de `LlmAgent` (`llm_agent.py:286`).
+>
+> Sans correctif, on obtiendrait des *cache hits* rejouant des décisions **prises avant l'existence
+> de la ligne sécurité**, face à des options dont le texte a changé — sans erreur, sans warning.
+> Le dépôt a déjà payé ce piège deux fois : `traits_key` et `extra_key` ont été ajoutés pour
+> exactement ça, avec un incident chiffré en commentaire (`llm/cache.py:220` : 352 agents affectés
+> le 2026-08-27).
+>
+> **Correctif retenu : étendre `active_prompt_checksum()` pour hacher aussi le gabarit
+> `travel_plan_describe_v2.j2`.** C'est la correction de la cause : le checksum est censé isoler le
+> cache sur « ce que voit le LLM », et le texte de l'option en fait partie. Effet : nouveau
+> répertoire `data/cache/llm/<checksum>/…` à chaque édition du gabarit, donc purge automatique et
+> **définitive** pour toutes les éditions futures.
+>
+> **Ne PAS bumper `data_version()`** comme levier de rechange : il préfixe aussi la clé du cache
+> OTP (`otp_persistent_cache.py:71`), soit **601 Mo** de plans en transports collectifs invalidés
+> pour un changement qui ne les concerne pas.
+>
+> Enfin, déplacer le texte déplace les parts modales, donc la loss bouge : **mesurer sur jeux gelés
+> avant/après** et n'ouvrir aucun run « de production » entre les deux. Outil : `ab_chaine.py
+> --dataset rank` (comparatif apparié), **pas** `calibrate run --iterations 0` — « deux ordres de
+> grandeur de trop ». Chiffrer avec `--dry-run` d'abord ; jeton de protocole requis
+> (`experiments/protocol_lock.json`, sortie 7 sans lui) ; `--batch 8` et **non** 15 (à 15 le modèle
+> omet des personas en rendant un JSON valide, mis en cache comme un succès). Garder le **même
+> modèle d'évaluation** entre les deux mesures : le prompt graine vaut 176,7 sous
+> `mistral-small-latest` et 25,9 sous `gemini-3.1-flash-lite-preview`, à texte identique.
 
 ### T5 — Migration : reconstruction du graphe et RAZ des caches / mémoires
 
 L'ajout du tag `cycleway` et du profil change des artefacts persistants. La migration est une
-**séquence ordonnée en trois temps** — l'ordre n'est pas un détail, cf. l'avertissement ci-dessous :
+**séquence ordonnée en quatre temps** — l'ordre n'est pas un détail, cf. l'avertissement ci-dessous.
 
-1. **Reconstruire le graphe vélo, une seule fois.** Le pickle `graphs_*.pkl` vit sur le **volume
-   partagé** `./data/cache/osmnx` (monté par le controller et les réplicas) : on le régénère depuis
-   OSM avec `cycleway` retenu, **une fois**, pas par réplica.
-2. **Purger le cache de routes OSMnx** (SQLite persistant + cache de plans), la mémoire long terme
-   (LTM) et le cache de décisions LLM.
+> ✅ **Prérequis levé le 2026-09-04.** Le peupleur et le runtime écrivaient dans **deux fichiers de
+> cache différents** — mesuré le 2026-09-03 : `data/cache/osmnx/toulouse_population_1000/…db`
+> (29 Mo, peupleur) contre `llm-agents/data/osmnx_cache/toulouse_population_1000/…db` (20 Ko,
+> runtime). Cause : `settings.gtfs.osmnx_persistent_cache_dir` valait `/app/data/osmnx_cache` alors
+> que le compose ne montait que `./data/cache/osmnx:/app/osmnx_cache`. Le défaut est désormais
+> `/app/data/cache/osmnx`, monté explicitement (cf. `docs/arch/cache-memory.md`, « Un seul fichier
+> pour le peupleur et pour le runtime »), et les 9 340 routes déjà calculées par le runtime ont été
+> rapatriées. **Deux conditions restent à vérifier avant l'étape 4 :** le controller doit avoir été
+> recréé depuis le correctif (`docker compose up -d controller`), et la cellule des chemins du
+> notebook doit afficher `✓ cache de routes partagé avec le runtime` — elle refuse de continuer
+> sinon.
+
+0. **`docker compose build osmnx1 osmnx2`.** `config/osmnx.yaml` est monté en **lecture seule** dans
+   les réplicas alors que leur code est figé dans l'image (documenté `config/osmnx.yaml:77`) :
+   ajouter des clés YAML lues par du code neuf **sans rebuild** casse le service au démarrage sur
+   `KeyError` — déjà vécu avec `park_base`.
+1. **Reconstruire le pickle des graphes, une seule fois.** ⚠ Il n'existe **qu'un seul pickle pour
+   les trois modes** : `_build_sync` accumule walk + bike + drive dans un unique
+   `graphs_<clé>.pkl` (`osmnx_direct.py:394`, clé md5 de `f"{city}_{dist}"`). « Reconstruire le
+   graphe vélo » n'existe donc pas — reconstruire, c'est reconstruire les trois. Le fichier vit sur
+   le volume partagé `./data/cache/osmnx`, régénéré **une fois**, pas par réplica.
+2. **Purger** le cache de routes OSMnx (SQLite + cache de plans) et le cache de décisions LLM.
 3. **Repeupler** le cache de routes avec le peupleur en masse
    (`scripts/data/population/route_worker.py`, étape 6 du notebook `generate_population.ipynb`).
+
+> ⚠ **Ne pas utiliser `make purge_cache`** (`Makefile:140`) : la cible détruit
+> `data/population/*.json` — la population générée — et son `rm -f data/cache/osmnx/*.pkl` n'est
+> **pas récursif**, donc elle ne supprime aucun `.db`. Elle fait à la fois trop et pas assez.
+> Purge par commandes explicites, controller arrêté (Qdrant embarqué est mono-processus).
+
+**Coût mesuré de l'étape 4** : ~83 500 routes pour 1 000 personas (`foot` ×1 + `bicycle` ×1 +
+`car` ×24 tranches horaires par paire O-D), **~2 h 30 à 3 h**. Régler `MAX_WORKERS = 6` et **non**
+12 : à 12 la machine de dev sature la RAM et part en swap (23 Go), les workers tombant à 50 % de
+CPU. La ligne `Terminé en …s (… ms/route)` de l'étape 6 mérite d'aller dans `docs/traces/`.
 
 > ⚠ **L'ordre est contraignant.** `init_worker` charge le **pickle du graphe** depuis le cache
 > partagé. Repeupler avant d'avoir reconstruit le graphe produit un cache intégralement peuplé et
@@ -174,9 +231,25 @@ l'homogénéité du profil l'impose. Corollaire : ne **pas** bumper `routing_ver
 - **Assertion au démarrage** (par process) : vérifier que les arêtes du graphe vélo portent
   effectivement `cycleway` (au moins une fraction non nulle). À défaut, échouer bruyamment — sinon
   la classe « protégé » est silencieusement impossible et le profil ment (piège *vacuité*).
-- La RAZ de la LTM et des décisions LLM est un choix assumé : on repart d'un état vierge plutôt que
-  de gérer la coexistence d'anciens souvenirs sans profil. Cela règle aussi la question de la clé de
-  récupération LTM (plus d'historique à faire correspondre).
+  ⚠ **Où la poser** : dans le `lifespan()` de `osmnx_server.py:47` — **pas** dans
+  `osmnx_direct.warmup()` (ligne 846), qui est **du code mort**, défini mais jamais appelé par le
+  code applicatif. Le `lifespan` est le seul point d'entrée où l'assertion a un effet au démarrage
+  réel du service. Noter aussi que l'invalidation de cache existante ne teste que
+  `number_of_edges() > 0` par mode (`osmnx_direct.py:405`) : un graphe vélo sans aucune arête
+  `cycleway` n'est **pas** détecté comme invalide et resservirait indéfiniment un profil vide.
+- **La purge de la LTM est un non-sujet** : la mémoire long terme vit dans le répertoire de travail
+  du run (`experiments/archive/<date>/long_term_memory/chroma_db/`), donc un `make run` **sans**
+  `CONT=1` démarre déjà vierge — rien à purger. L'exigence est satisfaite automatiquement, sauf
+  reprise à chaud (`CONT=1`), où il faut alors supprimer ce répertoire explicitement.
+- La RAZ des décisions LLM, elle, est un choix assumé : on repart d'un état vierge plutôt que de
+  gérer la coexistence d'anciennes décisions sans profil.
+
+**L'alarme de couverture (DoD #2) se réplique sur `terminal_time_out_of_perimeter`**
+(`osmnx_direct.py:196-212`) : un compteur Prometheus qui incrémente **à chaque** occurrence, un
+drapeau module-global de front montant, et un `logger.error("[ALARME] …")` émis **une seule fois**
+dont le message le dit explicitement. Convention du dépôt : appeler `fire_alarme("<slug>")` juste à
+côté du `logger.error` (`llm_module/telemetry/alarms.py:28`) — ce que le site historique ne fait pas,
+ayant son propre compteur métier.
 
 ---
 

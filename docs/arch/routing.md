@@ -145,6 +145,26 @@ points ne dépend du fuseau du processus :
 
 ---
 
+## Jeu de déplacements enregistré (ticket 035)
+
+Quand `data.jeu_enregistre` désigne un jeu (`make run JEU=<nom>`), le contrôleur **ne consulte les
+moteurs qu'en dernier recours** : pour un déplacement couvert par le jeu, les propositions sont
+servies depuis `data/jeux/<nom>/propositions.jsonl` (source `enregistree`, car scolaire `locale`),
+sans aucun appel OTP/OSMnx (spec 04, G3). Un appel moteur n'a lieu que si l'heure réelle de départ
+s'écarte de l'heure de référence au-delà de la tolérance déclarée pour un groupe de modes
+(`data.jeu_tolerances_horaires` : marche/vélo insensibles, voiture à l'heure pleine, TC/train au pas
+de 10 minutes, valeurs proposées) — et seul ce groupe est recalculé (`recalculee:horaire`) ; si le
+jour simulé n'est pas celui du jeu, transports collectifs et train sont recalculés
+(`recalculee:offre_jour`, décision du 2026-09-06 : le mardi joue l'offre du mardi) — **sauf** si la grille
+horaire du jour est identique, ou si aucun passage différent ne tombe dans la fenêtre temporelle du
+déplacement (départ → départ + 4 h), vérifié dans le GTFS et déclaré par déplacement
+(`make jeu-verifier-jours NOM=… JOUR=… DECLARER=1`, fichier `EQUIVALENCES.yaml` à côté du MANIFEST,
+cf. `experiences/offre_jour.py`) ; ou si le
+jeu ne couvre pas le déplacement (`hors_jeu`, pré-calcul au-delà de la journée). Le compte rendu
+`make report` rend les appels moteurs, les propositions par source, les recalculs sans effet et les
+déclencheurs jamais déclenchés (`jeu_stats.json`). Le jeu n'est jamais modifié par la simulation.
+Préparation : `make jeu POP=… NOM=…` — voir [plateforme-experiences.md](plateforme-experiences.md).
+
 ## OpenTripPlanner (transit)
 
 OTP est dédié exclusivement aux transports en commun en mode horaire contraint.

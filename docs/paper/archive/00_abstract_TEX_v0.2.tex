@@ -1,0 +1,17 @@
+% =====================================================================
+% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v0.2 (9 September 2026)
+% Chapter 0 of the paper: the abstract. To be inserted before 01_introduction.tex.
+% Ready to paste into the Overleaf project (acmart + natbib: \citep, \citet).
+% Derived file: regenerate after every validated pass of ../en/00_abstract.md.
+% Placeholders <xx>, <nb_trajets>, <N> are filled from methode/experience_plan/experiments.yaml.
+% Open point (see ../relecture/00_abstract.md, item 3): the abstract announces an
+% over-attraction of cycling, while the run of 8 September 2026 measures one of public
+% transport. Wording left untouched on purpose.
+% =====================================================================
+
+\begin{abstract}
+Multi-agent simulations of urban mobility rely on tabular models estimated from surveys or on explicit rules. Either way the space of representable behaviours is fixed a priori: a factor encoded as neither variable nor rule cannot influence any decision. Agents based on large language models (LLMs) promise to lift it; we show they do at the price of a trade-off between calibration and adaptation to exceptional situations.
+\\\\We evaluate LLM agents on mode choice in Toulouse: 1,000 synthetic individuals (eqasim), itineraries on the real networks (OpenTripPlanner), decisions taken inside GAMA, which grounds them in the transport system's physical constraints. We measure against the CEREMA 2023 EMC$^2$ survey at two scales: aggregate modal shares (L1, points) and individual choices on a sealed test set of $\langle \textbf{nb\_trajets} \rangle$ trips (accuracy, log-loss). At identical variables, the majority mode (car, $\langle \textbf{xx} \rangle$\,\%) sets the floor and a LightGBM oracle fitted on the survey the ceiling.
+\\\\Calibration fails: walking is underestimated ($\langle \textbf{xx} \rangle$\,\% against $\langle \textbf{xx} \rangle$\,\% observed), cycling over-attractive ($\langle \textbf{xx} \rangle$\,\% against $\langle \textbf{xx} \rangle$\,\%), and individual accuracy of $\langle \textbf{xx} \rangle$\,\% beats the prior but stays $\langle \textbf{xx} \rangle$ points below the oracle. In exchange they produce two regimes no memoryless tabular model can: adaptation to real events from the local press, and behavioural hysteresis over $\langle \textbf{N} \rangle$ days after an incident (metro breakdown, bicycle fall), carried by a memory register that revises perceived risk.
+\\\\This points to hybrid architectures, where the tabular model secures calibration and the LLM agent handles departures from the nominal regime.
+\end{abstract}

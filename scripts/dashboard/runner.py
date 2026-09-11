@@ -62,14 +62,39 @@ class Job:
         return " ".join(self.argv)
 
 
+_RE_INDEX_JOB = re.compile(r"^(\d{3,})-")
+
+
+def dernier_index(dossier: Path) -> int:
+    """Le plus grand numéro de job déjà écrit dans ce dossier de journaux (0 s'il est vide).
+
+    Le compteur repart de là, au lieu de 1 : le registre vit dans `st.cache_resource`, donc
+    un redémarrage du serveur Streamlit le remet à neuf, alors que les jobs qu'il a lancés
+    sont DÉTACHÉS et continuent d'écrire. Le 2026-09-08, un job `001-root-experience-lancer`
+    a rouvert en écriture le journal d'un `001-root-experience-lancer` d'une session
+    précédente encore vivant : les deux poignées ont écrit dans le même fichier, chacune à
+    son décalage, et la console d'un job montrait la sortie de l'autre.
+    """
+    plus_grand = 0
+    try:
+        noms = [p.name for p in dossier.glob("*.log")]
+    except OSError:
+        return 0
+    for nom in noms:
+        m = _RE_INDEX_JOB.match(nom)
+        if m:
+            plus_grand = max(plus_grand, int(m.group(1)))
+    return plus_grand
+
+
 class Registry:
     """Registre de jobs, partagé par toutes les reruns du serveur Streamlit."""
 
     def __init__(self) -> None:
         self._jobs: list[Job] = []
         self._lock = threading.Lock()
-        self._counter = 0
         LOG_DIR.mkdir(parents=True, exist_ok=True)
+        self._counter = dernier_index(LOG_DIR)
 
     # ── lecture ───────────────────────────────────────────────────────────────
     def jobs(self) -> list[Job]:
@@ -96,10 +121,15 @@ class Registry:
     # ── écriture ──────────────────────────────────────────────────────────────
     def launch(self, label: str, argv: list[str], cwd: Path, flags: tuple[str, ...] = ()) -> Job:
         with self._lock:
-            self._counter += 1
             slug = re.sub(r"[^A-Za-z0-9]+", "-", label).strip("-").lower()[:48]
-            job_id = f"{self._counter:03d}-{slug}"
-            log_path = LOG_DIR / f"{job_id}.log"
+            # Jamais le journal d'un autre job, même d'une session précédente : un fichier qui
+            # existe déjà peut être tenu ouvert par un processus détaché toujours vivant.
+            while True:
+                self._counter += 1
+                job_id = f"{self._counter:03d}-{slug}"
+                log_path = LOG_DIR / f"{job_id}.log"
+                if not log_path.exists():
+                    break
             job = Job(
                 id=job_id,
                 label=label,
@@ -160,6 +190,15 @@ class Registry:
         with self._lock:
             self._reap()
             self._jobs = [j for j in self._jobs if j.running]
+
+
+def par_priorite(jobs: list[Job]) -> list[Job]:
+    """Ce qui tourne d'abord, le plus récent d'abord à l'intérieur de chaque groupe.
+
+    `jobs()` rend l'ordre chronologique inverse : un job terminé il y a une minute passait
+    au-dessus d'un job encore en cours, dans un volet nommé « Activités en cours ».
+    """
+    return sorted(jobs, key=lambda job: not job.running)
 
 
 def tail(job: Job, max_lines: int = 400) -> str:

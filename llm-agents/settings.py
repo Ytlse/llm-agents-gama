@@ -144,6 +144,8 @@ class ProviderConfig(BaseModel):
     batch_max_agents:  int   = 5
     concurrency_limit: int   = 2
     disable_timeout:   int   = 180
+    # Attente du client pour une tâche servie par cette instance (s) ; None = défaut du client.
+    wait_timeout:      Optional[float] = None
     adapter:           str   = ""
 
 
@@ -379,6 +381,20 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     # `population_size` agents (après filtre bbox éventuel), le chargement REFUSE plutôt
     # que de ré-échantillonner — un sceau ne se rogne pas en silence.
     population_file: Optional[str] = None
+    # ── Jeu de déplacements enregistré (ticket 035, spec 04) ─────────────────────
+    # Dossier d'un jeu préparé par `python -m experiences preparer-jeu` (data/jeux/<nom>).
+    # Désigné, la simulation SERT ses propositions au lieu d'appeler les moteurs (G3), après
+    # contrôle que le jeu porte bien l'empreinte de la population chargée (G1 : refus sinon).
+    # Absent : comportement historique inchangé, calcul en vol (G2). Posé par `make run JEU=<nom>`.
+    jeu_enregistre: Optional[str] = None
+    # Tolérance horaire par groupe de modes (walk, bike, car, transit, rail) : "insensible",
+    # "heure" (recalcul si l'heure pleine change) ou {pas_min: N}. OBLIGATOIRE dès qu'un jeu est
+    # désigné — aucun défaut dans le code (E1, question 8) ; les valeurs proposées sont dans
+    # config/config.yaml, commentées.
+    jeu_tolerances_horaires: Optional[dict[str, Any]] = None
+    # Part des recalculs horaires qui rendent les propositions déjà enregistrées au-delà de
+    # laquelle l'ALARME « tolérance trop sensible » se lève (G7, front montant).
+    jeu_seuil_recalcul_sans_effet: float = 0.3
     state_file: str = "./state.json"
     number_of_llm_based_agents: Optional[int] = 0
 
@@ -434,6 +450,13 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # sans réappeler le LLM.
     mode_draw_seed: int = 42
 
+    # Ordre de présentation des options au décideur (ticket 035, spec 02 D7 / EF-23) :
+    # mélange DÉTERMINISTE dérivé de (cette graine, agent, activité), identique dans les
+    # deux modes d'exécution — et non plus `random.shuffle` non graîné. Le tirage final ne
+    # dépend pas de cet ordre (les poids sont réalignés sur l'ordre canonique par code).
+    # Nommée comme dans docs/paper/methode/experience_plan/experiments.yaml (`option_order_seed`).
+    option_order_seed: int = 42
+
     # ── Une date météo par agent (ticket 023, suite) ───────────────────────────
     # Sur une seule journée simulée, tous les agents partagent une seule météo :
     # le régresseur a une variance nulle, et « aucun effet mesuré » ne veut alors
@@ -457,6 +480,9 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
         "temperature": 0,
         "top_p": 1.0,
         "max_tokens": 4096,
+        # `thinking_budget` n'est PAS listé ici : absent des paramètres, la passerelle laisse
+        # au fournisseur son défaut de réflexion. Une expérience qui veut le piloter le pose
+        # dans `decideur.parametres`, ce qui le scelle dans son empreinte.
     }
     llm_retry_count: int = 3
     llm_retry_delay: int = 5  # seconds

@@ -122,11 +122,11 @@ Trois points d'attention :
   cette clé : l'entrée dédiée `google_gemini31_ga` a donc son **propre cache**, totalement
   isolé de la campagne `ga1` (restée sur la preview) — aucune campagne en cours n'est
   perturbée, et le quota Google étant compté **par modèle**, elle dispose d'un seau RPD distinct.
-- **Un modèle distinct pour les mutations** (`gemini-3.1-flash-lite-preview`),
+- **Un modèle distinct pour les mutations** (`gemini-3.1-flash-lite`),
   afin de ne pas consommer le quota de tokens du modèle d'évaluation, qui est la
   ressource rare de la boucle. ⚠ Depuis le passage de l'éval sur Gemini
   (2026-07-17), éval et mutation partagent le même modèle Gemini, donc le même
-  quota provider ; basculer la mutation sur un autre modèle (ex. `google_gemma42`)
+  quota provider ; basculer la mutation sur un autre modèle (ex. `google_gemma42_key1`)
   rétablit la séparation des quotas si celui-ci devient contraignant.
 - **Le générateur réfléchit, le juge non** (2026-08-18, amendement A7 du protocole).
   `mutation_thinking_budget: 1024` demande un budget de pensée sur les trois chemins qui
@@ -1227,7 +1227,7 @@ crash ou un quota en pleine ablation reprend à la première coalition non payé
   Google — quota free tier compté par projet ET par modèle, soit 2 × 500 RPD.
   Deux passes one-shot par jour (`cloud/run_ga_key.sh` +
   `calib-ga-am.timer` 09h-11h Paris clé 1, `calib-ga-pm.timer` 11h-13h clé 2,
-  `RandomizedDelaySec=2h`) ; le provider reste `google_gemini35` quelle que
+  `RandomizedDelaySec=2h`) ; le provider reste `google_gemini35_key1` quelle que
   soit la clé (injectée dans `PROVIDER_KEYS__google_gemini35` au lancement) →
   `eval_params_key` unique, cache partagé. `--clear-cooldown` accompagne chaque
   bascule de clé (le cooldown du store est global, les seaux sont par clé).
@@ -1884,7 +1884,7 @@ et **jamais appelés en production**. Constaté sur le store de la campagne `ref
 > l'instrument n'a pas bougé), mais la garantie était décorative.
 
 D'où la lecture du store actuel : le prompt seed vaut **176,7** sous
-`mistral-small-latest` et **25,9** sous `gemini-3.1-flash-lite-preview`, pour le
+`mistral-small-latest` et **25,9** sous `gemini-3.1-flash-lite`, pour le
 *même texte*. Ramener les deux à la loss courante réduit l'écart — il venait pour
 l'essentiel de losses différentes — mais ne réconcilie pas les décisions. Une
 trajectoire tracée à travers les régimes mesure donc autant le changement
@@ -1905,7 +1905,7 @@ calibrate reeval --config run.yaml --branch essai2 --workers 8 # mesure
 | `--dataset` | jeu gelé (défaut `train`) |
 | `--batch N` | personas par requête. **Mettre 8** : à 15 (capacité déduite du TPM), le modèle omet des personas de sa réponse — voir ci-dessous. N'entre pas dans `eval_params_key()`, donc ne change pas la mesure, seulement le nombre d'appels. |
 | `--workers N` | requêtes en vol. Le facteur limitant d'un rejeu est la **latence**, pas le RPM : à 2 requêtes en vol pour ~2 min de génération, on ne consomme qu'~1 req/min sur les 15 autorisées. N'entre pas dans `eval_params_key()` — la mesure est inchangée. |
-| `--provider` | seconde clé (`google2`), pour finir une lignée quand le RPD de la clé 1 est épuisé. La page de synthèse regroupe les régimes par **modèle · politique**, pas par `params_key` : deux clés sur le même modèle restent **une seule courbe**. Le cache, lui, est bien distinct (le provider entre dans `eval_params_key()`) — les nœuds déjà payés sur la clé 1 seront donc **repayés** sur la clé 2. |
+| `--provider` | seconde clé (`google_gemini31_key2`), pour finir une lignée quand le RPD de la clé 1 est épuisé. La page de synthèse regroupe les régimes par **modèle · politique**, pas par `params_key` : deux clés sur le même modèle restent **une seule courbe**. Le cache, lui, est bien distinct (le provider entre dans `eval_params_key()`) — les nœuds déjà payés sur la clé 1 seront donc **repayés** sur la clé 2. |
 
 #### Le lot incomplet : ce que l'instrumentation a montré (2026-07-31, action A10)
 
@@ -1913,7 +1913,7 @@ Sous la politique pondérée, une éval de lignée « n'avançait plus » sans q
 ne remonte. L'hypothèse consignée ici — sortie ~5× plus longue → dépassement du timeout
 de 240 s de l'adaptateur Google — **était fausse**. Les trois grandeurs relevées sur des
 lots réels du jeu `train`, prompt de la feuille `0fc427e7`, modèle
-`gemini-3.1-flash-lite-preview` :
+`gemini-3.1-flash-lite` :
 
 | Lot | Latence | `finishReason` | Tokens de complétion | Décisions rendues |
 |---|---|---|---|---|
@@ -1939,7 +1939,7 @@ un défaut de schéma. Le lot passait pour un **succès**, remettait à zéro le
 d'échecs consécutifs du coupe-circuit, et l'éval était calculée puis **mise en cache** sur
 une sous-population — indistinguable en base d'une mesure complète.
 
-*(À noter aussi : la clé `google_gemini31` avait son RPD de 500 épuisé. Un quota mort
+*(À noter aussi : la clé `google_gemini31_key1` avait son RPD de 500 épuisé. Un quota mort
 produit un 429 explicite, correctement traité — ce n'était pas la cause du silence.)*
 
 #### Les trois défenses ajoutées
@@ -1989,11 +1989,13 @@ ERREUR `[ALARME]`.
 #### Ce que le rejeu a produit (2026-07-31)
 
 ```bash
-calibrate reeval --config run.yaml --branch essai2 --provider google2 --batch 8 --workers 4
+calibrate reeval --config run.yaml --branch essai2 --provider google_gemini31_key2 --batch 8 --workers 4
 ```
 
 432 appels, ~25 min, sur la **seconde clé** Google (le RPD de la première était épuisé).
 Trajectoire sur `train`, sous `gemini-3.1-flash-lite-preview · masse de probabilité` —
+étiquette de régime CITÉE TELLE QUELLE depuis la synthèse scellée ; le modèle qui a
+répondu est `gemini-3.1-flash-lite` (alias `-preview` retiré, cf. 2026-09-10) —
 composites tels que stockés par le moteur (loss `emd_jsd`, poids de la campagne) :
 
 | # | Nœud | Branche | Composite | Δ graine |
@@ -2553,7 +2555,8 @@ Trois propriétés qui en font un outil de mesure et pas un script d'exploration
 Le régime de mesure est celui de la campagne `ref2` (`gemini-3.5-flash-lite`, jeux `v5`),
 c'est-à-dire précisément la campagne semée depuis `expert_chaine` : l'écart se lit à côté de
 ses propres scores. Le modèle est **épinglé** et non un alias `-preview`, ce qui satisfait le
-garde-fou `assert_pinned_eval_model` — `run.yaml`, qui pointe `gemini-3.1-flash-lite-preview`,
+garde-fou `assert_pinned_eval_model` — `run.yaml`, qui pointait `gemini-3.1-flash-lite-preview`
+jusqu'au 2026-09-10 (alias depuis épinglé sur `gemini-3.1-flash-lite`),
 serait refusé sur un store neuf, et c'est voulu : un alias re-résout au fil du temps.
 
 Le store est **dédié** (`calibration_results/ab_chaine.db`) : un A/B exploratoire n'entre pas
@@ -2838,7 +2841,7 @@ nom stable ferait servir une éval périmée en silence. Les manifestes produits
 ### 12.4 · La pente mesurée : l'affirmation C n'est pas soutenue
 
 Les six colonnes ont été évaluées le 2026-08-26 sous un juge unique
-(`google_gemini31` / `gemini-3.1-flash-lite`, T=0), prompt constant `expert_chaine`,
+(`google_gemini31_key1` / `gemini-3.1-flash-lite`, T=0), prompt constant `expert_chaine`,
 comparatif apparié.
 
 | Δ composite vs `L4` | `screen` (108 pers.) | `val` (165 pers.) |

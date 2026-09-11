@@ -7,18 +7,20 @@ Volets :
                  santé des logs, cache LLM, lancement/arrêt.
   🤖 Providers — quotas et disponibilité des providers LLM, rafraîchissement
                  de providers.yaml (`make providers`).
-  ▶ Commandes  — lance les cibles `make` de la racine, de prompt_calibration et
-                 d'otp-toulouse, avec suivi de sortie en direct et arrêt propre.
-  🎫 Tickets   — état des tickets de docs/tickets/.
+  📟 Activités en cours — ce qui tourne : exécutions d'expérience et jeux en
+                 préparation lus sur le disque, puis les cibles `make` lancées
+                 depuis cette session, avec leur sortie et un arrêt propre.
+  🎫 Tickets   — état des tickets de docs/tickets/, statut modifiable ici même.
   📊 Métriques — services Docker, santé d'un run au choix, scores de synthèse,
                  avancement des campagnes de calibration.
+  🧪 Expériences — registre des expériences de la plateforme (ticket 035) : état,
+                 couverture, parts modales, détail jusqu'à la décision unitaire.
 
 Lancement : `make dashboard` depuis la racine du dépôt.
 """
 
 from __future__ import annotations
 
-import shlex
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -31,12 +33,12 @@ import streamlit as st
 # est sur sys.path, mais pas la racine du dépôt — d'où les imports relatifs au
 # package quand il est disponible, absolus sinon.
 try:  # pragma: no cover
-    from scripts.dashboard import live, makefiles, metrics, palette, runner, tickets
+    from scripts.dashboard import experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
 except ImportError:  # pragma: no cover
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from scripts.dashboard import live, makefiles, metrics, palette, runner, tickets
+    from scripts.dashboard import experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -184,8 +186,8 @@ def make_action(
 ) -> None:
     """Bouton contextuel : lance une cible make via le registre de jobs.
 
-    C'est le même chemin que le volet ▶ Commandes (mêmes drapeaux, même log
-    dans 📟 Lancements) — seul l'emplacement du bouton change."""
+    Toutes les actions du tableau de bord passent par là : registre de jobs, journal
+    dans `experiments/.dashboard/`, suivi et arrêt dans 📟 Activités en cours."""
     if st.button(label, key=key or f"act-{project}-{target_name}", width="stretch", disabled=disabled, help=help):
         _, targets = cached_targets()
         target = next((t for t in targets.get(project, []) if t.name == target_name), None)
@@ -193,7 +195,7 @@ def make_action(
             st.error(f"Cible `{target_name}` introuvable dans le Makefile `{project}`.")
             return
         REGISTRY.launch(target.key, target.command(values or {}), target.cwd, target.flags)
-        st.toast(f"make {target_name} lancé — suivi dans 📟 Lancements")
+        st.toast(f"make {target_name} lancé — suivi dans 📟 Activités en cours")
 
 
 def run_make_inline(target: str, values: dict[str, str], *, project: str = "root", timeout: int = 120) -> str:
@@ -265,119 +267,36 @@ def render_sidebar() -> None:
     )
 
 
-# ── Volet Commandes ───────────────────────────────────────────────────────────
-def variable_inputs(target: makefiles.Target, catalogue: dict[str, makefiles.Variable]) -> dict[str, str]:
-    """Champs de saisie des variables `make` proposées pour une cible."""
-    values: dict[str, str] = {}
-    specs = [catalogue[name] for name in target.variables if name in catalogue]
-    if not specs:
-        return values
-
-    for chunk_start in range(0, len(specs), 3):
-        cols = st.columns(3)
-        for col, spec in zip(cols, specs[chunk_start : chunk_start + 3]):
-            widget_key = f"var-{target.key}-{spec.name}"
-            with col:
-                if spec.kind == "bool":
-                    if st.checkbox(spec.name, help=spec.help, key=widget_key):
-                        values[spec.name] = "1"
-                elif spec.kind == "choice" and spec.choices:
-                    choice = st.selectbox(
-                        spec.name,
-                        ("(défaut)", *spec.choices),
-                        help=spec.help,
-                        key=widget_key,
-                    )
-                    if choice != "(défaut)":
-                        values[spec.name] = choice
-                else:
-                    text = st.text_input(
-                        spec.name, help=spec.help, placeholder=spec.placeholder, key=widget_key
-                    )
-                    if text.strip():
-                        values[spec.name] = text.strip()
-    return values
-
-
-def shell_line(target: makefiles.Target, argv: list[str]) -> str:
-    rel = target.cwd.relative_to(REPO_ROOT).as_posix()
-    prefix = f"cd {rel} && " if rel != "." else ""
-    return prefix + " ".join(argv)
-
-
-def render_target(target: makefiles.Target, catalogue: dict[str, makefiles.Variable]) -> None:
-    badges = " ".join(makefiles.FLAG_LABELS[f][0] for f in target.flags if f in makefiles.FLAG_LABELS)
-    notes = " · ".join(
-        f"{makefiles.FLAG_LABELS[f][0]} {makefiles.FLAG_LABELS[f][1]}"
-        for f in target.flags
-        if f in makefiles.FLAG_LABELS
-    )
-
-    head, action = st.columns([6, 1], vertical_alignment="center")
-    with head:
-        st.markdown(f"**`make {target.name}`** {badges}")
-        caption = " — ".join(part for part in (target.doc, notes) if part)
-        if caption:
-            st.caption(caption)
-
-    values: dict[str, str] = {}
-    confirmed = True
-    with head.expander("Options et commande", expanded=not target.launchable):
-        values = variable_inputs(target, catalogue)
-        extra = st.text_input(
-            "Autres variables `make`",
-            placeholder="CLÉ=valeur CLÉ2=valeur2",
-            key=f"extra-{target.key}",
-        )
-        for token in shlex.split(extra) if extra.strip() else []:
-            if "=" in token:
-                key, _, val = token.partition("=")
-                values[key.strip()] = val
-        if "danger" in target.flags:
-            confirmed = st.checkbox(
-                "Je confirme : cette cible supprime des données", key=f"confirm-{target.key}"
-            )
-        st.code(shell_line(target, target.command(values)), language="bash")
-        if not target.launchable:
-            st.caption("Cette cible pose une question au clavier : copiez la commande dans un terminal.")
-
-    argv = target.command(values)
-    with action:
-        if not target.launchable:
-            st.button("Terminal requis", key=f"run-{target.key}", disabled=True, width="stretch")
-        elif st.button("▶ Lancer", key=f"run-{target.key}", disabled=not confirmed, width="stretch"):
-            REGISTRY.launch(f"{target.project}:{target.name}", argv, target.cwd, target.flags)
-            st.session_state["last_job_label"] = f"make {target.name}"
-            st.rerun()
-
-
-def render_commands() -> None:
-    projects, targets = cached_targets()
-    labels = {p.label: p for p in projects}
-    chosen = st.radio("Projet", list(labels), horizontal=True, label_visibility="collapsed")
-    project = labels[chosen]
-    project_targets = targets.get(project.key, [])
-
-    if not project_targets:
-        st.warning(f"Aucune cible lue dans `{project.makefile}`.")
-        return
-
-    groups = makefiles.grouped(project_targets)
-    st.caption(
-        f"{len(project_targets)} cibles lues dans "
-        f"`{project.makefile.relative_to(REPO_ROOT)}` — {len(groups)} groupes."
-    )
-    for group, group_targets in groups:
-        with st.expander(f"{group} — {len(group_targets)} cibles", expanded=(group == "Docker")):
-            for target in group_targets:
-                render_target(target, project.variables)
-
-
 # ── Panneau des jobs ──────────────────────────────────────────────────────────
+def _job_decideur(job: runner.Job) -> str:
+    """Décideur d'un job d'expérience, lu dans son `experience.yaml` (vide sinon).
+
+    `experience-lancer`/`-reprendre` ne portent que `EXP=<nom>` sur leur ligne de
+    commande ; le décideur est celui défini pour cette expérience.
+    """
+    if "experience-lancer" not in job.label and "experience-reprendre" not in job.label:
+        return ""
+    nom = next((tok[4:] for tok in job.argv if tok.startswith("EXP=")), "")
+    return experiences.decideur_de(nom) if nom else ""
+
+
 def render_job(job: runner.Job, expanded: bool) -> None:
     icon = {"en cours": "⏳", "ok": "🟢", "échec": "🔴", "arrêté": "⚫", "erreur": "🔴"}[job.state]
-    title = f"{icon} {job.label} — {job.state} · {runner.format_duration(job.duration)}"
-    with st.expander(title, expanded=expanded):
+    quand = datetime.fromtimestamp(job.started_at).strftime("%d/%m %H:%M")
+    decideur = _job_decideur(job)
+    extra = f" · {decideur}" if decideur else ""
+    title = (
+        f"{icon} {job.label} — {job.state} · "
+        f"{runner.format_duration(job.duration)} · {quand}{extra}"
+    )
+    # Le volet se rejoue toutes les 2 s (fragment) et `expanded` l'emporte à CHAQUE tour :
+    # ouvrir la console d'un job qui n'est pas en tête était donc impossible, elle se
+    # refermait aussitôt. `key` + `on_change="rerun"` font écrire le pli choisi par le
+    # lecteur dans `session_state`, qu'on relit ici — l'argument ne sert plus que de valeur
+    # par défaut au tout premier affichage du job.
+    cle_volet = f"job-volet-{job.id}"
+    with st.expander(title, expanded=st.session_state.get(cle_volet, expanded),
+                     key=cle_volet, on_change="rerun"):
         info, action = st.columns([5, 1], vertical_alignment="center")
         info.code(f"{job.command_line}   (cwd: {job.cwd})", language="bash")
         if job.running:
@@ -394,25 +313,151 @@ def render_job(job: runner.Job, expanded: bool) -> None:
 
 @st.fragment(run_every="2s")
 def render_jobs_live() -> None:
-    jobs = REGISTRY.jobs()
+    jobs = runner.par_priorite(REGISTRY.jobs())
     running = [j for j in jobs if j.running]
     if not jobs:
-        st.info("Aucun lancement pour l'instant. Choisissez une cible dans **▶ Commandes**.")
+        st.info("Aucune cible `make` lancée depuis cette session. Les boutons des onglets "
+                "🎮 Run GAMA, 🤖 Providers, 🧬 Calibration et 🧪 Expériences passent tous par ici. "
+                "Une cible sans bouton se lance dans un terminal : `make help` en donne la liste.")
         return
 
     head, action = st.columns([5, 1], vertical_alignment="center")
     head.markdown(f"**{len(running)} en cours** · {len(jobs) - len(running)} terminé(s)")
-    if action.button("🧹 Purger l'historique", disabled=bool(len(jobs) == len(running)), width="stretch"):
+    if action.button("🧹 Purger l'historique", disabled=bool(len(jobs) == len(running)), width="stretch",
+                     help="retire les lancements terminés de la liste ; rien à purger tant qu'ils tournent tous"):
         REGISTRY.clear_finished()
         st.rerun()
 
+    # Ouverture d'office du job de tête : valeur par défaut au premier affichage seulement
+    # (cf. render_job). Ensuite c'est le pli du lecteur qui décide — un lancement plus
+    # récent ne referme plus la console du job qu'il relègue en 2e position.
     for index, job in enumerate(jobs):
         render_job(job, expanded=(index == 0))
 
 
+@st.fragment(run_every="5s")
+def render_activites_disque() -> None:
+    """Exécutions et jeux en cours d'après le DISQUE : indépendant du registre de cette session."""
+    experiences.rendre_activites(st, experiences.activites_en_cours())
+
+
+@st.fragment(run_every="10s")
+def render_reprenables_disque() -> None:
+    """Les exécutions ARRÊTÉES et leur cause, avec de quoi les relancer.
+
+    Elles ne s'affichaient nulle part ici : une exécution qui s'arrête — quota épuisé,
+    passerelle injoignable, PC éteint, pause — quittait l'onglet à la seconde même, et il
+    fallait la retrouver dans le registre de 🧪 Expériences pour la reprendre. Dix secondes
+    suffisent : une exécution arrêtée ne bouge plus.
+    """
+    # `launch_target` en direct, pas `session_state["_lancer"]` : celui-là n'est écrit que par
+    # l'onglet Expériences, dessiné APRÈS celui-ci — au premier passage le bouton serait grisé.
+    experiences.rendre_reprenables(st, experiences.interrompues(), lancer=launch_target)
+
+
+@st.fragment(run_every="10s")
+def render_sonde_conteneurs() -> None:
+    """La sonde des conteneurs : son bouton, et ce qu'elle a relevé.
+
+    Elle existe parce que trois runs ont été perdus le 2026-09-07 sur un `controller` tué
+    (code 137) sans trace dans ses journaux et sans OOM signalé par Docker. Ce volet évite
+    d'aller lire ses fichiers à la main."""
+    sonde = metrics.sonde_conteneurs()
+    with st.container(border=True):
+        bouton, resume = st.columns([1, 3], vertical_alignment="center")
+        with bouton:
+            make_action("🩺 Sonde des conteneurs", "watch-containers", key="sonde-conteneurs",
+                        help="`make watch-containers` : relève la mémoire toutes les 10 s, écoute "
+                             "`docker events`, et photographie les processus de l'hôte quand un "
+                             "conteneur est arrêté. Ne modifie aucun conteneur ; arrêtez-la avec « Stop ».")
+        if not sonde.presente:
+            resume.caption("Aucune campagne. À lancer avant un run long : elle dira qui a arrêté "
+                           "un conteneur, et combien de mémoire il prenait.")
+            return
+        pics = " · ".join(f"`{n}` {o / 2**30:.2f} Gio"
+                          for n, o in sorted(sonde.pics.items(), key=lambda x: -x[1])[:4])
+        resume.markdown(f"**Campagne `{sonde.dossier.name}`** — {sonde.mesures} mesures"
+                        + (f" · début {sonde.debut[11:19]}" if sonde.debut else ""))
+        if pics:
+            resume.caption(f"Pics de mémoire : {pics}")
+
+        if sonde.chutes:
+            st.warning(f"⚠ {len(sonde.chutes)} conteneur(s) tombé(s) et capturé(s) : "
+                       + ", ".join(f"`{c}`" for c in sonde.chutes)
+                       + f". État et journaux dans `{sonde.dossier.name}/chute-<service>.txt`.")
+        if sonde.appelants:
+            st.markdown("**Qui a demandé l'arrêt** — processus de l'hôte photographiés à l'instant même :")
+            for a in sonde.appelants:
+                st.markdown(f"- `{a['service']}` · {a['action']} à {a['heure']}")
+                for commande in a["commandes"] or ["(aucune commande docker ou make dans la photo)"]:
+                    st.code(commande, language="bash")
+        elif sonde.chutes:
+            st.caption("Aucun appelant photographié : la campagne a démarré avant l'écoute de "
+                       "`docker events`. Relancez la sonde pour capturer le prochain arrêt.")
+        for alarme in sonde.alarmes:
+            st.caption(alarme[:300])
+
+
+@st.fragment(run_every="5s")
+def render_derniere_erreur_llm() -> None:
+    """La dernière erreur LLM remontée — une seule ligne, remplacée à chaque nouvelle.
+
+    Lue en fin de `erreurs.jsonl` des exécutions en cours : pas d'historique, juste le
+    dernier échec vu, pour savoir d'un coup d'œil ce qui coince (quota, passerelle saturée…).
+    """
+    err = experiences.derniere_erreur_llm()
+    if not err:
+        return
+    ts = str(err.get("horodatage") or "")[11:19]
+    msg = str(err.get("message") or err.get("type") or "erreur").strip()
+    st.warning(f"⚠️ **Dernière erreur LLM** · {ts} · {msg[:200]}"
+               + f"  \n_{err.get('experience')} / {err.get('execution')} · personne {err.get('person_id')}_")
+
+
+def render_activites() -> None:
+    st.markdown("#### 🧪 Exécutions et jeux en cours")
+    st.caption(
+        "Lu sur le disque : une exécution d'expérience ou une construction de jeu lancée depuis "
+        "un terminal, ou survivante d'un redémarrage du tableau de bord, apparaît ici aussi."
+    )
+    render_activites_disque()
+    render_derniere_erreur_llm()
+    st.divider()
+    st.markdown("#### ⏹ Exécutions arrêtées, à relancer")
+    st.caption(
+        "Pourquoi chacune s'est arrêtée — quota épuisé, passerelle injoignable ou réseau coupé, "
+        "PC ou conteneur arrêté, pause — et de quoi la reprendre sans repayer ses décisions "
+        "déjà acquises. La cause est lue dans l'état écrit par l'exécution et dans son journal "
+        "d'erreurs ; le détail cite toujours la ligne d'origine."
+    )
+    render_reprenables_disque()
+    st.divider()
+    st.markdown("#### ⚙️ Cibles `make` lancées depuis cette session")
+    render_jobs_live()
+
+
 # ── Volet Tickets ─────────────────────────────────────────────────────────────
 def render_tickets() -> None:
-    items = tickets.load_tickets()
+    if st.session_state.pop("last_ticket_saved", None):
+        st.toast("Statut enregistré dans `tickets_status.yaml`")
+    try:
+        items = tickets.load_tickets()
+    except tickets.CleInvalide as erreur:
+        # Deux causes distinctes, deux messages : accuser un « statut inconnu » pour un
+        # problème de clé enverrait chercher au mauvais endroit.
+        st.error(f"`tickets_status.yaml` porte une clé invalide, aucun ticket n'est affiché : {erreur}")
+        st.caption("La clé d'une entrée est le nom de fichier complet du ticket, sans extension.")
+        return
+    except tickets.StatutInconnu as erreur:
+        st.error(f"`tickets_status.yaml` porte un statut inconnu, aucun ticket n'est affiché : {erreur}")
+        st.caption(f"Statuts admis : {', '.join(tickets.EDITABLE_STATUSES)}.")
+        return
+    except ValueError as erreur:
+        # Le fichier reste refusé plutôt que lu de travers, mais l'erreur s'arrête à cet
+        # onglet : sans cette garde, une faute de frappe interrompait le script et faisait
+        # disparaître l'onglet 🧪 Expériences avec celui-ci.
+        st.error(f"`tickets_status.yaml` est refusé, aucun ticket n'est affiché : {erreur}")
+        return
     if not items:
         st.warning("Aucun ticket trouvé dans `docs/tickets/`.")
         return
@@ -424,8 +469,9 @@ def render_tickets() -> None:
         col.metric(f"{tickets.STATUS_ICON[status]} {status.capitalize()}", counts.get(status, 0))
 
     st.caption(
-        "Le statut est déduit des cases à cocher et de la ligne `**État**` du ticket ; "
-        "il est surchargeable dans `scripts/dashboard/tickets_status.yaml` (colonne « Source »)."
+        "Le statut se change dans le tiroir de chaque ticket, plus bas : il est écrit dans "
+        "`scripts/dashboard/tickets_status.yaml`, la source de vérité. À défaut d'entrée il est "
+        "déduit des cases à cocher et de la ligne `**État**` — la colonne « Source » dit lequel a parlé."
     )
 
     frame = pd.DataFrame(
@@ -463,11 +509,67 @@ def render_tickets() -> None:
             st.markdown(f"**Statut** {t.status} _(source : {t.status_source})_")
             if t.state_line:
                 st.markdown(f"**Ligne d'état du ticket** — {t.state_line}")
-            if t.note:
-                st.info(t.note)
             if t.total_boxes:
                 st.progress(t.progress or 0.0, text=f"{t.done}/{t.total_boxes} cases cochées")
             st.caption(f"`{t.rel_path}` — {t.lines} lignes, modifié le {t.modified:%d/%m/%Y %H:%M}")
+            render_ticket_form(t)
+
+
+def render_ticket_form(ticket: tickets.Ticket) -> None:
+    """Changer le statut d'un ticket sans ouvrir un fichier de 1 470 lignes.
+
+    L'écriture ne touche que l'entrée de ce ticket : commentaires d'en-tête, ordre et notes
+    des autres tickets sont préservés à l'octet. Enregistrer sans rien changer n'écrit rien,
+    pour ne pas salir `git status`."""
+    with st.form(key=f"statut-{ticket.path.stem}", border=False):
+        col_statut, col_note = st.columns([1, 3])
+        vocabulaire = tickets.EDITABLE_STATUSES
+        depart = vocabulaire.index(tickets.statut_editable(ticket.status))
+        choix = col_statut.selectbox(
+            "Statut", vocabulaire, index=depart,
+            format_func=lambda s: f"{tickets.STATUS_ICON[s]} {s}",
+            help="`en veille` = décision de ne pas avancer maintenant ; `bloqué` = une dépendance extérieure manque.",
+        )
+        # Le champ porte une clé STABLE : sans elle son identité dépendait de `value=`, donc
+        # une édition du fichier faite entre-temps changeait l'identité du widget et Streamlit
+        # jetait le texte tapé — en affichant « rien à enregistrer ».
+        cle_note = f"note-{ticket.path.stem}"
+        base_note = st.session_state.setdefault(f"{cle_note}-base", ticket.note)
+        note = col_note.text_area(
+            "Note — ce sur quoi le statut s'appuie, et ce qui reste", value=ticket.note, height=110,
+            key=cle_note,
+            help="Affichée dans le tableau. Vidée, elle est retirée du fichier.",
+        )
+        touchee = note != base_note
+        if not touchee and ticket.note != base_note:
+            st.caption("La note de ce ticket a changé dans le fichier depuis l'ouverture du tiroir ; "
+                       "elle sera conservée telle qu'elle y est.")
+        if ticket.status_source != "surcharge":
+            st.caption(
+                f"Ce ticket n'a pas d'entrée dans `tickets_status.yaml` — son statut est "
+                f"{'déduit' if ticket.status != tickets.UNKNOWN else 'inconnu'} "
+                f"(source : {ticket.status_source}). Enregistrer écrira le statut choisi ici."
+            )
+        if st.form_submit_button("💾 Enregistrer le statut", width="stretch"):
+            try:
+                # Note non touchée dans le formulaire → on ne la réécrit pas, une édition faite
+                # à la main dans le fichier entre-temps survit (R14). Touchée, elle gagne :
+                # c'est une intention explicite (R27).
+                modifie = tickets.save_override(ticket.path.stem, choix, note if touchee else None)
+            except (ValueError, RuntimeError, OSError) as erreur:
+                st.error(f"Statut non enregistré : {erreur}")
+            else:
+                # La base est reprise dans les deux cas : sinon, après une écriture sans
+                # effet, la note resterait « touchée » pour toute la session.
+                st.session_state[f"{cle_note}-base"] = note
+                if modifie:
+                    st.session_state["last_ticket_saved"] = f"{ticket.title} → {choix}"
+                    st.rerun()
+                elif touchee:
+                    st.info("Le fichier dit déjà cela : votre note ne diffère que par des espaces, "
+                            "qui sont normalisés à l'écriture.")
+                else:
+                    st.info("Rien à enregistrer : le statut et la note sont déjà ceux-là.")
 
 
 # ── Volet Métriques ───────────────────────────────────────────────────────────
@@ -729,8 +831,8 @@ def render_synthesis() -> None:
     with actions[1]:
         make_action("🌐 make synthesis-open", "synthesis-open", help="Régénère puis ouvre docs/synthesis/index.html dans le navigateur.")
     actions[2].caption(
-        "Évals payantes (`common-set-eval`, `heldout-eval`) : ▶ Commandes → "
-        "Synthèse des scores, avec DRY_RUN=1 d'abord."
+        "Évals payantes : `make common-set-eval` et `make heldout-eval` dans un terminal, "
+        "avec `DRY_RUN=1` d'abord pour chiffrer."
     )
 
 
@@ -1031,7 +1133,8 @@ def render_calib_cloud() -> None:
             "pause",
             project="calib",
             disabled=not pause_ok,
-            help="Coupe le daemon et le digest sur la VM, arme le rappel Discord quotidien.",
+            help="Coupe le daemon et le digest sur la VM, arme le rappel Discord quotidien "
+                 "— cochez « Confirmer la pause » ci-dessus.",
         )
     with actions[2]:
         make_action(
@@ -1042,7 +1145,7 @@ def render_calib_cloud() -> None:
         )
     st.caption(
         "Dashboard de calibration détaillé (DAG, Pareto, distributions) : "
-        "`make ui` dans ▶ Commandes → projet prompt_calibration."
+        "`cd prompt_calibration && make ui` dans un terminal."
     )
 
 
@@ -1066,6 +1169,16 @@ def render_metrics() -> None:
     render_synthesis()
 
 
+def _is_rpd_zero(rpd: object) -> bool:
+    """True si le quota RPD est explicitement nul (provider inutile)."""
+    if rpd is None:
+        return False
+    try:
+        return int(rpd) == 0
+    except (ValueError, TypeError):
+        return False
+
+
 # ── Volet Vue d'ensemble ──────────────────────────────────────────────────────
 @st.fragment(run_every="10s")
 def render_overview() -> None:
@@ -1083,12 +1196,18 @@ def render_overview() -> None:
         if not docker.available:
             st.markdown(f"{status_dot('muted')} Docker indisponible")
         elif not docker.services:
-            st.markdown(f"{status_dot('critical')} Pile arrêtée — `make up`")
+            st.markdown(f"{status_dot('critical')} Pile arrêtée")
+            make_action("🐳 make up", "up", key="apercu-up",
+                        help="Démarre toute la pile. Pour une seule expérience, l'onglet "
+                             "🧪 Expériences démarre juste ce qu'elle utilise.")
         else:
             kind = "good" if not docker.missing else "warning"
             st.markdown(f"{status_dot(kind)} **{docker.running}/{len(docker.services)}** conteneurs actifs")
             if docker.missing:
                 st.caption(f"Manquants : {', '.join(docker.missing)}")
+                make_action("🐳 make up", "up", key="apercu-up-manquants",
+                            help="Démarre toute la pile. Pour une seule expérience, l'onglet "
+                                 "🧪 Expériences démarre juste ce qu'elle utilise.")
 
     with row1[1], st.container(border=True):
         st.markdown("**🎮 Run GAMA** — onglet 🎮 Run GAMA")
@@ -1103,10 +1222,11 @@ def render_overview() -> None:
     with row1[2], st.container(border=True):
         st.markdown("**🤖 Providers** — onglet 🤖 Providers")
         if health.available:
-            n = len(health.providers)
-            ok = sum(1 for p in health.providers if p.available)
-            cooldown = sum(1 for p in health.providers if p.cooldown)
-            exhausted = sum(1 for p in health.providers if p.quota_exhausted)
+            providers = [p for p in health.providers if not _is_rpd_zero(p.rpd_limit)]
+            n = len(providers)
+            ok = sum(1 for p in providers if p.available)
+            cooldown = sum(1 for p in providers if p.cooldown)
+            exhausted = sum(1 for p in providers if p.quota_exhausted)
             kind = "good" if ok == n else ("warning" if ok else "critical")
             st.markdown(f"{status_dot(kind)} **{ok}/{n}** disponibles")
             if cooldown or exhausted:
@@ -1138,11 +1258,15 @@ def render_overview() -> None:
             st.caption(git["head"])
 
     with row2[2], st.container(border=True):
-        st.markdown("**⚙️ Jobs** — onglet 📟 Lancements")
+        st.markdown("**⚙️ Jobs** — onglet 📟 Activités en cours")
         running = REGISTRY.running_count()
         st.markdown(
             f"{status_dot('good' if running else 'muted')} **{running}** lancement(s) en cours"
         )
+
+    with st.container(border=True):
+        st.markdown("**🧪 Expériences** — onglet 🧪 Expériences")
+        experiences.rendre_activites(st, experiences.activites_en_cours(), compact=True)
 
     st.caption(f"Données lues à {datetime.now():%H:%M:%S} — rafraîchissement automatique (10 s).")
 
@@ -1243,10 +1367,11 @@ def render_run_actions() -> None:
             "Je confirme : purge Grafana/Prometheus et compteurs Redis avant démarrage",
             key="run-confirm",
         )
-        if st.button("🚀 make run-offline", disabled=proc.active or not confirmed, width="stretch"):
+        if st.button("🚀 make run-offline", disabled=proc.active or not confirmed, width="stretch",
+                     help="cochez la confirmation ci-dessus ; indisponible tant qu'un run tourne"):
             argv = ["make", "run-offline"]
             REGISTRY.launch("root:run-offline", argv, REPO_ROOT, ("long", "danger"))
-            st.toast("Run lancé — suivi dans 📟 Lancements")
+            st.toast("Run lancé — suivi dans 📟 Activités en cours")
         if proc.active:
             st.caption("Un run tourne déjà : arrêtez-le d'abord.")
 
@@ -1256,16 +1381,19 @@ def render_run_actions() -> None:
             "Tue le launcher headless et stoppe le service `gama` ; "
             "les autres services restent en place."
         )
-        if st.button("⏹ make stop-run", disabled=not proc.active, width="stretch"):
+        if st.button("⏹ make stop-run", disabled=not proc.active, width="stretch",
+                     help="disponible seulement quand un run tourne"):
             REGISTRY.launch("root:stop-run", ["make", "stop-run"], REPO_ROOT)
-            st.toast("Arrêt demandé — suivi dans 📟 Lancements")
+            st.toast("Arrêt demandé — suivi dans 📟 Activités en cours")
+        if not proc.active:
+            st.caption("Aucun run en cours.")
 
     with down, st.container(border=True):
         st.markdown("**🔻 Couper toute la pile**")
         st.caption("`make down` — arrête tous les services Docker, y compris `gama`.")
         if st.button("🔻 make down", width="stretch"):
             REGISTRY.launch("root:down", ["make", "down"], REPO_ROOT)
-            st.toast("Arrêt de la pile — suivi dans 📟 Lancements")
+            st.toast("Arrêt de la pile — suivi dans 📟 Activités en cours")
 
 
 def render_run_report(run: metrics.RunInfo) -> None:
@@ -1368,20 +1496,21 @@ def render_providers_tab() -> None:
     by_name = {p["name"]: p for p in static.providers} if static.available else {}
 
     if health.available:
-        n = len(health.providers)
-        ok = sum(1 for p in health.providers if p.available)
+        providers = [p for p in health.providers if not _is_rpd_zero(p.rpd_limit)]
+        n = len(providers)
+        ok = sum(1 for p in providers if p.available)
         cols = st.columns(4)
         cols[0].metric("Providers", n, border=True)
         cols[1].metric("Disponibles", ok, border=True)
-        cols[2].metric("En cooldown", sum(1 for p in health.providers if p.cooldown), border=True)
+        cols[2].metric("En cooldown", sum(1 for p in providers if p.cooldown), border=True)
         cols[3].metric(
-            "Quota jour épuisé", sum(1 for p in health.providers if p.quota_exhausted), border=True
+            "Quota jour épuisé", sum(1 for p in providers if p.quota_exhausted), border=True
         )
         frame = pd.DataFrame(
             [
                 {
                     "": "🟢" if p.available else ("🟠" if p.cooldown else "🔴"),
-                    "Provider": p.name,
+                    "Provider": by_name.get(p.name, {}).get("adapter", p.name),
                     "Modèle": by_name.get(p.name, {}).get("model", "?"),
                     "RPM": f"{p.current_rpm}/{p.rpm_limit or '∞'}",
                     "Tâches": p.active_tasks,
@@ -1391,7 +1520,7 @@ def render_providers_tab() -> None:
                     "Tokens jour": p.daily_tokens,
                     "TPD": p.tpd_limit,
                 }
-                for p in health.providers
+                for p in providers
             ]
         )
         st.dataframe(
@@ -1415,12 +1544,12 @@ def render_providers_tab() -> None:
     else:
         st.warning(f"{health.error} Les quotas ci-dessous sont ceux déclarés dans `providers.yaml`.")
         if static.available:
+            static_providers = [p for p in static.providers if not _is_rpd_zero(p.get("rpd_limit"))]
             st.dataframe(
                 pd.DataFrame(
                     [
                         {
-                            "Provider": p["name"],
-                            "Adapter": p["adapter"],
+                            "Provider": p["adapter"],
                             "Modèle": p["model"],
                             "RPM": p["rpm_limit"],
                             "TPM": p["tpm_limit"],
@@ -1428,7 +1557,7 @@ def render_providers_tab() -> None:
                             "TPD": p["tpd_limit"],
                             "Poids": p["weight"],
                         }
-                        for p in static.providers
+                        for p in static_providers
                     ]
                 ),
                 hide_index=True,
@@ -1458,12 +1587,13 @@ def render_providers_tab() -> None:
     with dry:
         if st.button("🔍 Bilan à blanc (DRY_RUN=1)", width="stretch"):
             REGISTRY.launch("root:providers-dry", ["make", "providers", "DRY_RUN=1"], REPO_ROOT)
-            st.toast("Bilan lancé — suivi dans 📟 Lancements")
+            st.toast("Bilan lancé — suivi dans 📟 Activités en cours")
     with real:
         confirmed = st.checkbox("Je confirme la réécriture de providers.yaml", key="providers-confirm")
-        if st.button("🔄 make providers", disabled=not confirmed, width="stretch"):
+        if st.button("🔄 make providers", disabled=not confirmed, width="stretch",
+                     help="cochez la confirmation ci-dessus : la cible réécrit providers.yaml"):
             REGISTRY.launch("root:providers", ["make", "providers"], REPO_ROOT)
-            st.toast("Rafraîchissement lancé — suivi dans 📟 Lancements")
+            st.toast("Rafraîchissement lancé — suivi dans 📟 Activités en cours")
 
     run = current_run()
     if run:
@@ -1478,22 +1608,34 @@ def render_providers_tab() -> None:
             )
 
 
+def launch_target(target_name: str, values: dict[str, str]) -> None:
+    """Lance une cible make de la racine par le registre de jobs (suivi dans 📟 Activités en cours)."""
+    _, targets = cached_targets()
+    target = next((t for t in targets.get("root", []) if t.name == target_name), None)
+    if target is None:
+        st.error(f"Cible `{target_name}` introuvable dans le Makefile.")
+        return
+    REGISTRY.launch(target.key, target.command(values), target.cwd, target.flags)
+    st.session_state["last_job_label"] = f"make {target_name}"
+
+
 # ── Assemblage ────────────────────────────────────────────────────────────────
 render_sidebar()
 st.title("🚦 Pilotage llm-agents-gama")
 
 # Les libellés d'onglet ne peuvent pas être rafraîchis par un fragment : le
-# compteur de jobs vit dans la barre latérale et dans le volet Lancements.
-tab_overview, tab_run, tab_providers, tab_calib, tab_commands, tab_jobs, tab_tickets, tab_metrics = st.tabs(
+# compteur de jobs vit dans la barre latérale et dans le volet Activités en cours.
+tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_travaux = st.tabs(
     [
         "🏠 Vue d'ensemble",
         "🎮 Run GAMA",
         "🤖 Providers",
         "🧬 Calibration",
-        "▶ Commandes",
-        "📟 Lancements",
+        "📟 Activités en cours",
         "🎫 Tickets",
         "📊 Métriques",
+        "🧪 Expériences",
+        "🗂️ Mes travaux",
     ]
 )
 
@@ -1505,11 +1647,16 @@ with tab_providers:
     render_providers_tab()
 with tab_calib:
     render_calibration_tab()
-with tab_commands:
-    render_commands()
 with tab_jobs:
-    render_jobs_live()
+    render_activites()
 with tab_tickets:
     render_tickets()
 with tab_metrics:
     render_metrics()
+
+
+with tab_experiences:
+    experiences.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
+                       arreter=REGISTRY.stop)
+with tab_travaux:
+    mes_travaux.render(st, pd)

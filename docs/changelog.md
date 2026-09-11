@@ -1,3 +1,1714 @@
+## [2026-09-10] Le résumé devient le chapitre 0, et GAMA Days redevient l'exception
+
+Le rangement livré plus tôt dans la journée ouvrait un dossier `soumissions/` à deux branches,
+`aamas2027/` et `gama_days/`, comme si les deux conférences pesaient pareil. Elles ne pèsent pas
+pareil : **tout ce dossier est l'article AAMAS**, sauf un résumé de quatre pages pour les GAMA
+Days. La symétrie était fausse, et elle éloignait du texte le résumé qui en fait partie.
+
+**Avant :** `soumissions/aamas2027/` (consignes, gabarit, résumé) et `soumissions/gama_days/`.
+**Après :** tout l'AAMAS dans `article/` — le résumé comme chapitre `00`, les consignes en
+`article/SOUMISSION_AAMAS_2027.md`, le gabarit officiel en `article/overleaf/template/` — et
+`gama_days/` seul à la racine du dossier, l'exception assumée.
+
+**Le résumé est un chapitre.** Il vivait à l'intérieur d'un document de comparaison de versions,
+donc nulle part dans le texte. Il devient la section 0, dans les trois arbres :
+`article/en/00_abstract.md` (maître, `v0.2`, 240 mots), `article/overleaf/00_abstract.tex` (le
+LaTeX prêt à coller) et `article/fr/00_abstract.md` — **un miroir français qui n'existait pas**,
+écrit comme traduction fidèle du maître, sans un fait ajouté ni retiré. Le document de
+comparaison rejoint la relecture, en `article/relecture/00_abstract.md`, où il garde sa valeur :
+ce qui a été coupé entre `v0.1` et `v0.2`, et pourquoi.
+
+**Un point ouvert est remonté du document de relecture vers l'en-tête du résumé**, dans les trois
+fichiers, plutôt que d'être corrigé en silence : le texte annonce une sur-attraction du **vélo**,
+alors que le run du 8 septembre 2026 mesure une sur-attraction des **transports en commun**
+(26,5 % contre 12,4 % observés) et la sous-estimation de la marche (15,3 % contre 26,8 %). La
+formulation d'origine est conservée telle quelle ; l'arbitrage reste à faire avant de remplir les
+emplacements chiffrés.
+
+`make paper-parite` voit désormais dix chapitres, dont trois rédigés et à parité sur les trois
+arbres. La trame passe en `v1.8` : le résumé y figure comme section 0.
+
+---
+
+## [2026-09-10] Le dossier de l'article est rangé par métier, et la trame ne contredit plus le texte
+
+`docs/paper/` mêlait à sa racine le texte de l'article, la méthode, la presse locale, deux
+appels à communication, des planches et des rapports — trente et une entrées, sans hiérarchie.
+Le dossier est maintenant rangé par métier, et chaque chose a un seul endroit.
+
+**Avant :** 31 entrées à plat, le manuscrit détaillé et les chapitres portant tous deux une
+introduction, l'état de l'art (51 PDF, 145 Mo) posé à la racine du dépôt.
+**Après :** sept dossiers — `article/` (le texte), `methode/`, `sources/`, `soumissions/`,
+`figures/`, `presentations/`, `archive/` — et une seule source par chapitre.
+
+Le texte vit dans trois arbres parallèles : `article/en/` porte le maître anglais,
+`article/fr/` le miroir français, `article/overleaf/` le rendu LaTeX (désormais en `.tex`, et
+non plus du LaTeX déguisé en Markdown). Un fichier par section, nommé `NN_slug` où `NN` **est**
+le numéro annoncé dans le plan, en section 1.4 : une renumérotation se voit dans `git status`
+et plus seulement dans une phrase.
+
+**Les six chapitres à écrire ont désormais un endroit.** Le manuscrit détaillé `v1.6` est figé
+dans `archive/` et ses sections sont éclatées en brouillons français — `03_metrics_and_substrate`
+à `08_conclusion`, plus `99_annexes`. Chacun porte en en-tête ce qui le disqualifie encore comme
+chapitre : un texte antérieur à la réécriture de l'introduction, un vocabulaire « Tier 1/2/3 » à
+remplacer, des chiffres à recouper depuis le dépôt. Un brouillon reste un brouillon, mais il
+n'est plus introuvable.
+
+**La trame ne contredit plus le texte.** Les deux ne disaient pas la même chose depuis neuf
+jours : la trame plaçait la cascade hybride en section 6 et la conclusion en 7, le texte annonce
+les régimes non tabulés en 6, les limites en 7, la conclusion en 8. Arbitrage : le texte fait
+foi. `article/plan/PLAN.md` passe en `v1.7`, la cascade devient les implications hybrides de la
+section 7 — une perspective tirée des limites mesurées, non une contribution annoncée — et les
+références quittent la numérotation des sections. Le dossier `article/plan/` porte un README qui
+dit ce qui fait foi, comment une renumérotation se propage, et un **journal des écarts** daté :
+un désaccord constaté ne se corrige plus en silence.
+
+**Un garde-fou pour l'arbre par langue.** Séparer `en/` de `fr/` fait disparaître le signal qui
+existait quand les trois fichiers d'un chapitre étaient voisins. `make paper-parite` le
+rétablit : il relit les en-têtes de version des trois arbres et sort en erreur quand un maître a
+bougé sans son miroir, quand une langue manque à un chapitre rédigé, ou quand une section
+annoncée par le plan n'a aucun fichier. Sur les chapitres en brouillon, l'absence d'anglais et
+de LaTeX est attendue et n'est pas comptée comme un écart. Vérifié par l'échec : deux
+divergences introduites volontairement sont bien détectées, code de sortie 1.
+
+**L'état de l'art rejoint l'article, sans entrer dans git.** Les 51 PDF de référence passent de
+la racine du dépôt à `docs/paper/sources/etat_de_lart/`, à côté de la bibliographie qu'ils
+alimentent. Ils sont **ignorés par git** : 145 Mo de documents d'éditeurs n'ont pas à peser sur
+un dépôt qui fait déjà 287 Mo, et `scripts/download_all_papers.py` sait les retélécharger. Seul
+leur README commenté, qui situe chaque article, est versionné.
+
+**Au passage :** trois doublons supprimés — le rapport de scénarios existait deux fois, à
+l'octet près ; un lien symbolique accentué `expérience_plan` était indexé par erreur ; un
+fichier nommé `experiments_OLD_TO_DELETE.html` l'était aussi. Les 44 liens relatifs cassés par
+les déplacements sont réparés et vérifiés, y compris deux qui l'étaient déjà avant.
+
+---
+
+## [2026-09-10] Le juge de la calibration porte enfin le nom du modèle qui répond
+
+Google avait retiré l'alias `gemini-3.1-flash-lite-preview` et le servait, sans erreur ni
+avertissement, avec son successeur `gemini-3.1-flash-lite`. Toutes les mesures lancées
+dessus scellaient donc dans leur empreinte le nom d'un modèle qui n'avait pas répondu. Le
+garde d'exécution de l'adaptateur Google a fini par le détecter et rendre un 502 ; le nom
+est désormais corrigé partout où il était demandé — passerelle, campagne de calibration,
+plan d'expériences et gabarits de run.
+
+**Avant :** la campagne demandait `gemini-3.1-flash-lite-preview`, Google répondait avec
+`gemini-3.1-flash-lite`, et l'écart n'apparaissait nulle part. 258 évaluations en base
+portent encore le nom fautif.
+**Après :** le nom demandé est celui qui répond. Le garde de démarrage
+`assert_pinned_eval_model` cesse au passage de refuser une campagne neuve, puisque le juge
+n'est plus désigné par un alias flottant.
+
+**Le modèle d'évaluation n'a pas changé** — seule son étiquette redevient vraie. Aucune
+évaluation payée n'est perdue : rien n'était joignable sous l'ancien nom avec la clé de
+cache actuelle, que l'ajout de `ds=<dataset_version>` avait déjà invalidée. Les noms
+d'expériences ne bougent pas non plus : `preview` était déjà traité comme du bruit par
+l'abréviation, donc l'ancien et le nouveau nom donnent le même slug `gemini-31-fl`.
+
+Deux garde-fous nouveaux empêchent la rechute : un test refuse toute config de campagne
+dont le juge porte un alias flottant, et un autre refuse qu'une instance de la passerelle
+redemande un alias connu comme retiré — l'un et l'autre échouent au commit, avant de
+consommer du quota.
+
+Ce qui n'a **pas** été touché, et attend un arbitrage : les empreintes déjà scellées sous
+le nom fautif (`experiments/archive/*/static_config.yaml`, les quatre définitions
+`data/experiences/exp_gemini-31-fl_*` dont l'exécution est terminée, et les synthèses
+datées de `docs/synthesis/`). Les réécrire reviendrait à retoucher une archive.
+
+---
+
+## [2026-09-10] L'article se lit par chapitres, et le plan est annoncé dans l'introduction
+
+L'introduction de l'article AAMAS portait tout : le contexte, l'état de l'art, le verrou, les
+contributions et l'annonce du plan, dans un seul fichier de 95 lignes décliné en trois langues
+de sortie. Les chapitres terminés vivent maintenant dans `docs/paper/chapitres/`, un dossier
+qui ne contient que la version courante, à raison de trois fichiers par chapitre : maître
+anglais, miroir français, rendu LaTeX pour Overleaf.
+
+**Avant :** un fichier `INTRODUCTION_*` par langue, l'état de l'art en section 2 de
+l'introduction, et un plan qui annonçait les sections 2 à 7.
+**Après :** deux chapitres, `01_INTRODUCTION_*` (contexte 1.1, verrou 1.2, contributions 1.3,
+organisation de l'article 1.4) et `02_RELATED_WORK_*` (2.1 utilité aléatoire, 2.2 agents
+génératifs, 2.3 alignement distributionnel), et un plan qui annonce l'état de l'art puis les
+sections 3 à 8.
+
+L'état de l'art devient une section de l'article à part entière, ce qui décale toutes les
+sections suivantes d'un cran. Le verrou reste une sous-section de l'introduction : il porte la
+motivation de H0 et la distinction entre substitut statistique et système adaptatif, qui
+organise la suite du texte. Trois raccords étaient nécessaires pour que la découpe ne casse pas
+la lecture : le plan renumérote et annonce la section 2 ; la phrase sur SILICA, en 2.3,
+n'annonce plus un verrou à venir mais renvoie à la section 1.2 qui le précède désormais ; les
+deux renvois internes au verrou, dans le paragraphe d'alignement et dans le palier 2, nomment
+la section 1.2. Les renvois vers 2.2 et 2.3 gardent leurs numéros, et le rendu LaTeX travaille
+sur `\label` / `\ref` : aucun numéro n'y est écrit en dur.
+
+Aucun changement de fond : le texte des chapitres est celui de la v0.15, mot pour mot hors les
+trois raccords ci-dessus. Cette v0.15, dernière version monolithique, est figée dans
+`docs/paper/archive/INTRODUCTION_*_v0.15.md` — elle n'existait jusqu'ici dans aucune version
+suivie. Les chapitres démarrent en `v0.16`.
+
+**Au passage :** le dossier `docs/paper/` retrouve une règle de rangement explicite. Un
+chapitre validé va dans `chapitres/` en un seul exemplaire, les instantanés figés restent dans
+`archive/`, et l'annonce du plan vit dans le chapitre 1 et nulle part ailleurs.
+
+---
+
+## [2026-09-10] La réflexion se règle par niveau, et « maximum » a un nom : high
+
+Le réglage numérique livré ce matin visait la mauvaise API. Vérification faite dans la
+documentation du fournisseur : les modèles Gemini 3 se pilotent par **`thinking_level`** —
+`minimal`, `low`, `medium`, `high` — et non par un budget en jetons. `high` est la réflexion
+maximale. Il n'y avait donc pas de plafond à relever : le maximum est un nom.
+
+**Avant :** « budget fixe » et un nombre à saisir, avec le risque qu'il soit raboté sans le dire.
+**Après :** « maximum (high) » dans le formulaire, dès que le modèle déclare ses niveaux.
+
+Le budget numérique reste accepté par l'API pour compatibilité ascendante, mais **les deux
+réglages ensemble rendent 400**. La passerelle refuse donc la combinaison avant l'appel, le
+formulaire n'en propose qu'un, et l'expérience n'en écrit qu'un.
+
+Les niveaux acceptés varient d'un modèle à l'autre — `minimal` existe sur gemini-3.6-flash et
+3.5-flash-lite, pas sur 3.7 ni 3.8, où le demander rend 400. Ils sont déclarés par instance dans
+`providers.yaml`, relevés dans la documentation et non devinés : cinq instances sur onze, les
+autres restent sans niveau et retombent sur le budget numérique, en le disant. Quand plusieurs
+clés servent un même modèle, seuls les niveaux communs sont offerts : un niveau accepté par
+l'une et refusé par l'autre ferait échouer l'appel selon la clé tirée.
+
+---
+
+## [2026-09-10] Demander « le maximum » de réflexion suppose de connaître le plafond
+
+Il n'existe pas de mot-clé « max » : la réflexion se demande en jetons. Et `-1` n'est pas le
+maximum, c'est l'automatique — le modèle arbitre, il peut réfléchir peu. Restait donc à saisir
+un grand nombre à la main, sans savoir s'il tenait.
+
+**Avant :** un budget de 32768 sur un modèle qui plafonne plus bas partait quand même. Le
+fournisseur le rabotait sans le dire, et l'expérience scellait dans son empreinte un budget qui
+n'avait pas eu lieu — la réponse ne rapporte que les jetons de pensée consommés, jamais le
+budget appliqué, donc rien ne permettait de le rattraper après coup.
+**Après :** « maximum du modèle (24576 jetons) » apparaît au formulaire dès qu'un plafond est
+déclaré, et résout vers ce nombre. L'empreinte porte une valeur concrète et vérifiable. Un
+budget supérieur est refusé au lancement, pas découvert trois heures plus tard.
+
+Le plafond se déclare par instance dans `providers.yaml` (`thinking_budget_max`), **relevé dans
+la documentation du fournisseur et jamais deviné**. Aucune valeur n'est fournie avec ce
+changement : tant qu'aucun plafond n'est relevé, « maximum » reste absent du formulaire, qui dit
+pourquoi. Un chiffre plausible aurait été pire que rien — il aurait fait passer pour vérifié ce
+qui ne l'est pas.
+
+Deux détails qui comptent quand plusieurs clés servent le même modèle : c'est le **plus petit**
+plafond qui vaut, sans quoi l'appel serait refusé sur l'instance la plus contrainte ; et si une
+seule instance ne déclare rien, il n'y a pas de plafond du tout — on ne déduit pas une valeur
+d'un sous-ensemble.
+
+---
+
+## [2026-09-10] La profondeur de réflexion se règle, et se voit quand elle n'est pas appliquée
+
+Les modèles Gemini réfléchissaient sans que personne ne le demande ni ne le sache : aucun
+`thinkingConfig` n'était envoyé, donc chacun appliquait son défaut — alors que la passerelle
+lisait déjà le compteur de jetons de pensée sans le piloter. C'est la piste qu'un audit avait
+désignée pour expliquer un écart de score : 44 s de délibération par décision sur un canal
+contre 8 s sur l'autre, et 98 % de justifications chiffrées contre 6 à 24 %.
+
+**Avant :** aucun moyen de régler la réflexion, et deux runs pouvaient différer sur ce seul
+facteur sans que rien ne le trace.
+**Après :** « Profondeur de réflexion » dans le formulaire — défaut du fournisseur, désactivée,
+laissée au modèle, ou budget fixe en jetons. Le réglage est scellé dans l'empreinte du décideur :
+deux budgets font deux empreintes, le rejeu est fidèle.
+
+Trois valeurs, trois sens distincts : ne rien envoyer (le fournisseur décide) n'est pas la même
+chose que demander zéro. Le défaut reste « ne rien envoyer », pour ne pas déplacer d'un coup
+toutes les mesures existantes.
+
+Le piège traité en même temps : **la pensée est prélevée sur le budget de sortie**. Un budget de
+réflexion demandé sans réserve fait tronquer la réponse et l'appel est perdu. La passerelle
+relève donc le plafond de sortie en conséquence, et quand une troncature survient malgré tout
+elle dit lequel des deux réglages arbitrer au lieu de laisser conclure à une boucle de
+répétition.
+
+Enfin, ce qui n'est pas appliqué se dit : seuls les fournisseurs Google savent transmettre ce
+réglage. Ailleurs, la passerelle avertit une fois que le budget est scellé dans l'empreinte sans
+être envoyé, et le formulaire le signale avant l'enregistrement. C'est la leçon du `t0` du canal
+Antigravity — une température scellée dans l'empreinte, inscrite dans le nom de l'expérience, et
+jamais transmise.
+
+---
+
+## [2026-09-10] Le formulaire ne propose plus que ce qui peut tourner
+
+Le tableau de bord offrait tout ce que les fichiers contenaient : des expériences dont le
+gabarit venait d'être invalidé, des prompts que la passerelle refuse désormais de servir, des
+modèles à vingt requêtes par jour pour une expérience qui en demande deux mille trois cents.
+Choisir l'un d'eux menait à un aller-retour perdu, ou à une mesure qu'on aurait invalidée après
+coup.
+
+**Avant :** 26 lignes d'expériences, 18 prompts, 15 modèles distants — sans distinction entre ce
+qui tourne et ce qui échouera.
+**Après :** 9 expériences, 15 prompts, 10 modèles distants. Le reste est retiré du choix, compté
+et motivé.
+
+**Avant :** « Modèle : gemini-3.8-flash — 20 req/jour disponibles sur 20 » était proposé comme
+les autres.
+**Après :** il est sous un dépli « 🚫 5 modèles écartés », avec la raison : quota journalier hors
+d'atteinte, ~114 jours pour une expérience complète.
+
+Rien ne disparaît sans dire pourquoi. Les expériences hors tableau se déplient avec leur motif
+d'archivage ou d'invalidation, et le rappel que définitions, exécutions, traces et scores sont
+intacts sur le disque — `make registre TOUT=1` les liste en ligne de commande. Les prompts et
+modèles écartés nomment leur verrou.
+
+Le filtre des prompts reproduit exactement ce que la passerelle refuse au service, et le filtre
+des modèles s'appuie sur le même module d'aptitude que `experience-lancer` : le formulaire et le
+lancement disent la même chose. Un test de parité verrouille l'égalité — sans lui, l'un des deux
+dériverait, et c'est le formulaire qui aurait tort.
+
+---
+
+## [2026-09-10] Aucun prompt ne part au modèle sans avoir été audité par un tiers
+
+Le corpus de prompts est passé au crible par un agent indépendant — `prompt-auditor`, qui n'a
+que des outils de lecture et ne réécrit jamais un texte — et le garde-fou est **armé** : servir
+une variante sans avis de neutralité valide est désormais un refus, plus un avertissement.
+
+**Avant :** 25 variantes, aucune auditée, rien qui distingue un prompt éprouvé d'un brouillon.
+**Après :** 18 variantes, toutes auditées, chaque avis scellé au sha256 de son texte. Retoucher
+un prompt après validation périme l'avis et la variante redevient inauditée.
+
+Cinq audits ont tourné. Ils ont trouvé ce que la relecture humaine avait laissé passer :
+
+- **Deux règles figées inédites**, d'une forme que personne n'avait cherchée : un multiplicateur
+  de durée suivi d'une consigne de rang. « Quand un transport collectif *double ou triple* la
+  durée porte-à-porte […] l'usager arbitre en faveur du mode le plus économe ». Un nombre écrit
+  en lettres reste un nombre. Les deux variantes concernées sont invalidées et remplacées par
+  une reformulation qui retire le seuil sans rien changer d'autre : `expert_chaine_m7.1` et
+  `expert_gem_3.8_v2`, toutes deux déclarées conformes.
+- **Une contradiction dans le fichier lui-même** : le prompt minimal historique était invalidé
+  au nom d'une règle qui ne vaut que pour la famille minimale, alors que la déclaration des
+  familles le rangeait en experte. La famille sous laquelle il a servi est désormais écrite.
+- **Un doublon** : deux variantes portaient le même texte à l'octet près sous deux noms
+  différents. Une comparaison d'expériences aurait pu opposer un prompt à lui-même.
+
+Le classement en paie le prix, et c'était le but : l'expérience menée sur `expert_chaine_m7`
+est invalidée à son tour. Elle était en tête des décideurs LLM depuis ce matin. Neuf expériences
+restent actives, le meilleur prompt valide est `expert_chaine_m6` à 11,06 de composite.
+
+Les neuf variantes `calibrated_*` de juin, artefacts temporaires, sont retirées du fichier —
+vérifié avant : aucune expérience ne les référençait, donc aucune empreinte archivée ne devient
+irreproductible. L'historique git les conserve.
+
+Ce qui n'a pas bougé : les empreintes scellées des exécutions passées se recalculent à
+l'identique, et le prompt actif démarre la plateforme.
+
+---
+
+## [2026-09-10] Un serveur local ne peut plus servir un modèle à la place d'un autre
+
+Une instance de la passerelle demandait `qwen3.8-27b-local`, un identifiant qui n'existe pas
+côté LM Studio. On s'attendait à une erreur de modèle inconnu ; il n'y en avait pas. Vérifié en
+direct : LM Studio répond `HTTP 200` et sert **un autre modèle chargé** — ici
+`qwen3-vl-8b-instruct-mlx`, un 8 B de vision au lieu du 27 B demandé.
+
+**Avant :** une mesure produite par cette instance portait le nom du modèle demandé, pas celui
+qui avait répondu. Rien ne le signalait, ni dans le journal, ni dans l'empreinte scellée.
+**Après :** la requête échoue sur « substitution de modèle : 'qwen/qwen3.8-27b' demandé,
+'qwen3-vl-8b-instruct-mlx' servi — la mesure porterait un nom de modèle faux ».
+
+L'adaptateur des serveurs OpenAI-compatibles compare désormais le modèle annoncé par la réponse
+à celui demandé, et refuse l'écart. C'est ce que la passerelle assurait déjà pour les
+fournisseurs qui déclarent leur identité, et qui manquait ici. Une réponse sans champ `model`
+passe sans contrôle : refuser sur un champ absent bloquerait des serveurs conformes.
+
+L'identifiant de l'instance est corrigé au passage. À noter, contre une conclusion trop rapide :
+ce défaut n'explique **pas** l'arrêt de l'expérience `qwen38-27b` à 244 décisions. Sa trace
+nomme une instance Groq et ses erreurs disent « passerelle occupée, timeout expiré » — c'est la
+saturation Groq, un problème distinct et lui aussi réel.
+
+---
+
+## [2026-09-10] Une expérience infaisable est refusée avant d'être lancée, un prompt fautif avant d'être servi
+
+Quatre garde-fous posés d'un coup, tous du même genre : dire non tôt plutôt que découvrir tard.
+
+**Le modèle doit pouvoir porter la charge.** `make experience-estimer` chiffrait le coût
+prévisionnel sans jamais conclure. Il refuse désormais ce qui ne peut pas aboutir, et
+`experience-lancer` refuse avant de créer le dossier d'exécution.
+
+**Avant :** cinq exécutions lancées sur des modèles qui ne pouvaient pas tenir la distance,
+arrêtées en route, archivées sans avoir rien mesuré.
+**Après :** « quota journalier hors d'atteinte pour 'gemini-3.8-flash' : 20 requêtes/jour contre
+2 285 sollicitations attendues, soit ~114 jours de quota ».
+
+La sévérité a été calibrée sur les faits, pas sur le fichier de configuration : un quota plus
+court que la charge n'est qu'un **avertissement**, parce qu'une exécution se reprend et s'étale
+sur plusieurs fenêtres — des runs sur `gemini-3.5-flash-lite` ont abouti au-delà du quota
+déclaré. Seul l'absurde est refusé. En revanche un plafond de jetons par requête inférieur au
+besoin est un refus franc : chaque appel serait tronqué, aucune patience n'y change rien.
+
+**Un prompt refusé par l'audit n'est plus servi.** L'agent `prompt-auditor` statue sur une
+variante avant son usage — règles figées, formules, a priori modaux selon la famille du prompt —
+et son avis scelle le sha256 du texte : retoucher le prompt après validation invalide l'avis et
+la variante redevient inauditée. Un verdict `non_conforme` refuse toujours ; un avis simplement
+absent avertit, le temps que les 25 variantes existantes soient examinées.
+
+**Comparer deux mesures dont l'une est invalidée demande de le dire.** `make comparer` s'arrête
+sur « [a] invalide le 2026-09-10 — mesure produite sous le gabarit minimal_persona » plutôt que
+de sortir un tableau d'écarts qu'on citerait plus tard sans se souvenir du problème. `TOUT=1`
+force, et le motif reste imprimé au-dessus des chiffres.
+
+**La sortie du modèle est conservée telle qu'émise.** Le canal Antigravity gagne un champ
+`sortie_litterale`, recopié verbatim, jamais normalisé. L'audit avait montré que les 2 287
+réponses d'un run étaient du JSON nu sous deux formes selon le segment — donc une
+re-sérialisation, et aucune pièce de l'archive ne montrait ce que le modèle avait écrit. Quand
+l'agent ne fournit pas le champ, la trace porte `null` et la réponse est comptée : un trou
+déclaré vaut mieux qu'une copie qu'on prendrait pour la sortie du modèle.
+
+---
+
+## [2026-09-10] Le registre ne montre plus que ce sur quoi on peut s'appuyer
+
+`make registre` listait trente expériences côte à côte : des mesures complètes, des définitions
+jamais lancées, des exécutions avortées à zéro décision, des doublons de nommage, et des mesures
+produites sous un prompt fautif — toutes du même air. Il fallait connaître l'historique pour
+savoir laquelle citer.
+
+**Avant :** 30 lignes indifférenciées, dont 20 sans valeur courante ou trompeuses.
+**Après :** 10 lignes actives, classées par score. Les 20 autres sont marquées et masquées ;
+`make registre TOUT=1` les réaffiche avec leur motif.
+
+Une expérience porte désormais un statut — `actif`, `archivee` ou `invalide` — et **rien n'est
+supprimé ni déplacé** : les 20 exécutions, les 14 `scores.json`, les traces et les empreintes
+restent sur le disque, lisibles et vérifiables. Le marqueur est un fichier posé à côté. Le motif
+y est obligatoire, et chaque changement de statut s'empile dans un historique : réactiver une
+expérience ne fait pas disparaître la trace de son archivage.
+
+Quatre mesures sont **invalidées** — celles produites sous le gabarit `minimal_persona`, dont la
+consigne de sortie orientait vers la marche. Leur page de synthèse s'ouvre maintenant sur un
+bandeau qui nomme la règle, la date et la raison, sans retoucher un seul chiffre : ils sont
+exacts, ils viennent de l'archive scellée, et c'est précisément pour ça qu'il faut dire à côté
+pourquoi ne pas s'y fier. Seize autres sont **archivées** : définitions jamais exécutées,
+exécutions à zéro décision, doublons de nommage.
+
+Ce qui reste actif : les quatre témoins (aléatoire, durée minimale, majoritaire voiture, LightGBM)
+et les six mesures sur prompt expert. Le classement des décideurs LLM est mené par
+`expert_chaine_m7` à 10,20 de composite, devant `m6` à 11,06.
+
+---
+
+## [2026-09-10] Un prompt minimal qui n'oriente plus vers la marche
+
+Le prompt « minimal » de référence poussait vers un mode. Sa consigne de sortie n° 4 demandait de
+justifier « **si c'est le cas, pourquoi la marche n'obtient pas la plus forte probabilité** » : un
+mode nommé, avec la présupposition qu'il devrait arriver en tête, dans le seul prompt dont la
+raison d'être est de n'influencer aucun mode. La formulation venait d'une aide au débogage du
+2026-06-13 (« …et si tu as hésité ») ; le fragment de débogage avait été retiré, pas la
+présupposition, qui a vécu trois mois et a été recopiée telle quelle dans `minimal_persona`.
+
+**Avant :** le témoin minimal demandait au modèle de se justifier quand la marche ne gagnait pas.
+**Après :** il demande « Justifie la répartition en une phrase concise. » — rien d'autre.
+
+La correction vit dans une **nouvelle variante, `prompt_minimal`** : l'ancienne n'est ni modifiée
+ni supprimée, sans quoi huit expériences déjà mesurées auraient changé de contenu sans changer de
+nom. `minimal_persona` porte désormais un bloc `_invalidation` qui dit la règle enfreinte, la date
+et le remplaçant ; les empreintes scellées de ses exécutions restent reproductibles à l'identique.
+
+Deux variantes calibrées de juin sont invalidées au passage, pour une raison différente : elles
+associaient un seuil chiffré à un mode (« pour les trajets inférieurs à 500 mètres, la marche par
+défaut », « la marche en option de premier ordre pour les segments ≤ 1 km »). Aucune n'avait servi
+en expérience.
+
+Les prompts se lisent maintenant en **deux familles**, déclarées en tête du fichier. La minimale
+n'en compte qu'un, `prompt_minimal` : la tâche, le format de sortie, rien qui puisse pencher vers
+un mode. Toutes les autres sont expertes, et y nommer, valoriser ou dévaloriser un mode est
+volontaire — seules les règles figées et les formules mathématiques y restent proscrites. La même
+phrase est donc licite dans une famille et fautive dans l'autre : c'est pourquoi la famille
+s'écrit au lieu de se deviner du nom.
+
+Le refus est **effectif** : servir un prompt invalidé lève désormais, en nommant la règle et le
+remplaçant, que la demande vienne d'une requête (`parameters.prompt_variant`) ou du prompt actif
+— et dans ce dernier cas c'est le démarrage du service qui échoue, pas la millième requête.
+Calculer une empreinte, en revanche, reste possible sur une variante invalidée : sinon
+l'invalidation aurait rendu irreproductibles les empreintes scellées des exécutions passées, ce
+qu'elle ne doit surtout pas faire.
+
+**Avant :** une expérience pouvait désigner un gabarit fautif, tourner trois heures et produire
+une mesure que rien ne signalait.
+**Après :** elle s'arrête au lancement sur « variante `minimal_persona` INVALIDÉE le 2026-09-10
+(règle M1) […] Utiliser `prompt_minimal` à la place. »
+
+Le remplaçant porte son propre segment de nom : une expérience sur le prompt corrigé s'appelle
+`…_promin_…` là où l'ancienne s'appelait `…_minper_…`. Les deux se distinguent donc au premier
+coup d'œil dans le registre, sans avoir à ouvrir une empreinte.
+
+Les mesures publiées ne sont pas retouchées. Ce qui change, c'est leur statut : une expérience
+tournée sous un prompt invalidé le sera à son tour, et le plan de remise en ordre —
+invalidations, archivage sans suppression, garde-fou de validation des prompts — est écrit dans
+`specs/hygiene-prompts-et-plateforme-experiences.md`.
+
+---
+
+## [2026-09-09] Les expériences Antigravity se reprennent depuis le conteneur
+
+Deux expériences (`exp_agy-claude-o-46_…`, `exp_agy-gemini-38-f_…`) désignaient leur population
+par un chemin de l'HÔTE. Elles démarraient donc depuis l'ordonnanceur, qui tourne sur l'hôte, et
+échouaient depuis `make experience-lancer`/`experience-reprendre`, qui exécute le runner **dans le
+conteneur `controller`** — où `./data/population` est monté sur `/data/eqasim-output`, pas sur
+`/app/data/population`.
+
+**Avant :** `make experience-reprendre EXP=exp_agy-claude-o-46_minper_jtir_t0_nosim` s'arrêtait sur
+`ERREUR : population introuvable : data/population/population_1000_AAMAS`, sans avoir rien repris.
+**Après :** la reprise repart de l'exécution en pause, avec ses 8 décisions déjà archivées.
+
+Les 30 expériences du dossier partagent désormais la même écriture, celle du conteneur
+(`/data/eqasim-output/…`) — la seule que `make` et la skill Antigravity emploient. Une expérience
+dérivée à la main hérite de cette forme : un chemin relatif ne vaut que pour le processus qui l'a
+écrit.
+
+Reprendre ne réécrit pas les empreintes : la population est identifiée par son sceau
+(`sha256`, `scellee`) figé dans `execution.yaml`, jamais par son chemin. Corriger l'un ne touche
+pas à l'autre.
+
+---
+
+## [2026-09-09] Une exécution arrêtée dit enfin POURQUOI, message à l'appui
+
+Le bloc des exécutions arrêtées n'affichait que le *type* de la dernière erreur — et jetait donc
+la seule information actionnable, qui vit dans son message.
+
+**Avant :** `pause automatique — 420s sans avancée ; 2049/2693 archivées · dernier échec : antigravity`
+**Après :** `🤖 sous-agent Antigravity muet` · `dernier échec (≥12 fois de suite) : antigravity: pas de réponse en 600s · antigravity:gemini-3.8-flash · à 15:26:37`
+
+Trois causes s'ajoutent, chacune reconnue au message et non à l'état :
+
+- 🧩 **prompt refusé** — `variante de prompt 'expert_chaine_m5' introuvable dans prompts.yaml` :
+  75 lignes dans les archives, une erreur de configuration que l'écran présentait comme une
+  inactivité ;
+- 🤖 **sous-agent Antigravity muet** — `antigravity: pas de réponse en 600s` ;
+- 🚧 **passerelle saturée** — `Providers saturés ou indisponibles après 8s (50 retries épuisés)`.
+
+La saturation passe **avant** le diagnostic réseau : une passerelle débordée n'est pas un câble
+coupé, et le mot « timeout » la classait à tort. Le motif réseau, lui, gagne les deux vrais cas
+de coupure des archives — `Name or service not known` et `Server disconnected` — qu'il ratait.
+
+Chaque ligne porte désormais le message entier (tronqué à 220 caractères), **l'instance** qui a
+lâché (`cerebras_gemma_4_31b_key1`, `antigravity:gemini-3.8-flash` — ce que la famille de
+fournisseur ne dit pas) et le **nombre d'échecs identiques consécutifs**, préfixé `≥` quand la
+répétition remplit la fenêtre relue. Le quota garde la priorité sur tout diagnostic : son heure
+de reprise est plus utile, et le diagnostic reste écrit dans le détail.
+
+---
+
+## [2026-09-09] Qui sert les décisions : une colonne, et un préfixe sur chaque ligne
+
+Le registre de 🧪 Expériences porte une colonne **`fournisseur`** à côté du décideur, et chaque
+ligne d'exécution de 📟 Activités en cours en est préfixée :
+
+**Avant :** `🧪 exp_agy-gemini-38-f_minper_jtir_t0_nosim / 2026-09-09_13_05_09 — 1 431 / 2 693 …`
+**Après :** `🧪 antigravity / exp_agy-gemini-38-f_minper_jtir_t0_nosim / 2026-09-09_13_05_09 — …`
+
+La valeur est lue dans `providers.yaml` : `local` pour un modèle servi par LM Studio (reconnu à
+son `base_url`), sinon la famille du fournisseur — `google`, `groq`, `cerebras`, `mistral` —
+prise dans l'`adapter` de l'instance et jamais dans son nom, qui porte un suffixe `_key1` (onze
+instances Google désignent un seul fournisseur). Un décideur `antigravity` affiche
+`antigravity` même quand son modèle porte un nom distant : la décision passe par un sous-agent,
+pas par la passerelle. Un modèle servi par deux familles les affiche toutes les deux
+(`cerebras · groq`), un modèle qu'aucune instance ne sert affiche `inconnu`, et un décideur sans
+LLM affiche `—` sans préfixe — la colonne `decideur` dit déjà l'heuristique.
+
+Comme le décideur et le prompt, le fournisseur suit le **snapshot figé** de chaque exécution :
+une expérience relancée après un changement de modèle garde, sur son archive, le fournisseur qui
+a réellement servi.
+
+---
+
+## [2026-09-09] Les expériences arrêtées se voient et se relancent depuis Activités en cours
+
+L'onglet **📟 Activités en cours** liste désormais les exécutions **arrêtées**, avec la cause de
+leur arrêt et un bouton pour les reprendre. Jusqu'ici une exécution qui s'arrêtait quittait
+l'onglet à la seconde même : quota épuisé pendant la nuit, passerelle injoignable, PC éteint,
+pause — il fallait aller la chercher dans le registre de 🧪 Expériences pour comprendre ce qui
+s'était passé.
+
+Six causes, chacune lue dans ce qui est écrit, jamais devinée : 🪫 **quota épuisé** (avec
+l'heure de reprise annoncée par le fournisseur), 📡 **passerelle injoignable ou coupure réseau**
+(reconnue au type de la dernière tentative échouée — le runner ne nomme jamais le réseau dans
+son état), 🔌 **PC ou conteneur arrêté** (plus rien d'écrit alors que l'état dit « en cours »),
+⏳ **pause automatique** du chien de garde, ⏸ **mise en pause**, ⏸ **arrêtée incomplète**. Le
+détail de chaque ligne cite toujours la ficelle d'origine ; une cause qui ne correspond à aucun
+de ces cas s'affiche « inconnue » avec son état brut.
+
+« ▶ Reprendre » ne redemande aucune décision déjà acquise, et la ligne dit combien sont déjà
+archivées. Deux états que la CLI acceptait déjà mais que le tableau de bord refusait sont
+maintenant reprenables : **interrompue** (processus mort, réconcilié par l'ordonnanceur) et
+**en attente de quota** tuée pendant son sommeil.
+
+**Avant :** une exécution épuisée à 3 h du matin disparaissait de l'onglet ; on découvrait au
+matin une plateforme muette, sans savoir si c'était le quota, le réseau ou la machine.
+**Après :** la ligne est là, avec sa cause, ses 55 décisions déjà payées et son bouton de reprise.
+
+---
+
+## [2026-09-09] Une exécution remplacée est dite obsolète, et le registre les masque
+
+Une exécution qui n'est pas la plus récente de son expérience est désormais **obsolète** —
+`make experience-reprendre` ne reprend que la dernière, et le tableau de bord ne promet donc
+plus une reprise que le noyau refuse. Le registre l'annonce **avec ce qu'elle coûte** :
+« obsolète (résultat complet) » sur une exécution menée à terme, dont les scores restent
+lisibles et comparables, « obsolète (partielle) » sur une exécution que la reprise ne touchera
+plus. C'est un état de vue : rien n'est écrit dans `etat.json`, dont le runner reste seul
+propriétaire.
+
+La case **« Terminées seulement »** du registre est remplacée par **« Masquer les obsolètes »**,
+cochée d'office : ce qui encombrait le tableau, ce sont les passages successifs d'une même
+expérience, pas les états non terminés. Elle compte ce qu'elle masque et se décoche d'un clic.
+
+**Avant :** « ▶ Reprendre » s'offrait sur une exécution ancienne et reprenait silencieusement
+une autre — la dernière.
+**Après :** l'ancienne est marquée obsolète, écartée de la reprise, et le nombre d'écartées est
+écrit.
+
+---
+
+## [2026-09-09] Lancer une expérience démarre les services dont elle a besoin
+
+Plus besoin de penser à démarrer la pile avant de lancer : `make experience-lancer` (donc
+`experience-reprendre`) et `make jeu` commencent par garantir leurs services —
+`make services-pretes REQUIS="…"`, soit `docker compose up -d --no-recreate --wait` sur les
+seuls services utiles, jamais la métrologie. Le `--no-recreate` protège ce qui tourne : recréer
+`controller` tuerait le runner d'une expérience en cours, qui y vit par `docker compose exec`. La cible est idempotente : sur une pile déjà debout, elle passe en
+une seconde. La garantie vaut aussi depuis un terminal, pas seulement depuis le tableau de bord.
+
+Le bouton « Démarrer les N service(s) manquant(s) » disparaît donc de l'onglet Expériences. Le
+bloc « 🐳 Services nécessaires » reste, en lecture seule, et **annonce à l'avance** ce que
+coûtera un démarrage à froid : `controller` attend `api`, `otp1-3`, `eqasim` et `osmnx1` en
+bonne santé, et le chargement des graphes OTP/OSMnx prend plusieurs minutes — visibles dans le
+journal du lancement, bornées par `ATTENTE` (600 s par défaut) pour échouer bruyamment plutôt
+que de pendre.
+
+Un `controller` éteint ne grise plus « ▶ Lancer » ni « 🔥 Warm-up ». Il grise encore
+« 🧮 Estimer le coût », qui lit la réponse de la plateforme en direct. Ce qui grise le
+lancement, désormais, c'est un démon Docker muet.
+
+**Avant :** cliquer « Lancer » sur une pile éteinte échouait, ou obligeait à cliquer d'abord
+« Démarrer les services » puis à attendre sans savoir combien de temps.
+**Après :** un seul clic ; le journal du job montre le démarrage, puis l'expérience.
+
+---
+
+## [2026-09-09] L'arrêt d'une exécution ne demande plus de confirmation, et les durées se lisent
+
+La case « Je confirme l'arrêt définitif : l'archive sera scellée et l'exécution ne pourra plus
+être reprise » est retirée : **⏹ Arrêter** est cliquable directement. Ce qui garde encore ce
+geste irréversible, c'est le libellé, l'aide au survol et une légende sous les deux boutons qui
+écrit la différence — la pause laisse l'exécution reprenable, l'arrêt scelle l'archive. Les deux
+boutons continuent de disparaître sur une exécution qui n'écrit plus.
+
+Les durées restantes s'écrivent partout en **`hh:mm:ss`** — exécution en cours, warm-up de jeu,
+barre du registre. Les heures ne sont pas bornées à 24 : une construction de trente et une
+heures s'écrit `31:20:05`.
+
+**Avant :** « reste ≈ 6765 s », et deux clics pour arrêter.
+**Après :** « reste ≈ 01:52:45 », et un seul.
+
+---
+
+## [2026-09-09] Le résumé AAMAS tient dans les 300 mots, et on voit ce qu'il a perdu
+
+Le résumé de l'article AAMAS 2027 passe de 339 à 240 mots (−29,2 %). Il respecte désormais la
+borne de l'enregistrement OpenReview — 100 à 300 mots en texte brut — que la version de travail
+dépassait de 39 mots.
+
+`docs/paper/AAMAS_ABSTRACT_EN_v0.1_vs_v0.2.md` met les deux versions côte à côte, paragraphe par
+paragraphe, avec le décompte de chacun et, sous chaque tableau, ce qui a été coupé et pourquoi.
+Trois corrections de fond y sont notées séparément des coupes : l'accord de `A synthetic
+population … are generated`, le calque `unit accuracy`, et l'ambiguïté de « the gap with the
+oracle remains significant » — écart L1 ou accuracy ? — devenue « stays *xx* points below the
+oracle ».
+
+Une question reste ouverte et signalée comme telle dans le fichier : le résumé annonce une
+sur-attraction du **vélo**, alors que la mesure du 8 septembre donne celle des **transports en
+commun** (26,5 % contre 12,4 % observés) et la sous-estimation de la marche (15,3 % contre
+26,8 %). À trancher avant de remplir les placeholders.
+
+**Avant :** un résumé de 339 mots hors norme de soumission, et aucune trace de ce qu'une
+réduction ferait disparaître.
+**Après :** une version à 240 mots prête à coller, et la version longue conservée en regard pour
+récupérer une formulation si la place revient.
+
+---
+
+## [2026-09-09] Décideur Antigravity : rejouer sans quota en sous-traitant à des agents
+
+Nouveau canal de décision `type: antigravity` qui délègue chaque choix modal à un sous-agent
+Antigravity (`invoke_subagent`) via des fichiers IPC atomiques dans `echanges/{demandes,reponses}/`.
+Le décideur tourne en local, en processus et sans solliciter les services de passerelle
+(aucun quota consommé, aucun appel réseau). Le texte présenté est rigoureusement identique
+à l'octet près à celui de la passerelle (`PromptEngine.render`).
+
+Le modèle étant choisi par l'IDE et non attesté par la passerelle, l'exécution est marquée
+honnêtement `modele_verifie: false` dans `execution.yaml` et chaque trace de décision (P1/P2) :
+elle sert de banc d'essai et de test à coût nul.
+
+**Avant :** rejouer une expérience nécessitait soit des quotas d'API externes payants, soit des
+services locaux lourds (LM Studio, conteneurs API/worker).
+**Après :** l'expérience tourne directement dans l'environnement Antigravity sans quota ni clé,
+avec un nom canonique conforme `exp_agy-<modele>...`, respect intégral de S4/D4, et traçabilité
+stricte dans l'archive.
+
+---
+
+## [2026-09-09] Une figure qui compare les expériences d'un coup d'œil
+
+Les résultats des expériences de choix modal se lisaient jusqu'ici un `scores.json` à la fois.
+`python scripts/analysis/plot_experiences.py` produit maintenant un nuage de points qui les met
+côte à côte : composite L1 en ordonnée, composite EMD/JSD en abscisse, les deux « plus bas =
+meilleur ». La couleur porte le modèle, la forme porte le gabarit de prompt, et les références
+sans prompt — LightGBM, durée minimale, tout voiture, aléatoire — restent en gris pour qu'on
+voie d'emblée ce qui relève d'un LLM et ce qui relève d'une heuristique. Le sous-titre rappelle
+le jour simulé, l'effectif, la fenêtre des exécutions et la date de génération, pour qu'une
+figure sortie du dossier reste datable.
+
+Le script prend une liste d'expériences en argument (par défaut le lot AAMAS de dix expériences),
+retient pour chacune la dernière exécution possédant un `scores.json`, et écrit un PNG 300 dpi et
+un SVG dans `docs/paper/raw_assets/`. Une expérience encore en cours ou sans score n'interrompt
+rien : elle est écartée, journalisée en `[ALARME]`, et la figure sort avec les autres.
+
+**Avant :** comparer dix expériences voulait dire ouvrir dix fichiers de scores et recopier les
+composites à la main.
+**Après :** une commande, une figure, et le classement — LightGBM devant, puis les Gemini par
+prompt, puis Mistral Small au niveau des heuristiques — se lit sans calcul.
+
+---
+
+## [2026-09-08] Le modèle local tient la distance, et chaque job garde son journal
+
+**Un modèle local ne se pilote pas comme une API distante.** Le fichier des fournisseurs accepte
+un champ `wait_timeout` : combien de temps le client attend une tâche servie par cette instance.
+La passerelle ne le lit pas, elle le publie, et l'appelant qui épingle une instance le lui passe.
+Il vaut 600 secondes sur les huit instances LM Studio. Le parallélisme d'une expérience sur un
+modèle local se règle par ailleurs sur son nombre d'appels simultanés, soit 1 pour les modèles de
+24 milliards de paramètres et plus.
+
+**Avant :** sur Muse Glimmer, huit personnes en parallèle pour un modèle qui sert un appel à la
+fois. Les requêtes faisaient la queue, dès la deuxième l'attente dépassait les 120 secondes du
+client, le disjoncteur s'ouvrait, et la course s'arrêtait d'elle-même après sept minutes sans
+avancée.
+**Après :** 1,34 décision par minute, aucune attente, aucune erreur. Le débit a presque triplé,
+et une requête ne porte plus qu'une personne au lieu de deux, donc moitié moins de jetons à
+générer.
+
+**Chaque job garde son journal.** Le registre de lancements vit dans le cache Streamlit : un
+redémarrage du serveur le remettait à neuf et son compteur repartait de 1, alors que les jobs déjà
+lancés sont détachés et écrivent toujours. Un nouveau job rouvrait donc en écriture le journal d'un
+job homonyme encore vivant, et la console de l'un affichait la sortie de l'autre. Le compteur
+repart maintenant du dernier index présent sur le disque, et un nom de fichier déjà pris est sauté.
+
+**Avant :** la console d'un job « meta/muse-glimmer » montrait la fin d'une course Gemini.
+**Après :** un journal par job, quel que soit le nombre de redémarrages du tableau de bord.
+
+**« S'inspirer d'une expérience existante » commence par la plus récente.** La liste va de la
+dernière expérience utilisée à la plus ancienne, celles qui n'ont jamais tourné fermant la marche.
+Une exécution reprise ce soir compte comme récente, même si elle a été ouverte ce matin.
+
+---
+
+## [2026-09-08] La passerelle exécute enfin le code monté, pas celui figé dans l'image
+
+`make passerelle-recharger` redémarrait `api` et `worker`, mais les deux continuaient de servir le
+code et le `prompts.yaml` installés dans l'image lors de sa construction (le 7 septembre à 11 h 41).
+Les sources montées sous `/app/<paquet>` étaient ignorées : `celery` et `uvicorn` sont des scripts
+console, dont le `sys.path[0]` est `/usr/local/bin` et non le répertoire de travail, contrairement à
+ce que supposait le commentaire du Dockerfile. Constaté quand la variante `expert_chaine_m5`,
+présente dans le fichier monté et relue avec succès par un `python -c` dans le conteneur, restait
+« introuvable » pour le worker après rechargement.
+
+L'environnement de la passerelle porte désormais `PYTHONPATH=/app`, comme le contrôleur le faisait
+déjà. Conséquence à connaître : toutes les modifications de `llm_gateway/` et de `prompts.yaml`
+postérieures au 7 septembre 11 h 41 n'ont pris effet côté passerelle qu'à cette recréation des
+conteneurs, y compris la lecture du quota journalier en heure du Pacifique et la bascule sur la
+seconde clé décrites plus bas ce même jour. Les exécutions de la journée qui passaient par la
+passerelle ont tourné sur l'ancien code.
+
+**Avant :** ajouter une variante puis `make passerelle-recharger` → « variante de prompt introuvable »
+en boucle, disjoncteur ouvert, expérience figée à 0 %
+**Après :** `docker compose up -d api worker` (ou `make passerelle-recharger`) suffit ; la variante est
+servie et l'expérience reprend seule au prochain test de la sonde
+
+---
+
+## [2026-09-08] Une exécution épuisée se reprend vraiment
+
+`make experience-reprendre` répondait « rien à reprendre » sur une exécution épuisée, alors que
+son propre message, la documentation et le bouton « Reprendre » du tableau de bord la donnaient
+reprenable, et que le runner la marque sans sceller l'archive précisément pour cela. La
+commande refusait tout état « final », épuisée comprise. Elle ne refuse plus que ce qui est
+réellement irréprenable : une archive clôturée, terminée ou arrêtée, et dit alors laquelle et
+pourquoi.
+
+**Avant :** l'exécution sur Muse Glimmer, déclarée épuisée à tort, ne pouvait repartir que par
+« Rejouer », en repayant ses décisions.
+**Après :** « Reprendre » la poursuit là où elle s'est arrêtée ; se reprend toute exécution en
+pause, épuisée, interrompue ou en cours sans runner.
+
+---
+
+## [2026-09-08] Une instance occupée n'est plus prise pour une instance morte
+
+La plateforme d'expériences décidait qu'une instance de la passerelle était hors service en lisant
+`available` dans `/health`. Ce champ dit « peut prendre une requête maintenant » : il vaut aussi
+faux quand l'instance est simplement occupée, tous ses appels simultanés étant pris. Pour un
+modèle local servi un appel à la fois, c'est le cas pendant chaque génération. Le go/no-go lit
+désormais les deux signaux qui disent vraiment « hors service », `disabled` et `cooldown`, et le
+tableau des ressources affiche « occupée » à part, à titre d'information.
+
+**Avant :** deux décisions après sa reprise, l'expérience sur Muse Glimmer a été déclarée épuisée
+jusqu'au lendemain 07:00, motif « hors service côté passerelle », alors que le modèle était en
+train de répondre.
+**Après :** l'instance occupée reste disponible, la requête suivante attend son tour ; seule une
+désactivation (erreurs consécutives, 402) ou un cooldown de la passerelle rend une instance
+indisponible, et le motif le dit.
+
+---
+
+## [2026-09-08] Un prompt à cinq mutations contre les dérives de gemini-3.5-flash-lite
+
+Le run `exp_gemini-35-fl_expcha_jtir_t0_nosim` du 8 septembre met 14,6 points de trop dans les
+transports collectifs et 11,3 de moins dans la marche que l'enquête EMC². Détail par persona : les
+retraités passent de la marche aux TC (+24 / −19), les actifs de la voiture aux TC (−15 / +17), les
+étudiants de la marche au vélo et aux TC, et 76 % des décisions mettent au moins 80 % sur une seule
+option. Les justifications du modèle nomment les causes — abonnement, « plus rapide », pluie annoncée
+pour une autre heure, âge lu comme incapacité — et le prompt lui-même disait « privilégier les modes
+assis pour les personnes âgées ».
+
+Une nouvelle variante `expert_chaine_m5` corrige ces lectures **sans dicter un mode ni un seuil de
+distance** : la tâche devient « estimer comment cent personnes de ce profil se répartiraient », le
+temps se compare porte-à-porte, l'abonnement ouvre une option sans la choisir, la météo se lit à sa
+mesure, l'effort se compare à l'effort. Sept mutations ont été rejouées sur 200 décisions appariées
+contre un témoin ; deux sont rejetées parce qu'elles vidaient la voiture vers les TC ou relançaient le
+vélo, cinq sont retenues. La variante attend la non-régression globale avant toute promotion.
+
+**Avant (témoin, 200 décisions) :** L1 à 4 modes 54,6 · marche 11,6 % · vélo 7,1 % · TC 36,7 % · 82 %
+de décisions à ≥ 80 % sur une option
+**Après (`expert_chaine_m5`, mêmes décisions) :** L1 48,1 · marche 13,3 % · vélo 4,7 % · TC 35,9 % ·
+70 % de décisions à ≥ 80 % sur une option
+
+---
+
+## [2026-09-08] La seconde clé d'un modèle est enfin consommée
+
+Une expérience qui déclare deux clés pour le même modèle disposait de 1000 requêtes par jour,
+mais s'arrêtait après 500 : la première clé épuisée, la seconde restait intacte et l'exécution
+se bloquait dessus jusqu'à la réouverture du quota, sept heures plus tard.
+
+La cause : l'état des quotas n'était lu qu'au **démarrage** du run. Une clé qui s'épuisait en
+cours de route restait « disponible » aux yeux du décideur, qui continuait de l'épingler — et la
+passerelle refuse, à raison, de changer d'instance dans le dos de l'expérience. Une tâche de
+veille relit désormais `/health` toutes les 30 s (`EXP_RAFRAICHIR_QUOTAS_S`, `0` désactive) : la
+clé épuisée sort des disponibles et la suivante est entamée **sans qu'aucune sollicitation ait
+eu à échouer**. La bascule se lit dans le journal, par le rang de la clé.
+
+**Avant :** un run de 1000 personnes s'est arrêté à 70,5 % avec 500 requêtes intactes en
+réserve. Il attendait le lendemain matin.
+**Après :** la bascule est automatique en 30 s au plus. Relancé à la main, ce même run a terminé
+ses 30 % restants en 64 requêtes seulement — le lot regroupe jusqu'à 15 agents.
+
+Une passerelle injoignable ne change rien au run : l'instantané précédent est conservé (jamais
+un état vide, qui ferait croire à l'épuisement de toutes les clés) et la lecture est retentée à
+l'échéance suivante.
+
+---
+
+## [2026-09-08] Une expérience en pause se reprend vraiment, et un test n'arrête plus les conteneurs
+
+Reprendre une exécution interrompue échouait de deux façons qui se cumulaient, et la plus grave
+n'avait rien à voir avec la pause.
+
+**Un test arrêtait les services sous une expérience en cours.** `make -n` passe pour un essai à
+blanc, mais GNU make exécute quand même toute ligne de recette contenant `$(MAKE)` — et dans
+`run-arret` ce `$(MAKE)` partage sa ligne shell avec `docker compose stop`. Un test du tableau de
+bord arrêtait donc réellement `controller` et `osmnx1` : 29 fois au total, dont deux sous une
+expérience qui tournait. Un run de 1000 personnes est ainsi mort à 70,5 %. Les tests de services
+lisent maintenant un `docker` factice et ne peuvent plus toucher la pile réelle.
+
+**Une demande de pause ne survit plus au run qui l'a reçue.** Le drapeau `PAUSE`/`STOP` est
+purgé au démarrage de l'exécution, plus seulement à sa clôture. Un runner tué net laissait son
+drapeau sur le disque, et la reprise l'honorait comme neuf.
+
+**Pause et Arrêter ne sont plus offerts sur une exécution morte.** La ligne renvoie vers
+« ▶ Reprendre » au lieu de laisser déposer un drapeau que personne ne lira.
+
+**Avant :** pause cliquée sur une exécution dont le runner était déjà tué → drapeau déposé dans
+le vide ; toute reprise se remettait en pause en quelques secondes, ou scellait l'archive en
+« arrêtée » (non reprenable) si le drapeau était `STOP`. Lancer la suite de tests coupait les
+conteneurs sous le run en cours.
+
+**Après :** la reprise repart du dernier déplacement archivé sans rien repayer et journalise le
+drapeau périmé qu'elle a retiré ; les contrôles d'interruption ne s'affichent que sur ce qui
+écrit encore ; la suite de tests laisse la pile debout.
+
+---
+
+## [2026-09-08] Le tableau de bord distingue modèles distants et locaux, et charge le modèle local avant de lancer
+
+Dans l'onglet Expériences, le décideur « modèle de langage (passerelle) » devient deux entrées :
+**modèle de langage (distant)**, un fournisseur d'API avec ses clés et son quota journalier, et
+**modèle de langage (local, LM Studio)**, un modèle servi par cette machine. Chaque entrée ne
+propose que les modèles de son bord, et le libellé d'un modèle local dit sa taille et son état
+dans LM Studio au lieu de « requêtes/jour ». Le fichier écrit ne change pas : les deux s'enregistrent
+`decideur.type: passerelle`, et une expérience relue se range du côté qui sert son modèle.
+
+Quand le modèle est local, un bloc **Modèle local** sous les services dit s'il est chargé et avec
+quel contexte, le charge d'un clic avec 16 384 jetons (`make lmstudio-charger`, suivi dans
+Activités en cours), recharge s'il faut changer de contexte ou d'identifiant, et décharge un modèle
+voisin qui occupe la mémoire (`make lmstudio-decharger`, nouvelle cible). Tant que le modèle n'est
+pas prêt, **« Lancer » est grisé avec le motif exact** ; enregistrer et estimer restent possibles.
+Le parallélisme conseillé d'un modèle local devient son nombre d'appels simultanés, un ou deux,
+au lieu d'un cinquième d'un débit par minute qu'il n'a pas.
+
+**Avant :** une expérience sur Muse Glimmer lancée depuis l'interface a tourné sept minutes sans
+une décision — modèle non chargé, puis chargé à la volée avec 4 096 jetons de contexte — et s'est
+mise en pause automatique sans que la page dise pourquoi.
+**Après :** le bloc affiche « chargé, contexte 4 096 < 8 192 », propose « Recharger avec 16 384
+jetons », et le bouton « Lancer » attend que ce soit fait.
+
+---
+
+## [2026-09-08] « S'inspirer d'une expérience » recopie ses réglages dès le choix
+
+Dans l'onglet « 🧪 Nouvelle expérience », choisir une expérience dans la liste « S'inspirer d'une
+expérience existante » remplit aussitôt tous les champs du formulaire avec ses réglages. Le nom,
+lui, ne se recopie toujours pas : il se recalcule des paramètres, et la filiation cite la source.
+Choisir « — partir de zéro — » remet le formulaire aux défauts de la plateforme. Le bouton devient
+« ↺ Recopier à nouveau » : il réapplique la source après des retouches à la main, puisque
+rechoisir la même entrée n'est pas un changement. Une légende sous la liste dit ce qui vient
+d'être recopié, tant que le formulaire est bien celui-là : à la première retouche elle disparaît,
+elle mentirait.
+
+Deux protections viennent avec : une expérience supprimée du disque — entre l'affichage de la liste
+et le choix, ou après avoir été recopiée — laisse le formulaire intact, le dit et remet la
+liste d'aplomb au lieu de la laisser retomber en silence sur « partir de zéro » ; et une expérience dont une valeur ne désigne
+plus rien ou est hors bornes (modèle retiré de `providers.yaml`, parallélisme 128) ne casse plus la
+page — ce champ revient à son défaut, les autres sont recopiés, comme pour le brouillon relu au
+démarrage.
+
+**Avant :** choisir une expérience dans la liste ne faisait rien ; il fallait cliquer
+« Recopier ses réglages », et une expérience hors bornes faisait lever un champ numérique.
+**Après :** le choix suffit, « partir de zéro » remet les défauts, et les valeurs relues sont
+validées avant d'atteindre les champs.
+
+---
+
+## [2026-09-08] Une expérience peut tourner sur un modèle local servi par LM Studio
+
+Les modèles chargés dans LM Studio sur la machine hôte sont désormais des fournisseurs de la
+passerelle, sans code : huit instances `lmstudio_*` (Mistral Small 3.2, Mistral Nemo 12B, Mistral 7B,
+Gemma 4 E4B, Qwen3-VL 8B et 32B, Qwen 3.8 27B, Muse Glimmer 28B) déclarées dans `providers.yaml` sur l'adapter OpenAI-compatible,
+activées d'un seul interrupteur `PROVIDER_KEYS__lmstudio` dans `.env`. Une définition d'expérience
+existe pour chacun ; `make experience-lancer EXP=exp_mistral-s-32_minper_jtir_p2_t0_nosim` épingle
+le run sur Mistral Small local, sans consommer aucun quota distant.
+
+Ces instances sont **hors rotation** (`weight: 0`) : la cascade du mode GAMA et les autres
+expériences ne les touchent jamais, seule une expérience qui nomme exactement leur modèle les
+sollicite. Un seul modèle étant chargé à la fois, la cascade aurait sinon fait charger les autres
+à la volée jusqu'à saturer la mémoire. Quand un identifiant existe déjà chez un fournisseur distant
+(`qwen/qwen3.8-27b` chez Groq), le modèle local se charge sous un alias (`qwen3.8-27b-local`) : une
+expérience épinglée ne mélange jamais Groq et local.
+
+Deux pièges LM Studio sont absorbés par la configuration : le serveur refuse `json_object` et
+n'accepte que `json_schema` (les instances le déclarent), et il charge les modèles avec 4 096
+jetons de contexte, trop court pour un lot de deux agents. `make lmstudio-charger MODELE=<id>`
+charge avec 16 384 jetons ; `make lmstudio-etat` montre ce qui est chargé et ce que la passerelle
+voit.
+
+**Avant :** aucun fournisseur local ; toute expérience passait par un quota distant (Google,
+Mistral, Groq, Cerebras).
+**Après :** `PROVIDER_KEYS__lmstudio=lmstudio` dans `.env`, recréation d'`api` et `worker`, et
+les huit modèles locaux apparaissent dans `/health` et dans la liste des décideurs du tableau de
+bord ; une expérience épinglée sur l'un d'eux tourne sur le GPU local.
+
+---
+
+## [2026-09-08] Un quota journalier épuisé se sait, s'attend, et chaque clé porte son nom
+
+Une expérience s'est arrêtée à **10 %** (292 déplacements sur 2693) après avoir attendu quinze
+minutes une clé que Google refusait. Le refus était pourtant explicite — `quotaId:
+GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `quotaValue: 500` — mais rien dans la chaîne
+ne savait le lire. Trois causes, toutes corrigées.
+
+**Les compteurs comptaient la mauvaise journée.** Le quota du free tier Gemini se réinitialise à
+minuit *Pacifique*, soit 09:00 à Paris l'été. Les compteurs internes, datés en UTC, se vidaient à
+02:00 — sept heures trop tôt. À 08:44, la passerelle annonçait 49 requêtes sur 500 quand Google
+en comptait plus de 500 (490 la veille dans la même journée Pacifique, plus celles du matin). La
+fenêtre journalière se règle désormais par fournisseur (`quota_reset_tz`, posé à
+`America/Los_Angeles` sur les instances Google, UTC ailleurs faute de mesure).
+
+**Le délai annoncé par Google était pris au mot.** Sur un dépassement journalier, Gemini renvoie
+un `retryDelay` de quelques secondes (0,7 s à 57 s relevés) qui ne mesure pas le temps jusqu'au
+reset. La passerelle en faisait un cooldown de 30 s, retentait, était refusée, et rebouclait.
+Un 429 qui désigne un quota du jour écarte maintenant l'instance jusqu'à la réouverture réelle.
+C'est la réponse du fournisseur qui tranche, plus le compteur local — lequel ne voit que le
+trafic de cette passerelle, alors qu'une clé est aussi consommée par les scripts de synthèse et
+la calibration de prompt.
+
+**Le message d'erreur perdait l'information en route.** Le worker reformulait le refus en
+« Providers saturés ou indisponibles », que la plateforme d'expériences classait « passerelle
+occupée, ça va revenir » — d'où une attente sans fin. La nature de l'échec et l'heure de reprise
+voyagent désormais en clair jusqu'au décideur, qui n'a plus à les deviner d'après le texte.
+
+**Une expérience épuisée se termine seule.** Attendre la fenêtre de reprise devient le
+comportement par défaut : la réouverture est connue et bornée, donc une expérience lancée le soir
+franchit la nuit au lieu de mourir à 10 %. L'attente reste visible (état `en_attente_quota`,
+`en_attente_quota_jusqu` dans la progression) et interruptible. Pour l'ancien comportement :
+`--ne-pas-attendre-fenetre`.
+
+**Avant :** 15 minutes de 429 en boucle sur une clé fermée pour 7 h, la seconde clé jamais
+essayée, puis arrêt à 10 % — et `/health` affichant « 49/500, disponible »
+**Après :** l'instance est écartée jusqu'à 09:00, la cascade passe à la clé suivante, et faute
+d'alternative l'exécution dort jusqu'à la réouverture puis reprend où elle s'était arrêtée
+
+**Chaque instance dit sa clé et son modèle.** Les instances de fournisseur suivent la convention
+`<modèle>_key<N>` : `google2` devient `google_gemini31_key2`, `google2_35` devient
+`google_gemini35_key2`, et les autres reçoivent leur suffixe. Un nom comme `google2` ne disait ni
+son modèle ni son rang de clé, et l'ordre de consommation des deux seaux de 500 requêtes
+dépendait de la table ASCII (« 2 » précède « _ ») plutôt que d'une décision. Trois effets :
+
+- la clé physique se lit dans le nom, donc deux modèles sur une même clé ne sont plus pris pour
+  deux quotas indépendants par le garde-fou des expériences parallèles ;
+- une instance suffixée `_keyN` exige sa propre clé : plus de repli silencieux sur celle de
+  l'adaptateur, qui avait déjà fait partir des appels sur la mauvaise clé ;
+- `openai` est désactivée — aucune clé ne lui était fournie et elle n'a jamais servi.
+
+Les runs archivés gardent les anciens noms : ce sont des mesures, elles ne se réécrivent pas.
+La campagne de calibration de prompt repart en revanche d'un cache d'évaluation vide, le nom
+d'instance entrant dans sa clé de cache.
+
+---
+
+## [2026-09-08] La pause prend effet en quelques secondes, et une exécution qui n'avance plus se met en pause seule
+
+Cliquer sur **⏸ Pause** annonçait « effective au prochain point sûr », et ce point sûr pouvait
+arriver deux minutes plus tard : l'exécution attendait le retour de la sollicitation en vol,
+soit jusqu'au timeout de poll de la passerelle (120 s). Rien ne bougeait à l'écran entre-temps.
+
+La pause laisse désormais un **délai de grâce de 15 secondes** (`EXP_PAUSE_GRACE_S`) aux appels
+déjà partis — assez pour qu'un appel normal revienne et soit archivé, donc jamais repayé — puis
+les **abandonne**. L'annulation ne touche que l'appel réseau, jamais une écriture d'archive : le
+déplacement reste non archivé et sera redemandé tel quel à la reprise. Rien n'est sauté, rien
+n'est fabriqué, le résultat final ne change pas ; le seul coût est monétaire, borné par le
+parallélisme. Le même délai s'applique à **⏹ Arrêter**.
+
+Le clic, lui, se voit tout de suite : la barre écrit « ⏸ pause demandée il y a N s, en cours » et
+le bouton passe à « Pause demandée ».
+
+**Avant :** « Pause demandée — effective au prochain point sûr », puis jusqu'à 2 min sans
+aucun retour à l'écran
+**Après :** « Pause demandée — effective en quelques secondes », la barre le dit dès le clic et
+l'état bascule sous 15 s
+
+**Une exécution qui n'avance plus se met en pause d'elle-même.** Au-delà de **7 minutes**
+(`EXP_INACTIVITE_PAUSE_S`, `0` désactive) sans le moindre déplacement réglé — décidé, resservi,
+non couvert, inexploitable, sans solution — le runner lève une `[ALARME]` nommant ce qu'il
+attendait et passe en pause. L'exécution reste reprenable, et son état dit pourquoi
+(`pause automatique — 420s sans avancée`). L'attente de la fenêtre de quota (`--attendre-fenetre`)
+en est exclue : cette immobilité est demandée. La barre écrit « ⏳ immobile depuis N min » dès une
+minute, pour voir venir la bascule.
+
+**Avant :** une exécution bloquée restait « en cours » indéfiniment ; il fallait s'en apercevoir
+et cliquer
+**Après :** au bout de 7 min, `[ALARME]` dans le journal et bascule en pause, reprenable
+
+---
+
+## [2026-09-08] Le registre ne prête plus un prompt à un décideur qui n'en lit pas
+
+Dans « Mes expériences », la colonne `prompt` affichait la variante inscrite dans le fichier
+d'expérience, quel que soit le décideur. `exp_lgbm_jtir_nosim` annonçait donc `minimal_persona`
+alors que ses 2 693 décisions ont été prises par le modèle LightGBM, sur douze variables de
+persona, sans qu'une seule phrase soit envoyée — son archive ne contient aucun échange LLM. Le
+nom calculé le disait déjà (pas de segment de prompt) ; le tableau le contredisait.
+
+Seule la passerelle reçoit un prompt système. Pour un modèle statistique, un rejeu, un tirage
+uniforme ou l'heuristique de durée minimale, la colonne dit maintenant « — ». Et comme le
+décideur, le prompt affiché suit le **snapshot figé de chaque exécution** : une expérience
+redéfinie de la passerelle vers LightGBM garde sa variante sur ses anciennes exécutions.
+
+**Avant :** `exp_lgbm_jtir_nosim` · décideur `modele` · prompt `minimal_persona`
+**Après :** `exp_lgbm_jtir_nosim` · décideur `modele` · prompt `—`
+
+Le formulaire ne fabrique plus cette illusion : quand le décideur choisi ne lit pas de prompt,
+le sélecteur et l'aperçu du texte restent là — lire un prompt avant de le choisir reste utile —
+mais le titre porte « non lu par ce décideur », et une légende dit que ce choix n'entrera ni dans
+le nom de l'expérience ni dans le registre.
+
+**Une case « Terminées seulement »** rejoint le filtre et le tri du registre : elle ne garde que
+les exécutions menées à terme. `epuisee`, `arretee` et `interrompue` sont masquées avec les
+autres — elles ne s'écrivent plus, mais leur couverture est partielle, et les afficher parmi les
+terminées ferait passer un résultat incomplet pour un résultat. C'est un filtre de vue : il
+annonce le nombre de lignes qu'il cache, se décoche d'un clic, et n'a rien à voir avec
+« 🗑 Retirer du tableau ». Une exécution qui tourne garde sa barre d'avancement et ses boutons
+Pause / Arrêter, case cochée ou non.
+
+---
+
+## [2026-09-08] Le nom d'une expérience se calcule de ses paramètres
+
+Le formulaire ne demande plus de nom d'expérience : il l'**affiche**, composé des paramètres
+choisis. `exp_gemini-31-fl_minper_jtir_t0_nosim` se lit comme une fiche — décideur, prompt,
+calendrier, température, mode — et deux expériences qui diffèrent d'un réglage nommé portent
+forcément deux noms.
+
+C'est la fin d'une classe entière d'accidents. Le nom est l'identité : le dossier, la clé de la
+file d'attente, la cible de « Arrêter ». Le 2026-09-07, trois exécutions de `Prompt_Minimaliste`
+ont mesuré gemini, gpt-oss et mistral sous cette seule identité — le fichier d'expérience ne
+gardait que le dernier décideur, et deux lancements du même nom se disputaient la même clé de
+quota au lieu de tourner en parallèle. `Prompt_Minimaliste_GPT-OSS-120b` servait en réalité
+`mistral-small-latest`, `Light_GBM` affichait une variante de prompt qui ne décidait rien, et
+deux dossiers `…qwen3.6-27b` portaient deux noms pour une définition identique au caractère près.
+
+**La grammaire.** `exp_<décideur>[_<prompt>][_<calendrier>][_<écarts>][_t<T>]_<mode>`. Le
+décideur est toujours nommé (le modèle pour une passerelle, abrégé : `gemini-31-fl`,
+`mistral-s`, `qwen36-27b`, `gpt-oss-120b`). Le prompt n'est nommé que s'il décide quelque chose.
+La température et le mode le sont **toujours**, même par défaut (`t0`, `nosim`) : ce sont les
+deux réglages qu'on veut lire sans ouvrir le fichier. Tout le reste — population, jeu, horizon,
+mémoire, événements, graines, parallélisme, tolérances — n'apparaît que s'il s'écarte de sa
+valeur de référence. Un nom court dit donc « tout par défaut ».
+
+**Les collisions.** Deux définitions identiques au caractère près sont *la même expérience* : la
+page le dit (« ces paramètres sont déjà ceux de X, lancer ajoutera une exécution ») et ne
+réécrit rien. Deux définitions différentes que la grammaire abrège pareil reçoivent un indice —
+`_2`, `_3` — comme une copie de fichier. Jamais d'écrasure silencieuse.
+
+**Les neuf expériences existantes ont été renommées**, avec leurs archives, leurs restitutions,
+leurs masques et la file d'attente. Les deux dossiers qwen ont été réunis en une seule
+expérience. L'ancien nom reste inscrit dans `renomme_de` et dans `.renommages.json`.
+
+Les **tentatives échouées** ont été effacées dans le même mouvement : les deux exécutions qwen
+mises en pause sur `passerelle_occupee` (2 et 4 déplacements décidés sur 2 693, aucun score), le
+masque de registre qui désignait une archive disparue, et l'entrée de file soumise la veille qui
+n'a jamais démarré. Restent les six exécutions terminées, toutes à 2 693 décisions archivées.
+
+| Avant | Après |
+|---|---|
+| `exp_00a_random_otp` | `exp_alea_nosim` |
+| `exp_00b_majority_car` | `exp_majvoiture_nosim` |
+| `exp_00c_shortest_time` | `exp_durmin_nosim` |
+| `Light_GBM` | `exp_lgbm_jtir_nosim` |
+| `Prompt_Minimaliste_Gemini_3.1` | `exp_gemini-31-fl_minper_jtir_t0_nosim` |
+| `Prompt_Minimaliste_Gemini_3.5` | `exp_gemini-35-fl_minper_jtir_t0_nosim` |
+| `Prompt_Minimaliste_mistral-small-latest` | `exp_mistral-s_minper_jtir_t0_nosim` |
+| `Prompt_Minimaliste_qwen3.6-27b` **+** `Prompt_Minimaliste_qwen_qwen3.6-27b` | `exp_qwen36-27b_minper_jtir_t0_nosim` (fusionnées, reste à lancer) |
+
+Les identifiants du plan AAMAS ne bougent pas : ils portent la phase et l'ordre des sections du
+papier, et pointent désormais leur dossier par une clé `nom_runtime`.
+
+**Avant :** on tapait un nom, libre de mentir sur ce qu'il désignait ; changer de modèle et
+relancer écrasait l'expérience précédente au lieu d'ouvrir une variante.
+**Après :** le nom se lit, ne se tape pas ; le modèle en fait partie ; une définition déjà
+enregistrée est reconnue comme telle, une définition différente reçoit un indice.
+
+Aligner d'autres expériences plus tard : `make experiences-renommer` dit ce qui bougerait,
+`make experiences-renommer APPLIQUER=1 FUSIONNER=1` l'écrit.
+
+---
+
+## [2026-09-08] Les expériences à décideur LightGBM démarrent
+
+`make experience-lancer EXP=<nom>` sur une expérience dont le décideur est `type: modele`
+échouait systématiquement, sur deux blocages enchaînés. Le premier était un chemin : la racine
+du dépôt était déduite de la profondeur du fichier, juste sur l'hôte mais fausse d'un niveau dans
+le conteneur `controller`, où `llm-agents` est monté sur `/app`. L'artefact était donc cherché
+dans `/scripts/progedo_logit/` au lieu de `/app/scripts/progedo_logit/` — introuvable alors qu'il
+était là. Le second attendait derrière : le décideur charge le booster avec LightGBM, absent de
+l'image.
+
+Les deux sont levés. La racine du dépôt se résout maintenant en remontant jusqu'au dossier qui
+porte `scripts/synthesis`, ce qui donne le bon chemin des deux côtés. Et `lightgbm==4.7.0` —
+version épinglée sur celle qui a produit l'artefact — accompagné de `libgomp1`, entre dans l'image
+du `controller` (et dans celle d'`osmnx1`, qui partage ce Dockerfile).
+
+**Avant :** `ERREUR : Décideur modèle : policy introuvable (/scripts/progedo_logit/mode_choice_policy.json)`,
+aucune décision produite.
+**Après :** l'expérience `Light_GBM` va au bout en **26 s** — 2 634 déplacements décidés sur
+2 645 exploitables, 0 erreur, score de clôture `composite emd_jsd = 4.918`.
+
+Ce que ça coûte : la décision E9 du ticket 005, qui prévoyait un évaluateur pur Python pour éviter
+d'embarquer LightGBM, est abandonnée — l'évaluateur n'avait jamais été écrit. Le poids invoqué à
+l'époque ne tient pas au chiffrage : 3,3 Mo de wheel, aucune compilation, `numpy` et `scipy` déjà
+présents, soit +0,05 % sur une image de 7,02 Go. La forme `dump_model` reste dans l'artefact au
+cas où l'on voudrait revenir en arrière.
+
+Effet de bord utile : un test de la suite 035 (`test_R15_routage_volet`) posait que l'exécution
+de référence — choisie automatiquement comme la première terminée du dépôt — avait forcément un
+décideur LLM. Dès que `Light_GBM` a produit une exécution terminée, il est passé au rouge : il
+vérifiait le tirage, pas la règle. Il fixe désormais le type de décideur explicitement et couvre
+les deux branches, quoi qu'il y ait sur disque.
+
+**Après modification du `Dockerfile` ou de `requirements.txt` :** `docker compose build controller osmnx1`.
+
+---
+
+## [2026-09-08] L'expérience qui disait GPT-OSS mesurait Mistral
+
+Le registre annonçait une expérience `Prompt_Minimaliste_GPT-OSS-120b` dont le décideur était
+`mistral-small-latest` : un reliquat des trois lancements homonymes du 2026-09-07, nommé à la main
+avant que le tableau de bord ne sache proposer le nom porteur du modèle. Le run archivé était bon,
+son étiquette mentait. L'expérience s'appelle désormais `Prompt_Minimaliste_mistral-small-latest`
+— exactement ce que propose `nom_avec_modele()` — et son exécution du 2026-09-07 porte la même
+correction dans son instantané, sa synthèse, ses scores et ses deux pages HTML.
+
+**Avant :** la ligne du registre annonçait un modèle, la colonne « décideur » en affichait un
+autre ; une synthèse HTML sortie du dossier attribuait 2693 déplacements au mauvais modèle.
+**Après :** nom, décideur et archives disent tous `mistral-small-latest`.
+
+Les quatre fichiers scellés du run — `decisions.jsonl`, `erreurs.jsonl`, `moves.csv`,
+`compteurs.json` — n'ont pas été touchés : leurs sha256 de clôture sont vérifiés identiques avant
+et après. Les journaux d'exécution gardent l'ancien nom, c'est sous celui-là que le run a tourné.
+
+---
+
+## [2026-09-07] Le 🗑 du registre retire une ligne, il n'efface plus rien
+
+Dans « Mes expériences », **🗑 Retirer du tableau** sort en un clic la ligne cliquée du registre
+— cette exécution-là, pas les autres de la même expérience — et **ne touche pas au disque** : la
+définition et les archives restent où elles sont. Un bandeau **🙈 N entrée(s) retirée(s) ·
+↩ Tout réafficher** compte ce qui a été retiré et le rend, même quand le tableau est devenu vide.
+Le retrait refuse une exécution encore vivante : elle sortirait du panneau « en cours » pendant
+qu'elle écrit. L'effacement définitif d'une expérience n'est plus atteignable depuis l'IHM.
+
+**Avant :** deux clics (`🗑 Supprimer…` puis « Confirmer la suppression définitive ») effaçaient
+`data/experiences/<nom>/` en entier — définition et toutes les exécutions archivées, sans retour
+possible ; les décisions déjà payées disparaissaient avec elles.
+**Après :** un clic retire la ligne du tableau, la restitution est à un clic, et rien n'est effacé.
+
+Au passage, cliquer une ligne puis réduire le tableau (filtre saisi, ligne retirée) ne fait plus
+tomber la page : la sélection de Streamlit est gardée **par indice** et survivait au
+rétrécissement, jusqu'au `single positional indexer is out-of-bounds` qui emportait tout l'onglet.
+
+---
+
+## [2026-09-07] Un décideur épinglé n'est jamais servi par un autre modèle
+
+Une expérience mesure UN modèle. La passerelle, elle, savait basculer vers un autre fournisseur
+quand celui qu'elle avait choisi échouait — la bonne réponse pour un run GAMA, qui veut une
+décision ; la mauvaise pour une mesure. Un lot qui porte un modèle épinglé échoue désormais
+franchement au lieu d'être resservi par un voisin, et le motif nomme l'instance épinglée.
+
+Le cas qui a fait remonter le problème : `cerebras_gpt-oss-120b` répond **HTTP 402, crédits
+épuisés**. Trois choses changent pour lui. L'instance est **désactivée** le temps de son
+`disable_timeout` au lieu d'un cooldown de 30 s — les crédits reviennent après une facturation,
+pas après une minute. L'événement lève une **alarme** `[ALARME] Crédits épuisés` visible dans
+`make error`, sur front montant : une ligne par panne, pas une par lot. Et une expérience n'est
+plus **admise** sur une instance que la passerelle a mise hors service : le go/no-go lit enfin
+`available`, à côté du quota du jour.
+
+**Avant :** l'expérience `gpt-oss-120b` recevait des réponses de `mistral`, les refusait une à
+une, et tournait à vide — 8 sollicitations, 8 refus, 0 décision archivée, et pour tout signal un
+WARNING noyé dans le journal du worker.
+**Après :** le refus tombe à l'admission (« instance hors service côté passerelle »), ou le lot
+échoue avec un motif lisible. Les runs GAMA, eux, gardent la bascule : ils ne mesurent rien.
+
+---
+
+## [2026-09-07] Deux modèles veulent deux noms d'expérience
+
+Le nom d'une expérience est son identité : le dossier, la clé de la file d'attente, la cible de
+`arreter`. Et son fichier ne porte qu'un décideur. Changer de modèle dans le formulaire puis
+réenregistrer sous le même nom n'ouvrait donc pas une variante — ça écrasait la précédente.
+
+Le tableau de bord le dit maintenant au moment où ça compte : quand le nom saisi désigne une
+expérience déjà définie sur un autre modèle, un bouton propose le nom porteur du modèle
+sélectionné (`Prompt_Minimaliste` → `Prompt_Minimaliste_gpt-oss-120b`), en remplaçant le suffixe
+plutôt qu'en l'empilant si on refait tourner le sélecteur. Dupliquer une expérience part
+désormais du nom source suffixé du modèle, au lieu d'un champ vide. Rien n'est imposé : un nom
+valide et libre ne déclenche aucune proposition.
+
+**Avant :** trois lancements successifs sur gemini, gpt-oss puis mistral laissaient trois
+exécutions homonymes, une seule définition (la dernière), et deux lancements du même nom se
+disputaient une clé au lieu de tourner en parallèle.
+**Après :** trois noms distincts, trois jeux de clés disjoints, trois expériences simultanées.
+
+---
+
+## [2026-09-07] La console d'un lancement reste ouverte quand on l'ouvre
+
+Dans « 📟 Activités en cours », le volet du job le plus récent s'ouvre d'office — mais seulement
+au premier affichage. Le pli choisi ensuite appartient au lecteur.
+
+**Avant :** le volet se rejouant toutes les deux secondes, ouvrir la console d'un job qui n'était
+pas en tête la refermait aussitôt. Avec deux expériences en parallèle, le journal de la plus
+ancienne était illisible.
+**Après :** la console ouverte reste ouverte, et celle qu'on referme reste fermée.
+
+---
+
+## [2026-09-07] Une exécution terminée porte son score toute seule
+
+Le score composite ne se demande plus : dès qu'une exécution passe **terminée**, le runner la
+score et écrit sa page de détail par sous-catégorie. La colonne `composite_emd` et l'icône 📊
+de « Mes expériences » se remplissent sans qu'on lance quoi que ce soit — le calcul est
+hors-ligne (aucun appel LLM), ~0,5 s pour 2 700 décisions.
+
+**Avant :** une exécution finissait, la colonne « composite » restait à « — », et il fallait
+penser à cliquer « ♻️ Recalculer toutes les expériences » (ou lancer `experiences score`) pour
+voir un score apparaître.
+**Après :** l'exécution finit, son composite est là.
+
+Le scoring est **fail-open** : s'il échoue, l'exécution reste terminée, sans score, et une
+`[ALARME]` nomme l'expérience concernée (`make error` la montre). Un rendu ne met jamais en
+échec une exécution qui a produit toutes ses décisions.
+
+Les exécutions **arrêtées, en pause ou en cours ne sont pas scorées** — elles affichent « — »,
+jamais 0, même largement remplies.
+
+Deux pannes corrigées au passage :
+
+- « Recalculer toutes les expériences » et `experiences score --toutes` **plantaient** dès
+  qu'une exécution déjà scorée était rencontrée (`ModuleNotFoundError: calibration`) : le rejeu
+  hors-ligne supposait qu'un calcul complet avait eu lieu avant lui dans le même processus.
+- Le scoring lancé **depuis le conteneur** — donc tout scoring de clôture — cherchait le
+  référentiel d'enquête au mauvais endroit et échouait en `FileNotFoundError`. Hôte et
+  conteneur rendent maintenant le même composite au dixième de milliardième près (vérifié :
+  29.912421671235457 des deux côtés).
+
+Enfin, la suite de tests du scoring ne se cale plus sur une exécution nommée en dur : cette
+exécution ayant été supprimée depuis le tableau de bord, **toute la suite skippait en silence**.
+Elle prend maintenant la première exécution terminée disponible.
+
+---
+
+## [2026-09-07] Phase 1 : ajout de la planche Gemini 3.5 Flash-Lite
+
+Le plan d'expériences gagne une quatrième planche nue en **Phase 1** :
+`exp_01d_bare_gemini35_flash_lite` — « Gemini 3.5 Flash-Lite — Prompt Minimaliste »,
+même prompt minimaliste que la 3.1, sur l'instance `google_gemini35`. Le registre
+« Mes travaux » compte désormais **30 fiches** (Phase 1 à quatre modèles : Gemini 3.1
+& 3.5, Mistral, Qwen).
+
+---
+
+## [2026-09-07] Les jobs affichent leur date et, pour une expérience, son décideur
+
+Chaque ligne des « Activités en cours » porte maintenant l'**heure de lancement**, et un job
+d'expérience (`experience-lancer` / `-reprendre`) montre en plus le **décideur** de l'expérience.
+
+**Avant :** `🟢 root:experience-lancer — ok · 2s`
+**Après :** `🟢 root:experience-lancer — ok · 2s · 07/09 23:25 · mistral-small-latest`
+
+On distingue d'un coup d'œil deux lancements de la même cible et on sait quel modèle a tourné,
+sans ouvrir le job.
+
+---
+
+## [2026-09-07] Arrêter le controller ne tue plus l'expérience en cours à coups de SIGKILL
+
+Le service `controller` s'arrête désormais **proprement**. Sa commande préfixe hypercorn par
+`exec`, ce qui en fait le **PID1** du conteneur : il reçoit SIGTERM et rend la main tout de suite.
+
+Auparavant, PID1 était le `sh -c` qui enveloppe la commande, et un shell ne relaie pas SIGTERM à
+ses enfants. Le moindre `docker stop`, `compose restart` ou `compose up` recréant le service
+attendait donc les 10 s du délai de grâce, puis Docker envoyait un **SIGKILL**. Le conteneur
+sortait en **137** — et comme le runner d'expérience tourne en `docker compose exec` *dans* ce
+conteneur, il tombait avec lui, sans clôture, `etat.json` figé sur `en_cours`. C'est exactement ce
+qui a coupé l'exécution `Prompt_Minimaliste / 2026-09-07_19_45_45` à 63 % : plus une ligne écrite,
+et la reprise refusée par un `service "controller" is not running`.
+
+**Avant :** `docker stop controller` → 10 s d'attente, puis exit **137** (SIGKILL)
+**Après :** `docker stop controller` → **immédiat**, exit **0** (arrêt gracieux)
+
+À savoir : Docker n'envoie SIGTERM qu'à PID1, jamais aux processus lancés en `exec`. Arrêter le
+conteneur reste donc brutal **pour le runner lui-même**. Pour interrompre une exécution à un point
+sûr, poser le fichier `PAUSE` dans son dossier d'exécution (ou lui envoyer `SIGINT`) **avant**
+d'arrêter le conteneur. À défaut, la reprise relit `decisions.jsonl`, repart du dernier déplacement
+archivé et consigne une interruption `arret_force`.
+
+---
+
+## [2026-09-07] Pilotage : onglet « Mes travaux » pour suivre les expériences faites
+
+Nouvel onglet **🗂️ Mes travaux** dans le tableau de bord de pilotage. Il croise le
+**plan** (les fiches de `experiments.yaml`) avec les **runs réels** lus sur disque.
+
+Cocher une fiche **demande la référence (la date) de l'expérience réalisée** — aucune
+association automatique. Sa config est alors comparée à celle réellement exécutée
+(`execution.yaml`) et **les écarts sautent aux yeux** (valeur fiche en rouge → valeur run
+en vert). On tranche champ par champ : *écraser la fiche* (le YAML est réécrit, une seule
+ligne touchée) ou *rejeter* (la fiche n'est pas validée). Le **score composite L1** est lu
+dans `scores.json` et figé sur la fiche — jamais saisi à la main. Un bouton **➕** à côté
+de chaque phase ajoute un bloc de travail libre, suivi comme une fiche.
+
+**Avant :** aucun endroit ne disait quelles expériences du plan étaient réellement
+faites, avec quel run, ni si le run exécuté correspondait à ce qui était prévu.
+**Après :** avancement chiffré par phase, association fiche→run tracée, écarts
+plan/exécution détectés et arbitrés, score composite figé au moment de la validation.
+
+L'état personnel vit dans `scripts/dashboard/mes_travaux.yaml`.
+
+---
+
+## [2026-09-07] Phase 0 du plan d'expériences : les trois planchers sont jouables
+
+Les trois planchers de la **Phase 0** (« planchers statistiques & heuristiques », 0 requête LLM)
+sont désormais **définis et enregistrés**, prêts à lancer sur le jeu `population_1000_AAMAS_20260316` :
+`exp_00a_random_otp` (tirage uniforme), `exp_00c_shortest_time` (durée minimale) et
+`exp_00b_majority_car` (a priori « voiture »).
+
+Ce dernier a nécessité un **nouveau décideur** : `majoritaire_voiture`. Il retient l'option dont le
+**mode principal** est la voiture au sens de l'enquête (hiérarchie EMC²), et non au sens de la chaîne
+— un rabattement voiture + train reste un déplacement collectif et n'est donc pas « prendre la
+voiture ». Entre plusieurs options voiture, la plus rapide ; sans aucune, repli déterministe sur la
+première option présentée. Comme les autres heuristiques : local, déterministe, sans quota.
+
+**Avant :** seuls les décideurs `aleatoire` et `duree_minimale` existaient — `exp_00b` ne pouvait
+pas être définie (type de décideur refusé au schéma).
+**Après :** `decideur.type: majoritaire_voiture` est un type valide ; les trois expériences de la
+Phase 0 apparaissent au registre et se lancent par `make experience-lancer EXP=<nom>`.
+
+---
+
+## [2026-09-07] Pilotage des expériences allégé, et la dernière erreur LLM sous les yeux
+
+L'onglet **🧪 Expériences** a été désencombré pour aller à l'essentiel. Le bloc **🐳 Services
+nécessaires** remonte en tête de la configuration ; **« Estimer le coût »** ouvre une petite popup
+qui donne le **nombre de requêtes LLM** (au lieu d'un pavé JSON) ; le prompt s'édite via un simple
+bouton **« Éditer »**. Dans **Mes expériences**, on **clique une ligne** du tableau pour agir
+dessus — Rejouer, Reprendre, Dupliquer, **🗑 Supprimer**, et les contrôles ⏸ Pause / ⏹ Arrêter
+d'une exécution en cours apparaissent tous juste au-dessus de son détail de score. La
+**suppression se fait en deux clics** et efface toute l'expérience (définition et exécutions
+archivées) ; elle refuse tant qu'une exécution écrit encore. Le décideur s'affiche **sans le
+préfixe `passerelle:`** (le modèle seul). Plusieurs éléments jugés bavards ont disparu : l'aperçu
+du fichier `experience.yaml`, la légende des dépendances entraînées, le volet « Détail exécution →
+personne → déplacement », le bouton « Préparer un autre jeu » (le warm-up ne s'affiche que
+lorsqu'aucun jeu n'existe encore).
+
+Deux garde-fous ont été **retirés à la demande** : réenregistrer une expérience déjà exécutée ne
+demande plus de confirmation d'écrasement, et lancer une expérience n'interrompt plus les
+exécutions concurrentes (plus de case « Arrêter d'abord »).
+
+Dans l'onglet **📟 Activités en cours**, le panneau de la sonde des conteneurs est masqué (la
+sonde reste lançable comme un job), remplacé par une **ligne unique « dernière erreur LLM »** — le
+dernier échec de décision, remplacé à chaque nouveau, pour voir d'un coup d'œil ce qui coince.
+
+**Avant :** la page mêlait aperçus de fichiers, confirmations et détails de trace ; l'estimation
+s'affichait en JSON brut ; la sonde occupait le haut du volet et aucune erreur LLM n'était visible.
+**Après :** l'écran va au but ; le coût tient en un nombre ; la dernière erreur LLM est toujours à
+l'écran.
+
+---
+
+## [2026-09-07] Plusieurs expériences en parallèle, sans se disputer les clés LLM
+
+Lancer une deuxième expérience ne tue plus la première. Deux expériences tournent désormais **en
+parallèle si elles utilisent des clés API différentes** ; si elles partageraient une clé (même
+fournisseur — le débit LLM est plafonné par clé, pas par instance), la seconde entre dans une
+**file d'attente FIFO** et démarre toute seule dès que la clé se libère. Un nouvel **ordonnanceur**
+(`make experience-ordonnancer`, aussi supervisé par le tableau de bord) fait avancer la file ; le
+tableau de bord montre qui tient quelle clé et qui attend, avec un bouton pour retirer une
+expérience de la file.
+
+Le jeu de clés d'une expérience se déduit de son **modèle** (aucun réglage nouveau à saisir). Un
+run tué brutalement libère quand même sa clé : il est réconcilié en nouvel état **`interrompue`**.
+Et `experience-lancer-arret` n'arrête plus les services partagés (`controller`, `api`, …) tant
+qu'une autre expérience tourne encore.
+
+**Avant :** relancer `Prompt_Minimaliste` pendant qu'elle tournait arrêtait le run en cours (le
+conteneur `controller` partagé était stoppé) ; impossible de faire tourner deux expériences à la
+fois.
+**Après :** deux expériences sur des clés distinctes (ex. `mistral` et `cerebras`) tournent
+ensemble ; deux sur la même clé (`google`) s'enchaînent automatiquement, la seconde attendant son
+tour dans la file.
+
+---
+
+## [2026-09-07] Le registre montre le décideur réellement utilisé par chaque exécution
+
+Le tableau des expériences affichait, pour **toutes** les exécutions d'une expérience, le décideur
+de sa définition *courante*. Lancer un run avec un autre modèle rebasculait donc l'affichage des
+exécutions passées — une exécution Gemini apparaissait « Mistral ». La donnée, elle, n'a jamais
+bougé : chaque exécution garde dans son `execution.yaml` la copie figée du décideur employé. Le
+registre (CLI et onglet dashboard) lit désormais ce décideur figé, ligne par ligne.
+
+Deux fuites qui laissaient une définition changer en silence sont fermées : ▶ Lancer et 🧮 Estimer
+passent maintenant par la **même confirmation d'écrasement** que 💾 Enregistrer quand l'expérience
+a déjà tourné (jusqu'ici seul Enregistrer la demandait) ; et un lancement ne réécrit plus la
+définition — il se contente d'ajouter la nouvelle exécution à l'index `executions_connues`, tenu
+par union avec le disque au lieu d'être réinitialisé à chaque run.
+
+**Avant :** les 4 exécutions de `Prompt_Minimaliste` affichaient toutes `mistral-small-latest` ;
+`executions_connues` n'en listait qu'une.
+**Après :** chaque ligne montre son décideur figé (`gemini-3.5-flash-lite`,
+`gemini-3.1-flash-lite-preview`, `gpt-oss-120b`, `mistral-small-latest`) ; l'index reflète les
+exécutions présentes.
+
+---
+
+## [2026-09-07] L'onglet Providers affiche le fournisseur réel, pas la clé d'instance
+
+La colonne **Provider** de l'onglet 🤖 Providers montrait les clés de
+`providers.yaml` (`groq_openai_120`, `google2_35`, `google_gemma43`…), qui sont des
+seaux de quota — pas des fournisseurs. Elle affiche désormais le fournisseur réel
+(l'`adapter` : `google`, `groq`, `mistral`, `cerebras`, `openai`), dans la vue live
+comme dans le repli statique. La colonne « Adapter » redondante du repli disparaît.
+
+**Avant :** `Provider = groq_openai_120 · google2_35 · google_gemma43 · mistral`
+**Après :** `Provider = groq · google · google · mistral` (le modèle reste en regard)
+
+---
+
+## [2026-09-07] Le sélecteur de modèle parle en clés, plus en noms d'instances
+
+Le choix du décideur « passerelle » désigne un **modèle**, pas une clé API. Le sélecteur
+et sa légende n'affichent donc plus les identifiants internes de `providers.yaml`
+(`google_gemini31`, `google2`…) — qui mêlent clé + modèle + seau de quota — mais un simple
+compte de clés et un détail par clé numérotée. Le modèle reste servi **indifféremment**
+sur toutes ses clés (consommées en série : un seau de 500 req/jour épuisé, on passe au
+suivant), ce qui n'a pas changé ; seul l'affichage est clarifié.
+
+**Avant :** `gemini-3.1-flash-lite — 880 req/jour disponibles sur 1000 · google_gemini31, google2`
+puis en légende `google_gemini31 : 500 restantes sur 500 · google2 : 380 restantes sur 500`
+**Après :** `gemini-3.1-flash-lite — 880 req/jour disponibles sur 1000 · 2 clés`
+puis en légende `clé 1 : 500 restantes sur 500 · clé 2 : 380 restantes sur 500`
+
+---
+
+## [2026-09-07] Le modèle LightGBM comme décideur d'expérience
+
+On peut désormais relancer une expérience — « s'inspirer d'une expérience existante » dans le
+dashboard — en remplaçant le décideur LLM par le **modèle statistique LightGBM (PROGEDO)**. Le
+modèle décide vraiment (masse de probabilité renormalisée sur les modes offerts), avec ou sans
+simulateur, par le **même chemin de décision** que le LLM. Sa page de synthèse est rendue en
+**volet 3**.
+
+La **version du modèle est scellée par SHA** dans l'empreinte de l'exécution : relancer avec un
+autre artefact donne un résultat traçablement distinct. Quand le modèle ne peut pas décider —
+origine/destination hors de la couche de zones, persona sans traits, aucune offre de mode
+prédictible — il rend une **non-décision explicite** (comptée, exclue des parts), jamais un
+repli silencieux vers un mode. Un décideur modèle **refuse de démarrer** si l'artefact ou la
+couche de zones manquent.
+
+**Before :** une expérience ne pouvait décider que par le LLM (ou une heuristique / un rejeu).
+**After :** décideur « modèle LightGBM » dans le formulaire ; l'expérience se relance à
+l'identique en changeant seulement de décideur, la version du modèle étant scellée par SHA.
+
+---
+
+## [2026-09-07] Score composite et détail par sous-catégorie pour chaque exécution
+
+Chaque exécution terminée reçoit un **score composite** (parts modales face à l'enquête EMC²
+2023) et une **page de synthèse** par sous-catégorie — genre, occupation, lieu de résidence,
+âge, motif, distance — rendue par le même moteur que `docs/synthesis` (la loss n'est pas
+réimplémentée). Le tableau « Mes expériences » du dashboard porte désormais deux colonnes de
+score (**L1 Composite**, **Composite EMD·JSD**) et le nom de la formule ; une icône **📊** marque
+les lignes scorées, et **cliquer la ligne** ouvre le détail par sous-catégorie juste en dessous
+(les colonnes de parts modales par mode ont été retirées du tableau pour l'alléger).
+
+La **formule** est révisable : ses 7 poids (global, absent_penalty, âge, occupation, genre,
+motif, distance) vivent dans `llm-agents/experiences/formules/reference.yaml`, versionnés, avec
+une **empreinte SHA canonique**. Un bouton « Recalculer toutes les expériences » réévalue tout
+l'historique **hors-ligne et instantanément** (le composite est linéaire : on recompose depuis
+les scores bruts, sans un seul appel LLM). Chaque score porte le SHA de la formule sous laquelle
+il a été calculé, et une exécution scorée sous une formule qui n'est plus la référence est
+signalée **⚠ périmée** jusqu'au prochain recalcul.
+
+Une exécution non terminée, ou une dimension sans effectif mesuré, affiche « — » ou « non
+mesuré » — jamais un 0 qui se ferait passer pour un score parfait.
+
+**Before :** une exécution ne livrait que ses parts modales globales ; aucun composite, aucun
+détail par strate, aucune page de synthèse comme celle de `docs/synthesis`.
+**After :** `python -m experiences score <exec>` (ou `--toutes`) écrit `scores.json` +
+`synthese_scores.html` ; le dashboard affiche le composite, le détail par sous-catégorie, et
+permet de rejouer une nouvelle formule sur tout le passé.
+
+---
+
+## [2026-09-07] La rangée d'actions d'une expérience reste alignée
+
+Quand aucune exécution n'est reprenable, la phrase qui l'explique s'affiche désormais sous les
+boutons plutôt que collée au bouton « Reprendre ».
+
+**Before :** l'explication logeait dans la colonne du bouton « Reprendre » ; comme la rangée est
+ancrée en bas, sa hauteur remontait le bouton, désaligné de « Rejouer » et « Dupliquer ».
+**After :** « Rejouer », « Reprendre » et « Dupliquer » restent sur une même ligne ; l'explication
+occupe sa propre ligne en pleine largeur juste en dessous.
+
+---
+
+## [2026-09-07] Le registre des expériences se met à jour tout seul
+
+Une exécution qui se terminait restait annoncée « en cours » dans « Mes expériences » jusqu'au
+prochain clic. Constaté sur un run fini à 99,8 % de couverture que la page ignorait encore.
+
+**Before :** le tableau du registre, les barres d'avancement et les boutons Pause et Arrêter
+étaient calculés une fois par exécution du script. Rien ne les réveillait.
+**After :** le registre et le panneau des lancements se rafraîchissent toutes les 5 secondes tant
+qu'une exécution ou un job tourne, et rechargent la page une fois quand un état change — les
+avertissements du formulaire et le bouton « Reprendre » sont calculés ailleurs.
+
+Ils cessent de sonder dès que plus rien ne tourne, pour ne pas gêner la navigation dans le détail
+d'une exécution archivée. C'est le même mécanisme que pour les jeux en construction et les
+services manquants : neuf blocs se rafraîchissent maintenant seuls, et la page d'architecture en
+donne le tableau.
+
+**Les boutons d'arrêt cessent de se marcher dessus.** Le même run s'affiche dans « Activités en
+cours » et dans « Mes expériences » ; leurs boutons Pause et Arrêter portent désormais un préfixe
+de clé distinct, sans quoi Streamlit refuse deux widgets de même identité. Ceux du registre
+héritent au passage de la confirmation qui garde l'arrêt définitif.
+
+---
+
+## [2026-09-07] Une sonde prend en flagrant délit le conteneur qui tombe
+
+Trois runs perdus dans la journée sur le même symptôme : le conteneur `controller` tué avec le
+code 137, aucune ligne dans ses journaux, aucun OOM signalé par Docker. Impossible de dire après
+coup combien de mémoire il consommait, qui d'autre en prenait, ni ce qu'il avait dit avant de
+mourir.
+
+**Before :** on constatait la mort du run et on repartait de zéro, sans matière pour comprendre.
+**After :** `make watch-containers`, lançable aussi d'un bouton dans l'onglet 📟 Activités en
+cours, relève la mémoire de chaque conteneur à intervalle fixe et capture, au moment de la chute,
+l'état d'inspection du conteneur et ses deux cents dernières lignes de journal.
+
+**Elle nomme aussi qui a demandé l'arrêt.** Elle écoute `docker events` et photographie les
+processus de l'hôte à l'instant même d'un `stop` ou d'un `kill` : pid, parent, heure de démarrage
+et ligne de commande, dans `appelant-<...>.txt`. Docker journalise l'appel mais pas l'appelant,
+et un `docker compose stop` ne vit qu'une seconde : la photo doit être prise à cet instant.
+Vérifié en direct sur un conteneur jetable, la capture rend bien `docker stop <conteneur>` avec
+son processus parent.
+
+**Le volet 📟 Activités en cours montre ce qu'elle a trouvé** sans qu'on lise les fichiers :
+campagne en cours, nombre de mesures, pics de mémoire par conteneur, chutes capturées, et les
+commandes d'arrêt photographiées. Seules les lignes qui ressemblent à un arrêt sont retenues.
+
+Elle écrit `memoire.csv`, `chute-<service>.txt` et son propre `sonde.log` dans
+`experiments/.dashboard/conteneurs/<horodatage>/`. L'alarme de seuil se lève sur front montant,
+à 85 % de la limite mémoire, pour ne pas noyer le journal ; le bilan de fin donne la durée, le
+nombre de tours, de mesures, de chutes, et les pics par conteneur. La sonde ne modifie aucun
+conteneur, et un `docker` injoignable la fait continuer plutôt que de l'arrêter.
+
+**La bascule d'une clé à l'autre se lit dans le journal, sans nommer la clé.** Quand la
+première épuise son quota du jour, la ligne dit « Passage sur la seconde clé (2/2) — la
+précédente a épuisé son quota du jour ». Le rang, jamais le nom : un journal est lu, copié et
+transmis, et le nom d'une instance désigne un compte.
+
+**Onze cibles `make` retrouvent leur documentation.** Leur ligne `.PHONY` séparait le bloc de
+commentaires `##` de la cible, si bien que le tableau de bord et `make help` les affichaient sans
+un mot d'explication. `providers`, `stop-run`, `run-offline`, `status` et `ab-detail` en faisaient
+partie.
+
+---
+
+## [2026-09-07] Les deux clés se consomment en série, et une attente n'est plus une erreur
+
+Cinq changements demandés le même jour, après un run où la moitié des sollicitations repartait en
+« Providers saturés » et où le compteur d'erreurs affichait 128 pour un run qui n'en avait aucune.
+
+**La deuxième clé Google rejoint la rotation.** Le compose lisait la clé 1 dans une variable
+`SIM_PROVIDER_KEYS__google` réservée à la simulation, donc vide par défaut : neuf instances sur
+seize étaient exclues faute de clé, et `gemini-3.5-flash-lite` n'était servi que par une seule.
+
+**Before :** 7 instances vivantes, un seul seau de 500 requêtes pour ce modèle.
+**After :** 15 instances vivantes, deux seaux pour ce modèle.
+
+**Les clés se consomment en série, pas en alternance.** La plateforme alternait entre les
+instances d'un même modèle, entamant les deux seaux à la fois. Elle prend maintenant la première
+qui a du quota et n'en change que lorsque celle-ci est épuisée, en journalisant la bascule. Le
+gateway sait faire de même sur sa propre rotation, par une politique `cascade` réglée dans
+l'environnement (`LLM_GATEWAY_ROUTING__POLICY`), `swrr` restant le défaut du paquet.
+
+**Une tentative réessayée est une attente, pas une erreur.** La plateforme ne saute jamais un
+déplacement : une tentative qui échoue est réessayée jusqu'à décision. La compter en erreur
+cachait le vrai signal, le débit du fournisseur.
+
+**Before :** « 128 erreurs » sur un run dont aucun déplacement n'avait échoué.
+**After :** « 96 attentes (passerelle_occupee) », et un compteur d'erreurs réservé aux échecs
+définitifs — un déplacement clos sans décision. Il reste vide tant que la règle tient, et une
+valeur non nulle dénonce donc une violation.
+
+**Le formulaire conseille un parallélisme tenable.** Il propose une valeur calculée sur le débit
+de l'instance servie, un cinquième des requêtes par minute, au lieu de huit par défaut. Sur une
+instance à quinze par minute, il propose trois : demander huit gâchait la moitié des tentatives.
+
+**Le bandeau des services disparaît sans qu'on clique.** Le bloc des services nécessaires se
+rafraîchit seul tant qu'il en manque un, et recharge la page dès que l'ensemble des manquants
+change.
+
+**Before :** on cliquait « Démarrer les services », les conteneurs montaient en trente secondes,
+et le bandeau rouge restait affiché jusqu'au prochain clic — l'état étant en plus mis en cache
+quinze secondes.
+**After :** le bandeau s'efface et les voyants passent au vert d'eux-mêmes. La sonde s'arrête
+quand tout tourne, pour ne pas interroger Docker en boucle.
+
+**Les exécutions en cours s'arrêtent depuis leur bloc.** Pause et Arrêter sur chaque ligne, avec
+la différence écrite : la pause laisse l'exécution reprenable, l'arrêt scelle l'archive et la
+ferme pour toujours. L'arrêt est gardé par une confirmation, puisque c'est lui qui a coûté
+209 décisions le matin même.
+
+---
+
+## [2026-09-07] Une exécution morte n'est plus arrêtée, et reste reprenable
+
+Correction d'un défaut introduit le jour même par l'arrêt des concurrents avant lancement, et de
+ce qui le rendait irréparable.
+
+**Une exécution n'est concurrente que si elle écrit encore.** Rester sur « en cours » dans son
+`etat.json` ne suffit pas : l'arrêt est coopératif, donc un runner tué laisse cet état pour
+toujours.
+
+**Before :** le tableau de bord écrivait un `STOP` dans une exécution déjà morte. La reprise
+suivante l'honorait et clôturait l'exécution en « arrêtée » — un état final, donc non reprenable —
+avec ses décisions payées dedans. C'est arrivé sur 209 décisions.
+**After :** seule une exécution dont la progression a moins de dix minutes est traitée comme
+concurrente. Une exécution qui vient de naître, sans fichier de progression, compte vivante grâce
+à la date de son état.
+
+**« Reprendre » accepte une exécution abandonnée en cours.** Les trois cas reprenables sont
+désormais : en pause, épuisée, et « en cours » que plus rien n'écrit. Sans le troisième, la page
+n'offrait aucun chemin propre après un runner tué, seulement « Rejouer », qui repaie tout.
+
+**« Lancer » prévient avant de créer une deuxième exécution.** Quand une exécution reprenable
+existe pour l'expérience composée, un avertissement la nomme avec son état et le nombre de
+décisions déjà archivées.
+
+**Une archive clôturée n'est plus proposée à la reprise.** La clôture vit dans
+`execution.yaml`, avec les empreintes des fichiers, et une archive clôturée est immuable (E19).
+`etat.json` n'en dit rien : une exécution clôturée pouvait donc apparaître reprenable alors que
+chaque tentative échouait sur « archive clôturée : immuable ». La page lit maintenant la clôture.
+
+**Un démon Docker muet est nommé.** L'état des services inconnu affichait un message tiède ; il
+dit maintenant que le démon ne répond pas et qu'il faut ouvrir Docker Desktop, au lieu de laisser
+`failed to connect to the docker API` surgir dans un journal de job.
+
+---
+
+## [2026-09-07] Aucun déplacement d'expérience n'est sauté : la décision est réessayée jusqu'au bout
+
+Deuxième ligne de défense côté plateforme d'expériences (ticket 035), après le correctif du gateway.
+Une exécution sans simulateur ne laisse plus de trous silencieux dans les journées, et toute
+tentative ratée est désormais tracée sur le disque.
+
+- **Plus de saut.** Une erreur transitoire d'un décideur distant (passerelle occupée, timeout,
+  réseau) est réessayée indéfiniment, pause croissante plafonnée à 60 s, interruptible par
+  pause/arrêt/signal. Le déplacement n'est archivé que décidé ; interrompu, il est repris tel quel.
+- **« Occupé » n'est plus « épuisé ».** Un message « saturés / indisponibles / timeout » est
+  classé `passerelle_occupee` (transitoire) ; l'état `epuisee` est réservé à un quota (429) ou un
+  crédit (402) confirmé. `attente_max_s` ne coupe plus l'exécution : c'est un seuil d'`[ALARME]`.
+- **Traçabilité.** Chaque tentative ratée est écrite dans `erreurs.jsonl`, tout le journal de
+  l'exécution dans `execution.log`, et `make experience-erreurs EXP=<nom>` rapproche les décisions
+  du jeu (déplacements manquants, journées à trous, décisions après un trou). `progression.json`
+  montre le déplacement en attente et depuis combien de temps.
+- **Attente de la fenêtre quota (optionnelle).** `make experience-lancer … ATTENDRE_FENETRE=1` fait
+  dormir l'exécution jusqu'à minuit UTC puis repartir seule, au lieu de passer `epuisee`.
+
+**Avant :** après 8 s la passerelle abandonnait un lot ; l'erreur « Providers saturés » était
+classée « quota épuisé » à tort, traitée comme transitoire mais bornée à 3 tentatives, puis le
+déplacement était **sauté sans laisser de trace** et la journée de la personne continuait — chaîne
+de véhicules faussée, aucune erreur dans l'archive (39 déplacements perdus sur le run du 2026-09-07).
+**Après :** le déplacement est réessayé jusqu'à être décidé ou l'exécution interrompue ; rien n'est
+sauté, chaque échec est daté et rapprochable, et un quota réellement épuisé arrête proprement (ou
+attend la fenêtre) sans jamais substituer de modèle ni décider par défaut.
+
+---
+
 ## [2026-09-07] Le gateway se règle par couches et un fournisseur occupé n'est plus abandonné
 
 Itération 2 du ticket 037, lots B à E, livrée sur la branche `ticket-037-iteration-2` pendant

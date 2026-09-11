@@ -107,7 +107,7 @@ toucher au moteur.
 | | |
 |---|---|
 | Modèle | `gemini-3.5-flash-lite`, température 0 |
-| Fournisseurs | `google2_35` et `google_gemini35` — **deux clés, un seul modèle** |
+| Fournisseurs | `google_gemini35_key2` et `google_gemini35_key1` — **deux clés, un seul modèle** |
 | Lots | 8 personas (même valeur que `common_set_eval` : à 15, le modèle rend un JSON valide mais amputé de personas) |
 | Appels | 62 lots × 10 bras = 620 |
 | Débit | 15 req/min et par clé, les deux clés en parallèle |
@@ -142,8 +142,8 @@ campagne s'est arrêtée : les bras déjà payés sont servis depuis leur trace,
 Quatre réserves, écrites en tête de chaque page parce qu'elles en bornent la lecture.
 
 **Aucun bras témoin** (décision du 2026-08-26). Le run a tourné sur quatre fournisseurs —
-`google2` (1 687 décisions), `google2_35` (1 560), `groq_openai_120` (87),
-`groq_qwen_qwen3_6_27b` (35) — quand les variantes tournent sur un seul modèle. L'écart
+`google_gemini31_key2` (1 687 décisions), `google_gemini35_key2` (1 560), `groq_openai_120_key1` (87),
+`groq_qwen_qwen3_6_27b_key1` (35) — quand les variantes tournent sur un seul modèle. L'écart
 publié mélange donc l'effet du prompt et celui du changement de modèle. Le séparer
 demanderait un onzième bras rejouant le prompt **inchangé** dans ces mêmes conditions,
 soit +62 appels : c'est le dispositif que `prompt_calibration/ab_meteo.py` applique déjà
@@ -220,6 +220,17 @@ pas diverger de la page dont elle dérive. Les réserves du § 5 sont portées e
 
 Un bras non rejoué n'est pas dessiné : le script s'arrête en nommant la commande qui
 produirait la page manquante, plutôt que de rendre un PNG vide.
+
+## 8. Suite (2026-09-08) : le même sous-jeu élargi, sous cinq mutations
+
+Le run `exp_gemini-35-fl_expcha_jtir_t0_nosim / 2026-09-08_12_04_14` (modèle unique, T = 0) rend le même
+report — TC +14,6, marche −11,3 — et permet ce que le 26/08 n'avait pas : un **bras témoin** rejouant le
+prompt inchangé dans les conditions du rejeu. Deux enseignements confirment et prolongent ceux du § 5 :
+les leviers de coût (V1, V3, et ici M2-M5) déplacent la masse **des TC vers la voiture**, pas vers la
+marche ; la seule chose qui ait bougé la marche est le **cadrage** de la tâche (estimer une répartition,
+pas choisir un optimum), à condition de ne pas exiger « une part pour toute option », qui vide la
+voiture là où elle domine. Dossier complet, traces et prompt proposé (`expert_chaine_m5`) :
+`docs/traces/2026-09-08_16-05_prompt_expcha_derives_m5/`.
 
 ## Voir aussi
 

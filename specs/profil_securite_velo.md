@@ -64,8 +64,9 @@ contiennent cette information mais elle est jetée.
 - **R13** *(déduite)* — Ajouter le profil **ne change pas** quelles options sont considérées
   identiques : deux itinéraires par ailleurs identiques restent **une seule** option.
 - **R14** *(déduite)* — Après mise en service, **aucun** profil issu d'un état antérieur à la
-  fonctionnalité n'est servi (remise à zéro des mémoires et caches ; les anciennes entrées ne sont
-  pas réutilisées).
+  fonctionnalité n'est servi (remise à zéro des caches ; les anciennes entrées ne sont pas
+  réutilisées). Cela vaut aussi pour les **décisions** : aucune décision LLM prise avant
+  l'existence de la ligne sécurité n'est resservie face à un texte d'option qui l'inclut.
 - **R15** *(déduite)* — Une arête non cyclable rencontrée malgré tout (voie interdite au vélo) est
   classée `exposé` et comptée, **jamais ignorée**.
 - **R16** *(déduite)* — Un itinéraire **servi du cache** porte **le même profil** qu'un itinéraire
@@ -103,8 +104,10 @@ contiennent cette information mais elle est jetée.
   `exposed_m=0` → « trajet mixte », sans mention d'exposition.
 - **R13** — Deux requêtes identiques produisent une option dédupliquée (identifiant d'option
   inchangé par rapport au comportement d'avant la fonctionnalité).
-- **R14** — Au premier démarrage post-migration, mémoires long terme et caches (décisions,
-  routes, plans) sont vides ; une assertion « le graphe vélo porte `cycleway` » passe.
+- **R14** — Au premier démarrage post-migration, les caches (décisions, routes, plans) sont vides
+  et une assertion « le graphe vélo porte `cycleway` » passe. Éditer le gabarit de rendu des
+  options produit un **nouveau répertoire de cache de décisions** : deux requêtes identiques, l'une
+  d'avant et l'une d'après l'édition, ne partagent pas d'entrée de cache.
 - **R15** — Arête `bicycle=no` / voie rapide sans aménagement présente dans le chemin → classée
   `exposé` et comptée en `exposed_m` ; jamais laissée sans catégorie ni écartée du total.
 - **R16** — Stocker une entrée puis la relire restitue `bike_safety` **à l'identique** ; deux

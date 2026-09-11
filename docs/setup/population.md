@@ -148,7 +148,7 @@ ni moins ». Et le cadre **échoue** s'il est vide ou ne recoupe pas les départ
 sans ce garde-fou, une faute de frappe ferait peupler tout le département en silence.
 
 **Le périmètre d'étude est celui des 453 communes sur six départements** (ticket 031, option A,
-rapport `docs/paper/population/RAPPORT_PERIMETRE_453_COMMUNES.html`). Depuis le 2026-09-03 les
+rapport `docs/paper/methode/population/RAPPORT_PERIMETRE_453_COMMUNES.html`). Depuis le 2026-09-03 les
 données des six départements sont dans `eqasim-toulouse/data/` — BD TOPO 3-4 TOUSTHEMES SHP LAMB93
 **édition 2025-03-15** pour les six (la 2024-09-15 n'est plus servie par l'IGN ; la Haute-Garonne a
 été reprise dans la même édition, l'ancienne livraison est rangée dans `data/bdtopo_archive_2024-09-15/`,

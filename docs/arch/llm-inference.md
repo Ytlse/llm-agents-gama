@@ -42,6 +42,143 @@ Le module est structuré en package ports & adapters (`core/` pur, `ports/` Prot
 
 ---
 
+## Ordre de présentation et épinglage (ticket 035)
+
+**L'ordre des options dans le prompt est déterministe.** `LlmAgent.evaluate_and_choose_travel_plan`
+ne mélange plus les options avec `random.shuffle` : l'ordre est une fonction de
+`agent.option_order_seed` (défaut 42, le même nom que dans `experiments.yaml`), de l'agent et de
+l'activité (`experiences.decision.ordre_presentation`). Le biais de position est toujours mélangé,
+mais le même déplacement est présenté dans le même ordre d'un run à l'autre et dans les deux modes
+d'exécution (spec 02, D7). Le tirage final, lui, est réaligné sur l'ordre canonique par code et ne
+dépend pas de la présentation.
+
+**Kwargs optionnels, sans effet pour la simulation.** `force_provider` épingle une instance de
+passerelle ; `allowed_providers` refuse toute réponse servie par une instance hors de l'ensemble
+(garde-fou client, compté `substitution_refusee`, spec 05 Q3) ;
+`trace` (dict fourni par l'appelant) reçoit le payload envoyé, la réponse brute, les poids par
+option présentée, le fournisseur, l'identifiant de lot et le repli uniforme éventuel (spec 02, D6) ;
+`presentation_figee` garde l'ordre reçu. Le contrôleur GAMA n'en passe aucun : son comportement
+est inchangé.
+
+**Un lot épinglé n'est jamais servi par un autre modèle.** La passerelle sait basculer vers un
+autre fournisseur quand celui qu'elle a choisi échoue (parse error, 4xx, prompt trop volumineux) :
+c'est la bonne réponse pour un run GAMA, qui veut une décision. C'est la mauvaise pour une
+expérience, qui mesure UN modèle. Depuis le 2026-09-07, `_switch_provider_or_fail` **refuse** la
+bascule quand le lot portait un `force_provider` : le lot échoue avec un motif qui nomme
+l'instance épinglée, et l'alarme `alarme:bascule_refusee` est levée. Les lots sans épinglage
+gardent la bascule.
+
+> Avant, le garde-fou n'existait que côté client : la réponse substituée arrivait, était refusée,
+> et le lot était perdu — l'exécution `2026-09-07_19_45_31` a enchaîné 8 sollicitations, 8 refus et
+> 0 décision archivée sans qu'aucune ERROR ne sorte.
+
+**Variante de prompt par requête.** `parameters.prompt_variant` (clé de `prompts:` dans
+`prompts.yaml`) remplace la variante active pour cette requête ; `PromptManager.get_system_prompt`
+lève si elle est inconnue. `parameters` entrant dans la clé de lot, deux variantes ne partagent
+jamais un appel. La simulation GAMA ne le renseigne pas et reste sur la variante active.
+
+**Variante invalidée : refus de service.** Une entrée de `prompts.yaml` portant un bloc
+`_invalidation: {statut: invalide, …}` n'est plus servie à un modèle :
+`get_system_prompt` et `render` lèvent `VariantePromptInvalide` (sous-classe de `ValueError`)
+en nommant la règle enfreinte et le remplaçant déclaré. Un prompt **actif** invalidé fait
+échouer `check_category`, donc le démarrage du service, plutôt que la millième requête.
+
+Le refus ne vaut que pour le **service**. `get_system_prompt(..., verifier_validite=False)`
+rend le texte sans contrôle, et c'est ce que fait `empreinte_gabarit` : une invalidation ne
+doit pas rendre irreproductibles les empreintes déjà scellées des exécutions passées. Une
+exécution lancée sur un gabarit invalidé le porte dans son empreinte (`invalide: true`,
+`invalide_regle`) — clés ajoutées hors du `sha256`, donc une variante valide produit
+l'empreinte d'avant, au caractère près.
+
+**Profondeur de réflexion (`thinking_budget`).** Quatrième clé de la cascade
+`core/inference.py`, résolue comme les autres : requête > fournisseur > défauts. Trois valeurs
+ont un sens distinct, et la distinction compte :
+
+| Valeur | Effet |
+|---|---|
+| `None` (défaut) | **rien n'est envoyé** — le fournisseur applique sa propre réflexion. C'est le comportement qui prévalait avant le 2026-09-10 : aucun `thinkingConfig` n'était émis, alors que `thoughtsTokenCount` était déjà lu et compté |
+| `0` | réflexion **désactivée** explicitement |
+| `-1` | laissée au modèle, budget non borné |
+| `n > 0` | budget fixe de `n` jetons de pensée |
+
+**La pensée est prélevée sur le budget de SORTIE.** Sans réserve, un budget de réflexion
+généreux fait tronquer la réponse (`finish_reason: MAX_TOKENS`) et l'appel est perdu. Le
+`google_adapter` relève donc `maxOutputTokens` de `n` (budget fixe) ou de `RESERVE_REFLEXION`
+= 2048 (budget dynamique), valeur reprise de `prompt_calibration` où elle est éprouvée. Quand
+une troncature survient avec des jetons de pensée et aucune complétion, le diagnostic le dit et
+nomme les deux réglages à arbitrer, au lieu de laisser conclure à une boucle de répétition.
+
+**Le réglage courant est un NIVEAU, pas un nombre.** Relevé le 2026-09-10 dans
+[la documentation Gemini](https://ai.google.dev/gemini-api/docs/thinking) : l'API expose
+`thinking_level` — `minimal`, `low`, `medium`, `high` — et **`high` EST le maximum**. Le budget
+numérique `thinking_budget` reste accepté pour compatibilité ascendante, mais la doc recommande
+de l'abandonner, et **les deux ensemble rendent 400**.
+
+Trois conséquences appliquées :
+
+1. `resolve_inference` **refuse** `thinking_level` et `thinking_budget` ensemble
+   (`ReglagesReflexionIncompatibles`), plutôt que de laisser découvrir le 400 en vol.
+2. Les niveaux acceptés **varient par modèle** : `minimal` existe sur `gemini-3.6-flash` et
+   `gemini-3.5-flash-lite`, pas sur `3.7` ni `3.8`. Ils se déclarent par instance
+   (`thinking_levels`), relevés dans la doc du fournisseur ; l'adapter refuse un niveau hors
+   liste, et `experience-lancer` le refuse d'avance.
+3. Le formulaire propose le **niveau** dès qu'un modèle en déclare, et ne retombe sur le budget
+   numérique que pour les modèles sans déclaration — un seul des deux part, jamais les deux.
+
+Quand plusieurs clés servent le même modèle, les niveaux offerts sont l'**intersection** : un
+niveau accepté par une clé et pas par l'autre ferait échouer l'appel selon le tirage.
+
+**Dire « le maximum » par un budget numérique demande un plafond déclaré** (chemin d'héritage,
+pour les modèles sans `thinking_levels`). L'API ne connaît pas de mot-clé « max » :
+la réflexion se demande en jetons, et `-1` est l'**automatique** (le modèle arbitre, il peut
+réfléchir peu), pas le maximum. Or un budget au-delà du plafond réel du modèle est **raboté
+silencieusement** par le fournisseur, et la réponse ne rapporte que `thoughtsTokenCount`, les
+jetons de pensée *consommés* — jamais le budget appliqué. Rien ne permet donc de rattraper
+l'écart après coup, et l'empreinte de l'expérience porterait un budget qui n'a pas eu lieu.
+
+D'où `thinking_budget_max` par instance dans `providers.yaml`, **relevé dans la documentation du
+fournisseur, jamais deviné** :
+
+| Déclaré | Absent |
+|---|---|
+| « maximum du modèle (n jetons) » apparaît au formulaire et **résout vers ce nombre** — l'empreinte porte une valeur concrète, pas un mot magique | aucun maximum n'est proposé, et le formulaire dit pourquoi |
+| le champ libre est **borné** par ce plafond | le champ libre va jusqu'à 32768 |
+| `experience-estimer` / `experience-lancer` **refusent** d'avance un budget supérieur | un avertissement dit qu'on ne peut pas vérifier que le budget sera appliqué |
+| `google_adapter` refuse l'appel (400) plutôt que de le laisser raboter | aucun contrôle |
+
+Quand plusieurs instances servent le même modèle, c'est le **plus petit** plafond qui vaut —
+demander plus ferait refuser l'appel sur la plus contrainte. Et si une seule instance ne le
+déclare pas, il n'y a pas de plafond : on ne déduit pas une valeur d'un sous-ensemble.
+
+**Tous les adapters ne savent pas l'appliquer.** `GoogleAdapter.applique_reflexion = True` ;
+partout ailleurs c'est `False`, et l'adapter **avertit une fois** que le réglage est scellé dans
+l'empreinte sans être transmis. C'est délibéré : le défaut trouvé le 2026-09-10 sur le canal
+antigravity était précisément un `temperature: 0.0` scellé dans l'empreinte, inscrit dans le nom
+de l'expérience (`t0`), et jamais envoyé. Un paramètre non appliqué doit se voir.
+
+Côté expérience, le budget se pose dans `decideur.parametres` — donc **scellé dans l'empreinte
+du décideur** : deux budgets font deux empreintes, et le rejeu est fidèle. La clé est **absente**
+quand la réflexion n'est pas pilotée, jamais à `None` : une clé nulle donnerait deux empreintes
+pour un même réglage selon qu'on a ouvert le formulaire ou non. Le tableau de bord l'expose sous
+« Profondeur de réflexion », à côté de la température.
+
+**Avis de neutralité : refus par défaut.** Une variante ne part au modèle que si elle porte un
+bloc `_neutralite` rendu par l'agent indépendant `prompt-auditor` (`.claude/agents/`). Le mode
+strict est **armé** depuis le 2026-09-10 (`exiger_avis_neutralite=True`) : un avis absent est un
+refus. Un verdict `non_conforme` refuse quel que soit le mode ; `conforme_avec_reserve` sert avec
+un WARNING nommant la règle. L'avis scelle le `sha256` du `content` : retoucher le texte après
+validation le périme (`etat_neutralite` → `perime`), donc refuse — c'est ce qui interdit de faire
+valider une version et d'en servir une autre. `PromptManager.etat_neutralite(variante)` rend
+`conforme`, `reserve`, `refus`, `absent` ou `perime`.
+
+**Familles de prompt.** `familles:` en tête de `prompts.yaml` déclare la famille de chaque
+variante (`PromptManager.famille`). Une seule est **minimale** — `prompt_minimal` : la tâche
+et le format de sortie, rien qui puisse pencher vers un mode. Toutes les autres sont
+**expertes**, où nommer et cadrer les modes est volontaire ; seules les règles figées
+(« sous tel seuil, tel mode ») et les formules mathématiques y sont proscrites. La même
+phrase étant licite dans une famille et fautive dans l'autre, la famille se déclare au lieu
+de se deviner du nom. Voir `specs/hygiene-prompts-et-plateforme-experiences.md`.
+
 ## Pipeline de batching
 
 ### File d'attente (Redis Sorted Set)
@@ -185,6 +322,19 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
   template via la variable `system_prompt`.
 - Les catégories absentes de `active:` (ex. `perception_filter`) conservent leur section
   `<!-- SYSTEM -->` en dur dans leur template.
+
+**Variante candidate `expert_chaine_m5` (2026-09-08).** Cinq mutations ancrées d'`expert_chaine`,
+écrites contre les dérives mesurées sous `gemini-3.5-flash-lite` (marche → TC chez les retraités et
+sur les trajets de 1 à 5 km, voiture → TC chez les actifs, 76 % de décisions à ≥ 80 % sur une option) :
+cadrage « répartition des choix de cent personnes de ce profil » au lieu de « mode optimal », temps
+porte-à-porte (attente et aléa des TC non comptés), abonnement et revenu lus comme disponibilité et
+coût plutôt que préférence, météo lue à sa mesure, confort et effort sans incapacité déduite de l'âge
+(« privilégier les modes assis pour les personnes âgées » retiré). Aucune consigne de mode ni de seuil
+distance → mode. Rejeu apparié de 200 décisions : L1 54,6 → 48,1 contre le témoin, marche +1,7, vélo
+7,1 → 4,7. La variante n'est **pas** active : elle attend la non-régression globale
+(`docs/traces/2026-09-08_16-05_prompt_expcha_derives_m5/`). La passerelle ne la voit qu'après
+`make passerelle-recharger` — qui ne suffisait pas avant le 2026-09-08 : sans `PYTHONPATH=/app`, le
+worker servait le `prompts.yaml` figé dans l'image (cf. changelog du même jour).
 
 #### Sortie du LLM : une distribution, pas un choix
 
@@ -499,7 +649,8 @@ recalculer à chaque changement de `rpm_limit`/`tpm_limit` (cf. en-tête de `pro
 
 À chaque sélection :
 1. Vérification du Circuit Breaker (provider exclu ?)
-2. Vérification du **quota journalier** (RPD/TPD) : provider écarté jusqu'à minuit UTC si épuisé
+2. Vérification du **quota journalier** (RPD/TPD) : provider écarté jusqu'au reset de sa
+   journée (fuseau `quota_reset_tz`) si épuisé
 3. Réservation atomique **RPM + TPM** via un unique script Lua (compare `now` au compteur
    glissant Redis ; toute étape qui échoue annule les réservations déjà posées)
 4. Réservation atomique du slot de concurrence
@@ -550,14 +701,42 @@ mort jusqu'à minuit — sur un run de plusieurs heures, les providers tombaient
 le pipeline dégénérait (cascade de timeouts → décisions par défaut). Ces quotas sont
 désormais **appliqués** (`infra/*/rate_limiter.py`) :
 
-- chaque réservation incrémente un compteur journalier UTC (`rpd:{provider}:{jour}`) ;
-  les tokens réellement consommés sont comptés après l'appel (`record_tokens` →
-  `tpd:{provider}:{jour}`) ;
-- au premier dépassement, un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'à
-  minuit UTC) écarte le provider de la rotation **sans re-sollicitation** toutes les
+- chaque réservation incrémente un compteur journalier daté dans le fuseau du fournisseur
+  (`rpd:{provider}:{jour}`) ; les tokens réellement consommés sont comptés après l'appel
+  (`record_tokens` → `tpd:{provider}:{jour}`) ;
+- au premier dépassement, un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'au reset
+  du fournisseur) écarte le provider de la rotation **sans re-sollicitation** toutes les
   `disable_timeout` secondes ;
 - `/health` (`get_status`) expose `daily_requests`, `daily_tokens`, `rpd_limit`,
   `tpd_limit` et `quota_exhausted` par provider.
+
+#### Le fuseau du reset, et qui fait autorité — 2026-09-08
+
+Deux corrections, après un blocage d'expérience à 10 % (voir le changelog du 2026-09-08).
+
+**Le fuseau.** Un quota journalier ne se réinitialise pas à minuit UTC mais à minuit chez le
+fournisseur : pour le free tier Gemini, minuit *Pacifique*, soit 09:00 à Paris l'été. Les
+compteurs, datés en UTC, se vidaient sept heures trop tôt — à 08:44 la passerelle annonçait
+49 requêtes sur 500 quand Google en comptait plus de 500. Le fuseau se règle par instance
+(`quota_reset_tz`, `America/Los_Angeles` sur les instances Google, `UTC` par défaut) et
+`core/quota.py` porte le calcul (`quota_day`, `next_quota_reset`, DST géré).
+
+**Qui fait autorité.** Le compteur local ne voit que le trafic de cette passerelle, alors
+qu'une clé est aussi consommée par `scripts/synthesis/*` et `prompt_calibration` : il
+sous-compte par construction, et ne peut donc pas décider seul qu'une clé est encore ouverte.
+Un 429 dont le corps désigne un quota journalier (`quotaId` en `…PerDay…`, détecté par
+`is_daily_quota_error`) appelle `mark_quota_exhausted_until` et écarte l'instance jusqu'au
+reset — le compteur n'est plus consulté sur ce chemin.
+
+Le `retryDelay` renvoyé dans ce cas est ignoré : Gemini annonce 0,7 s à 57 s pour une fenêtre
+qui ne rouvre que des heures plus tard, et le suivre faisait boucler l'instance sur des 429.
+Il reste utilisé pour un 429 de **débit par minute**, où il est juste.
+
+**Ce que l'appelant en apprend.** L'échec porte désormais `error_kind="quota_journalier"` et
+`resume_at` (`Task`, `TaskStatusResponse`, `TaskResult` du SDK). Sans ces champs, le message
+reformulé par le worker — « Providers saturés ou indisponibles » — était classé « passerelle
+occupée » côté expériences, qui attendait indéfiniment. Une instance épinglée sans alternative
+fait donc remonter l'heure de réouverture au lieu d'une saturation générique.
 
 ---
 
@@ -567,8 +746,9 @@ désormais **appliqués** (`infra/*/rate_limiter.py`) :
 |-----------|-------------|
 | Erreur réseau / HTTP 5xx | `mark_cooldown` 60s + retry exponentiel (1s→30s, max 10 essais) |
 | HTTP 429 (rate limit) | Cooldown calé sur le délai renvoyé par le provider, cherché dans l'ordre : header `retry-after` (secondes brutes), `x-ratelimit-reset-tokens` (les 429 Groq portent sur les tokens TPM/TPD), `x-ratelimit-reset-requests`, `x-ratelimit-reset`. À défaut de header, le délai est extrait du corps JSON (Google Gemini : `error.details[].retryDelay` ; Groq/Gemini : messages `"retry in Xs"` / `"try again in XhYmZ.Ws"`, formats `h`/`m`/`s`/`ms`). Fallback 60s si rien n'est trouvé ; cooldown clampé à [10s, 1h]. La tâche est requeue et re-routée vers un autre provider via la rotation SWRR |
-| HTTP 4xx non récupérable (hors 429/max_tokens) | **Bascule de modèle** : le provider fautif est mis en cooldown court (`provider_switch_cooldown_seconds`, 30s) et le batch est rejoué **sans `force_provider`** → la rotation SWRR sélectionne un autre modèle. Borné à ≈`len(providers)` tentatives ; échec définitif seulement si tous les modèles rejettent la requête |
-| Réponse illisible / hors-schéma (`ProviderParseError`) | **Bascule de modèle** identique : un modèle différent peut produire un JSON valide. En dernier recours (tous épuisés), la réponse brute est remontée au client |
+| **HTTP 402 (crédits épuisés)** | L'instance est **désactivée** pour son `disable_timeout` — pas un cooldown de 30 s : les crédits reviennent après une facturation, pas après une minute. `/health` la publie alors en `available: false`. Alarme `[ALARME] Crédits épuisés` en ERROR, **sur front montant** (une ligne par panne, pas une par lot). Lot épinglé → échec franc ; lot non épinglé → bascule |
+| HTTP 4xx non récupérable (hors 402/429/max_tokens) | **Bascule de modèle** : le provider fautif est mis en cooldown court (`provider_switch_cooldown_seconds`, 30s) et le batch est rejoué **sans `force_provider`** → la rotation SWRR sélectionne un autre modèle. Borné à ≈`len(providers)` tentatives ; échec définitif seulement si tous les modèles rejettent la requête. **Sauf lot épinglé** (`force_provider`) : aucune bascule, échec immédiat (cf. « Ordre de présentation et épinglage ») |
+| Réponse illisible / hors-schéma (`ProviderParseError`) | **Bascule de modèle** identique : un modèle différent peut produire un JSON valide. En dernier recours (tous épuisés), la réponse brute est remontée au client. **Sauf lot épinglé** : aucune bascule |
 | > 30 échecs consécutifs | Exclusion totale du routage SWRR pendant 120-180s glissantes |
 
 Les tâches en échec sont réinsérées dans le Sorted Set avec leur score d'origine.
@@ -622,7 +802,7 @@ nominal (cache exact ou LLM) : les appelants attendent, et la contre-pression `/
 existante retient GAMA en conséquence (le temps simulé n'avance plus tant que les
 décisions ne reviennent pas — cf. mode drainage). L'un des appelants suspendus devient
 périodiquement la **sonde** (demi-ouvert, toutes les `probe_interval` secondes, défaut
-60 s) : au premier succès — renouvellement des quotas à minuit UTC, retour du service —
+60 s) : au premier succès — renouvellement des quotas au reset du fournisseur, retour du service —
 le disjoncteur se referme et **toutes les soumissions suspendues repartent**, avec de
 vraies décisions LLM. Aucun redémarrage, aucune intervention.
 
@@ -665,7 +845,8 @@ l'appelant rejoue la même troncature à l'identique jusqu'à épuisement (le d�
 étant quasi-déterministe à température 0), sans qu'aucune ligne ne le dise.
 
 **Le timeout de 240 s n'est pas la contrainte usuelle.** Mesuré le 2026-07-31 sur
-`gemini-3.1-flash-lite-preview`, lots de 15 personas avec distribution complète par
+`gemini-3.1-flash-lite` (écrit `…-preview` jusqu'au 2026-09-10 : l'alias, retiré
+côté Google, désignait déjà ce modèle), lots de 15 personas avec distribution complète par
 persona : **3,6 à 8,8 s** par appel et **2 742 tokens** de complétion au pire. Deux
 ordres de grandeur de marge. Ne pas le rallonger sans mesure : un appel réellement
 bloqué doit finir par rendre la main.
@@ -675,7 +856,7 @@ bloqué doit finir par rendre la main.
 Un piège propre aux appels **multi-agents** : le modèle peut rendre un JSON
 parfaitement valide, conforme au schéma, `finishReason=STOP`, très en deçà du plafond
 de tokens — et pourtant **amputé d'une partie des agents demandés**. Mesuré le
-2026-07-31 sur `gemini-3.1-flash-lite-preview` : sur 12 lots de 15 personas, **4 lots
+2026-07-31 sur `gemini-3.1-flash-lite` : sur 12 lots de 15 personas, **4 lots
 n'ont rendu que 5 à 8 décisions sur 15** (dont un à 1 287 tokens de complétion pour
 4 096 autorisés).
 

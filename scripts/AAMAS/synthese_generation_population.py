@@ -7,7 +7,7 @@
         --velo docs/traces/<date>_…/velo_cohorte.json --velo-vivier docs/traces/<date>_…/velo_vivier.json \\
         --mesures-graphe docs/traces/<date>_mesures_graphe_perimetre_v4/mesures.json \\
         --out docs/traces/<date>_…/fabrication_population.html \\
-        --copie docs/paper/population/fabrication_population_v4_<date>.html
+        --copie docs/paper/methode/population/fabrication_population_v4_<date>.html
 
 CE QUE C'EST. La page qui explique, de bout en bout, d'où vient chaque agent du jeu de test : les
 données publiques et l'enquête d'appariement qu'eqasim consomme, ce que le fork change, les étapes

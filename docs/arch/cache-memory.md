@@ -240,7 +240,7 @@ confondait.
 > à côté de la clé. Décision de l'auteur : cela change le nombre d'appels OTP d'un run.
 
 Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
-**toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`). La clé voiture
+**toujours actif** (`OsmnxPersistentCache`, `data/cache/osmnx/<population>/osmnx_cache.db`). La clé voiture
 inclut le **jour de la semaine + tranche horaire** (granularité du facteur de congestion) mais
 **pas la date absolue** : deux runs à des dates calendaires différentes mais même weekday
 réutilisent les mêmes trajets. Marche/vélo sont indépendants du temps (coords + mode).
@@ -252,6 +252,46 @@ Le cache est initialisé dans `_prepare_population` (`handle.application`) **ava
 opération de routage, si bien que le Pass 2 de génération de population (calcul des temps de
 trajet pour l'ajustement des plannings) en bénéficie aussi : une régénération du fichier
 population réutilise les routes déjà calculées au lieu de tout recalculer via OSMnx.
+
+### Un seul fichier pour le peupleur et pour le runtime ⚠
+
+Le cache de routes est écrit par **deux** producteurs, qui doivent viser le même fichier :
+
+| Producteur | Où il écrit | Comment le chemin est obtenu |
+|---|---|---|
+| Peupleur en masse (étape 6 de `generate_population.ipynb`) | `data/cache/osmnx/<population>/` | `OSMNX_ROUTE_CACHE`, chemin hôte |
+| Runtime (`_prepare_population`) | `/app/data/cache/osmnx/<population>/` | `gtfs.osmnx_persistent_cache_dir` |
+
+L'égalité des deux ne tient qu'au montage `./data/cache/osmnx:/app/data/cache/osmnx` du service
+`controller` (`docker-compose.yml`) — exactement comme le cache OTP monte `./data/cache/otp` sur
+`/app/data/cache/otp`. **Retirer ce montage ne casse rien de visible** : `/app` étant le bind de
+`./llm-agents`, le runtime crée alors un `llm-agents/data/cache/osmnx/` dans l'arborescence du
+code, invisible du peupleur, et repart de zéro à chaque population neuve.
+
+C'est ce qui s'est produit du **2026-06-02 au 2026-09-04** : le défaut valait
+`/app/data/osmnx_cache`, que rien ne montait. 196 runs ont recalculé leurs routes à froid à côté
+d'un cache réchauffé de 83 478 routes, et la promesse « 100 % de hits au démarrage » de l'étape 6
+du notebook n'a jamais été tenue une seule fois. Trois garde-fous ont été posés :
+
+1. **Au démarrage du runtime**, `init_persistent_cache` journalise le chemin **et le nombre de
+   routes en base** (`[osmnx-cache] Cache de routes actif : … — N routes en base`), en distinguant
+   « fichier existant » de « FICHIER CRÉÉ ». C'est le chiffre dont l'absence a rendu la dérive
+   invisible huit semaines.
+2. **`[ALARME]`** si le répertoire du cache n'est **pas un point de montage** (lu dans
+   `/proc/self/mountinfo` : dans un conteneur, deux binds du même disque hôte partagent leur
+   `st_dev`, donc ni `st_dev` ni `os.path.ismount` ne les distinguent). Un `WARNING` distinct
+   signale un cache vide sur un chemin correctement monté — légitime pour une population neuve.
+3. **Dans le notebook**, la cellule des chemins **refuse de continuer** si
+   `docker-compose.yml` ne monte pas le répertoire hôte sur le chemin lu dans `settings.py` :
+   réchauffer 2 h 30 pour un fichier que personne ne lit doit échouer bruyamment.
+
+**Piège de nommage, toujours ouvert.** Le sous-dossier est nommé
+`toulouse_population_{population_size}` — dérivé de la **taille**, pas de l'identité de la
+population. Les sceaux v2, v3 et v4 de 1 000 agents partagent donc `toulouse_population_1000/`.
+Aucun risque de justesse (la clé porte les coordonnées et `routing_version`, donc une ligne d'une
+autre population ou d'une autre version n'est jamais resservie), mais « mon cache est-il chaud
+pour CETTE population ? » n'a pas de réponse lisible : le fichier contient aujourd'hui 92 818
+lignes dont 83 478 en `r1`, définitivement inertes depuis le bump `r2`.
 
 ---
 

@@ -1217,7 +1217,7 @@ tickets:
       au premier run.
 
   ticket_030_car_scolaire_synthetique:
-    status: implémenté
+    status: terminé
     note: >-
       IMPLÉMENTÉ le 2026-09-03 (Lots A + B ; Lot C rendu GAMA hors périmètre, décision utilisateur).
       Option school_bus synthétique pour les personas 5-17 ans hors ressort Tisséo, sur leurs
@@ -1225,9 +1225,12 @@ tickets:
       règlement liO), durée calibrée EMC² (médiane ≈ 30 min), gratuit, horaire ± 30 min autour de
       l'activité. Comptée en TC dans les 3 tables de métriques + pont oracle (test de non-régression
       vu échouer d'abord), exclue de la mention d'abonnement. Rendu GAMA via marqueur __DIRECT_CAR__
-      (interpolation point-à-point, agent rouge, sans édition GAMA). Fichiers : trip_helper/school_bus.py,
-      config/school_bus.yaml, tests/test_school_bus.py (13 tests verts). Prérequis population porté
-      par le ticket 031 (§ 1.2). Circuits réels NON demandés à la Région (délais).
+      (interpolation point-à-point, agent rouge, sans édition GAMA). Journalisation Lot B complète :
+      compteurs school_bus_options_total (proposées) ET school_bus_chosen_total (choisies).
+      Fichiers : trip_helper/school_bus.py, config/school_bus.yaml, tests/test_school_bus.py
+      (14 tests verts). VÉRIFIÉ sur le run v4 (2026-09-04) : 1 000 agents chargés, 84 options
+      school_bus proposées (42 aller + 42 retour) ; sur 136 trajets scolaires de mineurs hors
+      Toulouse, 54 choisissent le TC (~40 %). Circuits réels NON demandés à la Région (délais).
   ticket_031_perimetre_453_communes:
     status: terminé
     note: >-
@@ -1361,8 +1364,23 @@ tickets:
       donne un cache peuplé uniformément SANS profil, silencieusement. La purge est obligatoire non
       pour les durées (identiques) mais parce que le peupleur est idempotent par couverture : sans
       purge il saute les entrées existantes, qui survivent sans profil → cache durablement mixte,
-      biais silencieux dans la mesure de calibration. Spec testable : specs/profil_securite_velo.md
-      (R16 = aller-retour cache préserve le profil).
+      biais silencieux dans la mesure de calibration. CORRECTIONS DU 2026-09-03 (vérifiées dans le
+      code) : (1) éditer le texte des options NE PURGE PAS le cache de décisions LLM — le texte
+      n'entre pas dans _make_state_hash (llm/cache.py:207) et active_prompt_checksum ne hache que
+      les prompts système (manager.py:164) ; correctif retenu = ÉTENDRE le checksum au gabarit
+      travel_plan_describe_v2.j2, et NE PAS bumper data_version() qui invaliderait aussi 601 Mo de
+      cache OTP (otp_persistent_cache.py:71). (2) Il n'y a QU'UN SEUL pickle pour les 3 modes
+      (osmnx_direct.py:394) : reconstruire, c'est reconstruire walk+bike+drive. (3) La migration
+      commence par docker compose build osmnx1 osmnx2 (config montée en ro, code figé dans l'image,
+      incident park_base). (4) L'assertion de démarrage va dans le lifespan de osmnx_server.py:47,
+      PAS dans osmnx_direct.warmup() qui est du code mort. (5) La purge de la LTM est un non-sujet
+      (LTM par run, vierge sans CONT=1). (6) NE PAS utiliser make purge_cache : il détruit
+      data/population/*.json et ne supprime aucun .db. PRÉREQUIS BLOQUANT : le peupleur et le
+      runtime écrivent dans deux fichiers de cache OSMnx différents (29 Mo vs 20 Ko mesurés) — à
+      aligner avant toute repopulation (~83 500 routes, ~2 h 30, MAX_WORKERS=6 et non 12).
+      DIFFÉRÉ : attend la fin du ticket 031 partie 2 (bascule vers le graphe polygone) ; signal GO
+      utilisateur. Spec testable : specs/profil_securite_velo.md (R16 = aller-retour cache préserve
+      le profil).
 
   ticket_033_profil_confort_pieton_propositions_gama:
     status: à faire
@@ -1385,6 +1403,11 @@ tickets:
       n'ajoute AUCUNE plomberie : comfort_metrics voyage dans le même dict retour. Migration = même
       séquence ordonnée en 3 temps (graphe walk → purge → repopulation), mutualisée avec celle du 032
       si les deux tickets sortent dans la même fenêtre (une seule purge, une seule repopulation).
+      Corrections du 2026-09-03 héritées du 032 : pas de purge automatique par édition de texte
+      (checksum étendu au gabarit), un seul pickle pour 3 modes, assertion dans le lifespan,
+      LTM non concernée, même prérequis de désalignement du cache. L'EXPOSITION du texte confort se
+      fait dans une passe SÉPARÉE de celle du vélo (sinon deux traitements dans une seule mesure de
+      calibration, non attribuables) ; le code et la migration, eux, se font en une fois.
       Seule divergence ASSUMÉE restante (choix utilisateur du
       2026-09-03) : le 033 garde un score ordinal 1-4 seuillé à 10 %, là où le 032 s'interdit tout
       score et applique un maillon faible sans seuil. Retirés du scope v1 (leviers) : stairs_count,
@@ -1467,3 +1490,30 @@ tickets:
       (eqasim 16 Go, experiments 10 Go, data 6,5 Go, scripts 560 Mo, docs 196 Mo, prompt_calibration
       dépôt git imbriqué), cinq principes, cible packages/ services/ infra/ data/ experiments/ docs/
       notebooks/, migration en trois pas indépendants.
+  ticket_040_ablation_filtre_eligibilite_modes:
+    status: en veille
+    note: >-
+      DÉCISION du 2026-09-09 : idée consignée, à traiter plus tard. Mesuré sur les archives, sans
+      lancer un run : le filtre d'éligibilité retire une catégorie modale entière sur 64 % des
+      déplacements pour le vélo et 27 % pour la voiture (run gemini-3.5 prompt minimal, composite
+      14,840), et 69,6 % des déplacements subissent au moins un écart hors-plafond. Le plafond à 6,
+      lui, n'a jamais supprimé une catégorie. Plan retenu : un 2×2 {filtre actif, filtre coupé} ×
+      {aléa, majorité voiture, durée min, LLM minimal} plutôt qu'un bras isolé, avec l'interaction
+      chiffrée. Lot 1 (position du véhicule + verrou de retour) se pilote par env, sans code ; lot 2
+      (possession, permis — des attributs d'enquête, pas des heuristiques) demande un drapeau ; lot 3
+      = tracer l'état des filtres dans experience.yaml, les empreintes et le nom canonique, aujourd'hui
+      absent partout, donc PRÉREQUIS. Coût : trois bras heuristiques gratuits + un run LLM (~35 min,
+      bien sous les 500 RPD), aucun recalcul OTP/OSMnx puisque l'offre gelée est mode-neutre.
+  ticket_041_etape_3a_hysteresis_longitudinale:
+    status: à faire
+    note: >-
+      Plan v0.1 rédigé le 2026-09-09 (docs/paper/methode/experience_plan/ETAPE_3A_PLAN_LONGITUDINAL.md),
+      en attente de validation (porte G0) ; aucun code. Trois bras (LLM + mémoire, LLM amnésique,
+      oracle LightGBM) sur la même cohorte scellée (100-200 agents, sous-échantillon par ménages),
+      trois périodes (nominal / choc / rétabli) de 5 à 60 jours ouvrés simulés. Manques bloquants
+      cartographiés : aucun événement joué, oracle non branché dans GAMA, multi-jours à 1 jour,
+      STM perdue à la pause, décideur non épinglé côté GAMA, cache sémantique dangereux, nettoyage
+      LTM à l'heure réelle. Mémoire actuelle : demi-vie 1,9 j, top-3, pas de renforcement — la
+      formule gamma/lambda du manuscrit n'existe pas dans le code (devient descriptive). Coût
+      mesuré : 0,64 requête/agent-jour (bras mémoire), 0,23 (amnésique) ; palier étendu à 5 bras,
+      N = 200 : 14 jours de quota à 1 000 RPD. Questions ouvertes dans specs/ticket_041/questions.md.

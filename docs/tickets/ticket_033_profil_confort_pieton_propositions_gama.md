@@ -115,10 +115,26 @@ option de déplacement.
 > 032 : pas de conteneur multi-modes générique. L'agent, lui, ne voit **aucune de ces clés** — il lit
 > le texte rendu ; les noms de bloc ne concernent que le code Python.
 
-> Impact calibration (à cadrer, pas à ignorer). Éditer le texte des options / le prompt **purge
-> automatiquement** le cache de décisions LLM (isolation par `active_prompt_checksum()`), mais
-> déplace les parts modales : **mesurer sur jeux gelés avant/après**, n'ouvrir aucun run de
-> production entre les deux (cf. *pas de dégradation scientifique*).
+> **Impact calibration — le piège de cache est corrigé par le 032 (vérifié le 2026-09-03).**
+>
+> ⚠ Contrairement à ce que disait la version initiale de ce ticket, éditer le texte des options
+> **ne purge PAS** le cache de décisions LLM : le texte rendu n'entre pas dans `_make_state_hash`
+> (`llm/cache.py:207`), et `active_prompt_checksum()` ne hache que les prompts système
+> (`manager.py:164`), pas le gabarit. Le 032 corrige la cause en **étendant le checksum au gabarit
+> `travel_plan_describe_v2.j2`** — voir sa note. Le 033 en hérite : chaque édition du gabarit
+> produit un nouveau répertoire de cache, donc les décisions d'avant la ligne confort ne sont
+> jamais resservies.
+>
+> Reste l'effet propre : déplacer le texte déplace les parts modales. **Mesurer sur jeux gelés
+> avant/après**, n'ouvrir aucun run de production entre les deux (cf. *pas de dégradation
+> scientifique*). Outil : `ab_chaine.py --dataset rank`, `--dry-run` d'abord, `--batch 8` (pas 15),
+> jeton de protocole requis. **Même modèle d'évaluation** que la mesure du 032, sinon on compare
+> deux instruments.
+>
+> **Exposer le confort dans une passe SÉPARÉE de celle du vélo.** Livrer les deux textes ensemble
+> mettrait deux traitements dans une seule mesure : les parts modales bougeraient sans qu'on puisse
+> attribuer le déplacement au vélo ou au piéton. Le code et la migration se font en une fois, les
+> deux expositions se mesurent l'une après l'autre.
 
 ### T5 — Migration : reconstruction du graphe
 
@@ -127,10 +143,13 @@ OSM** (il n'utilise que `highway`, déjà retenu), la migration est **plus lég�
 pas de reconfiguration `useful_tags_way`. Elle suit néanmoins **la même séquence ordonnée en trois
 temps** que le 032 (graphe → purge → repopulation), pour la même raison et avec le même piège :
 
-1. **Reconstruire le graphe `walk` une seule fois** : le pickle `graphs_*.pkl` vit sur le **volume
-   partagé** `./data/cache/osmnx` (monté par le controller et les réplicas) — on le régénère **une
-   fois**, avec l'attribut `comfort` posé sur les arêtes, **pas par réplica**. Aucun bump de version
-   de cache (cf. T3.2).
+1. **Reconstruire le pickle des graphes une seule fois** : ⚠ il n'existe **qu'un seul pickle pour
+   les trois modes** (`_build_sync`, `osmnx_direct.py:394`) — « reconstruire le graphe `walk` »
+   n'existe pas, reconstruire c'est reconstruire walk + bike + drive. Le fichier vit sur le **volume
+   partagé** `./data/cache/osmnx`, régénéré **une fois** avec l'attribut `comfort` posé sur les
+   arêtes walk, **pas par réplica**. Aucun bump de version de cache (cf. T3.2). Précédé d'un
+   `docker compose build osmnx1 osmnx2` si une clé YAML nouvelle est lue par du code neuf
+   (`config/osmnx.yaml` est monté en lecture seule, code figé dans l'image).
 2. **Purger** le cache de routes OSMnx — **obligatoire**, et pas pour la justesse des durées (poser
    `comfort` ne change ni topologie ni `travel_time` : les itinéraires piétons sont identiques). La
    raison est que le peupleur est **idempotent par couverture** (`if not _sqlite.lookup(key).found`) :
@@ -149,9 +168,13 @@ les graphes `bike` **et** `walk`, on purge une fois, on repeuple une fois. Ne pa
 purges/repopulations successives.
 - **Assertion au démarrage** (par process) : vérifier qu'une fraction non nulle des arêtes `walk`
   porte `comfort`, et échouer bruyamment sinon (piège *vacuité* : un profil systématiquement vide
-  mentirait).
-- Se **greffer sur la RAZ déjà prévue par le 032** (LTM + décisions LLM) plutôt que d'en déclencher
-  une seconde, si les deux tickets sont livrés dans la même fenêtre.
+  mentirait). ⚠ À poser dans le `lifespan()` de `osmnx_server.py:47` — **pas** dans
+  `osmnx_direct.warmup()` (ligne 846), qui est du **code mort** jamais appelé.
+- Se **greffer sur la RAZ déjà prévue par le 032** (décisions LLM) plutôt que d'en déclencher une
+  seconde, si les deux tickets sont livrés dans la même fenêtre. La **LTM n'a pas à être purgée** :
+  elle vit dans le répertoire de travail du run, donc un `make run` sans `CONT=1` démarre vierge.
+- Même **prérequis bloquant** que le 032 : le désalignement des chemins de cache OSMnx entre le
+  peupleur et le runtime doit être corrigé avant toute repopulation, sinon elle est sans effet.
 
 ---
 
