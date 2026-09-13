@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
 from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 
 DEFAULT_EXAMPLE_FILE = Path(__file__).resolve().parent / "providers.example.yaml"

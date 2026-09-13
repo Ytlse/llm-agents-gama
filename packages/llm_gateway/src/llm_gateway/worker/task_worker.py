@@ -31,10 +31,10 @@ from llm_gateway.adapters.base import (
     ProviderServerError,
     get_adapter,
 )
-from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA, is_daily_quota_error, next_quota_reset
 from llm_gateway.config import get_settings, learn_provider_max_output_tokens
 from llm_gateway.core.inference import resolve_inference
 from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA, is_daily_quota_error, next_quota_reset
 from llm_gateway.telemetry.logger import get_logger, log_llm_call, log_llm_error, log_llm_exchange
 from llm_gateway.worker.app import create_celery_app
 from llm_gateway.worker.runtime import WorkerRuntime, get_worker_runtime

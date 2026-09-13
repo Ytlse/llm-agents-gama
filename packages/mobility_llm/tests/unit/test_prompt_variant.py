@@ -69,6 +69,7 @@ def test_variante_invalidee_refusee_au_service(pm, variante):
 def test_variante_invalidee_refusee_au_rendu(pm):
     """Le refus vaut aussi par `render` : c'est le chemin qu'emprunte une requête."""
     from llm_gateway.prompts.engine import VariantePromptInvalide
+
     from mobility_llm.persona import AgentSpec
 
     agent = AgentSpec(agent_id="a1", perception="p", destination="work",
@@ -165,7 +166,6 @@ def _pm_sur(tmp_path, entrees: dict, actif="v"):
     import json
 
     import yaml
-
     from llm_gateway.prompts.engine import PromptManager
 
     tpl = tmp_path / "tpl"
