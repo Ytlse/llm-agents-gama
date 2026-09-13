@@ -28,8 +28,8 @@ from llm_gateway.config.providers import (
     ProvidersFile,
     load_providers_file,
 )
-from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 from llm_gateway.config.sources import ENV_PREFIX, LegacyEnvSource, yaml_sources
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)

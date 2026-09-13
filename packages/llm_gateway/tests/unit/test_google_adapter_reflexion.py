@@ -149,8 +149,9 @@ def test_niveau_hors_liste_refuse(monkeypatch):
 
 def test_niveau_et_budget_ensemble_refuses_par_la_cascade():
     """L'API rend 400 si les deux coexistent : la cascade le refuse avant l'appel."""
-    import pytest
     from types import SimpleNamespace
+
+    import pytest
 
     from llm_gateway.core.inference import ReglagesReflexionIncompatibles, resolve_inference
 

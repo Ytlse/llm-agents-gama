@@ -14,7 +14,7 @@ choses l'ont rendu illisible pour la plateforme :
 Ces tests figent les deux points sur les valeurs réellement observées ce jour-là.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from llm_gateway.core.quota import (
     is_daily_quota_error,
@@ -61,7 +61,7 @@ class TestNatureDuRefus:
 
 class TestFenetreDuJour:
     # 2026-09-08 06:44 UTC = 08:44 à Paris = 23:44 le 7 au Pacifique.
-    INSTANT_DU_BLOCAGE = datetime(2026, 9, 8, 6, 44, tzinfo=timezone.utc)
+    INSTANT_DU_BLOCAGE = datetime(2026, 9, 8, 6, 44, tzinfo=UTC)
 
     def test_les_deux_fuseaux_ne_datent_pas_la_meme_journee(self):
         """La cause racine : à 08:44 Paris, le compteur UTC a tourné, celui de Google pas."""
@@ -71,7 +71,7 @@ class TestFenetreDuJour:
     def test_la_reouverture_tombe_a_9h_a_paris(self):
         """Mesuré : les sondes sur les deux clés repassent en HTTP 200 à 09:01 heure de Paris."""
         assert next_quota_reset("America/Los_Angeles", self.INSTANT_DU_BLOCAGE) == datetime(
-            2026, 9, 8, 7, 0, tzinfo=timezone.utc
+            2026, 9, 8, 7, 0, tzinfo=UTC
         )
 
     def test_l_attente_reelle_depasse_de_loin_le_retry_delay_annonce(self):
@@ -82,27 +82,27 @@ class TestFenetreDuJour:
 
     def test_passage_a_l_heure_d_hiver_pacifique(self):
         """Le 1er novembre 2026, le Pacifique repasse en PST : minuit local = 08:00 UTC."""
-        apres = datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc)
+        apres = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
         assert next_quota_reset("America/Los_Angeles", apres) == datetime(
-            2026, 11, 6, 8, 0, tzinfo=timezone.utc
+            2026, 11, 6, 8, 0, tzinfo=UTC
         )
 
     def test_passage_a_l_heure_d_ete_pacifique(self):
         """Fin mars, PDT : minuit local = 07:00 UTC."""
-        ete = datetime(2026, 3, 30, 12, 0, tzinfo=timezone.utc)
+        ete = datetime(2026, 3, 30, 12, 0, tzinfo=UTC)
         assert next_quota_reset("America/Los_Angeles", ete) == datetime(
-            2026, 3, 31, 7, 0, tzinfo=timezone.utc
+            2026, 3, 31, 7, 0, tzinfo=UTC
         )
 
     def test_fuseau_inconnu_retombe_sur_utc_sans_lever(self):
         """Un fuseau illisible (tzdata absente) ne doit pas empêcher le gateway de démarrer."""
-        t = datetime(2026, 9, 8, 6, 44, tzinfo=timezone.utc)
+        t = datetime(2026, 9, 8, 6, 44, tzinfo=UTC)
         assert next_quota_reset("Mars/Olympus_Mons", t) == datetime(
-            2026, 9, 9, 0, 0, tzinfo=timezone.utc
+            2026, 9, 9, 0, 0, tzinfo=UTC
         )
-        assert next_quota_reset(None, t) == datetime(2026, 9, 9, 0, 0, tzinfo=timezone.utc)
+        assert next_quota_reset(None, t) == datetime(2026, 9, 9, 0, 0, tzinfo=UTC)
 
     def test_l_attente_est_toujours_strictement_positive(self):
         """Une seconde avant le reset, on attend 1 s — jamais 0, qui ferait boucler l'appelant."""
-        juste_avant = datetime(2026, 9, 8, 6, 59, 59, tzinfo=timezone.utc)
+        juste_avant = datetime(2026, 9, 8, 6, 59, 59, tzinfo=UTC)
         assert seconds_until_quota_reset("America/Los_Angeles", juste_avant) >= 1

@@ -8,7 +8,7 @@ minuit UTC, soit 02:00 heure de Paris, pour un quota Gemini qui ne rouvrait qu'�
 refusée par Google était donc annoncée disponible pendant sept heures.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from llm_gateway.core.quota import next_quota_reset
 
@@ -23,14 +23,14 @@ class TestRetraitSurParoleDuFournisseur:
 
     def test_le_retrait_vise_le_reset_pacifique(self, ports):
         """Le TTL doit couvrir l'attente réelle, pas les ~30 s du `retryDelay` annoncé."""
-        attendu = (next_quota_reset("America/Los_Angeles") - datetime.now(timezone.utc)).total_seconds()
+        attendu = (next_quota_reset("America/Los_Angeles") - datetime.now(UTC)).total_seconds()
         ttl = ports.limiter.mark_quota_exhausted_until("p_pacifique", kind="rpd")
         assert abs(ttl - attendu) <= 2
         assert ttl > 60, "un quota du jour ne se règle jamais en moins d'une minute"
 
     def test_une_heure_de_reprise_explicite_est_respectee(self, ports):
         """Quand le fournisseur donne son heure, c'est elle qui vaut."""
-        cible = datetime.now(timezone.utc) + timedelta(hours=3)
+        cible = datetime.now(UTC) + timedelta(hours=3)
         ttl = ports.limiter.mark_quota_exhausted_until("p_pacifique", kind="rpd", until=cible)
         assert abs(ttl - 3 * 3600) <= 2
         assert ports.limiter.is_quota_exhausted("p_pacifique") is True

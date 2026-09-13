@@ -21,7 +21,7 @@ Seule la réponse du fournisseur fait autorité pour déclarer une fenêtre ferm
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, tzinfo
 
 # `quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"`, et les variantes
 # rencontrées dans les messages en clair. Même sémantique que `_DAILY_QUOTA_RE` de
@@ -37,38 +37,40 @@ def is_daily_quota_error(corps: str | None) -> bool:
     Sur un quota journalier, le délai annoncé par le fournisseur est à jeter : c'est
     `next_quota_reset()` qui donne l'heure de réouverture.
     """
-    return bool(corps) and bool(DAILY_QUOTA_RE.search(corps))
+    if not corps:
+        return False
+    return bool(DAILY_QUOTA_RE.search(corps))
 
 
-def _fuseau(nom: str | None):
+def _fuseau(nom: str | None) -> tzinfo:
     """Le fuseau demandé, UTC si l'environnement ne sait pas le résoudre (fail-safe)."""
     if not nom:
-        return timezone.utc
+        return UTC
     try:
         from zoneinfo import ZoneInfo
 
         return ZoneInfo(nom)
     except Exception:  # noqa: BLE001 — fuseau inconnu ou base tzdata absente
-        return timezone.utc
+        return UTC
 
 
 def next_quota_reset(fuseau: str | None, maintenant: datetime | None = None) -> datetime:
     """Prochain minuit dans `fuseau`, rendu en UTC. Passages heure d'été inclus."""
     tz = _fuseau(fuseau)
-    local = (maintenant or datetime.now(timezone.utc)).astimezone(tz)
+    local = (maintenant or datetime.now(UTC)).astimezone(tz)
     lendemain = (local + timedelta(days=1)).date()
     minuit = datetime(lendemain.year, lendemain.month, lendemain.day, tzinfo=tz)
-    return minuit.astimezone(timezone.utc)
+    return minuit.astimezone(UTC)
 
 
 def quota_day(fuseau: str | None, maintenant: datetime | None = None) -> str:
     """Jour de quota courant, « AAAAMMJJ » dans `fuseau` — la clé des compteurs du jour."""
-    return (maintenant or datetime.now(timezone.utc)).astimezone(_fuseau(fuseau)).strftime("%Y%m%d")
+    return (maintenant or datetime.now(UTC)).astimezone(_fuseau(fuseau)).strftime("%Y%m%d")
 
 
 def seconds_until_quota_reset(fuseau: str | None, maintenant: datetime | None = None) -> int:
     """Secondes avant la réouverture de la fenêtre (au moins 1)."""
-    now = maintenant or datetime.now(timezone.utc)
+    now = maintenant or datetime.now(UTC)
     return max(1, int((next_quota_reset(fuseau, now) - now).total_seconds()))
 
 
