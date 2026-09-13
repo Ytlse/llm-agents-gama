@@ -1,16 +1,14 @@
-"""ports — les interfaces (Protocol) du gateway. Contrats sans implémentation."""
+"""Shim de compatibilité — `llm_module.ports` a déménagé dans `llm_gateway.ports`.
 
-from llm_module.ports.batch_queue import BatchQueue
-from llm_module.ports.llm_adapter import LLMAdapter
-from llm_module.ports.metrics import MetricsSink
-from llm_module.ports.rate_limiter import RateLimiter
-from llm_module.ports.task_store import SyncTaskStore, TaskStore
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.ports`.
+"""
+import warnings as _warnings
 
-__all__ = [
-    "BatchQueue",
-    "LLMAdapter",
-    "MetricsSink",
-    "RateLimiter",
-    "SyncTaskStore",
-    "TaskStore",
-]
+_warnings.warn(
+    "llm_module.ports est déprécié : importez llm_gateway.ports (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from llm_gateway.ports import *  # noqa: E402,F401,F403

@@ -1,0 +1,1907 @@
+# Statut des tickets de `docs/tickets/` — SOURCE DE VÉRITÉ.
+#
+# Le dashboard sait déduire un statut du contenu d'un ticket (cases à cocher, ligne
+# `**État**`), mais cette déduction ment dans le mauvais sens : au 2026-08-20 elle
+# donnait « à faire 0/15 » pour le ticket 008 dont les actions A1–A7 sont livrées,
+# et « sans statut » pour 9 tickets sur 15 — dont 013, livré et documenté au
+# changelog. La raison est structurelle : un ticket dont les cases sont des
+# CRITÈRES D'ACCEPTATION (006, 007, 008) n'a pas de case cochée tant que le run de
+# validation n'a pas eu lieu, ce qui n'a rien à voir avec l'avancement du travail.
+# Le statut est donc porté ici, et pas dans l'en-tête des tickets : un `**Statut**`
+# recopié dans chaque `.md` se périme en silence et il y en a quinze à tenir.
+#
+# Clé   : le NOM DE FICHIER COMPLET sans extension.
+#         ⚠ Ne pas utiliser la forme courte (`ticket_005`, `005`) : deux tickets
+#         DISTINCTS partagent le numéro 005 (choix modal probabiliste / politique
+#         PROGEDO) et deux autres le 014 (anticipation / annexe). La résolution
+#         courte de `tickets.py` (`overrides.get(f"ticket_{number}")`) appliquerait
+#         alors un seul statut aux deux.
+# status: à faire | en cours | terminé | bloqué | en veille | amélioration | abandonné
+#         `en veille` ≠ `bloqué` : rien n'empêche d'avancer, c'est une DÉCISION de
+#         ne pas le faire maintenant. `bloqué` dit qu'une dépendance extérieure
+#         manque. Les confondre ferait chercher un déblocage qui n'existe pas.
+#         `amélioration` : le ticket est CONSERVÉ comme piste d'amélioration future.
+#         Ni chantier interrompu qui reprendra tel quel (`en veille`), ni renoncement
+#         (`abandonné`) : rien n'est attendu de lui, et on ne le jette pas pour autant.
+# note  : ce sur quoi le statut s'appuie, et ce qui reste. Affiché dans le tableau.
+
+tickets:
+
+  ticket_002_snapshot_plan_24h:
+    status: abandonné
+    note: >-
+      REJETÉ le 2026-08-24, décision utilisateur. Le ticket persistait le plan 24 h
+      résolu (décisions LLM incluses) pour court-circuiter le warm-up au run suivant,
+      avec réutilisation conditionnée à un HASH DE POPULATION. C'est là qu'il meurt :
+      chacun des chantiers en cours change la population (016 l'abonnement TC, 017 le
+      permis, 019 le logement déjà, 020 possiblement le périmètre), donc chaque
+      livraison donne un hash différent et jette le snapshot. Le fichier serait écrit
+      puis mis à la poubelle à chaque itération, précisément pendant la phase qui
+      s'ouvre. Le filet suffit d'ailleurs : `make run CONT=1` réutilise le workdir, et
+      les caches OTP/OSMnx/LLM ne sont PAS invalidés par un changement de trait — un
+      itinéraire entre deux points reste valide même si l'agent gagne un abonnement de
+      bus. Le warm-up « complet » tape donc dans les caches au lieu de refaire les
+      appels réseau. À rouvrir seulement si le temps de démarrage redevient un
+      problème mesuré sur une population stable.
+
+  ticket_003_edf_predictive_backpressure:
+    status: terminé
+    note: >-
+      File EDF, contrôle prédictif par échéance et mode drainage en production
+      (`backpressure.py`, `handle/application.py`, tests). Étendu depuis par le
+      ticket 010 (échéance des réflexions au réveil de l'agent).
+
+  ticket_004_prompt_calibration_industrialisation:
+    status: terminé
+    note: >-
+      MIS EN VEILLE le 2026-08-24. Phases 0 à 7 livrées, 57 des 60 cases cochées ;
+      le module vit dans son dépôt autonome `prompt_calibration/`. Rien ne bloque —
+      décision de priorité : le gain de la calibration de prompt (3,67 de composite)
+      est du même ordre que celui d'un seul paramètre de POPULATION en amont (2,17
+      pour le calibre du temps terminal, ticket 013 — chiffre révisé le 2026-08-24,
+      cf. 013), et calibrer un prompt sur une base biaisée revient à calibrer
+      l'instrument sur le biais. Reprend après les tickets 016/017 et le
+      nouveau jeu de test. Le dépôt reste opérationnel, la calibration tourne en
+      TÂCHE DE FOND (cf. 009).
+
+  ticket_005_choix_modal_probabiliste:
+    status: terminé
+    note: >-
+      Bascule du 2026-07-29 : le LLM rend une distribution, le tirage est seedé, et
+      c'est la distribution — non la décision — qui est mise en cache. Un repli
+      uniforme n'est jamais persisté.
+
+  ticket_005_mode_choice_model:
+    status: terminé
+    note: >-
+      Bras de comparaison non-LLM livré (`scripts/progedo_logit/`, politique
+      entraînée + prédictions sur le jeu commun) ; il figure comme volet 3 dans la
+      page de synthèse (`arms.model` à `ok`).
+
+  ticket_006_relance_run_reference:
+    status: abandonné
+    note: >-
+      ABANDONNÉ le 2026-08-24 : on repart d'un NOUVEAU JEU DE TEST. Le ticket visait
+      la relance du run de référence des 19-21 août et la vérification de ses six
+      critères d'acceptation sur ce run-là ; ce substrat est périmé (personas portant
+      l'ancien gradient vélo, calibre du temps terminal 8× à 24× trop haut). Rejouer
+      ses critères mesurerait une base qu'on ne veut plus. Ce qui restait utile — la
+      PROCÉDURE de relance — vit dans le ticket 007, qui reste la référence.
+
+  ticket_007_procedure_nouveau_run:
+    status: terminé
+    note: >-
+      La procédure est écrite et suivie. Ses neuf cases sont une CHECKLIST À
+      REJOUER à chaque run, pas une barre d'avancement — elles resteront vides
+      entre deux runs, c'est normal.
+
+  ticket_008_run_24h_mesures_synthese:
+    status: terminé
+    note: >-
+      A1 à A7 livrés : âge et permis corrigés, mode passager, seuil de retour
+      court, colonne « Contrainte de chaîne », `simulation_max_days` consigné,
+      replis d'erreur LLM exclus du scoring, jeux gelés `v2` (météo tirée dans
+      l'année). Ses quinze cases sont des critères d'acceptation non cochés.
+
+  ticket_009_calibration_genetique:
+    status: terminé
+    note: >-
+      MIS EN VEILLE le 2026-08-24. G1 à G3 livrés ; G4 déployé — le service tourne en
+      autonomie sur la VM Google Cloud, cadence hebdomadaire active. Le RÉSULTAT n'est
+      pas significatif : il ne justifie pas d'y remettre du travail avant d'avoir
+      assaini les données d'entrée. La campagne CONTINUE de tourner en tâche de fond
+      (aucun coût d'attention, le store s'enrichit) mais n'est plus un chantier
+      instruit ; la configuration SMTP des rapports reste ouverte et non urgente.
+
+  ticket_010_drainage_nocturne_reflexions:
+    status: abandonné
+    note: >-
+      ABANDONNÉ le 2026-08-24 comme chantier — le CODE RESTE EN PRODUCTION. A1 à A4
+      sont implémentés depuis le 2026-08-03 (échéance au réveil de l'agent, alarme
+      backlog conditionnée à ce qui souffre réellement, drainage post-pause tracé,
+      panneau cockpit) et continuent d'opérer. Seul le volet de validation est
+      abandonné : ses critères devaient être mesurés sur les runs du 2026-08-19, et
+      on repart d'un nouveau jeu de test. Si la saturation du pipeline redevient un
+      sujet sur cette nouvelle base, elle sera réinstruite dans un ticket neuf plutôt
+      que jugée sur d'anciens seuils.
+
+  ticket_011_arrivees_perdues_gama:
+    status: abandonné
+    note: >-
+      La cause amont n'est pas comprise et l'accusé de réception (A2) n'est pas
+      écrit — aucune trace d'ACK dans `LLMAgent.gaml`. Seul le filet de sécurité
+      préexistant opère : le watchdog force la reprise ~1 h simulée après l'arrivée
+      attendue. À traiter avant le premier run à 10 000 agents.
+      ⚠ 2026-08-24 : maintenu à faire, en PRIORITÉ BASSE (confirmé par
+      l'utilisateur). Le filet du watchdog tient à l'échelle actuelle ; l'échéance
+      réelle reste le passage à 10 000 agents, pas le prochain run.
+
+  ticket_012_memoisation_reflexions:
+    status: terminé
+    note: >-
+      MIS EN VEILLE le 2026-08-24 — le CODE RESTE EN PRODUCTION. A1, A2 et A4 sont
+      livrés (`llm/reflection_store.py`, branchement STM + LTM, compteur
+      `agent_reflection_memo_total`, tests) et la mémoïsation opère. Seul A3, la
+      mesure, est suspendu : il demande de rejouer DEUX FOIS un scénario épinglé pour
+      publier le taux de hit (attendu ≈ 100 % au 2ᵉ passage), et le scénario épinglé
+      change avec le nouveau jeu de test — la mesure serait à refaire aussitôt. À
+      requalifier sur le nouveau jeu, où elle garde son intérêt : chaque réflexion
+      vaut une requête pleine sur le quota jour (247 réflexions / 30 min au pic du
+      soir, 0 % cachées avant livraison), donc c'est le poste que les replays
+      d'itération font payer deux fois. Reste vrai par ailleurs : le compteur n'est lu
+      par aucun dashboard Grafana — sa place est dans 06_cache_llm.
+
+  ticket_013_temps_terminal_itineraires:
+    status: terminé
+    note: >-
+      Le correctif est livré : accès et diffusion portés par des jambes nommées,
+      temps terminal exogène et spatialisé par couronne, trois caches versionnés,
+      rendu décomposé, tests. Reste T6 — la grille de sensibilité est appelable et
+      testée, mais aucun script ne la parcourt : la mesure n'existe pas.
+      2026-08-24 — le CALIBRE est corrigé et livré (tt3). L'enquête mesure le temps
+      terminal voiture (T2/T6/T11 du fichier trajets) à 0,55 min quand tt2 en
+      appliquait 2 à 10 selon la couronne — 8× à 24× trop, et c'était la cause de la
+      régression du run du 21 août (vélo +4 pts, voiture −9,5 pts). La config tire
+      désormais dans la loi d'enquête (voiture ET vélo, tous deux `sourced`),
+      `routing_version` inchangée. 56 tests, dont un garde-fou qui refuse un retour
+      aux valeurs tt2.
+      MESURE CORRIGÉE le 2026-08-24 : le premier A/B annonçait −5,28, mais il ne
+      réécrivait que la VOITURE dans le jeu de test alors que la livraison alignait
+      aussi le VÉLO — périmètre mesuré plus étroit que le périmètre livré. Un
+      troisième bras (`v7`, les deux modes) donne le chiffre opposable : **−2,17** de
+      composite. Aligner la voiture seule vaut −4,52 ; l'alignement du vélo rend
+      +2,35, soit la moitié, parce qu'un vélo plus rapide est plus attractif. Les
+      dimensions `distance` (+2,59) et `motif` (+1,29) se dégradent. Le correctif
+      d'outillage : `--modes` sur `rewrite_terminal_time.py` (+8 tests de périmètre),
+      rapport de dérivation par mode, page de mesure sans chiffre en dur. Traces :
+      `docs/traces/2026-08-24_temps_terminal/`. RESTE : un run de simulation neuf
+      (les mesures portent sur des jeux gelés, sans rejeu des chaînes de véhicule) et
+      T6, la grille de sensibilité, toujours non parcourue.
+
+  ticket_014_anticipation_chaine_journee:
+    status: terminé
+    note: >-
+      Option 1 livrée et mesurée (météo du jour + agenda glissant dans le prompt, derrière `agenda_anticipation_enabled`,
+      signature dans la clé de cache, colonne « Anticipation »). La ligne de position des véhicules
+      a été retirée après mesure (+5,5 pts de vélo) : la règle vit au prompt système. Options
+      2 (prompt-journée) et 3 (ancre de boucle) restent des conceptions. ⚠ 2026-08-24 : les DEUX
+      options restent OUVERTES, décision utilisateur. L'analyse versée au dossier recommandait
+      d'abandonner l'option 2 — son bénéfice tour-based est atteint par l'option 3 sans sa rupture
+      de granularité de mesure (scoring par déplacement, corpus de calibration, jeux gelés, caches
+      Shapley : « un nouveau protocole, pas une évolution ») ; elle n'est PAS retenue et l'option
+      2 reste instruite. Rappel de la question 4 du ticket, qui vaut pour les deux : c'est un
+      changement de modèle comportemental, il se mesure contre une référence stable — donc après
+      le nouveau jeu de test. CTerminé au profit du ticket 045
+
+  ticket_014_annexe_prompt_journee:
+    status: terminé
+    note: >-
+      Annexe de démonstration au ticket 014 : transformation d'une journée réelle
+      (agent 514467) vers le format prompt-journée de l'option 2. Le matériau est
+      produit ; il ne porte pas de travail à faire.
+
+  ticket_015_acces_velo_progedo:
+    status: terminé
+    note: >-
+      Lots 1 à 3 livrés et mesurés. Le gradient de taille de ménage est REDRESSÉ
+      (34,8 / 49,7 / 60,9 / 67,5 % pour les tailles 1 à 4, contre 76 → 36 %
+      avant) et le total ne bouge pas (50,3 % de porteurs pour 50,9 % observés).
+      Trois étages appris sur EMC² dans `llm_module/core/bike_ownership.py`
+      (`make bike-ownership`), appliqués par
+      `scripts.data.population.enrich_personal_bike --check` sur les populations
+      10 / 100 / 1000. Alarme sur champ absent posée (lot 1). Politique de choix
+      modal ré-entraînée sur l'indicateur nominatif construit (spec v2) : les
+      deux côtés parlent enfin de la même variable. Trois critères d'acceptation
+      RESTATÉS, mesure à l'appui — l'axe habitat est inatteignable comme écrit
+      (l'habitat du persona est lui-même imputé et juste une fois sur deux, ce
+      qui plafonne l'amplitude à ~20 pts au lieu de 33), « 1,22 vélo/ménage »
+      compte des vélos sans titulaire, et les cibles par catégorie doivent être
+      standardisées et comptées en ménages.
+      ⚠ 2026-08-24 — LOT 4 REJETÉ, décision utilisateur : le post-traitement est
+      obligatoire dans tous les cas, donc inutile de porter la même loi à DEUX
+      endroits. Le lot 4 remontait les deux étages dans le fork eqasim pour qu'une
+      génération neuve produise le trait nativement ; c'était une ceinture par-dessus
+      des bretelles, au prix d'un risque de DÉRIVE entre deux implémentations de la
+      même loi — le motif même que les tickets 015 à 019 passent leur temps à
+      corriger. L'objection avancée contre le rejet (« une population régénérée sans
+      post-traitement récupère l'ancien gradient ») ne tient pas : le pipeline le
+      REFUSE bruyamment — `simulation_controller.py:352` lève une `[ALARME]` en ERROR
+      sur `personal_bike` absent, compte les agents dans
+      `alarme_total{source="personal_bike_absent"}`, et les sept populations sans le
+      trait sont sorties du champ du loader (`data/population/old/`). L'échec est
+      détecté, pas silencieux. Voir aussi `docs/setup/population.md` étape 8 : les
+      trois post-traitements refusent de tourner si leur ressource manque, au lieu
+      d'imputer à l'aveugle.
+      RESTE UNE SEULE CHOSE : les chiffres du volet 3 sont transitoires — le run
+      épinglé lit ses propres personas archivés, qui portent encore l'ancien gradient
+      inversé. La relance était le ticket 006, abandonné : la dépendance bascule sur
+      le NOUVEAU JEU DE TEST. L'axe habitat s'est déjà resserré avec le ticket 019
+      (accord 47,6 → 50,2 %, amplitude 19,9 → 26,8 pts).
+
+  ticket_019_habitat_taille_menage:
+    status: terminé
+    note: >-
+      Les quatre lots sont livrés et mesurés. La loi du logement est passée en
+      pondération ménages (`COE0`) et reçoit un levier de taille
+      `P(M1|taille)/P(M1)` estimé au périmètre puis renormalisé ; ressource
+      `zf_housing_type.json` en v2 (leviers, effectifs de cellule, bloc de
+      validation), sel de tirage `housing_type_v2`, et le module REFUSE une v1
+      plutôt que d'imputer sans levier. Test interne EMC² publié dans la
+      ressource et exécuté à chaque `make housing-type` : erreur absolue moyenne
+      sur les 20 cellules 3,00 pt (mécanisme précédent) → 0,75 pt, sous le
+      critère de 1 pt, marginale géographique préservée (34,7/12,9/28,2/23,6/0,6
+      observés contre 34,1/13,1/28,2/23,9/0,7 rakés). Populations 10/100/1000
+      ré-imputées : part d'individuel isolé par taille 14,5 / 41,8 / 36,9 /
+      52,1 % pour 15,7 / 46,5 / 45,5 / 53,9 % observés sur le 1000, et surtout la
+      PENTE est retrouvée (+37,6 pt contre +38,2 observés, là où elle valait
+      +9,5 pt avant). Critère n° 2 du ticket 015 rejoué : l'accord habitat
+      imputé/observé monte de 47,6 à 50,2 %, et l'amplitude opposable de 19,9 à
+      26,8 pts sur les 33,4 publiés — +6,9 pts regagnés sans qu'une ligne du
+      modèle vélo bouge. Deux cellules du 1000 (tailles 2 et 3) dépassent les
+      ± 4 pts stricts du ticket mais restent dans la marge de bruit 2 σ : à
+      n = 71 adresses, l'écart-type de la cellule vaut 5,9 pts, le seuil du
+      ticket est sous le plancher de mesure — c'est le même constat que les
+      critères restatés du 015. Levier par secteur de tirage : hors périmètre,
+      non nécessaire (résidu 0,75 pt).
+
+  ticket_016_abonnement_tc_progedo:
+    status: terminé
+    note: >-
+      LOTS 1 ET 2 LIVRÉS le 2026-08-27, communs avec le 017. Loi apprise sur `P12`
+      (`make equipment-propensity`, AUC hors-échantillon 0,798, CV groupée par ménage),
+      posée par `scripts.data.population.enrich_equipment` et câblée dans l'étape 8 du
+      notebook de génération. Reproduit ses cibles sur l'enquête : toutes les strates
+      d'occupation à 0,1 pt, gradient de motorisation exact (61,8 / 25,5 / 16,1 %).
+      Sur la population 1000, l'écart étudiant − retraité passe de +5,7 à +45,5 pts
+      (cible +54,5) — le critère le plus discriminant du ticket. Les paliers tarifaires
+      Tisséo (moins de 26 ans, ouverture senior) sont ARBITRÉS sur l'AUC et retenus
+      (+0,0079), pas décrétés ; la tarification n'entre jamais comme grandeur (P12 ne
+      sert que deux modalités, et M22/revenu est livré vide). Cible « étudiants »
+      RESTATÉE de 74,3 à 72,2 % : le recodage du dépôt range l'alternance avec les
+      étudiants, et c'est la définition du persona qui doit gagner. Contrefactuel volet 3
+      à politique figée : les 15-19 ans gagnent 5,3 pts sur les TC et 4,2 sur la voiture,
+      mais le composite de TÊTE ne bouge pas (6,015 → 5,941) — il était juste pour les
+      mauvaises personnes, exactement ce que ce ticket annonçait. RESTE : lot 3 (recette
+      sur un run, volet 1) et lot 4 (remontée dans le fork eqasim). Ancien diagnostic
+      ci-dessous. Même diagnostic que le 015 sur un trait
+      qui pèse davantage : le total tient (21,9 % d'abonnés simulés contre 25,8 %
+      mesurés) mais la répartition est RETOURNÉE — étudiants 35,4 % contre 74,3 %
+      observés, retraités 29,7 % contre 17,7 %, et le signe de l'écart 18-24 ans /
+      65 ans et + est inversé (−2,4 pts simulés contre +44,4 observés). Cause isolée :
+      eqasim recopie l'abonnement du donneur ENTD 2008, et la classe d'appariement 15-29
+      mélange 64 % (15-17), 63 % (18-24) et 29 % (25-29). C'est le levier d'équipement le
+      plus fort de la politique (+9,5 pt de TC, −8,0 pt de voiture sur l'artefact v2, à
+      comparer à +5,7 pt de vélo pour `has_bike`) : biais induit −3,7 pt de TC chez les
+      étudiants, +1,1 pt chez les retraités, −0,4 pt seulement en agrégat. Plus simple que
+      le 015 : trait individuel, un seul étage, aucun ménage à reconstituer, et la
+      politique est déjà entraînée sur `P12` — aucun ré-entraînement. Lots 1-2 COMMUNS
+      avec le 017. ⚠ 2026-08-24 : actualité CONFIRMÉE par l'utilisateur, c'est le
+      chantier prioritaire avec le 017.
+
+  ticket_017_permis_progedo:
+    status: terminé
+    note: >-
+      LOTS 1 ET 2 LIVRÉS le 2026-08-27, communs avec le 016 (même chargeur, même script
+      de pose). Loi apprise sur `P7` — `P7 == 3`, conduite accompagnée, compte NON —
+      AUC hors-échantillon 0,953, plancher légal 18 ans en dur. Sur la population 1000 :
+      91,5 % → 87,7 % chez les majeurs (cible 85,9). Les paliers tarifaires ont été
+      offerts puis RETIRÉS par l'arbitrage (gain −0,0001) : la règle tranche dans les
+      deux sens. Piège de l'ordre FERMÉ : `car_availability` dérive du nombre de permis,
+      le notebook rejoue donc `fix_minor_traits` (idempotent) APRÈS la pose — 68 ménages
+      recalculés — et la recette échoue si les deux ne sont plus d'accord. ⚠ Écart des
+      25-34 ans à −3,2 pt, AU-DELÀ de la tolérance ± 3 du ticket : demande soit
+      l'interaction âge × genre que le ticket prévoit, soit un critère restaté — non
+      tranché. ⚠ Le contrefactuel volet 3 SOUS-ESTIME l'effet du permis : l'offre OTP y
+      est gelée alors que `_can_drive` la conditionne. RESTE : lot 3 (run) et lot 4
+      (fork). Ancien diagnostic ci-dessous. Écart modéré en agrégat (91,5 % simulé
+      contre 85,9 % mesuré chez les majeurs) et concentré sur les jeunes adultes : 85,4 %
+      contre 58,1 % à 18-24 ans, soit +27 points. Même cause que le 016 (classe
+      d'appariement 15-29 : 0 % à 15-17, 58 % à 18-24, 78 % à 25-29) plus le millésime
+      ENTD 2008. Point mesuré qui simplifie le ticket : la structure de foyer du permis est
+      DÉJÀ correcte (82,3 % de doubles titulaires observés, 81,3 % simulés, surdispersion
+      ×1,13 contre ×2,4 pour le vélo) — donc pas d'étage « combien dans le ménage », un
+      logit individuel suffit. Verrou dur sur le mode voiture (+8,1 pt de voiture sur
+      l'artefact v2, contre +6,5 en v1) et amont de `car_availability` : à livrer AVANT le
+      018, qu'il désamorce en partie. Lots 1-2 COMMUNS avec le 016.
+
+  ticket_018_partage_voiture_foyer:
+    status: amélioration
+    note: >-
+      NON PRIORITAIRE, et écrit pour ne pas être oublié. `_owns_car` vaut
+      `number_of_cars > 0` : tout membre d'un foyer motorisé conduit « la » voiture, sans
+      rivalité, et `car_availability` ne colore que le prompt sans jamais restreindre le
+      jeu d'options. Mesuré : 20,6 % des ménages motorisés ont plus de titulaires que de
+      voitures (25,4 % des agents), et 6,1 % des 2 505 trajets voiture conduits du run
+      2026-08-19 partent alors que toutes les voitures du foyer sont déjà sorties — mesures
+      antérieures aux livraisons 015 et 019, à refaire au prochain run de référence. Une
+      voiture étant réellement partagée, la bonne réponse n'est PAS l'attribution nominative
+      du 015 mais une capacité de ménage (option B), ou un jeu d'options conditionné
+      (option A), ou la limite écrite (option C). Recommandation : livrer le 017 d'abord —
+      il retire l'essentiel des 6,9 points de « some » en excès. Annexe : le deux-roues
+      motorisé (9 % des ménages, 0,85 % des déplacements) est mesuré à zéro parce
+      qu'absent, et la référence CEREMA ne le ventile pas — décision du 2026-08-21 : rien
+      n'est entrepris.
+      ⚠ 2026-08-24 — TESTÉ au signal « GO18 » : le canal NARRATIF est REJETÉ. `v8` dérivé
+      de `v7` (72 personas sur 818 basculés `some` → `all`, distribution portée à
+      69,7/16,7/13,6 % pour une cible EMC² recalculée à 70,0/16,9/13,1 %), A/B apparié sur
+      trois jeux. Effet voiture sur les personas traités : +0,24 pt sur `train` (35
+      personas, plancher 2,38), +4,25 sur `val` (10 personas, plancher 5,49), et en mise en
+      commun des deux jeux DISJOINTS +1,34 pt pour un plancher de 1,31 — soit exactement le
+      niveau du bruit. Effet AGRÉGÉ reconstruit : +0,12 pt de part voiture, contre 5,28 de
+      composite pour le temps terminal par la même méthode. C'est l'amplitude qui ferme la
+      question, pas le test. Le premier chiffre (+7,27 pt sur `rank`) était un FAUX POSITIF :
+      médiane de +1,3 pt derrière la moyenne, plancher mal posé, et `rank ⊂ screen ⊂ train`
+      donc aucune réplication indépendante. Cible recalculée par `make car-availability`
+      (contrôle positif : motorisation publiée reproduite ; négatif : non-réponse P7 nulle
+      chez les majeurs) — 70,0/16,9/13,1 contre les 69,5/16,9/13,6 cités, le recoupement
+      tient. Trace : `docs/traces/2026-08-24_car_availability/`. NE DIT RIEN de la rivalité
+      (option B) ni de l'option A : un jeu gelé ne change pas quelles options ont été
+      offertes. Sortie recommandée : OPTION C (écrire la limite), le 017 corrigeant le
+      niveau gratuitement.
+      Méthode suivie : Le test
+      suivra `docs/arch/protocole-parametre-exogene.md`, celui qui a servi au temps
+      terminal : mesurer la variable dans EMC² (avec contrôle négatif ET positif, une
+      variable nulle parce que non renseignée n'est pas une variable nulle), réécrire un
+      jeu gelé `vN+1` où UNE SEULE variable bouge, A/B APPARIÉ sur le moteur de
+      calibration (`--dry-run` d'abord, effectif opposable = personas distincts, jeu
+      `test` refusé, modèle d'éval épinglé), archiver dans `docs/traces/` — le rejet
+      compte autant que l'adoption — puis porte de décision. Intérêt décisif ici : ça
+      chiffre l'effet SANS payer de run. Deux limites à porter avec tout résultat, et
+      elles mordent sur ce ticket-ci : la réécriture ne change pas QUELLES options ont
+      été offertes — or c'est précisément l'objet de l'option A — et elle ne rejoue pas
+      les chaînes de véhicule. Et le piège documenté du 2026-08-24 : si le périmètre
+      livré dépasse le périmètre mesuré, le dire et le mesurer.
+
+  ticket_020_perimetre_population_cerema:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-24 sur demande utilisateur : s'assurer qu'on travaille bien sur
+      la même base que l'enquête avant de juger un résultat. Travaux d'INSTRUCTION —
+      inventaire chiffré des écarts de périmètre et de définition entre la population
+      EMC²/CEREMA et la population simulée, avec un verdict écrit par axe (corriger /
+      neutraliser dans le scoring / publier comme limite). Neuf axes à mesurer ; trois
+      constats sont DÉJÀ établis à la lecture du dépôt : (C1) les caractéristiques de la
+      population enquêtée existent dans `population_emc2_2023.yaml` mais AUCUN code ne
+      lit ce fichier et l'essentiel dort en commentaire — méthodologie, territoire,
+      totaux de population, équipement vélo ; (C2) `geo_reference.py` classe les
+      couronnes par DISTANCE à l'hypercentre (8/20/40 km) là où l'enquête découpe par
+      LISTE DE COMMUNES (1/68/109/275), alors que son commentaire annonce l'inverse — or
+      la cible voiture vaut 31 % à Toulouse contre 64 % en 1ʳᵉ couronne, et depuis le
+      013 ce classement FACTURE le temps terminal ; (C3) l'enquête couvre le
+      20/09/2022-18/02/2023 hors vacances scolaires, quand les jeux gelés v2 tirent la
+      météo dans l'année entière — l'écart porte sur le mode le plus sensible à la
+      météo, le vélo. Passe AVANT la reprise des tickets 004 et 009, mis en veille le
+      même jour.
+      ⚠ 2026-08-24 — INSTRUIT ET RENDU. Les neuf axes ont chacun une valeur enquête, une
+      valeur simulée et un verdict : 2 conformes (A1 âge, A6 jour de semaine), 2 À
+      CORRIGER (A2 couronnes, A4 hors périmètre), 5 À PUBLIER comme limites (A3, A5, A7,
+      A8, A9). Aucun axe non mesuré. Les trois constats sont confirmés et chiffrés.
+      C1 levé : `population_emc2_2023.yaml` est actif, chargé par
+      `llm_module/core/population_reference.py` et couvert par 17 tests ; chacune de ses
+      valeurs a été RECALCULÉE depuis les microdonnées (11 grandeurs + 4 parts de
+      population, toutes à moins de 0,5 pt), ce qui a corrigé deux valeurs recopiées :
+      54 585 déplacements et non 54 785, et 69/108 communes en 1ʳᵉ/2ᵉ couronne et non
+      68/109 (la couche SIG fait foi contre la publication ; total 453 inchangé). Les
+      blocs vélo/stationnement/télétravail sont SUPPRIMÉS et non rétablis — l'équipement
+      vélo vit dans bike_ownership.json (015), les deux autres n'ont aucun consommateur.
+      C2 chiffré, et c'est le résultat lourd : 249 personas sur 1 021 (24,4 %) changent
+      de couronne. L'erreur est UNIDIRECTIONNELLE — les 179 zones fines de Toulouse sont
+      toutes à moins de 7,0 km du centre, donc le disque de 8 km ne perd aucun Toulousain
+      mais capte 66 habitants de Blagnac (21), Balma (19), Tournefeuille, Colomiers,
+      Ramonville. Il gonfle Toulouse et vide la 1ʳᵉ couronne, où la cible voiture passe
+      de 31 à 64 %. Et il FLATTE LA NOTE : L1 moyen pondéré par zone 47,8 pt sous le
+      classement publié contre 50,7 sous le classement correct, à run constant. Le stratum
+      3ᵉ couronne, absent du tableau publié, réapparaît avec 99 trajets. En revanche le
+      risque « temps terminal » annoncé par le ticket S'EST DISSIPÉ avec tt3 : la même
+      confusion coûtait 4 min sous tt2, elle coûte 34 s maintenant que les lois sont
+      massées à zéro. Le classement reste à corriger pour la LECTURE, l'urgence côté
+      simulation est levée.
+      C3 chiffré, et l'écart est plus grand que prévu : les jeux gelés tirent dans
+      l'année (42,5 % de jours pluvieux contre 44,7 % en fenêtre d'enquête — l'écart y
+      est surtout THERMIQUE, 18,0 contre 12,7 °C à midi), mais les RUNS se jouent sur
+      cinq journées de mi-mars TOUTES SÈCHES : 0,0 % de trajets sous la pluie, vérifié
+      sur les 76 runs archivés dont les 20 derniers sont tous à zéro.
+      Trois trouvailles non anticipées par le ticket. (1) A4 : 45 personas (4,4 %) vivent
+      hors des 453 communes, jusqu'à 114 km du Capitole, et le classement métrique les
+      range en 3ᵉ couronne où ils forment 76 % du stratum — « hors périmètre » n'est pas
+      une couronne, d'où la constante OUT_OF_PERIMETER et son test. Décidable parce que
+      le recalcul des parts modales EMC² sur les seuls déplacements INTERNES redonne
+      exactement la cible publiée (55,0 % voiture ; 56,1 % sur tous les déplacements).
+      (2) A3, contre-exemple utile : l'écart de 30 % sur la taille de ménage (2,71 contre
+      2,08) est un ARTEFACT DE BASE, pas un défaut de population — pondérer chaque
+      personne par 1/taille donne 2,01, et 1,23 voiture/ménage pour une cible de 1,25.
+      Une base non déclarée fabrique aussi des défauts imaginaires. (3) A7 : la
+      hiérarchie de mode principal est INVERSÉE (le code teste la voiture avant les TC ;
+      l'enquête code 760 de ses 770 déplacements mixtes en TC). Latente aujourd'hui —
+      OTP est interrogé mode par mode, aucun itinéraire simulé ne mêle les deux, zéro
+      déplacement mal classé — mais 1,41 pt de la cible TC (11,5 % de ses 12,2 %) est
+      structurellement hors d'atteinte. À corriger AVANT tout parking-relais. Le soupçon
+      de départ, lui, est levé : les jambes d'accès ne sont PAS comptées comme
+      déplacements, ni côté simulation (is_transfer) ni côté enquête (aucun de ses
+      39 743 déplacements détaillés en voiture ou TC ne porte de trajet à pied).
+      Livré : `make communes-couronnes` (la donnée manquante — 453 communes et la
+      géométrie des couronnes), `make audit-perimetre` (les neuf axes, codes de sortie
+      0/2/3 — le 3 dit « axe NON MESURABLE », parce qu'un axe non mesuré est un axe qui
+      passe), mode `--recompute` qui recoupe le cadrage depuis les microdonnées, doc
+      `docs/arch/perimetre-population.md`, rapport grand public et traces dans
+      `docs/traces/2026-08-24_perimetre_population/`.
+      RESTE OUVERT, hors périmètre de ce ticket qui n'était PAS un ticket de correction :
+      basculer `residence_zone` sur le classement communal (bump de `version` dans
+      terminal_time.yaml, trois caches invalidés, run complet — à coordonner avec la
+      correction de calibre en attente du 013) ; exclure du scoring les domiciles hors
+      périmètre ; restreindre le tirage de météo à la fenêtre d'enquête POUR LA MESURE ;
+      aligner la hiérarchie de mode principal ; garantir l'âge minimum par une assertion
+      au lieu d'en hériter.
+
+  ticket_021_couronne_residence_post_traitement:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-24 à la suite du ticket 020, dont il exécute les DEUX verdicts
+      « à corriger » : A2 (couronnes classées par distance à l'hypercentre au lieu de la
+      liste de communes de l'enquête) et A4 (domiciles hors des 453 communes rangés en
+      3ᵉ couronne). Un seul trait les résout : la couronne du domicile, POSÉE SUR LE
+      PERSONA à la génération au lieu d'être devinée à la distance au runtime.
+      POURQUOI CETTE VOIE. `residence_zone` a TROIS appelants de production et un seul ne
+      porte aucun cache : `move_logger` (colonne du journal → tout le scoring par zone) ;
+      `osmnx_direct._make_travel_plan` (temps terminal → durées des plans → cache OTP ET
+      cache de décisions LLM) ; `export_terminal_time` (les 785 centroïdes de zones fines →
+      les STRATES des lois de temps terminal, ce que `terminal_time_emc2.json` inscrit dans
+      son `meta.crown_definition`). Les deux écarts du 020 vivent ENTIÈREMENT dans le
+      premier : ce sont des écarts de LECTURE, pas de décision. Un post-traitement les
+      corrige donc sans bumper `terminal_time.yaml`, sans invalider de cache et sans run à
+      rejouer. Et le troisième appelant est la raison pour laquelle aligner le temps terminal
+      est un ticket distinct : ses lois sont stratifiées par le classement métrique, les
+      basculer demande de RÉ-EXPORTER la ressource, pas de changer un `if`.
+      Contrepartie assumée et bornée : une divergence de définition avec le temps terminal —
+      34 s par bout de trajet sur le pire couple OBSERVÉ (Toulouse ↔ 1ʳᵉ couronne, 66 cas ;
+      les deux autres couples réels valent 2 s et 11 s), 43 s sur le pire couple POSSIBLE,
+      qui ne se produit pas. Elle valait 4 min sous tt2 — c'est le 013 qui a absorbé le
+      risque. À inscrire dans le docstring, pas à subir.
+      LA DONNÉE EST PRESQUE TOUTE DANS LE CONTENEUR : le code ZF porte le numéro de secteur
+      de tirage sur ses 3 premiers chiffres, le secteur porte la couronne, et `zone_resolver`
+      résout déjà un domicile en zone fine (c'est ainsi que 015 et 019 travaillent). CE QUI
+      MANQUE FIXE LE GRAIN DE LA TABLE : `zf_zones.gpkg` ne porte NI `INSEE` NI `COM`, donc
+      une table secteur → couronne de 88 lignes donnerait la couronne mais jamais la commune,
+      que l'audit exige. La table se publie au grain ZONE FINE — 785 lignes
+      `zf → secteur, couronne, insee, commune` — depuis la jointure que l'export calcule déjà.
+      DEUX ÉQUIVALENCES MESURÉES LE 2026-08-24 (lot 0, `make audit-couronnes`, trace
+      `docs/traces/2026-08-24_couronne_equivalences/`) : les SEPT PORTES PASSENT — 785/785 au
+      grain zone fine, 1 021/1 021 au grain domicile, différence symétrique VIDE entre « hors
+      couche » et « hors périmètre », et 1 021/1 021 d'accord avec la colonne archivée du 020
+      (recoupement par un chemin INDÉPENDANT). La porte F établit en plus que ZF → INSEE
+      reproduit la commune archivée sur les 976, ce qui CONFIRME le grain zone fine de la
+      table. Ce qui était supposé est maintenant mesuré : (1) l'accord entre
+      classement par préfixe ZF et classement géométrique sur des DOMICILES n'a jamais été
+      mesuré — ce qui est établi est l'intégrité de la jointure ZF → NUM_DTIR, et le seul
+      usage du préfixe dans le dépôt porte sur les microdonnées d'enquête, pas sur les
+      personas ; (2) `resolve() is None` (hors COUCHE de zones fines) et `hors périmètre`
+      (hors des quatre COURONNES dissoutes) sont deux emprises différentes, et le 976/45
+      vient de la seconde. Emprise normative : le géojson des couronnes. L'alarme de
+      couverture de `zone_resolver` ne protège pas ce cas — elle se déclenche à 15 %, on est
+      à 4,41 %.
+      SIX LOTS dont le 0 est FAIT.
+      LA MESURE SE FAIT SUR `v7`, dernière base de référence du registre `avancement.yaml`.
+      Records sans `lieu_residence` et loss à six dimensions sans la zone : « à décisions
+      constantes » devient STRUCTUREL, zéro appel LLM. PAS de jeu `v9` — rien du prompt ne
+      bouge, seule l'agrégation change, donc une TABLE DE JOINTURE `agent_id → couronne`.
+      ⚠ NE JAMAIS enrichir en place `experiments/archive/2026-08-19_14_36/population_1000.json` :
+      son sha256 est épinglé par les manifestes de v5, v6, v7 ET v8. PAS de composite non
+      plus : `lieu_residence` est `scored: False` dans `frames` et absent de l'évaluateur, un
+      `v7 → v9` rendrait 0,00 — publier ce zéro serait « vacuité ≠ perfection » en pleine
+      page. Le score porté au registre est le L1 de la dimension ZONE, avec `score_caveat`.
+      Et `v7` ne peut pas porter A4 : ses 930 personas sont bbox-filtrés, donc `verdict:
+      mesure` (périmètre partiel), A4 chiffré à part sur les 1 021.
+      0 : FAIT, cf. ci-dessus.
+      1 : FAIT le 2026-08-24 — `llm_module/data/zf_couronne.json` (version `zc1`, 785 zones
+      + 88 secteurs, avec INSEE et commune), lecteur `llm_module/core/residence_zone.py`
+      (`CouronneTable` refuse version inattendue / modalité hors COURONNES / secteur à deux
+      couronnes ; `couronne_of_zf` se replie sur le secteur, `commune_of_zf` JAMAIS),
+      `CommunalZones` montée de `audit_perimetre` vers `core` (une seule classification de
+      référence, lue par l'audit ET la production), assertion « aucun secteur sans zone
+      fine » ajoutée à l'export, et 16 tests sur ressources COMMITTÉES dont la porte B
+      REJOUÉE à chaque exécution — une mesure ponctuelle se périme, un test non.
+      2 : FAIT le 2026-08-24 — `enrich_residence_zone.py`, `make residence-zone`, en tête de
+      l'étape 8 du notebook. Écrit `residence_zone` / `residence_commune` / `residence_insee`
+      par le CODE de zone fine, déterministe SANS tirage (trait observé, idempotence vérifiée
+      à l'octet). TROIS écritures distinctes : couronne / `hors périmètre` / AUCUN trait sans
+      coordonnées — écrire « dehors » de qui on ne sait rien serait une affirmation ; et la
+      commune ne s'invente jamais. `--check` = couverture + ACCORD code ↔ géométrie +
+      modalités + taux hors périmètre ; l'écart au cadrage sort en CODE 4, informatif (axe A9,
+      le tirage), traduit en succès par le Makefile comme par le notebook. `--out` protège les
+      populations épinglées : sha256 de l'archive 2026-08-19_14_36 vérifié inchangé après une
+      passe. Recoupement indépendant du 020 au passage : 249 personas (24,4 %) sur la
+      population de référence et 178 (19,1 %) sur celle des jeux gelés divergent du classement
+      métrique — exactement les chiffres publiés. 16 tests. 3 : FAIT le 2026-08-24 — `move_logger`
+      recopie le trait et son IMPORT de `residence_zone` a DISPARU, ce qu'un test exige
+      (`not hasattr(move_logger, "residence_zone")`) : le repli à la distance est impossible,
+      pas déconseillé. La colonne accepte `hors périmètre` (déclaré dans `RESIDENCE_VALUES`)
+      et ramène à vide toute valeur hors référentiel. Docstring de `residence_zone` réécrit :
+      classement MÉTRIQUE du temps terminal, sa prétention EMC² dite fausse avec son coût, la
+      divergence chiffrée, et l'alignement présenté comme un RÉ-EXPORT de ressource. Les deux
+      tests qui encodaient l'ancienne décision sont inversés — leur inversion EST la
+      décision. 253 tests verts côté llm-agents. 4 : FAIT le 2026-08-24 — `frames.normalize_place` rend
+      `(clé, référencée)` avec la clé ASCII `hors_perimetre` (la sortie brute donnait
+      `hors_périmètre`, qui ne joignait rien et disparaissait), et `dimension_detail` publie une
+      ligne « — hors référentiel — » portant la MASSE EXCLUE : « exclu des cibles » ne doit pas
+      se confondre avec « inexistant ». Le geste vaut aussi pour « Autres » du logement (test du
+      019 étendu). Mesure `make couronne-v7` : ZÉRO appel LLM, décisions déjà en base
+      (ab_chaine.db, node c00b4318b3, T=0), splits train+val = 2 197 décisions / 569 agents.
+      RÉSULTAT : +2,11 pt de L1 par zone (41,26 → 43,38), les QUATRE strates dégradées et une
+      3ᵉ couronne qui APPARAÎT à 41,88. ⚠ PIÈGE ÉVITÉ : pondérer par la MASSE observée rend
+      −0,26 pt, une fausse amélioration — le reclassement sort 47 agents de la strate la pire
+      (Toulouse, L1 59), donc la moyenne baisse par changement de mélange alors que chaque
+      strate empire. Une moyenne pondérée par la masse n'est pas une règle de score valide pour
+      comparer deux CLASSEMENTS ; les poids publiés sont ceux du cadrage, identiques des deux
+      côtés. C'est le critère « une correction qui améliore le score est suspect » qui a attrapé
+      le cas. Trace `docs/traces/2026-08-24_couronne_v7/` + ligne `couronne_residence` au
+      registre `avancement.yaml`. 5 : ÉCRIT LE 2026-08-24, NON REJOUÉ — trait posé dans
+      `eqasim-toulouse/synthesis/population/llm_agents.py` sur `home_location` APRÈS le snap
+      OTP, donc sur les coordonnées que `identity.home` portera (les mêmes que lit le journal) ;
+      le poser en étage A (`enriched.py`, avant snap) l'aurait fait diverger pour tout persona
+      snappé. Demande `docker compose build eqasim` + régénération : tant que ce n'est pas fait,
+      une génération neuve n'a PAS le trait et doit passer par `make residence-zone`. Même règle
+      que le lot 4 du 015 : ne pas le dire livré.
+      PIÈGES À CONNAÎTRE. (1) Les 45 hors-périmètre ne se trahissent pas par leurs distances :
+      5,15 km de parcours moyen contre 4,92 km pour les résidents du périmètre. Leur exclusion
+      ne déplacera presque pas l'agrégat, et il NE FAUT PAS en conclure au non-effet — tout le
+      dommage est concentré dans le stratum 3ᵉ couronne dont ils forment 76 %. C'est exactement
+      le piège d'A2, qui ne bouge la cible moyenne que de 1,7 pt tout en déplaçant un quart de
+      la population. (2) Ni le run courant ni `v7` n'exposent A4 : populations bbox-filtrées,
+      aucun domicile hors couche. A4 est latent pour les runs, actif pour la population de
+      référence — un `--check` qui passe sur le run ne prouve rien. (3) Le cache de décisions
+      LLM est clé par NOM de population, pas par contenu : corriger un fichier ne l'invalide
+      pas, ce qui est voulu ici et serait un bug silencieux pour un trait entrant dans le prompt.
+      ISSUE ATTENDUE : une DÉGRADATION de la lecture par zone, de l'ordre du 47,8 → 50,7 pt
+      mesuré sur le run du 2026-08-24 — à RECALCULER sur `v7`, dont le périmètre de records
+      diffère. Le composite comparable, lui, ne bouge pas. C'est le critère d'acceptation, pas
+      un échec : le ticket retire un avantage que la mesure n'avait pas mérité. Un ticket de
+      correction qui améliore le score est suspect.
+
+  ticket_026_population_conforme_perimetre:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-24. CORRECTION DE BASSIN : le cadre de tirage n'est pas le périmètre
+      d'enquête, et c'est la cause racine de l'axe A9 du ticket 020. « Conforme » = le CADRE
+      est exactement les 453 communes (donc les parts par couronne convergent vers
+      36,4/34,1/14,2/15,4), PAS « chaque commune porte un persona » : à 1 000 agents pour
+      1,32 M d'habitants, la plupart des 275 communes de 3ᵉ couronne resteront vides et c'est
+      correct.
+      CONSTAT MESURÉ. Le périmètre couvre 453 communes sur SIX départements (31:346, 32:38,
+      81:27, 82:22, 09:10, 11:10) — VÉRIFIÉ par trois chemins : recompte depuis le shapefile
+      source, surface 5 428 km² contre 5 400 km² annoncés par le rapport auat, et le rapport
+      lui-même (453 communes, 1,4 M hab., 1,32 M de 5 ans et +, découpage 1/68/109/275 — la
+      couche donne 1/69/108/275, écart d'une commune déjà documenté). Le rapport affiche
+      « Département 31 » comme COUCHE DE CARTE et comme périmètre d'ANALYSE, pas comme le
+      périmètre d'enquête. La frange hors 31 fait 107 communes, 25 % de la surface, dont 100
+      communes en 3ᵉ couronne. Et elle n'est pas sous-représentée mais ABSENTE : les 976
+      personas de la population de référence dont la commune est connue sont TOUS en 31. Ce qu'on génère : 111 communes sur 453 (24,5 %), 290/785
+      zones fines, et un déficit STRUCTURÉ parce que le filtre est un rectangle — 3ᵉ couronne
+      20 communes sur 275, 54 personas pour 15,4 % du cadrage. La population de référence, en
+      plus, porte 45 domiciles HORS périmètre : non conforme dans les deux sens.
+      ⚠ VERSION VOLONTAIREMENT PARTIELLE (décision du 2026-08-24) : le cadre de tirage devient
+      les 346 communes du périmètre situées EN HAUTE-GARONNE, pas les 453. Les 107 communes des
+      cinq autres départements (dont 100 en 3ᵉ couronne) demandent +10 Go de BD TOPO/BAN et
+      restent pour plus tard. LA LIMITE EST CHIFFRÉE ET PUBLIÉE (perimetre-population.md,
+      limite n°6) : le cadre Haute-Garonne PLAFONNE la 3ᵉ couronne à 10,6 % de population
+      quand l'enquête en compte 15,4 % — résidu STRUCTUREL de 4,7 pt sur cette strate. En L1
+      de répartition : 11,7 pt aujourd'hui → ≈ 9,5 pt avec ce ticket → ≈ 2,7 pt avec la suite.
+      Ce ticket referme donc 2,2 pt sur les 9,0 disponibles, UN QUART : son apport est surtout
+      STRUCTUREL (cadre par liste de communes au lieu d'un rectangle, plomberie en place), pas
+      numérique. PIÈGE DE LECTURE À DÉSAMORCER : avec ce cadre les écarts par couronne valent
+      +1,0 / +3,3 / +0,4 / −4,8 pt, donc `--check` (tolérance 5 pt) PASSERA — à 4,8 contre 5,0.
+      Un check vert ne vaudra PAS conformité, et la cible du check reste le cadrage COMPLET :
+      recalibrer la cible sur ce qu'on sait produire serait se donner raison par construction.
+      GAIN COLLATÉRAL : plus aucun téléchargement, le département 31 est déjà là.
+      CODE LIVRÉ LE 2026-08-24, RÉGÉNÉRATION À FAIRE. (1) LE SNAP N'EXISTE PAS —
+      CORRECTION : `_snap_to_polygon` est défini et appelé NULLE PART (une seule occurrence
+      dans le dépôt, sa définition). Aucun domicile n'est déplacé, ni avant ni après ce
+      ticket ; l'avertissement de la première rédaction était faux, et j'aurais dû vérifier
+      l'appelant. Ce qui reste vrai : rien ne ramène dans le graphe une activité qui en sort,
+      donc les personas éloignés n'auront PAS d'offre TC — limite à publier, que seul un GTFS
+      régional lèverait (ticket distinct, il change les durées de TOUS les agents).
+      (2) GÉNÉRATION livrée : `EQASIM_PERIMETER`/`EQASIM_DEPARTMENTS`, cadre = liste de
+      communes lue par `CommuneTable`, `departments` plus en dur, `sampling_rate` sur la
+      population RP 2022 du cadre, paramètre exposé par l'API et par le notebook, garde-fou
+      qui LÈVE sur un cadre vide. (3) CHARGEMENT livré : le filtre d'admission porte sur le
+      PÉRIMÈTRE (trait `residence_zone`), repli sur la bbox AVEC ALARME quand le trait manque,
+      rejets comptés par motif ; le filtre reste sur les 453 même quand le cadre est restreint
+      au 31, pour ne pas graver la limitation dans le runtime. 30 tests.
+      ANCIENNE ANALYSE, CONSERVÉE POUR MÉMOIRE. (1) le piège du snap (invalidé ci-dessus) :
+      `llm_agents` snappe sur l'enveloppe convexe des arrêts OTP (+0,02°) et `identity.home`
+      prend les coordonnées POST-SNAP ; le GTFS monté est Tisséo seul (lat 43,40-43,75), donc
+      un domicile de 3ᵉ couronne à 60 km serait DÉPLACÉ jusqu'au bord, et la couronne du 021
+      annoncerait la commune du bord. Voies : GTFS régional liO, ou ne pas snapper hors zone
+      TC en journalisant l'absence d'offre. Le réseau ROUTIER suffit déjà (pbf 0,55-2,25 /
+      42,86-44,09 ⊃ périmètre). (2) GÉNÉRATION, version light : `departments: ["31"]` reste
+      INCHANGÉ (c'est ce qui rend la version légère) ; remplacer `_communes_from_bbox` par la
+      liste des INSEE de `commune_couronne.json` FILTRÉE sur le préfixe 31, soit 346 communes.
+      Garde-fou à écrire : le filtre ÉCHOUE si la liste est vide ou ne recoupe pas
+      `departments`, sinon une faute de frappe ferait retomber en silence sur tout le
+      département — le mécanisme existe déjà, la config synpp accepte
+      `"communes"` ; `sampling_rate` devient juste sans autre changement ; données à étendre :
+      BAN (adresses-31 seul → 5 fichiers de plus, trivial) et surtout BD TOPO (D031 = 2,0 Go
+      → ≈ +10 Go, LE coût matériel) ; RP 2022, FILOSOFI, IRIS, codes, ENTD sont déjà
+      nationaux. (3) LE VERROU DU CHARGEMENT : `factory.py:151` calcule world_bbox = arrêts
+      GTFS ± 0,05° et `load_population` écarte tout domicile dehors — cette bbox ne contient
+      que 221/453 communes et 51/277 zones fines de 3ᵉ couronne (47,9 % de la surface). Sans
+      ce changement, une population conforme serait RE-TRONQUÉE DE MOITIÉ au chargement et
+      l'étage 2 n'aurait servi à rien. Le filtre devient un filtre de PÉRIMÈTRE (le trait
+      `residence_zone` du 021 le rend gratuit), et la `WorldGrid` — qui assertionne que toute
+      localisation est dans son rectangle — doit être découplée du filtre et calée sur
+      l'emprise du périmètre.
+      CRITÈRE D'ACCEPTATION LE PLUS SIMPLE, DÉJÀ OUTILLÉ : `make residence-zone CHECK=1` passe
+      du code 4 au code 0. Puis nouveau jeu gelé (v9) et re-chiffrage ; le ticket 025 ne
+      devient exécutable qu'après. À prévoir : le coût de simulation monte (domiciles à
+      60-100 km → trajets longs → OTP/OSMnx plus lents, caches plus gros).
+
+  ticket_025_dimension_zone_notee:
+    status: abandonné
+    note: >-
+      OUVERT le 2026-08-24 à la suite du ticket 021. DÉCISION DE MESURE, pas correction :
+      faut-il noter la dimension « lieu de résidence » ? La cible existe dans
+      `cerema_values.yaml`, mais `frames` la marque `scored: False` — comme `type_logement` —
+      pour que le composite de la page soit EXACTEMENT la loss du moteur, dont les poids
+      (global 1,0 · âge 0,5 · occupation 0,5 · motif 0,5 · genre 0,3 · distance 0,3) ne
+      portent aucun terme de zone. La raison est bonne, et c'est le problème : sur v7/train
+      le L1 de la zone vaut 43,38 contre 6 à 12 pour les dimensions notées. Le
+      désajustement le plus grave du modèle est celui que personne ne note, donc celui que
+      la calibration n'a jamais eu de raison de réduire.
+      ⚠ AVERTISSEMENT D'IMPACT, à lire avant de demander l'implémentation. Le composite
+      SAUTE : 25,69 → 38,07 (w=0,3) ou 46,32 (w=0,5), soit un déplacement de niveau 10 à 20
+      fois plus grand que l'effet à lire. 728 ÉVALUATIONS STOCKÉES (601 nœuds) portent un
+      composite sans ce terme et cessent d'être comparables ; les quatre lignes du registre
+      `avancement.yaml` aussi, dont les gains du 013 (−4,52 et −2,17) ; le cache Shapley et
+      les ablations reposent sur une loss stable et sont invalidés ; et surtout la
+      CALIBRATION CHANGE D'OBJECTIF — un terme à 43 pt dominerait la loss, l'optimiseur
+      sacrifierait âge/motif/distance pour gagner sur la zone. Aucun appel LLM nécessaire
+      (les décisions sont stockées, c'est du re-scoring), mais rebaseline complet de tout ce
+      qui a été publié.
+      PRÉALABLE NON NÉGOCIABLE : le ticket 026 (population conforme au périmètre). Sur v7 la
+      3ᵉ couronne pèse 15,4 % du cadrage et tient dans 18 agents / 20 communes sur 275 :
+      noter cette dimension avant d'avoir une géographie complète ferait piloter la
+      calibration par le bruit d'échantillonnage.
+      TROIS OPTIONS. A : ajouter le terme (rebaseline complet). B : publier un
+      `composite_etendu` À CÔTÉ, sans toucher au composite comparable — aucun historique
+      cassé, la zone devient visible et opposable avant d'être engagée dans l'optimisation.
+      C : ne rien noter et publier la limite avec son amplitude. RECOMMANDATION : B
+      maintenant, A après le 026 livré et mesuré.
+
+  ticket_022_rabattement_mode_principal:
+    status: terminé
+    note: >-
+      LOT 1 LIVRÉ le 2026-09-04 — l'arbitrage de la hiérarchie est RENDU : celle du dépôt
+      est celle de l'enquête. Il n'y avait rien à postuler, l'ordre est PUBLIÉ : annexe
+      « Hiérarchie des modes », p. 53 du rapport AUAT/CEREMA, 36 modes dans l'ordre,
+      « défini au niveau national ». Ramené aux jambes de la simulation : métro > tram >
+      téléphérique > bus (car liO, car scolaire, TAD) > train > voiture > deux-roues
+      motorisé > vélo > marche. CONTRÔLÉ sur les microdonnées, pas seulement recopié :
+      53 paires de codes tranchées par 2 607 observations, 53 conformes sur 53, une seule
+      observation à contre-courant et elle est conforme à l'annexe (un Flixbus, rang 12,
+      perd contre un TER, rang 8). Gelé dans `llm_module/data/mode_hierarchy_emc2.json`
+      avec sa provenance ; servi par `llm_module/core/mode_hierarchy.py` à `move_logger`,
+      `mode_choice`, `task_worker` et `simulation_controller` — plus une seule cascade de
+      `if` écrite à la main.
+      DEUX SURPRISES. (1) LE BUS PASSE AVANT LE TRAIN (rangs 4 et 8 ; 34 déplacements
+      mixtes sur 35 codés bus) : un « autocar liO + TER » est un déplacement en TC, et le
+      constat déposé la veille — « la colonne Train de moves.csv sous-compte le rail de
+      62,5 % » — S'INVERSE. `_BUS_MODES` avant `_RAIL_MODES` était conforme ; c'étaient
+      `mode_choice` et `task_worker`, train en tête, qui divergeaient. (2) Grafana 07 NE
+      compare PAS quatre modes à cinq : les deux `label_replace` ramènent les deux séries
+      aux mêmes quatre catégories EMC², où le train est dans les TC (rangs 1 à 13, p. 53).
+      Fondre `rail` dans `transit` est correct pour cette métrique.
+      LA DISTINCTION QUI MANQUAIT : mode principal ≠ mode de véhicule. `_primary_mode`
+      servait aussi les verrous de chaîne du 008 ; aligner la hiérarchie sans séparer aurait
+      fait PERDRE LA VOITURE au verrou de retour sur un rabattement. `_vehicle_mode` est
+      désormais distinct, et un test vérifie qu'ils divergent bien sur un plan car+bus.
+      EFFET MESURÉ AVANT APPLICATION (versions « avant » par `git show`, six témoins de
+      rejeu) : ZÉRO bascule pour `_plan_transport_mode` et `canonical_mode` sur les 385 888
+      options des jeux gelés, les 444 055 décisions en cache et les 17 258 options du run
+      archivé — aucun résultat publié ne bouge, critère C2 vérifié par la mesure. Seules
+      bascules : les compteurs de diagnostic du worker, où le Téléo et le car scolaire
+      sortent de `other` (ils y tombaient AVEC un ERROR à chaque décision).
+      DEUX LIMITES CHIFFRÉES, NON CORRIGÉES parce qu'elles changent le prompt (décision de
+      l'auteur) : `_select_candidates` groupe par `_primary_mode`, donc un train pur et un
+      bus+train partagent l'unique créneau `transit` — sur 440 points où le train pur
+      existe, 122 (27,7 %) sont écartés au profit d'un bus+train plus rapide ; et
+      `numTripPatterns = 6` prive 45 points d'une option ferroviaire qu'un 20 leur rendrait
+      (833 → 878 points sur 2 580, plafond OTP atteint 59,7 % → 24,5 %, durée de requête
+      inchangée).
+      CLOS le 2026-09-12 SANS les lots 2 à 4, mesure à l'appui. La prémisse du lot 2 — « le
+      modèle est puni pour ne pas atteindre une cible en partie hors d'atteinte, donc le score
+      va s'améliorer » — a été VÉRIFIÉE au lieu d'être supposée, sur 17 exécutions archivées
+      (≈ 50 000 déplacements, trace docs/traces/2026-09-12_10-10_sens_limite_rabattement/). Elle
+      est FAUSSE sur le corpus actuel : la simulation SUR-PRODUIT les transports collectifs sur
+      les longues distances (36 % contre une cible de 13 % sur 20-50 km, 47 % contre 12 % au-delà
+      de 50 km). Un intervalle qui ne s'étend que vers le bas est donc inerte — gain de 0,000 pt
+      pour les TROIS bras LLM, 0,00 à 0,17 pt pour les oracles statistiques, mais +2,17 à
+      +2,19 pt pour `durmin` et `majvoiture`. La neutralisation n'aurait profité qu'aux DEUX
+      BASELINES DÉGÉNÉRÉS, c'est-à-dire qu'elle aurait rapproché le modèle sous test de ses
+      hommes de paille. Sur le composite, qui compare des profils EMD et non des parts par
+      tranche, elle aurait même DÉGRADÉ le score. Ni le trait `rabattement_plausible`, ni la
+      table d'atteignabilité, ni la bande de rendu n'existent — et ne doivent pas être repris
+      sans re-mesure (le ticket 025 / périmètre à 453 communes peut faire basculer le signe).
+      LE LOT 5 PART DANS LE TICKET 049 : publier la limite, avec son amplitude par strate ET son
+      sens. Une limite d'instrument qui ne mord pas dans le sens attendu se dit, elle ne se tait
+      pas.
+      OUVERT le 2026-08-24 à la suite du ticket 020, dont il traite l'axe A7. Le 020 lui
+      avait donné le verdict « à publier » sur la base du chiffre GLOBAL de 1,41 pt ; la
+      mesure PAR STRATE faite pour ce ticket-ci le rend nettement plus grave, donc plus
+      urgent. Deux moitiés à ne pas confondre.
+      M1, correction de code, latente : `move_logger._plan_transport_mode` teste la voiture
+      AVANT les transports collectifs ; l'enquête fait l'inverse (760 de ses 770
+      déplacements mixtes voiture+TC sont codés TC, et les 58 déplacements vélo+TC le sont
+      TOUS). Zéro déplacement mal classé aujourd'hui — OTP est interrogé mode par mode,
+      aucun itinéraire simulé ne mêle les deux. Bombe à retardement, pas bug actif.
+      M2, effet miroir, et c'est lui qui mord : la simulation ne peut pas produire les
+      déplacements que la cible compte en TC PARCE QU'ILS SONT MIXTES. Le 1,41 pt global
+      masque l'essentiel. Par couronne, part de la cible TC perdue : Toulouse 3 %, 1ʳᵉ 22 %,
+      2ᵉ 31 %, 3ᵉ 28 %. Par distance, c'est bien pire : 5-10 km 13 %, 10-20 km 39 %,
+      20-50 km 59 %, plus de 50 km 64 %. Sur la tranche 20-50 km, près de SIX DIXIÈMES de la
+      cible TC est hors d'atteinte par construction — et le modèle en est « corrigé »
+      d'autant. Profil : médiane 11,1 km contre 1,9 km pour l'ensemble ; 42 % des motifs sont
+      le retour au domicile, 14 % le travail fixe ; 3,1 % des personnes mobiles en font un.
+      LE PIÈGE À NE PAS TOMBER DEDANS : retirer le rabattement de la cible TC serait FAUX.
+      Ces voyageurs se déplacent quand même et feront, privés d'option mixte, un trajet soit
+      tout voiture soit tout TC — on ne sait pas lequel. La cible atteignable est donc un
+      INTERVALLE [cible − rabattement ; cible], pas un point : 2ᵉ couronne [4,8 ; 7] %,
+      tranche 20-50 km [5,3 ; 13] %. Même raisonnement que la grille de sensibilité T6 du 013.
+      LE POST-TRAITEMENT sert à calculer cet intervalle SUR LA POPULATION EN MAIN et non sur
+      des marginales d'enquête — supposer les deux identiques est exactement ce que le 020 a
+      démoli. Trait `rabattement_plausible`, propension mesurée : ensemble 3,14 % ; par
+      couronne 1,76 / 3,62 / 4,61 / 3,95 % ; par motorisation 1,14 / 2,32 / 4,32 %.
+      ⚠ Un ménage SANS voiture fait quand même du rabattement (1,14 % — passager, dépose,
+      autopartage) : conditionner le trait à la possession serait le motif des 016/017, un
+      coefficient appris sur une variable appliqué à une autre. Conditionner à la couronne ET
+      à la motorisation. C'est un trait de MESURE : il ne fait rabattre personne, aucun prompt
+      ne le lit, aucun cache n'est touché.
+      PRÉREQUIS : le ticket 021. Sans la couronne de résidence corrigée, le conditionnement
+      géographique retombe sur le classement métrique, qui déplace 66 personas de la 1ʳᵉ
+      couronne (propension 3,62 %) vers Toulouse (1,76 %).
+      CINQ LOTS : table de hiérarchie mesurée sur EMC² (au lieu d'une cascade de `if`) +
+      test de non-régression à zéro déplacement déplacé ; `reachable_targets.json` avec les
+      intervalles par strate (test : la borne haute EST la cible de cerema_values.yaml) ;
+      `enrich_rabattement.py` (étage D) ; rendu de la bande dans la page de synthèse, avec et
+      sans neutralisation ; écriture de la limite résiduelle.
+      ⚠ SENS DU SCORE INVERSÉ PAR RAPPORT AU 021. Ici la neutralisation AMÉLIORE
+      mécaniquement la note en élargissant la cible : il faut donc la justifier STRATE PAR
+      STRATE et montrer qu'elle vient du rabattement mesuré. Une neutralisation qui améliore
+      le score sans justification par strate est indistinguable d'un ajustement sur la cible,
+      que la décision T2 du 013 interdit. `cerema_values.yaml` n'est PAS modifié — une borne
+      d'atteignabilité décrit notre instrument, pas l'enquête, et les mélanger rendrait la
+      cible non recoupable sur les microdonnées.
+      HORS PÉRIMÈTRE : produire les itinéraires de rabattement (nouveau type d'option,
+      parkings-relais localisés, cache de plans ET cache de décisions invalidés) et la chaîne
+      de véhicule qui va avec (verrou de retour du 008, position des véhicules du 014).
+
+  ticket_023_fenetre_meteo_jeux_geles:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-24 à la suite du ticket 020, axe A5. À MENER SELON
+      `docs/arch/protocole-parametre-exogene.md` — le paramètre corrigé est ici
+      l'INSTRUMENT (la météo gelée dans les jeux de calibration) et non une valeur de
+      production. `calibration/weather.py` tire un jour dans l'année climatique entière
+      (365 j, graine `meteo_v2`) alors que les cibles auxquelles ces jeux servent à
+      comparer sont des déplacements du 20/09/2022 au 18/02/2023 — 152 jours.
+      ⚠ CE N'EST PAS UNE REDÉCOUVERTE. L'action A7 du ticket 008 a déjà corrigé le défaut
+      GRAVE : les jeux v1 ne portaient que cinq valeurs météo, toutes sèches, et le prompt
+      était calibré dans un monde sans pluie. Ce ticket ne fait que rétrécir la fenêtre.
+      PRÉ-MESURE FAITE, ZÉRO APPEL LLM DÉPENSÉ (jeux v7 hors test, 2 087 enregistrements,
+      les deux tirages rejoués). Traitement : T au créneau de départ 15,65 → 10,75 °C
+      (−4,90), part sous la pluie 44,71 → 43,51 % (−1,20 pt), 98,90 % des enregistrements
+      changent de phrase météo, 48,9 % basculent pluie/sec. TÉMOIN NUL (même année, graine
+      différente, donc re-tirage seul) : ΔT −0,02 °C mais Δpluie −5,08 pt.
+      DEUX CONCLUSIONS AVANT TOUT A/B. (1) La correction est THERMIQUE et elle seule : −4,90
+      contre −0,02 °C, signal propre. (2) SUR LA PLUIE IL N'Y A RIEN À ANNONCER — le
+      −1,20 pt du traitement est QUATRE FOIS plus petit que le −5,08 pt d'un simple
+      re-tirage. C'est un critère d'acceptation : refuser d'en tirer un effet quel que soit
+      le résultat de l'A/B.
+      ⚠ LE TÉMOIN PLACEBO DU PROTOCOLE EST INDISPONIBLE ICI, et c'est le point de méthode du
+      ticket. Le § « second piège » suppose un traitement partiel ; ici il touche 98,90 % du
+      jeu, donc le canal placebo ne pèse que 1,10 % (23 enregistrements) et sa mise à
+      l'échelle en √(masse_placebo/masse_traitée) l'amplifierait par 9,5. SUBSTITUT : un
+      témoin nul À PLEINE MASSE — troisième jeu, même liste de 365 jours, graine placebo,
+      même quantité de re-tirage (50,3 % de bascules contre 48,9 %) et aucun changement de
+      distribution. Coûte un bras d'A/B de plus ; sans lui le chiffre n'est pas opposable.
+      SECOND LIVRABLE, TRANSVERSE : LE JETON D'EXCLUSION, exigé par le protocole et jamais
+      outillé. Raison scientifique et non hygiénique : le protocole constate lui-même qu'un Δ
+      placebo de même signe que le Δ traité « signale une dérive systématique ENTRE BRAS et
+      non du bruit pur », et un run concurrent en est une cause directe — il consomme le même
+      quota, et si la cascade de fournisseurs bascule entre le premier et le second bras, les
+      deux bras n'ont pas été évalués par le même modèle. Facteur confondu avec le
+      traitement, invisible dans les agrégats. Deux autres ressources partagées : le store
+      content-addressed (deux procédures sous la même clé `ds=`) et le lien
+      `experiments/current` que `make run` repointe sous une archive en cours.
+      LE JETON DOIT : refuser la prise si un run tourne — en RÉUTILISANT `live.run_process()`
+      (pgrep launcher headless + IHM GAMA, mêmes motifs que `make run`) et non une seconde
+      implémentation ; enregistrer un instantané de quota à la prise ET au relâchement via
+      `live.api_health()`, ce qui permet de DÉTECTER APRÈS COUP une consommation concurrente
+      qu'on n'a pas su bloquer, donc de savoir si une mesure est à jeter ; porter hôte,
+      utilisateur, PID, sujet, prise, durée attendue ; signaler un jeton orphelin SANS le
+      lever automatiquement ; être exigé par tous les `ab_*.py` sauf `--dry-run`.
+      ⚠ LIMITE À NE PAS CACHER : un verrou LOCAL ne couvre pas la campagne génétique qui
+      tourne en autonomie sur la VM Google Cloud avec son propre quota et son déclenchement
+      hebdomadaire. Trois réponses possibles (liste de contrôle obligatoire à la prise,
+      marqueur partagé, ou comparaison des instantanés de quota qui DÉTECTE sans prévenir) —
+      et la limite doit être écrite dans la doc du jeton ET dans sa sortie, pas seulement
+      dans le ticket. Un verrou distribué est un autre ticket.
+      SEPT LOTS, le jeton EN PREMIER : jeton + tests ; garde-fou dans les `ab_*.py` (⚠
+      `prompt_calibration` est un dépôt git autonome, le garde-fou doit marcher sans le dépôt
+      principal sur le sys.path, comme `weather.py` recopie la mise en forme météo) ; la
+      fenêtre lue depuis `population_reference.survey_window()` avec son contrôle de validité
+      publié ; trois jeux v7 / v8 / v7n ; l'A/B à trois colonnes, modèle épinglé, effectif
+      opposable = personas distincts ; archive avec les instantanés de quota comme PREUVE
+      qu'aucun run concurrent n'a tourné ; porte de décision.
+      PIÈGES DÉJÀ IDENTIFIÉS : la fenêtre FRANCHIT le 1er janvier (test `>= début OU <= fin`,
+      jamais un intervalle simple — un test du 020 couvre déjà ce piège) ; nouvelle graine ET
+      nouveau nom de jeu obligatoires, car la clé d'éval porte `ds=<nom>` et pas une empreinte
+      du contenu, donc un contenu changé sous un nom stable fait servir une éval périmée sans
+      que le store le détecte ; vérifier la filiation des jeux avant de parler de réplication
+      (`rank ⊂ screen ⊂ train`, `val` seul indépendant, `test` fermé) ; diff du jeu et diff de
+      production sur les MÊMES lignes.
+      HORS PÉRIMÈTRE : la variance d'un run de simulation — l'autre moitié de l'axe A5, NON
+      corrigeable par un choix de dates (27,7 % des séquences de 5 jours de la période
+      d'enquête sont elles aussi sèches) ; ce ticket ne ferme PAS A5. La météo de production
+      reste sur l'année entière : la simulation doit pouvoir se jouer n'importe quand, c'est
+      la MESURE qui doit parler de la fenêtre de sa cible.
+      ATTENDU : effet faible et thermique. Le REJET est une issue normale du protocole et
+      s'archive autant que l'adoption. Ce qui justifie le ticket n'est pas l'ampleur attendue,
+      c'est que la mesure sera enfin faite sur la fenêtre de sa cible.
+      ⚠ 2026-08-25 — AMENDÉ, TOUJOURS À FAIRE, ZÉRO APPEL LLM DÉPENSÉ. Trois changements.
+      (1) LE SUBSTRAT N'EST PLUS v7 MAIS v9, tiré du run de référence 2026-08-24_17_34
+      (`docs/traces/2026-08-25_run_reference`). Pré-mesure REJOUÉE sur v9, train+val,
+      1 810 enregistrements / 613 personas : T 15,57 → 10,84 °C (−4,74), témoin nul +0,26 °C.
+      LA GRANDEUR THERMIQUE SE RÉPLIQUE (−4,90 sur v7) — sur des TIRAGES disjoints, cf. (b).
+      (2) LA PLUIE CHANGE DE SIGNE ENTRE SUBSTRATS : −1,20 pt sur v7, +1,10 pt sur v9, pour
+      un plancher de bruit de −1,16 pt sur le même v9. Un effet qui s'inverse quand on change
+      de substrat, à magnitude égale au bruit, EST DU BRUIT — la preuve est maintenant faite,
+      et le refus de conclure sur la pluie n'est plus une précaution mais un résultat.
+      (3) RENOMMAGE OBLIGATOIRE : `v8` EST DÉJÀ PRIS par la réécriture `car_availability` du
+      ticket 018 (`derived_from: v7`). Le ticket serait tombé dans son propre piège D3 — clé
+      d'éval en `ds=<nom>`, éval périmée servie sans détection. Les jeux deviennent v10
+      (fenêtre, graine `meteo_v3`) et v9n (témoin nul, graine `meteo_v3n`). Filiation à
+      relire sur le manifeste de v9 (`ga_rank_v9`, screen 0,2807) et non sur celui de v7 :
+      v9 est un jeu NEUF, pas un dérivé.
+      TROISIÈME LIVRABLE AJOUTÉ LE 2026-08-25 : LE BULLETIN MÉTÉO ENRICHI — lever/coucher du
+      soleil, amplitude min/max, créneaux précipitants. Forme validée. Livré DANS LA MÊME
+      CAMPAGNE que la fenêtre mais porté par un QUATRIÈME BRAS (`v10b` = fenêtre + bulletin)
+      pour rester séparable de la fenêtre seule. PAS DE « RISQUE DE PLUIE » EN POURCENTAGE :
+      la source ne porte aucune colonne de probabilité, un chiffre serait fabriqué ; seuls
+      les créneaux dont le CODE météo est précipitant sont annoncés. ORDRE NON NÉGOCIABLE :
+      d'abord `weather_loader` en production, PUIS la recopie dans `calibration/weather.py`,
+      PUIS le test d'égalité des deux sorties — sinon on calibre un prompt que la simulation
+      ne peut pas produire. TROIS PIÈGES CHIFFRÉS SUR LA SOURCE : 25 jours sur 365 portent
+      des mm SANS aucun créneau précipitant (repli obligatoire sur la formulation actuelle,
+      la forme enrichie AJOUTE et n'enlève jamais) ; 30 créneaux sur 1 460 sortent de
+      [MIN, MAX] jusqu'à 3 °C, tous de nuit (bornes du jour élargies aux créneaux lus, source
+      inchangée) ; la neige n'apparaît QU'UN jour sur 365, branche conservée.
+      ⚠ DEUX DÉFAUTS DE LA PRÉ-MESURE D'ORIGINE, TROUVÉS EN RECOUPANT. (a) ELLE COMPTAIT
+      DOUBLE : les « 2 087 enregistrements v7 hors test » additionnaient train+val+screen+rank
+      alors que screen ⊂ train et rank ⊂ screen — 519 lignes comptées deux fois (24,9 %),
+      toutes issues de train. Décompte juste pour v7 : 1 568. La lecture ne prend désormais
+      que train+val, et c'est un critère d'acceptation. Le défaut sur-pondère train, il ne
+      renverse pas le −4,90 °C. (b) « SUBSTRATS INDÉPENDANTS » ÉTAIT FAUX : v7 et v9 partagent
+      89 % de leurs personas (557 des 613 de v9, Jaccard 0,891). Ce qui EST disjoint, c'est
+      l'unité mesurée — la clé de tirage (agent_id, entry), commune à 1,8 % seulement (1,0 %
+      avec l'heure) : 99 % des enregistrements de v9 lisent une météo que la pré-mesure v7
+      n'avait jamais lue. La réplication vaut pour la GRANDEUR, pas pour la POPULATION, et le
+      mot « indépendant » est banni du ticket sans recoupement chiffré.
+      HUIT LOTS désormais (le bulletin s'intercale en lot 4), le jeton toujours EN PREMIER.
+      ⚠ 2026-08-25 — LOTS 1 À 5 LIVRÉS, ZÉRO APPEL LLM DÉPENSÉ. L1 le jeton :
+      `scripts/protocol_lock.py` + make protocol-{status,lock,unlock} ; refuse la prise si
+      `live.run_process().active` (sonde RÉUTILISÉE, pas réimplémentée) ou si
+      controller/worker tournent ; exige SUBJECT et CLOUD_PAUSED=1 (liste de contrôle du
+      § cloud, axe D4) ; PID enregistré = `os.getsid(0)`, le MENEUR DE SESSION, car
+      `make protocol-lock` se termine aussitôt et son PID paraîtrait orphelin dans la
+      seconde ; orphelin SIGNALÉ en [ALARME] et jamais levé sans STEAL=1 ; deux instantanés
+      de quota via `live.api_health()`, archivés au relâchement avec le delta de
+      consommation. 17 tests. L2 le garde-fou : `calibration/protocol_guard.py`, lu PAR
+      CHEMIN sans rien importer du dépôt principal (autonomie de prompt_calibration),
+      câblé dans les 3 ab_*.py, sortie 7 sans jeton, --dry-run toujours passant ; la forme
+      du fichier est un CONTRAT INTER-DÉPÔTS figé par un test de chaque côté. 13 tests.
+      L3 la fenêtre : `WeatherDeck.load(window=)`, `survey_window_md()` lit le YAML par
+      chemin et un test le compare à `population_reference.survey_window()` ; 152/365 jours ;
+      `validity_report()` publie les DEUX profils (température et précipitation) sans quoi
+      un tirage vide serait indistinguable d'un tirage juste ; fenêtre GELÉE au manifeste.
+      L4 le bulletin : production `weather_loader` D'ABORD, puis recopie, puis test
+      d'égalité — 6 cas enrichis dont neige et repli. L5 les jeux : `rewrite_weather.py`
+      produit v10 / v9n / v10b ; DIFF STRICT VÉRIFIÉ sur 2 874 records × 3 variantes —
+      seuls `context` et, dans `section`, la ligne « Météo plus tard » et l'agenda bougent,
+      ZÉRO ligne hors périmètre (critère D7). v10 vs v10b ne diffèrent QUE par la phrase,
+      section identique bit à bit. 12 tests.
+      DEUX DÉFAUTS TROUVÉS PAR LES TESTS PENDANT L'IMPLÉMENTATION, tous deux silencieux.
+      (a) `v10` portait d'abord le bulletin enrichi : il était donc IDENTIQUE à `v10b` et
+      les deux corrections n'étaient plus séparables — le défaut même que le 4e bras est
+      censé écarter. (b) Le remplacement du bloc `weather:` du manifeste utilisait `(?ms)`
+      au lieu de `(?m)` : avec DOTALL le `.*` franchit les sauts de ligne et le motif
+      AVALAIT TOUT CE QUI SUIT — la clé `entries_source` disparaissait, le YAML restait
+      valide, et il manquait seulement la provenance des entrées. Les jeux ont été
+      régénérés.
+      FILIATION v9 VÉRIFIÉE (axe D6) : screen ⊂ train (121 personas), val disjoint de train
+      ET de screen, test disjoint. ⚠ v9 NE PORTE PAS DE JEU `rank` : l'A/B lit `screen`
+      (121 personas) et `val` (182, le seul indépendant).
+      L6 CHIFFRÉ, PAS LANCÉ : `ab_meteo.py` à 4 bras, modèle épinglé gemini-3.5-flash-lite
+      (T=0), 92 appels sur screen + 140 sur val = 232 appels, ~15 min. EN ATTENTE : la prise
+      du jeton exige `docker compose stop controller worker` et la confirmation que la
+      campagne cloud est en pause — deux décisions qui ne sont pas les miennes.
+      TRACE : `docs/traces/2026-08-25_premesure_meteo_v9` (pré-mesure + contrôles de source,
+      deux scripts rejouables, aucun nombre recopié à la main).
+      ⚠ 2026-08-25 — CLOS. A/B LANCÉ ET RENDU, 232 appels, VERDICT REJET. Jeton pris avec la
+      preuve d'exclusion la plus forte : AUCUN service en marche à la prise NI au
+      relâchement (`docs/traces/2026-08-25_ab_meteo/protocol_lock.json`). Les quotas
+      manquent parce que l'API était arrêtée — c'est la CAUSE de l'exclusion, pas un trou :
+      d'où la seconde sonde d'état de pile ajoutée au jeton pendant l'implémentation.
+      RÉSULTAT, composite ↓ meilleur. screen (121 personas) : v9 22,93 / v10 22,51 /
+      v9n 22,60 / v10b 23,06. val (182 personas, SEUL JEU INDÉPENDANT) : v9 26,75 /
+      v10 25,06 / v9n 28,73 / v10b 26,78. Contrastes — fenêtre (v10−v9) : −0,43 et −1,69 ;
+      TÉMOIN NUL (v9n−v9) : −0,34 et +1,98 ; bulletin (v10b−v10) : +0,55 et +1,72.
+      CE QUE LA MESURE ÉTABLIT PORTE SUR L'INSTRUMENT PLUS QUE SUR LA MÉTÉO. Le témoin nul
+      ne change AUCUNE distribution et déplace pourtant le composite de 2 points sur val,
+      en CHANGEANT DE SIGNE entre les deux jeux. Sur val, le traitement (−1,69) est SOUS ce
+      plancher (+1,98). La variance propre de l'éval dépasse l'effet visé.
+      LE TÉMOIN NUL A ÉVITÉ UN FAUX POSITIF, et c'est ce qui justifie son coût : avec le
+      canal placebo du protocole (1 % du jeu, plancher étroit), le −1,69 aurait été déclaré
+      « signal » sans hésitation.
+      ⚠ LE VERDICT IMPRIMÉ SUR screen EST TROP GÉNÉREUX. `ab_meteo.py` applique la règle
+      héritée de `ab_car_availability.py` (|Δ traité| > |Δ plancher| ⇒ SIGNAL), ce qui donne
+      0,43 contre 0,34 — 1,26 fois le bruit, un rapport qui ne veut rien dire. Le seuil n'a
+      PAS été modifié après coup : déplacer les poteaux une fois le résultat connu
+      invaliderait la mesure. La sortie brute est archivée telle quelle avec la réserve à
+      côté. Un seuil opposable est à définir AVANT la prochaine campagne.
+      AUCUNE CONCLUSION SUR LA PLUIE, comme le ticket l'exigeait AVANT la mesure.
+      PORTE DE DÉCISION : le tirage de PRODUCTION reste sur l'année entière (la simulation
+      doit pouvoir se jouer n'importe quand) ; pas de garde-fou de non-régression, puisque
+      rien n'est adopté. La fenêtre reste disponible dans `WeatherDeck.load` et gelée aux
+      manifestes de v10/v10b. LE BULLETIN ENRICHI RESTE EN PRODUCTION comme un choix de
+      CONTENU et non un résultat de mesure : +1,72 sur val va dans le mauvais sens mais
+      reste sous le plancher, donc il n'y a pas de preuve qu'il dégrade — seulement absence
+      de preuve qu'il améliore. À rouvrir si un instrument moins bruyant le permet.
+      NE FERME PAS l'axe A5 du ticket 020 (variance d'un run de 5 jours) ni l'excès de
+      transports collectifs (20,8 % sur val contre 12,4 % attendus).
+      TRACE DE L'A/B : `docs/traces/2026-08-25_ab_meteo`. Registre : `avancement.yaml`,
+      mesure `fenetre_meteo`.
+      ⚠ 2026-08-25 — CINQUIÈME BRAS `v10c` MESURÉ ET REJETÉ, +58 appels (290 au total).
+      AGENDA ANNOTÉ PAR ÉTAPE : chaque trajet prévu porte condition, température,
+      luminosité (jour/nuit/aube/crépuscule, ±30 min autour du lever et du coucher),
+      rafales ≥ 30 km/h (seuil Beaufort 5, 14,5 % des jours de la fenêtre) et verglas < 3 °C
+      (19 jours sur 365). RÉSOLUTION DE 3 H : la source porte HUIT relevés (0/3/6/9/12/15/
+      18/21H), tous complets sur 365 jours, et le code n'en lisait QUE QUATRE depuis
+      l'origine. Le code météo diffère entre 12H et 15H sur 159/365 jours (44 %), la
+      température de ≥ 2 °C sur 236/365 (65 %) : deux trajets du même après-midi étaient
+      annoncés identiques dans les deux tiers des cas.
+      RÉSULTAT — LE CAS D'ÉCOLE DE LA CAMPAGNE. `screen` : v10c−v10 = +1,95, soit 5,7 FOIS
+      le plancher (−0,34), le contraste le plus fort de toute la mesure, avec la marche qui
+      recule de 13,26 % à 10,93 % (cible 26). On tenait un résultat. `val` : −0,17, soit un
+      DIXIÈME du plancher (+1,98), ET CHANGEMENT DE SIGNE. Il ne reste rien. REJET.
+      ⚠⚠ RÉSULTAT SUR L'INSTRUMENT, plus important que celui sur la météo : DEUX FOIS dans
+      cette campagne `screen` a produit un signal que `val` n'a pas confirmé (le bulletin,
+      puis l'agenda). `screen ⊂ train`, 121 personas, plancher SIX FOIS plus étroit que sur
+      `val`. UN PLANCHER ÉTROIT FABRIQUE DES SIGNAUX — `screen` ne doit plus être lu seul, et
+      toute lecture future exige `val`.
+      L'AGENDA N'EST PAS PORTÉ EN PRODUCTION et n'y a jamais été : le bras était
+      EXPÉRIMENTAL, et c'est précisément ce qui a permis de ne rien livrer sur la foi du
+      +1,95. Le code vit dans `rewrite_weather.py`, à porter dans `_agenda_lines` seulement
+      si un instrument moins bruyant le confirme.
+      ⚠ LA RÉSOLUTION DE 3 H N'EST PAS CONDAMNÉE. `v10c` la portait EN PAQUET avec
+      l'annotation (choix assumé : un seul bras) ; la mesure ne peut pas les départager, et
+      le rejet de l'ensemble ne dit rien de la résolution seule. À reprendre.
+      DÉFAUT TROUVÉ ET CORRIGÉ : `check_paired` ne comparait que le champ `context`, or
+      `v10c` ne diffère de `v10` que par `section` — une annotation qui n'aurait rien annoté
+      serait passée inaperçue et on aurait payé une éval pour un Δ nul. Le contrôle porte
+      désormais sur le PROMPT ENTIER et compare les bras DEUX À DEUX, pas seulement au
+      premier (ce qui attrape aussi le doublon v10/v10b du début).
+      4 ALARMES sur la campagne : vecteurs de probabilités à somme nulle, repli uniforme,
+      4 décisions perdues sur 2 262 (0,2 %).
+      PAGE D'AVANCEMENT : deux graphiques distincts (courbe des NIVEAUX des runs de
+      production, 5 points non monotones ; barres des ÉCARTS par mesure, groupées par unité,
+      les non-appliquées estompées) et les niveaux avant→après dans chaque fiche. Champs
+      numériques ajoutés à `avancement.yaml`, extraits des traces — les Δ recalculés
+      reproduisent exactement les scores écrits à la main.
+
+  ticket_024_diversite_et_contexte:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-24. Ticket de MESURE, pas de correction : rien n'est modifié, ni
+      en production ni dans l'instrument. Trois chiffres à produire, tous lus contre la
+      DERNIÈRE VERSION DE PROMPT ACCEPTÉE (`expert_chaine`, graine de `ref2`).
+      BLOC A — diversité intra-persona. A1 pondéré / A2 vote majoritaire (`argmax` par
+      persona) / A3 choix direct. A1 vs A2 est la mesure centrale et elle coûte ZÉRO appel :
+      les décisions `(agent_id, mode, poids)` sont déjà dans la table `evals` du store, donc
+      tout se relit comme `rescore --from-decisions`. L'écart pondéré / argmax EST le coût du
+      collapse. Quatre métriques de dispersion à livrer dans `metrics.py` mais HORS composite
+      (entropie normalisée par le nombre d'options OFFERTES, nombre effectif de modes,
+      taux de réponses dégénérées à 0,90 et 0,99, variance inter-persona).
+      BLOC B — sensibilité au contexte, par ABLATION descendante depuis `v7` (rien à
+      produire : la ligne `Mobilité :` porte déjà les traits des tickets 015-018). Cinq
+      paliers L0..L4 + témoin nul L4n (même information reformulée, longueur comparable),
+      prompt CONSTANT sur tous les bras.
+      LE LIVRABLE PRINCIPAL est la COMPARAISON D'AMPLITUDES, qui n'était dans aucune des deux
+      affirmations : prompt = −7,13 de composite (IC90 [−10,37 ; −4,35], n = 259, T1 de
+      `ref1`) contre contexte = `L4 − L0`, à mesurer. Si le second ne dépasse pas le premier,
+      c'est l'inverse du discours prévu qu'il faudra tenir. ⚠ Les deux amplitudes ne sont pas
+      sur le même jeu : comparaison INDICATIVE, pas test apparié — à écrire à côté du chiffre.
+      DÉJÀ ACQUIS SANS DÉPENSER : la moitié inter-persona du bloc A. Part voiture du champion
+      PLATE (42,7 → 49,1 %) quand la réelle va de 18 % à 77 % ; marche 0-1 km à 31,3 contre
+      76,0 (−44,7). Le déficit agrégé de marche (−14,5) est la SOMME d'un effondrement sur les
+      courts trajets et d'un excédent sur les longs : l'agrégat masque le défaut.
+      DÉPENDANCE DURE : `scripts/protocol_lock.py` est ABSENT — le lot 1 du ticket 023 n'est
+      pas livré. Voie propre = livrer le jeton d'abord (il sert tous les tickets suivants) ;
+      voie manuelle tolérable UNIQUEMENT parce que les lots 1 et 2 ne consomment rien.
+      PIÈGE PRINCIPAL : `eval_temp` vaut 0,0 et il est GELÉ (§3). La dispersion intra-persona
+      de A3 vaut donc 0 PAR CONSTRUCTION DE L'INSTRUMENT, pas par propriété du modèle — motif
+      « l'absence de mesure produit le score parfait ». A1 vs A3 se lit au niveau AGRÉGÉ
+      seulement ; mesurer la dispersion de A3 exigerait K tirages à température > 0, donc hors
+      instrument gelé, donc hors lots.
+      AUTRES PIÈGES : normaliser l'entropie par le nombre d'options offertes, sinon on mesure
+      l'offre d'itinéraires et pas le modèle ; nom de jeu neuf par palier car la clé d'éval
+      porte `ds=<nom>` et non une empreinte du contenu, ET le champ `version:` du manifeste
+      doit porter ce nom (`v6` et `v7` portent tous deux `version: v5`, recopié de leur
+      source) ; témoin nul obligatoire car retirer du texte raccourcit aussi le contexte ;
+      effectif opposable = personas distincts, pas décisions.
+      HORS PÉRIMÈTRE : la mémoire et la réaction aux perturbations (autre ticket, ouverture de
+      présentation) ; la dispersion intra-persona de A3 ; l'injection du fait local (axe D7 —
+      témoin de PLAFOND, jamais un candidat de production : c'est la cible dans le contexte) ;
+      faire entrer la dispersion dans la loss (ça changerait ce que la campagne optimise).
+      `test` est FERMÉ : son regard unique est consommé depuis l'amendement A5. Tous les
+      chiffres sont EXPLORATOIRES, jamais confirmatoires.
+      ATTENDU : commencer par les lots 1 et 2 donne des chiffres immédiatement, sans jeton,
+      sans quota, sans attente. L'issue « pas d'effet » (pente dans le bruit du témoin nul)
+      RÉFUTE l'affirmation « plus de contexte = plus de précision » et s'archive comme les
+      autres.
+      ── LOTS 1 À 3 LIVRÉS le 2026-08-25, ZÉRO APPEL LLM, jeton non requis ──
+      Lot 1 : les quatre métriques de dispersion dans `metrics.py`, HORS composite (un test
+      verrouille la liste des champs de `Scores`). Entropie normalisée par le nombre de MODES
+      DISTINCTS offerts et non par le nombre d'options — le vecteur vit sur les modes, les
+      options d'un même mode étant agrégées ; l'offre d'un agent récurrent est l'UNION de ses
+      trajets. Toute grandeur non mesurable rend `None` et se déclare, jamais 0,0 : sur une
+      dispersion, l'absence de mesure imite le résultat le plus spectaculaire.
+      Lot 2 : `analyse_dispersion.py`, store en LECTURE SEULE, compte les évals à l'entrée et
+      à la sortie pour démontrer qu'aucune n'est créée. RÉSULTAT sur `expert_chaine`,
+      12 évals, juge `gemini-3.5-flash-lite` : modes effectifs 1,43 à 1,75 sur 3 à 4 offerts ;
+      réponses DÉTERMINISTES (max p ≥ 0,99) de 24,8 % (`screen@v9n`) à 55,8 % (`val@v7`) ;
+      variance inter-persona 0,078 à 0,101 ; coût du collapse (A2−A1) de 6,8 à 13,3 points.
+      L'AFFIRMATION D EST CHIFFRÉE ET ELLE TIENT. Le substrat compte : `v7`/`v8` sont bien
+      plus dégénérés que `v9`/`v10`. Trace : `docs/traces/2026-08-25_diversite_contexte/`.
+      Lot 3 : `rewrite_context.py` produit `ctxL4` (copie à l'octet), `ctxL3`, `ctxL2`,
+      `ctxL1`, `ctxL0` et le témoin nul `ctxL4n` (+0,2 % de longueur). Le script REFUSE
+      d'écrire si `L4` n'est pas identique à sa source ou si `L4n` dérive de plus de 5 %.
+      Trois pièges de périmètre désamorcés et sous test : `Contraintes` survit au retrait de
+      `Mobilité` (même ligne ; il vaut `None` sur 2 487/2 487, information constante) ;
+      l'agenda survit au retrait de la météo (seules ses annotations « — … prévu » partent) ;
+      les sous-puces de l'agenda survivent à celles des options. La météo avait TROIS
+      porteurs, pas un — `context`, la ligne de bulletin et les annotations d'agenda.
+      D1 CADUC : `scripts/protocol_lock.py` EXISTE depuis le 2026-08-25 (lot 1 du 023), avec
+      `make protocol-lock/unlock/status` et le garde `calibration/protocol_guard.py` que tous
+      les `ab_*.py` appellent. La dépendance dure du ticket est levée.
+      ARBITRÉ le 2026-08-25 : (a) SUBSTRAT = `v7`, on refera sur un jeu plus récent plus
+      tard si besoin ; (b) JUGE = `gemini-3.1-flash-lite` (nom stable, `google_gemini31`,
+      seau de quota distinct de 3.5 dont la clé 1 est épuisée) — config `run_ab_context.yaml`
+      prête et validée contre `assert_pinned_eval_model`. ⚠ CE JUGE N'EST PAS CELUI DE
+      `ref2` : le bloc B ouvre une SÉRIE NEUVE au sens du §3 amendé, ses composites ne se
+      posent pas à côté de ceux de `ref2` ni du −7,13 de `ref1`, et la comparaison
+      d'amplitudes exigera son propre pont (champion vs B0 sous CE juge et CE jeu).
+      CE QUE LES LOTS 1-3 ONT APPRIS, AU-DELÀ DE D : le modèle réalise 65 % de l'écart
+      inter-persona ATTEIGNABLE (variance A1 0,087 contre 0,133 en A2 décidé, identique sur
+      `screen` et `val`) — il n'est donc pas figé, il est SOUS-DÉCIDÉ. Et le tableau
+      d'élasticité du ticket est PÉRIMÉ : sur `val@v10c` la part voiture va de 34,5 % à
+      87,3 % (contre 42,7 → 49,1 pour le champion de `ref1`), le défaut n'est plus une
+      courbe plate mais un EFFONDREMENT DE LA MARCHE SOUS 2 KM (−43,2 pts à 0-1 km, −38,7 à
+      1-2 km, contre −6,6 à +5,9 au-delà). Le TC est en grande partie une masse de SECOND
+      CHOIX : 22,1 % en pondéré, 17,0 % en vote majoritaire.
+      ── LOT 4 (bloc B) le 2026-08-26 — LA PENTE EST DANS LE BRUIT ──
+      `screen`, 108 personas appariés, juge `gemini-3.1-flash-lite`, six colonnes :
+      L4 23,00 · L3 24,60 (+1,60) · L2 24,36 (+1,36) · L1 25,56 (+2,56) · L0 25,52 (+2,52) ·
+      TÉMOIN NUL L4n 25,04 (+2,03). Retirer TOUT le contexte coûte 2,52 ; réordonner et
+      réétiqueter le MÊME contexte en coûte 2,03 — rapport 1,24. DEUX PALIERS SONT SOUS LE
+      PLANCHER (L3 à 0,79 ×, L2 à 0,67 ×). La pente SATURE dès L1 : retirer la décomposition
+      des étapes, soit 55 % de la longueur du prompt, ne change plus rien de mesurable.
+      `val` : quota épuisé (429) après deux colonnes, mais ce sont les bonnes — référence
+      23,74 et témoin nul 27,66, soit un PLANCHER DE +3,92, presque le double de celui de
+      `screen`. L'effet cherché est donc plus petit que le bruit du jeu le plus fiable.
+      ISSUE (c) DE LA PORTE DE DÉCISION : l'affirmation C n'est pas soutenue, et la
+      comparaison d'amplitudes penche à l'inverse du discours annoncé — contexte 2,5 (dans le
+      bruit) contre prompt 7,13 (hors bruit, autre juge, autre jeu, donc indicatif).
+      ⚠ Le témoin nul déplace la part voiture de 4,8 points à information constante : aucune
+      affirmation sur une part modale sous ~5 points n'est opposable ici.
+      DÉFAUT D'INSTRUMENT TROUVÉ ET CORRIGÉ : `make_provider_call` n'envoyait pas `model`,
+      l'adaptateur retombait sur le `default_model` du fournisseur. Le modèle ANNONCÉ n'était
+      pas le modèle APPELÉ, et le garde anti-alias du §3 portait sur une étiquette décorative.
+      Le premier passage a été jeté (store conservé sous
+      `ab_context_PREVIEW_ETIQUETTE_FAUSSE.db`) ; les composites du second sont IDENTIQUES,
+      donc les chiffres jetés étaient mal étiquetés, pas faux. ⚠ `run_common_set.yaml`
+      (volet 2 de la page de synthèse, DÉJÀ PUBLIÉ) est dans le même cas.
+      `val` COMPLET le 2026-08-26 (165 personas appariés) : L4 23,74 · L3 20,95 (−2,79) ·
+      L2 22,51 (−1,23) · L1 21,99 (−1,75) · L0 22,56 (−1,18) · TÉMOIN NUL L4n 27,66 (+3,92).
+      LES QUATRE ABLATIONS AMÉLIORENT LE SCORE SUR `val` LÀ OÙ ELLES LE DÉGRADAIENT SUR
+      `screen` : le signe s'inverse, et l'amplitude reste sous le témoin nul dans les deux
+      jeux. Résultat nul de la forme la plus nette — l'effet est plus petit que le bruit ET
+      sa direction n'est pas stable. AFFIRMATION C RÉFUTÉE sur ce dispositif.
+      LE FAIT NON CHERCHÉ, ET LE SEUL SUR LEQUEL LES DEUX JEUX CONCORDENT : le témoin nul est
+      la colonne LA PLUS DÉGRADÉE des deux tableaux, davantage que le retrait de tout le
+      contexte. Un plancher systématiquement pire que tous les traitements n'est plus du
+      bruit : c'est un EFFET DE FORME. Le modèle réagit à la mise en forme du contexte plus
+      qu'à son contenu. ⚠ `L4n` cumule 4 permutations et 2 renommages — un palier par
+      permutation dirait lequel porte l'effet, et ne coûte que des retraits mécaniques.
+      TICKET À OUVRIR, pas une conclusion à écrire.
+      ── JEU COMPLET (train + val) le 2026-08-26, 0 appel : `pool_context.py` ──
+      569 personnes, 1 568 déplacements (3,4 × `val` seul). L4 22,69 · L0 22,42 (−0,27, soit
+      0,10 × le plancher) · TÉMOIN NUL L4n 25,35 (+2,66). Sur `train` seul l'ablation totale
+      donne EXACTEMENT −0,00 (22,83 contre 22,83). RETIRER TOUT LE CONTEXTE NE CHANGE RIEN.
+      TROIS ÉCHELLES DE BRUIT EMBOÎTÉES, la troisième mesurée par accident : l'épuisement du
+      quota a forcé à rejouer `ctxL4` sur la SECONDE CLÉ (même modèle, autre projet) →
+      22,83 contre 22,84, écart 0,01, ≤ 0,05 par dimension. Donc : répétition pure 0,01 ·
+      contenu du contexte 0,27 · FORME du contexte 2,66. Le témoin nul vaut 250 × l'aléa de
+      répétition — ce n'est pas du bruit, c'est un effet systématique de mise en forme, et
+      c'est le SEUL signal du bloc B. Le contrôle d'équivalence justifie par la mesure de
+      mélanger les deux clés dans un tableau ; le triplet L4/L4n/L0 a malgré tout été refait
+      ENTIER sur la clé 2 pour qu'aucun contraste ne repose sur un changement de clé.
+      MANQUE : L3/L2/L1 sur `train` (456 appels pour six colonnes contre 500 par seau et par
+      jour). Ils restent mesurés sur `screen` et `val`, tous sous le plancher : leur ajout
+      préciserait le point de saturation, pas la conclusion.
+      COMPARAISON D'AMPLITUDES (livrable principal) : contexte ≤ 2,8 et sans signe stable
+      contre prompt 7,13 hors bruit — indicatif (jeux et juges différents), mais l'ordre de
+      grandeur est l'INVERSE du discours annoncé.
+      LOT 4 CLOS : les trois questions qui précédaient sa mesure sont retombées d'elles-mêmes.
+      Le substrat est `v7`, tranché ci-dessus et trace conservée ; le juge a été tenu CONSTANT
+      sur les six colonnes, comme l'exige le §3 amendé (A11) ; et `val` a bien été lu à côté de
+      `screen`, la leçon du 023 étant appliquée. Rien de ce bloc ne reste ouvert : il ne
+      subsiste que le MANQUE déjà énoncé plus haut (L3/L2/L1 sur `train`), qui préciserait le
+      point de saturation, pas la conclusion.
+
+  ticket_027_motif_accompagnement:
+    status: terminé
+    note: >-
+      OUVERT le 2026-08-26. Le motif `other` du prompt (19 % des décisions) est aux DEUX
+      TIERS de l'accompagnement — le motif le plus routier de la référence (70 % voiture).
+      MESURÉ sur les 54 585 déplacements de l'EMC² 2023 (`D5A`) : 6 797 en `other`, dont
+      4 503 d'accompagnement (61/64/71/74), soit 66,2 % de `other` et 8,2 % de tous les
+      déplacements ; santé et démarches (41/42/43) en font 30,7 %. L'information est détruite
+      dans eqasim, en UNE LIGNE : la table ENTD replie les familles 3, 4 et 6 sur `other`
+      (famille 6 = accompagnement, RECOUPÉ indépendamment de la nomenclature — la colonne
+      dédiée `V2_MMOTIFDACC` est renseignée sur 3 743 des 3 759 cas dans cette seule famille).
+      Projection : ~208 records du jeu `all`, 11,5 %. LE SCORE EST DÉJÀ CÂBLÉ — `MOTIF_MAP`
+      porte `"escort": "accompagnement"` et la cible est dans `cerema_values.yaml` ; la
+      dimension attend un motif qui n'arrive jamais, et elle est vide pour 59,9 % des records.
+      AUCUNE LOGIQUE AVAL NE BRANCHE sur le motif (seules occurrences de `purpose ==` :
+      du code commenté) — une valeur neuve traverse sans casse. OPTION A (le patch) : sortir
+      la famille 6 de `other`, faire pointer `escort` sur le vivier de lieux `other`, ajouter
+      `DEST_TO_MOTIF["escort"]`, régénérer. OPTION B (le substrat) : basculer `hts: entd` →
+      `mobisurvstd` sur l'EMC² 2023 — le format standard porte DÉJÀ `escort` comme motif de
+      première classe et eqasim l'écrase (`"escort": "other"`), et nos fichiers PROGEDO sont
+      à ce format. B fait venir toutes les chaînes d'activités de l'enquête LOCALE et de 2023
+      au lieu d'une enquête nationale de 2008 : c'est l'écart de fond, et un chantier de
+      substrat (population, run, jeux gelés, comparabilité de la série à re-établir).
+      ⚠ RIEN NE SE RATTRAPE APRÈS COUP : contrairement à la couronne du ticket 021, le motif
+      d'origine n'est nulle part dans la population ni dans les jeux — il faut régénérer.
+      ⚠ LE PROTOCOLE EXOGÈNE NE SAIT PAS MESURER CE TICKET : on ne peut pas fabriquer un bras
+      `escort` par réécriture, faute de savoir LESQUELS des `other` en sont. Mesure partielle
+      gratuite possible (réécrire le libellé sur 66 % des `other` tirés au hasard) — elle
+      borne le gain NARRATIF, pas la justesse de l'affectation, et se lit contre le plancher
+      de reformulation du ticket 024 (2,03), pas contre zéro.
+      SONDE LIVRÉE le 2026-09-12 (spec specs/ticket_027/sonde-motif-escort.md, 12 règles ;
+      scripts/deriver_sonde_escort.py ; 15 tests verts ; llm-agents 861 verts). DÉFAUT DE
+      CONCEPTION TROUVÉ ET CORRIGÉ AVANT DE MESURER : la sonde telle qu'elle était pensée le
+      2026-08-26 — réécrire le libellé dans le JEU — n'aurait RIEN produit. Le motif servi au
+      décideur vient de la POPULATION (runner.py, deplacements_attendus), le jeu n'est interrogé
+      que pour ses propositions ; le bras aurait rendu un écart nul parfaitement trompeur. Il faut
+      dériver les DEUX : la population (pour le prompt) et le jeu (sinon verifier_population refuse
+      au lancement). Le jeu dérivé se fabrique par COPIE — lignes hors tirage recopiées à l'octet,
+      empreinte recalculée, dépendances héritées — parce que rejouer les moteurs ferait dériver les
+      itinéraires et que cette dérive se confondrait avec le traitement ; la copie est licite parce
+      que le motif n'entre dans aucun calcul de proposition (vérifié À CHAQUE dérivation, pas
+      supposé). MESURÉ sur le substrat scellé : 436 `other` sur 2 405 déplacements (18,1 %), 289
+      réétiquetés `escort` (66,2 %, graine 27), soit 8,8 % des 3 299 de la journée refermée —
+      dans la fourchette 8,2 % ± 2 pts du critère. Substrat NON SCELLÉ (PROVENANCE.yaml, pas de
+      MANIFEST) : population_par_defaut() reste la v5 et la sonde n'apparaît pas au formulaire.
+      Bras apparié DÉFINI et estimé (3 161 sollicitations, 138 non couverts, aucun refus) :
+      exp_agy-gemini-38-f_promin_jtir_pop-1000_AAMAS_v5_escort66_t0_nosim, témoin
+      exp_agy-gemini-38-f_promin_jtir_pop-1000_AAMAS_v5_t0_nosim. NON LANCÉ : le témoin tournait
+      encore (84,8 % à 10:44) et le protocole exogène §0 interdit deux mesures sur le même quota.
+      ⚠ TROUVÉ EN CHEMIN, hors périmètre de la sonde : les QUATRE ORACLES TABULAIRES replient
+      l'accompagnement une SECONDE fois, indépendamment d'eqasim (purpose_from_code, codes D5A
+      61/64/71/74 → `other`). L'affirmation du ticket « aucune logique aval ne branche sur le
+      motif » était vraie le 26/08 et ne l'est plus depuis les tickets 042/043/044 : sur un
+      substrat portant `escort`, la variable devient NaN pour les oracles pendant que l'agent lit
+      un libellé informatif. L'option A a donc TROIS jambes, pas deux : eqasim + DEST_TO_MOTIF +
+      purpose_from_code avec réentraînement des quatre artefacts. Aucun bras tabulaire ne se joue
+      sur le substrat sondé. Questions vivantes : specs/ticket_027/questions.md.
+      SONDE MESURÉE le 2026-09-12, et elle TRANCHE. Bras
+      exp_gemini-31-fl_promin_jtir_pop-1000_AAMAS_v5_escort66_t0_nosim (exécution 2026-09-12_09_25_17,
+      40 min, 0 erreur, 2 562 sollicitations) apparié au témoin
+      exp_gemini-31-fl_promin_jtir_pop-population_1000__t0_nosim (2026-09-11_21_22_55) — MÊME modèle
+      gemini-3.1-flash-lite distant, mêmes clés (aucune bascule de fournisseur vérifiée décision par
+      décision), mêmes graines, 3 154/3 161 décidés DES DEUX CÔTÉS. Le bras Antigravity prévu au départ
+      a été écarté : son témoin s'est bloqué en `en_attente_agent` à 877/894 personnes, agent muet
+      depuis 11:11 — un témoin incomplet n'apparie rien.
+      RÉSULTAT 1, LE LIBELLÉ NE FAIT RIEN : sur les 284 réétiquetés à choix libre des deux côtés,
+      L1 = 4,9 pts et voiture +1,8. Mais les motifs NON touchés bougent de 1,6 (home) à 4,8 (shop)
+      entre les deux bras, et le taux de décisions individuellement changées vaut 17,3 % sur les
+      réétiquetés contre 19,7 à 23,7 % sur les intacts — le PLUS BAS des sept groupes. L'effet du mot
+      est sous le bruit de lot (parallelisme 8 : changer l'étiquette d'un agent change le voisinage
+      de prompt des autres). Le gain narratif de l'option A est donc BORNÉ À RIEN : cette
+      justification-là tombe.
+      RÉSULTAT 2, LA STRATE SORT DU NÉANT : `accompagnement` passe de n=0 / couverte=false à n=124
+      couverte, et rend le PIRE L1 des quatre strates du motif — 61,4, avec 44,6 % de voiture contre
+      71,4 % de cible EMC². Composite emd_jsd 14,22 → 15,66 et L1 global 41,11 → 41,32 : le score
+      EMPIRE, non parce que l'agent décide moins bien, mais parce qu'une strate publiée dans la cible
+      et jamais mesurée s'est mise à compter. Motif « vacuité ≠ perfection » confirmé sur pièces.
+      DÉCISION QUI EN DÉCOULE : l'option A ne se justifie PLUS par le prompt, seulement par la
+      métrologie — un quart de la cible motif publiée reste hors de portée du score sans elle.
+      Trace : docs/traces/2026-09-12_10-45_ticket027_sonde_escort/resultat.txt.
+  ticket_028_temps_terminal_couronnes_communales:
+    status: terminé
+    note: >-
+      OUVERT ET LIVRÉ le 2026-09-02, en préparation du scellement de la population AAMAS.
+      Ressource ré-exportée (tt4), 70 + 38 tests verts, audit A2 conforme sur les 1 021
+      personas. Aucun run rejoué : l'effet sur les parts modales se lit au prochain run
+      scellé, qui repart à froid sur les caches OTP et décisions. C'est le
+      ticket « distinct » que le 021 a renvoyé : le temps terminal classait encore les points
+      d'origine/destination par DISTANCE à l'hypercentre (8/20/40 km) alors que la résidence
+      est classée par COMMUNE depuis le 021 — deux définitions dans la même simulation, écart
+      borné à 34 s par bout de trajet mais rendu « à corriger » par l'audit A2 à chaque
+      exécution. Trois appelants : export_terminal_time (strates des lois → ré-export,
+      tt3 → tt4, caches OTP et décisions invalidés, routing_version inchangé),
+      osmnx_direct._make_travel_plan (CommunalZones.classify ; hors périmètre → loi
+      `default`, compté et alarmé au lieu du repli silencieux « 3ᵉ couronne » = axe A4),
+      et l'audit lui-même (A2 vérifie meta.crown_definition + trait = géométrie ; A9 perd
+      sa colonne métrique). geo_reference.residence_zone SURVIT comme témoin d'audit avec
+      zéro appelant de production, et un test l'exige.
+  ticket_029_selection_par_menage_marges_multiples:
+    status: terminé
+    note: >-
+      OUVERT ET LIVRÉ le 2026-09-03 (population_1000_AAMAS_v3 scellée : 13 marges conformes,
+      514 ménages entiers, 10,6 % d'immobiles ; runtime GAMA avec immobiles à vérifier au
+      premier run). Suite du scellement v2 du 2026-09-02. Trois écarts mesurés sur la
+      population scellée : marges non allouées au biais du générateur (75 ans et + 9,8 % contre
+      7,1 ; permis « non » 16,6 contre 14,1), ménages fragmentés par la sélection individuelle
+      (308 complets sur 865), AUCUN immobile (l'export eqasim écartait les journées sans
+      déplacement ; l'enquête en compte 10,6 %). Livraison : cibles personne gelées cm1 (7 marges
+      recalculées COEP, non publiées), sélection v3 par MÉNAGE avec descente sur marges multiples
+      (échanges de ménages de même taille et même cellule), pré-imputation du vivier avant
+      sélection (3ter-a), immobiles gardés à l'export (journée domicile, drapeau racine) + garde
+      `ajuster_planning` (KeyError sur une activité), contrôle à 13 marges + section ménages et
+      mobilité. Nouveau dossier population_1000_AAMAS_v3 ; runtime GAMA avec immobiles À VÉRIFIER
+      au premier run.
+
+  ticket_030_car_scolaire_synthetique:
+    status: terminé
+    note: >-
+      IMPLÉMENTÉ le 2026-09-03 (Lots A + B ; Lot C rendu GAMA hors périmètre, décision utilisateur).
+      Option school_bus synthétique pour les personas 5-17 ans hors ressort Tisséo, sur leurs
+      trajets école ; éligibilité = âge seul (sectorisation et seuil de distance abandonnés, cf.
+      règlement liO), durée calibrée EMC² (médiane ≈ 30 min), gratuit, horaire ± 30 min autour de
+      l'activité. Comptée en TC dans les 3 tables de métriques + pont oracle (test de non-régression
+      vu échouer d'abord), exclue de la mention d'abonnement. Rendu GAMA via marqueur __DIRECT_CAR__
+      (interpolation point-à-point, agent rouge, sans édition GAMA). Journalisation Lot B complète :
+      compteurs school_bus_options_total (proposées) ET school_bus_chosen_total (choisies).
+      Fichiers : trip_helper/school_bus.py, config/school_bus.yaml, tests/test_school_bus.py
+      (14 tests verts). VÉRIFIÉ sur le run v4 (2026-09-04) : 1 000 agents chargés, 84 options
+      school_bus proposées (42 aller + 42 retour) ; sur 136 trajets scolaires de mineurs hors
+      Toulouse, 54 choisissent le TC (~40 %). Circuits réels NON demandés à la Région (délais).
+  ticket_031_perimetre_453_communes:
+    status: terminé
+    note: >-
+      OUVERT le 2026-09-03 (rapport de périmètre, option A). Partie 1, livré le 2026-09-03 :
+      eqasim six départements + filtre par liste de communes journalisé, household.commune_id
+      renseigné, journées donneuses = jours de classe (donneurs écartés sortent du vivier),
+      service Docker enfin sur config_toulouse.yml (le vivier de donneurs était réduit à 308
+      résidents du 31 depuis mai — v3 comprise), graphes OSMnx du polygone des 453 communes
+      (make osmnx-perimeter-graph, +30 % de nœuds, worker 1,6 Go), règle aamas_seal_v4 avec
+      journal du périmètre, ligne « scolaires avec activité d'études » au contrôle. Mesuré sur
+      la Haute-Garonne : A4 = 0, 89 % des 6-17 ans mobiles avec activité d'études (57,5 % en v3).
+      PORTE 1 LEVÉE (après-midi) : BD TOPO 2025-03-15 et BAN des six départements ; biais du
+      cadre corrigé (personnes à commune undefined pondérées : 17 986 → 11 329 personnes) ;
+      congestion par zone d'arête livrée ; SCEAU v4 posé à 18:16 (population_1000_AAMAS_v4,
+      sha256 9f05c655…, 12 marges conformes + motorisation ménage à publier, six départements,
+      scolaires 88,5 %), sauvegarde, config.yaml repointé, synthèse HTML v3.
+      PARTIE 2 PORTÉE le 2026-09-03 au soir (trace
+      docs/traces/2026-09-03_22-46_ticket031_partie2_portage_chaine/). Chargement runtime : le
+      filtre rectangulaire de 30 km devient un filtre par COMMUNE du domicile
+      (inputs/population/perimeter.py, cascade commune → trait residence_zone → géométrie avec
+      [ALARME]) ; une activité hors polygone ne fait plus écarter l'agent (comptée, [ALARME] sur
+      front montant au-delà de 1 %) ; un sceau se charge entier ou se refuse ; WorldGrid élargi à
+      l'enveloppe du polygone. MESURÉ : 1 000 / 1 000 agents v4, 0 écarté, 0 activité hors polygone
+      sur 1 884 — l'ancien rectangle en écartait 77. OSMnx runtime : clé de graphe configurable
+      (défaut 444ca7e6a515 = polygone), graphe absent = GraphMissingError + [ALARME] au lieu d'un
+      téléchargement, passe O3 sur speeds.bike avec sources citées (arêtes vélo en vitesse de repli
+      32,0 % → 0,0 %), routing_version r1 → r2. OTP : T1 (extrait du polygone, ancien extrait et
+      graph.obj archivés), T4 (enveloppe TC Tisséo + TER recalculée) et T5 (fenêtre de service)
+      faits ; graphe reconstruit en 46 s / 2,0 Go ; 0 « Couldn't link » sur les 2 580 points de la
+      v4. GAMA : monde = perimetre_453.shp (86 × 93 km), avertissement de couverture TC (21 %),
+      compteur d'agents hors monde. vizpop sur les quatre couronnes. Caches : par population, rien
+      à purger, aucun jeu gelé touché. Tests 305 + 419 verts.
+      T2/T6/G2 FAITS le 2026-09-04, porte de téléchargement levée (trace
+      docs/traces/2026-09-04_01-30_ticket031_gtfs_lio/). GTFS liO téléchargé (ODbL, 23 833 236 o,
+      sha256 d196b763…, validité lue dans calendar.txt 2026-08-01 → 2027-08-31, 309 lignes,
+      7 506 arrêts ; 1 485 arrêts et 56 lignes dans le périmètre) et étendu en feeds annuels
+      lio_2026/lio_2027 (code 0) — indispensable, l'export ne sert RIEN le 16 mars 2026 (la journée
+      simulée y est la copie du lundi 15 mars 2027, écart de saison 1 jour). Trois corrections du
+      pipeline gtfs_year, chacune testée : calendar.txt hebdomadaire déplié (457 services, 2 925
+      retraits), courses de contenu identique le même jour préservées (45 le 14/09, les fusionner
+      amputait l'offre), V7 reformulé en « la copie sert exactement l'offre de son donneur » et V6
+      distinguant un tracé chimère fabriqué d'un défaut recopié. NON-RÉGRESSION : les quatre feeds
+      Tisséo/TER rejoués sont identiques à l'octet près (feed_info excepté). GRAPHE reconstruit et
+      mesuré hors service (un run occupait otp1/2/3) : 55 s, 2,6 Go, 84,9 Mo, 11 562 arrêts,
+      3 228 patterns ; contrôle de rattachement de la v4 dans les mêmes conditions qu'avant :
+      670 → 339 points sans itinéraire TC (3ᵉ couronne 369 → 163, 2ᵉ 160 → 35, noStopsInRange
+      364 → 91), 0 échec de rattachement. T6 : le feed TER n'a aucune ligne routière, le GTFS SNCF
+      national n'en met que 3 courses dans le périmètre toutes le 2026-09-03 → NE PAS le charger ;
+      mais l'export TER en service ne sert AUCUN train le jour simulé (couverture 2026-04-29 →
+      2026-10-26) — le feed annuel ter_2026 le corrige et entre dans le graphe livré. G2 :
+      routes.shp 395 → 730 tracés, stops.shp 3 822 → 5 375 arrêts (nouveau script
+      scripts/data/gama/export_gtfs_layers.py, sans dépendance à settings.py) ; mailles de 5 km du
+      périmètre portant un arrêt 52/217 → 156/217, zones fines 394/785 → 571/785.
+      BASCULE FAITE le 2026-09-04 07:38 (questions n° 14, 16, 17 tranchées ; trace
+      docs/traces/2026-09-04_07-17_ticket031_lio_queue_rail/). Le graphe EN SERVICE porte Tisséo
+      export + TER annuel + liO annuel : 55,3 s, 2,09 Go, 84 438 867 o (sha256 f2820c59…),
+      11 507 arrêts, 3 146 patterns ; otp1/2/3 healthy. QUEUE TRONQUÉE DE liO (n° 17) : le creux de
+      20 % du printemps 2027 est un ARTEFACT, pas une saison — treize lignes .liO 31 cessent le
+      11-12/12/2026 au changement de service SNCF et ne reviennent jamais sur 37 semaines, leur
+      calendar.txt s'arrête là quand celui des voisines court jusqu'au 31/08/2027, et DIX des
+      treize sont des rabattements sur gare du périmètre (Muret, Carbonne, Noé, Villefranche,
+      Castelnau-d'Estrétefonds, Boussens) ; l'offre globale gardait 94 % de ses lignes, d'où
+      l'aveuglement des seuils globaux. La règle 1 gagne une seconde forme, la « falaise de
+      lignes » (seuil = part des lignes perdues définitivement + 13 semaines de couverture
+      restante, ce qui met les exports glissants Tisséo hors d'atteinte par construction) ;
+      6 tests neufs, non-régression Tisséo/TER à l'octet près. La journée simulée reçoit désormais
+      4 303 courses liO au lieu de 3 494 (751 dans le périmètre au lieu de 635, 52 lignes au lieu
+      de 41), donneur = lundi 07/12/2026, confiance déclarée BASSE (99 j de saison, pour 1,2 %
+      d'écart d'offre mesuré) ; prix déclaré : lio_2026 passe à 133 journées réelles et 192 en
+      confiance basse, lio_2027 à 0 réelle, code 4. MODE RAIL (n° 16) : demandé, accepté
+      (SUPPORTED_MODES) et nommé (gtfs_modality_name_map["2"] = "Train") ; 1 883 des 11 288
+      itinéraires rendus proposent un train (833 points, 58 % des itinéraires de 3ᵉ couronne).
+      DÉFAUT RÉPARÉ en chemin : la porte de proximité _has_reachable_stop ne voyait que les arrêts
+      Tisséo et écartait 397 des 2 580 points (245 de 3ᵉ couronne, 150 de 2ᵉ) — pour eux le runtime
+      SAUTAIT OTP et la bascule n'aurait rien produit ; elle énumère les trois feeds
+      (17 955 arrêts au lieu de 5 661) et docker-compose monte ./data/gtfs. CONTRÔLE FINAL de la
+      v4 : 670 → 314 points sans itinéraire TC (3ᵉ couronne 369 → 148, 2ᵉ 160 → 26, 1ʳᵉ 9 → 8,
+      Toulouse 132 inchangé — tous walkingBetterThanTransit), noTransitConnection 171 → 1,
+      0 échec de rattachement. Tests : llm-agents 325 verts (code 0), scripts 438 verts + les
+      2 échecs préexistants de test_weather_draw.
+      TERMINÉ le 2026-09-04 : journée simulée COMPLÈTE sur le sceau v5 (run 2026-09-04_16_25,
+      1 h 41 de temps mur, « Simulation stopped after 1 simulated day(s) ») — 1 000/1 000 agents
+      chargés, 0 « Couldn't link », 0 agent hors monde, alarmes de périmètre silencieuses, 0 erreur
+      d'entrée-sortie, et 0 route de cache antérieure à la purge de 14 h 17 (8 333 routes, la plus
+      ancienne datée 15 h 51 min 36 s). Les 7 critères d'acceptation sont tenus. Partie 1 en entier
+      grâce au SCEAU v5 : 13 marges conformes sur 13, synthèse des écarts vide, ménages sans voiture
+      19,19 % pour une cible de 19,19 %, allocation par triplet cellule × effectif présent × taille
+      déclarée (règle aamas_seal_v5). Partie 2 en entier : traces horodatées, run complet, et parts
+      modales contre les cibles 453 avec le DÉTAIL et l'AGRÉGAT — voiture 38,7 % contre 56,7, TC
+      32,9 contre 12,4, marche 19,2 contre 26,8, vélo 9,2 contre 4,1 ; L1 = 51,3 pt sur comptages
+      non redressés ; 0 déplacement mal classé et invariant de comptage vérifié (5 257 = 5 257 =
+      5 257). LE RAIL VA JUSQU'À L'ARRIVÉE : 13 des 22 décisions ferroviaires portaient sur le jour
+      joué, les 13 sont arrivées à destination dans GAMA (11 agents, 2,6 à 27,2 km, retard médian
+      −6 min). Questions n° 9, 10, 11, 12, 13, 18, 19, 20, 21, 22 et 23 fermées ET vérifiées le
+      2026-09-04 : mem_limit 8g committé, largeur corrigée en v1.4 du rapport, trois feeds en
+      service (670 → 314 points sans TC), import de settings sans effet de bord (claim_run),
+      420 communes distinctes dans les libellés de zone contre 2, ZÉRO « Unknown » dans 2 065
+      échanges LLM, train classé en transports collectifs par la loss, clés route_type=2 de
+      Settings.gaml en place, router-config.json chargé par les 3 instances OTP, pile recréée.
+      RESTENT DEUX DÉCISIONS DE L'AUTEUR, hors critères et hors travail : n° 8 (roads.prj annonce
+      une zone UTM où ses coordonnées ne sont valides nulle part — recommandation : NE RIEN
+      RÉÉCRIRE, aucun modèle ne lit ces couches) et n° 15 (l'avertissement de couverture TC teste
+      une enveloppe, donc répond « couvert à 100 % » depuis que liO est dans la couche —
+      recommandation : le remplacer par un maillage, quelques lignes de GAML ; les deux chiffres
+      justes sont 72 % des mailles de 5 km et 73 % des zones fines ; le blocage « le seul GAMA
+      disponible porte le run » est levé depuis le 2026-09-04 18 h 06). Hors périmètre et déclarés
+      comme tels : transport scolaire (ticket 030, en pause à la demande de l'auteur), écart des
+      parts modales au modèle de choix (tickets 018, 022, 024), arrivées perdues 36 sur 3 139 pushs
+      = 1,15 % (ticket 011), G3 (rendu, non mesurable en headless), manuscrit § 2.2 et annexe F.
+
+  ticket_032_lts_velo_propositions_gama:
+    status: amélioration
+    note: >-
+      SPEC rédigée le 2026-09-03, RESSERRÉE ce jour. Post-traite les itinéraires vélo OSMnx pour
+      exposer à l'agent LLM un PROFIL DE SÉCURITÉ DESCRIPTIF (bloc bike_safety, nom propre au mode)
+      dérivé des tags cycleway/highway/maxspeed, fallback vitesse par highway. Choix de rigueur :
+      PAS de LTS normé ni de score synthétique (le graphe n'a ni voies, ni stationnement, ni ADT) —
+      des faits OSM agrégés par distance (protected/calm/urban_pct, exposed_m, classified_pct) ;
+      worst_lts SUPPRIMÉ (« max pondéré distance » était auto-contradictoire) et remplacé par
+      exposed_m en maillon faible SANS seuil. NON routage : profil extrait dans _route_sync sur le
+      chemin déjà calculé. Profil TRANSITOIRE : il ne vit que jusqu'au rendu texte de l'option, pas
+      de remontée GAMA (déterministe, donc recalculable hors ligne). Pose la plomberie réutilisée par
+      le ticket 033. Cache : le profil voyage dans le dict retour (aucun versionnement, ne PAS bumper
+      routing_version) ; toute la chaîne est déjà transparente (réplica /route, client HTTP,
+      store/lookup, peupleur en masse) SAUF le CHEMIN DE CACHE HIT, qui déballe deux clés nommées et
+      jetterait le profil en silence — corrigé par un paramètre additif route_extras sur
+      _make_travel_plan (portant le dict retour complet ; défaut None, donc les 4 appels de
+      test_terminal_time.py restent intacts et le 033 n'ajoute aucune plomberie). Migration = SÉQUENCE
+      ORDONNÉE en 3 temps : reconstruire le graphe (volume partagé, une fois) → purger → repeupler
+      (étape 6 du notebook). L'ordre est contraignant : repeupler avant de reconstruire le graphe
+      donne un cache peuplé uniformément SANS profil, silencieusement. La purge est obligatoire non
+      pour les durées (identiques) mais parce que le peupleur est idempotent par couverture : sans
+      purge il saute les entrées existantes, qui survivent sans profil → cache durablement mixte,
+      biais silencieux dans la mesure de calibration. CORRECTIONS DU 2026-09-03 (vérifiées dans le
+      code) : (1) éditer le texte des options NE PURGE PAS le cache de décisions LLM — le texte
+      n'entre pas dans _make_state_hash (llm/cache.py:207) et active_prompt_checksum ne hache que
+      les prompts système (manager.py:164) ; correctif retenu = ÉTENDRE le checksum au gabarit
+      travel_plan_describe_v2.j2, et NE PAS bumper data_version() qui invaliderait aussi 601 Mo de
+      cache OTP (otp_persistent_cache.py:71). (2) Il n'y a QU'UN SEUL pickle pour les 3 modes
+      (osmnx_direct.py:394) : reconstruire, c'est reconstruire walk+bike+drive. (3) La migration
+      commence par docker compose build osmnx1 osmnx2 (config montée en ro, code figé dans l'image,
+      incident park_base). (4) L'assertion de démarrage va dans le lifespan de osmnx_server.py:47,
+      PAS dans osmnx_direct.warmup() qui est du code mort. (5) La purge de la LTM est un non-sujet
+      (LTM par run, vierge sans CONT=1). (6) NE PAS utiliser make purge_cache : il détruit
+      data/population/*.json et ne supprime aucun .db. PRÉREQUIS BLOQUANT : le peupleur et le
+      runtime écrivent dans deux fichiers de cache OSMnx différents (29 Mo vs 20 Ko mesurés) — à
+      aligner avant toute repopulation (~83 500 routes, ~2 h 30, MAX_WORKERS=6 et non 12).
+      DIFFÉRÉ : attend la fin du ticket 031 partie 2 (bascule vers le graphe polygone) ; signal GO
+      utilisateur. Spec testable : specs/profil_securite_velo.md (R16 = aller-retour cache préserve
+      le profil).
+
+  ticket_033_profil_confort_pieton_propositions_gama:
+    status: amélioration
+    note: >-
+      SPEC rédigée le 2026-09-03, REQUALIFIÉE ce jour de « profil routier voiture » (hors sujet :
+      vitesse/autoroute/péage n'ont pas de sens à pied) vers « profil de confort piéton », puis
+      ALLÉGÉE. Post-traite les itinéraires piétons OSMnx (network_type=walk, déjà routés par
+      osmnx_direct.py) pour un score de confort 1-4, exposé en bloc comfort_metrics homogène au vélo.
+      Dépend du ticket 032, dont il RÉUTILISE la plomberie (profil calculé dans _route_sync, porté
+      TRANSITOIREMENT sur le TravelPlan, traversant le cache dans le dict retour avec le chemin de
+      cache hit corrigé, rendu en TEXTE dans un gabarit j2, graphe reconstruit une fois sur le volume
+      partagé + assertion au démarrage, RAZ LTM/caches) — PAS de middleware JSON, l'agent lit du
+      texte, pas du JSON (erreur d'architecture corrigée le 2026-09-03). Scope minimal : confort =
+      attribut STATIQUE d'arête posé dans la boucle qui pose déjà speed_kph (highway seul, pas de
+      sidewalk) ; agrégat = 3 sommes (comfort_x_pct + worst_comfort seuillé à 10 %). ALIGNÉ sur le 032
+      le 2026-09-03 (4 écarts corrigés) : profil transitoire, PAS de remontée GAMA via model_dump ;
+      pas de versionnement de cache (la RAZ du 032 suffit) ; bloc nommé comfort_metrics et vélo nommé
+      bike_safety (pas de champ générique route_characteristics) ; graphe walk régénéré UNE FOIS sur
+      le volume partagé, pas par réplica. Grâce au paramètre route_extras posé par le 032, le 033
+      n'ajoute AUCUNE plomberie : comfort_metrics voyage dans le même dict retour. Migration = même
+      séquence ordonnée en 3 temps (graphe walk → purge → repopulation), mutualisée avec celle du 032
+      si les deux tickets sortent dans la même fenêtre (une seule purge, une seule repopulation).
+      Corrections du 2026-09-03 héritées du 032 : pas de purge automatique par édition de texte
+      (checksum étendu au gabarit), un seul pickle pour 3 modes, assertion dans le lifespan,
+      LTM non concernée, même prérequis de désalignement du cache. L'EXPOSITION du texte confort se
+      fait dans une passe SÉPARÉE de celle du vélo (sinon deux traitements dans une seule mesure de
+      calibration, non attribuables) ; le code et la migration, eux, se font en une fois.
+      Seule divergence ASSUMÉE restante (choix utilisateur du
+      2026-09-03) : le 033 garde un score ordinal 1-4 seuillé à 10 %, là où le 032 s'interdit tout
+      score et applique un maillon faible sans seuil. Retirés du scope v1 (leviers) : stairs_count,
+      crossings_count, lit (28 % de couverture OSM), dénivelé (MNT).
+
+  ticket_034_velo_cle_stable_une_seule_loi:
+    status: amélioration
+    note: >-
+      DÉCISION NON PRISE (2026-09-03) : l'auteur n'est pas certain de l'implémenter ; le ticket
+      consigne le constat pour trancher sur des chiffres. Deux mesures du 2026-09-03 au soir :
+      (1) le vélo d'un persona dépend de sa position dans le fichier — l'attribution et le type
+      de vélo hachent l'index de fichier et une clé d'adresse suffixée en cas de collision ;
+      201 des 1 000 personas de la v4 scellée portent un `personal_bike` différent de celui
+      qu'ils avaient dans le vivier pré-imputé (logement, permis, abonnement, couronne : 0),
+      distribution globale inchangée ; (2) la loi vit à deux endroits contre la décision du
+      2026-08-24 (lot 4 du ticket 015 rejeté) : `_assign_personal_bike` est actif dans le fork
+      eqasim et l'étape 8 réécrit 4,7 % du vivier. Proposé : clé `person_id` + `household.id`,
+      sel personal_bike_v2, au prochain scellement (v5) ; retrait de la loi du fork ; clôture
+      du 015. Options (a) déclarer seulement, (b) lot 1, (c) lots 1 et 2 — recommandation (c).
+
+  ticket_035_plateforme_gestion_experiences_decouplage_spec_fonctionnelle:
+    status: terminé
+    note: >-
+      RÉÉCRIT le 2026-09-05 en spécification FONCTIONNELLE pure (45 EF, 7 RG, 12 CAF, 7 points à
+      trancher) ; six specs testables dans specs/ticket_035/ (86 règles J/D/S/G/Q/E). IMPLÉMENTÉ le
+      2026-09-05 sous hypothèses explicites (specs/ticket_035/questions.md, 18 questions vivantes) :
+      chaîne des véhicules et plafond extraits du contrôleur (vehicle_chain.py, candidats.py) ;
+      décision unique tracée (experiences/decision.py) appelée par le contrôleur ET le runner ;
+      ordre de présentation déterministe dans LlmAgent ; jeu enregistré (experiences/jeu.py, make
+      jeu) ; exécution sans simulateur avec épinglage du décideur, épuisement propre, pause/reprise
+      depuis l'archive (runner.py, decideurs.py, ressources.py, archive.py) ; expérience YAML,
+      empreintes, estimation, refus, registre, comparaison, synthèse (experience.py, registre.py) ;
+      CLI python -m experiences + cibles make ; onglet dashboard « Expériences » ; simulation GAMA
+      sur jeu (make run JEU=, tolérances par groupe, jeu_stats.json, rubrique make report).
+      Relecture du 2026-09-06 (deux tours) : 17 questions tranchées et appliquées — offre TC du jour
+      lue dans le GTFS par déplacement (experiences/offre_jour.py, make jeu-verifier-jours), moves.csv
+      enrichi, recréation du contrôleur, format des événements, unité = déplacement, empreinte du jeu
+      suffit ; règle du jour rigoureuse (grille horaire identique, sinon fenêtre temporelle par déplacement) ;
+      déplacements sans proposition inexploitables, exclus et remontés en WARNING. Plus aucune question
+      ouverte ; reste à faire la vérification GTFS sur un jeu réel v5 (OTP requis). 80 tests test_035_*
+      verts, suite complète verte (573). RESTE : D8/G12 (égalité des modes sur run
+      réel), G8/G9 événements (refusés au lancement), G10 pause à chaud GAMA (DecideurRejeu non
+      câblé sur CONT=1), S5 taille des lots, E21, validation humaine du design
+      (docs/arch/plateforme-experiences.md) et des 18 questions.
+  ticket_036_authentification_gateway_llm:
+    status: amélioration
+    note: >-
+      DÉCISION du 2026-09-06 : à traiter dans un second temps, après le découpage de llm_module
+      en bibliothèque (paramétrage préfixé LLM_GATEWAY_). Le ticket fixe le périmètre pour ne pas
+      redécider : jeton bearer optionnel en liste (rotation), /health exempté, /metrics
+      protégeable, SDK qui envoie l'en-tête et ne compte pas 401/403 comme une panne, aucune
+      trace du jeton dans les logs, CORS configurable à la place du `*` codé en dur. Effort S.
+  ticket_037_llm_module_en_trois_bibliotheques:
+    status: en cours
+    note: >-
+      GO du 2026-09-06. Itération 1 LIVRÉE le 2026-09-07 : trois paquets en layout src (llm_gateway 1.1.0,
+      mobility_core 0.1.0, mobility_llm 0.1.0) installés en editable ; coquille llm_module dépréciée (53
+      shims) ; hook de catégorie par entry point (validation 422 à la soumission, observe côté worker) ;
+      suites 233 + 199 + 134, llm-agents 551 ; import-linter 5/5 ; ruff et mypy strict à zéro ; images
+      api/worker reconstruites, /health et 422 vérifiés ; CI, pre-commit, mkdocs, ADR. Commits 2f27a27, a5b3c8c, 617c0f6 poussés le 07 ; e2e perception_filter réel OK ; CI verte
+      (5 jobs, cliquet de couverture 70 %). Licence Apache-2.0 posée. ITÉRATION 2 : lot A LIVRÉ le 07
+      (réglages en couches LLM_GATEWAY_, fichier des fournisseurs hors du paquet, limites apprises
+      dans Redis, /config ; gateway 1.2.0 ; CI verte run 34090531486). Lots B à E LIVRÉS le 07 sur la branche
+      ticket-037-iteration-2 (CI verte run 34115618770) et fusionnés : cascade d'inférence, adapter
+      OpenAI-compatible générique + entry points, journal des échanges opt-in + rédacteur, familles
+      Prometheus déclarées par le bundle, règle « occupé n'est pas en panne », rangement par catégorie ;
+      gateway 1.3.0, mobility-llm 0.2.0, couverture 82 %. RESTE : itération 3 (versioning) ; itérations suivantes = paramétrage en couches
+      LLM_GATEWAY_, adapter OpenAI-compatible, exécuteur sans Celery, ticket 036 (auth).
+  ticket_038_licence_des_ressources_emc2_de_mobility_core:
+    status: terminé
+    note: >-
+      FAIT le 2026-09-12 — le paquet ne redistribue plus les ressources qui reproduisent l'enquête
+      (zf_couronne, zf_housing_type, zf_zones.*) : liste explicite de package-data,
+      include-package-data = false, MANIFEST.in en liste blanche, et un test qui CONSTRUIT sdist et
+      wheel pour regarder dedans. Les trois réglages étaient nécessaires : la liste explicite seule
+      laissait fuir les deux archives. Sans effet à l'exécution (conteneurs en volume, venv editable).
+      FAIT AUSSI le 2026-09-12 : zf_couronne.json déversionnée (git rm --cached + .gitignore),
+      resources.restricted_data_path() + RESTRICTED_RESOURCES câblés dans residence_zone, housing_type
+      et zone_resolver (erreur nommant ressource, commande make, variable MOBILITY_CORE_EMC2_DATA_DIR
+      et chemins essayés), LICENSE + NOTICE + license = Apache-2.0 (PEP 639) pour mobility_core et
+      mobility_llm. RESTE : l'avis ADISP sur commune_couronne / couronne_perimetre, et la cohérence du
+      LICENSE racine avec les trois paquets.
+      DÉCISION du 2026-09-07 : à trancher plus tard. Le gateway est sous Apache-2.0 ; la question porte sur
+      les ressources data/ de mobility_core, toutes dérivées des microdonnées ProGEDO lil-1750 (accès
+      restreint). Le ticket dresse le tableau des ressources et leur origine, distingue agrégés et
+      reproduction de découpage, et liste ce qu'il faut relire (convention lil-1750, publication AUAT/CEREMA).
+  ticket_039_organisation_du_depot:
+    status: en cours
+    note: >-
+      OUVERT et MIGRÉ le 2026-09-12 (pas 1, 2 et 3 livrés). Cible atteinte : packages/ (llm_gateway,
+      mobility_core, mobility_llm), services/ (llm-agents, GAMA, eqasim-toulouse, otp-toulouse),
+      infra/ (docker-compose.yml, prometheus.yml, grafana/). Les chemins DANS les conteneurs sont
+      inchangés (/app, /eqasim, /otp) : seule la moitié hôte des montages bouge, et la pile qui
+      tournait n'a pas été redémarrée. Le compose déplacé exige `--project-directory` (COMPOSE_FILE
+      et COMPOSE_PROJECT_DIRECTORY ne suffisent pas, mesuré) ; le Makefile le porte dans $(COMPOSE).
+      Les résolutions de racine passent de `parents[N]` à une ANCRE (scripts/synthesis,
+      data/weather/<fichier>, services/GAMA/CityTransport) dans settings.py, le conftest des tests
+      et weather_loader — sans quoi 25 tests météo passaient de « réussis » à « ignorés » au lieu
+      d'échouer. GAMA est monté sur /services/GAMA pour que le symlink des sorties compte trois crans
+      des deux côtés. Désuivis sans quitter le disque : docs/traces (42 fichiers, jamais désuivis
+      malgré la règle du 02/09) et tests/token_usage (6). Règles .gitignore repointées — dont
+      zf_couronne.json, déversionné pour licence au ticket 038, qui se serait reversionné.
+      Vérifications : compose config identique aux seules lignes attendues, make ps retrouve la pile,
+      scripts/tests 1009 passés (2 échecs préexistants : tf13 et synthese_generation),
+      services/llm-agents 871 passés, paquets 733 passés, import-linter 5/5, contexte de build de
+      l'image passerelle vérifié par build réel (3,70 Mo, les trois paquets seuls).
+      CORRECTIONS AU CONSTAT du 07/09 : `gama/` et `GAMA/` n'étaient PAS deux répertoires (même
+      inode, APFS insensible à la casse) ; le poids de scripts/ et de docs/slides+synthesis était
+      DÉJÀ hors de git. RESTE : Makefile à 1 346 lignes (principe 3 non tenu), prompt_calibration
+      toujours dépôt imbriqué (dépendance ou sous-module non tranché), sort de docs/paper et des
+      pages de synthèse non tranché, tri manuel de Divers/ réservé à l'auteur. llm_module/ reste à
+      la racine délibérément : son retrait appartient au ticket 037.
+  ticket_040_ablation_filtre_eligibilite_modes:
+    status: abandonné
+    note: >-
+      ABANDONNÉ le 2026-09-11 AU PROFIT DU TICKET 045 — abandonné comme TICKET, pas comme idée :
+      la mesure reste à faire, c'est le 045 qui la porte. (« clos » n'est pas un statut du
+      vocabulaire ; « abandonné » est celui qui dit « ce ticket ne sera pas mené ici ».), sur décision de l'auteur. L'idée reste juste et
+      la mesure reste à faire : c'est le ticket 045 (lot 4e) qui la porte désormais, pour qu'un
+      seul des deux la porte. Ce qui a été mesuré ici tient toujours et sert d'entrée au 045 :
+      sur les archives, sans lancer de run, le filtre d'éligibilité retire une catégorie modale
+      entière sur 64 % des déplacements pour le vélo et 27 % pour la voiture (run gemini-3.5
+      prompt minimal, composite 14,840), et 69,6 % des déplacements subissent au moins un écart
+      hors-plafond ; le plafond à 6, lui, n'a jamais supprimé une catégorie. Le plan 2×2 {filtre
+      actif, filtre coupé} × {aléa, majorité voiture, durée min, LLM minimal} est repris tel quel
+      par le lot 4e du 045, à deux écarts près décidés par l'auteur : les bras LLM se jouent
+      UNIQUEMENT en chaîne active (c'est l'anticipation qu'on veut démontrer, la retirer
+      reviendrait à évaluer l'agent en le privant de ce qu'on mesure), et la condition coupée se
+      limite au LOT 1 (position du véhicule + verrou de retour) — jamais la possession, le permis
+      ni l'âge, qui sont des attributs de la personne présents dans les 21 variables du contrat.
+      Le PRÉREQUIS que ce ticket avait identifié (lot 3 : tracer l'état des filtres dans
+      experience.yaml, les empreintes et le nom canonique, absent partout) est LIVRÉ par le 045 le
+      2026-09-11 : `vehicule_chaine` et `verrou_retour` sont des champs de la définition, entrent
+      dans `reglages_herites` et dans le nom (`nochn`, `noret`), muets quand ils valent la
+      référence. Le lot 2 (possession, permis) n'est pas repris : il est écarté, pas différé.
+
+  ticket_041_etape_3a_hysteresis_longitudinale:
+    status: à faire
+    note: >-
+      Plan v0.1 rédigé le 2026-09-09 (docs/paper/methode/experience_plan/ETAPE_3A_PLAN_LONGITUDINAL.md),
+      en attente de validation (porte G0) ; aucun code. Trois bras (LLM + mémoire, LLM amnésique,
+      oracle LightGBM) sur la même cohorte scellée (100-200 agents, sous-échantillon par ménages),
+      trois périodes (nominal / choc / rétabli) de 5 à 60 jours ouvrés simulés. Manques bloquants
+      cartographiés : aucun événement joué, oracle non branché dans GAMA, multi-jours à 1 jour,
+      STM perdue à la pause, décideur non épinglé côté GAMA, cache sémantique dangereux, nettoyage
+      LTM à l'heure réelle. Mémoire actuelle : demi-vie 1,9 j, top-3, pas de renforcement — la
+      formule gamma/lambda du manuscrit n'existe pas dans le code (devient descriptive). Coût
+      mesuré : 0,64 requête/agent-jour (bras mémoire), 0,23 (amnésique) ; palier étendu à 5 bras,
+      N = 200 : 14 jours de quota à 1 000 RPD. Questions ouvertes dans specs/ticket_041/questions.md.
+
+  ticket_042_second_oracle_logit_multinomial:
+    status: terminé
+    note: >-
+      Livré le 2026-09-10 (spec specs/score_composite_deux_oracles.md, 20 règles, 40 tests).
+      Le logit multinomial annoncé par C1/C2 existe : `make logit` l'estime à parité stricte
+      (21 variables, même parquet, split par ménage, sample_weight COEP, régularisation en
+      validation croisée groupée DANS le train), et les métriques des deux oracles sortent du
+      même module partagé. Test scellé (13 045 trajets) : logit 0,766 / CEL 0,5954 / GMPCA
+      0,551 / L1 masse 0,0286 contre booster 0,785 / 0,5402 / 0,583 / 0,0269 — l'inversion
+      de Martín-Baos et al. (2023) sur les parts agrégées ne se produit pas, le plafond de
+      référence est bien l'oracle supervisé. `make bi-oracle` publie trois blocs sur le run
+      épinglé : fidélité 16,16 (inchangée), accord désagrégé au logit 899 % de la distance
+      inter-oracles (JSD 0,1847 bit contre 0,0205), désaccord de sens 5,0 % (1 transition de
+      distance sur 20). Poids des deux nouveaux termes à 0 : mesurés et publiés, ils ne
+      sélectionnent aucun prompt (sinon le prompt est ajusté au modèle). Restent : bloc C2
+      (élasticités A/B, exige une paire déjà payée — store car_availability absent de cette
+      machine), la phrase de limite « pas un RUM, ni VOT ni WTP » au chapitre 2, et mesurer
+      s_B sur deux ou trois runs de plus avant d'envisager un poids non nul.
+
+  ticket_043_troisieme_famille_regression_logistique_noyau:
+    status: terminé
+    note: >-
+      Livré le 2026-09-11 (spec specs/ticket_043/klr-troisieme-famille.md, 14 règles, 29 tests).
+      `make klr` estime la régression logistique à noyau RBF + Nyström à parité stricte, avec la
+      MÊME matrice de dessin que le logit (design_matrix_from_contract, partagée) : 2 000 points
+      d'appui tirés par ménage, γ et λ choisis en validation croisée groupée DANS le train, appuis
+      retirés dans la partie d'ajustement de CHAQUE pli. Artefact autoportant de 1,5 Mo à
+      coefficients duaux (B = W·βᵀ, repliement exact vérifié à 4e-12). Test scellé : exactitude
+      0,784 (booster 0,785, logit 0,766), CEL 0,5531, et L1 masse 0,0253 — MEILLEURE des trois.
+      Jeu gelé AAMAS : composite 5,0300 contre 4,9182 (booster) et 6,1734 (logit), L1 48,59, la
+      meilleure. Second arbitre du bloc C1 livré : une transition n'entre au score que si les deux
+      arbitres portent le même signe franc, sinon elle est écartée et comptée ; sur le run épinglé
+      les deux s'accordent sur les 20 transitions, donc le s_C1 = 5,0 % du prompt est corroboré.
+      Bloc B' publié (accord à la KLR : 1 725 % de la distance inter-oracles ; la KLR est deux fois
+      plus proche du booster que le logit). Poids toujours à 0 (K12). Banc : 39 min, 3 configurations
+      écartées — une non convergée, deux pour dérive des parts (0,0057 et 0,0061 contre un plafond
+      à 0,0056 fixé sur la L1 du logit). Les deux bords de grille du premier banc ont été MESURÉS
+      par un banc élargi (41 min) : γ×0,25 est un optimum INTÉRIEUR (×0,125 → 0,55117, ×0,0625 →
+      0,55951) et m est sur un PLATEAU (0,54557 / 0,54487 / 0,54476 à 1 000 / 2 000 / 3 000). Le
+      banc élargi retient m = 3 000 pour un gain de 0,0001 ; le ticket borne m à 2 000, donc
+      l'artefact publié reste à 2 000 et le fait est rapporté, pas appliqué (à 3 000, une
+      composante propre passe déjà sous le plancher : rang 2 999/3 000). Relever la borne serait
+      une décision de périmètre.
+
+  ticket_044_temoin_random_forest:
+    status: terminé
+    note: >-
+      Livré le 2026-09-11 (spec specs/ticket_044/temoin_random_forest.md, 10 règles, 25 tests).
+      `make forest` mesure le témoin à parité stricte (mêmes parquet, split par ménage,
+      sample_weight COEP, métriques partagées ; réglage en validation croisée groupée DANS le
+      train ; ni class_weight ni rééquilibrage) et n'écrit QUE des chiffres : aucun modèle
+      sérialisé, aucun consommateur. Retenu max_depth 14 / min_samples_leaf 5 /
+      max_features 0,3 / 1 200 arbres, aucun bord de grille ; plateau montré (log-loss CV
+      0,5687 → 0,5678 → 0,5669 à 200, 400, 1 200 arbres). Test scellé (13 045 trajets) : RF
+      0,776 / CEL 0,5703 / GMPCA 0,565 / L1 masse 0,0232 / L1 mode élu 0,0899 / rappel vélo
+      0,035. Seuils du verdict déclarés AVANT le chiffre (part de l'écart comblée, 0,70 / 0,30)
+      → verdict formel INDÉCIS, et c'est le résultat. Lecture par axe : sur les parts modales
+      agrégées les ARBRES suffisent (le RF dépasse le booster, part 3,04) — l'article ne peut
+      donc pas attribuer la fidélité des parts au boosting ; sur l'exactitude désagrégée
+      l'avantage se partage (0,49 et 0,45) ; sur la classe minoritaire le BOOSTING est décisif
+      (rappel vélo 0,035 contre 0,138 booster et 0,108 logit, le RF passant sous les deux alors
+      que sa masse vélo est calibrée à 4,3 % contre 4,0 % observés). Rappel vélo du logit
+      mesuré au passage (0,108), le ticket le donnait « à mesurer ». Sensibilité d'encodage
+      chiffrée : la voie native (codes entiers lus comme ordinales) ne coûte que 0,0005
+      d'exactitude et 0,0015 de L1 masse — la précaution ne changeait pas la conclusion.
+      Conséquence pour le ticket 043 : une troisième famille d'arbres est écartée sur l'axe des
+      parts, mais la question du rappel des minoritaires reste ouverte. Questions dans
+      specs/ticket_044/questions.md. Coût réel : 13 min, hors ligne, aucun appel LLM.
+      EXTENSION du 2026-09-11 (hors périmètre initial, demandée après le verdict, donc la
+      clause « pas de décideur tant que la question n'est pas tranchée » est levée, pas
+      contournée) : le témoin est joué comme expérience `exp_rf_jtir_nosim`, dérivée de
+      `exp_mnl_jtir_nosim`, même jeu gelé, même couverture (2 634 / 2 645). Composite emd_jsd
+      5,5889 contre 4,9182 (booster) et 6,1734 (logit) — part de l'écart comblée 0,47, contre
+      0,49 et 0,45 sur le test scellé PROGEDO : deux substrats indépendants, la même moitié.
+      Le décideur ne charge AUCUN arbre : artefact de 12 ko (contrat + hyperparamètres + deux
+      SHA) plus une matrice .npz de 1,4 Mo ; RFPredictor réajuste en 10 s puis VÉRIFIE que la
+      forêt reproduit les métriques publiées. Ce garde-fou a servi : scikit-learn 1.9.0 (le
+      conteneur controller) ne donne pas la même forêt que 1.8.0 (l'hôte) — exactitude
+      +0,000188, CEL +0,0008 — d'où une exécution sur l'hôte. NON REJOUABLE par la CLI : la
+      famille `rf` est enregistrée à l'exécution par
+      scripts/progedo_logit/lancer_experience_rf.py, les deux lignes de table (FAMILLES,
+      POLICY_FORMATS) étant laissées au ticket 043 qui modifiait ces fichiers en parallèle.
+      Un LISEZ-MOI.md dans le dossier de l'expérience le dit et donne la relance. Aucun
+      scores.json écrit à la main.
+
+  ticket_045_substrat_unique_v5_et_reconstruction_des_experiences:
+    status: en cours
+    note: >-
+      Ouvert le 2026-09-11. Audit : les 36 exécutions avaient TOUTES lu la cohorte v1 (f67b0777…)
+      et non la v5 (de73532e…), référence de l'article. LOTS 1, 2 (partiel), 3 et 5 LIVRÉS le
+      2026-09-11 (spec specs/ticket_045/substrat-unique-v5.md, 25 règles ; 6 fichiers de tests
+      045 ; suite llm-agents 784 verts, tableau de bord sans aucune régression et 9 échecs
+      préexistants réparés). AUCUNE mesure relancée, aucun appel LLM.
+      LA JOURNÉE SE REFERME (A1, le plus grave) : énumération unique dans `chaine_activites.py`,
+      partagée par le contrôleur et la plateforme ; 3 299 déplacements attendus sur la v5 au lieu
+      de 2 405, dont 183 fermetures sur place inexploitables. Trois compteurs corrigés dans la
+      foulée, tous cassés PAR cette correction et trouvés en la vérifiant : `est_complet` devenu
+      inatteignable, progression bloquée à 80 % sur un run terminé, alarme moteurs déclenchée à
+      chaque préparation (5,5 % de fermetures pour un seuil à 5 %). Une fermeture sur place n'est
+      pas une défaillance de moteur : `est_defaillance_moteur` porte la distinction.
+      A2 REQUALIFIÉ EN ILLUSION : même texte, chemin du gabarit d'option résolu depuis la racine
+      du dépôt alors que le conteneur monte llm-agents sur /app — le morceau sortait du hachage
+      sans bruit. Corrigé, hôte et conteneur rendent la même empreinte. La comparabilité
+      Antigravity/passerelle n'était pas en cause. A3 REQUALIFIÉ : les 23 exécutions complètes ont
+      toutes 48 inexploitables ; le vrai défaut était l'accumulation au fil des décisions, corrigé
+      par une dérivation depuis le jeu à l'ouverture. A4 corrigé : l'hôte mesure le commit et le
+      transmet au conteneur (git absent de l'image), et le manifeste enregistre la clé EFFECTIVE
+      du graphe OSMnx. L'artefact KLR n'avait PAS changé (les 4 sha256 sur disque sont ceux des
+      exécutions) et le ticket 043 était déjà `terminé` : les deux précautions annoncées tombent.
+      CAUSE RACINE FERMÉE : `population_par_defaut()` prend la dernière cohorte scellée par DATE
+      de sceau, la population sort de DEFAUTS_NOMMAGE et entre toujours dans le nom via
+      `abreger_population` (le tronquage naïf effaçait le suffixe de version — même piège trouvé
+      et fermé sur le segment `jeu-`, où deux dates donnaient le même nom), `resoudre_population`
+      refuse l'archive sauf motif écrit et journalisé, et le tableau de bord ne propose plus rien
+      d'archivé NULLE PART — y compris « S'inspirer de » et « Dupliquer », qui ne filtraient pas.
+      BASE VIERGE : 46 définitions, 36 exécutions, 3 cohortes et le jeu v1 déplacés (jamais
+      supprimés), documentés, zippés (57,3 Mo + 7,0 Mo + 2,2 Mo), chemins journalisés dans
+      data/JOURNAL_archivage_ticket_045_2026-09-11.json. Script idempotent et vérifié :
+      scripts/archiver_substrat_v1.py.
+      RESTE À FAIRE : R10-R12 (publier les parts des deux façons + compte des choix forcés par
+      bras + intersection inter-bras), R19 (empreinte de population à côté du bouton de
+      lancement), puis le jeu v5, les 14 exécutions gratuites du 2×2 qui servent aussi de
+      balayage, et enfin les 6 bras payants — sur GO explicite seulement. Questions vivantes dans
+      specs/ticket_045/questions.md, dont la règle 1 du contrat d'évaluation (fausse, bloque
+      l'écriture) et `ratios_du_plan()` qui rend toujours None.
+
+  ticket_046_asymetrie_informationnelle_du_contrat_d_evaluation:
+    status: à faire
+    note: >-
+      Ouvert le 2026-09-11 à la demande de l'auteur, rien n'est lancé. Ce ticket N'IMPLÉMENTE
+      RIEN : il examine des solutions et les chiffre. Décision de l'auteur à l'ouverture : EN
+      ATTENDANT ON RESTE EN L'ÉTAT — l'agent garde son anticipation, le protocole ne bouge pas,
+      le ticket 045 continue sans attendre. Le fait : la règle 1 du contrat d'évaluation dit que
+      l'agent et les modèles tabulaires reçoivent « les mêmes 21 variables », et c'est FAUX.
+      L'agent reçoit en outre l'agenda des trajets restants et la météo des tranches à venir
+      (`persona.py:38-39`, ticket 014, intitulé « anticipation de la chaîne de la journée »),
+      donc de l'information sur l'AVENIR de la journée — exactement ce que la chaîne des
+      véhicules rend coûteux. Le modèle tabulaire décide chaque déplacement isolément. Le texte
+      faux est publié dans le résumé FR/EN, l'overleaf et la section 1.3 des deux introductions.
+      Quatre options examinées, non exclusives : A aligner l'agent (couper
+      `agenda_anticipation_enabled`, aucun code — mais l'auteur a déjà tranché CONTRE le
+      2026-09-11 : ce serait évaluer l'agent en le privant de ce qu'on démontre) ; B double
+      mesure de l'agent avec et sans anticipation (payant, doublerait les bras LLM ; prérequis :
+      le drapeau doit entrer dans la définition et le nom, comme `vehicule_chaine` l'a fait au
+      045) ; C déclarer l'asymétrie et en faire l'objet de l'étude (coût NUL, aucune mesure à
+      refaire, et c'est le MINIMUM OBLIGATOIRE quelle que soit la suite) ; D deux lectures
+      déclarées pour les modèles tabulaires, en chaîne et hors chaîne (GRATUIT, quatre familles
+      hors ligne — l'écart chiffre ce que coûte de ne pas anticiper la journée, sans doute le
+      résultat le plus publiable du dispositif). Recommandation de départ : C obligatoire, D en
+      premier car gratuit, B si le budget le permet, A jamais seule. BLOQUE la publication de la
+      section 1.3 et de tout chiffre qui s'en réclame : aucune mesure ne se publie sous un
+      contrat faux.
+
+  ticket_047_offre_a_mode_unique_ce_qui_compte_comme_decision:
+    status: terminé
+    note: >-
+      2026-09-12 — LA MESURE EST FAITE, SYSTÉMATIQUEMENT ; la convention reste à trancher (décision
+      de l'auteur : mesurer d'abord, décider d'en parler ensuite). Chaque scoring produit désormais
+      les DEUX lectures du composite (toutes décisions / hors itinéraire unique), leurs scores bruts
+      par dimension — donc le rejeu de formule reste exact des deux côtés — et le compte de choix
+      forcés sur SES DEUX périmètres, chacun nommé : celui de l'exécution (toutes décisions
+      archivées) et celui du score (premier jour simulé, dernière tentative), qui diffèrent de 14 à
+      19 lignes sur chaque exécution du 11/09. Le compte et la seconde lecture sont des colonnes PAR
+      DÉFAUT du tableau de bord et du registre CLI, des tuiles d'en-tête de la page d'exécution, et
+      une [ALARME] part au journal au-delà de 1,0 point EMD d'écart. Un scores.json sans seconde
+      lecture est réputé périmé : il se recalcule à plein au lieu d'être rejoué, sinon tout
+      l'historique serait resté « non mesuré ». Les 16 exécutions du 11/09 ont été recalculées.
+      CE QUE LA MESURE MONTRE, et qui n'était pas su : retirer ces lignes déplace le composite de
+      -3,75 (durmin) à +12,22 (alea) et CHANGE LE CLASSEMENT — lgbm premier à 4,50 passe à 10,46,
+      derrière klr (4,55 -> 9,95). Chaîne coupée, l'écart plafonne à 0,32 et les choix forcés
+      tombent à 44 pour TOUS les bras (contre 279 à 811 chaîne active) : ces lignes viennent de la
+      chaîne des véhicules, donc des choix antérieurs du bras lui-même. Conséquence signalée à
+      l'article, non corrigée (verrou) : l'écart « en chaîne / hors chaîne » du chapitre 6 — que le
+      texte désigne comme son argument le plus direct — vaut +0,31 toutes décisions comprises et
+      +6,45 hors itinéraire unique pour lgbm. L'ordre cité en conclusion (9,28 contre 7,40) A ÉTÉ
+      RECALCULÉ le 2026-09-12 sous les deux lectures, sur le même run et la même empreinte moves.csv,
+      les trois chiffres publiés étant d'abord reproduits à l'identique : IL TIENT — production 7,40
+      -> 10,07, variante à 93,4 % d'accuracy 9,28 -> 11,31, la variante reste la pire. La contribution
+      3 ne change pas de démonstration. Mais la marge passe de 1,88 à 1,24 point (un tiers de moins),
+      et les deux valeurs citées se dégradent de +2,0 à +2,7 points hors itinéraire unique : les
+      citer sans nommer la lecture « toutes décisions » reste inexact. Trace :
+      docs/traces/2026-09-12_11-30_ticket047_ordre_des_composites_conclusion/. Piège trouvé au
+      passage : docs/synthesis/archive/2026-08-31_v4_matrice_vitesse/ porte la PAGE de la variante
+      mais un parquet de production — seule la trace du 31/08 conserve ses prédictions.
+      RESTE À FAIRE : l'inventaire écrit de toutes les grandeurs publiées et de leur traitement, la
+      convention tranchée dans score-synthesis.md, et la phrase du chapitre 4. Les deux questions
+      ouvertes (exactitude unitaire, dénominateur de la couverture) ne sont pas tranchées.
+      Ouvert le 2026-09-11 à la demande de l'auteur. Sorti du ticket 045 (alerte
+      A5) pour être traité à part. Une offre à mode unique n'est pas une décision : les trois
+      décideurs y produisent le même résultat sans qu'aucune préférence ne soit exprimée. Les parts
+      modales de la plateforme les COMPTENT (un déplacement contraint est un déplacement de la
+      journée), les termes d'accord du score à deux oracles les ÉCARTENT (mesurer un accord là où
+      personne n'a décidé fait baisser la perte sans rien mesurer) — aucun des deux n'a tort, mais
+      la convention n'est écrite nulle part et diffère d'une grandeur à l'autre sans avertir le
+      lecteur. Non trivial parce que le COMPTE dépend du bras : ces situations naissent des choix
+      antérieurs de la journée, et l'écart entre bras est donc en partie un écart d'offres. Quatre
+      travaux : inventorier toutes les grandeurs publiées et leur traitement, trancher la convention
+      dans score-synthesis.md, publier les deux lectures des parts avec le compte par bras, et
+      l'annoncer en une phrase au chapitre 4. Hors périmètre : la contrainte de chaîne (045),
+      l'asymétrie informationnelle (046), l'ablation du filtre d'éligibilité (040). BLOQUE la
+      publication des parts modales par bras.
+
+  ticket_048_calendrier_de_consolidation_et_echelle_d_oubli:
+    status: en cours
+    note: >-
+      Ouvert le 2026-09-11 à la demande de l'auteur, rien n'est lancé. Préalable BLOQUANT de
+      l'architecture mémoire proposée (docs/arch/memory-stm-ltm.md, partie III) : il ne
+      construit aucun de ses quatre lots, il tranche les trois points qui touchent au protocole
+      de mesure. (1) CORRIGÉ le 2026-09-11 après relecture de l'auteur : la première rédaction
+      annonçait que 70,6 % des agent-jours ne franchissent pas le seuil de réflexion, sur la foi
+      du run 2026-07-08_08_54 — CHIFFRE FAUX, ce run mesure 1,80 déplacement par agent-jour quand
+      le manifeste scellé v5 en prévoit 3,30 par persona et 3,69 par mobile (enquête EMC² : 3,53
+      et 3,95). Le run est antérieur à la correction de chaîne cyclique du ticket 045 (+37 %) et
+      sous-exécute son propre plan. Reconstruit sur la source de vérité : à 6,34 entrées par
+      déplacement, un agent mobile produit ~23 entrées par jour et franchit le seuil DEUX FOIS
+      par jour. Ce qui subsiste, plus faible mais réel : le moment de la consolidation est une
+      fonction du nombre de déplacements de l'agent, donc la position d'un choc par rapport à la
+      consolidation est une variable NON CONTRÔLÉE de l'expérience, et la décision ne lit que la
+      mémoire longue. Le plancher journalier reste justifié parce qu'il rend le calendrier
+      déterministe et protège la queue basse. Le taux réel d'entrées est à MESURER sur un run
+      courant avec GAMA : aucun run exploitable ne le permet aujourd'hui (le seul avec
+      observations précède la v5, les récents sont hors simulateur).
+      (2) La normalisation min-max par composante rend le paramètre d'oubli presque inopérant :
+      l'ordre par ancienneté lui est invariant, seul l'espacement bouge (apport au score à 3
+      jours : 0,085 contre 0,138 selon λ), si bien que le critère de réfutation (ii) du bras de
+      sensibilité peut se déclencher pour une raison technique. (3) memory_decay_lambda et
+      memory_horizon_days, déclarés dans experiments.yaml, ne sont lus par AUCUN code — le bras
+      λ÷3 n'est pas exécutable. DÉCISIONS DE L'AUTEUR le 2026-09-11 : une réflexion par jour
+      simulé au minimum indépendamment du remplissage, l'idéal visé étant une par déplacement
+      sous réserve de coût ; normalisation min-max abandonnée. PROPOSÉ pour arbitrage : le
+      paramètre d'oubli devient une constante de temps EN JOURS (S = 1/λ ; défaut 2,8 jours qui
+      reproduit exactement la décroissance en service, bras principal 2,5, sensibilité 7,7), un
+      paramètre en jours étant le seul qui se discute devant un relecteur. COÛT chiffré, et il
+      renverse l'intuition DANS L'AUTRE SENS. La grandeur de référence est l'APPEL MÉMOIRE PAR
+      DÉPLACEMENT, seule indépendante de la population et de l'horizon, auto-réflexion longue durée
+      comprise (894 appels sur 5 jours, identiques dans tous les régimes) : aujourd'hui 0,69 ; une
+      par jour SEULE 0,33, soit MOINS cher qu'aujourd'hui (−22 % sur le total) puisque le seuil
+      volumétrique déclenche déjà deux consolidations quotidiennes ; plancher journalier, le régime
+      retenu, 0,69 à 0,96 (0 à +16 %, la borne haute supposant que tous les agents ont besoin du
+      plancher chaque jour, ce qui est faux — la valeur réelle est proche de la borne basse) ; une
+      par déplacement 1,05, soit +22 % sur le total et non +52 %.
+      Sous ce régime les réflexions sont la moitié du volume, ce qui rend légitime la piste des
+      huit modèles LM Studio déjà déclarés — mais l'admission d'un modèle local est CONDITIONNÉE
+      à une mesure sur jeux gelés (conformité au schéma, accord sur le niveau nommé et les axes,
+      et surtout écart en aval sur les distributions de probabilité modale), jamais accordée
+      parce que c'est moins cher. La décision, elle, n'est pas candidate : c'est la grandeur que
+      l'article mesure. LIVRÉ le 2026-09-11, les trois points de code : plancher journalier de
+      consolidation à 22 h (stm_reflection_daily_floor_*), normalisation min-max supprimée du
+      classement au profit de valeurs absolues, et constante de temps d'oubli EN JOURS
+      (long_term_retrieval__force_base_jours = 2.8, qui reproduit l'ancienne base 0,7 à 1e-3).
+      15 tests neufs (test_048_calendrier_et_oubli.py), suite complète verte à 861 tests.
+      RESTE À FAIRE : mesurer le taux réel d'entrées par agent-jour sur un run courant avec
+      GAMA avant de trancher entre plancher et régime par déplacement (action 2) ; convertir les
+      déclarations memory_decay_lambda / memory_horizon_days d'experiments.yaml vers le nouveau
+      paramètre (action 4, partie données) ; instruire la piste des modèles locaux (action 5).
+      BLOQUE l'expérience d'hystérésis tant que les actions restantes ne sont pas faites.
+
+  ticket_049_itineraire_mixte_limite_a_publier:
+    status: terminé
+    note: >-
+      Ouvert le 2026-09-12, rien n'est écrit. Porte le LOT 5 du ticket 022, clos le même jour :
+      publier la limite, sans toucher au code. LE FAIT : OTP est interrogé mode par mode, donc le
+      jeu d'options ne contient AUCUN itinéraire mixte (ni voiture + parking-relais + métro, ni
+      vélo + TER), alors que l'enquête en compte et les range presque tous en transports collectifs
+      (760 des 770 déplacements voiture + TC, et les 58 vélo + TC). Une part de la cible TC est
+      donc hors d'atteinte PAR CONSTRUCTION : 1,41 pt globalement, mais jusqu'à 22 / 31 / 28 % de
+      la cible par couronne (1ʳᵉ, 2ᵉ, 3ᵉ) et 39 / 59 / 64 % par tranche de distance (10-20,
+      20-50, plus de 50 km). Le chiffre global est trompeusement rassurant, c'est l'erreur que le
+      ticket 020 a trouvée trois fois. LA MOITIÉ NEUVE, ET ELLE RENVERSE LA LECTURE DU 022 : la
+      limite ne pénalise PAS le modèle aujourd'hui. Mesuré le 2026-09-12 sur 17 exécutions, la
+      simulation sur-produit les TC sur les longues distances, et neutraliser la cible ne
+      rapporterait 0,000 pt aux bras LLM mais +2,2 pt aux baselines dégénérés. Il faut donc écrire
+      la limite AVEC SON SENS — sans quoi le lecteur croit qu'elle joue contre le modèle. QUATRE
+      TRAVAUX : deux paragraphes au chapitre 8 de l'article (fr ET en), le classement des lots 2 à
+      4 consigné dans perimetre-population.md § A7 qui promet encore un trait qui n'existera pas,
+      l'occasion de re-mesurer (ticket 025, changement d'offre), et ne pas transporter le
+      raisonnement au ticket 021 dont la correction dégrade le score. ⚠ TOUCHE L'ARTICLE : passe
+      par la skill `article-verrou`, diff présenté et accord explicite. Hors périmètre : produire
+      les itinéraires mixtes (autre ticket, coûteux), la SUR-PRODUCTION de TC sur les longues
+      distances (36 % contre 13 % — problème en soi, plus gros, à traiter à part), la chaîne de
+      véhicule d'un rabattement (008, 014).

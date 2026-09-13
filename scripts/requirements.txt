@@ -5,5 +5,8 @@ osmnx
 python-dotenv
 dash
 plotly
+streamlit
 openai
 matplotlib
+lightgbm
+scikit-learn

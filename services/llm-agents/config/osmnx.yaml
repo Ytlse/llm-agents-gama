@@ -1,0 +1,183 @@
+# OSMnx routing configuration — speeds, penalties, and congestion tables for Toulouse.
+# Source for congestion data: tomtom.com/traffic-index
+
+# Vitesses par type de voie OSM (km/h). Une voie dont le type n'est pas listé reçoit la
+# vitesse de `fallbacks` — un repli MUET, qu'on mesure : sur le graphe du polygone des
+# 453 communes (2026-09-03, `build_osmnx_perimeter_graph.py`), 32,0 % des arêtes vélo
+# tombaient en repli (14 km/h) faute d'entrée pour `service` (91 k arêtes, 6 372 km) et
+# `track` (22,6 k arêtes, 8 494 km, les chemins ruraux de 3ᵉ couronne) ; 5,1 % en marche
+# (`track`), 1,2 % en voiture (`living_street`, `motorway_link`). Les entrées ajoutées ce
+# jour (ticket 031 partie 2, action O3) portent chacune leur source ; les vitesses
+# historiques ne bougent pas. Toute modification ici change la durée RÉSEAU → bumper
+# `routing_version` dans config/terminal_time.yaml (fait : r2) et reposer les vitesses sur
+# le pickle du graphe (`python -m scripts.data.population.build_osmnx_perimeter_graph --respeed`).
+speeds:
+  walk:
+    residential: 5
+    tertiary: 5
+    footway: 4.5
+    pedestrian: 4.5
+    path: 4.5
+    steps: 2
+    living_street: 5
+    service: 5
+    unclassified: 5
+    secondary: 5
+    primary: 5
+    # 2026-09-03 — chemins ruraux (8 535 km sur le polygone) : allure de marche ordinaire,
+    # même valeur qu'une voie résidentielle (le repli valait déjà 5 ; l'entrée le rend explicite).
+    track: 5
+  bike:
+    residential: 15
+    tertiary: 18
+    cycleway: 20
+    living_street: 10
+    secondary: 16
+    primary: 16
+    unclassified: 14
+    path: 10
+    # 2026-09-03 — entrées ajoutées (ticket 031 partie 2). Source : profil `bike` de
+    # GraphHopper (moteur de routage libre, valeurs par défaut de
+    # `BikeCommonAverageSpeedParser`, github.com/graphhopper/graphhopper) : service 14,
+    # track 12 (sans `tracktype`), road 12, bridleway 6, footway et pedestrian = « section
+    # poussée » (PUSHING_SECTION_SPEED, 4 km/h : le vélo est poussé à pied — en France la
+    # circulation à vélo sur trottoir est interdite, art. R412-7 du code de la route, et
+    # l'aire piétonne se traverse à l'allure du pas, art. R431-9). Les bretelles (`*_link`)
+    # prennent la vitesse de la voie qu'elles prolongent, comme dans ce même profil ; `trunk`
+    # (route à accès réglementé ouverte aux cycles, 101 km sur le polygone) est aligné sur
+    # `primary` de ce fichier (16) plutôt que sur les 18 de GraphHopper, qui tarife aussi
+    # primary à 18 : l'échelle du fichier prime, la hiérarchie est celle de la source.
+    service: 14
+    track: 12
+    road: 12
+    bridleway: 6
+    footway: 4
+    pedestrian: 4
+    trunk: 16
+    trunk_link: 16
+    primary_link: 16
+    secondary_link: 16
+    tertiary_link: 18
+    # Voie réservée aux bus ouverte aux cycles (7 arêtes) : hypothèse déclarée, vitesse d'une
+    # voie résidentielle — aucune source ne tarife ce cas, GraphHopper l'exclut du profil.
+    busway: 15
+  drive:
+    motorway: 100
+    trunk: 80
+    primary: 50
+    secondary: 45
+    tertiary: 40
+    residential: 25
+    unclassified: 30
+    service: 15
+    # 2026-09-03 — zone de rencontre : vitesse limitée à 20 km/h (art. R110-2 du code de la
+    # route) ; le repli servait 30. Bretelle d'autoroute : 70 km/h, profil `car` de GraphHopper
+    # (`motorway_link`), le repli servait 30 sur 125 km de bretelles.
+    living_street: 20
+    motorway_link: 70
+
+fallbacks:
+  walk: 5
+  bike: 14
+  drive: 30
+
+penalties:
+  drive:
+    traffic_signals: 20
+    stop: 5
+    give_way: 2
+    crossing: 0
+    mini_roundabout: 3
+  bike:
+    traffic_signals: 15
+    stop: 2
+    give_way: 1
+    crossing: 0
+    mini_roundabout: 2
+  walk:
+    traffic_signals: 12
+    stop: 0
+    give_way: 0
+    crossing: 8
+    mini_roundabout: 0
+
+# ⚠ RETIRÉ du moteur de routage par le ticket 013 — conservé ici commenté parce
+# que sa disparition silencieuse laisserait croire que le stationnement n'avait
+# jamais été modélisé. Il l'était : `_route_sync` ajoutait `park_base × 2` DANS la
+# durée du trajet, soit 4 min (voiture) et 2 min (vélo) invisibles, sans
+# provenance et sans décomposition affichée — alors que les options en transports
+# collectifs montrent chacune de leurs jambes de marche. Cette asymétrie
+# sur-représentait la voiture sur les trajets courts (+24,7 pts sur 0-1 km, mesuré
+# sur la campagne ref1).
+#
+# Le temps terminal est désormais un paramètre exogène documenté, avec sa
+# provenance et ses libellés de rendu : voir config/terminal_time.yaml.
+# park_base:
+#   drive: 120
+#   bike: 60
+#   walk: 0
+#
+# ⚠ DÉPLOIEMENT — ce fichier est monté depuis l'hôte dans les réplicas `osmnx`
+# (`./llm-agents/config:/app/config:ro`) alors que leur CODE est cuit dans
+# l'image. Modifier une clé lue par le code sans reconstruire l'image casse le
+# service au démarrage : c'est exactement ce qui s'est produit ici
+# (`KeyError: 'park_base'`). Le `controller`, lui, monte tout `./llm-agents` et
+# voit le code en direct — d'où une panne visible d'un seul côté.
+# Après toute modification de ce fichier : `docker compose build osmnx1`.
+
+# Congestion index: average speed in km/h per hour (rows) and day (cols: Mon→Sun).
+# free_flow is the maximum observed speed used as the reference for the congestion factor.
+congestion:
+  city_free_flow_kmh: 57
+  metro_free_flow_kmh: 59
+  # 24 rows (00:00 → 23:00) × 7 columns (Mon Tue Wed Thu Fri Sat Sun)
+  city_raw:
+    - [45, 45, 44, 44, 43, 43, 44]  # 00:00
+    - [44, 43, 42, 42, 42, 43, 44]  # 01:00
+    - [45, 44, 43, 42, 42, 42, 43]  # 02:00
+    - [48, 48, 47, 46, 43, 43, 42]  # 03:00
+    - [54, 53, 52, 51, 48, 46, 44]  # 04:00
+    - [57, 56, 55, 54, 52, 48, 45]  # 05:00
+    - [57, 57, 57, 57, 57, 52, 49]  # 06:00
+    - [37, 37, 39, 38, 44, 54, 52]  # 07:00
+    - [28, 28, 32, 29, 38, 55, 54]  # 08:00
+    - [37, 37, 40, 38, 44, 51, 52]  # 09:00
+    - [45, 44, 44, 44, 44, 48, 50]  # 10:00
+    - [45, 43, 43, 43, 43, 45, 48]  # 11:00
+    - [44, 42, 41, 42, 41, 44, 47]  # 12:00
+    - [44, 43, 42, 43, 44, 45, 48]  # 13:00
+    - [44, 43, 42, 43, 43, 45, 48]  # 14:00
+    - [44, 43, 42, 43, 40, 44, 48]  # 15:00
+    - [38, 36, 37, 36, 32, 44, 48]  # 16:00
+    - [31, 28, 32, 29, 28, 43, 47]  # 17:00
+    - [34, 31, 33, 31, 33, 42, 46]  # 18:00
+    - [41, 39, 38, 38, 38, 41, 44]  # 19:00
+    - [42, 42, 41, 41, 41, 41, 44]  # 20:00
+    - [42, 42, 41, 41, 42, 41, 44]  # 21:00
+    - [42, 42, 42, 42, 42, 42, 44]  # 22:00
+    - [44, 43, 43, 42, 43, 43, 45]  # 23:00
+  metro_raw:
+    - [50, 49, 48, 48, 48, 48, 48]  # 00:00
+    - [49, 48, 47, 46, 46, 48, 48]  # 01:00
+    - [50, 49, 48, 47, 47, 47, 47]  # 02:00
+    - [53, 52, 51, 50, 48, 47, 47]  # 03:00
+    - [57, 56, 55, 54, 52, 50, 48]  # 04:00
+    - [59, 58, 58, 57, 56, 53, 49]  # 05:00
+    - [58, 57, 57, 57, 58, 56, 53]  # 06:00
+    - [39, 39, 42, 40, 46, 58, 56]  # 07:00
+    - [32, 32, 36, 33, 41, 57, 57]  # 08:00
+    - [41, 41, 44, 42, 47, 53, 55]  # 09:00
+    - [48, 46, 46, 47, 47, 49, 52]  # 10:00
+    - [47, 46, 45, 46, 46, 47, 51]  # 11:00
+    - [46, 45, 43, 45, 44, 47, 51]  # 12:00
+    - [47, 46, 45, 46, 46, 48, 52]  # 13:00
+    - [47, 46, 45, 46, 46, 48, 53]  # 14:00
+    - [46, 45, 45, 46, 44, 46, 53]  # 15:00
+    - [41, 39, 41, 40, 37, 46, 53]  # 16:00
+    - [35, 33, 36, 34, 34, 45, 52]  # 17:00
+    - [38, 35, 37, 36, 39, 45, 51]  # 18:00
+    - [45, 43, 43, 42, 43, 45, 50]  # 19:00
+    - [46, 46, 45, 45, 46, 45, 50]  # 20:00
+    - [46, 46, 46, 46, 47, 45, 49]  # 21:00
+    - [46, 46, 46, 46, 47, 46, 49]  # 22:00
+    - [48, 47, 47, 47, 47, 47, 50]  # 23:00

@@ -1,11 +1,11 @@
 # Monitoring & dashboards de pilotage
 
 La supervision repose sur **Prometheus + Grafana**, tous deux provisionnés dans
-`docker-compose.yml`. Aucune brique externe (pas de Loki) : les métriques
+`infra/docker-compose.yml`. Aucune brique externe (pas de Loki) : les métriques
 numériques passent par Prometheus, les rares données textuelles (messages
 d'erreur LLM) par un endpoint JSON lu via le plugin Grafana *Infinity*.
 
-## Cibles scrappées (`prometheus.yml`)
+## Cibles scrappées (`infra/prometheus.yml`)
 
 | Job | Cible | Expose |
 |-----|-------|--------|
@@ -14,7 +14,7 @@ d'erreur LLM) par un endpoint JSON lu via le plugin Grafana *Infinity*.
 | `node`                  | `node_exporter:9100`      | CPU / RAM / load (global VM Docker) |
 | `cadvisor`              | `cadvisor:8080`           | CPU / RAM / réseau **par conteneur** (api, worker, otp, redis, qdrant…) |
 
-## Dashboards (`grafana/dashboards/`)
+## Dashboards (`infra/grafana/dashboards/`)
 
 Refonte 2026-07-10 : **un dashboard = une question**, ordonnés par le cycle de
 vie d'un run. Chaque dashboard porte le tag `sim` et un menu déroulant de
@@ -24,7 +24,7 @@ dans `/debug-run` (`make report / capacity / init`).
 
 | # | Fichier / uid | Question |
 |---|---------------|----------|
-| 01 | `01_cockpit.json` / `cockpit` | Le run va-t-il bien ? (feu santé, alarmes, agents bloqués, fallback %, quotas, caches, erreurs) |
+| 01 | `01_cockpit.json` / `cockpit` | Le run va-t-il bien ? (feu santé, alarmes, agents bloqués, fallback %, composition de la file LLM, quotas, caches, erreurs) |
 | 02 | `02_init_bootstrap.json` / `init-bootstrap` | L'init est-elle rapide, le cache Qdrant assez peuplé ? |
 | 03 | `03_pipeline_scheduling.json` / `pipeline-scheduling` | Le scheduler tient-il la cadence ? (lag, EDF, backpressure, retards, vitesse sim, /sync) |
 | 04 | `04_llm_gateway.json` / `llm-gateway` | Les providers suivent-ils ? À quel coût en tokens ? |
@@ -35,6 +35,34 @@ dans `/debug-run` (`make report / capacity / init`).
 
 Le dashboard 07 applique la **palette officielle des modes** (CLAUDE.md) :
 voiture rouge, vélo/train violet, TC vert, marche cyan, moto magenta.
+
+**Row « Répartition attendue vs tirée »** (depuis le choix probabiliste) : le LLM
+annonce une distribution, l'agent tire dedans — deux camemberts côte à côte
+(`llm_mode_probability_pct_total` vs `trip_mode_by_purpose_total`), l'écart en points
+de %, et un bandeau d'intégrité des étiquettes de mode. Trois clés de lecture :
+
+- les deux vocabulaires sont ramenés à un socle commun par `label_replace`
+  (marche/vélo/voiture/TC) — le **train est fondu dans les TC**, comme côté contrôleur ;
+- dans **Grafana**, l'écart est **structurellement non nul** : les décisions mono-choix et
+  les points de cache hérités arrivent dans « tiré » sans exister dans « attendu », les deux
+  compteurs Prometheus n'ayant pas le même dénominateur. C'est la **tendance** qui compte,
+  pas la valeur absolue. **`make report`, lui, ne mélange plus les dénominateurs** depuis le
+  2026-09-04 : il compte les modes tirés sur les seules lignes de `moves.csv` qui portent une
+  répartition, et son alarme `Tirage modal dérivant` (seuil 8 pt, muette sous 200 décisions)
+  ne se déclenche donc que sur un vrai biais de tirage. Sur le run `2026-09-04_16_25` elle
+  annonçait −11,9 pt pour les transports collectifs ; à dénominateur commun l'écart vaut
+  +0,3 pt. Un chiffre de Grafana et un chiffre du rapport ne se comparent pas ;
+- le bandeau `llm_mode_label_mismatch_total / llm_mode_label_checked_total` doit rester
+  à **0 %**. Non nul = le modèle note une autre option que celle qu'il croit, donc ses
+  probabilités partent sur les mauvais index et toute la répartition est fausse
+  (alarme `mode_label_mismatch` au-delà de 5 % sur 200 options observées).
+
+Le symptôme jumeau se lit dans les logs plutôt que dans Grafana : un modèle qui
+**renumérote les options** place sa masse sur des index inexistants. Le réalignement par
+libellé de mode la rattrape (cf. `docs/arch/llm-inference.md`) ; ce qui reste sort en
+`make error` sous `[ALARME] Vecteur de probabilités inexploitable` — la décision du modèle
+a été remplacée par une distribution uniforme, la part modale du run en porte la trace.
+`make warning | grep "hors bornes"` donne le détail (masse réalignée ou perdue).
 
 Les graphiques temporels du dashboard 07 (parts modales, trajets par motif,
 états des agents) sont indexés sur l'**heure simulée**, pas l'heure réelle :
@@ -52,36 +80,59 @@ restreindre la plage au run courant pour une lecture propre.
 Deux mécanismes complémentaires :
 
 1. **Compteur `alarme_total{source}`** — chaque log ERROR `[ALARME]` incrémente
-   le compteur (module `llm_module/telemetry/alarms.py`, `fire_alarme(source)`).
+   le compteur (module `packages/llm_gateway/src/llm_gateway/telemetry/alarms.py`, `fire_alarme(source)`).
    Sources : `backlog`, `event_loop`, `arrivee_perdue`, `cache_llm_stale`,
-   `cache_llm_qdrant`, `gateway_llm` (controller) et `providers_satures`
+   `cache_llm_qdrant`, `gateway_llm`, `vehicule_orphelin` (controller) et `providers_satures`
    (worker, via Redis `alarme:{source}` relu par `WorkerMetricsCollector`).
-   Ne pas importer `alarms.py` dans le processus API : la famille y est déjà
-   émise par le collecteur Redis. Les deux sites `[ALARME]` de
-   `llm_module/config.py` (échec de persistance providers.yaml, rare et non
-   critique en live) restent hors compteur — visibles via `make error`.
-2. **Alertes Grafana provisionnées** — `grafana/provisioning/alerting/simulation-alerts.yml`
+   Le compteur de `alarms.py` n'est créé qu'au premier `fire_alarme` et se range hors
+   registre si la famille est déjà exposée : le processus API peut importer le SDK sans
+   collision (ticket 037). Le site `[ALARME]` de `packages/llm_gateway/src/llm_gateway/config/learned.py`
+   (limite apprise impossible à mémoriser dans le store, les autres processus la
+   réapprendront) reste hors compteur — visible via `make error`.
+2. **Alertes Grafana provisionnées** — `infra/grafana/provisioning/alerting/simulation-alerts.yml`
    (7 règles, dossier « Alertes simulation ») : agents bloqués, fallback LLM
    >10 %, alarme `[ALARME]` émise, drainage >10 min, aucun provider actif,
    event loop >5 s, backlog >90 % pendant 10 min.
 
 ## Métriques notables
 
-**Gateway** (`llm_module/api/metrics.py`) : appels/erreurs/tokens par provider
+**Gateway** (`packages/llm_gateway/src/llm_gateway/api/metrics.py`) : appels/erreurs/tokens par provider
 (`__all__` = agrégat), `llm_provider_state/…_limit/…_today`,
 `llm_provider_disable_ttl_seconds` (secondes avant réactivation — couvre la
 désactivation temporaire **et** le cooldown 429/5xx, valeur = max des deux
-TTL), files de batch,
-workers Celery, métriques métier worker (`llm_transport_mode_chosen_total`,
-`llm_mode_by_distance_total` — 7 tranches jusqu'à `>50km`,
-`llm_mode_by_provider_total`, `llm_chosen_index_total`), `alarme_total` (part worker).
+TTL), files de batch (`llm_task_queue_depth{batch_key}` et son agrégat
+`llm_task_queue_depth_by_category{category}` — ticket 010 : lit d'un coup d'œil
+`itinary_multi_agent` vs `stm_reflection`, la donnée du diagnostic du 2026-08-03),
+workers Celery, `alarme_total` (part worker). Les **métriques métier** du worker
+(`llm_transport_mode_chosen_total`, `llm_mode_by_distance_total` — 7 tranches jusqu'à
+`>50km`, `llm_mode_by_provider_total`, `llm_chosen_index_total`,
+`llm_mode_probability_pct_total`) ne sont plus déclarées par le gateway depuis le
+2026-09-07 (ticket 037) : elles vivent dans `packages/mobility_llm/src/mobility_llm/__init__.py`
+(`MetricFamilySpec`) et s'enregistrent auprès de lui par l'entry point
+`llm_gateway.categories` — le gateway ne connaît plus un seul mot de mobilité.
+Depuis que le LLM renvoie une **distribution** de probabilités (cf.
+`docs/arch/llm-inference.md`), `llm_transport_mode_chosen_total` et
+`llm_chosen_index_total` portent l'option **la plus probable** (le tirage a lieu côté
+contrôleur) ; `llm_mode_probability_pct_total{mode}` cumule la masse de probabilité par
+mode canonique — c'est la répartition *attendue*, dont `trip_mode_by_purpose_total`
+donne la réalisation tirée.
 
-**Contrôleur** (`llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
-(ticket 003), `controller_sync_duration_seconds` (latence du battement de cœur
+**Contrôleur** (`services/llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
+(ticket 003), composition de la pile (ticket 010 :
+`controller_pending_reflections` = réflexions STM en file EDF ou en vol,
+`controller_overdue_decisions` = décisions plan/refill à échéance sim dépassée —
+le signal qui distingue une vraie saturation du drainage nocturne nominal ;
+panneau « Composition de la file LLM » du cockpit),
+`controller_sync_duration_seconds` (latence du battement de cœur
 GAMA↔controller), `controller_event_loop_lag_seconds`,
 `trip_mode_by_purpose_total{mode,purpose}` (mode principal × motif d'activité,
 compté au push du trajet vers GAMA — couvre décisions LLM **et** cache
 sémantique **et** mono-choix, contrairement aux `llm_mode_by_*` de la gateway),
+`agent_vehicle_chain_total{mode,event}` (cohérence de chaîne vélo/voiture :
+`unavailable` = mode écarté faute de véhicule sur place, `forced_return` /
+`return_failed` = verrou de retour au domicile, `orphaned` / `reset_home` =
+véhicule laissé à une étape intermédiaire puis rattrapé — cf.
+[vehicle-chain.md](vehicle-chain.md)),
 couverture du cache Qdrant (`llm_cache_points_total/exact/stale`,
 `llm_cache_agents_covered`), `agent_bootstrap_wave_moves{wave,status}` (détail par vague du bootstrap,
 vague 1 comprise — status `planned`/`done`/`ok`/`cache_hit`/`cache_miss` ;
@@ -112,11 +163,11 @@ Prometheus ne stocke que du numérique. Les messages d'erreur bruts vivent dans
 un **ring buffer Redis** plafonné (`llm:recent_errors`, 50 entrées) :
 
 - écriture : `RedisMetricsSink.push_error()`, appelé au point de capture d'erreur
-  du worker (`llm_module/worker/task_worker.py`) ;
-- lecture : `GET /errors/recent?limit=N` (`llm_module/api/routes.py`) ;
+  du worker (`packages/llm_gateway/src/llm_gateway/worker/task_worker.py`) ;
+- lecture : `GET /errors/recent?limit=N` (`packages/llm_gateway/src/llm_gateway/api/routes.py`) ;
 - affichage : datasource *Infinity* (`yesoreyeram-infinity-datasource`, installée
   via `GF_INSTALL_PLUGINS`), provisionnée dans
-  `grafana/provisioning/datasources/prometheus.yml` — dashboards 01 et 04.
+  `infra/grafana/provisioning/datasources/prometheus.yml` — dashboards 01 et 04.
 
 ## Réglages
 

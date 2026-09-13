@@ -1,0 +1,17 @@
+# 0. Abstract
+
+**Document:** chapter 0 of the AAMAS 2027 paper, the abstract itself (English master; French mirror in [`../fr/00_abstract.md`](../fr/00_abstract.md); LaTeX rendering for Overleaf in [`../overleaf/00_abstract.tex`](../overleaf/00_abstract.tex)).
+**Version:** `v0.2` (9 September 2026) — 240 words, a 29.2 % cut from the 339-word `v0.1`, which overshot the OpenReview upper bound. Text unchanged since; it enters the article's chapters on 10 September 2026, having until then lived only inside the version-comparison document now filed as [`../relecture/00_abstract.md`](../relecture/00_abstract.md).
+**Longueur :** 240 mots au décompte de soumission (emplacements comptés pour un mot, commandes LaTeX exclues), 242 au découpage naïf du miroir Markdown, où « % » fait un jeton à part. Dans les deux cas, dans la borne de 100 à 300 mots de l'enregistrement OpenReview ([`../SOUMISSION_AAMAS_2027.md`](../SOUMISSION_AAMAS_2027.md), § 2.2). **Le décompte de l'anglais fait foi.** Recompter après chaque passe.
+**Convention des tags :** un chiffre écrit **[xx]**, **[nb_trajets]** ou **[N]** est un emplacement, à remplir depuis l'export de [`../../methode/experience_plan/experiments.yaml`](../../methode/experience_plan/experiments.yaml). Aucun chiffre du résumé n'est mesuré à ce stade.
+**Point ouvert, à trancher avant de remplir les emplacements :** le résumé annonce une sur-attraction du **vélo**, or le run du 8 septembre 2026 mesure une sur-attraction des **transports en commun** (26,5 % contre 12,4 % observés) et la sous-estimation de la marche (15,3 % contre 26,8 %). La formulation d'origine est conservée telle quelle, sans être corrigée en silence : voir [`../relecture/00_abstract.md`](../relecture/00_abstract.md), point 3.
+
+---
+
+Multi-agent simulations of urban mobility rely on tabular models estimated from surveys or on explicit rules. Either way the space of representable behaviours is fixed a priori: a factor encoded as neither variable nor rule cannot influence any decision. Agents based on large language models (LLMs) promise to lift it; we show they do at the price of a trade-off between calibration and adaptation to exceptional situations.
+
+We evaluate LLM agents on mode choice in Toulouse: 1,000 synthetic individuals (eqasim), itineraries on the real networks (OpenTripPlanner), decisions taken inside GAMA, which grounds them in the transport system's physical constraints. We measure against the CEREMA 2023 EMC² survey at two scales: aggregate modal shares (L1, points) and individual choices on a sealed test set of **[nb_trajets]** trips (accuracy, log-loss). At identical variables, the majority mode (car, **[xx]** %) sets the floor and a LightGBM oracle fitted on the survey the ceiling.
+
+Calibration fails: walking is underestimated (**[xx]** % against **[xx]** % observed), cycling over-attractive (**[xx]** % against **[xx]** %), and individual accuracy of **[xx]** % beats the prior but stays **[xx]** points below the oracle. In exchange they produce two regimes no memoryless tabular model can: adaptation to real events from the local press, and behavioural hysteresis over **[N]** days after an incident (metro breakdown, bicycle fall), carried by a memory register that revises perceived risk.
+
+This points to hybrid architectures, where the tabular model secures calibration and the LLM agent handles departures from the nominal regime.

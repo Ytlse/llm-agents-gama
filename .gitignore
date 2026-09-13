@@ -1,71 +1,221 @@
+# ============================================================
+# Système / éditeurs
+# ============================================================
+.DS_Store
+# Verrous laissés par Word/PowerPoint quand un document est ouvert.
+~$*
+
+# ============================================================
 # Environnements virtuels Python
+# ============================================================
 .venv/
 venv/
 env/
 
-# Fichiers de configuration locaux et secrets
+# ============================================================
+# Secrets et configuration locale
+# ============================================================
 .env
+GAMA/CityTransport/config/sim_params.yaml
 
-# Cache et fichiers temporaires macOS
-.DS_Store
+# Configuration Claude Code propre à la machine (non partagée).
+# Le reste de .claude/ (CLAUDE.md, settings.json, agents/, skills/) est
+# du contenu versionné : ne pas l'ignorer en bloc, sinon tout nouveau
+# fichier ajouté sans `git add -f` disparaît silencieusement.
+.claude/settings.local.json
 
-# Dossiers de résultats et d'export
-exports/
-results/
-samples/
-
-# Dossiers de données de monitoring
-grafana_data/
-prometheus_data/
-
-# Fichiers de logs et de cache Python
+# ============================================================
+# Logs et caches Python
+# ============================================================
 *.pyc
 *.log
 __pycache__/
 
-# Fichiers de données et de debug spécifiques
-llm-agents/debug.txt
-llm-agents/llm_exchanges.jsonl
-
-# Dossiers d'expérimentations
+# ============================================================
+# Dossiers de résultats, d'export et d'expérimentations
+# ============================================================
+exports/
+results/
+samples/
 experiments*/
+GAMA/CityTransport/results
+GAMA/CityTransport/results_legacy/*
+scripts/models_influence/results*
+scripts/analysis/*.png
 
-# Fichiers CSV dans un sous-dossier spécifique
-scripts/general/*.csv
-Divers/*
-GAMA/CityTransport/config/sim_params.yaml
+# Sorties générées de la synthèse (docs/synthesis/index.html, data.json,
+# archive/*) : produites par scripts/synthesis/build.py, ne pas versionner.
+docs/synthesis/*
+scripts/synthesis/data/*
+scripts/models_influence/calibration_results/*
 
-# Dossier EQUASIM Toulouse — géré dans un repo git séparé
-eqasim-toulouse/
-GAMA/CityTransport/models/false
-data/cache/eqasim/*
-data/population/*
+# Captures d'écran ponctuelles (monitoring, debug) déposées dans docs/capture/
+docs/capture/*.png
 
-# Cache
-scripts/general/cache/*
-llm-agents/cache/*
-otp-toulouse/toulouse/gtfs/*
+# Supports de présentation déposés dans docs/slides/ : 46 Mo de PPTX et de PDF
+# exportés à chaque itération, sans intérêt pour le code et définitifs une fois
+# dans l'historique (le plus gros fichier versionné du dépôt fait 6,4 Mo).
+# Le README du dossier, lui, reste versionné : c'est lui qui porte l'historique
+# fonctionnel des versions. La règle *.pptx couvre aussi les verrous « ~$… »
+# laissés par PowerPoint.
+docs/slides/*.pptx
+docs/slides/*.pdf
+
+# ============================================================
+# Dossiers de données de monitoring (Grafana / Prometheus)
+# ============================================================
+grafana_data/
+prometheus_data/
+
+# ============================================================
+# Caches applicatifs
+# ============================================================
 cache/*
-llm-agents/data/osmnx_cache/*
-llm-agents/data/otp_cache/*
 llm_cache/
+services/llm-agents/cache/*
+services/llm-agents/data/osmnx_cache/*
+services/llm-agents/data/otp_cache/*
+scripts/general/cache/*
 data/cache/*
 
-# Temp
-scripts/general/travel_time.py
+# Métadonnées de build (régénérées à chaque `pip install -e`) : jamais versionnées.
+*.egg-info/
+build/
+dist/
+
+# ============================================================
+# Données OTP / GTFS / réseau temporaires
+# ============================================================
 otp-toulouse/toulouse/*
 otp-toulouse/source/*
-data/archives/gtfs/*
 scripts/data/gtfs/*
-GAMA/CityTransport/results_legacy/*
-GAMA/CityTransport/results
+# Ces deux dossiers portent des DONNÉES (pbf, graph.obj, feeds, notebooks de fouille)
+# qu'on ne versionne pas — mais la provenance d'un extrait et les recettes que la
+# documentation cite doivent, elles, se rejouer. Exceptions explicites (ticket 031, T1/T3/T4) :
+# `Toulouse.osm.pbf.dvc` et son README disent d'où vient l'extrait OSM servi à OTP ;
+# `transit_service_hull.py` recalcule `geography.TOULOUSE_TRANSIT_SERVICE_WKT` ;
+# `otp_link_check.py` compte les « Couldn't link » d'une population.
+!otp-toulouse/toulouse/README_Toulouse.osm.pbf.md
+!scripts/data/gtfs/transit_service_hull.py
+!scripts/data/gtfs/otp_link_check.py
+# Feeds annuels reconstruits par `make gtfs-year` : 280 Mo décompressés,
+# entièrement régénérables depuis les exports archivés. Le code du pipeline
+# (scripts/data/gtfs_year/) et la trace de build restent versionnés, et
+# l'instantané du calendrier scolaire aussi — c'est lui qui rend le build
+# rejouable à l'identique hors ligne.
+data/gtfs_year/*
+scripts/data/gtfs_year/cache/*
 scripts/data/population/Temp/*
-scripts/analysis/*.png
-scripts/models_influence/results*
 
-docs/tickets/*
+# ============================================================
+# Données restreintes ProGEDO / EMC² / INSEE
+# ============================================================
+# Couche de zones fines dérivée de l'enquête EMC² (ProGEDO / lil-1750, accès
+# restreint). Même statut que sa source, qui n'est pas versionnée : on la
+# régénère avec `make zones` plutôt que de la committer.
+packages/mobility_core/src/mobility_core/data/zf_zones.gpkg
+packages/mobility_core/src/mobility_core/data/zf_zones.meta.json
+
+# Loi du type de logement par zone fine, dérivée de la même enquête (action A2).
+# Même statut, même raison : `make housing-type` la régénère.
+packages/mobility_core/src/mobility_core/data/zf_housing_type.json
+
+# Table des 785 zones fines → secteur de tirage → couronne → commune (ticket 038).
+# Déversionnée le 2026-09-12 : ce n'est pas un résultat agrégé mais le PLAN DE SONDAGE de
+# l'enquête, que la convention lil-1750 ne permet pas de céder. Le dépôt ayant vocation à
+# accompagner une publication, elle en sort comme elle est sortie du paquet.
+# `make communes-couronnes` la régénère ; `commune_couronne.json` (453 communes) et
+# `couronne_perimetre.geojson`, eux, restent versionnés — statut à confirmer (ADISP).
+packages/mobility_core/src/mobility_core/data/zf_couronne.json
+
 data/insee/*
+data/PROGEDO 2023/*
+data/population/*
+data/cache/eqasim/*
 
-#script
-scripts/models_influence/calibration_results/*
-llm_module/llm_gateway.egg-info/SOURCES.txt
+# Jeux de données ProGEDO Logit générés (exploration, fits, exports) : le
+# code (*.py, *.ipynb) reste versionné, les données dérivées non.
+scripts/progedo_logit/*.csv
+scripts/progedo_logit/*.json
+scripts/progedo_logit/*.parquet
+scripts/progedo_logit/*.npz
+!scripts/progedo_logit/feature_spec.json
+
+# ============================================================
+# Fichiers de données et de debug spécifiques
+# ============================================================
+scripts/general/*.csv
+Divers/*
+# Brouillons de session — sur le disque, jamais dans git (ticket 039). `Divers/` attend un
+# tri manuel de l'auteur ; `scratch/` n'a pas vocation à être trié, seulement à ne pas
+# encombrer `git status`.
+scratch/
+
+# ============================================================
+# Dépôts git externes / séparés (gérés indépendamment, ne pas versionner
+# leur contenu dans ce dépôt)
+# ============================================================
+# EQUASIM Toulouse
+services/eqasim-toulouse/
+# Calibration de prompt (github.com/Ytlse/prompt_calibration)
+prompt_calibration/
+# Assistant personnel — dépôt git autonome imbriqué
+docs/slides/README.md
+# Les traces d'expériences se versionnent PAR DATE ET HEURE sur disque (docs/traces/<AAAA-MM-JJ_HH-MM>_…),
+# pas dans git — décision du 2026-09-02. Ce qui se versionne dans git est l'artefact scellé
+# (data/population/population_1000_AAMAS/) et sa documentation.
+docs/traces/*
+# Ticket 039 : la règle ci-dessus n'a jamais désuivi les 42 fichiers déjà versionnés — un
+# `.gitignore` n'agit que sur ce qui n'est pas encore suivi. Ils sont sortis de l'index le
+# 2026-09-12 et restent sur le disque, comme la décision du 02/09 le demandait.
+
+# Sorties d'un relevé de consommation de jetons — un résultat d'exécution, pas une pièce
+# du code (ticket 039). Le dossier reste sur le disque.
+tests/token_usage/
+
+# Ticket 035 — jeux de déplacements enregistrés et résultats d'exécution : sur disque, pas dans git
+# (les définitions d'expériences, elles, se versionnent : data/experiences/<nom>/experience.yaml)
+data/jeux/
+# Ticket 045 — archives du substrat v1. Les DÉFINITIONS archivées se versionnent, comme les
+# vivantes : ce sont elles qui disent quoi reconstruire, et elles pèsent quelques kilo-octets.
+# Les exécutions archivées, non : 403 Mo de traces, et le motif au-dessus ne les couvre pas
+# (un niveau de dossier de plus). Les zips non plus : ce sont des copies transportables,
+# reproductibles depuis les dossiers par `scripts/archiver_substrat_v1.py`.
+data/experiences/
+data/experiences/.masques.json
+services/llm-agents/data/experiences/
+# copie de services/llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
+.config.yaml.applique
+
+# Caches d'outillage
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+packages/llm_gateway/site/
+
+# Artefacts de couverture (pytest-cov)
+.coverage
+coverage.xml
+htmlcov/
+
+# Recueil de PDF de l état de l art (145 Mo, PDF d éditeurs) : seul le README est suivi
+docs/paper/sources/etat_de_lart/*.pdf
+docs/paper/sources/etat_de_lart/.DS_Store
+data/JOURNAL_archivage_ticket_045_2026-09-11.json
+
+services/GAMA/CityTransport/results
+
+services/otp-toulouse/source/ter_occitanie/
+services/otp-toulouse/tools/filter_ter_gtfs.py
+specs/dashboard-pilotage-activites-tickets.md
+specs/hygiene-prompts-et-plateforme-experiences.md
+specs/nommage-canonique-experiences.md
+specs/tableau-experiences-colonnes-et-filtres.md
+specs/ticket_027/questions.md
+specs/ticket_027/sonde-motif-escort.md
+specs/ticket_043/klr-troisieme-famille.md
+specs/ticket_043/questions.md
+specs/ticket_044/questions.md
+specs/ticket_044/temoin_random_forest.md
+specs/ticket_045/questions.md
+specs/ticket_045/substrat-unique-v5.md

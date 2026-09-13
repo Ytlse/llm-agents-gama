@@ -1,0 +1,11 @@
+mobility-llm
+Copyright 2026 les auteurs du dépôt Ytlse/llm-agents-gama
+
+Ce produit inclut des logiciels développés dans le cadre du projet llm-agents-gama
+(simulation multi-agents de la mobilité toulousaine). Distribué sous la licence
+Apache 2.0 : voir le fichier LICENSE.
+
+Les prompts et gabarits de ce paquet citent des communes et des noms de réseaux de
+transport ; ils ne reproduisent aucune donnée de l'enquête EMC² Toulouse 2023. Le domaine
+de l'enquête, et les réserves qui s'y attachent, vivent dans `mobility-core` (voir son
+fichier NOTICE).

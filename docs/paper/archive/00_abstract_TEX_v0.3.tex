@@ -1,0 +1,19 @@
+% =====================================================================
+% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v0.3 (11 September 2026)
+% Dernière mise à jour : 2026-09-11
+% Chapter 0 of the paper: the abstract. To be inserted before 01_introduction.tex.
+% Ready to paste into the Overleaf project (acmart + natbib: \citep, \citet).
+% Derived file: regenerate after every validated pass of ../en/00_abstract.md.
+% Placeholders <xx> are filled from methode/experience_plan/experiments.yaml.
+% Submission word count: 241 (placeholders count as one word, LaTeX commands excluded),
+% i.e. -29.1 % on the 340-word version of 10 September 2026, inside the 100-300 OpenReview bound.
+% Open point (see ../relecture/00_abstract.md, item 3): the two biased modes are left as
+% placeholders — v0.2 announced cycling, the run of 8 September 2026 measures public transport.
+% =====================================================================
+
+\begin{abstract}
+Urban mobility simulations rely on tabular models or on explicit rules; either way the space of representable behaviours is fixed a priori: a factor encoded as neither variable nor rule cannot influence any decision. LLM agents promise to lift it; we ask two separate questions: can such a population stand in statistically for a territory's, and can it react to contexts no survey tabulates?
+\\\\We evaluate mode choice in Toulouse against the certified EMC$^2$ 2023 survey, under a contract that gives every model the same information: 1,000 sealed eqasim personas, 2,645 trips, OpenTripPlanner itineraries, decisions inside GAMA, and the same 21 variables for the LLM agent, a multinomial logit and a LightGBM oracle fitted on the survey. Four levels are compared --- naive floors, bare LLM, a prompt rewritten by hand toward the published shares, tabular references --- the agent's probability mass over the modes actually offered being read against the tabular models' renormalised probabilities.
+\\\\We test one pre-registered hypothesis: neither LLM condition reaches the tabular reference within the equivalence margin --- L1 errors of $\langle \textbf{xx} \rangle$ and $\langle \textbf{xx} \rangle$ points against $\langle \textbf{xx} \rangle$ (logit) and $\langle \textbf{xx} \rangle$ (oracle). Two regimes no survey tabulates are then judged on robustness, not fidelity: five-day hysteresis after a metro line failure, with and without decaying memory, and five dated local news events with twenty pre-registered directional predictions, $\langle \textbf{xx} \rangle$\,\% met.
+\\\\This argues for hybrid architectures: the tabular model secures calibration, the LLM agent handles departures from the nominal regime.
+\end{abstract}

@@ -1,15 +1,15 @@
+"""Shim de compatibilité — `llm_module.main` a déménagé dans `llm_gateway.main`.
+
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.main`.
 """
-main.py — Point d'entrée uvicorn (compat docker-compose : `llm_module.main:app`).
+import warnings as _warnings
 
-L'application est construite par la fabrique create_app() (api/app.py) :
-composition explicite des dépendances, reset RPM dans le lifespan.
-"""
+_warnings.warn(
+    "llm_module.main est déprécié : importez llm_gateway.main (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-from llm_module.api.app import create_app
-
-app = create_app()
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("llm_module.main:app", host="0.0.0.0", port=8000, reload=True)
+from llm_gateway.main import *  # noqa: E402,F401,F403
+from llm_gateway.main import app  # noqa: E402,F401

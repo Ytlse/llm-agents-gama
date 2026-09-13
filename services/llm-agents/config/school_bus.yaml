@@ -1,0 +1,31 @@
+# Car scolaire synthétique — paramètres exogènes (ticket 030).
+#
+# Source de vérité UNIQUE des constantes du Lot A. Elles sont FIGÉES (pas de
+# calibrateur automatique) : choisies une fois pour que la durée médiane retombe
+# sur les 30 min observés dans l'EMC² sur la distance médiane des trajets scolaires
+# (4,94 km à vol d'oiseau), et vérifiées a posteriori par le critère d'acceptation 3.
+#
+# Provenance des durées : microdonnées EMC² 2023 (ProGEDO lil-1750, MODP=41) —
+# médiane 30 min (20-40), 7,45 km parcourus pour 4,94 km à vol d'oiseau (détour 1,51),
+# ~16 km/h porte-à-porte. Le règlement liO ne donne aucun chiffre de durée : l'enquête
+# reste la source du temps de trajet, plus de l'éligibilité (cf. ticket 030).
+#
+# Cohérence : accès 5 + ramassage 10 + (4,94 × 1,5 / 28) h ≈ 30,9 min ; effective
+# porte-à-porte ≈ 14 km/h, proche des 16 observés.
+
+# Éligibilité individuelle : l'âge, et lui seul (décision 2026-09-03).
+age_min: 5
+age_max: 17
+
+# Durée : accès à l'arrêt + (distance vol d'oiseau × détour / vitesse) + ramassage.
+access_minutes: 5          # marche domicile → point d'arrêt
+detour_factor: 1.5        # distance parcourue / distance vol d'oiseau (EMC² : 1,51)
+in_vehicle_speed_kmh: 28  # vitesse entre arrêts ; recalée pour médiane ≈ 30 min
+ramassage_minutes: 10     # temps de tournée (arrêts intermédiaires), forfait
+
+# Horaire : marge autour de l'activité scolaire (le règlement cale les circuits sur
+# la première entrée / dernière sortie de l'établissement ; 30 min = alignement au mieux).
+schedule_margin_minutes: 30
+
+# Coût : nul (transport scolaire régional gratuit depuis 2021). Pas de champ tarif
+# dans le modèle : la gratuité est portée par le libellé de rendu.

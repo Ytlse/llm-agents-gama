@@ -10,12 +10,12 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 [Événements de simulation et décisions]
 └── Mémoire Court Terme (Python RAM — isolation par activity_id)
     └── Seuil atteint (stm_reflection_min_entries entrées dans le buffer)
-        └── Appel gateway llm_module (catégorie stm_reflection)
+        └── Appel gateway llm_gateway (catégorie stm_reflection)
             └── Réflexion narrative + concepts extraits
                 └── Écriture en Mémoire Long Terme (ChromaDB — base vectorielle locale)
                     └── Index partagé / partitionnement logique par person_id
                         └── Self-reflection multi-jours (intervalle temps : long_term_self_reflect_interval_days)
-                            └── Appel gateway llm_module (catégorie ltm_self_reflection)
+                            └── Appel gateway llm_gateway (catégorie ltm_self_reflection)
 ```
 
 ### Court terme (STM)
@@ -23,7 +23,7 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 - Stockée en RAM Python dans une liste ordonnée de `MemoryEntry`
 - Isolation par `activity_id` : chaque activité a sa propre fenêtre contextuelle
 - Purgée quand le buffer atteint **`stm_reflection_min_entries`** entrées (seuil configurable) — déclenchement par volume, pas par intervalle de temps
-- Implémentation : `llm-agents/llm/shortterm.py`
+- Implémentation : `services/llm-agents/llm/shortterm.py`
 
 ### Long terme (LTM — ChromaDB)
 
@@ -39,7 +39,7 @@ $$\text{Score} = (\text{Similarité Cosinus} \times 0.4) + (\text{Score BLEU des
 
 Les souvenirs récents et pertinents remontent dans le contexte LLM de l'agent.
 
-- Implémentation : `llm-agents/llm/longterm.py`
+- Implémentation : `services/llm-agents/llm/longterm.py`
 
 ---
 
@@ -58,20 +58,44 @@ Le cache est **hybride** : il se comporte différemment selon que l'agent a déj
 │
 ├── LTM vide (typiquement : tout le bootstrap)
 │   └── Correspondance exacte (`scroll` clé-valeur, ~0,1 ms, aucun embedding)
-│       ├── Trouvé → décision resservie
+│       ├── Trouvé → distribution resservie, puis NOUVEAU tirage (`draw_index`)
 │       └── Sinon  → appel LLM, puis store avec `memory_empty=True`
 │
 └── LTM remplie
     └── Embedding de la LTM courante, puis similarité cosinus (`query_points`)
         contre les LTM des décisions stockées aux mêmes conditions
-        ├── score ≥ `cache.semantic_threshold` → décision resservie
+        ├── score ≥ `cache.semantic_threshold` → distribution resservie, puis NOUVEAU tirage
         └── score <  seuil (ou aucun candidat)  → appel LLM avec la LTM,
                                                    puis store avec `memory_empty=False`
+
+(un hit dont plus aucune option n'est tirable redevient un miss — cf. « options disparues »)
 ```
 
 Sans souvenir, deux décisions prises dans les mêmes conditions factuelles sont nécessairement identiques : l'embedding serait du calcul pur perte. Dès que l'agent a un vécu, ce vécu pèse sur sa décision, et le cache ne la resert que si la mémoire courante est proche de celle qui l'avait produite — **c'est ce qui permet à l'agent d'apprendre** au lieu de rejouer indéfiniment sa première décision.
 
 Les deux familles de points sont **étanches** (`memory_empty` fait partie du filtre) : une décision prise sans souvenir n'est jamais resservie à un agent qui en a, et réciproquement.
+
+### Ce qui est mis en cache : une distribution, pas une décision
+
+Le LLM ne renvoie plus un itinéraire choisi mais une **probabilité par option**
+(cf. `docs/arch/llm-inference.md`). C'est ce vecteur qui est persisté, dans le champ
+`probabilities` du point Qdrant (`[{code, mode, p}, …]`, indexé par code de plan et non
+par position).
+
+Conséquence : **un hit ne resert pas une décision figée, il rejoue un tirage**. La graine
+dérive de `(agent.mode_draw_seed, agent_id, activity_id, jour simulé)` — un même agent,
+replacé dans le même contexte un autre jour, peut donc changer de mode sans qu'aucun appel
+LLM ait lieu. Le cache économise l'inférence, pas la variabilité des comportements.
+
+Deux cas particuliers :
+
+- **options disparues** — les codes de plan absents des options courantes sont écartés et
+  la masse restante est renormalisée ; s'il ne reste rien de tirable, le hit devient un
+  miss (`code_not_in_options`) et le LLM est rappelé ;
+- **points hérités** — les points écrits avant cette bascule ne portent que
+  `chosen_plan_code` : ils sont resservis tels quels, sans tirage. En pratique, changer le
+  prompt système change aussi le checksum d'isolation du cache, donc ces points vivent dans
+  un répertoire distinct.
 
 - Stockage : disque local dans `data/llm_cache/<checksum_prompt>/<population_name>/`
 - Activation : `cache.enabled: true` dans la config d'expérience
@@ -91,13 +115,49 @@ Les deux familles de points sont **étanches** (`memory_empty` fait partie du fi
 
 ### Quand le cache est-il pertinent ?
 
-La clé de lookup encode l'**agent**, l'**activité**, la **catégorie de jour** (semaine/week-end), la **tranche de 10 minutes**, les **options de transport disponibles** et la **météo** — plus, sur la branche sémantique, la **mémoire long terme** de l'agent. Un même agent replacé dans le même contexte de décision *et* avec un vécu comparable reçoit la même décision sans appel LLM supplémentaire.
+La clé de lookup encode l'**agent**, l'**activité**, la **catégorie de jour** (semaine/week-end), la **tranche de 10 minutes**, les **options de transport disponibles** et la **météo** — plus, sur la branche sémantique, la **mémoire long terme** de l'agent. Un même agent replacé dans le même contexte de décision *et* avec un vécu comparable reçoit la même **distribution** sans appel LLM supplémentaire — le mode effectif, lui, est retiré au sort.
 
 Corollaire : le cache est réutilisable d'un run à l'autre pour un scénario donné, mais une réflexion LTM qui change significativement le vécu d'un agent invalide ses décisions cachées — par construction.
 
 > ⚠️ Le filtre inclut désormais `weekday` et `memory_empty`. Les caches produits avant cette
 > évolution ne portent pas ces champs et ne seront jamais retrouvés : supprimer
 > `data/llm_cache/` pour repartir proprement.
+
+> Le cache n'a **aucun mode dégradé** : la clé de lookup est toujours appliquée dans son
+> intégralité. En cas de panne LLM durable, la simulation **attend** le rétablissement
+> (disjoncteur client, cf. `docs/arch/llm-inference.md` § « Panne durable ») plutôt que
+> de servir des décisions sous contraintes relâchées.
+
+> Le principe vaut aussi à l'**écriture** : un repli uniforme (vecteur LLM inexploitable,
+> typé `UniformFallback` par `normalize_option_probabilities`) sert le trajet en cours
+> mais n'est **jamais persisté** — `[cache] store refusé` dans les logs. Sans ce refus,
+> le hasard d'un run devenait la « décision » servie à tous les runs suivants (constaté
+> le 2026-08-03 ; assainissement : `scripts/cache/purge_uniform_fallback.py`).
+
+### Mémoïsation des réflexions STM/LTM (ticket 012)
+
+Les appels de **réflexion** obéissent à un régime distinct des décisions : le prompt
+contient le vécu unique de l'agent, donc tout rapprochement (sémantique, inter-agents)
+est interdit — mais un prompt **byte-identique** (re-run déterministe : décisions au
+cache, tirages seedés, météo rejouée) est une fonction pure déjà payée.
+`ReflectionMemoStore` (`llm/reflection_store.py`) mémoïse par SHA-256 du prompt
+effectif (agent, identité, vécu, consignes, horodatage, paramètres LLM) dans
+`reflections.sqlite`, à côté du cache de décisions — l'isolation par checksum de
+prompt système est héritée du répertoire.
+
+| | Décisions (`llm_decisions`) | Réflexions (`reflections.sqlite`) |
+|---|---|---|
+| Réutilisation | Contexte partagé (agent, activité, créneau, météo…) | **Exact uniquement**, jamais inter-agents |
+| Branche sémantique | Oui (seuil cosinus) | **Non — par construction** |
+| Contenu servi | Distribution → nouveau tirage | La réflexion telle que payée |
+| Repli persisté | Jamais (`UniformFallback`) | Jamais (réflexion vide refusée) |
+
+Un hit (`[reflection-memo] hit` dans les logs, compteur Prometheus
+`agent_reflection_memo_total`) a des effets strictement identiques à un appel réel :
+STM consommée, entrées REFLECTION/CONCEPT écrites en LTM. Désactivable via
+`cache.reflection_memo_enabled`. Le taux de hit attendu est ~0 % sur un scénario
+inédit et ~100 % sur le re-run d'un scénario épinglé — c'est la mesure de validation
+du ticket 012 (A3).
 
 ### Cache LRU des métadonnées LTM
 
@@ -110,7 +170,7 @@ Corollaire : le cache est réutilisable d'un run à l'autre pour un scénario do
 Le cache persistant d'itinéraires (`OtpPersistentCache`, SQLite) mémorise les itinéraires
 par couple origine/destination/heure (`gtfs.otp_cache_enabled`, défaut `true`), les réutilise
 à une heure de départ proche par décalage temporel, et blackliste les paires O/D sans
-itinéraire ; la base est persistée par population dans `llm-agents/data/otp_cache/<population>/`.
+itinéraire ; la base est persistée par population dans `services/llm-agents/data/otp_cache/<population>/`.
 La clé de cache inclut les modes disponibles pour l'agent (`include_car` **et** `include_bike`) :
 deux agents avec des équipements différents (avec/sans vélo) ne partagent jamais une entrée,
 sinon l'option vélo pourrait manquer silencieusement dans les choix proposés au LLM.
@@ -134,7 +194,7 @@ Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache`
 > passer la clé sur l'heure exacte (sans décalage).
 
 > ⚠️ **Limitation connue — `fixed_day` et date absolue** : la clé du cache OTP inclut la
-> **date simulée réelle** (`YYYY-MM-DD`), calculée avant le remapping `gtfs.fixed_day`
+> **date simulée réelle**, calculée avant le remapping `gtfs.fixed_day`
 > effectué dans `OTPTripHelper`. Avec `fixed_day` actif, deux dates simulées différentes
 > envoient pourtant la même requête à OTP (mêmes horaires GTFS) mais génèrent des clés
 > distinctes : un cache réchauffé pour le jour J est donc **intégralement raté** pour une
@@ -142,8 +202,47 @@ Selon le mode de routage, deux câblages partagent le même `OtpPersistentCache`
 > de la clé sur la date fixe (ou le jour de semaine) quand `fixed_day` est actif, à l'image
 > de la clé weekday d'`OsmnxPersistentCache`.
 
+### La clé porte l'INSTANT, décalage compris (2026-09-04)
+
+Depuis le 2026-09-04, la partie temporelle de `OtpPersistentCache.make_key` n'est plus une
+date et une heure nues mais **l'instant complet dans le fuseau du réseau**
+(`2026-03-16T05:00:00+01:00`, cf. [routing.md](routing.md#lhorloge--quelle-heure-les-moteurs-reçoivent-ils)).
+Ce n'est pas cosmétique, et c'est le seul cache des trois que le correctif de fuseau
+mettait vraiment en danger :
+
+- il ne mémorise pas des durées mais des **`TravelPlan` sérialisés**, et `lookup` les
+  **décale** de `departure_time - stored_departure_time` ;
+- sa clé était bâtie sur `datetime.fromtimestamp(departure_time)`, donc sur le fuseau du
+  **processus** : une entrée qui répondait à un départ de 5 h murales était rangée sous
+  l'étiquette « 06:00 ». Sous la nouvelle convention, elle aurait été resservie à un départ
+  de 6 h murales — puis décalée d'une heure de plus ;
+- **aucune version ne l'en empêchait** : `data_version()` (`tt4`) n'a pas bougé et
+  `routing_version` n'entre pas dans cette clé. Changer la **forme** de la chaîne rend
+  l'ancienne génération inatteignable sans purge manuelle. Mesuré sur
+  `data/cache/otp/toulouse_population_1000/` : 52 159 lignes, dont **5 318 étaient encore
+  vivantes** (écrites en `tt4`, les 2026-09-03 et 09-04) et sont désormais inertes.
+
+Le décalage porté par la clé distingue en outre **l'heure d'hiver de l'heure d'été** : la
+même heure murale n'est pas le même instant selon la saison, et l'ancienne clé les
+confondait.
+
+> ⚠️ **Ce que la liste noire n'est pas protégée par, et ce n'est pas réglé.**
+> `make_blacklist_key` ne porte **ni heure, ni version** — seulement les coordonnées — et
+> `get_itineraries` y ajoute une paire dès que `do_get_iteraries` rend une liste **vide**,
+> ce qui inclut « aucun service **à cette heure-là** »
+> (`noTransitConnectionInSearchWindow`) et pas seulement « ces deux points ne sont pas
+> reliés ». Le commentaire du code justifie l'absence de version par un « fait de topologie
+> du réseau » : c'est vrai du motif topologique, faux du motif horaire. Conséquence
+> concrète : les **62 paires** déjà noircies dans
+> `data/cache/otp/toulouse_population_1000/` l'ont été à l'ancienne heure et continuent de
+> rendre `[]` sans qu'OTP soit interrogé. Et la clé étant un SHA-256, **on ne peut pas
+> retrouver de quelles paires il s'agit** — une liste noire non auditable.
+> Recommandation : ne noircir que sur un motif indépendant de l'heure
+> (`LOCATION_NOT_FOUND`, `OUTSIDE_BOUNDS`, `noStopsInRange`), et stocker le motif en clair
+> à côté de la clé. Décision de l'auteur : cela change le nombre d'appels OTP d'un run.
+
 Le routage direct OSMnx (marche/vélo/voiture) dispose, lui, de son propre cache persistant
-**toujours actif** (`OsmnxPersistentCache`, `llm-agents/data/osmnx_cache/`). La clé voiture
+**toujours actif** (`OsmnxPersistentCache`, `data/cache/osmnx/<population>/osmnx_cache.db`). La clé voiture
 inclut le **jour de la semaine + tranche horaire** (granularité du facteur de congestion) mais
 **pas la date absolue** : deux runs à des dates calendaires différentes mais même weekday
 réutilisent les mêmes trajets. Marche/vélo sont indépendants du temps (coords + mode).
@@ -156,11 +255,86 @@ opération de routage, si bien que le Pass 2 de génération de population (calc
 trajet pour l'ajustement des plannings) en bénéficie aussi : une régénération du fichier
 population réutilise les routes déjà calculées au lieu de tout recalculer via OSMnx.
 
+### Un seul fichier pour le peupleur et pour le runtime ⚠
+
+Le cache de routes est écrit par **deux** producteurs, qui doivent viser le même fichier :
+
+| Producteur | Où il écrit | Comment le chemin est obtenu |
+|---|---|---|
+| Peupleur en masse (étape 6 de `generate_population.ipynb`) | `data/cache/osmnx/<population>/` | `OSMNX_ROUTE_CACHE`, chemin hôte |
+| Runtime (`_prepare_population`) | `/app/data/cache/osmnx/<population>/` | `gtfs.osmnx_persistent_cache_dir` |
+
+L'égalité des deux ne tient qu'au montage `./data/cache/osmnx:/app/data/cache/osmnx` du service
+`controller` (`infra/docker-compose.yml`) — exactement comme le cache OTP monte `./data/cache/otp` sur
+`/app/data/cache/otp`. **Retirer ce montage ne casse rien de visible** : `/app` étant le bind de
+`./llm-agents`, le runtime crée alors un `services/llm-agents/data/cache/osmnx/` dans l'arborescence du
+code, invisible du peupleur, et repart de zéro à chaque population neuve.
+
+C'est ce qui s'est produit du **2026-06-02 au 2026-09-04** : le défaut valait
+`/app/data/osmnx_cache`, que rien ne montait. 196 runs ont recalculé leurs routes à froid à côté
+d'un cache réchauffé de 83 478 routes, et la promesse « 100 % de hits au démarrage » de l'étape 6
+du notebook n'a jamais été tenue une seule fois. Trois garde-fous ont été posés :
+
+1. **Au démarrage du runtime**, `init_persistent_cache` journalise le chemin **et le nombre de
+   routes en base** (`[osmnx-cache] Cache de routes actif : … — N routes en base`), en distinguant
+   « fichier existant » de « FICHIER CRÉÉ ». C'est le chiffre dont l'absence a rendu la dérive
+   invisible huit semaines.
+2. **`[ALARME]`** si le répertoire du cache n'est **pas un point de montage** (lu dans
+   `/proc/self/mountinfo` : dans un conteneur, deux binds du même disque hôte partagent leur
+   `st_dev`, donc ni `st_dev` ni `os.path.ismount` ne les distinguent). Un `WARNING` distinct
+   signale un cache vide sur un chemin correctement monté — légitime pour une population neuve.
+3. **Dans le notebook**, la cellule des chemins **refuse de continuer** si
+   `infra/docker-compose.yml` ne monte pas le répertoire hôte sur le chemin lu dans `settings.py` :
+   réchauffer 2 h 30 pour un fichier que personne ne lit doit échouer bruyamment.
+
+**Piège de nommage, toujours ouvert.** Le sous-dossier est nommé
+`toulouse_population_{population_size}` — dérivé de la **taille**, pas de l'identité de la
+population. Les sceaux v2, v3 et v4 de 1 000 agents partagent donc `toulouse_population_1000/`.
+Aucun risque de justesse (la clé porte les coordonnées et `routing_version`, donc une ligne d'une
+autre population ou d'une autre version n'est jamais resservie), mais « mon cache est-il chaud
+pour CETTE population ? » n'a pas de réponse lisible : le fichier contient aujourd'hui 92 818
+lignes dont 83 478 en `r1`, définitivement inertes depuis le bump `r2`.
+
 ---
 
 ## Cache des graphes OSMnx
 
-Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis OpenStreetMap au premier démarrage et mis en cache dans `data/osmnx_cache/`. Ce cache est persistant entre les redémarrages Docker (volume monté).
+Les graphes topologiques OSMnx (walk, bike, drive) vivent dans `data/cache/osmnx/` (monté dans les
+réplicas `osmnx` et le controller sous `/app/osmnx_cache`), sous la forme `graphs_<clé>.pkl` +
+`boundary_<clé>.pkl`. **Depuis le 2026-09-03 (ticket 031, partie 2), le graphe servi au runtime est
+celui du polygone des 453 communes** — clé `444ca7e6a515`, label
+`perimetre_453_communes:cc1:osm-220101` (`geography.PERIMETER_CACHE_KEY`), 225 Mo, construit hors
+ligne et sans téléchargement par `make osmnx-perimeter-graph` depuis les pbf OSM régionaux. La clé
+se configure (`gtfs.osmnx_graph_key`, vide = polygone) ; un graphe absent est une **erreur explicite**
+(`[ALARME]`, `GraphMissingError`), plus un téléchargement Overpass à sa place. Seul le graphe
+historique du disque de 30 km (clé `ecb40f20a303`, `PRODUCTION_CACHE_KEY_30KM`) garde sa recette de
+téléchargement, pour l'audit. Un changement des vitesses de `config/osmnx.yaml` se repose sur le
+pickle avec `build_osmnx_perimeter_graph.py --respeed` (26 s, 2,6 Go de pointe) : le pickle porte
+les vitesses de sa construction, la config seule ne suffit pas.
+
+**Les caches d'itinéraires sont par population**, pas par graphe : le cache SQLite OSMnx
+(`osmnx_persistent_cache_dir/<population>/`) et le cache OTP (`otp_persistent_cache_dir/<population>/`)
+d'une population nouvelle partent vierges — la v4 n'a rien à purger. Mais la clé SQLite OSMnx ne
+porte pas le graphe : une population déjà servie sur le disque de 30 km garderait ses durées (dont
+les replis à 70 km/h des trajets de 3ᵉ couronne). C'est pourquoi **`routing_version` passe de `r1` à
+`r2`** au changement de graphe et de vitesses vélo (`config/terminal_time.yaml`) : les anciennes
+lignes restent lisibles pour audit, aucune n'est resservie.
+
+**`r3` (2026-09-04) — une précaution, et la mesure qui le dit.** L'heure de départ est passée au
+fuseau du **réseau** au lieu de celui du processus ([routing.md](routing.md#lhorloge--quelle-heure-les-moteurs-reçoivent-ils)) :
+sous `TZ=Europe/Paris` (le `controller`) l'entier de GAMA valant 5 h murales était lu 6 h, sous
+`TZ=UTC` (les réplicas `osmnx`) 5 h. Vérifié avant de bumper : **aucune durée mémorisée n'est
+fausse pour autant.** La clé de ce cache porte le créneau (`weekday` + heure pleine) qui SERT à
+calculer le facteur de congestion, et la valeur ne contient que `duration_s`/`distance_m`, aucun
+horaire absolu — une ligne est donc juste pour l'étiquette sous laquelle elle est rangée, quel que
+soit le fuseau qui l'a produite ; les lignes `foot`/`bicycle` n'ont pas d'heure du tout. Le bump
+achète deux choses : la couverture chaude se déplace de toute façon (le runtime interroge 5 h au
+lieu de 6 h), et **aucune ligne n'enregistre sous quelle convention elle a été lue** — une
+prochaine modification de cette lecture mélangerait donc deux générations en silence. Coût mesuré
+sur `data/cache/osmnx/toulouse_population_1000/` : **9 340 lignes** encore vivantes en `r2`
+(écrites les 2026-09-03 et 09-04) deviennent inertes, les 83 478 de `r1` l'étant déjà. Si ce coût
+pèse plus que la précaution, revenir à `r2` est défendable — la mesure ci-dessus est le seul
+argument qui compte.
 
 ---
 
@@ -170,9 +344,132 @@ Les graphes topologiques OSMnx (walk, bike, drive) sont téléchargés depuis Op
 |-------|-------------|------------|-----|
 | Mémoire LT agents | ChromaDB | Disque | `person_id` + embedding |
 | Cache sémantique LLM | Disque local (Qdrant) | Disque | Vecteur (options + historique + purpose) |
-| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | date + bucket 10 min + coords + mode |
-| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque | coords + mode (+ jour-de-semaine/heure pour la voiture) |
-| Graphes OSMnx | Fichiers pickle | Volume Docker | Zone géographique + mode |
+| Itinéraires OTP | SQLite (`OtpPersistentCache`) | Disque | **version des données** + **instant dans le fuseau du réseau** (bucket 10 min, décalage compris) + coords + mode |
+| Routage direct OSMnx | SQLite (`OsmnxPersistentCache`) | Disque, par population | **`routing_version`** (`r3`) + coords + mode (+ jour-de-semaine/heure **murale** pour la voiture) |
+| Graphes OSMnx | Fichiers pickle | Volume Docker | Clé de graphe (`444ca7e6a515` = polygone des 453 communes) + mode |
+
+### Version des données d'itinéraire dans les clés (ticket 013)
+
+**Trois** caches survivent aux runs et étaient **aveugles** à un changement de définition
+des durées d'itinéraire. Ils portent désormais tous les trois
+`trip_helper.terminal_time.data_version()`, lu du champ `version:` de
+`services/llm-agents/config/terminal_time.yaml` : **bumper cette version les invalide proprement**,
+sans rien détruire — les anciennes lignes restent lisibles pour audit.
+
+- **Routage OSMnx** — adressé par (mode, coordonnées, créneau). Le jour où le temps de
+  stationnement est sorti de `duration_s`, il aurait continué à servir des durées calculées
+  sous l'ancienne définition, indéfiniment.
+- **Itinéraires OTP** — le plus lourd des trois, parce qu'il ne mémorise pas des durées mais
+  les **`TravelPlan` sérialisés**, options voiture et vélo comprises (le cache s'intercale à
+  la frontière appelant → helper, donc après l'assemblage transit + direct). Un cache chaud
+  aurait resservi des plans à **une seule jambe**, portant l'ancien stationnement fondu dans
+  la durée : le défaut du ticket 013 en entier, ressuscité après sa correction.
+- **Décisions LLM** — le plus discret. `state_hash` est fait des `TravelPlan.get_code()`
+  triés, c'est-à-dire de routes et d'arrêts : **insensible aux durées par construction**.
+  Sans version, un run rejouerait tranquillement des décisions prises sur des options où la
+  voiture était plus rapide qu'elle ne l'est — et **rien ne l'aurait signalé dans les logs**,
+  puisque de son point de vue le contexte de décision est identique.
+
+> Même famille de piège, fermée au ticket 014 : le **contexte d'anticipation** injecté dans
+> le prompt (météo du jour, agenda glissant, position des véhicules) n'apparaît ni dans les
+> codes d'options ni dans la météo du moment. Sa signature déterministe entre donc dans le
+> `state_hash` via `extra_key` — deux agendas ou deux états de véhicules différents ne
+> peuvent pas se servir mutuellement une décision. `extra_key` vide (anticipation
+> désactivée) laisse le hash strictement identique à l'existant : le cache d'avant reste
+> lisible à flag éteint.
+
+### Couper le cache pour rendre un run rejouable — `make run CACHE=0`
+
+Une décision servie par le cache **n'est jamais journalisée** : elle n'apparaît pas dans
+`llm_exchanges.jsonl`, donc son prompt n'existe nulle part. Conséquence directe pour toute
+mesure qui rejoue des décisions — A/B de prompt, plancher « prompt nu », ablation : elle ne
+peut porter que sur les décisions ayant **raté** le cache.
+
+Chiffré sur le run du 2026-08-27 : 6 735 décisions par la voie LLM, **76,4 % servies par le
+cache**, et le journal ne portait que **377 des 3 249** décisions du périmètre scoré. Les
+377 ne sont pas un échantillon : ce sont les plus atypiques du run, celles qu'aucune
+décision voisine n'avait déjà couvertes.
+
+`make run CACHE=0` bascule `cache.enabled` dans `services/llm-agents/config/config.yaml`, sur le
+patron de `MEM=0`. `enabled: false` court-circuite entièrement le cache
+(`self.llm_cache = None`) : il n'est ni lu ni écrit, et **il est donc inutile de le
+supprimer** — les décisions déjà payées restent valides pour un run ultérieur.
+
+Le coût est l'inverse exact du taux de service : **×4,24** sur ce run. En requêtes et en
+tokens, 228 → ~967 et 1,2 M → ~5,2 M. Deux conséquences pratiques : sur des paliers
+gratuits à 500 requêtes/jour, un run de 1 000 agents **force la bascule entre modèles**
+— qui veut un plancher sur modèle unique doit réduire le périmètre ; et `make run CACHE=1`
+doit suivre, sinon tous les runs ultérieurs paient le plein tarif sans que rien ne le
+rappelle.
+
+> **Troisième occurrence de la même famille, fermée le 2026-08-27 — et celle qui a coûté un
+> vidage manuel.** Les **traits du persona** n'apparaissent ni dans les codes d'options, ni
+> dans la météo, ni dans la signature d'anticipation. Or tous ne conditionnent pas l'offre :
+> `has_pt_subscription` ne change que le **texte du prompt** (`_pt_subscription_note` accole
+> « Abonné aux transports en commun. » à l'option TC). Corriger l'abonnement de 352 agents
+> laissait donc leurs décisions déjà en cache être resservies **sous l'ancien prompt**, sans
+> aucun signal. Une signature des traits entre désormais dans le `state_hash` via
+> `traits_key` (`_traits_signature` dans `llm_agent.py`).
+>
+> Deux précisions qui font la différence entre un correctif et une gêne :
+>
+> - **`has_driving_license` s'auto-invalidait déjà.** Il passe par `_can_drive`, qui
+>   conditionne les modes offerts, donc les codes d'options, donc le `state_hash`. Seuls les
+>   traits « narratifs » avaient besoin de la signature.
+> - **`name` est exclu de la signature, et c'est vérifié plutôt que supposé.** Il vient de
+>   Faker non graine à la génération : l'inclure viderait tout le cache à chaque
+>   régénération de population. Contrôle du 2026-08-27 : le `name` est **identique** entre la
+>   population source et celle du run (930/930), il n'est donc pas re-tiré au chargement,
+>   contrairement à ce qu'affirmait la documentation de la chaîne de population. Tout le
+>   reste de `traits_json` entre, y compris ce qui ne sert qu'au narratif — trier par « ce
+>   qui atteint le prompt » est exactement l'arbitrage qui a produit le défaut.
+>
+> `traits_key` vide laisse le hash strictement identique à l'existant, comme `extra_key` :
+> un cache d'avant le correctif reste lisible, au prix de n'être pas gardé sur cet axe.
+
+> La **liste noire** d'`OtpPersistentCache` (`make_blacklist_key`) reste délibérément **non
+> versionnée** : « OTP ne relie pas ces deux points » est un fait de topologie du réseau, qui
+> ne dépend d'aucun temps terminal. La versionner ferait re-interroger OTP pour rien sur
+> toutes les paires connues comme non reliées.
+
+> ⚠️ Toute modification des valeurs de `terminal_time.yaml` **doit** bumper `version:`. Le
+> chargeur refuse une configuration sans version, mais il ne peut pas devenir qu'une valeur
+> a changé sans que la version suive.
+
+> **Quatrième occurrence, et la mesure qui la chiffre — 2026-09-04.** La clé du cache de
+> décisions porte `weekday` + `time_slice`, et ces deux champs se lisaient
+> `datetime.fromtimestamp(ts)` — donc dans le fuseau du **processus**. Trois conséquences,
+> toutes mesurées dans
+> [`docs/traces/2026-09-04_14-30_horloge_prompt_meteo/`](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md) :
+>
+> - le `controller` (`TZ=Europe/Paris`) et les réplicas `osmnx` (`TZ=UTC`) calculaient
+>   **deux clés différentes pour le même instant simulé** : ils ne s'adressaient donc pas la
+>   même entrée ;
+> - un départ à **23 h murales un vendredi** basculait en `Weekend` et au lendemain
+>   (`day`/`month` du payload compris) : sa clé allait se confondre avec celle d'un vrai
+>   départ de week-end. 77 des 5 322 déplacements du run archivé `2026-09-04_01_09` partent
+>   dans l'heure murale 23 h ;
+> - **l'affirmation « le hachage des options change de toute façon » est FAUSSE.**
+>   `get_code()` vaut `route^arrêt^arrêt` : **aucune information d'heure**. Mesuré sur OTP
+>   en service, 200 couples origine-destination de la population scellée v4 × 5 heures
+>   murales : le `state_hash` est **identique** malgré le décalage d'une heure pour
+>   **259 / 990 contextes (26,2 %)** — et **47 %** à 23 h. Sur ceux-là, `time_slice` /
+>   `weekday` étaient le SEUL garde-fou contre un hit périmé, et comme ils portaient le même
+>   décalage que le routage… ils ne gardaient rien. Ce qui a protégé le dépôt le 2026-09-04
+>   n'est pas le hachage : c'est la **purge manuelle de 14 h 17**
+>   (`data/cache/llm` relevé à 0 octet, 0 fichier).
+>
+> Les deux champs lisent désormais `sim_clock.wall_clock`. Effet de bord : la tranche bouge
+> pour **100 %** des départs, donc tout point écrit avant le 2026-09-04 devient injoignable
+> pour son propre contexte — une invalidation par décalage, pas une garantie. ⚠ **Le texte
+> du prompt n'est toujours pas dans le `state_hash` sur l'axe de l'heure** : l'heure
+> affichée à l'agent (`current_time`, `departure_time`) n'y entre pas, seule `time_slice` la
+> couvre, au pas de 10 minutes. Question ouverte laissée à l'auteur du dépôt : la météo
+> (38,9 % des départs) et l'anticipation (31,7 %) entrent, elles, par `weather_key` et
+> `extra_key`.
+
+Le store de calibration, lui, était déjà correct : `RunConfig.eval_params_key()` contient
+`ds=<dataset_version>`, donc une éval sur `v4` ne peut pas lire le cache d'une éval sur `v3`.
 
 ---
 

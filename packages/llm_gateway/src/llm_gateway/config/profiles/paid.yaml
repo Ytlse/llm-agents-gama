@@ -1,0 +1,11 @@
+# Profil « paid » : fournisseurs à quotas larges (centaines de RPM, millions de TPM). Le
+# micro-batching attend moins et regroupe plus ; les réessais sont moins nombreux parce qu'un
+# 429 y est rare. VALEURS DE DÉPART, À RECALIBRER sur vos propres mesures (cf. guide des quotas).
+#   LLM_GATEWAY_PROFILE=paid
+batching:
+  delay_seconds: 1.0
+  target_agents: 20
+  max_batch_agents: 40
+resilience:
+  max_retries: 10
+  backoff_base_seconds: 0.5

@@ -2,6 +2,23 @@
 
 This file centralizes all instructions, conventions, and project context for Claude Code.
 
+## Règle permanente — l'article est verrouillé 🔒
+
+**Aucune session n'écrit dans `docs/paper/article/` sans accord humain explicite.**
+Cela couvre tous les `.md` de l'article : `fr/`, `en/`, `relecture/`, `plan/`, `overleaf/`,
+`README.md`, `CITATIONS.md`, `ameliorations.md`, `SOUMISSION_AAMAS_2027.md`. La lecture,
+le grep et la citation restent libres.
+
+**Procédure :** charger la skill `article-verrou`, présenter le diff (fichier, section,
+avant/après), s'arrêter, attendre un oui. **Un seul accord par tâche**, couvrant les
+fichiers annoncés dans ce diff et rien d'autre.
+
+Le harness demande aussi via `permissions.ask` sur `Edit`/`Write` — mais **pas** sur une
+écriture passée par `Bash` (`sed -i`, `>`, heredoc, `git checkout`). Ces chemins-là sont
+soumis à la même règle : c'est à moi de l'appliquer.
+
+---
+
 ## Instructions at Each Code Modification
 
 ### 1. Maintain Documentation ✅
@@ -64,6 +81,24 @@ if backlog_depth > BACKLOG_WARNING_THRESHOLD:
 
 ---
 
+### 4. Signaler l'impact sur l'article 📄
+Avant de conclure une tâche, dire ce qui rend l'article caduc ou daté.
+
+**Quand :** la tâche a touché un chiffre citable, une métrique ou sa définition, un
+protocole, un jeu gelé, un comportement décrit dans l'article, ou le corpus de référence.
+Un refactor sans effet observable ne déclenche rien.
+
+**Quoi :** charger la skill `article-impact` et rendre le bloc `=== SIGNALEMENT ARTICLE ===`
+— par section : ce qui a changé, la phrase qui devient fausse, l'action suggérée. Toujours
+énoncer aussi les sections vérifiées et indemnes.
+
+**Ne rien réécrire :** le signalement s'arrête au constat ; la correction repasse par le
+verrou ci-dessus.
+
+**Why:** une modification de code peut invalider silencieusement une phrase déjà relue.
+
+---
+
 ## Project Context
 
 ### h2c/Hypercorn Fix 🔧
@@ -90,9 +125,12 @@ GAMA's Java 21 HTTP client automatically adds `Upgrade: h2c` headers to all requ
 
 **Why:** All LLM services are now containerized. The controller WebSocket client reconnects indefinitely, so it waits for GAMA as long as needed.
 
+**Offline mode (headless, no GUI):** `make run OFFLINE=1` (alias `make run-offline`) runs GAMA in the `gama` compose service (profile `offline`, image `gamaplatform/gama:2025.06.4` — keep the tag pinned to the locally validated GAMA version). **Hot stop/resume:** `make stop-run` stops the simulation (GAMA + launcher) leaving the stack up; `make run OFFLINE=1 CONT=1` resumes in the SAME experiment dir (logs appended, state.json/checkpoints reloaded, Grafana/Prometheus/Redis kept). GAMA restarts at t0 of the sim day (no mid-trip state freeze, cf. ticket 002); caches make the replay near-instant. The launcher `scripts/gama/launch_headless.py` drives load/play via GAMA Server (port 6868) and MUST keep its WebSocket open for the whole run (GAMA Server kills experiments whose client disconnects). `GAMA_WS_URL` switches to `ws://gama:3001`. See `docs/setup/quickstart.md`.
+
 **If agents don't move:**
 - Check Docker services started before GAMA
-- Check WebSocket logs in controller show successful connection to `ws://host.docker.internal:3001`
+- Check WebSocket logs in controller show successful connection to `ws://host.docker.internal:3001` (GUI mode) or `ws://gama:3001` (offline mode)
+- Offline mode: check `experiments/current/gama_headless.log` for load/play errors
 
 **Relevant file:** `handle/websocket.py` (WebSocket reconnect loop)
 

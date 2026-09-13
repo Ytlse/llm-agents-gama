@@ -2,6 +2,10 @@
 
 **Date** : 2026-07-07
 **Statut** : ✅ implémenté le 2026-07-07 (phases 0 à 5, cf. §5 pour les écarts au plan)
+**Suite** : le 2026-09-07, le [ticket 037](../tickets/ticket_037_llm_module_en_trois_bibliotheques.md)
+a découpé ce package en trois (`llm_gateway`, `mobility_core`, `mobility_llm`) ; `llm_module/` est
+devenu une coquille de compatibilité dépréciée. Ce CR reste l'historique de l'étape précédente ;
+les chemins `llm_module/...` qu'il cite sont ceux de juillet 2026.
 **Origine** : relecture complète du module (~5 300 lignes) du 2026-07-07, qui a aussi produit
 4 correctifs de bugs (cf. [changelog](../changelog.md)). Ce CR traite le chantier structurel
 identifié à cette occasion.
@@ -54,7 +58,7 @@ Chaque fonction existe parfois en double (sync pour Celery, async pour FastAPI).
 implémentation (mémoire, mock) sans monkeypatcher des fonctions une à une.
 
 À cela s'ajoute un **couplage caché inter-projets** : `telemetry/logger.py:122` fait
-`from settings import settings` — qui résout le `settings.py` de `llm-agents/` selon le
+`from settings import settings` — qui résout le `settings.py` de `services/llm-agents/` selon le
 `sys.path` du process appelant. Le module n'est donc pas réellement autonome.
 
 ### 1.3 Packaging inexistant
@@ -195,7 +199,7 @@ class LLMGatewayClient:
 
 Disparaissent : `"EXPECTED_ERROR"`, les clés `"_post_ms"` injectées dans le dict de
 réponse, la tâche `_heartbeat` morte, et les deux `AsyncClient` créés à chaque tâche.
-Le `simulation_controller` de `llm-agents/` devient le premier consommateur migré.
+Le `simulation_controller` de `services/llm-agents/` devient le premier consommateur migré.
 
 ### 2.5 `pyproject.toml`
 
@@ -216,7 +220,7 @@ monitoring = ["flower>=2.0"]
 
 Soit ~12 dépendances runtime au lieu des ~45 actuelles. Le Dockerfile du gateway installe
 `pip install .` — llama-index, faiss, geopandas et consorts restent dans les requirements
-de `llm-agents/` où ils sont réellement utilisés.
+de `services/llm-agents/` où ils sont réellement utilisés.
 
 ---
 

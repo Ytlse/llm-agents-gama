@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "reflection": {
+            "type": "string",
+            "description": "Synthèse des patterns et habitudes observés sur plusieurs jours, 200 mots max"
+          }
+        },
+        "required": [
+          "agent_id",
+          "reflection"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "agents"
+  ],
+  "additionalProperties": false
+}

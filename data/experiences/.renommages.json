@@ -1,0 +1,20 @@
+[
+ {
+  "le": "2026-09-08T06:21:46+00:00",
+  "regle": "nommage-canonique-experiences",
+  "renommages": {
+   "Light_GBM": "exp_lgbm_jtir_nosim",
+   "Prompt_Minimaliste_Gemini_3.1": "exp_gemini-31-fl_minper_jtir_t0_nosim",
+   "Prompt_Minimaliste_Gemini_3.5": "exp_gemini-35-fl_minper_jtir_t0_nosim",
+   "Prompt_Minimaliste_mistral-small-latest": "exp_mistral-s_minper_jtir_t0_nosim",
+   "Prompt_Minimaliste_qwen3.6-27b": "exp_qwen36-27b_minper_jtir_t0_nosim",
+   "Prompt_Minimaliste_qwen_qwen3.6-27b": "exp_qwen36-27b_minper_jtir_t0_nosim",
+   "exp_00a_random_otp": "exp_alea_nosim",
+   "exp_00b_majority_car": "exp_majvoiture_nosim",
+   "exp_00c_shortest_time": "exp_durmin_nosim"
+  },
+  "fusions": {
+   "Prompt_Minimaliste_qwen_qwen3.6-27b": "exp_qwen36-27b_minper_jtir_t0_nosim"
+  }
+ }
+]

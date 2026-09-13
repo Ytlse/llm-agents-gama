@@ -1,0 +1,63 @@
+{# template: itinary_multi_agent.md.j2 #}
+{# Le texte système n'est plus codé en dur ici : il provient de la variante active   #}
+{# dans prompts.yaml (clé active.itinary_multi_agent), injectée via `system_prompt`.  #}
+{# Le schéma JSON reste injecté depuis schemas.json via `schema`.                     #}
+<!-- SYSTEM -->
+{{ system_prompt }}
+
+Schéma JSON attendu :
+{{ schema }}
+
+<!-- USER -->
+{# Contexte partagé (météo/trafic) éventuel au niveau de la requête. #}
+{%- set shared_context = None %}
+{%- if context and context != 'None' %}{% set shared_context = context %}{%- elif parameters and parameters.context and parameters.context != 'None' %}{% set shared_context = parameters.context %}{%- endif %}
+{% for agent in agents %}
+{#- La météo est réinjectée DANS chaque bloc persona (météo propre à l'agent si
+    fournie, sinon contexte partagé de la requête) : un lot peut ainsi mélanger
+    des contextes différents sans qu'un préambule commun ne les écrase. #}
+{%- set agent_context = agent.context if (agent.context and agent.context != 'None') else shared_context %}
+--- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
+{% if agent_context %}**Contexte :** {{ agent_context }}
+{% endif %}
+{#- Anticipation de la chaîne (ticket 014) : météo des tranches restantes de la
+    journée (tous les agents) et agenda glissant (agents ayant un véhicule à
+    chaîner). PAS de ligne de position des véhicules : « votre vélo est avec
+    vous » agissait comme une invitation (+5,5 pts de vélo mesurés) — la règle
+    de chaîne vit dans le prompt système (variante expert_chaine). Puces « · »
+    exprès : la consigne de sortie réserve les lignes « - [n] » aux options. #}
+{% if agent.day_outlook %}**Météo plus tard :** {{ agent.day_outlook }}.
+{% endif %}
+{{ agent.perception }}
+{% if agent.agenda %}
+
+**Trajets suivants prévus aujourd'hui :**
+{% for line in agent.agenda %}
+    · {{ line }}
+{% endfor %}
+{% endif %}
+
+**Options de trajet** ({{ agent.trajectories | length }} options, indices 0 à {{ agent.trajectories | length - 1 }}) :
+{# Les étapes d'un itinéraire (« - Marche jusqu'à… », « - Bus '401' vers… ») sont
+   ré-indentées en sous-puces « · » : rendues comme des puces « - » de même niveau
+   que la ligne d'option, elles se lisaient comme des options supplémentaires et
+   plusieurs modèles renumérotaient alors tout le bloc (index 0..35 pour 6 options),
+   ce qui envoyait leurs probabilités hors bornes. Une seule règle désormais : une
+   ligne « - [n] » = une option. #}
+{% for traj in agent.trajectories %}
+- [{{ traj.index }}] {{ traj.mode }}: {{ traj.description | replace('\n- ', '\n    · ') }}
+{% endfor %}
+
+{% if agent.history %}
+**Historique :**
+{% for entry in agent.history %}
+- {{ entry }}
+{% endfor %}
+{% endif %}
+
+{% endfor %}
+
+Réponds avec l'objet JSON final contenant les recommandations pour {{ agents | length }} persona(s).
+Pour chaque persona, recopie son `agent_id` **exactement** tel que fourni ci-dessus (identifiant numérique uniquement, sans le mot « PERSONA » ni le nom du persona).
+Pour chaque persona, note **toutes** ses options — une entrée `probabilities` par option, avec son `index` et son `mode` recopiés tels quels — et fais en sorte que les `probability` somment à 100. Une option que ce persona ne prendrait jamais reçoit 0.
+Seules les lignes `- [n]` sont des options : les sous-puces « · » détaillent les étapes d'une option et ne reçoivent jamais d'entrée `probabilities`. Les index repartent de 0 dans chaque bloc persona — n'utilise que ceux affichés entre crochets dans le bloc du persona que tu notes, jamais une numérotation continue d'un persona à l'autre.

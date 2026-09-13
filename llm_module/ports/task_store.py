@@ -1,33 +1,14 @@
+"""Shim de compatibilité — `llm_module.ports.task_store` a déménagé dans `llm_gateway.ports.task_store`.
+
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.ports.task_store`.
 """
-ports/task_store.py — Contrat de persistance des tâches (statut, résultat, pub/sub).
-"""
+import warnings as _warnings
 
-from __future__ import annotations
-from typing import Optional, Protocol
+_warnings.warn(
+    "llm_module.ports.task_store est déprécié : importez llm_gateway.ports.task_store (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-from llm_module.core.models import Task
-
-
-class TaskStore(Protocol):
-    """Variante async — utilisée par l'API FastAPI."""
-
-    async def save(self, task: Task) -> None: ...
-
-    async def get(self, task_id: str) -> Optional[Task]: ...
-
-    async def wait_done(self, task_id: str, timeout: float) -> Optional[Task]:
-        """Bloque jusqu'à l'état terminal de la tâche (pub/sub) ou le timeout.
-        Retourne le dernier état connu de la tâche, None si elle n'existe pas."""
-        ...
-
-
-class SyncTaskStore(Protocol):
-    """Variante sync — utilisée par le worker Celery."""
-
-    def save_sync(self, task: Task) -> None: ...
-
-    def get_sync(self, task_id: str) -> Optional[Task]: ...
-
-    def publish_done_sync(self, task: Task) -> None:
-        """Notifie les long-polls que la tâche a atteint un état terminal."""
-        ...
+from llm_gateway.ports.task_store import *  # noqa: E402,F401,F403

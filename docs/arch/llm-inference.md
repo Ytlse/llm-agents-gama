@@ -1,6 +1,17 @@
 # Architecture LLM — Inférence et load balancing
 
-Le module LLM (`llm_module/`) fait office de répartiteur de charge haute performance pour les appels vers les API LLM externes. Il découple le controller des fournisseurs et absorbe les variations de débit.
+Le gateway LLM (paquet `llm_gateway/`, ex-`llm_module`) fait office de répartiteur de charge haute performance pour les appels vers les API LLM externes. Il découple le controller des fournisseurs et absorbe les variations de débit.
+
+> **Depuis le 2026-09-07 (ticket 037), `llm_module` est découpé en trois paquets** : `llm_gateway`
+> (le gateway générique décrit ici, sans aucun mot de mobilité), `mobility_core` (le domaine de
+> l'enquête EMC² : couronnes, zones fines, hiérarchie des modes, vélo, logement) et `mobility_llm`
+> (les catégories LLM de la mobilité : persona, templates, schémas, variantes de prompt, choix modal,
+> métriques métier — enregistrées auprès du gateway par l'entry point `llm_gateway.categories`).
+> `llm_module/` n'est plus qu'une coquille de compatibilité qui réexporte et émet un
+> `DeprecationWarning`. La documentation propre au gateway (tutoriel, guides, référence des
+> réglages, métriques, ADR) vit dans `packages/llm_gateway/docs/` (`mkdocs serve`) ; cette page garde
+> l'explication du pipeline vu depuis la simulation. Les chemins ci-dessous sont ceux des
+> nouveaux paquets.
 
 ---
 
@@ -30,6 +41,160 @@ Le module est structuré en package ports & adapters (`core/` pur, `ports/` Prot
   Google passe en header `x-goog-api-key` (plus de clé en query string dans les logs).
 
 ---
+
+## Ordre de présentation et épinglage (ticket 035)
+
+**L'ordre des options dans le prompt est déterministe.** `LlmAgent.evaluate_and_choose_travel_plan`
+ne mélange plus les options avec `random.shuffle` : l'ordre est une fonction de
+`agent.option_order_seed` (défaut 42, le même nom que dans `experiments.yaml`), de l'agent et de
+l'activité (`experiences.decision.ordre_presentation`). Le biais de position est toujours mélangé,
+mais le même déplacement est présenté dans le même ordre d'un run à l'autre et dans les deux modes
+d'exécution (spec 02, D7). Le tirage final, lui, est réaligné sur l'ordre canonique par code et ne
+dépend pas de la présentation.
+
+**Kwargs optionnels, sans effet pour la simulation.** `force_provider` épingle une instance de
+passerelle ; `allowed_providers` refuse toute réponse servie par une instance hors de l'ensemble
+(garde-fou client, compté `substitution_refusee`, spec 05 Q3) ;
+`trace` (dict fourni par l'appelant) reçoit le payload envoyé, la réponse brute, les poids par
+option présentée, le fournisseur, l'identifiant de lot et le repli uniforme éventuel (spec 02, D6) ;
+`presentation_figee` garde l'ordre reçu. Le contrôleur GAMA n'en passe aucun : son comportement
+est inchangé.
+
+**Un lot épinglé n'est jamais servi par un autre modèle.** La passerelle sait basculer vers un
+autre fournisseur quand celui qu'elle a choisi échoue (parse error, 4xx, prompt trop volumineux) :
+c'est la bonne réponse pour un run GAMA, qui veut une décision. C'est la mauvaise pour une
+expérience, qui mesure UN modèle. Depuis le 2026-09-07, `_switch_provider_or_fail` **refuse** la
+bascule quand le lot portait un `force_provider` : le lot échoue avec un motif qui nomme
+l'instance épinglée, et l'alarme `alarme:bascule_refusee` est levée. Les lots sans épinglage
+gardent la bascule.
+
+> Avant, le garde-fou n'existait que côté client : la réponse substituée arrivait, était refusée,
+> et le lot était perdu — l'exécution `2026-09-07_19_45_31` a enchaîné 8 sollicitations, 8 refus et
+> 0 décision archivée sans qu'aucune ERROR ne sorte.
+
+**Un modèle servi des deux côtés se désigne par sa portée.** L'épinglage se fait par égalité de
+`default_model`, or le même identifiant existe parfois en local et à distance : `qwen/qwen3.8-27b`
+est déclaré chez Groq **et** dans LM Studio (deux quantifications, 27B MXFP4 contre MLX 4 bit).
+Les deux instances étaient alors admises ensemble, et l'épuisement du quota Groq faisait passer
+l'expérience en local sans que rien ne le dise. Depuis le 2026-09-11, `decideur.portee`
+(`local` / `distant`) choisit le bord ; une expérience qui ne la pose pas alors que son modèle
+est servi des deux côtés est refusée au lancement. Voir
+[plateforme-experiences.md §5](plateforme-experiences.md).
+
+**Une réponse rendue par un autre modèle que celui demandé est rejetée en 502.** Contrôle côté
+adaptateur (`openai_compatible._refuser_substitution_de_modele`), distinct de la bascule
+ci-dessus : LM Studio répond **200** à un identifiant de modèle inconnu et sert un autre modèle
+chargé (`qwen3.8-27b-local`, inexistant, servi par `qwen3-vl-8b-instruct-mlx` le 2026-09-10 —
+un 8B de vision au lieu d'un 27B). L'archive portait un nom de modèle faux, sans signal. Le
+contrôle ne s'applique que si la réponse déclare un modèle : les serveurs conformes qui n'en
+renvoient pas passent.
+
+**Variante de prompt par requête.** `parameters.prompt_variant` (clé de `prompts:` dans
+`prompts.yaml`) remplace la variante active pour cette requête ; `PromptManager.get_system_prompt`
+lève si elle est inconnue. `parameters` entrant dans la clé de lot, deux variantes ne partagent
+jamais un appel. La simulation GAMA ne le renseigne pas et reste sur la variante active.
+
+**Variante invalidée : refus de service.** Une entrée de `prompts.yaml` portant un bloc
+`_invalidation: {statut: invalide, …}` n'est plus servie à un modèle :
+`get_system_prompt` et `render` lèvent `VariantePromptInvalide` (sous-classe de `ValueError`)
+en nommant la règle enfreinte et le remplaçant déclaré. Un prompt **actif** invalidé fait
+échouer `check_category`, donc le démarrage du service, plutôt que la millième requête.
+
+Le refus ne vaut que pour le **service**. `get_system_prompt(..., verifier_validite=False)`
+rend le texte sans contrôle, et c'est ce que fait `empreinte_gabarit` : une invalidation ne
+doit pas rendre irreproductibles les empreintes déjà scellées des exécutions passées. Une
+exécution lancée sur un gabarit invalidé le porte dans son empreinte (`invalide: true`,
+`invalide_regle`) — clés ajoutées hors du `sha256`, donc une variante valide produit
+l'empreinte d'avant, au caractère près.
+
+**Profondeur de réflexion (`thinking_budget`).** Quatrième clé de la cascade
+`core/inference.py`, résolue comme les autres : requête > fournisseur > défauts. Trois valeurs
+ont un sens distinct, et la distinction compte :
+
+| Valeur | Effet |
+|---|---|
+| `None` (défaut) | **rien n'est envoyé** — le fournisseur applique sa propre réflexion. C'est le comportement qui prévalait avant le 2026-09-10 : aucun `thinkingConfig` n'était émis, alors que `thoughtsTokenCount` était déjà lu et compté |
+| `0` | réflexion **désactivée** explicitement |
+| `-1` | laissée au modèle, budget non borné |
+| `n > 0` | budget fixe de `n` jetons de pensée |
+
+**La pensée est prélevée sur le budget de SORTIE.** Sans réserve, un budget de réflexion
+généreux fait tronquer la réponse (`finish_reason: MAX_TOKENS`) et l'appel est perdu. Le
+`google_adapter` relève donc `maxOutputTokens` de `n` (budget fixe) ou de `RESERVE_REFLEXION`
+= 2048 (budget dynamique), valeur reprise de `prompt_calibration` où elle est éprouvée. Quand
+une troncature survient avec des jetons de pensée et aucune complétion, le diagnostic le dit et
+nomme les deux réglages à arbitrer, au lieu de laisser conclure à une boucle de répétition.
+
+**Le réglage courant est un NIVEAU, pas un nombre.** Relevé le 2026-09-10 dans
+[la documentation Gemini](https://ai.google.dev/gemini-api/docs/thinking) : l'API expose
+`thinking_level` — `minimal`, `low`, `medium`, `high` — et **`high` EST le maximum**. Le budget
+numérique `thinking_budget` reste accepté pour compatibilité ascendante, mais la doc recommande
+de l'abandonner, et **les deux ensemble rendent 400**.
+
+Trois conséquences appliquées :
+
+1. `resolve_inference` **refuse** `thinking_level` et `thinking_budget` ensemble
+   (`ReglagesReflexionIncompatibles`), plutôt que de laisser découvrir le 400 en vol.
+2. Les niveaux acceptés **varient par modèle** : `minimal` existe sur `gemini-3.6-flash` et
+   `gemini-3.5-flash-lite`, pas sur `3.7` ni `3.8`. Ils se déclarent par instance
+   (`thinking_levels`), relevés dans la doc du fournisseur ; l'adapter refuse un niveau hors
+   liste, et `experience-lancer` le refuse d'avance.
+3. Le formulaire propose le **niveau** dès qu'un modèle en déclare, et ne retombe sur le budget
+   numérique que pour les modèles sans déclaration — un seul des deux part, jamais les deux.
+
+Quand plusieurs clés servent le même modèle, les niveaux offerts sont l'**intersection** : un
+niveau accepté par une clé et pas par l'autre ferait échouer l'appel selon le tirage.
+
+**Dire « le maximum » par un budget numérique demande un plafond déclaré** (chemin d'héritage,
+pour les modèles sans `thinking_levels`). L'API ne connaît pas de mot-clé « max » :
+la réflexion se demande en jetons, et `-1` est l'**automatique** (le modèle arbitre, il peut
+réfléchir peu), pas le maximum. Or un budget au-delà du plafond réel du modèle est **raboté
+silencieusement** par le fournisseur, et la réponse ne rapporte que `thoughtsTokenCount`, les
+jetons de pensée *consommés* — jamais le budget appliqué. Rien ne permet donc de rattraper
+l'écart après coup, et l'empreinte de l'expérience porterait un budget qui n'a pas eu lieu.
+
+D'où `thinking_budget_max` par instance dans `providers.yaml`, **relevé dans la documentation du
+fournisseur, jamais deviné** :
+
+| Déclaré | Absent |
+|---|---|
+| « maximum du modèle (n jetons) » apparaît au formulaire et **résout vers ce nombre** — l'empreinte porte une valeur concrète, pas un mot magique | aucun maximum n'est proposé, et le formulaire dit pourquoi |
+| le champ libre est **borné** par ce plafond | le champ libre va jusqu'à 32768 |
+| `experience-estimer` / `experience-lancer` **refusent** d'avance un budget supérieur | un avertissement dit qu'on ne peut pas vérifier que le budget sera appliqué |
+| `google_adapter` refuse l'appel (400) plutôt que de le laisser raboter | aucun contrôle |
+
+Quand plusieurs instances servent le même modèle, c'est le **plus petit** plafond qui vaut —
+demander plus ferait refuser l'appel sur la plus contrainte. Et si une seule instance ne le
+déclare pas, il n'y a pas de plafond : on ne déduit pas une valeur d'un sous-ensemble.
+
+**Tous les adapters ne savent pas l'appliquer.** `GoogleAdapter.applique_reflexion = True` ;
+partout ailleurs c'est `False`, et l'adapter **avertit une fois** que le réglage est scellé dans
+l'empreinte sans être transmis. C'est délibéré : le défaut trouvé le 2026-09-10 sur le canal
+antigravity était précisément un `temperature: 0.0` scellé dans l'empreinte, inscrit dans le nom
+de l'expérience (`t0`), et jamais envoyé. Un paramètre non appliqué doit se voir.
+
+Côté expérience, le budget se pose dans `decideur.parametres` — donc **scellé dans l'empreinte
+du décideur** : deux budgets font deux empreintes, et le rejeu est fidèle. La clé est **absente**
+quand la réflexion n'est pas pilotée, jamais à `None` : une clé nulle donnerait deux empreintes
+pour un même réglage selon qu'on a ouvert le formulaire ou non. Le tableau de bord l'expose sous
+« Profondeur de réflexion », à côté de la température.
+
+**Avis de neutralité : refus par défaut.** Une variante ne part au modèle que si elle porte un
+bloc `_neutralite` rendu par l'agent indépendant `prompt-auditor` (`.claude/agents/`). Le mode
+strict est **armé** depuis le 2026-09-10 (`exiger_avis_neutralite=True`) : un avis absent est un
+refus. Un verdict `non_conforme` refuse quel que soit le mode ; `conforme_avec_reserve` sert avec
+un WARNING nommant la règle. L'avis scelle le `sha256` du `content` : retoucher le texte après
+validation le périme (`etat_neutralite` → `perime`), donc refuse — c'est ce qui interdit de faire
+valider une version et d'en servir une autre. `PromptManager.etat_neutralite(variante)` rend
+`conforme`, `reserve`, `refus`, `absent` ou `perime`.
+
+**Familles de prompt.** `familles:` en tête de `prompts.yaml` déclare la famille de chaque
+variante (`PromptManager.famille`). Une seule est **minimale** — `prompt_minimal` : la tâche
+et le format de sortie, rien qui puisse pencher vers un mode. Toutes les autres sont
+**expertes**, où nommer et cadrer les modes est volontaire ; seules les règles figées
+(« sous tel seuil, tel mode ») et les formules mathématiques y sont proscrites. La même
+phrase étant licite dans une famille et fautive dans l'autre, la famille se déclare au lieu
+de se deviner du nom. Voir `specs/hygiene-prompts-et-plateforme-experiences.md`.
 
 ## Pipeline de batching
 
@@ -69,7 +234,12 @@ sur les ~1 600 tokens/agent mesurés + 25 % de marge).
 
 #### Budget de sortie (max_tokens) proportionnel au batch
 
-Le `max_tokens` envoyé par le client (défaut 4096) est un budget **par tâche** (1 agent).
+Le `max_tokens` envoyé par le client (défaut **8192** depuis le 2026-08-26, 4096 avant)
+est un budget **par tâche** (1 agent). Le relèvement accompagne la justification **par
+option** : mesurée sur 437 appels, la complétion valait 2 825 tokens en moyenne et
+3 921 au pic pour des lots de 15 personas avec une seule raison par persona ; à
+5,39 options par persona en moyenne (jusqu'à 9), une raison par option franchit 4096 et
+se fait tronquer en silence.
 Le worker le multiplie par le nombre d'agents fusionnés dans le batch, borné par
 `settings.max_output_tokens` (16 384, plafond global) puis par le
 `max_output_tokens` **du provider** (plafond de complétion du modèle, déclaré dans
@@ -109,16 +279,18 @@ Chaque modèle a sa propre limite du paramètre `max_tokens` (8 192 pour
 cette limite provoque un HTTP 400 non retryable (``"`max_tokens` must be less than or
 equal to `8192`"``) qui faisait échouer tout le batch. Trois mécanismes s'articulent :
 
-1. **Déclaration** : le champ optionnel `max_output_tokens` de `providers.yaml` porte
-   le plafond de complétion du modèle. Absent = pas de limite connue (fallback
-   `settings.max_output_tokens`). Le worker borne le `max_tokens` envoyé à cette valeur.
+1. **Déclaration** : le champ optionnel `max_output_tokens` du fichier des fournisseurs
+   (`config/llm_gateway/providers.yaml`) porte le plafond de complétion du modèle. Absent = pas
+   de limite connue (fallback `settings.batching.max_output_tokens`). Le worker borne le `max_tokens` envoyé à cette valeur.
 2. **Apprentissage automatique** : si un provider répond quand même 400 avec un message
    `max_tokens must be ≤ N` (formats Groq/OpenAI/Google reconnus par
    `_parse_max_tokens_limit`), le worker apprend N via
    `learn_provider_max_output_tokens()` : config en mémoire ajustée immédiatement
-   **et** ligne `max_output_tokens` écrite dans `providers.yaml` (édition chirurgicale
-   préservant les commentaires, écriture atomique — le bind mount `./llm_module`
-   persiste la valeur sur l'hôte). Le batch est alors rejoué : le prochain essai est
+   **et** valeur rangée dans le store des limites apprises (port `LearnedLimits` : hash
+   Redis `llm_gateway:learned:max_output_tokens` partagé entre API et workers, fichier JSON
+   sans Redis). Depuis l'itération 2 du ticket 037, le fichier des fournisseurs n'est plus
+   réécrit : chaque processus fusionne les limites apprises au démarrage, sans jamais élargir
+   un plafond déclaré. Le batch est alors rejoué : le prochain essai est
    plafonné correctement ou part sur un autre provider via la rotation. Si la limite
    était déjà connue (rien de nouveau à apprendre), l'échec reste définitif pour ne
    pas boucler sur la même 400.
@@ -153,8 +325,22 @@ avec `finishReason == MAX_TOKENS`. Ce check attrape aussi le cas des modèles «
 
 #### Source des prompts système
 
+> **Renommage du 2026-09-11.** `expert_chaine` s'appelle désormais **`expert_m4`** (variante
+> active) et `expert_best` s'appelle **`expert_m1`**. Le texte des deux est inchangé au
+> caractère près — les sceaux `_neutralite.sha256_texte` restent valides. **Aucun alias de
+> compatibilité** : les expériences archivées qui portent `variante: expert_chaine` dans leur
+> `experience.yaml` ne se rejouent plus. Les mentions de `expert_chaine` plus bas dans cette
+> page sont des **constats datés** (mesures d'août et septembre 2026) et gardent l'ancien nom,
+> qui est celui sous lequel ces mesures ont été prises. La lignée `expert_chaine_m5` à `m7.1`
+> conserve son nom.
+>
+> Neuf variantes sont par ailleurs **archivées** le même jour : `persona_v1` à `v5`, `expert`,
+> `b0_pristine`, `minimal_persona`, `expert_gem_3.8_v1`. Archivée veut dire **retirée du choix
+> du tableau de bord, toujours servable** — `b0_pristine` reste le seed gelé de la campagne de
+> référence, et une expérience qui le désigne se rejoue à l'identique.
+
 Le texte du prompt système n'est plus codé en dur dans les templates Jinja. Il provient
-d'une **source unique** : `llm_module/prompts/prompts.yaml`, fusionnée avec l'historique
+d'une **source unique** : `packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml`, fusionnée avec l'historique
 du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipynb`, qui y
 écrit chaque variante calibrée).
 
@@ -163,10 +349,328 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
   sans modifier le code.
 - `prompts:` contient les variantes (`content`), schéma JSON inclus. À l'exécution,
   `PromptManager.get_system_prompt(category)` retire le bloc « Schéma JSON attendu »
-  (réinjecté dynamiquement via `{{ schema }}` depuis `schemas.json`) et passe le texte au
-  template via la variable `system_prompt`.
+  (réinjecté dynamiquement via `{{ schema }}`) et passe le texte au template via la
+  variable `system_prompt`. **Le schéma réinjecté n'est pas celui du texte calibré** : depuis
+  le 2026-09-07 (ticket 037, itération 2), chaque catégorie range son schéma dans son
+  dossier — `packages/mobility_llm/src/mobility_llm/categories/<catégorie>/output_schema.json`, à côté
+  de `template.md.j2` — et c'est ce fichier que `get_output_schema` sert, plus un
+  `schemas.json` commun. Conséquence à ne pas perdre de vue : un champ que le texte d'une
+  variante réclame mais que `output_schema.json` ne déclare pas n'arrivera pas (le schéma
+  imposé porte `additionalProperties: false`).
 - Les catégories absentes de `active:` (ex. `perception_filter`) conservent leur section
   `<!-- SYSTEM -->` en dur dans leur template.
+
+**Variante candidate `expert_chaine_m5` (2026-09-08).** Cinq mutations ancrées d'`expert_chaine`,
+écrites contre les dérives mesurées sous `gemini-3.5-flash-lite` (marche → TC chez les retraités et
+sur les trajets de 1 à 5 km, voiture → TC chez les actifs, 76 % de décisions à ≥ 80 % sur une option) :
+cadrage « répartition des choix de cent personnes de ce profil » au lieu de « mode optimal », temps
+porte-à-porte (attente et aléa des TC non comptés), abonnement et revenu lus comme disponibilité et
+coût plutôt que préférence, météo lue à sa mesure, confort et effort sans incapacité déduite de l'âge
+(« privilégier les modes assis pour les personnes âgées » retiré). Aucune consigne de mode ni de seuil
+distance → mode. Rejeu apparié de 200 décisions : L1 54,6 → 48,1 contre le témoin, marche +1,7, vélo
+7,1 → 4,7. La variante n'est **pas** active : elle attend la non-régression globale
+(`docs/traces/2026-09-08_16-05_prompt_expcha_derives_m5/`). La passerelle ne la voit qu'après
+`make passerelle-recharger` — qui ne suffisait pas avant le 2026-09-08 : sans `PYTHONPATH=/app`, le
+worker servait le `prompts.yaml` figé dans l'image (cf. changelog du même jour).
+
+#### Sortie du LLM : une distribution, pas un choix
+
+Pour la catégorie `itinary_multi_agent`, le LLM **ne choisit plus** d'itinéraire : il
+attribue à *chaque* option proposée la probabilité (en %) que le persona la retienne, la
+somme valant 100. Le schéma
+(`packages/mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json`) exige
+donc, par persona, un tableau `probabilities` de `{index, mode, probability}` — une entrée
+par option, `0` pour une option jugée impossible — plus **un** `reason`, en lieu et place de
+l'ancien `chosen_index`.
+
+**La raison par option vit dans le texte des variantes, pas dans le schéma imposé.** Le
+2026-08-26, la consigne est passée d'une raison unique par persona (« justifie la
+répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient
+pas la plus forte probabilité » — elle ne disait pas pourquoi telle option perdait contre
+telle autre, et la clause sur la marche orientait la justification vers un mode) à « justifie
+la répartition en une phrase concise par option ». Les variantes de la famille
+`expert_chaine` (l'active s'appelle `expert_m4` depuis le 2026-09-11) portent donc, dans le schéma **littéral de leur texte**, un
+`reason` par entrée de `probabilities` (« une phrase justifiant la probabilité de CETTE
+option par rapport aux autres »), et c'est ce qui explique une sortie ~5 fois plus longue,
+d'où le relèvement de `max_tokens` (voir ci-dessus).
+
+> ⚠ **Divergence en l'état (constatée le 2026-09-11, non corrigée ici).** Le schéma
+> réellement imposé au fournisseur, `output_schema.json`, déclare `reason` **au niveau du
+> persona** et `required: [index, mode, probability]` par option, avec
+> `additionalProperties: false`. Un modèle en sortie structurée ne peut donc pas rendre la
+> raison par option que le texte de la variante active lui demande. Trancher le sens voulu
+> (aligner le schéma sur le texte, ou le texte sur le schéma) est une décision de produit,
+> pas une correction de documentation : cette page décrit ce que le code fait aujourd'hui.
+
+Le post-traitement vit dans `packages/mobility_llm/src/mobility_llm/mode_choice.py`, partagé par tous les
+consommateurs pour qu'ils appliquent la **même** politique de décision :
+
+| Étape | Fonction | Rôle |
+|---|---|---|
+| Normalisation | `normalize_option_probabilities` | Doublons, valeurs négatives, somme ≠ 100, index renumérotés : le vecteur brut est ramené à une distribution sur les options réellement proposées (repli sur l'uniforme si rien n'est exploitable, tracé en `[ALARME]`) |
+| Répartition | `mode_distribution` | Agrège les options par **mode canonique** (`walking`, `cycling`, `car`, `public_transport`, `train`, `motorbike`). Un mode qu'aucune option ne propose — la marche quand le trajet est trop long — reste présent à **0 %**, ce qui rend deux répartitions comparables |
+| Tirage | `draw_index` | Tire une option proportionnellement à sa probabilité, avec une graine dérivée de `(agent.mode_draw_seed, agent_id, activity_id, jour simulé)` |
+
+Le tirage a lieu **côté simulation** (`llm-agents`), sur la liste triée par code de plan :
+il ne dépend donc pas du mélange anti-biais-de-position appliqué au prompt. Conséquences :
+
+- **rejouabilité** — à graine égale, un run relancé reproduit exactement les mêmes trajets ;
+- **variabilité réaliste** — le jour simulé entrant dans la graine, un même agent placé
+  deux jours de suite dans le même contexte peut prendre sa voiture puis le bus ;
+- **exploration gratuite** — changer `agent.mode_draw_seed` explore un autre tirage sans
+  réappeler le LLM.
+
+La répartition ayant servi au tirage est tracée **par demande d'itinéraire** dans
+`moves.csv`, à raison d'**une colonne par mode** : `P(Marche) %`, `P(Vélo) %`,
+`P(Voiture Privée) %`, `P(Transports_collectifs) %`, `P(Train) %`,
+`P(Deux-roues motorisé) %`, `P(Autres modes) %` (somme = 100, directement agrégeables).
+Distinguer deux cas à la lecture : **`0`** = le LLM a explicitement écarté ce mode ;
+**cellule vide** = la décision n'a pas produit de répartition (mono-choix, absence
+d'itinéraire, erreur LLM, point de cache hérité).
+
+Le worker, lui, ne tire pas : il alimente `llm_transport_mode_chosen_total` et
+`llm_chosen_index_total` avec l'option **la plus probable**, et cumule la masse de
+probabilité par mode dans `llm_mode_probability_pct_total` (répartition *attendue*, que le
+tirage reproduit en espérance). Une réponse à l'ancien format (`chosen_index`) reste
+acceptée partout : elle est traitée sans tirage.
+
+##### Une ligne « - [n] » = une option
+
+Les options sont rendues en puces `- [n] mode: description`, et la description d'un
+itinéraire détaille ses étapes. Ces étapes étaient rendues en puces `- ` de **même niveau**
+que la ligne d'option : plusieurs modèles (mistral, llama 3.1, gemma) les lisaient comme
+des options supplémentaires et renumérotaient le bloc entier — index `0..35` pour 6 options,
+donc masse de probabilité placée **hors bornes** et décision perdue. Deux garde-fous :
+
+1. **Rendu** (`categories/itinary_multi_agent/template.md.j2`) — les étapes deviennent des sous-puces indentées
+   « · », l'en-tête annonce le nombre d'options et la plage d'index, et la consigne finale
+   rappelle que seules les lignes `- [n]` sont des options et que les index repartent de 0
+   dans chaque bloc persona.
+2. **Réalignement** (`normalize_option_probabilities(…, modes=…)`) — une entrée hors bornes
+   est replacée sur l'option que **son libellé de mode** désigne (égalité de chaîne, puis
+   égalité de mode canonique) ; si plusieurs options partagent ce mode, la masse est
+   répartie entre elles — indéterminé quant à l'itinéraire, fidèle à la part modale.
+   Sans `modes`, ou libellé non reconnu, la masse est écartée (tracée) plutôt que placée
+   sur la mauvaise option. Les entrées hors bornes à probabilité nulle sont ignorées en
+   `DEBUG` : elles ne coûtent rien et noyaient les vraies pertes.
+
+Les deux appelants de production passent les modes **envoyés** (source de vérité) :
+`llm_agent.py` depuis le payload rendu, `task_worker.py` depuis `spec.trajectories`. Rejoué
+sur le run du 2026-07-29 (36 agents touchés), le réalignement ramène les replis uniformes de
+12 à 1 et l'écart de part modale à l'intention du modèle de 0,41 à 0,02.
+
+Le pipeline de calibration applique **le même** traitement à ses jeux gelés — rendu et
+réalignement — sous le drapeau `prod_option_handling` (cf. `docs/arch/prompt_calibration.md`) :
+sans lui, la mesure porterait sur un prompt que la production n'envoie plus.
+
+Témoin complémentaire déjà en place : `llm_mode_label_mismatch_total` / `llm_mode_label_checked_total`
+(mode annoncé ≠ mode de l'option, cf. `docs/arch/monitoring.md`) — même symptôme vu depuis
+les index restés *dans* les bornes.
+
+#### Contexte (météo/trafic) réinjecté par persona
+
+Dans le template de la catégorie (`categories/itinary_multi_agent/template.md.j2`), le contexte factuel (météo, trafic) est rendu **à
+l'intérieur de chaque bloc persona** (`**Contexte :** …` juste sous l'en-tête `--- agent_id=… ---`),
+et non plus une seule fois en préambule commun au lot. La source par persona est
+`agent.context` si elle est fournie, sinon le contexte partagé de la requête
+(`request.context` puis `parameters.context`).
+
+La météo est donc **portée par l'agent** (`AgentSpec.context`), plus par les `parameters`
+de la requête : c'est `build_travel_plan_payload` (côté `llm-agents`) qui la place dans le
+bloc agent. Comme la clé de batch (`compute_batch_key`) ne hache que `request.parameters`
+(catégorie, params LLM, provider forcé, min-TPM), la météo n'y intervient plus : **des
+demandes de météos différentes peuvent désormais être fusionnées dans un même appel LLM**,
+chaque persona conservant la sienne dans le prompt. Le worker fusionne les agents des tâches
+compatibles (`_execute_batch`) et rend le lot avec les `parameters` communs — corrects
+puisque identiques par construction de la clé.
+
+Le pipeline de calibration applique le **même format** d'injection
+(`calibration/evaluation.py::inject_context`), pour que la mesure reflète exactement le
+prompt de production.
+
+#### Anticipation de la chaîne de la journée (ticket 014)
+
+Le choix reste **trajet par trajet**, mais le bloc persona est enrichi de trois éléments
+construits par le contrôleur (`_build_anticipation`, `simulation_controller.py`) et rendus
+par `categories/itinary_multi_agent/template.md.j2` :
+
+- `**Météo plus tard :**` — la météo des tranches restantes de la journée
+  (`day_weather_outlook`, tranches matin/après-midi/soirée du CSV météo), pour **tous**
+  les agents : sortir le vélo le matin quand il pleuvra le soir devient un choix informé ;
+- `**Trajets suivants prévus aujourd'hui :**` — l'agenda **glissant** des trajets restants
+  (heure planifiée, motif, distance vol d'oiseau × 1,3, météo prévue si différente), en
+  puces « · » pour ne jamais ressembler à une ligne d'option `- [n]`.
+
+L'agenda n'est généré que pour les agents qui ont **quelque chose à chaîner**
+(conducteurs possédant une voiture, possesseurs de vélo — jamais les passagers, dont la
+voiture n'est pas positionnelle). Les trois verrous de chaîne (ticket 008) restent
+inchangés : le bloc informe, il ne contraint pas.
+
+**La position des véhicules n'est volontairement PAS énoncée dans le prompt.** La
+première version portait une ligne « Vos véhicules : votre vélo est au domicile, avec
+vous » : mesurée sur le run `2026-08-19_13_17`, elle a gonflé la part vélo de +5,5 points
+(écart EMC² +13,8 → +19,6) — le libellé agissait comme une invitation, pas comme une
+information, et la disponibilité réelle est déjà portée par le jeu d'options via les
+verrous. La règle de chaîne vit désormais dans le **prompt système** (variante
+`expert_m4` de `prompts.yaml` — `expert_chaine` jusqu'au 2026-09-11 —, seed `expert`). Reformulée le **2026-08-26** : elle
+énonçait « pense au stationnement et aux déplacements du reste de la journée, jusqu'au
+retour au domicile », ce qui se lisait comme une obligation de garder le véhicule toute la
+journée. Elle dit désormais la vraie contrainte — la **continuité de position** :
+
+> l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements
+> journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de
+> stationnement précédent. Il est donc nécessaire d'anticiper l'enchaînement de tous vos
+> parcours prévus pour valider la faisabilité globale de la journée, même si certains
+> trajets intermédiaires s'effectuent par d'autres moyens.
+
+La dernière clause est celle qui manquait : laisser la voiture au travail et aller déjeuner
+à pied est un enchaînement valide, que l'ancienne formulation décourageait. Cette phrase
+est un **segment calibrable** (à couvrir par le catalogue de mutations), pas une constante. La colonne `Anticipation` de `moves.csv`
+trace ce que le prompt de chaque trajet contenait (`agenda` / `meteo` / vide), et la
+**signature** déterministe des textes entre dans la clé du cache de décisions (cf.
+`docs/arch/cache-memory.md`). Flag : `settings.agent.agenda_anticipation_enabled`
+(défaut `True` ; `False` rétablit le prompt myope pour l'A/B).
+
+#### Le bloc persona allégé — 2026-08-26
+
+La ligne `Mobilité : … | … | …` a été **retirée**, et avec elle `Contraintes : None`. Ce
+que chacun portait, et pourquoi il part :
+
+| Élément | Sort | Motif |
+|---|---|---|
+| `car_availability` + statut de conducteur | retiré | le jeu d'options dit déjà si la voiture est prenable (`_owns_car` / `_can_drive`), et le canal narratif a été **mesuré puis rejeté** : +0,12 pt de part voiture, au niveau du bruit (ticket 018) |
+| vélo personnel | retiré | même raison ; l'option vélo n'est proposée que si le vélo est là |
+| abonnement TC | **déplacé sur l'option** | il n'est *pas* déductible du jeu d'options — une option bus existe qu'on soit abonné ou non — mais il ne pèse que là où un TC est offert |
+| `Contraintes : None` | retiré | littéral codé en dur (`constraints = "None"`, TODO d'origine), jamais implémenté : mesuré constant sur **2 487 records sur 2 487** |
+
+Ne reste que l'identité sociale — prénom, âge, occupation, taille du foyer, revenu — seule
+information que les options ne portent pas.
+
+L'abonnement s'accole à la **première ligne** de la description de l'option
+(`_pt_subscription_note`, `llm_agent.py`), jamais aux sous-puces « · » : collé à une étape,
+il passerait pour une étape.
+
+```
+- [0] foot,bus,foot: Temps de trajet : 1 h 36, dont 13 minutes de marche. Pas d'abonnement aux transports en commun.
+    · Marche jusqu'à 'Mairie Aussonne' : 3 minutes.
+```
+
+⚠ **Deux pertes assumées.** (1) Un agent possédant un vélo garé ailleurs n'a pas d'option
+vélo, et le prompt ne dit plus qu'il en possède un — comme il ne peut pas s'en servir,
+l'information ne portait aucune décision. (2) Les libellés de voiture n'étaient pas
+binaires (« peut conduire, voiture à partager dans le foyer, conditionné par la
+nécessité », « sans permis et seul·e au foyer »…) : ces nuances ne se déduisent pas de la
+seule présence d'une option voiture. Elles disparaissent.
+
+Ordre de grandeur de ce qui change : la phrase « ne conduit pas : se déplace en voiture
+uniquement en passager·ère… » portait sur **384 records sur 1 810 (21,2 %)** du jeu gelé,
+dont 330 de mineurs — un enfant de 5 ans s'y voyait décrire comme passager d'une voiture
+toujours disponible.
+
+⚠ **À mesurer avant d'être crédité d'un gain.** La campagne du ticket 024 a établi que le
+modèle réagit à la **mise en forme** du contexte plus qu'à son contenu : son témoin nul de
+reformulation coûte 2,03 de composite, plus que le retrait de *tout* le contexte (2,52).
+Retirer des segments et rendre une mention conditionnelle sont des changements de mise en
+forme : leur effet se lit contre ce plancher-là, pas contre zéro.
+
+#### Météo : résolution de 3 h, rafales et verglas — 2026-08-26
+
+**La lecture du moment passe de quatre relevés à huit.** La source porte 0, 3, 6, 9, 12,
+15, 18 et 21 h ; le code n'en lisait que quatre (3, 6, 12, 18 h), si bien qu'un départ à
+11 h recevait la météo de 6 h et un départ à 17 h celle de 12 h. Or **le code météo diffère
+entre 12 h et 15 h sur 159 jours sur 365** : pour les trajets d'après-midi, le prompt
+annonçait couramment un temps qui n'était plus celui-là.
+
+Deux rôles sont désormais séparés, et ils ne doivent pas être confondus :
+
+- `_reading_bucket` — **huit** créneaux, le relevé le plus proche en arrière de l'heure de
+  départ. C'est la météo du moment ;
+- `_BUCKET_ORDER` — **quatre** tranches, délibérément laissées grossières : la ligne
+  « Météo plus tard » et le cadre du jour (amplitude, créneaux précipitants). Les affiner
+  en même temps referait le paquet de deux changements du bras `v10c` (ticket 023), que la
+  mesure n'a pas su départager.
+
+**Le bulletin porte deux aléas de plus**, au franchissement d'un seuil seulement :
+
+- `rafales à N km/h` si `WINDSPEED_MAX_KMH` ≥ **30** (vent frais, Beaufort 5) ;
+- `risque de verglas` si le minimum du jour est sous **3 °C**.
+
+Les deux viennent du bras `v10c` rejeté, où ils annotaient *chaque étape* — emplacement
+inadapté pour le vent, qui est un **maximum journalier** et se répétait donc à l'identique
+partout. Le bulletin est sa place.
+
+```
+Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 11°C, lever 06:41, coucher 19:18, rafales à 33 km/h, risque de verglas. Pas de précipitations prévues.
+```
+
+Une journée sans aléa garde sa phrase **mot pour mot**, et un jeu gelé antérieur au
+2026-08-26 — dépourvu du champ `wind_max_kmh` — se relit à l'identique : sinon sa
+ré-évaluation ne porterait plus sur ce qui a été mesuré. Un test le verrouille, comme il
+verrouille l'égalité de la phrase entre `weather_loader.py` (production) et
+`calibration/weather.py` (jeux gelés).
+
+#### Une date météo par agent — variance du régresseur (`weather_per_agent_dates`) — 2026-08-26
+
+Le ticket 023 a mesuré le bulletin météo enrichi « à pleine masse » et conclu à aucun
+effet. La cause est instrumentale, pas substantielle : **sur une seule journée simulée,
+les 1 000 agents partagent une seule météo** — le régresseur a une variance nulle, et
+« aucun effet mesuré » ne veut alors rien dire.
+
+`urban_mobility_agents/utils/weather_draw.py` (activé par `Settings.weather_per_agent_dates`)
+tire, pour chaque agent, un jour de l'année dans la fenêtre déclarée
+par `Settings.weather_window` (`"enquete"` par défaut — la fenêtre de collecte EMC²,
+lue depuis `mobility_core.population_reference`, pas recopiée en dur), et ne substitue
+que la **date** du bulletin lu par `weather_loader.get_weather` : l'heure du départ est
+conservée (le bulletin se lit par créneaux de 3 h, cf. ci-dessus), et tout le reste de la
+simulation — horaires GTFS, véhicules, itinéraires, agendas — reste sur la journée
+simulée. Le tirage est une fonction pure de `(weather_draw_seed, person_id)` : deux runs
+identiques produisent exactement les mêmes météos.
+
+C'est un dispositif distinct du jeton d'exclusion / bulletin enrichi du ticket 023 : celui-ci
+porte sur la fenêtre météo des **jeux gelés de calibration** (hors ligne), quand
+`weather_per_agent_dates` porte sur le tirage météo **en simulation GAMA**, pour rendre
+l'effet météo mesurable sur un run donné plutôt que de le confondre avec l'absence de
+variance de l'instrument.
+
+⚠ **« Par défaut » veut dire deux choses, et les confondre a fait échouer deux tests une
+journée entière** (2026-09-04). Le **défaut du code** est `weather_per_agent_dates = False`
+dans `settings.py` : rien ne bouge si personne ne le demande. La **configuration du run**,
+elle, l'active délibérément (`services/llm-agents/config/config.yaml`, depuis « une seule
+configuration de run »), parce que sans tirage la mesure de l'effet météo n'a aucune
+variance à mesurer. Un test qui lit `settings.agent.weather_per_agent_dates` lit la
+configuration du run, **pas** le défaut du code : `scripts/tests/test_weather_draw.py`
+vérifie désormais chaque affirmation à sa source (le champ pydantic d'un côté, `config.yaml`
+et le runtime de l'autre), et les tests du branchement forcent le drapeau au lieu de le
+supposer.
+
+#### L'heure de lecture du bulletin est l'heure MURALE de GAMA — 2026-09-04
+
+`weather_loader.get_weather`, `day_weather_outlook` et `weather_draw.timestamp_meteo`
+lisaient `datetime.fromtimestamp(ts, tz=ZoneInfo("Europe/Paris"))` : un fuseau explicite,
+immunisé au `TZ` du processus — et faux quand même, parce qu'il traitait l'heure **murale**
+de GAMA comme un instant. Pour 5 h murales, le bulletin ouvert était celui de **6 h** (et de
+8 h pour une journée simulée en été).
+
+Mesuré sur les 5 322 déplacements du run archivé `2026-09-04_01_09`, code d'avant extrait
+par `git archive`
+([trace](../traces/2026-09-04_14-30_horloge_prompt_meteo/README.md)) : **2 332 départs
+(43,8 %)** changeaient de relevé de 3 h — **3 668 (68,9 %)** en été —, **2 070 (38,9 %)**
+changeaient de **phrase météo mot pour mot**, et les **77 départs de l'heure murale 23 h**
+changeaient de **JOUR** de bulletin : ils lisaient la journée du mardi pendant que leur
+itinéraire était calculé le lundi.
+
+Ces trois fonctions passent désormais par `sim_clock.wall_clock`, et **il n'y a plus aucun
+fuseau dans la météo** : la source est indexée par (mois, jour) et lue par créneau de 3 h,
+donc seuls les champs muraux comptent. Un test le verrouille explicitement (aucun import de
+`zoneinfo` dans ces deux modules), parce que le fuseau écrit en dur était invisible aux
+tests d'indépendance au `TZ`.
+
+⚠ **`weather_loader` doit rester chargeable PAR CHEMIN.** `prompt_calibration` est un dépôt
+autonome : il charge ce fichier par `spec_from_file_location` pour vérifier que sa copie de
+`weather_to_natural_language` n'a pas dérivé, exprès pour ne pas faire entrer le contrôleur
+dans ses tests. L'import de `sim_clock` est donc **différé** dans `_heure_murale` — hisser
+cet import en tête de module casse 14 tests de la calibration (vécu le 2026-09-04). Un test
+du dépôt principal charge le module dans un `python -I` pour que la casse se voie ici.
 
 #### Isolation du cache LLM par version de prompt
 
@@ -193,7 +697,8 @@ recalculer à chaque changement de `rpm_limit`/`tpm_limit` (cf. en-tête de `pro
 
 À chaque sélection :
 1. Vérification du Circuit Breaker (provider exclu ?)
-2. Vérification du **quota journalier** (RPD/TPD) : provider écarté jusqu'à minuit UTC si épuisé
+2. Vérification du **quota journalier** (RPD/TPD) : provider écarté jusqu'au reset de sa
+   journée (fuseau `quota_reset_tz`) si épuisé
 3. Réservation atomique **RPM + TPM** via un unique script Lua (compare `now` au compteur
    glissant Redis ; toute étape qui échoue annule les réservations déjà posées)
 4. Réservation atomique du slot de concurrence
@@ -244,14 +749,42 @@ mort jusqu'à minuit — sur un run de plusieurs heures, les providers tombaient
 le pipeline dégénérait (cascade de timeouts → décisions par défaut). Ces quotas sont
 désormais **appliqués** (`infra/*/rate_limiter.py`) :
 
-- chaque réservation incrémente un compteur journalier UTC (`rpd:{provider}:{jour}`) ;
-  les tokens réellement consommés sont comptés après l'appel (`record_tokens` →
-  `tpd:{provider}:{jour}`) ;
-- au premier dépassement, un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'à
-  minuit UTC) écarte le provider de la rotation **sans re-sollicitation** toutes les
+- chaque réservation incrémente un compteur journalier daté dans le fuseau du fournisseur
+  (`rpd:{provider}:{jour}`) ; les tokens réellement consommés sont comptés après l'appel
+  (`record_tokens` → `tpd:{provider}:{jour}`) ;
+- au premier dépassement, un flag `quota_exhausted:{provider}` (TTL = secondes jusqu'au reset
+  du fournisseur) écarte le provider de la rotation **sans re-sollicitation** toutes les
   `disable_timeout` secondes ;
 - `/health` (`get_status`) expose `daily_requests`, `daily_tokens`, `rpd_limit`,
   `tpd_limit` et `quota_exhausted` par provider.
+
+#### Le fuseau du reset, et qui fait autorité — 2026-09-08
+
+Deux corrections, après un blocage d'expérience à 10 % (voir le changelog du 2026-09-08).
+
+**Le fuseau.** Un quota journalier ne se réinitialise pas à minuit UTC mais à minuit chez le
+fournisseur : pour le free tier Gemini, minuit *Pacifique*, soit 09:00 à Paris l'été. Les
+compteurs, datés en UTC, se vidaient sept heures trop tôt — à 08:44 la passerelle annonçait
+49 requêtes sur 500 quand Google en comptait plus de 500. Le fuseau se règle par instance
+(`quota_reset_tz`, `America/Los_Angeles` sur les instances Google, `UTC` par défaut) et
+`core/quota.py` porte le calcul (`quota_day`, `next_quota_reset`, DST géré).
+
+**Qui fait autorité.** Le compteur local ne voit que le trafic de cette passerelle, alors
+qu'une clé est aussi consommée par `scripts/synthesis/*` et `prompt_calibration` : il
+sous-compte par construction, et ne peut donc pas décider seul qu'une clé est encore ouverte.
+Un 429 dont le corps désigne un quota journalier (`quotaId` en `…PerDay…`, détecté par
+`is_daily_quota_error`) appelle `mark_quota_exhausted_until` et écarte l'instance jusqu'au
+reset — le compteur n'est plus consulté sur ce chemin.
+
+Le `retryDelay` renvoyé dans ce cas est ignoré : Gemini annonce 0,7 s à 57 s pour une fenêtre
+qui ne rouvre que des heures plus tard, et le suivre faisait boucler l'instance sur des 429.
+Il reste utilisé pour un 429 de **débit par minute**, où il est juste.
+
+**Ce que l'appelant en apprend.** L'échec porte désormais `error_kind="quota_journalier"` et
+`resume_at` (`Task`, `TaskStatusResponse`, `TaskResult` du SDK). Sans ces champs, le message
+reformulé par le worker — « Providers saturés ou indisponibles » — était classé « passerelle
+occupée » côté expériences, qui attendait indéfiniment. Une instance épinglée sans alternative
+fait donc remonter l'heure de réouverture au lieu d'une saturation générique.
 
 ---
 
@@ -261,8 +794,9 @@ désormais **appliqués** (`infra/*/rate_limiter.py`) :
 |-----------|-------------|
 | Erreur réseau / HTTP 5xx | `mark_cooldown` 60s + retry exponentiel (1s→30s, max 10 essais) |
 | HTTP 429 (rate limit) | Cooldown calé sur le délai renvoyé par le provider, cherché dans l'ordre : header `retry-after` (secondes brutes), `x-ratelimit-reset-tokens` (les 429 Groq portent sur les tokens TPM/TPD), `x-ratelimit-reset-requests`, `x-ratelimit-reset`. À défaut de header, le délai est extrait du corps JSON (Google Gemini : `error.details[].retryDelay` ; Groq/Gemini : messages `"retry in Xs"` / `"try again in XhYmZ.Ws"`, formats `h`/`m`/`s`/`ms`). Fallback 60s si rien n'est trouvé ; cooldown clampé à [10s, 1h]. La tâche est requeue et re-routée vers un autre provider via la rotation SWRR |
-| HTTP 4xx non récupérable (hors 429/max_tokens) | **Bascule de modèle** : le provider fautif est mis en cooldown court (`provider_switch_cooldown_seconds`, 30s) et le batch est rejoué **sans `force_provider`** → la rotation SWRR sélectionne un autre modèle. Borné à ≈`len(providers)` tentatives ; échec définitif seulement si tous les modèles rejettent la requête |
-| Réponse illisible / hors-schéma (`ProviderParseError`) | **Bascule de modèle** identique : un modèle différent peut produire un JSON valide. En dernier recours (tous épuisés), la réponse brute est remontée au client |
+| **HTTP 402 (crédits épuisés)** | L'instance est **désactivée** pour son `disable_timeout` — pas un cooldown de 30 s : les crédits reviennent après une facturation, pas après une minute. `/health` la publie alors en `available: false`. Alarme `[ALARME] Crédits épuisés` en ERROR, **sur front montant** (une ligne par panne, pas une par lot). Lot épinglé → échec franc ; lot non épinglé → bascule |
+| HTTP 4xx non récupérable (hors 402/429/max_tokens) | **Bascule de modèle** : le provider fautif est mis en cooldown court (`provider_switch_cooldown_seconds`, 30s) et le batch est rejoué **sans `force_provider`** → la rotation SWRR sélectionne un autre modèle. Borné à ≈`len(providers)` tentatives ; échec définitif seulement si tous les modèles rejettent la requête. **Sauf lot épinglé** (`force_provider`) : aucune bascule, échec immédiat (cf. « Ordre de présentation et épinglage ») |
+| Réponse illisible / hors-schéma (`ProviderParseError`) | **Bascule de modèle** identique : un modèle différent peut produire un JSON valide. En dernier recours (tous épuisés), la réponse brute est remontée au client. **Sauf lot épinglé** : aucune bascule |
 | > 30 échecs consécutifs | Exclusion totale du routage SWRR pendant 120-180s glissantes |
 
 Les tâches en échec sont réinsérées dans le Sorted Set avec leur score d'origine.
@@ -276,14 +810,115 @@ un pipeline LLM qui ne draine plus :
 
 - **Worker gateway** : quand tous les providers sont saturés/en cooldown et qu'un batch
   est abandonné, avec la liste des providers en cooldown (`task_worker.py`).
-- **SDK client** (`llm_module/sdk.py`) : après 10 tâches échouées d'affilée côté
+- **SDK client** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`) : après 10 tâches échouées d'affilée côté
   controller (timeouts gateway inclus). Cette alarme **arme la backpressure SDK**
   (ci-dessous).
 - **Backpressure `/sync`** (`handle/application.py`) : alignée sur les seuils du mode
-  drainage — se déclenche quand le backlog atteint `drain_trigger_ratio` (défaut 80 %)
-  de la population, donne le `min_interval` appliqué et les coefficients
-  `min_internal_coeff_*` ; elle est aussi poussée vers la console GAMA et se réarme
-  quand le backlog repasse sous `drain_release_ratio` (défaut 20 %).
+  drainage — armée quand le backlog atteint `drain_trigger_ratio` (défaut 80 %) de la
+  population, **mais ne crie que sur une vraie saturation de décisions** (ticket 010) :
+  départs servis en retard (`late_since_last_sync > 0`) ou tâches plan/refill dont
+  l'échéance sim est dépassée. Un backlog dominé par des réflexions STM ou des
+  pré-planifications à échéance lointaine pendant la nuit simulée est le **drainage
+  nominal** : log INFO avec composition (`N décisions (dont X à échéance dépassée) +
+  M réflexions STM`), pas ERROR — cf. run 2026-08-03 où l'alarme criait au feu sur un
+  embouteillage bénin (803 tâches, late=0, cache 99 %, providers sains). L'ERROR donne
+  la composition, le `min_interval` appliqué et les coefficients `min_internal_coeff_*` ;
+  elle est aussi poussée vers la console GAMA et se réarme quand le backlog repasse
+  sous `drain_release_ratio` (défaut 20 %). Logique pure et testée :
+  `backpressure.backlog_alarm_transition()`.
+
+### Panne durable — disjoncteur client : on attend le renouvellement
+
+Les mécanismes ci-dessus absorbent les incidents **courts** (un provider en cooldown,
+une rafale de 429). Une **panne durable** — pénurie de tokens (tous les quotas
+journaliers épuisés), gateway ou réseau coupé pendant des heures — posait deux
+problèmes distincts :
+
+1. **Gâchis** : chaque décision brûlait une tentative vouée à l'échec (8 s d'attente
+   de slot + retries worker, ou 120 s de poll timeout côté client) avant d'échouer.
+2. **Intégrité scientifique** : chaque échec dégénérait la décision en « premier
+   itinéraire de la liste » (`llm_fallback`) — sur 24 h de rupture, un biais modal
+   massif et non maîtrisé dans `moves.csv`.
+
+Le **disjoncteur client** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`, réglages
+`agent.remote_llm_circuit_failure_threshold` / `remote_llm_circuit_probe_interval`)
+répond aux deux en choisissant **l'attente, pas la dégradation** : après N échecs
+consécutifs (défaut 10) — **erreurs réseau incluses** (gateway injoignable, 5xx à la
+soumission), qui échappaient auparavant au comptage — les soumissions LLM sont
+**suspendues**. Aucune tâche n'échoue, aucune décision n'est prise hors du chemin
+nominal (cache exact ou LLM) : les appelants attendent, et la contre-pression `/sync`
+existante retient GAMA en conséquence (le temps simulé n'avance plus tant que les
+décisions ne reviennent pas — cf. mode drainage). L'un des appelants suspendus devient
+périodiquement la **sonde** (demi-ouvert, toutes les `probe_interval` secondes, défaut
+60 s) : au premier succès — renouvellement des quotas au reset du fournisseur, retour du service —
+le disjoncteur se referme et **toutes les soumissions suspendues repartent**, avec de
+vraies décisions LLM. Aucun redémarrage, aucune intervention.
+
+Observabilité : `[ALARME]` sur front montant à l'ouverture
+(`alarme_total{source="gateway_llm_circuit"}`), gauges Prometheus
+`llm_gateway_circuit_open` et `llm_gateway_circuit_waiters` (soumissions en attente),
+log INFO à la fermeture avec la durée de la panne.
+
+`remote_llm_circuit_failure_threshold: 0` désactive le disjoncteur (comportement
+historique : chaque décision échoue après son timeout puis part sur l'index par
+défaut `llm_fallback`).
+
+### Instrumentation d'un appel Google (Gemini)
+
+Un appel structuré peut échouer de trois façons qui se ressemblent toutes de
+l'extérieur — « ça n'avance plus » — et se soignent différemment. L'adaptateur Google
+relève donc **trois grandeurs sur chaque appel**, avant toute levée d'exception :
+
+| Grandeur | Ce qu'elle tranche |
+|---|---|
+| **Tokens de complétion** (`candidatesTokenCount` + `thoughtsTokenCount`) | Plafond `maxOutputTokens` sous-dimensionné, ou non |
+| **`finishReason`** | `STOP` (le modèle a fini) vs `MAX_TOKENS` (tronqué) vs `SAFETY` (bloqué) |
+| **Latence** de l'appel | Génération réellement longue vs échec instantané |
+
+Elles sont tracées en DEBUG à chaque appel, et **rappelées dans le message de chaque
+exception** — un timeout dit combien de temps il a attendu et quel budget il demandait,
+une troncature dit combien de tokens ont été produits pour quel plafond.
+
+> **Les tokens de raisonnement comptent dans la sortie.** `thoughtsTokenCount` est
+> facturé **et** décompté du plafond `maxOutputTokens`. Il est donc additionné aux
+> tokens de complétion dans le `tokens_out` renvoyé au worker : l'ignorer sous-estimait
+> la consommation réelle et masquait la cause d'une troncature sur les modèles à
+> raisonnement.
+
+**Alarme de troncature.** Une troncature isolée est un aléa (WARNING). Au-delà de
+**3 troncatures `MAX_TOKENS` consécutives** sur la même instance de provider,
+l'adaptateur lève une ERREUR `[ALARME]` — sur **front montant** : une seule par
+épisode, réarmée par la première complétion propre. Sans ce signal, le retry de
+l'appelant rejoue la même troncature à l'identique jusqu'à épuisement (le décodage
+étant quasi-déterministe à température 0), sans qu'aucune ligne ne le dise.
+
+**Le timeout de 240 s n'est pas la contrainte usuelle.** Mesuré le 2026-07-31 sur
+`gemini-3.1-flash-lite` (écrit `…-preview` jusqu'au 2026-09-10 : l'alias, retiré
+côté Google, désignait déjà ce modèle), lots de 15 personas avec distribution complète par
+persona : **3,6 à 8,8 s** par appel et **2 742 tokens** de complétion au pire. Deux
+ordres de grandeur de marge. Ne pas le rallonger sans mesure : un appel réellement
+bloqué doit finir par rendre la main.
+
+### Réponse valide mais incomplète
+
+Un piège propre aux appels **multi-agents** : le modèle peut rendre un JSON
+parfaitement valide, conforme au schéma, `finishReason=STOP`, très en deçà du plafond
+de tokens — et pourtant **amputé d'une partie des agents demandés**. Mesuré le
+2026-07-31 sur `gemini-3.1-flash-lite` : sur 12 lots de 15 personas, **4 lots
+n'ont rendu que 5 à 8 décisions sur 15** (dont un à 1 287 tokens de complétion pour
+4 096 autorisés).
+
+**Réduire la taille du lot atténue le phénomène mais ne l'élimine pas.** Sur un rejeu
+complet à 8 personas par lot (372 requêtes de base), les lots incomplets restent
+courants — jusqu'à un lot ne rendant qu'**1 persona sur 8**. La taille de lot est donc
+un levier de coût, pas une garantie de complétude.
+
+Aucune des défenses habituelles ne voit ce cas : ce n'est ni une erreur HTTP, ni une
+troncature, ni un défaut de schéma. **C'est à l'appelant de comparer ce qu'il a demandé
+à ce qu'il a reçu** — le nombre d'agents envoyés contre le nombre de décisions rendues —
+puis de redemander les manquants dans une requête plus petite. Voir
+[prompt_calibration.md](prompt_calibration.md) pour la façon dont le moteur de
+calibration s'en protège (re-tir par moitiés, puis garde de couverture).
 
 ### Backpressure /sync
 
@@ -311,7 +946,8 @@ agents ratent leurs heures de départ. Le **mode drainage** (`update_drain_mode(
 `backpressure.py`) ajoute une barrière à hystérésis :
 
 - **Enclenchement** : pile ≥ `world.drain_trigger_ratio` (défaut **80 %** — l'alarme
-  backlog `[ALARME]` se déclenche au même seuil).
+  backlog `[ALARME]` est armée au même seuil, mais ne passe en ERROR que si des
+  décisions sont réellement en souffrance, cf. « Alarmes de saturation »).
 - **Comportement** : chaque réponse `/sync` est retenue jusqu'à `cap` secondes (la
   limite dure par réponse reste le read timeout HTTP du client GAMA — on ne peut pas
   bloquer indéfiniment une seule réponse), en ré-échantillonnant la pile toutes les
@@ -337,7 +973,7 @@ deadlock (`Inhabitant.gaml`).
 ### Backpressure SDK (drainage sur alarme)
 
 Distincte de la backpressure `/sync` (qui freine le rythme des steps GAMA), la
-backpressure **SDK** (`llm_module/sdk.py`) protège la gateway déjà saturée. Quand
+backpressure **SDK** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`) protège la gateway déjà saturée. Quand
 l'alarme « 10 tâches échouées d'affilée » se déclenche, le client suspend toute nouvelle
 soumission LLM (`_await_backpressure_drain`) tant que la pile in-flight n'est pas retombée
 sous `remote_llm_backpressure_ratio × worker_concurrency` (défaut **20 %**, soit 4 tâches
@@ -360,7 +996,7 @@ l'abandon client.
 
 ## Polling côté controller
 
-Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Si la socket pubsub est interrompue (`redis.exceptions.TimeoutError`) avant la fin du timeout, le serveur se reconnecte automatiquement et reprend l'attente jusqu'à épuisement du budget de temps — évitant les faux-timeouts (`waited=Xs timeout=30s`) lorsque la socket Redis se déconnecte brièvement. Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../../pipeline.md)).
+Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Si la socket pubsub est interrompue (`redis.exceptions.TimeoutError`) avant la fin du timeout, le serveur se reconnecte automatiquement et reprend l'attente jusqu'à épuisement du budget de temps — évitant les faux-timeouts (`waited=Xs timeout=30s`) lorsque la socket Redis se déconnecte brièvement. Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../pipeline.md)).
 
 ---
 

@@ -1,28 +1,22 @@
+"""Shim de compatibilité — `llm_module.tasks.llm_config` a déménagé dans `llm_gateway.config`.
+
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.config`.
 """
-tasks/llm_config.py — Shim de compatibilité.
+import warnings as _warnings
 
-La configuration vit désormais dans llm_module.config (restructuration en
-package, cf. docs/arch/llm-module-package-refactor.md). Ce module est conservé
-pour les notebooks d'analyse (scripts/models_influence/*, scripts/analysis/*) ;
-préférer `from llm_module.config import get_settings`.
-"""
-
-from __future__ import annotations
-from typing import Optional
-
-from llm_module.config import (  # noqa: F401
-    ProviderConfig,
-    Settings,
-    filter_providers_without_api_key,
-    get_settings,
-    load_provider_defaults,
+_warnings.warn(
+    "llm_module.tasks.llm_config est déprécié : importez llm_gateway.config (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
-# Alias historiques
-_load_provider_defaults = load_provider_defaults
+from llm_gateway.config import *  # noqa: E402,F401,F403
+from llm_gateway.config import get_settings as _gs  # noqa: E402
 
-settings = get_settings()
+_load_provider_defaults = load_provider_defaults  # noqa: F405
+settings = _gs()
 
 
-def get_batch_max_agents(force_provider: Optional[str] = None) -> int:
+def get_batch_max_agents(force_provider=None):
     return settings.get_batch_max_agents(force_provider)

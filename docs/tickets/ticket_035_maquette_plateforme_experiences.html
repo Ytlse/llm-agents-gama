@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maquette Ticket 035 — Plateforme de Gestion des Expériences AAMAS 2027</title>
+  <!-- Double support Tailwind : CDN standard pour ouverture locale dans un navigateur + gstatic pour le sandboxing IDE -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --bg-page: var(--background, #0f172a);
+      --bg-card: var(--card, #1e293b);
+      --border-color: var(--border, #334155);
+      --text-main: var(--foreground, #f8fafc);
+      --text-muted: var(--muted-foreground, #94a3b8);
+      --primary-accent: var(--primary, #3b82f6);
+    }
+    body {
+      background-color: var(--bg-page);
+      color: var(--text-main);
+    }
+  </style>
+</head>
+<body class="font-sans antialiased p-4 sm:p-6 min-h-screen">
+
+  <!-- Header & Navigation -->
+  <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-[var(--border-color)] gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🧪</span>
+        <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Experiment Studio & Benchmark Runner</h1>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Ticket 035 · AAMAS 2027</span>
+      </div>
+      <p class="text-xs sm:text-sm text-[var(--text-muted)] mt-1">Plateforme unifiée de calcul d'itinéraires découplé, inférence LLM et pilotage GAMA</p>
+    </div>
+    
+    <!-- View Switcher -->
+    <div class="flex items-center gap-2 bg-[var(--bg-card)] p-1 rounded-lg border border-[var(--border-color)] self-start md:self-auto shadow-sm">
+      <button id="btn-tab-hub" onclick="switchView('hub')" class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md bg-blue-600 text-white shadow-sm transition-all">
+        📊 Registre & Lanceur
+      </button>
+      <button id="btn-tab-detail" onclick="switchView('detail')" class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md text-[var(--text-muted)] hover:text-white transition-all">
+        🔬 Vue Détail (Run exp_02a)
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== VUE 1 : REGISTRE & LANCEUR D'EXPÉRIENCES ==================== -->
+  <main id="view-hub" class="mt-6 space-y-6">
+
+    <!-- Section 1 : Lanceur d'expérience (Interactive Configurator) -->
+    <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-5 shadow-sm">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">⚡</span>
+          <h2 class="font-semibold text-base">Nouveau Run d'Expérience</h2>
+        </div>
+        <span class="text-xs text-[var(--text-muted)]">Source de vérité : <code class="text-blue-400">experiments.yaml</code></span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 text-xs sm:text-sm">
+        <!-- 1. Population -->
+        <div class="space-y-1.5">
+          <label class="font-medium text-[var(--text-muted)] block">1. Population</label>
+          <select class="w-full bg-[var(--bg-page)] border border-[var(--border-color)] rounded-lg p-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none">
+            <option selected>population_1000_AAMAS_vLAST (894 mobiles, 2 579 trajets)</option>
+            <option>population_400_calibration.json</option>
+            <option>population_10000_full_toulouse.json</option>
+          </select>
+          <span class="text-[10px] text-emerald-400 block">✓ Empreinte scellée SHA256 validée</span>
+        </div>
+
+        <!-- 2. Banque d'itinéraires -->
+        <div class="space-y-1.5">
+          <label class="font-medium text-[var(--text-muted)] block">2. Banque d'itinéraires</label>
+          <select class="w-full bg-[var(--bg-page)] border border-[var(--border-color)] rounded-lg p-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none">
+            <option selected>cache_2026-08-17_v4 (20 options / trajet)</option>
+            <option>Calcul à la volée OTP+OSMnx (Lent)</option>
+            <option>+ Générer nouveau pré-calcul superset...</option>
+          </select>
+          <span class="text-[10px] text-blue-400 block">⚡ Filtre dynamique véhicule actif</span>
+        </div>
+
+        <!-- 3. Prompt Template -->
+        <div class="space-y-1.5">
+          <label class="font-medium text-[var(--text-muted)] block">3. Prompt Template</label>
+          <select class="w-full bg-[var(--bg-page)] border border-[var(--border-color)] rounded-lg p-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none">
+            <option selected>B0_bare (Zéro prompt engineering)</option>
+            <option>B2_calibrated (Issu algo génétique)</option>
+            <option>B3_few_shot_emc2</option>
+            <option>B4_news_events_presse</option>
+          </select>
+          <span class="text-[10px] text-[var(--text-muted)] block">Format JSON structuré strict</span>
+        </div>
+
+        <!-- 4. Modèle / Moteur -->
+        <div class="space-y-1.5">
+          <label class="font-medium text-[var(--text-muted)] block">4. Modèle Décisionnel</label>
+          <select class="w-full bg-[var(--bg-page)] border border-[var(--border-color)] rounded-lg p-2 text-xs focus:ring-1 focus:ring-blue-500 outline-none">
+            <option selected>Gemini 3.1 Flash-Lite (Google SWRR - 15 RPM)</option>
+            <option>Mistral Small Latest (60 RPM)</option>
+            <option>Qwen 2.5 32B Instruct (Local GPU vLLM)</option>
+            <option>Oracle LightGBM (Supervisé local)</option>
+            <option>Heuristique Temps Minimum</option>
+          </select>
+          <span class="text-[10px] text-amber-400 block">Quota dispo : 400/500 RPD</span>
+        </div>
+
+        <!-- 5. Mode Simulateur -->
+        <div class="space-y-1.5">
+          <label class="font-medium text-[var(--text-muted)] block">5. Mode d'exécution</label>
+          <div class="flex items-center gap-2 bg-[var(--bg-page)] p-1.5 rounded-lg border border-[var(--border-color)]">
+            <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+              <input type="radio" name="exec_mode" checked class="text-blue-500 focus:ring-0">
+              <span>Direct (Fast)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-xs">
+              <input type="radio" name="exec_mode" class="text-blue-500 focus:ring-0">
+              <span>GAMA (Simu)</span>
+            </label>
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+            <span>Jours : <input type="number" value="1" min="1" max="7" class="w-10 bg-transparent border border-[var(--border-color)] rounded px-1 text-center"></span>
+            <span>Date : <span class="text-blue-300">Commune</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer action bar -->
+      <div class="mt-5 pt-3 border-t border-[var(--border-color)] flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+          <span>Estimation : <b class="text-white">~258 requêtes</b> (batch B=10)</span>
+          <span>Tokens prévus : <b class="text-white">~774 k</b></span>
+          <span>Durée estimée : <b class="text-emerald-400">~18 min</b> (SWRR safe)</span>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <button class="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition">
+            <span>▶</span> Lancer l'expérience
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2 : Job en cours (Live Tracker avec Pause / Reprise) -->
+    <div class="bg-[var(--bg-card)] rounded-xl border border-blue-500/40 p-5 relative overflow-hidden shadow-lg">
+      <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 animate-pulse"></div>
+      
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">En cours d'exécution</span>
+            <span class="text-xs text-[var(--text-muted)]">·</span>
+            <span class="font-mono text-xs text-blue-300 font-semibold">exp_02a_calibrated_gemini_31</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Mode Direct (Fast)</span>
+          </div>
+          <p class="text-xs text-[var(--text-muted)] mt-1">Évaluation du prompt calibré sur cohorte scellée 1 000 agents (J1 / 2 579 trajets)</p>
+        </div>
+
+        <!-- Boutons de Contrôle du Run -->
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 text-xs font-medium flex items-center gap-1.5 transition">
+            <span>⏸</span> Pause & Snapshot
+          </button>
+          <button class="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 text-xs font-medium flex items-center gap-1.5 transition">
+            <span>⏹</span> Arrêter
+          </button>
+        </div>
+      </div>
+
+      <!-- Progression -->
+      <div class="mt-4 space-y-2">
+        <div class="flex justify-between text-xs font-mono">
+          <span>Trajets : <b>1 840 / 2 579</b> (71.3%)</span>
+          <span>Batchs API : <b>184 / 258</b> (B=10)</span>
+          <span>Restant : <b>~5 min 12 s</b></span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+          <div class="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full" style="width: 71.3%"></div>
+        </div>
+      </div>
+
+      <!-- Métriques d'exécution temps réel -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-[var(--border-color)] text-xs">
+        <div class="bg-[var(--bg-page)] p-2.5 rounded-lg border border-[var(--border-color)]">
+          <div class="text-[var(--text-muted)]">Quota Consommé</div>
+          <div class="text-sm font-semibold font-mono text-white mt-0.5">184 / 500 RPD (36.8%)</div>
+        </div>
+        <div class="bg-[var(--bg-page)] p-2.5 rounded-lg border border-[var(--border-color)]">
+          <div class="text-[var(--text-muted)]">Débit / Erreurs</div>
+          <div class="text-sm font-semibold font-mono text-emerald-400 mt-0.5">14.8 RPM · 0 HTTP 429</div>
+        </div>
+        <div class="bg-[var(--bg-page)] p-2.5 rounded-lg border border-[var(--border-color)]">
+          <div class="text-[var(--text-muted)]">Véhicules Disponibles</div>
+          <div class="text-sm font-semibold font-mono text-blue-400 mt-0.5">812 Domicile · 188 Déplacés</div>
+        </div>
+        <div class="bg-[var(--bg-page)] p-2.5 rounded-lg border border-[var(--border-color)]">
+          <div class="text-[var(--text-muted)]">Score L1 Intermédiaire</div>
+          <div class="text-sm font-semibold font-mono text-amber-300 mt-0.5">4.2 pts vs EMC²</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3 : Tableau comparatif des expériences (Leaderboard MLflow-like) -->
+    <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-5 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-semibold text-base flex items-center gap-2">
+            <span>📚</span> Registre & Résultats d'Expériences
+          </h2>
+          <p class="text-xs text-[var(--text-muted)]">Classement des runs selon l'écart aux parts modales de l'enquête Cerema EMC² 2023</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="Filtrer (id, modèle, phase)..." class="bg-[var(--bg-page)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-xs text-white outline-none w-48">
+          <button class="px-2.5 py-1.5 rounded-lg bg-[var(--bg-page)] border border-[var(--border-color)] text-xs hover:bg-slate-800">Export LaTeX</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-[var(--border-color)] text-[var(--text-muted)] font-medium">
+              <th class="py-2.5 px-3">Identifiant / Date</th>
+              <th class="py-2.5 px-3">Modèle / Moteur</th>
+              <th class="py-2.5 px-3">Mode</th>
+              <th class="py-2.5 px-3">Voiture</th>
+              <th class="py-2.5 px-3">TC</th>
+              <th class="py-2.5 px-3">Marche</th>
+              <th class="py-2.5 px-3">Vélo</th>
+              <th class="py-2.5 px-3">L1 Composite</th>
+              <th class="py-2.5 px-3">EMD Macro</th>
+              <th class="py-2.5 px-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[var(--border-color)]">
+            <!-- Cibles de référence Cerema -->
+            <tr class="bg-blue-950/20 text-blue-200 font-semibold border-b-2 border-blue-500/30">
+              <td class="py-2.5 px-3 flex items-center gap-1.5">
+                <span>🎯</span> <span>Cible EMC² 2023</span>
+              </td>
+              <td class="py-2.5 px-3">Enquête Référence</td>
+              <td class="py-2.5 px-3">—</td>
+              <td class="py-2.5 px-3 font-mono">51.2 %</td>
+              <td class="py-2.5 px-3 font-mono">18.4 %</td>
+              <td class="py-2.5 px-3 font-mono">22.8 %</td>
+              <td class="py-2.5 px-3 font-mono">7.6 %</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">0.0 pp</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">0.000</td>
+              <td class="py-2.5 px-3"><span class="text-[10px] text-blue-400">Vérité terrain</span></td>
+            </tr>
+
+            <!-- Exp 02a : Calibré (Meilleur) -->
+            <tr class="hover:bg-slate-800/50 cursor-pointer transition" onclick="switchView('detail')">
+              <td class="py-2.5 px-3 font-medium">
+                <div class="font-mono text-blue-400">exp_02a_calibrated</div>
+                <div class="text-[10px] text-[var(--text-muted)]">2026-09-04 16:25</div>
+              </td>
+              <td class="py-2.5 px-3">
+                <div>Gemini 3.1 Flash-Lite</div>
+                <div class="text-[10px] text-[var(--text-muted)]">Prompt calibré B2</div>
+              </td>
+              <td class="py-2.5 px-3"><span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px]">Direct (B=10)</span></td>
+              <td class="py-2.5 px-3 font-mono">50.8 %</td>
+              <td class="py-2.5 px-3 font-mono">19.1 %</td>
+              <td class="py-2.5 px-3 font-mono">21.5 %</td>
+              <td class="py-2.5 px-3 font-mono">8.6 %</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400 font-bold">3.4 pp</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">0.042</td>
+              <td class="py-2.5 px-3">
+                <button onclick="switchView('detail')" class="px-2 py-1 bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded hover:bg-blue-600/50">Détails</button>
+              </td>
+            </tr>
+
+            <!-- Exp 03b : Oracle LightGBM -->
+            <tr class="hover:bg-slate-800/50 cursor-pointer transition">
+              <td class="py-2.5 px-3 font-medium">
+                <div class="font-mono text-slate-300">exp_03b_oracle_lgbm</div>
+                <div class="text-[10px] text-[var(--text-muted)]">2026-09-03 14:19</div>
+              </td>
+              <td class="py-2.5 px-3">
+                <div>LightGBM Supervisé</div>
+                <div class="text-[10px] text-[var(--text-muted)]">Tabulaire PROGEDO</div>
+              </td>
+              <td class="py-2.5 px-3"><span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px]">ML Local</span></td>
+              <td class="py-2.5 px-3 font-mono">52.1 %</td>
+              <td class="py-2.5 px-3 font-mono">17.8 %</td>
+              <td class="py-2.5 px-3 font-mono">22.4 %</td>
+              <td class="py-2.5 px-3 font-mono">7.7 %</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">2.1 pp</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">0.028</td>
+              <td class="py-2.5 px-3">
+                <button class="px-2 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded hover:bg-slate-700">Détails</button>
+              </td>
+            </tr>
+
+            <!-- Exp 01a : Bare Gemini Flash-Lite -->
+            <tr class="hover:bg-slate-800/50 cursor-pointer transition">
+              <td class="py-2.5 px-3 font-medium">
+                <div class="font-mono text-slate-300">exp_01a_bare_gemini</div>
+                <div class="text-[10px] text-[var(--text-muted)]">2026-09-02 21:08</div>
+              </td>
+              <td class="py-2.5 px-3">
+                <div>Gemini 3.1 Flash-Lite</div>
+                <div class="text-[10px] text-[var(--text-muted)]">Prompt Brut B0</div>
+              </td>
+              <td class="py-2.5 px-3"><span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px]">Direct</span></td>
+              <td class="py-2.5 px-3 font-mono">38.4 %</td>
+              <td class="py-2.5 px-3 font-mono">24.2 %</td>
+              <td class="py-2.5 px-3 font-mono">16.1 %</td>
+              <td class="py-2.5 px-3 font-mono text-rose-400 font-semibold">21.3 %</td>
+              <td class="py-2.5 px-3 font-mono text-amber-400">32.2 pp</td>
+              <td class="py-2.5 px-3 font-mono text-amber-400">0.245</td>
+              <td class="py-2.5 px-3">
+                <button class="px-2 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded hover:bg-slate-700">Détails</button>
+              </td>
+            </tr>
+
+            <!-- Exp 04a : Hystérésis GAMA 5 jours (Simulation) -->
+            <tr class="hover:bg-slate-800/50 cursor-pointer transition">
+              <td class="py-2.5 px-3 font-medium">
+                <div class="font-mono text-slate-300">exp_04a_gama_5d_hyst</div>
+                <div class="text-[10px] text-[var(--text-muted)]">2026-08-27 17:57</div>
+              </td>
+              <td class="py-2.5 px-3">
+                <div>Gemini 3.1 + GAMA</div>
+                <div class="text-[10px] text-[var(--text-muted)]">LTM Mémoire active</div>
+              </td>
+              <td class="py-2.5 px-3"><span class="px-1.5 py-0.5 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700 text-[10px]">GAMA 5j</span></td>
+              <td class="py-2.5 px-3 font-mono">49.4 %</td>
+              <td class="py-2.5 px-3 font-mono">20.1 %</td>
+              <td class="py-2.5 px-3 font-mono">21.9 %</td>
+              <td class="py-2.5 px-3 font-mono">8.6 %</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">5.8 pp</td>
+              <td class="py-2.5 px-3 font-mono text-emerald-400">0.068</td>
+              <td class="py-2.5 px-3">
+                <button class="px-2 py-1 bg-slate-800 text-slate-300 border border-slate-700 rounded hover:bg-slate-700">Détails</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+
+  <!-- ==================== VUE 2 : DÉTAIL D'UNE EXPÉRIENCE (DRILL-DOWN) ==================== -->
+  <main id="view-detail" class="mt-6 space-y-6 hidden">
+    
+    <!-- En-tête de l'expérience sélectionnée -->
+    <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <button onclick="switchView('hub')" class="text-xs text-[var(--text-muted)] hover:text-white flex items-center gap-1">
+            ← Retour au registre
+          </button>
+          <span class="text-[var(--text-muted)]">·</span>
+          <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">Statut : Terminé (Scellé)</span>
+        </div>
+        <h2 class="text-xl font-bold mt-1 text-white">exp_02a_calibrated_gemini_31</h2>
+        <p class="text-xs text-[var(--text-muted)] mt-0.5">Modèle : Gemini 3.1 Flash-Lite · Prompt : B2 Calibré · Mode : Direct Offline · Cohorte : 1 000 agents (2 579 trajets)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="px-3 py-1.5 rounded-lg bg-[var(--bg-page)] border border-[var(--border-color)] text-xs text-slate-200 hover:bg-slate-800 flex items-center gap-1.5">
+          <span>📄</span> Ouvrir HTML Rapport
+        </button>
+        <button class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-500 flex items-center gap-1.5">
+          <span>🔁</span> Cloner et Varier
+        </button>
+      </div>
+    </div>
+
+    <!-- Comparaison Visuelle des Parts Modales vs Cible Cerema -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <!-- Voiture -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-4">
+        <div class="flex justify-between items-center text-xs text-[var(--text-muted)]">
+          <span>🚗 Voiture</span>
+          <span>Cible : 51.2 %</span>
+        </div>
+        <div class="text-2xl font-bold mt-1 text-white">50.8 %</div>
+        <div class="text-xs text-emerald-400 mt-0.5 font-medium">-0.4 pp (Conforme)</div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div class="bg-blue-500 h-full rounded-full" style="width: 50.8%"></div>
+        </div>
+      </div>
+
+      <!-- TC -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-4">
+        <div class="flex justify-between items-center text-xs text-[var(--text-muted)]">
+          <span>🚌 Transports Communs</span>
+          <span>Cible : 18.4 %</span>
+        </div>
+        <div class="text-2xl font-bold mt-1 text-white">19.1 %</div>
+        <div class="text-xs text-emerald-400 mt-0.5 font-medium">+0.7 pp (Conforme)</div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div class="bg-indigo-500 h-full rounded-full" style="width: 19.1%"></div>
+        </div>
+      </div>
+
+      <!-- Marche -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-4">
+        <div class="flex justify-between items-center text-xs text-[var(--text-muted)]">
+          <span>🚶 Marche</span>
+          <span>Cible : 22.8 %</span>
+        </div>
+        <div class="text-2xl font-bold mt-1 text-white">21.5 %</div>
+        <div class="text-xs text-emerald-400 mt-0.5 font-medium">-1.3 pp (Léger déficit)</div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div class="bg-amber-500 h-full rounded-full" style="width: 21.5%"></div>
+        </div>
+      </div>
+
+      <!-- Vélo -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-4">
+        <div class="flex justify-between items-center text-xs text-[var(--text-muted)]">
+          <span>🚲 Vélo</span>
+          <span>Cible : 7.6 %</span>
+        </div>
+        <div class="text-2xl font-bold mt-1 text-white">8.6 %</div>
+        <div class="text-xs text-emerald-400 mt-0.5 font-medium">+1.0 pp (Sous contrôle)</div>
+        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+          <div class="bg-emerald-500 h-full rounded-full" style="width: 8.6%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Diagnostic Métier & Chaîne de Véhicules -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Volet Gauche : Décomposition par Strates (Distance & Motif) -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-5">
+        <h3 class="font-semibold text-sm mb-3 flex items-center gap-2">
+          <span>📊</span> Part modale par tranche de distance
+        </h3>
+        <div class="space-y-3 text-xs">
+          <div>
+            <div class="flex justify-between text-[var(--text-muted)] mb-1">
+              <span>&lt; 1 km (Marche attendue &gt; 70%)</span>
+              <span class="font-mono text-white">Marche 73% · Vélo 8% · Voiture 19%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded flex overflow-hidden">
+              <div class="bg-amber-500 h-full" style="width: 73%"></div>
+              <div class="bg-emerald-500 h-full" style="width: 8%"></div>
+              <div class="bg-blue-500 h-full" style="width: 19%"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[var(--text-muted)] mb-1">
+              <span>1 - 3 km (Compétition Vélo / TC / Voiture)</span>
+              <span class="font-mono text-white">Marche 28% · Vélo 19% · TC 24% · Voiture 29%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded flex overflow-hidden">
+              <div class="bg-amber-500 h-full" style="width: 28%"></div>
+              <div class="bg-emerald-500 h-full" style="width: 19%"></div>
+              <div class="bg-indigo-500 h-full" style="width: 24%"></div>
+              <div class="bg-blue-500 h-full" style="width: 29%"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[var(--text-muted)] mb-1">
+              <span>&gt; 5 km (Dominance Voiture & TC structurants)</span>
+              <span class="font-mono text-white">Voiture 71% · TC 27% · Vélo 2%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded flex overflow-hidden">
+              <div class="bg-blue-500 h-full" style="width: 71%"></div>
+              <div class="bg-indigo-500 h-full" style="width: 27%"></div>
+              <div class="bg-emerald-500 h-full" style="width: 2%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-xs">
+          <span class="text-[var(--text-muted)]">EMD Distance : <b class="text-emerald-400">0.038</b></span>
+          <span class="text-[var(--text-muted)]">JSD Motif : <b class="text-emerald-400">0.029</b></span>
+          <span class="text-[var(--text-muted)]">Accuracy vs Choix réel : <b class="text-white">68.4%</b></span>
+        </div>
+      </div>
+
+      <!-- Volet Droit : Inspecteur de Requête LLM & Suivi de Véhicule -->
+      <div class="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-sm flex items-center gap-2">
+              <span>🔍</span> Inspecteur de Décision (Agent #418 - Trajet 2/3)
+            </h3>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-blue-300 font-mono">ID: person_418</span>
+          </div>
+
+          <div class="bg-[var(--bg-page)] rounded-lg p-3 border border-[var(--border-color)] text-xs font-mono space-y-2">
+            <div class="text-slate-400">
+              # Contexte dynamique : Trajet 1 effectué en <span class="text-blue-300 font-semibold">BUS</span> (Domicile → Travail).<br>
+              # État véhicule : <span class="text-rose-400 font-semibold">Vélo personnel resté au domicile</span>.<br>
+              # Action filtre dynamique : <span class="text-emerald-400">Option vélo personnel masquée du prompt LLM</span> !
+            </div>
+            <div class="text-amber-300/90 pt-1 border-t border-slate-800">
+              Options soumises au LLM : [1. Marche (18 min), 2. Métro Ligne B (11 min), 3. Bus L9 (14 min)]
+            </div>
+            <div class="text-blue-200 pt-1 border-t border-slate-800">
+              Décision LLM : <b>Option 2 (Métro)</b> - Prob: 0.72<br>
+              <i>"L'agent est pressé pour son rendez-vous et le métro garantit un temps de parcours sans aléa de voirie."</i>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[var(--border-color)] flex items-center justify-between text-xs text-[var(--text-muted)]">
+          <span>Tokens consommés : <b class="text-white">982</b> (740 in / 242 out)</span>
+          <span>Latence : <b class="text-white">1.12 s</b></span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    function switchView(view) {
+      const hub = document.getElementById('view-hub');
+      const detail = document.getElementById('view-detail');
+      const btnHub = document.getElementById('btn-tab-hub');
+      const btnDetail = document.getElementById('btn-tab-detail');
+
+      if (view === 'hub') {
+        hub.classList.remove('hidden');
+        detail.classList.add('hidden');
+        btnHub.classList.add('bg-blue-600', 'text-white');
+        btnHub.classList.remove('text-[var(--text-muted)]');
+        btnDetail.classList.remove('bg-blue-600', 'text-white');
+        btnDetail.classList.add('text-[var(--text-muted)]');
+      } else {
+        hub.classList.add('hidden');
+        detail.classList.remove('hidden');
+        btnDetail.classList.add('bg-blue-600', 'text-white');
+        btnDetail.classList.remove('text-[var(--text-muted)]');
+        btnHub.classList.remove('bg-blue-600', 'text-white');
+        btnHub.classList.add('text-[var(--text-muted)]');
+      }
+    }
+  </script>
+</body>
+</html>

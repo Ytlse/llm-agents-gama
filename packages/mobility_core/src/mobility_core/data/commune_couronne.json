@@ -1,0 +1,2284 @@
+{
+ "version": "cc1",
+ "source": {
+  "survey": "EMC² Toulouse 2023 (ProGEDO / lil-1750)",
+  "dtir_layer": "EMC2_Toulouse_2023_DTIR_17072023.shp",
+  "zf_layer": "EMC2_Toulouse_2023_ZF_26052023.shp",
+  "field": "NOM_D2"
+ },
+ "note": "Découpage par liste de communes, tel que défini par la couche SIG de l'enquête. La publication CEREMA annonce 68 et 109 communes pour les 1ʳᵉ et 2ᵉ couronnes ; la couche en donne 69 et 108, pour le même total de 453. La couche fait foi : c'est sur ses secteurs que les poids de redressement ont été calculés.",
+ "counts": {
+  "Toulouse": 1,
+  "1ere couronne": 69,
+  "2eme couronne": 108,
+  "3eme couronne": 275
+ },
+ "n_communes": 453,
+ "communes": [
+  {
+   "insee": "09038",
+   "commune": "La Bastide-de-Besplas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09147",
+   "commune": "Labatut",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09167",
+   "commune": "Lézat-sur-Lèze",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09170",
+   "commune": "Lissac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09172",
+   "commune": "Loubaut",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09275",
+   "commune": "Saint-Quirc",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09277",
+   "commune": "Saint-Ybars",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09310",
+   "commune": "Thouars-sur-Arize",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09338",
+   "commune": "Villeneuve-du-Latou",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "09342",
+   "commune": "Sainte-Suzanne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11026",
+   "commune": "Baraigne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11030",
+   "commune": "Belflou",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11074",
+   "commune": "Les Cassés",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11134",
+   "commune": "Fajac-la-Relenque",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11166",
+   "commune": "Gourvieille",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11208",
+   "commune": "La Louvière-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11218",
+   "commune": "Marquein",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11238",
+   "commune": "Molleville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11243",
+   "commune": "Montferrand",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "11359",
+   "commune": "Saint-Michel-de-Lanès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31002",
+   "commune": "Aignes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31003",
+   "commune": "Aigrefeuille",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31004",
+   "commune": "Ayguesvives",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31006",
+   "commune": "Albiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31022",
+   "commune": "Aucamville",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31024",
+   "commune": "Auragne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31025",
+   "commune": "Aureville",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31026",
+   "commune": "Auriac-sur-Vendinelle",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31027",
+   "commune": "Auribail",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31029",
+   "commune": "Aurin",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31032",
+   "commune": "Aussonne",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31033",
+   "commune": "Auterive",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31035",
+   "commune": "Auzeville-Tolosane",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31036",
+   "commune": "Auzielle",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31037",
+   "commune": "Avignonet-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31038",
+   "commune": "Azas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31044",
+   "commune": "Balma",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31047",
+   "commune": "Bax",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31048",
+   "commune": "Baziège",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31049",
+   "commune": "Bazus",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31051",
+   "commune": "Beaufort",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31052",
+   "commune": "Beaumont-sur-Lèze",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31053",
+   "commune": "Beaupuy",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31054",
+   "commune": "Beauteville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31055",
+   "commune": "Beauville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31056",
+   "commune": "Beauzelle",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31057",
+   "commune": "Belberaud",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31058",
+   "commune": "Belbèze-de-Lauragais",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31060",
+   "commune": "Bélesta-en-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31061",
+   "commune": "Bellegarde-Sainte-Marie",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31062",
+   "commune": "Bellesserre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31065",
+   "commune": "Bérat",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31066",
+   "commune": "Bessières",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31069",
+   "commune": "Blagnac",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31071",
+   "commune": "Bois-de-la-Pierre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31073",
+   "commune": "Bondigoux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31074",
+   "commune": "Bonrepos-Riquet",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31075",
+   "commune": "Bonrepos-sur-Aussonnelle",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31077",
+   "commune": "Le Born",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31079",
+   "commune": "Bouloc",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31082",
+   "commune": "Bourg-Saint-Bernard",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31084",
+   "commune": "Boussens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31087",
+   "commune": "Bragayrac",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31088",
+   "commune": "Brax",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31089",
+   "commune": "Bretx",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31090",
+   "commune": "Brignemont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31091",
+   "commune": "Bruguières",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31093",
+   "commune": "Le Burgaud",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31094",
+   "commune": "Buzet-sur-Tarn",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31096",
+   "commune": "Cabanac-Séguenville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31097",
+   "commune": "Le Cabanial",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31098",
+   "commune": "Cadours",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31099",
+   "commune": "Caignac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31100",
+   "commune": "Calmont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31101",
+   "commune": "Cambernard",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31102",
+   "commune": "Cambiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31103",
+   "commune": "Canens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31104",
+   "commune": "Capens",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31105",
+   "commune": "Caragoudes",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31106",
+   "commune": "Caraman",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31107",
+   "commune": "Carbonne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31111",
+   "commune": "Castagnac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31113",
+   "commune": "Castanet-Tolosan",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31116",
+   "commune": "Castelginest",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31117",
+   "commune": "Castelmaurou",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31118",
+   "commune": "Castelnau-d'Estrétefonds",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31119",
+   "commune": "Castelnau-Picampeau",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31120",
+   "commune": "Le Castéra",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31122",
+   "commune": "Casties-Labrande",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31126",
+   "commune": "Caubiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31128",
+   "commune": "Caujac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31135",
+   "commune": "Cazères",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31136",
+   "commune": "Cépet",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31137",
+   "commune": "Cessales",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31145",
+   "commune": "Cintegabelle",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31148",
+   "commune": "Clermont-le-Fort",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31149",
+   "commune": "Colomiers",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31150",
+   "commune": "Cornebarrieu",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31151",
+   "commune": "Corronsac",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31153",
+   "commune": "Couladère",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31156",
+   "commune": "Cox",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31157",
+   "commune": "Cugnaux",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31160",
+   "commune": "Daux",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31161",
+   "commune": "Deyme",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31162",
+   "commune": "Donneville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31163",
+   "commune": "Drémil-Lafage",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31164",
+   "commune": "Drudas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31165",
+   "commune": "Eaunes",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31166",
+   "commune": "Empeaux",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31169",
+   "commune": "Escalquens",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31171",
+   "commune": "Espanès",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31173",
+   "commune": "Esperce",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31179",
+   "commune": "Le Faget",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31180",
+   "commune": "Falga",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31181",
+   "commune": "Le Fauga",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31182",
+   "commune": "Fenouillet",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31184",
+   "commune": "Flourens",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31185",
+   "commune": "Folcarde",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31186",
+   "commune": "Fonbeauzard",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31187",
+   "commune": "Fonsorbes",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31188",
+   "commune": "Fontenilles",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31189",
+   "commune": "Forgues",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31192",
+   "commune": "Fourquevaux",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31193",
+   "commune": "Le Fousseret",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31194",
+   "commune": "Francarville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31196",
+   "commune": "Francon",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31202",
+   "commune": "Fronton",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31203",
+   "commune": "Frouzins",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31204",
+   "commune": "Fustignac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31205",
+   "commune": "Gagnac-sur-Garonne",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31206",
+   "commune": "Gaillac-Toulza",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31209",
+   "commune": "Garac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31210",
+   "commune": "Gardouch",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31211",
+   "commune": "Gargas",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31212",
+   "commune": "Garidech",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31215",
+   "commune": "Gauré",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31216",
+   "commune": "Gémil",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31219",
+   "commune": "Gensac-sur-Garonne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31220",
+   "commune": "Gibel",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31225",
+   "commune": "Goutevernisse",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31226",
+   "commune": "Gouzens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31227",
+   "commune": "Goyrans",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31228",
+   "commune": "Gragnague",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31229",
+   "commune": "Gratens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31230",
+   "commune": "Gratentour",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31231",
+   "commune": "Grazac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31232",
+   "commune": "Grenade",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31233",
+   "commune": "Grépiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31234",
+   "commune": "Le Grès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31240",
+   "commune": "Issus",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31243",
+   "commune": "Juzes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31248",
+   "commune": "Labarthe-sur-Lèze",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31249",
+   "commune": "Labastide-Beauvoir",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31250",
+   "commune": "Labastide-Clermont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31252",
+   "commune": "Labastide-Saint-Sernin",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31253",
+   "commune": "Labastidette",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31254",
+   "commune": "Labège",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31256",
+   "commune": "Labruyère-Dorsa",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31258",
+   "commune": "Lacaugne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31259",
+   "commune": "Lacroix-Falgarde",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31261",
+   "commune": "Lafitte-Vigordane",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31262",
+   "commune": "Lagarde",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31263",
+   "commune": "Lagardelle-sur-Lèze",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31264",
+   "commune": "Lagrâce-Dieu",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31265",
+   "commune": "Lagraulet-Saint-Nicolas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31266",
+   "commune": "Lahage",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31267",
+   "commune": "Lahitère",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31269",
+   "commune": "Lamasquère",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31271",
+   "commune": "Lanta",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31272",
+   "commune": "Lapeyrère",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31273",
+   "commune": "Lapeyrouse-Fossat",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31275",
+   "commune": "Laréole",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31277",
+   "commune": "Lasserre-Pradère",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31280",
+   "commune": "Latrape",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31281",
+   "commune": "Launac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31282",
+   "commune": "Launaguet",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31283",
+   "commune": "Lautignac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31284",
+   "commune": "Lauzerville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31285",
+   "commune": "Lavalette",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31286",
+   "commune": "Lavelanet-de-Comminges",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31287",
+   "commune": "Lavernose-Lacasse",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31288",
+   "commune": "Layrac-sur-Tarn",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31291",
+   "commune": "Léguevin",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31292",
+   "commune": "Lescuns",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31293",
+   "commune": "Lespinasse",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31297",
+   "commune": "Lévignac",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31299",
+   "commune": "Lherm",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31303",
+   "commune": "Longages",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31304",
+   "commune": "Loubens-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31309",
+   "commune": "Lussan-Adeilhac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31310",
+   "commune": "Lux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31311",
+   "commune": "La Magdelaine-sur-Tarn",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31312",
+   "commune": "Mailholas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31317",
+   "commune": "Marignac-Lasclares",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31318",
+   "commune": "Marignac-Laspeyres",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31319",
+   "commune": "Marliac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31320",
+   "commune": "Marquefave",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31324",
+   "commune": "Martres-Tolosane",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31325",
+   "commune": "Mascarville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31326",
+   "commune": "Massabrac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31327",
+   "commune": "Mauran",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31328",
+   "commune": "Mauremont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31329",
+   "commune": "Maurens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31330",
+   "commune": "Mauressac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31331",
+   "commune": "Maureville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31332",
+   "commune": "Mauvaisin",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31334",
+   "commune": "Mauzac",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31338",
+   "commune": "Menville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31339",
+   "commune": "Mérenvielle",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31340",
+   "commune": "Mervilla",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31341",
+   "commune": "Merville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31345",
+   "commune": "Miremont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31346",
+   "commune": "Mirepoix-sur-Tarn",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31349",
+   "commune": "Mondavezan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31351",
+   "commune": "Mondonville",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31352",
+   "commune": "Mondouzil",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31353",
+   "commune": "Monès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31354",
+   "commune": "Monestrol",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31355",
+   "commune": "Mons",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31356",
+   "commune": "Montaigut-sur-Save",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31358",
+   "commune": "Montastruc-la-Conseillère",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31359",
+   "commune": "Montastruc-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31361",
+   "commune": "Montaut",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31362",
+   "commune": "Montberaud",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31364",
+   "commune": "Montberon",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31366",
+   "commune": "Montbrun-Lauragais",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31367",
+   "commune": "Montclar-de-Comminges",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31368",
+   "commune": "Montclar-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31370",
+   "commune": "Montégut-Bourjac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31374",
+   "commune": "Montesquieu-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31375",
+   "commune": "Montesquieu-Volvestre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31377",
+   "commune": "Montgaillard-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31379",
+   "commune": "Montgazin",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31380",
+   "commune": "Montgeard",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31381",
+   "commune": "Montgiscard",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31382",
+   "commune": "Montgras",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31383",
+   "commune": "Montjoire",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31384",
+   "commune": "Montlaur",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31387",
+   "commune": "Montoussin",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31388",
+   "commune": "Montpitol",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31389",
+   "commune": "Montrabé",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31392",
+   "commune": "Mourvilles-Basses",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31393",
+   "commune": "Mourvilles-Hautes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31395",
+   "commune": "Muret",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31396",
+   "commune": "Nailloux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31399",
+   "commune": "Noé",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31401",
+   "commune": "Noueilles",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31402",
+   "commune": "Odars",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31403",
+   "commune": "Ondes",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31406",
+   "commune": "Palaminy",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31407",
+   "commune": "Paulhac",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31409",
+   "commune": "Péchabou",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31410",
+   "commune": "Pechbonnieu",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31411",
+   "commune": "Pechbusque",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31413",
+   "commune": "Pelleport",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31416",
+   "commune": "Peyssies",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31417",
+   "commune": "Pibrac",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31418",
+   "commune": "Pin-Balma",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31419",
+   "commune": "Le Pin-Murelet",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31420",
+   "commune": "Pinsaguel",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31421",
+   "commune": "Pins-Justaret",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31422",
+   "commune": "Plagne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31423",
+   "commune": "Plagnole",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31424",
+   "commune": "Plaisance-du-Touch",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31425",
+   "commune": "Le Plan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31428",
+   "commune": "Polastron",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31429",
+   "commune": "Pompertuzat",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31433",
+   "commune": "Portet-sur-Garonne",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31435",
+   "commune": "Poucharramet",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31436",
+   "commune": "Pouy-de-Touges",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31437",
+   "commune": "Pouze",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31439",
+   "commune": "Préserville",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31441",
+   "commune": "Prunet",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31442",
+   "commune": "Puydaniel",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31444",
+   "commune": "Puysségur",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31445",
+   "commune": "Quint-Fonsegrives",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31446",
+   "commune": "Ramonville-Saint-Agne",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31448",
+   "commune": "Rebigue",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31450",
+   "commune": "Renneville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31453",
+   "commune": "Rieumajou",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31454",
+   "commune": "Rieumes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31455",
+   "commune": "Rieux-Volvestre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31458",
+   "commune": "Roques",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31459",
+   "commune": "Roquesérière",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31460",
+   "commune": "Roquettes",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31462",
+   "commune": "Rouffiac-Tolosan",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31464",
+   "commune": "Sabonnères",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31466",
+   "commune": "Saiguède",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31467",
+   "commune": "Saint-Alban",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31469",
+   "commune": "Saint-Araille",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31473",
+   "commune": "Saint-Cézert",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31474",
+   "commune": "Saint-Christaud",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31475",
+   "commune": "Saint-Clar-de-Rivière",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31476",
+   "commune": "Saint-Élix-le-Château",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31480",
+   "commune": "Sainte-Foy-d'Aigrefeuille",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31481",
+   "commune": "Sainte-Foy-de-Peyrolières",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31484",
+   "commune": "Saint-Geniès-Bellevue",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31485",
+   "commune": "Saint-Germier",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31486",
+   "commune": "Saint-Hilaire",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31488",
+   "commune": "Saint-Jean",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31489",
+   "commune": "Saint-Jean-Lherm",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31490",
+   "commune": "Saint-Jory",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31491",
+   "commune": "Saint-Julia",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31492",
+   "commune": "Saint-Julien-sur-Garonne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31495",
+   "commune": "Saint-Léon",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31496",
+   "commune": "Sainte-Livrade",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31497",
+   "commune": "Saint-Loup-Cammas",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31499",
+   "commune": "Saint-Lys",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31501",
+   "commune": "Saint-Marcel-Paulel",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31505",
+   "commune": "Saint-Michel",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31506",
+   "commune": "Saint-Orens-de-Gameville",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31507",
+   "commune": "Saint-Paul-sur-Save",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31511",
+   "commune": "Saint-Pierre",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31512",
+   "commune": "Saint-Pierre-de-Lages",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31514",
+   "commune": "Saint-Rome",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31515",
+   "commune": "Saint-Rustice",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31516",
+   "commune": "Saint-Sauveur",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31517",
+   "commune": "Saint-Sulpice-sur-Lèze",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31518",
+   "commune": "Saint-Thomas",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31519",
+   "commune": "Saint-Vincent",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31520",
+   "commune": "Sajas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31525",
+   "commune": "Salles-sur-Garonne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31526",
+   "commune": "La Salvetat-Saint-Gilles",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31527",
+   "commune": "La Salvetat-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31529",
+   "commune": "Samouillan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31530",
+   "commune": "Sana",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31533",
+   "commune": "Saubens",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31534",
+   "commune": "Saussens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31538",
+   "commune": "Savères",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31540",
+   "commune": "Ségreville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31541",
+   "commune": "Seilh",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31543",
+   "commune": "Sénarens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31546",
+   "commune": "Seyre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31547",
+   "commune": "Seysses",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31551",
+   "commune": "Tarabel",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31552",
+   "commune": "Terrebasse",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31553",
+   "commune": "Thil",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31555",
+   "commune": "Toulouse",
+   "couronne": "Toulouse"
+  },
+  {
+   "insee": "31557",
+   "commune": "Tournefeuille",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31558",
+   "commune": "Toutens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31560",
+   "commune": "Trébons-sur-la-Grasse",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31561",
+   "commune": "L'Union",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31563",
+   "commune": "Vacquiers",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31566",
+   "commune": "Vallègue",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31567",
+   "commune": "Vallesvilles",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31568",
+   "commune": "Varennes",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31570",
+   "commune": "Vaux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31571",
+   "commune": "Vendine",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31572",
+   "commune": "Venerque",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31573",
+   "commune": "Verfeil",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31574",
+   "commune": "Vernet",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31575",
+   "commune": "Vieille-Toulouse",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31576",
+   "commune": "Vieillevigne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31577",
+   "commune": "Vignaux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31578",
+   "commune": "Vigoulet-Auzil",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31579",
+   "commune": "Villariès",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31580",
+   "commune": "Villate",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31581",
+   "commune": "Villaudric",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31582",
+   "commune": "Villefranche-de-Lauragais",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31583",
+   "commune": "Villematier",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31584",
+   "commune": "Villemur-sur-Tarn",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31587",
+   "commune": "Villeneuve-lès-Bouloc",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31588",
+   "commune": "Villeneuve-Tolosane",
+   "couronne": "1ere couronne"
+  },
+  {
+   "insee": "31589",
+   "commune": "Villenouvelle",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "31592",
+   "commune": "Larra",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "31593",
+   "commune": "Cazac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32007",
+   "commune": "Ardizas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32016",
+   "commune": "Auradé",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32038",
+   "commune": "Beaupuy",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32090",
+   "commune": "Castillon-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32098",
+   "commune": "Cazaux-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32105",
+   "commune": "Clermont-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32106",
+   "commune": "Cologne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32120",
+   "commune": "Encausse",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32121",
+   "commune": "Endoufielle",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32134",
+   "commune": "Frégouville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32148",
+   "commune": "Giscaro",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32160",
+   "commune": "L'Isle-Jourdain",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32171",
+   "commune": "Labastide-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32182",
+   "commune": "Lahas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32206",
+   "commune": "Laymont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32210",
+   "commune": "Lias",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32234",
+   "commune": "Marestaing",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32261",
+   "commune": "Monblanc",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32262",
+   "commune": "Monbrun",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32268",
+   "commune": "Monferran-Savès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32289",
+   "commune": "Montpézat",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32295",
+   "commune": "Nizas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32308",
+   "commune": "Pébées",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32322",
+   "commune": "Pompiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32334",
+   "commune": "Pujaudran",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32339",
+   "commune": "Razengues",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32349",
+   "commune": "Roquelaure-Saint-Aubin",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32357",
+   "commune": "Sainte-Anne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32372",
+   "commune": "Saint-Cricq",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32379",
+   "commune": "Saint-Germier",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32387",
+   "commune": "Saint-Loube",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32420",
+   "commune": "Sauvimont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32421",
+   "commune": "Savignac-Mona",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32425",
+   "commune": "Ségoufielle",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32432",
+   "commune": "Seysses-Savès",
+   "couronne": "2eme couronne"
+  },
+  {
+   "insee": "32435",
+   "commune": "Sirac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32444",
+   "commune": "Thoux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "32448",
+   "commune": "Touget",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81022",
+   "commune": "Bannières",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81025",
+   "commune": "Belcastel",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81050",
+   "commune": "Cambon-lès-Lavaur",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81070",
+   "commune": "Coufouleux",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81076",
+   "commune": "Cuq-Toulza",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81102",
+   "commune": "Garrigues",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81104",
+   "commune": "Giroussens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81106",
+   "commune": "Grazac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81126",
+   "commune": "Lacougotte-Cadoul",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81149",
+   "commune": "Loupiac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81150",
+   "commune": "Lugan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81162",
+   "commune": "Maurens-Scopont",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81164",
+   "commune": "Mézens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81173",
+   "commune": "Montcabrier",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81185",
+   "commune": "Montvalen",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81189",
+   "commune": "Mouzens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81220",
+   "commune": "Rabastens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81228",
+   "commune": "Roquemaure",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81236",
+   "commune": "Saint-Agnan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81255",
+   "commune": "Saint-Jean-de-Rives",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81261",
+   "commune": "Saint-Lieux-lès-Lavaur",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81271",
+   "commune": "Saint-Sulpice-la-Pointe",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81293",
+   "commune": "Tauriac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81298",
+   "commune": "Teulat",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81310",
+   "commune": "Veilhes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81318",
+   "commune": "Villeneuve-lès-Lavaur",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "81324",
+   "commune": "Viviers-lès-Lavaur",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82005",
+   "commune": "Aucamville",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82014",
+   "commune": "Beaupuy",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82017",
+   "commune": "Bessens",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82020",
+   "commune": "Bouillac",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82027",
+   "commune": "Campsas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82028",
+   "commune": "Canals",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82043",
+   "commune": "Comberouger",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82048",
+   "commune": "Dieupentale",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82057",
+   "commune": "Fabas",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82062",
+   "commune": "Finhan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82075",
+   "commune": "Grisolles",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82079",
+   "commune": "Labastide-Saint-Pierre",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82105",
+   "commune": "Mas-Grenier",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82114",
+   "commune": "Monbéqui",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82135",
+   "commune": "Nohic",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82136",
+   "commune": "Orgueil",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82142",
+   "commune": "Pompignan",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82150",
+   "commune": "Reyniès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82178",
+   "commune": "Savenès",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82188",
+   "commune": "Varennes",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82190",
+   "commune": "Verdun-sur-Garonne",
+   "couronne": "3eme couronne"
+  },
+  {
+   "insee": "82194",
+   "commune": "Villebrumier",
+   "couronne": "3eme couronne"
+  }
+ ]
+}

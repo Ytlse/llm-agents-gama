@@ -1,11 +1,16 @@
-"""
-settings/models.py — Shim de compatibilité.
+"""Shim de compatibilité — `llm_module.settings.models` a déménagé dans `llm_gateway.core.models`.
 
-Les modèles vivent désormais dans llm_module.core.models (restructuration en
-package, cf. docs/arch/llm-module-package-refactor.md). Ce module est conservé
-pour les consommateurs externes (scripts/models_influence/prompt_calibration_lib.py,
-notebooks) ; préférer les imports depuis llm_module.core.models.
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.core.models`.
 """
+import warnings as _warnings
 
-from llm_module.core.models import *  # noqa: F401,F403
-from llm_module.core.models import _FALLBACK_PRIORITY_SCORE  # noqa: F401
+_warnings.warn(
+    "llm_module.settings.models est déprécié : importez llm_gateway.core.models (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from llm_gateway.core.models import *  # noqa: E402,F401,F403
+from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE  # noqa: E402,F401
+from mobility_llm.persona import AgentSpec  # noqa: E402,F401

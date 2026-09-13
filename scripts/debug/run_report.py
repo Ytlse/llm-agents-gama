@@ -370,22 +370,92 @@ def section_agents(run: Path, out: list[str], alarms: list[str]) -> None:
         )
 
 
+# Écart absolu maximal toléré (points de %) entre la part attendue d'un mode et sa
+# part réellement tirée, avant de considérer que le tirage dérive.
+TH_MODE_DRIFT_PTS = 8.0
+# En dessous de cet effectif, l'écart n'est que du bruit d'échantillonnage.
+TH_MODE_DRIFT_MIN_ROWS = 200
+
+
+def _decisions_expected_vs_drawn(expected: Counter, expected_rows: int,
+                                 drawn: Counter, out: list[str], alarms: list[str]) -> None:
+    """Compare la répartition annoncée par le LLM à celle réellement tirée.
+
+    Le tirage doit reproduire la distribution en espérance. Un écart franc et durable
+    ne vient donc pas du modèle : il vient du tirage lui-même, du cache (options
+    disparues, points hérités resservis sans tirage) ou d'un biais de normalisation.
+
+    **Un seul dénominateur des deux côtés** : les lignes qui portent une répartition.
+    Compter les modes tirés sur TOUTES les lignes du journal — mono-choix, fallback,
+    « Aucun » — y mêlait des décisions sans tirage et fabriquait un écart de plus de
+    10 points sur le mode le plus fréquent, avec l'accusation infondée qui va avec
+    (« vérifier le cache »). Mesuré sur le run 2026-09-04_16_25 : -11,9 pt annoncés
+    pour les transports collectifs, +0,3 pt à dénominateur commun.
+    """
+    if not expected_rows:
+        return
+    out.append(
+        f"\n**Répartition attendue vs tirée** ({expected_rows} décisions probabilistes, "
+        f"même dénominateur des deux côtés)\n")
+    out.append("| Mode | attendu | tiré | écart |")
+    out.append("|:--|--:|--:|--:|")
+    drawn_total = sum(drawn.values()) or 1
+    worst = (0.0, "")
+    for mode, mass in expected.most_common():
+        exp_pct = 100.0 * mass / expected_rows
+        got_pct = 100.0 * drawn.get(mode, 0) / drawn_total
+        delta = got_pct - exp_pct
+        if exp_pct == 0 and got_pct == 0:
+            continue
+        out.append(f"| {mode} | {exp_pct:.1f} % | {got_pct:.1f} % | {delta:+.1f} pts |")
+        if abs(delta) > worst[0]:
+            worst = (abs(delta), mode)
+    if expected_rows >= TH_MODE_DRIFT_MIN_ROWS and worst[0] > TH_MODE_DRIFT_PTS:
+        alarms.append(
+            f"🟠 Tirage modal dérivant : {worst[1]} s'écarte de {worst[0]:.1f} pts de la "
+            f"répartition annoncée par le LLM sur {expected_rows} décisions — vérifier le "
+            f"cache (points hérités resservis sans tirage) et la normalisation."
+        )
+
+
 def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
     path = run / "moves.csv"
     if not path.exists():
         return
     modes = Counter()
     methods = Counter()
+    # Somme des probabilités annoncées par le LLM, par mode : la répartition qu'il
+    # « voulait ». Les modes tirés doivent la reproduire en espérance — un écart
+    # persistant signale un biais du tirage ou du cache, pas du modèle.
+    expected = Counter()
+    # Modes tirés sur les SEULES lignes qui portent une répartition : c'est le
+    # dénominateur de `expected`, et le seul avec lequel l'écart veut dire quelque chose.
+    drawn = Counter()
+    expected_rows = 0
     total = 0
     fallbacks = 0
     with path.open(encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        prob_cols = [c for c in (reader.fieldnames or [])
+                     if c.startswith("P(") and c.endswith(") %")]
+        for row in reader:
             total += 1
             modes[row.get("Mode de transport Choisi", "?")] += 1
             method = row.get("Méthode de sélection", "?")
             methods[method] += 1
             if "Error" in method or "Default" in method:
                 fallbacks += 1
+            # Cellule vide = décision sans répartition (mono-choix, erreur, cache hérité) ;
+            # 0 = mode explicitement écarté. Seules les lignes renseignées comptent.
+            cells = {c: row.get(c, "") for c in prob_cols}
+            if any(v not in ("", None) for v in cells.values()):
+                expected_rows += 1
+                drawn[row.get("Mode de transport Choisi", "?")] += 1
+                for col, val in cells.items():
+                    try:
+                        expected[col[2:-3]] += float(val) / 100.0
+                    except (TypeError, ValueError):
+                        pass
     if not total:
         return
     # Ratio « erreur définitive LLM » : fallbacks rapportés aux seules décisions
@@ -406,6 +476,8 @@ def section_decisions(run: Path, out: list[str], alarms: list[str]) -> None:
         left = f"{ml[i][0]} | {ml[i][1]}" if i < len(ml) else " | "
         right = f"{sl[i][0][:32]} | {sl[i][1]}" if i < len(sl) else " | "
         out.append(f"| {left} | | {right} |")
+
+    _decisions_expected_vs_drawn(expected, expected_rows, drawn, out, alarms)
     if fallbacks / total >= TH_FALLBACK_SHARE:
         alarms.append(
             f"🟠 {fallbacks}/{total} décisions ({fallbacks / total:.1%}) en fallback "
@@ -614,6 +686,45 @@ def section_quotas(run: Path, out: list[str], alarms: list[str]) -> None:
         pass  # Silencieusement ignorer les erreurs de quota_validator
 
 
+def section_jeu(run: Path, out: list[str], alarms: list[str]) -> None:
+    """Jeu de déplacements enregistré (ticket 035, spec 04, G14) : appels moteurs, sources,
+    recalculs sans effet, déclencheurs jamais déclenchés, couverture. Rien sans `jeu_stats.json`."""
+    path = run / "jeu_stats.json"
+    if not path.exists():
+        return
+    try:
+        st = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        out.append("\n## 📼 Jeu enregistré\n\n`jeu_stats.json` illisible.\n")
+        return
+    out.append("\n## 📼 Jeu enregistré\n")
+    out.append(f"Jeu **{st.get('jeu')}** (empreinte `{str(st.get('empreinte'))[:12]}…`) · population {st.get('population')}\n")
+    out.append("| Rubrique | Valeur |")
+    out.append("|:--|--:|")
+    out.append(f"| Appels au trip helper (moteurs) | {st.get('appels_moteur', 0)} |")
+    out.append(f"| — dont OTP / OSMnx (quand mesuré) | {st.get('appels_otp', 0)} / {st.get('appels_osmnx', 0)} |")
+    sources = st.get("propositions_par_source") or {}
+    for k in sorted(sources):
+        out.append(f"| Propositions `{k}` | {sources[k]} |")
+    out.append(f"| Déplacements servis du jeu | {st.get('deplacements_servis', 0)} |")
+    out.append(f"| Déplacements recalculés (horaire) | {st.get('recalculs_horaire', 0)} |")
+    out.append(f"| Recalculs sans effet | {st.get('recalcul_sans_effet', 0)} |")
+    out.append(f"| Recalculs illégitimes | {st.get('recalcul_illegitime', 0)} |")
+    out.append(f"| Déplacements hors jeu (calcul en vol) | {st.get('hors_jeu', 0)} |")
+    jamais = st.get("declencheurs_jamais_declenches") or []
+    out.append(f"| Déclencheurs jamais déclenchés | {', '.join(jamais) if jamais else 'aucun'} |")
+    couv = st.get("couverture_jeu") or {}
+    if couv:
+        out.append(f"| Couverture du jeu | {couv.get('deplacements_couverts')} / {couv.get('deplacements_attendus')} |")
+    if st.get("recalcul_illegitime"):
+        alarms.append(f"🔴 {st['recalcul_illegitime']} appel(s) moteur hors des conditions admises (spec 04, G4).")
+    rec = st.get("recalculs_horaire", 0)
+    if rec and st.get("recalcul_sans_effet", 0) / rec > 0.3:
+        alarms.append(f"🟠 {st['recalcul_sans_effet']}/{rec} recalculs horaires sans effet — tolérance trop sensible (G7).")
+    if jamais:
+        alarms.append(f"🟡 déclencheur(s) de recalcul jamais déclenché(s) : {', '.join(jamais)} — fonction fantôme ? (EF-44)")
+
+
 def section_alarms(out: list[str], alarms: list[str]) -> None:
     banner = ["\n## 🚨 ALARMES\n"]
     if not alarms:
@@ -660,6 +771,7 @@ def main() -> int:
     section_activity_coverage(run, out, alarms)
     section_arrivals(run, out, alarms)
     section_quotas(run, out, alarms)
+    section_jeu(run, out, alarms)
     section_alarms(out, alarms)  # doit rester en dernier (insère en tête)
 
     report = "\n".join(out).rstrip() + "\n"

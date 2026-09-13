@@ -1,0 +1,865 @@
+"""
+worker/task_worker.py — Worker Celery avec retry et backoff exponentiel.
+
+Le Worker est le cœur du traitement :
+  1. Dépile les tâches de la file de batch (BatchQueue)
+  2. Construit le prompt via le PromptManager
+  3. Sélectionne le provider via le LoadBalancer
+  4. Exécute l'appel LLM via l'Adapter approprié
+  5. Valide la sortie structurée
+  6. Persiste le résultat (TaskStore) et notifie via Pub/Sub
+
+Les dépendances (Redis, balancer, métriques) sont composées par
+worker/runtime.py au premier traitement — pas à l'import du module.
+
+Retry avec backoff exponentiel sur les erreurs 5xx :
+  tentative 1 → attente 1s
+  tentative 2 → attente 2s
+  tentative 3 → attente 4s
+  tentative 4 → attente 8s  (max_retries=settings.resilience.max_retries dans config)
+"""
+
+from __future__ import annotations
+
+import re
+import time
+from datetime import UTC, datetime
+
+from llm_gateway.adapters.base import (
+    ProviderClientError,
+    ProviderParseError,
+    ProviderServerError,
+    get_adapter,
+)
+from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA, is_daily_quota_error, next_quota_reset
+from llm_gateway.config import get_settings, learn_provider_max_output_tokens
+from llm_gateway.core.inference import resolve_inference
+from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
+from llm_gateway.telemetry.logger import get_logger, log_llm_call, log_llm_error, log_llm_exchange
+from llm_gateway.worker.app import create_celery_app
+from llm_gateway.worker.runtime import WorkerRuntime, get_worker_runtime
+
+logger = get_logger(__name__)
+
+
+class ProviderCapacityError(Exception):
+    """Prompt rendu trop volumineux pour la capacité par requête du provider.
+
+    Levée AVANT l'appel HTTP : le 413 « request too large » est évité, le slot
+    RPM/TPM est restitué et le batch est rejoué sur un autre modèle (rotation).
+    """
+
+    def __init__(self, provider: str, prompt_tokens_est: int, max_tokens_per_request: int):
+        self.provider = provider
+        self.prompt_tokens_est = prompt_tokens_est
+        self.max_tokens_per_request = max_tokens_per_request
+        super().__init__(
+            f"Prompt ≈{prompt_tokens_est} tokens estimés > capacité par requête "
+            f"({max_tokens_per_request} tokens, sortie minimale comprise) de {provider}"
+        )
+
+# ---------------------------------------------------------------------------
+# Application Celery — instance module-level requise par le CLI :
+#   celery -A llm_gateway.worker.task_worker.celery_app worker …
+# Construire l'app ne touche pas à Redis (la connexion broker est paresseuse).
+# ---------------------------------------------------------------------------
+
+celery_app = create_celery_app(get_settings())
+
+
+# ---------------------------------------------------------------------------
+# Tâche principale
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    name="process_batch_task",
+    bind=True,
+    max_retries=get_settings().resilience.max_retries,
+)
+def process_batch_task(self, batch_key: str, force_provider: str | None = None, min_tpm_required: int | None = None, min_output_required: int | None = None) -> None:
+    """
+    Point d'entrée Celery pour le traitement par lot (micro-batching).
+    `bind=True` pour accéder à `self.retry()`.
+    """
+    rt = get_worker_runtime()
+    settings = rt.settings
+
+    # Attendre un slot provider en boucle locale plutôt que via self.retry().
+    # self.retry() crée un nouveau message Celery + round-trips Redis à chaque tentative ;
+    # un simple time.sleep() dans le même worker est bien moins coûteux.
+    res = settings.resilience
+    deadline = time.monotonic() + res.provider_wait_seconds
+    provider_name: str | None = None
+    _p5_provider_wait_start = time.monotonic()
+    while True:
+        try:
+            provider_name = rt.balancer.select_provider(force=force_provider, min_tpm=min_tpm_required, min_output=min_output_required)
+            break
+        except RuntimeError:
+            if time.monotonic() >= deadline:
+                if self.request.retries < res.saturation_retries:
+                    logger.warning(
+                        f"Providers saturés depuis {res.provider_wait_seconds:.0f}s, "
+                        f"retry dans {res.saturation_retry_seconds:.0f}s | batch_key={batch_key} "
+                        f"attempt={self.request.retries + 1}/{res.saturation_retries}"
+                    )
+                    raise self.retry(countdown=res.saturation_retry_seconds)
+                _statuses = rt.balancer.get_status()
+                busy = _providers_merely_busy(_statuses, force_provider)
+                if busy and not res.abandon_when_busy and self.request.retries < self.max_retries:
+                    # Fenêtre RPM/TPM pleine, lissage ou concurrence : ce n'est pas une panne, c'est
+                    # une file d'attente. Abandonner ici perdait des décisions à chaque pointe
+                    # (run du 2026-09-07 : la moitié des sollicitations sur une instance forcée à
+                    # 15 RPM). On attend la fenêtre ; seul max_retries borne l'attente.
+                    if self.request.retries == res.saturation_retries:
+                        rt.metrics.incr("alarme:providers_occupes")
+                        logger.error(
+                            f"[ALARME] Providers occupés (fenêtre pleine, pas de panne) : le lot attend "
+                            f"la fenêtre au lieu d'être abandonné | batch_key={batch_key} "
+                            f"attempt={self.request.retries + 1}/{self.max_retries} "
+                            f"providers={[n for n, st in _statuses.items() if force_provider in (None, n)]}"
+                        )
+                    raise self.retry(countdown=res.saturation_retry_seconds)
+                tasks = rt.queue.pop(batch_key, 100)
+                _cooldowns = [n for n, st in _statuses.items() if st.get("cooldown")]
+                # Le worker n'expose pas de /metrics : l'alarme transite par Redis
+                # et ressort en alarme_total{source} via WorkerMetricsCollector.
+                rt.metrics.incr("alarme:providers_satures")
+                logger.error(
+                    f"[ALARME] Tous les providers LLM saturés ou indisponibles — "
+                    f"{len(tasks)} tâche(s) abandonnée(s) | batch_key={batch_key} "
+                    f"providers_en_cooldown={_cooldowns or 'aucun'} "
+                    f"(quotas RPM/TPM épuisés ? voir /health)"
+                )
+                for t in tasks:
+                    _fail_task(rt, t, f"Providers saturés ou indisponibles après {res.provider_wait_seconds:.0f}s ({self.request.retries} retries épuisés)")
+                return
+            time.sleep(res.saturation_poll_seconds)
+    _p5_provider_wait_ms = (time.monotonic() - _p5_provider_wait_start) * 1000
+
+    # ------------------------------------------------------------------
+    # Début du tracking d'occupation du provider
+    # ------------------------------------------------------------------
+    rt.limiter.incr_active(provider_name)
+    try:
+        batch_limit = settings.providers[provider_name].batch_max_agents
+
+        # Libère le flag de dispatch différé AVANT le pop : toute tâche ajoutée
+        # ensuite pourra replanifier son propre dispatch (cf. BatchQueue.try_mark_scheduled).
+        rt.queue.clear_scheduled(batch_key)
+        tasks = rt.queue.pop(batch_key, batch_limit)
+        if not tasks:
+            # Aucune requête ne partira : restituer le slot RPM + TPM réservé
+            # par select_provider (sinon il reste consommé 60s pour rien).
+            rt.limiter.release_slot(provider_name)
+            return
+
+        # Marquer comme en cours
+        for task in tasks:
+            task.status = TaskStatus.RUNNING
+            task.updated_at = datetime.now(UTC)
+            rt.store.save_sync(task)
+
+        batch_id = f"batch_{tasks[0].task_id[:8]}_{len(tasks)}"
+
+        try:
+            _execute_batch(rt, tasks, batch_id, provider_name, _p5_provider_wait_ms, self.request.retries)
+
+        except ProviderCapacityError as e:
+            # Détectée avant l'appel HTTP (et avant le recalage TPM) : le slot
+            # RPM/TPM réservé par select_provider n'a servi à rien, on le restitue.
+            rt.limiter.release_slot(provider_name)
+            rt.metrics.incr(f"capacity_reroute_total:{provider_name}")
+            _switch_provider_or_fail(
+                self, rt, tasks, batch_key, e, provider_name,
+                reason="Prompt trop volumineux pour la capacité par requête",
+                min_tpm_required=min_tpm_required,
+                min_output_required=min_output_required,
+                force_provider=force_provider,
+            )
+
+        except ProviderServerError as e:
+            # Erreur 5xx → exclusion temporaire, backoff exponentiel et retry
+            rt.limiter.cooldown(e.provider, seconds=60)
+            delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+            logger.warning(
+                f"Erreur serveur provider, retry planifié | task_id={batch_id} "
+                f"provider={e.provider} http_status={e.status_code} "
+                f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
+            )
+            if self.request.retries < self.max_retries:
+                rt.queue.requeue(batch_key, tasks)
+                raise self.retry(exc=e, countdown=delay)
+            else:
+                for t in tasks:
+                    _fail_task(rt, t, f"Max retries dépassé suite à une erreur 5xx sur {e.provider}")
+
+        except ProviderClientError as e:
+            if e.status_code == 429 and is_daily_quota_error(str(e)):
+                # Quota du JOUR épuisé, de la bouche du fournisseur (`quotaId` en
+                # …PerDayPerProjectPerModel…). Son `retryDelay` ne vaut rien ici : 0,7 s à 57 s
+                # relevés le 2026-09-08 pour une fenêtre qui ne rouvrait que 7 h plus tard. Un
+                # cooldown court faisait donc boucler l'instance sur des 429 pendant 15 min,
+                # pendant que le compteur local affichait 49 requêtes sur 500 (il ne voit pas le
+                # trafic des autres outils). C'est la réponse du fournisseur qui tranche.
+                cfg_p = settings.providers.get(e.provider)
+                tz = getattr(cfg_p, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
+                reprise = next_quota_reset(tz)
+                ttl = rt.limiter.mark_quota_exhausted_until(e.provider, kind="rpd", until=reprise)
+                logger.error(
+                    f"[ALARME] Quota journalier épuisé sur '{e.provider}' — instance écartée "
+                    f"jusqu'à {reprise.isoformat(timespec='seconds')} ({ttl}s) | task_id={batch_id} "
+                    f"tz={tz} retry_delay_annonce={getattr(e, 'ratelimit_reset', None)!r} (ignoré : "
+                    f"il ne mesure pas le temps jusqu'au reset)"
+                )
+                if force_provider is None and self.request.retries < self.max_retries:
+                    # Instance non épinglée : le lot repart, le balancer écartera celle-ci et
+                    # prendra la suivante de la cascade (autre clé, autre seau de quota).
+                    rt.queue.requeue(batch_key, tasks)
+                    raise self.retry(exc=e, countdown=1)
+                # Instance épinglée (une expérience épingle son décideur) : aucune alternative
+                # admissible. On le DIT à l'appelant — `quota_journalier` + l'heure de reprise —
+                # pour qu'il attende la fenêtre au lieu de réessayer toutes les 30 s.
+                for t in tasks:
+                    _fail_task(
+                        rt, t,
+                        f"Quota journalier épuisé sur {e.provider}, fenêtre rouverte à "
+                        f"{reprise.isoformat(timespec='seconds')}",
+                        error_kind="quota_journalier",
+                        resume_at=reprise,
+                    )
+            elif e.status_code == 429:
+                # Rate limit par minute/seconde → cooldown calé sur x-ratelimit-reset si disponible
+                cooldown_secs = _parse_ratelimit_reset_seconds(getattr(e, "ratelimit_reset", None))
+                rt.limiter.cooldown(e.provider, seconds=cooldown_secs)
+                delay = min(settings.resilience.backoff_base_seconds * (2 ** self.request.retries), 30.0)
+                logger.warning(
+                    f"Rate limit (429) atteint, provider en cooldown, retry planifié | "
+                    f"task_id={batch_id} provider={e.provider} "
+                    f"cooldown={cooldown_secs}s ratelimit_reset={getattr(e, 'ratelimit_reset', None)} "
+                    f"retry_in={delay:.1f}s attempt={self.request.retries + 1}"
+                )
+                if self.request.retries < self.max_retries:
+                    rt.queue.requeue(batch_key, tasks)
+                    raise self.retry(exc=e, countdown=delay)
+                else:
+                    for t in tasks:
+                        _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) suite aux Rate Limits sur {e.provider}")
+            elif e.status_code == 402:
+                # Crédits épuisés (« payment required ») : ni saturation, ni requête
+                # invalide. L'instance ne redeviendra pas servable d'elle-même dans la
+                # minute — on la désactive au lieu d'un cooldown court, et on alarme sur
+                # front montant : c'est un événement qui coûte une campagne entière.
+                _credits_epuises(
+                    self, rt, tasks, batch_key, e,
+                    force_provider=force_provider,
+                    min_tpm_required=min_tpm_required,
+                    min_output_required=min_output_required,
+                )
+            elif (limit := _parse_max_tokens_limit(str(e))) and learn_provider_max_output_tokens(rt.settings, rt.learned, e.provider, limit):
+                # 400 "max_tokens must be ≤ N" → limite de complétion apprise
+                # (config mémoire + providers.yaml). Le batch est rejoué : le
+                # prochain essai plafonne max_tokens à N (ou part sur un autre
+                # provider via la rotation). Si la limite était déjà connue
+                # (learn → False), on retombe dans l'échec définitif ci-dessous
+                # pour ne pas boucler sur la même 400.
+                logger.warning(
+                    f"max_tokens au-dessus de la limite du modèle, batch rejoué avec la "
+                    f"limite apprise | task_id={batch_id} provider={e.provider} "
+                    f"max_output_tokens={limit} attempt={self.request.retries + 1}"
+                )
+                if self.request.retries < self.max_retries:
+                    rt.queue.requeue(batch_key, tasks)
+                    raise self.retry(exc=e, countdown=1)
+                else:
+                    for t in tasks:
+                        _fail_task(rt, t, f"Max retries dépassé({self.max_retries}) sur {e.provider} : {str(e)}")
+            else:
+                # Autre erreur 4xx → souvent liée au provider/modèle : on tente un
+                # autre modèle avant d'abandonner (échec définitif si tous épuisés).
+                _switch_provider_or_fail(
+                    self, rt, tasks, batch_key, e, e.provider,
+                    reason="Erreur 4xx non récupérable",
+                    min_tpm_required=min_tpm_required,
+                    min_output_required=min_output_required,
+                    force_provider=force_provider,
+                )
+
+        except RuntimeError as e:
+            logger.exception(f"RuntimeError inattendue dans le worker | task_id={batch_id}")
+            for t in tasks:
+                _fail_task(rt, t, f"RuntimeError interne : {str(e)}")
+
+        except ProviderParseError as e:
+            # Réponse illisible/hors-schéma : fréquemment propre au modèle. On tente un
+            # autre modèle avant d'abandonner ; en dernier recours on remonte le brut.
+            logger.warning(
+                f"Erreur de parsing de la réponse du provider, bascule tentée | "
+                f"task_id={batch_id} detail={str(e)} raw_preview={str(e.raw)[:300]!r}"
+            )
+            _switch_provider_or_fail(
+                self, rt, tasks, batch_key, e, e.provider,
+                reason="Erreur de parsing de la réponse LLM",
+                min_tpm_required=min_tpm_required,
+                min_output_required=min_output_required,
+                final_error_msg=f"{str(e)}\nRaw LLM response:\n{e.raw}",
+                force_provider=force_provider,
+            )
+
+        except Exception as e:
+            # Cas générique — on logue avec stacktrace complète via logger.exception
+            logger.exception(f"Exception inattendue dans le worker | task_id={batch_id} error={e}")
+            for t in tasks:
+                _fail_task(rt, t, f"Exception interne : {str(e)}")
+
+        else:
+            # Succès complet : relancer un worker s'il reste des éléments dans cette file
+            if rt.queue.size(batch_key) > 0:
+                process_batch_task.delay(batch_key, force_provider, min_tpm_required, min_output_required)
+    finally:
+        # Quoi qu'il arrive (succès, échec, retry, timeout...), on libère le slot !
+        rt.limiter.decr_active(provider_name)
+
+
+# ---------------------------------------------------------------------------
+# Logique métier
+# ---------------------------------------------------------------------------
+
+def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider_name: str, p5_provider_wait_ms: float = 0.0, retries: int = 0) -> None:
+    settings = rt.settings
+    base_req = tasks[0].request
+    merged_agents = []
+    for t in tasks:
+        merged_agents.extend(t.request.agents)
+
+    # 2. Construction du prompt — par la catégorie (bundle enregistré) : c'est elle qui
+    # valide les items et qui possède template et schéma. Le worker ne connaît aucun métier.
+    handle = rt.registry.get(base_req.category)
+    _t_prompt = time.monotonic()
+    items = handle.validate_items(merged_agents)
+    messages = handle.render(items, base_req.parameters)
+    schema = handle.output_schema
+    p5_prompt_ms = (time.monotonic() - _t_prompt) * 1000
+
+    # 3. Assemblage de la requête interne
+    # max_tokens envoyé par le client est un budget PAR tâche (1 agent) : le batch
+    # fusionne N agents et la sortie croît linéairement (stm_reflection ≈ 500-1800
+    # tokens/agent). Sans scaling, un batch de 10 sature 4096 et le JSON est
+    # tronqué en plein milieu → JSONDecodeError. Borné par max_output_tokens
+    # (limite de complétion des modèles) puis par la capacité du provider.
+    provider_cfg = settings.providers.get(provider_name)
+    # Cascade requête > fournisseur > défauts (core.inference) ; max_tokens est un budget PAR tâche.
+    inference = resolve_inference(
+        base_req.parameters, provider_cfg.inference if provider_cfg else None, settings.inference
+    )
+    per_task_tokens = inference.max_tokens
+    max_tokens = min(per_task_tokens * max(1, len(merged_agents)), settings.batching.max_output_tokens)
+    if provider_cfg and provider_cfg.max_output_tokens:
+        max_tokens = min(max_tokens, provider_cfg.max_output_tokens)
+    # Garde-fou 413 : la capacité par requête est confrontée à la taille RÉELLE du
+    # prompt rendu, pas à assumed_prompt_tokens — les prompts stm_reflection font
+    # ~2× l'estimation statique et partaient condamnés vers les providers à petit
+    # quota (38 HTTP 413 sur le run 2026-07-11). Si même la sortie minimale ne
+    # tient plus dans le budget, on rejoue ailleurs AVANT de brûler l'appel.
+    prompt_chars = sum(len(m.content or "") for m in messages)
+    prompt_tokens_est = int(prompt_chars / settings.batching.token_chars_ratio)
+    max_tokens = _fit_request_budget(
+        provider_cfg, prompt_tokens_est, max_tokens, settings.batching.min_output_tokens, provider_name
+    )
+    internal_req = InternalRequest(
+        provider=provider_name,
+        messages=messages,
+        response_schema=schema,
+        temperature=inference.temperature,
+        top_p=inference.top_p,
+        max_tokens=max_tokens,
+        # Budget de RÉFLEXION, distinct du budget de sortie : il n'est pas multiplié par la
+        # taille du lot ni borné par les plafonds du fournisseur, il vaut par appel. C'est
+        # l'adapter qui décide s'il sait le transmettre (`applique_reflexion`) et qui réserve
+        # la sortie en conséquence.
+        thinking_budget=inference.thinking_budget,
+        thinking_level=inference.thinking_level,
+    )
+
+    # ── Recalage de la réservation TPM sur la taille réelle du batch ────────
+    # select_provider() a réservé l'estimation statique tpm_estimate_per_request
+    # (forfait batch plein) AVANT de connaître le contenu du batch. Maintenant que
+    # le prompt est rendu, on corrige la fenêtre glissante : un petit batch rend
+    # du headroom aux autres workers, un batch de réflexions (~4 500 tokens_in/agent)
+    # réserve son vrai coût au lieu du forfait 2 200 — c'est ce sous-comptage qui
+    # faisait dépasser le TPM réel des providers à petit quota (429).
+    reserved_tokens: int | None = None
+    if provider_cfg and provider_cfg.tpm_limit:
+        reserved_tokens = (
+            prompt_tokens_est
+            + len(merged_agents) * settings.batching.assumed_output_tokens
+        )
+        rt.limiter.adjust_tokens(
+            provider_name,
+            reserved_tokens - (provider_cfg.tpm_estimate_per_request or 0),
+        )
+
+    # 4. Appel LLM via l'adapter approprié
+    adapter = get_adapter(provider_name)
+    start_ts = time.monotonic()
+
+    try:
+        llm_output, tokens_in, tokens_out = adapter.call(internal_req)
+    except Exception as exc:
+        # Restitue le montant effectivement réservé (recalé ci-dessus), pas le forfait.
+        rt.limiter.release_slot(provider_name, reserved_tokens)
+        logger.error(f"Error with provider | task_id={batch_id} provider={provider_name}")
+        rt.metrics.incr(f"llm_calls_err_total:{provider_name}")
+        error_type = getattr(exc, "error_type", "unknown")
+        http_status = getattr(exc, "status_code", None)
+        log_llm_error(
+            task_id=batch_id,
+            provider=provider_name,
+            error_type=error_type,
+            error_message=str(exc),
+            http_status=http_status,
+            ratelimit_reset=getattr(exc, "ratelimit_reset", None),
+            telemetry=settings.telemetry,
+        )
+        rt.metrics.incr(f"llm_errors_by_type:{provider_name}:{error_type}")
+        # Ring buffer texte relu par /errors/recent (cockpit Grafana).
+        rt.metrics.push_error({
+            "time": datetime.now(UTC).isoformat(timespec="seconds"),
+            "provider": provider_name,
+            "error_type": error_type,
+            "http_status": http_status,
+            "message": str(exc)[:500],
+            "task_id": batch_id,
+        })
+        consecutive = rt.limiter.record_failure(provider_name)
+        if consecutive >= settings.resilience.disable_after_consecutive_errors:
+            cfg = settings.providers.get(provider_name)
+            timeout = cfg.disable_timeout if cfg else 180
+            rt.limiter.disable(provider_name, seconds=timeout)
+            logger.error(
+                f"Provider désactivé pendant {timeout}s après {consecutive} erreurs consécutives | "
+                f"provider={provider_name}"
+            )
+        raise
+
+    rt.limiter.record_success(provider_name)
+
+    # ── Recalage final : la fenêtre TPM reflète la consommation réelle ──────
+    if reserved_tokens is not None:
+        actual_total = (tokens_in or 0) + (tokens_out or 0)
+        if actual_total > 0:
+            rt.limiter.adjust_tokens(provider_name, actual_total - reserved_tokens)
+            if actual_total > reserved_tokens * 1.25:
+                logger.warning(
+                    f"Estimation TPM sous-évaluée de {actual_total - reserved_tokens} tokens "
+                    f"(réservé={reserved_tokens}, réel={actual_total}) — vérifier "
+                    f"token_chars_ratio/assumed_output_tokens | provider={provider_name} "
+                    f"category={base_req.category} batch={len(merged_agents)} agents"
+                )
+
+    # ── Réalignement des agent_id renvoyés par le LLM ────────────────────────
+    # Le modèle renvoie parfois un agent_id mal formé ("PERSONA 446264", voire le
+    # nom du persona) au lieu de l'identifiant attendu. Sans correction, le
+    # démultiplexage (résultats matchés par agent_id exact) jette silencieusement
+    # ces agents : ils ne reçoivent aucune recommandation. On réaligne sur l'id
+    # réel via sa partie numérique.
+    _expected_ids = [str(a.agent_id) for a in merged_agents]
+    _expected_set = set(_expected_ids)
+    _by_digits: dict[str, str] = {}
+    for _eid in _expected_ids:
+        _digits = re.sub(r"\D", "", _eid)
+        if _digits:
+            _by_digits.setdefault(_digits, _eid)
+    for agent_resp in llm_output.agents:
+        aid = str(agent_resp.agent_id)
+        if aid in _expected_set:
+            continue
+        resolved = _by_digits.get(re.sub(r"\D", "", aid))
+        if resolved:
+            logger.warning(
+                f"agent_id mal formé par le LLM, réaligné | got={aid!r} → {resolved!r} | "
+                f"provider={provider_name} category={base_req.category}"
+            )
+            agent_resp.agent_id = resolved
+        else:
+            logger.error(
+                f"agent_id non résolu renvoyé par le LLM (résultat perdu) | got={aid!r} | "
+                f"expected={_expected_ids} provider={provider_name} category={base_req.category}"
+            )
+
+    # ── Métriques métier : déléguées à la catégorie ─────────────────────────
+    # Le gateway ne sait pas ce qu'est un mode de transport ; le bundle qui a déclaré la
+    # catégorie observe la réponse validée et alimente les compteurs qu'il veut.
+    try:
+        handle.observe(provider_name, items, llm_output, rt.metrics)
+    except Exception as exc:  # une métrique métier ne doit jamais faire échouer un lot
+        logger.warning(
+            f"Hook observe de la catégorie en erreur (ignoré) | category={base_req.category} "
+            f"provider={provider_name} error={exc!r}"
+        )
+
+    latency_ms = (time.monotonic() - start_ts) * 1000
+    p5_llm_ms = latency_ms
+
+    # Métriques: appel réussi + batching (agents reçus → 1 prompt envoyé)
+    rt.metrics.incr(f"llm_calls_ok_total:{provider_name}")
+    rt.metrics.incr(f"prompts_sent_total:{base_req.category}")
+    rt.metrics.incr(f"agents_batched_total:{base_req.category}", amount=len(merged_agents))
+
+    # Métriques tokens
+    rt.metrics.incr(f"tokens_in_total:{provider_name}", amount=tokens_in)
+    rt.metrics.incr(f"tokens_out_total:{provider_name}", amount=tokens_out)
+    rt.metrics.incr("tokens_in_total:__all__", amount=tokens_in)
+    rt.metrics.incr("tokens_out_total:__all__", amount=tokens_out)
+
+    # Quota journalier tokens (tpd_limit) : comptage a posteriori des tokens réels.
+    rt.limiter.record_tokens(provider_name, tokens_in + tokens_out)
+
+    tokens_in_per_agent = tokens_in / len(merged_agents) if merged_agents else tokens_in
+    if tokens_in_per_agent > settings.batching.assumed_prompt_tokens:
+        logger.warning(
+            f"[worker] tokens_in dépasse assumed_prompt_tokens | "
+            f"tokens_in_per_agent={tokens_in_per_agent:.0f} "
+            f"assumed={settings.batching.assumed_prompt_tokens} "
+            f"provider={provider_name} batch_id={batch_id}"
+        )
+
+    # 6. Log de l'échange LLM (prompt + réponse + tokens) dans workdir/llm_exchanges.jsonl
+    # sim_ts = horodatage simulé du lot, pour ventiler la consommation par jour de simulation.
+    # C'est le score de priorité fourni par la catégorie (pour la mobilité : le plus petit
+    # departure_timestamp du lot) ; None si la catégorie n'en définit pas.
+    _scores = [t.priority_score for t in tasks if t.priority_score != _FALLBACK_PRIORITY_SCORE]
+    sim_ts = min(_scores) if _scores else None
+    log_llm_exchange(
+        task_id=batch_id,
+        provider=provider_name,
+        messages=[{"role": m.role, "content": m.content} for m in messages],
+        response=[a.model_dump() if hasattr(a, "model_dump") else a for a in llm_output.agents],
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        category=base_req.category,
+        sim_ts=sim_ts,
+        telemetry=settings.telemetry,
+    )
+
+    # 7. Télémétrie métriques
+    log_llm_call(
+        task_id=batch_id,
+        provider=provider_name,
+        status="success",
+        latency_ms=latency_ms,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        http_status=200,
+    )
+
+    # 7. Démultiplexage et Persistance des résultats
+    # P5_5: demux computation time (dict build + result extraction, before Redis saves)
+    _t_demux = time.monotonic()
+    results_by_agent = {}
+    for a in llm_output.agents:
+        aid = a.get("agent_id") if isinstance(a, dict) else getattr(a, "agent_id", None)
+        if aid:
+            results_by_agent[aid] = a
+
+    n = len(tasks)
+    base_in,  rem_in  = divmod(tokens_in,  n)
+    base_out, rem_out = divmod(tokens_out, n)
+
+    # Build per-task results before saves so P5_5 is measured once
+    task_bundles = []
+    for i, t in enumerate(tasks):
+        t_agent_ids = [a.agent_id for a in t.request.agents]
+        t_results   = [results_by_agent[aid] for aid in t_agent_ids if aid in results_by_agent]
+        t_tokens_in  = base_in  + (rem_in  if i == n - 1 else 0)
+        t_tokens_out = base_out + (rem_out if i == n - 1 else 0)
+        task_bundles.append((t, t_results, t_tokens_in, t_tokens_out))
+
+    p5_5_ms = (time.monotonic() - _t_demux) * 1000
+
+    for t, t_results, t_tokens_in, t_tokens_out in task_bundles:
+        # P4_4: micro-batch wait = elapsed since task creation minus all worker phases
+        # time.time() (epoch), pas time.monotonic() : created_at est un timestamp epoch.
+        # created_at peut être naïf (tâches créées avant migration) → on le force en UTC.
+        created = t.created_at if t.created_at.tzinfo else t.created_at.replace(tzinfo=UTC)
+        elapsed_since_create = (time.time() - created.timestamp()) * 1000
+        p4_4_ms = max(0.0, elapsed_since_create - p5_provider_wait_ms - p5_prompt_ms - p5_llm_ms - p5_5_ms)
+
+        t.status        = TaskStatus.SUCCESS
+        t.result        = t_results
+        t.provider_used = provider_name
+        t.latency_ms    = latency_ms
+        t.tokens_in     = t_tokens_in
+        t.tokens_out    = t_tokens_out
+        t.updated_at    = datetime.now(UTC)
+        t.timing_p5     = {
+            "P4_4_ms":    round(p4_4_ms, 2),
+            "P5_1_ms":    round(p5_provider_wait_ms, 2),
+            "P5_3_ms":    round(p5_prompt_ms, 2),
+            "P5_4_ms":    round(p5_llm_ms, 2),
+            "P5_5_ms":    round(p5_5_ms, 2),
+            "provider":   provider_name,
+            "retries":    retries,
+            "tokens_in":  t_tokens_in,
+            "tokens_out": t_tokens_out,
+        }
+        rt.store.save_sync(t)
+        rt.store.publish_done_sync(t)
+
+    logger.info(
+        f"Batch terminé avec succès | task_id={batch_id} tasks_merged={len(tasks)} "
+        f"provider={provider_name} latency_ms={latency_ms:.1f} agents_count={len(llm_output.agents)}"
+    )
+
+
+def _providers_merely_busy(statuses: dict[str, dict], force_provider: str | None) -> bool:
+    """Vrai si au moins un provider éligible est seulement OCCUPÉ, pas en panne.
+
+    Éligible : le provider forcé, sinon tous. Occupé = ni désactivé, ni en cooldown, ni au
+    quota du jour — la fenêtre RPM/TPM pleine, le lissage ou la concurrence se libèrent seuls.
+    """
+    for name, st in statuses.items():
+        if force_provider is not None and name != force_provider:
+            continue
+        if st.get("disabled") or st.get("cooldown") or st.get("quota_exhausted"):
+            continue
+        return True
+    return False
+
+
+def _fit_request_budget(
+    provider_cfg,
+    prompt_tokens_est: int,
+    max_tokens: int,
+    min_output_tokens: int,
+    provider_name: str,
+) -> int:
+    """Confronte le prompt rendu à la capacité par requête du provider.
+
+    Retourne max_tokens, éventuellement rogné pour tenir sous max_tokens_per_request
+    (les providers groq free tier comptent prompt + max_tokens dans la limite 413).
+    Lève ProviderCapacityError si même min_output_tokens ne tient plus dans le budget.
+    """
+    if not (provider_cfg and provider_cfg.max_tokens_per_request):
+        return max_tokens
+    output_budget = provider_cfg.max_tokens_per_request - prompt_tokens_est
+    if output_budget < min_output_tokens:
+        raise ProviderCapacityError(provider_name, prompt_tokens_est, provider_cfg.max_tokens_per_request)
+    return min(max_tokens, output_budget)
+
+
+def _credits_epuises(
+    celery_task,
+    rt: WorkerRuntime,
+    tasks: list[Task],
+    batch_key: str,
+    exc: ProviderClientError,
+    force_provider: str | None,
+    min_tpm_required: int | None,
+    min_output_required: int | None,
+) -> None:
+    """HTTP 402 : le compte du fournisseur n'a plus de crédit.
+
+    Deux différences avec une 4xx ordinaire :
+
+    - **Durée.** Un cooldown de 30 s n'a aucun sens : les crédits reviennent après une
+      action humaine (facturation), pas après une minute. L'instance est donc DÉSACTIVÉE
+      pour son `disable_timeout`, ce que `/health` publie en `available: false`.
+    - **Visibilité.** L'événement coûte une campagne entière et se noyait en WARNING dans
+      le journal du worker (panne 2026-09-07 sur `cerebras_gpt-oss-120b`). Il sort en
+      ERROR `[ALARME]`, sur **front montant** : une seule ligne à la première 402, pas une
+      par lot tant que l'instance reste désactivée.
+
+    Un appelant qui a épinglé son instance (expérience) reçoit une erreur franche : pas de
+    bascule vers un autre modèle. Un appelant sans épinglage (GAMA) garde la bascule.
+    """
+    provider = exc.provider
+    deja_hors_service = rt.limiter.is_disabled(provider)
+    cfg = rt.settings.providers.get(provider)
+    timeout = cfg.disable_timeout if cfg else 180
+    rt.limiter.disable(provider, seconds=timeout)
+    if not deja_hors_service:
+        rt.metrics.incr("alarme:credits_epuises")
+        logger.error(
+            f"[ALARME] Crédits épuisés (HTTP 402) sur {provider} — instance désactivée "
+            f"{timeout}s, à recharger côté fournisseur | batch_key={batch_key} "
+            f"taches={len(tasks)} force_provider={force_provider or 'aucun'} "
+            f"message={str(exc)[:200]}"
+        )
+    if force_provider:
+        motif = (
+            f"Crédits épuisés (HTTP 402) sur l'instance épinglée {force_provider!r} — "
+            f"aucune bascule vers un autre modèle : {exc}"
+        )
+        for t in tasks:
+            _fail_task(rt, t, motif)
+        return
+    _switch_provider_or_fail(
+        celery_task, rt, tasks, batch_key, exc, provider,
+        reason="Crédits épuisés (HTTP 402)",
+        min_tpm_required=min_tpm_required,
+        min_output_required=min_output_required,
+    )
+
+
+def _switch_provider_or_fail(
+    celery_task,
+    rt: WorkerRuntime,
+    tasks: list[Task],
+    batch_key: str,
+    exc: Exception,
+    provider: str,
+    reason: str,
+    min_tpm_required: int | None,
+    min_output_required: int | None,
+    final_error_msg: str | None = None,
+    force_provider: str | None = None,
+) -> None:
+    """Bascule le batch vers un AUTRE modèle plutôt que d'échouer sec.
+
+    Utilisé pour les erreurs souvent spécifiques au provider (parse error, 4xx non
+    récupérable) : on met le provider fautif en cooldown court puis on rejoue le batch
+    SANS force_provider, pour que la rotation SWRR sélectionne un autre modèle. Borné à
+    ~len(providers) tentatives afin de ne pas boucler sur une erreur déterministe (une
+    requête réellement invalide finit par échouer sur tous les providers).
+
+    EXCEPTION — `force_provider` non nul : la bascule est REFUSÉE. Un appelant qui épingle
+    une instance mesure ce modèle-là (expériences du ticket 035, `decideurs.py`) ; lui
+    répondre avec un autre modèle invalide la mesure. Le client refusait déjà la réponse
+    substituée, mais après coup : le lot était perdu et l'exécution tournait à vide
+    (run 2026-09-07_19_45_31, 8 sollicitations, 8 refus, 0 décision archivée). On échoue
+    donc ici, franchement, avec un motif qui nomme l'instance épinglée.
+    """
+    settings = rt.settings
+    if force_provider:
+        rt.limiter.cooldown(provider, seconds=settings.resilience.provider_switch_cooldown_seconds)
+        msg = (
+            f"{reason} sur l'instance épinglée {force_provider!r} — aucune bascule "
+            f"(décideur épinglé, substitution interdite) : {exc}"
+        )
+        logger.error(
+            f"[ALARME] {reason} sur {provider} — bascule REFUSÉE, instance épinglée par "
+            f"l'appelant | batch_key={batch_key} force_provider={force_provider} "
+            f"taches={len(tasks)} error={str(exc)[:200]}"
+        )
+        rt.metrics.incr("alarme:bascule_refusee")
+        for t in tasks:
+            _fail_task(rt, t, final_error_msg or msg)
+        return
+    rt.limiter.cooldown(provider, seconds=settings.resilience.provider_switch_cooldown_seconds)
+    max_switches = min(celery_task.max_retries, max(1, len(settings.providers) - 1))
+    if celery_task.request.retries < max_switches:
+        logger.warning(
+            f"{reason} sur {provider} — bascule vers un autre modèle | "
+            f"attempt={celery_task.request.retries + 1}/{max_switches} "
+            f"error={str(exc)[:200]}"
+        )
+        rt.queue.requeue(batch_key, tasks)
+        raise celery_task.retry(
+            exc=exc,
+            countdown=1,
+            args=[batch_key],
+            kwargs={
+                "force_provider": None,
+                "min_tpm_required": min_tpm_required,
+                "min_output_required": min_output_required,
+            },
+        )
+    terminal_msg = final_error_msg or f"{reason} — échec après {max_switches} bascule(s) de provider : {exc}"
+    for t in tasks:
+        _fail_task(rt, t, terminal_msg)
+
+
+def _fail_task(
+    rt: WorkerRuntime,
+    task: Task,
+    error_msg: str,
+    *,
+    error_kind: str | None = None,
+    resume_at: datetime | None = None,
+) -> None:
+    """Marque la tâche en échec. `error_kind`/`resume_at` disent à l'appelant CE QU'il doit
+    faire : un « quota_journalier » n'est pas une passerelle occupée, il s'attend jusqu'à
+    `resume_at` au lieu d'être réessayé toutes les 30 s (incident du 2026-09-08)."""
+    task.status     = TaskStatus.FAILED
+    task.error      = error_msg
+    task.error_kind = error_kind
+    task.resume_at  = resume_at
+    task.updated_at = datetime.now(UTC)
+    rt.store.save_sync(task)
+    rt.store.publish_done_sync(task)
+    logger.error(
+        f"Tâche échouée | task_id={task.task_id} error={error_msg}"
+        + (f" kind={error_kind}" if error_kind else "")
+        + (f" resume_at={resume_at.isoformat(timespec='seconds')}" if resume_at else "")
+    )
+
+
+# Messages 400 renvoyés quand max_tokens dépasse le plafond de complétion du modèle.
+# La limite N est capturée pour être apprise (cf. learn_provider_max_output_tokens).
+_MAX_TOKENS_LIMIT_PATTERNS = (
+    # Groq : "`max_tokens` must be less than or equal to `8192`, the maximum..."
+    re.compile(r"max_tokens`? must be less than or equal to `?(\d+)`?"),
+    # OpenAI : "max_tokens is too large: 20000. This model supports at most 16384 completion tokens"
+    re.compile(r"supports at most (\d+) (?:completion|output) tokens"),
+    # Google : "max_output_tokens must be ... limited to 8192" / variantes "limited to N"
+    re.compile(r"max(?:_output)?_?tokens[^.]{0,80}?limited to (\d+)", re.IGNORECASE),
+)
+
+
+def _parse_max_tokens_limit(error_message: str) -> int | None:
+    """Extrait la limite de complétion N d'un message d'erreur 400 max_tokens.
+
+    Retourne None si le message ne correspond à aucun format connu.
+    """
+    for pattern in _MAX_TOKENS_LIMIT_PATTERNS:
+        m = pattern.search(error_message)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def _parse_ratelimit_reset_seconds(value: str | None, default: int = 60) -> int:
+    """Parse le délai avant reset (header retry-after / x-ratelimit-reset-* ou corps 429).
+
+    Formats supportés :
+      - Groq : "1h13m4s", "59m17.087999999s", "6m0s", "45s", "140ms"
+        (les quotas journaliers TPD renvoient des délais en heures)
+      - retry-after standard : nombre brut de secondes ("13")
+      - OpenAI : ISO 8601 "2026-05-28T17:01:00Z"
+
+    Retourne `default` si la valeur est absente ou non parseable.
+    Valeur retournée clampée à [10, 3600].
+    """
+    if not value:
+        return default
+
+    value = value.strip()
+
+    # Format durée composée : "XhYmZ.Ws", "Xs", "Xms" (Groq)
+    m = re.fullmatch(r'(?:(\d+)h)?(?:(\d+)m(?!s))?(?:(\d+(?:\.\d+)?)s)?(?:(\d+(?:\.\d+)?)ms)?', value)
+    if m and any(m.groups()):
+        hours   = int(m.group(1) or 0)
+        minutes = int(m.group(2) or 0)
+        seconds = float(m.group(3) or 0)
+        millis  = float(m.group(4) or 0)
+        total = int(hours * 3600 + minutes * 60 + seconds + millis / 1000) + 2  # +2s de marge
+        return max(10, min(total, 3600))
+
+    # Nombre brut de secondes (header retry-after standard)
+    try:
+        total = int(float(value)) + 2
+        return max(10, min(total, 3600))
+    except ValueError:
+        pass
+
+    # Format ISO 8601 timestamp (OpenAI)
+    try:
+        reset_dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        delta = (reset_dt - datetime.now(UTC)).total_seconds()
+        total = int(delta) + 2
+        return max(10, min(total, 3600))
+    except (ValueError, TypeError):
+        pass
+
+    return default

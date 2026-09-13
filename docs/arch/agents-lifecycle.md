@@ -25,11 +25,13 @@ Un agent entre en phase de planification quand :
     └── Consolidation et déduplication des itinéraires
     └── LlmAgent.evaluate_and_choose_travel_plan()
         └── Extraction mémoire long terme (ChromaDB, score composite)
+            SEULEMENT si l'agent a des souvenirs — sinon rien n'est lu avant le cache
         └── Lookup cache sémantique (LlmSemanticCache)
-            ├── Cache HIT → retourne l'index immédiatement
-            └── Cache MISS → injection Persona + Météo + Historique + Itinéraires
-                └── Inférence LLM (sortie structurée JSON)
-                    └── Store asynchrone dans le cache (fire-and-forget)
+            ├── Cache HIT → retire un index dans les probabilités mémorisées (draw_index)
+            └── Cache MISS → construction du payload (LTM lue ici si elle ne l'a pas été)
+                └── injection Persona + Météo + Historique + Itinéraires
+                    └── Inférence LLM (JSON structuré : une probabilité par option)
+                        └── Store asynchrone dans le cache (fire-and-forget)
     └── Traitement du résultat
         └── Écriture décision en mémoire court terme
         └── Stockage trajet dans next_planned_move (état PLANNED)
@@ -79,6 +81,33 @@ pile de backpressure et du scan) :
 
 ---
 
+## La chaîne d'activités est cyclique
+
+La dernière activité de la journée est suivie d'un **retour à la première**, qui est le domicile
+dans la quasi-totalité des cas. Une journée de n activités compte donc **n déplacements**, pas
+n − 1 : le retour au domicile est un déplacement, et il se décide comme les autres.
+
+Une seule implémentation porte cette règle, `chaine_activites.py` :
+
+- `activite_suivante(activites, courante)` applique `(i + 1) % n`, avec le garde `len ≤ 1`,
+  l'appariement par `id` et le contrôle des deux localisations ;
+- `paires_de_la_journee(activites)` en dérive toutes les paires (origine, destination).
+
+Le contrôleur de simulation (trois sites) et la plateforme d'expériences
+(`experiences/jeu.py::deplacements_attendus`) passent tous deux par là. Ce module existe parce
+que les deux avaient divergé : le contrôleur refermait le cycle, la plateforme énumérait les
+paires consécutives et s'arrêtait à la dernière activité. La plateforme mesurait donc 2 693
+décisions là où la simulation en jouait 3 693 sur la cohorte v1 — **27 % de la journée jamais
+décidée**, et pas au hasard : exactement le trajet où la règle de cohérence des véhicules
+contraint le plus le choix, puisqu'un agent parti en voiture rentre en voiture. Les parts
+modales mesurées par la plateforme étaient celles d'une journée amputée de son retour, donc
+tirées vers les modes d'aller (ticket 045, alerte A1).
+
+Un retour vers le **même lieu** (la personne finit déjà chez elle : 77 cas sur la cohorte v5)
+reste un déplacement énuméré, mais il est inexploitable — il n'y a pas d'itinéraire à calculer
+entre un point et lui-même. Il compte dans les attendus bruts, jamais dans les exploitables, et
+n'entre pas dans l'alarme de santé des moteurs de routage.
+
 ## Bootstrap et horizon glissant
 
 À l'initialisation, le controller pré-calcule les itinéraires du cycle complet (toutes les activités de la journée) pour lisser la charge future, puis maintient cet horizon en permanence.
@@ -87,9 +116,13 @@ pile de backpressure et du scan) :
 
 ```text
 [POST /init reçu]
-└── Lecture toulouse_population_N.json
-    └── Filtrage spatial (Bounding Box GTFS)
-    └── Filtrage PersonCloseToTheStopFilter (≤ 5 km d'un arrêt)
+└── Lecture de la population (fichier scellé `data.population_file`, ou toulouse_population_N.json)
+    └── Filtre de PÉRIMÈTRE par commune du domicile : household.commune_id ∈ 453 communes
+        (repli : trait residence_zone, puis géométrie du polygone + [ALARME]) ; une activité
+        hors polygone est comptée et alarmée au-delà de 1 %, l'agent est gardé ; un fichier
+        scellé se charge entier ou se refuse ([ALARME])            — inputs/population/perimeter.py
+    └── Second filtre au chargement des Person : trait residence_zone (eqasim_loader.perimeter_verdict)
+    └── (PersonCloseToTheStopFilter ≤ 5 km d'un arrêt : désactivé)
 └── Vérification enrichissement OSMnx dans le cache JSON
     ├── Présent → skip enrichissement
     └── Absent → calcul synchrone des routes inter-activités
@@ -102,6 +135,18 @@ pile de backpressure et du scan) :
     └── Initialisation de precomputed_horizon_act / precomputed_horizon_ts
         pour chaque agent (dernière activité calculée par les vagues)
 ```
+
+**Périmètre au chargement (ticket 031, partie 2 — 2026-09-03).** Jusqu'à ce jour, `_prepare_population`
+écartait tout agent dont le domicile **ou une seule activité** sortait du rectangle de 30 km du graphe
+OSMnx (`TOULOUSE_OSM_ROUTES_30K_BBOX`) : 77 des 1 000 agents de la population scellée v4 (60 domiciles,
+dont 55 de 3ᵉ couronne, et 105 activités), donc un sceau refusé. Le filtre porte désormais sur le
+**périmètre de l'enquête** — la commune du domicile est l'une des 453 (`household.commune_id`,
+renseigné pour tous depuis la v4). Une activité hors du polygone (école ou travail hors périmètre)
+n'écarte pas l'agent : elle est comptée dans le journal (`activités hors polygone k / n`) et une
+`[ALARME]` se lève sur front montant au-dessus de 1 % des activités localisées. Mesuré au premier
+chargement de la v4 : **1 000 / 1 000 admis par commune, 0 écarté, 0 activité hors polygone**. Le
+monde (`WorldGrid`) couvre l'enveloppe du polygone unie à celle des arrêts GTFS — avant, le seul
+rectangle des arrêts Tisséo ± 0,05°, qui ne contenait que 221 des 453 communes.
 
 **Lissage de la rafale (vague 1)** — au `/init`, tous les agents éligibles lancent leur
 premier itinéraire quasi simultanément. Sans plafond, cette rafale sature les quotas RPM/TPM
@@ -212,7 +257,7 @@ Les précipitations ne sont affichées que si `precip_mm > 0` afin de ne pas alo
 
 ## Métriques associées
 
-Voir [observability.md](../../observability.md) et [pipeline.md](../../pipeline.md) pour le détail des métriques et des points de mesure temporels.
+Voir [observability.md](../observability.md) et [pipeline.md](../pipeline.md) pour le détail des métriques et des points de mesure temporels.
 
 | Métrique | Description |
 |----------|-------------|

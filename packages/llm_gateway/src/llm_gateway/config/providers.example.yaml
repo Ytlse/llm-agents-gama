@@ -1,0 +1,60 @@
+# Exemple de fichier des fournisseurs — copiez-le hors du paquet et désignez-le :
+#   LLM_GATEWAY_PROVIDERS_FILE=/chemin/vers/providers.yaml
+# Sans fichier désigné, le gateway charge CET exemple avec un avertissement ; sans clé d'API
+# (PROVIDER_KEYS__<nom> ou LLM_GATEWAY_PROVIDER_KEYS__<nom>) aucun fournisseur n'est actif.
+#
+# Champs obligatoires : rpm_limit, base_url, default_model.
+# Facultatifs : tpm_limit, rpd_limit et tpd_limit (quotas journaliers, appliqués), weight,
+#   concurrency_limit, disable_timeout, adapter (défaut = nom de l'entrée), max_tokens_per_request
+#   (capacité d'une requête unique), max_output_tokens (plafond de complétion ; appris sur HTTP 400
+#   et mémorisé hors de ce fichier), inference: {temperature, top_p, max_tokens} (surcharges).
+# Toute clé inconnue fait échouer le démarrage en nommant le fournisseur et la clé.
+# Poids SWRR : weight = min(rpm_limit, tpm_limit / 3000) / 15.
+providers:
+  openai:
+    rpm_limit: 15
+    tpm_limit: 200000
+    base_url: https://api.openai.com/v1
+    default_model: gpt-4o-mini
+    max_output_tokens: 16384
+    weight: 1.0
+    concurrency_limit: 3
+  mistral:
+    rpm_limit: 60
+    tpm_limit: 500000
+    base_url: https://api.mistral.ai/v1
+    default_model: mistral-small-latest
+    weight: 4.0
+    concurrency_limit: 3
+  google:
+    adapter: google
+    rpm_limit: 15
+    tpm_limit: 250000
+    rpd_limit: 500
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    default_model: gemini-3.5-flash-lite
+    weight: 1.0
+    concurrency_limit: 2
+    disable_timeout: 120
+  groq:
+    adapter: groq
+    rpm_limit: 30
+    tpm_limit: 8000
+    rpd_limit: 1000
+    max_tokens_per_request: 8000
+    base_url: https://api.groq.com/openai/v1
+    default_model: openai/gpt-oss-120b
+    max_output_tokens: 65536
+    weight: 0.18
+    concurrency_limit: 3
+    disable_timeout: 120
+  cerebras:
+    adapter: cerebras
+    rpm_limit: 5
+    tpm_limit: 30000
+    rpd_limit: 2400
+    base_url: https://api.cerebras.ai/v1
+    default_model: gpt-oss-120b
+    weight: 0.33
+    concurrency_limit: 4
+    disable_timeout: 120

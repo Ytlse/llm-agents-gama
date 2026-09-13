@@ -74,6 +74,24 @@ Le projet utilise plusieurs systèmes de stockage vectoriel selon le cas d'usage
 
 ---
 
+## Modèles de choix modal (oracles tabulaires)
+
+Ces librairies servent aux modèles qui prédisent un mode de transport à partir des traits d'un
+persona, sans LLM — les « oracles » auxquels on compare les décisions des agents, et le
+décideur `type: modele` de la plateforme d'expériences.
+
+**LightGBM** — Booster à arbres de gradient. C'est le premier oracle (`make policy`) et le
+modèle chargé par le décideur `modele` quand l'artefact est un booster. Version épinglée
+(`lightgbm==4.7.0` dans `services/llm-agents/requirements.txt`) : un booster rechargé par une autre
+version n'est pas garanti identique.
+
+**scikit-learn** — Sert le logit multinomial (second oracle, `make logit`) et le témoin random
+forest (`make forest`). Les modèles estimés ici ne sont pas embarqués dans le conteneur de
+simulation : le logit est ré-évalué en **pur numpy**
+(`scripts/progedo_logit/mode_choice_logit.py`), et le témoin n'écrit que des mesures.
+
+---
+
 ## Génération de Population Synthétique (`eqasim-toulouse`)
 
 Ces librairies servent exclusivement à générer la population d'agents à partir de données INSEE et d'enquêtes de mobilité réelles.

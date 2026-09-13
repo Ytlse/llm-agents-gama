@@ -1,16 +1,14 @@
-"""infra.redis — implémentations Redis des ports du gateway."""
+"""Shim de compatibilité — `llm_module.infra.redis` a déménagé dans `llm_gateway.infra.redis`.
 
-from llm_module.infra.redis.batch_queue import RedisBatchQueue
-from llm_module.infra.redis.connection import create_async_redis, create_sync_redis
-from llm_module.infra.redis.metrics import RedisMetricsSink
-from llm_module.infra.redis.rate_limiter import RedisRateLimiter
-from llm_module.infra.redis.task_store import RedisTaskStore
+Ce module disparaîtra à la version majeure suivante de llm-gateway (2.0). Remplacez
+l'import par `llm_gateway.infra.redis`.
+"""
+import warnings as _warnings
 
-__all__ = [
-    "RedisBatchQueue",
-    "RedisMetricsSink",
-    "RedisRateLimiter",
-    "RedisTaskStore",
-    "create_async_redis",
-    "create_sync_redis",
-]
+_warnings.warn(
+    "llm_module.infra.redis est déprécié : importez llm_gateway.infra.redis (retrait prévu en 2.0).",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from llm_gateway.infra.redis import *  # noqa: E402,F401,F403

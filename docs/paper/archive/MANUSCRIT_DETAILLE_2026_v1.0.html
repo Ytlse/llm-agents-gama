@@ -1,0 +1,2004 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manuscrit Détaillé 2026 — Slides & Document Interactif</title>
+  
+  <!-- KaTeX for crisp mathematical formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-card: #1f242c;
+      --bg-card-hover: #262c36;
+      --border-color: #30363d;
+      --border-light: #484f58;
+      
+      --text-main: #e6edf3;
+      --text-muted: #8b949e;
+      --text-bright: #ffffff;
+      
+      --accent-blue: #388bfd;
+      --accent-blue-bg: rgba(56, 139, 253, 0.15);
+      --accent-cyan: #39c5cf;
+      --accent-green: #3fb950;
+      --accent-green-bg: rgba(63, 185, 80, 0.15);
+      --accent-amber: #d29922;
+      --accent-amber-bg: rgba(210, 153, 34, 0.15);
+      --accent-purple: #bc8cff;
+      --accent-purple-bg: rgba(188, 140, 255, 0.15);
+      --accent-coral: #f85149;
+      --accent-coral-bg: rgba(248, 81, 73, 0.15);
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      
+      --slide-radius: 16px;
+      --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f6f8fa;
+      --bg-secondary: #ffffff;
+      --bg-card: #f0f3f6;
+      --bg-card-hover: #e6ebf1;
+      --border-color: #d0d7de;
+      --border-light: #afb8c1;
+      
+      --text-main: #1f2328;
+      --text-muted: #656d76;
+      --text-bright: #090d12;
+      
+      --accent-blue: #0969da;
+      --accent-blue-bg: rgba(9, 105, 218, 0.1);
+      --accent-cyan: #0598ab;
+      --accent-green: #1a7f37;
+      --accent-green-bg: rgba(26, 127, 55, 0.1);
+      --accent-amber: #9a6700;
+      --accent-amber-bg: rgba(154, 103, 0, 0.1);
+      --accent-purple: #8250df;
+      --accent-purple-bg: rgba(130, 80, 223, 0.1);
+      --accent-coral: #cf222e;
+      --accent-coral-bg: rgba(207, 34, 46, 0.1);
+      
+      --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.55;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Control Bar */
+    header.deck-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+      backdrop-filter: blur(8px);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-badge {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .deck-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 520px;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+    }
+
+    .btn-icon:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-light);
+      color: var(--text-bright);
+    }
+
+    .btn-icon.active {
+      background: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* Progress bar */
+    .progress-track {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.2);
+      z-index: 999;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-purple));
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Presentation Layout */
+    .deck-viewport {
+      margin-top: 60px;
+      min-height: calc(100vh - 60px);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px;
+      position: relative;
+    }
+
+    /* Mode Slides */
+    body.mode-slides .slide-container {
+      width: 100%;
+      max-width: 1200px;
+      min-height: calc(100vh - 120px);
+      display: none;
+      animation: fadeInSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    body.mode-slides .slide-container.current {
+      display: block;
+    }
+
+    /* Mode Document (Scroll Continu) */
+    body.mode-doc .deck-viewport {
+      display: block;
+      max-width: 1100px;
+      margin: 60px auto 0 auto;
+      padding: 30px 20px 100px 20px;
+    }
+
+    body.mode-doc .slide-container {
+      display: block !important;
+      margin-bottom: 40px;
+      scroll-margin-top: 80px;
+    }
+
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Slide Card */
+    .slide-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--slide-radius);
+      padding: 36px 44px;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-meta-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--accent-blue);
+      background: var(--accent-blue-bg);
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+
+    .slide-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-bright);
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+
+    .slide-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 14px;
+    }
+
+    /* Content Typography & Components */
+    p {
+      margin-bottom: 14px;
+      color: var(--text-main);
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin: 20px 0 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      margin: 14px 0 8px 0;
+    }
+
+    ul, ol {
+      margin-left: 24px;
+      margin-bottom: 16px;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    /* Grid & Cards */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin: 16px 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .slide-card {
+        padding: 22px 18px;
+      }
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px 18px;
+      transition: all 0.2s ease;
+    }
+
+    .info-card:hover {
+      border-color: var(--border-light);
+      background: var(--bg-card-hover);
+    }
+
+    .info-card.accent-blue {
+      border-left: 4px solid var(--accent-blue);
+    }
+    .info-card.accent-green {
+      border-left: 4px solid var(--accent-green);
+    }
+    .info-card.accent-amber {
+      border-left: 4px solid var(--accent-amber);
+    }
+    .info-card.accent-purple {
+      border-left: 4px solid var(--accent-purple);
+    }
+    .info-card.accent-coral {
+      border-left: 4px solid var(--accent-coral);
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-label.blue { color: var(--accent-blue); }
+    .card-label.green { color: var(--accent-green); }
+    .card-label.amber { color: var(--accent-amber); }
+    .card-label.purple { color: var(--accent-purple); }
+    .card-label.coral { color: var(--accent-coral); }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 6px;
+    }
+
+    /* Metric Badges */
+    .metric-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--text-bright);
+      font-family: var(--font-mono);
+      line-height: 1.2;
+    }
+
+    .metric-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-card);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: var(--bg-secondary);
+      color: var(--text-bright);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .table-mono td, .table-mono th {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+    }
+
+    /* Interactive Comparison Bars */
+    .bar-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 100px 120px;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+      font-size: 0.86rem;
+    }
+
+    .bar-track {
+      background: var(--bg-card);
+      height: 22px;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      border: 1px solid var(--border-color);
+      position: relative;
+    }
+
+    .bar-fill-target {
+      background: var(--accent-blue);
+      height: 100%;
+      display: flex;
+      align-items: center;
+      padding-left: 6px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.74rem;
+      font-family: var(--font-mono);
+    }
+
+    .bar-fill-actual {
+      background: var(--accent-purple);
+      height: 100%;
+      display: flex;
+      align-items: center;
+      padding-left: 6px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.74rem;
+      font-family: var(--font-mono);
+    }
+
+    .delta-tag {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .delta-pos {
+      background: var(--accent-coral-bg);
+      color: var(--accent-coral);
+    }
+
+    .delta-neg {
+      background: var(--accent-amber-bg);
+      color: var(--accent-amber);
+    }
+
+    .delta-good {
+      background: var(--accent-green-bg);
+      color: var(--accent-green);
+    }
+
+    /* Diagram Containers */
+    .diagram-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* Code blocks */
+    pre, code {
+      font-family: var(--font-mono);
+    }
+
+    code.inline-code {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.86rem;
+      color: var(--accent-cyan);
+    }
+
+    pre.code-block {
+      background: #090d12;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.82rem;
+      overflow-x: auto;
+      color: #e6edf3;
+      margin: 10px 0;
+      line-height: 1.45;
+    }
+
+    /* Confusion Matrix Heatmap */
+    .conf-matrix {
+      display: grid;
+      grid-template-columns: 100px repeat(4, 1fr) 90px;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      text-align: center;
+      margin: 14px 0;
+    }
+
+    .conf-cell {
+      padding: 10px 4px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+    }
+
+    .conf-header {
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      font-size: 0.76rem;
+    }
+
+    .conf-diag {
+      background: var(--accent-green-bg);
+      border-color: var(--accent-green);
+      color: var(--text-bright);
+      font-weight: 700;
+    }
+
+    .conf-off {
+      color: var(--text-main);
+    }
+
+    .conf-recall {
+      background: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      font-weight: 700;
+    }
+
+    /* Bottom Navigation Dock */
+    footer.deck-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      background-color: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+      backdrop-filter: blur(8px);
+    }
+
+    body.mode-doc footer.deck-footer {
+      display: none;
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slide-counter span.active-num {
+      color: var(--text-bright);
+      font-weight: 700;
+    }
+
+    .nav-btn-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Drawer / Table of Contents Modal */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drawer-overlay.open {
+      display: flex;
+    }
+
+    .drawer-content {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px 28px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .drawer-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-bright);
+    }
+
+    .toc-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .toc-list {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .toc-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease;
+    }
+
+    .toc-item:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-blue);
+      transform: translateY(-1px);
+    }
+
+    .toc-item.active {
+      background: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+    }
+
+    .toc-item-num {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--accent-blue);
+      font-size: 0.8rem;
+      min-width: 24px;
+    }
+
+    .toc-item-title {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Print styles */
+    @media print {
+      header.deck-header, footer.deck-footer, .progress-track {
+        display: none !important;
+      }
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+      .deck-viewport {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+      }
+      .slide-container {
+        display: block !important;
+        page-break-after: always;
+        margin-bottom: 30px !important;
+      }
+      .slide-card {
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        padding: 20px !important;
+      }
+    }
+  </style>
+</head>
+<body class="mode-slides" data-theme="dark">
+
+  <!-- Header -->
+  <header class="deck-header">
+    <div class="header-left">
+      <span class="header-badge">Article 2026</span>
+      <span class="deck-title">De la Décision Statistique au Comportement Adaptatif</span>
+    </div>
+    <div class="header-controls">
+      <button class="btn-icon" id="btn-toc" title="Sommaire (Touche O)">
+        <i data-lucide="layout-grid" style="width: 15px; height: 15px;"></i>
+        <span>Sommaire</span>
+      </button>
+      <button class="btn-icon" id="btn-mode-toggle" title="Basculer Mode Présentation / Document (Touche D)">
+        <i data-lucide="file-text" style="width: 15px; height: 15px;"></i>
+        <span id="mode-label">Mode Doc</span>
+      </button>
+      <button class="btn-icon" id="btn-theme-toggle" title="Thème Clair / Sombre">
+        <i data-lucide="sun" id="theme-icon" style="width: 15px; height: 15px;"></i>
+      </button>
+      <button class="btn-icon" id="btn-fullscreen" title="Plein Écran (Touche F)">
+        <i data-lucide="maximize" style="width: 15px; height: 15px;"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Progress bar -->
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <!-- Viewport -->
+  <main class="deck-viewport" id="viewport">
+
+    <!-- ==================== SLIDE 1 : TITRE & MÉTADONNÉES ==================== -->
+    <div class="slide-container current" data-slide="1">
+      <div class="slide-card">
+        <div class="slide-meta-tag">
+          <i data-lucide="book-open" style="width: 12px; height: 12px;"></i>
+          Manuscrit de Recherche 2026 — Document de Travail Intégral
+        </div>
+        <h1 class="slide-title" style="font-size: 2.1rem; margin-top: 6px; margin-bottom: 16px;">
+          De la Décision Statistique au Comportement Adaptatif :
+        </h1>
+        <h2 style="font-size: 1.3rem; font-weight: 500; color: var(--accent-cyan); margin-bottom: 24px;">
+          Évaluation Empirique, Limites et Perspectives Hybrides des Agents LLM en Simulation de Mobilité Urbaine
+        </h2>
+
+        <div class="grid-3" style="margin-bottom: 24px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="users" style="width: 13px; height: 13px;"></i> Auteurs Prévisibles</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Yves B., Benoit Gaudou, Kamaldeep Singh Oberoi</div>
+            <div class="metric-sub">Ordre et affiliations universitaires à définir</div>
+          </div>
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="map-pin" style="width: 13px; height: 13px;"></i> Cadre de Recherche</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Projet LLM-Agents GAMA</div>
+            <div class="metric-sub">Défis Clés Occitanie (MIDOC) — Métropole Toulousaine</div>
+          </div>
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="check-circle-2" style="width: 13px; height: 13px;"></i> Statut & Données</div>
+            <div style="font-weight: 600; color: var(--text-bright);">Enquête EMC² 2023 / ProGEDO</div>
+            <div class="metric-sub">785 zones fines, 453 communes, 13 045 tests gelés</div>
+          </div>
+        </div>
+
+        <div class="grid-4">
+          <div class="info-card">
+            <div class="card-label amber"><i data-lucide="layers" style="width: 12px; height: 12px;"></i> BLOC 1</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Sémantique & Hystérésis</div>
+            <div class="metric-sub">Mémoire J+1 & Perturbations</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label coral"><i data-lucide="bar-chart-2" style="width: 12px; height: 12px;"></i> BLOC 2</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Macro-Distribution & Biais</div>
+            <div class="metric-sub">Biais Marche vs TC & Temps</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label blue"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> BLOC 3</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Oracle LightGBM (78.5 %)</div>
+            <div class="metric-sub">Inférence Aveugle & SHAP</div>
+          </div>
+          <div class="info-card">
+            <div class="card-label green"><i data-lucide="git-merge" style="width: 12px; height: 12px;"></i> BLOC 4</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Architecture Hybride</div>
+            <div class="metric-sub">Cascade 3 étages + Ménage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 2 : RÉSUMÉ & ABSTRACT ==================== -->
+    <div class="slide-container" data-slide="2">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="file-text" style="width: 12px; height: 12px;"></i> Résumé & Abstract</div>
+        <h2 class="slide-title">Richesse Narrative Qualitative vs Fidélité Distributionnelle</h2>
+        <div class="slide-subtitle">La tension fondamentale entre agents génératifs et modèles statistiques supervisés</div>
+
+        <div class="grid-2">
+          <!-- FR -->
+          <div class="info-card accent-blue" style="font-size: 0.88rem; line-height: 1.6;">
+            <div class="card-label blue"><i data-lucide="globe" style="width: 13px; height: 13px;"></i> Résumé Français</div>
+            <p>
+              L'intégration des grands modèles de langage (LLM) au sein des simulations multi-agents (<strong>GABM</strong>) ouvre des perspectives inédites pour modéliser le comportement humain sans recourir à des systèmes de règles manuelles rigides. Toutefois, l'évaluation de ces agents face à des données d'enquête réelles révèle une tension fondamentale entre <em>richesse narrative qualitative</em> et <em>fidélité distributionnelle quantitative</em>.
+            </p>
+            <p>
+              Dans cet article, nous confrontons les décisions d'agents génératifs (Mistral, Gemini, Qwen-32B local) à un oracle supervisé (<strong>LightGBM</strong> entraîné sur l'enquête EMC² 2023, <strong>$78,5\,\%$</strong> d'accuracy sur $13\,045$ trajets de test).
+            </p>
+            <p>
+              Face aux biais distributionnels observés (sous-estimation marche, sur-attractivité TC/vélo), nous proposons une <strong>architecture hybride en cascade</strong> (Règles $\to$ LightGBM $90\,\%$ $\to$ LLM $10\,\%$) couplée aux contraintes de la cellule familiale.
+            </p>
+          </div>
+
+          <!-- EN -->
+          <div class="info-card accent-purple" style="font-size: 0.88rem; line-height: 1.6; font-style: italic;">
+            <div class="card-label purple"><i data-lucide="globe" style="width: 13px; height: 13px;"></i> English Abstract</div>
+            <p>
+              Integrating Large Language Models (LLMs) into agent-based social simulations (GABM) offers new avenues for modeling human decision-making beyond rigid rule-based systems. However, benchmarking these agents against real-world travel surveys reveals a fundamental trade-off between qualitative semantic expressiveness and quantitative distributional fidelity.
+            </p>
+            <p>
+              We benchmark generative agents (Mistral, Gemini, local Qwen-32B) against a supervised statistical oracle (LightGBM trained on the 2023 EMC² survey, achieving $78.5\%$ accuracy on $13,045$ test trips).
+            </p>
+            <p>
+              To bridge the gap between statistical calibration and behavioral adaptation, we propose a cascading hybrid architecture (Deterministic Rules $\to$ LightGBM for $90\%$ nominal flow $\to$ LLM for $10\%$ disruptions) embedded within household-level constraints.
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-green" style="margin-top: 14px;">
+          <div class="card-label green"><i data-lucide="target" style="width: 13px; height: 13px;"></i> Les 3 Paliers de Contribution de l'Article</div>
+          <div class="grid-3" style="margin-top: 8px;">
+            <div><strong>1. Macroscopique :</strong> Quantification des biais LLM face aux parts modales réelles (Marche 11.9% vs 26.8%).</div>
+            <div><strong>2. Microscopique :</strong> Protocole d'inférence en aveugle ($N=1000$) confrontant SHAP vs justifications LLM.</div>
+            <div><strong>3. Comportemental :</strong> Modélisation de l'hystérésis ($J+1$) et des contextes qualitatifs non tabulés.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 3 : INTRODUCTION & POSITIONNEMENT ==================== -->
+    <div class="slide-container" data-slide="3">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="compass" style="width: 12px; height: 12px;"></i> Section 1</div>
+        <h2 class="slide-title">Introduction & Positionnement Scientifique</h2>
+        <div class="slide-subtitle">Dépasser l'opposition entre économétrie rigide et narration artificielle</div>
+
+        <div class="grid-2" style="margin-bottom: 16px;">
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="history" style="width: 13px; height: 13px;"></i> 1.1 Contexte : Émergence des GABM en Mobilité</div>
+            <p style="font-size: 0.88rem;">
+              La modélisation multi-agents des transports (ABM) repose historiquement sur :
+            </p>
+            <ul style="font-size: 0.85rem;">
+              <li><strong>Modèles de choix discrets</strong> (Logit multinomial / emboîté) : calibrés sur des utilités globales mais rigides face aux imprévus.</li>
+              <li><strong>Systèmes experts à règles</strong> (arbres BDI) : coûteux à concevoir manuellement, incapables de généraliser hors du domaine nominal.</li>
+            </ul>
+            <p style="font-size: 0.85rem; color: var(--accent-cyan);">
+              ➜ L'arrivée des LLMs apporte des agents autonomes raisonnant en langage naturel, évaluant des compromis complexes (météo, agenda, confort).
+            </p>
+          </div>
+
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="alert-triangle" style="width: 13px; height: 13px;"></i> 1.2 Le Verrou Scientifique : Réalisme vs Calage</div>
+            <p style="font-size: 0.88rem;">
+              Si l'expressivité qualitative est impressionnante sur des scénarios individuels scénarisés, le déploiement métropolitain se heurte à la <strong>fidélité distributionnelle</strong>.
+            </p>
+            <p style="font-size: 0.85rem;">
+              Les LLMs sont influencés par des <em>priors culturels mondiaux</em> issus de leur pré-entraînement internet, produisant des anomalies systématiques (sur-attractivité des transports en commun, écrasement de la marche à pied courte).
+            </p>
+          </div>
+        </div>
+
+        <h3>1.3 Positionnement du Travail : 3 Piliers Méthodologiques</h3>
+        <div class="grid-3">
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Pilier 1</div>
+            <div class="card-title">Évaluation Empirique Réelle</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              Dépasser les benchmarks académiques synthétiques en évaluant sur l'enquête EMC² 2023 ($785$ zones fines, $453$ communes).
+            </p>
+          </div>
+          <div class="info-card accent-purple">
+            <div class="card-label purple">Pilier 2</div>
+            <div class="card-title">Audit Face à un Oracle ML</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              Utiliser LightGBM ($78,54\,\%$ d'accuracy) comme étalon de référence de ce qu'une approche supervisée classique produit.
+            </p>
+          </div>
+          <div class="info-card accent-green">
+            <div class="card-label green">Pilier 3</div>
+            <div class="card-title">Ingénierie Multi-Agents Hybride</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              Définir la ligne de partage opérationnelle : ML tabulaire pour le flux nominal de masse, LLM pour les $10\,\%$ de ruptures et cas qualitatifs.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 4 : BLOC 1 - PROTOCOLE & PERSONAS ==================== -->
+    <div class="slide-container" data-slide="4">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="zap" style="width: 12px; height: 12px;"></i> Section 2 — BLOC 1</div>
+        <h2 class="slide-title">Comportement Individuel, Sémantique & Adaptation</h2>
+        <div class="slide-subtitle">La valeur ajoutée intrinsèque du raisonnement en langage naturel</div>
+
+        <div class="grid-2" style="margin-bottom: 18px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="settings" style="width: 13px; height: 13px;"></i> 2.1 Protocole Expérimental & Réfutabilité</div>
+            <ul style="font-size: 0.85rem; line-height: 1.6;">
+              <li><strong>Déterminisme & Dispersion :</strong> Même à basse température ($\tau = 0.2$), une variance résiduelle inter-runs persiste. Évaluation sur plusieurs seeds fixés avec moyennes et intervalles de confiance à $95\,\%$.</li>
+              <li><strong>Comparaison Multi-Modèles :</strong> Évaluation croisée sur familles distinctes (Mistral-Small, Gemini-Flash, Qwen-32B local).</li>
+              <li><strong>Schéma de réponse JSON strict :</strong> Extraction sans ambiguïté du couple <code>(choice, reason)</code>.</li>
+            </ul>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="message-square" style="width: 13px; height: 13px;"></i> 2.3 Analyse Automatique des Justifications (NLP)</div>
+            <p style="font-size: 0.85rem;">
+              Sur les trajets où $\text{Choix}_{\text{LLM}} \neq \text{Choix}_{\text{LightGBM}}$, application d'un pipeline d'extraction de motifs clés et clustering sémantique :
+            </p>
+            <div style="background: var(--bg-primary); padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; margin-top: 6px;">
+              <div>🔹 <strong>35 %</strong> : Confort physique et météo perçue</div>
+              <div>🔹 <strong>28 %</strong> : Évitement des ruptures de charge (correspondances pénibles)</div>
+              <div>🔹 <strong>20 %</strong> : Contraintes horaires et pression temporelle perçue</div>
+            </div>
+          </div>
+        </div>
+
+        <h3>2.2 Personas Narratifs et Contextes Qualitatifs Non-Tabulaires</h3>
+        <div class="grid-3">
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="package" style="width: 12px; height: 12px;"></i> Cas 1 : Logistique & Encombrement</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « Je transporte un gâteau d'anniversaire fragile et deux cartons volumineux pour une fête. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 6px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Élimine vélo/marche ➜ <strong>Voiture</strong>.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ Tabulaire :</span> Voit $d=2\text{ km}$ ➜ Prédit <strong>Marche</strong>.
+            </div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="moon" style="width: 12px; height: 12px;"></i> Cas 2 : Perception de Sécurité</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « Trajet de retour à 23h30 à travers une ruelle industrielle non éclairée et isolée. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 6px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Arbitrage vers <strong>TC abrité ou Voiture</strong>.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ Tabulaire :</span> Ignore le sentiment d'insécurité nocturne.
+            </div>
+          </div>
+
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="briefcase" style="width: 12px; height: 12px;"></i> Cas 3 : Dress-Code & Occasion</div>
+            <p style="font-size: 0.82rem; font-style: italic;">
+              « Entretien d'embauche formel en costume trois pièces avec risque de pluie. »
+            </p>
+            <div style="font-size: 0.8rem; margin-top: 6px;">
+              <span style="color: var(--accent-green); font-weight: 600;">✓ LLM :</span> Évite sueur à vélo et attente sous la pluie.<br>
+              <span style="color: var(--accent-coral); font-weight: 600;">✗ Tabulaire :</span> Aucune variable "tenue vestimentaire".
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 5 : BLOC 1 - HYSTÉRÉSIS & MÉMOIRE J+1 ==================== -->
+    <div class="slide-container" data-slide="5">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="activity" style="width: 12px; height: 12px;"></i> Section 2.4 — BLOC 1</div>
+        <h2 class="slide-title">Chocs Ponctuels & Modélisation de l'Hystérésis</h2>
+        <div class="slide-subtitle">L'effet mémoire à J+1 : point de rupture méthodologique avec les modèles statistiques amnésiques</div>
+
+        <div class="diagram-box" style="flex-direction: column; align-items: stretch; gap: 14px;">
+          <div style="display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 16px;">
+            <!-- J Matin -->
+            <div class="info-card accent-blue" style="text-align: center;">
+              <div class="card-label blue">JOUR J — Matin (Nominal)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0;">Métro en service</div>
+              <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem;">
+                Choix : <strong>Métro</strong>
+              </div>
+              <div class="metric-sub" style="margin-top: 6px;">Conditions optimales</div>
+            </div>
+
+            <!-- J Incident -->
+            <div class="info-card accent-coral" style="text-align: center;">
+              <div class="card-label coral">JOUR J — 17h (Choc Réseau)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0; color: var(--accent-coral);">Panne Métro Ligne A</div>
+              <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; font-family: var(--font-mono); font-size: 0.85rem;">
+                Ré-optimisation $A' \to B$ : <strong>Bus</strong>
+              </div>
+              <div class="metric-sub" style="margin-top: 6px;">Trajet dégradé (+35 min, stress)</div>
+            </div>
+
+            <!-- J+1 Rétabli -->
+            <div class="info-card accent-purple" style="text-align: center;">
+              <div class="card-label purple">JOUR J+1 — Matin (Rétabli 100%)</div>
+              <div style="font-size: 0.95rem; font-weight: 700; margin: 8px 0;">Métro réparé à 100%</div>
+              <div style="display: grid; grid-template-rows: 1fr 1fr; gap: 6px; text-align: left; font-size: 0.78rem;">
+                <div style="background: var(--bg-primary); padding: 6px 8px; border-radius: 4px; border-left: 3px solid var(--accent-coral);">
+                  <strong>LightGBM (Amnésique) :</strong><br>Reprend le Métro ($\text{features}=J$)
+                </div>
+                <div style="background: var(--bg-primary); padding: 6px 8px; border-radius: 4px; border-left: 3px solid var(--accent-green);">
+                  <strong>LLM + Mémoire :</strong><br>Évite le Métro à $J+1$ (Méfiance)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Timeline SVG Arrow -->
+          <svg viewBox="0 0 800 28" style="width: 100%; height: 28px;">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#388bfd" />
+              </marker>
+            </defs>
+            <line x1="40" y1="14" x2="760" y2="14" stroke="#388bfd" stroke-width="3" stroke-dasharray="6,4" marker-end="url(#arrow)" />
+          </svg>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="cpu" style="width: 13px; height: 13px;"></i> Constat Méthodologique Majeur</div>
+          <p style="font-size: 0.88rem; margin: 0;">
+            Un modèle statistique tabulaire ré-évalué à $J+1$ réinitialise immédiatement son choix car ses variables d'entrée ($od\_km$, temps théorique) sont redevenues identiques à $J$. L'agent LLM doté d'une <strong>mémoire épisodique</strong> conserve l'historique émotionnel et décisionnel de l'incident, reproduisant l'<strong>inertie comportementale (churn modal temporaire)</strong> observée chez les usagers réels.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 6 : BLOC 2 - MACRO-DISTRIBUTION VS EMC2 ==================== -->
+    <div class="slide-container" data-slide="6">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="bar-chart-2" style="width: 12px; height: 12px;"></i> Section 3 — BLOC 2</div>
+        <h2 class="slide-title">Utilité et Limites en Simulation Urbaine</h2>
+        <div class="slide-subtitle">Macro-distribution vs Réalité empirique (Run de référence 2026-08-24 / 2 911 décisions)</div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Mode de Transport</th>
+                <th>Cible Réelle (EMC² 2023)</th>
+                <th>Simulation LLM (Run 2026-08-24)</th>
+                <th>Écart ($\Delta$)</th>
+                <th>Diagnostic & Biais Structurel</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>🚗 Voiture</strong></td>
+                <td><strong style="font-family: var(--font-mono);">56,70 %</strong></td>
+                <td><strong style="font-family: var(--font-mono); color: var(--accent-green);">57,58 %</strong></td>
+                <td><span class="delta-tag delta-good">+0,88 pt</span></td>
+                <td><strong>Alignement remarquable</strong> sur l'auto-solisme</td>
+              </tr>
+              <tr>
+                <td><strong>🚶 Marche à pied</strong></td>
+                <td><strong style="font-family: var(--font-mono);">26,80 %</strong></td>
+                <td><strong style="font-family: var(--font-mono); color: var(--accent-coral);">11,90 %</strong></td>
+                <td><span class="delta-tag delta-pos">-14,90 pt</span></td>
+                <td><strong>Sous-représentation critique</strong> des trajets courts</td>
+              </tr>
+              <tr>
+                <td><strong>🚌 Transports Collectifs</strong></td>
+                <td><strong style="font-family: var(--font-mono);">12,37 %</strong></td>
+                <td><strong style="font-family: var(--font-mono); color: var(--accent-amber);">17,23 %</strong></td>
+                <td><span class="delta-tag delta-neg">+4,86 pt</span></td>
+                <td><strong>Sur-attractivité marquée</strong> (prior vertueux)</td>
+              </tr>
+              <tr>
+                <td><strong>🚲 Vélo</strong></td>
+                <td><strong style="font-family: var(--font-mono);">4,12 %</strong></td>
+                <td><strong style="font-family: var(--font-mono); color: var(--accent-coral);">13,29 %</strong></td>
+                <td><span class="delta-tag delta-pos">+9,17 pt</span></td>
+                <td><strong>Sur-utilisation massive</strong> ($\times 3,2$ la réalité)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-2" style="margin-top: 16px;">
+          <div class="info-card accent-coral">
+            <div class="card-label coral"><i data-lucide="alert-circle" style="width: 13px; height: 13px;"></i> Métriques Globales du Run</div>
+            <div style="display: flex; gap: 20px; align-items: baseline; margin-top: 4px;">
+              <div>
+                <div class="metric-value" style="color: var(--accent-coral);">18,23</div>
+                <div class="metric-sub">Score Composite (Loss)</div>
+              </div>
+              <div>
+                <div class="metric-value" style="color: var(--accent-amber);">29,81 pt</div>
+                <div class="metric-sub">Erreur L1 cumulée</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="info" style="width: 13px; height: 13px;"></i> Interprétation Comportementale</div>
+            <p style="font-size: 0.84rem; margin: 0;">
+              Le LLM applique une <em>rationalité écologique idéalisée</em> issue de son corpus d'entraînement : dès qu'une alternative décarbonée existe, il la privilégie au détriment de la marche utilitaire de quartier.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 7 : BLOC 2 - PHYSIQUE DU RÉSEAU & TEMPS TERMINAUX ==================== -->
+    <div class="slide-container" data-slide="7">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="sliders" style="width: 12px; height: 12px;"></i> Section 3.2 & 3.3 — BLOC 2</div>
+        <h2 class="slide-title">La Physique du Réseau Prime sur le Prompt</h2>
+        <div class="slide-subtitle">Pourquoi l'ingénierie de prompt échoue là où le calage des temps terminaux triomphe</div>
+
+        <div class="grid-3" style="margin-bottom: 18px;">
+          <div class="info-card accent-amber">
+            <div class="card-label amber">Expérience 1 (Ticket 014)</div>
+            <div class="card-title">Consigne de Chaîne dans le Prompt</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted); margin-top: 4px;">
+              Ajout de consignes textuelles d'optimisation de journée.
+            </p>
+            <div class="delta-tag delta-pos" style="margin-top: 8px;">$\Delta \text{Composite} = +0,21$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-coral); margin-top: 4px;"><strong>Inefficace</strong> (Bruit statistique)</div>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green">Expérience 2 (Ticket 013)</div>
+            <div class="card-title">Temps Terminal Voiture</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted); margin-top: 4px;">
+              Réduction du temps d'accès/stationnement de $7,93\text{ min} \to 0,55\text{ min}$.
+            </p>
+            <div class="delta-tag delta-good" style="margin-top: 8px;">$\Delta \text{Composite} = -4,52$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-green); margin-top: 4px;"><strong>Gain Massif</strong> sur le score global</div>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Expérience 3 (Ticket 015)</div>
+            <div class="card-title">Alignement Voiture + Vélo</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted); margin-top: 4px;">
+              Alignement conjoint des temps d'accroche vélo et parking.
+            </p>
+            <div class="delta-tag delta-good" style="margin-top: 8px;">$\Delta \text{Composite} = -2,17$ pt</div>
+            <div class="metric-sub" style="color: var(--accent-cyan); margin-top: 4px;">Vélo redevenant trop attractif si sur-favorisé</div>
+          </div>
+        </div>
+
+        <div class="info-card accent-purple">
+          <div class="card-label purple"><i data-lucide="footprints" style="width: 13px; height: 13px;"></i> 3.3 Le Biais de Report Marche ➜ Transports Collectifs ($495$ décisions décortiquées)</div>
+          <p style="font-size: 0.88rem;">
+            L'analyse approfondie de $495$ décisions où le LLM a retenu un bus ou tramway alors qu'un itinéraire piéton direct était proposé montre un <strong>biais cognitif propre aux LLMs</strong> :
+          </p>
+          <div class="grid-2" style="margin-top: 8px; font-size: 0.84rem;">
+            <div style="background: var(--bg-primary); padding: 8px 12px; border-radius: 6px;">
+              🔴 <strong>Sur-valorisation de la vitesse nominale TC :</strong> Le modèle perçoit le véhicule en mouvement comme un gain d'utilité systématique.
+            </div>
+            <div style="background: var(--bg-primary); padding: 8px 12px; border-radius: 6px;">
+              🔴 <strong>Sous-estimation de la pénibilité de marche courte :</strong> Un trajet de $12\text{ min}$ à pied est perçu comme "évitable" dès qu'une ligne de bus existe.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 8 : BLOC 3 - ORACLE STATISTIQUE LIGHTGBM ==================== -->
+    <div class="slide-container" data-slide="8">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> Section 4 — BLOC 3</div>
+        <h2 class="slide-title">Évaluation Unitaire Face à l'Oracle Statistique</h2>
+        <div class="slide-subtitle">Architecture et performances scellées du modèle supervisé LightGBM (13 045 trajets de test)</div>
+
+        <div class="grid-3" style="margin-bottom: 16px;">
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="check-circle" style="width: 13px; height: 13px;"></i> Accuracy Globale</div>
+            <div class="metric-value" style="color: var(--accent-green);">78,54 %</div>
+            <div class="metric-sub">Pondérée sur le test gelé scellé</div>
+          </div>
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="trending-down" style="width: 13px; height: 13px;"></i> LogLoss Multi-Classe</div>
+            <div class="metric-value" style="color: var(--accent-blue);">0,540</div>
+            <div class="metric-sub">Calibration des probabilités modales</div>
+          </div>
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="target" style="width: 13px; height: 13px;"></i> Erreur Distributionnelle</div>
+            <div class="metric-value" style="color: var(--accent-purple);">2,68 pt</div>
+            <div class="metric-sub">Écart L1 moyen face à la réalité EMC²</div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 8px;">
+          Matrice de Confusion de l'Oracle LightGBM ($N = 13\,045$ trajets) :
+        </div>
+
+        <div class="conf-matrix">
+          <div class="conf-cell conf-header">Réel \ Prédit</div>
+          <div class="conf-cell conf-header">🚲 Vélo</div>
+          <div class="conf-cell conf-header">🚗 Voiture</div>
+          <div class="conf-cell conf-header">🚌 TC</div>
+          <div class="conf-cell conf-header">🚶 Marche</div>
+          <div class="conf-cell conf-header">Rappel</div>
+
+          <div class="conf-cell conf-header">Réel Vélo</div>
+          <div class="conf-cell conf-diag">67</div>
+          <div class="conf-cell conf-off">251</div>
+          <div class="conf-cell conf-off">51</div>
+          <div class="conf-cell conf-off">150</div>
+          <div class="conf-cell conf-recall">13,8 %</div>
+
+          <div class="conf-cell conf-header">Réel Voiture</div>
+          <div class="conf-cell conf-off">30</div>
+          <div class="conf-cell conf-diag">6 384</div>
+          <div class="conf-cell conf-off">264</div>
+          <div class="conf-cell conf-off">632</div>
+          <div class="conf-cell conf-recall">87,5 %</div>
+
+          <div class="conf-cell conf-header">Réel TC</div>
+          <div class="conf-cell conf-off">25</div>
+          <div class="conf-cell conf-off">302</div>
+          <div class="conf-cell conf-diag">1 068</div>
+          <div class="conf-cell conf-off">217</div>
+          <div class="conf-cell conf-recall">66,1 %</div>
+
+          <div class="conf-cell conf-header">Réel Marche</div>
+          <div class="conf-cell conf-off">20</div>
+          <div class="conf-cell conf-off">748</div>
+          <div class="conf-cell conf-off">110</div>
+          <div class="conf-cell conf-diag">2 726</div>
+          <div class="conf-cell conf-recall">74,9 %</div>
+        </div>
+
+        <div class="info-card accent-amber" style="margin-top: 10px;">
+          <div class="card-label amber"><i data-lucide="shield-check" style="width: 12px; height: 12px;"></i> Rigueur d'Échantillonnage Intra-Foyer</div>
+          <p style="font-size: 0.82rem; margin: 0;">
+            Le découpage apprentissage / validation / test ($31\,279$ / $7\,924$ / $13\,045$ trajets) est opéré par <code>hh_id</code> (identifiant de ménage) à seed fixé, proscrivant formellement toute fuite de données (data leakage) entre membres d'une même famille.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 9 : BLOC 3 - SHAP VS JUSTIFICATIONS & QWEN-32B ==================== -->
+    <div class="slide-container" data-slide="9">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="search" style="width: 12px; height: 12px;"></i> Section 4.2 à 4.4 — BLOC 3</div>
+        <h2 class="slide-title">Inférence en Aveugle, Qwen-32B & Analyse SHAP</h2>
+        <div class="slide-subtitle">Confrontation des déterminants mathématiques (SHAP) aux raisonnements sémantiques</div>
+
+        <div class="grid-2" style="margin-bottom: 16px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="terminal" style="width: 13px; height: 13px;"></i> 4.2 Protocole Aveugle & Inférence Locale (Qwen-32B)</div>
+            <ul style="font-size: 0.84rem; line-height: 1.55;">
+              <li><strong>Script <code>eval_llm_on_survey.py</code> :</strong> Échantillon stratifié $N = 1\,000$ lignes réelles, masquage de la modalité observée.</li>
+              <li><strong>Moteur Local (Qwen-2.5-32B-Instruct) :</strong> Exécuté via vLLM / AWQ à $\tau=0$, zéro coût d'API, aucun rate-limit, reproductibilité déterministe parfaite.</li>
+              <li><strong>Double confrontation :</strong> LLM vs Réalité d'enquête et LLM vs Oracle LightGBM.</li>
+            </ul>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="pie-chart" style="width: 13px; height: 13px;"></i> 4.4 Hiérarchie SHAP des 20 Variables LightGBM</div>
+            <div style="font-size: 0.82rem; font-family: var(--font-mono);">
+              <div style="margin-bottom: 4px;">1. <code>od_km</code> : <strong>28,52 %</strong> (Déterminant physique n°1)</div>
+              <div style="margin-bottom: 4px;">2. <code>density_orig/dest</code> : <strong>12,65 %</strong> (Morphologie urbaine)</div>
+              <div style="margin-bottom: 4px;">3. <code>cars / car_avail</code> : <strong>9,99 %</strong> (Équipement motorisé)</div>
+              <div style="margin-bottom: 4px;">4. <code>has_pt_subscription</code> : <strong>9,53 %</strong> (Accès transports)</div>
+              <div style="margin-bottom: 4px;">5. <code>same_zone</code> : <strong>7,42 %</strong> (Hyper-proximité piétonne)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="scale" style="width: 13px; height: 13px;"></i> Le Duel Cognitif : Géométrie Lourde vs Temps Perçu</div>
+          <div class="grid-2" style="font-size: 0.85rem; margin-top: 8px;">
+            <div>
+              <strong>LightGBM (68 % du pouvoir prédictif) :</strong><br>
+              Tranche quasi-exclusivement sur la géométrie euclidienne ($od\_km$, zone fine) et la dotation en capital ($car\_count$, abonnement).
+            </div>
+            <div>
+              <strong>LLM Agent :</strong><br>
+              Optimise l'utilité ressentie, la fatigue thermique, l'exposition météo et le confort des correspondances, justifiant ses écarts sur les modes actifs.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 10 : BLOC 4 - ARCHITECTURE HYBRIDE EN CASCADE ==================== -->
+    <div class="slide-container" data-slide="10">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="git-merge" style="width: 12px; height: 12px;"></i> Section 5.1 — BLOC 4</div>
+        <h2 class="slide-title">L'Architecture Hybride en Cascade</h2>
+        <div class="slide-subtitle">Concilier la vitesse statistique du ML (90%) et la flexibilité sémantique du LLM (10%)</div>
+
+        <div class="diagram-box" style="flex-direction: column; gap: 12px;">
+          <!-- Request -->
+          <div style="background: var(--bg-primary); border: 1px dashed var(--border-color); padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 0.88rem;">
+            🎯 Requête de Déplacement de l'Agent Synthétique
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 20px; height: 20px; color: var(--text-muted);"></i>
+
+          <!-- Stage 1 -->
+          <div class="info-card accent-amber" style="width: 100%; max-width: 860px;">
+            <div class="card-label amber"><i data-lucide="filter" style="width: 12px; height: 12px;"></i> ÉTAGE 1 : FILTRE DÉTERMINISTE (Règles Physiques & Légales)</div>
+            <div style="font-size: 0.85rem;">
+              Pas de permis ? Pas de voiture possédée au foyer ? Véhicule déjà stationné ailleurs ?<br>
+              ➜ <strong>Élimination préalable stricte</strong> des modes impossibles. Zéro coût de calcul.
+            </div>
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 20px; height: 20px; color: var(--text-muted);"></i>
+
+          <!-- Stage 2 -->
+          <div class="info-card accent-green" style="width: 100%; max-width: 860px;">
+            <div class="card-label green"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> ÉTAGE 2 : ORACLE STATISTIQUE LIGHTGBM (90 % du flux nominal)</div>
+            <div style="font-size: 0.85rem;">
+              Trajet de routine en heure nominale, réseau fluide, météo standard.<br>
+              ➜ <strong>Décision instantanée (&lt; 0.1 ms), 0 token consommé</strong>, alignement EMC² 2023 garanti.
+            </div>
+          </div>
+
+          <i data-lucide="arrow-down" style="width: 20px; height: 20px; color: var(--text-muted);"></i>
+
+          <!-- Stage 3 -->
+          <div class="info-card accent-purple" style="width: 100%; max-width: 860px;">
+            <div class="card-label purple"><i data-lucide="sparkles" style="width: 12px; height: 12px;"></i> ÉTAGE 3 : AGENT GÉNÉRATIF LLM (10 % des situations complexes)</div>
+            <div style="font-size: 0.85rem;">
+              Incident réseau imprévu, alerte météo, bagages encombrants, arbitrage/négociation intra-foyer.<br>
+              ➜ <strong>Raisonnement contextuel, négociation d'équipe, mise à jour mémoire épisodique $J+1$.</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 11 : BLOC 4 - ÉCHELLE DU FOYER & MÉNAGE ==================== -->
+    <div class="slide-container" data-slide="11">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="home" style="width: 12px; height: 12px;"></i> Section 5.2 — BLOC 4</div>
+        <h2 class="slide-title">L'Échelle de la Cellule Familiale</h2>
+        <div class="slide-subtitle">Contraintes d'interaction intra-ménage, arbitrage du véhicule partagé et chaînes spatiales</div>
+
+        <div class="grid-3" style="margin-bottom: 18px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="car" style="width: 13px; height: 13px;"></i> 1. Compétition pour le Véhicule</div>
+            <p style="font-size: 0.84rem;">
+              Si un foyer de deux adultes actifs ne dispose que d'une seule automobile :
+            </p>
+            <div style="font-size: 0.82rem; background: var(--bg-primary); padding: 8px; border-radius: 6px; margin-top: 6px;">
+              Allocation automatique selon l'éloignement travail, l'absence de desserte TC et les horaires de prise de poste.
+            </div>
+          </div>
+
+          <div class="info-card accent-amber">
+            <div class="card-label amber"><i data-lucide="users" style="width: 13px; height: 13px;"></i> 2. Accompagnement Scolaire</div>
+            <p style="font-size: 0.84rem;">
+              Basé sur les travaux d'accompagnement intra-ménage (<code>accompagnement_intra_menage.pptx</code>) :
+            </p>
+            <div style="font-size: 0.82rem; background: var(--bg-primary); padding: 8px; border-radius: 6px; margin-top: 6px;">
+              La dépose des enfants vers l'école verrouille le mode et modifie la chaîne de déplacements du parent accompagnateur.
+            </div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="navigation" style="width: 13px; height: 13px;"></i> 3. Chaînes Spatiales de Véhicules</div>
+            <p style="font-size: 0.84rem;">
+              Formalisé dans <code>vehicle-chain.md</code> :
+            </p>
+            <div style="font-size: 0.82rem; background: var(--bg-primary); padding: 8px; border-radius: 6px; margin-top: 6px;">
+              Conservation stricte de l'état spatial du véhicule. Interdiction absolue de réapparition magique au domicile le lendemain.
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card accent-green">
+          <div class="card-label green"><i data-lucide="git-pull-request" style="width: 13px; height: 13px;"></i> Cohérence Systémique Globale</div>
+          <p style="font-size: 0.86rem; margin: 0;">
+            L'intégration du niveau ménage résout les incohérences classiques des simulateurs individuels centrés sur l'agent isolé, assurant la conservation des stocks de véhicules et la synchronisation des agendas partagés.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 12 : CONCLUSION & PERSPECTIVES ==================== -->
+    <div class="slide-container" data-slide="12">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="check-circle" style="width: 12px; height: 12px;"></i> Section 6</div>
+        <h2 class="slide-title">Discussion & Conclusion</h2>
+        <div class="slide-subtitle">Synthèse des apports et feuille de route pour les jumeaux numériques urbains</div>
+
+        <div class="grid-3" style="margin-bottom: 20px;">
+          <div class="info-card accent-coral">
+            <div class="card-label coral">Leçon 1</div>
+            <div class="card-title">Pas de LLM pour la Statistique Pure</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              Les arbres supervisés (LightGBM) restent $10\,000\times$ plus rapides, gratuits en tokens et rigoureusement calés sur les distributions d'enquête.
+            </p>
+          </div>
+
+          <div class="info-card accent-blue">
+            <div class="card-label blue">Leçon 2</div>
+            <div class="card-title">La Vraie Valeur : L'Adaptabilité</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              La rupture LLM réside dans l'adaptation aux contextes qualitatifs non tabulés, l'explicabilité native en langage naturel et l'effet mémoire d'hystérésis ($J+1$).
+            </p>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green">Leçon 3</div>
+            <div class="card-title">L'Avenir est Hybride</div>
+            <p style="font-size: 0.84rem; color: var(--text-muted);">
+              Le couplage en cascade (90% ML nominal / 10% LLM perturbations) offre le compromis optimal entre passage à l'échelle métropolitaine et réalisme comportemental.
+            </p>
+          </div>
+        </div>
+
+        <div class="info-card accent-purple">
+          <div class="card-label purple"><i data-lucide="rocket" style="width: 13px; height: 13px;"></i> Perspectives & Travaux Futurs</div>
+          <div class="grid-2" style="font-size: 0.85rem; margin-top: 6px;">
+            <div>
+              <strong>1. Déploiement In-Situ GAMA :</strong> Exécution de l'architecture hybride au sein du moteur CityTransport avec 10 000 agents actifs.
+            </div>
+            <div>
+              <strong>2. Négociation Multi-LLM Intra-Foyer :</strong> Dialogue interactif entre agents conjoints pour l'arbitrage en temps réel des ressources partagées.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 13 : ANNEXE A - QUOTAS & SWRR ==================== -->
+    <div class="slide-container" data-slide="13">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="server" style="width: 12px; height: 12px;"></i> Annexe A</div>
+        <h2 class="slide-title">Gestion des Quotas, Économie de Tokens & SWRR</h2>
+        <div class="slide-subtitle">Pool d'inférence multi-fournisseurs avec algorithme Smooth Weighted Round Robin (206 RPM / 37.7k RPD)</div>
+
+        <div class="grid-3" style="margin-bottom: 16px;">
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="calculator" style="width: 13px; height: 13px;"></i> A.1 Budget d'Appels Calculé</div>
+            <div style="font-family: var(--font-mono); font-size: 0.78rem; background: var(--bg-primary); padding: 8px; border-radius: 6px;">
+              $$\text{Total Calls} = N_{\text{ag}} \times N_{\text{tr}} \times N_{\text{j}} \times N_{\text{seeds}} \times N_{\text{mod}}$$
+            </div>
+            <div class="metric-sub" style="margin-top: 6px;">Calcul a priori anti-dépassement</div>
+          </div>
+
+          <div class="info-card accent-green">
+            <div class="card-label green"><i data-lucide="gauge" style="width: 13px; height: 13px;"></i> A.2 Capacité Globale</div>
+            <div class="metric-value" style="color: var(--accent-green);">206 RPM</div>
+            <div class="metric-sub"><strong>37 700+ req/jour</strong> (Free Tier mutualisé)</div>
+          </div>
+
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="database" style="width: 13px; height: 13px;"></i> A.4 Caching SQLite & Drip-Feed</div>
+            <div style="font-size: 0.8rem;">
+              Indexation par $\text{hash}(\text{prompt} + \text{opt} + \text{model} + \tau)$ garantissant qu'aucune requête déjà validée n'est rejouée.
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          A.3 Tableau des 11 Instances Actives en Rotation (SWRR) :
+        </div>
+
+        <div class="table-container table-mono" style="max-height: 250px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Instance</th>
+                <th>Adaptateur</th>
+                <th>Modèle</th>
+                <th>RPM</th>
+                <th>TPM</th>
+                <th>RPD</th>
+                <th>Poids SWRR</th>
+                <th>Part Trafic</th>
+                <th>Rôle / Spécialisation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>mistral</code></td>
+                <td>Mistral</td>
+                <td><code>mistral-small-latest</code></td>
+                <td>60</td>
+                <td>500k</td>
+                <td>100M</td>
+                <td><strong>4.0</strong></td>
+                <td>40,5 %</td>
+                <td>Pilier central (1 req/s)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemini31</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.1-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Juge Éval (clé calib)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemini35</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.5-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Mutateur (+ thinking)</td>
+              </tr>
+              <tr>
+                <td><code>google2</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.1-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Seconde clé (pré-tests)</td>
+              </tr>
+              <tr>
+                <td><code>google2_35</code></td>
+                <td>Google</td>
+                <td><code>gemini-3.5-flash-lite</code></td>
+                <td>15</td>
+                <td>250k</td>
+                <td>500</td>
+                <td><strong>1.0</strong></td>
+                <td>10,1 %</td>
+                <td>Seconde clé (seau 3.5)</td>
+              </tr>
+              <tr>
+                <td><code>google_gemma42</code></td>
+                <td>Google</td>
+                <td><code>gemma-4-26b-a4b-it</code></td>
+                <td>30</td>
+                <td>150k</td>
+                <td>1 500</td>
+                <td><strong>0.36</strong></td>
+                <td>3,6 %</td>
+                <td>Modèle compact</td>
+              </tr>
+              <tr>
+                <td><code>google_gemma43</code></td>
+                <td>Google</td>
+                <td><code>gemma-4-31b-it</code></td>
+                <td>30</td>
+                <td>150k</td>
+                <td>1 500</td>
+                <td><strong>0.36</strong></td>
+                <td>3,6 %</td>
+                <td>Modèle compact</td>
+              </tr>
+              <tr>
+                <td><code>cerebras_gpt</code></td>
+                <td>Cerebras</td>
+                <td><code>gpt-oss-120b</code></td>
+                <td>30</td>
+                <td>100k</td>
+                <td>14 400</td>
+                <td><strong>0.33</strong></td>
+                <td>3,3 %</td>
+                <td>Inférence ultra-rapide</td>
+              </tr>
+              <tr>
+                <td><code>cerebras_gemma</code></td>
+                <td>Cerebras</td>
+                <td><code>gemma-4-31b</code></td>
+                <td>30</td>
+                <td>100k</td>
+                <td>14 400</td>
+                <td><strong>0.33</strong></td>
+                <td>3,3 %</td>
+                <td>Inférence ultra-rapide</td>
+              </tr>
+              <tr>
+                <td><code>groq_openai</code></td>
+                <td>Groq</td>
+                <td><code>openai-120</code></td>
+                <td>30</td>
+                <td>50k</td>
+                <td>14 400</td>
+                <td><strong>0.18</strong></td>
+                <td>1,8 %</td>
+                <td>Inférence LPUs</td>
+              </tr>
+              <tr>
+                <td><code>groq_qwen</code></td>
+                <td>Groq</td>
+                <td><code>qwen3-6-27b</code></td>
+                <td>30</td>
+                <td>50k</td>
+                <td>14 400</td>
+                <td><strong>0.18</strong></td>
+                <td>1,8 %</td>
+                <td>Inférence LPUs</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 14 : ANNEXES B & C ==================== -->
+    <div class="slide-container" data-slide="14">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="code" style="width: 12px; height: 12px;"></i> Annexes B & C</div>
+        <h2 class="slide-title">Spécifications Techniques & Inférence Locale</h2>
+        <div class="slide-subtitle">Détails d'implémentation du banc de test aveugle et configuration de Qwen-32B</div>
+
+        <div class="grid-2">
+          <!-- Annexe B -->
+          <div class="info-card accent-blue">
+            <div class="card-label blue"><i data-lucide="file-code" style="width: 13px; height: 13px;"></i> Annexe B : Script <code>eval_llm_on_survey.py</code></div>
+            <ul style="font-size: 0.82rem; line-height: 1.5;">
+              <li><strong>Localisation :</strong> <code>scripts/progedo_logit/eval_llm_on_survey.py</code></li>
+              <li><strong>Entrée :</strong> <code>mode_choice_test.csv</code> ($13\,045$ lignes scellées)</li>
+              <li><strong>Arguments CLI supportés :</strong>
+                <pre class="code-block" style="margin-top: 4px;">--n_samples 1000 \
+--model local-qwen32b \
+--endpoint http://localhost:8000/v1 \
+--seed 42</pre>
+              </li>
+              <li><strong>Sorties :</strong> <code>results/eval_survey_&lt;model&gt;.json</code> & <code>confusion_matrix_&lt;model&gt;.png</code>.</li>
+            </ul>
+          </div>
+
+          <!-- Annexe C -->
+          <div class="info-card accent-purple">
+            <div class="card-label purple"><i data-lucide="hard-drive" style="width: 13px; height: 13px;"></i> Annexe C : Configuration Inférence Qwen-32B</div>
+            <ul style="font-size: 0.82rem; line-height: 1.5;">
+              <li><strong>Modèle Recommandé :</strong> <code>Qwen/Qwen2.5-32B-Instruct-AWQ</code> ou GGUF Q4_K_M.</li>
+              <li><strong>Option 1 — Serveur vLLM (Production GPU) :</strong>
+                <pre class="code-block" style="margin-top: 4px;">vllm serve Qwen/Qwen2.5-32B-Instruct-AWQ \
+  --port 8000 --max-model-len 4096</pre>
+              </li>
+              <li><strong>Option 2 — Ollama :</strong>
+                <pre class="code-block" style="margin-top: 4px;">ollama run qwen2.5:32b</pre>
+              </li>
+              <li><strong>Hyperparamètres :</strong> $\tau = 0.0$, $\text{seed} = 0$, sortie JSON stricte <code>{ "choice": "...", "reason": "..." }</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SLIDE 15 : ANNEXES D & E ==================== -->
+    <div class="slide-container" data-slide="15">
+      <div class="slide-card">
+        <div class="slide-meta-tag"><i data-lucide="database" style="width: 12px; height: 12px;"></i> Annexes D & E</div>
+        <h2 class="slide-title">Bilan Calibration & Dictionnaire des Variables</h2>
+        <div class="slide-subtitle">Retours sur l'optimisation génétique de prompt et structure des données de l'enquête EMC² 2023</div>
+
+        <div class="info-card accent-amber" style="margin-bottom: 14px;">
+          <div class="card-label amber"><i data-lucide="help-circle" style="width: 13px; height: 13px;"></i> Annexe D : Bilan de la Prompt Calibration & Justification du Pivot</div>
+          <p style="font-size: 0.84rem; margin: 0;">
+            Le module de calibration de prompt (<code>prompt_calibration/</code>) a montré que l'espace d'optimisation par blocs est <strong>hautement non convexe et bruité</strong>. Les gains d'un prompt optimisé restent négligeables face aux gains apportés par le calage direct des paramètres de réseau (temps terminaux, éligibilité vélo). Cela justifie le choix de l'<strong>architecture hybride en cascade</strong>.
+          </p>
+        </div>
+
+        <div style="font-size: 0.88rem; font-weight: 600; color: var(--text-bright); margin-bottom: 6px;">
+          Annexe E : Dictionnaire des 15 Variables de l'Enquête EMC² 2023 (ProGEDO lil-1750) :
+        </div>
+
+        <div class="table-container table-mono" style="max-height: 260px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Type</th>
+                <th>Description / Modalités d'Enquête</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>age</code></td><td>Numérique</td><td>Âge de l'individu (5 à 99 ans)</td></tr>
+              <tr><td><code>gender</code></td><td>Catégoriel</td><td><code>Male</code>, <code>Female</code></td></tr>
+              <tr><td><code>household_size</code></td><td>Numérique</td><td>Nombre de personnes au sein du ménage</td></tr>
+              <tr><td><code>has_driving_license</code></td><td>Booléen</td><td>Détention du permis de conduire B</td></tr>
+              <tr><td><code>number_of_cars</code></td><td>Numérique</td><td>Nombre de véhicules motorisés possédés</td></tr>
+              <tr><td><code>car_availability</code></td><td>Catégoriel</td><td><code>all</code> (toujours), <code>some</code> (parfois), <code>none</code> (jamais)</td></tr>
+              <tr><td><code>has_bike</code></td><td>Booléen</td><td>Attribution nominative d'un vélo (personnel ou VAE)</td></tr>
+              <tr><td><code>has_pt_subscription</code></td><td>Booléen</td><td>Détention d'un abonnement de transport collectif</td></tr>
+              <tr><td><code>main_occupation</code></td><td>Catégoriel</td><td>Travail plein/partiel, Étudiant, Retraité, Au foyer...</td></tr>
+              <tr><td><code>purpose</code></td><td>Catégoriel</td><td>Motif : <code>work</code>, <code>education</code>, <code>shop</code>, <code>leisure</code>, <code>home</code></td></tr>
+              <tr><td><code>departure_hour</code></td><td>Numérique</td><td>Heure de départ de l'activité (0 à 23h)</td></tr>
+              <tr><td><code>od_km</code></td><td>Numérique</td><td>Distance inter-centroïdes de zones fines en kilomètres</td></tr>
+              <tr><td><code>same_zone</code></td><td>Booléen</td><td>Déplacement intra-zone fine (1 si Origine = Destination)</td></tr>
+              <tr><td><code>density_orig / dest</code></td><td>Numérique</td><td>Densité de population et d'emploi de la zone</td></tr>
+              <tr><td><code>mode</code> (Cible)</td><td>Catégoriel</td><td><code>bike</code>, <code>car</code>, <code>transit</code>, <code>walk</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Table of Contents Modal / Drawer -->
+  <div class="drawer-overlay" id="drawer-overlay">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <div class="drawer-title">Sommaire des Slides</div>
+        <button class="btn-icon" id="btn-close-drawer">
+          <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+          <span>Fermer</span>
+        </button>
+      </div>
+      <div class="toc-list" id="toc-list-container">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer Navigation Dock -->
+  <footer class="deck-footer">
+    <div class="slide-counter">
+      Slide <span class="active-num" id="current-slide-num">1</span> / <span id="total-slides-num">15</span>
+    </div>
+    <div class="nav-btn-group">
+      <button class="btn-icon" id="btn-prev" title="Slide Précédente (Flèche Gauche)">
+        <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+        <span>Précédent</span>
+      </button>
+      <button class="btn-icon" id="btn-next" title="Slide Suivante (Flèche Droite / Espace)">
+        <span>Suivant</span>
+        <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    // State management
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide-container');
+    const totalSlides = slides.length;
+    let isDocMode = false;
+
+    // Elements
+    const currentSlideNumEl = document.getElementById('current-slide-num');
+    const totalSlidesNumEl = document.getElementById('total-slides-num');
+    const progressFillEl = document.getElementById('progress-fill');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnModeToggle = document.getElementById('btn-mode-toggle');
+    const modeLabel = document.getElementById('mode-label');
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    const btnToc = document.getElementById('btn-toc');
+    const drawerOverlay = document.getElementById('drawer-overlay');
+    const btnCloseDrawer = document.getElementById('btn-close-drawer');
+    const tocListContainer = document.getElementById('toc-list-container');
+
+    totalSlidesNumEl.textContent = totalSlides;
+
+    // Titles for TOC
+    const slideTitles = [
+      "1. Page de Garde & Métadonnées",
+      "2. Résumé & Abstract (FR / EN)",
+      "3. 1. Introduction & Contexte Scientifique",
+      "4. 2. BLOC 1 : Protocole & Personas Narratifs",
+      "5. 2.4 BLOC 1 : Hystérésis & Mémoire J+1",
+      "6. 3. BLOC 2 : Macro-Distribution vs EMC²",
+      "7. 3.2 BLOC 2 : Physique vs Prompt & Biais Marche",
+      "8. 4. BLOC 3 : Oracle Statistique LightGBM",
+      "9. 4.4 BLOC 3 : Inférence Aveugle & SHAP",
+      "10. 5.1 BLOC 4 : Architecture Hybride en Cascade",
+      "11. 5.2 BLOC 4 : Échelle du Foyer & Ménage",
+      "12. 6. Discussion, Synthèse & Perspectives",
+      "13. Annexe A : Quotas & Pool SWRR",
+      "14. Annexes B & C : Script CLI & Qwen-32B",
+      "15. Annexes D & E : Bilan & Variables EMC²"
+    ];
+
+    // Build TOC
+    slideTitles.forEach((title, idx) => {
+      const item = document.createElement('div');
+      item.className = `toc-item ${idx + 1 === currentSlide ? 'active' : ''}`;
+      item.innerHTML = `
+        <span class="toc-item-num">${String(idx + 1).padStart(2, '0')}</span>
+        <span class="toc-item-title">${title}</span>
+      `;
+      item.addEventListener('click', () => {
+        goToSlide(idx + 1);
+        closeDrawer();
+      });
+      tocListContainer.appendChild(item);
+    });
+
+    function updateSlide() {
+      if (!isDocMode) {
+        slides.forEach((s, idx) => {
+          if (idx + 1 === currentSlide) {
+            s.classList.add('current');
+          } else {
+            s.classList.remove('current');
+          }
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // Update counters & progress
+      currentSlideNumEl.textContent = currentSlide;
+      const progressPercent = ((currentSlide) / totalSlides) * 100;
+      progressFillEl.style.width = `${progressPercent}%`;
+
+      // Update TOC active state
+      document.querySelectorAll('.toc-item').forEach((item, idx) => {
+        if (idx + 1 === currentSlide) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    function goToSlide(num) {
+      if (num < 1) num = 1;
+      if (num > totalSlides) num = totalSlides;
+      currentSlide = num;
+      if (isDocMode) {
+        const target = document.querySelector(`.slide-container[data-slide="${num}"]`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        updateSlide();
+      }
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        goToSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        goToSlide(currentSlide - 1);
+      }
+    }
+
+    // Event listeners
+    btnNext.addEventListener('click', nextSlide);
+    btnPrev.addEventListener('click', prevSlide);
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (drawerOverlay.classList.contains('open')) {
+        if (e.key === 'Escape') closeDrawer();
+        return;
+      }
+
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(totalSlides);
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      } else if (e.key.toLowerCase() === 'd') {
+        toggleDocMode();
+      } else if (e.key.toLowerCase() === 'o') {
+        toggleDrawer();
+      }
+    });
+
+    // Toggle Presentation / Document Mode
+    function toggleDocMode() {
+      isDocMode = !isDocMode;
+      if (isDocMode) {
+        document.body.classList.remove('mode-slides');
+        document.body.classList.add('mode-doc');
+        btnModeToggle.classList.add('active');
+        modeLabel.textContent = 'Mode Slides';
+      } else {
+        document.body.classList.remove('mode-doc');
+        document.body.classList.add('mode-slides');
+        btnModeToggle.classList.remove('active');
+        modeLabel.textContent = 'Mode Doc';
+        updateSlide();
+      }
+    }
+    btnModeToggle.addEventListener('click', toggleDocMode);
+
+    // Dark / Light Theme Toggle
+    btnThemeToggle.addEventListener('click', () => {
+      const currentTheme = document.body.getAttribute('data-theme');
+      const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+      document.body.setAttribute('data-theme', newTheme);
+      themeIcon.setAttribute('data-lucide', newTheme === 'light' ? 'moon' : 'sun');
+      lucide.createIcons();
+    });
+
+    // Fullscreen Toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+
+    // TOC Drawer
+    function toggleDrawer() {
+      drawerOverlay.classList.toggle('open');
+    }
+    function closeDrawer() {
+      drawerOverlay.classList.remove('open');
+    }
+    btnToc.addEventListener('click', toggleDrawer);
+    btnCloseDrawer.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click', (e) => {
+      if (e.target === drawerOverlay) closeDrawer();
+    });
+
+    // KaTeX Auto-render
+    document.addEventListener("DOMContentLoaded", function() {
+      if (window.renderMathInElement) {
+        renderMathInElement(document.body, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false}
+          ],
+          throwOnError: false
+        });
+      }
+      lucide.createIcons();
+      updateSlide();
+    });
+  </script>
+</body>
+</html>

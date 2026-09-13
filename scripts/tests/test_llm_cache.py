@@ -13,9 +13,11 @@ Aucun appel réseau, aucun modèle chargé : SentenceTransformer est mocké.
 Qdrant tourne en mode fichier local dans un répertoire temporaire.
 """
 
+import calendar
 import sys
 import os
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -38,6 +40,11 @@ class FakeOption:
     def get_code(self) -> str:
         return self._code
 
+    def mode_label(self) -> str:
+        # Cohérent avec TravelPlan : get_code() joint les jambes par "+",
+        # mode_label() joint leurs modes par ",". Ici un segment de code = un mode.
+        return ",".join(seg.lower() for seg in self._code.split("+"))
+
 
 def make_embed_fn(vectors: dict):
     """
@@ -55,8 +62,15 @@ def make_embed_fn(vectors: dict):
 
 
 def ts(hour: int, minute: int) -> int:
-    """Timestamp Unix pour aujourd'hui à l'heure donnée."""
-    return int(datetime(2026, 5, 28, hour, minute, 0).timestamp())
+    """Horodatage GAMA (heure MURALE) du 28 mai 2026 à l'heure donnée.
+
+    ⚠ `calendar.timegm` et non `datetime(...).timestamp()` : la clé du cache de
+    décisions se lit en heure murale (`sim_clock.wall_clock`), pas dans le fuseau du
+    processus. Construire l'entrée avec `.timestamp()` ferait passer le test sous
+    `TZ=UTC` et échouer sous `TZ=Europe/Paris` — c'est exactement le défaut que la
+    clé portait jusqu'au 2026-09-04.
+    """
+    return calendar.timegm(datetime(2026, 5, 28, hour, minute, 0).timetuple())
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +100,7 @@ class TestStaticHelpers(unittest.TestCase):
         self.assertNotEqual(h_sun, h_rain)
 
     def test_time_slice_rounding(self):
-        """Arrondi au pas de 10 minutes vers le bas."""
+        """Arrondi au pas de 10 minutes vers le bas, sur l'heure MURALE de GAMA."""
         from llm.cache import LlmSemanticCache
 
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(8, 0)),  "08:00")
@@ -95,6 +109,43 @@ class TestStaticHelpers(unittest.TestCase):
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(8, 19)), "08:10")
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(18, 53)), "18:50")
         self.assertEqual(LlmSemanticCache._make_time_slice(ts(23, 59)), "23:50")
+
+    def test_cle_independante_du_fuseau_du_processus(self):
+        """La clé du cache ne doit pas dépendre du `TZ` du processus.
+
+        Deux processus du même run n'ont pas le même fuseau — le `controller` tourne en
+        `TZ=Europe/Paris`, les réplicas `osmnx` en `TZ=UTC`. Tant que la clé passait par
+        `datetime.fromtimestamp(ts)`, ils calculaient deux tranches différentes pour le
+        même instant simulé et ne s'adressaient donc pas la même entrée.
+        """
+        from llm.cache import LlmSemanticCache
+
+        # 16 mars 2026 5 h murales (t0 du run archivé) et un vendredi 23 h 30 :
+        # le second est le cas où le fuseau du processus changeait aussi le JOUR.
+        cas = [calendar.timegm(datetime(2026, 3, 16, 5, 0, 0).timetuple()),
+               calendar.timegm(datetime(2026, 3, 20, 23, 30, 0).timetuple())]
+        attendu_par_tz = {}
+        initial = os.environ.get("TZ")
+        try:
+            for tz in ("UTC", "Europe/Paris", "Pacific/Kiritimati", "America/Los_Angeles"):
+                os.environ["TZ"] = tz
+                time.tzset()
+                attendu_par_tz[tz] = [
+                    (LlmSemanticCache._make_time_slice(t), LlmSemanticCache._make_weekday(t))
+                    for t in cas
+                ]
+        finally:
+            if initial is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = initial
+            time.tzset()
+
+        distincts = {tuple(v) for v in attendu_par_tz.values()}
+        self.assertEqual(len(distincts), 1,
+                         f"la clé du cache bouge avec le fuseau du processus : {attendu_par_tz}")
+        self.assertEqual(attendu_par_tz["UTC"],
+                         [("05:00", "Weekday"), ("23:30", "Weekday")])
 
 
 class TestCacheRoundTrip(unittest.IsolatedAsyncioTestCase):
@@ -301,3 +352,73 @@ class TestCacheRoundTrip(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# ---------------------------------------------------------------------------
+# Signature des traits dans le state_hash (correctif du 2026-08-27)
+# ---------------------------------------------------------------------------
+
+class TestTraitsKeyDansStateHash(unittest.TestCase):
+    """Un trait qui ne conditionne pas l'offre — l'abonnement TC — ne change que le
+    texte du prompt. Sans signature de traits, les décisions déjà en cache étaient
+    resservies sous l'ancien prompt, sans qu'aucun log ne le signale."""
+
+    @staticmethod
+    def _hash(**kw):
+        from llm.cache import LlmSemanticCache
+        class _Opt:
+            def __init__(self, code): self._c = code
+            def get_code(self): return self._c
+        return LlmSemanticCache._make_state_hash([_Opt("a"), _Opt("b")], **kw)
+
+    def test_traits_differents_donnent_des_hash_differents(self):
+        self.assertNotEqual(self._hash(traits_key="aaa"), self._hash(traits_key="bbb"))
+
+    def test_traits_identiques_donnent_le_meme_hash(self):
+        self.assertEqual(self._hash(traits_key="aaa"), self._hash(traits_key="aaa"))
+
+    def test_absence_de_signature_reste_compatible(self):
+        """Une signature vide ne doit pas altérer le hash : le champ est facultatif."""
+        self.assertEqual(self._hash(), self._hash(traits_key=""))
+
+    def test_la_signature_ne_se_confond_pas_avec_lanticipation(self):
+        """Deux ingrédients distincts : les intervertir changerait le sens du hash."""
+        self.assertNotEqual(self._hash(extra_key="x"), self._hash(traits_key="x"))
+
+
+class TestSignatureDesTraits(unittest.TestCase):
+    """La signature elle-même : ce qu'elle doit voir et ce qu'elle doit ignorer."""
+
+    @staticmethod
+    def _sig(traits):
+        import hashlib as _h, json as _j
+        excluded = ("name",)
+        if not traits:
+            return ""
+        kept = {k: v for k, v in sorted(traits.items()) if k not in excluded}
+        raw = _j.dumps(kept, ensure_ascii=False, sort_keys=True, default=str)
+        return _h.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    BASE = {"name": "Alice", "age": 20,
+            "has_pt_subscription": False, "has_driving_license": True}
+
+    def test_labonnement_deplace_la_signature(self):
+        """Le trait qui a coûté le vidage manuel de cache."""
+        self.assertNotEqual(self._sig(self.BASE),
+                            self._sig({**self.BASE, "has_pt_subscription": True}))
+
+    def test_le_nom_ne_la_deplace_pas(self):
+        """`name` vient de Faker non graine : l'inclure viderait le cache à chaque
+        régénération de population, sans qu'aucune décision n'en dépende."""
+        self.assertEqual(self._sig(self.BASE),
+                         self._sig({**self.BASE, "name": "Bob"}))
+
+    def test_lordre_des_cles_est_indifferent(self):
+        """Un dict Python garde l'ordre d'insertion : deux sérialisations de la même
+        population donneraient deux signatures sans le tri."""
+        self.assertEqual(self._sig(self.BASE),
+                         self._sig(dict(reversed(list(self.BASE.items())))))
+
+    def test_traits_absents_donnent_une_signature_vide(self):
+        self.assertEqual(self._sig(None), "")
+        self.assertEqual(self._sig({}), "")
