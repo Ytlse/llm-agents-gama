@@ -68,7 +68,7 @@ vélo ou on ne l'est pas — pas une pièce lancée pour chaque membre.
 
 ## Les trois étages
 
-Tout vit dans [`llm_module/core/bike_ownership.py`](../../llm_module/core/bike_ownership.py)
+Tout vit dans [`packages/mobility_core/src/mobility_core/bike_ownership.py`](../../mobility_core/src/mobility_core/bike_ownership.py)
 (module pur, I/O confinée à `load`), appris par
 [`scripts/progedo_logit/export_bike_ownership.py`](../../scripts/progedo_logit/export_bike_ownership.py)
 (`make bike-ownership`) et appliqué par
@@ -89,7 +89,7 @@ Deux covariables du ticket sont **écartées**, pour deux raisons différentes :
   pas.
 - **`M1` (type d'habitat)** : c'était le « piège à trancher » du ticket, et la mesure le
   tranche. Le `housing_type` du persona est lui-même **imputé**
-  ([housing_type.py](../../llm_module/core/housing_type.py)) et ne coïncide avec l'habitat
+  ([housing_type.py](../../mobility_core/src/mobility_core/housing_type.py)) et ne coïncide avec l'habitat
   réel qu'**une fois sur deux** (47,6 % avec la loi de zone seule, 50,2 % depuis le raking
   sur la taille du ticket 019). Conditionner `k` sur la zone seule reproduisait la courbe
   d'équipement par habitat imputé à **0,6 point près** ; conditionner sur l'habitat imputé
@@ -208,14 +208,16 @@ make bike-ownership   # (ré)apprend le modèle depuis les microdonnées PROGEDO
 ```
 
 ```bash
-llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike \
+services/llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike \
   data/population/toulouse_population_1000.json --check
 ```
 
 `--dry-run` rapporte sans réécrire ; `--check` sort en échec (code 2) si une cible est hors
-tolérance. La ressource `llm_module/data/bike_ownership.json` est **hors dépôt**, comme la
-couche de zones fines : son absence est un cas normal, traité par une erreur explicite au
-chargement, **jamais par un repli sur l'ancienne formule**.
+tolérance. La ressource `packages/mobility_core/src/mobility_core/data/bike_ownership.json` est
+**versionnée** depuis le ticket 037 (elle a suivi `mobility_core`) — contrairement à la couche
+de zones fines `zf_zones.gpkg`, qui reste hors dépôt comme sa source PROGEDO. Le chargement
+n'a pas changé pour autant : une ressource absente lève une erreur explicite, **jamais un
+repli sur l'ancienne formule**.
 
 ### L'adresse comme clé de ménage
 

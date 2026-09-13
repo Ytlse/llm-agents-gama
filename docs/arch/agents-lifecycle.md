@@ -25,11 +25,13 @@ Un agent entre en phase de planification quand :
     └── Consolidation et déduplication des itinéraires
     └── LlmAgent.evaluate_and_choose_travel_plan()
         └── Extraction mémoire long terme (ChromaDB, score composite)
+            SEULEMENT si l'agent a des souvenirs — sinon rien n'est lu avant le cache
         └── Lookup cache sémantique (LlmSemanticCache)
-            ├── Cache HIT → retourne l'index immédiatement
-            └── Cache MISS → injection Persona + Météo + Historique + Itinéraires
-                └── Inférence LLM (sortie structurée JSON)
-                    └── Store asynchrone dans le cache (fire-and-forget)
+            ├── Cache HIT → retire un index dans les probabilités mémorisées (draw_index)
+            └── Cache MISS → construction du payload (LTM lue ici si elle ne l'a pas été)
+                └── injection Persona + Météo + Historique + Itinéraires
+                    └── Inférence LLM (JSON structuré : une probabilité par option)
+                        └── Store asynchrone dans le cache (fire-and-forget)
     └── Traitement du résultat
         └── Écriture décision en mémoire court terme
         └── Stockage trajet dans next_planned_move (état PLANNED)
@@ -78,6 +80,33 @@ pile de backpressure et du scan) :
    `MAX_VEHICLE_WAIT`). Métrique : `controller_lost_arrivals_recovered_total`.
 
 ---
+
+## La chaîne d'activités est cyclique
+
+La dernière activité de la journée est suivie d'un **retour à la première**, qui est le domicile
+dans la quasi-totalité des cas. Une journée de n activités compte donc **n déplacements**, pas
+n − 1 : le retour au domicile est un déplacement, et il se décide comme les autres.
+
+Une seule implémentation porte cette règle, `chaine_activites.py` :
+
+- `activite_suivante(activites, courante)` applique `(i + 1) % n`, avec le garde `len ≤ 1`,
+  l'appariement par `id` et le contrôle des deux localisations ;
+- `paires_de_la_journee(activites)` en dérive toutes les paires (origine, destination).
+
+Le contrôleur de simulation (trois sites) et la plateforme d'expériences
+(`experiences/jeu.py::deplacements_attendus`) passent tous deux par là. Ce module existe parce
+que les deux avaient divergé : le contrôleur refermait le cycle, la plateforme énumérait les
+paires consécutives et s'arrêtait à la dernière activité. La plateforme mesurait donc 2 693
+décisions là où la simulation en jouait 3 693 sur la cohorte v1 — **27 % de la journée jamais
+décidée**, et pas au hasard : exactement le trajet où la règle de cohérence des véhicules
+contraint le plus le choix, puisqu'un agent parti en voiture rentre en voiture. Les parts
+modales mesurées par la plateforme étaient celles d'une journée amputée de son retour, donc
+tirées vers les modes d'aller (ticket 045, alerte A1).
+
+Un retour vers le **même lieu** (la personne finit déjà chez elle : 77 cas sur la cohorte v5)
+reste un déplacement énuméré, mais il est inexploitable — il n'y a pas d'itinéraire à calculer
+entre un point et lui-même. Il compte dans les attendus bruts, jamais dans les exploitables, et
+n'entre pas dans l'alarme de santé des moteurs de routage.
 
 ## Bootstrap et horizon glissant
 
@@ -228,7 +257,7 @@ Les précipitations ne sont affichées que si `precip_mm > 0` afin de ne pas alo
 
 ## Métriques associées
 
-Voir [observability.md](../../observability.md) et [pipeline.md](../../pipeline.md) pour le détail des métriques et des points de mesure temporels.
+Voir [observability.md](../observability.md) et [pipeline.md](../pipeline.md) pour le détail des métriques et des points de mesure temporels.
 
 | Métrique | Description |
 |----------|-------------|

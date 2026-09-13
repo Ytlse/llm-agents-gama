@@ -1,6 +1,6 @@
 """synthese_generation_population.py — Comment la population du jeu de test est fabriquée.
 
-    llm-agents/.venv/bin/python -m scripts.AAMAS.synthese_generation_population \\
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.synthese_generation_population \\
         --sceau data/population/population_1000_AAMAS_v4 \\
         --vivier docs/traces/<date>_controle_toulouse_population_10000/report.json \\
         --audit docs/traces/<date>_audit_perimetre_v4/audit_perimetre.json \\
@@ -39,8 +39,8 @@ from scripts.AAMAS.synthese_representativite import (TEMPLATE_V2, TITRES, fr, lo
                                                      template_parts, velo_resume)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_EQASIM = REPO_ROOT / "eqasim-toulouse" / "config_toulouse.yml"
-COMMUNES = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
+CONFIG_EQASIM = REPO_ROOT / "services" / "eqasim-toulouse" / "config_toulouse.yml"
+COMMUNES = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
 GRAPHE_META = REPO_ROOT / "data" / "cache" / "osmnx" / "graphs_444ca7e6a515.meta.json"
 
 # Chiffres du journal de génération eqasim et du notebook, sans fichier structuré. Chacun porte

@@ -51,7 +51,67 @@
 
 ---
 
+## 5. Risque pour la reproductibilité AAMAS : données sous convention nominative et Supplementary Material (ZIP 25 Mo)
+
+**Ce que c'est (remarque de relecture).** *« Risque pour la reproductibilité AAMAS : Si un relecteur ne peut pas rejouer les expériences parce que les données d'enquête sont sous embargo/convention nominative, le code et la cohorte synthétique scellée doivent être intégralement décrits et rendus reproductibles dans le Supplementary Material (ZIP anonyme de 25 Mo). »*
+
+**Ce que le papier doit faire.** Les microdonnées brutes de l'enquête EMC² 2023 (`lil-1750`) ne peuvent pas être cédées ni redistribuées dans le ZIP de soumission ([`SOUMISSION_AAMAS_2027.md`](SOUMISSION_AAMAS_2027.md) § 3, [`../sources/ENGAGEMENT_DONNEES_EMC2.md`](../sources/ENGAGEMENT_DONNEES_EMC2.md)). Pour garantir une reproductibilité inattaquable lors de l'évaluation en double aveugle :
+1. La cohorte synthétique scellée v5 (1 000 personas, 3 299 déplacements, anonymisée et générée par la chaîne eqasim/sélection par ménages) doit être fournie avec ses traits complets et son manifeste d'empreinte (`de73532e…`).
+2. Tout le code d'inférence, de calcul des métriques (`mobility_core`, `mobility_llm`), les configurations d'expériences (`experiments.yaml`), les graines de tirage et les scripts d'évaluation doivent être inclus dans l'archive ZIP anonyme (≤ 25 Mo).
+3. L'article doit expliciter clairement la disjonction entre les microdonnées d'enquête protégées (qui servent d'étalon statistique externe de référence et d'entraînement pour les oracles) et la cohorte synthétique entièrement réplicable par les tiers.
+
+**Où le placer — trois points d'ancrage :**
+1. *Chapitre 4, Section 4.5 & 4.7* ([`fr/04_metrics_and_substrate.md`](fr/04_metrics_and_substrate.md)) : expliciter la distinction données d'enquête protégées vs cohorte synthétique réplicable.
+2. *Annexe G* ([`fr/99_annexes.md`](fr/99_annexes.md)) et [`SOUMISSION_AAMAS_2027.md`](SOUMISSION_AAMAS_2027.md) § 3 : cadrer la constitution du ZIP anonyme de 25 Mo.
+3. *Rebuttal / Réponses aux relecteurs* : réponse formelle préparée en cas d'attaque sur la reproductibilité.
+
+**Ce que ça coûte.** Aucun coût expérimental : la cohorte v5 et le code existent déjà. Le seul coût est de préparer l'archive anonymisée et de vérifier qu'aucun fichier du ZIP ne viole la convention `lil-1750`.
+
+**Décision du 12 septembre 2026.** Consigné dans les actions pour l'écriture du papier.
+
+---
+
+## 6. Objection sur la portée de H0 : apport scientifique face au boosting tabulaire sur-spécialisé
+
+**Ce que c'est (objection de relecture).** *« Prétendre que $H_0$ est une découverte majeure est exagéré : il est évident qu'un LLM nu ou légèrement prompté à la main ne peut pas battre un Gradient Boosted Tree (LightGBM) entraîné de façon supervisée sur 31 000 trajets locaux réels. Vous comparez un modèle non entraîné avec un modèle sur-spécialisé. Quel est l'apport scientifique réel au-delà de confirmer que le boosting tabulaire surpasse le zero-shot ? »*
+
+**Ce que le papier doit faire (défense et positionnement).** L'article ne doit pas présenter $H_0$ comme la « surprise » d'une défaite du LLM face au boosting, mais comme une clarification méthodologique et une démonstration en deux volets :
+1. **La réfutation formelle du discours ambiant (Tier 3 de SILICA) :** Une part importante de la littérature récente sur les agents génératifs (CitySim, AgentMove, travaux récents CHI/AAMAS) suggère ou laisse entendre que des agents LLM dotés de personas et de bon sens urbain capturent spontanément les comportements humains. $H_0$ à parité informationnelle (21 variables, offre physique OTP) apporte une mesure rigoureuse de la borne : le prompt engineering manuel ne franchit pas le plafond distributionnel sur l'impédance physique, et l'écart reste structurel.
+2. **L'asymétrie d'exposition assumée et chiffrée :** L'article annonce dès le départ l'asymétrie (31 279 trajets vus par LightGBM contre zéro pour le LLM). La comparaison n'est pas un concours algorithmique asymétrique gratuit, c'est l'étalonnage de ce que coûte l'absence d'enquête locale (coût de transfert).
+3. **L'apport scientifique au-delà du nominal (le véritable cœur du papier) :**
+   - *Régimes non tabulés (Section 7) :* Là où LightGBM est totalement aveugle et amnésique (incapable d'intégrer une fermeture imprévue de station, une alerte canicule ou un article de presse locale sans ré-entraînement lourd), l'agent LLM démontre une adaptation qualitative et une inertie cognitive (hystérésis sur 5 jours).
+   - *L'architecture hybride en cascade (Section 8) :* La conclusion logique n'est pas « jetons le LLM » mais « combinons-les » : 90 % des flux de routine traités instantanément par l'oracle tabulaire (0 token, fidélité parfaite), et 10 % de cas complexes, chocs ou forte incertitude délégués au LLM.
+
+**Où le placer — trois points d'ancrage :**
+1. *Chapitre 1 (§ 1.2 Le verrou, et § 1.3 C2/H0)* : désamorcer immédiatement en cadrant $H_0$ comme un plafond méthodologique et non une découverte de supériorité algorithmique naïve.
+2. *Chapitre 6 (§ 6.2 et § 6.7)* : insister sur l'enseignement transférable (« bien classer l'enquête ne suffit pas à simuler la ville » et asymétrie d'exposition).
+3. *Chapitre 8 (§ 8.1 Limites, § 8.2 & 8.3 Cascade hybride)* : réponse complète structurée en perspective hybride.
+4. *Rebuttal AAMAS* : argumentaire prêt face à cette attaque prévisible.
+
+**Décision du 12 septembre 2026.** Consigné dans les actions pour l'écriture du papier.
+
+---
+
+## 7. Formalisation compacte du dispositif agentique en remplacement de la description narrative
+
+**Ce que c'est (action de rédaction / standard AAMAS).** *« Remplacer la description narrative du dispositif par une formalisation propre en un bloc compact :*
+$$\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$$
+*où $P_i$ est le persona socio-démographique scellé, $M_{i,t}$ le registre de mémoire bi-composante (STM circulaire, LTM vectorielle), $C_i$ l'état de la chaîne de véhicules du ménage, et $\pi_\theta(a \mid o_t, M_{i,t})$ la distribution verbalisée sur l'espace d'action restreint $\mathcal{A}(o_t, C_i)$. »*
+
+**Ce que le papier doit faire.** Le chapitre 3 actuel ([`fr/03_architecture.md`](fr/03_architecture.md)) est rédigé en style narratif issu de la v0.1. AAMAS exige une rigueur formelle (*Dual Core*) pour les architectures multi-agents :
+1. Remplacer la prose narrative du § 3.1 par un bloc compact introduisant formellement le quadruplet $\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$.
+2. Spécifier rigoureusement l'espace d'action contextuel $\mathcal{A}(o_t, C_i)$ : sous-ensemble des modes physiques offerts à l'instant $t$ par OpenTripPlanner et OSMnx sous la contrainte d'éligibilité et de localisation des véhicules $C_i$ (règles de chaîne).
+3. Poser la décision comme un échantillonnage sur la distribution de probabilité verbalisée par le modèle : $a_t \sim \pi_\theta(\cdot \mid o_t, M_{i,t})$, garantissant la préservation de la diversité individuelle face aux modes déterministes.
+
+**Où le placer.**
+- *Chapitre 3, Section 3.1 & 3.3* ([`fr/03_architecture.md`](fr/03_architecture.md)) : remplacement direct de la narration en tête du chapitre.
+
+**Décision du 12 septembre 2026.** Consigné dans les actions pour l'écriture du papier.
+
+---
+
 ## Journal
 
 - 8 septembre 2026 — création du fichier avec trois points, issus des décisions 4.3, 4.5 et 4.7 de la relecture de l'introduction.
 - 10 septembre 2026 — point 4 ajouté : version forte sur l'absence de formule dans le prompt, vérifiée, à écrire dans un chapitre à venir (trois emplacements candidats, méthodes recommandé). Point 3 rafraîchi : il décrivait un état de l'introduction périmé depuis la v0.13.
+- 12 septembre 2026 — points 5, 6 et 7 ajoutés : point 5 sur le risque de reproductibilité AAMAS (embargo d'enquête / cohorte synthétique et code dans le ZIP de 25 Mo) ; point 6 sur l'objection de portée de H0 (LLM nu/calibré vs LightGBM supervisé sur 31k trajets) et la valorisation des apports hors nominal (régimes non tabulés et cascade hybride) ; point 7 sur la formalisation mathématique compacte du dispositif agentique ($\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$) en remplacement de la description narrative du chapitre 3.

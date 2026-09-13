@@ -1,7 +1,7 @@
 """export_mode_hierarchy.py — La hiérarchie des modes de l'enquête, sourcée puis vérifiée.
 
-    llm-agents/.venv/bin/python -m scripts.progedo_logit.export_mode_hierarchy
-    llm-agents/.venv/bin/python -m scripts.progedo_logit.export_mode_hierarchy --check
+    services/llm-agents/.venv/bin/python -m scripts.progedo_logit.export_mode_hierarchy
+    services/llm-agents/.venv/bin/python -m scripts.progedo_logit.export_mode_hierarchy --check
 
 CE QUE ÇA SERT. Un déplacement qui mêle plusieurs modes reçoit **un** mode principal. Le
 dépôt en portait quatre tables et trois réponses pour le même trajet (ticket 022, M1). Ce
@@ -92,7 +92,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 DATA = ROOT / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
-OUT = ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "mode_hierarchy_emc2.json"
+OUT = ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "mode_hierarchy_emc2.json"
 
 logger = logging.getLogger("progedo.mode_hierarchy")
 

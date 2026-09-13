@@ -21,7 +21,7 @@ publie 395 pour 124 lignes. Le TER, lui, ne publie aucune géométrie (son
 La reconstruction par (ligne, sens) — un tracé, celui de la course la plus
 desservie — suffit à l'affichage mais **fabrique du mouvement** dès qu'on
 l'utilise pour faire rouler des véhicules. `build_trips`
-(`llm-agents/inputs/gtfs/gama.py`) force le dernier segment d'une course jusqu'au
+(`services/llm-agents/inputs/gtfs/gama.py`) force le dernier segment d'une course jusqu'au
 dernier point du tracé :
 
     shape_segments[-1] = len(shape_dist_traveled_list) - 1

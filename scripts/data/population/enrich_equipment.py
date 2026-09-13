@@ -388,7 +388,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                         help="confronte aux cibles des tickets 016/017 et sort en échec")
     args = parser.parse_args(argv)
 
-    zones = args.zones or REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
+    zones = args.zones or REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
     spec_path = args.spec or REPO_ROOT / "scripts" / "progedo_logit" / "feature_spec.json"
     if not zones.exists():
         print(f"[erreur] Couche de zones absente : {zones} — `make zones`",

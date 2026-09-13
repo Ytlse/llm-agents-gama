@@ -136,8 +136,13 @@ fichier YAML de 1 470 lignes.
 ### Statut des tickets
 
 - **R9** — Dans le détail de chaque ticket, l'utilisateur choisit un statut parmi le vocabulaire
-  fermé (`à faire`, `en cours`, `terminé`, `bloqué`, `en veille`, `abandonné`), peut modifier la
-  note, et « Enregistrer » écrit dans la source de vérité des statuts.
+  fermé (`à faire`, `en cours`, `terminé`, `bloqué`, `en veille`, `amélioration`, `abandonné`),
+  peut modifier la note, et « Enregistrer » écrit dans la source de vérité des statuts.
+- **R9b** *(déduite)* — `amélioration` range un ticket **conservé comme piste d'amélioration
+  future** : ni chantier interrompu qui reprendra tel quel (`en veille`), ni renoncement
+  (`abandonné`). Il ne se déduit jamais du contenu d'un ticket — cases à cocher ou ligne
+  `**État**` — : seule une entrée écrite le pose, sinon un ticket rangé là retomberait dans la
+  file de travail au premier rechargement.
 - **R10** — L'écriture préserve à l'octet tout ce qui n'est pas l'entrée modifiée : commentaires
   d'en-tête, ordre des entrées, notes et style des autres tickets.
 - **R11** — Un ticket sans entrée dans la source de vérité en reçoit une à l'enregistrement, avec
@@ -283,6 +288,9 @@ fichier YAML de 1 470 lignes.
   → écrite en `>-`.
 - **R16** — un ticket sans entrée dont les cases donnent `en cours` → sélecteur sur `en cours` ;
   l'option « sans statut » n'est pas dans la liste.
+- **R9b** — un ticket enregistré en `amélioration` → l'entrée porte ce statut, le rechargement le
+  rend avec la source « surcharge », et le sélecteur repart dessus ; aucun ticket sans entrée ne
+  reçoit ce statut par déduction.
 
 - **R17** — un dossier de jeu dont le manifeste porte `clos: false` → le jeu figure dans la liste
   de sa population, libellé « EN PRÉPARATION », et l'avertissement « aucun jeu préparé » est

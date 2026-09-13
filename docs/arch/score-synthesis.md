@@ -362,7 +362,7 @@ n'est pas recalculé par la page : elle relit la colonne `Lieu de résidence` te
 que le run l'a écrite. Et depuis le **ticket 021**, `move_logger.py` ne la calcule
 plus non plus : il **recopie** le trait `residence_zone` du persona, posé à la
 génération de population depuis le découpage **par liste de communes** de l'enquête
-(`llm_module/core/residence_zone.py`). Classer par distance à l'hypercentre — ce que
+(`packages/mobility_core/src/mobility_core/residence_zone.py`). Classer par distance à l'hypercentre — ce que
 faisait l'action A9 — comparait 24,4 % des personas à la cible d'une autre zone et
 rangeait en 3ᵉ couronne 45 domiciles qui ne sont pas dans le périmètre d'enquête.
 
@@ -723,8 +723,8 @@ même cette borne est optimiste.
 La page affiche la disponibilité de chacune des 21 variables sur le jeu commun :
 les 12 variables persona et les 3 variables de contexte sont lues directement, les
 6 variables géographiques sont dérivées des coordonnées par le résolveur de zone
-fine (`llm_module/core/zone_resolver.py`, action A7). Ce dernier a besoin de la
-couche `llm_module/data/zf_zones.gpkg`, hors dépôt comme sa source PROGEDO : quand
+fine (`packages/mobility_core/src/mobility_core/zone_resolver.py`, action A7). Ce dernier a besoin de la
+couche `packages/mobility_core/src/mobility_core/data/zf_zones.gpkg`, hors dépôt comme sa source PROGEDO : quand
 elle manque, la page marque ces 6 variables « couche absente » et la régénérer
 demande `make zones`. Dès que les prédictions existent, la colonne « État » ne dit
 plus ce qu'on attendait de la variable mais **ce que la prédiction a trouvé** : une
@@ -892,10 +892,12 @@ métrique ajoutée d'un côté ne peut pas manquer de l'autre.
 
 Verdict sur le split test scellé (13 045 trajets, pondéré COEP) :
 
-| | CEL | GMPCA | Exactitude | L1 masse | L1 mode élu |
-|---|---|---|---|---|---|
-| Booster LightGBM | 0,5402 | 0,583 | **0,785** | **0,0269** | **0,0730** |
-| Logit multinomial | 0,5954 | 0,551 | 0,766 | 0,0286 | 0,1003 |
+| | CEL | GMPCA | Exactitude | L1 masse | L1 mode élu | Rappel vélo |
+|---|---|---|---|---|---|---|
+| Booster LightGBM | 0,5402 | 0,583 | **0,785** | 0,0269 | **0,0730** | **0,138** |
+| Logit multinomial | 0,5954 | 0,551 | 0,766 | 0,0286 | 0,1003 | 0,108 |
+| **Logistique à noyau (KLR)** | 0,5531 | 0,575 | 0,784 | 0,0253 | 0,0928 | 0,122 |
+| *Témoin* random forest | 0,5703 | 0,565 | 0,776 | **0,0232** | 0,0899 | 0,035 |
 
 Le booster devance le logit sur **les deux** familles : l'inversion décrite par la
 littérature ne se produit pas sur ces données. GMPCA = exp(−CEL) est la « moyenne géométrique
@@ -908,13 +910,234 @@ sur caractéristiques individuelles, de motif et de géographie. Ni valeur du te
 disposition à payer n'en sortent — et ce n'est pas un oubli, c'est le prix de la parité
 d'information (voie 1, tranchée le 2026-09-10).
 
+### Le témoin random forest — d'où vient l'avantage du booster ?
+
+Le tableau ci-dessus laissait une phrase invérifiable : le booster devance le logit, soit.
+**Mais de quoi cet avantage est-il fait ?** Deux causes le produiraient également — les
+**arbres** (non-linéarités et interactions qu'une forme linéaire en log-odds ne peut pas
+représenter) ou le **boosting** (l'agrégation par descente de gradient). Un random forest
+sépare les deux : il est fait d'arbres comme le booster, mais agrégés par **bagging**.
+
+C'est un **témoin, pas un candidat** ([ticket 044](../tickets/ticket_044_temoin_random_forest.md),
+spec `specs/ticket_044/temoin_random_forest.md`). `make forest` le mesure à parité stricte —
+mêmes parquet, split par ménage, `sample_weight` COEP, encodage et métriques partagées — et
+n'écrit **que des chiffres** : `rf_mode_choice_metrics.json`, 62 ko, aucun modèle sérialisé.
+Rejouer demande de relancer la mesure (13 min, hors ligne, déterministe).
+
+**Le seuil était écrit avant le chiffre.** Pour chaque métrique, la part de l'écart
+booster–logit comblée par le RF, `(RF − logit) / (booster − logit)` : 0 au niveau du logit, 1
+à celui du booster. `≥ 0,70` → les arbres ; `≤ 0,30` → le boosting. Choisir le seuil après
+avoir vu le résultat reviendrait à choisir la conclusion.
+
+| Axe | Part de l'écart comblée | Ce que ça dit |
+|---|---|---|
+| Exactitude pondérée | 0,49 | moitié-moitié |
+| CEL | 0,45 | moitié-moitié |
+| **L1 masse de probabilité** | **3,04** | le RF *dépasse* le booster |
+| L1 mode élu | 0,38 | plutôt le boosting |
+| **Rappel vélo** | **−2,53** | le RF tombe sous le logit |
+
+**Verdict formel : indécis** — et c'est le résultat, pas un échec de la mesure. Aucune des
+deux causes ne s'affirme seule, et la lecture par axe est plus informative que le mot :
+
+1. **Sur les parts modales agrégées, les arbres suffisent.** Le RF fait *mieux* que le booster
+   (L1 masse 0,0232 contre 0,0269) sans aucun boosting. L'article ne peut donc pas écrire que
+   le boosting est ce qui achète la fidélité des parts — c'est l'axe où notre H0 se joue.
+2. **Sur l'exactitude désagrégée, l'avantage se partage** : le RF en reprend la moitié (0,49
+   sur l'exactitude, 0,45 sur la CEL). Les arbres apportent la moitié de l'écart au logit, le
+   boosting l'autre moitié.
+3. **Sur la classe minoritaire, le boosting est décisif.** Rappel vélo 0,035 contre 0,138 pour
+   le booster et 0,108 pour le logit : le RF passe *sous les deux*. Sa masse de probabilité sur
+   le vélo est pourtant bien calibrée (4,3 % prédits contre 4,0 % observés) — il ne l'élit
+   simplement presque jamais (0,5 % des décisions en mode élu). C'est exactement ce que le
+   réglage du booster était allé chercher en passant de 31 à 5 feuilles, et le bagging ne le
+   donne pas.
+
+⚠ **Le rappel vélo du logit (0,108) est mesuré ici pour la première fois** : le ticket le
+donnait « à mesurer ». Il sort de `mnl_model_metrics.json` sans rien relancer.
+
+**Le réglage n'a lu que le train** : validation croisée 5 plis groupée par `hh_id`, critère
+log-vraisemblance négative pondérée, 48 configurations. Retenu `max_depth = 14`,
+`min_samples_leaf = 5`, `max_features = 0,3`, aucun bord de grille touché. Le plateau en
+nombre d'arbres est montré et non affirmé : log-loss CV 0,5687 → 0,5678 → 0,5669 à 200, 400 et
+1 200 arbres. Ni `class_weight` ni rééquilibrage, comme pour le booster — repondérer gonflerait
+le rappel vélo en détruisant la calibration, or ce sont les probabilités qui produisent les
+parts.
+
+**Une précaution d'encodage, chiffrée plutôt qu'affirmée.** Les arbres de scikit-learn n'ont
+aucun support des catégorielles : nourris des codes entiers du spec, ils liraient `purpose` et
+`socioprofessional_class` comme des **ordinales**, et un RF en retrait n'aurait plus dit « c'est
+le boosting » mais peut-être « c'est l'encodage ». La voie principale réutilise donc la matrice
+de dessin déclarée du logit (50 colonnes, indicatrices par modalité, modalité `__missing__`).
+La voie littérale est mesurée à côté : elle coûte **0,0005 d'exactitude, 0,0008 de CEL et
+0,0015 de L1 masse**. Autrement dit la précaution ne change pas la conclusion — et on le sait
+parce qu'on l'a mesuré.
+
+### La troisième famille — la logistique à noyau (KLR), et le second arbitre
+
+Le tableau des familles tenait **les deux extrêmes d'un même axe** et rien entre les deux :
+un booster exact et non lisse (élasticités erratiques par construction, réserve *behaviorally
+unreasonable* de Zhao et al. 2020), un logit lisse et moins exact. C'est précisément ce
+compromis que Martín-Baos et al. (2023) étudient, et leur conclusion désigne une famille que
+le dépôt n'avait pas : la **régression logistique à noyau**, non linéaire comme le booster et
+à réponse lisse comme le logit. `make klr`
+([ticket 043](../tickets/ticket_043_troisieme_famille_regression_logistique_noyau.md), spec
+`specs/ticket_043/klr-troisieme-famille.md`) l'estime, à parité stricte comme les deux
+autres — et cette fois la parité va plus loin : **la matrice de dessin est celle du logit,
+réutilisée telle quelle** (`design_matrix_from_contract`). Un noyau RBF n'a de sens que sur
+des variables centrées-réduites, et refaire l'encodage aurait produit un décalage silencieux
+— les probabilités seraient restées parfaitement plausibles.
+
+**Nyström, parce qu'il n'y a pas le choix.** Un noyau exact exigerait la matrice de Gram du
+train : 39 203², soit 1,5 milliard d'entrées. On projette donc sur `m` points d'appui
+(500 à 2 000) tirés **par ménage** — `m` ménages distincts, un trajet dans chacun. Un tirage
+par trajet concentrerait les appuis sur les gros foyers, qui portent jusqu'à 38 déplacements.
+
+**L'artefact tient en quelques centaines de kilo-octets** parce que la racine inverse `W` de
+la matrice de Gram des appuis se replie dans les coefficients :
+
+    softmax(Φ·βᵀ + α) = softmax(K(Z,L)·(W·βᵀ) + α) = softmax(K(Z,L)·B + α)
+
+`B` (m × 4) est ce qu'on appelle des **coefficients duaux** : un poids par point d'appui et
+par alternative. Le repliement est exact — vérifié avant écriture à 1e-9, mesuré à 3e-14 — et
+l'évaluateur qui s'en sert ne demande que numpy, comme celui du logit. Les points d'appui
+étant `m` **lignes réelles d'enquête** (centrées-réduites), l'artefact reste gitignoré comme
+les deux autres : la source PROGEDO est d'accès restreint (lil-1750).
+
+**Le réglage n'a lu que le train.** `γ` (largeur du noyau), `λ` (ridge) et `m` sont choisis en
+validation croisée 5 plis groupée par `hh_id`, et les appuis sont retirés **dans la partie
+d'ajustement de chaque pli** : un appui tiré une fois pour toutes pourrait tomber dans le pli
+de validation, qui entrerait alors dans la structure du modèle. `γ` est ancré sur
+l'heuristique médiane (`γ_med = 1 / médiane ‖z − z′‖²`), ce qui rend la grille lisible d'un
+jeu à l'autre.
+
+**Deux motifs d'écart, tous deux comptés et publiés.** Une configuration sort du classement
+si sa L1 de parts modales hors-échantillon dépasse `référence + 0,005` — la référence étant
+la L1 du **logit sur les mêmes plis**, mesurée et non choisie —, ou si l'un de ses plis a
+atteint le plafond d'itérations : le ridge demandé n'a alors pas été estimé, et la ligne ne
+mesure pas la configuration qu'elle nomme. Ce sont les probabilités, pas l'exactitude, qui
+produisent les parts modales.
+
+**Ce que la troisième famille donne** (split test scellé, 13 045 trajets, pondéré COEP ;
+`γ = 0,01045` soit ×0,25 de l'heuristique médiane, `C = 10`, `m = 2 000` appuis, rang plein) :
+
+| | KLR | Booster | Logit | Lecture |
+|---|---|---|---|---|
+| Exactitude | **0,784** | 0,785 | 0,766 | **entre les deux**, à un millième du booster |
+| CEL / GMPCA | 0,5531 / 0,575 | 0,5402 / 0,583 | 0,5954 / 0,551 | entre les deux |
+| L1 masse de probabilité | **0,0253** | 0,0269 | 0,0286 | **meilleure des trois** |
+| L1 mode élu | 0,0928 | 0,0730 | 0,1003 | entre les deux |
+| Rappel vélo | 0,122 | 0,138 | 0,108 | entre les deux |
+
+La cible du ticket était d'**entrer entre les deux sur l'exactitude en restant lisse** : elle
+est tenue sur les cinq axes, et sur les parts modales agrégées — l'axe où notre H0 se joue —
+la KLR fait mieux que les deux oracles. C'est le résultat que Martín-Baos et al. (2023)
+annoncent pour cette famille, et il ne contredit pas Wang et al. (2024) : le booster reste
+devant sur l'exactitude désagrégée, d'un millième.
+
+**Sur le run épinglé et sur le jeu gelé** (mêmes substrats que les deux autres familles) :
+
+| Mesure | KLR | Booster | Logit |
+|---|---|---|---|
+| Jeu gelé AAMAS, composite `emd_jsd` (plateforme, `exp_klr_jtir_nosim`) | 5,0300 | **4,9182** | 6,1734 |
+| idem, mode tiré | 5,3907 | **4,9735** | 7,3171 |
+| idem, L1 | **48,59** | 51,37 | 56,98 |
+| Run épinglé, distance au booster (JSD, bloc B′) | 0,0112 bit | — | 0,0205 bit |
+
+La KLR est **deux fois plus proche du booster que le logit ne l'est** (0,0112 contre
+0,0205 bit) : non linéaire comme lui, elle décide comme lui bien plus souvent — tout en
+gardant la réponse lisse du logit.
+
+**Le second arbitre a été mis à l'épreuve, et il confirme.** Sur le run épinglé, les deux
+arbitres portent le même signe sur **les 20 transitions** de l'axe de distance : aucune
+n'est écartée pour divergence. Le `s_C1 = 5,0 %` du prompt n'est donc plus la parole d'un
+seul modèle — il est corroboré par une famille de forme entièrement différente. C'était
+l'objet de la manœuvre : un arbitre unique ne se réfute pas, deux arbitres qui s'accordent
+transforment un désaccord du prompt en défaut du prompt.
+
+**Les deux bords de grille ont été mesurés, pas seulement déclarés.** Le premier banc
+retenait γ au bord bas (×0,25 sur 0,25..4) et `m` au bord haut (2 000) : un optimum au bord ne
+dit pas « c'est l'optimum », il dit « il est peut-être dehors ». Un second banc a donc étendu
+les deux axes (γ jusqu'à ×0,0625, `m` jusqu'à 3 000), et il répond :
+
+| Axe | Mesure | Conclusion |
+|---|---|---|
+| γ (à C = 10) | ×0,0625 : 0,55951 · ×0,125 : 0,55117 · **×0,25 : 0,54715** · ×0,5 : 0,54939 | **optimum intérieur** — le bord bas n'était pas une frontière cachée |
+| `m` (à γ×0,25, C = 10) | 1 000 : 0,54557 · 2 000 : 0,54487 · 3 000 : 0,54476 | **plateau** — 0,0001 de log-vraisemblance CV entre 2 000 et 3 000 |
+
+Le banc élargi retient formellement `m = 3 000`, pour un gain d'un dix-millième ; le ticket
+borne `m` à 2 000, et l'artefact publié y reste. Passer outre pour 0,0001 aurait modifié le
+périmètre écrit du ticket sans le dire — et à 3 000 appuis, une composante propre tombe déjà
+sous le plancher (rang effectif 2 999 / 3 000 : deux appuis presque confondus). Le banc
+**signale** désormais tout bord touché (`grid_edges_touched`), et l'élargissement se redemande
+en une ligne : `make klr KLR_ARGS="--gamma-multipliers 0.0625 0.125 0.25 0.5 --m-grid 1000 2000 3000"`.
+
+Les lignes communes aux deux bancs sont identiques au chiffre près : même graine, mêmes plis,
+mêmes appuis — le déterminisme annoncé est vérifié, pas supposé.
+
+**Coût mesuré** : 39 min de banc (22 configurations, 5 plis chacune), 1,17 Gio de carte de
+Nyström au point le plus gros, artefact de 1,5 Mo. Trois configurations écartées : une pour
+non-convergence (`C = 100` à γ×0,25), deux pour dérive des parts modales (L1 0,0057 et
+0,0061 contre un plafond à 0,0056). Sans la référence du logit, ces deux-là seraient passées
+— le choix de la référence a donc changé le modèle publié, ce n'est pas une formalité.
+
+### Le témoin joué comme expérience — un recoupement, pas une répétition
+
+Le témoin a aussi été joué sur la plateforme d'expériences (`exp_rf_jtir_nosim`, dérivée de
+`exp_mnl_jtir_nosim`, jeu gelé `population_1000_AAMAS_20260316`, 2 634 décisions). **Ce n'est
+pas la même mesure refaite** : le substrat change entièrement — 1 000 agents synthétiques au
+lieu des 13 045 trajets d'enquête, l'offre d'itinéraires vient d'OTP, les probabilités sont
+renormalisées sur les modes réellement offerts, et le composite est une EMD/JSD par strate et
+non une L1 de parts globales.
+
+| Expérience | Composite `emd_jsd` | Décidés |
+|---|---|---|
+| `exp_lgbm_jtir_nosim` (booster) | **4,9182** | 2 634 / 2 645 |
+| `exp_rf_jtir_nosim` (*témoin*) | 5,5889 | 2 634 / 2 645 |
+| `exp_mnl_jtir_nosim` (logit) | 6,1734 | 2 634 / 2 645 |
+
+Part de l'écart booster–logit comblée : **0,47**. À comparer aux 0,49 de l'exactitude et aux
+0,45 de la CEL sur le test scellé PROGEDO. Deux mesures indépendantes, deux substrats sans
+rapport, **la même moitié** — c'est ce qui transforme « le RF reprend la moitié de l'écart »
+d'une observation en un résultat. La couverture identique (2 634 / 2 645) est ce qui rend les
+trois composites comparables : sans elle, ils porteraient sur des déplacements différents.
+
+**Trois choses à savoir avant de relancer.**
+
+1. ⚠ **L'expérience n'est pas rejouable par la CLI.** `python -m experiences lancer
+   --experience exp_rf_jtir_nosim` échoue sur un format d'artefact inconnu. Elle a été lancée
+   par `scripts/progedo_logit/lancer_experience_rf.py`, qui enregistre la famille `rf` **au
+   moment de l'exécution** — les deux lignes de table (`FAMILLES`, `POLICY_FORMATS`) ont été
+   laissées au ticket 043, qui modifiait ces fichiers au même moment. Le dossier de
+   l'expérience porte un `LISEZ-MOI.md` qui le dit.
+2. **Rien n'a été écrit à la main.** L'exécution est produite par le code de la plateforme —
+   décision, renormalisation, tirage, compteurs, scoring. Un `scores.json` tapé au clavier ne
+   serait pas comparable au 6,1734 du logit, puisque l'un sortirait du code de scoring et
+   l'autre de nous.
+3. **Elle tourne sur l'hôte, pas dans le `controller`.** Le conteneur porte scikit-learn
+   1.9.0, la forêt a été estimée sous 1.8.0, et **les deux ne donnent pas la même forêt** :
+   mesuré, pas supposé — exactitude +0,000188, CEL +0,0008. Le garde-fou refuse donc d'y
+   démarrer, ce qui est son travail.
+
+**Le décideur ne charge aucun arbre.** `rf_mode_choice_policy.json` pèse 12 ko et ne contient
+que le contrat de matrice de dessin, les hyperparamètres et deux empreintes ; la matrice
+d'entraînement l'accompagne dans un `.npz` de 1,4 Mo (elle est surtout faite de 0 et de 1).
+`RFPredictor` réajuste la forêt en dix secondes, **puis vérifie qu'elle reproduit les métriques
+publiées** avant de décider quoi que ce soit. Sérialiser les 1 200 arbres aurait coûté ~150 Mo
+en JSON ou 165 Mo en `joblib`, et un `pickle` scikit-learn se périme à la version suivante —
+ce que le passage de 1.8 à 1.9 vient précisément d'illustrer.
+
+⚠ Le rejeu ne passe **pas** par le parquet : le conteneur des expériences n'a ni `pyarrow` ni
+`fastparquet`. C'est la raison d'être du `.npz`, que numpy seul sait relire.
+
 ### Les trois blocs
 
 | Bloc | Grandeur | Oracle | Run épinglé |
 |---|---|---|---|
 | **A** — fidélité | composite `emd_jsd`, **inchangé** | l'enquête | 16,16 |
 | **B** — accord désagrégé | JSD(prompt, MNL) ÷ JSD inter-oracles | le logit, à l'échelle du booster | 899 % |
-| **C1** — sens de variation | part des transitions de distance à signe contredit | le logit | 5,0 % (1/20) |
+| **B'** — la même chose contre la 3ᵉ famille | JSD(prompt, KLR) ÷ JSD inter-oracles | la KLR, à l'échelle du booster | 1 725 % |
+| **C1** — sens de variation | part des transitions de distance à signe contredit | le logit **et** la KLR | 5,0 % (1/20, 0 écartée pour divergence) |
 | **C2** — élasticités A/B | signes d'élasticité d'arc | le logit | non mesuré |
 
 Le composite reste **linéaire** : `S₂ = Σ w_dim·s_dim + w_B·s_B + w_C·s_C`, tous termes
@@ -974,6 +1197,24 @@ arbitre. Deux garde-fous : une transition dont une strate compte moins de 30 dé
 score — comparer un signe à du bruit reviendrait à noter le prompt sur un tirage. Les deux
 comptes sont publiés.
 
+**Un second arbitre depuis le [ticket 043](../tickets/ticket_043_troisieme_famille_regression_logistique_noyau.md).**
+Un arbitre unique ne se réfute pas : quand le prompt contredit le logit, rien ne dit si le
+défaut est dans le prompt ou dans l'arbitre. La régression logistique à noyau (§ 4 ter) est
+donc le **second arbitre** de `C1`, et la règle est explicite :
+
+- les deux arbitres portent un signe franc et **le même** → la transition entre au score, et
+  un désaccord du prompt est un défaut du prompt ;
+- les deux arbitres **divergent**, ou le second n'a pas de signe franc → la transition
+  **sort du score et se compte** (`arbitres_en_desaccord`, `second_arbitre_sans_signe`). Le
+  test se tait plutôt que d'imputer au prompt un désaccord que les modèles n'ont pas tranché
+  entre eux.
+
+Sans parquet KLR (`make klr && make klr-predict`), le régime à un seul arbitre est inchangé
+— et la sortie **dit** lequel des deux régimes a produit le chiffre (`regime`) : deux `s_C1`
+qui ne reposent pas sur la même règle ne se comparent pas d'un run à l'autre. Les poids ne
+bougent pas pour autant : un second arbitre change ce que le bloc mesure, il ne change pas la
+règle qui interdit de sélectionner un prompt contre un modèle.
+
 `C2` exige des décisions **rejouées** sous perturbation, donc des appels LLM. Le module n'en
 fait aucun : il exploite une paire A/B déjà payée quand on lui en désigne une
 (`--ab-variable`, `--ab-llm-before/after`, `--ab-mnl-before/after`), et rend « non mesuré »
@@ -984,9 +1225,14 @@ pas comparable, le logit ne voit pas la météo.
 
 ```bash
 make logit                # estime le second oracle (~1 min, hors ligne)
+make klr                  # estime la troisième famille (~45 min de banc, hors ligne)
 make common-set-predict   # booster sur le run épinglé
 make mnl-predict          # logit sur le MÊME run, par le MÊME chemin de prédiction
-make bi-oracle            # les trois blocs → data/bi_oracle.json
+make klr-predict          # KLR sur le MÊME run, par le MÊME chemin de prédiction
+make bi-oracle            # les blocs → data/bi_oracle.json (C1 à deux arbitres)
+make forest               # témoin random forest (~18 min, hors ligne, indépendant du reste)
+make forest FOREST_ARGS=--artefact          # + le contrat de rejeu (12 ko) et sa matrice (1,4 Mo)
+python -m scripts.progedo_logit.lancer_experience_rf   # le témoin joué comme expérience (~5 min)
 ```
 
 `bi_oracle` refuse de composer un chiffre si le numérateur et le dénominateur ne viennent pas
@@ -1008,7 +1254,10 @@ donc sous le même nom.
 | `scripts/synthesis/bi_oracle.py` | Score à deux oracles : accord désagrégé au logit et cohérence de sens (`make bi-oracle`) — hors ligne, déterministe |
 | `scripts/progedo_logit/fit_mode_choice_logit.py` | Producteur : estime le second oracle (`make logit`) |
 | `scripts/progedo_logit/mode_choice_logit.py` | Contrat et évaluateur pur numpy du logit — prédit sans scikit-learn |
-| `scripts/progedo_logit/mode_choice_eval.py` | Métriques **partagées** par les deux oracles (CEL, GMPCA, parts modales, L1) |
+| `scripts/progedo_logit/fit_mode_choice_forest.py` | **Témoin** random forest : d'où vient l'avantage du booster ? (`make forest`) — mesures seules, aucun arbre sérialisé |
+| `scripts/progedo_logit/mode_choice_rf.py` | `RFPredictor` : réajuste la forêt en ~10 s depuis un `.npz` de 1,4 Mo, puis **vérifie qu'elle reproduit les métriques publiées** |
+| `scripts/progedo_logit/lancer_experience_rf.py` | Lanceur ponctuel de `exp_rf_jtir_nosim` — enregistre la famille `rf` à l'exécution, sans toucher aux tables |
+| `scripts/progedo_logit/mode_choice_eval.py` | Métriques **partagées** par les deux oracles et le témoin (CEL, GMPCA, parts modales, L1) |
 | `scripts/synthesis/charts.py` | SVG en ligne (bullet, profils ordinaux, matrice) |
 | `scripts/synthesis/render.py` | Assemblage HTML — page complète (`render()`) et pages dédiées « Détail par sous-catégorie » (`render_detail()`, spécifiées par `DETAIL_PAGES`) |
 | `scripts/synthesis/build.py` | Orchestration + CLI + liste d'actions |

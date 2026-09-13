@@ -44,7 +44,7 @@ sont *la même expérience*, avec deux exécutions.
   ailleurs la variante n'a aucun effet sur la décision, et la nommer ferait croire à un prompt
   (`Light_GBM` portait `minimal_persona`). Abréviation = trois premières lettres de chaque
   mot, dix caractères au plus : `minimal_persona` → `minper`, `b_min` → `bmin`,
-  `expert_chaine` → `expcha`. Variante absente (= prompt **actif** de la passerelle) →
+  `expert_m4` → `expm4`. Variante absente (= prompt **actif** de la passerelle) →
   `actif`, parce que « le prompt du jour » n'est pas un paramètre reproductible.
 - **N6** — Le **calendrier** n'est nommé que s'il s'écarte du cas simple : `aleatoire` →
   `jtir`, `propre` → `jpers` ; `commune` reste muette quand sa date est le jour du jeu, et

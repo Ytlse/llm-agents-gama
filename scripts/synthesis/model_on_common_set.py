@@ -236,21 +236,30 @@ def offered_mass(probabilities: dict[str, float], offered: list[str]) -> float:
 
 #: Formats d'artefact acceptés — un par oracle. Le premier est le booster supervisé
 #: (« référence haute »), le second le logit multinomial de parité stricte, qui sert
-#: d'arbitre comportemental et non de cible de fidélité.
-POLICY_FORMATS = ("lightgbm_mode_choice_policy", "mnl_mode_choice_policy")
+#: d'arbitre comportemental et non de cible de fidélité, le troisième la régression
+#: logistique à noyau (ticket 043), second arbitre du même bloc.
+#:
+#: Le témoin random forest n'y est PAS, et c'est la règle R7 du ticket 044 : un témoin ne
+#: devient pas un arbitre. Il se joue par son lanceur dédié, qui remplace `load_policy` dans
+#: le seul espace de noms du décideur, sans que ce module le connaisse.
+POLICY_FORMATS = ("lightgbm_mode_choice_policy", "mnl_mode_choice_policy",
+                  "klr_mode_choice_policy")
 
 
 def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
     """Recharge un oracle depuis son artefact, après vérification du contrat.
 
-    **Deux formats, un seul chemin de prédiction.** Le booster LightGBM se recharge par
+    **Trois formats, un seul chemin de prédiction.** Le booster LightGBM se recharge par
     ``model_text`` (format natif, qui le restitue à l'identique) ; le logit multinomial se
-    recharge en ``LogitPredictor``, un évaluateur pur numpy construit sur les coefficients
-    de l'artefact. Les deux exposent ``predict`` et ``feature_name``, donc tout ce qui suit
+    recharge en ``LogitPredictor`` et la régression logistique à noyau en ``KLRPredictor``,
+    deux évaluateurs purs numpy construits sur les coefficients — directs pour le logit,
+    duaux sur les points d'appui pour la KLR. Les trois exposent ``predict`` et
+    ``feature_name``, donc tout ce qui suit
     — encodage, renormalisation sur l'offre OTP, écriture du parquet — est le **même code**
-    pour les deux. C'est la condition pour que leurs deux parquets soient comparables :
-    deux colonnes mesurées par deux chemins ne se comparent pas (règle R7 de
-    `specs/score_composite_deux_oracles.md`).
+    pour les trois. C'est la condition pour que leurs parquets soient comparables : deux
+    colonnes mesurées par deux chemins ne se comparent pas (règle R7 de
+    `specs/score_composite_deux_oracles.md`, K9 de
+    `specs/ticket_043/klr-troisieme-famille.md`).
 
     La forme ``dump_model`` de l'artefact LightGBM avait été prévue pour un évaluateur pur
     Python destiné au conteneur ``controller`` ; cet évaluateur n'a jamais été écrit et la
@@ -285,6 +294,9 @@ def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
     if artefact["format"] == "mnl_mode_choice_policy":
         from scripts.progedo_logit.mode_choice_logit import LogitPredictor
         model: Any = LogitPredictor(artefact)
+    elif artefact["format"] == "klr_mode_choice_policy":
+        from scripts.progedo_logit.mode_choice_klr import KLRPredictor
+        model = KLRPredictor(artefact)
     else:
         import lightgbm as lgb
         model = lgb.Booster(model_str=artefact["booster"]["model_text"])

@@ -205,7 +205,7 @@ synthétique (`SVC_0001`…, numérotés par cardinalité décroissante).
 
 Cela rend la sur-offre structurellement impossible, garde `calendar.txt` vide et
 `exception_type=1` — les deux conditions posées par
-[`llm-agents/inputs/gtfs/reader.py`](../../llm-agents/inputs/gtfs/reader.py) —
+[`services/llm-agents/inputs/gtfs/reader.py`](../../llm-agents/inputs/gtfs/reader.py) —
 et compresse le calendrier d'un facteur dix : 8 812 services et 428 046 lignes,
 là où un service par trip en demanderait plus de 3,7 millions.
 
@@ -370,7 +370,7 @@ ouvrés scolaires tombent sous 1,2 %.
 
 OTP consomme le feed annuel sans difficulté. **GAMA non** : son calendrier de
 services est un masque binaire 64 bits — `assert len(all_dates) <= 64` dans
-[`llm-agents/inputs/gtfs/gama.py`](../../llm-agents/inputs/gtfs/gama.py), décodé
+[`services/llm-agents/inputs/gtfs/gama.py`](../../llm-agents/inputs/gtfs/gama.py), décodé
 côté modèle par `PublicTransport.gaml` (`trip_calendar_map`, `BITWISE_BIT_VAL`).
 `build_trips` balaie de surcroît tous les trips pour chaque date, ce qui rend un
 feed annuel impraticable de toute façon.
@@ -382,7 +382,7 @@ make gtfs-window START=2026-03-16 DAYS=64
 ```
 
 Elle **doit** contenir la date de simulation (`starting_date` dans
-`GAMA/CityTransport/models/Settings.gaml`) : hors calendrier,
+`services/GAMA/CityTransport/models/Settings.gaml`) : hors calendrier,
 `is_trip_available_today` se contente d'un avertissement et ne planifie plus
 aucune course. La fenêtre 2026-03-16 +64 j sert 63 dates, 34 356 trips, et passe
 les deux `assert` du lecteur ainsi que le masque binaire.
@@ -390,7 +390,7 @@ les deux `assert` du lecteur ainsi que le masque binaire.
 `make gtfs-window` extrait la fenêtre **d'un** feed, à côté du jeu en service :
 c'est l'outil d'inspection. Ce que GAMA lit vraiment est produit par
 `make gama-trip-info`, qui fenêtre les **trois** réseaux, les fusionne et écrit
-`GAMA/CityTransport/includes/trip_info.json` avec les couches en regard. Trois
+`services/GAMA/CityTransport/includes/trip_info.json` avec les couches en regard. Trois
 choses y sont propres à la fusion, et non à un feed seul :
 
 - **la date simulée est lue dans `Settings.gaml`**, pas recopiée — deux sources
@@ -465,18 +465,18 @@ quatorze agences liO. Ancien graphe conservé sous
    et il ne reste pas au premier niveau : deux calendriers pour un même réseau se
    cumuleraient.
 2. `build-config.json` doit être **dans** `data/gtfs/` (c'est le cas depuis le
-   ticket 031, T5) : celui d'`otp-toulouse/toulouse/` est hors du répertoire de
+   ticket 031, T5) : celui d'`services/otp-toulouse/toulouse/` est hors du répertoire de
    build, donc inerte. `router-config.json` n'y est **toujours pas** — les trois
    instances tournent sur la configuration de routage par défaut, ce qui est une
    limite connue et non un choix.
 3. Reconstruire le graphe :
-   `java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --build data/gtfs --save`.
+   `java -Xmx4G -jar services/otp-toulouse/bin/otp-shaded-2.8.1.jar --build data/gtfs --save`.
    Une publication du feed annuel Tisséo porterait le graphe de 39 343 à ~75 000
    trips : prévoir `-Xmx8G` et vérifier le `mem_limit: 6g` des trois réplicas.
 4. `docker compose up -d otp1 otp2 otp3`, et vérifier les trois *healthchecks*.
 5. **Vérifier les modes demandés à OTP.** Un réseau dans le graphe dont le mode
    n'est pas demandé est **introuvable**, sans aucun signal : le TER est resté dans ce
-   cas du 2026-09-03 au 2026-09-04. `llm-agents/trip_helper/otp.py` demande
+   cas du 2026-09-03 au 2026-09-04. `services/llm-agents/trip_helper/otp.py` demande
    aujourd'hui `bus`, `metro`, `tram`, `cableway` et `rail`, et
    `gtfs_modality_name_map` nomme les `route_type` 0, 1, **2**, 3 et 6.
 6. **Vérifier que les conteneurs voient le nouveau feed.** La porte de proximité

@@ -31,7 +31,8 @@
                           (spec 02 : filtre, ordre, trace)
                                     │
                           experiences/decideurs.py
-                          (passerelle épinglée · durée minimale · rejeu · aléatoire)
+                          (passerelle épinglée · antigravity · durée minimale ·
+                           rejeu · aléatoire · modèle tabulaire · majoritaire voiture)
                                     │
                           experiences/archive.py  ──▶ data/experiences/<exp>/executions/<horodatage>/
                           (spec 05/06 : decisions.jsonl atomique, etat.json, moves.csv, synthese)
@@ -39,9 +40,9 @@
                           experiences/registre.py ──▶ CLI `registre`, `comparer` · onglet dashboard
 ```
 
-Tout le code neuf vit dans le paquet **`llm-agents/experiences/`** (importable depuis le conteneur
+Tout le code neuf vit dans le paquet **`services/llm-agents/experiences/`** (importable depuis le conteneur
 `controller`, où tournent déjà `models`, `settings`, `trip_helper`, `text_helper`). Les tests sont
-dans `llm-agents/tests/test_035_*.py`, un fichier par spec, un test par règle (`test_J3_…`).
+dans `services/llm-agents/tests/test_035_*.py`, un fichier par spec, un test par règle (`test_J3_…`).
 
 ## 2. Spec 02 — la décision unique (`experiences/decision.py`)
 
@@ -59,18 +60,27 @@ Sans cette extraction, `decision.py` ne peut pas importer le filtre sans importe
 
 ```python
 Proposition(plan: TravelPlan, source: str)          # source ∈ enregistree | recalculee:offre:<id> |
-                                                     #          recalculee:horaire:<ecart_min>/<tol> | en_vol | locale
+                                                     #   recalculee:horaire:<ecart_min>/<tol> |
+                                                     #   en_vol | hors_jeu | locale
 Ecart(code: str, mode: str, motif: str)              # motif ∈ non_possede | pas_de_conducteur |
                                                      #         vehicule_ailleurs | retour_force | plafond
-ContexteDecision(timestamp, purpose, departure_time, activity_id, from_location, destination,
-                 anticipation: dict|None, memoire_presentee: list[str], evenement: dict|None,
-                 graine_ordre: int, max_candidats: int)
-Decision(retenue: Proposition|None, index_presente: int|None, methode: str,
-         distribution: dict, reponse_brute: str|None, fournisseur: str,
-         trace: TraceDecision)
-TraceDecision(presentees: list[dict], ecartees: list[Ecart], retenue: dict|None,
-              distribution: dict, reponse_brute: str|None, sources: dict[code→source],
-              methode: str, graine_ordre: int, souvenirs: list[str], periode_evenement: str|None)
+ContexteDecision(timestamp, activity_id, purpose, departure_time, from_location, destination,
+                 anticipation: dict|None, evenement: dict|None,
+                 periode_evenement: str|None,           # avant | pendant | apres
+                 graine_ordre: int, graine_tirage: int, max_candidats: int)
+ReponseDecideur(index: int|None, fournisseur: str, distribution: dict, poids: list[float],
+                reponse_brute: str|None, raison: str, souvenirs: list[str],
+                presente: dict|None, repli_uniforme: bool, erreur: str|None,
+                identifiant_lot: str|None, non_imputable: bool, reprise_a: str|None,
+                modele_verifie: bool|None, sortie_litterale: str|None)
+Decision(retenue: Proposition|None, methode: str, trace: dict,
+         reponse: ReponseDecideur|None, sollicite: bool)
+# La trace n'est pas une dataclasse : `construire_trace()` rend le dict archivé tel quel dans
+# decisions.jsonl — person_id, activity_id, purpose, timestamp, departure_time, methode,
+# presentees, ecartees, retenue (+ index_presente), distribution, poids_presentes,
+# reponse_brute, sortie_litterale, sources, fournisseur, raison, souvenirs, presente,
+# identifiant_lot, graine_ordre, graine_tirage, contrainte_chaine, periode_evenement,
+# anticipation (+ modele_verifie quand le décideur l'atteste).
 ```
 
 **Fonctions**, appelées à l'identique par les deux modes :
@@ -116,9 +126,22 @@ propositions.jsonl   une ligne par déplacement :
                       propositions: [TravelPlan.model_dump()…], motif_absence: str|null}
 ```
 
-- **Déplacement** = paire d'activités consécutives **localisées** de l'agenda (J2) ; heure = règle du
-  contrôleur (`scheduled_start_time` sinon `end_time`, `to_timestamp_based_on_day`, +24 h si déjà
-  passé).
+- **Déplacement** = paire d'activités **localisées** de l'agenda, sur une chaîne **cyclique**
+  (J2, ticket 045). Une journée de n activités vaut **n déplacements**, pas n − 1 : la dernière
+  activité est suivie d'un retour à la première, qui est le domicile dans la quasi-totalité des
+  cas. L'énumération est unique, dans `chaine_activites.py`, et partagée avec le contrôleur de
+  simulation — c'est la divergence entre les deux implémentations qui faisait manquer à la
+  plateforme 27 % de la journée, précisément la part où la contrainte de chaîne des véhicules
+  pèse le plus. Heure = règle du contrôleur (`scheduled_start_time` sinon `end_time`,
+  `to_timestamp_based_on_day`, +24 h si déjà passé) ; pour la fermeture, elle désigne le même
+  instant que « fin de la dernière activité », les populations scellées encodant le bouclage.
+- **Deux dénominateurs, et il faut les distinguer.** `deplacements_attendus` est le décompte
+  **brut** ; `deplacements_exploitables` en retire ce qui ne PEUT pas être couvert, c'est-à-dire
+  les déplacements dont l'origine est la destination (138 sur la cohorte v5 : 77 fermetures de
+  journée et 61 trajets entre deux activités au même lieu). `est_complet` et le
+  taux de couverture se mesurent sur les **exploitables** : les exiger sur le brut rendait la
+  complétude inatteignable pour toute population dont les journées reviennent au domicile.
+  `est_defaillance_moteur(motif)` porte cette distinction en un seul endroit.
 - **Préparation** : `trip_helper.get_itineraries(include_car=True, include_bike=True, arrive_by=False)`
   — tous modes, **aucun** plafond, plus l'option car scolaire (`build_school_bus_option`, locale,
   déterministe) pour que le jeu soit un vrai sur-ensemble. Aucun attribut du persona n'est écrit (J16).
@@ -131,7 +154,16 @@ propositions.jsonl   une ligne par déplacement :
   des dépendances qui diffèrent. Le lancement d'une expérience l'affiche et exige
   `--accepter-perime` pour continuer **[H]**.
 - **Journalisation** (J15) : début/fin/durée/compteurs, ligne de succès, ALARME à front montant si la
-  part de déplacements sans proposition dépasse `--seuil-sans-proposition`.
+  part de **défaillances de moteur** dépasse `--seuil-sans-proposition`. Les fermetures sur place
+  en sont exclues : il n'y a pas d'itinéraire à calculer entre un point et lui-même, et les
+  compter faisait franchir le seuil de 5 % à chaque préparation (5,5 % sur la cohorte v5), ce qui
+  revient à éteindre l'alarme en la faisant hurler tout le temps.
+- **État du dépôt** (ticket 045, A4) : `git` n'est pas installé dans l'image `controller`, si bien
+  que `commit` et `arbre_propre` étaient nuls dans toute exécution lancée depuis le tableau de
+  bord. L'hôte les mesure et les transmet par `EXP_DEPOT_COMMIT` / `EXP_DEPOT_ARBRE_PROPRE`
+  (posées par le Makefile) ; `etat_depot()` les lit, et retombe sur `git` pour un lancement direct
+  sur l'hôte. `osmnx_graph_key` enregistre la clé **effective** (`graph_key()`), non le réglage
+  brut qui vaut `None` dans le cas courant.
 
 ## 4. Spec 06 — l'expérience (`experiences/experience.py`) et l'archive (`experiences/archive.py`)
 
@@ -139,7 +171,9 @@ propositions.jsonl   une ligne par déplacement :
 
 ```yaml
 nom, population: {chemin}, jeu: {nom}, gabarit: {categorie: itinary_multi_agent}   # empreinte = texte effectif
-decideur: {type: passerelle|duree_minimale|rejeu|aleatoire, modele, parametres: {temperature, top_p, max_tokens}, rejeu_de: <exec>|null}
+decideur: {type: passerelle|antigravity|duree_minimale|rejeu|aleatoire|modele|majoritaire_voiture,
+           modele, portee: local|distant|null, parametres: {temperature, top_p, max_tokens},
+           rejeu_de: <exec>|null, graine: <int>|null, artefact: <chemin>|null}
 mode: sans_simulateur | simulateur
 calendrier: {politique: commune|propre|aleatoire, date: "2026-03-16", graine: 42}
 horizon_jours: 1
@@ -160,7 +194,7 @@ pas celui de ses paramètres.
 
 `Experience.empreintes()` : population (MANIFEST sha256 ou sha256 fichier + `scellee`), jeu
 (`propositions_sha256`), gabarit (sha256 du prompt système actif de la catégorie **+** du template
-`itinary_multi_agent.md.j2` **+** de `travel_plan_describe_v2.j2`), décideur (modèle + paramètres),
+`categories/itinary_multi_agent/template.md.j2` **+** de `travel_plan_describe_v2.j2`), décideur (modèle + paramètres),
 dépôt (commit + arbre propre).
 
 `refuser_si_impossible(exp)` (E6) : jeu ≠ population, décideur sans instance disponible (lecture de
@@ -412,6 +446,112 @@ rapproche `decisions.jsonl` du jeu : tentatives par type, déplacements manquant
   `DecideurRejeu` (aucune sollicitation), positions et mémoire suivent. La reprise à l'instant exact
   exige un gel d'état côté GAMA (ticket 002), hors de ce lot.
 
+## 6 bis. Un seul substrat : le garde d'archive (ticket 045)
+
+Les 36 premières exécutions de la plateforme ont **toutes** lu la cohorte v1 quand la référence
+de l'article était la v5. Aucune n'était fautive isolément : deux mécanismes se renforçaient, et
+le troisième garde-fou n'existait pas.
+
+| Mécanisme | Avant | Après |
+|---|---|---|
+| Défaut du formulaire | `populations()[0]`, soit le premier par **ordre alphabétique** — la v1 précède `_v3`, `_v4`, `_v5` | `population_par_defaut()` : la **dernière scellée par date de sceau**. Une cohorte sans `scelle_le` ne peut pas prendre la tête |
+| Nom de l'expérience | `population_1000_AAMAS` était une valeur muette du nommage (N7) : aucun des 46 noms ne mentionnait de substrat | la population entre **toujours** dans le nom, via `abreger_population` — qui retire le préfixe commun `population_` avant de tronquer, faute de quoi la coupe à 16 caractères effaçait exactement le suffixe de version |
+| Lecture d'une cohorte périmée | rien ne s'y opposait | `resoudre_population()` **refuse** tout chemin sous `data/population/archive/` |
+
+**Le garde est dans le code, pas dans un README.** Un garde-fou qui n'existe que dans la prose ne
+se déclenche jamais. Sa levée demande un **motif**, pas un booléen :
+
+```yaml
+population:
+  chemin: data/population/archive/population_1000_AAMAS
+  archivee_confirmee: "témoin du ticket 045"      # journalisé à chaque lecture
+```
+
+`archivee_confirmee: true` ne lève rien : il faut écrire pourquoi. Le motif part en WARNING avec
+le rappel que la mesure ne se compare pas à celles faites sur la cohorte de référence.
+
+**Le tableau de bord ne propose rien d'archivé**, nulle part. Deux notions distinctes portaient le
+même mot « obsolète », et il faut les tenir séparées : une exécution *obsolète* est une exécution
+qu'une plus récente de la même expérience a remplacée, et c'est elle que la case « Masquer les
+obsolètes » gouverne ; une expérience *archivée* est une décision de retrait, que cette case n'a
+jamais eu à gouverner. `experiences()` filtre désormais les statuts `archivee` et `invalide` —
+c'était la lacune : le tableau « Mes expériences » filtrait, mais « S'inspirer d'une expérience
+existante » et « Dupliquer » lisaient la liste brute. `experiences(inclure_masquees=True)` reste
+disponible pour la **lecture** par nom : on cesse de les proposer, on ne les rend pas illisibles.
+
+**Les parts modales se publient des deux façons** (R10-R12). Une décision à itinéraire unique
+n'a été prise par personne : une seule option existait. Elle compte pourtant dans les parts, et
+son nombre **dépend du bras**, puisqu'il découle de ses propres choix antérieurs — 393 pour
+`duree_minimale`, 286 pour `aleatoire` sur le même substrat, soit 11 à 15 % de journée identique
+et non décidée, ce qui comprime mécaniquement les écarts qu'on mesure.
+
+La chaîne n'est pas neutralisée : un trajet contraint par un choix antérieur reste un fait de la
+journée simulée, et une vraie journée en comporte. Une synthèse porte donc trois blocs :
+
+| Bloc | Ce qu'il dit |
+|---|---|
+| `parts_modales` | toutes décisions, choix forcés compris — **porte la conclusion** |
+| `parts_modales_hors_choix_unique` | ce que le décideur a réellement décidé |
+| `choix_forces` | leur nombre, leur part, et le rappel que ce nombre dépend du bras |
+
+Pour comparer deux bras **terme à terme**, ni l'un ni l'autre ne suffit : « hors itinéraire
+unique » retire des trajets *différents* selon le bras, donc ne rend pas la comparaison plus
+juste, il la déplace. `perimetre_commun(traces_par_bras)` rend l'intersection des déplacements
+que **tous** ont réellement décidés, avec son effectif et ce que chaque bras y perd.
+
+**L'empreinte du substrat s'affiche avant le lancement** (R19), pas seulement dans la synthèse
+écrite après coup : `_bandeau_substrat` place au-dessus des boutons le nom de la cohorte, son
+empreinte, sa date de sceau et le jeu. Une cohorte non scellée se signale ; un jeu préparé pour
+une autre cohorte bloque avant le clic — la garde `verifier_population` (G1) existait déjà au
+lancement, mais découvrir l'incohérence après avoir payé n'a pas le même prix que la lire.
+
+**Interrupteurs de chaîne dans la définition** (R13). `vehicule_chaine` et `verrou_retour` sont
+des champs de `experience.yaml`, entrent dans `reglages_herites` et dans le nom (`nochn`,
+`noret`) dès qu'ils s'écartent de la référence, qui est **actif**. Sans cela, les deux conditions
+du 2×2 chaîne auraient porté la même définition, la même signature et le même nom. Ces deux
+drapeaux coupent la **position** du véhicule et le **verrou de retour**, jamais la possession, le
+permis ni l'âge — attributs de la personne que les deux décideurs voient légitimement.
+
+## 6 ter. Substrat dérivé de sonde (`scripts/deriver_sonde_escort.py`, ticket 027)
+
+Certaines questions se posent sur le **contenu** du substrat — « le modèle réagit-il à cette
+valeur ? » — et n'exigent pas de régénérer une population. La réponse tient dans un substrat
+*dérivé* : mêmes personnes, mêmes lieux, mêmes horaires, mêmes propositions, **un champ changé**.
+
+Trois contraintes gouvernent la fabrique, et aucune n'est cosmétique.
+
+**Il faut dériver la population, pas seulement le jeu.** Le motif servi au décideur vient de
+l'agenda de la personne (`runner.py` : `deplacements_attendus(personnes, …)`), jamais de la ligne
+de jeu ; le jeu n'est interrogé que pour ses propositions. Réécrire le jeu seul ne changerait rien
+au prompt — et la mesure rendrait un écart nul parfaitement trompeur.
+
+**Il faut donc aussi dériver le jeu**, parce qu'un jeu est lié à sa population par empreinte
+(`verifier_population`, G1) et serait refusé au lancement. Ce jeu-là se fabrique par **copie** :
+les lignes hors tirage sont recopiées à l'octet, les lignes tirées re-sérialisées avec le champ
+changé, l'empreinte recalculée, les `dependances` héritées telles quelles. Rejouer les moteurs
+rendrait un jeu *presque* identique — et cette dérive-là se confondrait avec le traitement.
+
+**La copie doit rester justifiée.** Elle ne vaut que tant que le champ dérivé n'entre dans aucun
+calcul de proposition. Pour le motif, deux emplois seulement : l'étiquette recopiée sur
+l'itinéraire, et l'option bus scolaire, qui ne se déclenche que sur `education`. Le script le
+**vérifie avant de dériver** et refuse si le code a changé, plutôt que de rendre une mesure fausse.
+
+Un substrat de sonde **ne se scelle pas** : pas de `MANIFEST.yaml`, un `PROVENANCE.yaml` à la
+place. Ce n'est pas un détail de rangement — `populations()` ne liste que les dossiers scellés et
+`population_par_defaut()` choisit la dernière scellée par date. Une sonde scellée aujourd'hui
+deviendrait le défaut du formulaire demain, ce qui est exactement la cause racine du ticket 045.
+Le jeu dérivé, lui, apparaît dans la liste des jeux : choisi avec la mauvaise population, le
+lancement est refusé — la garde échoue fermée.
+
+```bash
+python scripts/deriver_sonde_escort.py --verifier   # chiffre, n'écrit rien
+python scripts/deriver_sonde_escort.py              # écrit population + jeu dérivés
+```
+
+Ce que la sonde mesure, et ce qu'elle ne mesure pas, s'écrit dans son `PROVENANCE.yaml` — le
+tirage étant aléatoire, elle borne la sensibilité au **libellé** et ne dit rien de la justesse de
+l'affectation. Spec : `specs/ticket_027/sonde-motif-escort.md`.
+
 ## 7. Interfaces utilisateur
 
 - **CLI** `python -m experiences <commande>` (dans le conteneur : `docker compose exec controller …`) :
@@ -440,6 +580,44 @@ dimension**, **détail par strate** cible/obtenu/L1/effectif, couverture, volet,
 formule et de `moves.csv`). `rendu_scores.py` écrit `synthese_scores.html` avec le **même**
 `_dimension_blocks()` que la page historique : les cellules par sous-catégorie ne peuvent pas
 diverger.
+
+### Deux lectures du composite, mesurées systématiquement (ticket 047)
+
+Quand une seule option existait, le décideur **n'est pas interrogé** : le mode est celui de
+l'unique itinéraire (`moves.csv`, méthode « Un seul itinéraire disponible »). Ces lignes
+restent dans le composite — la journée les a jouées — mais chaque scoring produit aussi la
+lecture **sans** elles, sans qu'aucune option soit passée :
+
+| Champ de `scores.json` | Ce qu'il porte |
+|---|---|
+| `composite.emd_jsd` / `.l1` | toutes décisions, choix forcés compris |
+| `composite.emd_jsd_hors_choix_unique` / `.l1_hors_choix_unique` | les mêmes, sans les décisions à itinéraire unique |
+| `scores_bruts_hors_choix_unique` | scores par dimension de la seconde lecture — ce qui rend son rejeu de formule exact, comme pour la première |
+| `choix_forces` | le compte : `n`, `part`, `n_scorees`, `n_hors_choix_unique`, et le compte de l'exécution entière (`n_execution`) avec son périmètre |
+
+**Pourquoi ce n'est pas facultatif.** Mesuré le 2026-09-12 sur les 16 exécutions du 11/09
+(même population, même jeu), retirer ces lignes déplace le composite EMD de **−3,75**
+(`durmin`) à **+12,22** (`alea`) et **change le classement** : `lgbm` est premier à 4,50 toutes
+décisions comprises, mais passe à 10,46 et derrière `klr` (9,95) hors itinéraire unique. Chaîne
+coupée, le même écart plafonne à 0,32 — ces lignes viennent de la chaîne des véhicules, donc
+des choix antérieurs du bras lui-même, et leur nombre en dépend (279 pour le tirage uniforme,
+811 pour le plus rapide).
+
+**Deux comptes, deux périmètres, tous deux nommés.** `synthese.json` compte sur toutes les
+décisions archivées ; le composite ne porte que sur le premier jour simulé et la dernière
+tentative. Les deux diffèrent de 14 à 19 lignes sur chaque exécution du 11/09 — soit 27,0 %
+contre 20,6 % de part forcée sur `exp_lgbm`. `scores.json` publie donc les deux, chacun avec
+son périmètre écrit : un compte posé à côté d'un chiffre qu'il ne recouvre pas se lit de
+travers sans jamais le dire.
+
+**Alarme.** Au-delà de 1,0 point EMD d'écart entre les deux lectures, le scoring journalise une
+`[ALARME]` nommant l'exécution et les deux valeurs (seuil calé sur la mesure ci-dessus : il
+sépare exactement le régime chaîne coupée du régime chaîne active). Le tableau de bord porte le
+même avertissement au-dessus du registre, et la page d'exécution dans son en-tête.
+
+**Un `scores.json` sans seconde lecture est périmé** et se recalcule à plein plutôt que de se
+rejouer : sans cette règle, le rejeu hors-ligne — qui recompose depuis les scores bruts —
+laisserait tout l'historique antérieur au ticket à « non mesuré », définitivement.
 
 **La formule est versionnée et empreinte.** Ses 7 poids (`global`, `absent_penalty`, `age`,
 `occupation`, `genre`, `motif`, `distance` — `length_penalty` reste hors composite) vivent dans
@@ -477,10 +655,10 @@ juste des deux côtés : racine du dépôt sur l'hôte, `/app` dans le conteneur
 `llm-agents` est monté — c'est ce qui rend le scoring de clôture possible côté conteneur, là où
 tourne le runner.
 
-Le **volet** suit le décideur : décideur LLM → volet 1 ; décideur modèle (LightGBM) → volet 3,
-avec le SHA de la version du modèle.
+Le **volet** suit le décideur : décideur LLM → volet 1 ; décideur modèle tabulaire (booster
+LightGBM ou logit multinomial, cf. §7 ter) → volet 3, avec le SHA de la version du modèle.
 
-## 7 ter. Décideur modèle LightGBM (`experiences/decideur_modele.py`)
+## 7 ter. Décideur modèle tabulaire — booster ou logit (`experiences/decideur_modele.py`)
 
 Un décideur de plus, au même contrat que la passerelle : `type: modele` dans le spec (avec un
 `artefact` optionnel — vide = version par défaut `scripts/progedo_logit/mode_choice_policy.json`).
@@ -492,10 +670,57 @@ l'expérience — exactement comme la lecture « attendu / tiré » du LLM. Rien
 réécrit : `persona_features`, `renormalize`, `load_policy` et `predict` viennent de
 `scripts/synthesis/model_on_common_set.py`, l'encodage du script d'entraînement.
 
+**Trois familles, un seul chemin de décision (tickets 042 et 043).** Le même décideur joue le
+booster LightGBM, le logit multinomial de parité stricte **et** la régression logistique à noyau :
+`load_policy` reconnaît les trois formats d'artefact et rend, dans les trois cas, un objet à
+`predict`/`feature_name`. Tout ce qui suit — encodage, renormalisation, tirage, journal — est le
+même code, condition pour que les exécutions soient comparables.
+
+```bash
+# ouvrir la variante logit d'une expérience modèle existante
+python -m experiences dupliquer --de exp_lgbm_jtir_nosim --vers exp_mnl_jtir_nosim \
+  --artefact scripts/progedo_logit/mnl_model.json
+
+# et la variante à noyau (make klr)
+python -m experiences dupliquer --de exp_lgbm_jtir_nosim --vers exp_klr_jtir_nosim \
+  --artefact scripts/progedo_logit/klr_model.json
+```
+
+Le chemin peut être **relatif** : il se résout depuis la racine du dépôt, de sorte que le même
+`experience.yaml` désigne le même modèle sur l'hôte et dans le conteneur.
+
+⚠ **Les libellés de famille sont DÉRIVÉS du `format` de l'artefact**, jamais écrits en dur —
+`modele:mnl@b365fb7d1ff2` dans `regime_applique.decideur`, `mnl_mode_choice_policy` dans
+l'empreinte, `{"modele": "mnl", …}` dans la réponse brute. Avant le ticket 042 ils disaient
+« lightgbm » quel que soit l'artefact chargé : le SHA restait juste (la version était donc
+scellée) mais toute comparaison lue dans les traces désignait le mauvais modèle. Un format hors
+de la table `FAMILLES` est **refusé au démarrage** plutôt que nommé « inconnu » — ce libellé entre
+dans le nom canonique de l'expérience. C'est ce qui a permis au ticket 043 d'ajouter la famille
+`klr` en une ligne de table, sans toucher au chemin de décision.
+
 **Version scellée (R12).** L'empreinte `empreintes.decideur` porte le **SHA du fichier** de
 l'artefact : relancer avec un autre modèle donne un résultat distinct, le même modèle le même SHA.
 On relance donc une expérience en échangeant seulement le décideur (« s'inspirer d'une expérience
 existante » dans le dashboard → décideur « modèle LightGBM »).
+
+**Premier résultat comparé** (jeu gelé `population_1000_AAMAS_20260316`, 2 634 décisions,
+couverture 99,6 %, 28 s d'exécution, aucun appel LLM) :
+
+| Décideur | composite `emd_jsd` | mode tiré | L1 |
+|---|---|---|---|
+| `exp_lgbm_jtir_nosim` — booster | **4,9182** | 4,9735 | 51,37 |
+| `exp_mnl_jtir_nosim` — logit | 6,1734 | 7,3171 | 56,98 |
+| `exp_klr_jtir_nosim` — logistique à noyau | 5,0300 | 5,3907 | **48,59** |
+
+L'écart de 1,26 point ne se transpose pas depuis le run épinglé, où il valait 0,71 : il se mesure
+par substrat. Le logit y sous-estime la marche de 2,96 points (booster : 1,00) et surestime les
+transports collectifs de 4,62 (booster : 3,79).
+
+**La troisième famille se range entre les deux** (ticket 043, 49 s d'exécution, même couverture
+99,6 %, aucun appel LLM) : composite 5,0300, à 0,11 point du booster et 1,14 devant le logit.
+Elle porte en revanche la **meilleure L1 des trois** (48,59) — cohérent avec ce que le split test
+scellé dit d'elle : non linéaire comme le booster sur l'exactitude, et meilleure que les deux sur
+les parts modales agrégées.
 
 **Non imputable (R13, RG-2).** Persona sans traits, aucune offre de mode prédictible, OD hors de
 la couche de zones : le décideur rend une **non-décision terminale**
@@ -504,8 +729,10 @@ réessayée** (contrairement à une erreur transitoire) **ni fabriquée** en rep
 décideur modèle **refuse de démarrer** (R14) si l'artefact ou la couche de zones (`make zones`)
 manquent : l'exécution ne commence pas dégradée.
 
-**Prérequis d'image.** Le décideur charge le booster avec LightGBM : `lightgbm==4.7.0` est dans
-`llm-agents/requirements.txt` et `libgomp1` (runtime OpenMP du wheel) dans le `Dockerfile` — donc
+**Prérequis d'image.** Ne concerne que la famille booster : le logit s'évalue en pur numpy
+(`scripts/progedo_logit/mode_choice_logit.py`) et n'a aucune de ces dépendances. Le décideur
+charge le booster avec LightGBM : `lightgbm==4.7.0` est dans
+`services/llm-agents/requirements.txt` et `libgomp1` (runtime OpenMP du wheel) dans le `Dockerfile` — donc
 dans l'image du `controller`, et par ricochet dans celle d'`osmnx1`, qui partage ce Dockerfile.
 Après modification de l'un ou l'autre, `docker compose build controller osmnx1`. La version est
 épinglée sur le `booster.version` de l'artefact : un booster rechargé par une autre version de la
@@ -562,7 +789,7 @@ Spec : `specs/hygiene-prompts-et-plateforme-experiences.md` §3.2 et §5.
 
 ## 9. État de l'implémentation (2026-09-05)
 
-Ce qui existe, testé (`llm-agents/tests/test_035_*.py`, un test par règle) :
+Ce qui existe, testé (`services/llm-agents/tests/test_035_*.py`, un test par règle) :
 
 | Spec | Livré | Tests | Reste |
 |---|---|---|---|

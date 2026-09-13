@@ -14,7 +14,22 @@ au chiffre publié.
 |---|---|---|
 | **A** — fidélité | les parts modales sont-elles celles de l'enquête ? | l'enquête (inchangé) |
 | **B** — accord désagrégé | décision par décision, le prompt répond-il comme un modèle de comportement ? | le MNL, rapporté au booster |
-| **C** — cohérence comportementale | les parts bougent-elles dans le **sens** qu'un modèle de comportement prédit ? | le MNL |
+| **B'** — la même chose, contre la troisième famille | *(colonne publiée, même calcul)* | la KLR, rapportée au booster |
+| **C** — cohérence comportementale | les parts bougent-elles dans le **sens** qu'un modèle de comportement prédit ? | le MNL **et** la KLR |
+
+## Deux arbitres pour le bloc C (ticket 043)
+
+Un arbitre unique ne se réfute pas : quand le prompt contredit le sens de variation du logit,
+rien ne dit si le défaut est dans le prompt ou dans l'arbitre. Depuis le ticket 043, la
+régression logistique à noyau — non linéaire comme le booster, lisse comme le logit — est le
+**second arbitre** du bloc C1. Une transition n'entre au score que si les deux arbitres
+portent un signe franc et le **même** ; s'ils divergent, elle est **écartée et comptée**, et
+le test se tait plutôt que d'imputer au prompt un désaccord que les modèles n'ont pas tranché
+entre eux. Sans parquet KLR (`make klr && make klr-predict`), le régime à un seul arbitre est
+inchangé, et la sortie dit lequel des deux a produit le chiffre.
+
+Les poids ne bougent pas pour autant (K12) : un second arbitre change ce que le bloc mesure,
+il ne change pas la règle qui interdit de sélectionner un prompt contre un modèle.
 
 Tous les termes sont orientés « perte, plus petit vaut mieux », et le composite reste
 **linéaire** :
@@ -241,17 +256,24 @@ def oracle_distributions(path: Path) -> tuple[dict[tuple[str, str], dict], dict]
 # ── Bloc B : accord désagrégé au second oracle ───────────────────────────────
 
 def block_b(llm: dict, mnl: dict, lgb: dict, *, n_perimeter: Optional[int] = None,
-            llm_skipped: Optional[dict] = None, epsilon: float = EPSILON) -> dict:
+            llm_skipped: Optional[dict] = None, epsilon: float = EPSILON,
+            arbitre: str = "mnl") -> dict:
     """`s_B` et son détail : divergences appariées, couverture, exclusions comptées.
 
     Deux rapports, et l'ordre entre eux est motivé (cf. :func:`jsd_bits`) : la JSD en tête
     parce qu'elle ne dépend d'aucune constante, le rapport de KL en second parce qu'il est
     la grandeur de la littérature — publié avec le compte des décisions où son plancher a
     joué, sans quoi on lirait une convention pour une mesure.
+
+    ``arbitre`` nomme l'oracle passé en deuxième position, et **seulement** cela : les clés
+    publiées portent son nom. La troisième famille (ticket 043) obtient ainsi sa colonne en
+    rappelant la même fonction avec ``arbitre="klr"``, sans qu'un seul chiffre soit calculé
+    par un second chemin — et sans qu'une sortie mesurée contre la KLR s'annonce « mnl ».
+    Un libellé faux ne se remarque pas ; c'est ce qui le rend pire qu'un libellé absent.
     """
     keys = sorted(set(llm) & set(mnl) & set(lgb))
     excluded = {
-        "sans_mnl": len(set(llm) - set(mnl)),
+        f"sans_{arbitre}": len(set(llm) - set(mnl)),
         "sans_booster": len(set(llm) - set(lgb)),
         "sans_prompt": len(set(mnl) - set(llm)),
         "offre_divergente": 0,
@@ -279,7 +301,7 @@ def block_b(llm: dict, mnl: dict, lgb: dict, *, n_perimeter: Optional[int] = Non
         degenerate += int(llm[key]["degenere"])
         per_decision.append({"jsd_llm": d_jsd_llm, "jsd_lgb": d_jsd_lgb,
                              "kl_llm": d_kl_llm, "kl_lgb": d_kl_lgb,
-                             "entropy_mnl": entropy_bits(target),
+                             "entropy_arbitre": entropy_bits(target),
                              "dist_cat": mnl[key]["dist_cat"]})
 
     n = len(per_decision)
@@ -299,28 +321,29 @@ def block_b(llm: dict, mnl: dict, lgb: dict, *, n_perimeter: Optional[int] = Non
         # Le rapport, en pourcentage de la distance inter-oracles. Un `s_B` de 100
         # signifie « le prompt est aussi loin du MNL que le booster l'est ».
         "s_B": 100.0 * jsd_llm / jsd_lgb,
-        "mesure": ("accord au second oracle (JSD), rapporté à la distance "
+        "mesure": (f"accord à l'oracle {arbitre} (JSD), rapporté à la distance "
                    "inter-oracles mesurée sur les mêmes décisions"),
-        "jsd_prompt_mnl_bits_mean": jsd_llm / n,
-        "jsd_booster_mnl_bits_mean": jsd_lgb / n,
+        "arbitre": arbitre,
+        f"jsd_prompt_{arbitre}_bits_mean": jsd_llm / n,
+        f"jsd_booster_{arbitre}_bits_mean": jsd_lgb / n,
         # Variante Kullback-Leibler, dépendante du plancher : à lire avec
         # `n_plancher_applique`, jamais seule.
         "s_B_kl": (100.0 * kl_llm / kl_lgb) if kl_lgb > 0 else None,
-        "kl_prompt_mnl_bits_mean": kl_llm / n,
-        "kl_booster_mnl_bits_mean": kl_lgb / n,
+        f"kl_prompt_{arbitre}_bits_mean": kl_llm / n,
+        f"kl_booster_{arbitre}_bits_mean": kl_lgb / n,
         "n_plancher_applique": floored,
         "n_prompt_degenere": degenerate,
-        "entropie_mnl_bits_mean": sum(d["entropy_mnl"] for d in per_decision) / n,
+        f"entropie_{arbitre}_bits_mean": sum(d["entropy_arbitre"] for d in per_decision) / n,
         "n_decisions": n,
         "couverture": n / base,
         "base_couverture": base,
         "exclusions": excluded,
         "epsilon": epsilon,
-        "par_distance": _by_distance(per_decision),
+        "par_distance": _by_distance(per_decision, arbitre),
     }
 
 
-def _by_distance(per_decision: list[dict]) -> list[dict]:
+def _by_distance(per_decision: list[dict], arbitre: str = "mnl") -> list[dict]:
     """Divergences moyennes par classe de distance — où l'accord se gagne ou se perd."""
     grouped: dict[Optional[str], list[dict]] = defaultdict(list)
     for row in per_decision:
@@ -335,8 +358,8 @@ def _by_distance(per_decision: list[dict]) -> list[dict]:
         out.append({
             "dist_cat": cat,
             "n": len(rows),
-            "jsd_prompt_mnl_bits_mean": num / len(rows),
-            "jsd_booster_mnl_bits_mean": den / len(rows),
+            f"jsd_prompt_{arbitre}_bits_mean": num / len(rows),
+            f"jsd_booster_{arbitre}_bits_mean": den / len(rows),
             # `null` plutôt que 0 : sans échelle locale, il n'y a pas de rapport à lire.
             "s_B": (100.0 * num / den) if den > 0 else None,
         })
@@ -364,18 +387,43 @@ def mass_by_stratum(distributions: dict, column: str = "dist_cat") -> dict:
     return out
 
 
-def block_c1(llm: dict, mnl: dict, *, min_stratum: int = MIN_STRATUM,
+def block_c1(llm: dict, mnl: dict, klr: Optional[dict] = None, *,
+             min_stratum: int = MIN_STRATUM,
              min_shift: float = MIN_ARBITER_SHIFT) -> dict:
-    """`s_C1` : part des couples (mode, transition) dont le signe contredit l'arbitre."""
+    """`s_C1` : part des couples (mode, transition) dont le signe contredit l'arbitre.
+
+    **Deux arbitres plutôt qu'un (K11, ticket 043).** Un arbitre unique ne se réfute pas :
+    quand le prompt contredit le sens de variation du logit, rien ne dit si le défaut est
+    dans le prompt ou dans l'arbitre. Avec la régression logistique à noyau en second
+    arbitre, la règle devient explicite :
+
+    - les deux arbitres portent un signe franc et **le même** → la transition entre au
+      score, et un désaccord du prompt est un défaut du prompt ;
+    - les deux arbitres **divergent**, ou le second n'a pas de signe franc → la transition
+      **sort du score et se compte**. Le test ne dit rien, et il se tait.
+
+    Sans ``klr``, le régime à un seul arbitre est inchangé — c'est ce que lit une sortie
+    produite avant que la troisième famille n'existe. La sortie **dit** lequel des deux
+    régimes a produit le chiffre : deux `s_C1` qui ne reposent pas sur la même règle ne se
+    comparent pas d'un run à l'autre.
+    """
     llm_strata = mass_by_stratum(llm)
     mnl_strata = mass_by_stratum(mnl)
+    klr_strata = mass_by_stratum(klr) if klr else None
     transitions: list[dict] = []
     skipped = {"effectif_insuffisant": 0, "arbitre_sans_signe": 0}
+    if klr_strata is not None:
+        skipped["second_arbitre_sans_signe"] = 0
+        skipped["arbitres_en_desaccord"] = 0
 
-    axis = [c for c in DIST_ORDER if c in llm_strata and c in mnl_strata]
+    axis = [c for c in DIST_ORDER if c in llm_strata and c in mnl_strata
+            and (klr_strata is None or c in klr_strata)]
     for left, right in zip(axis, axis[1:]):
-        thin = min(llm_strata[left]["n"], llm_strata[right]["n"],
-                   mnl_strata[left]["n"], mnl_strata[right]["n"]) < min_stratum
+        counts = [llm_strata[left]["n"], llm_strata[right]["n"],
+                  mnl_strata[left]["n"], mnl_strata[right]["n"]]
+        if klr_strata is not None:
+            counts += [klr_strata[left]["n"], klr_strata[right]["n"]]
+        thin = min(counts) < min_stratum
         for mode in PREDICTABLE_CATS:
             if thin:
                 skipped["effectif_insuffisant"] += 1
@@ -387,21 +435,40 @@ def block_c1(llm: dict, mnl: dict, *, min_stratum: int = MIN_STRATUM,
                 # désaccord le condamnerait — elle sort du score et se compte.
                 skipped["arbitre_sans_signe"] += 1
                 continue
+            d_klr = None
+            if klr_strata is not None:
+                d_klr = (klr_strata[right]["shares"][mode]
+                         - klr_strata[left]["shares"][mode])
+                if abs(d_klr) < min_shift:
+                    skipped["second_arbitre_sans_signe"] += 1
+                    continue
+                if (d_klr > 0) != (d_mnl > 0):
+                    # Les deux modèles de comportement ne disent pas la même chose : la
+                    # transition ne peut pas servir de référence de signe, et le désaccord
+                    # du prompt n'y est pas interprétable.
+                    skipped["arbitres_en_desaccord"] += 1
+                    continue
             d_llm = (llm_strata[right]["shares"][mode] - llm_strata[left]["shares"][mode])
             transitions.append({
                 "mode": mode, "de": left, "vers": right,
                 "delta_llm_pt": d_llm, "delta_mnl_pt": d_mnl,
+                **({"delta_klr_pt": d_klr} if d_klr is not None else {}),
                 "accord": (d_llm > 0) == (d_mnl > 0),
             })
 
+    regime = ("deux arbitres (logit + KLR, transition écartée s'ils divergent)"
+              if klr_strata is not None else "un seul arbitre (logit)")
     if not transitions:
-        return {"s_C1": None, "mesure": "non mesuré",
-                "raison": "aucune transition ne porte à la fois un effectif et un signe",
+        return {"s_C1": None, "mesure": "non mesuré", "regime": regime,
+                "raison": ("aucune transition ne porte à la fois un effectif et un signe "
+                           "partagé par les deux arbitres" if klr_strata is not None else
+                           "aucune transition ne porte à la fois un effectif et un signe"),
                 "ecartees": skipped}
     disagreements = [t for t in transitions if not t["accord"]]
     return {
         "s_C1": 100.0 * len(disagreements) / len(transitions),
         "mesure": "part des couples (mode, transition) dont le signe contredit l'arbitre",
+        "regime": regime,
         "n_transitions": len(transitions),
         "n_desaccords": len(disagreements),
         "ecartees": skipped,
@@ -504,30 +571,51 @@ def compose(fidelity: Optional[float], s_b: Optional[float], s_c: Optional[float
 
 # ── Substrat : deux oracles, un seul run ─────────────────────────────────────
 
+def _substrate_problems(label: str, meta: dict, run_path: Optional[str],
+                        moves_sha: Optional[str]) -> list[str]:
+    """Écarts de substrat d'un oracle : fichier absent, autre run, autre `moves.csv`."""
+    if meta.get("error"):
+        return [f"{label} : {meta['error']}"]
+    problems = []
+    if run_path and meta.get("run") != run_path:
+        problems.append(f"{label} : mesuré sur {meta.get('run')}, run épinglé {run_path}")
+    if moves_sha and meta.get("moves_sha256") != moves_sha:
+        problems.append(f"{label} : empreinte moves.csv divergente "
+                        f"({str(meta.get('moves_sha256'))[:12]}… vs {moves_sha[:12]}…)")
+    return problems
+
+
 def check_substrate(mnl_meta: dict, lgb_meta: dict, run_path: Optional[str],
-                    moves_sha: Optional[str]) -> dict:
+                    moves_sha: Optional[str], klr_meta: Optional[dict] = None) -> dict:
     """Refuse un numérateur et un dénominateur mesurés sur deux substrats (R9).
 
     L'empreinte n'est pas redondante avec le nom du run : une reprise à chaud réécrit
     `moves.csv` **dans le même dossier**, donc sous le même nom. Seule l'empreinte
     distingue ces deux états.
+
+    Le **troisième oracle est vérifié à part** (`klr_ok`) : un KLR absent ou mesuré sur un
+    autre run doit priver le bloc C de son second arbitre, pas priver le bloc B de son
+    chiffre. Un garde-fou qui annule plus que ce qu'il protège finit par être contourné.
     """
     problems = []
     for label, meta in (("mnl", mnl_meta), ("booster", lgb_meta)):
-        if meta.get("error"):
-            problems.append(f"{label} : {meta['error']}")
-            continue
-        if run_path and meta.get("run") != run_path:
-            problems.append(f"{label} : mesuré sur {meta.get('run')}, run épinglé {run_path}")
-        if moves_sha and meta.get("moves_sha256") != moves_sha:
-            problems.append(f"{label} : empreinte moves.csv divergente "
-                            f"({str(meta.get('moves_sha256'))[:12]}… vs {moves_sha[:12]}…)")
+        problems += _substrate_problems(label, meta, run_path, moves_sha)
     if (mnl_meta.get("spec_version") is not None
             and mnl_meta.get("spec_version") != lgb_meta.get("spec_version")):
         problems.append("les deux oracles n'ont pas le même contrat de variables")
+
+    klr_problems: list[str] = []
+    if klr_meta is not None:
+        klr_problems = _substrate_problems("klr", klr_meta, run_path, moves_sha)
+        if (klr_meta.get("spec_version") is not None
+                and klr_meta.get("spec_version") != mnl_meta.get("spec_version")):
+            klr_problems.append("le troisième oracle n'a pas le contrat de variables des "
+                                "deux autres")
     return {
         "ok": not problems,
         "problemes": problems,
+        "klr_ok": klr_meta is not None and not klr_problems,
+        "problemes_klr": klr_problems,
         "run": run_path,
         "moves_sha256": moves_sha,
         "oracles": {
@@ -539,6 +627,11 @@ def check_substrate(mnl_meta: dict, lgb_meta: dict, run_path: Optional[str],
                         "sha256": lgb_meta.get("policy_sha256"),
                         "genere_le": lgb_meta.get("policy_generated_at"),
                         "chemin": lgb_meta.get("policy_path")},
+            **({"klr": {"format": (klr_meta or {}).get("policy_format"),
+                        "sha256": (klr_meta or {}).get("policy_sha256"),
+                        "genere_le": (klr_meta or {}).get("policy_generated_at"),
+                        "chemin": (klr_meta or {}).get("policy_path")}}
+               if klr_meta is not None else {}),
         },
     }
 
@@ -592,16 +685,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     llm, llm_skipped = llm_distributions(moves)
     mnl_path = manifest.path_of("arms.model_mnl.predictions")
     lgb_path = manifest.path_of("arms.model.predictions")
+    klr_path = manifest.path_of("arms.model_klr.predictions")
     mnl, mnl_meta = oracle_distributions(mnl_path) if mnl_path else ({}, {"error": "chemin absent du manifeste"})
     lgb, lgb_meta = oracle_distributions(lgb_path) if lgb_path else ({}, {"error": "chemin absent du manifeste"})
+    klr, klr_meta = (oracle_distributions(klr_path) if klr_path
+                     else ({}, {"error": "chemin absent du manifeste"}))
 
     print(f"Run épinglé : {run['path']}")
     print(f"Décisions comparables (offre à 2 modes ou plus) : prompt {len(llm)} | "
-          f"MNL {len(mnl)} | booster {len(lgb)} — écartées côté prompt : {llm_skipped} "
-          f"(sur {stats.get('total')} lignes du journal)")
+          f"MNL {len(mnl)} | booster {len(lgb)} | KLR {len(klr)} — écartées côté prompt : "
+          f"{llm_skipped} (sur {stats.get('total')} lignes du journal)")
 
     substrate = check_substrate(mnl_meta, lgb_meta, run.get("path"),
-                                (run.get("moves") or {}).get("sha256"))
+                                (run.get("moves") or {}).get("sha256"), klr_meta)
     if not substrate["ok"]:
         # Bruyant et non bloquant : la sortie est écrite avec ses blocs « non mesuré »,
         # parce qu'une page sans chiffre est plus utile qu'un chiffre sans substrat.
@@ -614,7 +710,23 @@ def main(argv: Optional[list[str]] = None) -> int:
          else {"s_B": None, "mesure": "non mesuré",
                "raison": "substrat divergent entre les deux oracles et le run épinglé",
                "problemes": substrate["problemes"]})
-    c1 = (block_c1(llm, mnl) if substrate["ok"]
+    # Troisième colonne : le MÊME calcul, l'accord du prompt mesuré contre la KLR. Publié
+    # à côté du bloc B, jamais à sa place — les deux arbitres ne sont pas interchangeables.
+    b_klr = (block_b(llm, klr, lgb, n_perimeter=n_perimeter, llm_skipped=llm_skipped,
+                     arbitre="klr")
+             if substrate["ok"] and substrate["klr_ok"] and klr
+             else {"s_B": None, "mesure": "non mesuré", "arbitre": "klr",
+                   "raison": ("troisième oracle absent du manifeste ou de son substrat : "
+                              + "; ".join(substrate["problemes_klr"] or ["parquet vide"]))})
+
+    # Second arbitre du bloc C, seulement si son substrat est le même : un arbitre mesuré
+    # sur un autre run trancherait des signes qui ne sont pas ceux de ces décisions.
+    second_arbiter = klr if (substrate["ok"] and substrate["klr_ok"] and klr) else None
+    if substrate["ok"] and not second_arbiter:
+        print("⚠ Bloc C à un seul arbitre — le second est indisponible : "
+              + "; ".join(substrate["problemes_klr"] or ["parquet KLR vide"])
+              + " (make klr && make klr-predict)", file=sys.stderr)
+    c1 = (block_c1(llm, mnl, second_arbiter) if substrate["ok"]
           else {"s_C1": None, "mesure": "non mesuré",
                 "raison": "substrat divergent entre l'arbitre et le run épinglé"})
 
@@ -654,6 +766,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "n_decisions_prompt": len(llm),
             "n_decisions_mnl": len(mnl),
             "n_decisions_booster": len(lgb),
+            "n_decisions_klr": len(klr),
             "n_decisions_perimetre": n_perimeter,
             "ecartees_prompt": llm_skipped,
             "exclude_selection_methods": exclude,
@@ -662,10 +775,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         "bloc_A_fidelite": {"metric": metric, "composite": fidelity,
                             "raison": fidelity_error or None},
         "bloc_B_accord_mnl": b,
+        "bloc_B_accord_klr": b_klr,
         "bloc_C_coherence": {"s_C": s_c, "C1_axe_distance": c1, "C2_elasticites_ab": c2},
         "composition": composition,
-        "avertissement": ("le MNL est un arbitre comportemental, pas une cible de "
-                          "fidélité : s_B et s_C mesurent un ACCORD, jamais une erreur"),
+        "avertissement": ("le MNL et la KLR sont des arbitres comportementaux, pas des "
+                          "cibles de fidélité : s_B et s_C mesurent un ACCORD, jamais une "
+                          "erreur ; les poids restent à 0 (K12)"),
     }
 
     out_path = Path(args.out) if args.out else (
@@ -688,12 +803,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"        variante KL (dépend du plancher ε = {b['epsilon']:g}) : "
               f"{b['s_B_kl']:.0f} % — plancher appliqué sur {b['n_plancher_applique']} "
               f"décisions, prompt quasi dégénéré sur {b['n_prompt_degenere']}")
+    if b_klr.get("s_B") is None:
+        print(f"Bloc B' — accord à la KLR : non mesuré ({b_klr.get('raison')})")
+    else:
+        print(f"Bloc B' — accord à la KLR : {b_klr['s_B']:.1f} % de la distance "
+              f"inter-oracles (JSD prompt {b_klr['jsd_prompt_klr_bits_mean']:.4f} bit, "
+              f"booster {b_klr['jsd_booster_klr_bits_mean']:.4f} bit, sur "
+              f"{b_klr['n_decisions']} décisions)")
     if c1.get("s_C1") is None:
         print(f"Bloc C1 — sens de variation : non mesuré ({c1.get('raison')})")
     else:
         print(f"Bloc C1 — sens de variation : {c1['s_C1']:.1f} % de désaccord "
               f"({c1['n_desaccords']}/{c1['n_transitions']} transitions, "
-              f"{c1['ecartees']} écartées)")
+              f"{c1['ecartees']} écartées) — {c1['regime']}")
     s_c2 = c2.get("s_C2")
     print("Bloc C2 — élasticités A/B : "
           + ("non mesuré" if s_c2 is None else f"{s_c2:.1f} % de désaccord"))

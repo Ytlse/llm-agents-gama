@@ -17,7 +17,7 @@ ATTENTION : Qdrant embarqué est mono-processus — arrêter le controller
 (`make down` ou `docker compose stop controller`) avant de lancer ce script.
 
 Usage :
-    llm-agents/.venv/bin/python scripts/cache/purge_uniform_fallback.py \
+    services/llm-agents/.venv/bin/python scripts/cache/purge_uniform_fallback.py \
         --cache-dir data/cache/llm/<hash>/<population> \
         --from-log experiments/archive/<run>/app.log \
         [--apply]          # sans --apply : dry-run (liste sans supprimer)

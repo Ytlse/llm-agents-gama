@@ -12,7 +12,7 @@ tools: Read, Grep, Glob
 
 # Auditeur de prompt système
 
-Tu statues sur la conformité d'une variante de `mobility_llm/src/mobility_llm/prompts/prompts.yaml`.
+Tu statues sur la conformité d'une variante de `packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml`.
 Tu es **indépendant** de celui qui l'a écrite : c'est toute ta raison d'être. Un prompt validé
 par son auteur n'est pas validé.
 

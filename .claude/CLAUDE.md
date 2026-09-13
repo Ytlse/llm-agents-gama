@@ -2,6 +2,23 @@
 
 This file centralizes all instructions, conventions, and project context for Claude Code.
 
+## Règle permanente — l'article est verrouillé 🔒
+
+**Aucune session n'écrit dans `docs/paper/article/` sans accord humain explicite.**
+Cela couvre tous les `.md` de l'article : `fr/`, `en/`, `relecture/`, `plan/`, `overleaf/`,
+`README.md`, `CITATIONS.md`, `ameliorations.md`, `SOUMISSION_AAMAS_2027.md`. La lecture,
+le grep et la citation restent libres.
+
+**Procédure :** charger la skill `article-verrou`, présenter le diff (fichier, section,
+avant/après), s'arrêter, attendre un oui. **Un seul accord par tâche**, couvrant les
+fichiers annoncés dans ce diff et rien d'autre.
+
+Le harness demande aussi via `permissions.ask` sur `Edit`/`Write` — mais **pas** sur une
+écriture passée par `Bash` (`sed -i`, `>`, heredoc, `git checkout`). Ces chemins-là sont
+soumis à la même règle : c'est à moi de l'appliquer.
+
+---
+
 ## Instructions at Each Code Modification
 
 ### 1. Maintain Documentation ✅
@@ -61,6 +78,24 @@ Instrument potential blocking points and raise explicit alarms on confirmed issu
 if backlog_depth > BACKLOG_WARNING_THRESHOLD:
     logger.error(f"[ALARME] Pipeline backlog critical: {backlog_depth}/{total_agents} agents pending")
 ```
+
+---
+
+### 4. Signaler l'impact sur l'article 📄
+Avant de conclure une tâche, dire ce qui rend l'article caduc ou daté.
+
+**Quand :** la tâche a touché un chiffre citable, une métrique ou sa définition, un
+protocole, un jeu gelé, un comportement décrit dans l'article, ou le corpus de référence.
+Un refactor sans effet observable ne déclenche rien.
+
+**Quoi :** charger la skill `article-impact` et rendre le bloc `=== SIGNALEMENT ARTICLE ===`
+— par section : ce qui a changé, la phrase qui devient fausse, l'action suggérée. Toujours
+énoncer aussi les sections vérifiées et indemnes.
+
+**Ne rien réécrire :** le signalement s'arrête au constat ; la correction repasse par le
+verrou ci-dessus.
+
+**Why:** une modification de code peut invalider silencieusement une phrase déjà relue.
 
 ---
 

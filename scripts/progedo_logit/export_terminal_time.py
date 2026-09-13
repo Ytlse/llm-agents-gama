@@ -1,6 +1,6 @@
 """export_terminal_time.py — Le temps terminal d'un trajet voiture, mesuré sur EMC².
 
-`llm-agents/config/terminal_time.yaml` applique 2 à 10 minutes d'accès et de
+`services/llm-agents/config/terminal_time.yaml` applique 2 à 10 minutes d'accès et de
 stationnement par trajet voiture, sourcées sur la littérature (tables COMPASS, Shoup,
 Cerema). L'enquête que le projet prend pour cible en mesure **11 à 14 fois moins**, et
 elle le mesure directement : le fichier trajets porte `T2` (marche à pied au départ),
@@ -55,7 +55,7 @@ import pandas as pd
 
 from scripts.progedo_logit.build_mode_choice_dataset import find_project_root
 
-DEFAULT_RESOURCE = (Path(__file__).resolve().parents[2] / "mobility_core" / "src" / "mobility_core" / "data"
+DEFAULT_RESOURCE = (Path(__file__).resolve().parents[2] / "packages" / "mobility_core" / "src" / "mobility_core" / "data"
                     / "terminal_time_emc2.json")
 
 # `T3` du fichier trajets : mode utilisé. 21 = conducteur de véhicule particulier.

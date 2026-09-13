@@ -16,10 +16,10 @@ from pathlib import Path
 import pytest
 
 RACINE = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RACINE / "llm-agents"))
+sys.path.insert(0, str(RACINE / "services" / "llm-agents"))
 
 # `from scripts.dashboard import experiences`, jamais `import experiences` : le paquet
-# `llm-agents/experiences` porte le même nom et l'emporterait selon l'ordre du sys.path.
+# `services/llm-agents/experiences` porte le même nom et l'emporterait selon l'ordre du sys.path.
 # C'est cette collision même qui a rendu un import silencieusement inerte dans le module
 # audité (cf. `_module_aptitude`).
 from scripts.dashboard import experiences as D  # noqa: E402
@@ -28,24 +28,53 @@ from scripts.dashboard import experiences as D  # noqa: E402
 # ── Prompts ──────────────────────────────────────────────────────────────────
 
 
-def test_parite_avec_le_refus_de_la_passerelle():
-    """Ce que le tableau de bord écarte est EXACTEMENT ce que le moteur refuse de servir."""
+def _refusees_par_le_moteur() -> set[str]:
     from mobility_llm import build_prompt_manager
     from llm_gateway.prompts.engine import AvisNeutraliteManquant, VariantePromptInvalide
 
     pm = build_prompt_manager()
-    refusees_moteur = set()
+    refusees = set()
     for v in pm.variantes():
         try:
             pm.get_system_prompt("itinary_multi_agent", v)
         except (VariantePromptInvalide, AvisNeutraliteManquant):
-            refusees_moteur.add(v)
+            refusees.add(v)
+    return refusees
 
-    ecartees_ihm = set(D.variantes_prompt_ecartees())
+
+def test_parite_avec_le_refus_de_la_passerelle():
+    """Ce que le tableau de bord ÉCARTE est EXACTEMENT ce que le moteur refuse de servir.
+
+    La parité porte sur `prompt_ecarte`, pas sur l'ensemble des variantes retirées du choix :
+    une variante ARCHIVÉE sort de la liste sans que le moteur la refuse, et l'y inclure ferait
+    échouer ce test pour une raison qui n'a rien à voir avec l'hygiène qu'il verrouille.
+    """
+    d = D._yaml(D.PROMPTS_YAML)
+    prompts = d.get("prompts") or {}
+    ecartees_ihm = {n for n in prompts if D.prompt_ecarte(prompts.get(n) or {}) is not None}
+    refusees_moteur = _refusees_par_le_moteur()
     assert ecartees_ihm == refusees_moteur, (
         f"divergence — IHM seule : {ecartees_ihm - refusees_moteur} ; "
         f"moteur seul : {refusees_moteur - ecartees_ihm}"
     )
+
+
+def test_une_archivee_sort_du_choix_mais_reste_servable():
+    """L'archivage est une décision d'auteur, pas un verdict d'hygiène.
+
+    `b0_pristine` est le seed gelé de la campagne de référence : le retirer du formulaire ne
+    doit jamais empêcher de rejouer une expérience qui le désigne.
+    """
+    from mobility_llm import build_prompt_manager
+
+    archivees = set(D.variantes_prompt_archivees())
+    assert archivees, "l'état courant du dépôt en compte neuf"
+    proposees, _ = D.variantes_prompt()
+    assert not (archivees & set(proposees))
+
+    pm = build_prompt_manager()
+    servables = set(pm.variantes()) - _refusees_par_le_moteur()
+    assert "b0_pristine" in archivees and "b0_pristine" in servables
 
 
 def test_les_variantes_proposees_sont_toutes_servables():
@@ -66,7 +95,7 @@ def test_la_variante_active_reste_proposee():
 
 def test_les_ecartees_sont_comptees_avec_un_motif():
     ecartees = D.variantes_prompt_ecartees()
-    assert ecartees, "l'état courant du dépôt en compte trois"
+    assert ecartees, "l'état courant du dépôt en compte dix — trois refusées au service, sept archivées"
     for nom, raison in ecartees.items():
         assert raison and raison.strip(), nom
 
@@ -98,6 +127,29 @@ def test_critere_ecarte(entree, attendu):
         assert r and attendu in r
 
 
+@pytest.mark.parametrize(
+    "entree,attendu",
+    [
+        ({"content": "t"}, None),
+        ({"content": "t", "_archive": {"statut": "archive", "le": "2026-09-11"}}, "archivée (2026-09-11)"),
+        ({"content": "t", "_archive": {"statut": "archive"}}, "archivée"),
+        # Un bloc présent mais au statut autre ne retire rien : seul `archive` archive.
+        ({"content": "t", "_archive": {"statut": "levee"}}, None),
+        ("pas un dict", None),
+    ],
+)
+def test_critere_archive(entree, attendu):
+    assert D.prompt_archive(entree) == attendu
+
+
+def test_une_archivee_invalidee_s_annonce_par_le_refus_de_service():
+    """Le motif le plus grave prime : inutilisable avant retirée du choix."""
+    entree = {"content": "t", "_archive": {"statut": "archive", "le": "2026-09-11"},
+              "_invalidation": {"statut": "invalide", "regle": "C1"}}
+    assert "invalidée" in D.prompt_ecarte(entree)
+    assert D.prompt_archive(entree) == "archivée (2026-09-11)"
+
+
 # ── Modèles ──────────────────────────────────────────────────────────────────
 
 
@@ -125,6 +177,24 @@ def test_les_modeles_utilisables_restent_proposables():
 # ── Expériences ──────────────────────────────────────────────────────────────
 
 
+# Ces deux tests lisent le dépôt RÉEL, pas une arborescence de test : ils vérifient que
+# l'état courant de `data/experiences` est cohérent. Le ticket 045 a vidé cette base — les
+# 46 définitions et 36 exécutions sont archivées — si bien qu'il n'y a plus rien à vérifier
+# tant que la reconstruction sur la cohorte v5 n'a pas commencé. On SAUTE avec un motif
+# explicite, selon la convention déjà en vigueur (`test_035_08_score`, `test_035_10`), plutôt
+# que d'affaiblir l'assertion : le jour où des expériences existent, ces tests reprennent
+# leur travail sans qu'on ait à y penser.
+# Ces deux tests portent sur des expériences RETIRÉES du tableau. Quand il n'y en a aucune,
+# ils n'ont rien à vérifier — et l'exiger reviendrait à demander au dépôt de contenir en
+# permanence au moins une expérience archivée, ce qui n'est ni vrai ni souhaitable. Le
+# ticket 045 a justement reparti d'une base neuve où toutes sont actives.
+_RIEN_A_RETIRER = pytest.mark.skipif(
+    not [l for l in D.lister() if D.masquee(l)],
+    reason="aucune expérience retirée dans data/experiences : la règle est sans objet ici",
+)
+
+
+@_RIEN_A_RETIRER
 def test_les_experiences_invalidees_ou_archivees_sortent_du_tableau():
     toutes = D.lister()
     visibles = [l for l in toutes if not D.masquee(l)]
@@ -133,6 +203,7 @@ def test_les_experiences_invalidees_ou_archivees_sortent_du_tableau():
     assert len(visibles) < len(toutes), "l'état courant du dépôt en masque"
 
 
+@_RIEN_A_RETIRER
 def test_chaque_experience_retiree_porte_son_motif():
     """Sans motif, une disparition se lit comme une perte de données."""
     retirees = [l for l in D.lister() if D.masquee(l)]

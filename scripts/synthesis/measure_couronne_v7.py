@@ -33,7 +33,7 @@ non-modification soit vérifiée et pas seulement promise.
 
 Usage :
     make couronne-v7
-    llm-agents/.venv/bin/python -m scripts.synthesis.measure_couronne_v7 \\
+    services/llm-agents/.venv/bin/python -m scripts.synthesis.measure_couronne_v7 \\
       --trace docs/traces/2026-08-24_couronne_v7
 """
 

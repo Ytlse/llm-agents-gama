@@ -28,7 +28,7 @@ Le calendrier de sortie est reconstruit par ENSEMBLES DE DATES : les trips qui
 roulent exactement les mêmes jours partagent un `service_id` synthétique. Cela
 rend la sur-offre structurellement impossible, garde `calendar.txt` vide et
 `exception_type=1` — les deux conditions posées par
-`llm-agents/inputs/gtfs/reader.py` — et compresse le calendrier d'un facteur dix
+`services/llm-agents/inputs/gtfs/reader.py` — et compresse le calendrier d'un facteur dix
 par rapport à un service par trip.
 """
 

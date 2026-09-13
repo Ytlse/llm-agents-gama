@@ -195,7 +195,7 @@ Ce que LM Studio impose, vérifié le 2026-09-08 :
   est le vrai frein ; `rpm_limit: 30` n'est jamais atteint en local. Pas de quota journalier.
 
 Activation : `PROVIDER_KEYS__lmstudio=lmstudio` dans `.env` (valeur libre, LM Studio ne vérifie pas
-la clé) ; `docker-compose.yml` la propage à toutes les instances `lmstudio_*`. Vide ou absente, elles sont exclues au
+la clé) ; `infra/docker-compose.yml` la propage à toutes les instances `lmstudio_*`. Vide ou absente, elles sont exclues au
 démarrage. Une variable ajoutée à `.env` n'entre dans les conteneurs qu'à leur **recréation**
 (`docker compose up -d --no-deps api worker`), pas à un simple `restart`. Ensuite
 `make lmstudio-etat` montre les modèles chargés et ce que la passerelle voit.
@@ -220,7 +220,7 @@ clés distantes (`PROVIDER_KEYS__google="" … make run …`).
 Ajouter un modèle téléchargé plus tard : copier une entrée `lmstudio_*`, recopier l'identifiant
 de `lms ls` dans `default_model` (ou un alias, si cet identifiant existe déjà chez un fournisseur
 distant), ajouter la ligne `PROVIDER_KEYS__lmstudio_<nom>_key1:
-${PROVIDER_KEYS__lmstudio:-}` dans `docker-compose.yml`, recréer `api` et `worker`, puis dupliquer
+${PROVIDER_KEYS__lmstudio:-}` dans `infra/docker-compose.yml`, recréer `api` et `worker`, puis dupliquer
 une définition d'expérience avec `--decideur-modele <identifiant>`.
 
 ---
@@ -261,7 +261,7 @@ Ce n'est pas cosmétique :
   le démarrage le dit (`[ALARME]` si la clé de l'adaptateur existait, sinon un avertissement).
   Le repli silencieux avait déjà fait partir des appels sur la mauvaise clé.
 
-Le mapping des 17 instances vers les 5 variables sources vit dans `docker-compose.yml` ; ce qui
+Le mapping des 17 instances vers les 5 variables sources vit dans `infra/docker-compose.yml` ; ce qui
 s'édite dans `.env` reste les sources ci-dessus.
 
 Les runs archivés portent les anciens noms — ce sont des mesures, elles ne se réécrivent pas.
@@ -286,5 +286,5 @@ Si `provider` est absent, le load balancer SWRR distribue entre tous les provide
 
 1. Ajouter une entrée dans `config/llm_gateway/providers.yaml` (configuration de déploiement, hors du paquet ; désignée par `LLM_GATEWAY_PROVIDERS_FILE`)
 2. Renseigner la clé dans `.env` : `PROVIDER_KEYS__<adapter>=...`
-3. Si l'adapter n'existe pas encore, implémenter la classe dans `llm_gateway/src/llm_gateway/adapters/`
+3. Si l'adapter n'existe pas encore, implémenter la classe dans `packages/llm_gateway/src/llm_gateway/adapters/`
 4. Lancer `make providers DRY_RUN=1` pour vérifier quotas et existence du modèle

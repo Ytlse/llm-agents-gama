@@ -2,7 +2,7 @@
 """Fusionne un cache SQLite de routes OSMnx dans un autre, sans rien écraser.
 
 Pourquoi ce script existe. Du 2026-06-02 au 2026-09-04, le runtime a écrit son cache de
-routes dans ``llm-agents/data/osmnx_cache/<population>/`` — un chemin qui n'était monté
+routes dans ``services/llm-agents/data/osmnx_cache/<population>/`` — un chemin qui n'était monté
 sur aucun volume — tandis que le peupleur en masse écrivait dans
 ``data/cache/osmnx/<population>/``. Aligner les deux chemins (défaut de
 ``gtfs.osmnx_persistent_cache_dir``) laisserait les routes déjà calculées par le runtime
@@ -19,7 +19,7 @@ de la place.
 
 Usage :
     python3 scripts/data/population/merge_osmnx_route_cache.py \\
-        llm-agents/data/osmnx_cache/toulouse_population_1000 \\
+        services/llm-agents/data/osmnx_cache/toulouse_population_1000 \\
         data/cache/osmnx/toulouse_population_1000
     # --dry-run pour compter sans écrire
 """

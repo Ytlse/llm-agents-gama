@@ -23,7 +23,7 @@ Deux mécanismes distincts coexistent : la **mémoire cognitive** des agents (qu
 - Stockée en RAM Python dans une liste ordonnée de `MemoryEntry`
 - Isolation par `activity_id` : chaque activité a sa propre fenêtre contextuelle
 - Purgée quand le buffer atteint **`stm_reflection_min_entries`** entrées (seuil configurable) — déclenchement par volume, pas par intervalle de temps
-- Implémentation : `llm-agents/llm/shortterm.py`
+- Implémentation : `services/llm-agents/llm/shortterm.py`
 
 ### Long terme (LTM — ChromaDB)
 
@@ -39,7 +39,7 @@ $$\text{Score} = (\text{Similarité Cosinus} \times 0.4) + (\text{Score BLEU des
 
 Les souvenirs récents et pertinents remontent dans le contexte LLM de l'agent.
 
-- Implémentation : `llm-agents/llm/longterm.py`
+- Implémentation : `services/llm-agents/llm/longterm.py`
 
 ---
 
@@ -58,15 +58,17 @@ Le cache est **hybride** : il se comporte différemment selon que l'agent a déj
 │
 ├── LTM vide (typiquement : tout le bootstrap)
 │   └── Correspondance exacte (`scroll` clé-valeur, ~0,1 ms, aucun embedding)
-│       ├── Trouvé → décision resservie
+│       ├── Trouvé → distribution resservie, puis NOUVEAU tirage (`draw_index`)
 │       └── Sinon  → appel LLM, puis store avec `memory_empty=True`
 │
 └── LTM remplie
     └── Embedding de la LTM courante, puis similarité cosinus (`query_points`)
         contre les LTM des décisions stockées aux mêmes conditions
-        ├── score ≥ `cache.semantic_threshold` → décision resservie
+        ├── score ≥ `cache.semantic_threshold` → distribution resservie, puis NOUVEAU tirage
         └── score <  seuil (ou aucun candidat)  → appel LLM avec la LTM,
                                                    puis store avec `memory_empty=False`
+
+(un hit dont plus aucune option n'est tirable redevient un miss — cf. « options disparues »)
 ```
 
 Sans souvenir, deux décisions prises dans les mêmes conditions factuelles sont nécessairement identiques : l'embedding serait du calcul pur perte. Dès que l'agent a un vécu, ce vécu pèse sur sa décision, et le cache ne la resert que si la mémoire courante est proche de celle qui l'avait produite — **c'est ce qui permet à l'agent d'apprendre** au lieu de rejouer indéfiniment sa première décision.
@@ -168,7 +170,7 @@ du ticket 012 (A3).
 Le cache persistant d'itinéraires (`OtpPersistentCache`, SQLite) mémorise les itinéraires
 par couple origine/destination/heure (`gtfs.otp_cache_enabled`, défaut `true`), les réutilise
 à une heure de départ proche par décalage temporel, et blackliste les paires O/D sans
-itinéraire ; la base est persistée par population dans `llm-agents/data/otp_cache/<population>/`.
+itinéraire ; la base est persistée par population dans `services/llm-agents/data/otp_cache/<population>/`.
 La clé de cache inclut les modes disponibles pour l'agent (`include_car` **et** `include_bike`) :
 deux agents avec des équipements différents (avec/sans vélo) ne partagent jamais une entrée,
 sinon l'option vélo pourrait manquer silencieusement dans les choix proposés au LLM.
@@ -263,9 +265,9 @@ Le cache de routes est écrit par **deux** producteurs, qui doivent viser le mê
 | Runtime (`_prepare_population`) | `/app/data/cache/osmnx/<population>/` | `gtfs.osmnx_persistent_cache_dir` |
 
 L'égalité des deux ne tient qu'au montage `./data/cache/osmnx:/app/data/cache/osmnx` du service
-`controller` (`docker-compose.yml`) — exactement comme le cache OTP monte `./data/cache/otp` sur
+`controller` (`infra/docker-compose.yml`) — exactement comme le cache OTP monte `./data/cache/otp` sur
 `/app/data/cache/otp`. **Retirer ce montage ne casse rien de visible** : `/app` étant le bind de
-`./llm-agents`, le runtime crée alors un `llm-agents/data/cache/osmnx/` dans l'arborescence du
+`./llm-agents`, le runtime crée alors un `services/llm-agents/data/cache/osmnx/` dans l'arborescence du
 code, invisible du peupleur, et repart de zéro à chaque population neuve.
 
 C'est ce qui s'est produit du **2026-06-02 au 2026-09-04** : le défaut valait
@@ -282,7 +284,7 @@ du notebook n'a jamais été tenue une seule fois. Trois garde-fous ont été po
    `st_dev`, donc ni `st_dev` ni `os.path.ismount` ne les distinguent). Un `WARNING` distinct
    signale un cache vide sur un chemin correctement monté — légitime pour une population neuve.
 3. **Dans le notebook**, la cellule des chemins **refuse de continuer** si
-   `docker-compose.yml` ne monte pas le répertoire hôte sur le chemin lu dans `settings.py` :
+   `infra/docker-compose.yml` ne monte pas le répertoire hôte sur le chemin lu dans `settings.py` :
    réchauffer 2 h 30 pour un fichier que personne ne lit doit échouer bruyamment.
 
 **Piège de nommage, toujours ouvert.** Le sous-dossier est nommé
@@ -351,7 +353,7 @@ argument qui compte.
 **Trois** caches survivent aux runs et étaient **aveugles** à un changement de définition
 des durées d'itinéraire. Ils portent désormais tous les trois
 `trip_helper.terminal_time.data_version()`, lu du champ `version:` de
-`llm-agents/config/terminal_time.yaml` : **bumper cette version les invalide proprement**,
+`services/llm-agents/config/terminal_time.yaml` : **bumper cette version les invalide proprement**,
 sans rien détruire — les anciennes lignes restent lisibles pour audit.
 
 - **Routage OSMnx** — adressé par (mode, coordonnées, créneau). Le jour où le temps de
@@ -388,7 +390,7 @@ cache**, et le journal ne portait que **377 des 3 249** décisions du périmètr
 377 ne sont pas un échantillon : ce sont les plus atypiques du run, celles qu'aucune
 décision voisine n'avait déjà couvertes.
 
-`make run CACHE=0` bascule `cache.enabled` dans `llm-agents/config/config.yaml`, sur le
+`make run CACHE=0` bascule `cache.enabled` dans `services/llm-agents/config/config.yaml`, sur le
 patron de `MEM=0`. `enabled: false` court-circuite entièrement le cache
 (`self.llm_cache = None`) : il n'est ni lu ni écrit, et **il est donc inutile de le
 supprimer** — les décisions déjà payées restent valides pour un run ultérieur.

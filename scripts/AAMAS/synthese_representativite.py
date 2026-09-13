@@ -1,6 +1,6 @@
 """synthese_representativite.py — La synthèse HTML de représentativité d'une population scellée.
 
-    llm-agents/.venv/bin/python -m scripts.AAMAS.synthese_representativite \\
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.synthese_representativite \\
         --sceau data/population/population_1000_AAMAS_v4 \\
         --precedent data/population/population_1000_AAMAS_v3 \\
         --vivier docs/traces/<date>_controle_vivier_10000_v4/report.json \\

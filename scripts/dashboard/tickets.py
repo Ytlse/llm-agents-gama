@@ -41,18 +41,25 @@ DOING = "en cours"
 DONE = "terminé"
 BLOCKED = "bloqué"
 PAUSED = "en veille"
+IMPROVEMENT = "amélioration"
 DROPPED = "abandonné"
 UNKNOWN = "sans statut"
 
 # `en veille` ≠ `bloqué` : rien n'empêche d'avancer, c'est une DÉCISION de ne pas le
 # faire maintenant (le travail reprendra tel quel). `bloqué` dit qu'une dépendance
 # extérieure manque. Les confondre ferait chercher un déblocage qui n'existe pas.
-STATUS_ORDER = [DOING, BLOCKED, TODO, PAUSED, DONE, DROPPED, UNKNOWN]
+#
+# `amélioration` ≠ `en veille` ≠ `abandonné` : le ticket est CONSERVÉ comme piste
+# d'amélioration future, sans travail en cours ni reprise attendue. `en veille` suppose un
+# chantier interrompu qui reprendra tel quel ; `abandonné` dit qu'on n'y reviendra pas. Les
+# confondre ferait soit chercher un chantier à reprendre, soit jeter une piste gardée exprès.
+STATUS_ORDER = [DOING, BLOCKED, TODO, PAUSED, IMPROVEMENT, DONE, DROPPED, UNKNOWN]
 STATUS_KIND = {
     DOING: "warning",
     BLOCKED: "critical",
     TODO: "muted",
     PAUSED: "muted",
+    IMPROVEMENT: "muted",
     DONE: "good",
     DROPPED: "muted",
     UNKNOWN: "muted",
@@ -62,6 +69,7 @@ STATUS_ICON = {
     BLOCKED: "🔴",
     TODO: "⚪",
     PAUSED: "🔵",
+    IMPROVEMENT: "🟣",
     DONE: "🟢",
     DROPPED: "⚫",
     UNKNOWN: "❔",
@@ -69,7 +77,7 @@ STATUS_ICON = {
 
 # Ce qu'on peut CHOISIR dans l'interface : le vocabulaire fermé, sans `sans statut`
 # qui n'est pas une décision mais l'absence d'entrée (R16).
-EDITABLE_STATUSES = [TODO, DOING, DONE, BLOCKED, PAUSED, DROPPED]
+EDITABLE_STATUSES = [TODO, DOING, DONE, BLOCKED, PAUSED, IMPROVEMENT, DROPPED]
 
 # 4096 est la SEULE largeur de dump pour laquelle les 1 470 lignes existantes se
 # relisent et se réécrivent à l'octet (60, 80, 92 et 100 recassent les notes des autres
@@ -250,7 +258,7 @@ def _rt_yaml():
     if YAML is None:  # pragma: no cover — ruamel est fourni par le venv du projet
         raise RuntimeError(
             "ruamel.yaml est requis pour écrire les statuts de tickets "
-            "(pip install ruamel.yaml dans llm-agents/.venv)"
+            "(pip install ruamel.yaml dans services/llm-agents/.venv)"
         )
     parseur = YAML()
     parseur.preserve_quotes = True

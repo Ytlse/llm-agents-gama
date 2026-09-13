@@ -13,6 +13,7 @@ Un chapitre par section de l'article, dans trois arbres parallèles :
 | [`SOUMISSION_AAMAS_2027.md`](SOUMISSION_AAMAS_2027.md) | consignes de soumission : OpenReview, format, matériel additionnel, règles IA |
 | [`overleaf/template/`](overleaf/template/) | gabarit officiel AAMAS 2027 (`aamas.cls`, style de références, exemple) |
 | [`ameliorations.md`](ameliorations.md) | points retirés du texte, à consolider ailleurs |
+| [`actions.md`](actions.md) | actions pour écrire le papier, risques relecteurs et objections |
 
 Le numéro de fichier **est** le numéro de section annoncé en 1.4 du chapitre 1. Une
 renumérotation se voit donc dans `git status`, et pas seulement dans une phrase.
@@ -27,16 +28,29 @@ pire que pas de date du tout.
 
 | # | Chapitre | EN | FR | LaTeX | Relecture |
 |---|---|---|---|---|---|
-| 0 | Résumé (*abstract*) | `v0.3` | `v0.3` | `v0.3` | [00](relecture/00_abstract.md) |
-| 1 | Introduction | `v0.17` | `v0.17` | `v0.17` | [01](relecture/01_introduction.md) |
+| 0 | Résumé (*abstract*) | `v0.4` | `v0.4` | `v0.4` | [00](relecture/00_abstract.md) |
+| 1 | Introduction | `v0.19` | `v0.19` | `v0.19` | [01](relecture/01_introduction.md) |
 | 2 | État de l'art (*related work*) | `v0.17` | `v0.17` | `v0.17` | dans le fichier du ch. 1 |
-| 3 | Métriques et socle d'évaluation | — | brouillon | — | — |
-| 4 | Les LLM nus et leur variabilité | — | brouillon | — | — |
-| 5 | Ablation en quatre paliers et références tabulaires | — | brouillon | — | — |
-| 6 | Régimes non tabulés | — | brouillon | — | — |
-| 7 | Limites et implications hybrides | — | brouillon | — | — |
-| 8 | Conclusion | — | brouillon | — | — |
+| 3 | Le dispositif (*architecture*) | — | `brouillon v0.4` | — | — |
+| 4 | Métriques et socle d'évaluation | — | `brouillon v0.8` | — | — |
+| 4.5 | Calibration du prompt (optimisation réfléchie) | — | `brouillon v0.1` | — | — |
+| 5 | Les LLM nus et leur variabilité | — | brouillon | — | — |
+| 6 | Ablation en quatre paliers et références tabulaires | — | `brouillon v0.1` | — | — |
+| 7 | Régimes non tabulés | — | brouillon | — | — |
+| 8 | Limites et implications hybrides | — | brouillon | — | — |
+| 9 | Conclusion | — | brouillon | — | — |
 | 99 | Annexes techniques | — | brouillon | — | — |
+
+## L'ordre de travail : le français d'abord, les traductions à la fin
+
+Décision de l'auteur, 11 septembre 2026 : **les chapitres se rédigent et se relisent en français**,
+et les maîtres anglais comme les rendus LaTeX s'écrivent **en fin de parcours**, une fois le fond
+arrêté. `en/` reste le texte de référence pour la soumission — c'est l'ordre de fabrication qui
+change, pas le statut des arbres.
+
+Conséquence sur la parité : tant qu'un chapitre est en `brouillon`, l'absence d'anglais et de LaTeX
+est normale et `make paper-parite` ne la compte pas comme un écart. Les chapitres 3 (`brouillon v0.4`) et 4 (`brouillon v0.5`) sont les premiers
+écrits dans cet ordre : texte neuf, et non un extrait du manuscrit.
 
 `brouillon` = texte français extrait du manuscrit détaillé `v1.6` (3 septembre 2026), **antérieur**
 à la réécriture de l'introduction : vocabulaire « Tier 1/2/3 » à reprendre, chiffres à recouper

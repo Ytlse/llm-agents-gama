@@ -2,73 +2,83 @@
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de vérité.
 >
-> **Décision de l'auteur du dépôt (2026-09-07)** : consigner le constat et la vision ; le plan
-> détaillé sera l'objet de ce ticket quand il sera ouvert. Rien ne bouge d'ici là.
+> **Constat consigné le 2026-09-07**, **remesuré et exécuté le 2026-09-12** (pas 1, 2 et 3).
 
-## Constat (mesuré le 2026-09-07)
+## Constat remesuré le 2026-09-12
 
-Le dépôt mêle à la racine des bibliothèques, des applications, des données, des résultats et
-des restes. Tailles sur disque, tout compris (caches, venv, données hors git) :
+| Répertoire | 2026-09-07 | 2026-09-12 | dont suivi par git | Nature |
+|---|---|---|---|---|
+| `services/eqasim-toulouse/` | 16 Go | 16 Go | **0 fichier** — entièrement ignoré | service + données de synthèse |
+| `experiments/` | 10 Go | 7,9 Go | hors git | résultats de runs |
+| `data/` | 6,5 Go | 5,1 Go | pointeurs DVC | entrées, caches, exports |
+| `services/llm-agents/` | 4,1 Go | 4,1 Go | 179 fichiers | contrôleur + venv du projet |
+| `scripts/` | 560 Mo | 567 Mo | **5,4 Mo** | outils ; le reste est du cache |
+| `services/GAMA/` | 565 Mo | 565 Mo | 17 fichiers | modèle de simulation |
+| `prompt_calibration/` | 457 Mo | 457 Mo | 0 — dépôt git imbriqué | dépôt autonome déployé sur VM |
+| `services/otp-toulouse/` | 415 Mo | 415 Mo | 11 fichiers | service de routage transit |
+| `docs/` | 196 Mo | **348 Mo** | `paper` 32 Mo ; `slides`, `synthesis`, `capture` : 0 | documentation + article |
+| `packages/` | — | 41 Mo | les trois bibliothèques | ticket 037 |
+| `infra/` | — | 288 Ko | compose, prometheus, grafana | orchestration |
 
-| Répertoire | Taille | Nature | Remarque |
-|---|---|---|---|
-| `eqasim-toulouse/` | 16 Go | service + données de synthèse | contexte Docker propre |
-| `experiments/` | 10 Go | résultats de runs | hors git ; registre du ticket 035 |
-| `data/` | 6,5 Go | entrées, caches, exports, données Prometheus | pointeurs DVC présents ; `cache/` reconstructible |
-| `llm-agents/` | 4,1 Go | application contrôleur + venv + caches | le venv du projet vit ici |
-| `scripts/` | 560 Mo | outils, notebooks, données | des données et des sorties dedans |
-| `gama/`, `GAMA/` | 565 Mo | modèle de simulation | deux casses pour un même sujet |
-| `prompt_calibration/` | 457 Mo | dépôt git **imbriqué**, autonome, déployé sur une VM | 0 fichier suivi par le dépôt parent |
-| `otp-toulouse/` | 415 Mo | service de routage transit | contexte Docker propre |
-| `docs/` | 196 Mo | documentation + pages de synthèse archivées + article | les pages HTML pèsent |
-| `llm_gateway/`, `mobility_core/`, `mobility_llm/` | légers | bibliothèques (ticket 037) | layout src, tests, CI, docs |
-| `llm_module/` | léger | coquille de compatibilité dépréciée | retrait en 2.0 |
-| `grafana/` | 252 Ko | dashboards et alertes comme code | à côté de `docker-compose.yml` |
-| `notebooks/`, `scripts/infra` (8 carnets), `scripts/analysis` (5) | | carnets dispersés | sorties parfois versionnées |
-| `Divers/`, `scratch/`, `tests/token_usage`, fichiers `batch_*.json`, `chunk49*`, `.pptx` à la racine | | restes de sessions | ni ignorés ni rangés |
+**Deux corrections au constat du 07/09.** `gama/` et `GAMA/` n'étaient **pas** deux répertoires :
+même inode, volume APFS insensible à la casse, une seule casse dans git et aucune référence en
+minuscules dans le code. Et le poids de `scripts/` comme celui de `docs/slides` et
+`docs/synthesis` **était déjà hors de git** : c'est de l'encombrement disque, pas du poids de
+dépôt.
 
-## Principes proposés
+## Principes (inchangés)
 
-1. **Quatre natures, quatre places** : ce qui se versionne et se publie (bibliothèques), ce qui se
-   déploie (services), ce qui entre (données), ce qui sort (résultats). Un fichier ne doit jamais
-   hésiter entre deux.
+1. **Quatre natures, quatre places** : ce qui se versionne et se publie, ce qui se déploie, ce
+   qui entre, ce qui sort. Un fichier ne doit jamais hésiter entre deux.
 2. **Tout ce qu'une exécution produit vit hors de git**, avec un index lisible et une règle de
-   rétention. `experiments/`, `data/cache/`, `data/prometheus_data/`, les sorties de notebooks.
-3. **Un point d'entrée par composant**, et le `Makefile` racine délègue au lieu de tout porter
-   (il dépasse le millier de lignes).
-4. **La documentation du projet reste dans `docs/`**, chaque bibliothèque porte la sienne
-   (README, CHANGELOG, site mkdocs), les pages lourdes archivées sortent du dépôt de code.
+   rétention.
+3. **Un point d'entrée par composant**, et le `Makefile` racine délègue au lieu de tout porter.
+4. **La documentation du projet reste dans `docs/`**, chaque bibliothèque porte la sienne.
 5. **Pas de dépôt git imbriqué** : `prompt_calibration` se consomme comme une dépendance
-   versionnée (ce que devient aussi le gateway à l'itération 3 du ticket 037), ou devient un
-   sous-module déclaré ; jamais une copie de travail invisible du parent.
+   versionnée, ou devient un sous-module déclaré.
 
-## Cible, sans déplacement immédiat
+## Cible atteinte le 2026-09-12
 
 ```
-packages/     llm_gateway, mobility_core, mobility_llm ; prompt_calibration comme dépendance
-services/     llm-agents (contrôleur, serveur osmnx), tableau de bord, eqasim-toulouse,
-              otp-toulouse, GAMA (le modèle, une seule casse)
-infra/        docker-compose, Dockerfiles, grafana (dashboards, alertes), prometheus
-data/         inputs/ immuables sous DVC ; reference/ (cerema_values, population_emc2,
-              feature_spec : ce que mobility_core.resources cherche) ; cache/ ignoré
-experiments/  hors git, registre, rétention
-docs/         arch, setup, tickets, changelog ; paper et synthèse archivée en LFS ou dans
-              un dépôt de publication
-notebooks/    tous les carnets, sorties vidées ; papermill écrit dans experiments/
-scripts/      outils maintenus et testés, rien d'autre
-specs/  tests/ (bout en bout transverses)
+packages/     llm_gateway · mobility_core · mobility_llm
+services/     llm-agents · GAMA · eqasim-toulouse · otp-toulouse
+infra/        docker-compose.yml · prometheus.yml · grafana/
+data/  experiments/  docs/  notebooks/  scripts/  specs/  tests/   (inchangés, à la racine)
 ```
 
-## Migration envisagée, en trois pas indépendants
+## Ce que la migration a appris
 
-1. **Alléger** : sortir les données de `scripts/` et de `docs/`, ignorer ou archiver les restes,
-   une seule casse pour GAMA. Aucun chemin de code ne change.
-2. **Infrastructure et services** : `infra/` et `services/` ; les contextes Docker et le Makefile
-   suivent. C'est le pas qui touche le plus de chemins.
-3. **Bibliothèques** : `packages/` quand le gateway et prompt_calibration sont consommés comme
-   dépendances (itération 3 du ticket 037), sinon le déplacement n'apporte rien.
+**Le compose déplacé exige `--project-directory`.** Sans lui, compose réancre tous les chemins
+relatifs sur son propre dossier et échoue dès `.env`. `COMPOSE_FILE` et
+`COMPOSE_PROJECT_DIRECTORY` ne suffisent pas — mesuré, pas supposé. Le `Makefile` porte les deux
+drapeaux dans `$(COMPOSE)`.
 
-## Ce que ce ticket ne décide pas
+**Les chemins qui comptent des crans sont le vrai coût d'un déplacement**, pas les chemins
+écrits en clair. Ce dépôt en portait beaucoup parce que les mêmes fichiers doivent se résoudre
+sur l'hôte ET dans un conteneur qui monte le code ailleurs : `parents[2]` valait la racine d'un
+côté et `/` de l'autre. La méthode qui tient est l'ancre (`experiences/chemins.py` la
+documentait déjà) — chercher un repère plutôt que compter. Trois formes à balayer, pas une :
+`parents[N]`, `.parent.parent`, et les chaînes `"../../"` que les deux premières ne montrent pas.
 
-L'ordre et le calendrier ; la place de `prompt_calibration` (dépendance ou sous-module) ; le sort
-des pages de synthèse (LFS ou dépôt séparé). Ce sont les trois questions à trancher à l'ouverture.
+**Deux angles morts de vérification.** `git grep` ne voit que le suivi : sept fichiers non
+commités gardaient l'ancien chemin, et c'est une `[ALARME]` d'exécution qui les a dénoncés. Et
+un chemin cassé peut se déguiser en donnée absente : 25 tests météo passaient de « réussis » à
+**« ignorés »** sans qu'aucun échoue.
+
+**Un `.gitignore` n'agit que sur ce qui n'est pas encore suivi.** Les 42 fichiers de
+`docs/traces` étaient couverts par une règle depuis le 2026-09-02 et restaient versionnés. Et
+déplacer un répertoire périme les règles qui le nomment : `zf_couronne.json`, déversionné pour
+raison de licence au ticket 038, se serait reversionné en silence.
+
+## Ce qui reste
+
+- **`Makefile` : 1 346 lignes.** Le principe 3 demande qu'il délègue ; il porte encore tout.
+- **`prompt_calibration`** : toujours un dépôt git imbriqué, 0 fichier suivi par le parent. Le
+  choix dépendance / sous-module n'est pas tranché.
+- **`docs/paper` (32 Mo suivis)** et les pages de synthèse archivées : le sort (LFS ou dépôt de
+  publication) n'est pas tranché. L'article est verrouillé : il n'a pas été touché.
+- **`llm_module/`** reste à la racine, délibérément : coquille de compatibilité sans
+  `pyproject.toml`, sans `src/`, sans tests, que plus rien n'importe dans le dépôt. La ranger
+  dans `packages/` la promouvrait au rang qu'elle est censée quitter. Son retrait appartient au
+  ticket 037 (version 2.0).
+- **`Divers/`** attend un tri manuel de l'auteur.

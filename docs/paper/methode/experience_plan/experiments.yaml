@@ -6,19 +6,22 @@
 # ── 1. SOCLE COMMUN PARTAGÉ (COMMON SET) ──────────────────────────────────────
 defaults:
   inputs:
-    # Chemin vers la population scellée finale (vLAST) alignée sur l'enquête Cerema EMC² 2023
-    population_file: "data/population/population_1000_AAMAS_vLAST/population.json"
-    population_hash: null  # Sera renseigné automatiquement par le hash sha256 au gel
+    # Chemin vers la population scellée alignée sur l'enquête Cerema EMC² 2023 : la v5,
+    # scellée le 2026-09-04 (le dossier vLAST cité jusqu'ici n'a jamais existé).
+    population_file: "data/population/population_1000_AAMAS_v5/population.json"
+    population_hash: null  # Sera renseigné automatiquement par le hash sha256 au gel ; sceau v5 : de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce
     reference_survey: "scripts/data/population/cerema_values.yaml"
     oracle_lightgbm: "scripts/progedo_logit/mode_choice_policy.json"
     feature_spec: "scripts/progedo_logit/feature_spec.json"
     otp_cache_dir: "data/cache/otp"
     # Unité d'évaluation = le déplacement. La cohorte scellée est de 1 000 PERSONNES ;
-    # le nombre de trajets est dérivé de leurs chaînes d'activités.
-    # Mesuré sur la population AAMAS courante : 1 000 pers., 894 mobiles, 2,58 trajets/pers.
+    # le nombre de déplacements est dérivé de leurs chaînes d'activités, qui sont CYCLIQUES :
+    # la première activité « home » commence la veille au soir et le dernier déplacement ramène
+    # au domicile, donc une chaîne de k activités porte k déplacements, et non k − 1.
+    # Mesuré sur population_1000_AAMAS_v5 : 1 000 pers., 894 mobiles, 3,30 déplacements/pers.
     # Recalculé automatiquement au gel du hash (peut varier légèrement d'une version à l'autre).
     person_count: 1000
-    trip_count: 2579       # ≈ activités−1 sommées sur les 1 000 personnes (dérivé, non fixé à la main)
+    trip_count: 3299       # somme(activités − 1) = 2 405, + 894 mobiles (dérivé, non fixé à la main)
 
   # Périmètre des 4 modes de transport canoniques (enquête EMC² 2023)
   # Tout mode plus fin généré en simulation est agrégé dans ces 4 classes pour le scoring
@@ -240,7 +243,7 @@ experiments:
       type: "llm"
       provider: "google"
       instance: "google_gemini35_key1"       # Instance SWRR dédiée (RPD=500)
-      model: "gemini-3.5-flash-lite-preview"
+      model: "gemini-3.5-flash-lite"   # version STABLE : les preview sont écartées (ticket 045)
       temperature: 0.0
       seed: 42
       prompt_template: "bare_minimal"

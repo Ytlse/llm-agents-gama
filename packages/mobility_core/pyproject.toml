@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=77"]   # PEP 639 : license = expression SPDX + license-files
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobility-core"
+description = "Domaine de l'enquête EMC² Toulouse : couronnes, zones fines, hiérarchie des modes, équipement, logement, cadrage de population. Aucune dépendance LLM."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.12"
+dynamic = ["version"]
+dependencies = [
+    "PyYAML>=6.0",
+    "loguru>=0.7,<0.8",
+]
+
+[project.optional-dependencies]
+# zone_resolver et residence_zone.CommunalZones : jointure point-dans-polygone.
+geo = ["geopandas>=1.1,<2", "shapely>=2.0", "pyproj>=3.6", "numpy>=1.26"]
+test = ["pytest>=8.0", "pytest-cov>=5.0", "hypothesis>=6.100"]
+dev = ["ruff>=0.6", "mypy>=1.11", "import-linter>=2.0"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+# `include-package-data` vaut True par défaut depuis setuptools 61 et s'UNIT à `package-data`
+# au lieu de la restreindre : toute ressource posée dans `src/mobility_core/data/` partait
+# dans le wheel, liste explicite ou non (ticket 038). À False, seule la liste ci-dessous fait
+# foi. Vérifié sur l'artefact lui-même par `tests/test_packaging_licence.py`.
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# LISTE EXPLICITE, PAS DE GLOB (ticket 038). Un `data/*.json` ramasse tout fichier présent
+# sur le disque au moment du build, y compris ceux que `.gitignore` exclut parce qu'ils
+# dérivent des microdonnées ProGEDO lil-1750 (accès restreint) : `zf_housing_type.json`
+# partait ainsi dans le wheel. Toute ressource ajoutée ici l'est en connaissance de cause ;
+# `tests/test_packaging_licence.py` échoue si une ressource restreinte réapparaît.
+mobility_core = [
+    "py.typed",
+    # Paramètres de modèles ajustés (intercept + coefficients), aucune table d'observations.
+    "data/bike_ownership.json",
+    "data/driving_license.json",
+    "data/pt_subscription.json",
+    # Agrégés au niveau couronne ou périmètre, effectifs élevés.
+    "data/car_availability_emc2.json",
+    "data/terminal_time_emc2.json",
+    # Issu du rapport publié AUAT/CEREMA (p. 53).
+    "data/mode_hierarchy_emc2.json",
+    # Périmètre des 453 communes — statut à confirmer auprès de l'ADISP (ticket 038).
+    "data/commune_couronne.json",
+    "data/couronne_perimetre.geojson",
+    # RESTREINTES, jamais listées ici : zf_couronne.json, zf_housing_type.json,
+    # zf_zones.gpkg, zf_zones.meta.json.
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "mobility_core.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "unit: tests purs, sans ressource externe",
+    "needs_data: tests qui exigent une ressource produite hors git (zf_zones.gpkg, feature_spec.json)",
+    "slow: tests qui construisent un artefact (sdist/wheel) — quelques secondes",
+]
+filterwarnings = [
+    "error::DeprecationWarning:mobility_core.*",
+]
+
+[tool.coverage.run]
+source = ["mobility_core"]
+branch = true
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["tests/data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+ignore = ["E501", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E731", "E402"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+ignore_missing_imports = true

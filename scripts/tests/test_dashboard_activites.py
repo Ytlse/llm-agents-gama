@@ -138,6 +138,9 @@ def plateforme(tmp_path, monkeypatch):
     monkeypatch.setattr(experiences, "DOSSIER", exps)
     monkeypatch.setattr(experiences, "DOSSIER_JEUX", jeux)
     monkeypatch.setattr(experiences, "lister", functools.partial(VRAI_LISTER, dossier=exps))
+    # Colonnes et filtres du tableau survivent maintenant à la fermeture de la page : sans
+    # cette redirection, les tests liraient la vue de l'utilisateur et écriraient dans la sienne.
+    monkeypatch.setattr(experiences, "ETAT_VUE_REGISTRE", tmp_path / "vue" / "tableau.yaml")
     return tmp_path
 
 
@@ -674,6 +677,26 @@ class FauxStRegistre(FauxStFragment):
 
     def caption(self, texte, **_k):
         self.legendes.append(texte)
+
+    def info(self, texte, **_k):
+        self.textes.append(texte)
+
+    @contextlib.contextmanager
+    def popover(self, label, **_k):
+        """Un filtre par colonne se dessine dans un popover, comme le panneau « Formule »
+        dans un repli : ce qu'il contient ne compte pas pour le tableau des exécutions."""
+        self.replis.append(label)
+        self.profondeur += 1
+        try:
+            yield self
+        finally:
+            self.profondeur -= 1
+
+    def multiselect(self, _label, options, default=None, key=None, **_k):
+        return self.session_state.get(key, list(default or []))
+
+    def number_input(self, _label, value=None, key=None, **_k):
+        return self.session_state.get(key, value)
 
     def text_input(self, _label, valeur="", **_k):
         return valeur

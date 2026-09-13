@@ -397,7 +397,7 @@ def cmd_replay(args) -> int:
     config = RunConfig(eval_provider=args.provider, eval_model=args.model,
                        eval_temp=0.0, eval_batch_max=BATCH,
                        prod_option_handling=True, max_retry_wait=30.0,
-                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/prompts/schemas.json"),
+                       schemas_path=str(REPO_ROOT / "packages/mobility_llm/src/mobility_llm/prompts/schemas.json"),
                        category="itinary_multi_agent")
     schema = json.loads(Path(config.schemas_path).read_text(
         encoding="utf-8"))[config.category]

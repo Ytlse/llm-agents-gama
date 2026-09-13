@@ -2,7 +2,7 @@
 
 `car_availability` (`all` / `some` / `none`) est dérivée, pas observée : elle compare le
 nombre de voitures du ménage à son nombre de titulaires du permis majeurs
-(`eqasim-toulouse/synthesis/population/enriched.py`). La population synthétique voit donc
+(`services/eqasim-toulouse/synthesis/population/enriched.py`). La population synthétique voit donc
 **trop de partage** dès que le nombre de permis est surestimé — ce que mesure le
 [ticket 017](../../docs/tickets/ticket_017_permis_progedo.md).
 
@@ -60,7 +60,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
-OUT = ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "car_availability_emc2.json"
+OUT = ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "car_availability_emc2.json"
 
 LEVELS = ("all", "some", "none")
 

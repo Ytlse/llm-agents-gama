@@ -307,7 +307,8 @@ def projects() -> list[Project]:
             REPO_ROOT / "prompt_calibration",
             _calib_variables(),
         ),
-        Project("otp", "otp-toulouse", REPO_ROOT / "otp-toulouse" / "Makefile", REPO_ROOT / "otp-toulouse", {}),
+        Project("otp", "otp-toulouse", REPO_ROOT / "services" / "otp-toulouse" / "Makefile",
+                REPO_ROOT / "services" / "otp-toulouse", {}),
     ]
 
 

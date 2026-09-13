@@ -192,6 +192,46 @@ expérience : **pas de remplaçante**, sauf demande.
 comparabilité. À livrer d'un bloc, à une date, et à consigner au changelog. Idéalement mesurés
 par un rejeu apparié, comme l'avait été la ligne « votre vélo est avec vous ».
 
+### 2.5 Archivage et renommage — décision de l'auteur du 2026-09-11
+
+Deux mécanismes s'ajoutent ici, l'un conforme au §2.1, l'autre en **exception explicite**.
+
+**Archivage — conforme.** Une variante peut recevoir un bloc `_archive` :
+
+```yaml
+_archive:
+  statut: archive
+  le: '2026-09-11'
+  motif: >-
+    retiré du choix de l'IHM à la demande de l'auteur. Le texte reste servable.
+```
+
+Elle sort alors du sélecteur du tableau de bord **sans que rien ne change pour le moteur** :
+`PromptManager` la sert comme avant. C'est la différence de fond avec `_invalidation`, et la
+raison pour laquelle le tableau de bord tient deux prédicats séparés — `prompt_ecarte()` (« la
+passerelle refuserait de la servir ») et `prompt_archive()` (« on ne la propose plus »). Les
+confondre ferait mentir le formulaire sur ce que le moteur accepte, et surtout interdirait de
+rejouer une expérience gelée qui désigne un seed retiré du choix. Le test de parité avec le
+refus de la passerelle porte donc sur `prompt_ecarte()` seul.
+
+Archivées le 2026-09-11 : `persona_v1` à `v5`, `expert`, `b0_pristine`, `minimal_persona`,
+`expert_gem_3.8_v1`. `b0_pristine` reste le **seed gelé** de la campagne de référence et
+`expert` le seed de la calibration d'`expert_m1` : tous deux restent servables, c'est le point.
+
+**Renommage — exception au §2.1, point 1.** `expert_chaine` devient `expert_m4` (variante
+active) et `expert_best` devient `expert_m1`, sur décision de l'auteur. Le texte n'est pas
+touché, au caractère près : les sceaux `_neutralite.sha256_texte` restent valides, et chaque
+entrée renommée porte `_provenance.ancien_nom`.
+
+⚠ **Conséquence assumée, tranchée par l'auteur le 2026-09-11 : pas d'alias de compatibilité.**
+Les deux expériences de `data/experiences/archive_v1_2026-09-11/` qui portent
+`variante: expert_chaine` — `exp_gemini-31-fl_expcha_jtir_t0_nosim` et
+`exp_gemini-35-fl_expcha_jtir_t0_nosim` — désignent une clé qui n'existe plus. Le tableau de bord les affichera
+« prompt refusé : variante introuvable » et elles **ne se rejouent plus**. C'est très exactement
+le trou N10 que le §2.1 cherche à éviter — la décision est ici de l'accepter pour ce lot précis,
+pas d'abroger la règle. La lignée `expert_chaine_m5` à `m7.1` conserve son nom ; seul son
+`derive_de` suit vers `expert_m4`.
+
 ---
 
 ## 3. Invalidation des expériences (point 3)

@@ -528,7 +528,9 @@ def render_ticket_form(ticket: tickets.Ticket) -> None:
         choix = col_statut.selectbox(
             "Statut", vocabulaire, index=depart,
             format_func=lambda s: f"{tickets.STATUS_ICON[s]} {s}",
-            help="`en veille` = décision de ne pas avancer maintenant ; `bloqué` = une dépendance extérieure manque.",
+            help="`en veille` = décision de ne pas avancer maintenant, le chantier reprendra tel quel ; "
+                 "`bloqué` = une dépendance extérieure manque ; "
+                 "`amélioration` = ticket conservé comme piste future, rien n'est attendu de lui.",
         )
         # Le champ porte une clé STABLE : sans elle son identité dépendait de `value=`, donc
         # une édition du fichier faite entre-temps changeait l'identité du widget et Streamlit
@@ -1362,7 +1364,7 @@ def render_run_actions() -> None:
 
     with launch, st.container(border=True):
         st.markdown("**▶ Lancer un run offline**")
-        st.caption("Config unique : llm-agents/config/config.yaml (l'éditer directement pour changer de run).")
+        st.caption("Config unique : services/llm-agents/config/config.yaml (l'éditer directement pour changer de run).")
         confirmed = st.checkbox(
             "Je confirme : purge Grafana/Prometheus et compteurs Redis avant démarrage",
             key="run-confirm",
@@ -1623,21 +1625,50 @@ def launch_target(target_name: str, values: dict[str, str]) -> None:
 render_sidebar()
 st.title("🚦 Pilotage llm-agents-gama")
 
+# L'onglet ouvert vit dans l'URL (`?onglet=tickets`) : un rafraîchissement du navigateur
+# ouvre une session neuve, dont l'état client est perdu, et retombait donc toujours sur
+# « Vue d'ensemble ». Le slug est court et ASCII — renommer un libellé (ils portent des
+# emoji) ne doit pas casser un lien mis en favori ni un onglet déjà ouvert.
+ONGLETS = [
+    ("vue", "🏠 Vue d'ensemble"),
+    ("run", "🎮 Run GAMA"),
+    ("providers", "🤖 Providers"),
+    ("calibration", "🧬 Calibration"),
+    ("activites", "📟 Activités en cours"),
+    ("tickets", "🎫 Tickets"),
+    ("metriques", "📊 Métriques"),
+    ("experiences", "🧪 Expériences"),
+    ("travaux", "🗂️ Mes travaux"),
+]
+LIBELLE_PAR_SLUG = dict(ONGLETS)
+SLUG_PAR_LIBELLE = {libelle: slug for slug, libelle in ONGLETS}
+CLE_ONGLET = "onglet_actif"
+
+
+# Un slug absent ou inconnu rend None : `st.tabs` reprend alors le premier onglet, comme
+# avant. Une URL trafiquée n'est donc jamais une erreur de page, juste un retour à l'accueil.
+onglet_demande = LIBELLE_PAR_SLUG.get(st.query_params.get("onglet"))
+
 # Les libellés d'onglet ne peuvent pas être rafraîchis par un fragment : le
 # compteur de jobs vit dans la barre latérale et dans le volet Activités en cours.
+# `on_change` fait que Streamlit rejoue le script à chaque changement d'onglet — sans lui,
+# les onglets ne suivent aucun état et `st.session_state[CLE_ONGLET]` n'existe même pas. Le
+# basculement coûte donc un rerun, comme n'importe quel bouton de la page ; les neuf volets
+# restent dessinés à chaque tour.
 tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_travaux = st.tabs(
-    [
-        "🏠 Vue d'ensemble",
-        "🎮 Run GAMA",
-        "🤖 Providers",
-        "🧬 Calibration",
-        "📟 Activités en cours",
-        "🎫 Tickets",
-        "📊 Métriques",
-        "🧪 Expériences",
-        "🗂️ Mes travaux",
-    ]
+    [libelle for _, libelle in ONGLETS],
+    key=CLE_ONGLET,
+    default=onglet_demande,
+    on_change="rerun",
 )
+
+# L'URL est recopiée à CHAQUE tour plutôt que dans un callback de changement d'onglet :
+# elle reste juste même quand le rerun vient d'ailleurs (bouton, fragment, restauration de
+# session). L'écriture est gardée par une comparaison — poser une query string identique
+# n'aurait rien changé, mais le dire ici évite d'avoir à s'en assurer à chaque relecture.
+slug_actif = SLUG_PAR_LIBELLE.get(st.session_state.get(CLE_ONGLET))
+if slug_actif and st.query_params.get("onglet") != slug_actif:
+    st.query_params["onglet"] = slug_actif
 
 with tab_overview:
     render_overview()

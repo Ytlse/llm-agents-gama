@@ -1,3 +1,1139 @@
+## [2026-09-12] Le dépôt range ses bibliothèques, ses services et son infrastructure
+
+Quatre natures, quatre places. `packages/` pour ce qui se publie, `services/` pour ce qui se
+déploie, `infra/` pour ce qui orchestre, la racine pour ce qui entre et ce qui sort.
+
+**Avant :** onze répertoires à la racine, sans qu'on puisse dire lequel était une bibliothèque,
+lequel un service, lequel un reste de session. Le `Makefile` portait quatre copies du chemin du
+venv ; le fichier compose, les tableaux Grafana et `prometheus.yml` voisinaient avec les données.
+**Après :**
+
+```
+packages/   llm_gateway · mobility_core · mobility_llm
+services/   llm-agents · GAMA · eqasim-toulouse · otp-toulouse
+infra/      docker-compose.yml · prometheus.yml · grafana/
+```
+
+**Ce qui ne change pas :** les chemins DANS les conteneurs. `/app`, `/eqasim`, `/otp` sont
+intacts ; seule la moitié hôte des montages bouge. La pile qui tournait pendant la migration
+n'a pas été redémarrée, et `make ps` la retrouve sous le même nom de projet.
+
+**Une commande à connaître.** Le compose vivant dans `infra/`, chaque appel porte désormais
+`-f infra/docker-compose.yml --project-directory <racine>`. Le second drapeau n'est pas
+décoratif : sans lui, compose réancre tous les chemins relatifs sur `infra/` et échoue dès
+`.env`. Les variables d'environnement `COMPOSE_FILE` et `COMPOSE_PROJECT_DIRECTORY` ne
+suffisent pas — c'est vérifié. Le `Makefile` porte le tout dans `$(COMPOSE)` ; rien à taper.
+
+**Compter les crans ne marchait plus, alors on cherche des repères.** Un dossier qui descend
+d'un niveau périme tout chemin écrit en `parents[2]` ou en `"../../"` — et le dépôt en comptait
+beaucoup, parce que les mêmes fichiers doivent se résoudre sur l'hôte ET dans un conteneur qui
+monte le code ailleurs. Les résolutions de racine passent maintenant par une ancre : le premier
+ancêtre qui porte `scripts/synthesis`, `data/weather/meteo_toulouse_12_mois.csv` ou
+`services/GAMA/CityTransport`. Cette méthode, `experiences/chemins.py` la documentait déjà ;
+elle est étendue à `settings.py`, au `conftest.py` des tests et au lecteur météo.
+
+**Un défaut muet corrigé au passage.** Le lecteur de bulletins météo remontait trois `..` en
+dur. Déplacé, il cherchait ses relevés au mauvais endroit — et 25 tests ne tombaient pas en
+échec : ils **s'ignoraient**, motif « données météo absentes du dépôt ». La donnée était là, le
+chemin ne l'était plus. Le piège suivant valait le détour : ancrer sur le dossier
+`data/weather` ne suffit pas, il existe côté hôte, vide, parce que c'est le point de montage du
+conteneur. Il faut ancrer sur le fichier.
+
+**Le symlink des sorties GAMA.** `services/GAMA/CityTransport/results` pointe vers le run
+courant par un chemin relatif, lu par GAMA sur l'hôte comme dans le conteneur. Les deux
+lectures doivent compter pareil : GAMA est donc monté sur `/services/GAMA` (et non `/GAMA`),
+pour que trois crans donnent la racine des deux côtés.
+
+**Deux lots sortent de git sans quitter le disque :** les 42 fichiers de `docs/traces` — que la
+règle d'ignore n'avait jamais désuivis, un `.gitignore` n'agissant que sur ce qui ne l'est pas
+encore — et les 6 fichiers d'un relevé de jetons sous `tests/token_usage/`.
+
+---
+
+## [2026-09-12] Nommer l'accompagnement ne change pas les décisions — mais le rend mesurable
+
+La sonde du ticket 027 a tourné : 289 déplacements `other` renommés `escort`, un bras LLM sur le
+substrat jumeau, apparié à un témoin complet sur le substrat scellé (même modèle, mêmes clés,
+mêmes graines, 3 154 décisions décidées de part et d'autre).
+
+**Le libellé seul ne fait rien.** Sur les 284 déplacements réétiquetés où les deux bras ont
+réellement choisi, la répartition modale bouge de 4,9 points — mais les motifs qu'on n'a PAS
+touchés bougent de 1,6 à 4,8 points entre les deux bras, et 17,3 % des décisions réétiquetées
+changent contre 19,7 à 23,7 % pour les motifs intacts. Autrement dit l'effet du mot est plus
+petit que le bruit du lot, et la voiture ne gagne que 1,8 point là où la référence en demande 25
+de plus.
+
+**En revanche la dimension notée gagne sa quatrième strate.** `accompagnement` était publiée dans
+la cible EMC² et n'avait jamais été mesurée — `n=0`, `couverte: false`, coût nul. Peuplée, elle
+rend le pire écart des quatre : **L1 61,4 · 44,6 % de voiture contre 71,4 % attendus**.
+
+**Avant :** le composite valait 14,22 et l'axe `motif` se notait sur trois strates — travail,
+études, achats — en laissant de côté le contexte le plus contraint vers la voiture.
+**Après :** sur le même bras et le même modèle, le composite vaut 15,66. Il n'a pas empiré parce
+que l'agent décide moins bien : il a empiré parce qu'une strate qui ne coûtait rien tant qu'elle
+était vide s'est mise à compter.
+
+Conséquence pour la suite : l'option A du ticket 027 — corriger eqasim pour que l'accompagnement
+existe vraiment — ne se justifie plus par un gain de prompt, cette sonde vient de l'exclure. Elle
+se justifie par la métrologie : sans elle, un quart de la cible publiée reste hors de portée du
+score.
+
+---
+
+## [2026-09-12] Le suivi des tickets ne casse plus quand un ticket change d'état
+
+Changer le statut d'un ticket dans `tickets_status.yaml` faisait échouer deux épreuves du
+tableau de bord — et, plus gênant, en avait discrètement vidé une troisième de son contenu.
+Ces épreuves visaient un ticket **par son nom** et supposaient son statut du jour. Le passage
+de `ticket_011` à `abandonné` a suffi : la substitution qu'elles opéraient ne mordait plus,
+l'épreuve n'avait plus rien à refuser, et elle le disait mal.
+
+Elles lisent désormais la clé et le statut **dans le fichier**, quels qu'ils soient. Et quand
+la substitution ne mord pas, l'épreuve échoue franchement en nommant la forme attendue, au
+lieu de passer sur du vide.
+
+**Avant :** changer le statut d'un ticket faisait rougir la suite sans rapport avec le
+changement, et une épreuve pouvait cesser de vérifier quoi que ce soit sans que rien ne
+l'annonce.
+**Après :** les statuts des tickets se modifient librement ; l'épreuve porte sur la forme du
+fichier et le comportement du code, pas sur l'avancement d'un chantier.
+
+---
+
+## [2026-09-12] Le composite dit désormais ce qu'il doit aux décisions que personne n'a prises
+
+Quand une seule option existait — rentrer en voiture parce que la voiture est restée au
+bureau — le décideur n'est pas interrogé : le mode est celui de l'unique itinéraire. Ces
+lignes entraient dans le composite sans que rien ne le signale, et leur nombre **dépend du
+bras**, puisqu'il découle de ses propres choix antérieurs.
+
+Chaque scoring produit maintenant les **deux lectures** du composite — toutes décisions, et
+hors itinéraire unique — plus le **compte** qui les relie. Aucune option à passer : la mesure
+se fait à la clôture d'une exécution comme au recalcul global, et tout l'historique a été
+recalculé.
+
+Ce n'est pas une précaution théorique. Mesuré sur les 16 exécutions du 11 septembre, à
+population et jeu identiques :
+
+| Bras | composite EMD, toutes décisions | hors itinéraire unique | choix forcés |
+|---|---|---|---|
+| `lgbm` | 4,50 | **10,46** | 650 (20,6 %) |
+| `klr` | 4,55 | **9,95** | 664 (21,1 %) |
+| `mnl` | 4,96 | 11,15 | 642 |
+| `gemini-3.5-flash-lite` | 8,95 | 16,70 | 627 |
+| `durmin` (plus rapide) | 26,93 | 23,18 | 811 (25,7 %) |
+| `alea` (tirage uniforme) | 55,95 | 68,18 | 279 (8,9 %) |
+
+Le classement n'est pas le même d'une colonne à l'autre : `lgbm` est premier à gauche,
+troisième à droite. Et l'effet vient bien de la chaîne des véhicules — coupée, les choix
+forcés tombent à 44 pour **tous** les bras et l'écart entre les deux lectures plafonne à 0,32
+point.
+
+**Avant :** une seule valeur de composite par exécution, qui comptait 279 à 811 lignes non
+décidées selon le bras, sans que le tableau, la page d'exécution ni le journal ne le disent.
+Deux bras se comparaient sur des proportions de contrainte différentes.
+
+**Après :** deux colonnes de composite et le compte de choix forcés au tableau de bord comme
+au registre en console, les deux lectures en tête de la page d'une exécution, et une
+`[ALARME]` au journal dès que l'écart dépasse 1,0 point EMD — le seuil qui sépare exactement
+le régime chaîne coupée du régime chaîne active.
+
+Un `scores.json` dépourvu de la seconde lecture est traité comme périmé : il se recalcule à
+plein au lieu d'être rejoué, sinon l'historique antérieur serait resté « non mesuré » pour
+toujours.
+
+**Ce que ce changement ne fait pas :** il ne tranche pas quelle lecture fait foi. Le composite
+principal continue de compter ces lignes ; la convention — quelle grandeur publiée les compte,
+laquelle les écarte, et pourquoi — reste à écrire (ticket 047).
+
+---
+
+## [2026-09-12] Les paquets disent sous quelle licence ils vivent, et n'emportent plus l'enquête
+
+`mobility_core` est installable, donc redistribuable — et il partait avec quatre ressources
+dérivées des microdonnées EMC² Toulouse 2023, dont la convention ProGEDO / ADISP lil-1750
+autorise à diffuser les **résultats**, pas les **données**. Par ailleurs, ni `mobility_core`
+ni `mobility_llm` ne déclaraient de licence : seul `llm_gateway` était outillé.
+
+**Avant :** `pip install mobility-core` livrait `zf_couronne.json` (le plan de sondage de
+l'enquête : 785 zones fines → secteur de tirage → commune), `zf_housing_type.json`
+(l'effectif par zone fine — médiane 12 ménages, 195 zones sous 5) et `zf_zones.meta.json`.
+Les deux derniers sont pourtant exclus par `.gitignore` depuis toujours : **le `.gitignore`
+ne protège pas le paquet.** Le paquet lui-même n'annonçait aucune licence.
+
+**Après :** sdist et wheel contiennent huit ressources, toutes des résultats — coefficients
+de logit (vélo, permis, abonnement TC), agrégats de niveau couronne, hiérarchie des modes du
+rapport publié AUAT/CEREMA, périmètre des 453 communes. `mobility_core` et `mobility_llm`
+déclarent `Apache-2.0` et embarquent `LICENSE` + `NOTICE`, ce dernier disant que la licence
+du code **ne s'étend pas** aux données de l'enquête.
+
+Trois réglages y concouraient, chacun suffisant à tout laisser passer : `package-data`
+utilisait un glob `data/*.json`, qui ramasse ce qui se trouve sur le disque au moment du
+build et non ce que git suit ; `include-package-data` valait `true` par défaut, ce qui
+**ajoute** à la liste au lieu de la restreindre ; et sans `MANIFEST.in`, l'archive source
+ignorait complètement `pyproject.toml`. `tests/test_packaging_licence.py` construit
+désormais les deux archives et regarde dedans — la déclaration ne fait pas foi, l'artefact
+oui.
+
+`zf_couronne.json` **sort aussi du dépôt** : ce n'est pas un agrégat mais le plan de sondage,
+et le dépôt a vocation à accompagner une publication. Comme les trois autres ressources
+restreintes, elle se produit localement (`make communes-couronnes`) et se lit par
+`mobility_core.resources.restricted_data_path()`, qui regarde d'abord
+`MOBILITY_CORE_EMC2_DATA_DIR`. Introuvable, les `load()` lèvent en nommant la ressource, la
+commande, la variable et les chemins essayés — jamais de repli silencieux, parce qu'une
+couronne devinée se relit comme une part modale et non comme un bug.
+
+**Rien ne change à l'exécution** : les conteneurs montent `mobility_core/src/mobility_core/`
+en volume et le venv local est en editable. Un poste neuf, en revanche, doit maintenant
+produire `zf_couronne.json` avant de classer une résidence.
+
+Le partage résultat / donnée reste ouvert au ticket 038 pour `commune_couronne.json` et
+`couronne_perimetre.geojson` : l'avis de l'ADISP est attendu.
+
+---
+
+## [2026-09-12] Une sonde pour savoir ce que vaut un libellé, sans régénérer la population
+
+Le motif `other` couvre 18,1 % des déplacements du substrat de référence, et l'enquête EMC² 2023
+dit que les deux tiers en sont de l'**accompagnement** — le motif le plus routier de toute la
+référence (70 % voiture), aujourd'hui ni nommé dans le prompt ni noté dans le score. La question
+« le modèle réagit-il seulement au libellé ? » se chiffrait jusqu'ici au prix d'une population
+régénérée et de tous les bras à rejouer. Elle se chiffre maintenant pour le prix d'un bras.
+
+`python scripts/deriver_sonde_escort.py` fabrique en une seconde un substrat jumeau du substrat
+scellé : mêmes personnes, mêmes lieux, mêmes horaires, mêmes propositions à l'octet près, et
+289 activités `other` tirées au sort (66,2 %, la part mesurée dans l'enquête) renommées `escort`.
+L'expérience `…_pop-1000_AAMAS_v5_escort66_t0_nosim` s'y lance comme sur n'importe quel substrat.
+
+**Avant :** mesurer l'effet d'un libellé de motif supposait de corriger la chaîne eqasim, de
+régénérer la cohorte, de repréparer un jeu (68 minutes de moteurs) et de rejouer les 18 exécutions
+— dont les bras LLM payants. Autant dire : jamais, ou une fois.
+**Après :** le substrat jumeau se fabrique en 0,6 s, le bras s'y joue seul et s'apparie au bras
+témoin déjà mesuré. Le substrat scellé n'est pas touché, les exécutions existantes restent valides.
+
+Trois garde-fous, parce qu'une sonde mal rangée devient une référence par accident : elle **ne se
+scelle pas** (donc ne peut pas devenir le défaut du formulaire — la cause racine du ticket 045),
+elle écrit un `PROVENANCE.yaml` qui dit **ce qu'elle ne mesure pas**, et le script **refuse de
+dériver** si le motif venait à influencer le calcul d'un itinéraire, auquel cas la copie des
+propositions ne serait plus légitime.
+
+Ce que la sonde ne dit pas, et qui doit se lire avec elle : le tirage est **aléatoire**. Elle ne
+sait pas lesquels des `other` sont vraiment des accompagnements — cette information est détruite
+en amont, dans eqasim. Elle borne le gain narratif atteignable ; elle ne mesure pas la justesse de
+l'affectation. Et son résultat se lit contre le plancher de reformulation du ticket 024 (2,03 de
+composite), jamais contre zéro.
+
+---
+
+## [2026-09-12] Le tableau de bord rouvre sur l'onglet qu'on regardait
+
+L'onglet ouvert s'écrit désormais dans l'URL du tableau de bord (`?onglet=tickets`). Un
+rafraîchissement du navigateur revient donc là où on était, et un lien vers un volet précis
+se partage tel quel : `http://localhost:8503/?onglet=metriques` ouvre les métriques.
+
+**Avant :** un F5 — ou la réouverture d'un onglet de navigateur restauré — repartait de
+« Vue d'ensemble », quel que soit le volet consulté. En cours de suivi d'une exécution dans
+« Expériences », il fallait retrouver son onglet, ses filtres et sa ligne à chaque
+rechargement.
+**Après :** la page rouvre sur le même volet. Une URL sans `onglet`, ou portant un slug
+inconnu, ouvre « Vue d'ensemble » comme avant — une adresse trafiquée ne produit pas d'erreur.
+
+Ce que cela ne fait pas : seul le **volet** est mémorisé. La ligne sélectionnée dans le
+registre des expériences ne l'est toujours pas (les colonnes et filtres du tableau, eux, se
+retiennent déjà sur disque). Changer d'onglet rejoue le script — le basculement coûte
+maintenant ce que coûte un bouton de la page, au lieu d'être instantané côté navigateur.
+
+---
+
+## [2026-09-12] Un ticket peut être gardé comme piste sans encombrer la file de travail
+
+Le vocabulaire des statuts de tickets gagne un septième mot : **`amélioration`** 🟣, pour ranger
+un ticket qu'on conserve au titre d'une amélioration future. Il se choisit dans le tiroir de
+chaque ticket du volet Tickets, comme les autres, et s'écrit dans `tickets_status.yaml`.
+
+**Avant :** un ticket qu'on ne voulait ni faire maintenant ni jeter n'avait que deux cases, et
+aucune ne disait la vérité. `en veille` promet un chantier interrompu qui reprendra tel quel, donc
+on va y chercher ce qui bloque ; `abandonné` dit qu'on n'y reviendra pas, donc on cesse de le lire.
+Une piste gardée exprès se déguisait en l'un ou en l'autre, et la file « à faire » se lisait comme
+plus lourde qu'elle ne l'était.
+**Après :** `amélioration` la range pour ce qu'elle est — rien n'est attendu de ce ticket, et on
+ne le jette pas pour autant. Les compteurs du volet Tickets comptent une colonne de plus, et le
+tri place ces tickets après `en veille`, avant les terminés.
+
+Ce statut ne se **déduit jamais** du contenu d'un ticket : ni ses cases à cocher, ni sa ligne
+`**État**` ne peuvent le produire — seule une entrée écrite le pose. Sans cela, un ticket rangé là
+serait retombé dans « à faire » au premier rechargement du tableau de bord.
+
+Aucun ticket existant n'a été reclassé : le mot est disponible, son emploi reste une décision.
+
+---
+
+## [2026-09-12] La cible « transports collectifs » ne sera pas élargie, et on dira pourquoi
+
+Le ticket 022 se termine sans trois de ses cinq lots. Sa prémisse a été vérifiée au lieu d'être
+supposée, et elle est fausse sur le corpus actuel.
+
+Ce ticket partait d'un fait exact : la simulation ne produit aucun itinéraire mixte — OTP est
+interrogé mode par mode, donc ni « voiture jusqu'au parking-relais puis métro », ni « vélo jusqu'à
+la gare puis TER ». L'enquête, elle, en compte, et les range presque tous en transports collectifs.
+Une part de la cible est donc hors d'atteinte par construction : jusqu'à 59 % sur la tranche
+20-50 km. Il en concluait que le modèle était puni pour un défaut d'instrument, et proposait de
+remplacer la cible par un intervalle.
+
+**Avant :** on attendait de cette neutralisation qu'elle améliore le score, au point que le
+ticket exigeait de justifier l'amélioration strate par strate pour qu'elle ne ressemble pas à un
+ajustement sur la cible.
+**Après :** mesuré sur 17 exécutions archivées, l'élargissement ne rapporte **rien** aux trois
+bras LLM (0,000 point) ni aux oracles statistiques (0,17 point au plus), mais **+2,2 points** aux
+deux baselines dégénérés — « tout en voiture » et « toujours le plus rapide ». Il aurait rapproché
+le modèle sous test de ses hommes de paille.
+
+La raison est que la simulation **sur-produit** les transports collectifs là où la cible était la
+plus inatteignable : 36 % contre une cible de 13 % sur 20-50 km, 47 % contre 12 % au-delà. Un
+intervalle qui ne s'étend que vers le bas ne change alors rien — et sur le composite, qui compare
+des profils de distance et non des parts par tranche, il dégraderait le score.
+
+Le trait `rabattement_plausible`, la table d'atteignabilité et la bande de rendu n'existeront
+donc pas. Ce qui reste à faire part dans le **ticket 049** : publier la limite, avec son amplitude
+par strate **et son sens**. Une limite d'instrument qui ne mord pas dans le sens attendu se dit,
+elle ne se tait pas — sans quoi le lecteur de l'article croit qu'elle joue contre le modèle.
+
+Le lot livré du 022 reste en place et inchangé : la hiérarchie des modes de l'enquête, gelée et
+servie à toutes les tables du dépôt.
+
+---
+
+## [2026-09-12] La mémoire tient dans un seul document, et chaque choix cite sa source
+
+`docs/arch/memory-stm-ltm.md` devient le document unique de la mémoire des agents. Le document
+séparé qui décrivait l'architecture proposée est supprimé : sa matière forme désormais la
+partie III, marquée « spécifié, non implémenté ». Trois parties, un seul endroit où chercher.
+
+**Avant :** deux documents, l'un décrivant le dispositif en service, l'autre une proposition.
+Rien n'empêchait de lire le second en croyant lire le premier.
+**Après :** un document en trois parties — la filiation, le dispositif en service, les
+évolutions spécifiées — dont l'en-tête dit laquelle décrit du code qui existe.
+
+**Chaque mécanisme dit maintenant d'où il vient.** La mémoire n'est pas une invention locale :
+c'est l'architecture d'agents génératifs de Park et al. (2023), adaptée au transport multimodal
+par Vu, Gaudou et Oberoi (2025), dont ce dépôt est la continuation. La partie I établit la
+correspondance mécanisme par mécanisme, et surtout les quatre endroits où le dispositif s'écarte
+de son ancêtre, vérifiés sur le texte des deux articles et non de mémoire.
+
+Deux de ces écarts expliquent des faits qui paraissaient arbitraires. Le paramètre au nom
+trompeur qui annonce une importance sans en être une est le vestige d'une substitution : Park et
+al. portent un score d'importance, Vu et al. ne le reprennent pas et lui substituent un score
+lexical. Et nos agents oublient trois fois plus vite que ceux de Park et al., dont la demi-vie
+est de 5,8 jours contre 1,94 ici, parce que leur décroissance part du dernier rappel du souvenir
+là où la nôtre part de son écriture.
+
+**Le plancher journalier livré la veille change de statut.** Ce n'était pas une invention mais
+une restauration : Vu et al. écrivent que la mémoire courte sert d'entrée à la réflexion à la
+fin de chaque jour simulé. Le seuil par compte d'entrées était une dérive par rapport à cette
+spécification.
+
+**La documentation technique est complète et vérifiée contre le code.** Les vingt-et-un
+paramètres de mémoire y figurent, groupés par rôle, dont six qui n'y étaient pas — parmi eux le
+drapeau qui coupe la mémoire pour les bras d'ablation, et un paramètre de modèle d'embedding
+déclaré mais branché sur rien. Les métriques, les lignes de journal utiles et l'alarme sont
+tabulées, avec ce qui n'est pas instrumenté et le deviendra.
+
+---
+
+## [2026-09-12] Le statut du ticket 014 redit où vit l'anticipation
+
+Le tableau des tickets décrivait l'anticipation de la chaîne de journée comme un bloc de
+prompt de la simulation. Ce n'est plus le seul endroit où elle vit : la plateforme
+d'expériences la rejoue hors GAMA, le drapeau `agenda_anticipation_enabled` entre dans les
+réglages hérités d'une exécution — donc dans l'identité d'une mesure — et le ticket 046 a
+depuis pris cette anticipation pour objet d'étude, avec la décision de la garder en l'état.
+
+**Avant :** la note du 014 s'arrêtait au 2026-08-24 ; lue aujourd'hui, elle laissait croire
+que couper le drapeau restait une option ouverte et que l'anticipation ne concernait que le
+prompt de simulation.
+**Après :** la note dit où l'anticipation est produite et tracée, renvoie au 046 et à sa
+décision, et nomme le prérequis qui bloque les options 2 et 3 — le jeu v5.
+
+Le statut reste `en cours` : la revue du 2026-08-24 avait explicitement refusé la mise en
+veille de ce ticket, rien depuis ne la justifie.
+
+---
+
+## [2026-09-11] Chaque agent consolide sa journée, et l'oubli se règle en jours
+
+Trois changements dans la mémoire des agents, qui sont le préalable aux expériences
+d'hystérésis. Ticket 048.
+
+**Tout agent consolide au moins une fois par jour simulé.** À 22 h, tout agent dont le tampon
+de mémoire courte n'est pas vide produit une réflexion, quel que soit son remplissage, une fois
+par jour au plus. Le seuil de dix entrées n'est pas touché : le plancher s'y ajoute.
+
+**Avant :** le déclenchement était purement volumétrique, donc le moment où un agent consolidait
+dépendait du nombre de déplacements qu'il faisait ce jour-là. Un agent à un seul déplacement
+produisait six entrées et ne consolidait pas de la journée ; un agent à quatre en produisait
+vingt-quatre et consolidait deux fois.
+**Après :** le calendrier est déterministe. Comme une décision ne lit que la mémoire longue, un
+souvenir non consolidé n'existe pas pour elle : la position d'un incident du soir par rapport à
+la décision du lendemain cesse d'être une variable non contrôlée. Le journal distingue les deux
+voies, par le seuil ou par le plancher.
+
+**L'oubli se règle en jours.** La décroissance d'un souvenir n'est plus réglée par une base
+d'exponentielle mais par une constante de temps, exprimée en jours. Le défaut de 2,8 jours
+reproduit exactement l'ancienne décroissance à trois décimales, demi-vie de 1,94 jour comprise,
+de sorte qu'aucun écart mesuré après ce changement ne vient d'un oubli silencieusement accéléré.
+
+**Avant :** « la base de l'exponentielle passe de 0,7 à 0,88 », qui ne se discute pas.
+**Après :** « un souvenir ordinaire dure trois fois plus longtemps », qui se discute. C'est ce
+paramètre que les bras de sensibilité des expériences doivent viser.
+
+**Le classement des souvenirs devient comparable d'une décision à l'autre.** Les composantes du
+score entrent désormais en valeur absolue.
+
+**Avant :** chaque composante était ramenée par min-max à l'intérieur du lot de candidats, donc
+le souvenir le plus récent valait toujours 1 et le plus ancien toujours 0, quel que soit
+l'écart réel. L'ordre par ancienneté était insensible au paramètre d'oubli, et deux décisions
+n'étaient pas comparables entre elles.
+**Après :** un souvenir d'un jour vaut la même chose quels que soient ses voisins, et changer la
+constante de temps déplace réellement la courbe.
+
+---
+
+## [2026-09-11] « Mes expériences » s'ouvre sur dix colonnes et se filtre colonne par colonne
+
+Le tableau du registre affichait quinze colonnes et n'offrait qu'une recherche texte sur
+l'ensemble : retrouver une ligne se faisait en lisant de gauche à droite, et « les exécutions
+terminées de ce fournisseur, ce prompt-là excepté » ne s'exprimait pas. Il s'ouvre maintenant
+sur dix colonnes et chacune porte son propre filtre, à la manière d'un tableur.
+
+**Avant :** quinze colonnes, un filtre texte global, un tri simple.
+**Après :** `experience`, `execution`, `etat`, `decideur`, `fournisseur`, `prompt`, `mode`,
+`couverture`, `composite_emd`, `composite_l1` — et un dépli **🔎 Colonnes et filtres** où chaque
+colonne affichée offre ses valeurs distinctes (OU dans la colonne, ET entre colonnes), où les
+trois colonnes de chiffres se bornent en min/max, et où **↺ Réinitialiser** remet tout.
+
+`scores` (📊), `jeu`, `jeu_etat`, `chaine` et `formule` ne disparaissent pas : le sélecteur de
+colonnes les rappelle d'un clic, et une colonne rappelée reprend sa place dans l'ordre du
+tableau. Colonnes et filtres **survivent à la fermeture de la page** ; s'ils cachent des lignes
+au retour, un bandeau le dit et propose de les rendre — un registre amputé par un filtre posé la
+veille, sans cause visible, serait pire que pas de mémoire du tout.
+
+**Trois précautions qui comptent plus que le filtre lui-même.** Ce qui est retenu sur disque,
+ce sont les valeurs **exclues** et non les cochées : une exécution lancée demain, avec un
+fournisseur ou un prompt inconnu hier, arrive **cochée** au lieu de naître invisible. Masquer
+une colonne **annule son filtre** : aucune ligne ne peut sortir du tableau à cause d'un critère
+qu'on ne voit pas. Et `formule` étant désormais masquée par défaut, l'avertissement qu'elle
+portait ne tombe pas avec elle — **un bandeau ⚠ compte les lignes affichées dont le score a été
+calculé avec une formule périmée**, parce qu'un chiffre qu'on citerait à tort ne doit pas
+dépendre d'une colonne qu'on a fermée.
+
+Au passage, le filtre texte est devenu une sous-chaîne **littérale** : il passait par
+`str.contains` de pandas, qui y lisait une expression régulière — saisir `exp_(alea` faisait
+tomber la page.
+
+**Avant :** filtre `exp_(alea` → la page tombe sur une erreur de regex.
+**Après :** filtre `exp_(alea` → les lignes qui contiennent ces caractères-là.
+
+---
+
+## [2026-09-11] Neuf prompts quittent la liste, deux changent de nom
+
+Le sélecteur « Prompt système » du tableau de bord ne propose plus que les variantes qu'on
+compte réellement lancer. Neuf sont **archivées** : `persona_v1` à `v5`, `expert`,
+`b0_pristine`, `minimal_persona`, `expert_gem_3.8_v1`. Deux sont **renommées** :
+`expert_best` devient `expert_m1`, et `expert_chaine` — la variante active — devient
+`expert_m4`.
+
+**Avant :** dix-huit variantes dans le sélecteur, dont cinq `persona_v*` jamais relancées et
+deux seeds gelés qu'on ne choisit pas à la main.
+**Après :** huit variantes proposées. Les neuf autres restent visibles dans le décompte des
+écartées, avec leur motif — un retrait qui ne se compte pas serait une suppression déguisée.
+
+**Archivée ne veut pas dire refusée.** Une variante archivée reste servie normalement par la
+passerelle : `b0_pristine` est le seed gelé de la campagne de référence, `expert` celui de la
+calibration d'`expert_m1`, et une expérience qui les désigne se rejoue à l'identique. C'est
+toute la différence avec une variante invalidée, que le moteur refuse de servir. Le tableau de
+bord tient désormais les deux prédicats séparément.
+
+**Ce que le renommage coûte, et qui a été accepté.** Il n'y a **aucun alias de compatibilité**
+(décision de l'auteur). Les **deux** expériences de `data/experiences/archive_v1_2026-09-11/`
+qui portent `variante: expert_chaine` — `exp_gemini-31-fl_expcha_jtir_t0_nosim` et
+`exp_gemini-35-fl_expcha_jtir_t0_nosim` — désignent une clé qui n'existe plus : le tableau de
+bord les affichera « prompt refusé : variante introuvable » et **elles ne se rejouent plus**.
+Aucune expérience ne désignait `expert_best`, `expert` ni `b0_pristine`. Le texte
+des deux variantes renommées est inchangé au caractère près — les sceaux d'audit restent
+valides — et chaque entrée garde son ancien nom dans sa provenance. La lignée
+`expert_chaine_m5` à `m7.1` conserve son nom.
+
+Effet de bord sur le nommage canonique : une expérience lancée sur la variante active
+s'appellera désormais `…_expm4_…` là où elle s'appelait `…_expcha_…`. **Le cache LLM du
+contrôleur, lui, n'est pas invalidé** : l'empreinte du prompt actif porte sur le texte, pas sur
+la clé, et elle est inchangée (`396eded46263…` avant comme après).
+
+---
+
+## [2026-09-11] Quatorze mesures sur la cohorte de référence, et ce que la chaîne des véhicules coûte
+
+Le jeu de déplacements de la cohorte v5 est construit, et les quatorze exécutions gratuites du
+ticket 045 ont tourné. **Aucun appel de modèle de langue.** Les six bras payants attendent
+toujours un feu vert explicite.
+
+**Le jeu v5.** 3 299 déplacements attendus, 3 161 exploitables, et **zéro défaillance de
+moteur** : les 138 déplacements sans proposition ont tous leur origine pour destination — 77
+fermetures de journée et 61 trajets entre deux activités situées au même endroit. Le manifeste
+porte pour la première fois l'état du dépôt, l'empreinte du graphe qu'OTP charge réellement et
+la clé effective du graphe piéton.
+
+**Ce que la chaîne des véhicules impose, chiffré.** Sept bras joués deux fois, chaîne active
+puis coupée. Le résultat le plus net porte sur les décisions où une seule option existait, que
+personne n'a donc choisies :
+
+| Bras | Chaîne active | Chaîne coupée |
+|---|---:|---:|
+| Durée minimale | 811 | 44 |
+| Majorité voiture | 787 | 44 |
+| Régression à noyau | 664 | 44 |
+| Forêt aléatoire | 656 | 44 |
+| Booster | 650 | 44 |
+| Logit multinomial | 642 | 44 |
+| Tirage au sort | 279 | 44 |
+
+**Avant :** un seul chiffre de parts modales, muet sur la part qu'aucun décideur n'avait choisie.
+**Après :** chaîne active, le nombre de choix forcés va de 279 à 811 **selon le bras**, puisqu'il
+découle de ses propres décisions du matin. Chaîne coupée, il tombe à **44 pour tous**, à
+l'identique : il ne dépend plus que de l'offre.
+
+**Et ces choix forcés pèsent lourd.** Sur les quatre familles statistiques, exclure les
+décisions à option unique fait tomber la part voiture de plus de neuf points — le booster passe
+de 51,7 % à 42,2 %. Chaîne coupée, l'écart entre les deux lectures disparaît (±0,3 point). Neuf
+points de part voiture ne venaient donc pas d'un choix de modèle mais de la contrainte de
+chaîne, et rien ne le disait.
+
+**Couper la chaîne augmente la part voiture** de 4,6 à 5 points pour les quatre familles : la
+voiture redevient proposable partout, y compris là où elle était garée ailleurs.
+
+**Le tableau de Pilotage dit l'état de la chaîne en toutes lettres.** Le nom d'une expérience le
+portait déjà, mais sous forme codée. Une colonne annonce désormais « active », « coupée », ou
+lequel des deux interrupteurs reste en service. Un réglage qui change ce que le décideur peut
+choisir ne doit pas demander de connaître une convention pour se lire.
+
+**Le témoin forêt aléatoire tourne en local, et c'est déclaré.** Il ne sérialise aucun arbre :
+il se réajuste au chargement puis vérifie qu'il reproduit les métriques publiées. Le conteneur
+porte scikit-learn 1.9.0, l'artefact a été estimé sous 1.8.0, et la forêt réajustée y diffère —
+assez pour que le garde-fou refuse, à raison. Ses deux bras ont donc tourné sur l'hôte, où la
+version correspond. La tolérance n'a pas été desserrée ; l'écart d'environnement est écrit.
+
+---
+
+## [2026-09-11] L'article ne se modifie plus dans le dos de son auteur
+
+Les `.md` de `docs/paper/article/` sont désormais verrouillés en écriture : toute session qui
+veut y toucher présente d'abord son diff — fichier, section, avant/après — et s'arrête pour un
+accord explicite. **Un seul accord par tâche**, valable pour les fichiers annoncés dans ce diff
+et rien d'autre. Lecture, grep et citation restent libres, et le reste de `docs/paper/`
+(`archive/`, `sources/`, `methode/`, `figures/`) n'est pas concerné.
+
+Symétriquement, une tâche qui touche un chiffre citable, une métrique, un protocole, un jeu gelé
+ou un comportement décrit dans l'article rend avant de conclure un bloc `SIGNALEMENT ARTICLE` :
+par section, ce qui a changé, la phrase qui devient fausse, l'action suggérée — et la liste des
+sections vérifiées et indemnes, pour qu'une vérification muette ne passe pas pour une absence de
+problème. Ce bloc constate, il ne réécrit rien : la correction repasse par le verrou.
+
+**Avant :** une session pouvait reformuler l'abstract ou rafraîchir un chiffre de la section
+ablation sans que rien ne le signale ; et un changement de métrique côté code laissait le texte
+FR et EN affirmer l'ancienne définition, jusqu'à ce qu'une relecture humaine le remarque.
+
+**Après :** l'écriture demande, et le signalement vient tout seul en fin de tâche.
+
+Deux skills portent la règle — `article-verrou` et `article-impact` — doublées de
+`permissions.ask` sur `Edit`/`Write` dans `.claude/settings.json`, actif même dans une session
+qui ne charge pas les skills. **Attention :** cette garde du harness ne couvre pas une écriture
+passée par `Bash` (`sed -i`, redirection, heredoc, `git checkout`) — sur ce chemin, seule la
+règle inscrite dans `.claude/CLAUDE.md` s'applique.
+
+---
+
+## [2026-09-11] Deux giga-octets de données périmées quittent `data/`
+
+Inventaire complet de `data/` puis purge de ce qui ne sert plus : instantanés de caches déjà
+remplacés, graphes routiers d'une clé abandonnée, populations hors du champ du chargeur, sorties
+régénérables et doublons compressés. **`data/` passe de 6,8 Go à 4,8 Go** sans qu'aucune pièce de
+référence ne bouge : la cohorte scellée v5 garde son empreinte `de73532e…`, le graphe OTP en
+service, les feeds des trois réseaux, les caches eqasim et OSMnx en service, les micro-données
+EMC² et les quatre sauvegardes de cohortes sont intacts.
+
+**Avant :** trois copies de la même campagne d'expériences (dossier, zip, exécutions), deux clés de
+graphe OSMnx dont une inerte depuis mai, un cache OTP peuplé d'itinéraires calculés sur des
+populations qui ne sont plus la référence, et un second `graph.obj` du 19 mai dormant dans le
+dossier du feed Tisséo — sans qu'aucun document ne dise lequel faisait foi.
+
+**Après :** une seule copie de chaque chose. Les définitions d'expériences (69 fichiers, 276 Ko)
+restent versionnées, leurs exécutions vivent dans le zip d'archive. `data/README.md` décrit
+l'arborescence réelle, la table des montages Docker, et énonce que **`data/gtfs/graph.obj` fait
+foi** — `settings.gtfs.gtfs_file` ne sert qu'à lire les calendriers du feed urbain.
+
+Les archives de graphes OTP (`data/gtfs/archives/`) sont conservées : chacune porte un README qui
+dit ce qu'elle rejoue — le prédécesseur direct, le retour arrière liO, la comparaison avant/après
+la coupe de la falaise de lignes, l'état d'avant le polygone des 453 communes.
+
+**Attention :** vider `data/cache/otp/` pendant que la pile tourne laisse le service écrire dans un
+fichier délié — les entrées mémorisées ne survivent pas. Arrêter `controller` et `osmnx1` avant de
+purger un cache, ou les redémarrer après.
+
+---
+
+## [2026-09-11] Le chapitre des métriques ne publie plus de chiffre tant que les mesures bougent
+
+Passe de fond sur le chapitre 4 de l'article. **Plus aucun résultat n'y est écrit en clair** : les
+expériences sont à refaire sur la cohorte en service, les mesures peuvent donc encore bouger, et
+tout chiffre mesuré devient un emplacement **[xx]** avec sa source en commentaire. Seules restent en
+clair les constantes de conception — 21 variables, quatre modes, six itinéraires au plus, mille
+personnes, borne d'équivalence d'un point, 453 communes.
+
+**Avant :** le chapitre portait des résultats mesurés au fil de la journée, dont certains sur des
+artefacts réestimés depuis.
+**Après :** un chiffre laissé dans un brouillon ne peut plus être cité par erreur ; la source reste
+à côté de l'emplacement, de sorte que le remplissage ne demande aucune recherche.
+
+Le reste de la passe répond à une relecture. Les deux divergences du composite sont maintenant
+**écrites en formules et justifiées** : la divergence de Jensen-Shannon sur les axes nominaux, parce
+qu'elle est symétrique, bornée et définie quand une modalité est absente — un modèle de langue
+répond volontiers « 90 / 10 / 0 / 0 » —, et parce que c'est la grandeur que publie le travail le
+plus proche ; la distance de transport optimal sur les axes ordinaux, parce qu'une divergence
+ignorerait l'ordre et ferait peser une confusion entre classes extrêmes comme une confusion entre
+classes voisines. Les nats sont définis. La règle de lecture masse / mode le plus probable est
+reformulée autour de ce que le dispositif fait réellement : le modèle verbalise sa distribution, la
+décision est un tirage dedans, et retenir le mode le plus probable écraserait la variabilité
+individuelle. La liste des 21 variables part en **annexe**, chacune glosée en une ligne.
+
+Trois sujets sortent du chapitre parce qu'ils méritent d'être traités à part. Le périmètre de mesure
+est resserré en trois conventions, et le raisonnement sur les offres à mode unique part au
+[ticket 047](tickets/ticket_047_offre_a_mode_unique_ce_qui_compte_comme_decision.md), neuf : un
+déplacement à itinéraire unique compte dans les parts modales, qui décrivent ce qui a eu lieu, et
+sort des mesures d'accord, qui décrivent ce qui a été décidé. L'asymétrie d'information entre
+l'agent et les modèles tabulaires porte désormais une **note de point à travailler** renvoyant au
+ticket 046 — la formulation n'est pas arrêtée, et aucun chiffre ne se publie sous un contrat dont
+l'énoncé ne l'est pas. Enfin le socle ne parle plus que d'**une** cohorte en service, les versions
+antérieures étant archivées, et la section sur la convention d'accès aux données est retirée : la
+convention s'applique, elle ne se raconte pas.
+
+Deux passes de coupe ont suivi, à la relecture. La distance de transport optimal n'est plus
+justifiée, seulement définie ; le principe « aucun indicateur ne se suffit » ne cite plus le
+résultat qui l'illustre, parce qu'une mesure n'a pas sa place dans un chapitre de définitions ; le
+périmètre de mesure tombe à trois phrases ; et la section sur le dimensionnement de l'échantillon
+est **supprimée** faute de pages — il en reste une phrase qui renvoie à la note de dimensionnement
+du dépôt. Le chapitre couvre désormais exactement ce que la section 1.4 lui annonce, et son corps
+passe de 3 444 à 2 599 mots.
+
+Répercussion au chapitre 6 : les quatre familles de référence y sont désormais jouées **deux fois**,
+en chaîne et hors chaîne. H0 se teste contre la lecture hors chaîne, qui est le plafond
+distributionnel honnête ; l'écart entre les deux lectures chiffre ce que coûte de ne pas anticiper
+la journée.
+
+---
+
+## [2026-09-11] L'article dit à quelles conditions il détient les données d'enquête
+
+L'engagement signé auprès de Quetelet-Progedo-Diffusion pour l'accès aux microdonnées de
+l'enquête ménages-déplacements toulousaine entre dans le papier. Il était tenu hors du dépôt ;
+il est désormais recopié, relié au texte, et ses conséquences sont écrites là où elles se
+décident — dans le chapitre qui décrit le socle d'évaluation et dans les consignes de soumission.
+
+**Le millésime cité est 2023.** La notification de diffusion portait « 2013 » ; l'enquête utilisée
+est celle de 2023, et c'est elle que citent l'article et sa bibliographie. La correction est
+consignée plutôt que passée en silence, et aucun chiffre n'en dépend.
+
+**Ce que l'article ne pourra pas montrer, il le dit maintenant.** La convention interdit de céder
+les données « sous quelque forme que ce soit ». Ni les fichiers d'enquête, ni le jeu de test scellé
+de 13 045 trajets n'accompagneront donc la soumission : ce sont les coefficients, les scores et les
+importances de variables des références tabulaires qui circulent, pas les trajets qui les ont
+produits. La reproductibilité offerte est dissymétrique, et le texte l'annonce.
+
+**Avant :** la section sur le socle d'évaluation décrivait la donnée d'enquête sans dire à quelles
+conditions elle est détenue ; le ZIP de soumission n'avait pas de règle sur ce qu'il peut emporter.
+**Après :** une section sur la provenance des données, une annexe qui porte la citation de la
+source et les engagements, deux règles dans les consignes de soumission, et un journal des
+informations à envoyer au diffuseur — vide à ce jour, ce qui est en soi une action à mener.
+
+Reste à compléter : le libellé exact du modèle de citation annexé à la convention (l'annexe en
+porte un provisoire, marqué comme tel), le statut des ressources dérivées de l'enquête embarquées
+par `mobility_core` (ticket 038), et la date de destruction des fichiers sources.
+
+---
+
+## [2026-09-11] La journée se referme, et un seul substrat reste en place
+
+Livraison des corrections du [ticket 045](tickets/ticket_045_substrat_unique_v5_et_reconstruction_des_experiences.md)
+et remise à neuf de la base d'expériences. Aucune mesure n'a été relancée : ce qui suit prépare
+la reconstruction sur la cohorte v5, il ne la commence pas.
+
+**La journée compte désormais son retour au domicile.** La plateforme d'expériences énumérait les
+déplacements par paires consécutives d'activités et s'arrêtait à la dernière, quand la chaîne est
+cyclique et que la simulation, elle, la referme. Une journée de n activités vaut n déplacements,
+pas n − 1. L'énumération est maintenant unique, partagée par la plateforme et le contrôleur.
+
+**Avant :** 2 405 déplacements attendus sur la cohorte v5, le retour au domicile jamais décidé —
+soit la part de la journée où la contrainte de chaîne des véhicules pèse le plus, et donc des parts
+modales tirées vers les modes d'aller.
+**Après :** 3 299 déplacements attendus, dont 138 à origine égale destination — 77 fermetures de
+journée (la personne finit déjà chez elle) et 61 trajets entre deux activités au même lieu —
+comptés dans les attendus bruts et exclus des exploitables.
+
+**Une population archivée ne se lit plus par accident.** Les cohortes v1, v3 et v4 sont rangées
+sous `data/population/archive/`, et le code refuse de les lire. La levée demande un motif écrit
+dans la définition, journalisé à chaque lecture — pas une case à cocher. Le tableau de bord ne
+propose plus rien d'archivé nulle part, y compris derrière « Masquer les obsolètes », qui gouverne
+les exécutions remplacées et n'a jamais eu à gouverner les archives.
+
+**Le nom d'une expérience dit toujours sur quelle cohorte elle a tourné.** La population n'est plus
+une valeur muette du nommage, et le formulaire propose la dernière cohorte scellée par date de
+sceau, non la première par ordre alphabétique. C'est la cause racine qui se ferme : les deux
+mécanismes qui ont conduit 36 exécutions sur la mauvaise cohorte sont corrigés chacun de son côté.
+
+**Avant :** `exp_durmin_nosim` — le substrat était invisible.
+**Après :** `exp_durmin_pop-1000_AAMAS_v5_nosim` — deux cohortes ne peuvent plus porter le même nom.
+
+**Une mesure se rattache enfin à un état du code.** `git` n'étant pas installé dans le conteneur,
+les 36 exécutions s'archivaient avec un commit nul. L'hôte mesure désormais l'état du dépôt et le
+transmet au lancement. Le manifeste d'un jeu enregistre aussi la clé **effective** du graphe OSMnx,
+là où il notait le réglage brut — donc rien, dans le cas courant.
+
+**Trois compteurs cessent de mentir.** Une fermeture sur place n'est pas une défaillance de moteur :
+il n'y a pas d'itinéraire à calculer entre un point et lui-même. La confondre avec un échec faisait
+franchir le seuil d'alarme à chaque préparation de jeu (5,5 % de fermetures sur la v5 pour un seuil
+à 5 %), rendait tout jeu définitivement « incomplet », et affichait 80 % de progression sur une
+exécution pourtant terminée. Le dénominateur des exploitables est maintenant dérivé du jeu à
+l'ouverture d'une exécution, donc identique quel que soit le sort de celle-ci.
+
+**Deux bras du même prompt portaient deux empreintes.** L'écart n'était pas réel : le gabarit
+d'option était cherché à un chemin qui n'existe pas dans le conteneur, et sortait du hachage sans
+bruit. Hôte et conteneur produisent désormais la même empreinte pour le même texte. La
+comparabilité des bras Antigravity et passerelle n'était donc pas en cause.
+
+**La base repart vierge.** Les 46 définitions, 36 exécutions, trois cohortes obsolètes et le jeu
+scellé contre la v1 sont archivés — déplacés, jamais supprimés —, documentés par un README qui dit
+la règle, zippés, et leurs chemins d'origine journalisés. `data/experiences/` et `data/jeux/` sont
+vides, `data/population/` ne porte plus que la v5.
+
+**Les parts modales se publient maintenant des deux façons.** Un trajet dont l'offre ne
+comportait qu'une option n'a été décidé par personne : il découle d'un choix antérieur du même
+bras, puisque partir en voiture le matin oblige à rentrer en voiture le soir. Leur nombre varie
+donc d'un bras à l'autre — 393 pour le plus rapide, 286 pour le tirage au sort, sur le même
+substrat — et un seul chiffre mélangerait ce que le décideur a décidé et ce que la situation lui
+imposait. On ne neutralise pas la chaîne : une vraie journée en comporte. On publie les deux
+lectures côte à côte, avec le compte de choix forcés. Pour comparer deux bras terme à terme, un
+périmètre commun ne retient que ce que tous ont réellement décidé.
+
+**Avant :** une colonne de pourcentages, muette sur la part qu'aucun décideur n'avait choisie.
+**Après :** deux colonnes, le compte de choix forcés, et le rappel que ce compte dépend du bras.
+
+**Le substrat s'affiche avant le lancement, plus seulement après.** L'empreinte de la cohorte et
+le jeu figurent au-dessus des boutons, une cohorte non scellée se signale, et un jeu préparé pour
+une autre cohorte bloque avant le clic. La garde existait déjà au lancement ; découvrir
+l'incohérence après avoir payé n'a pas le même prix que la lire à l'écran.
+
+**L'estimation de coût retrouve sa source.** Le plan d'expériences était cherché au mauvais
+endroit, si bien que les jetons par sollicitation rendaient toujours « rien ». Le défaut était
+sans effet tant que des exécutions archivées servaient de repli — il est devenu actif le jour où
+la base a été vidée, c'est-à-dire aujourd'hui. Un bras payant s'estimait donc « aucune mesure
+disponible », exactement au moment où l'on décide de dépenser. Le chemin est corrigé, une absence
+se journalise, et le plan est monté en lecture seule dans le conteneur, qui ne voyait pas la
+documentation du tout.
+
+**Le ticket 040 est clos au profit du 045**, pour qu'un seul des deux porte la mesure du 2×2
+chaîne. Et l'asymétrie du contrat d'évaluation — l'agent voit l'agenda de sa journée, le modèle
+tabulaire non, alors que le contrat annonce les mêmes variables pour les deux — ouvre le
+[ticket 046](tickets/ticket_046_asymetrie_informationnelle_du_contrat_d_evaluation.md), qui
+examine quatre issues et les chiffre. En attendant, rien ne change au protocole.
+
+**Reste à faire avant toute mesure :** construire le jeu v5, puis jouer les quatorze exécutions
+gratuites qui servent aussi de balayage. Aucun appel de modèle de langue n'a été fait, et aucun
+bras payant ne se lance avant ce balayage.
+
+---
+
+## [2026-09-11] Aucune expérience n'avait tourné sur la cohorte de référence
+
+Audit du substrat des 36 exécutions de la plateforme d'expériences, à la demande de l'auteur.
+Résultat : **toutes ont lu la cohorte v1** (`f67b0777…`, scellée le 2 septembre) et non la **v5**
+(`de73532e…`, scellée le 4 septembre) qui est la référence de l'article. Aucune mesure n'existe sur
+la cohorte de référence, et les 36 exécutions sont à refaire.
+
+**Avant :** le formulaire de création d'expérience proposait la première population scellée par
+ordre alphabétique — donc la v1 — et le nom de l'expérience restait **muet** sur ce point, cette
+population étant la valeur par défaut du nommage. Aucun des 46 noms ne mentionnait de substrat, ce
+qui se lisait comme « rien à signaler ».
+
+**Après :** le [ticket 045](tickets/ticket_045_substrat_unique_v5_et_reconstruction_des_experiences.md)
+porte la reprise en cinq lots — archiver les cohortes obsolètes derrière un garde-fou dans le code,
+balayer les autres causes d'invalidation, repartir d'une base d'expériences vierge, reconstruire
+13 définitions sur la v5, et fermer la cause racine pour que le substrat ne soit plus jamais
+implicite.
+
+Le balayage demandé a trouvé quatre autres points, dont un plus grave que la population :
+**la plateforme ne referme pas la journée**. Elle énumère les déplacements par paires consécutives
+d'activités, alors que la chaîne est cyclique et que le contrôleur de simulation, lui, la referme —
+27 % des déplacements ne sont jamais décidés, et ce sont les retours au domicile, là où la
+contrainte de chaîne des véhicules pèse le plus. Décision de l'auteur : la journée doit se refermer,
+et la correction précède toute relance. Les trois autres : deux empreintes de gabarit sous un même
+nom de variante, un dénominateur d'exploitables qui bouge d'une exécution à l'autre, et des jeux de
+choix qui divergent entre bras — 286 à 393 décisions à itinéraire unique selon le bras, comptées
+dans les parts modales publiées alors qu'aucun décideur ne les a décidées.
+
+Par ailleurs, la **régression logistique à noyau** entre dans le tableau des références du
+chapitre 4 de l'article : exactitude 0,784 au niveau du booster, L1 des parts 2,53 points contre
+2,69, rappel vélo 0,122. Aucune des quatre familles ne domine sur les trois axes à la fois — le
+plafond de l'ablation reste donc non désigné, et le chapitre annonce le critère qui le désignera.
+
+---
+
+## [2026-09-11] Les chapitres 1 et 4 de l'article décrivent enfin la même cohorte
+
+La section 1.3 de l'article AAMAS présentait la cohorte scellée **v1**, alors que le chapitre des
+métriques, rédigé le même jour, mesure sur la **v5**. Un lecteur y trouvait deux substrats pour une
+seule expérience, avec deux empreintes différentes. Le chapitre 1 est réaligné sur la v5 dans les
+trois arbres — français, maître anglais, rendu LaTeX — et passe en `v0.19`.
+
+**Avant :** cohorte v1, sceau du 2 septembre, sha256 `f67b0777…` ; tirage à la personne par
+allocation proportionnelle dans un vivier de 5 063 personnes ; six marges contrôlées ; 2 693
+déplacements le jour évalué, dont 2 645 « exploitables ».
+
+**Après :** cohorte `population_1000_AAMAS_v5`, scellée le 4 septembre, sha256 `de73532e…` ; tirage
+à l'unité **ménage**, 499 ménages entiers pris dans un vivier de 11 329 personnes (10 979 éligibles,
+5 652 ménages), effectifs de cellule par programme entier puis descente par échanges de ménages ;
+**treize** marges, toutes conformes, aucune non mesurable, dans une borne d'équivalence de ± 1 point ;
+**3 299** déplacements le jour évalué.
+
+L'écart de comptage n'était pas un arrondi : la chaîne d'activités d'un persona est **cyclique**. La
+première activité « home » commence la veille au soir et le dernier déplacement ramène au domicile,
+si bien qu'une chaîne de *k* activités porte *k* déplacements et non *k* − 1. La convention fausse
+perdait un déplacement par personne mobile — le retour à la maison. Le recoupement tient : 2 405
+(somme des activités moins une) plus 894 personnes mobiles font 3 299, soit exactement les 3,30
+déplacements par persona du dossier scellé.
+
+Conséquence pratique : le nombre de décisions **réellement scorées** n'est plus annoncé dans
+l'introduction. C'est une autre grandeur, que les exclusions de périmètre font varier ; elle se mesure
+sur un run et laisse d'ici là un emplacement à remplir, comme les autres chiffres d'expérience.
+
+Le résumé, qui portait le même chiffre dérivé (« 2 645 trajets »), passe à 3 299 déplacements et en
+`v0.4` dans les trois arbres, à décompte de mots inchangé. Le plan expérimental, enfin, désignait une
+population inexistante :
+
+**Avant :** `population_file: data/population/population_1000_AAMAS_vLAST/population.json`,
+`trip_count: 2579`.
+**Après :** le dossier scellé v5, `trip_count: 3299`, et le commentaire qui dit la convention cyclique
+au lieu de `activités − 1`.
+
+---
+
+## [2026-09-11] Le témoin random forest joué comme expérience : la même moitié, sur un autre substrat
+
+`exp_rf_jtir_nosim` existe. Le témoin du ticket 044 décide désormais sur le jeu gelé
+`population_1000_AAMAS_20260316`, à côté du booster et du logit, avec la **même couverture**
+(2 634 décisions sur 2 645) — sans quoi les trois composites ne se compareraient pas.
+
+| Expérience | Composite `emd_jsd` |
+|---|---|
+| `exp_lgbm_jtir_nosim` (booster) | **4,9182** |
+| `exp_rf_jtir_nosim` (*témoin*) | 5,5889 |
+| `exp_mnl_jtir_nosim` (logit) | 6,1734 |
+
+Part de l'écart booster–logit comblée : **0,47** — contre 0,49 sur l'exactitude et 0,45 sur la
+CEL du test scellé PROGEDO. Deux mesures indépendantes, deux substrats sans rapport (13 045
+trajets d'enquête d'un côté, 1 000 agents synthétiques et l'offre OTP de l'autre), la même
+moitié. Le « moitié-moitié » du matin cesse d'être une observation pour devenir un résultat.
+
+**Avant :** le témoin ne vivait que dans un fichier de mesures, et son « moitié-moitié » ne
+reposait que sur le test scellé.
+**Après :** un second substrat le confirme, par le code de scoring de la plateforme.
+
+⚠ **Trois limites, dites plutôt que découvertes.**
+
+- L'expérience **n'est pas rejouable par la CLI** : elle a été lancée par un script qui
+  enregistre la famille `rf` au moment de l'exécution, parce que le ticket 043 modifiait au
+  même moment les deux tables qu'il aurait fallu compléter. Le dossier porte un `LISEZ-MOI.md`
+  qui l'explique et donne la commande de relance.
+- Elle tourne **sur l'hôte, pas dans le `controller`** : celui-ci porte scikit-learn 1.9.0
+  quand la forêt a été estimée sous 1.8.0, et **les deux ne donnent pas la même forêt** —
+  exactitude +0,000188, CEL +0,0008. C'est mesuré, pas supposé, et c'est un garde-fou qui l'a
+  attrapé.
+- Aucun chiffre n'a été recopié à la main. Un `scores.json` tapé au clavier ne serait pas
+  comparable à celui du logit, puisque l'un sortirait du code de scoring et l'autre de nous.
+
+**Le décideur ne charge aucun arbre.** L'artefact pèse 12 ko : un contrat de matrice de dessin,
+des hyperparamètres, deux empreintes. La matrice d'entraînement l'accompagne dans un `.npz` de
+1,4 Mo — elle est surtout faite de 0 et de 1. `RFPredictor` réajuste la forêt en dix secondes,
+**puis vérifie qu'elle reproduit les métriques publiées** avant de décider quoi que ce soit.
+Sérialiser les 1 200 arbres (3 740 500 nœuds) aurait coûté ~150 Mo en JSON ou 165 Mo en
+`joblib` — et un `pickle` scikit-learn se périme à la version suivante, ce que le passage de
+1.8 à 1.9 vient d'illustrer. Le rejeu ne demande que **numpy** : le conteneur des expériences
+n'a ni `pyarrow` ni `fastparquet`.
+
+```bash
+make forest FOREST_ARGS=--artefact                     # le contrat de rejeu (~18 min)
+make forest FOREST_ARGS=--artefact-seul                # le régénère sans re-mesurer
+python -m scripts.progedo_logit.lancer_experience_rf   # l'expérience (~5 min, hors ligne)
+```
+
+---
+
+## [2026-09-11] Une troisième famille de modèle, et un second arbitre pour le sens des variations
+
+La comparaison des modèles de choix modal tenait les deux extrêmes d'un même axe et rien
+entre les deux : un booster exact mais non lisse, un logit lisse mais moins exact. `make klr`
+ajoute la famille qui manquait — une **régression logistique à noyau RBF** approchée par
+Nyström, non linéaire comme le premier et à réponse lisse comme le second. Elle entre entre
+les deux sur l'exactitude (0,784 contre 0,785 et 0,766) et fait **mieux que les deux sur les
+parts modales agrégées** (L1 masse 0,0253 contre 0,0269 et 0,0286), qui est l'axe où
+l'hypothèse du projet se joue. Sur le jeu gelé AAMAS, son composite vaut 5,0300 contre 4,9182
+pour le booster et 6,1734 pour le logit, avec la meilleure L1 des trois (48,59).
+
+Elle sert surtout de **second arbitre** au bloc C du score à deux oracles. Jusqu'ici, quand
+le prompt contredisait le sens de variation du logit, rien ne disait si le défaut était dans
+le prompt ou dans l'arbitre : un arbitre unique ne se réfute pas. Désormais une transition
+n'entre au score que si les deux arbitres portent un signe franc et le même ; s'ils divergent,
+elle est écartée et comptée, et le test se tait. Sur le run épinglé, les deux s'accordent sur
+**les 20 transitions** : le 5,0 % de désaccord du prompt est corroboré, il n'est plus la
+parole d'un seul modèle.
+
+**Avant :** deux familles de modèle, un seul arbitre du sens des variations, et un désaccord
+du prompt qu'on ne pouvait pas départager du défaut de l'arbitre.
+**Après :** trois familles au même contrat de variables, un bloc C à deux arbitres qui se
+tait quand ils divergent, et une colonne de plus dans le score à deux oracles.
+
+Dans le tableau de bord, la colonne « Décideur » **nomme désormais la famille du modèle** —
+`modele:lightgbm`, `modele:mnl`, `modele:rf`, `modele:klr` — au lieu d'afficher « modele » pour
+les quatre expériences de modèle, c'est-à-dire la seule chose qu'elles avaient en commun. La
+famille se lit dans le format de l'artefact, jamais dans le nom du fichier ; un artefact absent
+laisse « modele » nu plutôt qu'une famille inventée.
+
+Le réglage du noyau ne lit jamais le split test : γ, λ et le nombre de points d'appui se
+choisissent en validation croisée groupée par ménage dans le train, et une configuration qui
+dérive sur les parts modales — ou dont un pli n'a pas convergé — est écartée avant tout
+classement, avec sa raison. Le décideur d'expérience accepte la nouvelle famille sans rien
+changer d'autre : `--artefact scripts/progedo_logit/klr_model.json`, et les traces disent
+`modele:klr@…`.
+
+---
+
+## [2026-09-11] Les agents rappellent dix souvenirs, et la doc mémoire dit enfin ce que fait le code
+
+Le nombre de souvenirs servis au modèle au moment de décider passe de trois à dix, valeur que
+la documentation annonçait déjà. Un agent qui a du vécu arrive donc devant ses options avec
+dix entrées de mémoire longue au lieu de trois, réflexions, concepts et résumés confondus.
+Le plafond du cache des métadonnées passe de 5 000 à 2 000 agents, taille suffisante pour
+garder toute une population simulée en mémoire sans éviction, pour environ 6 Mo.
+
+**Avant :** trois souvenirs dans le prompt de décision, cache dimensionné pour 5 000 agents.
+**Après :** dix souvenirs, cache dimensionné pour 2 000 agents.
+
+Trois passages de la documentation mémoire décrivaient un dispositif qui n'existe pas. Le plus
+trompeur : la politique de rétention était présentée comme conservant les souvenirs « dont
+l'importance dépasse 0,7 ». Aucun champ d'importance n'existe dans le dispositif — ni sur
+l'entrée mémoire, ni dans le nettoyage, ni dans le score de rappel. Un retard de quarante-cinq
+minutes et un trajet nominal sont conservés et rappelés avec exactement le même poids. Le
+document le dit maintenant explicitement, et nomme le paramètre au nom trompeur qui entretenait
+la confusion : la « valeur d'importance par défaut » est en réalité le score de repli du
+recouvrement lexical pour les entrées sans mots-clés. Le pré-filtrage vectoriel était par
+ailleurs décrit comme ramenant cinq cents candidats, là où il en ramène cinquante et délègue
+l'isolation par agent à la base vectorielle.
+
+---
+
+## [2026-09-11] Le chapitre des métriques dit sur quel substrat l'article mesure
+
+Le chapitre 4 de l'article AAMAS (« Métriques et socle d'évaluation ») est rédigé en français,
+texte neuf plutôt qu'extrait du manuscrit figé. Il définit ce qui est mesuré aux deux échelles,
+les trois règles du contrat d'évaluation, **ce qui n'entre pas au score**, les deux substrats
+scellés et le dimensionnement de la cohorte.
+
+Trois chiffres du brouillon hérité ne survivent pas au recoupement dans le dépôt, et le
+chapitre les corrige.
+
+**Avant :** la cohorte scellée était la v1 en section 1.3 (six marges contrôlées, deux non
+mesurables) et la v3 dans le brouillon du chapitre 4 ; le jour évalué portait 2 693
+déplacements ; l'effectif efficace était annoncé à 1 750.
+
+**Après :** la cohorte est la **v5** — treize marges conformes, aucune non mesurable, 499
+ménages entiers, tirage à l'unité ménage ; le jour évalué porte **3 299** déplacements, la
+chaîne d'activités étant cyclique (une chaîne de *k* activités porte *k* déplacements, non
+*k − 1*) ; l'effectif efficace vaut **1 530 à 1 720** déplacements indépendants équivalents,
+l'effet de plan de la note de dimensionnement étant désormais appliqué et non seulement calculé.
+
+Deux choix de fond accompagnent le texte. Les références tabulaires y sont présentées comme une
+**famille en cours de caractérisation** — oracle supervisé, logit multinomial, témoin random
+forest, régression logistique à noyau en attente — et non comme un plafond déjà désigné : le
+témoin montre que sur les parts agrégées les arbres suffisent, alors que sur la classe
+minoritaire le boosting est décisif, donc aucun scalaire ne classe. Et la nouvelle sous-section
+sur le périmètre de mesure nomme le piège récurrent du dispositif : une offre à mode unique
+force les trois décideurs sur le même mode, et l'inclure ferait baisser la perte sans qu'aucun
+accord n'ait été mesuré — 665 décisions sur 3 249, écartées et comptées.
+
+Reste ouvert, et signalé dans l'en-tête du chapitre : la section 1.3 du chapitre 1 décrit encore
+la cohorte v1. Tant qu'elle n'est pas réalignée, les chapitres 1 et 4 ne parlent pas du même
+substrat.
+
+---
+
+## [2026-09-11] Les schémas de docs/arch/ redisent ce que le code fait
+
+Passe de vérification sur les vingt pages de `docs/arch/`, chaque affirmation confrontée au
+code plutôt qu'au souvenir. Ce qui est corrigé se lit en trois familles.
+
+**Les schémas de décision.** Le cache LLM ne resert plus une décision figée depuis qu'il
+mémorise une distribution : les arbres de `cache-memory.md`, `agents-lifecycle.md` et
+`memory-stm-ltm.md` le disent maintenant, y compris le cas où un hit redevient un miss faute
+d'option tirable. L'extraction de mémoire long terme n'est plus montrée comme un passage
+obligé avant le cache : elle n'a lieu que si l'agent a des souvenirs — tout le bootstrap
+l'évite, et c'est ce qui rend le démarrage gratuit en embeddings.
+
+**Avant :** « Cache HIT → décision resservie », « 1. aquery_user_memories(...) » en tête de pipeline
+**Après :** « distribution resservie, puis NOUVEAU tirage », « 1. SI l'agent a des souvenirs »
+
+**Les structures et les chemins.** Le bloc de types de `plateforme-experiences.md` décrivait
+un `Decision` et une `TraceDecision` qui n'existent plus : il rend désormais
+`ReponseDecideur` (seize champs, de `repli_uniforme` à `sortie_litterale`), le `Decision`
+réel et le dict effectivement archivé dans `decisions.jsonl`. La liste des décideurs — dans
+le schéma comme dans le YAML d'expérience — récupère `antigravity`, `modele`,
+`majoritaire_voiture`, `portee` et `graine`. Le découpage de `llm_module` en trois paquets
+(ticket 037) est enfin répercuté : une trentaine de liens pointaient vers des coquilles
+dépréciées ou vers des fichiers qui n'existaient plus (`mobility_core`, `mobility_llm`,
+`config/llm_gateway/providers.yaml`, `categories/<nom>/template.md.j2` et
+`output_schema.json`). Plus aucun lien de `docs/arch/` ne pointe dans le vide.
+
+**Deux affirmations devenues fausses.** `bike_ownership.json` était décrit « hors dépôt » :
+il est versionné depuis qu'il a suivi `mobility_core` (la couche `zf_zones.gpkg`, elle, reste
+dehors). Et les métriques métier du worker ne sont plus déclarées par le gateway — elles
+vivent dans `mobility_llm`, qui les enregistre par entry point.
+
+`python-libraries.md` gagne la section qui lui manquait : LightGBM et scikit-learn servent les
+oracles tabulaires et le décideur `type: modele`, et la page les passait sous silence.
+
+⚠ **Une divergence est signalée, pas corrigée** (`llm-inference.md`) : le texte de la variante
+de prompt active réclame une raison **par option**, alors que le schéma réellement imposé au
+fournisseur (`output_schema.json`) déclare `reason` au niveau du persona, avec
+`additionalProperties: false`. En sortie structurée, le modèle ne peut pas rendre ce que le
+prompt lui demande. Trancher le sens voulu est une décision de produit ; la page décrit
+l'état du code.
+
+---
+
+## [2026-09-11] Le témoin random forest : l'avantage du booster se partage
+
+`make forest` répond à une question que l'article s'apprêtait à trancher sans la mesurer :
+**l'avance du booster LightGBM sur le logit vient-elle des arbres ou du boosting ?** Un random
+forest — des arbres, mais agrégés par bagging — sépare les deux. C'est un témoin : il ne
+remplace aucun oracle, il ne sérialise aucun modèle, il écrit 62 ko de chiffres.
+
+Le seuil du verdict était écrit **avant** le résultat : la part de l'écart booster–logit
+comblée par le RF, `≥ 0,70` → les arbres, `≤ 0,30` → le boosting. Verdict formel : **indécis**,
+et c'est le résultat. La lecture par axe dit plus que le mot :
+
+- **parts modales agrégées** — les arbres suffisent : le RF fait *mieux* que le booster (L1
+  masse 0,0232 contre 0,0269) sans aucun boosting. L'axe où H0 se joue n'appartient pas au
+  boosting ;
+- **exactitude désagrégée** — l'avantage se partage en deux moitiés (part 0,49 sur
+  l'exactitude, 0,45 sur la CEL) ;
+- **classe minoritaire** — le boosting est décisif : rappel vélo 0,035 contre 0,138 pour le
+  booster et 0,108 pour le logit, le RF passant *sous les deux*. Sa masse sur le vélo est
+  pourtant bien calibrée (4,3 % contre 4,0 % observés) ; il ne l'élit presque jamais.
+
+**Avant :** « le booster devance le logit » était un fait sans cause, et la phrase d'article qui
+en tirait une explication n'était pas réfutable.
+**Après :** trois chiffres la réfutent ou la nuancent, et la conclusion « une troisième famille
+d'arbres n'apportera rien » est explicitement écartée sur l'axe des parts modales.
+
+Le rappel vélo du logit (0,108) est mesuré au passage — le ticket le donnait « à mesurer ».
+
+Précaution mesurée plutôt qu'affirmée : les arbres de scikit-learn n'ont pas de support des
+catégorielles, et les lire comme des ordinales aurait pu faire passer un biais d'encodage pour
+un effet de méthode. La voie principale réutilise la matrice de dessin déclarée du logit ; la
+voie littérale, mesurée à côté, ne coûte que 0,0005 d'exactitude et 0,0015 de L1 masse. La
+précaution ne changeait pas la conclusion — et on le sait parce qu'on l'a chiffré.
+
+```bash
+make forest          # ~13 min, hors ligne, aucun appel LLM, déterministe
+```
+
+---
+
+## [2026-09-11] Les schémas d'architecture disent que le modèle rend des probabilités
+
+Deux arbres d'exécution de la documentation d'architecture décrivaient encore la décision comme un
+index : « Cache HIT → retourne l'index immédiatement », « retourne l'index mémorisé ». Le cache
+mémorise en réalité **une probabilité par option** et retire un index dedans à chaque coup, avec une
+graine dérivée du contexte.
+
+**Avant :** un lecteur des schémas pouvait croire qu'une décision mise en cache est rejouée telle
+quelle, donc qu'un même contexte donne toujours le même mode par construction du cache.
+**Après :** les schémas disent le tirage, cohérent avec `draw_index` et avec la règle du dépôt —
+l'option la plus probable sert aux métriques et aux replis, jamais à la décision de l'agent.
+
+---
+
+## [2026-09-11] L'article décrit enfin le dispositif qu'il évalue
+
+Le texte AAMAS gagne une **section 3, « Le dispositif : décider dans une ville contrainte »**,
+écrite en français d'abord et lisible dans `docs/paper/article/fr/03_architecture.md`. Elle dit ce
+que l'agent voit au moment de choisir, d'où vient l'offre d'itinéraires, quelle heure reçoivent les
+moteurs, ce que porte la mémoire, et pourquoi une journée simulée est une chaîne et non une suite
+de tirages indépendants. Les sections 3 à 8 antérieures décalent d'un cran, jusqu'à la section 9.
+
+**Avant :** l'article passait de l'introduction aux métriques. Un lecteur ne pouvait pas savoir si
+l'agent invente un trajet ou en choisit un, ni ce qui l'empêche de rentrer en voiture quand il est
+parti à vélo — alors que ces contraintes produisent une part de la répartition modale mesurée.
+**Après :** le dispositif est décrit avant d'être jugé, et le chapitre énonce lui-même la
+conséquence méthodologique : une part de ce qu'on mesure vient des contraintes, pas du modèle de
+langue.
+
+Le chapitre dit aussi ce que le dispositif fait d'un retard : arrivé après l'heure, l'agent avance sa
+cible horaire pour cette activité — 75 % du retard constaté, un quart d'heure au plus — et se l'écrit
+en mémoire, de sorte qu'il le relira en décidant le lendemain. C'est l'apprentissage le plus simple que
+porte le dispositif, et il ne doit rien au modèle de langue.
+
+Le chapitre ne parle pas du passage à l'échelle (batching, répartition de charge, disjoncteur,
+caches) : si ce matériel doit figurer, ce sera en annexe technique. `make paper-parite` reste vert —
+11 chapitres, 3 rédigés à parité, 0 écart.
+
+---
+
+## [2026-09-11] Une expérience peut être jouée par le logit, et la trace dit lequel
+
+Le décideur « modèle » de la plateforme d'expériences accepte maintenant **les deux familles**
+de modèles tabulaires : le booster LightGBM comme avant, et le logit multinomial du ticket 042.
+`experiences dupliquer --artefact scripts/progedo_logit/mnl_model.json` suffit à ouvrir la
+variante ; aucun appel LLM, aucun réseau, 28 secondes d'exécution.
+
+**Avant :** le décideur chargeait n'importe quel artefact mais s'annonçait « lightgbm » dans son
+nom, son empreinte et sa réponse brute. Le SHA du fichier restait juste, donc la version était
+scellée — mais une exécution du logit se lisait comme une exécution du booster, et changer
+d'artefact demandait d'éditer l'`experience.yaml` à la main.
+**Après :** les trois libellés sont **dérivés du format de l'artefact** (`modele:mnl@b365fb7d1ff2`),
+un format inconnu est refusé au démarrage plutôt que nommé « inconnu », et un chemin relatif se
+résout depuis la racine du dépôt — le même `experience.yaml` désigne le même modèle sur l'hôte et
+dans le conteneur.
+
+**Le premier chiffre, sur le jeu gelé de 1 000 personas AAMAS** (`population_1000_AAMAS_20260316`,
+2 634 décisions, couverture 99,6 %) :
+
+| Décideur | composite `emd_jsd` | mode tiré | L1 |
+|---|---|---|---|
+| Oracle LightGBM | **4,9182** | 4,9735 | 51,37 |
+| Logit multinomial | 6,1734 | 7,3171 | 56,98 |
+
+**1,26 point sépare les deux familles** sur ce substrat, contre 0,71 sur le run épinglé : l'écart
+ne se transpose pas d'un jeu à l'autre, et c'est la mesure qui le dit, pas l'extrapolation. Où le
+logit perd : il sous-estime la marche de 2,96 points (booster : 1,00) et surestime les transports
+collectifs de 4,62 (booster : 3,79).
+
+**Deux mesures ouvertes pour une troisième famille** — [ticket 044](tickets/ticket_044_temoin_random_forest.md),
+un témoin random forest d'une heure qui dira si l'avantage du booster vient des arbres ou du
+boosting ; [ticket 043](tickets/ticket_043_troisieme_famille_regression_logistique_noyau.md), la
+régression logistique à noyau, famille que la littérature désigne comme le meilleur compromis
+entre exactitude et plausibilité comportementale — et qui servirait de **second arbitre** au bloc C
+du score à deux oracles, un arbitre unique ne pouvant pas se réfuter.
+
+---
+
 ## [2026-09-11] Un modèle local et un modèle distant du même nom sont deux expériences
 
 Le même identifiant de modèle vit parfois des deux côtés : `qwen/qwen3.8-27b` est servi par Groq

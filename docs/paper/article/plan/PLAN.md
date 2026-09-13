@@ -4,7 +4,7 @@
 > *De la Décision Statistique au Comportement Adaptatif : Évaluation Empirique, Limites et Perspectives Hybrides des Agents LLM en Simulation de Mobilité Urbaine*
 > *(EN : Generative Agents vs. Statistical Oracles in Urban Mobility Simulation: Empirical Limits, Unit-Level Evaluation, and Hybrid Perspectives)*
 
-**Version du document :** `v1.8` (10 septembre 2026) — le résumé entre dans la trame comme section 0, le matériel de soumission AAMAS rejoint le dossier de l'article. `v1.7` du même jour : réalignée sur le plan annoncé en section 1.4 du chapitre 1 (`v0.16`), qui fait foi : l'état de l'art devient la section 2, les sections suivantes décalent d'un cran, la cascade hybride cesse d'être une section pour devenir les implications hybrides de la section 7, et les références quittent la numérotation. Écarts détaillés et datés dans [`README.md`](README.md). Version antérieure figée dans [`../../archive/PLAN_ARTICLE_2026_v1.6.md`](../../archive/PLAN_ARTICLE_2026_v1.6.md).
+**Version du document :** `v1.11` (11 septembre 2026) — le chapitre 4 perd sa section de dimensionnement (contrainte de pages : il en reste une phrase en 4.5) et resserre son périmètre de mesure ; il couvre désormais exactement ce que la section 1.4 lui annonce. `v1.10` (même jour) — le chapitre 4 est rédigé, et sa trame interne change : une sous-section neuve sur le périmètre de mesure (ce qui n'entre pas au score), les références tabulaires deviennent une **famille en cours de caractérisation** plutôt qu'un oracle désigné, et la cohorte scellée retenue est la **v5**. Numérotation des sections inchangée. `v1.9` (même jour) — l'article gagne une section système : le dispositif évalué est décrit en section 3, les sections 3 à 8 antérieures décalent d'un cran jusqu'à la section 9. Le trou était réel — ni `article/`, ni le manuscrit figé `v1.6` ne décrivaient l'objet évalué, là où tout article comparable du corpus porte une section méthode ou système. `v1.8` (10 septembre 2026) — le résumé entre dans la trame comme section 0, le matériel de soumission AAMAS rejoint le dossier de l'article. `v1.7` du même jour : réalignée sur le plan annoncé en section 1.4 du chapitre 1 (`v0.16`), qui fait foi : l'état de l'art devient la section 2, les sections suivantes décalent d'un cran, la cascade hybride cesse d'être une section pour devenir les implications hybrides de la section 7, et les références quittent la numérotation. Écarts détaillés et datés dans [`README.md`](README.md). Version antérieure figée dans [`../../archive/PLAN_ARTICLE_2026_v1.6.md`](../../archive/PLAN_ARTICLE_2026_v1.6.md).
 **Ce qui fait foi :** le texte de l'article, section 1.4 de [`../en/01_introduction.md`](../en/01_introduction.md). Ce fichier en est dérivé — voir [`README.md`](README.md).
 **Fichiers associés :** [`../README.md`](../README.md) (état d'avancement par chapitre), [`../../methode/PROTOCOLE_SCIENTIFIQUE.md`](../../methode/PROTOCOLE_SCIENTIFIQUE.md), [`../../sources/BIBLIOGRAPHIE.md`](../../sources/BIBLIOGRAPHIE.md), [`../../sources/references.bib`](../../sources/references.bib)
 
@@ -31,43 +31,59 @@
    2.2 Agents génératifs en simulation de mobilité
    2.3 Alignement distributionnel des populations de LLM
 
-3. MÉTRIQUES ET SOCLE D'ÉVALUATION                 brouillon — article/fr/03_metrics_and_substrate.md
-   3.1 Métriques macro (parts modales, erreur L1) et micro (accuracy, rappel, LogLoss)
-   3.2 Les trois règles du contrat : parité informationnelle, lectures comparables, renormalisation sur l'offre
-   3.3 Contrôle démographique de la cohorte scellée (N = 1 000, marges de l'EMC² 2023)
-   3.4 Dimensionnement de l'échantillon et effectif efficace  -> methode/JUSTIFICATION_TAILLE_ECHANTILLON.md
-   3.5 Stabilité d'échelle (N = 1 000 -> 10 000)
+3. LE DISPOSITIF : DÉCIDER DANS UNE VILLE CONTRAINTE   brouillon — article/fr/03_architecture.md
+   3.1 Vue d'ensemble : GAMA porte le monde, le contrôleur le cycle de vie, le module LLM le choix
+   3.2 Le terrain : deux moteurs d'itinéraires, l'horloge du réseau, le périmètre, les modes ouverts
+   3.3 Le point de décision : ce que l'agent voit, ce qu'il rend (un indice, pas un trajet)
+   3.4 Mémoire courte et longue : ce qui fait qu'un jour ressemble au précédent
+   3.5 La journée est une chaîne : les trois règles des véhicules personnels
 
-4. LES LLM NUS ET LEUR VARIABILITÉ                 brouillon — article/fr/04_bare_llm.md
-   4.1 Prompt neutre et offre d'itinéraires
-   4.2 Comparaison entre modèles, tous à température 0
-   4.3 Variabilité inter-graines et intervalles de confiance
-   4.4 Taux de bascule individuelle et test de McNemar sur décisions appariées
+4. MÉTRIQUES ET SOCLE D'ÉVALUATION                 brouillon v0.8 — article/fr/04_metrics_and_substrate.md
+   4.1 Deux échelles, et la lecture qui décide de tout (masse de probabilité vs mode le plus probable)
+   4.2 Les trois règles du contrat : parité informationnelle, lectures homogènes, renormalisation sur l'offre
+   4.3 Le périmètre de mesure (trois phrases : ce qui porte une décision modale)
+   4.4 Le socle de référence : une cohorte en service, quatre familles tabulaires
+   4.5 La cohorte scellée et son contrôle démographique (13 marges, TOST ± 1 pt)
+   -- le dimensionnement de l'échantillon quitte le chapitre (place), il en reste une phrase en 4.5
+      -> methode/JUSTIFICATION_TAILLE_ECHANTILLON.md
 
-5. ABLATION EN QUATRE PALIERS ET RÉFÉRENCES TABULAIRES   brouillon — article/fr/05_ablation.md
-   5.1 Les quatre paliers : planchers -> LLM nu -> prompt calibré -> références tabulaires
-   5.2 Test de H0 sur la cohorte scellée
-   5.3 Audit unitaire à parité informationnelle, contrat de 21 variables
-   5.4 Prévalence des temps terminaux physiques
-   5.5 SHAP contre justifications en langue naturelle
-   5.6 L'angle mort de l'oracle sur les modes minoritaires
-   5.7 Enseignement transférable : bien classer l'enquête ne suffit pas à simuler la ville
+4.5 CALIBRATION DU PROMPT (OPTIMISATION RÉFLÉCHIE) brouillon v0.1 — article/fr/04.5_prompt_calibration.md
+    4.5.1 La vulnérabilité du prompt « calibré » et l'impératif de réfutabilité
+    4.5.2 Le goulet computationnel : échec d'échelle du génétique en MAS (O(G·P·N) tokens)
+    4.5.3 Le paradigme retenu : optimisation réfléchie (LLM-as-Optimizer / gradient textuel)
+    4.5.4 Les quatre garde-fous structurels anti-surapprentissage (Zéro seuil, populations cloisonnées, comptages pondérés, compaction)
+    4.5.5 Statut du Palier 2 dans l'architecture de la preuve (plafond Tier 3 de SILICA)
 
-6. RÉGIMES NON TABULÉS                             brouillon — article/fr/06_untabulated_regimes.md
-   6.1 Hystérésis sur cinq jours après une panne de service, trois conditions dont un agent sans mémoire
-   6.2 Cinq événements de presse locale datés, cinq conditions par événement
-   6.3 Prédictions directionnelles préenregistrées et critères de réfutation
+5. LES LLM NUS ET LEUR VARIABILITÉ                 brouillon — article/fr/05_bare_llm.md
+   5.1 Prompt neutre et offre d'itinéraires
+   5.2 Comparaison entre modèles, tous à température 0
+   5.3 Variabilité inter-graines et intervalles de confiance
+   5.4 Taux de bascule individuelle et test de McNemar sur décisions appariées
 
-7. LIMITES ET IMPLICATIONS HYBRIDES                brouillon — article/fr/07_limits_and_hybrid.md
-   7.1 Limites : indépendance des alternatives non pertinentes, asymétrie d'exposition, cohorte synthétique
-   7.2 La cascade hybride en perspective (règles -> modèle tabulaire -> LLM)
-   7.3 Cadre comparatif de performance
-   7.4 Interactions intra-ménage et conservation des chaînes de véhicules
+6. ABLATION EN QUATRE PALIERS ET RÉFÉRENCES TABULAIRES   brouillon — article/fr/06_ablation.md
+   6.1 Les quatre paliers : planchers -> LLM nu -> prompt calibré -> références tabulaires
+   6.2 Test de H0 sur la cohorte scellée
+   6.3 Audit unitaire à parité informationnelle, contrat de 21 variables
+   6.4 Prévalence des temps terminaux physiques
+   6.5 SHAP contre justifications en langue naturelle
+   6.6 L'angle mort de l'oracle sur les modes minoritaires
+   6.7 Enseignement transférable : bien classer l'enquête ne suffit pas à simuler la ville
 
-8. CONCLUSION                                      brouillon — article/fr/08_conclusion.md
-   8.1 Ce que l'évaluation établit en régime nominal
-   8.2 Le domaine de pertinence des agents génératifs
-   8.3 Ce que l'hybridation résout, et ce qu'elle laisse ouvert
+7. RÉGIMES NON TABULÉS                             brouillon — article/fr/07_untabulated_regimes.md
+   7.1 Hystérésis sur cinq jours après une panne de service, trois conditions dont un agent sans mémoire
+   7.2 Cinq événements de presse locale datés, cinq conditions par événement
+   7.3 Prédictions directionnelles préenregistrées et critères de réfutation
+
+8. LIMITES ET IMPLICATIONS HYBRIDES                brouillon — article/fr/08_limits_and_hybrid.md
+   8.1 Limites : indépendance des alternatives non pertinentes, asymétrie d'exposition, cohorte synthétique
+   8.2 La cascade hybride en perspective (règles -> modèle tabulaire -> LLM)
+   8.3 Cadre comparatif de performance
+   8.4 Interactions intra-ménage et conservation des chaînes de véhicules
+
+9. CONCLUSION                                      brouillon — article/fr/09_conclusion.md
+   9.1 Ce que l'évaluation établit en régime nominal
+   9.2 Le domaine de pertinence des agents génératifs
+   9.3 Ce que l'hybridation résout, et ce qu'elle laisse ouvert
 ```
 
 **Hors numérotation des sections :**

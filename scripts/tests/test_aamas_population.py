@@ -9,7 +9,7 @@ Ce qui est verrouillé ici, et pourquoi :
     un déficit au lieu de le cacher ;
   * le contrôle rend `non mesurable` — jamais 0 — pour une marge sans cible publiée.
 
-    llm-agents/.venv/bin/python -m pytest scripts/tests/test_aamas_population.py -q
+    services/llm-agents/.venv/bin/python -m pytest scripts/tests/test_aamas_population.py -q
 """
 
 from __future__ import annotations

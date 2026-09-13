@@ -11,9 +11,31 @@ make dashboard DASHBOARD_PORT=8600  # autre port
 make dashboard DASHBOARD_THEME=dark # thème sombre
 ```
 
-L'application tourne avec l'interpréteur `llm-agents/.venv/bin/python`
+L'application tourne avec l'interpréteur `services/llm-agents/.venv/bin/python`
 (surchargeable via `DASHBOARD_PYTHON`) : c'est le seul du dépôt qui porte
 Streamlit, pandas et Altair.
+
+### Navigation : l'onglet ouvert vit dans l'URL
+
+Chaque onglet porte un **slug** dans la barre d'adresse — `?onglet=tickets`,
+`?onglet=experiences`, `?onglet=run`… L'URL est recopiée à chaque tour depuis l'onglet
+réellement ouvert : c'est l'état de la page qui fait foi, jamais l'inverse.
+
+Deux conséquences d'usage : un **rafraîchissement du navigateur revient sur l'onglet qu'on
+regardait** (un F5 ouvre une session Streamlit neuve, où tout l'état client est perdu — la
+barre d'adresse est le seul repère qui survit), et un lien vers une page précise du tableau
+de bord se copie-colle (`http://localhost:8503/?onglet=metriques`).
+
+Un slug absent ou inconnu n'est pas une erreur : la page revient à « Vue d'ensemble ». Les
+slugs sont courts et sans emoji, indépendants des libellés affichés — renommer un onglet ne
+casse donc ni un favori ni un onglet de navigateur déjà ouvert. La table
+`ONGLETS` de `scripts/dashboard/app.py` en est la source unique ; ajouter un onglet sans l'y
+inscrire fait échouer `scripts/tests/test_dashboard_onglet_url.py`.
+
+Contrepartie assumée : changer d'onglet rejoue le script (c'est ce qui permet à Streamlit de
+savoir quel onglet est ouvert), là où le basculement était purement côté navigateur. Le coût
+est celui de n'importe quel bouton de la page — les données passent par `st.cache_data` — et
+les neuf volets continuent d'être dessinés à chaque tour.
 
 ---
 
@@ -76,7 +98,7 @@ limite, requêtes et tokens du jour face aux quotas RPD/TPD, cooldown, quota
 `google`, `groq`, `mistral`…), pas la clé d'instance de `providers.yaml` — deux
 seaux de quota d'un même fournisseur servant le même modèle apparaissent donc
 sous le même libellé, disambiguïsés par leurs compteurs de quota. Si l'API est arrêtée, repli sur les quotas déclarés dans
-`llm_module/config/providers.yaml` (dont le mtime date le dernier
+`config/llm_gateway/providers.yaml` (dont le mtime date le dernier
 rafraîchissement). Deux boutons pilotent `make providers` : le bilan à blanc
 (`DRY_RUN=1`) et le rafraîchissement réel, gardé par une confirmation puisqu'il
 réécrit `providers.yaml`. Les 429 du run courant sont listés par provider.
@@ -370,11 +392,12 @@ tickets:
     note: la cause amont n'est pas comprise, l'accusé de réception n'est pas écrit
 ```
 
-Statuts admis — `à faire`, `en cours`, `terminé`, `bloqué`, `en veille`, `abandonné`.
-Le vocabulaire est **fermé** : `tickets.py` indexe l'icône par le statut, une valeur
-hors liste lève une `KeyError` à l'affichage plutôt que de passer inaperçue.
+Statuts admis — `à faire`, `en cours`, `terminé`, `bloqué`, `en veille`,
+`amélioration`, `abandonné`. Le vocabulaire est **fermé** : `tickets.py` indexe l'icône
+par le statut, une valeur hors liste lève une `KeyError` à l'affichage plutôt que de
+passer inaperçue.
 
-Deux distinctions qui portent du sens, et qu'il ne faut pas fondre :
+Trois distinctions qui portent du sens, et qu'il ne faut pas fondre :
 
 - **`en veille` ≠ `bloqué`.** *En veille* est une décision de ne pas avancer
   maintenant, le travail reprendra tel quel ; *bloqué* dit qu'une dépendance
@@ -382,6 +405,12 @@ Deux distinctions qui portent du sens, et qu'il ne faut pas fondre :
 - **`abandonné` ne veut pas dire « code retiré ».** Le ticket 010 est abandonné comme
   chantier alors que ses actions A1–A4 tournent en production : c'est le volet de
   validation qui est abandonné, pas la livraison. La note dit lequel des deux.
+- **`amélioration` n'est ni l'un ni l'autre.** Le ticket est **conservé** comme piste
+  d'amélioration future : rien n'est attendu de lui — ni reprise d'un chantier interrompu
+  (`en veille`), ni renoncement (`abandonné`). C'est le tiroir où un ticket survit sans
+  peser sur la file de travail. Il ne se **déduit jamais** du texte d'un ticket : seule
+  une entrée dans le fichier des statuts peut le poser, et l'enlever est tout aussi
+  explicite.
 
 ⚠ **Clé = nom de fichier complet, et rien d'autre.** Toute clé du fichier doit désigner
 **exactement un** ticket : une forme courte (`ticket_005`) ou une clé mal orthographiée
@@ -481,10 +510,21 @@ couverture décidés / attendus exploitables, parts modales), barre d'avancement
 cours lue dans `progression.json` (écrit toutes les 5 s par le runner). Les colonnes
 `composite_emd` / `composite_l1` et l'icône 📊 se remplissent **toutes seules** : le runner score
 l'exécution à sa clôture (R23) et la table lit le `scores.json` produit — plus rien à déclencher
-à la main. Une exécution non terminée (en cours, en pause, **arrêtée**) reste à « — » : elle
+à la main. (L'icône 📊 ne s'affiche plus par défaut depuis le 2026-09-11 : `composite_emd` à
+« — » dit déjà qu'une exécution n'est pas scorée. Elle se rappelle au sélecteur de colonnes.) Une exécution non terminée (en cours, en pause, **arrêtée**) reste à « — » : elle
 n'est pas scorable. Le décideur est affiché
 **sans le préfixe `passerelle:`** — le modèle seul (le préfixe était du bruit) ; les autres types
-gardent leur libellé (`rejeu`, `aleatoire`…). La colonne **`prompt` ne dit une variante que si le
+gardent leur libellé (`rejeu`, `aleatoire`…). Un décideur **modèle statistique nomme sa famille**
+(`modele:lightgbm`, `modele:mnl`, `modele:rf`, `modele:klr`) depuis le ticket 043 : quatre
+expériences de modèle coexistent et `experience.yaml` ne porte que le chemin de l'artefact, si
+bien que la colonne affichait « modele » quatre fois — la seule chose que ces lignes avaient en
+commun. La famille est **dérivée du `format` de l'artefact** (`<famille>_mode_choice_policy`),
+jamais écrite en dur ni devinée depuis le nom du fichier, exactement comme le libellé des traces
+d'exécution (`modele:klr@<sha>`). Trois précautions : seuls les premiers kilo-octets du fichier
+sont lus (l'artefact à noyau pèse 1,5 Mo et la table se rafraîchit toutes les 10 s), le cache est
+indexé sur la taille et la date du fichier (un modèle ré-estimé est relu), et un artefact absent
+ou sans `format` laisse « modele » nu — inventer une famille serait pire que n'en dire aucune.
+Un `artefact` vide désigne le booster par défaut, comme à l'exécution. La colonne **`prompt` ne dit une variante que si le
 décideur en lit une** : seule la passerelle reçoit un prompt système
 (`experiences/cli.py` ne transmet `parameters.prompt_variant` que sous
 `decideur.type == "passerelle"`), si bien qu'un modèle statistique, un rejeu, un tirage ou
@@ -510,7 +550,42 @@ décoché d'un clic, sans rapport avec « 🗑 Retirer du tableau » ; il compte
 masque, et le panneau de progression plus bas parcourt les lignes non filtrées — cocher la case
 ne peut donc pas faire perdre de vue une exécution qui tourne ni ses boutons Pause / Arrêter
 (une exécution qui tourne est de toute façon la dernière de son expérience, donc jamais
-obsolète). La colonne `etat` porte le suffixe de l'obsolescence **avec ce qu'elle coûte** :
+obsolète).
+
+**Dix colonnes, et un filtre par colonne** (spec `specs/tableau-experiences-colonnes-et-filtres.md`,
+2026-09-11). Le tableau s'ouvre sur `experience`, `execution`, `etat`, `decideur`, `fournisseur`,
+`prompt`, `mode`, `couverture`, `composite_emd`, `composite_l1` — les quinze colonnes d'avant se
+lisaient de gauche à droite pour retrouver une ligne. Les cinq autres (`scores`, `jeu`, `jeu_etat`,
+`chaine`, `formule`) ne sont pas perdues : le dépli **🔎 Colonnes et filtres** les rappelle d'un
+clic, et une colonne rappelée **reprend sa place** dans l'ordre canonique au lieu d'être recollée
+en bout de ligne. Chaque colonne affichée y porte son propre sélecteur, à la manière d'un tableur :
+ses valeurs distinctes, toutes cochées au départ, **OU** à l'intérieur d'une colonne et **ET**
+entre colonnes, le filtre texte s'ajoutant en ET. L'absence de valeur s'y filtre sous son propre
+nom, **« (vide) »** : dans ce projet une mesure absente et un zéro ne se confondent pas. Les trois
+colonnes de chiffres (`couverture`, `composite_emd`, `composite_l1`) se filtrent par **bornes
+min/max incluses**, avec une case « inclure les lignes non scorées » — `composite_l1` porte une
+valeur distincte par exécution, une liste de cases y serait illisible. Un sélecteur qui filtre le
+dit (🔹 et « 3/5 »), le nombre de **lignes affichées sur lignes candidates** est écrit sous le
+tableau, et **↺ Réinitialiser les filtres** remet tout. Trois garde-fous, qui sont la raison
+d'être de la moitié du code : *(i)* les valeurs proposées pour une colonne se calculent **avant**
+les filtres des autres colonnes, sinon une valeur décochée ailleurs disparaîtrait de son propre
+sélecteur et deviendrait impossible à recocher ; *(ii)* masquer une colonne **annule son filtre**,
+aucune ligne ne pouvant être retirée par un critère qu'on ne voit pas ; *(iii)* ce qui est retenu
+sur disque, ce sont les **écarts au défaut** — colonnes retirées, colonnes rappelées, valeurs
+**exclues** — jamais l'état affiché : une exécution lancée demain avec un fournisseur inconnu
+hier arrive donc **cochée** au lieu de naître invisible sous un filtre écrit avant elle, et une
+colonne que le registre n'exposait pas le jour de l'écriture (pas une seule exécution scorée,
+donc pas de `composite_l1`) n'est pas retenue comme masquée — elle reviendrait sinon jamais. Colonnes, filtres et texte survivent à la fermeture de la page
+(`experiments/.dashboard/vue_tableau_experiences.yaml`, ignoré par git, illisible = défauts,
+**dernier écrivain gagnant** si deux onglets du tableau de bord sont ouverts — comme pour le
+brouillon du formulaire) ;
+au premier dessin, des filtres restaurés qui cachent des lignes se signalent par un bandeau
+nommant les colonnes en cause. Enfin, `formule` étant masquée par défaut, l'avertissement
+qu'elle portait ne tombe pas avec elle : **un bandeau ⚠ compte les lignes affichées dont le score
+a été calculé avec une formule périmée** — un chiffre qu'on citerait à tort ne doit pas
+dépendre d'une colonne qu'on a fermée. Le filtre texte, lui, est désormais une sous-chaîne
+**littérale** : `str.contains` de pandas y lisait une expression régulière, et `exp_(alea`
+faisait tomber la page. La colonne `etat` porte le suffixe de l'obsolescence **avec ce qu'elle coûte** :
 « obsolète (résultat complet) » sur une exécution menée à terme, dont les scores restent
 lisibles et comparables, « obsolète (partielle) » sur une exécution que la reprise ne touchera
 plus. `obsolete` est un état de **vue**, calculé par `lister()` : il n'est jamais écrit dans
@@ -664,7 +739,7 @@ rien. `make up-services` reste, pour démarrer des services sans rien lancer.
 
 Le compose entraîne les dépendances des services nommés, et la page les nomme aussi : sans
 cela elle laisserait croire qu'elle démarre trois conteneurs quand elle en démarre huit. Ce
-graphe est **lu dans `docker-compose.yml`**, jamais recopié dans le code, et sa lecture ne
+graphe est **lu dans `infra/docker-compose.yml`**, jamais recopié dans le code, et sa lecture ne
 lance aucun sous-processus. La tuile « Services » de la vue d'ensemble, elle, garde un bouton
 `make up` pour toute la pile.
 

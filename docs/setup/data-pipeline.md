@@ -130,13 +130,13 @@ Deux points délicats, documentés dans l'en-tête du script :
 | taille | 28 315 173 o | 30 121 074 o |
 | durée de génération | — | 57 s (46 s de `build_trips`) |
 
-**La table des tracés, lue par le runtime** (`GAMA/CityTransport/includes/shape_lookup.json`,
+**La table des tracés, lue par le runtime** (`services/GAMA/CityTransport/includes/shape_lookup.json`,
 1,1 Mo) : la recette publie, à côté des courses, la correspondance
 `route_id → {shape_id → {stop_id: stop_sequence}}` **qu'elle a réellement utilisée**, plus le
 catalogue des arrêts desservis (5 956). C'est exactement la structure que consomme
 `GTFSData.get_shape_id_from_route_info`, dont dépend la montée d'un agent dans un véhicule
 (`Inhabitant.gaml` : `shape_id_list contains each.shape_id`). Le format et sa relecture vivent
-dans [`llm-agents/inputs/gtfs/table_traces.py`](../../llm-agents/inputs/gtfs/table_traces.py).
+dans [`services/llm-agents/inputs/gtfs/table_traces.py`](../../llm-agents/inputs/gtfs/table_traces.py).
 
 > **Pourquoi la recette publie au lieu de laisser le runtime refabriquer.** Le TER ne publie
 > aucune géométrie : ses `shape_id` sont *fabriqués* par `gtfs_traces.py`
@@ -161,8 +161,8 @@ alarme apprend à ignorer les alarmes.
 primaire. Voir [routing.md](../arch/routing.md#la-table-des-tracés--ce-qui-permet-à-un-agent-de-monter)
 pour la chaîne complète et les alarmes.
 
-⚠ `export_trip_info.py` importe `llm-agents/inputs/gtfs/{reader,gama}.py`, donc
-`llm-agents/settings.py`. **Depuis le 2026-09-04, cet import ne crée plus de répertoire de run
+⚠ `export_trip_info.py` importe `services/llm-agents/inputs/gtfs/{reader,gama}.py`, donc
+`services/llm-agents/settings.py`. **Depuis le 2026-09-04, cet import ne crée plus de répertoire de run
 et ne déplace plus `experiments/current`** — cela appartient à `claim_run()`, que seul le
 processus propriétaire appelle. La réserve du ticket 031 (question ouverte n° 12) est donc
 levée : la recette peut tourner pendant un run.
@@ -170,10 +170,10 @@ levée : la recette peut tourner pendant un run.
 ### Le monde GAMA : le périmètre des 453 communes (ticket 031, G1)
 
 ```shell
-llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
+services/llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
 ```
 
-écrit `GAMA/CityTransport/includes/perimetre_453.shp` (polygone dissous des quatre couronnes,
+écrit `services/GAMA/CityTransport/includes/perimetre_453.shp` (polygone dissous des quatre couronnes,
 EPSG:4326 comme `routes.shp`). `Settings.gaml` en fait l'emprise du monde —
 `geometry shape <- envelope(perimetre_shape_file)`, **86 × 93 km** (mesuré en Lambert-93 sur le
 polygone dissous : 85,8 × 92,9 km, 5 428 km² de communes dans une enveloppe de 7 971 km² ; GAMA
@@ -205,7 +205,7 @@ OTP est le moteur de calcul d'itinéraires multi-modal (transit + marche/vélo/v
 
 ### Installation
 
-1. Télécharger le binaire OTP depuis le [guide officiel](https://docs.opentripplanner.org/en/v2.7.0/Getting-OTP/) et le placer dans `otp-toulouse/bin/`.
+1. Télécharger le binaire OTP depuis le [guide officiel](https://docs.opentripplanner.org/en/v2.7.0/Getting-OTP/) et le placer dans `services/otp-toulouse/bin/`.
 
 2. L'extrait OSM `data/gtfs/Toulouse.osm.pbf` est, **depuis le 2026-09-03 (ticket 031, T1)**,
    l'extrait du **polygone exact des 453 communes** de l'enquête EMC² 2023 — produit sans
@@ -215,7 +215,7 @@ OTP est le moteur de calcul d'itinéraires multi-modal (transit + marche/vélo/v
    extrait bbbike de 2026 limité au rectangle de 30 km (`TOULOUSE_OSM_ROUTES_30K_BBOX`), hors duquel
    OTP ne pouvait pas rattacher les domiciles de 3ᵉ couronne ni trois gares TER (« Couldn't link ») ;
    l'ancien extrait et son `graph.obj` sont archivés dans `data/gtfs/archives/2026-09-03_pre_perimetre_453/`,
-   la provenance est consignée dans `otp-toulouse/toulouse/Toulouse.osm.pbf.dvc` (écrit à la main,
+   la provenance est consignée dans `services/otp-toulouse/toulouse/Toulouse.osm.pbf.dvc` (écrit à la main,
    `dvc` n'étant pas installé) et `README_Toulouse.osm.pbf.md`. Limite : la voirie passe de 2026 à
    2022 ; un extrait 2026 du même polygone demande un téléchargement régional (~270 Mo), non fait sans
    accord. Un autre extrait se pose au même endroit (`Toulouse.osm.pbf`), puis le graphe se reconstruit.
@@ -234,7 +234,7 @@ make otp-graph
 
 > **Pourquoi une recette et pas la commande nue.** `data/gtfs/` est un répertoire de **travail**,
 > non versionné ; les configurations d'OTP, elles, sont versionnées dans
-> `otp-toulouse/toulouse/` (`build-config.json`, `router-config.json`, `otp-config.json`).
+> `services/otp-toulouse/toulouse/` (`build-config.json`, `router-config.json`, `otp-config.json`).
 > `make otp-graph` les y recopie avant de construire, puis archive l'ancien graphe. Le
 > 2026-09-04, une reconstruction faite à la main avec un `build-config.json` minimal écrit
 > directement dans `data/gtfs/` a **perdu en silence** quatre réglages — `embedRouterConfig`,
@@ -249,7 +249,7 @@ make otp-graph
 > contraintes et le temps de battement changent l'itinéraire retenu, non son existence.
 
 # Démarrer le serveur OTP
-java -Xmx4G -jar otp-toulouse/bin/otp-shaded-2.8.1.jar --load data/gtfs
+java -Xmx4G -jar services/otp-toulouse/bin/otp-shaded-2.8.1.jar --load data/gtfs
 ```
 
 Mesuré le 2026-09-03 sur l'extrait du polygone (JDK 25, `-Xmx4G`) : **46 s de construction, 2,0 Go
@@ -285,7 +285,7 @@ gare du périmètre. Voir [`gtfs-annee.md`](../arch/gtfs-annee.md) et
 ### Configuration dans le controller
 
 ```yaml
-# llm-agents/config/config.yaml
+# services/llm-agents/config/config.yaml
 gtfs:
   mode: OTP
   otp_endpoint: http://localhost:8080/otp/transmodel/v3
@@ -314,7 +314,7 @@ Les graphes OSMnx sont téléchargés depuis OpenStreetMap au premier démarrage
 
 ### Déploiement Docker
 
-En Docker, OSMnx tourne dans un microservice dédié (`osmnx1`, port `8090`). Des replicas supplémentaires (`osmnx2`, `osmnx3`) peuvent être activés dans `docker-compose.yml` si la charge le nécessite.
+En Docker, OSMnx tourne dans un microservice dédié (`osmnx1`, port `8090`). Des replicas supplémentaires (`osmnx2`, `osmnx3`) peuvent être activés dans `infra/docker-compose.yml` si la charge le nécessite.
 
 Le controller les contacte via :
 

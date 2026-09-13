@@ -18,18 +18,18 @@ de la mobilité). Le contrôleur, les scripts et les tests les importent ; en lo
 installer en editable dans le venv de `llm-agents` :
 
 ```bash
-llm-agents/.venv/bin/python -m pip install -e ./mobility_core -e ./llm_gateway[test] -e ./mobility_llm
+services/llm-agents/.venv/bin/python -m pip install -e ./mobility_core -e ./llm_gateway[test] -e ./mobility_llm
 ```
 
 Puis `make test-all` (les trois suites + contrats d'architecture), `make lint`, `make typecheck`.
-Les images Docker `api`/`worker` embarquent les trois paquets (`llm_gateway/Dockerfile`, contexte
-racine) ; en développement, `docker-compose.yml` monte les sources par-dessus, avec `PYTHONPATH=/app` pour qu'elles précèdent les copies installées dans l'image (sans quoi `celery` et `uvicorn`, scripts console, servent le code figé à la construction).
+Les images Docker `api`/`worker` embarquent les trois paquets (`packages/llm_gateway/Dockerfile`, contexte
+racine) ; en développement, `infra/docker-compose.yml` monte les sources par-dessus, avec `PYTHONPATH=/app` pour qu'elles précèdent les copies installées dans l'image (sans quoi `celery` et `uvicorn`, scripts console, servent le code figé à la construction).
 
 ## Ordre de démarrage (mode IHM)
 
 ```
 1. docker compose up      ← démarre tous les services Docker
-2. Ouvrir GAMA            ← fichier GAMA/CityTransport/City.gaml
+2. Ouvrir GAMA            ← fichier services/GAMA/CityTransport/City.gaml
 3. Cliquer Play dans GAMA ← le controller se connecte via WebSocket ws://host.docker.internal:3001
 ```
 
@@ -56,7 +56,7 @@ make run OFFLINE=1 NO_GOOGLE=1   # campagne sans les modèles Google (gemini/gem
 
 make run OFFLINE=1 MEM=0         # coupe la mémoire des agents : LTM ET auto-réflexion
                                  # (MEM=1 pour les réactiver ; sans MEM, réglage inchangé).
-                                 # Écrit dans GAMA/CityTransport/config/sim_params.yaml —
+                                 # Écrit dans services/GAMA/CityTransport/config/sim_params.yaml —
                                  # réglage PERSISTANT, il vaut aussi pour les runs IHM
                                  # suivants. L'injection de paramètres GAMA Server ne
                                  # fonctionne pas pour ces drapeaux : Settings.gaml
@@ -88,7 +88,7 @@ Points d'attention :
 
 - Le launcher **garde sa connexion WebSocket ouverte pendant tout le run** : GAMA Server arrête les expériences dont le client se déconnecte. L'arrêt propre passe par `make down` (ou `docker compose --profile offline down`).
 - À la pause de fin d'horizon (`simulation_max_days`), le controller **continue de drainer les réflexions STM en attente** (écritures LTM, utiles aux runs qui reprennent cette population). Si la LTM du run doit être réutilisée, attendre dans les logs controller le message `[drainage] Réflexions STM épuisées — LTM complète, arrêt sûr (make down)` avant d'arrêter les services.
-- Les paramètres de scénario (population, jours simulés…) restent lus depuis `GAMA/CityTransport/config/sim_params.yaml`, comme en mode IHM.
+- Les paramètres de scénario (population, jours simulés…) restent lus depuis `services/GAMA/CityTransport/config/sim_params.yaml`, comme en mode IHM.
 - Sans display, l'observation passe par Grafana, vizpop (port 5050) et `make report`. Le protocole GAMA Server permet aussi d'évaluer des expressions GAML à chaud (port 6868 exposé sur l'hôte).
 
 ---
@@ -179,7 +179,7 @@ fois, le texte d'un prompt. Les choix du formulaire sont retenus d'une session �
 7. **Lire.** Détail d'une exécution : couverture, parts modales face à l'enquête, puis personne →
    déplacement → trace (options présentées, écartées et motifs, réponse brute).
 
-`make run JEU=` écrit `data.jeu_enregistre` dans `llm-agents/config/config.yaml` et **recrée le
+`make run JEU=` écrit `data.jeu_enregistre` dans `services/llm-agents/config/config.yaml` et **recrée le
 contrôleur** (les réglages sont lus au démarrage du processus). Les tolérances horaires par groupe
 de modes doivent y être déclarées (bloc commenté à décommenter) : sans elles, le jeu est refusé.
 Une exécution s'archive dans `data/experiences/<nom>/executions/<horodatage>/` (`decisions.jsonl`,
@@ -190,7 +190,7 @@ jusqu'à la décision unitaire.
 ## Commandes Docker
 
 ```shell
-# Démarrage standard — configuration unique : llm-agents/config/config.yaml
+# Démarrage standard — configuration unique : services/llm-agents/config/config.yaml
 # (pour changer de config, éditer directement ce fichier)
 docker compose up
 

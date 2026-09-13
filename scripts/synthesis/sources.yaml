@@ -119,7 +119,7 @@ arms:
     # la couche est voisine de son consommateur, `mobility_core.zone_resolver`. Tant
     # qu'il pointait `llm_module/data/`, le volet 3 se régénérait « couche absente »
     # sans que rien ne dise que c'était le manifeste, et non la ressource, qui manquait.
-    zones: mobility_core/src/mobility_core/data/zf_zones.gpkg
+    zones: packages/mobility_core/src/mobility_core/data/zf_zones.gpkg
 
   # ── Second oracle : logit multinomial (parité stricte, voie 1) ──────────────
   # Même contrat de variables, même jeu, même split que `model` — c'est la condition
@@ -128,3 +128,11 @@ arms:
   model_mnl:
     policy: scripts/progedo_logit/mnl_model.json
     predictions: scripts/synthesis/data/mnl_on_common_set.parquet
+
+  # Troisième famille (ticket 043) : régression logistique à noyau RBF, non linéaire comme
+  # le booster et lisse comme le logit. Même contrat, même jeu, même split — et le SECOND
+  # ARBITRE du bloc C : quand les deux arbitres divergent sur le sens d'une variation, la
+  # transition sort du score au lieu d'être imputée au prompt.
+  model_klr:
+    policy: scripts/progedo_logit/klr_model.json
+    predictions: scripts/synthesis/data/klr_on_common_set.parquet

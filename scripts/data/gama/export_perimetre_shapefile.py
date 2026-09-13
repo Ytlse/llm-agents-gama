@@ -1,8 +1,8 @@
 """Exporte le polygone du périmètre des 453 communes en shapefile WGS84 pour GAMA (ticket 031, G1).
 
-    llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
+    services/llm-agents/.venv/bin/python scripts/data/gama/export_perimetre_shapefile.py
 
-Produit `GAMA/CityTransport/includes/perimetre_453.shp` (+ .shx/.dbf/.prj/.cpg), une seule entité :
+Produit `services/GAMA/CityTransport/includes/perimetre_453.shp` (+ .shx/.dbf/.prj/.cpg), une seule entité :
 le polygone dissous des quatre couronnes de `mobility_core/data/couronne_perimetre.geojson` (EPSG:4326,
 comme `routes.shp` et `stops.shp`). `Settings.gaml` en fait l'emprise du monde
 (`geometry shape <- envelope(perimetre_shape_file)`) à la place de l'enveloppe des lignes Tisséo,
@@ -20,11 +20,11 @@ from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-for _p in (str(REPO_ROOT), str(REPO_ROOT / "llm-agents")):
+for _p in (str(REPO_ROOT), str(REPO_ROOT / "services" / "llm-agents")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-INCLUDES = REPO_ROOT / "GAMA" / "CityTransport" / "includes"
+INCLUDES = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "includes"
 OUT = INCLUDES / "perimetre_453.shp"
 
 

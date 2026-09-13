@@ -1,0 +1,29 @@
+mobility-core
+Copyright 2026 les auteurs du dépôt Ytlse/llm-agents-gama
+
+Ce produit inclut des logiciels développés dans le cadre du projet llm-agents-gama
+(simulation multi-agents de la mobilité toulousaine). Le CODE est distribué sous la
+licence Apache 2.0 : voir le fichier LICENSE.
+
+---
+
+DONNÉES — la licence du code ne s'étend PAS aux ressources de `mobility_core/data/`.
+
+Ces ressources sont dérivées de l'Enquête Mobilité Certifiée CEREMA (EMC²) Toulouse 2023,
+dont les microdonnées sont diffusées sous convention nominative par Quetelet-Progedo-
+Diffusion (ADISP, convention lil-1750). Cette convention engage à ne pas céder les données
+sous quelque forme que ce soit. Ce qui est redistribué ici relève de la diffusion de
+RÉSULTATS : coefficients de modèles ajustés (`bike_ownership.json`, `driving_license.json`,
+`pt_subscription.json`), agrégats de niveau couronne ou périmètre
+(`car_availability_emc2.json`, `terminal_time_emc2.json`, `commune_couronne.json`,
+`couronne_perimetre.geojson`) et hiérarchie des modes issue du rapport publié AUAT/CEREMA.
+
+Usage limité à la recherche. Toute publication s'appuyant sur ces ressources cite l'enquête
+selon le modèle annexé à la convention lil-1750.
+
+Les ressources qui reproduisent les microdonnées ou le découpage de l'enquête
+(`zf_couronne.json`, `zf_housing_type.json`, `zf_zones.gpkg`, `zf_zones.meta.json`) ne sont
+PAS distribuées avec ce paquet et se produisent localement — cf. `mobility_core.resources`.
+
+`couronne_perimetre.geojson` incorpore par ailleurs des géométries communales issues
+d'Admin Express (IGN), sous Licence Ouverte / Open Licence Etalab.

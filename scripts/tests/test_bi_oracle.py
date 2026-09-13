@@ -331,3 +331,100 @@ def test_les_parts_par_strate_sont_des_masses_de_probabilite():
     assert strata["2-5km"]["n"] == 2
     assert strata["2-5km"]["shares"]["voiture"] == pytest.approx(72.5)
     assert sum(strata["2-5km"]["shares"].values()) == pytest.approx(100.0)
+
+
+# ── K11 (ticket 043) : le bloc C à deux arbitres ─────────────────────────────
+#
+# Un arbitre unique ne se réfute pas. Avec la KLR en second arbitre, une transition
+# n'entre au score que si les deux modèles de comportement portent un signe franc et le
+# même ; sinon elle sort du score et se compte, plutôt que d'imputer au prompt un
+# désaccord que les modèles n'ont pas tranché entre eux.
+
+def test_K11_sans_klr_le_regime_a_un_arbitre_est_inchange():
+    """Le chiffre d'avant le ticket 043 ne bouge pas, et la sortie dit son régime."""
+    strata = DIST_ORDER[:6]
+    mnl = _curve([0.80, 0.65, 0.50, 0.38, 0.25, 0.12], strata)
+    llm = _curve([0.75, 0.60, 0.45, 0.55, 0.30, 0.15], strata)
+    out = block_c1(llm, mnl)
+    assert out["s_C1"] == pytest.approx(20.0)
+    assert out["regime"] == "un seul arbitre (logit)"
+    assert "arbitres_en_desaccord" not in out["ecartees"]
+    assert all("delta_klr_pt" not in t for t in out["transitions"])
+
+
+def test_K11_les_deux_arbitres_d_accord_la_transition_compte():
+    strata = DIST_ORDER[:6]
+    mnl = _curve([0.80, 0.65, 0.50, 0.38, 0.25, 0.12], strata)
+    klr = _curve([0.78, 0.66, 0.52, 0.40, 0.22, 0.10], strata)   # même sens partout
+    llm = _curve([0.75, 0.60, 0.45, 0.55, 0.30, 0.15], strata)
+    out = block_c1(llm, mnl, klr)
+    assert out["n_transitions"] == 10
+    assert out["s_C1"] == pytest.approx(20.0)
+    assert out["regime"].startswith("deux arbitres")
+    assert out["ecartees"]["arbitres_en_desaccord"] == 0
+    assert all("delta_klr_pt" in t for t in out["transitions"])
+
+
+def test_K11_arbitres_en_desaccord_la_transition_sort_du_score():
+    """Le KLR remonte là où le logit descend : le test se tait sur cette transition."""
+    strata = DIST_ORDER[:3]
+    mnl = _curve([0.80, 0.50, 0.20], strata)
+    klr = _curve([0.80, 0.90, 0.20], strata)    # sens inverse sur la 1re transition
+    llm = _curve([0.70, 0.40, 0.10], strata)
+    out = block_c1(llm, mnl, klr)
+    # 2 transitions × 2 modes = 4 couples ; la première transition sort (2 couples).
+    assert out["ecartees"]["arbitres_en_desaccord"] == 2
+    assert out["n_transitions"] == 2
+    assert {(t["de"], t["vers"]) for t in out["transitions"]} == {(strata[1], strata[2])}
+
+
+def test_K11_second_arbitre_sans_signe_ecarte_et_compte():
+    """Le second arbitre plat ne vaut pas accord : la transition est écartée, pas imputée."""
+    strata = DIST_ORDER[:2]
+    mnl = _curve([0.80, 0.20], strata)
+    klr = _curve([0.50, 0.50], strata)          # aucun signe à donner
+    llm = _curve([0.20, 0.80], strata)
+    out = block_c1(llm, mnl, klr)
+    assert out["s_C1"] is None
+    assert out["mesure"] == "non mesuré"
+    # Les deux modes que la courbe fait bouger (marche, voiture) atteignent le second
+    # arbitre et s'y arrêtent ; les deux autres (vélo, transports collectifs) sont plats
+    # chez le PREMIER arbitre et sortent avant. Les deux compteurs sont distincts parce
+    # qu'ils ne disent pas la même chose sur ce que le test n'a pas pu mesurer.
+    assert out["ecartees"]["second_arbitre_sans_signe"] == 2
+    assert out["ecartees"]["arbitre_sans_signe"] == 2
+    assert "deux arbitres" in out["regime"]
+
+
+def test_K11_la_troisieme_colonne_est_le_meme_calcul():
+    """`block_b(arbitre="klr")` rend les mêmes grandeurs, nommées d'après leur arbitre."""
+    llm, mnl, lgb = triple(40)
+    contre_mnl = block_b(llm, mnl, lgb)
+    contre_klr = block_b(llm, mnl, lgb, arbitre="klr")
+    assert contre_klr["s_B"] == pytest.approx(contre_mnl["s_B"])
+    assert contre_klr["arbitre"] == "klr"
+    assert "jsd_prompt_klr_bits_mean" in contre_klr
+    # Aucune clé ne doit annoncer « mnl » dans une sortie mesurée contre la KLR : un
+    # libellé faux ne se remarque pas, c'est ce qui le rend pire qu'un libellé absent.
+    assert not [k for k in contre_klr if k.endswith("_mnl_bits_mean")]
+    assert "sans_klr" in contre_klr["exclusions"]
+
+
+def test_K11_substrat_du_troisieme_oracle_verifie_a_part():
+    """Un KLR hors substrat prive le bloc C de son second arbitre, pas le bloc B de s_B."""
+    bon = {"run": "experiments/r1", "moves_sha256": "abc", "spec_version": 2,
+           "policy_format": "mnl_mode_choice_policy"}
+    verdict = check_substrate(bon, dict(bon), "experiments/r1", "abc",
+                              {"run": "experiments/AUTRE", "moves_sha256": "abc",
+                               "spec_version": 2})
+    assert verdict["ok"] is True                     # les deux premiers restent mesurables
+    assert verdict["klr_ok"] is False
+    assert any("klr" in p for p in verdict["problemes_klr"])
+
+
+def test_K11_klr_absent_est_un_regime_declare_pas_un_zero():
+    verdict = check_substrate({"run": "r", "moves_sha256": "a", "spec_version": 2},
+                              {"run": "r", "moves_sha256": "a", "spec_version": 2},
+                              "r", "a", {"error": "parquet absent : …"})
+    assert verdict["klr_ok"] is False
+    assert verdict["problemes_klr"] == ["klr : parquet absent : …"]

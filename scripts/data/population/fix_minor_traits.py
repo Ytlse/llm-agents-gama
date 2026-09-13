@@ -48,7 +48,7 @@ DRIVING_AGE = 18
 VAE_MIN_AGE = 14
 
 # Motif d'activité → libellé de `travel_purposes`, **le même mapping** que
-# `_PURPOSE_FR` de eqasim-toulouse/synthesis/population/llm_agents.py. Toute
+# `_PURPOSE_FR` de services/eqasim-toulouse/synthesis/population/llm_agents.py. Toute
 # divergence ferait diverger la population corrigée du format de génération.
 PURPOSE_FR = {
     "work": "Travail",

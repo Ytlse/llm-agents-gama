@@ -69,7 +69,11 @@ COULEURS_MODELES = {
 # Formes par gabarit de prompt, puis par type de décideur pour les références.
 FORMES_PROMPTS = {
     "minimal_persona": ("o", "Persona minimal", "persona"),
+    # `expert_chaine` a été renommé `expert_m4` le 2026-09-11. La clé historique reste : ce
+    # sont les expériences ARCHIVÉES qui la portent dans leur `experience.yaml`, et les
+    # dépouiller de leur forme rendrait le graphique muet sur la moitié des points.
     "expert_chaine": ("s", "Expert chaîne", "chaîne"),
+    "expert_m4": ("s", "Expert chaîne", "chaîne"),
     "expert_chaine_m5": ("^", "Expert chaîne (m5)", "chaîne m5"),
 }
 FORMES_REFERENCES = {

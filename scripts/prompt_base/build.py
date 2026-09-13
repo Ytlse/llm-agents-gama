@@ -123,7 +123,7 @@ from typing import Iterator, Optional
 # via PYTHONPATH. Hors conteneur, on les ajoute pour pouvoir lancer le script
 # depuis la racine du dépôt.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-for _p in (_REPO_ROOT, _REPO_ROOT / "llm-agents"):
+for _p in (_REPO_ROOT, _REPO_ROOT / "services" / "llm-agents"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

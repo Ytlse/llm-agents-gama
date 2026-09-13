@@ -22,7 +22,7 @@ alarme inutile ; et le garde-fou de couverture est exercé **dans les deux sens*
 aujourd'hui et rouge quand on lui retire « Train ». Un contrôle qu'on n'a jamais vu
 échouer est un contrôle dont on ne sait pas s'il peut échouer.
 
-Lancement : PYTHONPATH=. llm-agents/.venv/bin/python -m pytest scripts/tests/test_mode_labels.py
+Lancement : PYTHONPATH=. services/llm-agents/.venv/bin/python -m pytest scripts/tests/test_mode_labels.py
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from scripts.analysis.mode_labels import (
     normalize_column, normalize_labels, resolve_log_path, tally_labels)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MOVE_LOGGER = REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils" / "move_logger.py"
+MOVE_LOGGER = REPO_ROOT / "services" / "llm-agents" / "urban_mobility_agents" / "utils" / "move_logger.py"
 ERRORS_SCRIPT = REPO_ROOT / "scripts" / "errors.py"
 
 # Ce que la normalisation rendait AVANT ce module, pour les libellés qu'elle couvrait.

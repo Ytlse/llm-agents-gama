@@ -41,7 +41,7 @@ Assemblage (assemblage.py)
     (le tracé chimère de la shape 14846)
   - une journée extrapolée est la copie exacte de sa donneuse
   - `calendar.txt` reste vide et `exception_type` valant 1 — le contrat de
-    `llm-agents/inputs/gtfs/reader.py`
+    `services/llm-agents/inputs/gtfs/reader.py`
   - fermeture référentielle, stations parentes comprises
 
 Validation (validation.py)
@@ -767,7 +767,7 @@ class TestAssemblage(BaseTemporaire):
 
     def test_contrat_du_lecteur_du_depot(self):
         """`calendar.txt` vide et `exception_type=1` : les deux asserts de
-        `llm-agents/inputs/gtfs/reader.py`."""
+        `services/llm-agents/inputs/gtfs/reader.py`."""
         source = self._index("src", {"S": ["20260316"]}, [course("T1", service="S")])
         sortie, _, _ = self._construire({"20260316": self._reel("20260316", "src")}, {"src": source})
         self.assertEqual(list(gtfs_io.lire(export_de(sortie), "calendar.txt")), [])

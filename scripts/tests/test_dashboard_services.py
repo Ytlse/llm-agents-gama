@@ -7,6 +7,7 @@ jamais, alors que `make up` la réveille.
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,15 @@ RACINE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RACINE))
 
 from scripts.dashboard import experiences  # noqa: E402
+
+# Depuis le ticket 039 le compose vit dans infra/ et chaque appel porte
+# `-f infra/docker-compose.yml --project-directory <racine>`. Ces drapeaux ne sont l'objet
+# d'aucun test ici : on les retire pour que les assertions portent sur la SOUS-COMMANDE.
+_DRAPEAUX_COMPOSE = re.compile(r"(docker )?compose -f \S+ --project-directory \S+")
+
+
+def _sans_drapeaux_compose(texte: str) -> str:
+    return _DRAPEAUX_COMPOSE.sub(lambda m: f"{m.group(1) or ''}compose", texte)
 
 
 @pytest.fixture(autouse=True)
@@ -88,7 +98,10 @@ def test_R6_la_cible_refuse_une_liste_vide(tmp_path):
     a_blanc = subprocess.run(["make", "-n", "up-services", "SERVICES=controller api worker"],
                              cwd=RACINE, capture_output=True, text=True)
     assert a_blanc.returncode == 0, a_blanc.stderr
-    assert "docker compose up -d controller api worker" in a_blanc.stdout
+    # Les drapeaux de `$(COMPOSE)` (-f infra/…, --project-directory) ne sont pas l'objet du
+    # test : ce qui compte est que la cible passe bien les trois services nommés.
+    assert "docker compose" in a_blanc.stdout
+    assert "up -d controller api worker" in a_blanc.stdout
 
 
 def test_R7_le_graphe_est_lu_dans_le_compose(tmp_path):
@@ -152,7 +165,7 @@ def test_R11_R13_R14_la_cible_chainee_arrete_apres_et_garde_le_code_de_retour():
         ["make", "-n", "experience-lancer-arret", "EXP=essai", "SERVICES=controller osmnx1"],
         cwd=RACINE, capture_output=True, text=True)
     assert a_blanc.returncode == 0, a_blanc.stderr
-    recette = a_blanc.stdout
+    recette = _sans_drapeaux_compose(a_blanc.stdout)
 
     lancement = recette.index("experiences lancer --experience essai")
     arret = recette.index("docker compose stop controller osmnx1")
@@ -173,7 +186,8 @@ def test_R11_le_lancement_avec_gama_arrete_aussi_le_service_gama(docker_hors_ser
 
     # `make -n` a bel et bien lancé la ligne (elle contient `$(MAKE)`) : ce qu'a reçu le
     # faux docker le prouve, et c'est cela qu'on veut voir arriver au vrai.
-    recu = docker_hors_service.read_text(encoding="utf-8") if docker_hors_service.exists() else ""
+    recu = _sans_drapeaux_compose(
+        docker_hors_service.read_text(encoding="utf-8") if docker_hors_service.exists() else "")
     assert "compose --profile offline stop controller osmnx1 gama" in recu, \
         f"la commande d'arrêt réellement émise : {recu!r}"
 

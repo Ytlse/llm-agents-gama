@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "services/llm-agents/.venv/bin/python",
+      "runtimeArgs": ["-m", "streamlit", "run", "scripts/dashboard/app.py",
+                      "--server.port", "8599", "--server.headless", "true"],
+      "port": 8599
+    }
+  ]
+}

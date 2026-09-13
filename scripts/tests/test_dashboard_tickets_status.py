@@ -7,6 +7,7 @@ un fragment inventé — parce que c'est son style réel (blocs repliés, commen
 accents) qui met l'écriture en défaut.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,24 @@ def fichier(tmp_path) -> Path:
 
 def _lignes(p: Path) -> list[str]:
     return p.read_text(encoding="utf-8").splitlines()
+
+
+def _premiere_entree_notee(texte: str) -> tuple[str, str, str]:
+    """La première entrée du fichier réel qui porte une note et un statut éditable.
+
+    Rend `(clé, statut, note)` LUS dans le fichier. Viser un ticket nommément couplait le
+    test à une valeur qui bouge : le 2026-09-12, le statut de `ticket_011` est passé de
+    « à faire » à « abandonné », le remplacement littéral a cessé de mordre, et deux tests
+    ont arrêté de vérifier quoi que ce soit. Ce qui est vérifié ici est la FORME du fichier
+    et le comportement de `tickets.py`, pas l'avancement d'un chantier.
+    """
+    import yaml as pyyaml
+
+    for cle, entree in (pyyaml.safe_load(texte)["tickets"] or {}).items():
+        statut, note = entree.get("status"), entree.get("note")
+        if note and statut in tickets.EDITABLE_STATUSES:
+            return cle, statut, note
+    pytest.fail("aucune entrée avec une note et un statut éditable dans tickets_status.yaml")
 
 
 def test_R9_le_statut_choisi_est_ecrit(fichier):
@@ -152,6 +171,25 @@ def test_R15_les_paragraphes_sont_conserves(fichier):
     assert relu == "premier paragraphe\n\nsecond paragraphe", "la ligne vide sépare deux paragraphes"
 
 
+def test_R9_amelioration_s_ecrit_et_se_relit_comme_une_surcharge(fichier, monkeypatch):
+    """`amélioration` n'est jamais DÉDUIT : seule une surcharge peut le poser.
+
+    Un ticket conservé comme piste future n'a aucun signal textuel qui le trahisse — ses
+    cases à cocher le donneraient `à faire`. Si l'aller-retour se perdait, le ticket
+    retomberait silencieusement dans la file de travail.
+    """
+    import yaml as pyyaml
+
+    monkeypatch.setattr(tickets, "OVERRIDES_PATH", fichier)
+    assert tickets.save_override("ticket_099_essai", tickets.IMPROVEMENT, path=fichier) is True
+    data = pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"]
+    assert data["ticket_099_essai"]["status"] == tickets.IMPROVEMENT
+
+    relu = tickets.parse_ticket(tickets.TICKETS_DIR / "ticket_099_essai.md", tickets._load_overrides())
+    assert (relu.status, relu.status_source) == (tickets.IMPROVEMENT, "surcharge")
+    assert tickets.statut_editable(tickets.IMPROVEMENT) == tickets.IMPROVEMENT
+
+
 def test_R16_le_vocabulaire_propose_est_ferme_et_sans_sans_statut():
     assert tickets.UNKNOWN not in tickets.EDITABLE_STATUSES
     assert set(tickets.EDITABLE_STATUSES) == set(tickets.STATUS_ICON) - {tickets.UNKNOWN}
@@ -255,17 +293,21 @@ def test_R23_un_statut_inconnu_dans_le_fichier_est_refuse(monkeypatch, fichier):
     Le cas s'est produit : au dernier commit, `ticket_030` portait `status: implémenté`, hors
     vocabulaire. Un repli silencieux aurait listé le ticket avec un statut déduit, faux.
     """
-    texte = fichier.read_text(encoding="utf-8").replace(
-        "  ticket_011_arrivees_perdues_gama:\n    status: à faire",
-        "  ticket_011_arrivees_perdues_gama:\n    status: a faire", 1)
-    fichier.write_text(texte, encoding="utf-8")
+    texte = fichier.read_text(encoding="utf-8")
+    cle, en_vigueur, _ = _premiere_entree_notee(texte)
+    # Le `count=1` + le `n == 1` sont le coeur du test : une substitution qui ne mord plus
+    # vidait l'épreuve de son contenu SANS la faire rougir. Elle doit désormais échouer fort.
+    casse, n = re.subn(rf"(^  {re.escape(cle)}:\n    status: ){re.escape(en_vigueur)}$",
+                       lambda m: f"{m.group(1)}a faire", texte, count=1, flags=re.M)
+    assert n == 1, f"le fichier n'a plus la forme attendue : « {cle} » puis « status: {en_vigueur} »"
+    fichier.write_text(casse, encoding="utf-8")
     monkeypatch.setattr(tickets, "OVERRIDES_PATH", fichier)
 
     with pytest.raises(ValueError) as refus:
         tickets.load_tickets()
     message = str(refus.value)
     assert "'a faire'" in message, message
-    assert "ticket_011_arrivees_perdues_gama" in message
+    assert cle in message
     for statut in tickets.EDITABLE_STATUSES:
         assert statut in message, f"la liste admise doit être rappelée ({statut} manque)"
     assert tickets.UNKNOWN not in message, "« sans statut » n'est pas une valeur qu'on puisse écrire"
@@ -301,16 +343,14 @@ def test_R28_une_cle_courte_dans_le_fichier_est_refusee_a_la_lecture(monkeypatch
 
 def test_R27_une_retouche_d_espaces_seuls_n_ecrit_rien(fichier):
     """La comparaison doit porter sur le texte STOCKÉ, sinon un double espace produit un diff."""
-    import yaml as pyyaml
-
-    note = pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"]["ticket_011_arrivees_perdues_gama"]["note"]
+    # Le statut est celui EN VIGUEUR dans le fichier : seule la note doit varier, sinon le
+    # test mesure deux changements à la fois et une écriture légitime le fait rougir.
+    cle, statut, note = _premiere_entree_notee(fichier.read_text(encoding="utf-8"))
     empreinte = fichier.stat().st_mtime_ns
 
-    assert tickets.save_override("ticket_011_arrivees_perdues_gama", tickets.TODO,
-                                 note + "   ", path=fichier) is False
-    assert tickets.save_override("ticket_011_arrivees_perdues_gama", tickets.TODO,
-                                 note.replace(" ", "  ", 3), path=fichier) is False
+    assert tickets.save_override(cle, statut, note + "   ", path=fichier) is False
+    assert tickets.save_override(cle, statut, note.replace(" ", "  ", 3), path=fichier) is False
     assert fichier.stat().st_mtime_ns == empreinte, "aucune écriture pour une retouche cosmétique"
 
-    assert tickets.save_override("ticket_011_arrivees_perdues_gama", tickets.TODO,
-                                 note + " et une phrase de plus.", path=fichier) is True
+    assert tickets.save_override(cle, statut, note + " et une phrase de plus.",
+                                 path=fichier) is True

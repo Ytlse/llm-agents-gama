@@ -5,17 +5,17 @@ occupent un lieu**. Un agent qui part travailler à vélo n'a pas de voiture au 
 son vélo n'est pas resté à la maison. Ce document décrit comment le contrôleur applique
 cette contrainte, et ce qu'elle ne couvre pas.
 
-Code : `llm-agents/urban_mobility_agents/vehicle_chain.py` (helpers `_vehicle_*`,
+Code : `services/llm-agents/urban_mobility_agents/vehicle_chain.py` (helpers `_vehicle_*`,
 `_park_vehicles`, `_orphaned_vehicles` — extraits du contrôleur par le ticket 035 pour que la
 simulation GAMA et l'exécution sans simulateur appliquent la **même** implémentation ; le
 contrôleur les ré-exporte et garde `_settle_vehicles_at_home` avec ses métriques) — état :
-`PersonState.planning_vehicle_at` (`llm-agents/models.py`).
+`PersonState.planning_vehicle_at` (`services/llm-agents/models.py`).
 
 Depuis le ticket 035 (spec 02), le verrou de sortie a une seule source : `_vehicle_unavailable_reason`
 rend le **motif** de l'écart (`non_possede`, `pas_de_conducteur`, `vehicule_ailleurs`) et
 `_vehicle_available` n'en est que la lecture booléenne. La trace de décision archive ce motif, ainsi
 que `retour_force` (verrou de retour) et `plafond` (plafond d'options) — voir
-[plateforme-experiences.md](plateforme-experiences.md) et `llm-agents/experiences/decision.py`.
+[plateforme-experiences.md](plateforme-experiences.md) et `services/llm-agents/experiences/decision.py`.
 
 ## État
 
@@ -177,7 +177,7 @@ en deux variantes de clé, et le taux de hit du cache OTP baisse légèrement.
   désactivée pour cet agent — comportement historique, compté sous `event="no_home"`. Le
   loader eqasim écarte ces agents dès qu'une bbox est posée, ce qui est le cas nominal.
 
-## Réglages (`llm-agents/settings.py`, section `agent`)
+## Réglages (`services/llm-agents/settings.py`, section `agent`)
 
 | Réglage | Défaut | Effet |
 |---------|--------|-------|
@@ -239,7 +239,7 @@ l'alignement en-têtes/valeurs à chaque exécution.
 
 ## Tests
 
-`llm-agents/tests/test_vehicle_chain.py` — 73 tests sur les fonctions réelles du
+`services/llm-agents/tests/test_vehicle_chain.py` — 73 tests sur les fonctions réelles du
 contrôleur (importées depuis le contrôleur, qui les ré-exporte de `vehicle_chain.py`) (possession, position initiale, les trois règles, mode passager, seuil de
 distance du verrou de retour, orphelins, chaînes de journée complètes, rattrapage au
 domicile).

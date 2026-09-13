@@ -4,7 +4,7 @@ Lecture, canonicalisation et écriture des jeux GTFS.
 Tout est lu en chaînes de caractères, jamais converti en nombre : un `direction_id`
 ou une date GTFS transformés en entier reviennent avec un format différent et
 cassent silencieusement les jointures (c'est la raison d'être de `STRING_COLUMNS`
-dans `llm-agents/inputs/gtfs/reader.py`, appliquée ici à toutes les colonnes).
+dans `services/llm-agents/inputs/gtfs/reader.py`, appliquée ici à toutes les colonnes).
 
 La canonicalisation est indispensable avant toute comparaison entre exports :
 les coordonnées et les distances varient sur leurs dernières décimales d'un

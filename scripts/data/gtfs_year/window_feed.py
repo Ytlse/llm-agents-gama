@@ -5,7 +5,7 @@ POURQUOI
 --------
 OTP consomme sans difficulté un feed couvrant l'année entière. La chaîne GAMA,
 non : le calendrier des services y est encodé en masque binaire 64 bits —
-`assert len(all_dates) <= 64` dans `llm-agents/inputs/gtfs/gama.py`, décodé côté
+`assert len(all_dates) <= 64` dans `services/llm-agents/inputs/gtfs/gama.py`, décodé côté
 modèle par `PublicTransport.gaml` (`trip_calendar_map` et `BITWISE_BIT_VAL`).
 Au-delà de 64 dates, l'export échoue ; et `build_trips` balaie tous les trips
 pour chacun d'eux, ce qui rend un feed annuel impraticable de toute façon

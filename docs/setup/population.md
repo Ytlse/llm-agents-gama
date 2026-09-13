@@ -12,7 +12,7 @@ notebook, correctifs de surface) : [../arch/population-post-traitements.md](../a
 
 ## Mise en place du dépôt eqasim-toulouse
 
-Le dossier `eqasim-toulouse/` n'est **pas inclus** dans ce dépôt git. Il utilise un fork personnalisé hébergé sur `https://github.com/Ytlse/eqasim-llm-toulouse`.
+Le dossier `services/eqasim-toulouse/` n'est **pas inclus** dans ce dépôt git. Il utilise un fork personnalisé hébergé sur `https://github.com/Ytlse/eqasim-llm-toulouse`.
 
 ```shell
 git clone https://github.com/Ytlse/eqasim-llm-toulouse eqasim-toulouse
@@ -56,7 +56,7 @@ git remote add upstream https://github.com/eqasim-org/eqasim-france.git
 
 ## Données d'entrée requises
 
-Télécharger et placer les données dans `eqasim-toulouse/data/` (voir le [guide officiel](https://github.com/eqasim-org/eqasim-france/blob/main/docs/cases/toulouse.md)) :
+Télécharger et placer les données dans `services/eqasim-toulouse/data/` (voir le [guide officiel](https://github.com/eqasim-org/eqasim-france/blob/main/docs/cases/toulouse.md)) :
 
 | Données | Sous-dossier | Utilisation |
 |---------|--------------|-------------|
@@ -138,7 +138,7 @@ recalculé sur la population RP 2022 de ces communes.
 
 | Réglage | Où | Défaut |
 |---|---|---|
-| `EQASIM_PERIMETER` | `docker-compose.yml` (service eqasim) | `true` |
+| `EQASIM_PERIMETER` | `infra/docker-compose.yml` (service eqasim) | `true` |
 | `EQASIM_DEPARTMENTS` | idem | `31` |
 | `PERIMETER`, `DEPARTMENTS` | cellule « Paramètres » du notebook | `True`, `['31']` |
 | `perimeter`, `departments` | corps JSON de `POST /generate` | — |
@@ -149,7 +149,7 @@ sans ce garde-fou, une faute de frappe ferait peupler tout le département en si
 
 **Le périmètre d'étude est celui des 453 communes sur six départements** (ticket 031, option A,
 rapport `docs/paper/methode/population/RAPPORT_PERIMETRE_453_COMMUNES.html`). Depuis le 2026-09-03 les
-données des six départements sont dans `eqasim-toulouse/data/` — BD TOPO 3-4 TOUSTHEMES SHP LAMB93
+données des six départements sont dans `services/eqasim-toulouse/data/` — BD TOPO 3-4 TOUSTHEMES SHP LAMB93
 **édition 2025-03-15** pour les six (la 2024-09-15 n'est plus servie par l'IGN ; la Haute-Garonne a
 été reprise dans la même édition, l'ancienne livraison est rangée dans `data/bdtopo_archive_2024-09-15/`,
 hors du chemin lu par eqasim), BAN `adresses-<dep>.csv.gz` du 2026-09-03 — et le service part
@@ -309,7 +309,7 @@ Pour un jeu de test à effectif rond et représentatif, la chaîne se joue en tr
    eqasim, pas dans la sélection.
 3. **Runs** sur le fichier scellé, pris entier — plus aucun ré-échantillonnage :
    ```yaml
-   # llm-agents/config/config.yaml
+   # services/llm-agents/config/config.yaml
    data:
      population_file: /data/eqasim-output/population_1000_AAMAS_v3/population.json
    ```
@@ -353,15 +353,15 @@ Les commandes ci-dessous restent utiles pour rejouer un seul trait sur une popul
 existante, sans repasser par la génération. Elles sont idempotentes.
 
 ```bash
-llm-agents/.venv/bin/python -m scripts.data.population.fix_minor_traits data/population/toulouse_population_1000.json
+services/llm-agents/.venv/bin/python -m scripts.data.population.fix_minor_traits data/population/toulouse_population_1000.json
 ```
 
 ```bash
-llm-agents/.venv/bin/python -m scripts.data.population.enrich_housing_type data/population/toulouse_population_1000.json --check
+services/llm-agents/.venv/bin/python -m scripts.data.population.enrich_housing_type data/population/toulouse_population_1000.json --check
 ```
 
 ```bash
-llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike data/population/toulouse_population_1000.json --check
+services/llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike data/population/toulouse_population_1000.json --check
 ```
 
 ```bash

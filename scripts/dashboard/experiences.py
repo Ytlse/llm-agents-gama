@@ -19,11 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import sys
 import time
 from datetime import date, datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -35,15 +37,25 @@ except ImportError:  # pragma: no cover
     import lmstudio  # type: ignore
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Le fichier compose vit dans infra/ (ticket 039) : `-f` le désigne et
+# `--project-directory` garde la racine comme base de ses chemins relatifs.
+COMPOSE_CMD = ["docker", "compose", "-f", str(REPO_ROOT / "infra" / "docker-compose.yml"),
+               "--project-directory", str(REPO_ROOT)]
+
 DOSSIER = REPO_ROOT / "data" / "experiences"
 DOSSIER_JEUX = REPO_ROOT / "data" / "jeux"
 DOSSIER_POP = REPO_ROOT / "data" / "population"
-PROMPTS_YAML = REPO_ROOT / "mobility_llm" / "src" / "mobility_llm" / "prompts" / "prompts.yaml"
+PROMPTS_YAML = REPO_ROOT / "packages" / "mobility_llm" / "src" / "mobility_llm" / "prompts" / "prompts.yaml"
 # Même fichier que `metrics.PROVIDERS_YAML` : les deux constantes doivent rester d'accord,
 # un test le garde. Le refactor du module LLM a déplacé ce fichier et celle-ci avait suivi
 # à moitié, ce qui vidait la liste des modèles du formulaire sans le dire.
 PROVIDERS_YAML = REPO_ROOT / "config" / "llm_gateway" / "providers.yaml"
 ETAT_ARCHIVE_MANQUANTE = "archive manquante"
+# Dossier qui range ce qui a été retiré du service (cohortes, jeux). Rien de ce qui vit
+# dessous n'est proposé au choix, quel que soit l'état de « Masquer les obsolètes » : ce
+# bouton gouverne les exécutions REMPLACÉES par une plus récente, pas ce qui est archivé.
+SEGMENT_ARCHIVE = "archive"
 POP_CONTENEUR = "/data/eqasim-output"          # montage de data/population dans le contrôleur
 
 # Le nom de l'expérience sert à construire `data/experiences/<nom>/` et à passer `EXP=<nom>`
@@ -108,6 +120,49 @@ ORDRE_CAUSES = ("quota", "prompt", "agent", "saturation", "reseau",
 # le genre de friction qui fait renoncer. `experiments/` est ignoré par git.
 ETAT_FORMULAIRE = REPO_ROOT / "experiments" / ".dashboard" / "formulaire_experience.yaml"
 
+# ── Le tableau du registre : colonnes affichées et filtre par colonne ────────
+# spec `specs/tableau-experiences-colonnes-et-filtres.md`
+
+# L'ordre canonique du tableau. Une colonne rappelée au sélecteur reprend sa place ici :
+# elle n'est jamais recollée en bout de ligne.
+COLONNES_REGISTRE = ("scores", "experience", "execution", "etat", "decideur", "fournisseur",
+                     "prompt", "jeu", "jeu_etat", "mode", "chaine", "couverture",
+                     "choix_forces", "part_forces", "choix_forces_score",
+                     "composite_emd", "composite_emd_hors_forces",
+                     "composite_l1", "composite_l1_hors_forces", "formule")
+
+# R1 — les douze colonnes affichées par défaut. Les autres restent rappelables (R2) :
+# `jeu`, `jeu_etat` et `chaine` disent la comparabilité de deux exécutions, `formule` le
+# calcul qui a produit le chiffre, `scores` n'est qu'un repère (`composite_emd` à « — » dit
+# déjà qu'une exécution n'est pas scorée).
+#
+# Ticket 047 — `choix_forces` et `composite_emd_hors_forces` sont par DÉFAUT, et pas
+# rappelables : le composite affiché compte les décisions à itinéraire unique, dont le
+# nombre dépend du bras (279 pour le tirage uniforme, 811 pour le plus rapide, sur le même
+# substrat). Mesuré le 2026-09-12, les retirer déplace le composite de −3,75 à +12,22 points
+# EMD et change le classement. Une colonne qu'il faut rappeler pour voir cela serait une
+# colonne que personne ne rappelle.
+COLONNES_REGISTRE_DEFAUT = ("experience", "execution", "etat", "decideur", "fournisseur",
+                            "prompt", "mode", "couverture", "choix_forces",
+                            "composite_emd", "composite_emd_hors_forces", "composite_l1")
+
+# R17 — celles-ci se filtrent par bornes, pas par liste de valeurs : `composite_l1` porte
+# une valeur distincte par exécution, une liste de cases à cocher y serait illisible.
+COLONNES_BORNEES = ("couverture", "choix_forces", "part_forces", "choix_forces_score",
+                    "composite_emd", "composite_emd_hors_forces",
+                    "composite_l1", "composite_l1_hors_forces")
+
+# R6 — l'absence de valeur est une valeur de filtre, et elle se nomme. Dans ce projet, une
+# mesure absente et un zéro ne se confondent pas : un score manquant vaut 0.0, c'est-à-dire
+# le score parfait.
+VALEUR_VIDE = "(vide)"
+
+# R18 — colonnes et filtres survivent à la fermeture du tableau de bord, comme le brouillon
+# du formulaire et pour la même raison : reposer six filtres à chaque `make dashboard` est
+# le genre de friction qui fait renoncer. `experiments/` est ignoré par git.
+ETAT_VUE_REGISTRE = REPO_ROOT / "experiments" / ".dashboard" / "vue_tableau_experiences.yaml"
+
+
 # Une construction de jeu écrit sa progression toutes les 5 s. Au-delà de cette marge plus
 # personne n'écrit : le jeu est relançable, et la construction reprendra où elle s'est arrêtée.
 FRAICHEUR_CONSTRUCTION_S = 120
@@ -140,7 +195,7 @@ DELAI_ARRET_S = 30
 # jetterait une heure de calcul.
 LABELS_CONCURRENTS = ("root:experience-lancer", "root:experience-reprendre", "root:run")
 
-COMPOSE = REPO_ROOT / "docker-compose.yml"
+COMPOSE = REPO_ROOT / "infra" / "docker-compose.yml"
 
 # Les services du compose dont une expérience se sert. Nommer la tête de chaîne suffit à les
 # démarrer : le compose entraîne ses dépendances. Restent dehors, et c'est voulu, les cinq
@@ -243,13 +298,166 @@ def _yaml(p: Path) -> dict:
         return {}
 
 
+def empreinte_population(chemin_relatif: str) -> dict:
+    """Identité et contenu d'une cohorte, calculés comme la PLATEFORME les calcule.
+
+    ⚠ Piège, et il a mordu le 2026-09-11 : **deux quantités différentes portent le nom
+    `sha256`**.
+
+    | Où | Ce que `population.sha256` désigne |
+    |---|---|
+    | manifeste du **jeu** | empreinte du FICHIER `MANIFEST.yaml` de la cohorte — son **identité** |
+    | manifeste de la **population** | empreinte de `population.json` — son **contenu** |
+
+    Lire le second et le comparer au premier fait crier « substrat incohérent » sur une
+    cohorte parfaitement cohérente. C'est ce que faisait cette fonction.
+
+    On délègue donc à `info_population()`, celle-là même dont `Jeu.verifier_population`
+    consomme le résultat : deux implémentations d'un même concept finissent toujours par
+    diverger, et c'est précisément le défaut que le ticket 045 corrige ailleurs. Le repli
+    local suit la même convention — l'empreinte d'identité est celle du FICHIER manifeste.
+    """
+    vide = {"nom": "", "sha256": "", "fichier_sha256": "", "scelle_le": "", "scellee": False}
+    if not chemin_relatif:
+        return vide
+    dossier = REPO_ROOT / chemin_relatif
+    m = _yaml(dossier / "MANIFEST.yaml")
+    scelle_le = str(m.get("scelle_le") or "") if m else ""
+    nom_replis = (m.get("nom") if m else None) or Path(chemin_relatif).name.replace(".json", "")
+    try:
+        _bootstrap_experiences()
+        from experiences.population import info_population
+
+        info = info_population(dossier)
+        return {
+            "nom": info.nom,
+            "sha256": info.sha256,                 # identité : le fichier MANIFEST
+            "fichier_sha256": info.fichier_sha256,  # contenu : population.json
+            "scelle_le": scelle_le,
+            "scellee": info.scellee,
+        }
+    except Exception:  # noqa: BLE001 — le tableau de bord reste debout sans la plateforme
+        if not m:
+            return {**vide, "nom": nom_replis}
+        chemin_manifeste = dossier / "MANIFEST.yaml"
+        pop = m.get("population") or {}
+        scellee = bool(pop.get("sha256"))
+        return {
+            "nom": nom_replis,
+            "sha256": _sha256_fichier(chemin_manifeste) if scellee else "",
+            "fichier_sha256": str(pop.get("sha256") or ""),
+            "scelle_le": scelle_le,
+            "scellee": scellee,
+        }
+
+
+def _sha256_fichier(chemin: Path) -> str:
+    """Empreinte d'un fichier — la même que `experiences.population.sha256_fichier`."""
+    import hashlib
+
+    h = hashlib.sha256()
+    try:
+        with open(chemin, "rb") as f:
+            for bloc in iter(lambda: f.read(1 << 20), b""):
+                h.update(bloc)
+    except OSError:
+        return ""
+    return h.hexdigest()
+
+
+def coherence_population_jeu(chemin_population: str, nom_jeu: str) -> str | None:
+    """Message de refus si le jeu n'a pas été préparé pour cette cohorte, sinon None.
+
+    Le même contrôle existe au lancement (`Jeu.verifier_population`, G1) et compare bien les
+    empreintes. Ici il est remonté AVANT le clic : découvrir l'incohérence après avoir payé
+    20 bras n'a pas le même prix que la découvrir en lisant l'écran.
+    """
+    if not chemin_population or not nom_jeu:
+        return None
+    mj = _yaml(DOSSIER_JEUX / nom_jeu / "MANIFEST.yaml")
+    if not mj:
+        return None
+    attendu = str(((mj.get("population") or {}).get("sha256")) or "")
+    courant = empreinte_population(chemin_population)["sha256"]
+    if attendu and courant and attendu != courant:
+        return (
+            f"le jeu « {nom_jeu} » a été préparé pour "
+            f"« {(mj.get('population') or {}).get('nom')} » (empreinte {attendu[:12]}…), "
+            f"pas pour la cohorte choisie (empreinte {courant[:12]}…)"
+        )
+    return None
+
+
+def _bandeau_substrat(st, exp: dict) -> None:
+    """Dit, juste au-dessus des boutons, sur QUEL substrat le lancement va porter (R19)."""
+    chemin = chemin_hote(str((exp.get("population") or {}).get("chemin") or ""))
+    nom_jeu = str((exp.get("jeu") or {}).get("nom") or "")
+    info = empreinte_population(chemin)
+    desaccord = coherence_population_jeu(chemin, nom_jeu)
+    if desaccord:
+        st.error(f"⛔ Substrat incohérent — {desaccord}. Le lancement sera refusé.")
+        return
+    if not info["scellee"]:
+        st.warning(
+            f"⚠ Substrat **non scellé** : `{info['nom']}`. Une cohorte sans sceau n'a pas "
+            f"d'identité stable — la mesure ne sera pas rattachable."
+        )
+        return
+    scelle = f" · scellée le {info['scelle_le'][:10]}" if info["scelle_le"] else ""
+    # Les DEUX empreintes, nommées : l'identité (le manifeste scellé) est celle que le jeu
+    # compare, le contenu (population.json) est celle qui se cite dans l'article.
+    st.caption(
+        f"Substrat : **{info['nom']}**{scelle} · identité `{info['sha256'][:12]}…` · "
+        f"contenu `{info['fichier_sha256'][:12]}…` · jeu **{nom_jeu or '—'}**"
+    )
+
+
 def populations() -> list[str]:
-    """Dossiers scellés (MANIFEST.yaml) puis fichiers JSON nus, relatifs à la racine."""
+    """Dossiers scellés (MANIFEST.yaml) puis fichiers JSON nus, relatifs à la racine.
+
+    Une cohorte rangée sous `archive/` n'est JAMAIS proposée (R16). L'exclusion était jusqu'ici
+    un accident de structure — un dossier `archive/` ne porte pas de `MANIFEST.yaml` à sa racine
+    directe, donc il tombait de lui-même — et rien ne l'énonçait. Elle est maintenant une règle,
+    tenue par un test : ce qui n'est pas dit ne se vérifie pas et finit par changer.
+    """
     if not DOSSIER_POP.is_dir():
         return []
-    scellees = sorted(str(p.relative_to(REPO_ROOT)) for p in DOSSIER_POP.iterdir() if (p / "MANIFEST.yaml").is_file())
+    scellees = sorted(
+        str(p.relative_to(REPO_ROOT))
+        for p in DOSSIER_POP.iterdir()
+        if (p / "MANIFEST.yaml").is_file() and p.name != SEGMENT_ARCHIVE
+    )
     nues = sorted(str(p.relative_to(REPO_ROOT)) for p in DOSSIER_POP.glob("*.json"))
-    return scellees + nues
+    return [c for c in scellees + nues if SEGMENT_ARCHIVE not in Path(c).parts]
+
+
+def _date_de_sceau(chemin_relatif: str) -> str:
+    """`scelle_le` du MANIFEST, ou chaîne vide si absent — jamais une date inventée."""
+    manifeste = _yaml(REPO_ROOT / chemin_relatif / "MANIFEST.yaml")
+    return str(manifeste.get("scelle_le") or "")
+
+
+def population_par_defaut() -> str:
+    """La cohorte proposée par le formulaire : la DERNIÈRE SCELLÉE, par date de sceau.
+
+    C'est la cause racine du ticket 045. Le défaut était `populations()[0]`, soit le premier
+    par ordre ALPHABÉTIQUE : `population_1000_AAMAS` précède `_v3`, `_v4`, `_v5`, si bien que
+    la cohorte v1 était proposée alors que la référence de l'article est la v5. Les 36
+    exécutions de la plateforme ont toutes été lancées sur ce défaut, sans que rien ne le
+    signale — d'autant que le nom de l'expérience restait muet sur sa population (R18).
+
+    Une cohorte sans `scelle_le` ne peut pas être « la plus récente » : elle passe derrière,
+    au lieu de prendre la tête par le seul fait que sa date est absente.
+    """
+    candidates = [
+        p for p in populations() if (REPO_ROOT / p / "MANIFEST.yaml").is_file()
+    ]
+    if not candidates:
+        return next(iter(populations()), "")
+    datees = [(d, p) for p in candidates if (d := _date_de_sceau(p))]
+    if datees:
+        return max(datees)[1]
+    return sorted(candidates)[-1]
 
 
 def chemin_conteneur(population_hote: str) -> str:
@@ -269,9 +477,12 @@ def chemin_hote(population_conteneur: str) -> str:
 
 
 def jeux() -> list[dict]:
+    """Les jeux proposables. Un jeu rangé sous `archive/` n'en fait jamais partie (R17)."""
     out = []
     if DOSSIER_JEUX.is_dir():
         for p in sorted(DOSSIER_JEUX.iterdir()):
+            if p.name == SEGMENT_ARCHIVE:
+                continue
             m = _yaml(p / "MANIFEST.yaml")
             if m:
                 out.append({"nom": m.get("nom", p.name), "population": (m.get("population") or {}).get("nom"),
@@ -308,30 +519,74 @@ def prompt_ecarte(entree: dict) -> Optional[str]:
     return None
 
 
+def prompt_archive(entree: dict) -> Optional[str]:
+    """Raison d'archivage d'une variante, ou None.
+
+    Distinct de `prompt_ecarte` À DESSEIN. Écartée veut dire « la passerelle refuserait de la
+    servir » ; archivée veut dire « on ne la propose plus, mais elle reste servable ». Confondre
+    les deux ferait mentir le formulaire sur ce que le moteur accepte, et interdirait de rejouer
+    une expérience gelée qui désigne un seed retiré du choix (`b0_pristine`, `expert`).
+    """
+    if not isinstance(entree, dict):
+        return None
+    bloc = entree.get("_archive")
+    if not isinstance(bloc, dict) or bloc.get("statut") != "archive":
+        return None
+    le = bloc.get("le")
+    return f"archivée{f' ({le})' if le else ''}"
+
+
 def variantes_prompt(*, inclure_ecartees: bool = False) -> tuple[list[str], Optional[str]]:
     """(variantes proposables, variante active).
 
-    Les variantes invalidées, jugées non conformes ou dont l'avis d'audit est périmé sont
-    retirées du choix : la passerelle les refuse au service, les proposer n'offrirait qu'un
-    lancement perdu. `variantes_prompt_ecartees()` dit lesquelles et pourquoi — un retrait qui
-    ne se compte pas serait une suppression déguisée.
+    Deux motifs de retrait, de nature différente. Les variantes invalidées, jugées non conformes
+    ou dont l'avis d'audit est périmé sont retirées parce que la passerelle les refuse au
+    service : les proposer n'offrirait qu'un lancement perdu. Les variantes ARCHIVÉES sont
+    retirées sur décision de l'auteur alors qu'elles restent parfaitement servables.
+    `variantes_prompt_ecartees()` dit lesquelles et pourquoi — un retrait qui ne se compte pas
+    serait une suppression déguisée.
     """
     d = _yaml(PROMPTS_YAML)
     prompts = d.get("prompts") or {}
     noms = sorted(prompts)
     if not inclure_ecartees:
-        noms = [n for n in noms if prompt_ecarte(prompts.get(n) or {}) is None]
+        noms = [
+            n for n in noms
+            if prompt_ecarte(prompts.get(n) or {}) is None
+            and prompt_archive(prompts.get(n) or {}) is None
+        ]
     return noms, (d.get("active") or {}).get("itinary_multi_agent")
 
 
 def variantes_prompt_ecartees() -> dict[str, str]:
-    """variante retirée du choix → raison, pour la rendre visible sans la proposer."""
+    """variante retirée du choix → raison, pour la rendre visible sans la proposer.
+
+    Les deux motifs y figurent : le refus de service et l'archivage. Le premier prime, une
+    variante à la fois invalidée et archivée s'annonce d'abord par ce qui la rend inutilisable.
+    """
     prompts = (_yaml(PROMPTS_YAML).get("prompts") or {})
-    return {
-        n: r
-        for n in sorted(prompts)
-        if (r := prompt_ecarte(prompts.get(n) or {})) is not None
-    }
+    out = {}
+    for n in sorted(prompts):
+        entree = prompts.get(n) or {}
+        raison = prompt_ecarte(entree) or prompt_archive(entree)
+        if raison is not None:
+            out[n] = raison
+    return out
+
+
+def variantes_prompt_archivees() -> dict[str, str]:
+    """variante archivée → motif tel qu'il est écrit dans `prompts.yaml`.
+
+    Sert à répondre « pourquoi ne la vois-je plus ? » sans ouvrir le YAML, et à distinguer un
+    retrait décidé d'un refus de service.
+    """
+    prompts = (_yaml(PROMPTS_YAML).get("prompts") or {})
+    out = {}
+    for n in sorted(prompts):
+        bloc = (prompts.get(n) or {}).get("_archive")
+        if isinstance(bloc, dict) and bloc.get("statut") == "archive":
+            out[n] = str(bloc.get("motif") or "").strip() or "archivée"
+    return out
 
 
 def prompts_textes() -> dict[str, dict]:
@@ -490,7 +745,7 @@ def services_actifs(timeout: float = 8.0) -> Optional[set[str]]:
     """Services docker compose en cours d'exécution — None si docker est injoignable."""
     import subprocess
     try:
-        r = subprocess.run(["docker", "compose", "ps", "--status", "running", "--services"], cwd=str(REPO_ROOT),
+        r = subprocess.run([*COMPOSE_CMD, "ps", "--status", "running", "--services"], cwd=str(REPO_ROOT),
                            capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -546,7 +801,7 @@ _APTITUDE_CACHE: dict[str, object] = {}
 
 
 def _module_aptitude():
-    """Charge `llm-agents/experiences/aptitude.py` PAR SON CHEMIN, une seule fois.
+    """Charge `services/llm-agents/experiences/aptitude.py` PAR SON CHEMIN, une seule fois.
 
     Un `from experiences import aptitude` ne marche pas ici : ce module-ci s'appelle lui aussi
     `experiences`, l'import résout sur lui-même et échoue en `ImportError` — avalé par un
@@ -559,7 +814,7 @@ def _module_aptitude():
     try:
         import importlib.util
 
-        chemin = REPO_ROOT / "llm-agents" / "experiences" / "aptitude.py"
+        chemin = REPO_ROOT / "services" / "llm-agents" / "experiences" / "aptitude.py"
         spec = importlib.util.spec_from_file_location("_aptitude_experiences", chemin)
         if spec and spec.loader:
             mod = importlib.util.module_from_spec(spec)
@@ -842,20 +1097,32 @@ def derniere_utilisation(dossier: Path) -> float:
     return dernier
 
 
-def experiences() -> dict[str, dict]:
-    """Les expériences définies, de la plus récemment utilisée à la moins récente.
+def experiences(inclure_masquees: bool = False) -> dict[str, dict]:
+    """Les expériences PROPOSABLES, de la plus récemment utilisée à la moins récente.
 
     L'ordre alphabétique mettait en tête des expériences oubliées depuis des semaines, alors
     que « S'inspirer de » sert d'abord à repartir de ce qu'on vient de faire. Celles qui n'ont
     jamais tourné viennent après, par ordre alphabétique : elles n'ont pas d'usage à dater.
+
+    Une expérience archivée ou invalidée n'est plus proposée (R17). C'était la lacune : le
+    tableau « Mes expériences » filtrait bien ces statuts, mais cette fonction-ci, qui alimente
+    le sélecteur « S'inspirer d'une expérience existante » et le bouton « Dupliquer », ne
+    filtrait rien. Une expérience retirée du service restait donc à un clic d'être recopiée
+    dans le formulaire — et la recopie, elle, ne dit pas d'où elle vient.
+
+    `inclure_masquees=True` rend la liste complète : on cesse de les PROPOSER, on ne les rend
+    pas illisibles. Une page de détail ou un rapport doit encore pouvoir les ouvrir.
     """
     if not DOSSIER.is_dir():
         return {}
     trouvees = []
     for p in sorted(DOSSIER.iterdir()):
         e = _yaml(p / "experience.yaml")
-        if e:
-            trouvees.append((derniere_utilisation(p), e.get("nom", p.name), e))
+        if not e:
+            continue
+        if not inclure_masquees and _statut_experience(p)["statut"] != "actif":
+            continue
+        trouvees.append((derniere_utilisation(p), e.get("nom", p.name), e))
     # Jamais utilisée ⇒ 0.0 : le tri décroissant la renverrait en tête, on la range donc à
     # part, derrière, par nom croissant.
     utilisees = sorted((t for t in trouvees if t[0]), key=lambda t: t[0], reverse=True)
@@ -864,9 +1131,9 @@ def experiences() -> dict[str, dict]:
 
 
 # ── Scores composites (spec scoring_composite_experiences) ───────────────────
-# Le paquet `experiences` vit sous llm-agents/ ; on l'ajoute au path à la demande,
+# Le paquet `experiences` vit sous services/llm-agents/ ; on l'ajoute au path à la demande,
 # sans le rendre obligatoire (le dashboard reste debout si le scoring est absent).
-LLM_AGENTS = REPO_ROOT / "llm-agents"
+LLM_AGENTS = REPO_ROOT / "services" / "llm-agents"
 
 
 def _bootstrap_experiences() -> None:
@@ -940,7 +1207,7 @@ def _panneau_formule(st) -> None:
             return
         st.caption(
             f"Référence **{ref['nom']}** · empreinte `{ref['sha256'][:12]}`. "
-            "Édition des poids dans `llm-agents/experiences/formules/reference.yaml` "
+            "Édition des poids dans `services/llm-agents/experiences/formules/reference.yaml` "
             "(versionné en git), puis recalcul ci-dessous — instantané, hors-ligne."
         )
         poids = ref.get("poids") or {}
@@ -1006,15 +1273,86 @@ def _apercu_ligne_selectionnee(st, event, df) -> None:
         components.html(page.read_text(encoding="utf-8"), height=900, scrolling=True)
 
 
+#: Artefact du décideur `modele` quand `experience.yaml` n'en désigne aucun — le booster,
+#: exactement comme `experiences.decideur_modele.POLICY_DEFAUT` (vérifié par test : les deux
+#: chemins se désynchroniseraient en silence, et la colonne annoncerait la mauvaise famille).
+ARTEFACT_MODELE_DEFAUT = "scripts/progedo_logit/mode_choice_policy.json"
+
+#: Suffixe commun aux formats d'artefact de choix modal : `<famille>_mode_choice_policy`.
+#: La famille se lit donc dans le format, et n'a pas à être recopiée dans une table que le
+#: prochain modèle oublierait de mettre à jour.
+SUFFIXE_FORMAT_POLITIQUE = "_mode_choice_policy"
+
+
+@lru_cache(maxsize=64)
+def _famille_du_format(chemin: str, signature: tuple) -> Optional[str]:
+    """Famille d'un artefact de modèle, lue dans son `format`. `None` si illisible.
+
+    **Pourquoi ne pas charger le JSON entier.** L'artefact de la logistique à noyau pèse
+    1,5 Mo (2 000 points d'appui) et la table se rafraîchit toutes les 10 secondes : le
+    `format` est la deuxième clé du fichier, quelques kilo-octets suffisent à le trouver.
+    Le cache est indexé sur (taille, mtime) : un artefact ré-estimé est relu, pas mémorisé.
+
+    Un format qui ne porte pas le suffixe attendu est rendu **tel quel** plutôt que traduit
+    au jugé : mieux vaut un libellé brut qu'un libellé faux, qui ne se remarque pas.
+    """
+    del signature                      # présent pour la clé de cache uniquement
+    try:
+        with open(chemin, "r", encoding="utf-8") as fh:
+            tete = fh.read(4096)
+    except OSError:
+        return None
+    trouve = re.search(r'"format"\s*:\s*"([^"]+)"', tete)
+    if not trouve:
+        return None
+    format_ = trouve.group(1)
+    return (format_[: -len(SUFFIXE_FORMAT_POLITIQUE)]
+            if format_.endswith(SUFFIXE_FORMAT_POLITIQUE) else format_)
+
+
+def famille_artefact(chemin: Optional[str]) -> Optional[str]:
+    """Famille du modèle désigné par un chemin d'artefact, ou `None`.
+
+    Le chemin des `experience.yaml` est relatif à la racine du dépôt (il doit désigner le
+    même fichier sur l'hôte et dans le conteneur) ; un chemin absolu est accepté tel quel.
+    """
+    if not chemin:
+        return None
+    p = Path(chemin)
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    try:
+        stat = p.stat()
+    except OSError:
+        return None
+    return _famille_du_format(str(p), (stat.st_size, stat.st_mtime_ns))
+
+
 def _decideur_label(dec: Optional[dict]) -> str:
     """Le décideur affiché : le modèle seul pour la passerelle (le préfixe « passerelle: » est
-    du bruit), sinon « type:modele » (ex. rejeu, aleatoire) ; vide si aucun type."""
+    du bruit), sinon « type:modele » (ex. rejeu, aleatoire) ; vide si aucun type.
+
+    **Le décideur `modele` dit sa famille** (`modele:klr`, `modele:lightgbm`) depuis le
+    ticket 043. Quatre expériences de modèle coexistent — booster, logit, forêt aléatoire,
+    logistique à noyau — et `experience.yaml` ne porte que le chemin de l'artefact : la
+    colonne affichait « modele » quatre fois, c'est-à-dire la seule chose que ces quatre
+    lignes avaient en commun. La famille est **dérivée du format de l'artefact**, jamais
+    écrite en dur ni devinée depuis le nom de fichier — même règle que les traces
+    d'exécution (`modele:klr@<sha>` dans `regime_applique.decideur`).
+    """
     dec = dec or {}
     t = dec.get("type")
     if not t:
         return ""
     if t == "passerelle":
         return dec.get("modele") or "passerelle"
+    if t == "modele" and not dec.get("modele"):
+        # Artefact absent = artefact par défaut, comme à l'exécution : sans cela la seule
+        # expérience à ne pas nommer son modèle — le booster — restait « modele » nu.
+        famille = famille_artefact(dec.get("artefact") or ARTEFACT_MODELE_DEFAUT)
+        # Sans artefact lisible (fichier absent, modèle jamais estimé), on garde « modele »
+        # nu : c'est ce qu'on sait, et inventer une famille serait pire que n'en dire aucune.
+        return f"modele:{famille}" if famille else "modele"
     return f"{t}:{dec.get('modele') or ''}".rstrip(":")
 
 
@@ -1036,8 +1374,13 @@ def _prompt_affiche(variante: Optional[str], dec: Optional[dict]) -> str:
 
 
 def decideur_de(nom: str) -> str:
-    """Label du décideur défini dans `experience.yaml` d'une expérience (vide si inconnue)."""
-    exp = experiences().get(nom)
+    """Label du décideur défini dans `experience.yaml` d'une expérience (vide si inconnue).
+
+    `inclure_masquees=True` : on LIT ici une expérience désignée par son nom, on n'en propose
+    pas une liste. Une archivée doit encore afficher son décideur, sinon la page de détail
+    mentirait par omission au lieu de dire que l'expérience est retirée du service.
+    """
+    exp = experiences(inclure_masquees=True).get(nom)
     return _decideur_label((exp or {}).get("decideur")) if exp else ""
 
 
@@ -1110,6 +1453,28 @@ def demasquer_tout(dossier: Optional[Path] = None) -> int:
     return n
 
 
+def libelle_chaine(exp: dict) -> str:
+    """L'état de la chaîne des véhicules, en toutes lettres.
+
+    Le nom d'une expérience porte `nochn` (position du véhicule coupée) et `noret` (verrou de
+    retour coupé), muets quand la chaîne est active — qui est la référence. Il faut connaître
+    la convention pour les lire, et c'est précisément ce qu'une mesure ne doit pas exiger.
+
+    Ce réglage change ce que le décideur PEUT choisir : chaîne active, un agent parti en
+    voiture n'a que la voiture pour rentrer ; chaîne coupée, tous les modes lui restent
+    ouverts. Deux colonnes qui ne s'accordent pas dessus ne se comparent pas.
+    """
+    chaine = exp.get("vehicule_chaine", True)
+    verrou = exp.get("verrou_retour", True)
+    if chaine and verrou:
+        return "active"
+    if not chaine and not verrou:
+        return "coupée"
+    # Un seul des deux : le libellé dit ce qui RESTE, pas ce qui tombe. « position » seul
+    # serait ambigu — on ne saurait pas s'il est actif ou coupé.
+    return "position seule" if chaine else "verrou seul"
+
+
 def _statut_experience(exp_dir: Path) -> dict:
     """Statut d'une expérience, best-effort — un marqueur illisible vaut « actif »."""
     st = _json(exp_dir / "statut.json")
@@ -1146,6 +1511,11 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
                 "prompt": _prompt_affiche(base_variante, exp.get("decideur")),
                 "jeu": (exp.get("jeu") or {}).get("nom"),
                 "jeu_etat": etat_du_jeu((exp.get("jeu") or {}).get("nom") or ""),
+                # La chaîne des véhicules en toutes lettres. Le nom la porte déjà (`nochn`,
+                # `noret`), mais il faut connaître la convention pour la lire : une colonne
+                # dit « active » ou « coupée » sans rien à décoder. C'est un réglage qui
+                # change ce que le décideur peut choisir, donc ce qu'on compare.
+                "chaine": libelle_chaine(exp),
                 "derive_de": exp.get("derive_de")}
         sur_disque = sorted(p.name for p in (exp_dir / "executions").iterdir()) if (exp_dir / "executions").is_dir() else []
         for nom in sur_disque:
@@ -1183,8 +1553,20 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
                            "execution": nom, "etat": etat.get("etat", "?"), "raison": etat.get("raison"),
                            "reprise_possible_a": etat.get("reprise_possible_a"), "date": conf.get("cree_le"),
                            "decides": couv.get("decides"), "attendus": couv.get("attendus"), "couverture": couv.get("taux"),
+                           # Ticket 047 — le compte de décisions à itinéraire unique voyage
+                           # avec les parts et le composite, systématiquement. DEUX comptes,
+                           # parce qu'il y a deux périmètres qui ne coïncident pas :
+                           # `choix_forces` porte sur toutes les décisions archivées (comme
+                           # la couverture et les parts), `choix_forces_score` sur le seul
+                           # périmètre scoré — premier jour simulé, dernière tentative. Sur
+                           # les exécutions du 11/09, les deux diffèrent de 14 à 19 lignes.
+                           "choix_forces": (synth.get("choix_forces") or {}).get("n"),
+                           "part_forces": (synth.get("choix_forces") or {}).get("part"),
+                           "choix_forces_score": (scores.get("choix_forces") or {}).get("n"),
                            # Scores (R5, R7, R9) : None → « — », jamais 0 ; drapeau périmée dérivé.
                            "composite_emd": comp.get("emd_jsd"), "composite_l1": comp.get("l1"),
+                           "composite_emd_hors_forces": comp.get("emd_jsd_hors_choix_unique"),
+                           "composite_l1_hors_forces": comp.get("l1_hors_choix_unique"),
                            "volet": scores.get("volet"), "formule": f_score.get("nom"),
                            "formule_perimee": bool(f_sha and ref_sha and f_sha != ref_sha),
                            **{f"part_{m}": v for m, v in parts.items()}, "dossier": str(d)})
@@ -1322,7 +1704,7 @@ def nommer(exp: dict) -> tuple[Optional[object], Optional[str]]:
     """
     N = _nommage()
     if N is None:
-        return None, ("le module de nommage (llm-agents/experiences/nommage.py) est "
+        return None, ("le module de nommage (services/llm-agents/experiences/nommage.py) est "
                       "introuvable : le nom d'une expérience ne peut pas être calculé")
     try:
         return N.attribuer_nom(exp, DOSSIER), None
@@ -1867,7 +2249,7 @@ def defauts() -> dict:
     return {
         # Pas de « nom » : il se calcule (N1). Ce dictionnaire est aussi la liste des champs
         # retenus dans le brouillon du formulaire (R21) — un nom saisi n'y a plus sa place.
-        "population": (populations() or [""])[0], "jeu": (jeux() or [{"nom": ""}])[0]["nom"],
+        "population": population_par_defaut(), "jeu": (jeux() or [{"nom": ""}])[0]["nom"],
         "variante": active or (variantes[0] if variantes else ""), "decideur_type": "passerelle_distant",
         "modele": next(iter(modeles_par_portee()[1]), "") or next(iter(modeles()), ""), "temperature": 0.0, "graine_decideur": 42, "rejeu_de": "", "artefact": "",
         "mode": "sans_simulateur", "politique": "commune", "date": "2026-03-16", "graine_calendrier": 42,
@@ -2217,7 +2599,9 @@ def services_requis_de(nom_experience: str) -> list[str]:
     donc lui dire quoi. Définition introuvable → le contrôleur seul, où la plateforme tourne :
     c'est le plancher, jamais rien de moins.
     """
-    exp = experiences().get(nom_experience)
+    # `inclure_masquees=True` : lecture par nom, pas proposition. Une reprise sur une
+    # expérience archivée doit démarrer les bons services, pas retomber sur le plancher.
+    exp = experiences(inclure_masquees=True).get(nom_experience)
     return services_requis(exp) if exp else [SERVICE_PLATEFORME]
 
 
@@ -2443,6 +2827,302 @@ def _panneau_masques(st, *, vide: bool = False) -> None:
         st.rerun()
 
 
+def _texte_cellule(v) -> str:
+    """La valeur telle qu'elle se filtre : du texte, « (vide) » quand il n'y a rien (R6).
+
+    Le test de NaN n'est pas une coquetterie : une valeur absente devient NaN en passant par
+    le DataFrame, et `NaN is not None` serait vrai — la ligne non scorée passerait pour
+    renseignée.
+    """
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        return VALEUR_VIDE
+    texte = str(v).strip()
+    return texte or VALEUR_VIDE
+
+
+def _texte_recherche(v) -> str:
+    """La même valeur pour la recherche plein texte — vide reste vide : chercher « vide »
+    ne doit pas ramener toutes les lignes sans score."""
+    t = _texte_cellule(v)
+    return "" if t == VALEUR_VIDE else t
+
+
+def _nombre(v):
+    """Le nombre porté par une valeur, ou None si elle n'en porte pas."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(x) else x
+
+
+def valeurs_filtrables(lignes: list[dict], colonne: str) -> list[str]:
+    """Valeurs distinctes d'une colonne, triées, « (vide) » en dernier (R4, R6).
+
+    Calculées sur les lignes CANDIDATES — après le retrait des masquées et, si la case est
+    cochée, des obsolètes, mais AVANT les filtres des autres colonnes (R11). Sinon une valeur
+    retenue disparaîtrait de son propre sélecteur parce qu'un filtre voisin l'a écartée, et
+    on ne pourrait plus la décocher.
+    """
+    vues = {_texte_cellule(l.get(colonne)) for l in lignes}
+    return sorted(vues - {VALEUR_VIDE}) + ([VALEUR_VIDE] if VALEUR_VIDE in vues else [])
+
+
+def retenues_a_jour(toutes: list[str], retenues, connues) -> list[str]:
+    """Ce qui reste coché quand les valeurs du registre bougent sous le filtre (R12).
+
+    Une valeur qui APPARAÎT arrive cochée : un filtre posé la semaine dernière ne doit pas
+    cacher en silence l'exécution lancée depuis. Une valeur qui DISPARAÎT est simplement
+    oubliée — pas d'erreur, pas de tableau vide.
+    """
+    if retenues is None:
+        return list(toutes)
+    retenues, connues = set(retenues), set(connues or ())
+    return [v for v in toutes if v in retenues or v not in connues]
+
+
+def appliquer_filtres(lignes: list[dict], colonnes, *, retenues=None, bornes=None,
+                      texte: str = "") -> list[bool]:
+    """Le masque des lignes à afficher : OU dans une colonne, ET entre colonnes (R5).
+
+    `retenues` : `{colonne: valeurs cochées}`. `bornes` : `{colonne: (mini, maxi, vides)}`,
+    bornes incluses, `vides` décidant du sort des lignes sans chiffre (R17). Seules les
+    colonnes AFFICHÉES filtrent (R10) : aucune ligne ne peut être retirée du tableau par un
+    critère qu'on ne voit pas. `texte` est cherché en SOUS-CHAÎNE LITTÉRALE (R16) — le
+    `str.contains` de pandas, lui, lisait une expression régulière et tombait sur `exp_(alea`.
+    """
+    affichees = list(colonnes)
+    retenues = {c: set(v) for c, v in (retenues or {}).items()
+                if c in affichees and v is not None}
+    bornes = {c: b for c, b in (bornes or {}).items() if c in affichees}
+    cherche = (texte or "").strip().casefold()
+    masque = []
+    for ligne in lignes:
+        garde = all(_texte_cellule(ligne.get(c)) in valeurs for c, valeurs in retenues.items())
+        if garde:
+            for c, (mini, maxi, vides) in bornes.items():
+                x = _nombre(ligne.get(c))
+                if x is None:
+                    garde = bool(vides)
+                elif (mini is not None and x < mini) or (maxi is not None and x > maxi):
+                    garde = False
+                if not garde:
+                    break
+        if garde and cherche:
+            garde = any(cherche in _texte_recherche(ligne.get(c)).casefold() for c in affichees)
+        masque.append(garde)
+    return masque
+
+
+def charger_vue_registre() -> dict:
+    """Colonnes et filtres de la dernière fois (R18), ou {} s'il n'y a rien de lisible."""
+    return _valider_vue_registre(_yaml(ETAT_VUE_REGISTRE))
+
+
+def _valider_vue_registre(brut) -> dict:
+    """Ne garde de l'état relu que ce qui a un sens aujourd'hui.
+
+    Un fichier abîmé, retouché à la main ou laissé par une version antérieure ne doit pas
+    vider le tableau : ce qu'on ne reconnaît pas est ignoré, et le tableau repart de ses dix
+    colonnes sans filtre (R18).
+    """
+    if not isinstance(brut, dict):
+        return {}
+    vue: dict = {}
+    # Des ÉCARTS au défaut, jamais la liste des colonnes affichées. Une colonne absente du
+    # registre le jour où l'on écrit (aucune exécution scorée, donc pas de `composite_l1`)
+    # serait sinon retenue comme « masquée » et ne reviendrait jamais.
+    for champ in ("retirees", "ajoutees"):
+        valeurs = brut.get(champ)
+        if isinstance(valeurs, list):
+            gardees = [c for c in COLONNES_REGISTRE if c in valeurs]
+            if gardees:
+                vue[champ] = gardees
+    # Ce qui est retenu sur disque, ce sont les valeurs EXCLUES, jamais les cochées : une
+    # valeur qui n'existait pas à l'écriture (nouveau fournisseur, nouvelle exécution)
+    # revient donc cochée, au lieu d'être cachée par un filtre écrit avant sa naissance.
+    exclues = brut.get("exclues")
+    if isinstance(exclues, dict):
+        propres = {c: [str(v) for v in vals] for c, vals in exclues.items()
+                   if c in COLONNES_REGISTRE and isinstance(vals, list) and vals}
+        if propres:
+            vue["exclues"] = propres
+    bornes = brut.get("bornes")
+    if isinstance(bornes, dict):
+        propres = {}
+        for c, b in bornes.items():
+            if c not in COLONNES_BORNEES or not isinstance(b, dict):
+                continue
+            mini, maxi, vides = _nombre(b.get("min")), _nombre(b.get("max")), bool(b.get("vides", True))
+            if mini is not None or maxi is not None or not vides:
+                propres[c] = (mini, maxi, vides)
+        if propres:
+            vue["bornes"] = propres
+    if isinstance(brut.get("texte"), str) and brut["texte"].strip():
+        vue["texte"] = brut["texte"]
+    return vue
+
+
+def sauver_vue_registre(*, colonnes, presentes=COLONNES_REGISTRE, exclues=None, bornes=None,
+                        texte: str = "") -> bool:
+    """Écrit colonnes et filtres pour la prochaine ouverture (R18). True si le fichier a changé.
+
+    Ce qu'on retient d'une colonne, c'est l'ÉCART au défaut — retirée, ou rappelée — et
+    seulement parmi celles que le tableau proposait (`presentes`). Retenir la liste affichée
+    perdrait pour toujours une colonne absente ce jour-là : un registre sans exécution scorée
+    n'expose pas `composite_l1`, et la rouvrir demain ne la ferait pas revenir.
+
+    Un échec d'écriture n'est pas une erreur : la mémoire de la vue est un confort, jamais
+    un blocage — le tableau s'affiche de toute façon.
+    """
+    montrees, offertes = set(colonnes), set(presentes)
+    vue = {}
+    retirees = [c for c in COLONNES_REGISTRE_DEFAUT if c in offertes and c not in montrees]
+    ajoutees = [c for c in COLONNES_REGISTRE if c in montrees and c not in COLONNES_REGISTRE_DEFAUT]
+    if retirees:
+        vue["retirees"] = retirees
+    if ajoutees:
+        vue["ajoutees"] = ajoutees
+    if exclues:
+        vue["exclues"] = {c: sorted(v) for c, v in sorted(exclues.items()) if v}
+    if bornes:
+        vue["bornes"] = {c: {"min": mini, "max": maxi, "vides": bool(vides)}
+                         for c, (mini, maxi, vides) in sorted(bornes.items())}
+    if (texte or "").strip():
+        vue["texte"] = texte
+    rendu = yaml.safe_dump(vue, allow_unicode=True, sort_keys=True)
+    try:
+        # Rien à retenir et rien d'écrit : ne pas créer le fichier. Ouvrir le tableau de bord,
+        # ou le dérouler dans un test, ne doit pas laisser de trace là où il n'y a pas d'état.
+        if not vue and not ETAT_VUE_REGISTRE.is_file():
+            return False
+        if ETAT_VUE_REGISTRE.is_file() and ETAT_VUE_REGISTRE.read_text(encoding="utf-8") == rendu:
+            return False
+        ETAT_VUE_REGISTRE.parent.mkdir(parents=True, exist_ok=True)
+        provisoire = ETAT_VUE_REGISTRE.with_name(ETAT_VUE_REGISTRE.name + ".tmp")
+        provisoire.write_text(rendu, encoding="utf-8")
+        os.replace(provisoire, ETAT_VUE_REGISTRE)
+        return True
+    except OSError:
+        return False
+
+
+def _cle_vue(st, nom: str) -> str:
+    """La clé Streamlit d'un widget de la vue, préfixée par la génération courante.
+
+    Voir `_oublier_filtres` : réinitialiser change de génération plutôt que d'effacer.
+    """
+    return f"vue-{int(st.session_state.get('_vue_version', 0))}-{nom}"
+
+
+def _oublier_filtres(st) -> None:
+    """« Réinitialiser » (R8) : toutes les colonnes reviennent, tous les filtres tombent.
+
+    Les clés ne sont pas effacées, elles CHANGENT DE GÉNÉRATION. Streamlit garde l'état d'un
+    widget côté navigateur et le renvoie au run suivant : une clé supprimée revenait garnie,
+    et le tableau restait filtré alors que la mémoire, elle, était vide — constaté le
+    2026-09-11 sur le filtre `etat`, y compris après rechargement de la page. Un nouveau nom
+    de clé donne un widget neuf, sans passé : c'est déjà ce que fait le formulaire à chaque
+    « s'inspirer d'une expérience ». Ce qui a été relu du disque est oublié dans la foulée,
+    sans quoi le défaut reviendrait du fichier au run suivant.
+    """
+    generation = int(st.session_state.get("_vue_version", 0))
+    for k in [k for k in list(st.session_state)
+              if isinstance(k, str) and k.startswith(f"vue-{generation}-")]:
+        del st.session_state[k]
+    st.session_state["_vue_version"] = generation + 1
+    st.session_state["_vue_registre"] = {}
+    st.session_state["_vue_registre_restauree"] = False  # plus rien de restauré : le bandeau tombe
+
+
+def _panneau_colonnes_et_filtres(st, candidates: list[dict], presentes: list[str],
+                                 texte: str) -> dict:
+    """Le sélecteur de colonnes et un filtre par colonne, à la manière d'un tableur.
+
+    Rend `{"colonnes", "retenues", "bornes"}`. L'état vit dans les clés Streamlit — il
+    survit donc au battement du fragment (5 s tant qu'une exécution tourne) et au clic de
+    sélection d'une ligne (R9) — et se recopie sur disque à chaque dessin (R18).
+    """
+    memoire = st.session_state.setdefault("_vue_registre", charger_vue_registre())
+    cle_cols = _cle_vue(st, "colonnes")
+    if cle_cols not in st.session_state:
+        retirees, ajoutees = set(memoire.get("retirees") or ()), memoire.get("ajoutees") or ()
+        voulues = {c for c in COLONNES_REGISTRE_DEFAUT if c not in retirees} | set(ajoutees)
+        st.session_state[cle_cols] = [c for c in presentes if c in voulues]
+        st.session_state["_vue_registre_restauree"] = bool(
+            memoire.get("exclues") or memoire.get("bornes") or memoire.get("texte"))
+    else:  # une colonne peut avoir disparu du registre entre deux dessins
+        st.session_state[cle_cols] = [c for c in st.session_state[cle_cols] if c in presentes]
+
+    actifs = []  # les colonnes effectivement filtrées, pour le bandeau de rappel (R19)
+    with st.expander("🔎 Colonnes et filtres", expanded=False):
+        st.multiselect(
+            "Colonnes affichées", presentes, key=cle_cols,
+            help="les dix colonnes par défaut sont celles du suivi courant ; `jeu`, `jeu_etat`, "
+                 "`chaine`, `formule` et l'icône 📊 se rappellent ici quand on en a besoin")
+        colonnes = [c for c in COLONNES_REGISTRE if c in set(st.session_state[cle_cols])]
+        if not colonnes:
+            st.caption("Aucune colonne choisie : le tableau reprend ses dix colonnes par défaut.")
+            colonnes = [c for c in COLONNES_REGISTRE_DEFAUT if c in presentes]
+        retenues: dict[str, list[str]] = {}
+        bornes: dict[str, tuple] = {}
+        exclues: dict[str, list[str]] = {}
+        cases = st.columns(4)
+        for i, c in enumerate(colonnes):
+            zone = cases[i % 4]
+            if c in COLONNES_BORNEES:
+                cles = tuple(_cle_vue(st, f"{q}-{c}") for q in ("min", "max", "vides"))
+                # Ce qui vient du disque est passé en `value=`, jamais écrit dans la clé du
+                # widget : Streamlit avertit quand une valeur par défaut ET la clé sont posées
+                # à la main, et il ignore `value` dès que le widget a son propre état.
+                defaut = (memoire.get("bornes") or {}).get(c, (None, None, True))
+                pose = (st.session_state.get(cles[0], defaut[0]) is not None
+                        or st.session_state.get(cles[1], defaut[1]) is not None
+                        or not st.session_state.get(cles[2], defaut[2]))
+                with zone.popover(f"{'🔹 ' if pose else ''}{c}", width="stretch"):
+                    mini = st.number_input("minimum", value=defaut[0], step=0.01, format="%.4f", key=cles[0])
+                    maxi = st.number_input("maximum", value=defaut[1], step=0.01, format="%.4f", key=cles[1])
+                    vides = st.checkbox("inclure les lignes non scorées", value=bool(defaut[2]), key=cles[2],
+                                        help="décochée, les lignes à « — » sortent du tableau")
+                borne = (mini, maxi, bool(vides))
+                if borne != (None, None, True):
+                    bornes[c] = borne
+                    actifs.append(c)
+                continue
+            cle, cle_vues = _cle_vue(st, f"val-{c}"), _cle_vue(st, f"vues-{c}")
+            toutes = valeurs_filtrables(candidates, c)
+            if cle in st.session_state:
+                st.session_state[cle] = retenues_a_jour(
+                    toutes, st.session_state[cle], st.session_state.get(cle_vues))
+            else:
+                hors = set((memoire.get("exclues") or {}).get(c, ()))
+                st.session_state[cle] = [v for v in toutes if v not in hors]
+            st.session_state[cle_vues] = toutes
+            pose = len(st.session_state[cle]) < len(toutes)
+            with zone.popover(f"{'🔹 ' if pose else ''}{c} · {len(st.session_state[cle])}/{len(toutes)}",
+                              width="stretch"):
+                st.multiselect(f"Valeurs de « {c} » à afficher", toutes, key=cle,
+                               label_visibility="collapsed",
+                               help="tout décocher vide le tableau de cette colonne ; "
+                                    "« ↺ Réinitialiser » remet tout")
+            gardees = list(st.session_state[cle])
+            retenues[c] = gardees
+            hors = [v for v in toutes if v not in set(gardees)]
+            if hors:
+                exclues[c] = hors
+                actifs.append(c)
+        if st.button("↺ Réinitialiser les filtres", key="exp-filtres-reset", width="stretch",
+                     help="remet les dix colonnes par défaut, décoche tous les filtres et vide "
+                          "le champ de recherche ; aucune donnée n'est touchée"):
+            _oublier_filtres(st)
+            st.rerun(scope="app")
+    # Le fichier n'est réécrit que s'il change (comme le brouillon du formulaire) : ce dessin
+    # se répète toutes les 5 s tant qu'une exécution tourne.
+    sauver_vue_registre(colonnes=colonnes, presentes=presentes, exclues=exclues,
+                        bornes=bornes, texte=texte)
+    return {"colonnes": colonnes, "retenues": retenues, "bornes": bornes, "actifs": actifs}
+
+
 def _suivi_du_registre(st, pd) -> None:
     """Le registre et les exécutions en cours, vivants tant que quelque chose tourne.
 
@@ -2470,8 +3150,9 @@ def _suivi_du_registre(st, pd) -> None:
         _panneau_formule(st)
 
         df = pd.DataFrame(lignes)
-        # Icône « résultats » : 📊 sur les lignes scorées ; cliquer la ligne ouvre le
-        # détail par sous-catégorie juste en dessous (plus de menu séparé).
+        # Icône « résultats » : 📊 sur les lignes scorées. Elle ne s'affiche plus par défaut
+        # (R1) — `composite_emd` à « — » dit déjà qu'une exécution n'est pas scorée — mais se
+        # rappelle au sélecteur de colonnes.
         if "composite_emd" in df.columns:
             # pd.notna, pas `is not None` : une valeur absente devient NaN dans le DataFrame,
             # et `NaN is not None` serait vrai → l'icône apparaîtrait sur les lignes non scorées.
@@ -2479,13 +3160,21 @@ def _suivi_du_registre(st, pd) -> None:
         # `date` retirée : c'est `cree_le` de l'exécution, soit l'horodatage que `execution`
         # porte déjà dans son nom (`2026-09-09_13_05_09`). Deux colonnes pour une information,
         # et le nom de dossier est l'identifiant — c'est lui qui reste.
-        colonnes = [c for c in ("scores", "experience", "execution", "etat", "decideur", "fournisseur", "prompt",
-                                "jeu", "jeu_etat", "mode", "couverture", "composite_emd",
-                                "composite_l1", "formule")
-                    if c in df.columns]
-        triables = [c for c in colonnes if c != "scores"]
+        presentes = [c for c in COLONNES_REGISTRE if c in df.columns]
+        # La liste des tris ne dépend PAS des colonnes affichées : trier sur une colonne qu'on
+        # ne montre pas reste légitime, et une liste qui se réduit sous les doigts quand on
+        # masque une colonne ferait perdre le tri en cours.
+        triables = [c for c in presentes if c != "scores"]
+        # Le texte relu du disque (R18) se pose AVANT le dessin du champ : Streamlit refuse
+        # qu'on écrive la valeur d'un widget déjà dessiné.
+        memoire = st.session_state.setdefault("_vue_registre", charger_vue_registre())
+        cle_filtre = _cle_vue(st, "filtre")
+        if cle_filtre not in st.session_state:
+            st.session_state[cle_filtre] = memoire.get("texte", "")
         c1, c2, c3 = st.columns([2, 1, 1], vertical_alignment="bottom")
-        filtre = c1.text_input("Filtrer (sous-chaîne sur toutes les colonnes)", "", key="exp-filtre")
+        filtre = c1.text_input("Filtrer (sous-chaîne sur toutes les colonnes)", key=cle_filtre,
+                               help="texte brut, jamais une expression régulière : « exp_(alea » "
+                                    "cherche bien ces caractères-là")
         # Tri par défaut sur `execution` : son nom est l'horodatage, l'ordre lexicographique
         # est donc l'ordre chronologique — ce que `date` donnait avant son retrait.
         tri = c2.selectbox("Trier par", triables,
@@ -2502,6 +3191,17 @@ def _suivi_du_registre(st, pd) -> None:
                  "remplacées ; la dernière exécution de chaque expérience reste toujours "
                  "visible. Le nombre de lignes masquées est dit sous le tableau.")
         df = df.sort_values(tri, ascending=False, na_position="last").reset_index(drop=True)
+        # Les obsolètes sortent AVANT que les valeurs filtrables soient calculées (R11) : un
+        # fournisseur qui n'apparaît que sur des lignes obsolètes n'a pas à peupler le
+        # sélecteur d'une colonne quand la case est cochée.
+        masquees = 0
+        if masquer_obsoletes and len(df):
+            garde = [not l.get("obsolete") for l in df.to_dict("records")]
+            masquees = len(garde) - sum(garde)
+            df = df[garde].reset_index(drop=True)
+        candidates = df.to_dict("records")
+        choix = _panneau_colonnes_et_filtres(st, candidates, presentes, filtre)
+        colonnes = choix["colonnes"]
         vue = df[colonnes].copy()
         # Obsolète : suffixe sur la colonne `etat`, avec ce que cela coûte. Une exécution
         # obsolète MENÉE À TERME garde un résultat complet et comparable — seul le libellé
@@ -2520,22 +3220,57 @@ def _suivi_du_registre(st, pd) -> None:
                 (f"{f} ⚠périmée" if p else f) if f else "—"
                 for f, p in zip(df["formule"], df["formule_perimee"])
             ]
-        if filtre:
-            garde = vue.astype(str).apply(lambda col: col.str.contains(filtre, case=False, na=False)).any(axis=1)
-            vue, df = vue[garde].reset_index(drop=True), df[garde].reset_index(drop=True)
-        masquees = 0
-        if masquer_obsoletes and len(df):
-            garde = [not l.get("obsolete") for l in df.to_dict("records")]
-            masquees = len(garde) - sum(garde)
-            vue, df = vue[garde].reset_index(drop=True), df[garde].reset_index(drop=True)
+        garde = appliquer_filtres(candidates, colonnes, retenues=choix["retenues"],
+                                  bornes=choix["bornes"], texte=filtre)
+        retirees = len(garde) - sum(garde)
+        vue, df = vue[garde].reset_index(drop=True), df[garde].reset_index(drop=True)
+        # R19 — des filtres relus du disque cachent des lignes : le dire TANT QU'ILS AGISSENT.
+        # Pas seulement au premier dessin : le fragment se redessine toutes les 5 s dès qu'une
+        # exécution tourne, et un bandeau montré une seule fois s'effacerait avant d'être lu.
+        # Il tombe quand on réinitialise — c'est `_oublier_filtres` qui baisse le drapeau.
+        if retirees and st.session_state.get("_vue_registre_restauree") and choix["actifs"]:
+            st.info(f"🔎 {retirees} ligne(s) masquée(s) par des filtres retenus de la dernière "
+                    f"session : {', '.join(choix['actifs'])}. « ↺ Réinitialiser les filtres » "
+                    "les rend, dans le dépli « Colonnes et filtres ».")
         if masquees:
             # Rien ne disparaît en silence, même derrière un filtre de vue : le nombre se dit,
             # comme le fait le panneau des entrées retirées.
             st.caption(f"🙈 {masquees} ligne(s) obsolète(s) masquée(s) par la case "
                        "« Masquer les obsolètes » — décochez-la pour les revoir.")
-        st.caption("📊 = résultats disponibles : cliquez la ligne pour voir le détail par "
-                   "sous-catégorie. La couverture accompagne chaque score ; une exécution non "
-                   "scorée affiche « — », jamais 0.")
+        # R3 — l'avertissement ne tombe pas avec la colonne qui le portait : `formule` est
+        # masquée par défaut, mais un score calculé avec une formule périmée reste un chiffre
+        # qu'on citerait à tort.
+        perimees = sum(1 for l in df.to_dict("records") if l.get("formule_perimee"))
+        if perimees:
+            st.warning(f"⚠ {perimees} ligne(s) affichée(s) portent un score calculé avec une "
+                       "formule PÉRIMÉE (différente de la référence courante) : recalculez-les "
+                       "depuis le dépli « ⚖️ Formule de score composite » avant de les citer. "
+                       "Le détail par ligne est dans la colonne `formule`, rappelable au "
+                       "sélecteur de colonnes.")
+        # Ticket 047 — le pendant visible de l'`[ALARME]` du journal de scoring. Le composite
+        # affiché compte des décisions que personne n'a prises, en nombre variable d'un bras
+        # à l'autre : quand les deux lectures s'écartent, le classement à l'écran n'est pas
+        # celui qu'on obtiendrait en ne notant que ce qui a été décidé.
+        sensibles = [l for l in df.to_dict("records")
+                     if l.get("composite_emd") is not None
+                     and l.get("composite_emd_hors_forces") is not None
+                     and pd.notna(l["composite_emd"]) and pd.notna(l["composite_emd_hors_forces"])
+                     and abs(l["composite_emd_hors_forces"] - l["composite_emd"]) >= 1.0]
+        if sensibles:
+            pire = max(sensibles,
+                       key=lambda l: abs(l["composite_emd_hors_forces"] - l["composite_emd"]))
+            st.warning(
+                f"⚠ {len(sensibles)} ligne(s) affichée(s) ont un composite qui **dépend des "
+                f"décisions à itinéraire unique** — celles où une seule option existait et où "
+                f"personne n'a choisi. Au plus fort : « {pire.get('experience')} » passe de "
+                f"{pire['composite_emd']:.2f} à {pire['composite_emd_hors_forces']:.2f} "
+                f"({pire['composite_emd_hors_forces'] - pire['composite_emd']:+.2f}) une fois "
+                f"ces lignes retirées. Leur nombre dépend du bras (colonne `choix_forces`) : "
+                f"le classement des deux colonnes de composite n'est pas le même, et aucune "
+                f"des deux n'est fausse. Ne citez pas l'une sans l'autre.")
+        st.caption(f"{len(df)} ligne(s) affichée(s) sur {len(candidates)} — cliquez une ligne "
+                   "pour voir son détail par sous-catégorie. La couverture accompagne chaque "
+                   "score ; une exécution non scorée affiche « — », jamais 0.")
         event = st.dataframe(vue, width="stretch", hide_index=True,
                              on_select="rerun", selection_mode="single-row", key="exp-table")
 
@@ -2775,10 +3510,15 @@ def _formulaire(st, base: dict, version: int) -> dict:
     elif v["decideur_type"] == "rejeu":
         v["rejeu_de"] = c3.text_input("Dossier d'exécution à rejouer", value=base["rejeu_de"], key=k("rejeu"), placeholder="/app/data/experiences/<exp>/executions/<horodatage>")
     elif v["decideur_type"] == "modele":
-        v["artefact"] = c3.text_input("Artefact LightGBM (vide = version par défaut)", value=base.get("artefact", ""),
+        v["artefact"] = c3.text_input("Artefact du modèle (vide = booster LightGBM)", value=base.get("artefact", ""),
                                       key=k("artefact"), placeholder="scripts/progedo_logit/mode_choice_policy.json")
-        c3.caption("Le modèle décide à la place du LLM (masse renormalisée sur l'offre). "
-                   "Sa version est scellée par SHA dans l'exécution ; exige la couche de zones (make zones).")
+        # Trois familles passent par ce champ depuis le ticket 043 : l'étiqueter « LightGBM »
+        # ferait croire qu'un autre artefact n'y est pas accepté.
+        c3.caption("Le modèle décide à la place du LLM (masse renormalisée sur l'offre). Trois "
+                   "familles : `mode_choice_policy.json` (booster), `mnl_model.json` (logit), "
+                   "`klr_model.json` (logistique à noyau) — la famille est DÉRIVÉE du format de "
+                   "l'artefact. Sa version est scellée par SHA dans l'exécution ; exige la "
+                   "couche de zones (make zones).")
     # Le sélecteur reste offert quel que soit le décideur (lire un prompt avant de le choisir
     # est utile en soi), mais il ne se présente plus comme un réglage de l'exécution quand
     # celle-ci n'en lira rien : c'est ici que « minimal_persona » entrait dans un
@@ -3268,6 +4008,12 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
     bloc_enregistrer, bloc_estimer = motifs["enregistrer"], motifs["estimer"]
     bloc_lancer, bloc_construire = motifs["lancer"], motifs["construire"]
     sans_jeu = bool(valeurs.get("sans_jeu"))
+
+    # R19 (ticket 045) — le substrat s'affiche À CÔTÉ du bouton, pas seulement dans la synthèse
+    # écrite après coup. Les 36 premières exécutions ont toutes lu la mauvaise cohorte : rien
+    # n'était faux dans les traces, mais rien ne le disait AVANT de payer. Une empreinte qu'on
+    # ne lit qu'après la dépense ne protège de rien.
+    _bandeau_substrat(st, exp)
 
     b1, b2, b3, b4 = st.columns(4)
     if b1.button("💾 Enregistrer", disabled=bool(bloc_enregistrer), width="stretch",

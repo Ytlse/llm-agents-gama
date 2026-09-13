@@ -103,7 +103,7 @@ Comparer la part modale moyenne avant (baseline) et après mutation :
 ## 5. Phase 4 — Proposition du Prompt Candidat et Clôture
 
 1. Combiner l'ensemble des 5 mutations retenues dans une variante unifiée (ex: `expert_chaine_m7`).
-2. Mettre à jour `mobility_llm/src/mobility_llm/prompts/prompts.yaml` avec :
+2. Mettre à jour `packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml` avec :
    - Le texte intégral de la variante.
    - Le bloc `_provenance` détaillant la dérivation, les mutations et les mesures empiriques.
 3. Rédiger le rapport de restitution présentant :

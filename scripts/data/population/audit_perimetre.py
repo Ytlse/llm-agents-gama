@@ -2,8 +2,8 @@
 audit_perimetre.py — Les neuf écarts de base entre la population enquêtée et la
 population simulée, mesurés un par un.
 
-    llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre
-    llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre \
+    services/llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre
+    services/llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre \
         --population data/population/toulouse_population_1000.json \
         --run experiments/current \
         --trace docs/traces/2026-08-24_perimetre_population
@@ -94,11 +94,11 @@ DEFAULT_RUN = REPO_ROOT / "experiments" / "current"
 DEFAULT_POPULATION_DANS_LE_RUN = "population_1000.json"
 DEFAULT_POPULATION = REPO_ROOT / "data" / "population" / "toulouse_population_1000.json"
 CEREMA_VALUES = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
-COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+COURONNE_GEOJSON = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 WEATHER_CSV = REPO_ROOT / "data" / "weather" / "meteo_toulouse_12_mois.csv"
 # Ressource du temps terminal : son `meta.crown_definition` dit sur quel découpage les
 # lois sont stratifiées. C'est le troisième lieu où la distance pourrait revenir (A2).
-TERMINAL_TIME_JSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "terminal_time_emc2.json"
+TERMINAL_TIME_JSON = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "terminal_time_emc2.json"
 
 # Les quatre catégories scorées, lues dans le module partagé. `MOVE_MODE_MAP` a été
 # retirée le 2026-09-04 : c'était une table de quatre entrées SANS « Train », et un

@@ -1,7 +1,7 @@
 """control_population.py — La population du jeu de test, contrôlée contre l'enquête EMC² 2023.
 
-    llm-agents/.venv/bin/python -m scripts.AAMAS.control_population data/population/x.json
-    llm-agents/.venv/bin/python -m scripts.AAMAS.control_population x.json --borne 1.0 \\
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.control_population data/population/x.json
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.control_population x.json --borne 1.0 \\
         --json rapport.json --trace docs/traces/2026-09-02_population_1000_AAMAS
 
 CE QUE ÇA CONTRÔLE (§3.1 du gabarit AAMAS, §2.3 du plan d'article, jalon 0 du protocole).

@@ -104,7 +104,7 @@ def _canonical_fr() -> dict[str, str]:
     import ast
     from mobility_core.mode_hierarchy import hierarchy
 
-    source = (REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils"
+    source = (REPO_ROOT / "services" / "llm-agents" / "urban_mobility_agents" / "utils"
               / "move_logger.py").read_text(encoding="utf-8")
     ordre = None
     for node in ast.walk(ast.parse(source)):
@@ -387,6 +387,46 @@ def test_le_booster_recharge_attend_les_variables_du_spec(spec):
     booster, artefact = load_policy(POLICY_PATH, spec)
     assert list(booster.feature_name()) == [f["name"] for f in spec["features"]]
     assert artefact["target"]["classes"] == spec["target"]["classes"]
+
+
+# ── K9 (ticket 043) : trois formats, un seul chemin de prédiction ────────────
+
+KLR_PATH = REPO_ROOT / "scripts" / "progedo_logit" / "klr_model.json"
+
+
+def test_K9_les_trois_familles_passent_par_le_meme_chargeur(spec):
+    """Le KLR se recharge comme les deux autres, et attend les mêmes variables.
+
+    C'est la condition pour que les trois parquets soient comparables : deux colonnes
+    mesurées par deux chemins ne se comparent pas.
+    """
+    if not KLR_PATH.exists():
+        pytest.skip("Troisième famille non estimée — `make klr`")
+    model, artefact = load_policy(KLR_PATH, spec)
+    assert artefact["format"] == "klr_mode_choice_policy"
+    assert list(model.feature_name()) == [f["name"] for f in spec["features"]]
+    assert artefact["target"]["classes"] == spec["target"]["classes"]
+    assert hasattr(model, "predict")
+
+
+def test_K9_le_chargeur_refuse_un_klr_sous_un_autre_contrat(spec, tmp_path):
+    if not KLR_PATH.exists():
+        pytest.skip("Troisième famille non estimée — `make klr`")
+    artefact = json.loads(KLR_PATH.read_text(encoding="utf-8"))
+    artefact["spec_version"] = spec["spec_version"] + 1
+    path = tmp_path / "klr.json"
+    path.write_text(json.dumps(artefact), encoding="utf-8")
+    with pytest.raises(ValueError, match="contrat de features"):
+        load_policy(path, spec)
+
+
+def test_K9_un_format_inconnu_reste_refuse(spec, tmp_path):
+    """Élargir la liste des formats ne doit pas l'ouvrir à n'importe quoi."""
+    path = tmp_path / "inconnu.json"
+    path.write_text(json.dumps({"format": "arbre_magique_v9",
+                                "spec_version": spec["spec_version"]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="Format d'artefact inattendu"):
+        load_policy(path, spec)
 
 
 # ── Lecture du parquet par la page ───────────────────────────────────────────

@@ -23,7 +23,7 @@ par le LLM de la référence **EMC² 2023 Toulouse** (`scripts/data/population/c
 | `scripts/models_influence/prompt_calibration_lib.py` | Ancienne version (conservée intacte) : moteur |
 | `scripts/models_influence/calibration_results/` | Cache d'éval, journal des mutations, checkpoint (ancienne version) |
 | `experiments/current/llm_exchanges.jsonl` | Source des requêtes réelles (catégorie `itinary_multi_agent`) |
-| `llm_module/prompts/prompts.yaml` | Prompt de départ et prompt calibré publié |
+| `packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml` | Prompt de départ et prompt calibré publié |
 
 > Le plan d'industrialisation détaillé est dans
 > `docs/tickets/ticket_004_prompt_calibration_industrialisation.md`.
@@ -1318,7 +1318,7 @@ fichiers identiques à l'octet ; la graine, la source et la part de jours pluvie
 consignées dans le `manifest.yaml` du jeu gelé.
 
 La mise en forme est une **recopie** de `weather_to_natural_language`
-(`llm-agents/.../weather_loader.py`) : les deux dépôts sont disjoints et
+(`services/llm-agents/.../weather_loader.py`) : les deux dépôts sont disjoints et
 `urban_mobility_agents` n'est pas importable depuis `prompt_calibration`.
 `calibration/tests/test_weather.py` charge le module de production par chemin et compare
 les deux sorties sur des cas fabriqués **et** sur de vrais jours du CSV — si la copie
@@ -2242,7 +2242,7 @@ Ce projet est à l'intersection des deux.
 ## 6 · Lancement depuis l'IHM GAMA
 
 La calibration peut être déclenchée sans quitter GAMA, via un bouton de
-l'expérience `e` (fichier `GAMA/CityTransport/models/City.gaml`).
+l'expérience `e` (fichier `services/GAMA/CityTransport/models/City.gaml`).
 
 ```
 IHM GAMA (bouton "Lancer la calibration du prompt")
@@ -2263,7 +2263,7 @@ campagne en tâche de fond → journal experiments/current/calibration.log
 | Élément | Détail |
 |---|---|
 | Endpoint | `POST /calibrate` — corps `{"iterations": N}`, non bloquant, réponse `calibration_started` (pid, cycles, journal). Un seul run à la fois (`calibration_busy` sinon). |
-| Montage | `docker-compose.yml` monte `./scripts:/app/scripts` dans le conteneur `controller` (le package de calibration n'y était pas auparavant). |
+| Montage | `infra/docker-compose.yml` monte `./scripts:/app/scripts` dans le conteneur `controller` (le package de calibration n'y était pas auparavant). |
 | Config conteneur | `config/gama_container.yaml` — surcharge les chemins sensibles à la disposition (`llm_module` sous `/opt`, non `/app`). Les défauts relatifs de `RunConfig` restent valables pour un lancement CLI depuis l'hôte. |
 | Journal | `experiments/current/calibration.log` (stdout + stderr de la campagne). |
 | Prérequis | Jeux gelés `calibration_datasets/<version>/` générés et clés providers dans `.env`. À défaut, la campagne s'arrête avec une erreur explicite dans le journal. |
@@ -2646,7 +2646,7 @@ des temps corrigés », pas « qu'aurait produit la simulation ». C'est précis
 veut savoir **avant** de payer un run de plusieurs heures.
 
 ```bash
-make terminal-time                                   # loi d'enquête → llm_module/data/
+make terminal-time                                   # loi d'enquête → packages/mobility_core/src/mobility_core/data/
 cd prompt_calibration
 ../llm-agents/.venv/bin/python rewrite_terminal_time.py --src v5 --dst v6 --modes car
 ../llm-agents/.venv/bin/python rewrite_terminal_time.py --src v5 --dst v7 \

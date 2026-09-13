@@ -25,14 +25,14 @@ l'écart invisible dans les agrégats*. Il déplace **toutes** les cibles à la 
 | Pièce | Rôle |
 |---|---|
 | [`population_emc2_2023.yaml`](../../scripts/data/population/population_emc2_2023.yaml) | Le **cadrage** : qui l'enquête a compté, où, quand, comment |
-| [`llm_module/core/population_reference.py`](../../llm_module/core/population_reference.py) | Le **chargeur validant** — refuse un cadrage incohérent, ne replie jamais |
-| [`llm_module/data/commune_couronne.json`](../../llm_module/data/commune_couronne.json) | La correspondance **commune → couronne** des 453 communes, et la géométrie des couronnes (`couronne_perimetre.geojson`) |
-| [`llm_module/data/zf_couronne.json`](../../llm_module/data/zf_couronne.json) | Les **785 zones fines** avec leur secteur de tirage, leur couronne, leur code INSEE et leur commune — la ressource qui rend la couronne d'un domicile **sans géométrie au runtime** (ticket 021) |
-| [`llm_module/core/residence_zone.py`](../../llm_module/core/residence_zone.py) | Le lecteur de cette table (`CouronneTable`) et la classification de référence par appartenance (`CommunalZones`), montée ici depuis l'audit pour qu'il n'en existe **qu'une** |
+| [`packages/mobility_core/src/mobility_core/population_reference.py`](../../mobility_core/src/mobility_core/population_reference.py) | Le **chargeur validant** — refuse un cadrage incohérent, ne replie jamais |
+| [`packages/mobility_core/src/mobility_core/data/commune_couronne.json`](../../mobility_core/src/mobility_core/data/commune_couronne.json) | La correspondance **commune → couronne** des 453 communes, et la géométrie des couronnes (`couronne_perimetre.geojson`) |
+| [`packages/mobility_core/src/mobility_core/data/zf_couronne.json`](../../mobility_core/src/mobility_core/data/zf_couronne.json) | Les **785 zones fines** avec leur secteur de tirage, leur couronne, leur code INSEE et leur commune — la ressource qui rend la couronne d'un domicile **sans géométrie au runtime** (ticket 021) |
+| [`packages/mobility_core/src/mobility_core/residence_zone.py`](../../mobility_core/src/mobility_core/residence_zone.py) | Le lecteur de cette table (`CouronneTable`) et la classification de référence par appartenance (`CommunalZones`), montée ici depuis l'audit pour qu'il n'en existe **qu'une** |
 
 Le cadrage est **opposable** : chacune de ses valeurs a été recalculée depuis les
 microdonnées d'enquête, et 17 tests
-([`test_population_reference.py`](../../llm_module/tests/test_population_reference.py))
+([`test_population_reference.py`](../../mobility_core/tests/test_population_reference.py))
 échouent si elle devient incohérente.
 
 ```bash
@@ -41,7 +41,7 @@ make audit-perimetre         # les neuf axes ; codes de sortie 0 / 2 / 3
 make audit-perimetre TRACE=docs/traces/<date>_perimetre   # archive le JSON
 
 # recoupement du cadrage depuis les microdonnées (accès restreint)
-llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre --recompute
+services/llm-agents/.venv/bin/python -m scripts.data.population.audit_perimetre --recompute
 ```
 
 Codes de sortie de `audit-perimetre` : **0** tout conforme, **2** au moins un axe à
@@ -81,7 +81,7 @@ décidable.
 Deux blocs commentés **n'ont pas été rétablis**, et deux valeurs ont été corrigées :
 
 - l'équipement vélo par type d'habitat est servi par
-  [`bike_ownership.json`](../../llm_module/data/bike_ownership.json) (ticket 015), seule
+  [`bike_ownership.json`](../../mobility_core/src/mobility_core/data/bike_ownership.json) (ticket 015), seule
   source de vérité ; une seconde copie finirait par diverger ;
 - stationnement au domicile et télétravail n'ont aucun consommateur ;
 - 54 785 → **54 585** déplacements recensés ;
@@ -134,7 +134,7 @@ défaut qu'il ferme.
 
 ### A2 — Le classement en couronnes est faux, et il flatte le score
 
-[`geo_reference.residence_zone`](../../llm_module/core/geo_reference.py) classe un domicile
+[`geo_reference.residence_zone`](../../mobility_core/src/mobility_core/geo_reference.py) classe un domicile
 par **distance à l'hypercentre** (8 / 20 / 40 km), et son commentaire annonce que « ce sont
 les modalités de `lieu_residence` de la référence EMC² ». Ce n'en sont pas : l'enquête
 découpe par **liste de communes** (1 / 69 / 108 / 275).
@@ -315,8 +315,8 @@ les listes de modes complètes, cf. l'enseignement 1 ci-dessous.
 **Refermé le 2026-09-04 par le [ticket 022](../tickets/ticket_022_rabattement_mode_principal.md)**,
 et par la source plutôt que par une convention : le rapport publie en annexe **p. 53** la
 hiérarchie complète des 36 modes enquêtés, « définie au niveau national ». L'ordre est gelé
-dans [`mode_hierarchy_emc2.json`](../../llm_module/data/mode_hierarchy_emc2.json) et servi
-par [`mode_hierarchy.py`](../../llm_module/core/mode_hierarchy.py) à toutes les tables du
+dans [`mode_hierarchy_emc2.json`](../../mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json) et servi
+par [`mode_hierarchy.py`](../../mobility_core/src/mobility_core/mode_hierarchy.py) à toutes les tables du
 dépôt — plus aucune cascade de `if` écrite à la main. Effet mesuré avant application :
 **zéro bascule** sur les 385 888 options des jeux gelés, les 444 055 décisions en cache et
 les 17 258 options du run archivé.
@@ -423,7 +423,7 @@ Trois propriétés, et aucune n'est décorative.
   ```
 
   Le contrôle **ne regarde pas que les données** : il confronte aussi la table à
-  [`mode_hierarchy`](../../llm_module/core/mode_hierarchy.py) (ticket 022), qui décide les
+  [`mode_hierarchy`](../../mobility_core/src/mobility_core/mode_hierarchy.py) (ticket 022), qui décide les
   libellés du journal. Une famille de modes ajoutée en amont sans entrée dans
   l'agrégation alarme **avant** qu'un run ne la produise — c'est la seule façon d'attraper
   le prochain « Train », dont l'absence n'était visible dans aucune donnée.

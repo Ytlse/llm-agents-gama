@@ -1,6 +1,6 @@
 """
 Tests unitaires du tirage d'une date météo par agent
-(`llm-agents/urban_mobility_agents/utils/weather_draw.py`).
+(`services/llm-agents/urban_mobility_agents/utils/weather_draw.py`).
 
 Le dispositif existe parce que, sur une seule journée simulée, les 1 000 agents
 partagent une seule météo : le régresseur a une variance nulle, et « aucun effet
@@ -37,7 +37,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
-sys.path.insert(0, str(REPO_ROOT / "llm-agents"))
+sys.path.insert(0, str(REPO_ROOT / "services" / "llm-agents"))
 
 from sim_clock import wall_clock  # noqa: E402
 from urban_mobility_agents.utils.weather_draw import (  # noqa: E402
@@ -270,7 +270,7 @@ class TestNonRegression(unittest.TestCase):
     tests pendant une journée** (2026-09-04). Le DÉFAUT DU CODE est
     `Settings.weather_per_agent_dates = False` : rien ne bouge si personne ne le
     demande. La CONFIGURATION DU RUN, elle, l'active délibérément
-    (`llm-agents/config/config.yaml`, ticket 023 lot 4 : sans tirage, les 1 000 agents
+    (`services/llm-agents/config/config.yaml`, ticket 023 lot 4 : sans tirage, les 1 000 agents
     d'une journée simulée partagent une météo et l'effet météo est par construction
     non mesurable). Un test qui lit `settings.agent.…` lit la configuration du run,
     pas le défaut du code — il affirmait donc que le dépôt n'active pas un dispositif
@@ -296,7 +296,7 @@ class TestNonRegression(unittest.TestCase):
         """
         import yaml
 
-        chemin = REPO_ROOT / "llm-agents" / "config" / "config.yaml"
+        chemin = REPO_ROOT / "services" / "llm-agents" / "config" / "config.yaml"
         brut = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
         agent = brut.get("agent") or {}
         self.assertTrue(

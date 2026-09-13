@@ -106,7 +106,7 @@ derive_de: exp_agy-gemini-31-f_minper_jtir_t0_nosim
 Démarrer le processus runner dans un terminal (via `run_command` en tâche de fond) :
 
 ```bash
-PYTHONPATH=llm-agents:mobility_llm/src:llm_gateway/src ./llm-agents/.venv/bin/python -m experiences.cli lancer <NOM_EXP>
+PYTHONPATH=llm-agents:packages/mobility_llm/src:packages/llm_gateway/src ./llm-agents/.venv/bin/python -m experiences.cli lancer <NOM_EXP>
 ```
 
 Le runner initialise l'exécution dans `data/experiences/<NOM_EXP>/executions/<TIMESTAMP>/` et prépare le sous-dossier d'échanges IPC :
@@ -184,7 +184,7 @@ Une fois la simulation de la journée terminée :
 
 1. **Vérifier l'intégrité de l'archive** :
    ```bash
-   PYTHONPATH=llm-agents:mobility_llm/src:llm_gateway/src ./llm-agents/.venv/bin/python -c "
+   PYTHONPATH=llm-agents:packages/mobility_llm/src:packages/llm_gateway/src ./llm-agents/.venv/bin/python -c "
    from pathlib import Path
    from experiences.archive import valider_archive
    exec_dir = sorted(Path('data/experiences/<NOM_EXP>/executions').glob('20*'))[-1]

@@ -306,7 +306,7 @@ def simulated_day(value: str) -> Optional[str]:
     """Jour simulé (``YYYY-MM-DD``) d'une ligne, depuis « Temps simulé ».
 
     Même convention que le champ ``sim_day`` de ``llm_exchanges.jsonl`` (UTC, cf.
-    ``llm_gateway/src/llm_gateway/telemetry/logger.py``) : c'est ce qui permet aux volets 1/3 et au
+    ``packages/llm_gateway/src/llm_gateway/telemetry/logger.py``) : c'est ce qui permet aux volets 1/3 et au
     volet 2 de découper le run sur la même frontière de journée.
     """
     text = (value or "").strip()

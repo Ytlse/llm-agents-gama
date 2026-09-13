@@ -319,7 +319,7 @@ def replay_variant(variant: dict, pairs: list[dict], base_prompt: str,
     config = RunConfig(eval_provider=provider, eval_model=MODEL, eval_temp=0.0,
                        eval_batch_max=BATCH, prod_option_handling=True,
                        max_retry_wait=30.0,
-                       schemas_path=str(REPO_ROOT / "mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json"),
+                       schemas_path=str(REPO_ROOT / "packages/mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json"),
                        category="itinary_multi_agent")
     # Depuis le ticket 037 (itération 2) le schéma vit avec sa catégorie
     # (categories/<nom>/output_schema.json) ; l'ancien schemas.json combiné reste accepté.

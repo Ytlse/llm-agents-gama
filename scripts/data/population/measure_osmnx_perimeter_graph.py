@@ -1,6 +1,6 @@
 """measure_osmnx_perimeter_graph.py — Mesures O2 et O4 du rapport de périmètre (ticket 031 § 1.4).
 
-    llm-agents/.venv/bin/python -m scripts.data.population.measure_osmnx_perimeter_graph \\
+    services/llm-agents/.venv/bin/python -m scripts.data.population.measure_osmnx_perimeter_graph \\
         --population data/population/population_1000_AAMAS_v3/population.json \\
         --trace docs/traces/<date>_mesures_graphe_perimetre
 
@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-LLMAGENTS_PATH = REPO_ROOT / "llm-agents"
+LLMAGENTS_PATH = REPO_ROOT / "services" / "llm-agents"
 for _p in (str(REPO_ROOT), str(LLMAGENTS_PATH), str(Path(__file__).resolve().parent)):
     if _p not in sys.path:
         sys.path.insert(0, _p)

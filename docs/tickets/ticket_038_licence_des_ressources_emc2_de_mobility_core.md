@@ -31,6 +31,60 @@ zones fines, lois conditionnées à la zone fine) et ce qui **agrège** ou vient
 publié** (hiérarchie des modes, tables de niveau couronne). La convention lil-1750 dit ce qu'on
 peut publier ; personne ne l'a relue avec cette question.
 
+## Fait le 2026-09-12 — le paquet ne redistribue plus les ressources restreintes
+
+Sans rien préjuger des questions ci-dessous, l'architecture **A** (exclusion du paquet, la
+ressource se lit hors paquet) est appliquée aux ressources qui reproduisent l'enquête.
+`zf_couronne.json`, `zf_housing_type.json`, `zf_zones.gpkg` et `zf_zones.meta.json` ne sont
+plus ni dans le sdist ni dans le wheel.
+
+Il fallait **trois** réglages, chacun suffisant à tout laisser passer :
+
+| Réglage | Ce qu'il laissait passer |
+|---|---|
+| `package-data = ["data/*.json", "data/*.geojson"]` | un glob emporte ce qui est sur le **disque de build**, pas ce que git suit — `zf_housing_type.json`, pourtant `.gitignore`, était déjà dans `build/lib/` |
+| `include-package-data` (défaut `true` depuis setuptools 61) | il **s'unit** à `package-data` au lieu de la restreindre : la liste explicite seule ne changeait rien |
+| absence de `MANIFEST.in` | le sdist ignore `pyproject.toml` ; il emportait tout `data/` même après les deux corrections ci-dessus |
+
+Constat méthodologique : la liste explicite **et** `include-package-data = false` laissaient
+encore fuir le sdist. Seule la construction effective des deux archives l'a montré — d'où
+`mobility_core/tests/test_packaging_licence.py`, qui construit sdist et wheel et regarde
+dedans, en plus de relire les déclarations.
+
+**Sans effet à l'exécution** : les conteneurs montent `mobility_core/src/mobility_core/` en
+volume (`docker-compose.yml`) et le venv local est en editable. `zf_couronne.json` reste
+versionné — c'est sa redistribution qui s'arrête.
+
+**Fait le même jour, à la suite :**
+
+- **`zf_couronne.json` déversionnée** (`git rm --cached` + `.gitignore`). Ce n'est pas un
+  agrégat mais le plan de sondage, et le dépôt a vocation à accompagner une publication.
+  Elle reste sur le disque des postes qui l'ont produite ; un clone neuf lance
+  `make communes-couronnes`.
+- **`resources.restricted_data_path()`** et ses compagnons `restricted_data_candidates`,
+  `restricted_resource_hint`, `RESTRICTED_RESOURCES`. Ordre : `$MOBILITY_CORE_EMC2_DATA_DIR`,
+  le `data/` du paquet, une racine de dépôt plausible. `residence_zone`, `housing_type` et
+  `zone_resolver` y passent ; l'erreur nomme la ressource, la commande, la variable et les
+  chemins essayés.
+- **`LICENSE` + `NOTICE` + `license = "Apache-2.0"`** (PEP 639) pour `mobility_core` et
+  `mobility_llm`, qui n'en avaient aucun. Le `NOTICE` de `mobility_core` pose explicitement
+  que la licence du code **ne couvre pas** `data/`.
+
+Vérifié : 206 tests `mobility_core`, 158 `mobility_llm`, plus `test_enrich_residence_zone`,
+`test_parite_modes`, `test_perimeter_filter`, `test_terminal_time`. Les deux paquets
+construisent un sdist et un wheel portant `License-Expression: Apache-2.0` et leurs deux
+fichiers de licence.
+
+**Reste à faire :**
+
+1. Le point 1 de « À trancher » ci-dessous : l'avis de l'ADISP sur `commune_couronne.json`
+   et `couronne_perimetre.geojson`, les deux seules ressources livrées dont le statut n'est
+   pas acquis. Tout le reste du paquet est soit un coefficient de modèle, soit un agrégat de
+   niveau couronne, soit du rapport publié.
+2. Vérifier la cohérence du `LICENSE` de la racine du dépôt avec les trois paquets (point 4).
+
+---
+
 ## À trancher
 
 1. Pour chaque ressource : redistribuable telle quelle, redistribuable en agrégé seulement, ou

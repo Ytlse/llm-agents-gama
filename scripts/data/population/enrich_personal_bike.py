@@ -9,7 +9,7 @@ Ce que ça remplace : eqasim tirait `p = min(1, vélos_du_donneur / taille)` où
 vélos est **recopié** d'un ménage de l'ENTD 2008 apparié sans la taille du foyer ni
 l'habitat. Le total sortait à peu près juste et la répartition était fausse — gradient de
 taille de ménage **inversé**. Le détail des trois étages et des décisions de
-conditionnement est dans `mobility_core/src/mobility_core/bike_ownership.py`.
+conditionnement est dans `packages/mobility_core/src/mobility_core/bike_ownership.py`.
 
 ## L'adresse comme clé de ménage : utilisable, imparfaite, et il faut le savoir
 

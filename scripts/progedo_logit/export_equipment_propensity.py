@@ -1,7 +1,7 @@
 """export_equipment_propensity.py — Lot 1 des tickets 016 et 017, en une passe.
 
 Deux traits du persona sont aujourd'hui **recopiés** du donneur ENTD 2008 apparié à la
-personne (`eqasim-toulouse/synthesis/population/enriched.py`), et tous deux sont faux de
+personne (`services/eqasim-toulouse/synthesis/population/enriched.py`), et tous deux sont faux de
 la même façon : le total tient à peu près, la répartition est retournée, et la cause est
 la même — `matching_attributes` utilise une classe d'âge `[14, 29, 44, 59, 74]` qui
 couvre 15 à 29 ans d'un seul bloc, là où l'enquête voit la propension s'effondrer d'un
@@ -48,8 +48,8 @@ C'est la seule façon d'empêcher une covariable « à saveur métier » de rest
 qu'elle a l'air pertinente.
 
 Usage :
-    llm-agents/.venv/bin/python -m scripts.progedo_logit.export_equipment_propensity
-    llm-agents/.venv/bin/python -m scripts.progedo_logit.export_equipment_propensity --dry-run
+    services/llm-agents/.venv/bin/python -m scripts.progedo_logit.export_equipment_propensity
+    services/llm-agents/.venv/bin/python -m scripts.progedo_logit.export_equipment_propensity --dry-run
 """
 from __future__ import annotations
 
@@ -145,7 +145,7 @@ def load_people(root: Path) -> pd.DataFrame:
 
     men = men.copy()
     men["cars"] = pd.to_numeric(men["M6"], errors="coerce")
-    geo, _, _ = build_geo(root / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
+    geo, _, _ = build_geo(root / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
     zone = geo.reindex(men["ZFM"]).reset_index(drop=True)
     men["density"] = zone["density_hh_km2"].values
     men["dist_center"] = zone["dist_center_km"].values

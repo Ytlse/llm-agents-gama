@@ -72,9 +72,9 @@ prometheus_data/
 # ============================================================
 cache/*
 llm_cache/
-llm-agents/cache/*
-llm-agents/data/osmnx_cache/*
-llm-agents/data/otp_cache/*
+services/llm-agents/cache/*
+services/llm-agents/data/osmnx_cache/*
+services/llm-agents/data/otp_cache/*
 scripts/general/cache/*
 data/cache/*
 
@@ -113,12 +113,20 @@ scripts/data/population/Temp/*
 # Couche de zones fines dérivée de l'enquête EMC² (ProGEDO / lil-1750, accès
 # restreint). Même statut que sa source, qui n'est pas versionnée : on la
 # régénère avec `make zones` plutôt que de la committer.
-mobility_core/src/mobility_core/data/zf_zones.gpkg
-mobility_core/src/mobility_core/data/zf_zones.meta.json
+packages/mobility_core/src/mobility_core/data/zf_zones.gpkg
+packages/mobility_core/src/mobility_core/data/zf_zones.meta.json
 
 # Loi du type de logement par zone fine, dérivée de la même enquête (action A2).
 # Même statut, même raison : `make housing-type` la régénère.
-mobility_core/src/mobility_core/data/zf_housing_type.json
+packages/mobility_core/src/mobility_core/data/zf_housing_type.json
+
+# Table des 785 zones fines → secteur de tirage → couronne → commune (ticket 038).
+# Déversionnée le 2026-09-12 : ce n'est pas un résultat agrégé mais le PLAN DE SONDAGE de
+# l'enquête, que la convention lil-1750 ne permet pas de céder. Le dépôt ayant vocation à
+# accompagner une publication, elle en sort comme elle est sortie du paquet.
+# `make communes-couronnes` la régénère ; `commune_couronne.json` (453 communes) et
+# `couronne_perimetre.geojson`, eux, restent versionnés — statut à confirmer (ADISP).
+packages/mobility_core/src/mobility_core/data/zf_couronne.json
 
 data/insee/*
 data/PROGEDO 2023/*
@@ -130,6 +138,7 @@ data/cache/eqasim/*
 scripts/progedo_logit/*.csv
 scripts/progedo_logit/*.json
 scripts/progedo_logit/*.parquet
+scripts/progedo_logit/*.npz
 !scripts/progedo_logit/feature_spec.json
 
 # ============================================================
@@ -137,13 +146,17 @@ scripts/progedo_logit/*.parquet
 # ============================================================
 scripts/general/*.csv
 Divers/*
+# Brouillons de session — sur le disque, jamais dans git (ticket 039). `Divers/` attend un
+# tri manuel de l'auteur ; `scratch/` n'a pas vocation à être trié, seulement à ne pas
+# encombrer `git status`.
+scratch/
 
 # ============================================================
 # Dépôts git externes / séparés (gérés indépendamment, ne pas versionner
 # leur contenu dans ce dépôt)
 # ============================================================
 # EQUASIM Toulouse
-eqasim-toulouse/
+services/eqasim-toulouse/
 # Calibration de prompt (github.com/Ytlse/prompt_calibration)
 prompt_calibration/
 # Assistant personnel — dépôt git autonome imbriqué
@@ -152,19 +165,33 @@ docs/slides/README.md
 # pas dans git — décision du 2026-09-02. Ce qui se versionne dans git est l'artefact scellé
 # (data/population/population_1000_AAMAS/) et sa documentation.
 docs/traces/*
+# Ticket 039 : la règle ci-dessus n'a jamais désuivi les 42 fichiers déjà versionnés — un
+# `.gitignore` n'agit que sur ce qui n'est pas encore suivi. Ils sont sortis de l'index le
+# 2026-09-12 et restent sur le disque, comme la décision du 02/09 le demandait.
+
+# Sorties d'un relevé de consommation de jetons — un résultat d'exécution, pas une pièce
+# du code (ticket 039). Le dossier reste sur le disque.
+tests/token_usage/
 
 # Ticket 035 — jeux de déplacements enregistrés et résultats d'exécution : sur disque, pas dans git
 # (les définitions d'expériences, elles, se versionnent : data/experiences/<nom>/experience.yaml)
 data/jeux/
-data/experiences/*/executions/
-# copie de llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
+# Ticket 045 — archives du substrat v1. Les DÉFINITIONS archivées se versionnent, comme les
+# vivantes : ce sont elles qui disent quoi reconstruire, et elles pèsent quelques kilo-octets.
+# Les exécutions archivées, non : 403 Mo de traces, et le motif au-dessus ne les couvre pas
+# (un niveau de dossier de plus). Les zips non plus : ce sont des copies transportables,
+# reproductibles depuis les dossiers par `scripts/archiver_substrat_v1.py`.
+data/experiences/
+data/experiences/.masques.json
+services/llm-agents/data/experiences/
+# copie de services/llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
 .config.yaml.applique
 
 # Caches d'outillage
 .ruff_cache/
 .mypy_cache/
 .hypothesis/
-llm_gateway/site/
+packages/llm_gateway/site/
 
 # Artefacts de couverture (pytest-cov)
 .coverage
@@ -174,3 +201,21 @@ htmlcov/
 # Recueil de PDF de l état de l art (145 Mo, PDF d éditeurs) : seul le README est suivi
 docs/paper/sources/etat_de_lart/*.pdf
 docs/paper/sources/etat_de_lart/.DS_Store
+data/JOURNAL_archivage_ticket_045_2026-09-11.json
+
+services/GAMA/CityTransport/results
+
+services/otp-toulouse/source/ter_occitanie/
+services/otp-toulouse/tools/filter_ter_gtfs.py
+specs/dashboard-pilotage-activites-tickets.md
+specs/hygiene-prompts-et-plateforme-experiences.md
+specs/nommage-canonique-experiences.md
+specs/tableau-experiences-colonnes-et-filtres.md
+specs/ticket_027/questions.md
+specs/ticket_027/sonde-motif-escort.md
+specs/ticket_043/klr-troisieme-famille.md
+specs/ticket_043/questions.md
+specs/ticket_044/questions.md
+specs/ticket_044/temoin_random_forest.md
+specs/ticket_045/questions.md
+specs/ticket_045/substrat-unique-v5.md

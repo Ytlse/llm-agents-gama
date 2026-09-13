@@ -3,12 +3,27 @@
 # ──────────────────────────────────────────────────────────────────────────────
 
 # Un seul fichier de configuration de run, plus de choix par variable : pour
-# changer de config, éditer directement llm-agents/config/config.yaml.
+# changer de config, éditer directement services/llm-agents/config/config.yaml.
 
 GAMA_BIN        = /Applications/GAMA.app/Contents/MacOS/GAMA
 # Racine du dépôt, déduite de l'emplacement du Makefile (pas de chemin absolu en dur)
 PROJECT_ROOT   := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-WORKSPACE       = $(PROJECT_ROOT)/GAMA/CityTransport
+WORKSPACE       = $(PROJECT_ROOT)/services/GAMA/CityTransport
+
+# ── Pile Docker (ticket 039) ──────────────────────────────────────────────────
+# Le fichier compose vit dans infra/ ; `--project-directory` garde la RACINE comme
+# base des chemins relatifs. Sans lui, compose réancre tout sur infra/ et échoue dès
+# `.env` (vérifié : COMPOSE_FILE et COMPOSE_PROJECT_DIRECTORY ne suffisent pas).
+COMPOSE_FILE_PATH = infra/docker-compose.yml
+COMPOSE           = docker compose -f $(COMPOSE_FILE_PATH) --project-directory $(PROJECT_ROOT)
+
+# Le venv du projet vit dans le service contrôleur (ticket 039 : services/llm-agents).
+# ⚠ On l'invoque TOUJOURS par `$(VENV_PYTHON) -m <outil>` : les scripts de `.venv/bin/`
+# portent un shebang absolu que le déplacement a périmé.
+# Chemin ABSOLU : les cibles qui font `cd` dans un paquet n'ont ainsi aucun `../` à compter
+# — c'est ce comptage qui cassait quand `packages/` s'est intercalé (ticket 039).
+VENV_PYTHON       = $(PROJECT_ROOT)/services/llm-agents/.venv/bin/python
+
 MODEL_PATH      = $(WORKSPACE)/models/City.gaml
 EXPERIMENT_NAME = e
 
@@ -39,7 +54,7 @@ endif
 # ── Mémoire des agents ─────────────────────────────────────────────────────────
 # `make run MEM=0` : coupe la mémoire long terme ET l'auto-réflexion ;
 # `make run MEM=1` : les réactive. Sans MEM, le fichier n'est pas touché.
-# ⚠ Le levier est GAMA/CityTransport/config/sim_params.yaml, PAS l'injection de
+# ⚠ Le levier est services/GAMA/CityTransport/config/sim_params.yaml, PAS l'injection de
 # paramètres GAMA Server : Settings.gaml (load_sim_config, cycle 1) écrase les
 # paramètres injectés avec le contenu de ce fichier. Le réglage est PERSISTANT
 # (le fichier est réécrit à cycle 2) : il vaut aussi pour les runs GUI suivants.
@@ -49,8 +64,8 @@ MEM ?=
 # « prompt nu », A/B de prompt) sur le périmètre COMPLET. Coûte ~4x plus d'appels.
 # `make run CACHE=1` : le réactive. Sans CACHE, le fichier n'est pas touché.
 CACHE ?=
-SIM_PARAMS = GAMA/CityTransport/config/sim_params.yaml
-APP_CONFIG = llm-agents/config/config.yaml
+SIM_PARAMS = services/GAMA/CityTransport/config/sim_params.yaml
+APP_CONFIG = services/llm-agents/config/config.yaml
 
 # ── Run sans modèles Google ───────────────────────────────────────────────────
 # `make run NO_GOOGLE=1` : blanchit les deux clés Google dans les conteneurs ;
@@ -70,15 +85,15 @@ endif
 .PHONY: up down restart rebuild logs ps clean purge-cache
 
 up:
-	docker compose up -d
+	$(COMPOSE) up -d
 
 # --profile offline : inclut le service gama (mode headless) s'il tourne ;
 # sans effet quand il n'est pas lancé.
 down:
-	docker compose --profile offline down
+	$(COMPOSE) --profile offline down
 
 restart:
-	docker compose restart
+	$(COMPOSE) restart
 
 .PHONY: watch-containers
 ## Sonde la mémoire des conteneurs et capture celui qui tombe. Existe parce que trois runs ont
@@ -97,7 +112,7 @@ watch-containers:
 ## Usage: make stop-services SERVICES="controller api worker otp1 otp2 otp3 osmnx1 eqasim redis"
 stop-services:
 	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à arrêter"; exit 2; }
-	docker compose stop $(SERVICES)
+	$(COMPOSE) stop $(SERVICES)
 
 .PHONY: experience-lancer-arret
 ## Lance une expérience PUIS arrête les services qu'elle utilisait. L'arrêt est chaîné dans la
@@ -112,7 +127,7 @@ experience-lancer-arret:
 	$(EXPERIENCES_PY) lancer --experience $(EXP); code=$$?; \
 	if $(EXPERIENCES_PY) actives --est-vide; then \
 		echo "[arret-fin] (code $$code) plus aucune expérience active — arrêt de : $(SERVICES)"; \
-		docker compose stop $(SERVICES); \
+		$(COMPOSE) stop $(SERVICES); \
 	else \
 		echo "[arret-fin] (code $$code) d'autres expériences tiennent une clé — services laissés up (R5) :"; \
 		$(EXPERIENCES_PY) actives; \
@@ -127,7 +142,7 @@ run-arret:
 	@set +e; \
 	$(MAKE) run OFFLINE=1 JEU=$(JEU); code=$$?; \
 	echo "[arret-fin] run terminé (code $$code) — arrêt de : $(SERVICES) gama"; \
-	docker compose --profile offline stop $(SERVICES) gama; \
+	$(COMPOSE) --profile offline stop $(SERVICES) gama; \
 	exit $$code
 
 .PHONY: up-services services-pretes
@@ -137,7 +152,7 @@ run-arret:
 ## Usage: make up-services SERVICES="controller api worker"
 up-services:
 	@test -n "$(SERVICES)" || { echo "SERVICES= est vide : nommez les services à démarrer"; exit 2; }
-	docker compose up -d $(SERVICES)
+	$(COMPOSE) up -d $(SERVICES)
 
 ## Garantit que les services nommés tournent ET sont sains, puis rend la main. Idempotent :
 ## sur une pile déjà debout, docker compose ne recrée rien et la cible passe en une seconde.
@@ -156,43 +171,43 @@ up-services:
 services-pretes:
 	@test -n "$(REQUIS)" || { echo "REQUIS= est vide : nommez les services à garantir"; exit 2; }
 	@echo "🐳 Services requis : $(REQUIS) — démarrage de ce qui manque, sans toucher à ce qui tourne (max $(if $(ATTENTE),$(ATTENTE),600)s)"
-	docker compose up -d --no-recreate --wait --wait-timeout $(if $(ATTENTE),$(ATTENTE),600) $(REQUIS)
+	$(COMPOSE) up -d --no-recreate --wait --wait-timeout $(if $(ATTENTE),$(ATTENTE),600) $(REQUIS)
 
 ## Rebuild all images from scratch and restart
 rebuild:
-	docker compose build --no-cache
-	docker compose up -d
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d
 
 ## Rebuild and restart api + worker + controller only
 api:
-	docker compose up --build api worker controller
+	$(COMPOSE) up --build api worker controller
 
 ## Rebuild and restart otp + worker only
 otp:
-	docker compose up --build otp worker
+	$(COMPOSE) up --build otp worker
 
 .PHONY: otp-graph
 ## Construit le graphe OTP (data/gtfs/graph.obj) en partant des configurations VERSIONNÉES.
 ## `data/gtfs/` est un répertoire de travail non versionné : sans cette recopie, une
-## reconstruction perd les réglages de `otp-toulouse/toulouse/*.json` sans le dire — c'est
+## reconstruction perd les réglages de `services/otp-toulouse/toulouse/*.json` sans le dire — c'est
 ## arrivé le 2026-09-04 (embedRouterConfig, boardingLocationTags, staticParkAndRide et
 ## maxStopToShapeSnapDistance perdus, donc des instances tournant sur les défauts d'OTP).
 ## L'ancien graphe est archivé, jamais écrasé.  Usage: make otp-graph
 otp-graph:
 	@test -f data/gtfs/Toulouse.osm.pbf || { echo "data/gtfs/Toulouse.osm.pbf manquant"; exit 1; }
-	@cp -v otp-toulouse/toulouse/build-config.json otp-toulouse/toulouse/router-config.json \
-	       otp-toulouse/toulouse/otp-config.json data/gtfs/
+	@cp -v services/otp-toulouse/toulouse/build-config.json services/otp-toulouse/toulouse/router-config.json \
+	       services/otp-toulouse/toulouse/otp-config.json data/gtfs/
 	@if [ -f data/gtfs/graph.obj ]; then \
 	  d=data/gtfs/archives/$$(date +%Y-%m-%d_%H-%M)_pre_build ; mkdir -p $$d ; \
 	  mv -v data/gtfs/graph.obj $$d/ ; fi
-	java -Xmx4G -jar otp-toulouse/bin/otp-shaded-*.jar --build data/gtfs --save
+	java -Xmx4G -jar services/otp-toulouse/bin/otp-shaded-*.jar --build data/gtfs --save
 	@ls -l data/gtfs/graph.obj && shasum -a 256 data/gtfs/graph.obj
 
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
 ps:
-	docker compose ps
+	$(COMPOSE) ps
 
 error:
 	python3 scripts/errors.py $(if $(LOG),$(LOG),experiments/current/app.log)
@@ -225,7 +240,7 @@ providers:
 clean:
 	@read -rp "Voulez-vous supprimer toutes les images Docker ? (y/N): " ans; \
 	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ] || [ "$$ans" = "yes" ] || [ "$$ans" = "YES" ]; then \
-		docker compose down -v --rmi all; \
+		$(COMPOSE) down -v --rmi all; \
 		docker system prune -a --volumes -f; \
 	fi
 
@@ -242,17 +257,17 @@ purge_cache:
 	docker builder prune -a -f
 	@echo "🗑️  Cache OSMnx graphs (data/cache/osmnx)..."
 	rm -f data/cache/osmnx/*.pkl
-	@echo "🗑️  Cache OSMnx local (llm-agents/osmnx_cache)..."
-	rm -f llm-agents/osmnx_cache/*.pkl
+	@echo "🗑️  Cache OSMnx local (services/llm-agents/osmnx_cache)..."
+	rm -f services/llm-agents/osmnx_cache/*.pkl
 	@echo "🗑️  Cache scripts OSMnx (scripts/general/cache)..."
 	rm -f scripts/general/cache/*.pkl
-	@echo "🗑️  Cache pipeline eqasim (eqasim-toulouse/cache)..."
-	rm -rf eqasim-toulouse/cache/*.cache
+	@echo "🗑️  Cache pipeline eqasim (services/eqasim-toulouse/cache)..."
+	rm -rf services/eqasim-toulouse/cache/*.cache
 	@echo "🗑️  Cache eqasim (data/cache/eqasim) + population générée (data/population)..."
 	rm -rf data/cache/eqasim/*.cache
 	rm -f data/population/*.json
 	@echo "🗑️  Cache RAPTOR/Solari..."
-	rm -f llm-agents/raptor_cache.pickle
+	rm -f services/llm-agents/raptor_cache.pickle
 	@echo "✅ Tous les caches purgés."
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -262,16 +277,16 @@ purge_cache:
 .PHONY: tests test-gateway test-mobility test-all lint-imports lint typecheck analysis
 
 # Interpréteur des paquets (installés en editable dans le venv de llm-agents).
-PKG_PYTHON ?= llm-agents/.venv/bin/python
+PKG_PYTHON ?= $(VENV_PYTHON)
 
 ## Tests du gateway LLM générique (unit + contract + integration ; e2e si LLM_GATEWAY_E2E_URL)
 test-gateway:
-	cd llm_gateway && ../$(PKG_PYTHON) -m pytest
+	cd packages/llm_gateway && $(PKG_PYTHON) -m pytest
 
 ## Tests du domaine mobilité (mobility_core) et des catégories LLM (mobility_llm)
 test-mobility:
-	cd mobility_core && ../$(PKG_PYTHON) -m pytest
-	cd mobility_llm && ../$(PKG_PYTHON) -m pytest
+	cd packages/mobility_core && $(PKG_PYTHON) -m pytest
+	cd packages/mobility_llm && $(PKG_PYTHON) -m pytest
 
 ## Les trois paquets, puis les contrats d'architecture
 test-all: test-gateway test-mobility lint-imports
@@ -285,15 +300,15 @@ lint-imports:
 
 ## ruff sur les trois paquets
 lint:
-	$(PKG_PYTHON) -m ruff check llm_gateway mobility_core mobility_llm
+	$(PKG_PYTHON) -m ruff check packages/llm_gateway packages/mobility_core packages/mobility_llm
 
 ## mypy : contrat public du gateway (core, ports, sdk) en strict
 typecheck:
-	cd llm_gateway && ../$(PKG_PYTHON) -m mypy src/llm_gateway/core src/llm_gateway/ports src/llm_gateway/sdk
+	cd packages/llm_gateway && $(PKG_PYTHON) -m mypy src/llm_gateway/core src/llm_gateway/ports src/llm_gateway/sdk
 
 # Les notebooks tournent via papermill, installé dans le venv du projet : le
 # python du système ne suffit pas. Surchargeable comme les autres interpréteurs.
-ANALYSIS_PYTHON ?= llm-agents/.venv/bin/python
+ANALYSIS_PYTHON ?= $(VENV_PYTHON)
 
 ## Run all analysis notebooks. Usage: make analysis [LOG_DIR=../../experiments/my_exp/]
 analysis:
@@ -309,7 +324,7 @@ analysis:
 
 .PHONY: dashboard
 
-DASHBOARD_PYTHON ?= llm-agents/.venv/bin/python
+DASHBOARD_PYTHON ?= $(VENV_PYTHON)
 DASHBOARD_PORT   ?= 8503
 # Thème imposé (light|dark) : les graphes choisissent leurs pas de couleur
 # dessus. Le laisser vide ferait diverger l'UI et les couleurs de texte.
@@ -347,7 +362,7 @@ dashboard:
 
 # La synthèse importe pandas/numpy et le moteur de calibration : le python3 du
 # système ne suffit pas. On vise le venv du projet, surchargeable.
-SYNTHESIS_PYTHON ?= llm-agents/.venv/bin/python
+SYNTHESIS_PYTHON ?= $(VENV_PYTHON)
 
 # Rapatriement du store de la campagne cloud avant chaque synthèse (PULL=0 pour
 # sauter, p. ex. hors-ligne). La campagne tourne sur la VM : sans ce pull, la
@@ -497,7 +512,7 @@ test-alt-prompt:
 # ──────────────────────────────────────────────────────────────────────────────
 
 .PHONY: zones housing-type bike-ownership terminal-time car-availability avancement policy policy-tune common-set-predict equipment-propensity
-.PHONY: logit mnl-predict bi-oracle
+.PHONY: logit mnl-predict klr klr-predict bi-oracle forest
 .PHONY: communes-couronnes audit-perimetre audit-couronnes residence-zone couronne-v7
 
 ## ──────────────────────────────────────────────────────────────────────────────
@@ -508,7 +523,7 @@ test-alt-prompt:
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 ## C'est la DONNÉE MANQUANTE du ticket : l'enquête découpe ses couronnes par LISTE DE
 ## COMMUNES (1 / 69 / 108 / 275), là où `geo_reference.residence_zone` classe par
-## distance à l'hypercentre. Produit mobility_core/src/mobility_core/data/commune_couronne.json et
+## distance à l'hypercentre. Produit packages/mobility_core/src/mobility_core/data/commune_couronne.json et
 ## couronne_perimetre.geojson, tous deux versionnés.
 communes-couronnes:
 	@test -d "data/PROGEDO 2023" || { \
@@ -724,7 +739,7 @@ gtfs-year-holdout:
 
 ## Extrait du feed annuel la fenêtre que consomment GAMA et le runtime. OTP lit
 ## l'année entière, GAMA non : son calendrier est un masque binaire 64 bits
-## (llm-agents/inputs/gtfs/gama.py, PublicTransport.gaml). La fenêtre DOIT
+## (services/llm-agents/inputs/gtfs/gama.py, PublicTransport.gaml). La fenêtre DOIT
 ## contenir la date de simulation, sinon plus aucune course n'est planifiée.
 ##   make gtfs-window START=2026-03-16 DAYS=64
 gtfs-window:
@@ -742,7 +757,7 @@ test-gtfs-year:
 
 .PHONY: gama-layers gama-trip-info test-gama-includes
 
-## Reconstruit les COUCHES que GAMA dessine — GAMA/CityTransport/includes/routes.shp
+## Reconstruit les COUCHES que GAMA dessine — services/GAMA/CityTransport/includes/routes.shp
 ## et stops.shp — à partir des trois réseaux du périmètre (Tisséo, TER, liO). Les
 ## couches précédentes sont déplacées dans un dossier archives_<date>, jamais
 ## supprimées. `includes/` n'est pas versionné : cette recette est la seule trace.
@@ -753,7 +768,7 @@ gama-layers:
 	  $(foreach f,$(FEEDS),--feed $(f)) \
 	  $(if $(OUT),--sortie $(OUT),) $(if $(TOUT),--tout,) $(if $(JSON),--json $(JSON),)
 
-## Reconstruit les COURSES que GAMA fait rouler — GAMA/CityTransport/includes/trip_info.json —
+## Reconstruit les COURSES que GAMA fait rouler — services/GAMA/CityTransport/includes/trip_info.json —
 ## à partir des trois réseaux et de la date simulée (lue dans Settings.gaml), PUIS la table
 ## des tracés que lit le runtime (includes/shape_lookup.json).
 ##
@@ -812,7 +827,7 @@ zones:
 ## ressource produite est en v2 — le module refuse une v1. L'export publie le test interne
 ## EMC² et ÉCHOUE si l'erreur du mécanisme dépasse 1 point sur les 20 cellules.
 ## Puis, pour poser le trait sur une population (aucun appel LLM, déterministe) :
-##   llm-agents/.venv/bin/python -m scripts.data.population.enrich_housing_type \
+##   $(VENV_PYTHON) -m scripts.data.population.enrich_housing_type \
 ##     data/population/toulouse_population_1000.json --check
 ## Codes de sortie de --check : 0 tout est dans la tolérance, 1 ressource absente,
 ## 2 une cible servie est démentie, 3 population enrichie mais trop petite pour trancher.
@@ -828,7 +843,7 @@ housing-type:
 ## Il lit aussi la table du type de logement (make housing-type) pour publier la cible
 ## d'équipement par habitat DILUÉE — la seule opposable à une population synthétique.
 ## Puis, pour poser le trait sur une population (aucun appel LLM, déterministe) :
-##   llm-agents/.venv/bin/python -m scripts.data.population.enrich_personal_bike \
+##   $(VENV_PYTHON) -m scripts.data.population.enrich_personal_bike \
 ##     data/population/toulouse_population_1000.json --check
 bike-ownership:
 	@test -d "data/PROGEDO 2023" || { \
@@ -855,7 +870,7 @@ equipment-propensity:
 ## Requires the restricted PROGEDO data under 'data/PROGEDO 2023/'.
 ## Ce que ça mesure : T2 (marche au départ), T6 (marche à l'arrivée) et T11 (durée de
 ## recherche du stationnement) du fichier trajets, par couronne. À comparer aux valeurs
-## de llm-agents/config/terminal_time.yaml, mesurées 8x à 24x plus grandes.
+## de services/llm-agents/config/terminal_time.yaml, mesurées 8x à 24x plus grandes.
 terminal-time:
 	@test -d "data/PROGEDO 2023" || { \
 	  echo "Données PROGEDO absentes : data/PROGEDO 2023/ (accès restreint lil-1750)"; \
@@ -954,6 +969,26 @@ logit:
 	  exit 1; }
 	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_logit $(if $(C),--C $(C),)
 
+## Random-forest WITNESS: does the booster's edge come from the trees or the boosting?
+## → scripts/progedo_logit/rf_mode_choice_metrics.json (mesures seules, AUCUN modèle)
+## Mêmes parquet, split par ménage, sample_weight COEP et métriques que `make policy` et
+## `make logit`. Réglage en validation croisée groupée DANS le train ; ni class_weight ni
+## rééquilibrage. Verdict à seuil déclaré d'avance : part de l'écart booster–logit comblée,
+## ≥ 0,70 → les arbres, ≤ 0,30 → le boosting. Hors ligne, ~20 min.
+## Prérequis pour le verdict : make policy && make logit (sinon « non mesuré »)
+##   make forest FOREST_ARGS="--encodage dessin"   # sans la voie de sensibilité
+##   make forest FOREST_ARGS="--rapide"            # passe de fumée, chiffres non publiables
+forest:
+	@test -f scripts/progedo_logit/progedo_mode_choice_v2.parquet || { \
+	  echo "Jeu d'entraînement absent : scripts/progedo_logit/progedo_mode_choice_v2.parquet"; \
+	  echo "Il est versionné ; s'il manque, régénérez-le avec build_mode_choice_dataset.py"; \
+	  exit 1; }
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make forest SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_forest $(FOREST_ARGS)
+
 ## Apply the SECOND oracle to the pinned common set (same code path as the booster)
 ## → scripts/synthesis/data/mnl_on_common_set.parquet
 mnl-predict:
@@ -961,11 +996,41 @@ mnl-predict:
 	  POLICY=scripts/progedo_logit/mnl_model.json \
 	  OUT=scripts/synthesis/data/mnl_on_common_set.parquet
 
+## Estimate the THIRD family: kernel logistic regression (RBF + Nyström, strict parity)
+## → scripts/progedo_logit/klr_model.json + klr_model_metrics.json
+## Même jeu, même split par ménage, même sample_weight, MÊME matrice de dessin que
+## `make logit` et mêmes métriques : la comparaison des trois familles ne mesure que les
+## trois modèles. γ, λ et m sont choisis en validation croisée groupée DANS le train, et
+## une configuration qui dérive sur les parts modales est écartée avant tout classement.
+## Hors ligne, déterministe (graine fixe), ~20 min pour le banc complet.
+##   make klr KLR_ARGS="--gamma 0.0418 --C 1 --m 1000"   # réglage imposé, sans banc
+##   make klr KLR_ARGS="--m-grid 500 1000"               # banc raccourci
+klr:
+	@test -f scripts/progedo_logit/progedo_mode_choice_v2.parquet || { \
+	  echo "Jeu d'entraînement absent : scripts/progedo_logit/progedo_mode_choice_v2.parquet"; \
+	  echo "Il est versionné ; s'il manque, régénérez-le avec build_mode_choice_dataset.py"; \
+	  exit 1; }
+	@test -x $(SYNTHESIS_PYTHON) || { \
+	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
+	  echo "Surchargez-le : make klr SYNTHESIS_PYTHON=/chemin/vers/python"; \
+	  exit 1; }
+	$(SYNTHESIS_PYTHON) -m scripts.progedo_logit.fit_mode_choice_klr $(KLR_ARGS)
+
+## Apply the THIRD family to the pinned common set (same code path as the two others)
+## → scripts/synthesis/data/klr_on_common_set.parquet
+klr-predict:
+	@$(MAKE) --no-print-directory common-set-predict \
+	  POLICY=scripts/progedo_logit/klr_model.json \
+	  OUT=scripts/synthesis/data/klr_on_common_set.parquet
+
 ## Two-oracle composite score → scripts/synthesis/data/bi_oracle.json
 ## Bloc A fidélité EMC² (inchangé), bloc B accord désagrégé au logit rapporté à la
 ## distance inter-oracles, bloc C sens de variation. Poids B et C à 0 : les termes sont
 ## publiés, ils ne sélectionnent aucun prompt. Aucun appel LLM, aucun réseau.
+## Bloc C à DEUX arbitres si le parquet KLR est là (make klr && make klr-predict) : une
+## transition où logit et KLR divergent sort du score au lieu d'être imputée au prompt.
 ## Prérequis : make logit && make common-set-predict && make mnl-predict
+##             (+ make klr && make klr-predict pour le second arbitre)
 bi-oracle:
 	@test -x $(SYNTHESIS_PYTHON) || { \
 	  echo "Interpréteur introuvable : $(SYNTHESIS_PYTHON)"; \
@@ -1025,12 +1090,12 @@ wait-ready:
 run:
 ifeq ($(CONT),)
 	echo "🗑️  Arrêt de Grafana et Prometheus..."; \
-	docker compose stop grafana prometheus 2>/dev/null || true; \
-	docker compose rm -f grafana prometheus 2>/dev/null || true; \
+	$(COMPOSE) stop grafana prometheus 2>/dev/null || true; \
+	$(COMPOSE) rm -f grafana prometheus 2>/dev/null || true; \
 	echo "🗑️  Suppression des données Grafana et Prometheus..."; \
 	rm -rf data/grafana_data data/prometheus_data; \
 	echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
-	docker compose exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r docker compose exec -T redis redis-cli del 2>/dev/null || true; \
+	$(COMPOSE) exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r $(COMPOSE) exec -T redis redis-cli del 2>/dev/null || true; \
 
 else
 	@echo "♻️  Reprise à chaud : workdir, métriques et compteurs conservés ($(shell readlink experiments/current))"
@@ -1064,7 +1129,7 @@ endif
 	@# (décision de l'auteur du 2026-09-06, question 17 du ticket 035).
 	@if ! cmp -s $(APP_CONFIG) .config.yaml.applique; then \
 		echo "♻️  $(APP_CONFIG) a changé depuis le dernier lancement : recréation du contrôleur"; \
-		docker compose up -d --force-recreate --no-deps controller && cp $(APP_CONFIG) .config.yaml.applique; \
+		$(COMPOSE) up -d --force-recreate --no-deps controller && cp $(APP_CONFIG) .config.yaml.applique; \
 	fi
 	@$(MAKE) wait-ready
 ifneq ($(OFFLINE),)
@@ -1073,7 +1138,7 @@ ifneq ($(OFFLINE),)
 	else \
 		echo "🚀 Lancement headless de l'expérience GAMA : $(EXPERIMENT_NAME) (GAMA Server, conteneur gama)..."; \
 		mkdir -p experiments/current; \
-		docker compose exec -T -e GAMA_EXPERIMENT=$(EXPERIMENT_NAME) controller \
+		$(COMPOSE) exec -T -e GAMA_EXPERIMENT=$(EXPERIMENT_NAME) controller \
 			python /app/scripts/gama/launch_headless.py \
 			>> experiments/current/gama_headless.log 2>&1 & \
 		echo "   Console GAMA → experiments/current/gama_headless.log"; \
@@ -1096,7 +1161,14 @@ run-offline:
 ## Tout passe par `python -m experiences` dans le conteneur controller (services requis pour
 ## préparer un jeu — OTP/OSMnx — et pour un décideur passerelle ; un décideur local n'a besoin
 ## de rien). Design : docs/arch/plateforme-experiences.md.
-EXPERIENCES_PY = docker compose exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml controller python -m experiences
+## État du dépôt mesuré sur l'HÔTE et transmis au conteneur (ticket 045, A4) : `git` n'est pas
+## installé dans l'image `controller`, si bien que chaque exécution s'archivait avec
+## `depot = {commit: null, arbre_propre: null}` — aucune mesure ne pouvait être rattachée à un
+## état du code. `:=` et non `=` : mesuré une fois au chargement du Makefile, pas à chaque appel.
+EXP_DEPOT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null)
+EXP_DEPOT_ARBRE_PROPRE := $(shell test -z "$$(git status --porcelain --untracked-files=no 2>/dev/null)" && echo 1 || echo 0)
+
+EXPERIENCES_PY = $(COMPOSE) exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml -e EXP_DEPOT_COMMIT=$(EXP_DEPOT_COMMIT) -e EXP_DEPOT_ARBRE_PROPRE=$(EXP_DEPOT_ARBRE_PROPRE) controller python -m experiences
 
 ## Prépare un jeu de déplacements enregistré. Usage : make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1 [JOUR=2026-03-16] [CONCURRENCE=8] [REQUIS="…"]
 ## Les moteurs de routage (défaut : controller otp1 otp2 otp3 osmnx1) sont démarrés et attendus sains d'abord.
@@ -1121,9 +1193,9 @@ jeu-verifier:
 jeu-verifier-jours:
 	$(EXPERIENCES_PY) verifier-jours --nom $(NOM) --jour $(JOUR) $(if $(METHODE),--methode $(METHODE),) $(if $(ECHANTILLON),--echantillon $(ECHANTILLON),) $(if $(DECLARER),--declarer,)
 
-## Recharge la passerelle LLM (api + worker) — nécessaire après un ajout dans mobility_llm/src/mobility_llm/prompts/prompts.yaml
+## Recharge la passerelle LLM (api + worker) — nécessaire après un ajout dans packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml
 passerelle-recharger:
-	docker compose restart api worker
+	$(COMPOSE) restart api worker
 
 ## LM Studio (modèles locaux, hôte) — charge un modèle avec un contexte suffisant pour la passerelle.
 ## LM Studio charge à 4 096 jetons par défaut : trop court pour un lot de 2 agents (~4 400 de prompt + réponse).
@@ -1197,7 +1269,7 @@ experience-defiler:
 ## Ordonnanceur (HÔTE) : réconcilie les fantômes et démarre les expériences en file dès qu'une
 ## clé se libère. À laisser tourner (le tableau de bord le supervise aussi). Ctrl-C pour arrêter.
 experience-ordonnancer:
-	cd llm-agents && .venv/bin/python -m experiences ordonnancer $(if $(INTERVALLE),--intervalle $(INTERVALLE),)
+	cd services/llm-agents && .venv/bin/python -m experiences ordonnancer $(if $(INTERVALLE),--intervalle $(INTERVALLE),)
 
 ## Pause / arrêt propre de l'exécution en cours : make experience-pause EXP=<nom> · make experience-arreter EXP=<nom>
 experience-pause:
@@ -1255,7 +1327,7 @@ POPULATION ?= /app/experiments/current/population_1000.json
 DAY ?= 2026-03-17
 BASE ?= $(DAY)
 prompt-base:
-	docker compose exec -T controller python /app/scripts/prompt_base/build.py \
+	$(COMPOSE) exec -T controller python /app/scripts/prompt_base/build.py \
 		--population $(POPULATION) \
 		--out /app/experiments/bases/$(BASE)/entries.jsonl \
 		--day $(DAY) \
@@ -1280,10 +1352,10 @@ status:
 ## (GAMA Server tue l'expérience dont le client s'est déconnecté). IHM : SIGTERM à GAMA.
 ## Pour tout arrêter, y compris les services : make down.
 stop-run:
-	@if docker compose ps --status running controller 2>/dev/null | grep -q controller; then \
-		docker compose exec -T controller pkill -f launch_headless.py 2>/dev/null || true; \
+	@if $(COMPOSE) ps --status running controller 2>/dev/null | grep -q controller; then \
+		$(COMPOSE) exec -T controller pkill -f launch_headless.py 2>/dev/null || true; \
 	fi
 	-@pkill -f "scripts/gama/launch_headless.py" 2>/dev/null || true
-	-@docker compose --profile offline stop gama 2>/dev/null || true
+	-@$(COMPOSE) --profile offline stop gama 2>/dev/null || true
 	-@pkill -f "$(GAMA_BIN)" 2>/dev/null || true
 	@echo "✅ Run arrêté. Les services restent en place (make down pour tout couper)."

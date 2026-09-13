@@ -1,8 +1,8 @@
 """Exporte les couches GAMA des lignes et des arrêts TC (ticket 031, G2).
 
-    llm-agents/.venv/bin/python scripts/data/gama/export_gtfs_layers.py
+    services/llm-agents/.venv/bin/python scripts/data/gama/export_gtfs_layers.py
 
-Produit `GAMA/CityTransport/includes/routes.shp` et `stops.shp` à partir de **plusieurs** feeds
+Produit `services/GAMA/CityTransport/includes/routes.shp` et `stops.shp` à partir de **plusieurs** feeds
 GTFS — Tisséo, TER et liO — là où ces couches ne portaient que Tisséo. Les couches précédentes
 sont déplacées à côté, horodatées, jamais supprimées.
 
@@ -14,7 +14,7 @@ jamais préfixés ni renommés**, et une collision entre deux réseaux lève une
 d'être arbitrée en silence.
 
 Le dossier `includes/` n'est pas versionné : ce script est la recette. Il ne dépend pas de
-`llm-agents/settings.py` — l'importer depuis un script de l'hôte re-pointe `experiments/current`
+`services/llm-agents/settings.py` — l'importer depuis un script de l'hôte re-pointe `experiments/current`
 et détourne les traces d'un run en cours (ticket 031, question ouverte n° 12).
 """
 
@@ -33,8 +33,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.data.gama import gtfs_traces  # noqa: E402
 
-INCLUDES = REPO_ROOT / "GAMA" / "CityTransport" / "includes"
-PERIMETRE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+INCLUDES = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "includes"
+PERIMETRE = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
 
 # Les trois réseaux du périmètre. Tisséo et le TER dans leur export en service ;
 # liO dans son feed annuel, le seul qui couvre la date simulée (l'export de
@@ -264,7 +264,7 @@ def couverture(couche_routes, couche_stops, journal=print) -> dict:
               "mailles_5km": {"dans_le_perimetre": len(dans_le_perimetre), "avec_arret": len(mailles),
                               "part": round(part_mailles, 4)}}
 
-    zones = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
+    zones = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
     if zones.exists():
         zf = gpd.read_file(zones).to_crs("EPSG:4326")
         avec = gpd.sjoin(zf[["geometry"]], couche_stops[["geometry"]], predicate="contains", how="inner")

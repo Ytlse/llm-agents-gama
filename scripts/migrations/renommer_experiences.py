@@ -10,8 +10,8 @@ Il ne renomme rien sans qu'on le demande : sans `--appliquer`, il DIT ce qu'il f
 par fichier. Avec `--fusionner`, deux dossiers de même signature sont réunis (une expérience,
 plusieurs exécutions) au lieu d'être distingués par un indice.
 
-    llm-agents/.venv/bin/python scripts/migrations/renommer_experiences.py           # vérifie
-    llm-agents/.venv/bin/python scripts/migrations/renommer_experiences.py --appliquer --fusionner
+    services/llm-agents/.venv/bin/python scripts/migrations/renommer_experiences.py           # vérifie
+    services/llm-agents/.venv/bin/python scripts/migrations/renommer_experiences.py --appliquer --fusionner
 
 Ce qui est réécrit : la définition (`nom`, `renomme_de`, `derive_de`), la copie figée de chaque
 exécution (`execution.yaml`), les restitutions de données (`synthese.json`, `scores.json`) et
@@ -34,7 +34,7 @@ from pathlib import Path
 import yaml
 
 RACINE = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(RACINE / "llm-agents"))
+sys.path.insert(0, str(RACINE / "services" / "llm-agents"))
 
 from experiences import nommage as N  # noqa: E402
 

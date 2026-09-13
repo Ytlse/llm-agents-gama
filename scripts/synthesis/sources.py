@@ -153,5 +153,5 @@ def import_calibration(repo: Path | str = "prompt_calibration") -> tuple[Optiona
     except Exception as exc:  # dépendance manquante dans l'interpréteur courant
         return None, (f"Import du moteur de calibration impossible : {exc}. "
                       "Utilisez un interpréteur disposant de pandas/numpy/pydantic "
-                      "(par ex. llm-agents/.venv/bin/python).")
+                      "(par ex. services/llm-agents/.venv/bin/python).")
     return calibration, ""

@@ -59,7 +59,7 @@ def _valeurs(**surcharges) -> dict:
 
 def test_le_nom_dit_les_parametres(plateforme):
     exp = experiences.construire_experience(_valeurs())
-    assert exp["nom"] == "exp_gemini-31-fl_minper_jtir_t0_nosim"
+    assert exp["nom"] == "exp_gemini-31-fl_minper_jtir_pop-1000_AAMAS_t0_nosim"
 
 
 def test_changer_de_modele_change_le_nom(plateforme):
@@ -70,9 +70,9 @@ def test_changer_de_modele_change_le_nom(plateforme):
     }
     assert len(noms) == 3, noms
     assert noms == {
-        "exp_gemini-31-fl_minper_jtir_t0_nosim",
-        "exp_mistral-s_minper_jtir_t0_nosim",
-        "exp_qwen36-27b_minper_jtir_t0_nosim",
+        "exp_gemini-31-fl_minper_jtir_pop-1000_AAMAS_t0_nosim",
+        "exp_mistral-s_minper_jtir_pop-1000_AAMAS_t0_nosim",
+        "exp_qwen36-27b_minper_jtir_pop-1000_AAMAS_t0_nosim",
     }
 
 

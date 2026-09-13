@@ -1,12 +1,12 @@
 """seal_population.py — Sélectionner 1 000 personas pile, par MÉNAGES, dans un vivier ; puis sceller.
 
     # 1. sélection stratifiée dans le vivier généré et pré-imputé (avant le routage du notebook)
-    llm-agents/.venv/bin/python -m scripts.AAMAS.seal_population select \\
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.seal_population select \\
         --pool scripts/data/population/Temp/4_zone_enriched/toulouse_population_10000.json \\
         --n 1000 --out scripts/data/population/Temp/4_zone_enriched/toulouse_population_1000_AAMAS.json
 
     # 2. scellement du fichier final, APRÈS post-traitements et contrôle
-    llm-agents/.venv/bin/python -m scripts.AAMAS.seal_population seal \\
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.seal_population seal \\
         --population data/population/toulouse_population_1000_AAMAS.json \\
         --out-dir data/population/population_1000_AAMAS_v5
 
@@ -122,7 +122,7 @@ DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v5
 PERIMETRE = {
     "definition": "453 communes de l'enquête EMC² Toulouse 2023, six départements "
                   "(31, 32, 81, 82, 09, 11), polygone communal — pas de rayon",
-    "table_communes": "mobility_core/src/mobility_core/data/commune_couronne.json",
+    "table_communes": "packages/mobility_core/src/mobility_core/data/commune_couronne.json",
     "departements_attendus": {"31": 346, "32": 38, "81": 27, "82": 22, "09": 10, "11": 10},
 }
 

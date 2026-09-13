@@ -13,7 +13,7 @@ de déplacements est écrite vide et l'axe correspondant de la page de synthèse
 **Le trait est imputé, pas observé.** Aucune source de la chaîne de génération ne le
 porte : ni eqasim, ni les tables INSEE mobilisées par le notebook. Il est donc tiré
 dans la loi que l'enquête EMC² observe **pour la zone fine du domicile, corrigée de la
-taille du ménage** (cf. `mobility_core/src/mobility_core/housing_type.py` pour le détail, le levier de
+taille du ménage** (cf. `packages/mobility_core/src/mobility_core/housing_type.py` pour le détail, le levier de
 taille du ticket 019 et les garde-fous). Trois conséquences à ne jamais taire :
 
 - la ventilation par type de logement de la page mesure un axe **imputé**, dont la

@@ -76,14 +76,33 @@ def design_matrix(encoded: Any, artefact: dict) -> np.ndarray:
     spec — la sortie de ``fit_mode_choice_policy.encode_features``. Aucune colonne n'est
     déduite des valeurs présentes : tout vient de l'artefact, sans quoi deux lots de
     prédiction produiraient deux matrices différentes.
+
+    Lit le contrat sous la clé ``logit`` de l'artefact ; une autre famille passe par
+    :func:`design_matrix_from_contract` avec le contrat qu'elle porte, sans avoir à ranger
+    son bloc sous un nom de famille qui ne serait pas le sien.
     """
-    logit = artefact["logit"]
-    stats = logit["standardization"]
-    indicators = set(logit["missing_indicators"])
+    return design_matrix_from_contract(encoded, artefact["features"], artefact["logit"])
+
+
+def design_matrix_from_contract(encoded: Any, features: list[dict],
+                                contract: dict) -> np.ndarray:
+    """Matrice de dessin, depuis un contrat nu — le cœur partagé entre familles.
+
+    **Pourquoi cette fonction est publique.** La régression logistique à noyau du
+    ticket 043 exige exactement cette matrice : un noyau RBF n'a de sens que sur des
+    variables centrées-réduites, et les manquants y sont matérialisés par les mêmes
+    indicatrices. Refaire l'encodage dans la troisième famille aurait produit un décalage
+    que rien n'aurait signalé — les probabilités seraient restées parfaitement plausibles.
+    Une seule fonction construit donc `Z` pour toutes les familles, et le contrat
+    (colonnes, indicatrices, centrage-réduction, modalités de référence) voyage avec
+    l'artefact qui l'a fixé.
+    """
+    stats = contract["standardization"]
+    indicators = set(contract["missing_indicators"])
     n = len(encoded)
     blocks: dict[str, np.ndarray] = {}
 
-    for feature in artefact["features"]:
+    for feature in features:
         name, kind = feature["name"], feature["kind"]
         values = np.asarray(encoded[name], dtype="float64")
         missing = np.isnan(values)
@@ -109,7 +128,7 @@ def design_matrix(encoded: Any, artefact: dict) -> np.ndarray:
         if name in indicators:
             blocks[f"{name}__missing"] = missing.astype("float64")
 
-    order = logit["design_columns"]
+    order = contract["design_columns"]
     unknown = [c for c in order if c not in blocks]
     if unknown:
         raise ValueError(f"Colonnes de dessin introuvables : {unknown[:5]}")

@@ -7,7 +7,7 @@ ticket 015, plus les tables de validation qui servent à juger le résultat.
 `4+`, 10 783 ménages, pondération `COE0`. Covariables : taille du ménage, nombre de VP
 (`M6`), et la zone de résidence par sa densité de ménages et sa distance à l'hypercentre.
 Ni `M1` (type d'habitat) ni `M2` (occupation du logement) — les raisons sont écrites dans
-`mobility_core/src/mobility_core/bike_ownership.py`, elles ne sont pas les mêmes : `M1` est moins
+`packages/mobility_core/src/mobility_core/bike_ownership.py`, elles ne sont pas les mêmes : `M1` est moins
 informatif que la zone dont il est imputé, `M2` n'existe pas côté persona.
 
 **Étage 2 — qui, dans le ménage, tient les vélos.** Logit binaire sur `P20 ∈ {plusieurs
@@ -164,7 +164,7 @@ def load_frames(root: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     men["size"] = key.map(sizes)
     men["n_eligible"] = key.map(eligibles).fillna(0)
 
-    geo, _, _ = build_geo(root / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
+    geo, _, _ = build_geo(root / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg", men)
     zone = geo.reindex(men["ZFM"]).reset_index(drop=True)
     men["density"] = zone["density_hh_km2"].values
     men["dist_center"] = zone["dist_center_km"].values

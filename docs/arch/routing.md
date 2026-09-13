@@ -18,7 +18,7 @@ Les deux moteurs sont interrogés **en parallèle** pour chaque agent, puis leur
 ## L'horloge : quelle heure les moteurs reçoivent-ils ?
 
 **Un horodatage GAMA n'est pas un instant : c'est une heure MURALE locale.**
-`GAMA/CityTransport/models/Settings.gaml` publie son horloge comme
+`services/GAMA/CityTransport/models/Settings.gaml` publie son horloge comme
 
 ```gaml
 date starting_date  <- date([2026,3,16,5,0,0]); // Lundi 5h
@@ -30,7 +30,7 @@ soit la différence de deux dates **naïves** — l'heure murale comptée comme 
 UTC (**1773637200** pour lundi 16 mars 2026 5 h, valeur relevée dans la colonne « Temps
 simulé » de `experiments/archive/2026-09-04_01_09/moves.csv`).
 
-Un seul module traduit cet entier, [`llm-agents/sim_clock.py`](../../llm-agents/sim_clock.py) :
+Un seul module traduit cet entier, [`services/llm-agents/sim_clock.py`](../../llm-agents/sim_clock.py) :
 
 | Fonction | Rend |
 |---|---|
@@ -256,7 +256,7 @@ OTP rend une jambe portant l'identifiant de sa ligne
 ```
 
 `get_shape_id_from_route_info` consulte `route_id_shape_lookup_map`, **lue dans le fichier
-annexe publié par la recette** (`GAMA/CityTransport/includes/shape_lookup.json`,
+annexe publié par la recette** (`services/GAMA/CityTransport/includes/shape_lookup.json`,
 `settings.gtfs.shape_lookup_file`). Voir
 [data-pipeline.md](../setup/data-pipeline.md#préparer-les-données-gtfs-pour-gama) pour sa
 production et son contrôle de fraîcheur.
@@ -371,7 +371,7 @@ Les requêtes au-delà des coupures spatiales sont rejetées sans calcul Dijkstr
 
 Chaque nœud du graphe porte une **zone** (`trip_helper/congestion_zones.py`) : `city` — la commune
 de Toulouse (frontière géocodée du graphe) ; `agglo` — l'agglomération hors Toulouse, union des
-couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête (`mobility_core/src/mobility_core/data/couronne_perimetre.geojson`) ;
+couronnes Toulouse + 1ʳᵉ + 2ᵉ de l'enquête (`packages/mobility_core/src/mobility_core/data/couronne_perimetre.geojson`) ;
 `outside` — le reste (la 3ᵉ couronne et au-delà). La durée congestionnée d'un trajet voiture est la
 **somme des temps libres de ses arêtes, chacun multiplié par le facteur TomTom de la zone de son
 nœud d'origine à l'heure de départ** : profil « ville » (`city_raw`) en ville, « agglomération »
@@ -385,7 +385,7 @@ communes (`make osmnx-perimeter-graph`, option `--zones-only` pour un pickle exi
 graphe historique de 30 km, paresseusement au premier chargement (`_GraphStore`, `route_worker`,
 réplicas), puis mises en cache dans le pickle. Un nœud sans zone est une erreur explicite (pas de
 facteur deviné) ; la géométrie des couronnes doit être visible du service (montage
-`mobility_core/src/mobility_core/data/couronne_perimetre.geojson` dans les réplicas `osmnx`). Le repli « même nœud »
+`packages/mobility_core/src/mobility_core/data/couronne_perimetre.geojson` dans les réplicas `osmnx`). Le repli « même nœud »
 (deux bouts rabattus sur le même nœud) rend une durée à la vitesse de repli du mode sur la
 distance à vol d'oiseau × 1,3, minimum 1 s — plus 70 km/h pour tous les modes.
 
@@ -413,7 +413,7 @@ jambes**, pas une.
 
 Trois propriétés structurent le dispositif :
 
-- **Paramètre exogène**, valeurs et provenance dans `llm-agents/config/terminal_time.yaml`
+- **Paramètre exogène**, valeurs et provenance dans `services/llm-agents/config/terminal_time.yaml`
   (NCHRP 716, COMPASS, Shoup, Millard-Ball, Cerema) — jamais ajusté pour améliorer un score.
 - Les couronnes sont celles de l'enquête — appartenance aux couronnes par liste de
   communes (`mobility_core.residence_zone.CommunalZones`, ticket 028), **la même
@@ -453,7 +453,7 @@ Le GIL Python bloque l'exécution parallèle des algorithmes Dijkstra dans le m�
 
 ### Déploiement
 
-En production, une seule instance (`osmnx1`) est active par défaut. Des replicas supplémentaires peuvent être décommentés dans `docker-compose.yml` :
+En production, une seule instance (`osmnx1`) est active par défaut. Des replicas supplémentaires peuvent être décommentés dans `infra/docker-compose.yml` :
 
 ```yaml
 # osmnx2:
@@ -555,7 +555,7 @@ sont.
 | `trip_helper/otp.py` → `SUPPORTED_MODES` | ce qui est **accepté** en retour (assertion dure) | `rail` ✅ |
 | `settings.gtfs.gtfs_modality_name_map` | `route_type` → nom lu dans le prompt | `"2": "Train"` ✅ |
 | `llm_agent._PT_LEG_MODES` | déclenche la mention d'abonnement TC | `rail`, `train` ✅ |
-| **`mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`** | **l'ordre de priorité, gelé depuis le rapport p. 53** | rang **5** ✅ *(2026-09-04)* |
+| **`packages/mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`** | **l'ordre de priorité, gelé depuis le rapport p. 53** | rang **5** ✅ *(2026-09-04)* |
 | `move_logger._RAIL_MODES` / `_CANONICAL_FR` | colonne « Train » de `moves.csv` | vues de la hiérarchie ✅ *(2026-09-04)* |
 | `mode_choice.CANONICAL_MODES` / `_MODE_KEYWORDS` | mode canonique de la répartition | `train`, ordre contrôlé à l'import ✅ *(2026-09-04)* |
 | `task_worker._extract_primary_mode` | compteurs de diagnostic ; suit la hiérarchie | ✅ *(2026-09-04)* |
@@ -605,7 +605,7 @@ journal le dit maintenant :
 
 **Arbitrage du ticket 022, rendu le 2026-09-04 : la hiérarchie du dépôt est celle de
 l'enquête.** L'ordre n'est plus écrit dans le code : il est gelé dans
-[`mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`](../../mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json)
+[`packages/mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json`](../../mobility_core/src/mobility_core/data/mode_hierarchy_emc2.json)
 et servi par [`mobility_core/mode_hierarchy.py`](../../mobility_core/src/mobility_core/mode_hierarchy.py).
 
     métro > tram > téléphérique > bus (car liO, car scolaire, TAD) > train
@@ -650,7 +650,7 @@ scolaire sortent de `other`, où ils atterrissaient **avec un ERROR à chaque d�
 
 **Ce que la métrique à quatre catégories n'a pas de fautif.** Le ticket annonçait que
 Grafana 07 « compare une base à quatre modes à une base à cinq ». Vérification :
-`grafana/dashboards/07_metier_mobilite.json` mappe `public_transport|train → tc` d'un côté
+`infra/grafana/dashboards/07_metier_mobilite.json` mappe `public_transport|train → tc` d'un côté
 et `transit → tc` de l'autre. **Les deux séries sont ramenées aux mêmes quatre catégories
 EMC²** — celles que l'annexe p. 53 nomme, où les rangs 1 à 13 forment « transports en
 commun », train compris. Fondre `rail` dans `transit` est correct pour cette métrique.

@@ -1,7 +1,7 @@
 """build_osmnx_perimeter_graph.py — Les trois graphes OSMnx du polygone des 453 communes.
 
-    llm-agents/.venv/bin/python -m scripts.data.population.build_osmnx_perimeter_graph
-    llm-agents/.venv/bin/python -m scripts.data.population.build_osmnx_perimeter_graph --force --trace docs/traces/<date>_graphe_perimetre
+    services/llm-agents/.venv/bin/python -m scripts.data.population.build_osmnx_perimeter_graph
+    services/llm-agents/.venv/bin/python -m scripts.data.population.build_osmnx_perimeter_graph --force --trace docs/traces/<date>_graphe_perimetre
     make osmnx-perimeter-graph
 
 POURQUOI (ticket 031, § 1.4 ; rapport de périmètre, action O1). Le graphe de routage de la
@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-LLMAGENTS_PATH = REPO_ROOT / "llm-agents"
+LLMAGENTS_PATH = REPO_ROOT / "services" / "llm-agents"
 for _p in (str(REPO_ROOT), str(LLMAGENTS_PATH)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -71,16 +71,16 @@ logger = logging.getLogger("osmnx.perimetre")
 # Le label dit ce que le graphe couvre et d'où il vient ; la clé en dérive. Changer les pbf
 # (millésime), la table des communes (version `cc1`) ou le périmètre change la clé — et donc
 # le cache — au lieu de resservir un vieux graphe sous un nom neuf.
-# Définies dans `llm-agents/geography.py` depuis la partie 2 du ticket 031 : le runtime
+# Définies dans `services/llm-agents/geography.py` depuis la partie 2 du ticket 031 : le runtime
 # (`osmnx_server`, `osmnx_direct`) sert ce graphe-là, une seule définition de la clé.
 from geography import PERIMETER_CACHE_KEY, PERIMETER_GRAPH_LABEL  # noqa: E402
 from geography import PRODUCTION_CACHE_KEY_30KM as PRODUCTION_CACHE_KEY  # noqa: E402  (disque de 30 km : frontière réutilisée)
 
-COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
-COMMUNE_TABLE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
+COURONNE_GEOJSON = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+COMMUNE_TABLE = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "commune_couronne.json"
 OSM_PBF_SOURCES = [
-    REPO_ROOT / "eqasim-toulouse" / "data" / "osm_toulouse" / "midi-pyrenees-220101.osm.pbf",
-    REPO_ROOT / "eqasim-toulouse" / "data" / "osm_toulouse" / "languedoc-roussillon-220101.osm.pbf",
+    REPO_ROOT / "services" / "eqasim-toulouse" / "data" / "osm_toulouse" / "midi-pyrenees-220101.osm.pbf",
+    REPO_ROOT / "services" / "eqasim-toulouse" / "data" / "osm_toulouse" / "languedoc-roussillon-220101.osm.pbf",
 ]
 OSMNX_CACHE_DIR = REPO_ROOT / "data" / "cache" / "osmnx"
 WORK_DIR = OSMNX_CACHE_DIR / "perimetre_453"      # extraits intermédiaires (pbf, xml)

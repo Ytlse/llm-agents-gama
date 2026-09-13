@@ -1,4 +1,4 @@
-"""Enveloppe de desserte TC — `TOULOUSE_TRANSIT_SERVICE_WKT` de `llm-agents/geography.py` (ticket 031, T4).
+"""Enveloppe de desserte TC — `TOULOUSE_TRANSIT_SERVICE_WKT` de `services/llm-agents/geography.py` (ticket 031, T4).
 
 Enveloppe concave des arrêts GTFS que le graphe OTP dessert **dans le polygone des 453 communes** :
 tous les arrêts Tisséo, et les arrêts TER situés dans le polygone (le feed TER couvre toute
@@ -7,7 +7,7 @@ le graphe de rue d'OTP, construit sur l'extrait OSM du polygone).
 
 Sert à la visualisation (`vizpop.py`) et à la documentation ; le runtime ne filtre pas dessus.
 
-    llm-agents/.venv/bin/python scripts/data/gtfs/transit_service_hull.py [--ratio 0.3] [--json sortie.json]
+    services/llm-agents/.venv/bin/python scripts/data/gtfs/transit_service_hull.py [--ratio 0.3] [--json sortie.json]
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-for _p in (str(REPO_ROOT), str(REPO_ROOT / "llm-agents")):
+for _p in (str(REPO_ROOT), str(REPO_ROOT / "services" / "llm-agents")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 

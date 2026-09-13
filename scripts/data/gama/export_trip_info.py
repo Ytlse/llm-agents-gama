@@ -1,13 +1,13 @@
-"""Produit `GAMA/CityTransport/includes/trip_info.json` — les courses que GAMA fait rouler
+"""Produit `services/GAMA/CityTransport/includes/trip_info.json` — les courses que GAMA fait rouler
 — et `shape_lookup.json`, la table par laquelle un itinéraire désigne ces courses.
 
-    llm-agents/.venv/bin/python scripts/data/gama/export_trip_info.py
+    services/llm-agents/.venv/bin/python scripts/data/gama/export_trip_info.py
     make gama-trip-info                     # les couches PUIS les courses
 
 POURQUOI UNE RECETTE
 --------------------
 `trip_info.json` n'en avait aucune. Il était produit à la main par le bloc
-`__main__` de `llm-agents/inputs/gtfs/gama.py`, qui lit en dur
+`__main__` de `services/llm-agents/inputs/gtfs/gama.py`, qui lit en dur
 `../data/gtfs/tisseo_gtfs/` et écrit dans `../data/exports/gtfs/`. Résultat
 mesuré le 2026-09-04 : le fichier en service datait du **27 mai**, portait
 **39 343 courses du seul Tisséo et aucune en `route_type=2`**, alors que
@@ -48,7 +48,7 @@ CE QUE LA RECETTE GARANTIT
    dans un véhicule (`Inhabitant.gaml`, `shape_id_list contains each.shape_id`).
    Elle est prise TELLE QUELLE sur l'objet qui a produit les courses — mêmes
    identifiants fabriqués, mêmes courses écartées — de sorte que le runtime n'ait
-   aucune règle à réappliquer. Voir `llm-agents/inputs/gtfs/table_traces.py`.
+   aucune règle à réappliquer. Voir `services/llm-agents/inputs/gtfs/table_traces.py`.
    Sans elle, mesuré le 2026-09-04 : 80 des 199 lignes du fichier (17 TER,
    58 cars liO, 5 lignes circulaires Tisséo) et 2 277 courses roulaient sans
    qu'aucun itinéraire ne puisse les nommer.
@@ -99,8 +99,8 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.data.gama import gtfs_traces  # noqa: E402
 from scripts.data.gama.export_gtfs_layers import FEEDS_DEFAUT, _a_des_geometries  # noqa: E402
 
-INCLUDES = REPO_ROOT / "GAMA" / "CityTransport" / "includes"
-SETTINGS_GAML = REPO_ROOT / "GAMA" / "CityTransport" / "models" / "Settings.gaml"
+INCLUDES = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "includes"
+SETTINGS_GAML = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "models" / "Settings.gaml"
 
 # Le masque binaire du calendrier côté modèle : 64 bits, un par date.
 LIMITE_MASQUE = 64
@@ -108,7 +108,7 @@ LIMITE_MASQUE = 64
 CODE_RESSOURCE = 1
 CODE_REFUS = 2
 
-# Tables que le lecteur `llm-agents/inputs/gtfs/reader.py` exige.
+# Tables que le lecteur `services/llm-agents/inputs/gtfs/reader.py` exige.
 COLONNES_MINIMALES = {
     "routes.txt": ["route_id", "route_short_name", "route_long_name", "route_type"],
     "trips.txt": ["route_id", "service_id", "trip_id", "direction_id", "shape_id"],
@@ -518,7 +518,7 @@ def main(argv=None) -> int:
     print(f"feed fusionné écrit : {temporaire}")
 
     try:
-        sys.path.insert(0, str(REPO_ROOT / "llm-agents"))
+        sys.path.insert(0, str(REPO_ROOT / "services" / "llm-agents"))
         # Depuis le 2026-09-04, importer `settings` ne crée plus de répertoire de run
         # et ne déplace plus `experiments/current` : cela appartient à `claim_run()`,
         # que seul le processus propriétaire appelle. Un run en cours n'est pas touché.

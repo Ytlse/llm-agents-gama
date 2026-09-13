@@ -3,7 +3,29 @@
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité.
 >
-> **Décision de l'auteur du dépôt (2026-09-09)** : idée consignée, à traiter plus tard. Rien
+> **CLOS le 2026-09-11 au profit du [ticket 045](ticket_045_substrat_unique_v5_et_reconstruction_des_experiences.md).**
+> Décision de l'auteur : un seul ticket doit porter la mesure, et c'est le 045 (lot 4e). Deux
+> tickets qui portent le même 2×2 finissent par le jouer deux fois, ou pas du tout.
+>
+> Ce qui est repris tel quel : le plan 2×2 {filtre actif, filtre coupé} × {aléa, majorité
+> voiture, durée min}, et tout le diagnostic ci-dessous, qui reste vrai et sert d'entrée au 045.
+>
+> Deux écarts, décidés par l'auteur le 11 septembre :
+>
+> - les **bras LLM se jouent uniquement en chaîne active**. L'anticipation de la journée est
+>   précisément la capacité pour laquelle des agents sont employés ; la retirer reviendrait à
+>   évaluer l'agent en le privant de ce qu'on cherche à démontrer ;
+> - la condition coupée se limite au **lot 1** (position du véhicule, verrou de retour). Le
+>   lot 2 (possession, permis, âge) est **écarté, pas différé** : ce sont des attributs de la
+>   personne, présents dans les 21 variables du contrat, et les couper reviendrait à donner une
+>   voiture à tout le monde — ce qui ne mesure plus rien.
+>
+> Le **prérequis** que ce ticket avait identifié — tracer l'état des filtres dans
+> `experience.yaml`, les empreintes et le nom canonique, absent partout — est **livré** par le
+> 045 le 2026-09-11 : `vehicule_chaine` et `verrou_retour` sont des champs de la définition,
+> entrent dans `reglages_herites` et dans le nom, muets quand ils valent la référence.
+>
+> **Décision antérieure (2026-09-09)** : idée consignée, à traiter plus tard. Rien
 > n'est lancé ; les mesures ci-dessous sont faites sur les runs déjà archivés et n'ont coûté
 > aucun appel LLM.
 

@@ -3,7 +3,7 @@
 # RECETTE REMPLACÉE LE 2026-09-04 — ce script ne fait plus rien, et il le dit.
 #
 # Il produisait `routes.shp`, `stops.shp` et `trip_info.json` en lançant les blocs
-# `__main__` de `llm-agents/inputs/gtfs/{reader,gama}.py`, qui lisent EN DUR le seul
+# `__main__` de `services/llm-agents/inputs/gtfs/{reader,gama}.py`, qui lisent EN DUR le seul
 # `data/gtfs/tisseo_gtfs`. C'est ce chemin qui a laissé `trip_info.json` cinq mois en
 # retard et à un seul réseau : 39 343 courses Tisséo et AUCUNE en `route_type=2`,
 # pendant que les couches, elles, portaient les trois réseaux et traçaient 34 lignes
@@ -26,7 +26,7 @@ cat >&2 <<'FIN'
 Ce script est remplacé depuis le 2026-09-04 et ne s'exécute plus.
 
 Il ne connaissait qu'un réseau (data/gtfs/tisseo_gtfs, en dur) et écrasait les trois
-fichiers de GAMA/CityTransport/includes/ par des versions mono-réseau, sans contrôle :
+fichiers de services/GAMA/CityTransport/includes/ par des versions mono-réseau, sans contrôle :
 c'est ainsi que trip_info.json a passé cinq mois sans une seule course de TER, alors
 que les couches en traçaient 34 lignes.
 

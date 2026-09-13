@@ -4,7 +4,7 @@ La population synthétique sur laquelle tournent les expériences de l'article e
 contre la population enquêtée par l'EMC² 2023, puis **scellée** : un dossier immuable, avec
 son empreinte, la règle qui l'a produit et le rapport qui l'a jugé. Cette page dit ce qui est
 comparé, à quoi, avec quels tests, et ce que chaque verdict engage. C'est le jalon 0 du
-[protocole](../paper/PROTOCOLE_SCIENTIFIQUE.md) (§ 2) et le § 3.1 du gabarit d'article.
+[protocole](../paper/methode/PROTOCOLE_SCIENTIFIQUE.md) (§ 2) et le § 3.1 du gabarit d'article.
 
 Trois scripts, dans `scripts/AAMAS/` :
 
@@ -26,7 +26,7 @@ filtre bbox — le run épinglé en portait 930. L'effectif du jeu de test dépe
 tirages dont aucun n'était contrôlé.
 
 Un effectif rond ne se règle pas à la génération : il se **sélectionne**. Et la sélection ne
-doit pas être aléatoire : la [note de dimensionnement](../paper/JUSTIFICATION_TAILLE_ECHANTILLON.md)
+doit pas être aléatoire : la [note de dimensionnement](../paper/methode/JUSTIFICATION_TAILLE_ECHANTILLON.md)
 (§ 4.3.1) demande un tirage **stratifié sur les strates mêmes qui serviront à la validation**,
 à allocation proportionnelle — 1 000 agents stratifiés valent ≈ 2 000 tirés au hasard.
 
@@ -356,7 +356,7 @@ au hasard** à `population_size` (`population_sample_seed`) — c'est ce tirage 
 personas du fichier de 1 021. Le réglage `data.population_file` court-circuite tout cela :
 
 ```yaml
-# llm-agents/config/config.yaml
+# services/llm-agents/config/config.yaml
 data:
   population_file: /data/eqasim-output/population_1000_AAMAS_v3/population.json
 ```
@@ -570,6 +570,6 @@ du cadre de tirage) qu'aucune sélection ne referme : à déclarer, pas à corri
 - [perimetre-population.md](perimetre-population.md) — les neuf axes de l'audit de périmètre (ticket 020).
 - [population-post-traitements.md](population-post-traitements.md) — les étages de post-traitement.
 - [Ticket 028](../tickets/ticket_028_temps_terminal_couronnes_communales.md) — le temps terminal aligné sur les couronnes communales.
-- [JUSTIFICATION_TAILLE_ECHANTILLON.md](../paper/JUSTIFICATION_TAILLE_ECHANTILLON.md) — le raisonnement sur N.
+- [JUSTIFICATION_TAILLE_ECHANTILLON.md](../paper/methode/JUSTIFICATION_TAILLE_ECHANTILLON.md) — le raisonnement sur N.
 - Rapport AUAT/CEREMA EMC² 2023 (68 p.) — pages 10, 11, 21, 26 ; fiches méthodologiques CEREMA
   (hiérarchie des modes, dimensionnement par secteur) : aucune marge toulousaine.

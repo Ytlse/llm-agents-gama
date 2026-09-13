@@ -43,10 +43,10 @@ L'arbre suivant représente l'ordre strict de validation des services requis pou
 *   `eqasim` (`./eqasim-toulouse`) : Port `8003`. Service HTTP persistant exposant `/health` et la population générée. Le controller attend sa disponibilité via `service_healthy`.
 *   `redis` (`redis:7-alpine`) : Port `6379`. Triple usage : persistance d'état (DB0), broker Celery (DB1), backend de résultats (DB2).
 *   `otp1` / `otp2` / `otp3` (`./otp-toulouse`) : Ports `8080`/`8081`/`8082`. API GraphQL Transmodel v3 pour le transit multimodal (6 Go RAM chacune).
-*   `osmnx1` (`./llm-agents`) : Port `8090`. Serveur FastAPI exécutant le calcul Dijkstra sur graphes topologiques (4 Go RAM). Des replicas `osmnx2`/`osmnx3` peuvent être activés dans `docker-compose.yml`.
-*   `api` (`llm_gateway/Dockerfile`, contexte racine) : Port `8000`. Passerelle d'orchestration asynchrone des requêtes LLM.
-*   `worker` (`llm_gateway/Dockerfile`, contexte racine) : Processus d'inférence Celery (concurrence : 8).
-*   `flower` (`llm_gateway/Dockerfile`, contexte racine) : Port `5555`. UI de monitoring des tâches Celery.
+*   `osmnx1` (`./llm-agents`) : Port `8090`. Serveur FastAPI exécutant le calcul Dijkstra sur graphes topologiques (4 Go RAM). Des replicas `osmnx2`/`osmnx3` peuvent être activés dans `infra/docker-compose.yml`.
+*   `api` (`packages/llm_gateway/Dockerfile`, contexte racine) : Port `8000`. Passerelle d'orchestration asynchrone des requêtes LLM.
+*   `worker` (`packages/llm_gateway/Dockerfile`, contexte racine) : Processus d'inférence Celery (concurrence : 8).
+*   `flower` (`packages/llm_gateway/Dockerfile`, contexte racine) : Port `5555`. UI de monitoring des tâches Celery.
 *   `controller` (`./llm-agents`) : Port `8002` (Hypercorn HTTP/2) + `5050` (Visualisation Folium).
 *   `gama` (Hôte physique) : Instance de simulation GAML hors conteneur reliant le contrôleur via `ws://host.docker.internal:3001`.
 
@@ -220,9 +220,9 @@ Le système expose trois terminaux de collecte Prometheus synchronisés à une f
 
 ### Structure des répertoires d'expérience
 
-Chaque run crée un répertoire horodaté sous `experiments/archive/<YYYY-MM-DD>_<HH_MM>/`. Le lien symbolique `experiments/current` pointe vers `archive/<nom>` pour un accès rapide au dernier run. GAMA écrit ses résultats dans le symlink `GAMA/CityTransport/results` → `../../experiments/archive/<nom>/gama_results`.
+Chaque run crée un répertoire horodaté sous `experiments/archive/<YYYY-MM-DD>_<HH_MM>/`. Le lien symbolique `experiments/current` pointe vers `archive/<nom>` pour un accès rapide au dernier run. GAMA écrit ses résultats dans le symlink `services/GAMA/CityTransport/results` → `../../experiments/archive/<nom>/gama_results`.
 
-**Où se trouve `experiments/`.** Le répertoire est celui de la racine du dépôt. Le conteneur monte `./experiments` sur `/app/experiments`, à côté du code (`/app`) ; sur l'hôte, le code vit dans `<dépôt>/llm-agents/` et les runs un niveau au-dessus. `settings.py` résout les deux cas ; `APP_EXPERIMENTS_DIR` force le chemin si besoin (les services Python le fixent à `/app/experiments` dans `docker-compose.yml`). La cible du symlink `results` s'exprime toujours dans la disposition du dépôt (`../../experiments/…`), car elle est lue par GAMA sur l'hôte ou par le conteneur `gama` — jamais par le contrôleur qui l'écrit. Un symlink pendant fait échouer le `save` de GAMA sur une `java.nio.file.FileAlreadyExistsException` doublée d'un « Java error: I/O error » qui ne nomme pas la cause. Le contrôleur vérifie donc la résolution au démarrage et journalise `[ALARME]` si elle échoue.
+**Où se trouve `experiments/`.** Le répertoire est celui de la racine du dépôt. Le conteneur monte `./experiments` sur `/app/experiments`, à côté du code (`/app`) ; sur l'hôte, le code vit dans `<dépôt>/llm-agents/` et les runs un niveau au-dessus. `settings.py` résout les deux cas ; `APP_EXPERIMENTS_DIR` force le chemin si besoin (les services Python le fixent à `/app/experiments` dans `infra/docker-compose.yml`). La cible du symlink `results` s'exprime toujours dans la disposition du dépôt (`../../experiments/…`), car elle est lue par GAMA sur l'hôte ou par le conteneur `gama` — jamais par le contrôleur qui l'écrit. Un symlink pendant fait échouer le `save` de GAMA sur une `java.nio.file.FileAlreadyExistsException` doublée d'un « Java error: I/O error » qui ne nomme pas la cause. Le contrôleur vérifie donc la résolution au démarrage et journalise `[ALARME]` si elle échoue.
 
 **Importer `settings` n'ouvre jamais un run ; l'ouvrir est un acte explicite.** Depuis le 2026-09-04, l'import lit la configuration et **ne touche à rien sur disque** : ni répertoire d'expérience créé, ni `static_config.yaml` écrit, ni symlink déplacé. C'est `FactorySettings.claim_run()` qui fait tout cela, et **seul le processus propriétaire du run l'appelle** — le contrôleur, dans `handle/__init__.py`.
 

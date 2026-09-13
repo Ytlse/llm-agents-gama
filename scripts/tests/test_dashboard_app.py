@@ -27,11 +27,14 @@ def app(tmp_path_factory):
     from scripts.dashboard import experiences
 
     origine = experiences.ETAT_FORMULAIRE
+    origine_vue = experiences.ETAT_VUE_REGISTRE  # colonnes et filtres du registre : même précaution
     experiences.ETAT_FORMULAIRE = tmp_path_factory.mktemp("brouillon") / "formulaire.yaml"
+    experiences.ETAT_VUE_REGISTRE = tmp_path_factory.mktemp("vue") / "tableau.yaml"
     at = AppTest.from_file(str(APP), default_timeout=240)
     at.run()
     yield at
     experiences.ETAT_FORMULAIRE = origine  # la constante est partagée par tous les fichiers de test
+    experiences.ETAT_VUE_REGISTRE = origine_vue
 
 
 def test_le_tableau_de_bord_se_charge_sans_exception(app):
@@ -412,6 +415,11 @@ def _app_patchee(tmp_path, patchs: dict):
             setattr(cible, nom, valeur)
     brouillon = experiences.ETAT_FORMULAIRE
     experiences.ETAT_FORMULAIRE = tmp_path / "formulaire.yaml"
+    # Colonnes et filtres du tableau « Mes expériences » se retiennent eux aussi sur disque :
+    # sans cette redirection, dérouler la page pendant un test écrirait dans la vue de
+    # l'utilisateur — avec les seules colonnes que la plateforme de poche expose.
+    vue = experiences.ETAT_VUE_REGISTRE
+    experiences.ETAT_VUE_REGISTRE = tmp_path / "vue_tableau.yaml"
     try:
         at = AppTest.from_file(str(APP), default_timeout=240)
         at.run()
@@ -420,6 +428,7 @@ def _app_patchee(tmp_path, patchs: dict):
         for (cible, nom), valeur in origines.items():
             setattr(cible, nom, valeur)
         experiences.ETAT_FORMULAIRE = brouillon
+        experiences.ETAT_VUE_REGISTRE = vue
 
 
 def test_R6_un_bouton_contextuel_resout_sa_cible_et_appelle_le_registre(tmp_path):

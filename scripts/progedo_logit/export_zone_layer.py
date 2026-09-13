@@ -47,7 +47,7 @@ from scripts.progedo_logit.build_mode_choice_dataset import (
     load_raw,
 )
 
-# Nom de couche attendu par le résolveur (mobility_core/src/mobility_core/zone_resolver.py).
+# Nom de couche attendu par le résolveur (packages/mobility_core/src/mobility_core/zone_resolver.py).
 LAYER_NAME = "zf"
 
 # Colonnes de la ressource. `ZF` est la clé, les cinq suivantes sont tout ce dont
@@ -108,7 +108,7 @@ def main() -> None:
     progedo_dir = root / "data" / "PROGEDO 2023" / "lil-1750-Donnees_CSV" / "fichiers_standards"
     sig_zf = (root / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
               / "EMC2_Toulouse_2023_ZF_26052023.shp")
-    out_dir = args.out_dir or (root / "mobility_core" / "src" / "mobility_core" / "data")
+    out_dir = args.out_dir or (root / "packages" / "mobility_core" / "src" / "mobility_core" / "data")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     _, men, _ = load_raw(progedo_dir)

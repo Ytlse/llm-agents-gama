@@ -23,6 +23,12 @@ from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Le fichier compose vit dans infra/ (ticket 039) : `-f` le désigne et
+# `--project-directory` garde la racine comme base de ses chemins relatifs.
+COMPOSE_CMD = ["docker", "compose", "-f", str(REPO_ROOT / "infra" / "docker-compose.yml"),
+               "--project-directory", str(REPO_ROOT)]
+
 EXPERIMENTS = REPO_ROOT / "experiments"
 SYNTHESIS_DATA = REPO_ROOT / "docs" / "synthesis" / "data.json"
 CALIB_STORES = {
@@ -74,7 +80,7 @@ def docker_status(timeout: float = 8.0) -> DockerStatus:
         return DockerStatus(False, error="binaire `docker` introuvable")
     try:
         proc = subprocess.run(  # noqa: S603 — commande fixe
-            ["docker", "compose", "ps", "--format", "json", "--all"],
+            [*COMPOSE_CMD, "ps", "--format", "json", "--all"],
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,

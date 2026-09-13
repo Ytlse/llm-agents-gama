@@ -54,7 +54,7 @@ SIG_DIR = REPO_ROOT / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
 DTIR_SHP = SIG_DIR / "EMC2_Toulouse_2023_DTIR_17072023.shp"
 ZF_SHP = SIG_DIR / "EMC2_Toulouse_2023_ZF_26052023.shp"
 
-OUT_DIR = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data"
+OUT_DIR = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data"
 OUT_TABLE = OUT_DIR / "commune_couronne.json"
 OUT_GEOJSON = OUT_DIR / "couronne_perimetre.geojson"
 OUT_ZF_TABLE = OUT_DIR / "zf_couronne.json"

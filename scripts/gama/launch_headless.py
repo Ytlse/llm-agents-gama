@@ -24,7 +24,7 @@ import sys
 import websockets
 
 GAMA_SERVER_URL = os.environ.get("GAMA_SERVER_URL", "ws://gama:6868")
-MODEL_PATH = os.environ.get("GAMA_MODEL_PATH", "/GAMA/CityTransport/models/City.gaml")
+MODEL_PATH = os.environ.get("GAMA_MODEL_PATH", "/services/GAMA/CityTransport/models/City.gaml")
 EXPERIMENT = os.environ.get("GAMA_EXPERIMENT", "e")
 CONTROLLER_HTTP_URL = os.environ.get("GAMA_HTTP_URL", "http://controller")
 CONTROLLER_HTTP_PORT = int(os.environ.get("GAMA_HTTP_PORT", "8002"))
@@ -109,7 +109,7 @@ async def main() -> None:
             {"type": "int", "name": "http_port", "value": CONTROLLER_HTTP_PORT},
             # ⚠ Ne pas injecter ici les paramètres de simulation (mémoire, jours…) :
             # Settings.gaml (load_sim_config, cycle 1) les écrase depuis
-            # GAMA/CityTransport/config/sim_params.yaml. C'est ce fichier qui fait foi —
+            # services/GAMA/CityTransport/config/sim_params.yaml. C'est ce fichier qui fait foi —
             # `make run MEM=0|1` le réécrit avant le lancement.
         ],
     }

@@ -1,0 +1,5 @@
+population_size: 1000
+part_of_llm_based_agents: 1.0
+long_term_memory_enabled: false
+long_term_self_reflect_enabled: false
+simulation_max_days: 1

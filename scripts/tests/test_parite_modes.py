@@ -29,7 +29,7 @@ Deux gardes contre la vacuité (« l'absence de mesure produit le score parfait 
 une boucle sur une liste vide passe sans rien vérifier, donc les effectifs et quelques
 modes-témoins sont assertés avant d'itérer.
 
-Lancement : PYTHONPATH=. llm-agents/.venv/bin/python -m pytest scripts/tests/test_parite_modes.py
+Lancement : PYTHONPATH=. services/llm-agents/.venv/bin/python -m pytest scripts/tests/test_parite_modes.py
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from scripts.synthesis.frames import CHOSEN_MODE_MAP
 from scripts.synthesis.model_on_common_set import CANONICAL_TO_CAT
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MOVE_LOGGER = REPO_ROOT / "llm-agents" / "urban_mobility_agents" / "utils" / "move_logger.py"
+MOVE_LOGGER = REPO_ROOT / "services" / "llm-agents" / "urban_mobility_agents" / "utils" / "move_logger.py"
 
 # Familles de la hiérarchie → nom historique de la liste de `move_logger` (les deux noms
 # sont cités dans la doc et dans `llm_agent`) → catégorie EMC² attendue de la loss. Le rail

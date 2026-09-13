@@ -428,7 +428,7 @@ def render(rows: list[dict], generated: datetime, traces: Path) -> str:
         "python archive_ab.py  --out ../docs/traces/2026-08-24_temps_terminal\n"
         "cd .. &amp;&amp; python -m scripts.synthesis.build_terminal_page</pre>",
         '<p>La correction est en production depuis <span class="mono">tt3</span> '
-        '(<span class="mono">llm-agents/config/terminal_time.yaml</span>) : le temps '
+        '(<span class="mono">services/llm-agents/config/terminal_time.yaml</span>) : le temps '
         "terminal y est tiré dans cette loi pour la voiture <em>et</em> le vélo, et "
         "56 tests — dont un garde-fou d'alignement — refusent un retour aux valeurs "
         "tt2.</p>",

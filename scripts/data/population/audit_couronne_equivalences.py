@@ -30,7 +30,7 @@ Codes de sortie :
 
 Usage :
     make audit-couronnes
-    llm-agents/.venv/bin/python -m scripts.data.population.audit_couronne_equivalences \
+    services/llm-agents/.venv/bin/python -m scripts.data.population.audit_couronne_equivalences \
       --population data/population/toulouse_population_1000.json \
       --trace docs/traces/2026-08-24_couronne_equivalences
 """
@@ -56,9 +56,9 @@ EXIT_OK, EXIT_RESOURCE_MISSING, EXIT_GATE_FAILED, EXIT_NOT_MEASURABLE = 0, 1, 2,
 SIG = REPO_ROOT / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
 SIG_DTIR = SIG / "EMC2_Toulouse_2023_DTIR_17072023.shp"
 SIG_ZF = SIG / "EMC2_Toulouse_2023_ZF_26052023.shp"
-ZF_GPKG = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
-COURONNE_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
-ZF_TABLE = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "zf_couronne.json"
+ZF_GPKG = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_zones.gpkg"
+COURONNE_GEOJSON = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+ZF_TABLE = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "zf_couronne.json"
 DEFAULT_POPULATION = (REPO_ROOT / "data" / "population"
                       / "toulouse_population_1000.json")
 DEFAULT_ARCHIVE = (REPO_ROOT / "docs" / "traces" / "2026-08-24_perimetre_population"

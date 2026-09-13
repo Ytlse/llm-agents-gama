@@ -145,7 +145,7 @@ providers:
   # changer de provider — même à modèle identique — repart d'un cache vide.
   #
   # La résolution de clé est `provider_keys[nom_instance] or provider_keys[adapter]`
-  # (llm_gateway/src/llm_gateway/config/settings.py). Le nom d'instance DOIT donc correspondre à la variable
+  # (packages/llm_gateway/src/llm_gateway/config/settings.py). Le nom d'instance DOIT donc correspondre à la variable
   # d'env, sinon on retombe silencieusement sur PROVIDER_KEYS__google (clé 1).
   google_gemini31_key2:
     adapter:           google

@@ -7,7 +7,7 @@ Pour chaque domicile et chaque lieu d'activité distinct d'un fichier de populat
 de l'emprise du graphe, `NO_STOPS_IN_RANGE` un point sans arrêt accessible (pas un défaut de graphe :
 la 3ᵉ couronne rurale n'a pas de TC). Les instances sont interrogées en tournante.
 
-    llm-agents/.venv/bin/python scripts/data/gtfs/otp_link_check.py \
+    services/llm-agents/.venv/bin/python scripts/data/gtfs/otp_link_check.py \
         --population data/population/population_1000_AAMAS_v4/population.json \
         --json docs/traces/<trace>/otp_link_check.json
 
@@ -31,18 +31,18 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-COURONNES_GEOJSON = REPO_ROOT / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
-# `llm-agents/` sur le path : `--gama-timestamp` traduit l'horodatage avec `sim_clock`,
+COURONNES_GEOJSON = REPO_ROOT / "packages" / "mobility_core" / "src" / "mobility_core" / "data" / "couronne_perimetre.geojson"
+# `services/llm-agents/` sur le path : `--gama-timestamp` traduit l'horodatage avec `sim_clock`,
 # le module que le runtime utilise. Recopier la conversion ici rétablirait l'asymétrie
 # qui a caché le défaut — un instrument qui ne tombe que si LUI change.
-if str(REPO_ROOT / "llm-agents") not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT / "llm-agents"))
+if str(REPO_ROOT / "services" / "llm-agents") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "services" / "llm-agents"))
 
 DEFAULT_ENDPOINTS = ["http://localhost:8080/otp/transmodel/v3",
                      "http://localhost:8081/otp/transmodel/v3",
                      "http://localhost:8082/otp/transmodel/v3"]
 CAPITOLE = (43.6045, 1.4440)
-# Les modes demandés sont ceux du runtime (`llm-agents/trip_helper/otp.py`) : un mode
+# Les modes demandés sont ceux du runtime (`services/llm-agents/trip_helper/otp.py`) : un mode
 # absent d'ici mesurerait une offre que les agents ne voient pas, et réciproquement.
 # `legs { mode authority }` sert à compter les itinéraires qui proposent un TRAIN —
 # le seul chiffre qui dise si l'ajout du mode `rail` change quelque chose.

@@ -75,7 +75,7 @@ qu'un autre réglage. Pour le temps terminal : `T2` (marche au départ), `T6` (m
 l'arrivée) et `T11` (durée de recherche du stationnement) du fichier trajets d'EMC².
 
 ```bash
-make terminal-time      # → llm_module/data/terminal_time_emc2.json
+make terminal-time      # → packages/mobility_core/src/mobility_core/data/terminal_time_emc2.json
 ```
 
 **Publier un contrôle de validité avec la loi.** Une variable d'enquête peut valoir zéro

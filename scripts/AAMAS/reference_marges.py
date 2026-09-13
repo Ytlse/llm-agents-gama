@@ -1,7 +1,7 @@
 """reference_marges.py — Les marges de référence du contrôle de population, assemblées et sourcées.
 
-    llm-agents/.venv/bin/python -m scripts.AAMAS.reference_marges              # imprime les marges
-    llm-agents/.venv/bin/python -m scripts.AAMAS.reference_marges --recompute  # regèle la cible jointe
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.reference_marges              # imprime les marges
+    services/llm-agents/.venv/bin/python -m scripts.AAMAS.reference_marges --recompute  # regèle la cible jointe
 
 CE QUE ÇA SERT. `control_population.py` compare une population synthétique à la population
 enquêtée par l'EMC² 2023. Chaque marge comparée doit avoir une cible dont on sait D'OÙ elle

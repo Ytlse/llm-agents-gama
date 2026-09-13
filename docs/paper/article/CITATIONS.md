@@ -183,7 +183,14 @@ Cocher une case = les quatre conditions vérifiées à la main, pas seulement le
 - [ ] Rapport final (68 p., mai 2024) et microdonnées ProGEDO lil-1750.
 - Phrases citantes : § 1 et § 4, enquête certifiée Cerema, environ 16 000 répondants, 453 communes ; cibles de parts modales.
 - À pointer : p. 10, 11, 21 du rapport (marges) ; effectif de l'enquête.
-- Bib : `tisseo2023emc2` (présente).
+- Bib : `tisseo2023emc2` (présente, complétée le 11 septembre 2026 d'une `note` : microdonnées diffusées par Quetelet-Progedo-Diffusion, convention `lil-1750`).
+- **Deux objets distincts, deux citations.** Le **rapport publié** (marges, parts modales) est citable sans réserve ; les **microdonnées** relèvent de la convention `lil-1750` et se citent selon son modèle annexé → entrée `progedo2023emc2microdata` et A34.
+
+### A34. Microdonnées EMC² 2023 (Quetelet-Progedo-Diffusion, lil-1750)
+- [ ] **Modèle de citation à recopier depuis l'annexe de la convention** — le libellé écrit aujourd'hui dans l'Annexe G est provisoire et marqué comme tel. Tant que cette case n'est pas cochée, aucune version n'est envoyée au diffuseur.
+- Phrases citantes : § 4.7 (conditions d'accès et conséquences sur le matériel supplémentaire), Annexe G, et partout où un chiffre est ajusté sur microdonnées (logit, oracle, marges recalculées).
+- Engagements associés (usage recherche, non-cession, information du diffuseur) : [`../sources/ENGAGEMENT_DONNEES_EMC2.md`](../sources/ENGAGEMENT_DONNEES_EMC2.md).
+- Bib : `progedo2023emc2microdata` (créée le 11 septembre 2026).
 
 ### A28. Smith, Beckman & Baggerly (1995) — TRANSIMS
 - [ ] **PDF absent de `etat_de_lart/`** — rapport technique LANL 1995 à récupérer. Retenue à la demande du tuteur (v0.3).
@@ -288,6 +295,7 @@ Chaque chiffre conservé dans la v0.2 doit se recalculer depuis un fichier du d�
 - [ ] Jusqu'à six itinéraires présentés — `max_candidats: 6` dans `experience.yaml` des expériences jouées.
 - [x] Corpus de 30 articles, 7 classés « éliminer » — plus mentionné dans l'introduction depuis la v0.7 (cinq articles, choisis avant tout appel) ; reste vrai pour l'annexe.
 - [ ] Enquête EMC² 2023 : environ 16 000 répondants, 453 communes — rapport AUAT/CEREMA.
+- [ ] Citation des microdonnées conforme au modèle de la convention `lil-1750` — libellé à recopier (A34) ; provisoire en Annexe G.
 - [ ] Tout autre chiffre porte un tag **[xx.y | exp_id]** jusqu'à mesure sur le substrat scellé.
 
 ---

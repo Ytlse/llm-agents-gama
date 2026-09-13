@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.extend(['mobility_llm/src', 'llm-agents', 'llm_gateway/src'])
+sys.path.extend(['packages/mobility_llm/src', 'services/llm-agents', 'packages/llm_gateway/src'])
 from mobility_llm import prompt_manager, CATEGORIES
 cat = CATEGORIES['itinary_multi_agent']
 

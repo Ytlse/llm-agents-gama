@@ -1,4 +1,4 @@
-"""Tests des deux recettes qui alimentent `GAMA/CityTransport/includes/`
+"""Tests des deux recettes qui alimentent `services/GAMA/CityTransport/includes/`
 (`scripts/data/gama/export_gtfs_layers.py` et `export_trip_info.py`).
 
 LA RÉGRESSION VISÉE

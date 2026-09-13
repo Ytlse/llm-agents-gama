@@ -9,7 +9,7 @@ Le gateway LLM (paquet `llm_gateway/`, ex-`llm_module`) fait office de répartit
 > métriques métier — enregistrées auprès du gateway par l'entry point `llm_gateway.categories`).
 > `llm_module/` n'est plus qu'une coquille de compatibilité qui réexporte et émet un
 > `DeprecationWarning`. La documentation propre au gateway (tutoriel, guides, référence des
-> réglages, métriques, ADR) vit dans `llm_gateway/docs/` (`mkdocs serve`) ; cette page garde
+> réglages, métriques, ADR) vit dans `packages/llm_gateway/docs/` (`mkdocs serve`) ; cette page garde
 > l'explication du pipeline vu depuis la simulation. Les chemins ci-dessous sont ceux des
 > nouveaux paquets.
 
@@ -325,8 +325,22 @@ avec `finishReason == MAX_TOKENS`. Ce check attrape aussi le cas des modèles «
 
 #### Source des prompts système
 
+> **Renommage du 2026-09-11.** `expert_chaine` s'appelle désormais **`expert_m4`** (variante
+> active) et `expert_best` s'appelle **`expert_m1`**. Le texte des deux est inchangé au
+> caractère près — les sceaux `_neutralite.sha256_texte` restent valides. **Aucun alias de
+> compatibilité** : les expériences archivées qui portent `variante: expert_chaine` dans leur
+> `experience.yaml` ne se rejouent plus. Les mentions de `expert_chaine` plus bas dans cette
+> page sont des **constats datés** (mesures d'août et septembre 2026) et gardent l'ancien nom,
+> qui est celui sous lequel ces mesures ont été prises. La lignée `expert_chaine_m5` à `m7.1`
+> conserve son nom.
+>
+> Neuf variantes sont par ailleurs **archivées** le même jour : `persona_v1` à `v5`, `expert`,
+> `b0_pristine`, `minimal_persona`, `expert_gem_3.8_v1`. Archivée veut dire **retirée du choix
+> du tableau de bord, toujours servable** — `b0_pristine` reste le seed gelé de la campagne de
+> référence, et une expérience qui le désigne se rejoue à l'identique.
+
 Le texte du prompt système n'est plus codé en dur dans les templates Jinja. Il provient
-d'une **source unique** : `mobility_llm/src/mobility_llm/prompts/prompts.yaml`, fusionnée avec l'historique
+d'une **source unique** : `packages/mobility_llm/src/mobility_llm/prompts/prompts.yaml`, fusionnée avec l'historique
 du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipynb`, qui y
 écrit chaque variante calibrée).
 
@@ -335,8 +349,14 @@ du pipeline de calibration (`scripts/models_influence/prompt_calibration_V3.ipyn
   sans modifier le code.
 - `prompts:` contient les variantes (`content`), schéma JSON inclus. À l'exécution,
   `PromptManager.get_system_prompt(category)` retire le bloc « Schéma JSON attendu »
-  (réinjecté dynamiquement via `{{ schema }}` depuis `schemas.json`) et passe le texte au
-  template via la variable `system_prompt`.
+  (réinjecté dynamiquement via `{{ schema }}`) et passe le texte au template via la
+  variable `system_prompt`. **Le schéma réinjecté n'est pas celui du texte calibré** : depuis
+  le 2026-09-07 (ticket 037, itération 2), chaque catégorie range son schéma dans son
+  dossier — `packages/mobility_llm/src/mobility_llm/categories/<catégorie>/output_schema.json`, à côté
+  de `template.md.j2` — et c'est ce fichier que `get_output_schema` sert, plus un
+  `schemas.json` commun. Conséquence à ne pas perdre de vue : un champ que le texte d'une
+  variante réclame mais que `output_schema.json` ne déclare pas n'arrivera pas (le schéma
+  imposé porte `additionalProperties: false`).
 - Les catégories absentes de `active:` (ex. `perception_filter`) conservent leur section
   `<!-- SYSTEM -->` en dur dans leur template.
 
@@ -357,21 +377,32 @@ worker servait le `prompts.yaml` figé dans l'image (cf. changelog du même jour
 
 Pour la catégorie `itinary_multi_agent`, le LLM **ne choisit plus** d'itinéraire : il
 attribue à *chaque* option proposée la probabilité (en %) que le persona la retienne, la
-somme valant 100. Le schéma (`mobility_llm/src/mobility_llm/prompts/schemas.json`) exige donc un tableau
-`probabilities` de `{index, mode, probability, reason}` — une entrée par option, `0` pour
-une option jugée impossible — en lieu et place de l'ancien `chosen_index`.
+somme valant 100. Le schéma
+(`packages/mobility_llm/src/mobility_llm/categories/itinary_multi_agent/output_schema.json`) exige
+donc, par persona, un tableau `probabilities` de `{index, mode, probability}` — une entrée
+par option, `0` pour une option jugée impossible — plus **un** `reason`, en lieu et place de
+l'ancien `chosen_index`.
 
-**`reason` est passé du persona à l'option le 2026-08-26.** Le schéma portait une raison
-unique par persona (« justifie la répartition en une phrase concise, en précisant si c'est
-le cas pourquoi la marche n'obtient pas la plus forte probabilité ») : elle ne disait pas
-pourquoi telle option perdait contre telle autre, et la clause sur la marche orientait la
-justification vers un mode en particulier. La consigne est désormais « justifie la
-répartition en une phrase concise par option », et chaque entrée de `probabilities` porte
-sa raison — « une phrase justifiant la probabilité de CETTE option par rapport aux
-autres ». Conséquence à ne pas oublier : la sortie est ~5 fois plus longue, d'où le
-relèvement de `max_tokens` (voir ci-dessus).
+**La raison par option vit dans le texte des variantes, pas dans le schéma imposé.** Le
+2026-08-26, la consigne est passée d'une raison unique par persona (« justifie la
+répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient
+pas la plus forte probabilité » — elle ne disait pas pourquoi telle option perdait contre
+telle autre, et la clause sur la marche orientait la justification vers un mode) à « justifie
+la répartition en une phrase concise par option ». Les variantes de la famille
+`expert_chaine` (l'active s'appelle `expert_m4` depuis le 2026-09-11) portent donc, dans le schéma **littéral de leur texte**, un
+`reason` par entrée de `probabilities` (« une phrase justifiant la probabilité de CETTE
+option par rapport aux autres »), et c'est ce qui explique une sortie ~5 fois plus longue,
+d'où le relèvement de `max_tokens` (voir ci-dessus).
 
-Le post-traitement vit dans `mobility_llm/src/mobility_llm/mode_choice.py`, partagé par tous les
+> ⚠ **Divergence en l'état (constatée le 2026-09-11, non corrigée ici).** Le schéma
+> réellement imposé au fournisseur, `output_schema.json`, déclare `reason` **au niveau du
+> persona** et `required: [index, mode, probability]` par option, avec
+> `additionalProperties: false`. Un modèle en sortie structurée ne peut donc pas rendre la
+> raison par option que le texte de la variante active lui demande. Trancher le sens voulu
+> (aligner le schéma sur le texte, ou le texte sur le schéma) est une décision de produit,
+> pas une correction de documentation : cette page décrit ce que le code fait aujourd'hui.
+
+Le post-traitement vit dans `packages/mobility_llm/src/mobility_llm/mode_choice.py`, partagé par tous les
 consommateurs pour qu'ils appliquent la **même** politique de décision :
 
 | Étape | Fonction | Rôle |
@@ -411,7 +442,7 @@ que la ligne d'option : plusieurs modèles (mistral, llama 3.1, gemma) les lisai
 des options supplémentaires et renumérotaient le bloc entier — index `0..35` pour 6 options,
 donc masse de probabilité placée **hors bornes** et décision perdue. Deux garde-fous :
 
-1. **Rendu** (`itinary_multi_agent.md.j2`) — les étapes deviennent des sous-puces indentées
+1. **Rendu** (`categories/itinary_multi_agent/template.md.j2`) — les étapes deviennent des sous-puces indentées
    « · », l'en-tête annonce le nombre d'options et la plage d'index, et la consigne finale
    rappelle que seules les lignes `- [n]` sont des options et que les index repartent de 0
    dans chaque bloc persona.
@@ -438,7 +469,7 @@ les index restés *dans* les bornes.
 
 #### Contexte (météo/trafic) réinjecté par persona
 
-Dans `itinary_multi_agent.md.j2`, le contexte factuel (météo, trafic) est rendu **à
+Dans le template de la catégorie (`categories/itinary_multi_agent/template.md.j2`), le contexte factuel (météo, trafic) est rendu **à
 l'intérieur de chaque bloc persona** (`**Contexte :** …` juste sous l'en-tête `--- agent_id=… ---`),
 et non plus une seule fois en préambule commun au lot. La source par persona est
 `agent.context` si elle est fournie, sinon le contexte partagé de la requête
@@ -461,7 +492,7 @@ prompt de production.
 
 Le choix reste **trajet par trajet**, mais le bloc persona est enrichi de trois éléments
 construits par le contrôleur (`_build_anticipation`, `simulation_controller.py`) et rendus
-par `itinary_multi_agent.md.j2` :
+par `categories/itinary_multi_agent/template.md.j2` :
 
 - `**Météo plus tard :**` — la météo des tranches restantes de la journée
   (`day_weather_outlook`, tranches matin/après-midi/soirée du CSV météo), pour **tous**
@@ -481,7 +512,7 @@ vous » : mesurée sur le run `2026-08-19_13_17`, elle a gonflé la part vélo d
 (écart EMC² +13,8 → +19,6) — le libellé agissait comme une invitation, pas comme une
 information, et la disponibilité réelle est déjà portée par le jeu d'options via les
 verrous. La règle de chaîne vit désormais dans le **prompt système** (variante
-`expert_chaine` de `prompts.yaml`, seed `expert`). Reformulée le **2026-08-26** : elle
+`expert_m4` de `prompts.yaml` — `expert_chaine` jusqu'au 2026-09-11 —, seed `expert`). Reformulée le **2026-08-26** : elle
 énonçait « pense au stationnement et aux déplacements du reste de la journée, jusqu'au
 retour au domicile », ce qui se lisait comme une obligation de garder le véhicule toute la
 journée. Elle dit désormais la vraie contrainte — la **continuité de position** :
@@ -604,7 +635,7 @@ variance de l'instrument.
 ⚠ **« Par défaut » veut dire deux choses, et les confondre a fait échouer deux tests une
 journée entière** (2026-09-04). Le **défaut du code** est `weather_per_agent_dates = False`
 dans `settings.py` : rien ne bouge si personne ne le demande. La **configuration du run**,
-elle, l'active délibérément (`llm-agents/config/config.yaml`, depuis « une seule
+elle, l'active délibérément (`services/llm-agents/config/config.yaml`, depuis « une seule
 configuration de run »), parce que sans tirage la mesure de l'effet météo n'a aucune
 variance à mesurer. Un test qui lit `settings.agent.weather_per_agent_dates` lit la
 configuration du run, **pas** le défaut du code : `scripts/tests/test_weather_draw.py`
@@ -779,7 +810,7 @@ un pipeline LLM qui ne draine plus :
 
 - **Worker gateway** : quand tous les providers sont saturés/en cooldown et qu'un batch
   est abandonné, avec la liste des providers en cooldown (`task_worker.py`).
-- **SDK client** (`llm_gateway/src/llm_gateway/sdk/client.py`) : après 10 tâches échouées d'affilée côté
+- **SDK client** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`) : après 10 tâches échouées d'affilée côté
   controller (timeouts gateway inclus). Cette alarme **arme la backpressure SDK**
   (ci-dessous).
 - **Backpressure `/sync`** (`handle/application.py`) : alignée sur les seuils du mode
@@ -809,7 +840,7 @@ problèmes distincts :
    itinéraire de la liste » (`llm_fallback`) — sur 24 h de rupture, un biais modal
    massif et non maîtrisé dans `moves.csv`.
 
-Le **disjoncteur client** (`llm_gateway/src/llm_gateway/sdk/client.py`, réglages
+Le **disjoncteur client** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`, réglages
 `agent.remote_llm_circuit_failure_threshold` / `remote_llm_circuit_probe_interval`)
 répond aux deux en choisissant **l'attente, pas la dégradation** : après N échecs
 consécutifs (défaut 10) — **erreurs réseau incluses** (gateway injoignable, 5xx à la
@@ -942,7 +973,7 @@ deadlock (`Inhabitant.gaml`).
 ### Backpressure SDK (drainage sur alarme)
 
 Distincte de la backpressure `/sync` (qui freine le rythme des steps GAMA), la
-backpressure **SDK** (`llm_gateway/src/llm_gateway/sdk/client.py`) protège la gateway déjà saturée. Quand
+backpressure **SDK** (`packages/llm_gateway/src/llm_gateway/sdk/client.py`) protège la gateway déjà saturée. Quand
 l'alarme « 10 tâches échouées d'affilée » se déclenche, le client suspend toute nouvelle
 soumission LLM (`_await_backpressure_drain`) tant que la pile in-flight n'est pas retombée
 sous `remote_llm_backpressure_ratio × worker_concurrency` (défaut **20 %**, soit 4 tâches
@@ -965,7 +996,7 @@ l'abandon client.
 
 ## Polling côté controller
 
-Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Si la socket pubsub est interrompue (`redis.exceptions.TimeoutError`) avant la fin du timeout, le serveur se reconnecte automatiquement et reprend l'attente jusqu'à épuisement du budget de temps — évitant les faux-timeouts (`waited=Xs timeout=30s`) lorsque la socket Redis se déconnecte brièvement. Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../../pipeline.md)).
+Après soumission, le controller attend le résultat via long-poll Pub/Sub Redis (canal `task_done:{task_id}`). Si la socket pubsub est interrompue (`redis.exceptions.TimeoutError`) avant la fin du timeout, le serveur se reconnecte automatiquement et reprend l'attente jusqu'à épuisement du budget de temps — évitant les faux-timeouts (`waited=Xs timeout=30s`) lorsque la socket Redis se déconnecte brièvement. Les métriques de timing sont tracées dans le pipeline de mesure (voir [docs/pipeline.md](../pipeline.md)).
 
 ---
 

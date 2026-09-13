@@ -1,11 +1,11 @@
 # Monitoring & dashboards de pilotage
 
 La supervision repose sur **Prometheus + Grafana**, tous deux provisionnés dans
-`docker-compose.yml`. Aucune brique externe (pas de Loki) : les métriques
+`infra/docker-compose.yml`. Aucune brique externe (pas de Loki) : les métriques
 numériques passent par Prometheus, les rares données textuelles (messages
 d'erreur LLM) par un endpoint JSON lu via le plugin Grafana *Infinity*.
 
-## Cibles scrappées (`prometheus.yml`)
+## Cibles scrappées (`infra/prometheus.yml`)
 
 | Job | Cible | Expose |
 |-----|-------|--------|
@@ -14,7 +14,7 @@ d'erreur LLM) par un endpoint JSON lu via le plugin Grafana *Infinity*.
 | `node`                  | `node_exporter:9100`      | CPU / RAM / load (global VM Docker) |
 | `cadvisor`              | `cadvisor:8080`           | CPU / RAM / réseau **par conteneur** (api, worker, otp, redis, qdrant…) |
 
-## Dashboards (`grafana/dashboards/`)
+## Dashboards (`infra/grafana/dashboards/`)
 
 Refonte 2026-07-10 : **un dashboard = une question**, ordonnés par le cycle de
 vie d'un run. Chaque dashboard porte le tag `sim` et un menu déroulant de
@@ -80,32 +80,36 @@ restreindre la plage au run courant pour une lecture propre.
 Deux mécanismes complémentaires :
 
 1. **Compteur `alarme_total{source}`** — chaque log ERROR `[ALARME]` incrémente
-   le compteur (module `llm_gateway/src/llm_gateway/telemetry/alarms.py`, `fire_alarme(source)`).
+   le compteur (module `packages/llm_gateway/src/llm_gateway/telemetry/alarms.py`, `fire_alarme(source)`).
    Sources : `backlog`, `event_loop`, `arrivee_perdue`, `cache_llm_stale`,
    `cache_llm_qdrant`, `gateway_llm`, `vehicule_orphelin` (controller) et `providers_satures`
    (worker, via Redis `alarme:{source}` relu par `WorkerMetricsCollector`).
    Le compteur de `alarms.py` n'est créé qu'au premier `fire_alarme` et se range hors
    registre si la famille est déjà exposée : le processus API peut importer le SDK sans
-   collision (ticket 037). Le site `[ALARME]` de `llm_gateway/src/llm_gateway/config/learned.py`
+   collision (ticket 037). Le site `[ALARME]` de `packages/llm_gateway/src/llm_gateway/config/learned.py`
    (limite apprise impossible à mémoriser dans le store, les autres processus la
    réapprendront) reste hors compteur — visible via `make error`.
-2. **Alertes Grafana provisionnées** — `grafana/provisioning/alerting/simulation-alerts.yml`
+2. **Alertes Grafana provisionnées** — `infra/grafana/provisioning/alerting/simulation-alerts.yml`
    (7 règles, dossier « Alertes simulation ») : agents bloqués, fallback LLM
    >10 %, alarme `[ALARME]` émise, drainage >10 min, aucun provider actif,
    event loop >5 s, backlog >90 % pendant 10 min.
 
 ## Métriques notables
 
-**Gateway** (`llm_gateway/src/llm_gateway/api/metrics.py`) : appels/erreurs/tokens par provider
+**Gateway** (`packages/llm_gateway/src/llm_gateway/api/metrics.py`) : appels/erreurs/tokens par provider
 (`__all__` = agrégat), `llm_provider_state/…_limit/…_today`,
 `llm_provider_disable_ttl_seconds` (secondes avant réactivation — couvre la
 désactivation temporaire **et** le cooldown 429/5xx, valeur = max des deux
 TTL), files de batch (`llm_task_queue_depth{batch_key}` et son agrégat
 `llm_task_queue_depth_by_category{category}` — ticket 010 : lit d'un coup d'œil
 `itinary_multi_agent` vs `stm_reflection`, la donnée du diagnostic du 2026-08-03),
-workers Celery, métriques métier worker (`llm_transport_mode_chosen_total`,
-`llm_mode_by_distance_total` — 7 tranches jusqu'à `>50km`,
-`llm_mode_by_provider_total`, `llm_chosen_index_total`), `alarme_total` (part worker).
+workers Celery, `alarme_total` (part worker). Les **métriques métier** du worker
+(`llm_transport_mode_chosen_total`, `llm_mode_by_distance_total` — 7 tranches jusqu'à
+`>50km`, `llm_mode_by_provider_total`, `llm_chosen_index_total`,
+`llm_mode_probability_pct_total`) ne sont plus déclarées par le gateway depuis le
+2026-09-07 (ticket 037) : elles vivent dans `packages/mobility_llm/src/mobility_llm/__init__.py`
+(`MetricFamilySpec`) et s'enregistrent auprès de lui par l'entry point
+`llm_gateway.categories` — le gateway ne connaît plus un seul mot de mobilité.
 Depuis que le LLM renvoie une **distribution** de probabilités (cf.
 `docs/arch/llm-inference.md`), `llm_transport_mode_chosen_total` et
 `llm_chosen_index_total` portent l'option **la plus probable** (le tirage a lieu côté
@@ -113,7 +117,7 @@ contrôleur) ; `llm_mode_probability_pct_total{mode}` cumule la masse de probabi
 mode canonique — c'est la répartition *attendue*, dont `trip_mode_by_purpose_total`
 donne la réalisation tirée.
 
-**Contrôleur** (`llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
+**Contrôleur** (`services/llm-agents/`) : init/pile/backpressure/drain/stuck, famille EDF
 (ticket 003), composition de la pile (ticket 010 :
 `controller_pending_reflections` = réflexions STM en file EDF ou en vol,
 `controller_overdue_decisions` = décisions plan/refill à échéance sim dépassée —
@@ -159,11 +163,11 @@ Prometheus ne stocke que du numérique. Les messages d'erreur bruts vivent dans
 un **ring buffer Redis** plafonné (`llm:recent_errors`, 50 entrées) :
 
 - écriture : `RedisMetricsSink.push_error()`, appelé au point de capture d'erreur
-  du worker (`llm_gateway/src/llm_gateway/worker/task_worker.py`) ;
-- lecture : `GET /errors/recent?limit=N` (`llm_gateway/src/llm_gateway/api/routes.py`) ;
+  du worker (`packages/llm_gateway/src/llm_gateway/worker/task_worker.py`) ;
+- lecture : `GET /errors/recent?limit=N` (`packages/llm_gateway/src/llm_gateway/api/routes.py`) ;
 - affichage : datasource *Infinity* (`yesoreyeram-infinity-datasource`, installée
   via `GF_INSTALL_PLUGINS`), provisionnée dans
-  `grafana/provisioning/datasources/prometheus.yml` — dashboards 01 et 04.
+  `infra/grafana/provisioning/datasources/prometheus.yml` — dashboards 01 et 04.
 
 ## Réglages
 
