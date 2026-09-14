@@ -377,14 +377,15 @@ D et E peuvent être développés en parallèle de B et C — ils n'en dépenden
 - [x] `data/weather/Codes meteo.csv` porte une colonne `Condition_EN` pour ses 47 conditions,
       `Condition` étant laissée intacte pour les historiques.
 - [x] Les prompts portent des noms génériques ; `_ancien_nom` permet de relire les traces archivées.
-- [ ] `make campagne-lancer` rejoue **les 10 expériences LLM**, se met en sommeil à l'épuisement
-      des quotas et **reprend d'elle-même au renouvellement, là où elle s'était arrêtée**.
+- [x] `make campagne-lancer` rejoue **les 22 expériences** (14 témoins puis 8 LLM — voir le
+      lot D ci-dessous pour le passage de 10 à 22), se met en sommeil à l'épuisement des
+      quotas et **reprend d'elle-même au renouvellement, là où elle s'était arrêtée**.
 - [x] La garde D-7 a statué : **comparables en l'état**. Les 14 témoins ne lisent aucun prompt,
       et la v6 porte les mêmes 1 000 `person_id` et 0 chaîne d'activité différente sur 1 000
       (motifs, horaires et lieux compris) que la v5 archivée.
-- [ ] L'onglet 🔁 Campagne affiche l'avancement, le temps avant renouvellement, et les échecs.
-- [ ] `docs/arch/plateforme-experiences.md` et `docs/arch/dashboard.md` sont à jour ;
-      `docs/changelog.md` porte l'entrée.
+- [x] L'onglet 🔁 Campagne affiche l'avancement, le temps avant renouvellement, et les échecs.
+- [x] `docs/arch/plateforme-experiences.md` (§ 6 sexies) et `docs/arch/dashboard.md` sont à
+      jour ; `docs/changelog.md` porte l'entrée.
 - [ ] Le § 4.3 de l'article justifie l'anglais avec les références du § 1.3 **et** énonce les
       réserves du même paragraphe. *(Soumis au verrou de l'article.)*
 
@@ -416,8 +417,8 @@ D et E peuvent être développés en parallèle de B et C — ils n'en dépenden
 | **C-2** — scellement v6 | ✅ **fait** | — |
 | **C-3** — `experiments.yaml` | ✅ **fait** | — |
 | **C-4/5/6** — renommage | ✅ **fait** | — |
-| **D** — pipeline de campagne | ⬜ **à faire** | tout |
-| **E** — onglet 🔁 Campagne | ⬜ **à faire** | tout |
+| **D** — pipeline de campagne | ✅ **fait** | — |
+| **E** — onglet 🔁 Campagne | ✅ **fait** | — |
 
 ### Lot A — fait
 
@@ -509,6 +510,40 @@ champs traduits et les prénoms, désormais tirés d'une graine.
 L'étape 4 s'est mise à router 33 420 paires au lieu de 3 258, et l'étape 7 aurait exporté le
 vivier de 10 000 sous le nom de la cohorte de 1 000. L'état est maintenant consigné après 3ter
 et relu à la reprise ; sans lui, l'outil **refuse** au lieu de deviner.
+
+### Lots D et E — faits, et trois choses que le ticket n'avait pas vues
+
+**La campagne porte 22 expériences, pas 10.** Le ticket écartait les 14 témoins déterministes
+parce qu'ils ne lisent aucun prompt — ce qui est juste. Mais il a été écrit avant que le lot A
+ne vide la plateforme : **leurs résultats ne vivent plus que dans l'archive froide**, que la
+doctrine interdit de référencer. Ne rejouer que les 10 bras LLM aurait donné des scores sans
+rien en face. Ils sont gratuits (aucun appel LLM) et passent en première phase. La sonde
+`escort66` (2 expériences) est écartée : hors protocole, décision du 2026-09-14.
+
+**Les définitions ont dû être recréées, pas rejouées.** `data/experiences/` était vide.
+`scripts/migrations/definir_experiences_v6.py` LIT les YAML archivés comme **spécification**
+(températures, graines, tolérances) et ÉCRIT des définitions neuves — cohorte v6, jeu v6, noms
+de variantes traduits lus dans `_ancien_nom`. Rien n'est copié depuis l'archive, et
+`executions_connues` repart vide : la v6 n'a pas d'histoire. Les 22 sont validées par la
+plateforme elle-même (`experiences definir`, schéma strict et nom calculé).
+
+**L'archive froide n'était pas froide — un montage Docker suit l'inode, pas le nom.**
+Le lot A *déplace* `data/experiences/` et `data/jeux/`. Les conteneurs déjà démarrés ont
+continué de lire leurs 26 définitions et d'écrire dans les dossiers déplacés, c'est-à-dire
+**dans l'archive**. Le garde de `froid.py` ne pouvait rien voir : il inspecte des chemins, et le
+conteneur ne voit que `/app/data/…`. Constaté en construisant le jeu v6, qui a écrit 2 Mo dans
+l'archive. Corrigé : le script d'archivage redémarre `controller`, `api` et `worker` dès qu'il
+déplace quelque chose, et le dit ; fail-open, avec la commande à lancer à la main si Docker
+manque.
+
+**Et un quatrième, sur le nommage.** Les noms d'expériences étaient tronqués en silence à 64
+caractères, perdant leur queue — `nosim`, `noret`, `nochn` : les segments qui disent ce que la
+mesure a coupé. Mesuré sur la campagne v6 : 12 noms sur 22 tronqués, 2 réduits au même nom.
+`LONGUEUR_MAX` passe à 128, et `dashboard.campagne.libelle()` rend chaque nom lisible **depuis
+sa définition** plutôt qu'en le redécoupant.
+
+**Ce qui n'a PAS été lancé.** Aucune expérience. Les 22 définitions existent et sont validées ;
+le lancement est laissé à l'auteur (décision du 2026-09-14 : préserver le quota de jetons).
 
 ### Ce que la bascule a appris sur le dépôt
 

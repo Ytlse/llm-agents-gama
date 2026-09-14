@@ -1,3 +1,91 @@
+## [2026-09-14] Une campagne se mène toute seule, à travers les quotas
+
+Rejouer le protocole, c'est vingt-deux expériences qui s'étalent sur plusieurs jours, séparées
+par des renouvellements de quota qui tombent la nuit. Jusqu'ici il fallait être là pour lancer
+la suivante. Une **campagne** est maintenant un objet du dépôt : un lot nommé d'expériences,
+mené jusqu'au bout.
+
+```
+make campagne-lancer NOM=bascule_anglaise_v6 ESTIMER=1   # le budget, sans rien dépenser
+make campagne-lancer NOM=bascule_anglaise_v6             # et on la laisse tourner
+make campagne-etat   NOM=bascule_anglaise_v6             # où en est-elle, et quand reprend-elle
+```
+
+**Les témoins d'abord.** La campagne avance par phases, et la suivante ne démarre que si la
+précédente est close. Les quatorze témoins déterministes — tirage au hasard, tout-voiture,
+durée minimale, et les quatre modèles ajustés — ne passent aucun appel LLM : ils passent en
+premier, en quelques minutes. Si le substrat est cassé, on l'apprend gratuitement, avant
+d'avoir dépensé le moindre quota.
+
+**Quand tout dort, elle le dit.** Une exécution seule savait déjà attendre sa fenêtre de quota.
+Ce qui manquait, c'est le niveau du lot : quand **toutes** les exécutions en vol attendent, la
+campagne consigne l'heure de réveil et reprend ensuite **à l'expérience courante**, jamais au
+début.
+
+**Avant :** « la machine ne fait rien depuis quatre heures, est-ce qu'elle est bloquée ? »
+**Après :** `💤 en sommeil — réveil à 2026-09-15T07:00:00+00:00 (dans 4,1 h). La reprise se fera
+sur l'expérience courante.`
+
+Un échec ne fait pas tomber le reste : après deux tentatives, l'expérience est déclarée en
+échec avec son motif, une `[ALARME]` est levée, et la campagne continue. L'état survit à un
+redémarrage — il est réécrit atomiquement à chaque transition.
+
+**Un onglet 🔁 Campagne** montre tout cela : avancement par phase, expérience en cours et sa
+durée, temps restant avant le prochain renouvellement, historique des sommeils, échecs avec
+leur motif. Les noms d'expériences, qui sont calculés et illisibles à l'œil
+(`exp_gemini-35-fl_proexp04_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim`), y sont rendus en
+clair — **depuis leur définition**, pas en redécoupant le nom.
+
+**Un piège refermé au passage, et il mordait en silence.** L'archivage à froid *déplace* des
+dossiers. Or un montage Docker suit l'**inode**, pas le nom : les conteneurs déjà démarrés
+continuaient de lire leurs 26 définitions et d'écrire leurs nouveaux jeux **dans l'archive**,
+que le garde-fou ne pouvait pas voir — il inspecte des chemins, et le conteneur ne voyait que
+`/app/data/…`. L'archivage redémarre désormais les services concernés dès qu'il déplace quelque
+chose.
+
+Les noms d'expériences étaient par ailleurs **tronqués en silence** au-delà de 64 caractères, et
+ce qu'ils perdaient était leur queue — `nosim`, `noret`, `nochn`, c'est-à-dire les segments qui
+disent ce que la mesure a coupé. Mesuré sur la campagne v6 : douze noms sur vingt-deux
+tronqués, deux réduits au même nom. La limite passe à 128.
+
+---
+
+## [2026-09-14] Le ticket du substrat se referme, et ce qu'il n'a pas exécuté prend son propre numéro
+
+Le ticket 045 portait deux choses très différentes : réparer le substrat — une seule cohorte, une
+seule empreinte, une base v1 archivée — et publier des mesures. La première est faite depuis le
+11 septembre. La seconde ne l'était pas, et gardait ouvert un ticket dont l'essentiel était clos.
+
+**Le 045 est clos.** Ce qu'il a livré reste chez lui : la cause racine du substrat divergent, la
+journée qui se referme à 3 299 déplacements au lieu de 2 405, la base v1 archivée, le jeu de
+déplacements et les quatorze exécutions gratuites du 2×2 chaîne / anticipation.
+
+**Le ticket 076 reprend les trois chantiers non exécutés**, et rien d'autre :
+
+- **Ce qu'une comparaison de bras publie** (gratuit) — les parts modales des deux façons, toutes
+  décisions et hors décisions à itinéraire unique, chacune avec son effectif ; le compte de choix
+  forcés par bras, remonté du compteur existant et non recalculé ; la comparaison terme à terme
+  faite sur l'intersection des déplacements réellement décidés, périmètre déclaré. C'est
+  exactement ce qui manquait pour lire les mesures du 11 septembre : neuf points de part voiture
+  venaient de la contrainte de chaîne et non d'un choix de modèle, et aucune sortie ne le disait.
+- **L'empreinte de population à côté du bouton de lancement** (gratuit) — visible **avant** de
+  lancer ce que la garde de cohérence refuserait **pendant**. D'autant plus utile que la cohorte
+  vient de changer.
+- **Les six bras payants du prompt minimal** — suspendus au jeu v6, au pipeline de campagne du
+  074, et à un GO explicite. Vérification faite sur l'archive : trois des six modèles n'ont
+  aucune définition (Claude Opus, les deux Mistral) et les trois Gemini sont déjà dans la campagne
+  du 074. Les jouer deux fois était le piège, il est écrit dans le ticket.
+
+**Avant :** un ticket « en cours » dont quatre lots sur cinq étaient livrés, et dont le reste
+nommait une cohorte partie à l'archive froide.
+**Après :** un ticket clos, un ticket neuf à trois lots dont deux ne dépendent de rien, et le
+troisième explicitement tenu derrière un GO.
+
+Effet sur le classement : le 076 entre à 7/10, porté par ses lots 1 et 2 — spécifiés règle par
+règle, avec leur test, et sans rien toucher de ce qui décide.
+
+---
+
 ## [2026-09-14] Trois statuts de tickets qui mentaient, dont un contre lui-même
 
 Le triage du 14 septembre classait les 36 tickets ouverts par faisabilité et sûreté. Relu le

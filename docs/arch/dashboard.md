@@ -1098,6 +1098,51 @@ repli compte : une variante inconnue laissée telle quelle ferait retomber le s�
 premier choix, `b0_pristine`, au lieu du prompt actif — une substitution silencieuse qui finirait
 écrite dans `experience.yaml`.
 
+## Onglet « 🔁 Campagne » (ticket 074, lot E)
+
+Une campagne dure des jours et passe l'essentiel de son temps à **attendre**. La question que
+se pose celui qui ouvre cette page n'est donc pas « ça tourne ? » mais **« qu'est-ce qui reste,
+et quand ? »**. Tout le volet répond à celle-là.
+
+| Ce qui est montré | D'où ça vient |
+|---|---|
+| avancement global et par phase, barre | les `etat.json` des exécutions, lus sur le disque |
+| expérience en cours, et depuis combien de temps | `campagnes/<nom>/etat.json` |
+| temps restant avant le prochain renouvellement de quota | `llm_gateway.core.quota.next_quota_reset` |
+| historique des mises en sommeil, durée cumulée | `etat.json`, champ `sommeils` |
+| expériences en échec, avec leur motif | `etat.json`, champ `echouees` |
+| Lancer · Arrêter · Budget | cibles `make`, par le registre de jobs |
+
+**Lecture seule, sauf trois boutons.** Le volet lit des fichiers ; il n'importe pas la pile du
+contrôleur, pour la même raison qu'`experiences.py` : le tableau de bord doit s'ouvrir même
+quand les conteneurs sont éteints.
+
+**Il ne recalcule rien.** Si `etat.json` dit qu'une expérience est faite, elle est affichée
+faite. La vérité de l'avancement vit dans le pilote, pas dans la page — deux sources de vérité
+pour un même chiffre finissent toujours par diverger.
+
+### Les noms sont rendus lisibles depuis leur DÉFINITION
+
+Un nom d'expérience est calculé et abrégé : `exp_gemini-35-fl_proexp04_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim`.
+Personne ne lit ça à l'œil. `campagne.libelle()` rend
+
+> gemini-3.5-flash-lite · T=0.0 · prompt prompt_expert_04 · cohorte population_1000_AAMAS_v6 ·
+> jeu population_1000_AAMAS_v6_20260316_EN · sans simulateur
+
+en lisant **`experience.yaml`**, pas en redécoupant le nom. Relire le nom pour le gloser
+reviendrait à écrire un second décodeur, qui dériverait du premier à la première retouche des
+abréviations. Le nom brut reste affiché dans sa propre colonne — c'est lui qui sert de `EXP=`
+en ligne de commande. Sans définition (expérience archivée, nom lu dans un vieil état), le nom
+brut est rendu tel quel : mieux vaut un nom brut qu'une glose fausse.
+
+### Garde d'exception (E-5)
+
+Le rendu est enveloppé dans un `try/except` qui affiche l'erreur **dans cet onglet**. Sans
+elle, une faute de frappe ici interromprait le script Streamlit et ferait disparaître l'onglet
+voisin avec celui-ci — le précédent est documenté plus haut, sur `tickets_status.yaml`.
+
+---
+
 ## Onglet « 🗂️ Mes travaux »
 
 Le suivi personnel de l'avancement : quelles fiches du plan sont réellement **faites**,

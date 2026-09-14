@@ -1,0 +1,43 @@
+# Ticket 074, lot D — campagne de bascule anglaise.
+# La sonde `escort66` (2 expériences) est volontairement absente : hors protocole,
+# et son substrat dérivé n'a pas été refait en v6 (décision du 2026-09-14).
+nom: bascule_anglaise_v6
+version: campagne1
+note: 'Rejeu du protocole sur la cohorte v6, en anglais (ticket 074). Les quatorze témoins déterministes
+  passent d''abord : ils ne consomment aucun quota, et sans eux les bras LLM n''auraient aucune échelle
+  à laquelle se lire — leurs résultats de la v5 sont partis à l''archive froide, qui ne se référence plus.'
+substrat:
+  population: data/population/population_1000_AAMAS_v6
+  jeu: population_1000_AAMAS_v6_20260316_EN
+  sceau: 412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6
+phases:
+- nom: temoins
+  raison: Aucun appel LLM, quelques minutes. S'ils échouent, le substrat est en cause et on l'apprend
+    avant d'avoir dépensé le moindre quota.
+  experiences:
+  - exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_durmin_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_durmin_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_klr_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_klr_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_lgbm_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_lgbm_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_majvoiture_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_majvoiture_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_mnl_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_mnl_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+  - exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
+  - exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
+- nom: llm
+  raison: Consomment du quota. La campagne dort à l'épuisement et reprend à l'expérience courante au renouvellement,
+    jamais au début.
+  experiences:
+  - exp_agy-gemini-38-f_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_a600_t0_nosim
+  - exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-35-fl_proexp04_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-35-fl_proexp06_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-35-fl_proexp08_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+  - exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim

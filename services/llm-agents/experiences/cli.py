@@ -862,6 +862,123 @@ def cmd_ordonnancer(a: argparse.Namespace) -> int:
     return boucle(intervalle_s=a.intervalle)
 
 
+# ── Campagne (ticket 074, lot D) ─────────────────────────────────────────────
+
+
+def cmd_campagne_lancer(a: argparse.Namespace) -> int:
+    from experiences import campagne as C
+
+    if a.estimer:
+        return _campagne_estimer(a.nom)
+    return C.lancer(a.nom, reprendre=not a.recommencer, intervalle_s=a.intervalle)
+
+
+def _campagne_estimer(nom: str) -> int:
+    """Le budget de la campagne, AVANT d'enfiler quoi que ce soit (D-8).
+
+    Volontairement LÉGER, et c'est un choix : `estimer` complet a besoin du moniteur de la
+    passerelle et des contrôles de lancement, donc du conteneur. La campagne, elle, pilote
+    depuis l'hôte. On lit donc ce qui suffit à décider — le nombre de déplacements couverts
+    du jeu, qui EST le nombre de sollicitations (`experience.estimer`, unité « déplacement »),
+    et le type de décideur, qui dit si ces sollicitations coûtent du quota.
+
+    Ce que ça ne remplace pas : `make experience-estimer EXP=<nom>` reste la mesure de
+    référence pour une expérience, jetons et fenêtre de quota compris. Ici on répond à une
+    seule question — « combien la campagne va-t-elle coûter en tout ? » — et on dit avec
+    quoi on y répond.
+    """
+    from experiences import campagne as C
+
+    camp = C.charger(nom)
+    total, par_phase = 0, []
+    print(f"Budget de la campagne {camp.nom!r} — {len(camp.toutes)} expériences")
+    for phase in camp.phases:
+        appels_phase = 0
+        print(f"\n  ── phase {phase.nom} ({len(phase.experiences)}) ──")
+        for exp_nom in phase.experiences:
+            try:
+                exp = _charger_experience_par_nom(exp_nom)
+                jeu = J.Jeu.charger(
+                    E.dossier_jeux() / exp.jeu.nom, verifier=False
+                )
+                couverts = int(jeu.couverture()["deplacements_couverts"])
+            except Exception as err:  # noqa: BLE001 — un devis raté ne bloque pas le total
+                print(f"     {exp_nom:58s}  devis impossible : {err}")
+                continue
+            # Seul un décideur qui passe par un fournisseur consomme du quota. Les témoins
+            # déterministes et les modèles ajustés tournent en local, à zéro appel.
+            avec_quota = exp.decideur.type in ("passerelle", "antigravity")
+            appels = couverts if avec_quota else 0
+            appels_phase += appels
+            marque = f"{appels:>7d} appel(s) LLM" if avec_quota else "      0 (local)"
+            print(f"     {exp_nom:58s}  {marque}")
+        par_phase.append((phase.nom, appels_phase))
+        total += appels_phase
+
+    print("\n  ── total ──")
+    for nom_phase, appels in par_phase:
+        print(f"     {nom_phase:58s}  {appels:>7d} appel(s) LLM")
+    print(f"     {'CAMPAGNE':58s}  {total:>7d} appel(s) LLM")
+    print("\n  Source : déplacements couverts du jeu de chaque expérience "
+          "(mêmes chiffres que `experience-estimer`, champ `sollicitations`).")
+    return 0
+
+
+def cmd_campagne_etat(a: argparse.Namespace) -> int:
+    from experiences import campagne as C
+
+    vue = C.etat_lisible(a.nom)
+    if a.json:
+        print(json.dumps(vue, ensure_ascii=False, indent=1))
+        return 0
+    etat = vue["etat"]
+    print("═" * 86)
+    print(f"Campagne {vue['nom']}  ·  {len(vue['faites'])}/{vue['total']} faites")
+    print("═" * 86)
+    if vue["note"]:
+        print(f"{vue['note']}\n")
+    for phase in vue["phases"]:
+        fait, tot = len(phase["faites"]), len(phase["experiences"])
+        barre = "█" * int(20 * fait / tot) + "·" * (20 - int(20 * fait / tot))
+        print(f"  {phase['nom']:12s} [{barre}] {fait}/{tot}")
+    if etat is None:
+        print("\nJamais lancée. `make campagne-lancer NOM=" + vue["nom"] + "`")
+        return 0
+    print(f"\n  phase courante : {etat.get('phase_courante')}")
+    print(f"  en cours       : {etat.get('courante') or '—'}")
+    print(f"  démarrée le    : {etat.get('demarree_le')}  ·  maj {etat.get('maj')}")
+    if etat.get("terminee_le"):
+        print(f"  TERMINÉE le    : {etat['terminee_le']}")
+    if vue["arret_demande"]:
+        print("  ⏹ arrêt demandé — l'exécution en cours se termine seule.")
+    sommeils = etat.get("sommeils") or []
+    if sommeils:
+        cumul = sum(s.get("duree_s") or 0 for s in sommeils) / 3600
+        print(f"  sommeils       : {len(sommeils)} ({cumul:.1f} h cumulées) ; "
+              f"dernier jusqu'à {sommeils[-1].get('jusqu')}")
+    print(f"  prochain renouvellement de quota : {vue['prochain_reveil']} "
+          f"(dans {vue['secondes_avant_reveil'] / 3600:.1f} h)")
+    echecs = etat.get("echouees") or {}
+    if echecs:
+        print(f"\n  ⚠ {len(echecs)} en échec :")
+        for exp_nom, det in echecs.items():
+            print(f"     {exp_nom:60s} {det.get('motif')} "
+                  f"({det.get('tentatives')} tentative(s))")
+    print("\n  état par expérience :")
+    for exp_nom, st in vue["par_experience"].items():
+        print(f"     {st['etat']:18s} {exp_nom}")
+    return 0 if not echecs else 1
+
+
+def cmd_campagne_arreter(a: argparse.Namespace) -> int:
+    from experiences import campagne as C
+
+    C.arreter(a.nom)
+    print(f"Arrêt demandé pour la campagne {a.nom!r}. "
+          "L'exécution en cours se termine ; aucune autre ne sera lancée.")
+    return 0
+
+
 def construire_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="experiences",
@@ -1032,6 +1149,26 @@ def construire_parser() -> argparse.ArgumentParser:
     )
     s.set_defaults(fn=cmd_ordonnancer)
     s.add_argument("--intervalle", type=float, default=5.0)
+
+    s = sub.add_parser(
+        "campagne-lancer", help="mène une campagne à son terme (ticket 074, lot D)"
+    )
+    s.set_defaults(fn=cmd_campagne_lancer)
+    s.add_argument("--nom", required=True)
+    s.add_argument("--recommencer", action="store_true",
+                   help="ignore l'état existant et repart de zéro")
+    s.add_argument("--estimer", action="store_true",
+                   help="dit le budget et sort, sans rien enfiler")
+    s.add_argument("--intervalle", type=float, default=30.0)
+
+    s = sub.add_parser("campagne-etat", help="avancement d'une campagne")
+    s.set_defaults(fn=cmd_campagne_etat)
+    s.add_argument("--nom", required=True)
+    s.add_argument("--json", action="store_true")
+
+    s = sub.add_parser("campagne-arreter", help="arrête une campagne proprement")
+    s.set_defaults(fn=cmd_campagne_arreter)
+    s.add_argument("--nom", required=True)
 
     s = sub.add_parser("registre")
     s.set_defaults(fn=cmd_registre)

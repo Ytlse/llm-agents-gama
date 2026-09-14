@@ -24,8 +24,23 @@ from experiences.chemins import racine_depot
 
 # Ce que le nom doit satisfaire : il devient un dossier ET la valeur de `EXP=` que `make`
 # développe sans guillemets dans un shell (N9). Même motif que `dashboard/experiences.py`.
-MOTIF_NOM = re.compile(r"^[^\W_][\w.\-]{0,63}$", re.UNICODE)
-LONGUEUR_MAX = 64
+MOTIF_NOM = re.compile(r"^[^\W_][\w.\-]{0,127}$", re.UNICODE)
+
+# 128 depuis le ticket 074, et c'est une correction de défaut, pas un confort. À 64, un nom
+# qui dépassait était TRONQUÉ en silence — et ce qu'il perdait était sa queue, c'est-à-dire
+# les segments d'identité les plus tardifs : `nosim`, `noret`, `nochn`. Mesuré au moment de
+# créer la campagne v6 : 12 définitions sur 22 tronquées, la plus longue à 81 caractères,
+# deux d'entre elles réduites au même nom. Un nommage calculé dont la promesse est « le nom
+# dit les paramètres » ne peut pas couper les paramètres pour tenir dans le nom.
+#
+# Le segment qui a fait déborder est `jeu-…`, qui n'apparaît que pour un jeu hors convention
+# `<population>_<AAAAMMJJ>` — la v6 porte `_EN` pour dire l'anglais, donc il apparaît.
+#
+# 128 plutôt que le strict nécessaire (81) : la marge est là pour que le prochain segment
+# d'identité n'ait pas à rouvrir ce débat. Un nom de dossier de 128 caractères tient sur
+# tous les systèmes de fichiers visés, et il n'est de toute façon pas fait pour être lu à
+# l'œil — c'est `dashboard.campagne.libelle()` qui le rend lisible.
+LONGUEUR_MAX = 128
 PREFIXE = "exp"
 
 # Budget du slug de modèle (N4). Au-delà, les mots sans chiffre tombent à leur initiale :

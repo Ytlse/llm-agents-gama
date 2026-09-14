@@ -187,8 +187,14 @@ PIECES = SURFACES_COPIEES + SUBSTRAT_DEPLACE
 CONSTATS = (
     "experiments/ — aucun dossier n'est cité par l'article (seul `experiments/current` apparaît, "
     "et il est vide). Rien à déplacer de ce côté.",
-    "scripts/synthesis/frames.py et scripts/progedo_logit/ — libellés d'occupation NON archivés "
-    "et NON traduits : ce sont des clés de jointure (B-7). La traduction se fait à l'affichage.",
+    "scripts/synthesis/frames.py et scripts/progedo_logit/ — les IDENTIFIANTS d'occupation "
+    "(`actif_temps_plein`) ne sont ni archivés ni traduits : ce sont des clés de jointure, et "
+    "`prompt_calibration/` les lit aussi. Le LIBELLÉ servi au modèle, lui, est passé à l'anglais "
+    "et la jointure se fait par `population_reference.occupation_enquete` — à la frontière, pas "
+    "à l'affichage (corrigé le 2026-09-14 : traduire à l'affichage aurait laissé la valeur "
+    "française dans le trait).",
+    "Les montages Docker suivent l'inode, pas le nom : tout DÉPLACEMENT laisse les conteneurs "
+    "déjà démarrés lire et écrire dans l'archive. D'où le réancrage en fin de course.",
 )
 
 # A-3 — les chiffres de l'article qui dérivent de ce qui est gelé ici. Écrits à la main parce
@@ -507,6 +513,55 @@ def ecrire_manifeste(journal: Journal, *, verifier: bool) -> None:
     )
 
 
+# ── Réancrage des montages Docker ────────────────────────────────────────────
+
+#: Services dont un volume pointe sur un dossier que l'archive DÉPLACE.
+#: Les nommer ici plutôt que de redémarrer toute la pile : un redémarrage d'OTP coûte
+#: plusieurs minutes de rechargement de graphe, pour rien.
+SERVICES_A_REANCRER = ("controller", "api", "worker")
+
+
+def reancrer_montages(*, verifier: bool) -> None:
+    """Redémarre les services dont un montage pointe sur un dossier déplacé.
+
+    POURQUOI C'EST INDISPENSABLE, et ça a été appris à la dure le 2026-09-14. Un montage
+    bind de Docker suit l'**inode**, pas le chemin. `shutil.move("data/experiences", …)`
+    renomme l'entrée de répertoire : sur l'hôte, `data/experiences` n'existe plus ; dans
+    le conteneur déjà démarré, `/app/data/experiences` désigne toujours le MÊME inode,
+    c'est-à-dire le dossier maintenant rangé sous `archive/`.
+
+    Le résultat n'est pas une erreur, c'est pire : la plateforme continue de tourner,
+    lit ses 26 définitions et écrit ses nouveaux jeux **dans l'archive froide**, que le
+    garde-fou `experiences.froid` ne peut pas voir — il inspecte les chemins, et le
+    conteneur, lui, ne voit que `/app/data/…`. Une archive « plus jamais référencée »
+    restait donc la seule chose que le dispositif référençait.
+
+    Fail-open : Docker absent ou pile éteinte n'est pas une anomalie (l'archivage doit
+    pouvoir tourner sur une machine sans conteneur). On le DIT, et l'archivage continue.
+    """
+    if verifier:
+        print(f"\n[réancrage] {', '.join(SERVICES_A_REANCRER)} seraient redémarrés "
+              "(un montage bind suit l'inode, pas le nom).")
+        return
+    argv = ["docker", "compose", "-f", str(RACINE / "infra" / "docker-compose.yml"),
+            "--project-directory", str(RACINE), "restart", *SERVICES_A_REANCRER]
+    print(f"\n[réancrage] redémarrage de {', '.join(SERVICES_A_REANCRER)} — sans quoi "
+          "les conteneurs continueraient d'écrire dans l'archive.")
+    try:
+        fait = subprocess.run(argv, cwd=str(RACINE), capture_output=True,
+                              text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"⚠ [réancrage] impossible ({e}). Si la pile tourne, REDÉMARREZ-LA À LA MAIN :\n"
+              f"    {' '.join(argv)}")
+        return
+    if fait.returncode != 0:
+        print(f"⚠ [réancrage] échec (code {fait.returncode}) : "
+              f"{(fait.stderr or '').strip()[:300]}\n"
+              f"    Si la pile tourne, redémarrez-la à la main : {' '.join(argv)}")
+        return
+    print("[réancrage] fait — les conteneurs voient désormais les dossiers neufs.")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -555,6 +610,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"⚠ {len(journal.absents)} entrée(s) INTROUVABLE(S) — ni en place, ni dans l'archive.")
 
     if verifier:
+        if any(e["mode"] == DEPLACEMENT for e in journal.entrees):
+            reancrer_montages(verifier=True)
         print(
             "\nRien n'a été écrit. Pour exécuter :"
             "\n    python scripts/archiver_avant_bascule_anglaise.py --appliquer"
@@ -563,6 +620,8 @@ def main(argv: list[str] | None = None) -> int:
 
     ecrire_manifeste(journal, verifier=verifier)
     journal.ecrire(ARCHIVE / "JOURNAL.json")
+    if any(e["mode"] == DEPLACEMENT for e in journal.entrees):
+        reancrer_montages(verifier=verifier)
     print(f"\nArchive écrite : {ARCHIVE.relative_to(RACINE)}/")
     print("  MANIFEST.yaml · README.md · JOURNAL.json")
     return 0

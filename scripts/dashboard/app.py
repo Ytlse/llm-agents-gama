@@ -34,12 +34,12 @@ import streamlit as st
 # est sur sys.path, mais pas la racine du dépôt — d'où les imports relatifs au
 # package quand il est disponible, absolus sinon.
 try:  # pragma: no cover
-    from scripts.dashboard import experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
+    from scripts.dashboard import campagne, experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
 except ImportError:  # pragma: no cover
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from scripts.dashboard import experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
+    from scripts.dashboard import campagne, experiences, live, makefiles, mes_travaux, metrics, palette, runner, tickets
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -1822,6 +1822,7 @@ ONGLETS = [
     ("tickets", "🎫 Tickets"),
     ("metriques", "📊 Métriques"),
     ("experiences", "🧪 Expériences"),
+    ("campagne", "🔁 Campagne"),
     ("travaux", "🗂️ Mes travaux"),
 ]
 LIBELLE_PAR_SLUG = dict(ONGLETS)
@@ -1846,7 +1847,7 @@ elif query_slug and last_synced and query_slug != last_synced and query_slug in 
 # Les libellés d'onglet ne peuvent pas être rafraîchis par un fragment : le
 # compteur de jobs vit dans la barre latérale et dans le volet Activités en cours.
 # `on_change` fait que Streamlit rejoue le script à chaque changement d'onglet.
-tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_travaux = st.tabs(
+tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_campagne, tab_travaux = st.tabs(
     [libelle for _, libelle in ONGLETS],
     key=CLE_ONGLET,
     on_change="rerun",
@@ -1898,6 +1899,19 @@ with tab_experiences:
     if _should_render("experiences"):
         experiences.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
                            arreter=REGISTRY.stop)
+with tab_campagne:
+    if _should_render("campagne"):
+        # E-5 — garde d'exception : sans elle, une faute de frappe dans ce module
+        # interromprait le script et ferait disparaître l'onglet voisin avec celui-ci
+        # (le précédent est documenté plus haut, sur `tickets_status.yaml`).
+        try:
+            campagne.render(st, pd, lancer=launch_target, jobs=REGISTRY.jobs)
+        except Exception as erreur:  # noqa: BLE001
+            st.error(f"L'onglet Campagne est en erreur, les autres restent servis : {erreur}")
+            st.caption("Le détail est dans la console du tableau de bord.")
+            import logging as _logging
+
+            _logging.getLogger(__name__).exception("onglet campagne")
 with tab_travaux:
     if _should_render("travaux"):
         mes_travaux.render(st, pd)

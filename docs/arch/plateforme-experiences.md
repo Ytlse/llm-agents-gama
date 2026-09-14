@@ -562,13 +562,32 @@ côté. `scripts/tests/test_074_archive_froide.py` verrouille la propriété plu
 promettre — c'est la leçon du ticket 045, où 36 exécutions ont lu la mauvaise cohorte sans que
 rien s'y oppose.
 
-### Ce que le gel coûte, tant que la v6 n'est pas scellée
+### Ce que le gel a coûté, et ce qu'il a rendu
 
-`data/population/` ne porte plus aucune cohorte scellée, et `data/experiences/` est vide. Une
-quarantaine de tests passent donc en **veille**, en disant pourquoi (« aucune cohorte scellée sur
-disque (substrat en archive froide, ticket 074 lot A) »), au lieu de tomber sur un `IndexError` ou
-un `FileNotFoundError` qui ferait chercher une régression du tableau de bord. Le compte de tests
-en veille est lui-même un indicateur : il doit redescendre au scellement de la v6.
+Entre l'archivage et le scellement de la v6, `data/population/` et `data/experiences/` étaient
+vides : une quarantaine de tests sont passés en **veille**, en disant pourquoi (« aucune cohorte
+scellée sur disque (substrat en archive froide, ticket 074 lot A) »), au lieu de tomber sur un
+`FileNotFoundError` qui aurait fait chercher une régression du tableau de bord. Le compte de
+tests en veille servait d'indicateur : il est redescendu de 41 à 25 au scellement de la v6.
+
+### ⚠ Un montage Docker suit l'inode, pas le nom (2026-09-14)
+
+**Le piège, et il a mordu.** L'archivage *déplace* `data/experiences/` et `data/jeux/`. Sur
+l'hôte, ces dossiers disparaissent. Dans un conteneur **déjà démarré**, `/app/data/experiences`
+désigne toujours le même inode — c'est-à-dire le dossier maintenant rangé sous `archive/`.
+
+Rien ne plante. La plateforme continue de tourner, lit ses 26 définitions et écrit ses nouveaux
+jeux **dans l'archive froide**. Le garde de `experiences.froid` ne peut rien voir : il inspecte
+des chemins, et le conteneur ne voit que `/app/data/…`, où le mot `archive` n'apparaît pas.
+Constaté en construisant le jeu v6, qui a écrit 2 Mo dans l'archive avant qu'on s'en aperçoive.
+
+**La parade** : `scripts/archiver_avant_bascule_anglaise.py` redémarre `controller`, `api` et
+`worker` dès qu'il a déplacé quoi que ce soit, et le dit. Fail-open — Docker absent n'est pas
+une anomalie — mais alors il imprime la commande à lancer à la main.
+
+**À retenir au-delà de ce ticket** : seul un *déplacement* casse un montage. L'archivage de
+`data/population/population_1000_AAMAS_v5` n'a rien cassé, parce qu'il déplaçait un ENFANT du
+dossier monté, pas le dossier lui-même.
 
 ## 6 quinquies. Nommage des variantes de prompt (ticket 074, C-4/C-5)
 
@@ -636,6 +655,65 @@ python scripts/deriver_sonde_escort.py              # écrit population + jeu d�
 Ce que la sonde mesure, et ce qu'elle ne mesure pas, s'écrit dans son `PROVENANCE.yaml` — le
 tirage étant aléatoire, elle borne la sensibilité au **libellé** et ne dit rien de la justesse de
 l'affectation. Spec : `specs/ticket_027/sonde-motif-escort.md`.
+
+## 6 sexies. La campagne (`experiences/campagne.py`, ticket 074 lot D)
+
+Une **campagne** est un lot nommé d'expériences menées jusqu'au bout, à travers plusieurs
+renouvellements de quota, sans qu'un humain relance la suivante à trois heures du matin.
+Elle **assemble** ce qui existe — elle ne réimplémente ni le lancement, ni la file, ni
+l'attente de fenêtre.
+
+    campagnes/<nom>.yaml        la définition : phases, expériences, substrat
+    campagnes/<nom>/etat.json   l'état, réécrit atomiquement à chaque transition
+    campagnes/<nom>/STOP        l'arrêt demandé, relu à chaque tour
+
+### Ce qu'elle apporte, et rien de plus
+
+**Des phases.** Une phase ne démarre que si la précédente est close. Une seule dépendance,
+et elle sert : les quatorze témoins déterministes ne consomment aucun quota, ils passent
+donc d'abord. Si le substrat est cassé, on l'apprend gratuitement.
+
+**Un sommeil au niveau du LOT.** `--attendre-fenetre` fait dormir *une* exécution. Quand
+**tout** ce qui vole dort, la campagne n'a rien à faire non plus : elle le dit, consigne
+l'heure de réveil, et reprend **à l'expérience courante**. C'est la différence entre « la
+machine est bloquée » et « la campagne attend 07:00 UTC, il reste 4 h 12 ».
+
+**Un état qui survit à un redémarrage.** Écriture atomique (`os.replace`) : un `etat.json`
+tronqué par une coupure ferait repartir la campagne du début, c'est-à-dire redépenser tout
+le quota déjà consommé.
+
+### Où ça tourne, et pourquoi
+
+Sur l'**hôte**, comme l'ordonnanceur : le lancement passe par `docker compose exec`, qui n'a
+aucun sens depuis l'intérieur du conteneur. La campagne appelle `ordonnanceur.tour()`
+elle-même — inutile de faire tourner l'ordonnanceur à côté, et le faire ne gêne pas.
+
+### Le délai de grâce, et ce qu'il évite
+
+Une expérience qu'on vient de lancer n'a pas encore écrit son `etat.json` : le temps que
+`lancer` démarre, réserve ses clés et ouvre son dossier, elle se lit encore `definie`. Sans
+délai de grâce (120 s), la campagne la relançait **à chaque tour** — et une expérience lancée
+deux fois écrase sa propre exécution. Au-delà du délai, c'est que le lancement a échoué avant
+d'ouvrir son dossier : on le dit, et on relance.
+
+### Alarmes (doctrine du dépôt, front montant)
+
+| Quand | Ce qui est dit |
+|---|---|
+| une expérience échoue 2 fois de suite | `[ALARME]` — elle est déclarée en échec, **la campagne continue sans elle** |
+| un sommeil dépasserait 26 h | `[ALARME]` — une fenêtre de quota en fait 24 ; c'est l'horloge ou les fuseaux qu'il faut regarder |
+
+### Ce qu'elle ne fait pas
+
+Elle ne juge pas un résultat : une exécution `terminee` est faite, point. Le score, la
+conformité et la comparabilité ont leurs propres outils (`score`, `registre.comparer`, règle
+P6), et les mêler à l'ordonnancement rendrait les deux illisibles.
+
+### Refus au chargement
+
+`charger()` refuse plutôt que de corriger : version inattendue, phase vide, expérience citée
+dans deux phases, expérience inexistante. La raison est toujours la même — une campagne qui
+s'arrête au milieu a déjà dépensé le quota de ce qui précède.
 
 ## 7. Interfaces utilisateur
 

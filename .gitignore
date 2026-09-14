@@ -182,6 +182,13 @@ data/jeux/
 # (un niveau de dossier de plus). Les zips non plus : ce sont des copies transportables,
 # reproductibles depuis les dossiers par `scripts/archiver_substrat_v1.py`.
 data/experiences/
+# … SAUF les définitions, que le commentaire ci-dessus annonçait déjà sans que rien ne les
+# laisse passer : `data/experiences/` avalait tout, négation comprise. Constaté au ticket 074,
+# en versionnant les 22 définitions de la campagne v6. Ce sont quelques kilo-octets, et ce sont
+# elles qui disent quoi reconstruire — sans elles, une campagne ne se rejoue pas ailleurs.
+!data/experiences/
+!data/experiences/*/
+!data/experiences/*/experience.yaml
 data/experiences/.masques.json
 services/llm-agents/data/experiences/
 # copie de services/llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)

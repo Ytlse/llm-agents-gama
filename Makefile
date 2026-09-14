@@ -1266,6 +1266,28 @@ experience-actives:
 experience-defiler:
 	$(EXPERIENCES_PY) defiler --experience $(EXP)
 
+## Campagne (ticket 074, lot D) : un lot nommé d'expériences menées jusqu'au bout, à travers
+## les renouvellements de quota. Tourne sur l'HÔTE, comme l'ordonnanceur, et l'appelle elle-même
+## — inutile de lancer `experience-ordonnancer` à côté.
+##   make campagne-lancer NOM=bascule_anglaise_v6 [ESTIMER=1] [RECOMMENCER=1] [INTERVALLE=30]
+##   make campagne-etat   NOM=bascule_anglaise_v6 [JSON=1]
+##   make campagne-arreter NOM=bascule_anglaise_v6
+## ESTIMER=1 dit le budget et sort, sans rien enfiler. RECOMMENCER=1 ignore l'état existant.
+campagne-lancer:
+	@test -n "$(NOM)" || { echo "Usage : make campagne-lancer NOM=<campagne>"; exit 1; }
+	@$(MAKE) --no-print-directory services-pretes REQUIS="$(if $(REQUIS),$(REQUIS),controller)"
+	cd services/llm-agents && .venv/bin/python -m experiences campagne-lancer --nom $(NOM) \
+	  $(if $(ESTIMER),--estimer,) $(if $(RECOMMENCER),--recommencer,) \
+	  $(if $(INTERVALLE),--intervalle $(INTERVALLE),)
+
+campagne-etat:
+	@test -n "$(NOM)" || { echo "Usage : make campagne-etat NOM=<campagne>"; exit 1; }
+	cd services/llm-agents && .venv/bin/python -m experiences campagne-etat --nom $(NOM) $(if $(JSON),--json,)
+
+campagne-arreter:
+	@test -n "$(NOM)" || { echo "Usage : make campagne-arreter NOM=<campagne>"; exit 1; }
+	cd services/llm-agents && .venv/bin/python -m experiences campagne-arreter --nom $(NOM)
+
 ## Ordonnanceur (HÔTE) : réconcilie les fantômes et démarre les expériences en file dès qu'une
 ## clé se libère. À laisser tourner (le tableau de bord le supervise aussi). Ctrl-C pour arrêter.
 experience-ordonnancer:
@@ -1308,6 +1330,8 @@ experience-statuer:
 ## Refuse aussi d'apparier une expérience invalidée ou archivée ; TOUT=1 force en rappelant le motif.
 comparer:
 	$(EXPERIENCES_PY) comparer $(A) $(B) $(if $(TOUT),--inclure-invalides,)
+
+.PHONY: campagne-lancer campagne-etat campagne-arreter
 
 .PHONY: services-pretes passerelle-recharger jeu jeu-consulter lmstudio-charger lmstudio-decharger lmstudio-etat jeu-verifier jeu-verifier-jours experience-definir experience-estimer experience-lancer experience-reprendre experience-pause experience-arreter experience-erreurs experience-file experience-actives experience-defiler experience-ordonnancer experiences-renommer registre comparer experience-statuts experience-statuer
 
