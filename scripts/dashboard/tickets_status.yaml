@@ -1866,11 +1866,21 @@ tickets:
       supprimés), documentés, zippés (57,3 Mo + 7,0 Mo + 2,2 Mo), chemins journalisés dans
       data/JOURNAL_archivage_ticket_045_2026-09-11.json. Script idempotent et vérifié :
       scripts/archiver_substrat_v1.py.
-      RESTE À FAIRE : R10-R12 (publier les parts des deux façons + compte des choix forcés par
-      bras + intersection inter-bras), R19 (empreinte de population à côté du bouton de
-      lancement), puis le jeu v5, les 14 exécutions gratuites du 2×2 qui servent aussi de
-      balayage, et enfin les 6 bras payants — sur GO explicite seulement. Questions vivantes dans
-      specs/ticket_045/questions.md, dont la règle 1 du contrat d'évaluation (fausse, bloque
+      LE JEU v5 ET LES 14 EXÉCUTIONS GRATUITES SONT FAITS le 2026-09-11 : 3 299 déplacements
+      attendus, 3 161 exploitables, ZÉRO défaillance de moteur (les 138 sans proposition ont tous
+      leur origine pour destination), sept bras joués chaîne active puis coupée — et le résultat
+      qui compte, les choix forcés vont de 279 à 811 selon le bras chaîne active, contre 44 pour
+      tous chaîne coupée. MAIS LA BASCULE ANGLAISE (ticket 074) LES A ENVOYÉS À L'ARCHIVE FROIDE
+      le 2026-09-14 : `data/jeux` et `data/experiences` sont VIDES et le code refuse de résoudre
+      l'archive. La référence est désormais la v6 — le jeu est à RECONSTRUIRE SUR LA v6. Les 14
+      témoins relèvent de la garde D-7 du 074 : la v6 ayant les mêmes chaînes d'activités que la
+      v5, la condition de rejeu n'est pas déclenchée, mais leurs exécutions ne sont plus servies
+      par la plateforme. RESTE EN PROPRE AU 045 : R10-R12 (publier les parts des deux façons +
+      compte des choix forcés par bras + intersection inter-bras), R19 (empreinte de population à
+      côté du bouton de lancement), et les 6 bras payants — sur GO explicite seulement. PÉRIMÈTRE
+      À TRANCHER : la partie exécution recouvre le lot D du 074 (pipeline de campagne) ; question
+      consignée dans specs/ticket_045/questions.md, avec les deux autres questions vivantes :
+      la règle 1 du contrat d'évaluation (fausse, bloque
       l'écriture) et `ratios_du_plan()` qui rend toujours None.
 
     triage:
@@ -1880,10 +1890,13 @@ tickets:
       motif: >-
         Révisé sur la note de statut, plus à jour que le ticket : les lots 1, 2 (partiel), 3 et 5
         sont LIVRÉS le 2026-09-11, la journée se referme (3 299 déplacements au lieu de 2 405) et
-        la suite llm-agents est à 784 verts. Le gros de ce qui pouvait casser est donc passé. Restent
-        R10-R12 (publier les parts des deux façons et le compte des choix forcés), R19, la construction
-        du jeu v5, les 14 exécutions gratuites du 2×2 — puis les 6 bras payants, sur GO explicite
-        seulement. Reste bloquant pour tout chiffre de l'article.
+        la suite llm-agents est à 784 verts. Le gros de ce qui pouvait casser est donc
+        passé. Le jeu et les 14 exécutions gratuites ont tourné le 2026-09-11, puis sont partis à
+        l'archive froide avec la bascule du 074 : à reconstruire SUR LA v6. Restent en propre
+        R10-R12 (publier les parts des deux façons et le compte des choix forcés), R19, et les 6
+        bras payants sur GO explicite. Reste bloquant pour tout chiffre de l'article, et son
+        périmètre d'exécution recouvre le lot D du 074 — à trancher avant de reprendre l'un ou
+        l'autre.
       date: '2026-09-14'
   ticket_046_asymetrie_informationnelle_du_contrat_d_evaluation:
     status: à faire
@@ -1976,7 +1989,9 @@ tickets:
     status: en cours
     category: Expériences & Cognition
     note: >-
-      Ouvert le 2026-09-11 à la demande de l'auteur, rien n'est lancé. Préalable BLOQUANT de
+      Ouvert le 2026-09-11 à la demande de l'auteur ; LES TROIS POINTS DE CODE SONT LIVRÉS le
+      2026-09-11 (détail en fin de note), le reste tient à une mesure aujourd'hui impossible.
+      Préalable BLOQUANT de
       l'architecture mémoire proposée (docs/arch/memory-stm-ltm.md, partie III) : il ne
       construit aucun de ses quatre lots, il tranche les trois points qui touchent au protocole
       de mesure. (1) CORRIGÉ le 2026-09-11 après relecture de l'auteur : la première rédaction
@@ -2033,10 +2048,13 @@ tickets:
       surete: 3
       jeux_de_test: false
       motif: >-
-        ÉCART À TRANCHER : le ticket 071 § 2.0 porte les trois décisions comme LIVRÉES le 2026-09-11
-        (plancher journalier à 22 h dans simulation_controller.py, min-max supprimée et constante
-        d'oubli en jours dans longterm.py / settings.py), quand la note de statut du 048 dit encore
-        "rien n'est lancé". L'un des deux se périme. Ce qui reste vrai dans les deux lectures :
+        ÉCART LEVÉ le 2026-09-14, vérifié dans le code : le 071 § 2.0 avait raison, les trois
+        décisions y sont — plancher journalier à 22 h (`settings.py:497-498`, branche « plancher »
+        de `simulation_controller.py:1654`), normalisation min-max abandonnée au profit de valeurs
+        absolues (`longterm.py:862`), constante d'oubli EN JOURS
+        (`long_term_retrieval__force_base_jours = 2.8`, `settings.py:534`). Le conflit n'était pas
+        entre deux tickets mais DANS la note du 048, dont la première phrase disait « rien n'est
+        lancé » quand sa fin disait « LIVRÉ ». Corrigé. Ce qui reste vrai dans les deux lectures :
         le taux d'entrées par agent-jour n'est mesurable sur aucun run exploitable — les runs récents
         sont hors simulateur et ne portent aucune observation.
       date: '2026-09-14'
@@ -2810,7 +2828,7 @@ tickets:
         méthodologique. Le cadrage culturel explicite, lui, modifierait `prompts.yaml`.
       date: '2026-09-14'
   ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne:
-    status: à faire
+    status: en cours
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-14. Bascule de tout le dispositif en anglais (prompts, gabarits, couche de
@@ -2825,19 +2843,35 @@ tickets:
       renforcement du cadrage territorial est écarté, et la traduction couvre les 22 variantes.
       Traduction confiée a Claude (Q5), a declarer dans l'annexe du ticket 069. Inventaire
       exhaustif dans specs/ticket_074/inventaire_traduction.md. Aucune question ouverte :
-      le ticket est executable en l'etat, a traiter dans une session dediee. Lot A (archive
-      froide) bloquant — rien ne bouge avant le gel de l'etat francais.
+      le ticket est executable en l'etat, a traiter dans une session dediee. Lot A (archive froide) bloquant — rien ne bouge avant le gel de l'etat francais. AVANCEMENT
+      AU 2026-09-14 (§ 10 du ticket) : lots A, B, C-1, C-1b, C-2, C-3 et C-4/5/6 LIVRÉS. Archive
+      froide de 503 Mo avec le sha256 de chaque pièce et le commit du gel, refus posé aux trois
+      points de passage obligés (cohorte, jeu, prompt) et prouvé par test ; sept surfaces
+      traduites ; cohorte v6 scellée qui REPRODUIT LA v5 AU CHIFFRE PRÈS (mêmes 1 000 personnes,
+      499 ménages, mêmes chaînes d'activités, mêmes dix marges à la décimale), seuls six champs de
+      langue et les prénoms changent ; 22 variantes renommées. Quatre jointures cassées par la
+      bascule ont été trouvées et réparées (permis, abonnement TC, vélo, plus la sélection de
+      reprise), avec alarme sur modalité hors vocabulaire. RESTENT les lots D (pipeline de reprise
+      de campagne, D-1 à D-8) et E (onglet 🔁 Campagne) : rien n'en est écrit. CONSÉQUENCE EN
+      VIGUEUR : data/jeux et data/experiences sont VIDES, tout est parti à l'archive froide — la
+      plateforme ne sert plus aucune mesure tant que le jeu v6 n'est pas construit.
 
     triage:
-      faisabilite: 2
-      surete: 1
+      faisabilite: 4
+      surete: 3
       jeux_de_test: true
       motif: >-
-        Le ticket le plus risqué du dépôt. Traduit sept surfaces, régénère la population en v6, renomme
-        18 prompts, rejoue 10 expériences LLM. Trois pièges identifiés dont un fatal : `parse_option_modes`
-        RELIT LES ÉTIQUETTES DE MODE dans le texte du prompt (`models.py:192`) — les traduire casse
-        la calibration et `moves.csv`. Le lot A (archive froide) est bloquant.
+        RE-NOTÉ le 2026-09-14, APRÈS livraison des lots A à C : la note 2/1 portait sur un travail
+        qui est fait. Le piège fatal est refermé (`parse_option_modes` relisait les étiquettes de
+        mode dans le texte du prompt, `models.py:192`), l'archive froide est gelée et son
+        inaccessibilité prouvée par test, la v6 reproduit la v5 au chiffre près. Ce qui reste —
+        lot D (campagne : file, reprise au renouvellement de quota, état persistant) et lot E
+        (onglet) — est spécifié item par item et assemble des briques existantes (`experience-
+        lancer ATTENDRE_FENETRE=1`, `next_quota_reset()`, ordonnanceur). Le drapeau reste levé :
+        D-7 peut imposer de rejouer les 14 témoins sur la v6, et la campagne produit des
+        exécutions attachées au jeu scellé.
       date: '2026-09-14'
+      aamas: 3
   ticket_073_reproductibilite_prompt_calibre_multi_graines_multi_populations:
     status: à faire
     category: Expériences & Cognition

@@ -1,3 +1,40 @@
+## [2026-09-14] Trois statuts de tickets qui mentaient, dont un contre lui-même
+
+Le triage du 14 septembre classait les 36 tickets ouverts par faisabilité et sûreté. Relu le
+soir même contre le code et l'arbre de travail, trois de ces notes décrivaient un état qui
+n'existe plus.
+
+**Le 074 se donnait pour « à faire » alors qu'il est aux trois quarts livré.** Sa note de
+triage — 2 en faisabilité, **1 en sûreté**, « le ticket le plus risqué du dépôt » — portait sur
+la traduction, le rescellement et le piège de `parse_option_modes`. Tout cela est fait : archive
+froide gelée et prouvée par test, sept surfaces traduites, cohorte v6 scellée. Ce qui reste, les
+lots D et E, assemble des briques existantes.
+
+**Avant :** priorité 3/10, dernier du classement, à côté d'un ticket dont le verrou de fond
+n'est pas levé.
+**Après :** `en cours`, priorité 7/10, et la note dit ce qui reste — le pipeline de campagne et
+son onglet, dont rien n'est écrit.
+
+**Le 048 se contredisait dans sa propre note.** Sa première phrase disait « rien n'est lancé »,
+sa dernière « LIVRÉ le 2026-09-11, les trois points de code ». Le triage avait pris la première
+au sérieux et ouvert un écart à trancher avec le ticket 071. Vérification faite dans le code :
+le plancher journalier de consolidation à 22 h, l'abandon de la normalisation min-max et la
+constante d'oubli en jours y sont tous les trois. Il n'y avait pas de conflit entre deux
+tickets, mais une phrase d'ouverture jamais relue.
+
+**Le 045 promettait un travail déjà fait, et sur une cohorte archivée.** Son reste-à-faire
+annonçait « le jeu v5, les 14 exécutions gratuites » — qui ont tourné le 11 septembre. Puis la
+bascule anglaise les a envoyés à l'archive froide : `data/jeux` et `data/experiences` sont
+**vides**, et le code refuse de résoudre l'archive. La référence est la v6, le jeu est donc à
+reconstruire dessus, et la partie exécution du 045 recouvre le lot D du 074 — question de
+périmètre consignée, pas tranchée.
+
+**Ce que la relecture a aussi montré :** une note de statut vieillit par sa **première** phrase.
+C'est celle qu'on ne réécrit pas quand on ajoute « LIVRÉ » à la fin, et c'est celle que le
+triage lit.
+
+---
+
 ## [2026-09-14] Le dispositif parle anglais, et la v5 part au froid
 
 Tout ce qu'un agent lit est désormais en anglais : son récit de persona, le bulletin météo de
