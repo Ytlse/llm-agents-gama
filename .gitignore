@@ -226,3 +226,5 @@ specs/ticket_045/substrat-unique-v5.md
 # doctrine « traces sur disque, pas dans git » : 500 Mo de jeux scellés et d'exécutions.
 # Le MANIFEST.yaml et le README.md qu'elle contient disent ce qu'elle porte et d'où ça vient.
 archive/
+docs/paper/mémoire/*
+docs/paper/memoire
