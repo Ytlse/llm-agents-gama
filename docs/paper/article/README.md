@@ -34,7 +34,7 @@ pire que pas de date du tout.
 | 3 | Le dispositif (*architecture*) | — | `brouillon v0.4` | — | — |
 | 4 | Métriques et socle d'évaluation | — | `brouillon v0.8` | — | — |
 | 4.5 | Calibration du prompt (optimisation réfléchie) | — | `brouillon v0.1` | — | — |
-| 5 | Les LLM nus et leur variabilité | — | brouillon | — | — |
+| 5 | Évaluation sous prompt factuel neutre et circonstancié et variabilité | — | `brouillon v0.2` | — | — |
 | 6 | Ablation en quatre paliers et références tabulaires | — | `brouillon v0.1` | — | — |
 | 7 | Régimes non tabulés | — | brouillon | — | — |
 | 8 | Limites et implications hybrides | — | brouillon | — | — |

@@ -228,7 +228,7 @@ figure.hyp{border:1px dashed var(--ochre);border-radius:.3em;padding:.6em;backgr
    </div>
    <div class="cols c2">
     <ul class="tight">
-     <li><b>Q1</b> — Amplitude et variabilité de l'écart distributionnel du modèle nu.</li>
+     <li><b>Q1</b> — Amplitude et variabilité de l'écart distributionnel sous prompt factuel neutre et circonstancié.</li>
      <li><b>Q2</b> — Effet respectif du prompt et des paramètres physiques du réseau.</li>
     </ul>
     <ul class="tight">
@@ -639,9 +639,9 @@ figure.hyp{border:1px dashed var(--ochre);border-radius:.3em;padding:.6em;backgr
 <!-- 12 ============ 4.1 PROMPT ============ -->
 <section class="slide" data-act="bare">
  <div class="pad">
-  <div class="head"><b>4. Modèle nu</b><span>4.1 Prompt</span><span class="num">12</span></div>
-  <h2 class="t">Un prompt minimal</h2>
-  <p class="lead">Le modèle nu reçoit le persona complet, les itinéraires réellement calculés, et une consigne
+  <div class="head"><b>4. Prompt factuel neutre</b><span>4.1 Prompt</span><span class="num">12</span></div>
+  <h2 class="t">Un prompt factuel neutre et circonstancié</h2>
+  <p class="lead">L'agent reçoit le persona complet, les itinéraires réellement calculés, et une consigne
    neutre. Aucun exemple, aucune consigne comportementale, aucun persona enrichi.</p>
   <div class="body">
    <div class="cols wl">
@@ -690,7 +690,7 @@ Itinéraires proposés (OpenTripPlanner) :
 <!-- 13 ============ 4.2 RÉFÉRENCES TRIVIALES ============ -->
 <section class="slide" data-act="bare">
  <div class="pad">
-  <div class="head"><b>4. Modèle nu</b><span>4.2 Références triviales</span><span class="num">13</span></div>
+  <div class="head"><b>4. Prompt factuel neutre</b><span>4.2 Références triviales</span><span class="num">13</span></div>
   <h2 class="t">Références triviales</h2>
   <p class="lead">Trois prédicteurs sans paramètre appris délimitent le plancher que tout modèle doit dépasser.</p>
   <div class="body">
@@ -711,7 +711,7 @@ Itinéraires proposés (OpenTripPlanner) :
    <div class="cols c2">
     <div class="box">
      <span class="lab">Rôle de la troisième référence</span>
-     <p>Elle n'utilise que la physique du réseau. Sa position par rapport au modèle nu mesure directement ce que
+     <p>Elle n'utilise que la physique du réseau. Sa position par rapport au prompt factuel neutre mesure directement ce que
       l'arbitrage en langue naturelle ajoute à un simple minimum de temps de parcours.</p>
     </div>
     <div class="box">
@@ -729,7 +729,7 @@ Itinéraires proposés (OpenTripPlanner) :
 <section class="slide" data-act="bare">
  <div class="pad">
   <div class="banner">Hypothèse — à confirmer par expérience <small>aucune mesure attachée à cette planche</small></div>
-  <div class="head"><b>4. Modèle nu</b><span>4.3 Modèles évalués</span><span class="num">14</span></div>
+  <div class="head"><b>4. Prompt factuel neutre</b><span>4.3 Modèles évalués</span><span class="num">14</span></div>
   <h2 class="t">Modèles évalués</h2>
   <p class="lead">Trois familles d'inférence sont comparées sous un prompt identique. Si l'écart distributionnel
    provient d'un prior de pré-entraînement, il doit se déplacer d'une famille à l'autre.</p>
@@ -770,7 +770,7 @@ Itinéraires proposés (OpenTripPlanner) :
 <section class="slide" data-act="bare">
  <div class="pad">
   <div class="banner">Hypothèse — à confirmer par expérience <small>amplitude de l'écart non mesurée</small></div>
-  <div class="head"><b>4. Modèle nu</b><span>4.4 Variabilité inter-graines</span><span class="num">15</span></div>
+  <div class="head"><b>4. Prompt factuel neutre</b><span>4.4 Variabilité inter-graines</span><span class="num">15</span></div>
   <h2 class="t">Variabilité inter-graines</h2>
   <p class="lead">Un gain de prompt inférieur à la dispersion inter-graines n'est pas interprétable. Le protocole
    ci-dessous établit cette dispersion à deux niveaux avant toute comparaison de prompts.</p>
@@ -938,7 +938,7 @@ density_orig · density_dest</p></div>
       <tr><td>Logit multinomial</td><td class="n">13 045</td><td class="n">39 203</td><td>Référence économétrique</td></tr>
       <tr class="hi"><td>Gradient boosté (LightGBM)</td><td class="n">13 045</td><td class="n">39 203</td>
        <td>Plafond tabulaire à variables identiques</td></tr>
-      <tr><td>Agent, modèle nu</td><td class="n">1 000</td><td class="n">0</td>
+      <tr><td>Agent, prompt factuel neutre</td><td class="n">1 000</td><td class="n">0</td>
        <td>Sous-échantillon tiré du même jeu, pour coût d'inférence</td></tr>
       <tr class="hy"><td>Agent, few-shot (palier 2 bis)</td><td class="n">1 000</td><td class="n">k</td>
        <td>Sépare l'incapacité du défaut d'information</td></tr>
@@ -1166,14 +1166,14 @@ w<sub>m</sub>(t) = 1 − Σ<sub>k : mode<sub>k</sub> = m</sub> γ · (retard<sub
      <ul class="tight">
       <li>Taux de reprise du mode perturbé, par jour et par bras.</li>
       <li>Écart entre bras à J3, J4, J5, et demi-vie de l'évitement.</li>
-      <li>Sensibilité à γ et λ ; cinq graines par bras.</li>
+      <li>Cinq graines par bras.</li>
      </ul>
     </div>
     <div class="box">
      <span class="lab">Critères de réfutation</span>
      <ul class="tight">
       <li>Le bras à registre vide présente le même écart à J3.</li>
-      <li>Diviser λ par trois ne déplace pas le résultat.</li>
+      <li>La remontée des jours 3 à 5 n'est pas monotone.</li>
       <li>Un incident sans rapport avec le mode perturbé produit le même évitement.</li>
      </ul>
     </div>
@@ -1574,7 +1574,7 @@ w<sub>m</sub>(t) = 1 − Σ<sub>k : mode<sub>k</sub> = m</sub> γ · (retard<sub
 (function(){
  var deck=document.getElementById('deck');
  var slides=[].slice.call(deck.querySelectorAll('.slide'));
- var ACTS=[['intro','1 Introduction'],['data','2 Données'],['metrics','3 Métriques'],['bare','4 Modèle nu'],
+ var ACTS=[['intro','1 Introduction'],['data','2 Données'],['metrics','3 Métriques'],['bare','4 Prompt factuel neutre'],
            ['ablation','5 Prompt / réseau'],['compare','6 Comparaison'],['proto','7–8 Protocoles'],['persp','9–11 Perspectives']];
  var i=0, rail=document.getElementById('rail'), count=document.getElementById('count');
 

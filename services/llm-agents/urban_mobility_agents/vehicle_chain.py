@@ -171,7 +171,12 @@ def _owns_bike(traits: dict) -> bool:
             )
         fire_alarme("personal_bike_absent")
         return False
-    return str(label).lower() != "pas de vélo"
+    # Les DEUX vocabulaires : « No bike » depuis la cohorte v6 (ticket 074), « Pas de vélo »
+    # pour les cohortes antérieures et leurs exécutions archivées. N'en connaître qu'un
+    # ferait rendre `True` à l'autre — un persona sans vélo recevrait une option vélo sur
+    # toute une cohorte, sans exception ni journal.
+    from mobility_core.bike_ownership import NO_BIKE
+    return str(label).strip().lower() not in {NO_BIKE.lower(), "pas de vélo"}
 
 
 def _owns_car(traits: dict) -> bool:

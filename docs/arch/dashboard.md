@@ -322,14 +322,14 @@ Chaque lancement est un sous-processus détaché (`start_new_session`) dont la
 sortie complète est écrite dans `experiments/.dashboard/<n>-<cible>.log`
 (dossier ignoré par git). Le volet affiche l'état, la durée, **l'heure de
 lancement**, le code retour et les 400 dernières lignes de sortie, rafraîchis
-toutes les deux secondes sans recharger la page. Un job d'expérience
+toutes les dix secondes sans recharger la page. Un job d'expérience
 (`experience-lancer` / `-reprendre`) ajoute le **décideur** de l'expérience visée
 (lu dans son `experience.yaml`), pour distinguer deux lancements de la même cible
 et savoir quel modèle a tourné sans ouvrir le job.
 
 **La console qu'on ouvre reste ouverte.** Le volet du job le plus récent est déplié d'office,
 mais seulement au premier affichage : le pli choisi ensuite appartient au lecteur et survit aux
-rafraîchissements. Le volet se rejouant toutes les deux secondes et l'argument `expanded` d'un
+rafraîchissements. Le volet se rejouant toutes les dix secondes et l'argument `expanded` d'un
 `st.expander` l'emportant à chaque tour, un simple `expanded=(index == 0)` refermait la console
 d'un job relégué en deuxième position par un lancement plus récent — impossible, avec deux
 expériences en parallèle, de lire le journal de la plus ancienne. Le pli est désormais écrit
@@ -437,6 +437,72 @@ quand les cases d'un ticket sont ses **critères d'acceptation** (006, 007, 008)
 restent vides jusqu'au run de validation, ce qui ne dit rien de l'avancement du
 travail. Une ligne « Source : cases » est donc à lire comme une entrée manquante dans
 la conf.
+
+### Triage : ce que coûterait d'y aller maintenant
+
+Le statut dit où en est un ticket. Le **triage** dit autre chose : peut-on le prendre
+aujourd'hui, et que risque-t-on en le prenant. Il vit dans un bloc `triage` de la même
+entrée, **à côté** de la note et jamais dedans — la note porte l'historique des
+décisions, et elle n'a pas à être réécrite parce qu'on vient de re-noter une
+faisabilité.
+
+```yaml
+tickets:
+  ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne:
+    status: à faire
+    category: Expériences & Cognition
+    note: >-
+      … ce sur quoi le STATUT s'appuie (inchangée par le triage)
+    triage:
+      faisabilite: 2          # 1 à 5
+      surete: 1               # 1 à 5
+      aamas: 3                # 1 à 5 (étoiles jaunes ⭐)
+      jeux_de_test: true      # le drapeau 🚩
+      motif: >-
+        … ce qui justifie ces notes
+      date: '2026-09-14'
+```
+
+⚠ **Les échelles vont dans le même sens : cinq étoiles est toujours la bonne
+nouvelle.** `faisabilite` ★★★★★ = prêt à lancer, rien ne bloque ; `surete` ★★★★★ =
+aucun risque de régression ; `aamas` ⭐⭐⭐⭐⭐ = intérêt décisif pour la soumission
+AAMAS (alignement aux standards `reviewer-aamas` : ADN multi-agent, formalisation
+mathématique, réalisme cognitif, équité/sûreté).
+C'est la raison du nom `surete` plutôt que `regression` :
+une clé nommée `regression` valant 5 se lirait « beaucoup de régression », soit
+l'inverse de ce qu'elle dit. Un nom qui contredit son échelle est une erreur de lecture
+qui arrive une fois par relecture, et toujours au mauvais moment. C'est aussi ce qui
+autorise la **priorité par somme** (2 à 10) : elle n'a de sens que tant que les deux
+échelles pointent du même côté.
+
+Le drapeau 🚩 `jeux_de_test` marque un ticket qui **modifie ou invalide** un jeu de
+test — cohorte scellée, `prompts.yaml`, ou jeu gelé. C'est le filtre qui dit d'un coup
+d'œil ce qui obligera à resceller ou à rejouer une campagne.
+
+Le triage ne porte que sur les tickets **ouverts** (`à faire`, `en cours`, `bloqué`,
+`en veille`, `amélioration`) : on ne se demande pas si un ticket terminé est faisable.
+Quatre tuiles résument ce périmètre — ouverts, 🚩 jeux de test, ⚡ quick wins
+(faisabilité ≥ 4 **et** sûreté ≥ 4), ◻️ non triés. Un ticket ouvert **non trié** est un
+angle mort : il n'apparaît dans aucun classement et son coût n'a jamais été posé, ce
+que le tiroir dit explicitement.
+
+**L'écriture obéit aux mêmes garanties que le statut**, et par une fonction distincte —
+`save_triage` n'écrit que le bloc `triage`, `save_override` n'écrit que statut /
+catégorie / note. Fondues en une seule, chaque enregistrement de l'un écraserait l'autre
+avec les valeurs affichées à l'ouverture du tiroir : exactement la régression que la
+règle de la note ferme déjà. Une valeur hors 1–5, un `jeux_de_test` non booléen ou un
+bloc à moitié posé sont **refusés en nommant le ticket et le champ**, jamais ramenés en
+silence dans l'intervalle — un `faisabilite: 8` corrigé discrètement en 5 ferait lire
+« prêt à lancer » là où quelqu'un s'est trompé.
+
+**La date ne bouge que si l'appréciation bouge.** Redater à chaque enregistrement
+ferait écrire le fichier au moindre clic dès le lendemain, contre la règle « enregistrer
+sans rien changer ne salit pas `git status` ». Re-confirmer une note inchangée ne la rend
+pas plus fraîche : c'est toujours le même jugement, porté le même jour. Mais une notation
+**vieillit** — c'est pourquoi elle est datée : « faisabilité ★★★★☆ » sur un ticket n'a
+plus le même sens après qu'un autre en a livré la moitié.
+
+---
 
 ## 4 · Volet « Métriques »
 
@@ -615,7 +681,7 @@ boucle quand rien ne bouge ne sert personne.
 
 | Bloc | Rythme | Condition |
 |------|--------|-----------|
-| Jobs (barre latérale et volet) | 2 s | toujours |
+| Jobs (barre latérale et volet) | 10 s | toujours |
 | Activités lues sur disque | 5 s | toujours |
 | Exécutions arrêtées | 10 s | toujours |
 | État du run GAMA | 5 s | toujours |

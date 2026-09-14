@@ -271,7 +271,7 @@ def _def_nommage(portee):
     return {
         "population": {"chemin": "/data/eqasim-output/population_1000_AAMAS"},
         "jeu": {"nom": "population_1000_AAMAS_20260316"},
-        "gabarit": {"variante": "minimal_persona"},
+        "gabarit": {"variante": "prompt_minimal_01"},
         "decideur": dec,
         "calendrier": {"politique": "aleatoire", "date": "2026-03-16", "graine": 42},
         "mode": "sans_simulateur",
@@ -281,11 +281,11 @@ def _def_nommage(portee):
 def test_P11_seul_le_local_se_dit_dans_le_nom():
     """`distant` est la référence (N7) : aucun nom existant ne bouge."""
     muet = N.nom_canonique(_def_nommage(None))
-    assert muet == "exp_qwen38-27b_minper_jtir_pop-1000_AAMAS_t0_nosim"
+    assert muet == "exp_qwen38-27b_promin01_jtir_pop-1000_AAMAS_t0_nosim"
     assert N.nom_canonique(_def_nommage("distant")) == muet
     assert (
         N.nom_canonique(_def_nommage("local"))
-        == "exp_qwen38-27b_local_minper_jtir_pop-1000_AAMAS_t0_nosim"
+        == "exp_qwen38-27b_local_promin01_jtir_pop-1000_AAMAS_t0_nosim"
     )
 
 

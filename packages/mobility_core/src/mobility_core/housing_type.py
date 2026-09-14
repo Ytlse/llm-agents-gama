@@ -106,7 +106,23 @@ from mobility_core.resources import restricted_data_path, restricted_resource_hi
 # des quatre autres modalités reviendrait à redistribuer 0,4 % de la population sans
 # source — et la page le compte hors référentiel, comme elle le fait déjà des
 # occupations inconnues.
+# (clé, libellé), et les deux ne suivent PAS la même règle depuis le ticket 074.
+#
+# La CLÉ indexe `cerema_values.yaml`, que `prompt_calibration/` lit aussi : elle reste
+# française, comme l'identifiant qu'elle est. Le LIBELLÉ est porté par le persona et lu par
+# `move_logger` ; il est passé à l'anglais avec le reste de ce qui sort vers le modèle.
 MODALITIES: tuple[tuple[str, str], ...] = (
+    ("individuel_isole", "Detached house"),
+    ("individuel_accole", "Terraced house"),
+    ("petit_habitat_collectif", "Small apartment building"),
+    ("grand_habitat_collectif", "Large apartment building"),
+    ("autres", "Other"),
+)
+
+#: Libellés d'avant la v6. `key_for` les accepte encore : les cohortes archivées les portent,
+#: et `move_logger._housing_type` rendrait sinon une colonne vide sur toute la v5 — une absence
+#: qui se lirait « trait non imputé », ce qui est faux.
+MODALITIES_FR: tuple[tuple[str, str], ...] = (
     ("individuel_isole", "Individuel isolé"),
     ("individuel_accole", "Individuel accolé"),
     ("petit_habitat_collectif", "Petit habitat collectif"),
@@ -117,6 +133,10 @@ MODALITIES: tuple[tuple[str, str], ...] = (
 MODALITY_KEYS: tuple[str, ...] = tuple(key for key, _ in MODALITIES)
 LABEL_BY_KEY: dict[str, str] = dict(MODALITIES)
 KEY_BY_LABEL: dict[str, str] = {label: key for key, label in MODALITIES}
+
+#: Libellé d'avant la v6 → clé. SÉPARÉE de `KEY_BY_LABEL`, qui doit rester une bijection :
+#: un test le vérifie, et c'est lui qui garantit qu'aucune modalité n'a deux clés.
+KEY_BY_LABEL_FR: dict[str, str] = {label: key for key, label in MODALITIES_FR}
 
 # Les quatre modalités effectivement ventilées par la référence EMC².
 REFERENCE_KEYS: tuple[str, ...] = MODALITY_KEYS[:4]
@@ -160,8 +180,9 @@ def label_for(key: str) -> str | None:
 
 
 def key_for(label: str) -> str | None:
-    """Libellé EMC² → clé de modalité. `None` si le libellé est inconnu."""
-    return KEY_BY_LABEL.get((label or "").strip())
+    """Libellé EMC² → clé de modalité, dans les DEUX vocabulaires. `None` si inconnu."""
+    texte = (label or "").strip()
+    return KEY_BY_LABEL.get(texte) or KEY_BY_LABEL_FR.get(texte)
 
 
 def size_bucket(household_size: float | str | None) -> int | None:

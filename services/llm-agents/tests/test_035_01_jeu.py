@@ -228,6 +228,7 @@ def test_J10_peremption(tmp_path, pop_dir):
     differentes, non_verif = J.perime(jeu, {"commit": "abc", "gtfs": {"calendar.txt": "c1", "routes.txt": "r9"}, "otp_graph_sha256": "g2"})
     assert differentes == ["otp_graph_sha256"] and non_verif == ["gtfs/routes.txt"]
     assert J.perime(jeu, deps) == ([], [])
+    assert J.perime(jeu, {**deps, "commit": "def"}) == ([], [])
 
 
 # ── J11 : reprise sans recalcul ───────────────────────────────────────────────────────

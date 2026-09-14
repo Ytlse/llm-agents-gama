@@ -1,3 +1,727 @@
+## [2026-09-14] Le dispositif parle anglais, et la v5 part au froid
+
+Tout ce qu'un agent lit est désormais en anglais : son récit de persona, le bulletin météo de
+sa journée, la description de chacune de ses options de trajet, les consignes de sortie et les
+22 variantes de prompt système. Le français qui restait n'était pas décoratif — il portait des
+**valeurs de traits** que le modèle recevait telles quelles.
+
+**Avant :** `Xavier, 41 ans, actif_temps_plein` — et sa couronne de résidence, son type de
+logement et son équipement vélo n'atteignaient pas le prompt du tout.
+**Après :** `Xavier, 41, Full-Time Worker (household of 4, medium-high income). Usual trip
+purposes: Work, Shopping. Lives in: 3rd ring` — l'occupation, les motifs de déplacement et la
+couronne sont dits, en anglais.
+
+**Les cibles de l'enquête, elles, restent en français.** `cerema_values.yaml`, la cible jointe
+couronne × motorisation et les marges gelées sont des citations du rapport EMC² : leurs `sha256`
+sont publiés dans les manifestes des cohortes déjà scellées, et le dépôt de calibration de
+prompts ne lit qu'elles. Les deux vocabulaires se rencontrent à des **frontières nommées**, une
+par trait — traduire à l'affichage aurait laissé la valeur française dans le trait, traduire le
+fichier gelé aurait cassé les sceaux. Le détail est dans
+[population-post-traitements.md](arch/population-post-traitements.md).
+
+**Trois jointures que la bascule a cassées sans rien dire.** Les lois ajustées sur l'enquête
+— permis de conduire, abonnement TC, équipement vélo — nomment leurs covariables dans la langue
+de l'enquête (`occ_Travail à plein temps`). Un persona qui dit `Full-time worker` ne
+correspondait alors à **aucune** d'entre elles : toutes les indicatrices restaient à zéro, ce qui
+veut dire « modalité de référence », pour la cohorte entière. Aucune erreur, aucune valeur
+manquante, une probabilité parfaitement plausible — et l'écart du taux de permis à sa cible qui
+passe de 2,5 à 5,2 points. Le contrôle du logement avait la même faille, en pire : ses valeurs
+tombaient dans « Autres », qui **est** une modalité publiée.
+
+La lecture traduit désormais, les artefacts restent gelés, et une modalité qu'aucun des deux
+vocabulaires ne connaît tombe toujours dans la référence — mais en levant une alarme. **Preuve
+que c'est réparé** : la cohorte v6 reproduit la v5 au chiffre près — mêmes 1 000 personnes,
+mêmes 499 ménages, mêmes chaînes d'activités, mêmes dix marges à la décimale. Seule la langue a
+changé.
+
+**Deux pièges refermés au passage.** Le bulletin météo reconnaissait la pluie et la neige sur
+des mots français : lu sur une table anglaise, il aurait annoncé « aucune précipitation prévue »
+365 jours sur 365, sans une ligne de journal. Et la cible jointe lue avec des clés anglaises
+contre un fichier français ne manque pas quelques lignes : elle n'en trouve **aucune**, et un
+contrôle naïf aurait rendu un écart parfait sur une table vide — la lecture lève maintenant une
+erreur qui nomme la ligne absente.
+
+**La cohorte de référence est régénérée et scellée en v6.** Elle porte les mêmes 1 000 personnes
+que la v5, les mêmes 499 ménages, les mêmes chaînes d'activités — motifs, horaires et lieux, zéro
+différence sur mille — et le même verdict de conformité : 13 marges conformes, aucune à corriger.
+Ce qui change tient en six champs de langue, plus les prénoms, désormais tirés d'une graine par
+personne au lieu de l'horloge : deux générations de la même cohorte donnent maintenant les mêmes
+noms.
+
+**Avant :** `Xavier, 40 ans, Travail à plein temps (seul(e), revenu très faible)`, un prénom
+différent à chaque régénération, et ni les motifs habituels ni la couronne de résidence dans le
+prompt.
+**Après :** `Xavier, 40, Full-Time Worker (lives alone, very low income). Usual trip purposes:
+Work. Lives in: 3rd ring` — relevé sur la cohorte scellée, et stable d'une génération à l'autre.
+
+Les 14 expériences témoins, qui ne lisent aucun prompt, voient donc un substrat identique : elles
+restent comparables **sans être rejouées**.
+
+**Les prompts portent enfin des noms qui se lisent.** `b_min`, `expert_chaine_m7.1`,
+`prompt_optimise_v5` et dix-neuf autres deviennent `prompt_expert_01` … `prompt_expert_21` et
+`prompt_minimal_01`, numérotés **dans l'ordre de la généalogie** : qui suit les numéros suit
+l'histoire des mutations. Chaque variante garde son ancien nom, et les traces archivées restent
+relisibles — un ancien nom est résolu en lecture, avec un avertissement qui nomme le nom
+canonique.
+
+**L'état français est archivé à froid**, sous `archive/2026-09-14_avant_bascule_anglaise/` :
+503 Mo restaurables et auditables, que plus aucun chargeur du dispositif ne sait résoudre. Une
+garde unique refuse tout chemin qui traverse `archive/`, en disant comment la lever.
+
+Conséquence temporaire : sans cohorte scellée sous `data/population/`, une quarantaine de tests
+se mettent en veille **en le disant** plutôt que d'échouer sur un fichier absent. Le compte doit
+revenir à zéro au scellement de la v6.
+
+---
+
+## [2026-09-14] Les accidents arrivent quand et où ils arrivent vraiment
+
+Le tirage d'accidents ne se contente plus d'un taux constant : il suit la loi observée sur
+3 789 accidents corporels de Haute-Garonne, millésimes 2019 à 2024.
+
+**Avant :** un nombre d'accidents identique chaque jour, une heure tirée au hasard dans la
+journée, une portion de route tirée au prorata de sa longueur. Conséquence : autant d'accidents
+à 3 h du matin qu'à 18 h, et 58 % d'entre eux en zone apaisée — parce que les rues à 30 km/h
+représentent 58 % des kilomètres du réseau simulé.
+**Après :** la pointe du soir domine nettement (9,8 % des accidents à 17 h contre 1,5 % à 3 h),
+le vendredi en produit 43 % de plus que le dimanche, et la zone apaisée retombe sous 8 %, sa
+part réelle. Les routes à 70-90 km/h, qui portent en réalité 27 % des accidents pour 4 % des
+kilomètres, en reçoivent enfin leur part.
+
+Le taux lui-même a été corrigé : **1,56 accident par jour** sur le territoire simulé, et non
+1,73 — ce dernier chiffre valait pour tout le département, dont le périmètre de simulation ne
+couvre que 90 %.
+
+**Un point mérite d'être dit franchement : la météo ne joue toujours aucun rôle.** Le calcul a
+été fait et son résultat écarté, parce qu'il annonçait que la pluie légère est deux fois plus
+sûre que la moyenne et que le brouillard multiplie le risque par trente-quatre. La cause n'est
+pas le manque de données mais deux vocabulaires qui ne découpent pas le même monde : la case
+cochée sur un constat d'accident dit « temps normal » dans 84 % des cas, y compris sous un ciel
+couvert, là où le relevé météo distingue finement couvert, pluie possible et pluie avérée.
+Ajuster la correspondance jusqu'à obtenir des chiffres plausibles aurait revenu à choisir le
+résultat. Le facteur reste donc neutre, et la mesure rejetée est conservée pour que le refus
+soit vérifiable.
+
+Les accidents n'allongent toujours aucun trajet : cette étape porte sur leur survenue, pas sur
+leurs conséquences.
+
+---
+
+## [2026-09-14] L'agent arrive à sa décision avec ce qu'il sait, pas avec dix souvenirs en vrac
+
+Jusqu'ici, au moment de choisir son trajet, un agent recevait ses dix derniers souvenirs
+pertinents, bruts, les uns après les autres. Beaucoup répétaient la même chose, et rien ne
+distinguait une habitude tenue depuis deux semaines d'un incident de la veille.
+
+**Il reçoit maintenant trois blocs courts, plus deux ou trois souvenirs récents.**
+
+Ses habitudes, calculées depuis le journal de ses trajets : quel mode il prend, pour quel motif,
+à quel moment, combien de fois sur combien, et les retards qu'il a subis. Ce qu'il sait, tiré de
+ses connaissances, chacune avec le nombre de fois où elle a été observée. Et ce qui a changé
+récemment : les incidents marquants, et les croyances qu'il a cessé de tenir.
+
+**Aucun de ces blocs n'est écrit par le modèle.** Ils sont calculés, donc vérifiables contre leur
+source, et ils ne coûtent aucun appel supplémentaire. Un texte que le modèle réécrirait
+périodiquement finirait par dériver et inventer.
+
+**Avant :** dix souvenirs bruts, sans hiérarchie, où une habitude et un accident se ressemblaient.
+
+**Après :** trois blocs qui disent ce qui se répète, ce qui est su, et ce qui vient de changer,
+puis deux ou trois souvenirs récents pour la situation du jour.
+
+Un bloc sans contenu est absent plutôt que présent et vide : un titre sans rien dessous dirait au
+modèle qu'il manque quelque chose, et l'inviterait à le combler.
+
+Le journal des trajets n'existait pas : il a été créé, et il est conservé avec la mémoire de
+l'agent, si bien qu'un run repris retrouve ses habitudes au lieu de repartir de zéro.
+
+---
+
+## [2026-09-14] Un agent peut enfin changer d'avis
+
+Jusqu'ici, ce qu'un agent apprenait s'empilait. Chaque soir il écrivait de nouvelles
+connaissances, aucune ne corrigeait les précédentes, et rien ne les reliait. Au bout d'un mois il
+en portait des centaines, dont beaucoup répétaient la même chose et certaines se contredisaient.
+C'est le prompt de décision qui arbitrait, chaque fois, à ses frais.
+
+**Une connaissance se corrige maintenant au lieu de s'ajouter.** Au moment de sa réflexion du
+soir, l'agent revoit ce qu'il croyait déjà sur les modes et les motifs de sa journée, et dit ce
+que la journée en fait : il la confirme, la précise, ou la contredit. Cela ne coûte aucun appel
+supplémentaire, tout se passe dans la réflexion qui avait déjà lieu.
+
+**Une connaissance contredite plus souvent que confirmée cesse d'être servie**, et le moment où
+elle est mise à l'écart est daté. Elle n'est jamais supprimée : c'est cette mise à l'écart datée
+qui rend lisible le changement d'habitude qu'on cherche à observer.
+
+**Et une connaissance ne s'oublie plus à l'horloge.** Qu'une ligne sature les jours de pluie ne
+devient pas faux parce que dix jours ont passé. Ce qui l'efface, c'est la contradiction.
+
+**Avant :** une connaissance de dix jours pesait moins de 3 % de son poids initial et sortait de
+ce que l'agent consultait, sans qu'aucune observation ne l'ait démentie. Une connaissance fausse,
+elle, restait consultée indéfiniment tant qu'elle était récente.
+
+**Après :** une connaissance jamais démentie garde tout son poids, quel que soit son âge. Une
+connaissance démentie le perd, quel que soit son âge.
+
+Une alarme surveille le cas où le modèle confirmerait tout sans jamais rien contredire : l'agent
+continuerait alors d'agir sur des croyances qui ont cessé d'être vraies.
+
+---
+
+## [2026-09-14] Un interrupteur pour faire arriver des accidents sur les axes
+
+L'IHM GAMA porte une nouvelle case, « Accidents sur les axes », à côté des interrupteurs de
+mémoire. Cochée, elle fait survenir des accidents au hasard sur le réseau routier pendant la
+journée simulée ; décochée — c'est la valeur par défaut — la simulation se comporte exactement
+comme avant.
+
+**Avant :** rien ne perturbait jamais le réseau. L'expérimentateur n'avait aucun moyen de faire
+exister un incident routier, ni par tirage au sort ni à la main.
+**Après :** chaque journée simulée tire son nombre d'accidents, chacun posé sur une portion de
+route réelle avec une heure de début et une durée, et le journal dit ce qui a été tiré — y
+compris zéro, ce qui arrive souvent : à 1,73 accident par jour pour tout un département,
+beaucoup de journées n'en voient aucun. C'est le comportement correct, pas une panne.
+
+Ce que cette première étape ne fait pas encore, et c'est délibéré : **les accidents n'allongent
+aucun trajet**. Ils existent, ils sont datés, ils sont situés, mais personne ne les subit. La
+raison est prudentielle — deux caches du système, celui des itinéraires et celui des décisions,
+resserviraient une durée perturbée à des simulations qui n'ont rien demandé, et ils doivent être
+protégés en même temps que le retard est branché, pas après.
+
+Deux limites à connaître avant de s'en servir. Le tirage **n'est pas encore représentatif** :
+il ignore l'heure, le jour de la semaine, la météo et le type de route, alors que les données
+d'accidentalité permettent de conditionner sur les quatre. Et le taux par défaut vaut pour
+toute la Haute-Garonne alors que la simulation ne couvre que l'agglomération : il est trop
+généreux. Les deux se corrigent au même endroit, et c'est la prochaine étape.
+
+Le régime retenu est écrit dans le fichier de scénario de chaque exécution, **y compris quand
+il est désactivé** : en relisant une simulation archivée, on peut toujours dire si elle
+connaissait les accidents.
+
+---
+
+## [2026-09-14] L'agent retrouve un souvenir même quand rien ne s'y ressemble
+
+Jusqu'ici, retrouver un souvenir passait par une seule question : ce texte ressemble-t-il à ma
+situation ? Une chute à vélo du matin, boulevard de Strasbourg, ne remontait donc jamais sur une
+décision du soir vers un autre quartier. Ni le lieu, ni l'heure, ni le motif ne coïncidaient.
+
+**Le rappel interroge maintenant trois viviers au lieu d'un.** Le premier reste la ressemblance
+de texte. Le deuxième va chercher, pour chaque mode proposé à l'agent, ce qu'il a déjà vécu avec
+ce mode. Le troisième remonte ses souvenirs les plus graves, sans aucune condition de lieu,
+d'heure ni de motif. C'est l'objet qui relie la chute du matin à la décision du soir, et l'objet
+suffit.
+
+**Un souvenir porte désormais cinq repères typés** : le mode, le lieu, le créneau, le motif et la
+météo du jour. Ils sont posés au moment où le souvenir s'écrit, pas recalculés à chaque décision.
+Deux graphies de la même ligne de bus se rencontrent enfin.
+
+**Le classement compte cinq critères au lieu de trois** : la ressemblance de texte, la météo, la
+fraîcheur, la gravité et la concordance des repères. Un repère qui ne concorde pas ne retranche
+rien : il n'ajoute simplement pas. Hors l'identité de l'agent et la fenêtre d'âge, **plus rien
+n'exclut un souvenir** — tout pondère.
+
+**Avant :** un souvenir dont le contexte ne ressemblait pas à la situation n'était pas retrouvé,
+quelle que soit sa gravité.
+
+**Après :** il est retrouvé par son objet ou par sa gravité, puis classé. S'il ne concorde sur
+rien, il reste classable sur ses autres critères plutôt que d'être écarté.
+
+Le modèle de plongement se choisit enfin par la configuration au lieu d'être écrit dans le code.
+Le modèle lui-même ne change pas.
+
+Deux alarmes surveillent que le dispositif sert à quelque chose : l'une si le vivier par objet
+revient vide trop souvent, signe que les repères sont mal posés, l'autre si le vivier de texte
+fournit à lui seul la quasi-totalité des souvenirs servis, signe que les deux autres ne servent
+à rien.
+
+---
+
+## [2026-09-14] Un souvenir sait désormais ce qu'il a coûté
+
+Jusqu'ici tous les souvenirs d'un agent s'oubliaient au même rythme. Une panne de métro de
+quarante-cinq minutes et un trajet parfaitement ordinaire pesaient pareil au bout d'une semaine,
+et disparaissaient ensemble. **Chaque souvenir porte maintenant une gravité**, calculée depuis ce
+que la simulation a réellement mesuré : le retard subi, la correspondance ratée, le mode auquel
+l'agent a dû renoncer.
+
+Cette gravité décide de trois choses.
+
+**La durée de vie.** Un trajet banal s'efface en quelques jours, un souvenir marquant tient près
+de trois semaines et ne sort plus du rappel pendant qu'il compte encore. Un souvenir qu'on se
+remémore dure plus longtemps : chaque fois qu'il est servi, il gagne un jour de vie, et son
+oubli repart de ce moment-là plutôt que de sa date d'écriture.
+
+**Le moment de la consolidation.** Un agent dont la journée bascule n'attend plus la nuit pour
+en tirer les leçons. Au-delà d'un seuil de gravité cumulée, il consolide immédiatement. Ce
+régime est prévu pour rester exceptionnel, et le dispositif lève une alarme s'il cesse de l'être.
+
+**Ce qui survit au nettoyage.** Les connaissances, elles, ne s'oublient plus à l'horloge : qu'une
+ligne sature les jours de pluie ne devient pas faux parce que dix jours ont passé.
+
+**Avant :** un souvenir de dix jours pesait 3 % de son poids initial, qu'il raconte une chute à
+vélo ou un trajet sans histoire. Les réflexions, elles, n'étaient jamais effacées.
+
+**Après :** le même souvenir pèse 60 % s'il raconte une chute, 3 % s'il ne raconte rien. Les
+réflexions s'effacent quand elles ne pèsent plus rien, les connaissances restent.
+
+Garde-fou : le modèle est invité à qualifier ce qu'il a vécu sur cinq niveaux, mais **il ne peut
+pas minimiser un fait mesuré**. S'il juge anodine une panne de quarante-cinq minutes, c'est la
+mesure qui l'emporte.
+
+Deux conséquences à connaître. Le cache de réflexions accumulé jusqu'ici n'est plus réutilisable,
+le format de réponse ayant changé. Et une composante de la gravité, l'incident réseau, reste sans
+source tant que le simulateur ne joue pas les événements : le démarrage l'annonce explicitement
+plutôt que de la laisser compter pour zéro en silence.
+
+---
+
+## [2026-09-14] Combien d'agents traversent la rocade au matin : la réponse est 38
+
+L'expérience « accident sur un axe » (ticket 070) reposait sur une inconnue : si trop peu de
+trajets empruntent l'axe perturbé, l'effet mesuré ne veut rien dire, quel que soit le soin mis
+au mécanisme. Cette exposition est maintenant comptée, sur sept exécutions déjà archivées, sans
+relancer une seule simulation.
+
+**Avant :** on supposait qu'il faudrait « entre 5 700 et 29 000 agents » pour qu'un accident
+posé sur la rocade touche assez de monde — une fourchette large, obtenue par un calcul
+d'ordre de grandeur sur un flux routier jamais vérifié.
+**Après :** 38,5 trajets voiture touchés par journée simulée à 1 000 agents (médiane, étendue
+20,5 – 100,5), pour un taux de traversée du périphérique de 18,2 %. Il faudrait **≈ 2 600
+agents** pour une figure à intervalle large et **≈ 10 400** pour une figure solide — trois fois
+moins que supposé.
+
+Ce que ça change pour la suite : l'expérience d'accident ne peut rien montrer à 1 000 agents, et
+ce n'est plus une intuition mais un chiffre publiable avec la taille de cohorte manquante. En
+revanche, élargir l'axe ne sert à rien — ajouter les antennes A 621/A 624 et la Rocade
+Arc-en-Ciel ne gagne que 2,6 points pour deux fois plus de route.
+
+Une limite est apparue en chemin, et elle vaut pour toute mesure future de ce genre : la seule
+exécution archivée à 10 000 agents est **inexploitable**, son journal de déplacements datant
+d'avant l'ajout des identifiants de personne et d'activité. Les origines et destinations n'en
+sont pas récupérables. La proportionnalité entre taille de cohorte et exposition reste donc
+supposée, pas mesurée.
+
+---
+
+## [2026-09-14] Les prompts portent enfin un nom qui dit ce qu'ils sont
+
+Les 22 variantes mélangeaient quatre conventions de nommage — `prompt_optimise_v5`,
+`expert_chaine_m7`, `b_min`, `b0_pristine`, `persona_v3`, `expert`. Aucune ne disait la famille,
+et la famille est précisément ce qui détermine quelle grille d'audit s'applique : la même phrase
+est licite dans un prompt expert et fautive dans un prompt minimal. `b_min` se lisait comme un
+prompt minimal alors qu'il relève de la famille experte depuis le 2026-09-10.
+
+Schéma unique : **`prompt_<famille>_<nn>`**, numéroté dans l'ordre de la **généalogie** et non de
+l'alphabet. `prompt_expert_05` dérive de `prompt_expert_04`, qui dérive de `prompt_expert_03` :
+la série se lit comme l'histoire des mutations. Un tri par date aurait dispersé les lignées — les
+cinq variantes `persona_*` portaient toutes la date de leur archivage, pas de leur écriture.
+
+**Avant :** `expert_gem_3.8_v2` et `expert_gem_3.8_v2_neutre_justif`, deux prompts différents,
+s'abrégeaient **tous deux** en `expgem38v2` dans le nom des expériences. Deux expériences
+portaient donc le même segment, distinguées par un indice `_2` qui ne disait pas ce qui changeait.
+**Après :** `prompt_expert_04` et `prompt_expert_05` — la collision a disparu, et avec elle
+l'indice muet.
+
+Rien n'est perdu : chaque entrée garde `_ancien_nom`, et un ancien nom **se résout encore en
+lecture**, avec un avertissement qui nomme le canonique. C'est ce qui permet de recalculer
+l'empreinte d'une exécution archivée : ses définitions gelées portent `variante:
+expert_gem_3.8_v2` et ne seront jamais réécrites, l'archive étant froide. Un nom vraiment inconnu
+reste refusé, et le message liste les deux jeux de noms.
+
+`scripts/migrations/renommer_prompts.py` fait le travail — à blanc par défaut, `--appliquer` pour
+écrire — et met à jour `active:`, `familles:`, `derive_de`, `_calibration.seed` et
+`_invalidation.remplace_par` en même temps que les clés.
+
+---
+
+## [2026-09-14] La fenêtre de mémoire suit l'horizon de l'expérience
+
+Les constantes de la mémoire visée (ticket 071) sont désormais **déclarées dans la
+configuration**, chacune avec sa règle de conception : allongement de la durée de vie par la
+gravité, renforcement au rappel, plafond, seuil du choc, seuils de confiance, tailles des viviers.
+Elles n'ont pas encore de lecteur — le code qui s'en sert arrive lot par lot — mais la
+spécification et la configuration disent enfin la même chose.
+
+Un seul comportement change, et c'est celui qui coûtait le plus cher : **la fenêtre d'âge du
+rappel suit l'horizon de l'expérience** au lieu d'être figée à trente jours.
+
+**Avant :** quel que soit l'horizon déclaré, un souvenir de plus de trente jours ne pouvait plus
+être rappelé. Une expérience de soixante jours perdait son second mois d'un coup, sans qu'aucune
+ligne de journal ne le signale.
+
+**Après :** la fenêtre vaut l'horizon de l'expérience, plafonnée à soixante jours, et le
+lancement l'annonce. Rien ne filtre plus par l'âge à l'intérieur d'un run : c'est la décroissance
+temporelle qui fait taire un vieux souvenir, pas une coupe nette.
+
+Le score de rappel, lui, **n'a pas bougé**. Ses cinq composantes cibles sont déclarées, mais le
+classement n'en lit encore que trois : les basculer avant que le code ne lise les cinq aurait fait
+tourner le dispositif sous un régime de score que personne n'a spécifié, et changé l'ordre des
+souvenirs servis en silence. Les cinq basculeront ensemble.
+
+---
+
+## [2026-09-14] Le dispositif parle anglais, et l'état français est gelé
+
+Le prompt envoyé aux modèles n'a jamais été « en français » : il était **mixte**. Les étiquettes
+et la prose l'étaient, mais les motifs (`work`, `home`), les étiquettes de mode (`bicycle`,
+`foot,bus,foot`) et les durées (`very long (20 minutes or more)`) étaient anglais depuis toujours.
+Ce mélange n'avait jamais été décidé — il venait de la sédimentation. Il est désormais tranché :
+**tout ce qui atteint le modèle est en anglais.**
+
+Huit surfaces ont basculé ensemble, et il fallait les huit : les 22 variantes de prompt système,
+les 4 gabarits de catégorie, les 9 descriptions de schéma de sortie, les 7 gabarits de description
+d'itinéraire, les libellés d'accès et de stationnement, le récit de persona, le bulletin météo et
+la table des 48 conditions. Traduire sept sur huit aurait produit un texte hybride sans que rien
+ne le signale.
+
+**Avant :** `Thibault, 58 ans, Travail à plein temps (seul(e), revenu très faible)` — puis
+`- [0] bicycle: Durée estimée : 2 hours, 9 minutes. Distance : 37.5 km.`
+**Après :** `Thibault, 58, Full-Time Worker (lives alone, very low income)` — puis
+`- [0] bicycle: Estimated duration: 2 hours, 9 minutes. Distance: 37.5 km.`
+
+Trois choses n'ont **pas** bougé, et c'est volontaire. Les étiquettes de mode : la chaîne les
+relit dans le texte du prompt lui-même, et elles alimentent la loss de calibration et les parts
+modales. Les noms propres : `Empalot Métro` et `Ramonville` restent ce qu'ils sont dans n'importe
+quelle langue. Les libellés d'occupation à la source : ce sont des clés de jointure des scripts
+d'enquête ; la bascule se fait à l'affichage.
+
+Les 22 variantes ont été **réauditées** par l'agent indépendant sur leur texte anglais — pas
+reconduites. Verdict : 8 conformes, 11 conformes avec réserve, 3 non conformes — exactement les 3
+qui étaient déjà invalidées. Tant que l'audit n'était pas rendu, le sceau de chaque variante était
+périmé et **aucun prompt n'était servable** : c'est le mécanisme qui a joué, pas une précaution
+ajoutée.
+
+L'état français d'avant la bascule est **gelé**, pas effacé : `archive/2026-09-14_avant_bascule_anglaise/`
+porte les 22 variantes françaises, les huit surfaces de rendu, la cohorte scellée v5, les jeux et
+les 24 expériences avec leurs exécutions — 503 Mo, avec le `sha256` de chaque pièce et le commit du
+gel. L'archive est **froide** : restaurable et auditable à la main, jamais résolue par le code. Le
+refus est posé aux trois points de passage obligés (cohorte, jeu, prompt) et un test le prouve.
+
+**Conséquence immédiate, et elle est voulue :** plus rien ne tourne tant que la cohorte v6 n'est pas
+régénérée. Une quarantaine de tests passent en veille, en disant pourquoi. Une expérience archivée
+qui désigne une de ces variantes ne se rejoue **plus à l'identique** — les métadonnées qui
+l'affirmaient portent un rectificatif daté.
+
+---
+
+## [2026-09-14] Le protocole d'hystérésis ne fait plus reposer la mémoire sur un seul paramètre d'oubli
+
+Le chapitre 7 déclarait que l'hypothèse H3 tombait si diviser la vitesse d'oubli par trois ne
+déplaçait pas la courbe de reprise. C'était une preuve causale isolée, et l'article n'en fait pas
+la promesse : la mémoire y est un élément du dispositif, pas son sujet. Le critère est supprimé,
+avec le bras de simulation `exp_04d` qui l'exécutait, et remplacé par la non-monotonie de la
+reprise — un falsifieur déjà annoncé dans l'introduction, jusque-là absent de la liste du
+chapitre 7. La liste reste à trois critères.
+
+Conséquence pour la spécification mémoire : le paramètre d'ablation `α`, qui devait débrayer le
+lien entre gravité d'un souvenir et sa durée de vie pour rendre ce critère propre, **n'a plus
+d'objet et ne sera pas implémenté**. Le couplage `force = S0 × (1 + k × I)` est gardé tel quel.
+
+**Avant :** trois critères de réfutation, dont un qui exigeait un quatrième bras de campagne de
+cinq jours (5 000 requêtes, 100 % du quota Google d'une journée) pour mesurer l'effet d'un
+paramètre que le code ne lisait même pas.
+**Après :** trois critères, tous mesurables sur les trois bras déjà prévus. La question de la
+sensibilité au paramètre d'oubli se répond par la règle de conception de chaque constante et son
+second point de référence publié, pas par un run.
+
+Au passage, et dans le même accord : les trois introductions (FR, EN, Overleaf) ne décrivent plus
+le registre consulté à la décision comme une mémoire « court terme à décroissance de taux λ ».
+La décision ne lit que la mémoire longue, et le paramètre est une constante de temps en jours.
+
+---
+
+## [2026-09-14] L'onglet Tickets dit ce qu'un chantier coûte, pas seulement où il en est
+
+Le statut d'un ticket disait où il en était ; il ne disait pas si on pouvait le prendre
+aujourd'hui, ni ce qu'on risquait en le prenant. Les 36 tickets ouverts portent désormais un
+**triage** : une note de faisabilité, une note de sûreté, et un drapeau 🚩 quand le ticket
+touche un jeu de test — cohorte scellée, `prompts.yaml` ou jeu gelé.
+
+Les deux échelles vont dans le même sens : **cinq étoiles est toujours la bonne nouvelle.**
+Faisabilité ★★★★★ = prêt à lancer ; sûreté ★★★★★ = aucun risque de régression. Le tableau se
+trie par faisabilité, par sûreté, par risque, ou par leur somme ; une case n'affiche que les
+tickets à drapeau. Quatre tuiles résument ce qui reste : ouverts, 🚩 jeux de test, ⚡ quick wins,
+◻️ non triés — cette dernière étant celle qui compte, un ticket ouvert non trié n'apparaissant
+dans aucun classement.
+
+Ce que le premier passage a trouvé : **10 tickets sur 36 touchent les jeux de test**, dont le 074
+(bascule anglaise) qui régénère la population et dont un piège casserait `moves.csv` — la fonction
+qui relit les étiquettes de mode dans le texte du prompt. **13 quick wins** sont disponibles tout
+de suite, presque tous en rédaction. Et deux conflits entre tickets, que personne ne voyait parce
+qu'aucune vue ne les mettait côte à côte : le 071 passe le plongement mémoire à un modèle
+francophone quand le 074 bascule tout le dispositif en anglais, et le 073 veut de nouvelles
+cohortes autour d'une v5 que le 074 envoie à l'archive froide.
+
+**Avant :** pour savoir par quoi commencer, il fallait ouvrir les 36 tickets ouverts et lire
+en moyenne 160 lignes chacun.
+**Après :** le tableau trié par priorité met en tête les trois tickets à dix sur dix, et la case
+🚩 isole en un clic ce qui obligera à resceller ou à rejouer une campagne.
+
+Le triage s'édite depuis le tiroir de chaque ticket, dans un formulaire séparé de celui du statut :
+enregistrer l'un n'écrase jamais l'autre. Une valeur hors 1–5 est refusée en nommant le ticket et
+le champ plutôt que ramenée en silence dans l'intervalle. Et la date de l'appréciation ne bouge que
+si l'appréciation bouge — re-confirmer un jugement inchangé ne le rend pas plus frais.
+
+---
+
+## [2026-09-14] Les trois familles de décideur se comparent d'un coup d'œil
+
+Le tableau des expériences chiffrait déjà les deux composites, mais il fallait lire vingt-quatre
+lignes pour voir ce que la question posait vraiment : un prompt expert rapproche-t-il un LLM des
+modèles classiques ? Deux figures répondent maintenant, tirées du même registre que le tableau —
+donc jamais en désaccord avec lui.
+
+La lecture n'est pas flatteuse pour les LLM : sur la cohorte scellée v5, les quatre modèles
+classiques occupent la plage 47,3–53,7 en composite L1, les prompts experts 66,5–98,9, les prompts
+minimaux 93,8–129,8. Le prompt expert déplace donc bien un LLM dans la bonne direction — jusqu'à
+refermer environ la moitié de l'écart au meilleur modèle classique — sans jamais le rejoindre. Les
+repères naïfs (179–274) disent ce que vaut l'échelle : les deux familles de LLM sont du bon côté.
+
+Deux avertissements sont portés par la figure elle-même plutôt que laissés au lecteur. Le tri est
+fait sur le L1 et le panneau EMD/JSD garde le même ordre : ses barres non décroissantes signalent
+les endroits où les deux métriques ne classent pas pareil. Et seule la chaîne des véhicules
+« active » est retenue par défaut — c'est le seul état où les trois familles coexistent, mélanger
+les deux comparerait des conditions différentes.
+
+**Avant :** la comparaison des familles se reconstituait à la main depuis le tableau, ligne à ligne.
+**Après :** `python scripts/analysis/plot_familles.py` produit les deux figures en PNG et SVG sous
+`docs/paper/figures/`, avec le compte de ce qui a été écarté et pourquoi dans son journal.
+
+---
+
+## [2026-09-14] La bascule anglaise du dispositif est cadrée
+
+Le ticket 074 ouvre la remise au propre de la langue. Le constat qui la déclenche : le prompt
+envoyé aux modèles n'est pas en français, il est mixte — « Destination : work », « [0] bicycle »,
+« 2 hours, 9 minutes » au milieu d'une prose française. Personne ne l'a décidé ; c'est la
+sédimentation d'une locale par défaut, des énumérés d'eqasim et de gabarits écrits à des moments
+différents. Le défaut ne fausse aucune comparaison — la couche de rendu est commune à tous les
+bras — mais il se lit comme un travail inachevé dans l'annexe des prompts.
+
+L'argument qui justifiait le français est tombé à la vérification : le substrat est en anglais et
+en chiffres, et c'est le code qui le traduit. Puisque toute retouche du texte d'un prompt impose
+de refaire la campagne, franciser coûterait le même prix que tout angliciser, pour le choix que la
+littérature soutient le moins. Le ticket tranche donc pour l'anglais, et pour une seule reprise.
+
+Cinq arbitrages ont été rendus dans la foulée. On régénère la cohorte et la v5 part à l'archive.
+La campagne à rejouer porte **10 expériences, pas 24** : les quatorze témoins déterministes ne
+lisent aucun prompt et sont indifférents à la langue. Le renforcement du cadrage territorial est
+écarté, pour qu'une seule variable change et que l'écart reste attribuable. La traduction couvre
+les vingt-deux variantes, y compris celles qui ne servent plus, et c'est Claude qui la fait — ce
+qui se déclare dans l'annexe d'usage des IA.
+
+**Avant :** la langue était subie, et le mélange invisible tant qu'on ne lisait pas un prompt réel.
+**Après :** la bascule est cadrée en cinq lots — archive froide inaccessible au code, traduction
+des sept surfaces concernées, régénération de la cohorte et renommage générique des prompts,
+pipeline de campagne qui se rendort à l'épuisement des quotas et repart au renouvellement, onglet
+de pilotage pour suivre tout ça. Aucune question n'est ouverte ; l'exécution attend sa session.
+
+---
+
+## [2026-09-14] Les constantes de la mémoire visée sont fixées, avec leurs règles
+
+La spécification de la mémoire cible porte désormais un jeu complet de constantes, chacune avec
+sa règle de conception en une phrase, rattachée au phénomène et non à l'horizon : le même jeu
+vaut pour cinq jours comme pour soixante. Les valeurs sont fixées avant tout run d'hystérésis,
+et le second point de sensibilité devient la valeur publiée de Park et al., 8,3 jours.
+
+**Avant :** un souvenir marquant vivait onze jours et tombait à 7 % en un mois, contredisant sa
+propre définition, « je m'en souviendrai dans un mois » ; le renforcement au rappel était
+multiplicatif et aurait saturé tout souvenir souvent rappelé sur soixante jours ; le seuil du
+déclenchement en journée, le seuil de service d'un concept et la fenêtre d'âge restaient à fixer.
+**Après :** un souvenir marquant vit près de vingt jours, la moitié de son poids à deux
+semaines ; chaque rappel ajoute un jour de durée de vie ; la réflexion part en journée dès qu'un
+souvenir grave survient ; un concept cesse d'être servi quand il a été contredit plus souvent que
+confirmé ; la fenêtre d'âge vaut l'horizon de l'expérience, soixante jours au plus.
+
+Aucun code ne change : ces valeurs décrivent le dispositif spécifié, pas le dispositif en
+service. Ticket 071, § 2.10.
+
+---
+
+## [2026-09-14] Le corpus « langue et cadrage culturel » dit enfin ce qu'il prétend dire
+
+Les 30 références rassemblées pour le ticket 072 ont été reprises une à une. Le premier
+téléchargement avait produit 20 fichiers étrangers sur 30 : les identifiants arXiv et ACL étaient
+fabriqués, et ils résolvaient vers de vrais articles sans aucun rapport — imagerie tomographique,
+micro-nageurs, semi-groupes numériques, ondes gravitationnelles. Le papier désigné comme pivot de
+la thèse du ticket était, sur le disque, un article de détection d'intrusion réseau.
+
+Chaque identifiant a été re-résolu, chaque PDF re-téléchargé, et **chaque fichier confronté au
+titre de sa page 1** avant d'être installé. Les doublons internes du corpus sont désormais
+signalés (02≡03, 19≡27, 22≡24), soit 27 travaux distincts pour 30 entrées.
+
+**Avant :** 8 références sur 30 étaient réellement lisibles ; un raisonnement appuyé sur ce corpus
+citait des articles que personne n'avait ouverts.
+**Après :** 30 sur 30 sont présentes et vérifiées, l'index et les métadonnées portent les
+identifiants réels, et la date de vérification est inscrite dans chaque fiche.
+
+---
+
+## [2026-09-14] La mémoire visée s'ancre dans ACT-R, et ses deux arbitrages sont rendus
+
+Le ticket 071, panel de l'évolution de la mémoire, a été relu sur avis extérieur. Chaque
+mécanisme y porte désormais le travail dont il dérive, ou la mention « apport propre » ; les
+notices ont été recoupées une à une, et deux d'entre elles, avancées par la relecture, sont
+corrigées plutôt que recopiées.
+
+**Le régime de consolidation est tranché et confirmé par l'auteur.** La réflexion part au
+plancher journalier de 22 h ; en journée, elle ne part que sur rupture, quand la gravité cumulée
+franchit un seuil réglé haut ; la réflexion par déplacement est abandonnée. La spécification de
+la mémoire le dit désormais, avec ses sources, et le seuil reste à régler sur une mesure.
+
+**Le couplage entre gravité et durée de vie reste ouvert, pour une raison nouvelle.** La
+relecture extérieure proposait un paramètre d'ablation `α` pour rendre interprétable le critère
+de réfutation (ii) de l'hystérésis. L'auteur a clarifié que l'article ne prétend pas isoler
+l'effet causal de l'oubli : ce critère sur-déclare, et `α` n'a de sens que s'il reste un critère.
+Le ticket expose les trois issues et recommande de reformuler (ii) en vérification de
+robustesse ; le paramètre attend cette décision.
+
+**Avant :** le ticket laissait ouverts le découplage entre gravité et durée de vie et le régime
+de consolidation ; la somme pondérée du rappel n'était rattachée à aucune théorie.
+**Après :** le régime est confirmé et écrit ; le découplage est suspendu à une question posée,
+avec sa recommandation ; les cinq composantes sont mises en correspondance avec l'équation
+d'activation d'ACT-R, divergences dites : loi de puissance contre exponentielle, gravité absente
+d'ACT-R, bruit non implémenté.
+
+Trois faits établis en relisant : les poids de rappel en service, 0,4 / 0,3 / 0,3, inversent ceux
+que Vu et al. publient, 0,3 / 0,3 / 0,4 ; le ticket 065 n'a aucun thème mémoire, et le dépôt des
+PDF est porté par le ticket 071 ; les chiffres de cohorte du ticket sont reproduits depuis la
+population scellée, avec la définition explicite du « 69 ménages sur 499 ». Le signalement
+d'impact sur l'article est consigné dans le ticket : rien de faux ce jour, un risque de
+sur-déclaration au chapitre 7 et un énoncé à compléter, sous verrou.
+
+Aucun comportement du code ne change.
+
+---
+
+## [2026-09-14] Ouverture du Ticket 073 : Reproductibilité et robustesse stochastique du prompt calibré Gemini 3.5
+
+Les scores remarquables atteints par Gemini 3.5 sous prompt calibré (`expert_gem_3.8_v2`, composite EMD-JSD de 5,34) reposent actuellement sur une population unique (`population_1000_AAMAS_v5`) et une graine unique (`seed = 42`). Le [ticket 073](tickets/ticket_073_reproductibilite_prompt_calibre_multi_graines_multi_populations.md) formalise le protocole expérimental et statistique pour éprouver la reproductibilité de ces mesures :
+- **Axe 1 (Iso-population, multi-seeds)** : 5 graines aléatoires pour quantifier la dispersion stochastique résiduelle du modèle et le taux de bascule décisionnelle individuel (*churn rate*).
+- **Axe 2 (Iso-seed, multi-populations)** : 3 à 5 cohortes synthétiques indépendantes de 1 000 agents issues de la matrice territoriale EMC2 pour évaluer la généralisation hors échantillon et écarter tout sur-apprentissage de cohorte.
+- **Décomposition de variance (ANOVA à deux facteurs)** : Quantification mathématique exacte de la part respective de l'aléa LLM versus l'échantillonnage de population.
+
+---
+
+## [2026-09-14] Quatre défauts du rappel corrigés, et trois points de conception révisés
+
+Une expertise externe déposée par l'auteur portait quatre affirmations testables sur le code de
+la mémoire longue. **Les quatre ont été vérifiées et sont exactes**, leur gravité est recalibrée.
+Ticket 071.
+
+**Le nettoyage ne lit plus l'horloge de la machine.** Il comparait des souvenirs horodatés en
+temps simulé au `datetime.now()` de la machine hôte. Un run rejouant une date antérieure de plus
+que le seuil aurait vu la condition de conservation devenir fausse pour toutes les entrées, et le
+nettoyage vider concepts et conversations en bloc.
+
+**Avant :** le seuil se calculait sur la date du jour de la machine.
+**Après :** il se calcule sur le souvenir le plus récent de l'agent, qui est son « maintenant ».
+Un nettoyage qui ne sait pas dater ne nettoie rien plutôt que de deviner.
+
+Le défaut n'a jamais pu se produire : son seul déclencheur demande dix mille entrées pour un
+agent, soit près de quatorze cents jours simulés contre cinq dans les expériences.
+
+**Un souvenir oublié quitte aussi l'index.** Les entrées retirées des métadonnées restaient
+indexées et auraient continué d'être resservies au modèle. Elles en sortent désormais, et
+l'identifiant de document est monotone là où il dérivait de la longueur de la liste, donc entrait
+en collision après un nettoyage.
+
+**La fenêtre de trente jours s'applique enfin avec le filtre par jour.** Activer le filtre par
+jour ouvré et créneau désactivait silencieusement la fenêtre d'âge : un souvenir de trois ans en
+temps simulé passait s'il tombait le bon jour de semaine. Les deux filtres se cumulent.
+
+**Une étiquette d'un seul mot peut atteindre le score maximal.** Elle plafonnait à 0,70 faute de
+bigrammes, contre 1,00 pour une étiquette de deux mots. Sans bigrammes, tout le poids revient aux
+unigrammes.
+
+**Trois points de conception de la spécification changent aussi**, et l'un corrigeait une faute.
+Le couple objet-motif désignait une identité unique de concept : tous les concepts d'un agent sur
+un même mode et un même motif se seraient détruits l'un l'autre, condamnant l'agent à une seule
+pensée par couple. Il désigne désormais un panier de candidats. Les concepts cessent de s'oublier
+à l'horloge, un concept ne se démentant que par contradiction et non par le temps qui passe. Et
+le plancher temporel sous les chocs disparaît, parce qu'il faisait entrer la gravité trois fois
+dans le score et rendait l'effet de l'oubli inséparable de l'effet de la gravité dans l'ablation.
+
+Une filiation avec HippoRAG, écrite sans que l'article ait été lu, est retirée : ce qui est décrit
+est une génération de candidats multi-viviers, technique classique. La mesure lexicale cesse d'être
+appelée BLEU, appellation héritée de la littérature d'origine mais inexacte.
+
+---
+
+## [2026-09-14] Les accidents de la route entrent au catalogue des chantiers, sources mesurées
+
+Le dépôt sait désormais ce qu'il faudrait pour faire survenir des accidents au hasard sur les
+axes et en faire subir le retard aux agents — et surtout ce qui l'en empêche aujourd'hui. Le
+[ticket 070](tickets/ticket_070_accidents_aleatoires_sur_les_axes.md) est ouvert : il tient les
+sources officielles, leurs limites, et trois constats de faisabilité mesurés avant toute ligne
+de code. Rien n'est implémenté ; quatre décisions sont posées au demandeur.
+
+La source est identifiée et vérifiée : le fichier **BAAC** de l'ONISR (data.gouv, Licence
+Ouverte, millésimes 2005 à 2024) porte l'heure, la date, les conditions atmosphériques, l'état
+de la surface, l'éclairement et la catégorie de route de chaque accident — soit presque
+exactement le conditionnement que la simulation sait déjà produire. Mesuré sur 2019-2024 :
+**3 789 accidents corporels en Haute-Garonne**, 1,73 par jour, géolocalisés à 100 % sur 2024,
+avec une pointe nette à 17 h et un creux le dimanche.
+
+Quatre points sont arbitrés dans la foulée : l'accident sera **subi** — retard *et* souvenir,
+la **gravité** modulant les deux (9,1 % des accidents du département sont mortels, et la
+départementale tue trois fois plus que la voie communale) ; le rapprochement se fera **par type
+d'axe**, en accrochant l'accident géolocalisé à l'arête OSM et en lisant son tag ; et **un
+itinéraire perturbé ne sera pas mis en cache** — ce qui rend au passage le **contournement**
+possible, un conducteur averti pouvant changer de chemin.
+
+Une quatrième source a été trouvée en cours d'échange, et c'est celle qui manquait : les
+Directions interdépartementales des routes publient en continu, sous Licence Ouverte, les
+**événements sans blessé** — accidents matériels, obstacles, bouchons — avec leur position et
+leurs horodatages, rocade toulousaine comprise. C'est la population que BAAC ne voit pas :
+environ 276 événements par jour sur le seul réseau national non concédé, contre 149 accidents
+corporels par jour en France entière. Mais c'est un flux, pas un historique : les durées se
+constituent en l'interrogeant, ce qui devient la première tâche du ticket.
+
+Le régime est arrêté : **monde partagé**, l'accident est un objet situé et non un tirage par
+agent — avec sa conséquence assumée, le tirage aléatoire fera vivre le monde sans porter de
+figure, et la mesure viendra d'un événement posé dans ce même monde. Le retard, lui, ne dépendra
+que de la **gravité** : six nombres pour trois niveaux, plutôt qu'un modèle de capacité qu'aucune
+source relue ne soutient.
+
+Deux simplifications enfin, toutes deux venues de la relecture. Les accidents seront classés par
+**vitesse autorisée** plutôt que par type de route : c'est un nombre présent des deux côtés — la
+source le renseigne à 99,1 %, et chaque tronçon de notre carte porte déjà une vitesse — donc plus
+aucune table de correspondance à inventer. Et la **gravité ne sortira jamais du moteur** : elle
+sert à tirer une durée de blocage, puis seules des minutes circulent. Un conducteur coincé
+derrière un accident ne sait pas s'il a fait un mort ; il sait qu'il a perdu vingt-cinq minutes.
+
+Une distinction a été posée qui structure le reste : **avoir** un accident et **subir**
+l'accident d'un autre ne sont pas la même chose. Deux personnes et demie sont impliquées dans un
+accident ; des centaines sont coincées derrière. Le ticket ne modélise que la seconde population
+— qu'un de nos agents soit lui-même accidenté demanderait 403 674 agent-jours de simulation pour
+arriver une fois. Les données disent la même chose : le flux des DIR sépare les accidents des
+bouchons, et ne les relie **que par exception**. Savoir quel bouchon vient de quel accident
+restera donc une hypothèse déclarée, pas une mesure.
+
+Un dernier ajout, qui peut faire tomber le ticket avant qu'il coûte quoi que ce soit : personne
+n'a jamais vérifié **qu'un retard vécu hier change la décision de demain**. La chaîne de mémoire
+existe, mais rien ne dit qu'un souvenir de ralentissement y survive et y pèse. Cela se teste sans
+écrire une ligne du mécanisme d'accident — en injectant un souvenir à la main sur une cohorte,
+pour quelques dizaines d'appels et une après-midi. Si l'effet est nul, il vaut mieux le savoir
+là que six semaines plus tard — et ce n'est pas un échec : qu'un agent doté d'une mémoire n'en
+fasse rien est en soi un résultat. Les trois inconnues du ticket sont donc écrites comme des
+hypothèses, avec leurs issues déclarées d'avance : ce sont elles que l'expérience mesure, pas
+des obstacles à lever avant de commencer. Un cas pratique entièrement chiffré déroule la
+mécanique bout en bout, du tirage de l'accident au souvenir du lendemain.
+
+**Avant :** « on a peut-être une base d'accidents quelque part », et l'idée qu'un accident posé
+sur une route ralentirait ceux qui l'empruntent.
+**Après :** les agents en voiture et à vélo se déplacent à vol d'oiseau dans GAMA, à une vitesse
+calée sur la durée planifiée — personne ne « passe » sur une arête, et le retard ne peut venir
+que du calcul d'itinéraire, côté Python, après la lecture d'un cache qui ignore volontairement
+la date. À fréquence réelle, un accident toucherait **0,60 déplacement par journée simulée** :
+le même piège de variance nulle que la météo avant le ticket 023.
+
+---
+
 ## [2026-09-12] Le dépôt range ses bibliothèques, ses services et son infrastructure
 
 Quatre natures, quatre places. `packages/` pour ce qui se publie, `services/` pour ce qui se
@@ -4850,7 +5574,7 @@ Mise à jour majeure du manuscrit et du protocole scientifique ([`MANUSCRIT_DETA
 * **Jalon 0 (Validation Démographique) :** Clarification de l'équiprobabilité des agents synthétiques (poids unitaire = 1, pas de $COEP$ runtime requis) et tableau de Goodness-of-Fit face au recensement Insee RP 2022 / CEREMA ($\chi^2$, $p > 0,95$).
 * **Ablation Incrémentale en 4 Paliers :**
   - *Palier 0 (Planchers)* : Hasard pur (25 %), Prior empirique (56,7 %) et Heuristique du plus rapide $\min(\text{durée OTP})$.
-  - *Palier 1 (Modèle Nu / Bare LLM)* : Évaluation zéro prompt engineering avec **Mistral AI** (modèles français/européens), **Qwen-2.5-32B** (open-weights local déterministe) et **Gemini-Flash**.
+  - *Palier 1 (Prompt factuel neutre et circonstancié / Zero Prompt Engineering)* : Évaluation zéro prompt engineering avec **Mistral AI** (modèles français/européens), **Qwen-2.5-32B** (open-weights local déterministe) et **Gemini-Flash**.
   - *Palier 2 (Modèle Calibré)* : Mesure du gain net de prompt engineering.
   - *Palier 3 (Baselines)* : Logit Multinomial (MNL) et Oracle LightGBM supervisé scellé.
 * **Évaluation Écologique sur Actualités Réelles Toulousaines :** Substitution des scénarios synthétiques par des articles de presse réelle sourcée (*La Dépêche*, communiqués Tisséo, arrêtés préfectoraux) : *Le Minotaure / La Machine*, *Pic d'Ozone / Alerte Canicule*, *Coupure du Périphérique Ouest*.

@@ -90,7 +90,7 @@ def _page_cat(mode: str) -> str:
     """Mode d'une proposition → catégorie de la page (via le mode canonique)."""
     from mobility_llm.mode_choice import canonical_mode
 
-    return CANONICAL_TO_CAT.get(canonical_mode(mode), "autres")
+    return CANONICAL_TO_CAT.get(canonical_mode(mode), "other")
 
 
 def _purpose_origin(person: Person, activity_id: str) -> str | None:

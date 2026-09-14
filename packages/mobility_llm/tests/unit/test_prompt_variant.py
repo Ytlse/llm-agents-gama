@@ -12,9 +12,9 @@ def pm():
 
 def test_variante_designee_remplace_l_active(pm):
     actif = pm.get_system_prompt("itinary_multi_agent")
-    minimal = pm.get_system_prompt("itinary_multi_agent", "b_min")
+    minimal = pm.get_system_prompt("itinary_multi_agent", "prompt_expert_02")
     assert actif and minimal and minimal != actif and len(minimal) < len(actif)
-    assert "b_min" in pm.variantes()
+    assert "prompt_expert_02" in pm.variantes()
 
 
 def test_variante_inconnue_refusee(pm):
@@ -26,24 +26,30 @@ def test_render_utilise_la_variante_de_la_requete(pm):
     from mobility_llm.persona import AgentSpec
     agent = AgentSpec(agent_id="a1", perception="p", destination="work", trajectories=[{"index": 0, "mode": "car", "description": "d"}])
     msgs_actif = pm.render("itinary_multi_agent", [agent], {})
-    msgs_min = pm.render("itinary_multi_agent", [agent], {"prompt_variant": "b_min"})
+    msgs_min = pm.render("itinary_multi_agent", [agent], {"prompt_variant": "prompt_expert_02"})
     systeme = lambda msgs: next(m.content for m in msgs if m.role == "system")
     assert systeme(msgs_min) != systeme(msgs_actif)
-    assert pm.get_system_prompt("itinary_multi_agent", "b_min").split("\n")[0] in systeme(msgs_min)
+    assert pm.get_system_prompt("itinary_multi_agent", "prompt_expert_02").split("\n")[0] in systeme(msgs_min)
 
 
 def test_prompt_minimal_rend_systeme_et_utilisateur(pm):
     """Le prompt système de la variante ET le bloc utilisateur (persona, options) partent ensemble."""
     from mobility_llm.persona import AgentSpec
-    agent = AgentSpec(agent_id="418", perception="Femme de 34 ans, cadre, sans voiture, abonnée TC.", destination="work",
-                      trajectories=[{"index": 0, "mode": "foot", "description": "Marche 25 min"}, {"index": 1, "mode": "bus", "description": "Bus L1 12 min"}])
-    msgs = pm.render("itinary_multi_agent", [agent], {"prompt_variant": "prompt_minimal"})
+    # Perception et descriptions en anglais depuis le ticket 074 : la fixture doit ressembler
+    # à ce que la chaîne produit réellement.
+    agent = AgentSpec(agent_id="418", perception="Claire, 34, Full-Time Worker (lives alone, medium income)", destination="work",
+                      trajectories=[{"index": 0, "mode": "foot", "description": "Walk 25 min"}, {"index": 1, "mode": "bus", "description": "Bus L1 12 min"}])
+    msgs = pm.render("itinary_multi_agent", [agent], {"prompt_variant": "prompt_minimal_02"})
     roles = [m.role for m in msgs]
     assert roles == ["system", "user"], roles
     systeme, utilisateur = msgs[0].content, msgs[1].content
-    assert "en tenant compte du persona" in systeme and "N'élimine aucune option" in systeme
-    assert "Schéma JSON attendu" not in systeme.split("\n")[0] and '"probabilities"' in systeme   # le schéma vient du gabarit, pas du texte collé
-    assert "agent_id=418" in utilisateur and "Femme de 34 ans" in utilisateur and "[0] foot" in utilisateur and "[1] bus" in utilisateur
+    assert "taking the persona into account" in systeme and "Do not rule out any option" in systeme
+    # Les DEUX orthographes sont exclues : la bascule anglaise a traduit ce titre, mais les
+    # variantes archivées portent la forme française et se relisent pour les empreintes.
+    premiere = systeme.split("\n")[0]
+    assert "Expected JSON schema" not in premiere and "Schéma JSON attendu" not in premiere
+    assert '"probabilities"' in systeme
+    assert "agent_id=418" in utilisateur and "Claire, 34" in utilisateur and "[0] foot" in utilisateur and "[1] bus" in utilisateur
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +58,7 @@ def test_prompt_minimal_rend_systeme_et_utilisateur(pm):
 
 # Les 9 `calibrated_*` ont été retirées du fichier le 2026-09-10 (artefacts temporaires de
 # juin, aucune expérience ne les référençait). Les invalidées restantes sont celles-ci.
-INVALIDES = ["minimal_persona", "expert_chaine_m7", "expert_gem_3.8_v1"]
+INVALIDES = ["prompt_minimal_01", "prompt_expert_19", "prompt_expert_03"]
 
 
 @pytest.mark.parametrize("variante", INVALIDES)
@@ -75,7 +81,7 @@ def test_variante_invalidee_refusee_au_rendu(pm):
     agent = AgentSpec(agent_id="a1", perception="p", destination="work",
                       trajectories=[{"index": 0, "mode": "car", "description": "d"}])
     with pytest.raises(VariantePromptInvalide):
-        pm.render("itinary_multi_agent", [agent], {"prompt_variant": "minimal_persona"})
+        pm.render("itinary_multi_agent", [agent], {"prompt_variant": "prompt_minimal_01"})
 
 
 def test_refus_est_une_valueerror(pm):
@@ -84,25 +90,25 @@ def test_refus_est_une_valueerror(pm):
 
     assert issubclass(VariantePromptInvalide, ValueError)
     with pytest.raises(ValueError):
-        pm.get_system_prompt("itinary_multi_agent", "minimal_persona")
+        pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_01")
 
 
 def test_empreinte_reste_calculable_sur_une_variante_invalidee(pm):
     """Une invalidation ne doit PAS rendre irreproductibles les empreintes déjà scellées."""
-    texte = pm.get_system_prompt("itinary_multi_agent", "minimal_persona", verifier_validite=False)
-    assert texte and "pourquoi la marche" in texte
+    texte = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_01", verifier_validite=False)
+    assert texte and "why walking does not get the highest probability" in texte
 
 
 def test_variantes_valides_inchangees(pm):
     """Le refus est ciblé : les autres variantes sont servies comme avant."""
-    for variante in ("prompt_minimal", "b_min", "expert_m4", "expert_chaine_m7.1"):
+    for variante in ("prompt_minimal_02", "prompt_expert_02", "prompt_expert_16", "prompt_expert_20"):
         assert pm.get_system_prompt("itinary_multi_agent", variante)
         assert pm.invalidation(variante) is None
 
 
 def test_prompt_minimal_ne_nomme_aucun_mode(pm):
     """Famille minimale : rien qui puisse pencher vers un mode (règle M1)."""
-    texte = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal").lower()
+    texte = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_02").lower()
     for mot in ("marche", "à pied", "vélo", "voiture", "transports collectifs",
                 "transports en commun", "bus", "métro", "tram", "train"):
         assert mot not in texte, f"{mot!r} apparaît dans le prompt minimal"
@@ -111,7 +117,7 @@ def test_prompt_minimal_ne_nomme_aucun_mode(pm):
 # Famille minimale : `prompt_minimal` est le seul EN SERVICE ; `minimal_persona` déclare la
 # famille sous laquelle elle a servi et été jugée (invalidée, donc refusée). Tout le reste est
 # expert par `familles.defaut`.
-MINIMALES = {"prompt_minimal", "minimal_persona"}
+MINIMALES = {"prompt_minimal_02", "prompt_minimal_01"}
 
 
 def test_familles_declarees(pm):
@@ -125,9 +131,9 @@ def test_un_seul_minimal_en_service(pm):
     """Le seul prompt minimal servable est `prompt_minimal` : l'autre est invalidé."""
     from llm_gateway.prompts.engine import VariantePromptInvalide
 
-    assert pm.get_system_prompt("itinary_multi_agent", "prompt_minimal")
+    assert pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_02")
     with pytest.raises(VariantePromptInvalide):
-        pm.get_system_prompt("itinary_multi_agent", "minimal_persona")
+        pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_01")
 
 
 def test_mode_strict_arme_et_toutes_les_variantes_auditees(pm):
@@ -151,9 +157,9 @@ def test_le_prompt_actif_est_servable(pm):
 
 def test_seul_prompt_minimal_est_exempt_de_mode(pm):
     """Le prompt de remplacement diffère de l'ancien par la seule consigne n° 4."""
-    ancien = pm.get_system_prompt("itinary_multi_agent", "minimal_persona", verifier_validite=False)
-    nouveau = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal")
-    clause = ", en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité"
+    ancien = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_01", verifier_validite=False)
+    nouveau = pm.get_system_prompt("itinary_multi_agent", "prompt_minimal_02")
+    clause = ", stating where applicable why walking does not get the highest probability"
     assert ancien.replace(clause, "") == nouveau
 
 

@@ -111,9 +111,9 @@ class TestClassementMetrique:
     def test_seuils_mesures_depuis_l_hypercentre_du_spec(self):
         assert classement_metrique(*SPEC_CENTER) == "Toulouse"
         assert classement_metrique(*self._point_au_sud(5)) == "Toulouse"
-        assert classement_metrique(*self._point_au_sud(12)) == "1ere couronne"
-        assert classement_metrique(*self._point_au_sud(30)) == "2eme couronne"
-        assert classement_metrique(*self._point_au_sud(60)) == "3eme couronne"
+        assert classement_metrique(*self._point_au_sud(12)) == "1st ring"
+        assert classement_metrique(*self._point_au_sud(30)) == "2nd ring"
+        assert classement_metrique(*self._point_au_sud(60)) == "3rd ring"
 
     def test_la_bande_des_820_m_suit_le_spec_et_non_l_ancienne_constante(self):
         """Un point à 7,99 km du centre du spec, mais à plus de 8 km de l'ancien.
@@ -135,7 +135,7 @@ class TestColonneDeResidence:
     """La colonne du journal RECOPIE le trait du persona. Elle ne calcule plus rien."""
 
     def test_le_trait_est_recopie_tel_quel(self):
-        for zone in ("Toulouse", "1ere couronne", "2eme couronne", "3eme couronne"):
+        for zone in ("Toulouse", "1st ring", "2nd ring", "3rd ring"):
             assert _residence_zone({"residence_zone": zone}) == zone
 
     def test_hors_perimetre_est_une_valeur_de_la_colonne(self):
@@ -144,7 +144,7 @@ class TestColonneDeResidence:
         Il n'a aucune cible EMC², sa masse doit être comptée à part. La colonne doit
         donc pouvoir porter la valeur, sinon elle disparaîtrait dans le stratum voisin.
         """
-        assert _residence_zone({"residence_zone": "hors périmètre"}) == "hors périmètre"
+        assert _residence_zone({"residence_zone": "outside perimeter"}) == "outside perimeter"
 
     def test_trait_absent_laisse_la_cellule_vide(self):
         """Population générée avant le ticket 021, ou domicile sans coordonnées."""

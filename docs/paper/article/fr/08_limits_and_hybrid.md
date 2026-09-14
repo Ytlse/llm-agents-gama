@@ -73,3 +73,7 @@ Au terme de cet audit empirique, nous formalisons la prospective d'une **archite
 La prospective s'étend à l'intégration des contraintes intra-ménage : arbitrage du véhicule partagé, dépose scolaire et conservation stricte de la chaîne spatiale des véhicules (`vehicle-chain.md`).
 
 ---
+
+### Tickets associés à ce chapitre
+- [Ticket 049](../../../tickets/ticket_049_itineraire_mixte_limite_a_publier.md) — L'itinéraire mixte n'existe pas : publier la limite, et dire dans quel sens elle penche
+- [Ticket 060](../../../tickets/ticket_060_formalisation_architecture_hybride_et_perspectives.md) — Formalisation de l'architecture hybride en cascade, cadre comparatif et perspectives

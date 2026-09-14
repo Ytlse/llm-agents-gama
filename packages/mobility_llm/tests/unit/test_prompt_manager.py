@@ -162,8 +162,16 @@ class TestSystemPrompt:
         assert sp and len(sp) > 50
 
     def test_schema_block_stripped(self, manager):
-        # Le bloc "Schéma JSON attendu : {...}" est retiré (réinjecté via {{ schema }})
+        """Le bloc « Expected JSON schema: {...} » est retiré du prompt système.
+
+        Les DEUX orthographes sont vérifiées, et ce n'est pas de la coquetterie
+        (ticket 074) : la bascule anglaise a traduit ce titre dans prompts.yaml, mais les
+        variantes archivées portent la forme française et se relisent encore pour recalculer
+        leurs empreintes. Un test qui ne connaîtrait qu'une seule forme laisserait passer
+        la régression sur l'autre — et c'est un schéma SERVI EN DOUBLE qui en sortirait.
+        """
         sp = manager.get_system_prompt("itinary_multi_agent")
+        assert "Expected JSON schema" not in sp
         assert "Schéma JSON attendu" not in sp
 
     def test_inactive_category_returns_none(self, manager):
@@ -178,8 +186,12 @@ class TestSystemPrompt:
         )
         messages = manager.render("itinary_multi_agent", [agent], {})
         sys_msg = next(m for m in messages if m.role == "system")
-        # Le schéma n'apparaît qu'une fois, injecté par le template (pas dupliqué)
-        assert sys_msg.content.count("Schéma JSON attendu") == 1
+        # Le schéma n'apparaît QU'UNE fois, injecté par le template — jamais dupliqué par
+        # un bloc resté dans le texte de la variante. On compte les deux orthographes
+        # ensemble : ce qui compte est le nombre de titres de schéma, pas leur langue.
+        titres = sum(sys_msg.content.count(t)
+                     for t in ("Expected JSON schema", "Schéma JSON attendu"))
+        assert titres == 1, f"{titres} titre(s) de schéma dans le prompt système servi"
         assert '"agent_id"' in sys_msg.content  # schéma bien injecté
 
 

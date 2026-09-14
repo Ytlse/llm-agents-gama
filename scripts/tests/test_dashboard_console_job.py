@@ -1,8 +1,8 @@
 """La console d'un job reste ouverte quand on l'ouvre (📟 Activités en cours).
 
-Le volet des jobs vit dans un fragment `run_every="2s"`, et l'argument `expanded` d'un
+Le volet des jobs vit dans un fragment `run_every="10s"`, et l'argument `expanded` d'un
 `st.expander` l'emporte à CHAQUE tour. Tant qu'il valait `index == 0`, seule la console du job
-le plus récent pouvait rester ouverte : ouvrir celle d'un autre job la refermait deux secondes
+le plus récent pouvait rester ouverte : ouvrir celle d'un autre job la refermait dix secondes
 plus tard. Cas réel du 2026-09-07 — deux expériences en parallèle, impossible de lire le
 journal de la plus ancienne.
 
@@ -71,7 +71,7 @@ def test_par_defaut_seul_le_job_de_tete_est_ouvert():
 
 
 def test_le_pli_choisi_par_le_lecteur_survit_au_rafraichissement():
-    """Le fragment se rejoue toutes les 2 s : il ne doit plus rien réimposer."""
+    """Le fragment se rejoue toutes les 10 s : il ne doit plus rien réimposer."""
     at = _apptest()
     at.session_state["job-volet-ancien"] = True   # le lecteur ouvre la console de mistral
     at.run()

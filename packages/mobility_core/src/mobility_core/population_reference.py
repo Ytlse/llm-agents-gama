@@ -55,14 +55,116 @@ REFERENCE_ENV = "POPULATION_EMC2_REFERENCE"
 # `cerema_values.yaml`, à la normalisation d'espace près (`normalize_place`) : le
 # classement des agents doit leur être identique, sinon les parts modales par zone se
 # comparent à des cibles qui ne désignent pas les mêmes territoires.
-COURONNES: tuple[str, ...] = ("Toulouse", "1ere couronne", "2eme couronne",
-                              "3eme couronne")
+# ANGLAIS depuis le ticket 074, et pour une raison précise : la couronne de résidence est
+# SERVIE AU MODÈLE dans le récit de persona (« Lives in: 3rd ring »). Tant qu'elle n'était
+# qu'une clé de jointure vers l'enquête, sa langue n'engageait personne ; servie au modèle,
+# elle relève de la même règle que le reste du prompt.
+#
+# Les clés de `cerema_values.yaml` (`1ere_couronne`), elles, restent FRANÇAISES : elles
+# franchissent une frontière de dépôt (`prompt_calibration/` les lit) et ne sont jamais vues
+# par le modèle. La traduction se fait à la frontière, dans `scripts/synthesis/frames.py`.
+COURONNES: tuple[str, ...] = ("Toulouse", "1st ring", "2nd ring", "3rd ring")
+
+#: Les modalités d'avant la v6, dans le MÊME ORDRE. Deux usages, et deux seulement : relire une
+#: cohorte ou une trace archivée, et relire une ressource générée avant la bascule.
+COURONNES_FR: tuple[str, ...] = ("Toulouse", "1ere couronne", "2eme couronne",
+                                 "3eme couronne")
+
+#: Ancienne modalité → modalité canonique.
+COURONNE_DEPUIS_FR: dict[str, str] = dict(zip(COURONNES_FR, COURONNES))
+
+#: Modalité canonique → identifiant de `cerema_values.yaml` (`lieu_residence`).
+COURONNE_VERS_CEREMA: dict[str, str] = {
+    "Toulouse": "Toulouse", "1st ring": "1ere_couronne",
+    "2nd ring": "2eme_couronne", "3rd ring": "3eme_couronne",
+}
+
+
+def couronne_canonique(valeur: str | None) -> str | None:
+    """Modalité de couronne canonique, quelle que soit la langue de la source.
+
+    Lire une cohorte d'avant la bascule sans traduire ferait tomber chaque agent dans
+    « modalité inconnue » : une masse entière comptée hors référentiel, sans qu'une seule
+    ligne ne manque nulle part.
+    """
+    if valeur is None:
+        return None
+    texte = str(valeur).strip()
+    return COURONNE_DEPUIS_FR.get(texte, texte or None)
 
 # Hors périmètre n'est PAS une couronne. C'est une cinquième modalité, et lui donner
 # un nom est le point : avant le ticket 020, un domicile à 100 km du Capitole était
 # classé « 3eme couronne » par le classement métrique et comparé à la cible d'un
 # territoire où il n'habite pas.
-OUT_OF_PERIMETER = "hors périmètre"
+OUT_OF_PERIMETER = "outside perimeter"
+
+#: La même modalité avant la bascule (ticket 074).
+OUT_OF_PERIMETER_FR = "hors périmètre"
+
+# `main_occupation` du persona → modalité de l'ENQUÊTE, telle que les artefacts ajustés
+# la nomment (`driving_license.json`, `pt_subscription.json`, `bike_ownership.json`, dont
+# les variables s'appellent littéralement `occ_Travail à plein temps`).
+#
+# POURQUOI CETTE TABLE EXISTE. Ces trois lois sont des artefacts GELÉS : leurs coefficients
+# ont été ajustés sur l'enquête, et le nom de leurs variables fait partie de l'ajustement.
+# Quand `main_occupation` est passé à l'anglais (ticket 074), le vecteur de design a cessé
+# de reconnaître UNE SEULE modalité : toutes les indicatrices sont tombées à zéro, donc
+# toute la cohorte dans la modalité de référence. Rien n'a planté — mesuré : l'écart de
+# `permis_adultes` à sa cible est passé de 2,52 à 5,23 points et celui de `abonnement_tc`
+# de 2,65 à 8,45, sans une ligne de journal.
+#
+# Les VALEURS sont donc figées avec les artefacts ; seules les clés suivent le persona.
+OCCUPATION_ENQUETE: dict[str, str] = {
+    # v6 et après
+    "Pupil (up to Baccalaureate)": "Scolaire (jusqu'au Bac)",
+    "Student": "Étudiant",
+    "Full-time worker": "Travail à plein temps",
+    "Part-time worker": "Travail à temps partiel",
+    "Unemployed / job seeker": "Chômeur/recherche d'emploi",
+    "Homemaker": "Personne au foyer",
+    "Retired": "Retraité",
+    # v5 et avant : l'identité, pour que les cohortes archivées se relisent sans détour.
+    "Scolaire (jusqu'au Bac)": "Scolaire (jusqu'au Bac)",
+    "Étudiant": "Étudiant",
+    "Travail à plein temps": "Travail à plein temps",
+    "Travail à temps partiel": "Travail à temps partiel",
+    "Chômeur/recherche d'emploi": "Chômeur/recherche d'emploi",
+    "Personne au foyer": "Personne au foyer",
+    "Retraité": "Retraité",
+    "Autre": "Autre",
+}
+
+
+def occupation_enquete(valeur: object) -> str | None:
+    """Modalité d'occupation de l'enquête, quelle que soit la langue du persona.
+
+    `None` pour une valeur absente ou hors vocabulaire — l'appelant décide alors, et le
+    DIT ; c'est précisément ce que le zéro silencieux des indicatrices ne faisait pas.
+    """
+    if valeur is None:
+        return None
+    return OCCUPATION_ENQUETE.get(str(valeur).strip())
+
+
+# Motif d'activité → libellé de `travel_purposes` du persona, SERVI au modèle.
+#
+# UNE SEULE définition : elle vivait en double, dans le générateur eqasim et dans
+# `fix_minor_traits`, chacun avec un commentaire disant « le même mapping que l'autre ». Les
+# traduire d'un seul côté a suffi à les faire diverger — le générateur posait `['Work']`, la
+# pré-imputation le réécrivait en `['Travail']`. `mobility_core` est monté dans l'image
+# eqasim : les deux côtés lisent la même table au lieu de promettre de rester d'accord.
+PURPOSE_LABEL: dict[str, str] = {
+    "work": "Work",
+    "education": "Education",
+    "shop": "Shopping",
+}
+
+#: Libellés d'avant la v6, pour relire les populations archivées.
+PURPOSE_LABEL_FR: dict[str, str] = {
+    "work": "Travail",
+    "education": "Etude",
+    "shop": "Achats",
+}
 
 # Âge minimum de la population cible de l'enquête. Les classes de parts modales
 # commencent à `5-9` : un agent de 3 ans tombe dans cette classe sans que rien ne le
@@ -120,7 +222,11 @@ def validate(reference: dict) -> dict:
 
     # Les couronnes couvrent le périmètre, ni plus ni moins.
     decoupage = _require(reference, "territoire.decoupage_concentrique")
-    noms = [str(z["nom"]) for z in decoupage]
+    # Le référentiel est un fichier d'ENQUÊTE : ses modalités sont celles de
+    # `cerema_values.yaml`, restées françaises (elles franchissent la frontière de
+    # `prompt_calibration/`). On les ramène au vocabulaire canonique avant de comparer, plutôt
+    # que d'exiger du référentiel qu'il parle la langue du persona.
+    noms = [couronne_canonique(str(z["nom"])) for z in decoupage]
     if tuple(noms) != COURONNES:
         raise PopulationReferenceError(
             f"cadrage incohérent : couronnes {noms} au lieu de {list(COURONNES)} — "
@@ -210,8 +316,14 @@ def surveyed_weekdays() -> tuple[int, ...]:
 
 
 def couronne_commune_counts() -> dict[str, int]:
-    """`couronne → nombre de communes`, du découpage de l'enquête."""
-    return {str(z["nom"]): int(z["communes"]) for z in
+    """`couronne → nombre de communes`, du découpage de l'enquête.
+
+    Les clés sont CANONIQUES (anglaises) : le référentiel parle le vocabulaire de l'enquête,
+    ses appelants celui du persona. Traduire ici plutôt que chez chacun d'eux évite qu'une
+    moitié du dépôt indexe par « 1ere couronne » et l'autre par « 1st ring » — deux
+    dictionnaires qui ne se joignent jamais, et dont rien ne dirait qu'ils ne se joignent pas.
+    """
+    return {couronne_canonique(str(z["nom"])): int(z["communes"]) for z in
             _require(population_reference(), "territoire.decoupage_concentrique")}
 
 

@@ -166,8 +166,8 @@ def test_get_code_distinct_from_car_no_dedup_collision():
 def test_rendering_shows_free_school_bus():
     plan = build_school_bus_option(_person(), _HOME, _edu_activity(), _TS, _TS)
     text = env_ob_to_text("travel_plan", plan.model_dump())
-    assert "Car scolaire" in text
-    assert "gratuit" in text.lower()
+    assert "school bus" in text.lower()
+    assert "free" in text.lower()
 
 
 def test_is_school_bus_plan_detects_chosen():

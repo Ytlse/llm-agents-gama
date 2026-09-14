@@ -35,6 +35,7 @@ from collections import Counter
 import pytest
 
 from mobility_core.bike_ownership import (
+    LABELS_FR,
     DEFAULT_RESOURCE,
     ELECTRIC_BIKE,
     K_CLASSES,
@@ -414,11 +415,13 @@ class TestContratDeSortie:
     def test_les_trois_libelles_sont_ceux_du_persona(self):
         """`traits_json` porte ces chaînes exactes, et `simulation_controller._owns_bike`
         les relit : une divergence d'un caractère prive les agents de vélo en silence."""
-        assert LABELS == ("Pas de vélo", "vélo normal", "VAE")
+        assert LABELS == ("No bike", "regular bike", "e-bike")
+        # Les libellés d'AVANT la v6 restent déclarés : les cohortes archivées les portent.
+        assert LABELS_FR == ("Pas de vélo", "vélo normal", "VAE")
         assert TRAIT_KEY == "personal_bike"
 
     def test_seul_pas_de_velo_est_negatif(self):
-        assert NO_BIKE.lower() == "pas de vélo"
+        assert NO_BIKE.lower() == "no bike"
         assert PLAIN_BIKE.lower() != "pas de vélo"
         assert ELECTRIC_BIKE.lower() != "pas de vélo"
 

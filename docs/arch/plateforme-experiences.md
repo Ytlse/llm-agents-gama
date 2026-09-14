@@ -151,8 +151,8 @@ propositions.jsonl   une ligne par déplacement :
   écriture ; `charger()` refuse un jeu altéré (J12), sans bloc `dependances` (J9), ou malformé (J13 :
   JSON strict, position de l'erreur ; jamais de pickle).
 - **Péremption** (J10) : `dependances_courantes()` recalcule le même bloc ; `perime(jeu)` rend la liste
-  des dépendances qui diffèrent. Le lancement d'une expérience l'affiche et exige
-  `--accepter-perime` pour continuer **[H]**.
+  des dépendances qui diffèrent (`commit` et `arbre_propre` sont informatifs pour la traçabilité sans périmer le jeu). Le lancement d'une expérience l'affiche et exige
+  `--accepter-perime` pour continuer **[H]** si une dépendance de transport (GTFS, graphe, config) a changé.
 - **Journalisation** (J15) : début/fin/durée/compteurs, ligne de succès, ALARME à front montant si la
   part de **défaillances de moteur** dépasse `--seuil-sans-proposition`. Les fermetures sur place
   en sont exclues : il n'y a pas d'itinéraire à calculer entre un point et lui-même, et les
@@ -511,6 +511,91 @@ des champs de `experience.yaml`, entrent dans `reglages_herites` et dans le nom 
 du 2×2 chaîne auraient porté la même définition, la même signature et le même nom. Ces deux
 drapeaux coupent la **position** du véhicule et le **verrou de retour**, jamais la possession, le
 permis ni l'âge — attributs de la personne que les deux décideurs voient légitimement.
+
+## 6 quater. Archive FROIDE : restaurable, auditable, jamais référencée (ticket 074)
+
+Le statut `archivee` d'une expérience (§ 7 quater) et le garde de cohorte du § 6 bis règlent la
+**visibilité** : les fichiers restent en place et restent lisibles. La bascule du dispositif en
+anglais demandait autre chose — geler l'état français **hors de portée du code**.
+
+    Froid = restaurable et auditable, jamais utilisé ni référencé.
+
+`archive/2026-09-14_avant_bascule_anglaise/` porte, à la racine du dépôt et hors git :
+
+| Dossier | Contenu | Mode |
+|---|---|---|
+| `prompts/` | `prompts.yaml` (22 variantes françaises), les 4 gabarits, les 4 schémas | copie |
+| `rendu/` | les 7 gabarits de description, `terminal_time.yaml`, les 2 tables de conditions météo | copie |
+| `code/` | `llm_agent.py`, `weather_loader.py` | copie |
+| `plateforme/` | les 24 définitions d'expériences **et leurs exécutions**, les jeux scellés v5 | déplacement |
+| `population/` | la cohorte v5, sa variante escorte, et la source déclarée par son MANIFEST | déplacement |
+
+La distinction copie / déplacement n'est pas cosmétique. Ce que git suit déjà est **copié** : ces
+fichiers restent en place, ce sont eux qu'on traduit, et git porte l'historique — la copie n'existe
+que pour qu'un auditeur lise l'état français sans faire d'archéologie dans les commits. Ce que git
+ne suit pas et qui ne doit plus servir est **déplacé**. Rien n'est supprimé.
+
+`MANIFEST.yaml` porte le commit du gel, le `sha256` de chaque entrée, son chemin d'origine, et la
+liste des chiffres de l'article qui en dérivent. `scripts/archiver_avant_bascule_anglaise.py` est
+idempotent, vérifie par défaut sans rien écrire, refuse de démarrer si une exécution a écrit sa
+progression depuis moins de deux minutes, et revérifie l'empreinte **à l'arrivée**.
+
+### Le garde est commun aux trois chargeurs
+
+`experiences/froid.py` porte la règle une seule fois ; trois points de passage obligés
+l'appliquent :
+
+| Chargeur | Ce qui y passe | Dérogation |
+|---|---|---|
+| `population.resoudre_population` | toute lecture de cohorte | `population.archivee_confirmee: <motif>` dans la définition |
+| `jeu.Jeu.charger` | toute lecture de jeu scellé | `archive_confirmee="<motif>"` |
+| `llm_gateway.prompts.engine.PromptManager` | tout service de prompt système | **aucune** — un prompt archivé ne se sert jamais |
+
+Le garde porte sur l'**emplacement**, jamais sur une correspondance de texte dans le nom : il
+suffit qu'un segment du chemin s'appelle `archive`. Une cohorte nommée `population_archivistes`
+reste parfaitement lisible. La dérogation exige un **motif écrit** — `confirme=True` se coche sans
+y penser, `confirme="garde de comparabilité D-7"` s'écrit, se journalise et se relit.
+
+Le registre et la file d'attente ne voient jamais l'archive, et ce n'est pas un filtre ajouté
+quelque part : `dossier_experiences()` et `dossier_jeux()` s'ancrent sous `data/`, l'archive vit à
+côté. `scripts/tests/test_074_archive_froide.py` verrouille la propriété plutôt que de la
+promettre — c'est la leçon du ticket 045, où 36 exécutions ont lu la mauvaise cohorte sans que
+rien s'y oppose.
+
+### Ce que le gel coûte, tant que la v6 n'est pas scellée
+
+`data/population/` ne porte plus aucune cohorte scellée, et `data/experiences/` est vide. Une
+quarantaine de tests passent donc en **veille**, en disant pourquoi (« aucune cohorte scellée sur
+disque (substrat en archive froide, ticket 074 lot A) »), au lieu de tomber sur un `IndexError` ou
+un `FileNotFoundError` qui ferait chercher une régression du tableau de bord. Le compte de tests
+en veille est lui-même un indicateur : il doit redescendre au scellement de la v6.
+
+## 6 quinquies. Nommage des variantes de prompt (ticket 074, C-4/C-5)
+
+Le nom d'une variante entre dans le nom de l'expérience (`abreger_variante`), donc dans son
+identité. Il doit dire **la famille** et **la place dans la série** :
+
+    prompt_<famille>_<nn>        famille ∈ {minimal, expert}
+
+La numérotation suit la **généalogie** (`_provenance.derive_de`), racines d'abord, puis chaque
+lignée en profondeur. Ni l'alphabet ni la date : les cinq `persona_*` portaient toutes la date de
+leur archivage, et un tri par date les aurait séparées de leurs parents.
+
+Ce que le renommage a réparé, et qu'aucun test ne voyait : `expert_gem_3.8_v2` et
+`expert_gem_3.8_v2_neutre_justif` s'abrégeaient **tous deux** en `expgem38v2`. Deux expériences
+portaient le même segment de variante, distinguées par un indice `_2` qui ne disait pas ce qui
+changeait — une collision dans l'identité d'une mesure, pas une gêne cosmétique.
+
+**Un ancien nom se résout encore, mais en LECTURE seulement.** `PromptManager` tient un index
+`_ancien_nom → nom canonique` et avertit à chaque résolution. Sans lui, `empreinte_gabarit` ne
+pourrait plus recalculer l'empreinte d'une exécution archivée : ses définitions gelées portent
+`variante: expert_gem_3.8_v2` et ne seront jamais réécrites, l'archive étant froide (§ 6 quater).
+Un nom vraiment inconnu reste refusé, et le message liste les deux jeux de noms — résoudre en
+silence ferait reconduire l'ancien nom de trace en trace.
+
+`scripts/migrations/renommer_prompts.py`, à blanc par défaut, réécrit les clés **et** toutes les
+références internes : `active:`, `familles.minimale`, `derive_de`, `_calibration.seed`,
+`_invalidation.remplace_par`, ainsi que les définitions d'expériences vivantes.
 
 ## 6 ter. Substrat dérivé de sonde (`scripts/deriver_sonde_escort.py`, ticket 027)
 

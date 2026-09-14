@@ -21,8 +21,10 @@ APP = Path(__file__).resolve().parents[1] / "dashboard" / "app.py"
 def app(tmp_path_factory):
     # Le formulaire d'expérience retient ses choix dans un fichier : le harnais ne doit ni
     # le lire ni l'écraser, sinon le test dépendrait du dernier brouillon de l'utilisateur.
+    import os
     import sys
 
+    os.environ["DASHBOARD_EAGER"] = "1"
     sys.path.insert(0, str(APP.parents[2]))
     from scripts.dashboard import experiences
 
@@ -35,6 +37,29 @@ def app(tmp_path_factory):
     yield at
     experiences.ETAT_FORMULAIRE = origine  # la constante est partagée par tous les fichiers de test
     experiences.ETAT_VUE_REGISTRE = origine_vue
+    os.environ.pop("DASHBOARD_EAGER", None)
+
+
+# ── Résolution des boutons ────────────────────────────────────────────────────
+# Deux boutons de la page portent EXACTEMENT le même libellé « 💾 Enregistrer » : celui du
+# tiroir d'un ticket et celui du formulaire d'expérience. Les résoudre par le texte revenait
+# à attraper le premier rendu — c'est-à-dire l'un des 75 boutons de tickets, l'onglet Tickets
+# étant rendu avant l'onglet Expériences. Un libellé est de l'interface : il doit pouvoir
+# changer sans casser une assertion.
+#
+# `form_id` est le seul identifiant stable ici. La clé n'en est pas un : Streamlit la dérive
+# du libellé pour un `form_submit_button` (« FormSubmitter:<clé du formulaire>-<libellé> »),
+# et le bouton d'expérience, simple `st.button`, n'en a aucune.
+def _bouton_ticket(at):
+    """Le bouton d'enregistrement du tiroir d'un ticket — formulaire `statut-<ticket>`.
+
+    Le formulaire voisin du même tiroir est `triage-<ticket>` : le préfixe les sépare."""
+    return next(b for b in at.button if b.form_id.startswith("statut-"))
+
+
+def _bouton_enregistrer_experience(at):
+    """Le bouton « 💾 Enregistrer » du formulaire d'expérience, hors de tout formulaire Streamlit."""
+    return next(b for b in at.button if not b.form_id and b.label == "💾 Enregistrer")
 
 
 def test_le_tableau_de_bord_se_charge_sans_exception(app):
@@ -81,19 +106,19 @@ def test_le_formulaire_produit_un_experience_yaml_complet():
     sys.path.insert(0, str(APP.parents[2]))
     from scripts.dashboard import experiences
     v = experiences.defauts()
-    v.update({"population": "data/population/population_1000_AAMAS_v5", "jeu": "v5_j1", "variante": "b_min"})
+    v.update({"population": "data/population/population_1000_AAMAS_v5", "jeu": "v5_j1", "variante": "prompt_expert_02"})
     exp = experiences.construire_experience(v)
     for champ in ("nom", "population", "jeu", "gabarit", "decideur", "mode", "calendrier", "horizon_jours", "memoire", "evenements",
                   "graine_ordre", "graine_tirage", "regroupement", "tolerances_horaires", "max_candidats", "attente_max_s"):
         assert champ in exp, champ
-    assert exp["population"]["chemin"] == "/data/eqasim-output/population_1000_AAMAS_v5" and exp["gabarit"]["variante"] == "b_min"
+    assert exp["population"]["chemin"] == "/data/eqasim-output/population_1000_AAMAS_v5" and exp["gabarit"]["variante"] == "prompt_expert_02"
     # aller-retour : une expérience relue remplit le formulaire (dupliquer / s'inspirer)
     base = experiences.depuis_experience(exp)
-    assert base["population"] == "data/population/population_1000_AAMAS_v5" and base["variante"] == "b_min"
+    assert base["population"] == "data/population/population_1000_AAMAS_v5" and base["variante"] == "prompt_expert_02"
     assert base["derive_de"] == exp["nom"], "la filiation cite le nom calculé de la source"
     assert "nom" not in base, "le nom ne se recopie pas : il se recalcule (N1)"
     variantes, active = experiences.variantes_prompt()
-    assert "b_min" in variantes and active
+    assert "prompt_expert_02" in variantes and active
     assert experiences.modeles()
 
 
@@ -102,8 +127,8 @@ def test_les_prompts_sont_lisibles_avant_de_choisir():
     sys.path.insert(0, str(APP.parents[2]))
     from scripts.dashboard import experiences
     textes = experiences.prompts_textes()
-    assert "b_min" in textes and textes["b_min"]["mots"] and "probabilit" in textes["b_min"]["contenu"].lower()
-    assert textes["b_min"]["provenance"].get("role")
+    assert "prompt_expert_02" in textes and textes["prompt_expert_02"]["mots"] and "probabilit" in textes["prompt_expert_02"]["contenu"].lower()
+    assert textes["prompt_expert_02"]["provenance"].get("role")
 
 
 def test_ajouter_variante_sans_jamais_ecraser(tmp_path):
@@ -114,13 +139,13 @@ def test_ajouter_variante_sans_jamais_ecraser(tmp_path):
     copie = tmp_path / "prompts.yaml"
     shutil.copy(experiences.PROMPTS_YAML, copie)
     avant = yaml.safe_load(copie.read_text())
-    experiences.ajouter_variante("test_dash", "Ligne 1.\n\nLigne 2 : « accents » — ok.", derive_de="b_min", chemin=copie)
+    experiences.ajouter_variante("test_dash", "Ligne 1.\n\nLigne 2 : « accents » — ok.", derive_de="prompt_expert_02", chemin=copie)
     apres = yaml.safe_load(copie.read_text())
     assert set(apres["prompts"]) == set(avant["prompts"]) | {"test_dash"} and apres["active"] == avant["active"]
     assert apres["prompts"]["test_dash"]["content"].strip() == "Ligne 1.\n\nLigne 2 : « accents » — ok."
-    assert apres["prompts"]["test_dash"]["_provenance"]["derive_de"] == "b_min"
+    assert apres["prompts"]["test_dash"]["_provenance"]["derive_de"] == "prompt_expert_02"
     with pytest.raises(ValueError, match="existe déjà"):
-        experiences.ajouter_variante("b_min", "x", chemin=copie)
+        experiences.ajouter_variante("prompt_expert_02", "x", chemin=copie)
     with pytest.raises(ValueError, match="invalide"):
         experiences.ajouter_variante("nom avec espaces", "x", chemin=copie)
     assert yaml.safe_load(copie.read_text()) == apres, "un refus ne touche pas le fichier"
@@ -363,6 +388,16 @@ def test_R12_le_compteur_de_statuts_suit_les_tickets(app):
         assert comptes[statut] == sum(1 for t in items if t.status == statut), statut
 
 
+def test_onglet_tickets_affiche_colonne_description(app):
+    """Le tableau et les expanders de l'onglet Tickets affichent la description courte."""
+    tableaux = [df.value for df in app.dataframe]
+    ticket_df = next(df for df in tableaux if "Titre" in df.columns and "Statut" in df.columns)
+    assert "Description" in ticket_df.columns
+    assert (ticket_df["Description"] != "").all()
+    markdowns = [str(m.value) for m in app.markdown]
+    assert any("**Description** — " in m for m in markdowns)
+
+
 def test_R14_une_note_non_touchee_n_est_pas_reecrite(tmp_path):
     """L'interface envoie toujours le contenu de la zone de texte telle qu'elle a été rendue.
 
@@ -387,7 +422,7 @@ def test_R14_une_note_non_touchee_n_est_pas_reecrite(tmp_path):
     try:
         at = AppTest.from_file(str(APP), default_timeout=240)
         at.run()
-        soumission = next(b for b in at.button if "Enregistrer le statut" in b.label)
+        soumission = _bouton_ticket(at)
         soumission.click().run()
     finally:
         tickets.load_tickets, tickets.save_override = origine_liste, origine_ecriture
@@ -528,7 +563,7 @@ def test_R27_le_texte_saisi_gagne_et_n_est_jamais_jete(tmp_path):
         at.run()
         at.text_area(key="note-ticket_912_note").set_value("NOTE TAPÉE PAR L'UTILISATEUR").run()
         fabriques[0].note = "note corrigée à la main dans le fichier"  # édition concurrente
-        soumission = next(b for b in at.button if "Enregistrer le statut" in b.label)
+        soumission = _bouton_ticket(at)
         soumission.click().run()
     finally:
         tickets.load_tickets, tickets.save_override = origine_liste, origine_ecriture
@@ -685,7 +720,7 @@ def _clic_statut(tmp_path, fabriques, *, avant_clic=None, ecriture=None):
         at.run()
         if avant_clic is not None:
             avant_clic(at)
-        next(b for b in at.button if "Enregistrer le statut" in b.label).click().run()
+        _bouton_ticket(at).click().run()
         return at, appels
     finally:
         tickets.load_tickets, tickets.save_override = origine_liste, origine_ecriture
@@ -754,7 +789,7 @@ def test_R1_R2_le_clic_enregistre_sans_jeu_et_nomme_le_jeu_attendu(tmp_path):
     patchs[runner.Registry] = {"launch": lambda self, label, argv, cwd, flags=(): lancements.append(argv)}
 
     with _app_patchee(tmp_path, patchs) as at:
-        enregistrer = next(b for b in at.button if b.label == "💾 Enregistrer")
+        enregistrer = _bouton_enregistrer_experience(at)
         assert not enregistrer.disabled, "sans jeu et sans conteneur, enregistrer doit rester possible"
         enregistrer.click().run()
         message = "\n".join(str(c.value) for c in at.code)
@@ -794,7 +829,7 @@ def test_reenregistrer_un_nom_deja_execute_ne_demande_plus_de_confirmation(tmp_p
     with _app_patchee(tmp_path, patchs) as at:
         assert not [c for c in at.checkbox if "porte déjà" in c.label], \
             "plus de case de confirmation d'écrasement"
-        enregistrer = next(b for b in at.button if b.label == "💾 Enregistrer")
+        enregistrer = _bouton_enregistrer_experience(at)
         assert not enregistrer.disabled, "réenregistrer un nom déjà exécuté est désormais direct"
 
 
@@ -819,7 +854,7 @@ def _plateforme_avec_survivante(tmp_path):
     from scripts.dashboard import experiences
 
     exps = tmp_path / "experiences"
-    population = experiences.populations()[0]
+    population = _cohorte_ou_saut(experiences)
     # Le nom se calcule des paramètres (N1) : l'exécution qui survit doit porter le nom que
     # le formulaire vierge produira, sinon elle relève d'une autre expérience.
     definition = experiences.construire_experience(
@@ -886,7 +921,7 @@ def test_N1_le_nom_est_affiche_calcule_et_non_saisi(tmp_path):
         assert experiences.MOTIF_NOM.match(noms[0]), noms[0]
         assert not [b for b in at.button if "Utiliser «" in b.label], \
             "plus rien à proposer : le nom n'est plus une saisie à corriger"
-        assert not next(b for b in at.button if b.label == "💾 Enregistrer").disabled
+        assert not _bouton_enregistrer_experience(at).disabled
 
 
 def test_N10_une_definition_deja_enregistree_est_annoncee_comme_telle(tmp_path):
@@ -894,7 +929,7 @@ def test_N10_une_definition_deja_enregistree_est_annoncee_comme_telle(tmp_path):
     experiences, patchs = _plateforme_isolee(tmp_path)
 
     with _app_patchee(tmp_path, patchs) as at:
-        next(b for b in at.button if b.label == "💾 Enregistrer").click().run()
+        _bouton_enregistrer_experience(at).click().run()
 
     with _app_patchee(tmp_path, patchs) as at:
         infos = [str(i.value) for i in at.info]
@@ -912,7 +947,7 @@ def test_R1_R3_le_bloc_des_services_dit_ce_qui_manque_et_le_lancement_le_demarre
     from scripts.dashboard import runner
 
     experiences, patchs = _plateforme_isolee(tmp_path)
-    population = experiences.populations()[0]
+    population = _cohorte_ou_saut(experiences)
     jeu = [{"nom": experiences.nom_jeu_attendu(population, "2026-03-16"),
             "population": Path(population).name, "jour": "2026-03-16", "clos": True,
             "couverts": 98, "attendus": 100}]
@@ -943,7 +978,7 @@ def test_R1_R3_le_bloc_des_services_dit_ce_qui_manque_et_le_lancement_le_demarre
 
 def test_R1_tout_en_marche_le_bloc_reste_visible_sans_bouton(tmp_path):
     experiences, patchs = _plateforme_isolee(tmp_path)
-    population = experiences.populations()[0]
+    population = _cohorte_ou_saut(experiences)
     patchs[experiences]["jeux"] = lambda: [{"nom": experiences.nom_jeu_attendu(population, "2026-03-16"),
                                            "population": Path(population).name, "jour": "2026-03-16",
                                            "clos": True, "couverts": 98, "attendus": 100}]
@@ -1038,10 +1073,43 @@ def test_R14_un_demon_docker_muet_est_nomme(tmp_path):
 _JOUR = "2026-03-16"
 # Tous les champs numériques et booléens du formulaire s'écartent des défauts : une recopie
 # PARTIELLE serait sinon invisible (un champ oublié garderait par hasard la bonne valeur).
-_REGLAGES_A = {"parallelisme": 16, "temperature": 0.7, "variante": "b_min", "max_candidats": 4, "attente_max_s": 60,
+_REGLAGES_A = {"parallelisme": 16, "temperature": 0.7, "variante": "prompt_expert_02", "max_candidats": 4, "attente_max_s": 60,
                "graine_ordre": 7, "graine_tirage": 11, "graine_calendrier": 5, "graine_decideur": 9, "memoire": True}
 # (pas d'horizon_jours : hors simulateur le champ est grisé et forcé à 1 par le formulaire lui-même)
 _REGLAGES_B = {"parallelisme": 24, "temperature": 0.3}
+
+
+REPO_ROOT_TEST = APP.parents[2]
+
+
+def _cohorte_ou_saut(experiences):
+    """La première cohorte scellée, ou un saut de test qui DIT pourquoi.
+
+    Ticket 074, lot A : la cohorte v5 est partie en archive FROIDE et la v6 n'est pas encore
+    produite — `data/population/` ne porte plus aucun dossier scellé. Les tests qui montent une
+    expérience complète n'ont alors rien à monter.
+
+    Sans ce garde, `populations()[0]` lève `IndexError: list index out of range` à seize
+    endroits : un échec qui ne nomme pas sa cause se lit comme une régression du tableau de
+    bord et fait chercher au mauvais endroit. Le tableau de bord, lui, se rend sans exception
+    dans cet état — vérifié.
+    """
+    import pytest as _pytest
+
+    # Les cohortes SCELLÉES seulement. `populations()` rend aussi les JSON nus (EF-02 : toute
+    # population est admissible), et le brut d'eqasim atterrit dans `data/population/` — c'est
+    # le montage `eqasim_output` du conteneur. Un vivier de 11 329 personas non sélectionné y
+    # ressemble à une cohorte : ces tests montent alors une expérience autour d'un substrat qui
+    # n'en est pas un, et échouent pour une raison sans rapport avec ce qu'ils vérifient.
+    cohortes = [c for c in experiences.populations()
+                if (REPO_ROOT_TEST / c / "MANIFEST.yaml").is_file()]
+    if not cohortes:
+        _pytest.skip(
+            "aucune cohorte SCELLÉE dans data/population (substrat en archive froide, "
+            "ticket 074 lot A ; un vivier nu n'en est pas une) — ces tests reviennent au "
+            "scellement de la v6"
+        )
+    return cohortes[0]
 
 
 def _plateau(tmp_path, retouches_a=None, avec_b=False):
@@ -1057,7 +1125,7 @@ def _plateau(tmp_path, retouches_a=None, avec_b=False):
     from scripts.dashboard import experiences
 
     exps = tmp_path / "experiences"
-    population = experiences.populations()[0]
+    population = _cohorte_ou_saut(experiences)
     nom_jeu = experiences.nom_jeu_attendu(population, _JOUR)
 
     def ecrire(reglages, retouches):
@@ -1121,7 +1189,7 @@ def test_inspirer_R1_le_choix_recopie_tous_les_champs_sans_autre_clic(tmp_path):
         assert not at.exception, "\n".join(str(e.value) for e in at.exception)
         attendu = pl.experiences._valider_base(pl.experiences.depuis_experience(pl.def_a))
         assert not _ecarts(_brouillon(tmp_path), attendu), _ecarts(_brouillon(tmp_path), attendu)
-        assert _parallelisme(at) == 16 and _champ(at, "Prompt système").value == "b_min"
+        assert _parallelisme(at) == 16 and _champ(at, "Prompt système").value == "prompt_expert_02"
         assert at.session_state["exp_version"] == 1, "les clés des widgets sont remises à neuf"
         assert pl.nom_a in _nom_affiche(at), "le nom calculé en tête est celui de la source"
 
@@ -1202,7 +1270,7 @@ def test_inspirer_R7_une_valeur_inconnue_ou_hors_bornes_ne_casse_pas_la_page(tmp
         modele = _champ(at, "Modèle (RPD = requêtes/jour restantes)").value
         assert modele != "fantome/absent" and modele in pl.experiences.modeles(), "inconnu : revient au défaut"
         assert abs(float(_champ(at, "Température").value) - 0.7) < 1e-9, "les autres champs sont recopiés"
-        assert _champ(at, "Prompt système").value == "b_min"
+        assert _champ(at, "Prompt système").value == "prompt_expert_02"
 
 
 def test_inspirer_R8_la_page_dit_ce_qu_elle_a_recopie_tant_que_c_est_vrai(tmp_path):

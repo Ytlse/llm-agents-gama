@@ -6,10 +6,20 @@
 # ── 1. SOCLE COMMUN PARTAGÉ (COMMON SET) ──────────────────────────────────────
 defaults:
   inputs:
-    # Chemin vers la population scellée alignée sur l'enquête Cerema EMC² 2023 : la v5,
-    # scellée le 2026-09-04 (le dossier vLAST cité jusqu'ici n'a jamais existé).
-    population_file: "data/population/population_1000_AAMAS_v5/population.json"
-    population_hash: null  # Sera renseigné automatiquement par le hash sha256 au gel ; sceau v5 : de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce
+    # Chemin vers la population scellée alignée sur l'enquête Cerema EMC² 2023 : la v6,
+    # scellée le 2026-09-14 (ticket 074). La v5 est partie à l'archive froide.
+    #
+    # LA v6 EST LA v5, EN ANGLAIS. Vérifié agent par agent contre l'archive : les mêmes
+    # 1 000 `person_id`, les mêmes 499 ménages, et 0 chaîne d'activité différente sur
+    # 1 000 — motifs, horaires et lieux compris. Six champs seulement changent :
+    # `main_occupation`, `housing_type`, `personal_bike`, `residence_zone` et
+    # `travel_purposes` passent à l'anglais, et les prénoms sont désormais tirés d'une
+    # graine par `person_id` au lieu de l'horloge.
+    #
+    # CONSÉQUENCE POUR LA GARDE D-7 : les 14 témoins déterministes ne lisent aucun
+    # prompt et voient un substrat identique. Ils restent comparables SANS être rejoués.
+    population_file: "data/population/population_1000_AAMAS_v6/population.json"
+    population_hash: null  # Sera renseigné automatiquement par le hash sha256 au gel ; sceau v6 : 412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6 (v5 archivée : de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce)
     reference_survey: "scripts/data/population/cerema_values.yaml"
     oracle_lightgbm: "scripts/progedo_logit/mode_choice_policy.json"
     feature_spec: "scripts/progedo_logit/feature_spec.json"
@@ -18,7 +28,8 @@ defaults:
     # le nombre de déplacements est dérivé de leurs chaînes d'activités, qui sont CYCLIQUES :
     # la première activité « home » commence la veille au soir et le dernier déplacement ramène
     # au domicile, donc une chaîne de k activités porte k déplacements, et non k − 1.
-    # Mesuré sur population_1000_AAMAS_v5 : 1 000 pers., 894 mobiles, 3,30 déplacements/pers.
+    # Mesuré sur population_1000_AAMAS_v6 : 1 000 pers., 894 mobiles, 3,30 déplacements/pers.
+    # — les mêmes trois chiffres que la v5, la cohorte étant la même.
     # Recalculé automatiquement au gel du hash (peut varier légèrement d'une version à l'autre).
     person_count: 1000
     trip_count: 3299       # somme(activités − 1) = 2 405, + 894 mobiles (dérivé, non fixé à la main)
@@ -158,7 +169,7 @@ experiments:
       cost_usd: 0.0
 
   # ============================================================================
-  # PHASE 1 : MODÈLES NUS / BARE LLM (Section 3 & 4.1)
+  # PHASE 1 : PROMPT FACTUEL NEUTRE ET CIRCONSTANCIÉ (Section 5 & 6.1)
   # ============================================================================
 
   - id: "exp_01a_bare_gemini_flash_lite"
@@ -439,37 +450,6 @@ experiments:
       requests_unbatched: 0
       batch_count: 0
       rpd_quota_consumption: "0%"
-
-  - id: "exp_04d_hysteresis_memory_5d_lambda_low"
-    title: "LLM + Mémoire — Sensibilité λ (λ÷3 = 0.13)"
-    phase: "phase_4_hysteresis"
-    description: "Réplique exacte d'exp_04a avec λ divisé par trois. Exécute le critère de réfutation (ii) du PROTOCOLE §5.3 : si diviser λ par trois ne déplace pas la courbe de ré-adoption, l'effet mémoire est réfuté."
-    engine:
-      type: "llm"
-      provider: "google"
-      instance: "google_gemini31_key1"
-      model: "gemini-3.1-flash-lite"
-      temperature: 0.0
-      seed: 42
-      memory_enabled: true
-      memory_horizon_days: 5
-      memory_decay_lambda: 0.13        # λ÷3 vs exp_04a (0.4) — bras de sensibilité
-    execution:
-      batch_size: 10
-      simulation_days: 5
-      perturbation:
-        day: 2
-        time: "17:00"
-        mode: "metro_line_a"
-        delay_min: 45
-    estimation:
-      requests_unbatched: 5000
-      batch_count: 500
-      rpd_quota_consumption: "100% (500 / 500 RPD — jour de campagne dédié)"
-      avg_tokens_per_trip_prompt: 850
-      avg_tokens_per_trip_reply: 230
-      total_tokens_in: 4375000
-      total_tokens_out: 1150000
 
   # ============================================================================
   # PHASE 5 : ÉVALUATION ÉCOLOGIQUE SUR ARTICLES DE PRESSE (Section 5.2 & 5.3)

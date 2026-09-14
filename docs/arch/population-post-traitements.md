@@ -123,6 +123,44 @@ Deux nuances utiles :
 
 ---
 
+## Les deux vocabulaires, et la frontière entre eux (ticket 074)
+
+Depuis la bascule anglaise, **tout ce qu'un agent lit est en anglais** — son récit de
+persona, son bulletin météo, la description de ses options, sa couronne de résidence, son
+occupation. Mais **les cibles de l'enquête restent en français**, parce qu'elles sont des
+citations : `cerema_values.yaml`, `population_emc2_2023.yaml`, `cible_jointe_couronne_motorisation.yaml`
+et `cibles_marges_personne.yaml` portent les libellés du rapport, et leurs `sha256` sont
+publiés dans les manifestes des cohortes déjà scellées. Les traduire romprait ces sceaux, et
+priverait le dépôt `prompt_calibration/` — qui lit `cerema_values.yaml` et rien d'autre — de
+sa référence.
+
+Les deux vocabulaires ne se rencontrent donc qu'à des **frontières nommées**, une par trait.
+Chacune est une fonction, pas une substitution de texte :
+
+| Trait | Ce que lit l'agent | Ce que disent les cibles | La frontière |
+|---|---|---|---|
+| `residence_zone` | `Toulouse`, `1st ring`, `2nd ring`, `3rd ring`, `outside perimeter` | `1ere couronne`… | `mobility_core.population_reference.couronne_canonique()` à la lecture, `COURONNE_VERS_CEREMA` vers les clés CEREMA |
+| `main_occupation` | `Full-time worker`, `Retired`, `Student`… | `Travail à plein temps`… | `scripts/synthesis/model_on_common_set.occupation_du_spec()` ; `frames.OCCUPATION_MAP` accepte les deux |
+| `housing_type` | `Detached house`, `Small apartment building`… | clés `individuel_isole`… | `mobility_core.housing_type.key_for()` — la CLÉ est française et stable, seul le LIBELLÉ a basculé |
+| `personal_bike` | `No bike`, `regular bike`, `e-bike` | `Pas de vélo`, `vélo normal`, `VAE` | `mobility_core.bike_ownership.LABELS_FR` et `has_bike()` |
+
+**La règle, en une phrase :** on traduit à la frontière, jamais à l'affichage et jamais dans
+le fichier gelé. Corriger à l'affichage laisserait la valeur française dans le trait, où le
+prochain lecteur la retrouverait ; traduire le fichier gelé casserait les sceaux.
+
+**Le piège que cette règle évite.** Une cible jointe lue avec des clés anglaises contre un
+fichier français ne « manque » pas quelques lignes : elle n'en trouve **aucune**, et un
+contrôle naïf rendrait un écart de 0 sur une table vide — la vacuité prise pour la
+perfection. C'est pourquoi `reference_marges.cible_jointe()` lève `ReferenceError` en
+nommant la ligne absente, plutôt que de servir « au mieux ».
+
+**Ce qui n'est PAS traduit, et ne le sera pas :** les étiquettes de mode (`car`, `bicycle`,
+`foot,bus,foot`), relues **dans le texte du prompt** par `parse_option_modes` ; les noms
+propres (arrêts GTFS, lignes, communes) ; et les clés de `housing_type`, qui sont des
+identifiants de jointure.
+
+---
+
 ## Les traits d'équipement et leurs tickets
 
 Quatre champs sont **recopiés du donneur ENTD 2008** (`enriched.py`, colonnes jointes

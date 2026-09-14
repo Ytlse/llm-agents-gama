@@ -133,7 +133,46 @@ def has_bike(personal_bike: Any) -> Optional[bool]:
     text = str(personal_bike).strip().lower()
     if not text:
         return None
-    return text != "pas de vélo"
+    # Les DEUX vocabulaires : « No bike » depuis la v6 (ticket 074), « Pas de vélo » avant.
+    # N'en connaître qu'un ferait rendre `True` à l'autre — un persona sans vélo compté comme
+    # en ayant un, sur toute une cohorte, sans qu'une seule ligne ne manque.
+    return text not in _SANS_VELO
+
+
+#: Les deux façons d'écrire « cette personne n'a pas de vélo ».
+_SANS_VELO = frozenset({"pas de vélo", "no bike"})
+
+
+# Libellé `main_occupation` du persona → modalité du `feature_spec.json`.
+#
+# Le spec et les artefacts entraînés encodent les modalités de l'ENQUÊTE, en français
+# (`main_occupation=Travail à plein temps` est une colonne de la matrice de dessin). La cohorte
+# v6 porte des libellés anglais, servis au modèle dans son prompt.
+#
+# La traduction se fait ICI, à la frontière, et surtout PAS en réentraînant : les quatre
+# modèles-témoins sont la référence contre laquelle les LLM sont notés, et réajuster leurs
+# coefficients déplacerait des chiffres publiés pour une raison de langue.
+#
+# Sans cette table, chaque persona v6 tomberait dans `__missing__`, dont le contrat dit
+# « coefficient nul : une valeur absente se comporte comme la modalité de référence ». Aucune
+# exception, aucun journal : une variable mise à zéro sur 100 % des lignes.
+_OCCUPATION_VERS_SPEC = {
+    "Pupil (up to Baccalaureate)": "Scolaire (jusqu'au Bac)",
+    "Student": "Étudiant",
+    "Full-time worker": "Travail à plein temps",
+    "Part-time worker": "Travail à temps partiel",
+    "Unemployed / job seeker": "Chômeur/recherche d'emploi",
+    "Homemaker": "Personne au foyer",
+    "Retired": "Retraité",
+}
+
+
+def occupation_du_spec(valeur: Any) -> Optional[str]:
+    """Modalité d'occupation telle que le spec l'attend, quelle que soit la langue du persona."""
+    if valeur is None:
+        return None
+    texte = str(valeur).strip()
+    return _OCCUPATION_VERS_SPEC.get(texte, texte or None)
 
 
 def persona_features(traits: dict) -> dict:
@@ -157,7 +196,7 @@ def persona_features(traits: dict) -> dict:
         "car_availability": traits.get("car_availability"),
         "has_bike": has_bike(traits.get("personal_bike")),
         "socioprofessional_class": traits.get("socioprofessional_class"),
-        "main_occupation": traits.get("main_occupation"),
+        "main_occupation": occupation_du_spec(traits.get("main_occupation")),
         "employed": traits.get("employed"),
         "studies": traits.get("studies"),
     }

@@ -1,0 +1,636 @@
+<title>Accidents sur les axes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@300;400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F5F6F8; --card:#FFFFFF; --card2:#EDEFF4; --hatch:#E4E8EF;
+  --ink:#191C22; --ink2:#4A5160; --muted:#79808F;
+  --rule:#DDE1E8; --rule2:#C6CCD7;
+  --accent:#1F5FA0; --accent-soft:#E6EEF8;
+  --ochre:#A8681C; --ochre-soft:#F5EBDB;
+  --car:#C43D3D; --bike:#7B52C7; --pt:#2E9E52; --walk:#0C7DA6;
+  --disp:"Spectral",ui-serif,Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#16181C; --card:#1D2026; --card2:#23272F; --hatch:#262B34;
+    --ink:#E9EBEF; --ink2:#AEB4C0; --muted:#7F8794;
+    --rule:#2C313A; --rule2:#3A404B;
+    --accent:#4E93D8; --accent-soft:#1A2635;
+    --ochre:#BB8638; --ochre-soft:#2B2318;
+    --car:#D9584F; --bike:#9A78DE; --pt:#37A863; --walk:#2892C0;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#16181C; --card:#1D2026; --card2:#23272F; --hatch:#262B34;
+  --ink:#E9EBEF; --ink2:#AEB4C0; --muted:#7F8794;
+  --rule:#2C313A; --rule2:#3A404B;
+  --accent:#4E93D8; --accent-soft:#1A2635;
+  --ochre:#BB8638; --ochre-soft:#2B2318;
+  --car:#D9584F; --bike:#9A78DE; --pt:#37A863; --walk:#2892C0;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;margin:0}
+p{margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* ---------- scène ---------- */
+.deck{padding-bottom:3.6rem}
+.slide{container-type:inline-size;background:var(--card);color:var(--ink);font-size:1.48cqw;position:relative}
+.deck[data-mode="slides"]{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 3.6rem)}
+.deck[data-mode="slides"] .slide{display:none;width:min(100vw,177.7vh);aspect-ratio:16/9;margin:0 auto;border:1px solid var(--rule)}
+.deck[data-mode="slides"] .slide.on{display:block}
+.deck[data-mode="doc"] .slide{container-type:normal;font-size:15.5px;max-width:62rem;margin:0 auto;border-bottom:1px solid var(--rule);background:transparent}
+.pad{--px:3.4em;--py:2.7em;position:absolute;inset:0;display:flex;flex-direction:column;gap:.85em;padding:var(--py) var(--px)}
+.deck[data-mode="doc"] .pad{--px:1.6em;--py:3em;position:static;inset:auto}
+.body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:.8em}
+.deck[data-mode="doc"] .body{overflow:visible}
+
+/* ---------- en-tête de planche ---------- */
+.head{display:flex;align-items:baseline;gap:.9em;font:500 .64em/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.head b{color:var(--accent);font-weight:500}
+.head .num{margin-left:auto;font-variant-numeric:tabular-nums}
+h2.t{font-size:1.9em;line-height:1.1;letter-spacing:-.012em;font-weight:500}
+.lead{font-size:.86em;line-height:1.5;color:var(--ink2);max-width:52em}
+
+/* ---------- bandeau ---------- */
+.banner{margin:calc(-1*var(--py)) calc(-1*var(--px)) 0;padding:.7em var(--px);
+  background:var(--ochre);color:var(--paper);
+  font:500 .82em/1.15 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  display:flex;align-items:center;gap:.8em}
+.banner::before{content:"";width:.62em;height:.62em;border:2px solid currentColor;border-radius:50%;flex:none}
+.banner small{margin-left:auto;letter-spacing:.06em;text-transform:none;font-size:.78em;opacity:.9}
+.banner.go{background:var(--accent)}
+
+/* ---------- statut ---------- */
+.st{display:inline-flex;align-items:center;gap:.45em;font:500 .62em/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.st::before{content:"";width:.58em;height:.58em;border-radius:50%;border:1.5px solid currentColor;flex:none}
+.st.m{color:var(--accent)}.st.m::before{background:currentColor}
+.st.p::before{background:linear-gradient(90deg,currentColor 0 50%,transparent 50% 100%)}
+
+/* ---------- notes ---------- */
+.notes{display:none;font-size:.74em;line-height:1.5;color:var(--muted);border-top:1px solid var(--rule);padding-top:.6em;max-width:60em}
+.notes b{color:var(--ink2);font-weight:500;font-family:var(--mono);font-size:.9em;letter-spacing:.06em;text-transform:uppercase}
+.deck[data-notes="on"] .notes,.deck[data-mode="doc"] .notes{display:block}
+
+/* ---------- blocs ---------- */
+.cols{display:grid;gap:.85em;grid-template-columns:repeat(auto-fit,minmax(0,1fr));align-items:start}
+.cols.c2{grid-template-columns:1fr 1fr}
+.cols.c3{grid-template-columns:repeat(3,1fr)}
+.cols.wl{grid-template-columns:1.4fr 1fr}
+.cols.wr{grid-template-columns:1fr 1.4fr}
+.box{background:var(--card2);border:1px solid var(--rule);border-radius:.3em;padding:.85em 1em;display:flex;flex-direction:column;gap:.45em}
+.box h3{font-size:.92em;line-height:1.25;font-weight:500}
+.box.acc{border-left:2px solid var(--accent)}
+.box.och{border-left:2px solid var(--ochre);background:var(--ochre-soft)}
+.lab{font:500 .62em/1.1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.box p,.box li{font-size:.8em;line-height:1.5;color:var(--ink2)}
+ul.tight{margin:0;padding-left:1.1em;display:flex;flex-direction:column;gap:.32em}
+ul.tight li{font-size:.82em;line-height:1.45;color:var(--ink2)}
+ul.tight li b,ul.tight li strong{color:var(--ink);font-weight:500}
+.q{border-left:2px solid var(--accent);background:var(--accent-soft);padding:.75em 1em;border-radius:0 .25em .25em 0}
+.q p{font-family:var(--disp);font-size:1em;line-height:1.5;color:var(--ink)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+code{font-family:var(--mono);font-size:.92em;background:var(--hatch);padding:.08em .32em;border-radius:.2em;color:var(--ink)}
+.eq{font-family:var(--mono);font-size:.84em;line-height:1.9;color:var(--ink);background:var(--card2);border:1px solid var(--rule);border-radius:.3em;padding:.7em .9em;overflow-x:auto}
+.kpis{display:grid;gap:.7em;grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+.kpi{border:1px solid var(--rule);border-radius:.3em;padding:.75em .85em;background:var(--card);display:flex;flex-direction:column;gap:.2em}
+.kpi .v{font-family:var(--mono);font-size:1.55em;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi .k{font:500 .58em/1.25 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.kpi .s{font-size:.72em;line-height:1.35;color:var(--ink2)}
+.kpi.acc .v{color:var(--accent)}
+.kpi.och .v{color:var(--ochre)}
+
+/* ---------- tables & figures ---------- */
+.tw{overflow-x:auto;display:flex;flex-direction:column;gap:.35em}
+.cap{font:500 .7em/1.35 var(--mono);letter-spacing:.04em;color:var(--muted)}
+.cap b{color:var(--ink2);font-weight:500}
+table{border-collapse:collapse;width:100%;font-size:.78em}
+th,td{text-align:left;padding:.46em .6em;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.35}
+thead th{font:500 .78em/1.2 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule2)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tr.hi td{background:var(--accent-soft)}
+tr.hy td{background:var(--ochre-soft)}
+figure{margin:0;display:flex;flex-direction:column;gap:.45em}
+figure svg{width:100%;height:auto;display:block;color:var(--ink2)}
+.deck[data-mode="slides"] figure svg{max-height:13em}
+figcaption{font:500 .7em/1.35 var(--mono);letter-spacing:.04em;color:var(--muted)}
+figcaption b{color:var(--ink2);font-weight:500}
+
+/* ---------- planche de titre ---------- */
+.title-slide .pad{justify-content:center;gap:1.3em}
+.title-slide h1{font-size:2.35em;line-height:1.14;letter-spacing:-.015em;max-width:36em;font-weight:500}
+.title-slide .authors{font-family:var(--disp);font-size:1.1em;line-height:1.5;color:var(--ink)}
+.title-slide .aff{font-size:.84em;line-height:1.6;color:var(--ink2)}
+.title-slide .meta{font:500 .66em/1.7 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.rule-brick{height:.28em;width:7em;background:repeating-linear-gradient(90deg,var(--accent) 0 1.3em,transparent 1.3em 1.55em)}
+
+/* ---------- navigation ---------- */
+.nav{position:fixed;left:0;right:0;bottom:0;height:3.6rem;background:var(--paper);border-top:1px solid var(--rule);
+  display:flex;align-items:center;gap:.8rem;padding:0 1rem;z-index:20;font-family:var(--mono)}
+.rail{display:flex;gap:.25rem;flex:1;min-width:0}
+.rail button{flex:1;min-width:0;background:none;border:0;border-top:2px solid var(--rule2);padding:.5rem 0 0;cursor:pointer;
+  font:500 .55rem/1.1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rail button[aria-current="true"]{border-top-color:var(--accent);color:var(--accent)}
+.nav .count{font:500 .7rem/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink2);white-space:nowrap}
+.nav button.b{background:var(--card);border:1px solid var(--rule2);color:var(--ink2);border-radius:.25rem;
+  padding:.4rem .6rem;cursor:pointer;font:500 .62rem/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.nav button.b:hover{border-color:var(--accent);color:var(--accent)}
+.nav button.b[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.btns{display:flex;gap:.35rem}
+.deck[data-mode="doc"] .btns{display:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.nav{display:none}.deck{padding-bottom:0}}
+@media (max-width:700px){
+  .deck[data-mode="slides"] .slide{font-size:2.6vw}
+  .cols.c2,.cols.c3,.cols.wl,.cols.wr{grid-template-columns:1fr}
+  .rail{display:none}
+}
+</style>
+
+<div class="deck" id="deck" data-mode="slides" data-notes="off">
+
+<!-- 1 ============ TITRE ============ -->
+<section class="slide title-slide" data-act="question">
+ <div class="pad">
+  <div class="rule-brick"></div>
+  <h1>Des accidents tirés au sort sur les axes, conditionnés aux statistiques réelles</h1>
+  <p class="authors">Ticket 070 — étude de faisabilité</p>
+  <p class="aff">Projet LLM-Agents GAMA · Aire métropolitaine de Toulouse<br>
+   Sources : BAAC/ONISR (data.gouv, Licence Ouverte) · graphe OSM du périmètre 453 communes<br>
+   <span class="mono" style="font-size:.86em;color:var(--muted)">Tous les chiffres portés ici sont mesurés et rejouables</span></p>
+  <p class="meta">14 septembre 2026<br>Traces <span style="text-transform:none;letter-spacing:.04em">2026-09-14_06-45_accidentalite_baac</span> · <span style="text-transform:none;letter-spacing:.04em">2026-09-14_11-20_exposition_rocade</span></p>
+ </div>
+</section>
+
+<!-- 2 ============ LA QUESTION ============ -->
+<section class="slide" data-act="question">
+ <div class="pad">
+  <div class="head"><b>La demande</b><span>Ce qui est demandé, et ce qui ne l'est pas</span><span class="num">2</span></div>
+  <h2 class="t">Un mécanisme représentatif, pas une figure</h2>
+  <div class="body">
+   <div class="q">
+    <p>Qu'un accident survienne au hasard sur un axe, avec une probabilité conditionnée à l'heure,
+     au jour, à la météo et au type d'axe, et qu'il coûte du temps aux déplacements qui l'empruntent.
+     Que le taux soit faible est normal — c'est la réalité. L'expérience, elle, viendra d'un accident
+     <em>provoqué</em>.</p>
+   </div>
+   <div class="cols c2">
+    <div class="box acc">
+     <span class="lab">Ce que ça demande</span>
+     <ul class="tight">
+      <li>Une <b>loi de tirage</b> fidèle aux statistiques d'accidentalité observées.</li>
+      <li>Un <b>retard subi</b> par les déplacements concernés, et le souvenir qui va avec.</li>
+      <li>Un <b>déclencheur manuel</b> pour poser un accident quand on veut mesurer.</li>
+     </ul>
+    </div>
+    <div class="box">
+     <span class="lab">Ce que ça ne demande pas</span>
+     <ul class="tight">
+      <li>Que le tirage aléatoire <b>porte une figure publiable</b> — il n'en portera pas, et ce n'est pas le but.</li>
+      <li>Que les agents <b>roulent sur le graphe routier</b> — gros chantier séparé, hors périmètre.</li>
+      <li>Que l'agent soit <b>victime</b> d'un accident : 0,0025 agent par journée simulée, hors d'atteinte.</li>
+     </ul>
+    </div>
+   </div>
+   <p class="lead">Cette distinction change le verdict. Jugé comme dispositif de mesure, le ticket est
+    bloqué par l'exposition. Jugé comme mécanisme, il ne l'est pas.</p>
+  </div>
+  <footer class="notes"><b>Note</b> — Le ticket 070 mélangeait les deux lectures. Le triage au dossier notait
+   la seconde et concluait sur la première.</footer>
+ </div>
+</section>
+
+<!-- 3 ============ RÉPONSE ============ -->
+<section class="slide" data-act="reponse">
+ <div class="pad">
+  <div class="banner go">Réponse — c'est faisable <small>sept travaux, un seul piège</small></div>
+  <div class="head"><b>Faisabilité</b><span>Décomposition</span><span class="num">3</span></div>
+  <h2 class="t">Ce qu'il faut écrire</h2>
+  <div class="body">
+   <div class="tw">
+    <table>
+     <thead><tr><th style="width:2.4em"></th><th>Travail</th><th>Où</th><th style="width:9em">Difficulté</th></tr></thead>
+     <tbody>
+      <tr><td class="n">A</td><td><b>Loi de tirage</b> conditionnée heure × jour × météo × classe de vitesse</td><td class="mono">nouveau module</td><td>Faible — données mesurées</td></tr>
+      <tr><td class="n">B</td><td><b>État du monde</b> : accidents actifs (arête, début, durée)</td><td class="mono">contrôleur</td><td>Faible</td></tr>
+      <tr class="hi"><td class="n">C</td><td><b>Injection dans l'itinéraire</b> : un facteur par arête</td><td class="mono">osmnx_direct.py:606</td><td>Faible — la forme existe déjà</td></tr>
+      <tr><td class="n">D</td><td><b>Contournement du cache d'itinéraires</b> : calcul à froid si un événement est actif</td><td class="mono">osmnx_direct.py:861</td><td>Moyenne — ouvre le détour</td></tr>
+      <tr class="hy"><td class="n">E</td><td><b>Clé du cache de décisions LLM</b></td><td class="mono">llm/cache.py:207</td><td>Moyenne — <b>le piège</b></td></tr>
+      <tr><td class="n">F</td><td><b>Déclencheur manuel</b> : poser un accident sur tel axe à telle heure</td><td class="mono">API contrôleur</td><td>Faible</td></tr>
+      <tr><td class="n">G</td><td><b>Souvenir</b> : « ralentissement constaté, +N min »</td><td class="mono">chaîne mémoire</td><td>Dépend de l'état de la chaîne</td></tr>
+     </tbody>
+    </table>
+    <p class="cap"><b>Tableau 1</b> — Le cœur (A–D, F) est de l'ordre de quelques jours. E est une demi-journée,
+     et doit être fait <b>avant</b> tout run.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 4 ============ LE VERROU QUI N'EN EST PAS UN ============ -->
+<section class="slide" data-act="reponse">
+ <div class="pad">
+  <div class="head"><b>Faisabilité</b><span>Le verrou supposé</span><span class="num">4</span></div>
+  <h2 class="t">Le vol d'oiseau n'empêche pas le retard d'être subi</h2>
+  <p class="lead">Dans GAMA, les agents en voiture se déplacent en ligne droite — le <code>TODO</code> « se déplacer
+   le long des routes OSM » est toujours là. On en concluait qu'un accident posé sur une route ne pouvait
+   ralentir personne. La chaîne du code dit autre chose.</p>
+  <div class="body">
+   <figure>
+    <svg viewBox="0 0 760 186" role="img" aria-label="Chaîne : OSMnx calcule une durée à partir des arêtes, le plan la transmet à GAMA, qui en déduit la vitesse de l'agent">
+     <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+       <path d="M0,0 L10,5 L0,10 z" fill="currentColor"></path>
+      </marker>
+     </defs>
+     <g font-family="IBM Plex Mono, monospace" font-size="11">
+      <rect x="4" y="34" width="168" height="62" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"></rect>
+      <text x="88" y="56" text-anchor="middle" fill="var(--accent)" font-size="10" letter-spacing="1">OSMNX</text>
+      <text x="88" y="73" text-anchor="middle" fill="var(--ink)" font-size="11.5">duration_s</text>
+      <text x="88" y="88" text-anchor="middle" fill="var(--ink2)" font-size="9.5">somme sur les arêtes</text>
+
+      <line x1="176" y1="65" x2="212" y2="65" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"></line>
+
+      <rect x="216" y="34" width="168" height="62" rx="4" fill="var(--card2)" stroke="var(--rule2)"></rect>
+      <text x="300" y="56" text-anchor="middle" fill="var(--muted)" font-size="10" letter-spacing="1">PLAN DE TRAJET</text>
+      <text x="300" y="73" text-anchor="middle" fill="var(--ink)" font-size="11.5">planned_dur</text>
+      <text x="300" y="88" text-anchor="middle" fill="var(--ink2)" font-size="9.5">Inhabitant.gaml:236</text>
+
+      <line x1="388" y1="65" x2="424" y2="65" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"></line>
+
+      <rect x="428" y="34" width="168" height="62" rx="4" fill="var(--card2)" stroke="var(--rule2)"></rect>
+      <text x="512" y="56" text-anchor="middle" fill="var(--muted)" font-size="10" letter-spacing="1">GAMA</text>
+      <text x="512" y="73" text-anchor="middle" fill="var(--ink)" font-size="11.5">speed = dist / dur</text>
+      <text x="512" y="88" text-anchor="middle" fill="var(--ink2)" font-size="9.5">Inhabitant.gaml:390</text>
+
+      <line x1="600" y1="65" x2="636" y2="65" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar)"></line>
+
+      <rect x="640" y="34" width="116" height="62" rx="4" fill="var(--ochre-soft)" stroke="var(--ochre)"></rect>
+      <text x="698" y="56" text-anchor="middle" fill="var(--ochre)" font-size="10" letter-spacing="1">VÉCU</text>
+      <text x="698" y="76" text-anchor="middle" fill="var(--ink)" font-size="11.5">arrivée tardive</text>
+
+      <text x="4" y="20" fill="var(--ink2)" font-size="10.5">L'accident entre ICI — et le retard ressort LÀ</text>
+
+      <rect x="216" y="118" width="380" height="44" rx="4" fill="none" stroke="var(--rule2)" stroke-dasharray="3 3"></rect>
+      <text x="406" y="136" text-anchor="middle" fill="var(--muted)" font-size="10">Le vol d'oiseau ne touche que la GÉOMÉTRIE du déplacement</text>
+      <text x="406" y="152" text-anchor="middle" fill="var(--muted)" font-size="10">— pas sa durée, qui vient du graphe et gouverne la vitesse</text>
+     </g>
+    </svg>
+    <figcaption><b>Figure 1</b> — La durée est calculée sur les arêtes ; la vitesse de l'agent en découle.
+     Un itinéraire allongé fait arriver l'agent plus tard, même s'il vole en ligne droite.</figcaption>
+   </figure>
+   <div class="cols c2">
+    <div class="box"><span class="lab">Ce que le vol d'oiseau interdit</span>
+     <p>Qu'un accident <b>situé en un point</b> attrape les agents qui passent physiquement là.
+      Le rattachement ne peut pas être spatial.</p></div>
+    <div class="box acc"><span class="lab">Ce qu'il permet quand même</span>
+     <p>Que l'accident attrape les agents <b>dont l'itinéraire calculé emprunte l'arête</b>.
+      C'est un rattachement par la route, pas par la position — et il suffit.</p></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 5 ============ LE PIÈGE ============ -->
+<section class="slide" data-act="reponse">
+ <div class="pad">
+  <div class="banner">Le piège — il ne fait pas de bruit <small>llm/cache.py:207, documenté trois fois</small></div>
+  <div class="head"><b>Faisabilité</b><span>Travail E</span><span class="num">5</span></div>
+  <h2 class="t">Le cache de décisions est insensible aux durées</h2>
+  <div class="body">
+   <p class="lead">La clé du cache de décisions est construite à partir des <b>codes d'options</b> — des routes et
+    des arrêts. Par construction, elle ignore les durées.</p>
+   <div class="eq">raw = data_version() | codes_options_triés | météo [ | anticipation ] [ | traits ]</div>
+   <div class="cols c2">
+    <div class="box och">
+     <span class="lab">Sans correctif</span>
+     <p>Un agent dont le trajet est allongé de 25 minutes se voit resservir <b>la décision prise sans
+      l'accident</b> — et aucun journal ne le signale, puisque de son point de vue le contexte est identique.</p>
+    </div>
+    <div class="box acc">
+     <span class="lab">Le correctif existe déjà</span>
+     <p>Le champ <code>extra_key</code> a été écrit exactement pour ce cas au ticket 014 : il porte
+      le contexte qui change le prompt sans changer les options. L'accident s'y ajoute.</p>
+    </div>
+   </div>
+   <p class="lead">Le même piège s'est déjà produit <b>trois fois</b> dans le dépôt — temps terminal, traits du
+    persona, contexte d'anticipation — dont une fois au prix d'un vidage manuel de cache. Il faut y penser,
+    pas l'inventer.</p>
+  </div>
+  <footer class="notes"><b>Note</b> — C'est le seul travail de la liste qui, omis, produit des résultats
+   faux plutôt qu'absents. D'où sa place avant tout run.</footer>
+ </div>
+</section>
+
+<!-- 6 ============ LA SOURCE ============ -->
+<section class="slide" data-act="donnees">
+ <div class="pad">
+  <div class="head"><b>Données</b><span>BAAC / ONISR — Haute-Garonne, 2019-2024</span><span class="num">6</span></div>
+  <h2 class="t">La source existe, et son conditionnement recouvre ce que la simulation sait déjà</h2>
+  <div class="body">
+   <div class="kpis">
+    <div class="kpi acc"><span class="v">3 789</span><span class="k">Accidents corporels</span><span class="s">Haute-Garonne, six ans</span></div>
+    <div class="kpi"><span class="v">1,73</span><span class="k">Par jour</span><span class="s">Sur tout le département</span></div>
+    <div class="kpi"><span class="v">100 %</span><span class="k">Géolocalisés en 2024</span><span class="s">561 accidents, lat/long</span></div>
+    <div class="kpi och"><span class="v">9,1 %</span><span class="k">Mortels</span><span class="s">49,9 % avec hospitalisé</span></div>
+   </div>
+   <div class="cols wl">
+    <figure>
+     <svg viewBox="0 0 740 232" role="img" aria-label="Accidents par heure, huit heures mesurées : 3 h 55, 7 h 202, 8 h 222, 12 h 168, 16 h 277, 17 h 370, 18 h 270, 19 h 257">
+      <g font-family="IBM Plex Mono, monospace" font-size="10.5">
+       <g stroke="var(--rule)" stroke-width="1">
+        <line x1="56" y1="190" x2="716" y2="190"></line>
+        <line x1="56" y1="147.5" x2="716" y2="147.5"></line>
+        <line x1="56" y1="105" x2="716" y2="105"></line>
+        <line x1="56" y1="62.5" x2="716" y2="62.5"></line>
+        <line x1="56" y1="20" x2="716" y2="20"></line>
+       </g>
+       <g fill="var(--muted)" text-anchor="end">
+        <text x="46" y="194">0</text><text x="46" y="151.5">100</text><text x="46" y="109">200</text>
+        <text x="46" y="66.5">300</text><text x="46" y="24">400</text>
+       </g>
+       <g fill="var(--accent)">
+        <rect x="74" y="166.6" width="44" height="23.4"></rect>
+        <rect x="155" y="104.1" width="44" height="85.9"></rect>
+        <rect x="235" y="95.6" width="44" height="94.4"></rect>
+        <rect x="316" y="118.6" width="44" height="71.4"></rect>
+        <rect x="396" y="72.3" width="44" height="117.7"></rect>
+        <rect x="477" y="32.7" width="44" height="157.3" fill="var(--ochre)"></rect>
+        <rect x="557" y="75.2" width="44" height="114.8"></rect>
+        <rect x="638" y="80.8" width="44" height="109.2"></rect>
+       </g>
+       <g fill="var(--ink)" text-anchor="middle" font-size="10">
+        <text x="96" y="161">55</text><text x="177" y="98">202</text><text x="257" y="90">222</text>
+        <text x="338" y="113">168</text><text x="418" y="67">277</text>
+        <text x="499" y="27" fill="var(--ochre)" font-weight="500">370</text>
+        <text x="579" y="70">270</text><text x="660" y="75">257</text>
+       </g>
+       <g fill="var(--muted)" text-anchor="middle">
+        <text x="96" y="208">03 h</text><text x="177" y="208">07 h</text><text x="257" y="208">08 h</text>
+        <text x="338" y="208">12 h</text><text x="418" y="208">16 h</text>
+        <text x="499" y="208" fill="var(--ochre)">17 h</text>
+        <text x="579" y="208">18 h</text><text x="660" y="208">19 h</text>
+       </g>
+       <text x="56" y="226" fill="var(--muted)" font-size="9.5">Huit heures mesurées, poolées sur six ans — les autres heures ne sont pas reprises sur cette figure.</text>
+      </g>
+     </svg>
+     <figcaption><b>Figure 2</b> — Profil horaire : la pointe du soir domine largement le matin.</figcaption>
+    </figure>
+    <div class="box">
+     <span class="lab">Variables disponibles dans la source</span>
+     <ul class="tight">
+      <li><code>hrmn</code> heure · date donc <b>jour de semaine</b></li>
+      <li><code>atm</code> conditions atmosphériques, 9 modalités</li>
+      <li><code>lum</code> éclairement · <code>surf</code> état de surface</li>
+      <li><code>catr</code> catégorie de route · <code>vma</code> vitesse autorisée</li>
+      <li><code>agg</code> en agglomération ou non · <code>lat</code>/<code>long</code></li>
+     </ul>
+     <p style="margin-top:.3em">Vendredi 643 accidents, dimanche 451. La départementale (189 en 2024) devant la voie communale (188).</p>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 7 ============ LE PIÈGE STATISTIQUE ============ -->
+<section class="slide" data-act="donnees">
+ <div class="pad">
+  <div class="banner">Attention au sens des chiffres <small>ce qui sépare « représentatif » de « faux »</small></div>
+  <div class="head"><b>Données</b><span>Ce que la source ne dit pas</span><span class="num">7</span></div>
+  <h2 class="t">Ce n'est pas un risque, c'est un compte</h2>
+  <div class="body">
+   <div class="cols c2">
+    <div class="box och">
+     <span class="lab">La lecture naïve</span>
+     <p><b>82,1 %</b> des accidents surviennent par temps normal, <b>9,3 %</b> sous pluie légère.
+      Lu tel quel : « la pluie est sûre ».</p>
+     <p>C'est faux. BAAC n'a <b>aucun dénominateur d'exposition</b> — l'essentiel des kilomètres se
+      parcourt aussi par temps normal. Un comptage n'est pas un taux.</p>
+    </div>
+    <div class="box acc">
+     <span class="lab">Ce qu'il faut faire à la place</span>
+     <p>Normaliser par une exposition : kilomètres de réseau par classe, calculables en interne sur le graphe.
+      On obtient un <b>taux</b> au lieu d'un compte, sans avoir besoin de comptages de trafic.</p>
+     <p>La neige-grêle reste inexploitable : <b>2 accidents en six ans</b>.</p>
+    </div>
+   </div>
+   <div class="box">
+    <span class="lab">Et une table de fréquences ne suffira pas</span>
+    <p>24 heures × 7 jours × 4 catégories de route × 3 états météo = <b>2 016 cellules pour 3 789 accidents</b>,
+     soit 1,88 accident par cellule. Une table empirique par cellule serait du bruit. Il faut un
+     <b>modèle paramétrique à effets multiplicatifs</b> — c'est le travail A, et c'est ce qui rend le tirage
+     réellement représentatif plutôt que seulement conditionné.</p>
+   </div>
+  </div>
+  <footer class="notes"><b>Note</b> — C'est le point le plus subtil du dossier : on peut conditionner un tirage
+   sur les bonnes variables et obtenir malgré tout une loi fausse, faute de dénominateur.</footer>
+ </div>
+</section>
+
+<!-- 8 ============ L'EXPOSITION ============ -->
+<section class="slide" data-act="mesure">
+ <div class="pad">
+  <div class="head"><b>Mesure</b><span>Exposition à la rocade, 7 h-9 h</span><span class="num">8</span></div>
+  <h2 class="t">Combien d'agents un accident peut-il toucher</h2>
+  <p class="lead">Sept exécutions archivées à 1 000 agents. Trajets voiture partant entre 7 h et 9 h, itinéraires
+   recalculés sur le graphe et testés contre les 61 arêtes taguées <code>ref = A 620</code>.</p>
+  <div class="body">
+   <div class="cols wl">
+    <div class="tw">
+     <table>
+      <thead><tr><th>Exécution</th><th class="n">Voiture 7-9 h / j</th><th class="n">Touchés / j</th><th class="n">Taux p</th></tr></thead>
+      <tbody>
+       <tr class="hi"><td class="mono">2026-08-19_14_36</td><td class="n">353,0</td><td class="n">100,5</td><td class="n">28,5 %</td></tr>
+       <tr><td class="mono">2026-08-02_18_55</td><td class="n">259,5</td><td class="n">68,5</td><td class="n">26,4 %</td></tr>
+       <tr><td class="mono">2026-08-27_17_57</td><td class="n">297,5</td><td class="n">51,0</td><td class="n">17,1 %</td></tr>
+       <tr><td class="mono">2026-08-28_09_52</td><td class="n">218,5</td><td class="n">38,5</td><td class="n">17,6 %</td></tr>
+       <tr><td class="mono">2026-09-04_01_09</td><td class="n">191,0</td><td class="n">38,0</td><td class="n">19,9 %</td></tr>
+       <tr><td class="mono">2026-08-26_17_46</td><td class="n">150,0</td><td class="n">27,3</td><td class="n">18,2 %</td></tr>
+       <tr><td class="mono">2026-09-04_16_25</td><td class="n">152,0</td><td class="n">20,5</td><td class="n">13,5 %</td></tr>
+      </tbody>
+     </table>
+     <p class="cap"><b>Tableau 2</b> — Médiane : <b>38,5 trajets touchés par journée simulée</b>, taux de
+      traversée médian <b>18,2 %</b>.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7em">
+     <div class="box acc">
+      <span class="lab">Ce que ça dit</span>
+      <p>Le tirage aléatoire ne portera <b>aucune figure</b> à 1 000 agents. Il faudrait ≈ 2 600 agents
+       pour une figure à intervalle large, ≈ 10 400 pour une figure solide.</p>
+     </div>
+     <div class="box">
+      <span class="lab">Ce que ça ne dit pas</span>
+      <p>Rien contre le mécanisme. Un accident qui ne touche personne certains jours <b>est le
+       comportement correct</b> — 1,73 accident par jour sur tout un département.</p>
+     </div>
+     <div class="box och">
+      <span class="lab">Limite</span>
+      <p>L'extrapolation suppose la linéarité et ne la mesure pas : la seule exécution archivée à
+       10 000 agents précède les identifiants de <code>moves.csv</code> et ne se joint pas.</p>
+     </div>
+    </div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 9 ============ DEUX DÉCLENCHEMENTS ============ -->
+<section class="slide" data-act="mesure">
+ <div class="pad">
+  <div class="head"><b>Mesure</b><span>Architecture de l'expérience</span><span class="num">9</span></div>
+  <h2 class="t">Un seul mécanisme, deux déclenchements</h2>
+  <div class="body">
+   <p class="lead">C'est ce qui réconcilie « je veux du réalisme » et « je veux pouvoir mesurer ». Le monde
+    reste partagé et physiquement cohérent ; seule la façon d'allumer l'événement change.</p>
+   <div class="cols c2">
+    <div class="box">
+     <span class="lab">Déclenchement 1 — tiré au sort</span>
+     <h3>Le régime nominal</h3>
+     <ul class="tight">
+      <li>Probabilité issue de la loi BAAC normalisée.</li>
+      <li>Certains jours : <b>aucun accident</b>. C'est correct.</li>
+      <li>Sert la <b>cohérence du monde</b>, pas la mesure.</li>
+      <li><span class="st p">ne porte aucune figure</span></li>
+     </ul>
+    </div>
+    <div class="box acc">
+     <span class="lab">Déclenchement 2 — posé à la main</span>
+     <h3>L'expérience</h3>
+     <ul class="tight">
+      <li>Axe, heure et gravité choisis par l'expérimentateur.</li>
+      <li><b>Même mécanisme, même monde</b> — seul l'allumage diffère.</li>
+      <li>Protocole d'événement exogène du ticket 059.</li>
+      <li><span class="st m">c'est de là que vient la figure</span></li>
+     </ul>
+    </div>
+   </div>
+   <div class="box och">
+    <span class="lab">Une règle de journalisation, non négociable</span>
+    <p>Chaque journée simulée doit dire <b>combien d'accidents ont été tirés et combien de trajets ont été
+     touchés — y compris zéro</b>. Sans ce compteur, « aucun effet mesuré » et « aucun accident survenu »
+     se ressemblent trop : c'est le motif récurrent du dépôt, où l'absence de mesure produit le score parfait.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<!-- 10 ============ PÉRIMÈTRE & DÉCISIONS ============ -->
+<section class="slide" data-act="suite">
+ <div class="pad">
+  <div class="head"><b>Suite</b><span>Périmètre et décisions</span><span class="num">10</span></div>
+  <h2 class="t">Ce qui est dedans, ce qui reste dehors</h2>
+  <div class="body">
+   <div class="cols c3">
+    <div class="box acc">
+     <span class="lab">Dans le périmètre</span>
+     <ul class="tight">
+      <li>Loi de tirage normalisée par les kilomètres de réseau</li>
+      <li>Accident <b>subi</b> : retard et souvenir</li>
+      <li>Gravité interne — seules des <b>minutes</b> sortent du moteur</li>
+      <li>Contournement rendu possible par le calcul à froid</li>
+      <li>Déclencheur manuel</li>
+     </ul>
+    </div>
+    <div class="box">
+     <span class="lab">Hors périmètre</span>
+     <ul class="tight">
+      <li>Faire rouler les agents sur le graphe routier — <b>gros ticket séparé</b></li>
+      <li>L'agent victime d'un accident</li>
+      <li>Les accidents sur le réseau de transport collectif</li>
+      <li>La propagation de congestion</li>
+     </ul>
+    </div>
+    <div class="box och">
+     <span class="lab">À décider</span>
+     <ul class="tight">
+      <li>Le souvenir <b>nomme-t-il la gravité</b> ? Position actuelle : non, seulement des minutes.</li>
+      <li>Vérifie-t-on la linéarité par une exécution à cohorte élargie <b>avant</b> le mécanisme ?</li>
+      <li>Le flux DATEX des DIR — durées réelles, latence de plusieurs semaines : <b>l'archivage démarre-t-il maintenant ?</b></li>
+     </ul>
+    </div>
+   </div>
+   <div class="q">
+    <p>Le mécanisme est faisable et le verrou supposé n'en est pas un. Ce qui demande une décision n'est plus
+     technique : c'est de savoir si l'archivage du flux de durées réelles commence maintenant — parce que sa
+     latence, elle, ne se rattrape pas.</p>
+   </div>
+  </div>
+  <footer class="notes"><b>Note</b> — Le retard n'est dans aucune source directement exploitable aujourd'hui ;
+   il reste un paramètre exogène tant que le flux DATEX n'a pas été archivé assez longtemps.</footer>
+ </div>
+</section>
+
+</div>
+
+<nav class="nav" aria-label="Navigation du diaporama">
+ <div class="rail" id="rail"></div>
+ <span class="count" id="count">1 / 10</span>
+ <div class="btns">
+  <button type="button" class="b" id="prev" aria-label="Planche précédente">◀</button>
+  <button type="button" class="b" id="next" aria-label="Planche suivante">▶</button>
+ </div>
+ <button type="button" class="b" id="notes" aria-pressed="false">Notes · n</button>
+ <button type="button" class="b" id="mode">Mode document</button>
+</nav>
+
+<script>
+(function(){
+ var deck=document.getElementById('deck');
+ var slides=[].slice.call(deck.querySelectorAll('.slide'));
+ var ACTS=[['question','1 La demande'],['reponse','2 Faisabilité'],['donnees','3 Données BAAC'],
+           ['mesure','4 Mesure'],['suite','5 Suite']];
+ var i=0, rail=document.getElementById('rail'), count=document.getElementById('count');
+
+ ACTS.forEach(function(a){
+  var b=document.createElement('button');
+  b.type='button'; b.textContent=a[1]; b.dataset.act=a[0];
+  b.addEventListener('click',function(){
+   var t=-1;
+   for(var k=0;k<slides.length;k++){ if(slides[k].dataset.act===a[0]){ t=k; break; } }
+   if(t<0) return;
+   if(deck.dataset.mode==='slides'){ go(t); }
+   else { slides[t].scrollIntoView({behavior:'smooth',block:'start'}); }
+  });
+  rail.appendChild(b);
+ });
+ var railBtns=[].slice.call(rail.children);
+
+ function paint(){
+  slides.forEach(function(s,n){ s.classList.toggle('on', n===i); });
+  count.textContent=(i+1)+' / '+slides.length;
+  var act=slides[i].dataset.act;
+  railBtns.forEach(function(b){ b.setAttribute('aria-current', String(b.dataset.act===act)); });
+ }
+ function go(n){ i=Math.max(0,Math.min(slides.length-1,n)); paint(); }
+
+ document.getElementById('prev').addEventListener('click',function(){go(i-1);});
+ document.getElementById('next').addEventListener('click',function(){go(i+1);});
+ var nb=document.getElementById('notes');
+ nb.addEventListener('click',function(){
+  var on=deck.dataset.notes==='on';
+  deck.dataset.notes=on?'off':'on';
+  nb.setAttribute('aria-pressed',String(!on));
+ });
+ document.getElementById('mode').addEventListener('click',function(){
+  var doc=deck.dataset.mode==='slides';
+  deck.dataset.mode=doc?'doc':'slides';
+  this.textContent=doc?'Mode diaporama':'Mode document';
+  if(doc){ slides[i].scrollIntoView({block:'start'}); } else { paint(); window.scrollTo(0,0); }
+ });
+ document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if(e.key==='n'||e.key==='N'){ nb.click(); return; }
+  if(e.key==='d'||e.key==='D'){ document.getElementById('mode').click(); return; }
+  if(deck.dataset.mode!=='slides') return;
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); go(i+1); }
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); go(i-1); }
+  else if(e.key==='Home'){ e.preventDefault(); go(0); }
+  else if(e.key==='End'){ e.preventDefault(); go(slides.length-1); }
+ });
+ paint();
+})();
+</script>

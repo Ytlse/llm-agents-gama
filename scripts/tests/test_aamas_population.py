@@ -287,7 +287,7 @@ def test_regle_v5_journalise_le_perimetre_et_les_departements():
     assert seal.SELECTION_RULE == "aamas_seal_v5"
     assert seal.SELECTION_NAMESPACE == "aamas_seal_v4"
     assert "classe_age" in seal.DESCENTE_MARGES and "occupation" in seal.DESCENTE_MARGES
-    assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v5"
+    assert seal.DEFAULT_SEAL_DIR.name == "population_1000_AAMAS_v6"
     # Les deux marges que l'ALLOCATION tient (et non la descente) depuis la v5.
     assert seal.ALLOCATION_MARGES == ("taille_menage_personne", "motorisation_menage")
     assert seal.ALLOCATION_TOLERANCE_ALARME_PT == 1.0   # la borne d'indifférence du contrôle

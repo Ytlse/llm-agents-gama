@@ -206,12 +206,12 @@ def test_rendu_voiture_decompose(certain_terminal):
     """
     drive_min, terminal_min = 3, CERTAIN_ACCESS_MIN + CERTAIN_EGRESS_MIN
     desc = direct("car", drive_min * 60, distance_m=1800.0).describe()
-    assert desc.startswith(f" Temps de trajet : {drive_min + terminal_min} minutes, "
-                           f"dont {terminal_min} minutes d'accès et de stationnement. "
-                           f"Distance : 1.8 km.")
-    assert f"\n- Rejoindre la voiture : {CERTAIN_ACCESS_MIN} minutes." in desc
-    assert f"\n- Conduite : {drive_min} minutes." in desc
-    assert (f"\n- Stationnement et marche jusqu'à 'shop' : "
+    assert desc.startswith(f" Travel time: {drive_min + terminal_min} minutes, "
+                           f"including {terminal_min} minutes of access and parking. "
+                           f"Distance: 1.8 km.")
+    assert f"\n- Walk to the car: {CERTAIN_ACCESS_MIN} minutes." in desc
+    assert f"\n- Driving: {drive_min} minutes." in desc
+    assert (f"\n- Parking and walk to 'shop': "
             f"{CERTAIN_EGRESS_MIN} minutes.") in desc
 
 
@@ -224,17 +224,17 @@ def test_rendu_velo_decompose(certain_terminal):
     """
     ride_min, terminal_min = 5, CERTAIN_ACCESS_MIN + CERTAIN_EGRESS_MIN
     desc = direct("bicycle", ride_min * 60, distance_m=1400.0).describe()
-    assert desc.startswith(f" Temps de trajet : {ride_min + terminal_min} minutes, "
-                           f"dont {terminal_min} minutes d'accès et d'attache. "
-                           f"Distance : 1.4 km.")
-    assert f"\n- Déverrouiller le vélo : {CERTAIN_ACCESS_MIN} minutes." in desc
-    assert f"\n- Trajet à vélo : {ride_min} minutes." in desc
-    assert f"\n- Attacher le vélo à 'shop' : {CERTAIN_EGRESS_MIN} minutes." in desc
+    assert desc.startswith(f" Travel time: {ride_min + terminal_min} minutes, "
+                           f"including {terminal_min} minutes of access and locking. "
+                           f"Distance: 1.4 km.")
+    assert f"\n- Unlock the bike: {CERTAIN_ACCESS_MIN} minutes." in desc
+    assert f"\n- Cycling: {ride_min} minutes." in desc
+    assert f"\n- Lock the bike at 'shop': {CERTAIN_EGRESS_MIN} minutes." in desc
 
 
 def test_rendu_marche_inchange():
     assert direct("foot", 960, distance_m=1400.0).describe() == (
-        " Durée estimée : 16 minutes. Distance : 1.4 km.")
+        " Estimated duration: 16 minutes. Distance: 1.4 km.")
 
 
 def test_rendu_transports_collectifs_inchange():
@@ -245,10 +245,10 @@ def test_rendu_transports_collectifs_inchange():
     la nouvelle branche du gabarit.
     """
     assert transit_plan().describe() == (
-        " Temps de trajet : 13 minutes, dont 11 minutes de marche."
-        "\n- Marche jusqu'à 'Pradettes' : 3 minutes."
-        "\n- Bus '13' vers 'Gare SNCF Baziège' : 2 minutes."
-        "\n- Marche jusqu'à 'shop' : 8 minutes.")
+        " Travel time: 13 minutes, including 11 minutes of walking."
+        "\n- Walk to 'Pradettes': 3 minutes."
+        "\n- Bus '13' to 'Gare SNCF Baziège': 2 minutes."
+        "\n- Walk to 'shop': 8 minutes.")
 
 
 def test_distance_conservee_sur_voiture_et_velo(certain_terminal):
@@ -262,7 +262,7 @@ def test_distance_conservee_sur_voiture_et_velo(certain_terminal):
     un score qui s'améliore parce qu'on mesure moins.
     """
     for mode in ("car", "bicycle"):
-        assert "Distance : 2.3 km." in direct(mode, 300, distance_m=2300.0).describe()
+        assert "Distance: 2.3 km." in direct(mode, 300, distance_m=2300.0).describe()
 
 
 @pytest.mark.parametrize("mode", ["car", "bicycle"])
@@ -300,7 +300,7 @@ def test_forme_courte_reconnait_les_plans_a_trois_jambes(certain_terminal):
 def test_libelle_de_diffusion_sans_destination_connue(certain_terminal):
     """Sans ``purpose``, on ne fabrique pas un nom de destination."""
     desc = direct("car", 180, purpose=None).describe()
-    assert (f"Stationnement et marche jusqu'à la destination : "
+    assert (f"Parking and walk to the destination: "
             f"{CERTAIN_EGRESS_MIN} minutes.") in desc
     assert "{destination}" not in desc
 
@@ -394,15 +394,15 @@ def test_variante_conserve_le_gradient_par_zone():
     # tirages ne dirait rien de la mise à l'échelle.
     base = terminal_time.terminal_profile("car")
     ecart_base = (base.mean_s("egress", "Toulouse")
-                  - base.mean_s("egress", "3eme couronne"))
+                  - base.mean_s("egress", "3rd ring"))
     terminal_time.apply_variant("high")
     haut = terminal_time.terminal_profile("car")
     assert haut.mean_s("egress", "Toulouse") > base.mean_s("egress", "Toulouse")
     assert (haut.mean_s("egress", "Toulouse")
-            - haut.mean_s("egress", "3eme couronne")) > ecart_base
+            - haut.mean_s("egress", "3rd ring")) > ecart_base
     # L'invariant des multiples de 60 survit à la mise à l'échelle — y compris sur
     # les CLÉS de la loi, qui sont les durées réellement affichables.
-    for zone in ("Toulouse", "1ere couronne", "2eme couronne", "3eme couronne",
+    for zone in ("Toulouse", "1st ring", "2nd ring", "3rd ring",
                  "default"):
         for laws in (haut.access_law_by_zone, haut.egress_law_by_zone):
             for seconds in (laws.get(zone) or {}):
@@ -526,12 +526,12 @@ def test_le_temps_terminal_depend_de_la_couronne():
     # tirages, pas deux couronnes. Le gradient s'exprime sur l'ESPÉRANCE de la loi.
     p = terminal_time.terminal_profile("car")
     assert p.spatialise is True
-    assert (p.mean_s("access", "Toulouse") > p.mean_s("access", "1ere couronne")
-            and p.mean_s("access", "2eme couronne")
-            > p.mean_s("access", "3eme couronne"))
-    assert (p.mean_s("egress", "Toulouse") > p.mean_s("egress", "1ere couronne")
-            and p.mean_s("egress", "2eme couronne")
-            > p.mean_s("egress", "3eme couronne"))
+    assert (p.mean_s("access", "Toulouse") > p.mean_s("access", "1st ring")
+            and p.mean_s("access", "2nd ring")
+            > p.mean_s("access", "3rd ring"))
+    assert (p.mean_s("egress", "Toulouse") > p.mean_s("egress", "1st ring")
+            and p.mean_s("egress", "2nd ring")
+            > p.mean_s("egress", "3rd ring"))
 
 
 def test_zone_inconnue_retombe_sur_le_defaut():
@@ -560,10 +560,10 @@ def test_les_deux_bouts_sont_tarifes_separement():
     # Aller au centre coûte plus cher qu'en partir : le stationnement domine. En
     # ESPÉRANCE — un couple de tirages ne prouverait rien, la loi étant massée à zéro.
     p = terminal_time.terminal_profile("car")
-    attendu_centre = (p.mean_s("access", "3eme couronne")
+    attendu_centre = (p.mean_s("access", "3rd ring")
                       + p.mean_s("egress", "Toulouse"))
     attendu_peripherie = (p.mean_s("access", "Toulouse")
-                          + p.mean_s("egress", "3eme couronne"))
+                          + p.mean_s("egress", "3rd ring"))
     assert attendu_centre > attendu_peripherie
     # Et le total reste la somme des sous-étapes affichées.
     for plan in (vers_centre, vers_peripherie):
@@ -594,7 +594,7 @@ def test_les_deux_classements_convergent_depuis_tt4():
 
     blagnac = (43.635, 1.39)
     assert classement_metrique(*blagnac) == "Toulouse"                      # l'ancienne définition
-    assert osmnx_direct._terminal_zone(*blagnac, "access") == "1ere couronne"  # celle de l'enquête
+    assert osmnx_direct._terminal_zone(*blagnac, "access") == "1st ring"  # celle de l'enquête
     assert osmnx_direct._terminal_zone(43.5973, 1.4450, "egress") == "Toulouse"
 
     # La ressource est stratifiée sur la même définition — sinon les durées tirées
@@ -606,7 +606,7 @@ def test_les_deux_classements_convergent_depuis_tt4():
     assert "geo_reference" not in meta["crown_definition"]
 
     # Le journal lit le trait, et rien d'autre.
-    assert move_logger._residence_zone({"residence_zone": "1ere couronne"}) == "1ere couronne"
+    assert move_logger._residence_zone({"residence_zone": "1st ring"}) == "1st ring"
     assert move_logger._residence_zone({}) == ""
 
     # Et le repli à la distance est IMPOSSIBLE dans les TROIS modules, pas seulement

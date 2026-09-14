@@ -21,6 +21,7 @@ Lancement : `make dashboard` depuis la racine du dépôt.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -233,7 +234,7 @@ def status_dot(kind: str) -> str:
 
 
 # ── Barre latérale ────────────────────────────────────────────────────────────
-@st.fragment(run_every="2s")
+@st.fragment(run_every="10s")
 def render_sidebar_jobs() -> None:
     """Compteur de jobs, rafraîchi sans relancer toute la page."""
     running = REGISTRY.running_count()
@@ -289,7 +290,7 @@ def render_job(job: runner.Job, expanded: bool) -> None:
         f"{icon} {job.label} — {job.state} · "
         f"{runner.format_duration(job.duration)} · {quand}{extra}"
     )
-    # Le volet se rejoue toutes les 2 s (fragment) et `expanded` l'emporte à CHAQUE tour :
+    # Le volet se rejoue toutes les 10 s (fragment) et `expanded` l'emporte à CHAQUE tour :
     # ouvrir la console d'un job qui n'est pas en tête était donc impossible, elle se
     # refermait aussitôt. `key` + `on_change="rerun"` font écrire le pli choisi par le
     # lecteur dans `session_state`, qu'on relit ici — l'argument ne sert plus que de valeur
@@ -311,7 +312,7 @@ def render_job(job: runner.Job, expanded: bool) -> None:
         st.caption(f"Log complet : `{job.log_path.relative_to(REPO_ROOT)}`")
 
 
-@st.fragment(run_every="2s")
+@st.fragment(run_every="10s")
 def render_jobs_live() -> None:
     jobs = runner.par_priorite(REGISTRY.jobs())
     running = [j for j in jobs if j.running]
@@ -468,10 +469,73 @@ def render_tickets() -> None:
     for col, status in zip(cols[1:], tickets.STATUS_ORDER):
         col.metric(f"{tickets.STATUS_ICON[status]} {status.capitalize()}", counts.get(status, 0))
 
+    # Le triage ne porte que sur les tickets OUVERTS : on ne se demande pas si un ticket
+    # terminé est faisable. Les quatre tuiles disent donc « sur ce qui reste ».
+    tri = tickets.summary_triage(items)
+    cols_tri = st.columns(4)
+    cols_tri[0].metric("🎯 Ouverts", tri["ouverts"], help="À faire, en cours, bloqué, en veille, amélioration.")
+    cols_tri[1].metric(
+        f"{tickets.DRAPEAU_JEUX} Jeux de test", tri["jeux_de_test"],
+        help="Tickets qui modifient ou invalident la cohorte scellée, `prompts.yaml` ou le jeu gelé.",
+    )
+    cols_tri[2].metric(
+        "⚡ Quick wins", tri["quick_wins"],
+        help=f"Faisabilité ≥ {tickets.SEUIL_QUICK_WIN_FAISABILITE}★ ET sûreté ≥ {tickets.SEUIL_QUICK_WIN_SURETE}★.",
+    )
+    cols_tri[3].metric(
+        "◻️ Non triés", tri["non_tries"],
+        help="Tickets ouverts sans bloc `triage` — leur coût et leur risque n'ont pas été appréciés.",
+    )
+
     st.caption(
-        "Le statut se change dans le tiroir de chaque ticket, plus bas : il est écrit dans "
-        "`scripts/dashboard/tickets_status.yaml`, la source de vérité. À défaut d'entrée il est "
-        "déduit des cases à cocher et de la ligne `**État**` — la colonne « Source » dit lequel a parlé."
+        "Le statut et la catégorie se changent dans le tiroir de chaque ticket, plus bas : ils sont écrits dans "
+        "`scripts/dashboard/tickets_status.yaml`, la source de vérité. À défaut d'entrée ils sont "
+        "déduits du ticket — la colonne « Source » dit lequel a parlé."
+    )
+    st.caption(
+        f"**Triage** — les deux échelles vont dans le même sens, {tickets.TRIAGE_MAX} étoiles est toujours la "
+        "bonne nouvelle : **Faisa.** ★★★★★ = prêt à lancer ; **Sûreté** ★★★★★ = aucun risque de régression. "
+        "**AAMAS** ⭐⭐⭐⭐⭐ = intérêt fort pour la soumission AAMAS (ADN multi-agent, formalisation, rigueur empirique, reviewer-aamas). "
+        f"Le drapeau {tickets.DRAPEAU_JEUX} marque un ticket qui touche les jeux de test — cohorte scellée, "
+        "`prompts.yaml` ou jeu gelé."
+    )
+
+    col_statut, col_cat, col_tri, col_recherche = st.columns([1, 1, 1, 2])
+    filtre_statut = col_statut.selectbox(
+        "Filtrer par statut",
+        [tickets.TOUS_STATUTS] + tickets.STATUS_ORDER,
+        index=0,
+        format_func=lambda s: s if s == tickets.TOUS_STATUTS else f"{tickets.STATUS_ICON[s]} {s.capitalize()}",
+    )
+    filtre_cat = col_cat.selectbox(
+        "Filtrer par catégorie",
+        [tickets.TOUTES_CATEGORIES] + tickets.CATEGORIES,
+        index=0,
+        format_func=lambda c: c if c == tickets.TOUTES_CATEGORIES else f"{tickets.CATEGORY_ICON.get(c, '')} {c}",
+    )
+    ordre = col_tri.selectbox("Trier par", list(tickets.TRIS), index=0)
+    recherche = col_recherche.text_input("Rechercher un ticket", placeholder="N°, titre, mot-clé...").strip().lower()
+
+    col_chk1, col_chk2 = st.columns([1, 1])
+    ouverts_seuls = col_chk1.checkbox(
+        "🎯 Tickets ouverts seulement",
+        help="N'afficher que les tickets ouverts (exclut abandonné, terminé et amélioration).",
+    )
+    drapeaux_seuls = col_chk2.checkbox(
+        f"{tickets.DRAPEAU_JEUX} Jeux de test seulement",
+        help="N'afficher que les tickets qui touchent la cohorte scellée, `prompts.yaml` ou le jeu gelé.",
+    )
+
+    # Le filtrage et le tri vivent dans `tickets.filtrer` : ici ils n'étaient vérifiables
+    # qu'en pilotant un widget dans un navigateur.
+    items_filtres = tickets.filtrer(
+        items,
+        filtre_statut,
+        filtre_cat,
+        drapeaux_seuls,
+        recherche,
+        ordre,
+        ouverts_seuls=ouverts_seuls,
     )
 
     frame = pd.DataFrame(
@@ -480,13 +544,19 @@ def render_tickets() -> None:
                 "": tickets.STATUS_ICON[t.status],
                 "N°": t.number,
                 "Titre": t.title,
+                "Catégorie": f"{tickets.CATEGORY_ICON.get(t.category, '')} {t.category}".strip(),
                 "Statut": t.status,
+                "Faisa.": t.triage.etoiles_faisabilite() if t.triage else "—",
+                "Sûreté": t.triage.etoiles_surete() if t.triage else "—",
+                "AAMAS": t.etoiles_aamas,
+                "🚩": tickets.DRAPEAU_JEUX if t.triage and t.triage.jeux_de_test else "",
+                "Description": t.description,
                 "Source": t.status_source,
                 "Cases": f"{t.done}/{t.total_boxes}" if t.total_boxes else "—",
                 "Avancement": t.progress if t.progress is not None else 0.0,
                 "Modifié": t.modified,
             }
-            for t in items
+            for t in items_filtres
         ]
     )
     st.dataframe(
@@ -495,7 +565,25 @@ def render_tickets() -> None:
         width="stretch",
         column_config={
             "": st.column_config.TextColumn(width="small"),
-            "Titre": st.column_config.TextColumn(width="large"),
+            "N°": st.column_config.TextColumn(width="small"),
+            "Titre": st.column_config.TextColumn(width="medium"),
+            "Catégorie": st.column_config.TextColumn("Catégorie", width="medium"),
+            "Statut": st.column_config.TextColumn(width="small"),
+            "Faisa.": st.column_config.TextColumn(
+                "Faisa.", width="small", help="Faisabilité — ★★★★★ = prêt à lancer, ★ = verrou non levé."
+            ),
+            "Sûreté": st.column_config.TextColumn(
+                "Sûreté", width="small",
+                help="★★★★★ = aucun risque de régression, ★ = régression majeure probable.",
+            ),
+            "AAMAS": st.column_config.TextColumn(
+                "AAMAS", width="small",
+                help="Intérêt pour AAMAS (reviewer-aamas) — ⭐⭐⭐⭐⭐ = contribution majeure / cœur du papier, ⭐ = accessoire ou hors scope.",
+            ),
+            "🚩": st.column_config.TextColumn(
+                "🚩", width="small", help="Touche les jeux de test : cohorte scellée, `prompts.yaml` ou jeu gelé."
+            ),
+            "Description": st.column_config.TextColumn("Description", width="large"),
             "Avancement": st.column_config.ProgressColumn(
                 "Avancement", min_value=0.0, max_value=1.0, format="percent"
             ),
@@ -503,26 +591,44 @@ def render_tickets() -> None:
         },
     )
 
-    st.markdown("#### Détail")
-    for t in items:
-        with st.expander(f"{tickets.STATUS_ICON[t.status]} {t.title}"):
+    st.markdown(f"#### Détail ({len(items_filtres)}/{len(items)})")
+    for t in items_filtres:
+        cat_badge = f"{tickets.CATEGORY_ICON.get(t.category, '')} {t.category}".strip()
+        with st.expander(f"{tickets.STATUS_ICON[t.status]} [{t.number}] {t.title} — {cat_badge}"):
+            if t.category:
+                st.markdown(f"**Catégorie** — {cat_badge}")
+            if t.description:
+                st.markdown(f"**Description** — {t.description}")
             st.markdown(f"**Statut** {t.status} _(source : {t.status_source})_")
+            if t.triage:
+                drapeau = f" · {tickets.DRAPEAU_JEUX} jeux de test" if t.triage.jeux_de_test else ""
+                date = f" _(le {t.triage.date_lisible()})_" if t.triage.date else ""
+                aamas_str = f" · AAMAS {t.triage.etoiles_aamas()}" if t.triage.aamas is not None else ""
+                st.markdown(
+                    f"**Triage** — Faisabilité {t.triage.etoiles_faisabilite()} · "
+                    f"Sûreté {t.triage.etoiles_surete()}{aamas_str}{drapeau}{date}"
+                )
+                if t.triage.motif:
+                    st.markdown(t.triage.motif)
+            elif tickets.est_ouvert(t):
+                st.caption("Ticket ouvert **non trié** — ni faisabilité ni sûreté appréciées.")
             if t.state_line:
                 st.markdown(f"**Ligne d'état du ticket** — {t.state_line}")
             if t.total_boxes:
                 st.progress(t.progress or 0.0, text=f"{t.done}/{t.total_boxes} cases cochées")
             st.caption(f"`{t.rel_path}` — {t.lines} lignes, modifié le {t.modified:%d/%m/%Y %H:%M}")
             render_ticket_form(t)
+            render_triage_form(t)
 
 
 def render_ticket_form(ticket: tickets.Ticket) -> None:
-    """Changer le statut d'un ticket sans ouvrir un fichier de 1 470 lignes.
+    """Changer le statut ou la catégorie d'un ticket sans ouvrir un fichier de 2 100 lignes.
 
     L'écriture ne touche que l'entrée de ce ticket : commentaires d'en-tête, ordre et notes
     des autres tickets sont préservés à l'octet. Enregistrer sans rien changer n'écrit rien,
     pour ne pas salir `git status`."""
     with st.form(key=f"statut-{ticket.path.stem}", border=False):
-        col_statut, col_note = st.columns([1, 3])
+        col_statut, col_cat, col_note = st.columns([1, 1, 2])
         vocabulaire = tickets.EDITABLE_STATUSES
         depart = vocabulaire.index(tickets.statut_editable(ticket.status))
         choix = col_statut.selectbox(
@@ -531,6 +637,12 @@ def render_ticket_form(ticket: tickets.Ticket) -> None:
             help="`en veille` = décision de ne pas avancer maintenant, le chantier reprendra tel quel ; "
                  "`bloqué` = une dépendance extérieure manque ; "
                  "`amélioration` = ticket conservé comme piste future, rien n'est attendu de lui.",
+        )
+        depart_cat = tickets.CATEGORIES.index(ticket.category) if ticket.category in tickets.CATEGORIES else 0
+        choix_cat = col_cat.selectbox(
+            "Catégorie", tickets.CATEGORIES, index=depart_cat,
+            format_func=lambda c: f"{tickets.CATEGORY_ICON.get(c, '')} {c}",
+            help="Classe thématique du ticket parmi les 5 classes majeures.",
         )
         # Le champ porte une clé STABLE : sans elle son identité dépendait de `value=`, donc
         # une édition du fichier faite entre-temps changeait l'identité du widget et Streamlit
@@ -543,6 +655,7 @@ def render_ticket_form(ticket: tickets.Ticket) -> None:
             help="Affichée dans le tableau. Vidée, elle est retirée du fichier.",
         )
         touchee = note != base_note
+        cat_touchee = choix_cat != ticket.category
         if not touchee and ticket.note != base_note:
             st.caption("La note de ce ticket a changé dans le fichier depuis l'ouverture du tiroir ; "
                        "elle sera conservée telle qu'elle y est.")
@@ -552,12 +665,17 @@ def render_ticket_form(ticket: tickets.Ticket) -> None:
                 f"{'déduit' if ticket.status != tickets.UNKNOWN else 'inconnu'} "
                 f"(source : {ticket.status_source}). Enregistrer écrira le statut choisi ici."
             )
-        if st.form_submit_button("💾 Enregistrer le statut", width="stretch"):
+        if st.form_submit_button("💾 Enregistrer", width="stretch"):
             try:
                 # Note non touchée dans le formulaire → on ne la réécrit pas, une édition faite
                 # à la main dans le fichier entre-temps survit (R14). Touchée, elle gagne :
                 # c'est une intention explicite (R27).
-                modifie = tickets.save_override(ticket.path.stem, choix, note if touchee else None)
+                modifie = tickets.save_override(
+                    ticket.path.stem,
+                    choix,
+                    note if touchee else None,
+                    category=choix_cat if cat_touchee else None,
+                )
             except (ValueError, RuntimeError, OSError) as erreur:
                 st.error(f"Statut non enregistré : {erreur}")
             else:
@@ -565,13 +683,79 @@ def render_ticket_form(ticket: tickets.Ticket) -> None:
                 # effet, la note resterait « touchée » pour toute la session.
                 st.session_state[f"{cle_note}-base"] = note
                 if modifie:
-                    st.session_state["last_ticket_saved"] = f"{ticket.title} → {choix}"
+                    st.session_state["last_ticket_saved"] = f"{ticket.title} → {choix} [{choix_cat}]"
                     st.rerun()
                 elif touchee:
                     st.info("Le fichier dit déjà cela : votre note ne diffère que par des espaces, "
                             "qui sont normalisés à l'écriture.")
                 else:
-                    st.info("Rien à enregistrer : le statut et la note sont déjà ceux-là.")
+                    st.info("Rien à enregistrer : le statut, la catégorie et la note sont déjà ceux-là.")
+
+
+def render_triage_form(ticket: tickets.Ticket) -> None:
+    """Noter la faisabilité, la sûreté, l'intérêt AAMAS et le drapeau « jeux de test » d'un ticket.
+
+    Formulaire SÉPARÉ de celui du statut, volontairement : `save_triage` n'écrit que le
+    bloc `triage`, `save_override` n'écrit que statut / catégorie / note. Fondus en un
+    seul, enregistrer l'un écraserait l'autre avec les valeurs affichées à l'ouverture
+    du tiroir — le défaut que R14 ferme déjà pour la note.
+    """
+    actuel = ticket.triage
+    with st.form(key=f"triage-{ticket.path.stem}", border=False):
+        st.markdown("**Triage** — coût, risque et intérêt AAMAS")
+        col_f, col_s, col_a, col_d = st.columns([1, 1, 1, 1])
+        faisabilite = col_f.slider(
+            "Faisabilité", tickets.TRIAGE_MIN, tickets.TRIAGE_MAX,
+            value=actuel.faisabilite if actuel else 3,
+            help="★★★★★ = prêt à lancer, rien ne bloque. ★ = verrou non levé, non commençable.",
+        )
+        surete = col_s.slider(
+            "Sûreté", tickets.TRIAGE_MIN, tickets.TRIAGE_MAX,
+            value=actuel.surete if actuel else 3,
+            help="★★★★★ = aucun risque de régression. ★ = régression majeure probable. "
+                 "Les deux échelles vont dans le même sens : 5 est toujours la bonne nouvelle.",
+        )
+        aamas = col_a.slider(
+            "Intérêt AAMAS", tickets.TRIAGE_MIN, tickets.TRIAGE_MAX,
+            value=actuel.aamas if (actuel and actuel.aamas is not None) else 3,
+            help="⭐⭐⭐⭐⭐ = au cœur du scope multi-agent / publication AAMAS. ⭐ = sans lien ou hors scope.",
+        )
+        jeux = col_d.checkbox(
+            f"{tickets.DRAPEAU_JEUX} Touche les jeux de test",
+            value=actuel.jeux_de_test if actuel else False,
+            help="Modifie ou invalide la cohorte scellée, `prompts.yaml` ou le jeu gelé.",
+        )
+        # Clé STABLE, même raison que la note : sans elle, l'identité du widget dépend de
+        # `value=`, et une édition du fichier entre-temps fait jeter le texte tapé.
+        cle_motif = f"motif-{ticket.path.stem}"
+        motif_initial = actuel.motif if actuel else ""
+        base_motif = st.session_state.setdefault(f"{cle_motif}-base", motif_initial)
+        motif = st.text_area(
+            "Motif — ce qui justifie ces notes", value=motif_initial, height=90, key=cle_motif,
+            help="Affiché dans le tiroir et fouillé par la recherche. Vidé, il est retiré du fichier.",
+        )
+        motif_touche = motif != base_motif
+        if st.form_submit_button("💾 Enregistrer le triage", width="stretch"):
+            try:
+                modifie = tickets.save_triage(
+                    ticket.path.stem,
+                    faisabilite,
+                    surete,
+                    jeux,
+                    motif if motif_touche else None,
+                    aamas=aamas,
+                )
+            except (ValueError, RuntimeError, OSError) as erreur:
+                st.error(f"Triage non enregistré : {erreur}")
+            else:
+                st.session_state[f"{cle_motif}-base"] = motif
+                if modifie:
+                    st.session_state["last_ticket_saved"] = (
+                        f"{ticket.title} → triage {tickets.etoiles(faisabilite)} / {tickets.etoiles(surete)} / AAMAS {tickets.etoiles_aamas(aamas)}"
+                    )
+                    st.rerun()
+                else:
+                    st.info("Rien à enregistrer : le fichier porte déjà ce triage.")
 
 
 # ── Volet Métriques ───────────────────────────────────────────────────────────
@@ -1645,49 +1829,75 @@ SLUG_PAR_LIBELLE = {libelle: slug for slug, libelle in ONGLETS}
 CLE_ONGLET = "onglet_actif"
 
 
-# Un slug absent ou inconnu rend None : `st.tabs` reprend alors le premier onglet, comme
-# avant. Une URL trafiquée n'est donc jamais une erreur de page, juste un retour à l'accueil.
-onglet_demande = LIBELLE_PAR_SLUG.get(st.query_params.get("onglet"))
+# L'URL gouverne l'onglet au premier chargement (ou rafraîchissement F5).
+# On ne passe PAS default= à st.tabs à chaque rerun : sinon Streamlit réévalue
+# l'identité interne du widget avec l'ancienne URL avant que le clic utilisateur
+# n'ait pu synchroniser les query params, ce qui écrasait la sélection au premier clic.
+query_slug = st.query_params.get("onglet")
+last_synced = st.session_state.get("_last_synced_slug")
+
+if CLE_ONGLET not in st.session_state:
+    if query_slug and query_slug in LIBELLE_PAR_SLUG:
+        st.session_state[CLE_ONGLET] = LIBELLE_PAR_SLUG[query_slug]
+elif query_slug and last_synced and query_slug != last_synced and query_slug in LIBELLE_PAR_SLUG:
+    # Changement d'URL externe (historique Précédent/Suivant ou saisie manuelle)
+    st.session_state[CLE_ONGLET] = LIBELLE_PAR_SLUG[query_slug]
 
 # Les libellés d'onglet ne peuvent pas être rafraîchis par un fragment : le
 # compteur de jobs vit dans la barre latérale et dans le volet Activités en cours.
-# `on_change` fait que Streamlit rejoue le script à chaque changement d'onglet — sans lui,
-# les onglets ne suivent aucun état et `st.session_state[CLE_ONGLET]` n'existe même pas. Le
-# basculement coûte donc un rerun, comme n'importe quel bouton de la page ; les neuf volets
-# restent dessinés à chaque tour.
+# `on_change` fait que Streamlit rejoue le script à chaque changement d'onglet.
 tab_overview, tab_run, tab_providers, tab_calib, tab_jobs, tab_tickets, tab_metrics, tab_experiences, tab_travaux = st.tabs(
     [libelle for _, libelle in ONGLETS],
     key=CLE_ONGLET,
-    default=onglet_demande,
     on_change="rerun",
 )
 
-# L'URL est recopiée à CHAQUE tour plutôt que dans un callback de changement d'onglet :
-# elle reste juste même quand le rerun vient d'ailleurs (bouton, fragment, restauration de
-# session). L'écriture est gardée par une comparaison — poser une query string identique
-# n'aurait rien changé, mais le dire ici évite d'avoir à s'en assurer à chaque relecture.
+# L'URL est recopiée à CHAQUE tour : elle reste juste même quand le rerun vient d'ailleurs
+# (bouton, fragment, restauration de session).
 slug_actif = SLUG_PAR_LIBELLE.get(st.session_state.get(CLE_ONGLET))
-if slug_actif and st.query_params.get("onglet") != slug_actif:
-    st.query_params["onglet"] = slug_actif
+if slug_actif:
+    st.session_state["_last_synced_slug"] = slug_actif
+    if st.query_params.get("onglet") != slug_actif:
+        st.query_params["onglet"] = slug_actif
+
+# Rendu paresseux (lazy loading) : en production, seul l'onglet sélectionné est calculé.
+# Cela évite de réévaluer à chaque clic les 4 000 lignes d'expériences, les sondes Docker
+# et les tickets (passage de ~10 s à < 0,2 s par clic).
+# DASHBOARD_EAGER=1 permet au harnais de test d'évaluer tous les volets d'un coup.
+LAZY = os.environ.get("DASHBOARD_EAGER", "").lower() not in ("1", "true", "yes")
+
+
+def _should_render(slug: str) -> bool:
+    return (not LAZY) or (slug_actif == slug)
+
 
 with tab_overview:
-    render_overview()
+    if _should_render("vue"):
+        render_overview()
 with tab_run:
-    render_run_tab()
+    if _should_render("run"):
+        render_run_tab()
 with tab_providers:
-    render_providers_tab()
+    if _should_render("providers"):
+        render_providers_tab()
 with tab_calib:
-    render_calibration_tab()
+    if _should_render("calibration"):
+        render_calibration_tab()
 with tab_jobs:
-    render_activites()
+    if _should_render("activites"):
+        render_activites()
 with tab_tickets:
-    render_tickets()
+    if _should_render("tickets"):
+        render_tickets()
 with tab_metrics:
-    render_metrics()
+    if _should_render("metriques"):
+        render_metrics()
 
 
 with tab_experiences:
-    experiences.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
-                       arreter=REGISTRY.stop)
+    if _should_render("experiences"):
+        experiences.render(st, pd, lancer=launch_target, inline=run_make_inline, jobs=REGISTRY.jobs,
+                           arreter=REGISTRY.stop)
 with tab_travaux:
-    mes_travaux.render(st, pd)
+    if _should_render("travaux"):
+        mes_travaux.render(st, pd)

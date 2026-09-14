@@ -342,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
     analyseur.add_argument("experiences", nargs="*", default=None, help="noms d'expériences (défaut : le lot AAMAS)")
     analyseur.add_argument(
         "--sortie", type=Path,
-        default=RACINE / "docs" / "paper" / "raw_assets" / "comparaison_experiences",
+        default=RACINE / "docs" / "paper" / "figures" / "comparaison_experiences",
         help="chemin de sortie sans extension (PNG et SVG écrits)",
     )
     options = analyseur.parse_args(argv)

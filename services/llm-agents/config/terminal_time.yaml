@@ -24,7 +24,19 @@
 # qui est le comportement voulu — sans elle, un run rejouerait des décisions
 # prises sur des durées différentes de celles qu'on affiche maintenant.
 # Toute modification des valeurs ci-dessous DOIT bumper cette version.
-version: tt4   # tt4 : strates COMMUNALES (ticket 028) ; tt3 : aligné sur l'enquête, tiré dans sa loi ; avant : constante par couronne
+version: tt5   # tt5 : libellés en anglais (ticket 074) ; tt4 : strates COMMUNALES (ticket 028) ; tt3 : aligné sur l'enquête, tiré dans sa loi ; avant : constante par couronne
+#
+# ⚠ tt5 NE CHANGE AUCUNE VALEUR NUMÉRIQUE — et le bump est pourtant obligatoire.
+# Les `labels:` ci-dessous ne servent pas qu'au rendu : `osmnx_direct` les pose dans
+# `Transit.step_label`, et le cache OTP persistant mémorise les **TravelPlan sérialisés**,
+# jambes terminales comprises. Sans bump, un cache chaud resservirait des plans portant
+# « Rejoindre la voiture » et « Stationnement et marche jusqu'à 'work' » — du français dans
+# un dispositif annoncé anglais, hérité par le jeu v6 au moment même de son scellement, et
+# sans qu'aucun log ne le signale.
+#
+# `routing_version` (r3) n'est PAS bumpée : le cache de routage OSMnx ne mémorise que du
+# temps de parcours réseau, qu'aucun libellé ne touche. Le recalcul à froid de milliers de
+# routes (~2 h pour 930 personas) est donc épargné ; seul le cache de plans OTP est à refaire.
 
 # Version du ROUTAGE — distincte, et la distinction n'est pas cosmétique. Le cache
 # OSMnx persistant ne mémorise plus que du temps de parcours RÉSEAU, qui ne dépend
@@ -90,9 +102,9 @@ modes:
 #
 # CE QUE ÇA DÉPLACE, mesuré à l'export (trajets à l'accès, tt3 → tt4) :
 #     Toulouse         6 439 → 6 130      moyenne 0,36 → 0,45 min
-#     1ere couronne    6 995 → 10 576     moyenne 0,14 → 0,16 min
-#     2eme couronne    4 383 → 3 447      moyenne 0,16 → 0,15 min
-#     3eme couronne      409 → 3 370      moyenne 0,09 → 0,13 min
+#     1st ring    6 995 → 10 576     moyenne 0,14 → 0,16 min
+#     2nd ring    4 383 → 3 447      moyenne 0,16 → 0,15 min
+#     3rd ring      409 → 3 370      moyenne 0,09 → 0,13 min
 #     hors strates     6 256 → 959        (25,6 % → 3,9 % des trajets sans couronne)
 # La 3ᵉ couronne métrique — au-delà de 40 km — n'existait presque pas ; celle de l'enquête
 # compte 275 communes. Et le rattachement par secteur retrouve une couronne pour ~5 300
@@ -117,9 +129,9 @@ modes:
 #
 #     couronne          accès : enquête / tt2      égression : enquête / tt2
 #     Toulouse                0,36 / 3 min                0,52 / 7 min
-#     1ere couronne           0,14 / 2                    0,17 / 4
-#     2eme couronne           0,16 / 2                    0,19 / 3
-#     3eme couronne           0,09 / 1                    0,06 / 1
+#     1st ring           0,14 / 2                    0,17 / 4
+#     2nd ring           0,16 / 2                    0,19 / 3
+#     3rd ring           0,09 / 1                    0,06 / 1
 #
 # Source : EMC² Toulouse 2023 (ProGEDO lil-1750), fichier trajets — T2 « temps de marche
 # à pied au départ », T6 « temps de marche à pied à l'arrivée », T11 « durée de recherche
@@ -185,7 +197,7 @@ modes:
         12: 0.000163
         15: 0.001305
         20: 0.001305
-      1ere couronne:   # n=10576, moyenne 0.16 min
+      1st ring:   # n=10576, moyenne 0.16 min
         0: 0.939107
         1: 0.026759
         2: 0.015507
@@ -199,7 +211,7 @@ modes:
         13: 9.5e-05
         15: 0.000473
         20: 0.000756
-      2eme couronne:   # n=3447, moyenne 0.15 min
+      2nd ring:   # n=3447, moyenne 0.15 min
         0: 0.949811
         1: 0.02582
         2: 0.011894
@@ -210,7 +222,7 @@ modes:
         10: 0.00116
         15: 0.00029
         20: 0.002611
-      3eme couronne:   # n=3370, moyenne 0.13 min
+      3rd ring:   # n=3370, moyenne 0.13 min
         0: 0.954599
         1: 0.020772
         2: 0.012166
@@ -261,7 +273,7 @@ modes:
         17: 0.000326
         18: 0.000163
         20: 0.002119
-      1ere couronne:   # n=10604, moyenne 0.21 min
+      1st ring:   # n=10604, moyenne 0.21 min
         0: 0.931252
         1: 0.025556
         2: 0.018106
@@ -277,7 +289,7 @@ modes:
         13: 9.4e-05
         15: 0.000566
         20: 0.001226
-      2eme couronne:   # n=3461, moyenne 0.18 min
+      2nd ring:   # n=3461, moyenne 0.18 min
         0: 0.946258
         1: 0.024559
         2: 0.013869
@@ -291,7 +303,7 @@ modes:
         12: 0.000289
         15: 0.000289
         20: 0.0026
-      3eme couronne:   # n=3377, moyenne 0.16 min
+      3rd ring:   # n=3377, moyenne 0.16 min
         0: 0.951436
         1: 0.019248
         2: 0.010956
@@ -330,11 +342,11 @@ modes:
     provenance: sourced
     spatialise: true
     labels:
-      access: "Rejoindre la voiture"
-      main: "Conduite"
-      egress: "Stationnement et marche jusqu'à '{destination}'"
-      egress_sans_destination: "Stationnement et marche jusqu'à la destination"
-      terminal: "d'accès et de stationnement"
+      access: "Walk to the car"
+      main: "Driving"
+      egress: "Parking and walk to '{destination}'"
+      egress_sans_destination: "Parking and walk to the destination"
+      terminal: "of access and parking"
 
   bicycle:   # 2047 trajets enquêtés
     access_law:
@@ -348,7 +360,7 @@ modes:
         10: 0.001466
         15: 0.000489
         20: 0.000977
-      1ere couronne:   # n=2047, moyenne 0.11 min
+      1st ring:   # n=2047, moyenne 0.11 min
         0: 0.964338
         1: 0.01661
         2: 0.007816
@@ -358,7 +370,7 @@ modes:
         10: 0.001466
         15: 0.000489
         20: 0.000977
-      2eme couronne:   # n=2047, moyenne 0.11 min
+      2nd ring:   # n=2047, moyenne 0.11 min
         0: 0.964338
         1: 0.01661
         2: 0.007816
@@ -368,7 +380,7 @@ modes:
         10: 0.001466
         15: 0.000489
         20: 0.000977
-      3eme couronne:   # n=2047, moyenne 0.11 min
+      3rd ring:   # n=2047, moyenne 0.11 min
         0: 0.964338
         1: 0.01661
         2: 0.007816
@@ -400,7 +412,7 @@ modes:
         10: 0.000977
         15: 0.000977
         20: 0.000977
-      1ere couronne:   # n=2047, moyenne 0.11 min
+      1st ring:   # n=2047, moyenne 0.11 min
         0: 0.967758
         1: 0.013679
         2: 0.007816
@@ -411,7 +423,7 @@ modes:
         10: 0.000977
         15: 0.000977
         20: 0.000977
-      2eme couronne:   # n=2047, moyenne 0.11 min
+      2nd ring:   # n=2047, moyenne 0.11 min
         0: 0.967758
         1: 0.013679
         2: 0.007816
@@ -422,7 +434,7 @@ modes:
         10: 0.000977
         15: 0.000977
         20: 0.000977
-      3eme couronne:   # n=2047, moyenne 0.11 min
+      3rd ring:   # n=2047, moyenne 0.11 min
         0: 0.967758
         1: 0.013679
         2: 0.007816
@@ -447,11 +459,11 @@ modes:
     provenance: sourced
     spatialise: false
     labels:
-      access: "Déverrouiller le vélo"
-      main: "Trajet à vélo"
-      egress: "Attacher le vélo à '{destination}'"
-      egress_sans_destination: "Attacher le vélo à l'arrivée"
-      terminal: "d'accès et d'attache"
+      access: "Unlock the bike"
+      main: "Cycling"
+      egress: "Lock the bike at '{destination}'"
+      egress_sans_destination: "Lock the bike on arrival"
+      terminal: "of access and locking"
 
 # Grille de sensibilité — ticket 013, décision T6. Les parts modales par tranche
 # de distance sont recalculées pour chacune de ces valeurs et l'écart à EMC² est

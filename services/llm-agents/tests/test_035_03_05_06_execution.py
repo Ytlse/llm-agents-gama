@@ -825,16 +825,35 @@ def test_E6_refus_explicites(banc, tmp_path):
         periodes={},
     )
     assert any("aucune instance" in r for r in refus)
-    # jeu périmé refusé, accepté explicitement → avertissement
+    # commit seul ne périme pas le jeu (audit trail)
+    jeu_perimable = J.Jeu(
+        jeu.dossier,
+        {**jeu.manifest, "dependances": {"commit": "abc", "otp_graph_sha256": "g1"}},
+        list(jeu._index.values()),
+    )
+    refus_commit, _ = E.refuser_si_impossible(
+        _exp(banc),
+        jeu_perimable,
+        banc["info"],
+        dependances={"commit": "def", "otp_graph_sha256": "g1"},
+        periodes={},
+    )
+    assert not any("périmé" in r for r in refus_commit)
+
+    # jeu périmé par une dépendance réelle refusé, accepté explicitement → avertissement
     refus, _ = E.refuser_si_impossible(
-        _exp(banc), jeu, banc["info"], dependances={"commit": "def"}, periodes={}
+        _exp(banc),
+        jeu_perimable,
+        banc["info"],
+        dependances={"commit": "def", "otp_graph_sha256": "g2"},
+        periodes={},
     )
     assert any("périmé" in r and "--accepter-perime" in r for r in refus)
     refus, avert = E.refuser_si_impossible(
         _exp(banc),
-        jeu,
+        jeu_perimable,
         banc["info"],
-        dependances={"commit": "def"},
+        dependances={"commit": "def", "otp_graph_sha256": "g2"},
         periodes={},
         perime_accepte=True,
     )
@@ -1165,11 +1184,11 @@ def test_D3_inexploitables_exclus_des_attendus(banc, tmp_path):
 
 def test_E3_variante_de_prompt_dans_l_empreinte_et_refus_si_inconnue(banc):
     actif = E.empreinte_gabarit("itinary_multi_agent")
-    minimal = E.empreinte_gabarit("itinary_multi_agent", "b_min")
+    minimal = E.empreinte_gabarit("itinary_multi_agent", "prompt_expert_02")
     assert (
         minimal["sha256"] != actif["sha256"]
-        and minimal["variante"] == "b_min"
-        and "prompts.yaml:b_min" in minimal["sources"]
+        and minimal["variante"] == "prompt_expert_02"
+        and "prompts.yaml:prompt_expert_02" in minimal["sources"]
     )
     exp = _exp(
         banc,
@@ -1184,12 +1203,12 @@ def test_E3_variante_de_prompt_dans_l_empreinte_et_refus_si_inconnue(banc):
         dependances={"commit": "abc"},
         periodes={},
     )
-    assert any("variante de prompt" in r and "b_min" in r for r in refus)
+    assert any("variante de prompt" in r and "prompt_expert_02" in r for r in refus)
     ok = _exp(
         banc,
         nom="ok",
         decideur={"type": "passerelle", "modele": "m"},
-        gabarit={"categorie": "itinary_multi_agent", "variante": "b_min"},
+        gabarit={"categorie": "itinary_multi_agent", "variante": "prompt_expert_02"},
     )
     refus, _ = E.refuser_si_impossible(
         ok,

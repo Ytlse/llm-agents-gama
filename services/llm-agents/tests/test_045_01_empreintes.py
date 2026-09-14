@@ -72,17 +72,17 @@ def test_r6_les_sources_enumerent_exactement_les_morceaux_haches():
     """
     from mobility_llm import prompt_manager as get_prompt_manager
 
-    emp = empreinte_gabarit(CATEGORIE, "prompt_minimal")
+    emp = empreinte_gabarit(CATEGORIE, "prompt_minimal_02")
     systeme = (
         get_prompt_manager().get_system_prompt(
-            CATEGORIE, "prompt_minimal", verifier_validite=False
+            CATEGORIE, "prompt_minimal_02", verifier_validite=False
         )
         or ""
     )
     gabarit = chemin_gabarit_option().read_text(encoding="utf-8")
 
     assert emp["sources"] == [
-        "prompts.yaml:prompt_minimal",
+        "prompts.yaml:prompt_minimal_02",
         chemin_gabarit_option().name,
     ]
     attendu = hashlib.sha256(f"{systeme}\n\x00\n{gabarit}".encode()).hexdigest()
@@ -91,7 +91,7 @@ def test_r6_les_sources_enumerent_exactement_les_morceaux_haches():
 
 def test_r6_une_variante_invalidee_garde_une_empreinte_et_le_dit():
     """L'invalidation s'annonce hors du hachage : une variante valide garde son empreinte d'avant."""
-    emp = empreinte_gabarit(CATEGORIE, "minimal_persona")
+    emp = empreinte_gabarit(CATEGORIE, "prompt_minimal_01")
     assert emp.get("invalide") is True
     assert emp.get("invalide_regle")
     assert len(emp["sha256"]) == 64
@@ -109,5 +109,5 @@ def test_r6_le_gabarit_option_manquant_est_une_erreur_pas_un_silence(monkeypatch
     monkeypatch.setattr(
         E, "chemin_gabarit_option", lambda: Path("/introuvable/absent.j2")
     )
-    emp = E.empreinte_gabarit(CATEGORIE, "prompt_minimal")
+    emp = E.empreinte_gabarit(CATEGORIE, "prompt_minimal_02")
     assert any("introuvable" in s for s in emp["sources"]), emp["sources"]

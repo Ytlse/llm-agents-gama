@@ -382,7 +382,7 @@ sans rien détruire — les anciennes lignes restent lisibles pour audit.
 
 Une décision servie par le cache **n'est jamais journalisée** : elle n'apparaît pas dans
 `llm_exchanges.jsonl`, donc son prompt n'existe nulle part. Conséquence directe pour toute
-mesure qui rejoue des décisions — A/B de prompt, plancher « prompt nu », ablation : elle ne
+mesure qui rejoue des décisions — A/B de prompt, plancher « prompt factuel neutre », ablation : elle ne
 peut porter que sur les décisions ayant **raté** le cache.
 
 Chiffré sur le run du 2026-08-27 : 6 735 décisions par la voie LLM, **76,4 % servies par le

@@ -68,7 +68,7 @@ _CODES_CSV = os.path.join(_REPO_ROOT, "data", "weather", "meteo_toulouse_codes.c
 
 # (month, day) → row dict from the CSV
 _weather_index: dict[tuple[int, int], dict] = {}
-# code int → French label
+# code int → English condition label (ticket 074, B-6)
 _code_labels: dict[int, str] = {}
 _loaded = False
 _load_error: Optional[str] = None
@@ -80,10 +80,28 @@ def _load():
         return
 
     try:
-        with open(_CODES_CSV, newline="", encoding="utf-8") as f:
+        # `Condition_EN` est la colonne servie depuis la bascule anglaise (ticket 074, B-6) ;
+        # `Condition` reste intacte parce que les historiques de `data/weather/*.csv` s'y
+        # réfèrent par `CodeMétéo`, et que l'écraser rendrait les archives illisibles.
+        #
+        # Le repli sur `Condition` est BRUYANT, exprès. Muet, il rendrait des libellés français
+        # au modèle sans que rien ne le signale — exactement le défaut que ce ticket corrige,
+        # et le pire des deux mondes : ni l'anglais annoncé, ni l'erreur qui le dirait.
+        sans_traduction: list[int] = []
+        with open(_CODES_CSV, newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 code = int(row["CodeMétéo"])
-                _code_labels[code] = row["Condition"].strip()
+                anglais = (row.get("Condition_EN") or "").strip()
+                if not anglais:
+                    sans_traduction.append(code)
+                _code_labels[code] = anglais or row["Condition"].strip()
+        if sans_traduction:
+            import logging
+            logging.getLogger(__name__).error(
+                f"[ALARME] [weather_loader] {len(sans_traduction)} code(s) météo sans "
+                f"`Condition_EN` dans {_CODES_CSV} : {sorted(sans_traduction)}. Leur libellé "
+                f"FRANÇAIS part dans le prompt — ajouter la traduction (ticket 074, B-6)."
+            )
 
         with open(_WEATHER_CSV, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
@@ -221,23 +239,37 @@ def get_weather(timestamp: int) -> Optional[dict]:
 
 # ── Le cadre du jour : amplitude, soleil, créneaux précipitants ───────────────
 
-# La neige l'emporte sur la pluie : « Légères averses de neige » contient « averse »
-# mais n'est pas de la pluie. L'ordre des deux tests porte donc du sens.
-_SNOW_RE = re.compile(r"neige|grésil|blizzard", re.I)
-_RAIN_RE = re.compile(r"pluie|bruine|averse|orage", re.I)
+# La neige l'emporte sur la pluie : « Light snow showers » contient « shower » mais n'est pas
+# de la pluie. L'ordre des deux tests porte donc du sens.
+#
+# ⚠ Ces expressions suivent la LANGUE DES LIBELLÉS, et c'est la seule chose qui les relie au
+# CSV. Restées françaises après la bascule (ticket 074, B-6), elles n'auraient plus rien
+# reconnu : `precip_slots` serait toujours vide, et le bulletin dirait « No precipitation
+# expected » tous les jours de l'année, y compris sous l'orage. Aucune exception, aucun log —
+# le motif « l'absence de mesure passe pour un cas sain », en pire, parce qu'ici elle produit
+# une AFFIRMATION fausse.
+_SNOW_RE = re.compile(r"snow|sleet|ice pellets|blizzard", re.I)
+_RAIN_RE = re.compile(r"rain|drizzle|shower|thunder", re.I)
 
-# Complément circonstanciel, et non le libellé nu de `_BUCKET_FR` : on écrit « Pluie
-# prévue le matin », pas « Pluie prévue matin ».
-_BUCKET_WHEN = {"night": "la nuit", "morning": "le matin",
-                "noon": "l'après-midi", "evening": "en soirée"}
+# Complément circonstanciel, et non le libellé nu de `_BUCKET_LABEL` : on écrit « Rain expected
+# in the morning », pas « Rain expected morning ».
+_BUCKET_WHEN = {"night": "at night", "morning": "in the morning",
+                "noon": "in the afternoon", "evening": "in the evening"}
 
 
 def _precip_family(label: str) -> Optional[str]:
-    """Famille de précipitation d'un libellé de condition, `None` si sec."""
+    """Famille de précipitation d'un libellé de condition, `None` si sec.
+
+    La valeur rendue est SERVIE au modèle, capitalisée, par `_precipitation_phrase`
+    (« Rain expected in the morning ») : elle est passée à l'anglais avec le reste du bulletin
+    (ticket 074, B-6). La laisser française aurait produit « Pluie expected in the morning » —
+    une phrase que ni le test du rendu ni celui de la détection n'auraient fait tomber, chacun
+    ne regardant que son côté.
+    """
     if _SNOW_RE.search(label):
-        return "neige"
+        return "snow"
     if _RAIN_RE.search(label):
-        return "pluie"
+        return "rain"
     return None
 
 
@@ -252,8 +284,8 @@ def day_frame(row: dict) -> dict:
 
     ⚠ **Les bornes sont élargies aux créneaux effectivement lus.** 30 créneaux sur 1 460
     sortent de `[MIN_TEMPERATURE_C, MAX_TEMPERATURE_C]` dans la source, jusqu'à 3 °C, tous
-    de nuit. Sans cet élargissement, le prompt se contredirait lui-même : « Météo : 11°C …
-    Aujourd'hui 13°C à 20°C ». La source n'est pas modifiée — seule la phrase est rendue
+    de nuit. Sans cet élargissement, le prompt se contredirait lui-même : « Weather: 11°C …
+    Today 13°C to 20°C ». La source n'est pas modifiée — seule la phrase est rendue
     cohérente avec ce qu'elle annonce par ailleurs.
     """
     try:
@@ -289,11 +321,11 @@ def day_frame(row: dict) -> dict:
     }
 
 
-def _enumerate_fr(items: list[str]) -> str:
-    """`["le matin", "l'après-midi", "en soirée"]` → `"le matin, l'après-midi et en soirée"`."""
+def _enumerate_en(items: list[str]) -> str:
+    """`["in the morning", "in the afternoon"]` → `"in the morning and in the afternoon"`."""
     if len(items) == 1:
         return items[0]
-    return f"{', '.join(items[:-1])} et {items[-1]}"
+    return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
 def _precipitation_phrase(w: dict) -> str:
@@ -309,27 +341,30 @@ def _precipitation_phrase(w: dict) -> str:
     3. rien du tout → « Pas de précipitations prévues. »
     """
     precip = w.get("precip_mm") or 0.0
-    precip_str = f"{precip:.1f}".replace(".", ",")
+    # Séparateur décimal ANGLAIS depuis la bascule : la virgule française au milieu d'une
+    # phrase anglaise (« 0,2 mm ») se lit comme un séparateur de milliers.
+    precip_str = f"{precip:.1f}"
     slots = w.get("precip_slots") or []
 
     if slots:
         by_family: dict[str, list[str]] = {}
         for bucket, family in slots:
             by_family.setdefault(family, []).append(_BUCKET_WHEN[bucket])
-        parts = [f"{family.capitalize()} prévue {_enumerate_fr(quand)}"
+        parts = [f"{family.capitalize()} expected {_enumerate_en(quand)}"
                  for family, quand in by_family.items()]
-        phrase = " ; ".join(parts)
-        return (f"{phrase} ({precip_str} mm sur la journée)." if precip > 0
+        phrase = "; ".join(parts)
+        return (f"{phrase} ({precip_str} mm over the day)." if precip > 0
                 else f"{phrase}.")
     if precip > 0:
-        return f"Précipitations prévues dans la journée : {precip_str} mm."
-    return "Pas de précipitations prévues."
+        return f"Precipitation expected during the day: {precip_str} mm."
+    return "No precipitation expected."
 
 
-# Ordre chronologique des tranches météo intra-journée et libellés français
-# pour la ligne « Météo du jour » (ticket 014 — anticipation).
+# Ordre chronologique des tranches météo intra-journée et libellés pour la ligne
+# « Weather later » (ticket 014 — anticipation).
 _BUCKET_ORDER = ("night", "morning", "noon", "evening")
-_BUCKET_FR = {"night": "nuit", "morning": "matin", "noon": "après-midi", "evening": "soirée"}
+_BUCKET_LABEL = {"night": "night", "morning": "morning",
+                 "noon": "afternoon", "evening": "evening"}
 
 
 def day_weather_outlook(timestamp: int) -> Optional[str]:
@@ -337,7 +372,7 @@ def day_weather_outlook(timestamp: int) -> Optional[str]:
 
     Ticket 014 : au moment de choisir un mode, l'agent doit voir la météo à venir
     (sortir le vélo le matin alors qu'il pleuvra le soir). Retourne par ex.
-    « après-midi 12°C, Ciel dégagé · soirée 13°C, Pluie » — ou None quand il ne
+    « afternoon 12°C, Clear/Sunny · evening 13°C, Light rain » — ou None quand il ne
     reste aucune tranche (départ en soirée) ou que les données manquent.
     Déterministe (fonction du jour et de l'heure) : la chaîne participe à la clé
     du cache de décisions via la signature d'anticipation.
@@ -360,15 +395,15 @@ def day_weather_outlook(timestamp: int) -> Optional[str]:
         except (ValueError, KeyError):
             continue
         label = _code_labels.get(code, str(code))
-        parts.append(f"{_BUCKET_FR[bucket]} {temp}°C, {label}")
+        parts.append(f"{_BUCKET_LABEL[bucket]} {temp}°C, {label}")
     return " · ".join(parts) if parts else None
 
 
 def weather_to_natural_language(w: Optional[dict]) -> Optional[str]:
     """Bulletin du jour au créneau de départ, pour le prompt.
 
-        Météo : 2°C, Partiellement nuageux. Aujourd'hui 2°C à 7°C, lever 07:55,
-        coucher 17:25. Pluie prévue en soirée (0,2 mm sur la journée).
+        Weather: 2°C, Partly cloudy. Today 2°C to 7°C, sunrise 07:55,
+        sunset 17:25. Rain expected in the evening (0.2 mm over the day).
 
     Le cadre du jour couvre la **journée entière**, créneaux déjà passés compris : il
     répond à « quelle journée fait-il », question distincte de celle que traite la ligne
@@ -387,19 +422,19 @@ def weather_to_natural_language(w: Optional[dict]) -> Optional[str]:
 
     frame = []
     if w.get("temp_min") is not None and w.get("temp_max") is not None:
-        frame.append(f"Aujourd'hui {int(w['temp_min'])}°C à {int(w['temp_max'])}°C")
+        frame.append(f"Today {int(w['temp_min'])}°C to {int(w['temp_max'])}°C")
     if w.get("sunrise"):
-        frame.append(f"lever {w['sunrise']}")
+        frame.append(f"sunrise {w['sunrise']}")
     if w.get("sunset"):
-        frame.append(f"coucher {w['sunset']}")
+        frame.append(f"sunset {w['sunset']}")
     # Aléas (2026-08-26) : ajoutés SEULEMENT au franchissement du seuil, pour que les
     # journées ordinaires gardent la phrase d'origine mot pour mot — et pour que les
     # jeux gelés antérieurs, dépourvus de ces champs, se relisent à l'identique.
     wind = w.get("wind_max_kmh")
     if wind is not None and wind >= VENT_FORT_KMH:
-        frame.append(f"rafales à {int(wind)} km/h")
+        frame.append(f"gusts up to {int(wind)} km/h")
     if w.get("temp_min") is not None and int(w["temp_min"]) < VERGLAS_C:
-        frame.append("risque de verglas")
+        frame.append("risk of black ice")
     if not frame:
-        return f"Météo : {temp}°C, {label}. {tail}"
-    return f"Météo : {temp}°C, {label}. {', '.join(frame)}. {tail}"
+        return f"Weather: {temp}°C, {label}. {tail}"
+    return f"Weather: {temp}°C, {label}. {', '.join(frame)}. {tail}"

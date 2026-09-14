@@ -67,6 +67,10 @@ class FauxSt:
         yield self
 
     @contextlib.contextmanager
+    def container(self, **_k):
+        yield self
+
+    @contextlib.contextmanager
     def spinner(self, *_a, **_k):
         yield self
 
@@ -93,11 +97,27 @@ class FauxSt:
     def text_input(self, label, value="", key=None, **_k):
         return self.session_state.setdefault(key, value)
 
-    def number_input(self, label, value=None, key=None, **_k):
-        return self.session_state.get(key, value)
+    def text_area(self, label, value="", key=None, **_k):
+        return self.session_state.setdefault(key, value)
+
+    def number_input(self, label, *args, value=None, key=None, **_k):
+        if len(args) >= 3:
+            val = args[2]
+        elif args:
+            val = args[0]
+        else:
+            val = value
+        return self.session_state.get(key, val)
 
     def checkbox(self, label, value=False, key=None, **_k):
         return self.session_state.get(key, value)
+
+    def radio(self, label, options, index=0, key=None, **_k):
+        options = list(options)
+        return self.session_state.setdefault(key, options[index] if options else None)
+
+    def date_input(self, label, value=None, key=None, **_k):
+        return self.session_state.setdefault(key, value)
 
     def button(self, label, key=None, **_k):
         self.boutons.append(label)
@@ -559,3 +579,36 @@ def test_R19_le_bandeau_tombe_des_qu_on_reinitialise(plateforme, vue_isolee):
     st.avis.clear()
     _dessiner(st)
     assert not any("dernière session" in a for a in st.avis), st.avis
+
+
+# ── Inversion de l'ordre des blocs & pourcentage de choix forcés ─────────────
+
+
+def test_ordre_des_blocs_mes_experiences_avant_nouvelle_experience(plateforme):
+    """« 📚 Mes expériences » doit précéder « 🧪 Nouvelle expérience » dans la page."""
+    st = FauxSt(event=FauxEvent([]))
+    with contextlib.suppress(RerunDemande):
+        D.render(st, pd)
+    subheaders = [t for t in st.textes if "Mes expériences" in t or "Nouvelle expérience" in t]
+    assert len(subheaders) >= 2, subheaders
+    assert "Mes expériences" in subheaders[0]
+    assert "Nouvelle expérience" in subheaders[1]
+
+
+def test_choix_forces_affiche_pourcentage_trois_decimales(plateforme):
+    """La colonne choix_forces affiche le pourcentage avec au moins 3 décimales."""
+    exp_a_exec = plateforme / "exp_a" / "executions" / "2026-09-10_08_00_00"
+    _ecrire(exp_a_exec / "synthese.json", {
+        "choix_forces": {"n": 5, "part": 5 / 99},
+        "parts_modales": {"n": 99}
+    })
+    st = FauxSt(event=FauxEvent([]))
+    _dessiner(st)
+    table = next(t for t in st.tables if "experience" in t.columns)
+    assert "choix_forces" in table.columns
+    valeurs = list(table["choix_forces"])
+    # 5 / 99 = 0.050505... -> 5.051 %
+    assert any(v == "5.051 %" for v in valeurs), valeurs
+    # Une exécution sans synthèse de choix forcés affiche "—"
+    assert any(v == "—" for v in valeurs), valeurs
+

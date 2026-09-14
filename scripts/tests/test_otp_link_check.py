@@ -37,8 +37,8 @@ class TestClassementCouronnes(unittest.TestCase):
         classement = self._classer([CAPITOLE, BLAGNAC, CAZERES])
         self.assertEqual(len(classement), 3)
         self.assertEqual(classement[0], "Toulouse")
-        self.assertEqual(classement[1], "1ere couronne")
-        self.assertEqual(classement[2], "3eme couronne")
+        self.assertEqual(classement[1], "1st ring")
+        self.assertEqual(classement[2], "3rd ring")
 
     def test_point_hors_perimetre_nest_pas_rattache_de_force(self):
         """Un point hors des 453 communes est compté à part, pas versé dans la

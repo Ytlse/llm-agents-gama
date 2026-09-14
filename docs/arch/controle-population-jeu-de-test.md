@@ -387,7 +387,43 @@ vivent dans le fichier, pas dans l'agent.
 
 ---
 
-## 6. La population scellée v5 du 2026-09-04 — treize marges sur treize
+## 6. La population scellée v6 du 2026-09-14 — la v5, en anglais
+
+`data/population/population_1000_AAMAS_v6/` — sha256 `412efada802f79e8…`, **1 000 personas en
+499 ménages entiers**, règle `aamas_seal_v5` **inchangée** : la v6 n'est pas un nouveau tirage,
+c'est le même, dans une autre langue (ticket 074). Bumper la règle aurait laissé croire le
+contraire.
+
+**Ce que « la même » veut dire, vérifié agent par agent contre la v5 archivée à froid :**
+
+| | v5 | v6 |
+|---|---|---|
+| `person_id` | 1 000 | les **mêmes** 1 000 |
+| ménages | 499 | 499 |
+| chaînes d'activités — motif, horaires, lieux | — | **0 différence sur 1 000** |
+| descente | 347 échanges, 3 passes, 60,98 → 3,50 pt | à l'identique |
+| mobiles / déplacements | 894 / 3 299 | 894 / 3 299 |
+| contrôle | 13 conformes / 13 | 13 conformes / 13 |
+
+Six champs diffèrent, et seulement eux : `main_occupation`, `housing_type`, `personal_bike`
+(1 000 chacun), `travel_purposes` (700 — les 300 autres sont vides), `residence_zone` (637 — les
+363 « Toulouse » ne changent pas de nom) et `name` (1 000, désormais tiré d'une graine par
+`person_id` au lieu de l'horloge : deux générations donnent les mêmes prénoms).
+
+**Conséquence pour la garde D-7 :** les 14 expériences témoins ne lisent aucun prompt et voient
+un substrat identique. Elles restent comparables **sans être rejouées**.
+
+**Trois jointures ont dû être réparées pour en arriver là**, et aucune ne levait d'erreur :
+le contrôle du logement comparait le libellé anglais du persona à la liste française et mettait
+toute la cohorte dans « Autres » (une modalité publiée, donc pas une valeur manquante) ; les lois
+ajustées du permis, de l'abonnement TC et de l'équipement vélo nomment leurs covariables dans la
+langue de l'enquête (`occ_Travail à plein temps`) et laissaient **toutes** leurs indicatrices à
+zéro, c'est-à-dire la modalité de référence pour 100 % des personas. Détail et parade :
+[population-post-traitements.md](population-post-traitements.md), section « Les deux vocabulaires ».
+
+---
+
+## 6 bis. La population scellée v5 du 2026-09-04 — treize marges sur treize
 
 `data/population/population_1000_AAMAS_v5/` — sha256 `de73532e82c84f62…`, **1 000 personas en
 499 ménages entiers** (1 000 membres présents sur 1 029 déclarés, 97,2 %), tirés par la règle
@@ -426,7 +462,7 @@ Sauvegarde `data/population/sauvegardes/population_1000_AAMAS_v5_2026-09-04.tar.
 Synthèses HTML : `docs/paper/methode/population/synthese_representativite_v4_population_v5_2026-09-04.html`
 et `fabrication_population_v5_2026-09-04.html`.
 
-## 6 bis. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
+## 6 ter. La population scellée v4 du 2026-09-03 — le périmètre des 453 communes
 
 `data/population/population_1000_AAMAS_v4/` — sha256 `9f05c655c3ad2cf4…`, **1 000 personas en
 513 ménages entiers** (469 complets au sens strict, 95,1 % des membres déclarés présents), tirés
@@ -463,7 +499,7 @@ chaînes d'activités viennent pour la première fois de l'ENTD nationale appari
 l'école. Les runs v3 et v4 ne sont pas comparables. Synthèse HTML :
 `docs/paper/methode/population/synthese_representativite_v3_population_v4_2026-09-03.html`.
 
-## 6 ter. La population scellée v3 du 2026-09-03 (historique)
+## 6 quater. La population scellée v3 du 2026-09-03 (historique)
 
 `data/population/population_1000_AAMAS_v3/` — sha256 `8d8bfa3645fa77fb…`, **1 000 personas en
 514 ménages entiers**, tirés par la règle `aamas_seal_v3` dans un vivier eqasim de **11 922**
@@ -516,7 +552,7 @@ persona contre 3,53) et de la moitié des scolaires sans école. Le service part
 `config_toulouse.yml` (source unique) ; la v4 sera la première population appariée sur l'ENTD
 nationale avec la classe d'âge tenue.
 
-## 6 quater. La population scellée v2 du 2026-09-02 (historique)
+## 6 quinquies. La population scellée v2 du 2026-09-02 (historique)
 
 `data/population/population_1000_AAMAS/` — sha256 `f67b07772f3dced9…`, **1 000 personas**,
 tirés dans un vivier eqasim de **5 063** (`population_size` 5 000, périmètre par liste de

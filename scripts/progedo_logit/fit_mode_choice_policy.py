@@ -229,6 +229,7 @@ def encode_features(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
         col = df[name]
         if kind == "categorical":
             out[name] = col.astype("object").map(encoding[name]).astype("float64")
+            _alarme_si_hors_spec(name, col, out[name])
         elif kind == "bool":
             # `astype(float)` direct échoue sur une colonne objet contenant des NaN.
             out[name] = pd.to_numeric(col.astype("object").map(
@@ -236,6 +237,53 @@ def encode_features(df: pd.DataFrame, spec: dict) -> pd.DataFrame:
         else:
             out[name] = pd.to_numeric(col, errors="coerce").astype("float64")
     return out[feature_names(spec)]
+
+
+#: Part de valeurs hors spec au-delà de laquelle une catégorielle ne mesure plus rien.
+#
+# 40 % n'est pas un réglage fin : en deçà, une cohorte peut légitimement contenir des
+# modalités que l'enquête ne produit pas (`socioprofessional_class = "Retired"`, cas
+# documenté du spec). Au-delà, ce n'est plus une exception, c'est un désaccord de
+# vocabulaire — et il se paie en silence.
+SEUIL_HORS_SPEC = 0.40
+
+_hors_spec_alarme: set = set()
+
+
+def _alarme_si_hors_spec(nom: str, brut, encode) -> None:
+    """Alarme quand une catégorielle bascule massivement en `__missing__`.
+
+    Le contrat de l'artefact dit : « coefficient nul : une valeur absente se comporte comme
+    la modalité de référence ». C'est un repli raisonnable pour quelques lignes. Appliqué à
+    TOUTES, il supprime la variable du modèle sans lever la moindre exception et sans écrire
+    une ligne de journal : la prédiction reste plausible, les métriques restent calculables,
+    et rien ne dit que le modèle ne voit plus l'occupation de personne.
+
+    Ce cas a failli se produire au ticket 074 : la cohorte v6 porte `main_occupation` en
+    anglais quand le spec l'encode en français. La traduction se fait à la frontière
+    (`model_on_common_set.occupation_du_spec`), mais un garde vaut mieux qu'une table qu'on
+    pense complète — la prochaine modalité ajoutée d'un côté et pas de l'autre retombera ici.
+
+    Émise une fois par variable : une alarme répétée à chaque lot noierait le journal.
+    """
+    import numpy as np
+
+    renseignes = brut.notna().sum()
+    if not renseignes:
+        return
+    perdus = int((encode.isna() & brut.notna()).sum())
+    part = perdus / renseignes
+    if part < SEUIL_HORS_SPEC or nom in _hors_spec_alarme:
+        return
+    _hors_spec_alarme.add(nom)
+    exemples = sorted({str(v) for v in brut[encode.isna() & brut.notna()].head(200)})[:4]
+    print(
+        f"[ALARME] {nom} : {perdus}/{renseignes} valeurs ({100 * part:.1f} %) hors du "
+        f"feature_spec — elles deviennent `__missing__`, de coefficient nul, donc la "
+        f"variable ne pèse plus rien pour ces lignes. Exemples : {exemples}. "
+        f"Vocabulaire de la cohorte et du spec en désaccord ?",
+        file=__import__("sys").stderr,
+    )
 
 
 def categorical_indices(spec: dict) -> list[int]:

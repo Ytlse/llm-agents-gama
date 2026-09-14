@@ -137,10 +137,10 @@ def hypercenter() -> tuple[float, float]:
 # `residence_zone` plus bas. Ne pas les déplacer : une trace archivée les a mesurées.
 COURONNE_BOUNDS_KM: tuple[tuple[float, str], ...] = (
     (8.0,  "Toulouse"),
-    (20.0, "1ere couronne"),
-    (40.0, "2eme couronne"),
+    (20.0, "1st ring"),
+    (40.0, "2nd ring"),
 )
-COURONNE_OUTER = "3eme couronne"
+COURONNE_OUTER = "3rd ring"
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

@@ -89,7 +89,11 @@ TOST_ECART = "écart"
 # Ce n'est pas une marge de la sélection : la descente n'échange pas sur ce critère, il se règle
 # dans l'appariement (eqasim). En dessous du seuil, l'écart est « à publier ».
 SCOLAIRE_AGE_MIN, SCOLAIRE_AGE_MAX = 6, 17
-SCOLAIRE_OCCUPATION = "Scolaire (jusqu'au Bac)"
+# Identifiant d'enquête, pas libellé : `main_occupation` dit « Pupil (up to Baccalaureate) »
+# depuis la v6 et « Scolaire (jusqu'au Bac) » avant. `OCCUPATION_MAP` connaît les deux ;
+# un littéral aurait compté 0 scolaire sur la v6 et rendu le contrôle « conforme » sur un
+# effectif vide.
+SCOLAIRE_OCCUPATION_KEY = "scolaire"
 SCOLAIRES_ETUDES_REFERENCE_PCT = (90.0, 95.0)
 SCOLAIRES_ETUDES_SEUIL_PCT = 88.0
 
@@ -305,7 +309,8 @@ def normalize(records: list[dict], zones=None) -> tuple[list[Persona], Counter]:
         # Scolaires (ticket 031 § 1.2) : 6-17 ans déclarés scolaires ; « activité d'études » = un
         # motif `education` dans la journée. L'EMC² 2023 en compte 90 à 95 % un jour de semaine.
         scolaire = (age is not None and SCOLAIRE_AGE_MIN <= age <= SCOLAIRE_AGE_MAX
-                    and str(traits.get("main_occupation")) == SCOLAIRE_OCCUPATION)
+                    and OCCUPATION_MAP.get(str(traits.get("main_occupation") or ""))
+                    == SCOLAIRE_OCCUPATION_KEY)
         activite_etudes = any(str(a.get("purpose")) == "education" for a in activities)
         if scolaire:
             counters["scolaires_6_17"] += 1

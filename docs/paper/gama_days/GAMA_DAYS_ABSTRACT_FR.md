@@ -30,14 +30,14 @@ Les valeurs ci‑dessous sont mesurées sur la population scellée les 7 et 8 se
 |---|---|---|---|---|---|---|
 | Cible EMC² 2023 | — | — | 56,7 % | 26,8 % | 12,4 % | 4,1 % |
 | **Gemini 3.5 Flash-Lite, prompt calibré `expert_chaine_m5`** | **12,6** | **35,2** | **50,6 %** | **15,3 %** | **26,5 %** | **7,6 %** |
-| Gemini 3.1 Flash-Lite, prompt nu | 18,4 | 46,0 | 45,5 % | 15,0 % | 32,5 % | 7,0 % |
-| Mistral Small, prompt nu | 27,4 | 63,4 | 33,8 % | 18,0 % | 38,8 % | 9,5 % |
+| Gemini 3.1 Flash-Lite, prompt factuel neutre | 18,4 | 46,0 | 45,5 % | 15,0 % | 32,5 % | 7,0 % |
+| Mistral Small, prompt factuel neutre | 27,4 | 63,4 | 33,8 % | 18,0 % | 38,8 % | 9,5 % |
 | A priori empirique, toujours la voiture | 29,9 | 57,1 | 85,3 % | 6,1 % | 8,1 % | 0,5 % |
 | Durée minimale | 29,7 | 52,9 | 80,5 % | 2,9 % | 9,8 % | 6,8 % |
 | Tirage uniforme | 50,4 | 83,6 | 14,9 % | 37,3 % | 41,1 % | 6,6 % |
 | Oracle LightGBM | 4,9 | 7,6 | 55,0 % | 25,8 % | 16,2 % | 3,1 % |
 
-Quatre enseignements pour la rédaction. Le prompt calibré gagne 5,8 points de composite sur le prompt nu, 18,4 vers 12,6, ce qui est loin d'être marginal et devra être dit sans être surinterprété : deux choses changent à la fois, le gabarit et le modèle. Le biais dominant reste la **sur‑attraction des transports collectifs**, encore quatorze points après calage, devant la sous‑estimation de la marche, onze points et demi ; le vélo n'en pèse que trois et demi, alors que le brouillon antérieur racontait le vélo, chiffre hérité du run GAMA du 24 août sur une autre population. Mistral nu fait moins bien que l'heuristique qui répond toujours « voiture ». Et le tirage uniforme sur l'offre est le pire décideur de tous, ce qui écarte l'hypothèse qu'une offre d'itinéraires mal formée expliquerait à elle seule les biais des agents.
+Quatre enseignements pour la rédaction. Le prompt calibré gagne 5,8 points de composite sur le prompt factuel neutre, 18,4 vers 12,6, ce qui est loin d'être marginal et devra être dit sans être surinterprété : deux choses changent à la fois, le gabarit et le modèle. Le biais dominant reste la **sur‑attraction des transports collectifs**, encore quatorze points après calage, devant la sous‑estimation de la marche, onze points et demi ; le vélo n'en pèse que trois et demi, alors que le brouillon antérieur racontait le vélo, chiffre hérité du run GAMA du 24 août sur une autre population. Mistral sous prompt factuel neutre fait moins bien que l'heuristique qui répond toujours « voiture ». Et le tirage uniforme sur l'offre est le pire décideur de tous, ce qui écarte l'hypothèse qu'une offre d'itinéraires mal formée expliquerait à elle seule les biais des agents.
 
 ---
 

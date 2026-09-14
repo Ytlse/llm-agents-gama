@@ -1,68 +1,343 @@
 # Famille des prompts (specs/hygiene-prompts-et-plateforme-experiences.md §4.1) :
 # un seul prompt de famille minimale, toutes les autres variantes sont expertes.
+#
+# ⚠ BASCULE ANGLAISE DU 2026-09-14 (ticket 074) — à lire avant d'interpréter une métadonnée.
+#
+# Les 22 `content` de ce fichier ont été TRADUITS du français vers l'anglais. Rien d'autre n'a
+# changé : ni principe ajouté ou retiré, ni nuance atténuée ; les écarts entre variantes
+# voisines ont été reproduits un à un et vérifiés. Chaque entrée porte un bloc `_traduction`
+# avec la date, le modèle traducteur et le sha256 du texte français d'origine.
+#
+# Conséquence qu'il faut avoir en tête : **une expérience archivée qui désigne une de ces
+# variantes ne se rejoue plus à l'identique.** Les `_archive.motif` qui l'affirmaient portent
+# désormais un rectificatif daté ; la version française est gelée, lisible et restaurable dans
+# `archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml` — archive FROIDE, que le
+# `PromptManager` refuse de charger (cf. `experiences.froid`).
+#
+# Les 22 avis `_neutralite` ont été rendus à NEUF sur le texte anglais, le 2026-09-14, par
+# l'agent `prompt-auditor`. Ce ne sont pas les avis de septembre reconduits.
+#
+# `_provenance.mots` a été recompté sur le texte anglais, BLOC DE SCHÉMA EXCLU, et par la
+# même méthode pour les 22. Les valeurs d'avant ne l'étaient pas : certaines comptaient le
+# schéma, d'autres non (b_min annonçait 81 mots pour un corps de 20). Elles servent d'étalon
+# à la règle M4 de l'auditeur — un étalon hétérogène ne mesure rien.
 familles:
   minimale:
-  - prompt_minimal
+    - prompt_minimal_02
   defaut: experte
 active:
-  itinary_multi_agent: expert_m4
+  itinary_multi_agent: prompt_expert_16
 prompts:
-  expert_gem_3.8_v2:
+  prompt_expert_07:
     _neutralite:
       verdict: conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 018b598bb223dc518974e83545bd38f4af2fa6dd625f715dd182154fec399814
+      le: '2026-09-14'
+      sha256_texte: b4c50f47b53a9159e9b7df81ecb836eb238a59c16d966aa367daba1693c19b1c
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats: []
     content: |
-      Sélectionner le mode de déplacement optimal en tenant compte du persona.
+      Select the optimal travel mode taking the persona into account.
 
-      Principes d'arbitrage situationnel :
-      - Friction de chaîne : Reconstitue la durée porte-à-porte réelle (marche d'approche, attente, trajet, diffusion). Si la marche d'accès représente l'essentiel du trajet direct pour quelques minutes à bord, l'usager privilégie la simplicité du trajet direct à pied sans rupture ni attente.
-      - Autonomie des aînés : Chez les personnes âgées ou fragiles, une marche continue et paisible à son propre rythme est le mode naturel d'indépendance pour la proximité, face à la pénibilité et au stress d'un transport collectif (secousses, risque de chute, montées de marche, attente debout sans banc).
-      - Logistique d'emport : Intègre la contrainte physique des charges (courses, sacs lourds, cabas). Porter des charges dans un transport collectif est dissuasif ; l'arbitrage s'oriente vers l'accès direct sans rupture (marche immédiate de quartier ou coffre d'un véhicule individuel).
-      - Temps de vie des actifs : Pour un actif engagé dans une journée contrainte, le temps retranché sur la vie personnelle a une valeur critique. Face à des liaisons collectives qui augmentent significativement la durée ou imposent de multiples correspondances, l'usager privilégie l'efficacité et la maîtrise horaire de son véhicule disponible.
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Preserving autonomy and mobility: Faced with physical fatigue or bodily vulnerability, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Time control and schedule constraints: For a person committed to a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
 
-      [Instructions de sortie]
+      [Output instructions]
 
-      1. Analyse le profil à travers ces principes.
-      2. N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4. Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
 
-      Schéma JSON attendu : { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." }, "probabilities": { "type": "array", "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index de l'option, tel qu'affiché entre crochets." }, "mode": { "type": "string", "description": "Mode de l'option, recopié depuis l'option." }, "probability": { "type": "number", "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
     _provenance:
-      role: correction de 'expert_gem_3.8_v1' — le multiplicateur de durée est retiré au profit d'un
-        qualificatif, la clause ne fixe plus de seuil chiffré
+      role: >-
+        mouture 5 épurée et subtile, ne retenant que la meilleure des mutations (M5 neutralité de justification),
+        alignée au plus près sur l'architecture éprouvée d'expert_gem_3.8_v2_neutre_justif (L1 17.34) tout en
+        éliminant rigoureusement les catégories sociodémographiques d'enquête (âge, statuts d'actifs ou aînés)
+        au profit de concepts universels (motricité/fatigue, journée aux horaires contraints).
+      obtention: >-
+        reprend exactement les 4 principes cardinaux de v2 sans ajout de principe budgétaire ou météo (dont
+        le cumul dans v3 et prooptv4 dégradait les scores par sur-report artificiel vers les TC).
+        Seule la mutation M5 (justification neutre sans a priori contre la marche) est conservée.
+      date: '2026-09-13'
+      mots: 280
+      derive_de: prompt_expert_05
+      reference: specs/hygiene-prompts-et-plateforme-experiences.md
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 54ba0b67292f14fcdac19a212c57cae3988aec376bc25d672f57c7e23fceede0
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: prompt_optimise_v5
+  prompt_expert_06:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-14'
+      sha256_texte: 086d4b2a217ff1a99411feed1807646c3b5dcf1bae26ce7b59ed7125ea2a4e01
+      auditeur: prompt-auditor (agent independant)
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Preserving autonomy and mobility: For people sensitive to physical fatigue, to jolting or to loss of balance, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying and handling logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate walk for light local shopping, or a private vehicle for heavier loads).
+      - Value of time and journey efficiency: When the day is subject to strict time commitments or to precious rest time, travel time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of an available vehicle.
+      - Budget trade-off and fitness for use: For tight budgets, the zero cost of active modes naturally prevails over short distances. Conversely, for longer or intercity links where public transport alternatives impose heavy duration penalties, using an available vehicle remains a rational functional trade-off against the value of time.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: >-
+        calibré pour corriger la sur-dérive TC et la sous-représentation automobile observées sur expert_gem_3.8_v3,
+        en s'appuyant sur le socle gagnant d'expert_gem_3.8_v2_neutre_justif tout en éliminant intégralement
+        les catégories de l'enquête (âge, actifs, statuts) au profit de concepts et valeurs d'arbitrage.
+      obtention: >-
+        reprend les principes d'expert_gem_3.8_v2_neutre_justif (L1 global 17.34) entièrement décatégorisés
+        (motricité continue sans citer les aînés, engagements horaires stricts sans citer les actifs),
+        rétablissement de la clause dissuasive d'emport en transport collectif, et principe budgétaire équilibré
+        évitant le sur-report artificiel vers les transports collectifs à multiples correspondances.
+      date: '2026-09-13'
+      mots: 346
+      derive_de: prompt_expert_05
+      reference: specs/hygiene-prompts-et-plateforme-experiences.md
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 233b4fa4d025c40394cb1f942bd0994e523e63e91fd24c08f67c8a9d82049bf4
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: prompt_optimise_v4
+  prompt_expert_08:
+    _neutralite:
+      verdict: conforme_avec_reserve
+      famille: experte
+      le: '2026-09-14'
+      sha256_texte: 014cbbbb3fe75643a2bcd81f0177721f864b8d3b08246f58d95504d390540f5b
+      auditeur: prompt-auditor (agent independant)
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
+      constats:
+        - regle: C1
+          passage: Walking straight there offers unmatched predictability and simplicity as soon as the trip can be completed in a few tens of minutes of continuous walking.
+          lecture: "Non bloquant. La clause réunit les trois ingrédients que C1 surveille : une forme de seuil (« as soon as »), une quantité de durée (« a few tens of minutes ») et un mode nommé à l'apodose. Réserve et non refus parce que la quantité n'est pas déterminée : « a few tens » nomme un ordre de grandeur, là où les formes rejetées (« 500 mètres », « ≤ 1 km », « double ») donnent un nombre exact. Le modèle garde l'appréciation du cas. ⚠ Constat NOUVEAU par rapport à l'avis du 2026-09-13 (conforme), sur un texte dont le sens n'a pas bougé : il vient de l'appréciation de l'auditeur, pas de la bascule anglaise. Le français disait « dès lors que le trajet se boucle en quelques dizaines de minutes de marche continue ». Si « quelques dizaines » relève du cadrage au sens de la jurisprudence 1, c'est à l'auteur de le poser."
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics and everyday shopping: Distinguish bulky purchases that require boot space from light, frequent everyday shopping. For the latter, direct and immediate access on foot, with no parking constraint and no manoeuvring, is the natural local reflex.
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+      - Budget reality and cost of use: The modal trade-off takes in the profile's level of resources and budget. For people with limited means or watchful of their spending, the running cost of a motor vehicle weighs heavily on daily life. Priority naturally goes to economical solutions, valuing the complete zero cost of walking and cycling, or accessible public transport networks, against the recurring cost of the car.
+      - Fixed frictions of the car: Over short links, the theoretical time saved behind the wheel is often absorbed by fixed constraints (manoeuvring, looking for parking, getting to the vehicle). Walking straight there offers unmatched predictability and simplicity as soon as the trip can be completed in a few tens of minutes of continuous walking.
+      - Weather and real exposure: Assess weather discomfort in proportion to real exposure. Moderate coolness, wind or intermittent showers are part of ordinary daily life and do not rule out active or public transport modes. Only severe, continuous or dangerous weather justifies a systematic fallback to the car.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: correction des dérives mesurées sur exp_gemini-35-fl_expgem38v2_jtir_pop-1000_AAMAS_v5_t0_nosim (étudiants/revenus modestes, achats, météo-paranoïa, 1-2 km et aînés)
+      obtention: >-
+        édité depuis 'expert_gem_3.8_v2' par 5 mutations cognitives qualitatives sans seuil (M1 météo et exposition réelle, M2 logistique d'emport de proximité, M3 réalité budgétaire et coût d'usage neutre démographiquement, M4 frictions fixes automobiles sur 1-2 km, M5 neutralisation de la consigne 4 retirant l'a priori modal contre la marche) validées sur 20 cas empiriques chacune (100 cas appariés au total)
+      date: '2026-09-13'
+      mots: 444
+      derive_de: prompt_expert_04
+      mutations:
+        - "M1 Météo et exposition réelle : fin de la météo-paranoïa, pluie modérée ordinaire vs repli systématique en voiture"
+        - "M2 Logistique d'emport du quotidien : distinction achats volumineux vs courses légères de quartier à pied"
+        - "M3 Réalité budgétaire et coût d'usage : arbitrage modal fondé sur le budget/ressources et le coût récurrent de l'automobile vs gratuité des modes doux ou réseaux collectifs accessibles (sans ciblage démographique spécifique)"
+        - "M4 Frictions fixes de l'automobile : intégration des manœuvres et stationnement sur 1-2 km vs simplicité marche directe"
+        - "M5 Neutralité de justification : suppression de la clause biaisée contre la marche (règle M1)"
+      mesures_empiriques:
+        M1_meteo_averses_20cas: {voiture: -18.8, marche: +10.6, tc: +6.0, velo: +2.3}
+        M2_achats_courses_20cas: {voiture: -15.9, marche: +6.9, tc: +3.8, velo: +5.3}
+        M3_budget_modeste_20cas: {voiture: -14.8, marche: +10.1, tc: +8.6, velo: -3.9}
+        M4_proximite_1_2km_20cas: {voiture: -8.1, marche: +6.9, tc: -0.8, velo: +2.1}
+        M5_seniors_ainés_20cas: {voiture: -10.0, marche: +4.7, tc: +1.2, velo: +4.0}
+        synthese_100cas_rejoues: {voiture: -13.5, marche: +7.8, tc: +3.7, velo: +2.0}
+      note: "aucune consigne explicite de mode, aucun seuil kilométrique, aucune formule mathématique, conforme C1-C5 et E1"
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 96ccb1ef796b1e2509aaae4a12d2bb767bc1a55c623cb71577372399fef46f72
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_gem_3.8_v3
+  prompt_expert_05:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-14'
+      sha256_texte: 5f55688f9cb3ba3e1e6c6f96549a339858ac72b110d9bdc7d14651c216b53ef4
+      auditeur: prompt-auditor (agent independant)
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: variante d'ablation de 'expert_gem_3.8_v2' avec neutralisation de la consigne 4 (mutation M5 seule) pour mesurer isolément l'impact de l'a priori modal contre la marche
+      obtention: >-
+        identique au caractère près à 'expert_gem_3.8_v2', à l'exception de la consigne 4 où la clause ', en précisant si c''est le cas pourquoi la marche n''obtient pas la plus forte probabilité' est supprimée (règle M1).
+      date: '2026-09-13'
+      mots: 277
+      derive_de: prompt_expert_04
+      reference: specs/hygiene-prompts-et-plateforme-experiences.md
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: d3966233d29d6344d47713c141d51095714dc722b2b7e39b08382952409909c2
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_gem_3.8_v2_neutre_justif
+  prompt_expert_04:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-14'
+      sha256_texte: b6982b833ef9db155e159088fe1daa6a2d3f23dcc7c91b6d1bffa9b0bd27aabc
+      auditeur: prompt-auditor (agent independant)
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: correction de 'expert_gem_3.8_v1' — le multiplicateur de durée est retiré au profit d'un qualificatif, la clause ne fixe plus de seuil chiffré
       obtention: >-
         « Face à des liaisons collectives qui doublent la duré… » devient « Face à des liaisons collectives qui augmentent signi… ». Aucune autre différence, au caractère près.
         Audit du 2026-09-10 : la clause d'origine tombait sous C1 (seuil chiffré suivi d'une
         consigne de rang), un multiplicateur écrit en lettres restant un nombre.
       date: '2026-09-10'
-      derive_de: expert_gem_3.8_v1
+      derive_de: prompt_expert_03
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
-  expert_gem_3.8_v1:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 018b598bb223dc518974e83545bd38f4af2fa6dd625f715dd182154fec399814
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_gem_3.8_v2
+  prompt_expert_03:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: non_conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 573cfd44d59517a711391dd6e116185a79f4131a3d02f1cb21ed4b3819d7715b
+      le: '2026-09-14'
+      sha256_texte: d23006792503964c61aae428f71cd1a61f4fae2d71c0c5a41b19953e3d57545d
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C1
-        passage: "Face à des liaisons collectives qui doublent la durée ou imposent de multiples correspondances, l'usager privilégie l'efficacité et la maîtrise horaire de son véhicule disponible."
-        lecture: "Bloquant. Seuil chiffré sur une durée suivi d'un mode nommé — la forme la plus directe visée par C1, plus nette que celle de expert_chaine_m7 où le mode n'était identifié que par la protase."
-      - regle: C5
-        passage: "derive_de: minimal_persona"
-        lecture: "Non bloquant. Le parent est de famille minimale et invalidé, l'enfant expert par défaut : C5 exige que le changement de famille soit explicite. Le mot « expert » du champ role dit la destination, pas que la grille applicable change."
+        - regle: C1
+          passage: Faced with public transport links that double the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+          lecture: "Bloquant. « double the duration » rend « doublent la durée » sans atténuation : un multiplicateur est un nombre (jurisprudence C1 du 2026-09-10, point 2), ici suivi d'une consigne de rang désignant un mode nommé. L'invalidation du 2026-09-10 est confirmée sur le texte anglais, à l'identique."
+        - regle: C5
+          passage: 'derive_de: minimal_persona'
+          lecture: Non bloquant. Le parent est de famille minimale et invalidé ; l'enfant est expert par défaut. C5 exige que le changement de famille soit explicite. Le mot « expert » du champ role énonce une destination, pas un changement de grille applicable.
     _invalidation:
       statut: invalide
       le: '2026-09-10'
@@ -72,36 +347,36 @@ prompts:
         doublent la durée […] l'usager privilégie […] son véhicule disponible ». Seuil chiffré
         suivi d'un mode nommé — forme la plus directe visée par C1. Second constat, non bloquant :
         C5, le changement de famille depuis le parent minimal_persona n'était pas explicite.
-      remplace_par: expert_gem_3.8_v2
+      remplace_par: prompt_expert_04
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
     content: |
-      Sélectionner le mode de déplacement optimal en tenant compte du persona.
+      Select the optimal travel mode taking the persona into account.
 
-      Principes d'arbitrage situationnel :
-      - Friction de chaîne : Reconstitue la durée porte-à-porte réelle (marche d'approche, attente, trajet, diffusion). Si la marche d'accès représente l'essentiel du trajet direct pour quelques minutes à bord, l'usager privilégie la simplicité du trajet direct à pied sans rupture ni attente.
-      - Autonomie des aînés : Chez les personnes âgées ou fragiles, une marche continue et paisible à son propre rythme est le mode naturel d'indépendance pour la proximité, face à la pénibilité et au stress d'un transport collectif (secousses, risque de chute, montées de marche, attente debout sans banc).
-      - Logistique d'emport : Intègre la contrainte physique des charges (courses, sacs lourds, cabas). Porter des charges dans un transport collectif est dissuasif ; l'arbitrage s'oriente vers l'accès direct sans rupture (marche immédiate de quartier ou coffre d'un véhicule individuel).
-      - Temps de vie des actifs : Pour un actif engagé dans une journée contrainte, le temps retranché sur la vie personnelle a une valeur critique. Face à des liaisons collectives qui doublent la durée ou imposent de multiples correspondances, l'usager privilégie l'efficacité et la maîtrise horaire de son véhicule disponible.
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that double the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
 
-      [Instructions de sortie]
+      [Output instructions]
 
-      1. Analyse le profil à travers ces principes.
-      2. N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4. Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
 
-      Schéma JSON attendu : { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." }, "probabilities": { "type": "array", "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index de l'option, tel qu'affiché entre crochets." }, "mode": { "type": "string", "description": "Mode de l'option, recopié depuis l'option." }, "probability": { "type": "number", "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
     _provenance:
       role: prompt expert light spécial Gemini 3.8 Flash, dérivé de minimal_persona et inspiré de MD6 (2026-09-10)
       obtention: minimal_persona augmenté de 4 principes situationnels concis validés sur 20 cas empiriques chacun (M1 friction de rabattement citadins, M2 autonomie seniors, M3 emport achats, M4 temps de vie actifs)
       date: '2026-09-10'
-      mots: 220
-      derive_de: minimal_persona
+      mots: 287
+      derive_de: prompt_minimal_01
       mutations:
-      - "M1 Friction de chaîne : rabattement piéton vs trajet direct à pied sans rupture"
-      - "M2 Autonomie des aînés : marche apaisée à son rythme vs pénibilité composée et secousses du TC"
-      - "M3 Logistique d'emport : portage des courses/achats orientant vers marche directe ou coffre voiture"
-      - "M4 Temps de vie des actifs : compétitivité de la voiture face aux correspondances et retards TC"
+        - "M1 Friction de chaîne : rabattement piéton vs trajet direct à pied sans rupture"
+        - "M2 Autonomie des aînés : marche apaisée à son rythme vs pénibilité composée et secousses du TC"
+        - "M3 Logistique d'emport : portage des courses/achats orientant vers marche directe ou coffre voiture"
+        - "M4 Temps de vie des actifs : compétitivité de la voiture face aux correspondances et retards TC"
       mesures_empiriques:
         M1_citadins_court_20cas: {tc: -10.1, marche: +11.6}
         M2_seniors_proximite_20cas: {tc: -8.8, marche: +27.2}
@@ -109,37 +384,53 @@ prompts:
         M4_actifs_travail_20cas: {tc: -7.6, voiture: +7.2}
         controle_composite_20cas: {tc: -9.7, marche: +12.3, tc_final_pct: 11.9, cible_cerema_tc: 12.4}
       note: "aucune consigne explicite de mode, aucun seuil kilométrique, aucune formule mathématique"
-  expert_chaine_m7.1:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 573cfd44d59517a711391dd6e116185a79f4131a3d02f1cb21ed4b3819d7715b
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_gem_3.8_v1
+  prompt_expert_20:
     _neutralite:
       verdict: conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 4b635348b835d9b744f3fdbf55a78ceb0c8583331a1745e419ca4be624eacc9c
+      le: '2026-09-14'
+      sha256_texte: 378078603f330b5b3daacbb1951f64f84e675e5268aa29f170678d55fb5123ff
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats: []
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Pour chaque personne, ta tâche est d'estimer comment se répartiraient les choix de cent personnes ayant ce même profil, placées devant ces mêmes options, ce même jour. Des personnes identiques sur le papier diffèrent par leurs habitudes, leur goût de l'effort, leur rapport au temps et à la dépense : les probabilités que tu rends décrivent cette diversité réelle, pas ta confiance dans la meilleure option. L'évaluation s'effectue en 3 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Temps porte-à-porte et friction de chaîne : Reconstitue le temps réel total en additionnant toutes les phases de la chaîne : (a) marche d'approche, (b) attente à l'arrêt et contraintes d'horaires fixes, (c) temps de déplacement effectif, (d) marche terminale et correspondances. Évalue les gains de temps uniquement sur cette chaîne complète reconstituée, et non sur le seul temps passé à bord d'un véhicule.
-      - Proportionnalité de l'effort et friction de rabattement : Compare la marche d'approche et terminale contenue dans l'option collective à la marche directe. Si le transport collectif impose une marche d'accès qui représente la majeure partie du trajet direct pour seulement quelques minutes à bord, le recours au véhicule motorisé collectif relève de la friction inutile : l'usager subit la marche, l'attente et la rupture de charge sans bénéfice d'effort réel.
-      - Coût marginal réel et neutralité de l'équipement : La possession d'un abonnement est un coût fixe déjà engagé, qui ne crée aucun gain marginal à être utilisé sur des parcours où la marche est déjà intrinsèquement gratuite, immédiate et sans attente. On n'« amortit » pas un abonnement en subissant l'attente d'un bus pour une courte liaison. De même, les revenus modestes n'orientent pas vers les transports collectifs lorsque les modes actifs offrent une gratuité totale et une maîtrise absolue du temps.
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Logistique d'emport et charge utile des motifs : Intègre la contrainte matérielle liée au motif du déplacement (courses alimentaires, sacs, cabas, matériel de travail, bagages). Voyager debout dans une rame bondée, monter des marches et marcher jusqu'à l'arrêt les bras chargés constitue une forte contrainte physique. Pour les achats et l'approvisionnement, l'arbitrage privilégie naturellement l'accès direct sans rupture : la marche directe pour la proximité immédiate de quartier, ou le véhicule individuel pour son volume de coffre et l'absence de portage.
-      - Météo et exposition réelle : Évalue la gêne météo strictement au prorata du temps passé dehors. Une fraîcheur modérée (3 à 25 °C) ou une bruine intermittente touchent autant l'attente immobile à un arrêt non abrité que la marche. Seules une pluie soutenue continue, la canicule ou le verglas altèrent significativement les arbitrages modaux.
-      - Préservation, rythme personnel et autonomie des aînés : Chez les personnes âgées ou fragiles, la marche à son propre rythme, continue et interruptible, est le mode préférentiel d'autonomie et de maintien physique sur les sorties de proximité. À l'inverse, l'enchaînement des transports collectifs (marches hautes des véhicules, risque de chute aux freinages, bousculades, attente debout sans banc) constitue une source majeure de stress physique et d'insécurité motrice, bien plus dissuasive qu'une marche tranquille.
-      - Valeur du temps de vie et compétitivité des actifs : Pour un actif engagé dans une journée professionnelle ou familiale, le temps de trajet retranché sur le repos et la vie personnelle a une valeur critique. Quand un transport collectif augmente significativement la durée porte-à-porte par rapport à un véhicule individuel disponible, l'usager arbitre en faveur du mode le plus économe en temps de vie, sauf contrainte rédhibitoire de stationnement ou de congestion majeure.
-      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il faut donc anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée.
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. For each person, your task is to estimate how the choices of a hundred people with that same profile, faced with those same options, on that same day, would be distributed. People identical on paper differ in their habits, their appetite for effort, their relationship to time and to spending: the probabilities you return describe that real diversity, not your confidence in the best option. The assessment proceeds in 3 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Door-to-door time and chain friction: Reconstruct the real total time by adding up every phase of the chain: (a) access walk, (b) wait at the stop and fixed-timetable constraints, (c) actual travel time, (d) final walk and interchanges. Assess time savings only on that complete reconstructed chain, and not on the time spent on board a vehicle alone.
+      - Proportionality of effort and access friction: Compare the access and final walk contained in the public transport option with the direct walk. If public transport imposes an access walk that accounts for most of the direct trip in exchange for only a few minutes on board, resorting to a collective motor vehicle is needless friction: the traveller endures the walk, the wait and the interchange with no real saving of effort.
+      - Real marginal cost and equipment neutrality: Owning a pass is a fixed cost already committed, which creates no marginal gain from being used on journeys where walking is already inherently free, immediate and wait-free. One does not "get one's money's worth" out of a pass by enduring a wait for a bus on a short link. Likewise, modest incomes do not steer towards public transport when active modes offer complete zero cost and absolute control of time.
+      - Carrying logistics and the load attached to trip purposes: Take into account the material constraint tied to the purpose of the trip (food shopping, bags, carrier bags, work equipment, luggage). Travelling standing in a crowded carriage, climbing steps and walking to the stop with one's arms full is a strong physical constraint. For shopping and provisioning, the trade-off naturally favours direct access with no interchange: a direct walk for immediate neighbourhood needs, or a private vehicle for its boot space and the absence of carrying.
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Weather and real exposure: Assess weather discomfort strictly in proportion to the time spent outside. Moderate coolness (3 to 25 °C) or intermittent drizzle affects standing still at an unsheltered stop as much as walking. Only heavy continuous rain, a heatwave or black ice significantly alter modal trade-offs.
+      - Preservation, personal pace and autonomy of older people: For elderly or frail people, walking at one's own pace, continuous and interruptible, is the preferred mode of autonomy and of physical upkeep on local outings. Conversely, the sequence of public transport (high steps into vehicles, risk of falling when braking, jostling, standing while waiting with no bench) is a major source of physical stress and of unsteadiness, far more off-putting than a quiet walk.
+      - Value of life time and competitiveness for working people: For a working person committed to a professional or family day, travel time taken away from rest and personal life has critical value. When public transport significantly increases the door-to-door duration compared with an available private vehicle, the traveller decides in favour of the mode that spends the least life time, barring a prohibitive parking or major congestion constraint.
+      - Chain of the day: using a personal means of travel conditions all of your daily trips, because every new trip must necessarily start again from the previous parking place. You must therefore anticipate the sequence of all your planned journeys in order to validate the overall feasibility of the day.
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise par option.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence per option.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -150,29 +441,29 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des  doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the  must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       },
                       "reason": {
                         "type": "string",
-                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
+                        "description": "One sentence justifying the probability of THIS option relative to the others."
                       }
                     },
                     "required": [
@@ -199,27 +490,42 @@ prompts:
         "additionalProperties": false
       }
     _provenance:
-      role: correction de 'expert_chaine_m7' — le multiplicateur de durée est retiré au profit d'un
-        qualificatif, la clause ne fixe plus de seuil chiffré
+      role: correction de 'expert_chaine_m7' — le multiplicateur de durée est retiré au profit d'un qualificatif, la clause ne fixe plus de seuil chiffré
       obtention: >-
         « Quand un transport collectif double ou triple la dur… » devient « Quand un transport collectif augmente significativem… ». Aucune autre différence, au caractère près.
         Audit du 2026-09-10 : la clause d'origine tombait sous C1 (seuil chiffré suivi d'une
         consigne de rang), un multiplicateur écrit en lettres restant un nombre.
       date: '2026-09-10'
-      derive_de: expert_chaine_m7
+      derive_de: prompt_expert_19
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
-  expert_chaine_m7:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 4b635348b835d9b744f3fdbf55a78ceb0c8583331a1745e419ca4be624eacc9c
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_chaine_m7.1
+  prompt_expert_19:
     _neutralite:
       verdict: non_conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 7433fcc2351a336d4f4350c40f2e823886d65b7ca44476a4057d7c990bdb39a5
+      le: '2026-09-14'
+      sha256_texte: d408680fcfeb073e1e8a01b616fe77901938e9089457430559ae8b72bd3fa5a4
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C1
-        passage: "Quand un transport collectif double ou triple la durée porte-à-porte par rapport à un véhicule individuel disponible, l'usager arbitre en faveur du mode le plus économe en temps de vie"
-        lecture: "Bloquant. « double ou triple » est un seuil chiffré sur une durée : un nombre écrit en lettres et exprimé en multiple reste un nombre. La protase pose l'indicateur et son franchissement, l'apodose prescrit un rang d'option. La jurisprudence du 2026-09-10 ne couvre pas ce cas — « 48 heures » et « 3 à 25 °C » décrivent une situation sans déboucher sur un mode."
+        - regle: C1
+          passage: When public transport doubles or triples the door-to-door duration compared with an available private vehicle, the traveller decides in favour of the mode that spends the least life time, barring a prohibitive parking or major congestion constraint.
+          lecture: "Bloquant. « doubles or triples » est un multiplicateur, donc un nombre, appliqué à un indicateur (la durée porte-à-porte) ; la protase pose son franchissement et l'apodose prescrit un rang d'option. Jurisprudence C1 du 2026-09-10, point 2. La bascule anglaise n'a rien déplacé : même structure, même quantification. m7.1 ne diffère que sur ces deux mots (« significantly increases ») et reste conforme : la frontière C1 passe exactement là."
     _invalidation:
       statut: invalide
       le: '2026-09-10'
@@ -231,30 +537,30 @@ prompts:
         lettres reste un nombre — et l'apodose prescrit un rang d'option. La jurisprudence du
         2026-09-10 sur « 48 heures » et « 3 à 25 °C » ne couvre pas ce cas : ces deux-là décrivent
         une situation sans déboucher sur un mode.
-      remplace_par: expert_chaine_m7.1
+      remplace_par: prompt_expert_20
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Pour chaque personne, ta tâche est d'estimer comment se répartiraient les choix de cent personnes ayant ce même profil, placées devant ces mêmes options, ce même jour. Des personnes identiques sur le papier diffèrent par leurs habitudes, leur goût de l'effort, leur rapport au temps et à la dépense : les probabilités que tu rends décrivent cette diversité réelle, pas ta confiance dans la meilleure option. L'évaluation s'effectue en 3 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Temps porte-à-porte et friction de chaîne : Reconstitue le temps réel total en additionnant toutes les phases de la chaîne : (a) marche d'approche, (b) attente à l'arrêt et contraintes d'horaires fixes, (c) temps de déplacement effectif, (d) marche terminale et correspondances. Évalue les gains de temps uniquement sur cette chaîne complète reconstituée, et non sur le seul temps passé à bord d'un véhicule.
-      - Proportionnalité de l'effort et friction de rabattement : Compare la marche d'approche et terminale contenue dans l'option collective à la marche directe. Si le transport collectif impose une marche d'accès qui représente la majeure partie du trajet direct pour seulement quelques minutes à bord, le recours au véhicule motorisé collectif relève de la friction inutile : l'usager subit la marche, l'attente et la rupture de charge sans bénéfice d'effort réel.
-      - Coût marginal réel et neutralité de l'équipement : La possession d'un abonnement est un coût fixe déjà engagé, qui ne crée aucun gain marginal à être utilisé sur des parcours où la marche est déjà intrinsèquement gratuite, immédiate et sans attente. On n'« amortit » pas un abonnement en subissant l'attente d'un bus pour une courte liaison. De même, les revenus modestes n'orientent pas vers les transports collectifs lorsque les modes actifs offrent une gratuité totale et une maîtrise absolue du temps.
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Logistique d'emport et charge utile des motifs : Intègre la contrainte matérielle liée au motif du déplacement (courses alimentaires, sacs, cabas, matériel de travail, bagages). Voyager debout dans une rame bondée, monter des marches et marcher jusqu'à l'arrêt les bras chargés constitue une forte contrainte physique. Pour les achats et l'approvisionnement, l'arbitrage privilégie naturellement l'accès direct sans rupture : la marche directe pour la proximité immédiate de quartier, ou le véhicule individuel pour son volume de coffre et l'absence de portage.
-      - Météo et exposition réelle : Évalue la gêne météo strictement au prorata du temps passé dehors. Une fraîcheur modérée (3 à 25 °C) ou une bruine intermittente touchent autant l'attente immobile à un arrêt non abrité que la marche. Seules une pluie soutenue continue, la canicule ou le verglas altèrent significativement les arbitrages modaux.
-      - Préservation, rythme personnel et autonomie des aînés : Chez les personnes âgées ou fragiles, la marche à son propre rythme, continue et interruptible, est le mode préférentiel d'autonomie et de maintien physique sur les sorties de proximité. À l'inverse, l'enchaînement des transports collectifs (marches hautes des véhicules, risque de chute aux freinages, bousculades, attente debout sans banc) constitue une source majeure de stress physique et d'insécurité motrice, bien plus dissuasive qu'une marche tranquille.
-      - Valeur du temps de vie et compétitivité des actifs : Pour un actif engagé dans une journée professionnelle ou familiale, le temps de trajet retranché sur le repos et la vie personnelle a une valeur critique. Quand un transport collectif double ou triple la durée porte-à-porte par rapport à un véhicule individuel disponible, l'usager arbitre en faveur du mode le plus économe en temps de vie, sauf contrainte rédhibitoire de stationnement ou de congestion majeure.
-      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il faut donc anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée.
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. For each person, your task is to estimate how the choices of a hundred people with that same profile, faced with those same options, on that same day, would be distributed. People identical on paper differ in their habits, their appetite for effort, their relationship to time and to spending: the probabilities you return describe that real diversity, not your confidence in the best option. The assessment proceeds in 3 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Door-to-door time and chain friction: Reconstruct the real total time by adding up every phase of the chain: (a) access walk, (b) wait at the stop and fixed-timetable constraints, (c) actual travel time, (d) final walk and interchanges. Assess time savings only on that complete reconstructed chain, and not on the time spent on board a vehicle alone.
+      - Proportionality of effort and access friction: Compare the access and final walk contained in the public transport option with the direct walk. If public transport imposes an access walk that accounts for most of the direct trip in exchange for only a few minutes on board, resorting to a collective motor vehicle is needless friction: the traveller endures the walk, the wait and the interchange with no real saving of effort.
+      - Real marginal cost and equipment neutrality: Owning a pass is a fixed cost already committed, which creates no marginal gain from being used on journeys where walking is already inherently free, immediate and wait-free. One does not "get one's money's worth" out of a pass by enduring a wait for a bus on a short link. Likewise, modest incomes do not steer towards public transport when active modes offer complete zero cost and absolute control of time.
+      - Carrying logistics and the load attached to trip purposes: Take into account the material constraint tied to the purpose of the trip (food shopping, bags, carrier bags, work equipment, luggage). Travelling standing in a crowded carriage, climbing steps and walking to the stop with one's arms full is a strong physical constraint. For shopping and provisioning, the trade-off naturally favours direct access with no interchange: a direct walk for immediate neighbourhood needs, or a private vehicle for its boot space and the absence of carrying.
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Weather and real exposure: Assess weather discomfort strictly in proportion to the time spent outside. Moderate coolness (3 to 25 °C) or intermittent drizzle affects standing still at an unsheltered stop as much as walking. Only heavy continuous rain, a heatwave or black ice significantly alter modal trade-offs.
+      - Preservation, personal pace and autonomy of older people: For elderly or frail people, walking at one's own pace, continuous and interruptible, is the preferred mode of autonomy and of physical upkeep on local outings. Conversely, the sequence of public transport (high steps into vehicles, risk of falling when braking, jostling, standing while waiting with no bench) is a major source of physical stress and of unsteadiness, far more off-putting than a quiet walk.
+      - Value of life time and competitiveness for working people: For a working person committed to a professional or family day, travel time taken away from rest and personal life has critical value. When public transport doubles or triples the door-to-door duration compared with an available private vehicle, the traveller decides in favour of the mode that spends the least life time, barring a prohibitive parking or major congestion constraint.
+      - Chain of the day: using a personal means of travel conditions all of your daily trips, because every new trip must necessarily start again from the previous parking place. You must therefore anticipate the sequence of all your planned journeys in order to validate the overall feasibility of the day.
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise par option.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence per option.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -265,29 +571,29 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des  doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the  must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       },
                       "reason": {
                         "type": "string",
-                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
+                        "description": "One sentence justifying the probability of THIS option relative to the others."
                       }
                     },
                     "required": [
@@ -317,46 +623,62 @@ prompts:
       role: "cinq mutations cognitives d'expert_chaine_m6 contre les dérives modales mesurées sur exp_gemini-35-fl_expcham6_jtir_t0_nosim (TC excédentaire chez les aînés, motif achats, actifs navetteurs, abonnés trajets courts et proximité 1-2 km)"
       obtention: "édité depuis expert_chaine_m6 par 5 mutations cognitives (M1 proportionnalité et friction de rabattement, M2 logistique d'emport et charge utile achats, M3 préservation et autonomie aînés, M4 neutralité de l'équipement et sunk costs, M5 valeur du temps de vie des actifs) validées sur 20 cas appariés chacune"
       date: '2026-09-09'
-      mots: 842
-      derive_de: expert_chaine_m6
+      mots: 802
+      derive_de: prompt_expert_18
       mutations:
-      - "M1 Proportionnalité de l'effort : la part de marche de rabattement dans l'option collective comparée à la marche directe"
-      - "M2 Logistique d'emport : contrainte physique des courses/sacs orientant vers la marche de proximité ou le coffre de la voiture"
-      - "M3 Autonomie et préservation des aînés : marche à son rythme face au stress des bousculades et freinages en bus"
-      - "M4 Neutralité d'équipement : l'abonnement est un coût fixe, il ne crée aucun gain marginal sur un trajet court gratuit"
-      - "M5 Valeur du temps de vie des actifs : arbitrages travail quand le transport collectif double ou triple la durée de voiture"
+        - "M1 Proportionnalité de l'effort : la part de marche de rabattement dans l'option collective comparée à la marche directe"
+        - "M2 Logistique d'emport : contrainte physique des courses/sacs orientant vers la marche de proximité ou le coffre de la voiture"
+        - "M3 Autonomie et préservation des aînés : marche à son rythme face au stress des bousculades et freinages en bus"
+        - "M4 Neutralité d'équipement : l'abonnement est un coût fixe, il ne crée aucun gain marginal sur un trajet court gratuit"
+        - "M5 Valeur du temps de vie des actifs : arbitrages travail quand le transport collectif double ou triple la durée de voiture"
       note: "aucune consigne explicite de mode ni de seuil distance -> mode ni formule mathématique"
 
-  expert_chaine_m6:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 7433fcc2351a336d4f4350c40f2e823886d65b7ca44476a4057d7c990bdb39a5
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_chaine_m7
+  prompt_expert_18:
     _neutralite:
       verdict: conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 033231a3abd62321d99e5a47c8e06183ddb163238e27e61636974092f802c243
+      le: '2026-09-14'
+      sha256_texte: 51872761119cef06842c80efed5840f4221b6566d8769f152c61bd08b1f0dbdd
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats: []
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Pour chaque personne, ta tâche est d'estimer comment se répartiraient les choix de cent personnes ayant ce même profil, placées devant ces mêmes options, ce même jour. Des personnes identiques sur le papier diffèrent par leurs habitudes, leur goût de l'effort, leur rapport au temps et à la dépense : les probabilités que tu rends décrivent cette diversité réelle, pas ta confiance dans la meilleure option. L'évaluation s'effectue en 3 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Temps porte-à-porte et friction de chaîne : Reconstitue le temps réel total en additionnant toutes les phases de la chaîne : (a) marche d'approche, (b) attente à l'arrêt et contraintes d'horaires fixes, (c) temps de déplacement effectif, (d) marche terminale et correspondances. Évalue les gains de temps uniquement sur cette chaîne complète reconstituée, et non sur le seul temps passé à bord d'un véhicule.
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
-      - Coût réel et arbitrage d'équipement : Un abonnement de transport ou un véhicule personnel rend une option disponible et limite son coût marginal sur les longs trajets. Il n'exerce aucune attraction sur les trajets locaux de proximité où les modes doux sont déjà gratuits, immédiats et sans réservation. L'équipement est un facilitateur de distance, non une préférence de mode.
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Météo et exposition réelle : Évalue la gêne météo strictement au prorata du temps passé dehors. Une fraîcheur modérée (3 à 25 °C) ou une bruine intermittente touchent autant l'attente immobile à un arrêt non abrité que la marche. Seules une pluie soutenue continue, la canicule ou le verglas altèrent significativement les arbitrages modaux.
-      - Confort, effort et pénibilité senior : Compare l'effort continu d'une marche à son propre rythme à la pénibilité composée d'un trajet collectif : rejoindre l'arrêt, attendre debout, monter des marches, voyager secoué debout et correspondre. Pour un senior ou une personne fragile, l'enchaînement physique d'un transport collectif est souvent plus fatigant et stressant qu'une marche directe de courte durée.
-      - Contraintes horaires et flexibilité des actifs : Pour un actif en trajet travail ou à horaire contraint, la garantie de l'horaire, la flexibilité de départ et la capacité d'emport pèsent fortement en faveur de l'autonomie (voiture ou mode direct), alors que les transports collectifs imposent des marges de sécurité contre les retards.
-      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il faut donc anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée.
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. For each person, your task is to estimate how the choices of a hundred people with that same profile, faced with those same options, on that same day, would be distributed. People identical on paper differ in their habits, their appetite for effort, their relationship to time and to spending: the probabilities you return describe that real diversity, not your confidence in the best option. The assessment proceeds in 3 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Door-to-door time and chain friction: Reconstruct the real total time by adding up every phase of the chain: (a) access walk, (b) wait at the stop and fixed-timetable constraints, (c) actual travel time, (d) final walk and interchanges. Assess time savings only on that complete reconstructed chain, and not on the time spent on board a vehicle alone.
+      - Raw access friction (approach time, parking, interchanges).
+      - Real cost and equipment trade-off: A travel pass or a personal vehicle makes an option available and limits its marginal cost on long trips. It exerts no pull on local short-range trips where soft modes are already free, immediate and need no booking. Equipment is an enabler of distance, not a mode preference.
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Weather and real exposure: Assess weather discomfort strictly in proportion to the time spent outside. Moderate coolness (3 to 25 °C) or intermittent drizzle affects standing still at an unsheltered stop as much as walking. Only heavy continuous rain, a heatwave or black ice significantly alter modal trade-offs.
+      - Comfort, effort and strain on older people: Compare the continuous effort of walking at one's own pace with the compound strain of a public transport trip: getting to the stop, waiting while standing, climbing steps, travelling jolted while standing, and changing. For an older or frail person, the physical sequence of a public transport trip is often more tiring and more stressful than a short direct walk.
+      - Scheduling constraints and flexibility for working people: For a working person on a commute or on a constrained schedule, guaranteed timing, departure flexibility and carrying capacity weigh heavily in favour of autonomy (car or direct mode), whereas public transport imposes safety margins against delays.
+      - Chain of the day: using a personal means of travel conditions all of your daily trips, because every new trip must necessarily start again from the previous parking place. You must therefore anticipate the sequence of all your planned journeys in order to validate the overall feasibility of the day.
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise par option.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence per option.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -367,29 +689,29 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des  doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the  must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       },
                       "reason": {
                         "type": "string",
-                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
+                        "description": "One sentence justifying the probability of THIS option relative to the others."
                       }
                     },
                     "required": [
@@ -419,45 +741,61 @@ prompts:
       role: cinq mutations cognitives d'expert_chaine_m5 contre les dérives modales mesurées sur exp_gemini-35-fl_expcham5_jtir_t0_nosim_2 (marche → TC chez les seniors, urbains denses et trajets 1-2 km)
       obtention: édité depuis expert_chaine_m5 par 5 mutations cognitives (M1 friction de chaîne door-to-door, M2 équipement comme facilitateur et non attracteur local, M3 pénibilité composée TC vs marche directe pour les seniors, M4 exposition météo au prorata du temps extérieur, M5 autonomie et contrainte horaire des actifs navetteurs)
       date: '2026-09-09'
-      mots: 783
-      derive_de: expert_chaine_m5
+      mots: 597
+      derive_de: prompt_expert_17
       mutations:
-      - 'M1 Temps porte-à-porte et friction de chaîne : reconstituer le temps réel total (accès + attente + trajet + diffusion) et évaluer les gains uniquement sur cette chaîne complète'
-      - 'M2 Arbitrage d''équipement : l''abonnement ou le véhicule est un facilitateur de distance, non une préférence de mode sur les trajets locaux gratuits et immédiats'
-      - 'M3 Pénibilité senior : l''enchaînement physique du TC (attente immobile debout, marche d''arrêt, secousses) est souvent plus fatigant pour un senior qu''une marche directe continue à son rythme'
-      - 'M4 Météo au prorata : la fraîcheur modérée (3-25 °C) ou la bruine touchent autant l''attente immobile à l''arrêt que la marche ; seules pluie soutenue, canicule ou verglas altèrent l''arbitrage'
-      - 'M5 Contraintes horaires des actifs : garantie horaire et autonomie pèsent fortement pour la voiture/mode direct face à l''imprévisibilité des TC'
+        - 'M1 Temps porte-à-porte et friction de chaîne : reconstituer le temps réel total (accès + attente + trajet + diffusion) et évaluer les gains uniquement sur cette chaîne complète'
+        - 'M2 Arbitrage d''équipement : l''abonnement ou le véhicule est un facilitateur de distance, non une préférence de mode sur les trajets locaux gratuits et immédiats'
+        - 'M3 Pénibilité senior : l''enchaînement physique du TC (attente immobile debout, marche d''arrêt, secousses) est souvent plus fatigant pour un senior qu''une marche directe continue à son rythme'
+        - 'M4 Météo au prorata : la fraîcheur modérée (3-25 °C) ou la bruine touchent autant l''attente immobile à l''arrêt que la marche ; seules pluie soutenue, canicule ou verglas altèrent l''arbitrage'
+        - 'M5 Contraintes horaires des actifs : garantie horaire et autonomie pèsent fortement pour la voiture/mode direct face à l''imprévisibilité des TC'
       note: aucune consigne de mode ni de seuil distance → mode
-  expert_chaine_m5:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 033231a3abd62321d99e5a47c8e06183ddb163238e27e61636974092f802c243
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_chaine_m6
+  prompt_expert_17:
     _neutralite:
       verdict: conforme
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 7b5a9298f090e9ae10579e49eb2e1a786d8851c36cbcb1bc438f8cb53693b3c4
+      le: '2026-09-14'
+      sha256_texte: d2f5a99daa774fc87ad08be577467def248ef9184eae9036ffaf39bcf89abff2
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats: []
     content: |
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Pour chaque personne, ta tâche est d'estimer comment se répartiraient les choix de cent personnes ayant ce même profil, placées devant ces mêmes options, ce même jour. Des personnes identiques sur le papier diffèrent par leurs habitudes, leur goût de l'effort, leur rapport au temps et à la dépense : les probabilités que tu rends décrivent cette diversité réelle, pas ta confiance dans la meilleure option. L'évaluation s'effectue en 3 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Temps porte-à-porte : compare les durées totales affichées, en gardant à l'esprit que la durée d'un transport collectif n'inclut ni l'attente à l'arrêt ni l'aléa d'une correspondance, alors qu'un trajet à pied ou à vélo tient sa durée. Un écart de quelques minutes sur un trajet court n'est pas un motif : en deçà d'un écart perceptible, le temps ne départage pas les options, et ce sont l'habitude, la simplicité et le coût qui décident.
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
-      - Coût réel : un abonnement rend le réseau gratuit à l'usage, il ne dit rien de la préférence pour un trajet donné, et son absence n'interdit pas le réseau. La marche et le vélo sont gratuits eux aussi : un revenu faible ne désigne pas le transport collectif comme l'option économique par défaut. Un équipement — abonnement, vélo, voiture — ouvre une option ; il ne la choisit pas.
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Météo : lis le bulletin à sa mesure. Un cumul de quelques dixièmes de millimètre sur la journée, ou une pluie annoncée pour une autre tranche horaire, ne touche pas un trajet de quelques minutes ; seules les conditions au moment du départ pèsent, à hauteur de la durée d'exposition. Entre 3 et 25 °C sans précipitation en cours, c'est le temps ordinaire d'un jour de semaine à Toulouse, et les habitants s'y déplacent comme d'habitude. Constituent une gêne réelle : une pluie soutenue en cours, le verglas, la canicule, la nuit dans un secteur non éclairé.
-      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-      - Filtre de confort et d'effort : pèse les préférences de confort qui ressortent du profil (foule, bruit, exposition aux intempéries), sans déduire une incapacité du seul âge. L'effort d'un déplacement se juge à sa durée et à son relief, et un trajet en transport collectif n'est pas sans effort : rejoindre l'arrêt, attendre debout, monter et descendre, rejoindre la destination. Compare des efforts réels, jamais un âge à une durée.
-      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il est donc nécessaire d'anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée, même si certains trajets intermédiaires s'effectuent par d'autres moyens.
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. For each person, your task is to estimate how the choices of a hundred people with that same profile, faced with those same options, on that same day, would be distributed. People identical on paper differ in their habits, their appetite for effort, their relationship to time and to spending: the probabilities you return describe that real diversity, not your confidence in the best option. The assessment proceeds in 3 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Door-to-door time: compare the total durations shown, bearing in mind that the duration of a public transport trip includes neither the wait at the stop nor the uncertainty of an interchange, whereas a walking or cycling trip holds to its duration. A gap of a few minutes on a short trip is not a reason: below a perceptible gap, time does not separate the options, and it is habit, simplicity and cost that decide.
+      - Raw access friction (approach time, parking, interchanges).
+      - Real cost: a travel pass makes the network free at the point of use; it says nothing about the preference for a given trip, and its absence does not rule the network out. Walking and cycling are free too: a low income does not designate public transport as the default economical option. Equipment — a pass, a bike, a car — opens up an option; it does not choose it.
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Weather: read the forecast for what it is worth. A few tenths of a millimetre accumulated over the day, or rain forecast for another time slot, does not affect a trip of a few minutes; only the conditions at the moment of departure count, in proportion to the duration of exposure. Between 3 and 25 °C with no precipitation under way, that is ordinary weekday weather in Toulouse, and residents travel as usual. What constitutes real discomfort: heavy rain under way, black ice, a heatwave, night-time in an unlit area.
+      - Reality filter: Distinguish a theoretically useful mode (the fastest in absolute terms) from a mode that is genuinely legitimate given the immediate context and the persona's constraints.
+      - Comfort and effort filter: weigh the comfort preferences that emerge from the profile (crowds, noise, exposure to the elements), without inferring incapacity from age alone. The effort of a trip is judged by its duration and its gradient, and a public transport trip is not effortless: getting to the stop, waiting while standing, getting on and off, getting to the destination. Compare real efforts, never an age against a duration.
+      - Chain of the day: using a personal means of travel conditions all of your daily trips, because every new trip must necessarily start again from the previous parking place. You must therefore anticipate the sequence of all your planned journeys in order to validate the overall feasibility of the day, even if some intermediate trips are made by other means.
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise par option.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence per option.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -468,29 +806,29 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       },
                       "reason": {
                         "type": "string",
-                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
+                        "description": "One sentence justifying the probability of THIS option relative to the others."
                       }
                     },
                     "required": [
@@ -520,55 +858,68 @@ prompts:
       role: cinq mutations d'expert_chaine contre les dérives mesurées sous gemini-3.5-flash-lite (marche → TC, voiture → TC, concentration ≥ 80 %) ; candidat à la non-régression globale
       obtention: 'édité depuis la variante ''expert_chaine'' par cinq remplacements ancrés (M1bis, M2, M3, M4, M5 de la trace) ; rejeu apparié de 200 décisions : L1 54,6 → 48,1, marche +1,7, vélo 7,1 → 4,7, TC −0,8, voiture +1,5'
       date: '2026-09-08'
-      mots: 847
-      derive_de: expert_m4
+      mots: 668
+      derive_de: prompt_expert_16
       mutations:
-      - 'M1bis cadrage : estimer la répartition des choix de cent personnes de ce profil, pas l''optimum'
-      - 'M2 temps porte-à-porte : attente et aléa des TC non comptés dans la durée affichée ; un écart de quelques minutes ne départage pas'
-      - 'M3 coût réel : l''abonnement ouvre une option sans la choisir ; marche et vélo gratuits aussi'
-      - 'M4 météo à sa mesure : cumul, tranche horaire, exposition ; 3-25 °C sans pluie en cours = temps ordinaire'
-      - 'M5 confort et effort : aucune incapacité déduite de l''âge ; le TC n''est pas sans effort ; « modes assis pour les personnes âgées » retiré'
+        - 'M1bis cadrage : estimer la répartition des choix de cent personnes de ce profil, pas l''optimum'
+        - 'M2 temps porte-à-porte : attente et aléa des TC non comptés dans la durée affichée ; un écart de quelques minutes ne départage pas'
+        - 'M3 coût réel : l''abonnement ouvre une option sans la choisir ; marche et vélo gratuits aussi'
+        - 'M4 météo à sa mesure : cumul, tranche horaire, exposition ; 3-25 °C sans pluie en cours = temps ordinaire'
+        - 'M5 confort et effort : aucune incapacité déduite de l''âge ; le TC n''est pas sans effort ; « modes assis pour les personnes âgées » retiré'
       trace: docs/traces/2026-09-08_16-05_prompt_expcha_derives_m5
       note: 'aucune consigne explicite de mode ni de seuil distance → mode ; repli si la voiture recule au-delà du bruit : retirer la phrase d''introduction (M1bis)'
-  expert_m4:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 7b5a9298f090e9ae10579e49eb2e1a786d8851c36cbcb1bc438f8cb53693b3c4
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_chaine_m5
+  prompt_expert_16:
     _provenance:
       ancien_nom: expert_chaine
       renomme_le: '2026-09-11'
       role: >-
-        renommage demandé par l'auteur ; la lignée experte se numérote désormais par mutation.
-        Aucune modification du texte : le sceau `_neutralite.sha256_texte` reste valide.
-        Aucun alias de compatibilité : les expériences archivées qui portent `variante: expert_chaine`
-        ne se rejouent plus (décision de l'auteur du 2026-09-11).
+        renommage demandé par l'auteur ; la lignée experte se numérote désormais par mutation. Aucune modification du texte : le sceau `_neutralite.sha256_texte` reste valide. Aucun alias de compatibilité : les expériences archivées qui portent `variante: expert_chaine` ne se rejouent plus (décision de l'auteur du 2026-09-11). ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : le texte a depuis été traduit en anglais, et le sceau a été recalculé en conséquence — l'avis qui vaut est celui du 2026-09-14, pas celui cité ici.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 03492e4fa5491e31b11902be2d55330f7fb791a1a5ee6049136dbca9d5fcad93
+      le: '2026-09-14'
+      sha256_texte: 5793322fd7f44e3a20f9162b9d23b14f102a249e851da2829545096140848afc
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée expert_chaine — aucun bloc _provenance)"
-        lecture: "Seule des variantes en service à ne porter ni derive_de, ni date, ni déclaration de racine. Réserve : le manque est documentaire, une racine n'a pas de parent à désigner, et la lignée aval m5 → m6 → m7 la déclare correctement. Levée par une ligne disant qu'elle est racine et depuis quand."
+        - regle: C5
+          passage: "_provenance: {ancien_nom: expert_chaine, renomme_le: '2026-09-11', role: …}"
+          lecture: "Non bloquant, et hérité. Le bloc _provenance documente le renommage, pas la lignée : ni derive_de, ni date de création, ni déclaration explicite de racine. Une racine n'a pas de parent à désigner, et la lignée aval (m5 → m6 → m7 → m7.1) la déclare bien."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Gain de temps VS confort.
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, pluie et vent, ...).
-      - Chaîne de la journée : l'usage d'un moyen de déplacement personnel conditionne l'ensemble de vos déplacements journaliers, car chaque nouveau trajet doit obligatoirement repartir du lieu de stationnement précédent. Il est donc nécessaire d'anticiper l'enchaînement de tous vos parcours prévus pour valider la faisabilité globale de la journée, même si certains trajets intermédiaires s'effectuent par d'autres moyens.
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. Your task is to select the optimal travel mode. The assessment must be purely algorithmic and proceed in 4 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Time saved VS comfort.
+      - Raw access friction (approach time, parking, interchanges).
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Reality filter: Distinguish a theoretically useful mode (the fastest in absolute terms) from a mode that is genuinely legitimate given the immediate context and the persona's constraints.
+      - Comfort filter: Take the persona's comfort preferences into account (e.g. avoiding crowded public transport, favouring seated modes for elderly people, rain and wind, ...).
+      - Chain of the day: using a personal means of travel conditions all of your daily trips, because every new trip must necessarily start again from the previous parking place. You must therefore anticipate the sequence of all your planned journeys in order to validate the overall feasibility of the day, even if some intermediate trips are made by other means.
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise par option.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence per option.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -579,29 +930,29 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       },
                       "reason": {
                         "type": "string",
-                        "description": "Une phrase justifiant la probabilité de CETTE option par rapport aux autres."
+                        "description": "One sentence justifying the probability of THIS option relative to the others."
                       }
                     },
                     "required": [
@@ -627,67 +978,99 @@ prompts:
         ],
         "additionalProperties": false
       }
-  prompt_minimal:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 03492e4fa5491e31b11902be2d55330f7fb791a1a5ee6049136dbca9d5fcad93
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_m4
+  prompt_minimal_02:
     _neutralite:
       verdict: conforme
       famille: minimale
-      le: '2026-09-10'
-      sha256_texte: f1d726c2572139633d229ab36db2b1577223f04e61b27ed274903229710c9063
+      le: '2026-09-14'
+      sha256_texte: 8da3812df553043df1496346af656075340c290c03485545d505718f50df751e
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, M1, M2, M3, M4]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - M1
+        - M2
+        - M3
+        - M4
+      langue: en
       constats: []
     content: |
-      Sélectionner le mode de déplacement optimal en tenant compte du persona.
+      Select the optimal travel mode taking the persona into account.
 
-      [Instructions de sortie]
+      [Output instructions]
 
-      1. Analyse le profil.
-      2. N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4. Justifie la répartition en une phrase concise.
+      1. Analyse the profile.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
 
-      Schéma JSON attendu : { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." }, "probabilities": { "type": "array", "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index de l'option, tel qu'affiché entre crochets." }, "mode": { "type": "string", "description": "Mode de l'option, recopié depuis l'option." }, "probability": { "type": "number", "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
     famille: minimale
     _provenance:
-      role: unique prompt de la famille minimale — tâche et format de sortie, rien qui puisse
-        influencer un mode plutôt qu'un autre
+      role: unique prompt de la famille minimale — tâche et format de sortie, rien qui puisse influencer un mode plutôt qu'un autre
       obtention: >-
         copie de 'minimal_persona' dont la consigne de sortie n° 4 est ramenée à « Justifie la
         répartition en une phrase concise. » ; le membre « en précisant si c'est le cas pourquoi
         la marche n'obtient pas la plus forte probabilité » est retiré (a priori modal, règle M1).
         Aucune autre différence, au caractère près.
       date: '2026-09-10'
-      mots: 92
-      derive_de: minimal_persona
+      mots: 82
+      derive_de: prompt_minimal_01
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
-  minimal_persona:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: f1d726c2572139633d229ab36db2b1577223f04e61b27ed274903229710c9063
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: prompt_minimal
+  prompt_minimal_01:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: non_conforme
       famille: minimale
-      le: '2026-09-10'
-      sha256_texte: 492ec2db42e1e1ab8ad5b77a8848fd20e87990a28383bf73fdc511be374eabf6
+      le: '2026-09-14'
+      sha256_texte: 884a0f6b3fcc6906d291ff29b2e460bd9a6eb6fc63b287de129521aa94461883
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, M1, M2, M3, M4]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - M1
+        - M2
+        - M3
+        - M4
+      langue: en
       constats:
-      - regle: M1
-        passage: "4. Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité."
-        lecture: "Bloquant. Famille minimale déclarée : un mode est nommé et son rang présupposé dans la consigne de sortie. La déclaration `famille: minimale` lève l'indétermination du premier examen — la règle est applicable, et elle est violée."
-      - regle: M3
-        passage: "…pourquoi la marche n'obtient pas la plus forte probabilité."
-        lecture: "Corroboration par permutation : remplacer « la marche » par « la voiture » change le sens de la consigne. Le texte est directionnel."
-      - regle: C5
-        passage: "derive_de: b_min"
-        lecture: "Non bloquant. L'entrée se déclare minimale alors que son parent b_min relève de la famille experte par défaut ; l'écart n'est explicité nulle part. Circonstance : la reclassification de b_min est du 2026-09-10, postérieure à la création du 2026-09-06."
-    # Famille sous laquelle cette variante a été SERVIE et jugée : c'était le prompt minimal
-    # du projet jusqu'au 2026-09-10. `familles.minimale` ne liste que `prompt_minimal`, qui est
-    # le minimal EN SERVICE ; ce champ dit la famille de celle-ci, sans la remettre en service
-    # (elle est invalidée, donc refusée). Sans lui, l'invalidation invoquait M1 — une règle de
-    # la famille minimale — sur une variante que la déclaration rangeait en experte.
+        - regle: M1
+          passage: 4. Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
+          lecture: 'Bloquant. Famille minimale déclarée : un mode est nommé (« walking ») et son rang présupposé dans la consigne de sortie. La traduction reconduit fidèlement la clause française ; la non-conformité est reconduite avec elle.'
+        - regle: M3
+          passage: …why walking does not get the highest probability.
+          lecture: 'Corroboration par permutation : remplacer « walking » par « the car » change le sens de la consigne. Le texte est directionnel.'
+        - regle: C5
+          passage: 'derive_de: b_min'
+          lecture: "Non bloquant. L'entrée se déclare minimale alors que son parent b_min relève de la famille experte par défaut ; le changement de famille n'est explicité nulle part. Circonstance atténuante : la reclassification de b_min (2026-09-10) est postérieure à la création de cette variante (2026-09-06)."
     famille: minimale
     _invalidation:
       statut: invalide
@@ -699,44 +1082,58 @@ prompts:
         débogage le 2026-06-13 (commit 0bc68b7, forme d'origine « …et si tu as hésité »), jamais
         retirée, puis reprise à la création de cette variante le 2026-09-06 alors que son parent
         b_min ne la portait pas.
-      remplace_par: prompt_minimal
+      remplace_par: prompt_minimal_02
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
     content: |
-      Sélectionner le mode de déplacement optimal en tenant compte du persona.
+      Select the optimal travel mode taking the persona into account.
 
-      [Instructions de sortie]
+      [Output instructions]
 
-      1. Analyse le profil.
-      2. N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4. Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      1. Analyse the profile.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
 
-      Schéma JSON attendu : { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)." }, "probabilities": { "type": "array", "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index de l'option, tel qu'affiché entre crochets." }, "mode": { "type": "string", "description": "Mode de l'option, recopié depuis l'option." }, "probability": { "type": "number", "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
     _provenance:
       role: prompt minimaliste avec persona (demande du 2026-09-06)
       obtention: édité depuis la variante 'b_min'
       date: '2026-09-06'
-      mots: 249
-      derive_de: b_min
-  b_min:
+      mots: 93
+      derive_de: prompt_expert_02
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 492ec2db42e1e1ab8ad5b77a8848fd20e87990a28383bf73fdc511be374eabf6
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: minimal_persona
+  prompt_expert_02:
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: e620b067dc0156c7540afb648bd6d93a4e8c6fefbe1ae7fa066e9abaa8d3ad6e
+      le: '2026-09-14'
+      sha256_texte: 823d5c7761617a6cfb48d68c4156bf407a25ebcad809e82304a4177962afedae
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "derive_de: null (racine de lignée assumée)"
-        lecture: "Non bloquant, mais C5 n'est pas satisfaite : le champ est posé à la racine de l'entrée et non dans `_provenance`, sa valeur ne pointe aucune variante existante, et un antécédent a existé (« prompt courant », 2026-08-12) sans être identifié par nom, commit ni fichier. L'ascendance devient non tracée *assumée* : auditable, pas tracée."
-    # Racine de lignée assumée : `_provenance` ne porte pas de `derive_de` et son « prompt
-    # courant » d'origine n'est plus résolvable (constat C5 de l'audit du 2026-09-10).
-    derive_de: null
+        - regle: C5
+          passage: 'derive_de:'
+          lecture: Non bloquant, et hérité. Le champ est posé à la racine de l'entrée et non dans `_provenance` ; sa valeur est vide et ne pointe aucune variante. L'antécédent revendiqué par _provenance.obtention n'est identifié ni par nom, ni par commit, ni par fichier. Ascendance non tracée mais assumée.
+    derive_de:
     content: |-
-      Pour chaque bloc ci-dessous, répartis 100 points de probabilité entre les options de trajet proposées, puis justifie brièvement dans le champ prévu.
+      For each block below, distribute 100 probability points across the proposed trip options, then justify briefly in the field provided.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -778,50 +1175,65 @@ prompts:
       obtention: prompt courant dépouillé de toute consigne comportementale ; ne restent que la tâche et le format
       date: '2026-08-12'
       sha1_normalise: 68229f00b026
-      mots: 81
+      mots: 20
       note: commun a B_min et B_min+persona ; les deux ne different que par strip_persona
-  expert_m1:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: e620b067dc0156c7540afb648bd6d93a4e8c6fefbe1ae7fa066e9abaa8d3ad6e
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: b_min
+  prompt_expert_10:
     _provenance:
       ancien_nom: expert_best
       renomme_le: '2026-09-11'
       role: >-
-        renommage demandé par l'auteur ; la lignée experte se numérote désormais par mutation.
-        Aucune modification du texte : le sceau `_neutralite.sha256_texte` reste valide.
+        renommage demandé par l'auteur ; la lignée experte se numérote désormais par mutation. Aucune modification du texte : le sceau `_neutralite.sha256_texte` reste valide. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : le texte a depuis été traduit en anglais, et le sceau a été recalculé en conséquence — l'avis qui vaut est celui du 2026-09-14, pas celui cité ici.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 6f282d2dcdbea88e889f7694c7d4f053b9d41752ce229e1160c7fef027dd33b1
+      le: '2026-09-14'
+      sha256_texte: b029b97101e55e71be7d4bf26d4f654a77e9a09348d95ffd30712fada7421860
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "_calibration: {seed: expert, iterations: 29}"
-        lecture: "Lignée reconstructible via _calibration.seed, qui nomme une variante existante, mais pas dans le champ prescrit et sans diff joint. Les consignes par mode (« Pour la marche, insiste… », « Pour le vélo, transforme sa perception… ») sont des cadrages délibérés, conformes au titre de E1."
+        - regle: C5
+          passage: '_calibration: {seed: expert, iterations: 29}'
+          lecture: "Non bloquant. Aucun `_provenance.derive_de` : le bloc ne porte que ancien_nom, renomme_le et role. La lignée n'est reconstructible que par `_calibration.seed`, qui nomme une variante existante mais hors du champ prescrit et sans diff joint."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
+      You will sequentially embody people living in Toulouse. Your task is to select the optimal travel mode. The assessment must be purely algorithmic and proceed in 4 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
 
-      - Gain de temps VS confort.
+      - Time saved VS comfort.
 
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
+      - Raw access friction (approach time, parking, interchanges).
 
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
 
-      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
+      - Reality filter: Distinguish a theoretically useful mode (the fastest in absolute terms) from a mode that is genuinely legitimate given the immediate context and the persona's constraints.
 
-      - Filtre de confort et d'usage : Évalue les préférences de confort du persona avec une attention particulière aux besoins pratiques et à l'adéquation du mode au contexte. **Pour la marche**, insiste sur sa nature comme solution par défaut fluide, immédiate et sans friction : capacité à se déplacer sans attente ni préparation, discrétion totale (pas de bruit, pas de pollution), adaptabilité immédiate aux imprévus (changement de dernière minute, détour) et une proximité sensorielle avec l'environnement qui réduit la fatigue psychologique. Souligne son adéquation naturelle avec les trajets urbains courts et routiniers, notamment pour les personas soucieux d'économie de temps et de simplicité dans leur quotidien. **Pour le vélo**, transforme sa perception en accentuant son caractère contraignant et peu intuitif dans Toulouse : effort physique perçu comme une pénibilité récurrente, exposition permanente aux aléas (transpiration, pluie, vent), et gestion logistique intrusive (équipement, stationnement incertain, risques de vol) qui alourdissent la routine plutôt que de l'alléger. Présente-le comme un mode résolument inadapté aux trajets où flexibilité et sérénité priment. **Pour les transports collectifs**, minore leur attractivité en soulignant leur rigidité structurelle : impossibilité de modifier un trajet en temps réel sans contrainte (horaires fixes, correspondances à orchestrer), espace partagé peu propice à la confidentialité ou au transport de charges, et dépendance aux aléas extérieurs (foule, retard) qui génèrent de la frustration plutôt que du gain. Leur usage doit être réservé aux cas où aucune autre option ne permet de respecter un engagement horaire absolu. **Pour la voiture**, contrebalance son attrait par une mise en avant des coûts cachés : temps perdu en stationnement, stress de conduite en milieu urbain dense, sédentarité induite et pollution sonore qui nuisent au bien-être à long terme — le tout sans renoncer à sa pertinence pour les trajets longs ou contraints par des impératifs horaires impérieux.
+      - Comfort and usage filter: Assess the persona's comfort preferences with particular attention to practical needs and to how well the mode fits the context. **For walking**, stress its nature as a smooth, immediate, friction-free default: the ability to set off without waiting or preparation, complete discretion (no noise, no pollution), immediate adaptability to the unexpected (last-minute change, detour) and a sensory closeness to the surroundings that reduces psychological fatigue. Underline its natural fit with short, routine urban trips, especially for personas concerned with saving time and keeping daily life simple. **For cycling**, reshape its perception by emphasising how demanding and counter-intuitive it is in Toulouse: physical effort perceived as a recurring hardship, constant exposure to the elements (sweat, rain, wind), and intrusive logistical management (equipment, uncertain parking, theft risk) that weigh the routine down rather than lighten it. Present it as a mode decidedly unsuited to trips where flexibility and peace of mind come first. **For public transport**, play down its appeal by underlining its structural rigidity: the impossibility of changing a trip in real time without constraint (fixed timetables, interchanges to orchestrate), shared space ill-suited to privacy or to carrying loads, and dependence on outside hazards (crowds, delays) that generate frustration rather than gain. Its use should be reserved for cases where no other option allows an absolute time commitment to be met. **For the car**, counterbalance its appeal by bringing forward the hidden costs: time lost parking, the stress of driving in a dense urban setting, the sedentariness it induces and the noise pollution that harm long-term wellbeing — all without giving up its relevance for long trips or trips constrained by imperative scheduling.
 
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -832,25 +1244,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -880,47 +1292,63 @@ prompts:
         "additionalProperties": false
       }
     _calibration:
-      seed: expert
+      seed: prompt_expert_09
       iterations: 29
       sample_size: 100
       score_initial: 226.18
       score_final: 144.74
       date: '2026-06-14'
-  b0_pristine:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 6f282d2dcdbea88e889f7694c7d4f053b9d41752ce229e1160c7fef027dd33b1
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert_m1
+  prompt_expert_01:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : c'est le seed gelé de la campagne de référence, une expérience qui le désigne doit continuer à se rejouer.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : c'est le seed gelé de la campagne de référence, une expérience qui le désigne doit continuer à se rejouer. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 40cf6d41439ddeb69ff3c1b17c4f69a0f4602eb14dc54b084dcd6cb9c0311ce1
+      le: '2026-09-14'
+      sha256_texte: 95f3ddb655d38b9392093fc7e6fde7ccc3c34e70e6007426c096c959a4efa161
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "origine: git 0bc68b7:scripts/models_influence/prompts.yaml -> prompts.expert.content"
-        lecture: "Lignée documentée et vérifiable (commit, chemin, sha1 normalisé) mais portée par `origine` et non par `_provenance.derive_de` pointant une variante du fichier. Constat le plus faible du corpus : la traçabilité de fond est satisfaite, la forme prescrite non."
+        - regle: C5
+          passage: 'origine: git 0bc68b7:scripts/models_influence/prompts.yaml -> prompts.expert.content'
+          lecture: Non bloquant, et hérité. Lignée documentée et vérifiable (commit, chemin, sha1 normalisé) mais portée par `origine` et non par `_provenance.derive_de` pointant une variante du fichier. La traçabilité de fond est satisfaite, la forme prescrite par C5 ne l'est pas.
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Gain de temps VS confort.
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, etc.).
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. Your task is to select the optimal travel mode. The assessment must be purely algorithmic and proceed in 4 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Time saved VS comfort.
+      - Raw access friction (approach time, parking, interchanges).
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Reality filter: Distinguish a theoretically useful mode (the fastest in absolute terms) from a mode that is genuinely legitimate given the immediate context and the persona's constraints.
+      - Comfort filter: Take the persona's comfort preferences into account (e.g. avoiding crowded public transport, favouring seated modes for elderly people, etc.).
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) Sélectionne l'index de l'option optimale.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la recommandation en une phrase concise, en précisent si c'est le cas pourquoi la marche n'est pas le meilleur choix et si tu as hésité.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Select the index of the optimal option.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the recommendation in one concise sentence, stating where applicable why walking is not the best choice and whether you hesitated.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -962,9 +1390,18 @@ prompts:
       origine: git 0bc68b7:scripts/models_influence/prompts.yaml -> prompts.expert.content
       date: '2026-06-13'
       sha1_normalise: 2b630f9a4b3d
-      mots: 335
-      note: prompt humain d'origine, ANTERIEUR a toute calibration ; ne pas modifier
-  expert:
+      mots: 250
+      note: "prompt humain d'origine, ANTERIEUR a toute calibration ; ne pas modifier ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : le texte A ÉTÉ modifié — traduit en anglais, sans autre changement. Version française d'origine dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml."
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 40cf6d41439ddeb69ff3c1b17c4f69a0f4602eb14dc54b084dcd6cb9c0311ce1
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: b0_pristine
+  prompt_expert_09:
     _archive:
       statut: archive
       le: '2026-09-11'
@@ -973,32 +1410,39 @@ prompts:
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 909dd1220ba7283ecb3924045b254e3ad13bf92e1a14fa7ec474642e74a80e1c
+      le: '2026-09-14'
+      sha256_texte: c5ff7c735f163ab38951a44f26ae90c12e983c69a0187dec1d1cf4c066bebe61
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée expert — aucun bloc _provenance)"
-        lecture: "Lignée non tracée. Le seul indice externe est b0_pristine._provenance.origine, qui pointe prompts.expert.content au commit 0bc68b7 ; or le content actuel diffère de ce gel (sortie en probabilités contre chosen_index). Le texte a évolué sans trace — précisément le risque que C5 couvre."
+        - regle: C5
+          passage: (entrée expert — aucun bloc _provenance)
+          lecture: Non bloquant, et hérité, mais c'est le constat C5 le plus lourd du corpus. Aucune lignée déclarée. Le seul indice externe est b0_pristine._provenance.origine, qui pointe prompts.expert.content au commit 0bc68b7 ; or le content en diffère (sortie en probabilités contre chosen_index). Le texte a évolué sans trace — le risque même que C5 couvre.
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse. Ta tâche est de sélectionner le mode de déplacement optimal. L'évaluation doit être purement algorithmique et s'effectuer en 4 étapes :
-      1) Filtrage strict : Définis les lignes rouges non négociables du persona pour éliminer d'emblée les options invalides.
-      2) Matrice de coût : Calcule le véritable coût d'opportunité de chaque option en pondérant les variables suivantes exclusivement selon les attributs du profil (âge, revenus, santé) :
-      - Gain de temps VS confort.
-      - Friction d'accès brute (temps d'approche, stationnement, correspondances).
-      - Filtre de sécurité : Élimine les options présentant des risques (accident de vélo en l'absence de pistes cyclables, vols, marche dans des zones peu sûres la nuit, etc.).
-      - Filtre de réalité : Fais la distinction entre un mode théoriquement utile (le plus rapide dans l'absolu) et un mode réellement légitime selon le contexte immédiat et les contraintes du persona.
-      - Filtre de confort : Prends en compte les préférences de confort du persona (ex: éviter les transports en commun bondés, privilégier les modes assis pour les personnes âgées, etc.).
-      3) Soutenabilité : Applique la règle des 48 heures pour évaluer la viabilité de l'effort physique ou financier : l'option choisie génère-t-elle une dette technique (fatigue, coût) soutenable si le trajet est répété sur deux jours ?
+      You will sequentially embody people living in Toulouse. Your task is to select the optimal travel mode. The assessment must be purely algorithmic and proceed in 4 steps:
+      1) Strict filtering: Define the persona's non-negotiable red lines so as to rule out invalid options from the outset.
+      2) Cost matrix: Compute the true opportunity cost of each option by weighting the following variables exclusively according to the profile's attributes (age, income, health):
+      - Time saved VS comfort.
+      - Raw access friction (approach time, parking, interchanges).
+      - Safety filter: Rule out options that carry risks (cycling accident where there are no cycle lanes, theft, walking through unsafe areas at night, etc.).
+      - Reality filter: Distinguish a theoretically useful mode (the fastest in absolute terms) from a mode that is genuinely legitimate given the immediate context and the persona's constraints.
+      - Comfort filter: Take the persona's comfort preferences into account (e.g. avoiding crowded public transport, favouring seated modes for elderly people, etc.).
+      3) Sustainability: Apply the 48-hour rule to assess the viability of the physical or financial effort: does the chosen option create a technical debt (fatigue, cost) that would remain bearable if the trip were repeated over two days?
 
-      [Instructions de sortie]
-      1) Analyse le profil via ce prisme.
-      2) N'élimine aucune option : attribue à CHAQUE option proposée, par son index, la probabilité en % que ce persona la retienne — d'autant plus élevée qu'elle lui correspond, 0 si elle lui est impossible. La somme doit valoir exactement 100.
-      3) Retourne uniquement un objet JSON valide — pas de markdown, pas de texte supplémentaire.
-      4) Justifie la répartition en une phrase concise, en précisant si c'est le cas pourquoi la marche n'obtient pas la plus forte probabilité.
+      [Output instructions]
+      1) Analyse the profile through this lens.
+      2) Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3) Return only a valid JSON object — no markdown, no extra text.
+      4) Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1009,25 +1453,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1056,42 +1500,58 @@ prompts:
         ],
         "additionalProperties": false
       }
-  persona_v5:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 909dd1220ba7283ecb3924045b254e3ad13bf92e1a14fa7ec474642e74a80e1c
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: expert
+  prompt_expert_15:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: a4fff586ec14eda406ec32141a623ee64e692f354fcde9a9c02713de8da55c7f
+      le: '2026-09-14'
+      sha256_texte: f8ac0b31de98fdae7344a668875616f06d239546e72a61d762ae95b141ff0062
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée persona_v5 — aucun bloc _provenance)"
-        lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et ces entrées sont antérieures à l'existence du champ. Bloquer punirait l'historique, pas une faute."
+        - regle: C5
+          passage: (entrée persona_v5 — aucun bloc _provenance)
+          lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et l'entrée est antérieure à l'existence du champ. La bascule anglaise n'a ni créé ni aggravé ce manque."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse, France qui en suporte pas le vélo et la voiture et adore le vélo.
-      À chaque fois, tu te comportes de manière réaliste, y compris en faisant des erreurs. Tes connaissances se limitent à la description de chaque personne que tu vas interpréter.
-      Chaque persona a ses propres sensibilités, et l'importance relative du mode de vie, des contraintes, de la santé, du confort, de la sécurité ou de la praticité varie selon son profil, son contexte familial et professionnel. La solution doit être unique et sur mesure pour chacun. Ta mission est d'identifier ton mode de déplacement préféré, en t'appuyant sur l'ensemble des options disponibles.
+      You will sequentially embody people living in Toulouse, France who cannot stand cycling and the car and love cycling.
+      Each time, you behave realistically, including by making mistakes. Your knowledge is limited to the description of each person you are going to play.
+      Each persona has their own sensitivities, and the relative importance of lifestyle, constraints, health, comfort, safety or practicality varies with their profile, their family and their professional context. The solution must be unique and tailored to each one. Your mission is to identify your preferred travel mode, drawing on all the available options.
 
-      CONSIGNE : L'évaluation ne se limite pas à la vitesse absolue. La décision doit refléter l'arbitrage cognitif réel d'un usager urbain :
-      - La minimisation de la friction d'accès : La marche annule les temps d'attente, la recherche de stationnement en voiture est très difficile en centre ville
-      - La charge mentale  : la marche, le vélo offre une prédictibilité totale face aux incertitudes des autres moyens de transport.
-      - la sécurité : la marche est le mode de déplacement le plus sûr, tandis que les autres modes sont exposés à des risques d'accidents et de vols.
-      - Le bénéfice santé indiscutable de la mobilité acttive doit être pondéré par la vulnérabilité dans le trafic, la tolérance aux aléas météorologiques et les contraintes de l'effort physique selon la destination (transpiration, fatigue matérielle).
-      - Le coût économique réel (carburant, parking vs ticket de transport).
-      - L'effort cognitif (stress vs temps de repos/lecture dans les transports en commun).
+      INSTRUCTION: The assessment is not limited to absolute speed. The decision must reflect the real cognitive trade-off of an urban traveller:
+      - Minimising access friction: Walking cancels waiting times; finding parking for a car is very difficult in the city centre
+      - Mental load: walking and cycling offer complete predictability against the uncertainties of the other means of transport.
+      - safety: walking is the safest travel mode, whereas the other modes are exposed to risks of accident and theft.
+      - The indisputable health benefit of active mobility must be weighted by vulnerability in traffic, tolerance of weather hazards and the constraints of physical effort depending on the destination (sweat, equipment fatigue).
+      - Real economic cost (fuel, parking vs a transport ticket).
+      - Cognitive effort (stress vs time to rest or read on public transport).
 
-      Instructions :
-      1. Analyse les détails, l'historique et les options de trajet propres à chaque persona en appliquant ces pondérations.
-      2. N'élimine aucune option : attribue à chaque option de la liste spécifique à ce persona, par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.
+      Instructions:
+      1. Analyse the details, the history and the trip options specific to each persona, applying these weightings.
+      2. Do not rule out any option: assign to each option in the list specific to this persona, by its index, the probability in % that they pick it (0 if it is impossible for them). The sum must be exactly 100.
+      3. Return only a JSON object — no markdown, no extra text.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1102,25 +1562,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1149,42 +1609,58 @@ prompts:
         ],
         "additionalProperties": false
       }
-  persona_v4:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: a4fff586ec14eda406ec32141a623ee64e692f354fcde9a9c02713de8da55c7f
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: persona_v5
+  prompt_expert_14:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: bf459f1a7ad3ac2a70df62eb93c95ccd90ed540768bd8fcf61bc3171935174e5
+      le: '2026-09-14'
+      sha256_texte: bb9cb7144ebb3e0b7f020c31c5c7ed78ae7f7048cb27da3825ce10a89bedbbaa
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée persona_v4 — aucun bloc _provenance)"
-        lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et ces entrées sont antérieures à l'existence du champ. Bloquer punirait l'historique, pas une faute."
+        - regle: C5
+          passage: (entrée persona_v4 — aucun bloc _provenance)
+          lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et l'entrée est antérieure à l'existence du champ. La bascule anglaise n'a ni créé ni aggravé ce manque."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.
-      À chaque fois, tu te comportes de manière réaliste, y compris en faisant des erreurs. Tes connaissances se limitent à la description de chaque personne que tu vas interpréter.
-      Chaque persona a ses propres sensibilités, et l'importance relative du mode de vie, des contraintes, de la santé, du confort, de la sécurité ou de la praticité varie selon son profil, son contexte familial et professionnel. La solution doit être unique et sur mesure pour chacun. Ta mission est d'identifier ton mode de déplacement préféré, en t'appuyant sur l'ensemble des options disponibles.
+      You will sequentially embody people living in Toulouse, France.
+      Each time, you behave realistically, including by making mistakes. Your knowledge is limited to the description of each person you are going to play.
+      Each persona has their own sensitivities, and the relative importance of lifestyle, constraints, health, comfort, safety or practicality varies with their profile, their family and their professional context. The solution must be unique and tailored to each one. Your mission is to identify your preferred travel mode, drawing on all the available options.
 
-      CONSIGNE : L'évaluation ne se limite pas à la vitesse absolue. La décision doit refléter l'arbitrage cognitif réel d'un usager urbain :
-      - La minimisation de la friction d'accès : La marche annule les temps d'attente, la recherche de stationnement en voiture est très difficile en centre ville
-      - La charge mentale  : la marche, le vélo offre une prédictibilité totale face aux incertitudes des autres moyens de transport.
-      - la sécurité : la marche est le mode de déplacement le plus sûr, tandis que les autres modes sont exposés à des risques d'accidents et de vols.
-      - Le bénéfice santé indiscutable de la mobilité acttive doit être pondéré par la vulnérabilité dans le trafic, la tolérance aux aléas météorologiques et les contraintes de l'effort physique selon la destination (transpiration, fatigue matérielle).
-      - Le coût économique réel (carburant, parking vs ticket de transport).
-      - L'effort cognitif (stress vs temps de repos/lecture dans les transports en commun).
+      INSTRUCTION: The assessment is not limited to absolute speed. The decision must reflect the real cognitive trade-off of an urban traveller:
+      - Minimising access friction: Walking cancels waiting times; finding parking for a car is very difficult in the city centre
+      - Mental load: walking and cycling offer complete predictability against the uncertainties of the other means of transport.
+      - safety: walking is the safest travel mode, whereas the other modes are exposed to risks of accident and theft.
+      - The indisputable health benefit of active mobility must be weighted by vulnerability in traffic, tolerance of weather hazards and the constraints of physical effort depending on the destination (sweat, equipment fatigue).
+      - Real economic cost (fuel, parking vs a transport ticket).
+      - Cognitive effort (stress vs time to rest or read on public transport).
 
-      Instructions :
-      1. Analyse les détails, l'historique et les options de trajet propres à chaque persona en appliquant ces pondérations.
-      2. N'élimine aucune option : attribue à chaque option de la liste spécifique à ce persona, par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.
+      Instructions:
+      1. Analyse the details, the history and the trip options specific to each persona, applying these weightings.
+      2. Do not rule out any option: assign to each option in the list specific to this persona, by its index, the probability in % that they pick it (0 if it is impossible for them). The sum must be exactly 100.
+      3. Return only a JSON object — no markdown, no extra text.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1195,25 +1671,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1242,42 +1718,58 @@ prompts:
         ],
         "additionalProperties": false
       }
-  persona_v3:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: bf459f1a7ad3ac2a70df62eb93c95ccd90ed540768bd8fcf61bc3171935174e5
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: persona_v4
+  prompt_expert_13:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: edd051d680431414708dddd8dfdddd1a12ebea9494f30e5c6da8d83cc3c58f6e
+      le: '2026-09-14'
+      sha256_texte: 7f7aed9937256b7e34f2d98ab1981d972502bf654c08694e382e28a0a0019325
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée persona_v3 — aucun bloc _provenance)"
-        lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et ces entrées sont antérieures à l'existence du champ. Bloquer punirait l'historique, pas une faute."
+        - regle: C5
+          passage: (entrée persona_v3 — aucun bloc _provenance)
+          lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et l'entrée est antérieure à l'existence du champ. La bascule anglaise n'a ni créé ni aggravé ce manque."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.
-      À chaque fois, tu te comportes de manière réaliste, y compris en faisant des erreurs. Tes connaissances se limitent à la description de chaque personne que tu vas interpréter.
-      Chaque persona a ses propres sensibilités, et l'importance relative du mode de vie, des contraintes, de la santé, du confort, de la sécurité ou de la praticité varie selon son profil, son contexte familial et professionnel. La solution doit être unique et sur mesure pour chacun. Ta mission est d'identifier ton mode de déplacement préféré, en t'appuyant sur l'ensemble des options disponibles.
+      You will sequentially embody people living in Toulouse, France.
+      Each time, you behave realistically, including by making mistakes. Your knowledge is limited to the description of each person you are going to play.
+      Each persona has their own sensitivities, and the relative importance of lifestyle, constraints, health, comfort, safety or practicality varies with their profile, their family and their professional context. The solution must be unique and tailored to each one. Your mission is to identify your preferred travel mode, drawing on all the available options.
 
-      CONSIGNE : L'évaluation ne se limite pas à la vitesse absolue. La décision doit refléter l'arbitrage cognitif réel d'un usager urbain :
-      - La minimisation de la friction d'accès : La marche annule les temps d'attente, la recherche de stationnement en voiture est très difficile en centre ville
-      - La charge mentale  : la marche, le vélo offre une prédictibilité totale face aux incertitudes des autres moyens de transport.
-      - la sécurité : la marche est le mode de déplacement le plus sûr, tandis que les autres modes sont exposés à des risques d'accidents et de vols. Ex: le vélo en l'absence de piste cyclable, la voiture en stationnement dans des zones à risque de vol.
-      - Le bénéfice santé indiscutable de la mobilité active doit être pris en compte.
-      - Le coût économique réel (carburant, parking vs ticket de transport).
-      - L'effort cognitif (stress vs temps de repos/lecture dans les transports en commun).
+      INSTRUCTION: The assessment is not limited to absolute speed. The decision must reflect the real cognitive trade-off of an urban traveller:
+      - Minimising access friction: Walking cancels waiting times; finding parking for a car is very difficult in the city centre
+      - Mental load: walking and cycling offer complete predictability against the uncertainties of the other means of transport.
+      - safety: walking is the safest travel mode, whereas the other modes are exposed to risks of accident and theft. E.g. cycling where there is no cycle lane, a car parked in areas at risk of theft.
+      - The indisputable health benefit of active mobility must be taken into account.
+      - Real economic cost (fuel, parking vs a transport ticket).
+      - Cognitive effort (stress vs time to rest or read on public transport).
 
-      Instructions :
-      1. Analyse les détails, l'historique et les options de trajet propres à chaque persona en appliquant ces pondérations.
-      2. N'élimine aucune option : attribue à chaque option de la liste spécifique à ce persona, par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.
+      Instructions:
+      1. Analyse the details, the history and the trip options specific to each persona, applying these weightings.
+      2. Do not rule out any option: assign to each option in the list specific to this persona, by its index, the probability in % that they pick it (0 if it is impossible for them). The sum must be exactly 100.
+      3. Return only a JSON object — no markdown, no extra text.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1288,25 +1780,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1335,40 +1827,56 @@ prompts:
         ],
         "additionalProperties": false
       }
-  persona_v2:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: edd051d680431414708dddd8dfdddd1a12ebea9494f30e5c6da8d83cc3c58f6e
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: persona_v3
+  prompt_expert_12:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: c144421226feccfc37058499f50b5e0595924b62f508711cc3c712b056d8eeeb
+      le: '2026-09-14'
+      sha256_texte: 7c664a3384df05af94a822ddea6dd975e8e188f1f805956bf44dfc0e5d534bf1
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée persona_v2 — aucun bloc _provenance)"
-        lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et ces entrées sont antérieures à l'existence du champ. Bloquer punirait l'historique, pas une faute."
+        - regle: C5
+          passage: (entrée persona_v2 — aucun bloc _provenance)
+          lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et l'entrée est antérieure à l'existence du champ. La bascule anglaise n'a ni créé ni aggravé ce manque."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.
-      À chaque fois, tu te comportes de manière réaliste, y compris en faisant des erreurs. Tes connaissances se limitent à la description de chaque personne que tu vas interpréter.
-      Chaque persona a ses propres sensibilités, et l'importance relative du mode de vie, des contraintes, de la santé, du confort, de la sécurité ou de la praticité varie selon son profil, son contexte familial et professionnel. La solution doit être unique et sur mesure pour chacun. Ta mission est d'identifier ton mode de déplacement préféré, en t'appuyant sur l'ensemble des options disponibles.
+      You will sequentially embody people living in Toulouse, France.
+      Each time, you behave realistically, including by making mistakes. Your knowledge is limited to the description of each person you are going to play.
+      Each persona has their own sensitivities, and the relative importance of lifestyle, constraints, health, comfort, safety or practicality varies with their profile, their family and their professional context. The solution must be unique and tailored to each one. Your mission is to identify your preferred travel mode, drawing on all the available options.
 
-      CONSIGNE : L'évaluation ne se limite pas à la vitesse absolue. La décision doit refléter l'arbitrage cognitif réel d'un usager urbain :
-      - La minimisation de la friction d'accès : La marche annule les temps d'attente, la recherche de stationnement et le besoin d'équipement, offrant une prédictibilité totale et la charge mentale la plus faible.
-      - La balance effort/bénéfice de la mobilité active : Le bénéfice santé doit être pondéré par la vulnérabilité dans le trafic, la tolérance aux aléas météorologiques et les contraintes de l'effort physique selon la destination (transpiration, fatigue matérielle).
-      - Le coût économique réel (carburant, parking vs ticket de transport).
-      - L'effort cognitif (stress vs temps de repos/lecture dans les transports en commun).
+      INSTRUCTION: The assessment is not limited to absolute speed. The decision must reflect the real cognitive trade-off of an urban traveller:
+      - Minimising access friction: Walking cancels waiting times, the search for parking and the need for equipment, offering complete predictability and the lowest mental load.
+      - The effort/benefit balance of active mobility: The health benefit must be weighted by vulnerability in traffic, tolerance of weather hazards and the constraints of physical effort depending on the destination (sweat, equipment fatigue).
+      - Real economic cost (fuel, parking vs a transport ticket).
+      - Cognitive effort (stress vs time to rest or read on public transport).
 
-      Instructions :
-      1. Analyse les détails, l'historique et les options de trajet propres à chaque persona en appliquant ces pondérations.
-      2. N'élimine aucune option : attribue à chaque option de la liste spécifique à ce persona, par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.
+      Instructions:
+      1. Analyse the details, the history and the trip options specific to each persona, applying these weightings.
+      2. Do not rule out any option: assign to each option in the list specific to this persona, by its index, the probability in % that they pick it (0 if it is impossible for them). The sum must be exactly 100.
+      3. Return only a JSON object — no markdown, no extra text.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1379,25 +1887,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1426,40 +1934,56 @@ prompts:
         ],
         "additionalProperties": false
       }
-  persona_v1:
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: c144421226feccfc37058499f50b5e0595924b62f508711cc3c712b056d8eeeb
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: persona_v2
+  prompt_expert_11:
     _archive:
       statut: archive
       le: '2026-09-11'
       motif: >-
-        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique.
+        retiré du choix de l'IHM le 2026-09-11 à la demande de l'auteur. Le texte reste servable : une expérience qui le désigne se rejoue à l'identique. ⚠ RECTIFICATIF DU 2026-09-14 (ticket 074) : cette phrase n'est plus exacte. Le texte de cette variante a été TRADUIT en anglais ; une expérience qui la désigne ne se rejoue donc PAS à l'identique. La version française est gelée dans archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml, et `_traduction` porte le sha256 du texte d'origine.
     _neutralite:
       verdict: conforme_avec_reserve
       famille: experte
-      le: '2026-09-10'
-      sha256_texte: 62765ca30671b8d88da74297403ff969b8f91e1abbfb9bf502b8498a47cfae28
+      le: '2026-09-14'
+      sha256_texte: 41ef7e25c18d477bbe0a2cead852419a4c0411c7a8c15172b5500eec191e4bdb
       auditeur: prompt-auditor (agent independant)
-      regles_evaluees: [C1, C2, C3, C4, C5, E1]
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      langue: en
       constats:
-      - regle: C5
-        passage: "(entrée persona_v1 — aucun bloc _provenance)"
-        lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et ces entrées sont antérieures à l'existence du champ. Bloquer punirait l'historique, pas une faute."
+        - regle: C5
+          passage: (entrée persona_v1 — aucun bloc _provenance)
+          lecture: "aucun `_provenance.derive_de` : lignée non tracée. Réserve et non refus — le manque porte sur la métadonnée, pas sur le texte servi, et l'entrée est antérieure à l'existence du champ. La bascule anglaise n'a ni créé ni aggravé ce manque."
     content: |-
-      Tu vas incarner séquentiellement des personnes vivant à Toulouse, France.
-      À chaque fois, tu te comportes de manière réaliste, y compris en faisant des erreurs. Tes connaissances se limitent à la description de chaque personne que tu vas interpréter.
-      Chaque persona a ses propres sensibilités, et l'importance relative du mode de vie, des contraintes, de la santé, du confort, de la sécurité ou de la praticité varie selon son profil, son contexte familial et professionnel. La solution doit être unique et sur mesure pour chacun. Ta mission est d'identifier ton mode de déplacement préféré, en t'appuyant sur l'ensemble des options disponibles.
+      You will sequentially embody people living in Toulouse, France.
+      Each time, you behave realistically, including by making mistakes. Your knowledge is limited to the description of each person you are going to play.
+      Each persona has their own sensitivities, and the relative importance of lifestyle, constraints, health, comfort, safety or practicality varies with their profile, their family and their professional context. The solution must be unique and tailored to each one. Your mission is to identify your preferred travel mode, drawing on all the available options.
 
-      CONSIGNE : L'optimisation ne se limite pas à la vitesse. La décision doit équilibrer :
-      - La praticité face aux frictions urbaines (coût et temps de recherche de stationnement, congestion).
-      - Le coût économique réel (carburant, parking vs ticket de transport).
-      - La santé et le bien-être.
-      - L'effort cognitif (stress vs temps de repos/lecture dans les transports en commun).
+      INSTRUCTION: Optimisation is not limited to speed. The decision must balance:
+      - Practicality against urban frictions (cost and time spent looking for parking, congestion).
+      - Real economic cost (fuel, parking vs a transport ticket).
+      - Health and wellbeing.
+      - Cognitive effort (stress vs time to rest or read on public transport).
 
-      Instructions :
-      1. Analyse les détails, l'historique et les options de trajet propres à chaque persona en appliquant les filtres de frictions urbaines.
-      2. N'élimine aucune option : attribue à chaque option de la liste spécifique à ce persona, par son index, la probabilité en % qu'il la retienne (0 si elle lui est impossible). La somme doit valoir exactement 100.
-      3. Retourne uniquement un objet JSON — pas de markdown, pas de texte supplémentaire.
+      Instructions:
+      1. Analyse the details, the history and the trip options specific to each persona, applying the urban friction filters.
+      2. Do not rule out any option: assign to each option in the list specific to this persona, by its index, the probability in % that they pick it (0 if it is impossible for them). The sum must be exactly 100.
+      3. Return only a JSON object — no markdown, no extra text.
 
-      Schéma JSON attendu :
+      Expected JSON schema:
       {
         "type": "object",
         "properties": {
@@ -1470,25 +1994,25 @@ prompts:
               "properties": {
                 "agent_id": {
                   "type": "string",
-                  "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+                  "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
                 },
                 "probabilities": {
                   "type": "array",
-                  "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+                  "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.",
                   "items": {
                     "type": "object",
                     "properties": {
                       "index": {
                         "type": "integer",
-                        "description": "Index de l'option, tel qu'affiché entre crochets."
+                        "description": "Index of the option, as shown in brackets."
                       },
                       "mode": {
                         "type": "string",
-                        "description": "Mode de l'option, recopié depuis l'option."
+                        "description": "Mode of the option, copied from the option."
                       },
                       "probability": {
                         "type": "number",
-                        "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                        "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                       }
                     },
                     "required": [
@@ -1517,3 +2041,12 @@ prompts:
         ],
         "additionalProperties": false
       }
+    _traduction:
+      de: fr
+      vers: en
+      le: '2026-09-14'
+      par: claude-opus-5
+      sha256_source: 62765ca30671b8d88da74297403ff969b8f91e1abbfb9bf502b8498a47cfae28
+      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
+      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
+    _ancien_nom: persona_v1

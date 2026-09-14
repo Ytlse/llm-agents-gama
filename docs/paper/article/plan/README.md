@@ -28,6 +28,32 @@ sans dossier correspondant.
 
 Un écart constaté se consigne ici, daté, avec ce qui a été retenu. Jamais corrigé en silence.
 
+### 14 septembre 2026 — la cohorte passe en v6, et aucun chiffre ne bouge
+
+Le [ticket 074](../../../tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md) a
+basculé en anglais tout ce que l'agent lit, traits de population compris. La cohorte a donc été
+régénérée et rescellée en **v6** ; la v5 part à l'archive froide — restaurable et auditable, mais
+plus jamais référencée.
+
+**L'écart consigné ici est un écart de NOM, pas de substrat.** Vérifié agent par agent contre
+l'archive : la v6 porte les mêmes 1 000 `person_id`, les mêmes 499 ménages, et **0 chaîne
+d'activité différente sur 1 000** — motifs, horaires et lieux compris. Les treize marges rendent
+leurs écarts au centième de point près, et l'audit de périmètre les mêmes verdicts (A1, A2, A4, A9
+conformes ; A3, A5, A8 à publier ; A6, A7 non mesurables faute de run).
+
+| | Avant (§ 1.3, `v0.20`) | Après — retenu (`v0.21`) |
+|---|---|---|
+| Cohorte scellée | v5, scellée le 2026-09-04, sha256 `de73532e…` | **v6**, scellée le 2026-09-14, sha256 `412efada…` |
+| Ménages, vivier, marges, déplacements | 499 · 11 329 · treize conformes · 3 299 | **inchangés** |
+| Langue des traits servis au modèle | `Travail à plein temps`, `3eme couronne` | **`Full-time worker`, `3rd ring`** |
+| Variante de prompt active | `expert_m4` | **`prompt_expert_16`** (même texte, traduit ; `_ancien_nom` conservé) |
+
+Conséquence pour la garde D-7 du ticket : les 14 expériences témoins ne lisent aucun prompt et
+voient un substrat identique — elles restent comparables **sans être rejouées**.
+
+Le tableau de l'entrée du 11 septembre, ci-dessous, n'est pas corrigé : il enregistre ce qui avait
+été retenu ce jour-là.
+
 ### 11 septembre 2026 — le chapitre 1 rejoint la v5, et la chaîne d'activités est cyclique
 
 Constat, en relisant la section 1.3 après la rédaction du chapitre 4 : **les deux chapitres ne
@@ -97,7 +123,7 @@ comment on le juge. Les sections 3 à 8 antérieures décalent d'un cran, jusqu'
 | | Avant (11 septembre, matin) | Après — retenu |
 |---|---|---|
 | § 3 | Métriques et socle d'évaluation | **Le dispositif : décider dans une ville contrainte** (neuf) |
-| § 4 à § 8 | LLM nus … Conclusion | décalées en § 5 à § 9 |
+| § 4 à § 8 | Prompt factuel neutre … Conclusion | décalées en § 5 à § 9 |
 
 Ce que la section 3 **ne porte pas** : le passage à l'échelle du dispositif (batching, répartition de
 charge, disjoncteur, caches), écarté du chapitre sur décision de l'auteur. Si ce matériel doit

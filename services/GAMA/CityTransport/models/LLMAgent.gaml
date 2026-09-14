@@ -56,7 +56,8 @@ species llm_agent_sync skills:[network] {
 			+ " part_of_llm=" + part_of_llm_based_agents
 			+ " ltm=" + long_term_memory_enabled
 			+ " self_reflect=" + long_term_self_reflect_enabled
-			+ " max_days=" + simulation_max_days;
+			+ " max_days=" + simulation_max_days
+			+ " accidents=" + accidents_enabled;
 
 		do send to: "/init" contents: [
 			"POST",
@@ -69,7 +70,10 @@ species llm_agent_sync skills:[network] {
 				// Horizon d'arrêt (ticket 008, A5) : transmis pour être consigné dans
 				// le scenario_params.yaml du run. Sans lui, rien dans le répertoire
 				// d'expérience ne dit sur combien de jours le run était censé porter.
-				"simulation_max_days"::simulation_max_days
+				"simulation_max_days"::simulation_max_days,
+				// Accidents sur les axes (ticket 070) : l'expérimentateur seul en décide,
+				// et le contrôleur le consigne dans le scenario_params.yaml du run.
+				"accidents_enabled"::accidents_enabled
 			]),
 			["Content-Type"::"application/json"]
 		];

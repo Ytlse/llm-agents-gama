@@ -55,6 +55,30 @@ La condition 5 sert deux fois : elle rend la comparaison honnête, **et** elle r
 
 **Précautions méthodologiques d'ordonnancement (Baronchelli, 2026).** Pour neutraliser tout biais d'amorçage ou de saillance positionnelle (*shared cues* / biais de primauté), l'ordre de présentation des options d'itinéraires et des modes est systématiquement randomisé de manière indépendante pour chaque requête d'agent.
 
-**Critères de réfutation de H3.** L'hypothèse tombe si : (i) l'agent sans registre montre la même inertie à J+1 ; (ii) diviser la vitesse d'oubli $\lambda$ par trois ne déplace pas la courbe ; (iii) un article placebo produit le même report modal que l'article pertinent.
+**Critères de réfutation de H3.** L'hypothèse tombe si : (i) l'agent sans registre montre la même inertie à J+1 ; (ii) la reprise des jours 3 à 5 n'est pas monotone ; (iii) un article placebo produit le même report modal que l'article pertinent.
 
 ---
+
+### Tickets associés à ce chapitre
+- [Ticket 041](../../../tickets/ticket_041_etape_3a_hysteresis_longitudinale.md) — Étape 3a longitudinale : habitudes, choc, récupération (GAMA offline, 5 à 60 jours)
+- [Ticket 059](../../../tickets/ticket_059_etape_3b_presse_locale_et_predictions_preenregistrees.md) — Étape 3b : Évaluation écologique sur presse locale, protocole à 5 conditions et validation des prédictions pré-enregistrées
+- [Ticket 063](../../../tickets/ticket_063_campagne_experimentale_hysteresis_longitudinale.md) — Campagne expérimentale longitudinale d'hystérésis et d'érosion mémorielle (Étape 3a)
+- [Ticket 064](../../../tickets/ticket_064_campagne_experimentale_presse_locale_et_scoring.md) — Campagne expérimentale de presse locale à 5 conditions et scoring de réfutation (Étape 3b)
+
+---
+
+<!-- NOTE DE TRAVAIL — à traiter, ne fait pas partie du texte -->
+
+> **À traiter (2026-09-14, ticket 070).** Deux points sur le § 5.3.
+>
+> 1. **Le dénominateur de la condition 5.** « Le plan est porté à cinq conditions par
+>    événement, sur une cohorte de 1 000 déplacements » vaut pour les conditions 1 à 4, qui
+>    sont textuelles et atteignent tous les agents. La condition 5 est physique : une coupure
+>    encodée dans le graphe ne touche que les trajets qui l'empruntent. Mesuré le 2026-09-14 :
+>    **18,2 % des trajets voiture de 7 h-9 h passent par la rocade, soit ≈ 38 déplacements par
+>    journée simulée** à 1 000 agents. L'exigence « le même événement déclaré deux fois » est
+>    donc tenue en droit, pas en portée : 100 % des agents en langue, ~18 % en graphe.
+>    Trace `2026-09-14_11-20_exposition_rocade_lot0bis`.
+> 2. **Un canal d'encodage manque au tableau.** La condition 5 liste « liens coupés dans OTP,
+>    fréquences dégradées, météo ». L'accident posé sur une arête en sera un quatrième — le
+>    jour où il produira un retard.

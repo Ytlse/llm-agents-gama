@@ -1,7 +1,7 @@
-# Contrôle de population — `toulouse_population_1000_AAMAS.json`
+# Contrôle de population — `toulouse_population_1000_AAMAS_v6.json`
 
-- **Effectif** : 1000 personas — sha256 `de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce`
-- **Date** : 2026-09-04T13:47:53+00:00
+- **Effectif** : 1000 personas — sha256 `412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6`
+- **Date** : 2026-09-14T19:27:45+00:00
 - **Borne TOST** : ± 1.0 pt · n_min 30 · n_min cellule 50
 - **Verdicts** : conforme 13 · à corriger 0 · à publier 0 · non mesurable 0
 - **Ménages** : 499 ; complets (taille déclarée) 474 (95.0 %) ; membres présents / déclarés 1000/1029 (97.2 %)
@@ -69,9 +69,9 @@ Base personne, nominale, n = 1000. Cible : AUAT/CEREMA, Rapport final EMC² 2023
 | Modalité | n | Observé | IC95 | Cible | Écart | TOST | Verdict |
 |---|---:|---:|---|---:|---:|---|---|
 | Toulouse | 363 | 36.3 % | [33.3, 39.4] | 36.4 % | -0.1 | non concluant | conforme |
-| 1ere couronne | 341 | 34.1 % | [31.2, 37.1] | 34.1 % | 0.0 | non concluant | conforme |
-| 2eme couronne | 142 | 14.2 % | [12.1, 16.5] | 14.2 % | 0.0 | non concluant | conforme |
-| 3eme couronne | 154 | 15.4 % | [13.2, 17.8] | 15.4 % | 0.0 | non concluant | conforme |
+| 1st ring | 341 | 34.1 % | [31.2, 37.1] | 34.1 % | 0.0 | non concluant | conforme |
+| 2nd ring | 142 | 14.2 % | [12.1, 16.5] | 14.2 % | 0.0 | non concluant | conforme |
+| 3rd ring | 154 | 15.4 % | [13.2, 17.8] | 15.4 % | 0.0 | non concluant | conforme |
 
 ### `couronne_x_motorisation` — **conforme**
 
@@ -83,15 +83,15 @@ Base personne, nominale, n = 1000. Cible : recalcul microdonnées EMC² 2023 (Pr
 | Toulouse × sans voiture | 107 | 10.7 % | [8.9, 12.8] | 10.7 % | 0.0 | non concluant | conforme |
 | Toulouse × une voiture | 172 | 17.2 % | [14.9, 19.7] | 17.3 % | -0.1 | non concluant | conforme |
 | Toulouse × deux voitures et + | 84 | 8.4 % | [6.8, 10.3] | 8.4 % | -0.0 | non concluant | conforme |
-| 1ere couronne × sans voiture | 19 | 1.9 % | — | 1.9 % | -0.0 | — | non mesurable (effectif 19 < 30 : pas d'IC exploitable) |
-| 1ere couronne × une voiture | 122 | 12.2 % | [10.2, 14.4] | 12.2 % | -0.0 | non concluant | conforme |
-| 1ere couronne × deux voitures et + | 200 | 20.0 % | [17.6, 22.6] | 20.0 % | 0.0 | non concluant | conforme |
-| 2eme couronne × sans voiture | 4 | 0.4 % | — | 0.4 % | 0.0 | — | non mesurable (effectif 4 < 30 : pas d'IC exploitable) |
-| 2eme couronne × une voiture | 39 | 3.9 % | [2.8, 5.3] | 3.9 % | -0.0 | non concluant | conforme |
-| 2eme couronne × deux voitures et + | 99 | 9.9 % | [8.1, 11.9] | 9.9 % | 0.0 | non concluant | conforme |
-| 3eme couronne × sans voiture | 6 | 0.6 % | — | 0.6 % | -0.0 | — | non mesurable (effectif 6 < 30 : pas d'IC exploitable) |
-| 3eme couronne × une voiture | 44 | 4.4 % | [3.2, 5.9] | 4.4 % | 0.0 | non concluant | conforme |
-| 3eme couronne × deux voitures et + | 104 | 10.4 % | [8.6, 12.5] | 10.4 % | 0.0 | non concluant | conforme |
+| 1st ring × sans voiture | 19 | 1.9 % | — | 1.9 % | -0.0 | — | non mesurable (effectif 19 < 30 : pas d'IC exploitable) |
+| 1st ring × une voiture | 122 | 12.2 % | [10.2, 14.4] | 12.2 % | -0.0 | non concluant | conforme |
+| 1st ring × deux voitures et + | 200 | 20.0 % | [17.6, 22.6] | 20.0 % | 0.0 | non concluant | conforme |
+| 2nd ring × sans voiture | 4 | 0.4 % | — | 0.4 % | 0.0 | — | non mesurable (effectif 4 < 30 : pas d'IC exploitable) |
+| 2nd ring × une voiture | 39 | 3.9 % | [2.8, 5.3] | 3.9 % | -0.0 | non concluant | conforme |
+| 2nd ring × deux voitures et + | 99 | 9.9 % | [8.1, 11.9] | 9.9 % | 0.0 | non concluant | conforme |
+| 3rd ring × sans voiture | 6 | 0.6 % | — | 0.6 % | -0.0 | — | non mesurable (effectif 6 < 30 : pas d'IC exploitable) |
+| 3rd ring × une voiture | 44 | 4.4 % | [3.2, 5.9] | 4.4 % | 0.0 | non concluant | conforme |
+| 3rd ring × deux voitures et + | 104 | 10.4 % | [8.6, 12.5] | 10.4 % | 0.0 | non concluant | conforme |
 
 ### `age_quinquennal` — **conforme**
 

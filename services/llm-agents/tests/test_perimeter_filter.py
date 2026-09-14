@@ -118,7 +118,7 @@ def test_une_population_sans_trait_leve_une_alarme(alarmes):
 def test_une_population_enrichie_n_alarme_pas(alarmes):
     from inputs.population.eqasim_loader import _apply_perimeter_filter
 
-    people = [person(*LOIN, zone="3eme couronne", pid="a"),
+    people = [person(*LOIN, zone="3rd ring", pid="a"),
               person(*CENTRE, zone="Toulouse", pid="b"),
               person(*CENTRE, zone=OUT_OF_PERIMETER, pid="c")]
     retenus = _apply_perimeter_filter(people, TISSEO_BBOX, "test")

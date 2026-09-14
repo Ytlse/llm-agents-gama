@@ -60,6 +60,7 @@ from models import Activity, BBox, Location, Person, PersonMove, TravelPlan
 from settings import settings
 from sim_clock import wall_clock
 from text_helper import env_ob_to_text, parse_ob
+from trip_helper import accidents as accidents_module
 from trip_helper.base import TripHelper
 from trip_helper.school_bus import (
     SCHOOL_BUS_CHOSEN,
@@ -78,6 +79,7 @@ from urban_mobility_agents.candidats import (  # noqa: F401 — ré-exportés (t
 )
 from urban_mobility_agents.core.scenario import Action, BaseScenario, Observation
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
+from llm.gravite import gravite_deterministe, journal_des_composantes
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
@@ -376,7 +378,12 @@ def _agenda_lines(
             line += f" (≈{km:.1f} km)"
         w = get_weather(ts)
         if w and now_label and w["weather_label"] != now_label:
-            line += f" — {w['weather_label'].lower()} prévu"
+            # Anglais depuis le ticket 074, comme tout ce qui atteint le modèle. Cette ligne
+            # est la NEUVIÈME surface de la bascule, et elle ne figurait pas dans l'inventaire :
+            # elle n'est rendue que pour les agents ayant un véhicule à chaîner ET quand la
+            # météo prévue diffère de celle du départ — assez rare pour qu'un contrôle par
+            # échantillon la manque, assez fréquent pour qu'elle parte en production.
+            line += f" — {w['weather_label'].lower()} expected"
         lines.append(line)
         prev = act
     return lines
@@ -486,6 +493,17 @@ class SimulationLoopV1(BaseScenario):
         self._stm_overdue_alarm_on = (
             False  # front montant de l'alarme réflexions en retard
         )
+        # Ticket 071, lot 1 — déclenchements PAR RUPTURE, pour vérifier que ce régime reste
+        # exceptionnel. Le seuil Θ = 0,7 a été fixé sans mesure : aucun run n'a jamais calculé
+        # la gravité déterministe. Le critère est « moins d'un déclenchement par agent et par
+        # semaine » ; au-dessus, Θ doit monter, sinon la consolidation de nuit — le régime
+        # choisi — devient l'exception à son tour et le coût d'inférence suit.
+        self._ruptures: list[tuple[float, int]] = []  # (timestamp sim, nombre)
+        self._rupture_alarme_on = False  # front montant
+        # Déclaration au démarrage de ce qui alimente réellement la gravité (lot 1). Une
+        # composante sans source contribue zéro, et zéro est la valeur d'un trajet parfait :
+        # sans cette ligne, la gravité serait minorée sans qu'aucun symptôme n'apparaisse.
+        journal_des_composantes()
         # Cohérence de chaîne des véhicules : dénominateur (retours au domicile planifiés)
         # et numérateur (retours laissant un véhicule ailleurs) du taux d'orphelins, plus
         # le front montant de l'alarme associée. Un taux élevé signale que le verrou de
@@ -799,6 +817,50 @@ class SimulationLoopV1(BaseScenario):
         nominal, pas une saturation (cf. alarme backlog, handle/application.py).
         """
         return len(self._stm_reflecting)
+
+    _FENETRE_RUPTURE_S = 7 * 86400  # une semaine simulée
+
+    def _compter_ruptures(
+        self, timestamp: float, par_rupture: set, agents_total: int
+    ) -> None:
+        """Compte les déclenchements par rupture et alarme si le régime cesse d'être rare.
+
+        Le seuil Θ a été fixé à 0,7 sur un raisonnement — la panne de la ligne A vaut 0,8 en
+        gravité déterministe, et à Θ = 1,0 le choc étudié n'aurait pas déclenché — mais SANS
+        mesure, faute de run ayant jamais calculé `I_det`. Cette fonction est la mesure.
+
+        Critère : moins d'un déclenchement par agent et par semaine simulée. L'alarme part sur
+        FRONT MONTANT, pour ne pas noyer le journal d'un run de soixante jours.
+        """
+        if par_rupture:
+            self._ruptures.append((float(timestamp), len(par_rupture)))
+        # fenêtre glissante d'une semaine SIMULÉE (jamais l'horloge de la machine)
+        limite = float(timestamp) - self._FENETRE_RUPTURE_S
+        self._ruptures = [(t, n) for t, n in self._ruptures if t >= limite]
+
+        total = sum(n for _, n in self._ruptures)
+        if agents_total <= 0:
+            return
+        par_agent_semaine = total / agents_total
+
+        if par_agent_semaine >= 1.0 and not self._rupture_alarme_on:
+            self._rupture_alarme_on = True
+            logger.error(
+                f"[ALARME] déclenchement par rupture NON EXCEPTIONNEL : {total} sur la "
+                f"dernière semaine simulée pour {agents_total} agents, soit "
+                f"{par_agent_semaine:.2f} par agent et par semaine (critère : < 1). "
+                f"Θ={settings.agent.memoire__theta_gravite_cumulee} est trop bas, ou les "
+                f"chocs sont plus fréquents que prévu — la consolidation de nuit n'est plus "
+                f"le régime de base et le coût d'inférence suit."
+            )
+        elif par_agent_semaine < 0.5 and self._rupture_alarme_on:
+            # Retour au calme à MOITIÉ du seuil, pas au seuil : sans hystérésis, l'alarme
+            # battrait à chaque oscillation autour de 1,0.
+            self._rupture_alarme_on = False
+            logger.info(
+                f"[gravite] régime de rupture redevenu rare : {par_agent_semaine:.2f} "
+                f"déclenchement par agent et par semaine simulée"
+            )
 
     def overdue_decision_count(self, now_sim: float) -> int:
         """Décisions d'itinéraire (plan/refill) en file EDF dont l'échéance sim est
@@ -1414,6 +1476,32 @@ class SimulationLoopV1(BaseScenario):
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.population.dump_population_snapshot, path)
 
+    async def _tirer_accidents_du_jour(self, timestamp: int) -> None:
+        """Tire les accidents de la journée simulée en cours, si le régime est actif.
+
+        FAIL-OPEN par construction : un tirage qui échoue lève une alarme et laisse la
+        simulation continuer. Un régime d'accidents est un décor, pas une dépendance — le
+        faire tomber au milieu d'un run de plusieurs heures coûterait infiniment plus cher
+        que l'absence d'accidents ce jour-là.
+        """
+        registre = accidents_module.registre()
+        if registre is None or self._sim_start_ts is None:
+            return
+        try:
+            if not registre.pret:
+                from trip_helper.osmnx_direct import _GraphStore
+
+                graphes, _ = await _GraphStore.get()
+                registre.charger_aretes(graphes["drive"])
+            jour, debut_jour_ts = accidents_module.jour_simule(timestamp, self._sim_start_ts)
+            registre.tirer_journee(jour, debut_jour_ts)
+        except Exception as exc:
+            logger.error(
+                f"[ALARME] Tirage des accidents impossible à {humanize_date(timestamp)} "
+                f"(jour ancré sur {humanize_date(self._sim_start_ts)}) : {exc!r}. "
+                "La simulation continue SANS accident pour cette journée."
+            )
+
     async def sync(
         self,
         timestamp: int,
@@ -1495,6 +1583,11 @@ class SimulationLoopV1(BaseScenario):
             )
             self._next_day_log_at += 86400
 
+        # Accidents de la journée simulée (ticket 070). Idempotent par journée : appelé à
+        # chaque sync, il ne tire qu'une fois. Ne modifie aucune durée d'itinéraire à ce
+        # stade — il peuple l'état du monde et publie ses compteurs.
+        await self._tirer_accidents_du_jour(timestamp)
+
         # Population checkpoint — une fois par jour de simulation à 2h du matin
         if self._next_population_checkpoint_at is None:
             self._next_population_checkpoint_at = _next_checkpoint_ts(timestamp)
@@ -1526,34 +1619,60 @@ class SimulationLoopV1(BaseScenario):
                 if _now_wall.hour >= settings.agent.stm_reflection_daily_floor_hour:
                     _floor_day = _now_wall.date().toordinal()
 
-            def _stm_eligible(_person) -> tuple[bool, bool]:
-                """(éligible, par_le_plancher) pour cet agent au timestamp courant."""
+            def _stm_eligible(_person) -> tuple[bool, str]:
+                """(éligible, motif) pour cet agent au timestamp courant.
+
+                TROIS conditions, additives — aucune ne remplace les autres :
+
+                - `seuil` : le compte d'entrées, condition historique ;
+                - `plancher` : l'heure dite, régime de consolidation de base (ticket 048) ;
+                - `rupture` : la gravité cumulée franchit Θ (ticket 071, lot 1). Mécanisme de
+                  Park et al. (2023, § 4.2), mais avec une différence à dire : chez eux le
+                  seuil cumulé se franchit deux ou trois fois par jour, c'est un régime
+                  courant ; ici il est EXCEPTIONNEL par construction de Θ, réservé aux
+                  ruptures. La consolidation normale reste celle de la nuit.
+                """
                 if not _person.is_llm_based:
-                    return False, False
+                    return False, ""
                 if _person.person_id in self._stm_reflecting:
-                    return False, False
-                _n = len(
-                    self.agent.get_short_term_memory(_person.person_id).recent_entries
-                )
+                    return False, ""
+                _mem = self.agent.get_short_term_memory(_person.person_id)
+                _n = len(_mem.recent_entries)
                 if _n >= settings.agent.stm_reflection_min_entries:
-                    return True, False
+                    return True, "seuil"
+                if (
+                    _n > 0
+                    and _mem.gravite_cumulee()
+                    >= settings.agent.memoire__theta_gravite_cumulee
+                ):
+                    return True, "rupture"
                 if (
                     _floor_day is not None
                     and _n > 0
                     and self._stm_floor_day.get(_person.person_id) != _floor_day
                 ):
-                    return True, True
-                return False, False
+                    return True, "plancher"
+                return False, ""
 
             _eligibles = [(p, *_stm_eligible(p)) for p in all_people]
             people_to_reflect = [p for p, _ok, _ in _eligibles if _ok]
-            _par_plancher = {p.person_id for p, _ok, _fl in _eligibles if _ok and _fl}
+            _par_plancher = {
+                p.person_id for p, _ok, _m in _eligibles if _ok and _m == "plancher"
+            }
+            _par_rupture = {
+                p.person_id for p, _ok, _m in _eligibles if _ok and _m == "rupture"
+            }
             if people_to_reflect:
+                # Les trois motifs sont comptés SÉPARÉMENT : sans cela, vérifier que le régime
+                # de rupture reste exceptionnel — moins d'un déclenchement par agent et par
+                # semaine — est impossible sans rejouer la simulation.
                 logger.info(
                     f"[timestamp: {humanize_date(timestamp)}] STM reflection for {len(people_to_reflect)} agents "
-                    f"({len(people_to_reflect) - len(_par_plancher)} par le seuil de {settings.agent.stm_reflection_min_entries} entrées, "
-                    f"{len(_par_plancher)} par le plancher journalier)"
+                    f"({len(people_to_reflect) - len(_par_plancher) - len(_par_rupture)} par le seuil de {settings.agent.stm_reflection_min_entries} entrées, "
+                    f"{len(_par_plancher)} par le plancher journalier, "
+                    f"{len(_par_rupture)} par rupture (Θ={settings.agent.memoire__theta_gravite_cumulee})"
                 )
+                self._compter_ruptures(timestamp, _par_rupture, len(all_people))
                 for _p in people_to_reflect:
                     self._stm_reflecting.add(_p.person_id)
                     if _p.person_id in _par_plancher:
@@ -1690,10 +1809,35 @@ class SimulationLoopV1(BaseScenario):
             weather=get_weather(observation.timestamp),
         )
 
+        # Retard subi, en secondes. Seule l'observation d'arrivée le porte ; ailleurs il vaut
+        # zéro, ce qui est un FAIT (aucun retard mesuré) et non une valeur manquante.
+        _retard_observe_s = 0.0
+
         if observation.env_ob_code in ("arrival", "tc_timeout"):
             _started_at = observation.data.get("started_at")
             _schedule_at = observation.data.get("schedule_at")
             _timed_out = observation.env_ob_code == "tc_timeout"
+            # Retard subi (ticket 071, lot 1), lu à la SOURCE et hors de toute branche : il ne
+            # dépend ni de la replanification, ni de la présence d'une activité en cache. Une
+            # arrivée en avance vaut zéro et non un retard négatif, qui viendrait compenser un
+            # incident réel dans la même entrée.
+            if observation.env_ob_code == "arrival":
+                try:
+                    _retard_observe_s = float(
+                        max(
+                            0,
+                            int(observation.data.get("arrive_at", 0))
+                            - int(observation.data.get("expected_arrive_at", 0)),
+                        )
+                    )
+                except (TypeError, ValueError) as _err:
+                    # Une observation mal formée ne doit pas faire perdre le souvenir — mais
+                    # elle ne doit pas non plus passer pour un trajet parfait en silence.
+                    logger.warning(
+                        f"[gravite] retard illisible pour {observation.person_id} "
+                        f"({_err}) — gravité de retard tenue pour nulle"
+                    )
+                    _retard_observe_s = 0.0
             await GamaArrivalsLogger.get_instance().log_arrival(
                 move_id=str(observation.data.get("moving_id", "")),
                 person_id=observation.person_id,
@@ -1754,6 +1898,30 @@ class SimulationLoopV1(BaseScenario):
             if not pushed:
                 self._try_schedule_person(person, self._current_sim_timestamp)
 
+        # Ticket 071, lot 1 — gravité DÉTERMINISTE de l'observation, calculée depuis ce que la
+        # simulation a mesuré. Aucun appel au modèle, aucun jugement : un retard est un retard.
+        #   - `arrival` porte le retard subi, via la propriété `late` de l'observation ;
+        #   - `tc_timeout` EST la correspondance ratée : l'agent a vu partir son véhicule.
+        # La composante « mode contraint » arrive par le chemin de DÉCISION (le contexte porte
+        # `contrainte_chaine`), et « incident réseau » n'a pas encore de source.
+        _gravite, _detail = gravite_deterministe(
+            retard_s=_retard_observe_s,
+            correspondance_ratee=(observation.env_ob_code == "tc_timeout"),
+        )
+        if _gravite > 0:
+            logger.debug(
+                f"[gravite] {person.person_id} — {observation.env_ob_code} : I_det="
+                f"{_gravite:.2f} (composantes : {', '.join(_detail.composantes_actives())})"
+            )
+        if _gravite >= settings.agent.memoire__importance_choc:
+            # Un choc est rare par construction du seuil : le dire au niveau INFO permet de
+            # le retrouver dans un journal de run sans rejouer la simulation.
+            logger.info(
+                f"[gravite] CHOC pour {person.person_id} à "
+                f"{humanize_date(observation.timestamp)} : I_det={_gravite:.2f} "
+                f"({observation.env_ob_code}, retard {int(_retard_observe_s)} s)"
+            )
+
         _context = Context(
             person=person,
             activity_id=observation.activity_id,
@@ -1765,8 +1933,35 @@ class SimulationLoopV1(BaseScenario):
             },
         )
         self.agent.add_short_term_memory(
-            context=_context, msg=ob_text, timestamp=observation.timestamp
+            context=_context,
+            msg=ob_text,
+            timestamp=observation.timestamp,
+            importance=_gravite,
         )
+
+        # Ticket 071, lot 4 — le trajet accompli entre au JOURNAL, d'où sortent les habitudes
+        # de l'agent. C'est ici, et seulement ici, que le mode retenu et le retard RÉELLEMENT
+        # subi sont connus ensemble : le mode vient de l'entrée de décision, écrite plus tôt
+        # dans la journée, et le retard de l'observation d'arrivée.
+        if observation.env_ob_code == "arrival" and self.agent.long_term_memory is not None:
+            try:
+                _stm = self.agent.get_short_term_memory(person.person_id).recent_entries
+                _decision = next(
+                    (e for e in reversed(_stm) if e.axe_objet), None
+                )
+                if _decision is not None:
+                    self.agent.long_term_memory.noter_trajet(
+                        person.person_id,
+                        _decision.axe_motif,
+                        _decision.axe_creneau,
+                        _decision.axe_objet,
+                        retard_s=_retard_observe_s,
+                    )
+            except Exception as _err:  # noqa: BLE001 — le journal ne doit rien faire tomber
+                logger.warning(
+                    f"[noyau] trajet non journalisé pour {person.person_id} ({_err}) — "
+                    f"les habitudes de cet agent seront incomplètes"
+                )
 
     def reschedule_amount(self, arrival_late_seconds: int) -> int:
         if arrival_late_seconds <= 0:
@@ -2645,7 +2840,14 @@ class SimulationLoopV1(BaseScenario):
                     person=person,
                     timestamp=timestamp,
                     activity_id=next_activity.id,
-                    data={"type": "travel_plan"},
+                    # `contrainte_chaine` voyage avec le contexte (ticket 071, lot 1) : c'est
+                    # ici, et seulement ici, qu'on sait si l'agent a dû renoncer à un mode.
+                    # L'entrée de mémoire courte écrite par la décision s'en sert pour sa
+                    # gravité déterministe.
+                    data={
+                        "type": "travel_plan",
+                        "contrainte_chaine": chain_constraint or "",
+                    },
                 )
                 EVALUATE_PLAN_CALLS.inc()
                 if settings.agent.agenda_anticipation_enabled:

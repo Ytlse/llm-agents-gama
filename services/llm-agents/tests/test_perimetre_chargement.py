@@ -104,8 +104,8 @@ def test_undefined_compte_comme_commune_manquante(perimeter):
 # ── Le repli, en cascade ─────────────────────────────────────────────────────
 
 def test_sans_commune_le_trait_decide(perimeter):
-    assert perimeter.home_verdict(_entry("p", LOIN_DEDANS, zone="3eme couronne")) == (True, "trait")
-    admis, motif = perimeter.home_verdict(_entry("p", CENTRE, zone="hors périmètre"))
+    assert perimeter.home_verdict(_entry("p", LOIN_DEDANS, zone="3rd ring")) == (True, "trait")
+    admis, motif = perimeter.home_verdict(_entry("p", CENTRE, zone="outside perimeter"))
     assert not admis and motif == "trait hors périmètre"
     admis, motif = perimeter.home_verdict(_entry("p", CENTRE, zone="4eme couronne"))
     assert not admis and "zone inconnue" in motif

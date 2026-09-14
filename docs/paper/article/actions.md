@@ -18,9 +18,9 @@ Ce document centralise les **actions de rédaction**, les **points d'arbitrage m
 **Actions concrètes pour le papier :**
 1. **Dans le texte de l'article (Chapitre 4 § 4.5 & § 4.7) :** Expliciter la frontière étanche entre :
    - les *microdonnées d'enquête réelles* (étalon statistique externe de référence et d'entraînement, non diffusables par engagement légal) ;
-   - la *cohorte synthétique scellée v5* ($N = 1\,000$ personas, $3\,299$ déplacements cycliques, anonymisée, issue d'eqasim et de la sélection par ménages) : celle-ci est intégralement diffusable et auditable.
+   - la *cohorte synthétique scellée v6* ($N = 1\,000$ personas, $3\,299$ déplacements cycliques, anonymisée, issue d'eqasim et de la sélection par ménages) : celle-ci est intégralement diffusable et auditable.
 2. **Dans le Supplementary Material (ZIP anonyme de 25 Mo) :**
-   - Intégrer le fichier `population.json` de la cohorte v5 avec son sceau d'intégrité sha256 (`de73532e…`).
+   - Intégrer le fichier `population.json` de la cohorte v6 avec son sceau d'intégrité sha256 (`412efada…`).
    - Intégrer l'intégralité du code d'inférence, de calcul des métriques et des prompts (`mobility_core`, `mobility_llm`), les configurations d'expériences (`experiments.yaml`), les graines de tirage et le runner d'expériences sans simulateur (`services/llm-agents/experiences/runner.py`).
    - Fournir les scripts et instructions pour rejouer les prédictions et calculer les métriques d'évaluation en aveugle sur la cohorte synthétique.
 3. **Documents liés :** [`SOUMISSION_AAMAS_2027.md`](SOUMISSION_AAMAS_2027.md) § 3, [`fr/04_metrics_and_substrate.md`](fr/04_metrics_and_substrate.md), [`fr/99_annexes.md`](fr/99_annexes.md) (Annexe G), [`ameliorations.md`](ameliorations.md) § 5.
@@ -30,7 +30,7 @@ Ce document centralise les **actions de rédaction**, les **points d'arbitrage m
 ## 2. Objection sur la portée de H0 : apport scientifique face au boosting tabulaire sur-spécialisé
 
 **Remarque / Objection de relecture :**
-> *« Prétendre que $H_0$ est une découverte majeure est exagéré : il est évident qu'un LLM nu ou légèrement prompté à la main ne peut pas battre un Gradient Boosted Tree (LightGBM) entraîné de façon supervisée sur 31 000 trajets locaux réels. Vous comparez un modèle non entraîné avec un modèle sur-spécialisé. Quel est l'apport scientifique réel au-delà de confirmer que le boosting tabulaire surpasse le zero-shot ? »*
+> *« Prétendre que $H_0$ est une découverte majeure est exagéré : il est évident qu'un agent sous prompt factuel neutre et circonstancié ou légèrement prompté à la main ne peut pas battre un Gradient Boosted Tree (LightGBM) entraîné de façon supervisée sur 31 000 trajets locaux réels. Vous comparez un modèle non entraîné avec un modèle sur-spécialisé. Quel est l'apport scientifique réel au-delà de confirmer que le boosting tabulaire surpasse le zero-shot ? »*
 
 **Diagnostic & Enjeux :**
 - Si le papier laisse penser que le résultat principal est la « découverte » qu'un modèle zero-shot / few-shot perd face à un modèle supervisé sur 31 000 données d'entraînement, le jury rejettera l'article pour trivialité.

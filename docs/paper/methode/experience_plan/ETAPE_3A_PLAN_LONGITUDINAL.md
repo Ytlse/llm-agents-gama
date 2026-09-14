@@ -80,7 +80,7 @@ Mesuré sur le run `2026-08-24_17_34` (930 agents, mémoire active) et lu dans l
 - Pas de notion d'importance à l'écriture (le champ `importance_score` de la doc n'existe pas), pas de renforcement par répétition, pas de structure « habitude » : le mot n'existe que comme consigne de prompt (`ltm_self_reflection/template.md.j2:30`).
 - Coût : **≈ 2,3 tâches « choix » + ≈ 1,1 tâche « réflexion STM »** par agent et par jour plein (auto-réflexion LTM : 1 par agent tous les 3 jours, jamais observée sur un run < 3 jours). Les tâches sont regroupées par la passerelle : ~10 agents par requête pour les décisions (cible `batch_target_agents`, capacité Gemini 15), **~3,5 réflexions par requête** mesurées.
 
-Conséquence pour le manuscrit : la formule $w_m(t) = 1 - \sum \gamma \cdot \frac{\Delta t_{\text{retard}}}{\Delta t_{\text{ref}}} e^{-\lambda (t - t_k)}$ du §5.1 **ne décrit pas le code**. `γ` et `λ` n'existent nulle part ; le seul paramètre apparenté est `long_term_retrieval__time_decay = 0,7`, soit $\lambda = -\ln 0{,}7 \approx 0{,}36$ par jour (proche du 0,4 de la fiche `exp_04a`). Le plan tranche (§6.4) : la formule devient un **modèle descriptif ajusté a posteriori** sur les courbes observées, et le bras de sensibilité « λ ÷ 3 » se joue sur `time_decay` ($e^{-0{,}36/3} \approx 0{,}89$).
+Conséquence pour le manuscrit : la formule $w_m(t) = 1 - \sum \gamma \cdot \frac{\Delta t_{\text{retard}}}{\Delta t_{\text{ref}}} e^{-\lambda (t - t_k)}$ du §5.1 **ne décrit pas le code**. `γ` et `λ` n'existent nulle part ; le seul paramètre apparenté est `long_term_retrieval__time_decay = 0,7`, soit $\lambda = -\ln 0{,}7 \approx 0{,}36$ par jour (proche du 0,4 de la fiche `exp_04a`). Le plan tranche (§6.4) : la formule devient un **modèle descriptif ajusté a posteriori** sur les courbes observées.
 
 ---
 
@@ -167,7 +167,6 @@ Déclinée en quatre sous-hypothèses testables, chacune avec sa métrique princ
 | **M** | modèle épinglé + prompt épinglé | modèle épinglé (le même ou un second, §4.5) | active (config courante) | oui |
 | **A** | idem M | — | coupée (`MEM=0`) | oui |
 | **O** | LightGBM `mode_choice_policy.json@sha`, renormalisé sur l'offre | — | — | oui |
-| **M-λ** | idem M | idem M | `time_decay` 0,7 → 0,89 (λ ÷ 3) | oui (réfutation ii) |
 | **M-placebo** | idem M | idem M | active ; choc **placebo** (§4.4) | oui (réfutation iii) |
 | **M-news** | idem M | idem M | active ; incident annoncé **par article** aux non-exposés | optionnel (pont avec Étape 3b) |
 | **M2…M4** | idem M | idem M | variantes de mémoire (§7) | optionnel, budget |

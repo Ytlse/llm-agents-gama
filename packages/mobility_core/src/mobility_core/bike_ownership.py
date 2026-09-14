@@ -86,10 +86,29 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from mobility_core.population_reference import occupation_enquete
+
+logger = logging.getLogger(__name__)
+
+_occupations_inconnues: set[str] = set()
+
+
+def _alarme_occupation_inconnue(valeur: object, occupations: Sequence[str]) -> None:
+    """Front montant par valeur : l'alarme ne se lève qu'une fois par modalité."""
+    texte = str(valeur)
+    if texte in _occupations_inconnues:
+        return
+    _occupations_inconnues.add(texte)
+    logger.error(
+        "[ALARME] occupation %r hors du vocabulaire de la loi d'équipement vélo — "
+        "indicatrices à zéro, donc MODALITÉ DE RÉFÉRENCE. Attendues : %s.",
+        texte, list(occupations))
 
 # ── Contrat de sortie ────────────────────────────────────────────────────────
 # Les trois libellés que porte `traits_json`, et qu'aucun consommateur ne doit
@@ -97,9 +116,18 @@ from pathlib import Path
 # c'est « hors couche de zones fines », et ça doit se voir.
 TRAIT_KEY = "personal_bike"
 
-NO_BIKE = "Pas de vélo"
-PLAIN_BIKE = "vélo normal"
-ELECTRIC_BIKE = "VAE"
+# Libellés du trait, en ANGLAIS depuis la cohorte v6 (ticket 074). Ils sont posés dans
+# `traits_json` et relus par comparaison de chaîne — pas par une clé — dans
+# `vehicle_chain.has_personal_bike` et `model_on_common_set.has_bike`. Les deux connaissent
+# les DEUX vocabulaires : les cohortes d'avant la v6 et leurs exécutions archivées portent
+# encore les libellés français, et n'en connaître qu'un ferait rendre « a un vélo » à un
+# persona qui n'en a pas, sur toute une cohorte, sans qu'aucune ligne ne manque.
+NO_BIKE = "No bike"
+PLAIN_BIKE = "regular bike"
+ELECTRIC_BIKE = "e-bike"
+
+#: Les libellés d'avant la v6, conservés pour relire les cohortes et traces archivées.
+LABELS_FR: tuple[str, ...] = ("Pas de vélo", "vélo normal", "VAE")
 
 LABELS: tuple[str, ...] = (NO_BIKE, PLAIN_BIKE, ELECTRIC_BIKE)
 
@@ -320,7 +348,11 @@ def propensity_design(k: int,
 
     `occupations` fixe l'ordre des indicatrices d'occupation : il vient de la ressource,
     pour que le vecteur reste aligné sur les coefficients même si le recodage du dépôt
-    gagne une modalité.
+    gagne une modalité. Il en vient aussi le VOCABULAIRE — la ressource est un artefact
+    gelé, qui nomme ses variables `occ_Travail à plein temps` — quand le persona dit
+    `Full-time worker` depuis le ticket 074 : l'occupation passe donc par
+    `occupation_enquete`, faute de quoi toutes les indicatrices resteraient à zéro et
+    toute la cohorte tomberait dans la modalité de référence, sans rien signaler.
     """
     size = max(1, min(int(household_size), SIZE_MAX))
     stock = max(0, min(int(k), K_MAX))
@@ -340,8 +372,11 @@ def propensity_design(k: int,
         "log_density": math.log1p(max(0.0, float(density_hh_km2 or 0.0))),
         "log_dist_center": math.log1p(max(0.0, float(dist_center_km))),
     }
+    enquete = occupation_enquete(main_occupation)
+    if enquete is None and main_occupation not in (None, ""):
+        _alarme_occupation_inconnue(main_occupation, occupations)
     for occupation in occupations:
-        design[f"occ_{occupation}"] = 1.0 if main_occupation == occupation else 0.0
+        design[f"occ_{occupation}"] = 1.0 if enquete == occupation else 0.0
     return design
 
 

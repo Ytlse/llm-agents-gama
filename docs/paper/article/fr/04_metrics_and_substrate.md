@@ -140,3 +140,11 @@ Le test est un **test d'équivalence** marge par marge, avec une borne d'indiff�
 Mille personnes, enfin, n'est pas un budget mais un calcul de précision fait avant la mesure : à cet effectif, et compte tenu de la corrélation entre les déplacements d'une même personne, la demi-largeur de l'intervalle de confiance reste sous les biais structurels que l'article cherche à établir, tout en restant au-dessus de l'incertitude propre de l'enquête de référence. Le calcul *ex ante* est détaillé dans la note de dimensionnement du dépôt, et tout intervalle publié est estimé par rééchantillonnage par grappe agent. <!-- source: docs/paper/methode/JUSTIFICATION_TAILLE_ECHANTILLON.md -->
 
 ---
+
+### Tickets associés à ce chapitre
+- [Ticket 043](../../../tickets/ticket_043_troisieme_famille_regression_logistique_noyau.md) — Troisième famille de référence : régression logistique à noyau
+- [Ticket 045](../../../tickets/ticket_045_substrat_unique_v5_et_reconstruction_des_experiences.md) — Substrat unique v5 et reconstruction des expériences
+- [Ticket 046](../../../tickets/ticket_046_asymetrie_informationnelle_du_contrat_d_evaluation.md) — L'agent voit sa journée, le modèle tabulaire non : que dit le contrat ?
+- [Ticket 047](../../../tickets/ticket_047_offre_a_mode_unique_ce_qui_compte_comme_decision.md) — Offre à mode unique : ce qui compte comme décision
+- [Ticket 052](../../../tickets/ticket_052_documentation_cohorte_scellee_v5.md) — Documentation et scellement démographique de la cohorte v5
+- [Ticket 053](../../../tickets/ticket_053_acces_donnees_recherche_et_reproductibilite.md) — Modalités d'accès aux données d'enquête pour la recherche et protocole de reproductibilité

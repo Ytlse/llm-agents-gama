@@ -354,3 +354,365 @@ def test_R27_une_retouche_d_espaces_seuls_n_ecrit_rien(fichier):
 
     assert tickets.save_override(cle, statut, note + " et une phrase de plus.",
                                  path=fichier) is True
+
+
+def test_description_extraite_depuis_markdown(tmp_path):
+    """Vérifie l'extraction automatique de la description courte."""
+    fichier_ticket = tmp_path / "tickets" / "ticket_099_essai.md"
+    fichier_ticket.write_text(
+        "# Ticket 099 — Titre d'essai\n\n"
+        "> Une note de statut sous forme de citation.\n\n"
+        "## Description\n\n"
+        "Voici le [lien](http://example.com) vers la **description** complète du `module`.\n\n"
+        "Deuxième paragraphe.\n",
+        encoding="utf-8",
+    )
+    t = tickets.parse_ticket(fichier_ticket, {})
+    assert t.description == "Voici le lien vers la description complète du module. Deuxième paragraphe."
+
+
+def test_description_extraite_premier_paragraphe(tmp_path):
+    """À défaut de section Description, retient le premier paragraphe informatif."""
+    fichier_ticket = tmp_path / "tickets" / "ticket_099_essai.md"
+    fichier_ticket.write_text(
+        "# Ticket 099 — Titre d'essai\n\n"
+        "> **Statut** : en cours\n\n"
+        "Premier paragraphe expliquant la problématique du ticket.\n\n"
+        "## Objectif\n",
+        encoding="utf-8",
+    )
+    t = tickets.parse_ticket(fichier_ticket, {})
+    assert t.description == "Premier paragraphe expliquant la problématique du ticket."
+
+
+def test_description_surchargee_dans_fichier(tmp_path):
+    """Une clé description dans les surcharges l'emporte sur l'extraction."""
+    fichier_ticket = tmp_path / "tickets" / "ticket_099_essai.md"
+    fichier_ticket.write_text(
+        "# Ticket 099 — Titre d'essai\n\n"
+        "## Description\n\n"
+        "Description issue du markdown.\n",
+        encoding="utf-8",
+    )
+    overrides = {"ticket_099_essai": {"description": "Description manuelle surchargée."}}
+    t = tickets.parse_ticket(fichier_ticket, overrides)
+    assert t.description == "Description manuelle surchargée."
+
+
+def test_save_override_description(fichier):
+    """save_override permet d'enregistrer ou modifier une description."""
+    import yaml as pyyaml
+
+    assert tickets.save_override(
+        "ticket_011_arrivees_perdues_gama",
+        tickets.DOING,
+        description="Nouvelle description courte du ticket 011.",
+        path=fichier,
+    ) is True
+
+    data = pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"]
+    assert data["ticket_011_arrivees_perdues_gama"]["description"] == "Nouvelle description courte du ticket 011."
+
+
+def test_tickets_reels_ont_tous_une_description():
+    """Sur les 50 vrais tickets du dépôt, aucun n'a de description vide."""
+    dossier_reel = tickets.REPO_ROOT / "docs" / "tickets"
+    fichiers = sorted(dossier_reel.glob("ticket_*.md"))
+    assert len(fichiers) >= 50
+    for f in fichiers:
+        t = tickets.parse_ticket(f, {})
+        assert t.description, f"{f.name} n'a pas de description extraite"
+        assert not re.search(r"\[.+\]\(.+\)", t.description), f"Lien non nettoyé dans {f.name}: {t.description}"
+
+
+def test_tous_les_tickets_reels_ont_une_categorie_valide():
+    """Chaque ticket du dépôt a une catégorie parmi les 5 classes majeures."""
+    items = tickets.load_tickets()
+    assert len(items) >= 50
+    for t in items:
+        assert t.category in tickets.CATEGORIES, f"{t.path.stem} a une catégorie invalide: {t.category!r}"
+    repartition = tickets.summary_by_category(items)
+    assert set(repartition.keys()) == set(tickets.CATEGORIES)
+    for cat, n in repartition.items():
+        assert n > 0, f"La catégorie {cat} n'a aucun ticket"
+
+
+def test_save_override_category(fichier):
+    """save_override permet d'enregistrer ou modifier une catégorie."""
+    import yaml as pyyaml
+
+    assert tickets.save_override(
+        "ticket_011_arrivees_perdues_gama",
+        tickets.DOING,
+        category=tickets.CAT_EXP,
+        path=fichier,
+    ) is True
+
+    data = pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"]
+    assert data["ticket_011_arrivees_perdues_gama"]["category"] == tickets.CAT_EXP
+
+
+# ── Triage : faisabilité, sûreté, drapeau « jeux de test » (R29 à R34) ────────
+#
+# Le triage dit ce que coûterait d'y aller maintenant ; la note dit ce sur quoi le
+# STATUT s'appuie. Les deux cohabitent dans la même entrée et ne doivent jamais
+# s'écraser — c'est ce que la moitié de ces tests vérifie.
+
+
+def _triage(fichier: Path, cle: str) -> dict:
+    import yaml as pyyaml
+
+    return (pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"] or {})[cle].get("triage")
+
+
+def test_R29_un_triage_ecrit_se_relit_tel_quel(fichier, monkeypatch):
+    assert tickets.save_triage(
+        "ticket_099_essai", 4, 2, True, "parce que le graphe est à reconstruire", date="2026-09-14",
+        path=fichier,
+    ) is True
+    bloc = _triage(fichier, "ticket_099_essai")
+    assert bloc["faisabilite"] == 4
+    assert bloc["surete"] == 2
+    assert bloc["jeux_de_test"] is True
+    assert bloc["date"] == "2026-09-14"
+    assert "reconstruire" in bloc["motif"]
+
+    monkeypatch.setattr(tickets, "OVERRIDES_PATH", fichier)
+    lu = tickets._lire_triage("ticket_099_essai", bloc)
+    assert (lu.faisabilite, lu.surete, lu.jeux_de_test) == (4, 2, True)
+    assert lu.priorite == 6 and lu.quick_win is False
+
+
+def test_R29_les_deux_echelles_vont_dans_le_meme_sens():
+    """5 est toujours la bonne nouvelle : c'est ce qui autorise la priorité par somme.
+
+    Si `surete` redevenait un `regression` croissant, `priorite` classerait en tête les
+    tickets les plus dangereux — en silence, et sans qu'aucun autre test ne le voie.
+    """
+    sur = tickets.Triage(faisabilite=5, surete=5)
+    risque = tickets.Triage(faisabilite=5, surete=1)
+    assert sur.priorite > risque.priorite
+    assert sur.quick_win is True and risque.quick_win is False
+
+
+def test_R30_ecrire_un_triage_n_efface_ni_la_note_ni_le_statut(fichier):
+    cle, statut, note = _premiere_entree_notee(fichier.read_text(encoding="utf-8"))
+    tickets.save_triage(cle, 3, 3, False, "un motif neuf", path=fichier)
+    import yaml as pyyaml
+
+    entree = (pyyaml.safe_load(fichier.read_text(encoding="utf-8"))["tickets"] or {})[cle]
+    assert entree["status"] == statut
+    assert entree["note"] == note
+    assert entree["triage"]["motif"] == "un motif neuf"
+
+
+def test_R30_ecrire_un_statut_n_efface_pas_le_triage(fichier):
+    tickets.save_triage("ticket_099_essai", 2, 5, True, "posé d'abord", path=fichier)
+    tickets.save_override("ticket_099_essai", tickets.DOING, note="une note", path=fichier)
+    bloc = _triage(fichier, "ticket_099_essai")
+    assert bloc["faisabilite"] == 2 and bloc["surete"] == 5 and bloc["jeux_de_test"] is True
+    assert bloc["motif"] == "posé d'abord"
+
+
+def test_R31_une_valeur_hors_bornes_est_refusee_en_nommant_le_ticket(fichier):
+    with pytest.raises(tickets.TriageInvalide) as erreur:
+        tickets.save_triage("ticket_099_essai", 8, 3, path=fichier)
+    assert "ticket_099_essai" in str(erreur.value) and "faisabilite" in str(erreur.value)
+    assert not fichier.read_text(encoding="utf-8").count("faisabilite: 8")
+
+
+@pytest.mark.parametrize("brut", [
+    {"faisabilite": 0, "surete": 3},
+    {"faisabilite": 3, "surete": 6},
+    {"faisabilite": "trois", "surete": 3},
+    {"faisabilite": True, "surete": 3},
+    {"surete": 3},
+    {"faisabilite": 3},
+    {"faisabilite": 3, "surete": 3, "jeux_de_test": "oui"},
+])
+def test_R31_la_lecture_refuse_un_bloc_mal_formé(brut):
+    with pytest.raises(tickets.TriageInvalide):
+        tickets._lire_triage("ticket_099_essai", brut)
+
+
+def test_R32_reenregistrer_le_meme_triage_n_ecrit_rien(fichier):
+    tickets.save_triage("ticket_099_essai", 3, 4, False, "stable", date="2026-09-14", path=fichier)
+    avant = fichier.read_text(encoding="utf-8")
+    assert tickets.save_triage(
+        "ticket_099_essai", 3, 4, False, "stable", date="2026-09-14", path=fichier
+    ) is False
+    assert fichier.read_text(encoding="utf-8") == avant
+
+
+def test_R32_la_date_ne_bouge_pas_quand_l_appreciation_ne_bouge_pas(fichier):
+    """Redater à chaque clic salirait `git status` dès le lendemain (R13)."""
+    tickets.save_triage("ticket_099_essai", 3, 4, False, "stable", date="2026-01-02", path=fichier)
+    tickets.save_triage("ticket_099_essai", 3, 4, False, "stable", path=fichier)
+    assert _triage(fichier, "ticket_099_essai")["date"] == "2026-01-02"
+
+    tickets.save_triage("ticket_099_essai", 5, 4, False, "stable", path=fichier)
+    assert _triage(fichier, "ticket_099_essai")["date"] != "2026-01-02"
+
+
+def test_R33_un_ticket_sans_bloc_triage_se_lit_sans_casser():
+    non_tries = [t for t in tickets.load_tickets() if t.triage is None]
+    assert non_tries, "le fichier réel doit encore porter des tickets sans triage (les clos)"
+    assert all(t.triage is None for t in non_tries)
+    assert tickets.summary_triage(non_tries)["non_tries"] == sum(
+        1 for t in non_tries if tickets.est_ouvert(t)
+    )
+
+
+def test_R34_tous_les_tickets_ouverts_sont_tries():
+    """Un ticket ouvert sans appréciation est un angle mort : il n'apparaît dans aucun
+    classement et son coût n'a jamais été posé."""
+    orphelins = [
+        f"{t.number} {t.path.stem}"
+        for t in tickets.load_tickets()
+        if tickets.est_ouvert(t) and t.triage is None
+    ]
+    assert not orphelins, f"tickets ouverts non triés : {', '.join(sorted(orphelins))}"
+
+
+def test_R34_les_tickets_clos_ne_portent_pas_de_triage():
+    """On ne se demande pas si un ticket terminé est faisable."""
+    parasites = [
+        f"{t.number} ({t.status})"
+        for t in tickets.load_tickets()
+        if not tickets.est_ouvert(t) and t.triage is not None
+    ]
+    assert not parasites, f"tickets clos portant un triage : {', '.join(sorted(parasites))}"
+
+
+def test_les_etoiles_ecrivent_toujours_les_cinq_positions():
+    assert tickets.etoiles(3) == "★★★☆☆"
+    assert tickets.etoiles(5) == "★★★★★"
+    assert tickets.etoiles(1) == "★☆☆☆☆"
+    assert len(tickets.etoiles(2)) == tickets.TRIAGE_MAX
+
+
+def test_les_etoiles_aamas_utilisent_des_etoiles_jaunes():
+    assert tickets.etoiles_aamas(3) == "⭐⭐⭐☆☆"
+    assert tickets.etoiles_aamas(5) == "⭐⭐⭐⭐⭐"
+    assert tickets.etoiles_aamas(1) == "⭐☆☆☆☆"
+    assert tickets.etoiles_aamas(None) == "—"
+    assert len(tickets.etoiles_aamas(2)) == tickets.TRIAGE_MAX
+
+
+def test_R29_un_triage_avec_aamas_ecrit_se_relit_tel_quel(fichier, monkeypatch):
+    assert tickets.save_triage(
+        "ticket_099_essai", 4, 3, False, "pertinent pour AAMAS", aamas=5, date="2026-09-14",
+        path=fichier,
+    ) is True
+    bloc = _triage(fichier, "ticket_099_essai")
+    assert bloc["faisabilite"] == 4
+    assert bloc["surete"] == 3
+    assert bloc["aamas"] == 5
+
+    monkeypatch.setattr(tickets, "OVERRIDES_PATH", fichier)
+    lu = tickets._lire_triage("ticket_099_essai", bloc)
+    assert lu.aamas == 5
+    assert lu.etoiles_aamas() == "⭐⭐⭐⭐⭐"
+
+
+def test_R31_aamas_hors_bornes_ou_type_invalide_est_refuse(fichier):
+    with pytest.raises(tickets.TriageInvalide) as err1:
+        tickets.save_triage("ticket_099_essai", 3, 3, aamas=7, path=fichier)
+    assert "aamas" in str(err1.value)
+
+    with pytest.raises(tickets.TriageInvalide) as err2:
+        tickets.save_triage("ticket_099_essai", 3, 3, aamas=0, path=fichier)
+    assert "aamas" in str(err2.value)
+
+    with pytest.raises(tickets.TriageInvalide):
+        tickets._lire_triage("ticket_099_essai", {"faisabilite": 3, "surete": 3, "aamas": "haut"})
+
+
+# ── Filtrage et tri du tableau (R35) ──────────────────────────────────────────
+#
+# Extraits de `render_tickets` pour cette raison : dans Streamlit, une inversion de
+# drapeau ou un tri à l'envers ne se voyait qu'en pilotant un widget dans un
+# navigateur — donc jamais en CI.
+
+
+def test_R35_le_filtre_drapeau_ne_garde_que_les_jeux_de_test():
+    items = tickets.load_tickets()
+    retenus = tickets.filtrer(items, drapeaux_seuls=True)
+    assert retenus, "le fichier réel porte des tickets à drapeau"
+    assert all(t.triage is not None and t.triage.jeux_de_test for t in retenus)
+    assert len(retenus) == tickets.summary_triage(items)["jeux_de_test"]
+    # et sans le filtre, on les retrouve tous
+    assert len(tickets.filtrer(items)) == len(items)
+
+
+def test_R35_le_tri_par_priorite_met_les_meilleurs_en_tete():
+    items = tickets.load_tickets()
+    tries = tickets.filtrer(items, ordre="Priorité (faisa. + sûreté)")
+    prios = [t.triage.priorite for t in tries if t.triage]
+    assert prios == sorted(prios, reverse=True)
+
+
+def test_R35_le_tri_par_interet_aamas_met_les_meilleurs_en_tete(fichier, monkeypatch):
+    monkeypatch.setattr(tickets, "OVERRIDES_PATH", fichier)
+    tickets.save_triage("ticket_099_essai", 3, 3, aamas=5, path=fichier)
+    items = tickets.load_tickets()
+    tries = tickets.filtrer(items, ordre="Intérêt AAMAS ↓")
+    notes = [t.aamas for t in tries if t.aamas is not None]
+    assert notes == sorted(notes, reverse=True)
+    assert tries[0].aamas == 5
+
+
+def test_R35_le_tri_par_risque_met_les_plus_dangereux_en_tete():
+    """`surete` croissante = du plus risqué au plus sûr. Une inversion ici ferait
+    proposer en premier les tickets les plus inoffensifs sous le libellé « risque »."""
+    items = tickets.load_tickets()
+    tries = tickets.filtrer(items, ordre="Risque de régression ↓")
+    sur = [t.triage.surete for t in tries if t.triage]
+    assert sur == sorted(sur)
+
+
+def test_R35_les_non_tries_tombent_en_fin_de_liste():
+    items = tickets.load_tickets()
+    for ordre in ("Priorité (faisa. + sûreté)", "Faisabilité ↓", "Sûreté ↓", "Risque de régression ↓"):
+        tries = tickets.filtrer(items, ordre=ordre)
+        positions = [i for i, t in enumerate(tries) if t.triage is None]
+        if positions:
+            assert min(positions) > max(
+                i for i, t in enumerate(tries) if t.triage is not None
+            ), f"un ticket non trié précède un ticket trié avec l'ordre {ordre!r}"
+
+
+def test_R35_la_recherche_fouille_aussi_le_motif_de_triage():
+    items = tickets.load_tickets()
+    cible = next(t for t in items if t.triage and t.triage.motif)
+    mot = max(
+        (m for m in re.findall(r"[a-zàâçéèêëîïôûùüÿñ]{7,}", cible.triage.motif.lower())),
+        key=len, default="",
+    )
+    assert mot, "le motif doit porter un mot assez long pour la recherche"
+    assert any(t.number == cible.number for t in tickets.filtrer(items, recherche=mot))
+
+
+def test_R35_le_filtre_ouverts_seuls_exclut_abandonne_termine_amelioration():
+    items = tickets.load_tickets()
+    retenus = tickets.filtrer(items, ouverts_seuls=True)
+    assert retenus, "il doit rester des tickets ouverts"
+    statuts_retenus = {t.status for t in retenus}
+    assert tickets.DROPPED not in statuts_retenus
+    assert tickets.DONE not in statuts_retenus
+    assert tickets.IMPROVEMENT not in statuts_retenus
+    assert all(t.status in {tickets.TODO, tickets.DOING, tickets.BLOCKED, tickets.PAUSED} for t in retenus)
+
+
+def test_R35_les_filtres_se_combinent():
+    items = tickets.load_tickets()
+    retenus = tickets.filtrer(items, statut=tickets.TODO, drapeaux_seuls=True)
+    assert all(t.status == tickets.TODO for t in retenus)
+    assert all(t.triage.jeux_de_test for t in retenus)
+
+
+def test_la_date_du_triage_s_affiche_au_format_de_l_interface():
+    assert tickets.Triage(3, 3, date="2026-09-14").date_lisible() == "14/09/2026"
+    # une valeur saisie à la main se montre telle quelle plutôt que de disparaître
+    assert tickets.Triage(3, 3, date="hier").date_lisible() == "hier"
+    assert tickets.Triage(3, 3).date_lisible() == ""

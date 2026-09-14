@@ -15,24 +15,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from loguru import logger
-
+from experiences import froid
 from models import Person
 
-# Segment de chemin qui marque une cohorte retirée du service. Le garde porte sur
-# l'EMPLACEMENT, jamais sur une correspondance de texte dans le nom : une cohorte qui
-# s'appellerait « population_archivistes » reste parfaitement lisible.
-SEGMENT_ARCHIVE = "archive"
-COHORTE_DE_REFERENCE = "data/population/population_1000_AAMAS_v5"
+# Le garde d'archive froide vit dans `experiences.froid` depuis le ticket 074 : populations,
+# jeux et prompts partagent désormais la même règle, et une règle écrite deux fois finit par
+# diverger. Les noms d'ici restent exportés — du code et des tests les importent depuis ce
+# module depuis le ticket 045.
+SEGMENT_ARCHIVE = froid.SEGMENT_ARCHIVE
+COHORTE_DE_REFERENCE = "data/population/population_1000_AAMAS_v6"
 
-
-class PopulationArchivee(ValueError):
-    """Lecture refusée : la cohorte a été retirée du service (ticket 045, lot 1)."""
+# `PopulationArchivee` reste une sous-classe de ValueError, comme avant : les appelants qui
+# l'attrapaient continuent de fonctionner.
+PopulationArchivee = froid.ContenuArchive
 
 
 def _sous_archive(chemin: Path) -> bool:
     """Le chemin traverse-t-il un dossier `archive` ?"""
-    return SEGMENT_ARCHIVE in Path(chemin).resolve().parts
+    return froid.sous_archive(chemin)
 
 
 def _verifier_non_archivee(chemin: Path, archivee_confirmee: str | None) -> None:
@@ -44,27 +44,20 @@ def _verifier_non_archivee(chemin: Path, archivee_confirmee: str | None) -> None
     jamais.
 
     La levée demande un MOTIF, pas un booléen : `archivee_confirmee=True` se coche sans y
-    penser, `archivee_confirmee="témoin du ticket 045"` s'écrit et se relit.
+    penser, `archivee_confirmee="témoin du ticket 045"` s'écrit et se relit. Elle se pose dans
+    la définition de l'expérience : `population.archivee_confirmee: <motif>`.
+
+    Le corps de la règle vit dans `experiences.froid` depuis le ticket 074 — populations, jeux
+    et prompts la partagent.
     """
-    if not _sous_archive(chemin):
-        return
-    motif = (
-        (archivee_confirmee or "").strip()
-        if isinstance(archivee_confirmee, str)
-        else ""
-    )
-    if not motif:
-        raise PopulationArchivee(
-            f"population archivée, lecture refusée : {chemin}\n"
-            f"  Une cohorte rangée sous `{SEGMENT_ARCHIVE}/` n'est plus la référence et ne se "
-            f"rejoue pas. La cohorte de référence est `{COHORTE_DE_REFERENCE}`.\n"
-            f"  Pour lire celle-ci malgré tout, la définition doit porter explicitement "
-            f"`population.archivee_confirmee: <motif>` — le motif est journalisé et doit être "
-            f"consigné dans le ticket qui le demande."
-        )
-    logger.warning(
-        f"[population] DÉROGATION : lecture d'une cohorte archivée {chemin} — motif : {motif!r}. "
-        f"Cette mesure ne se compare pas à celles faites sur {COHORTE_DE_REFERENCE}."
+    froid.verifier(
+        chemin,
+        archivee_confirmee,
+        quoi="une cohorte de population",
+        comment_lever=(
+            "la définition de l'expérience doit porter `population.archivee_confirmee: <motif>`"
+        ),
+        repli=COHORTE_DE_REFERENCE,
     )
 
 

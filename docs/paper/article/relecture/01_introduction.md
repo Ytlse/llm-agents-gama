@@ -89,6 +89,12 @@ Aucun point à la relecture du 8 septembre 2026. Section validée telle quelle. 
 
 **Vérifications du 10 septembre 2026 (pour trancher (b) et (c)).**
 - *(b) Disjonction.* Toutes les versions de jeux gelés (`calibration_datasets/v1` à `v10c`) sont découpées dans des runs sur l'ancienne `population_1000.json` (930 personas ; empreintes `aec28f01…`, `d7e3e7b7…`, `cab69d4b…`, `4cd38bdc…`), jamais dans la cohorte scellée (`population_1000_AAMAS_v5`, `de73532e…`). Intersection des `person_id` entre la cohorte v5 et les populations des runs 2026‑08‑19 (jeux v5–v8) et 2026‑08‑24 (jeux v9–v10c) : **0 sur 930**. Le prompt a donc été choisi sur d'autres individus synthétiques que ceux sur lesquels H0 est mesurée. Réserve à garder en tête : ce sont des générations eqasim différentes, tirées des mêmes viviers recensement/enquête ; la disjonction vaut pour les individus synthétiques, pas nécessairement pour les donneurs d'enquête (`provenance.hts_id`, présent dans la v5).
+- *(b) — mise à jour du 14 septembre 2026.* La conclusion est inchangée, l'empreinte citée non :
+  la cohorte en service est la **v6** (`412efada…`), scellée le 14 septembre, la v5 (`de73532e…`)
+  étant en archive froide — restaurable et auditable, mais plus référencée. La v6 porte les mêmes
+  1 000 `person_id` que la v5 ; l'intersection avec les populations des jeux gelés reste donc
+  **0 sur 930**.
+
 - *(c) Référence visible.* La fonction objectif lit `scripts/data/population/cerema_values.yaml` : les **parts modales publiées** du rapport AUAT/CEREMA, par strate (globale, lieu de résidence, genre, âge, occupation, motif, distance), pas les microdonnées ; dernier commit du fichier le 2026‑05‑27, antérieur à toute la trajectoire de calibration. Ce sont aussi les marges que H0 teste : sur la cible, la mesure est nécessairement *in sample*, comme pour le logit et l'oracle estimés sur la même enquête. Ce n'est pas un défaut à cacher, c'est la condition d'une comparaison à pied d'égalité — c'est ce que le texte doit dire.
 
 **Texte proposé (remplace les trois phrases « Second, the alignment literature… testable hypothesis. »).**
@@ -263,6 +269,26 @@ l'agent qui en a davantage, et c'est la première chose qu'un relecteur éprouve
 **Ce qui reste vrai et sert la formulation de la v0.15.** Le `content` contient des nombres de procédure et de format. Une négation absolue (« never a figure ») serait donc réfutable par la lecture du prompt en annexe, alors que la négation restreinte aux chiffres **de l'enquête** est exacte. La v0.15 tient telle quelle.
 **Option retenue par l'auteur (10 septembre 2026), pour un chapitre à venir.** Énoncer la version forte, elle aussi vérifiée : le prompt ne contient aucune formule de décision, aucun seuil et aucun coefficient ; ses seuls nombres décrivent la procédure et le format de sortie. Cet énoncé répond directement au reproche d'un modèle à heuristiques fixes. **Emplacement non tranché** : consigné avec ses trois candidats et le relevé de vérification dans [`ameliorations.md`](../ameliorations.md) § 4 (méthodes recommandé, annexe du prompt en vérification, discussion en repli). Hors introduction.
 **Précision sur les variantes non actives.** `expert_chaine_m5` à `m7.1` portent en plus une bande de température (« entre 3 et 25 °C ») qui qualifie le temps ordinaire ; descriptive, elle ne prescrit pas non plus de mode. Ces variantes ne sont pas actives.
+
+**Note du 14 septembre 2026 — le texte relevé ci-dessus n'existe plus tel quel.** Le
+[ticket 074](../../../tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md) a
+traduit les 22 variantes de `prompts.yaml` en anglais et les a renommées `prompt_<famille>_<nn>`.
+Ce qui change, et ce qui ne change pas :
+
+- **Le constat de fond tient.** Le relevé a été refait le 14 septembre sur le texte servi
+  aujourd'hui : aucun `content` ne porte de pourcentage ni de part modale, et les valeurs mesurées
+  vivent toujours dans les blocs `_provenance` / `_neutralite`, qui ne sont pas envoyés au modèle.
+- **Les citations sont datées.** « Applique la règle des 48 heures » se lit désormais « Apply the
+  48-hour rule » ; « entre 3 et 25 °C » se lit « between 3 and 25 °C ». Le français cité dans les
+  items ci-dessus est celui du 10 septembre, conservé tel quel — c'est un relevé daté, pas une
+  citation du texte courant.
+- **Les noms ont changé** : `expert_chaine_m5` à `m7.1` → `prompt_expert_17` à `20` ;
+  `expert_gem_3.8_v1` → `prompt_expert_03`. Chaque entrée garde son `_ancien_nom`, et
+  `PromptManager` résout encore les anciens noms en lecture.
+- **Le compte était déjà faux.** « Les 18 variantes » en portait 22 dès le 10 septembre ; l'erreur
+  est antérieure au ticket 074.
+- **`expert_chaine` n'a jamais été le nom d'une variante de `prompts.yaml`.** La variante active
+  était `expert_m4` (aujourd'hui `prompt_expert_16`). Erreur de relevé, elle aussi antérieure.
 
 ### 4.13 Règle 2 du contrat : la décision de l'agent est un tirage, pas un argmax ✔
 **Remarque (11 septembre 2026, à l'occasion de la réécriture du résumé).** La règle 2 écrivait : « The platform reads this answer twice: as a probability mass per mode, and as a retained decision. […] decision against its argmax. » Un lecteur comprend « retained decision » comme ce que l'agent a fait. C'est faux.

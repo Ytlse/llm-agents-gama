@@ -94,13 +94,13 @@ class TravelPlanWrapper(TravelPlan):
     def terminal_label(self) -> str:
         """Qualificatif du « dont … » de l'en-tête, propre au mode.
 
-        « de marche » serait faux pour une voiture : chercher une place n'est pas
+        « of walking » serait faux pour une voiture : chercher une place n'est pas
         de la marche. Le libellé vient donc du profil du mode
-        (``d'accès et de stationnement`` / ``d'accès et d'attache``) et non d'une
+        (``of access and parking`` / ``of access and locking``) et non d'une
         formule unique appliquée à tout.
         """
         profile = self._terminal_profile
-        return profile.labels["terminal"] if profile is not None else "d'accès"
+        return profile.labels["terminal"] if profile is not None else "of access"
 
     @property
     def described_steps(self) -> list[tuple[str, int]]:
