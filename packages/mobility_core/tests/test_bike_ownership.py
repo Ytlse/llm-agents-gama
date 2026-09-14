@@ -35,12 +35,12 @@ from collections import Counter
 import pytest
 
 from mobility_core.bike_ownership import (
-    LABELS_FR,
     DEFAULT_RESOURCE,
     ELECTRIC_BIKE,
     K_CLASSES,
     K_MAX,
     LABELS,
+    LABELS_FR,
     MIN_AGE_ELECTRIC,
     MIN_AGE_ELIGIBLE,
     NO_BIKE,
