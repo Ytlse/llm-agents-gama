@@ -2,9 +2,10 @@
 Tests unitaires : filtrage du mode vélo selon personal_bike.
 
 Vérifie que :
-- Les trois valeurs valides ("Pas de vélo", "vélo normal", "VAE") sont correctement
-  interprétées, y compris avec des variantes de casse.
-- Le champ absent revient au défaut include_bike=True (rétrocompatibilité).
+- Les trois valeurs valides ("No bike", "regular bike", "e-bike") sont correctement
+  interprétées, y compris avec des variantes de casse — et leurs équivalents français
+  ("Pas de vélo", "vélo normal", "VAE"), que portent les cohortes d'avant le ticket 074.
+- Le champ absent prive l'agent du vélo et lève une alarme (ticket 015, lot 1).
 - `_vehicle_mode` identifie bien un plan vélo OSMnx.
 - Le post-filtre supprime effectivement les plans vélo quand include_bike=False.
 
@@ -20,10 +21,11 @@ from unittest.mock import MagicMock
 
 from urban_mobility_agents.simulation_controller import _vehicle_mode
 
-# ── helper : reproduit la logique de simulation_controller._compute_move_for_activity ──
-
-def _include_bike(traits: dict) -> bool:
-    return traits.get("personal_bike", "vélo normal").lower() != "pas de vélo"
+# `_owns_bike` est IMPORTÉE de la production, pas recopiée. La copie qui vivait ici
+# répondait encore « vélo autorisé » à un champ absent — le défaut d'avant le ticket 015 —
+# et ne connaissait que le vocabulaire français : elle aurait laissé passer une cohorte v6
+# entière sans jamais tomber, puisqu'elle ne mesurait qu'elle-même.
+from urban_mobility_agents.vehicle_chain import _owns_bike as _include_bike
 
 
 def _make_plan(mode: str):
@@ -48,15 +50,30 @@ class TestIncludeBike:
     def test_pas_de_velo_tout_majuscule(self):
         assert _include_bike({"personal_bike": "PAS DE VÉLO"}) is False
 
+    def test_no_bike_anglais(self):
+        """Valeur de la cohorte v6 (ticket 074) → doit exclure le vélo."""
+        assert _include_bike({"personal_bike": "No bike"}) is False
+
+    def test_no_bike_casse_variable(self):
+        assert _include_bike({"personal_bike": "NO BIKE"}) is False
+        assert _include_bike({"personal_bike": " no bike "}) is False
+
     def test_velo_normal(self):
         assert _include_bike({"personal_bike": "vélo normal"}) is True
 
     def test_vae(self):
         assert _include_bike({"personal_bike": "VAE"}) is True
 
-    def test_champ_absent_defaut_true(self):
-        """Populations sans le champ personal_bike → rétrocompatibilité, vélo autorisé."""
-        assert _include_bike({}) is True
+    def test_regular_bike(self):
+        assert _include_bike({"personal_bike": "regular bike"}) is True
+
+    def test_e_bike(self):
+        assert _include_bike({"personal_bike": "e-bike"}) is True
+
+    def test_champ_absent_prive_du_velo(self):
+        """Champ absent → SANS vélo et alarme (ticket 015, lot 1) : le repli prive d'un
+        mode plutôt que d'en offrir un que l'agent n'a pas."""
+        assert _include_bike({}) is False
 
     def test_valeur_inconnue_autorise_velo(self):
         """Valeur inattendue → ne doit pas bloquer le vélo (fail-open)."""

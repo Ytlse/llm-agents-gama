@@ -135,7 +135,6 @@ L'évaluation ne repose pas sur une facturation théorique au dollar, mais sur l
 | **`exp_02b` Gemini Few-Shot** | `gemini-3.1-flash-lite` | 1 000 | **100** | **20 %** (100 / 500 RPD) | Nul |
 | **`exp_03b` Oracle LightGBM** | Tabulaire supervisé | 0 | 0 | **0 %** (0 req) | Nul (local) |
 | **`exp_04a` Hystérésis (5 jours)**| `gemini-3.1-flash-lite` | 5 000 | **500** | **100 %** (500 / 500 RPD) | Nécessite 2 clés Google (`google_gemini31_key1` + `google_gemini31_key2`) |
-| **`exp_04d` Hystérésis λ÷3 (5 j)** | `gemini-3.1-flash-lite` | 5 000 | **500** | **100 %** (500 / 500 RPD) | Jour de campagne dédié (bras de sensibilité λ) |
 | **`exp_05a..c` Presse Locale** | `gemini-3.1-flash-lite` | 1 000 | **100** | **20 %** (100 / 500 RPD) | Nul (par condition ; 4 conditions LLM/événement) |
 
 ---
@@ -154,7 +153,7 @@ C'est ce nom-là que prennent `make experience-lancer EXP=…` et `data/experien
    * `exp_00a_random_otp` : Hasard uniforme parmi les options d'itinéraires OTP.
    * `exp_00b_majority_car` : A priori empirique (mode majoritaire : Voiture 100 %).
    * `exp_00c_shortest_time` : Heuristique du trajet le plus rapide (min durée OTP).
-2. **Phase 1 : Modèles Nus / Bare LLM (Zero Prompt Engineering, $T=0.0$)**
+2. **Phase 1 : Prompt factuel neutre et circonstancié (Zero Prompt Engineering, $T=0.0$)**
    * `exp_01a_bare_gemini_flash_lite` : Google Gemini 3.1 Flash-Lite (référence distante économique).
    * `exp_01b_bare_mistral_small` : Mistral Small (modèle souverain européen).
    * `exp_01c_bare_qwen_32b_local` : Qwen-2.5-32B Instruct (modèle open-weight déterministe local vLLM).
@@ -168,7 +167,6 @@ C'est ce nom-là que prennent `make experience-lancer EXP=…` et `data/experien
    * `exp_04a_hysteresis_memory_5d` : Panne métro J2 + rétablissement J3-J5 avec mémoire court-terme $\mathcal{M}_t$ ($\lambda = 0{,}4$).
    * `exp_04b_hysteresis_amnesic_5d` : Condition contrôle : sans registre de mémoire.
    * `exp_04c_hysteresis_oracle_lightgbm` : Comportement de l'oracle tabulaire (amnésie structurelle).
-   * `exp_04d_hysteresis_memory_5d_lambda_low` : Bras de sensibilité $\lambda \div 3 = 0{,}13$ — exécute le critère de réfutation (ii) du protocole (« diviser $\lambda$ par trois doit déplacer la courbe »).
 6. **Phase 5 : Valeur Ajoutée LLM — Évaluation Écologique sur Presse Locale**
    * Événement 1 : Festival La Machine / Minotaure (Centre piétonnisé) — **5 conditions** (Nominal, Brut, Paraphrase sans indice modal, Placebo, Oracle encodé).
    * Événement 2 : Canicule & Pic d'Ozone (Crit'Air / TC réduits) — **5 conditions** (« pire cas » de suivi de consigne : l'article brut nomme la réponse modale).

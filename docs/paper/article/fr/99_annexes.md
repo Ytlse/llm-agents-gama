@@ -129,3 +129,10 @@ découpages de zones fines — est examiné à part et n'est pas tranché à ce 
 **À la version finale.** La mention du registre de déclaration de traitement, qui nomme
 l'établissement, ne figure pas dans la version soumise en double insu : elle est à ajouter ici
 au moment de la version non anonyme, avec les remerciements au diffuseur.
+
+---
+
+### Tickets associés à ce chapitre
+- [Ticket 053](../../../tickets/ticket_053_acces_donnees_recherche_et_reproductibilite.md) — Sanctuarisation de la frontière de reproductibilité et accès aux données de recherche (Quetelet-Progedo)
+- [Ticket 062](../../../tickets/ticket_062_revue_et_alignement_des_annexes_techniques.md) — Revue, complétion et alignement des Annexes techniques A à G (Chapitre 99)
+

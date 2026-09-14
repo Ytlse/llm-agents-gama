@@ -74,7 +74,7 @@ def test_une_archivee_sort_du_choix_mais_reste_servable():
 
     pm = build_prompt_manager()
     servables = set(pm.variantes()) - _refusees_par_le_moteur()
-    assert "b0_pristine" in archivees and "b0_pristine" in servables
+    assert "prompt_expert_01" in archivees and "prompt_expert_01" in servables
 
 
 def test_les_variantes_proposees_sont_toutes_servables():

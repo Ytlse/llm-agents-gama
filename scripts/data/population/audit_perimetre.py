@@ -55,7 +55,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from mobility_core.geo_reference import haversine_km, hypercenter  # noqa: E402
 from mobility_core.population_reference import (  # noqa: E402
-    COURONNES, MIN_AGE, OUT_OF_PERIMETER, couronne_commune_counts,
+    COURONNES, MIN_AGE, OUT_OF_PERIMETER, couronne_canonique, couronne_commune_counts,
     couronne_population_shares, household_targets, household_weight,
     population_reference, survey_window, surveyed_weekdays)
 from mobility_core.residence_zone import CommunalZones  # noqa: E402
@@ -850,8 +850,12 @@ def axis_a9_spatial(people: list[dict], zones: Optional[CommunalZones]) -> Findi
         counts[zones.classify(h.get("lat"), h.get("lon"))] += 1
     inside = sum(n for z, n in counts.items() if z in COURONNES)
     observed = {z: 100.0 * counts.get(z, 0) / inside for z in COURONNES} if inside else {}
-    core_target = target["Toulouse"] + target["1ere couronne"]
-    core_observed = observed.get("Toulouse", 0) + observed.get("1ere couronne", 0)
+    # Cœur d'agglomération = les deux premières modalités de COURONNES, prises À LA
+    # SOURCE. Les nommer en dur (« 1ere couronne ») aurait levé un KeyError au ticket 074 ;
+    # les nommer en dur en anglais le relèverait à la prochaine bascule.
+    _coeur = COURONNES[:2]
+    core_target = sum(target[z] for z in _coeur)
+    core_observed = sum(observed.get(z, 0) for z in _coeur)
     l1 = sum(abs(observed.get(z, 0) - target[z]) for z in COURONNES)
     detail = (
         "Une surconcentration en cœur d'agglomération tire mécaniquement la part "
@@ -938,7 +942,11 @@ def recompute_from_microdata() -> dict:
     men["COE0"] = pd.to_numeric(men["COE0"], errors="coerce")
     per["COEP"] = pd.to_numeric(per["COEP"], errors="coerce")
 
-    per["couronne"] = per["ZFP"].str[:3].map(couronne_of)
+    # `NOM_D2` est la couche SIG de l'enquête : elle dit « 1ere couronne ». La modalité
+    # du dispositif est anglaise depuis le ticket 074 — on canonicalise À LA LECTURE,
+    # sinon la jointure avec la cible ne trouve aucune ligne et le recoupement, qui est
+    # tout le point de cette fonction, se fait entre deux vocabulaires étrangers.
+    per["couronne"] = (per["ZFP"].str[:3].map(couronne_of).map(couronne_canonique))
     par_couronne = per.groupby("couronne")["COEP"].sum()
     population_5plus = float(par_couronne.sum())
 
@@ -996,9 +1004,10 @@ def recompute_from_microdata() -> dict:
          reference["enquete"]["localisation_deplacements"]["interne_au_perimetre"]),
     ]
     for zone, cible in cible_couronnes.items():
-        code = {"Toulouse": "Toulouse", "1ere couronne": "1ere couronne",
-                "2eme couronne": "2eme couronne", "3eme couronne": "3eme couronne"}[zone]
-        observe = 100.0 * float(par_couronne.get(code, 0.0)) / population_5plus
+        # `par_couronne` et `cible_couronnes` viennent tous deux de `population_reference`,
+        # donc de la même modalité canonique : la table de correspondance d'identité qui
+        # vivait ici ne faisait que masquer un désaccord éventuel derrière un KeyError.
+        observe = 100.0 * float(par_couronne.get(zone, 0.0)) / population_5plus
         lignes.append((f"part de population — {zone} (%)", round(observe, 1),
                        round(cible, 1)))
 

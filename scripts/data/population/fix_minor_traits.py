@@ -42,31 +42,46 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from mobility_core.bike_ownership import ELECTRIC_BIKE, PLAIN_BIKE
+from mobility_core.population_reference import PURPOSE_LABEL
+
 # Âge du permis, et âge en dessous duquel un vélo à assistance électrique n'a pas
 # de sens. Valeurs en dur : ce sont des seuils légaux et physiques, pas des réglages.
 DRIVING_AGE = 18
 VAE_MIN_AGE = 14
 
-# Motif d'activité → libellé de `travel_purposes`, **le même mapping** que
-# `_PURPOSE_FR` de services/eqasim-toulouse/synthesis/population/llm_agents.py. Toute
-# divergence ferait diverger la population corrigée du format de génération.
-PURPOSE_FR = {
-    "work": "Travail",
-    "education": "Etude",
-    "shop": "Achats",
-}
+# Motif d'activité → libellé de `travel_purposes`. LU dans `mobility_core`, plus recopié :
+# cette table et celle du générateur se promettaient d'être identiques par commentaire
+# interposé, et elles ont divergé à la première traduction (ticket 074).
+PURPOSE_FR = PURPOSE_LABEL
 
 # Un agent « en études » au sens de la règle 2. `professional_activity` porte selon
 # les versions le code eqasim (`student`, `under14`) ou son libellé lisible
 # (`Student`, `Child (under 14)`) : les deux sont acceptés.
 STUDENT_ACTIVITIES = {"student", "under14", "Student", "Child (under 14)"}
-STUDENT_OCCUPATION = "Scolaire (jusqu'au Bac)"
+
+# `main_occupation` a basculé en anglais au ticket 074 : la v6 dit « Pupil (up to
+# Baccalaureate) » là où la v5 disait « Scolaire (jusqu'au Bac) ». On compare donc sur
+# l'IDENTIFIANT de l'enquête (`scolaire`), que `OCCUPATION_MAP` rend depuis les deux
+# vocabulaires. Un littéral français aurait cessé de reconnaître un seul scolaire de la
+# v6 — et la règle 2 (`work` → `education`) ne se serait plus appliquée à personne, sans
+# qu'aucun compteur ne bouge, puisque son compteur est le nombre de cas CORRIGÉS.
+STUDENT_OCCUPATION_KEY = "scolaire"
+
+
+
+
+def _occupation_key(main_occupation) -> str | None:
+    """Identifiant d'enquête d'une occupation, dans les deux vocabulaires."""
+    from scripts.synthesis.frames import OCCUPATION_MAP
+
+    return OCCUPATION_MAP.get(str(main_occupation or ""))
 
 
 def _is_student(traits: dict) -> bool:
     return (
         str(traits.get("professional_activity", "")) in STUDENT_ACTIVITIES
-        or traits.get("main_occupation") == STUDENT_OCCUPATION
+        or _occupation_key(traits.get("main_occupation")) == STUDENT_OCCUPATION_KEY
     )
 
 
@@ -124,8 +139,13 @@ def fix(population: list[dict]) -> Counter:
             counts["travel_purposes_recalcules"] += 1
 
         # 5. Pas de VAE avant 14 ans (tirage aléatoire d'eqasim, sans filtre d'âge).
-        if age is not None and age < VAE_MIN_AGE and traits.get("personal_bike") == "VAE":
-            traits["personal_bike"] = "vélo normal"
+        # Les deux vocabulaires : « e-bike » (v6) et « VAE » (cohortes antérieures). Ce
+        # correctif est idempotent et rejoué sur des populations déjà enrichies — y compris
+        # anciennes. N'en connaître qu'un laisserait des VAE à des enfants de 10 ans sans
+        # qu'aucun compteur ne bouge : la règle s'appliquerait, simplement à rien.
+        if (age is not None and age < VAE_MIN_AGE
+                and str(traits.get("personal_bike")) in {ELECTRIC_BIKE, "VAE"}):
+            traits["personal_bike"] = PLAIN_BIKE
             counts["vae_declasses"] += 1
 
     # ── Règle 4 — au niveau du ménage, après le retrait des permis ───────────

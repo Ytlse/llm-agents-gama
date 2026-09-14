@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 ZONE_CITY, ZONE_AGGLO, ZONE_OUTSIDE = "city", "agglo", "outside"
 ZONES = (ZONE_CITY, ZONE_AGGLO, ZONE_OUTSIDE)
 NODE_ZONE_KEY = "zone"
-AGGLO_COURONNES = ("Toulouse", "1ere couronne", "2eme couronne")
+AGGLO_COURONNES = ("Toulouse", "1st ring", "2nd ring")
 
 # Où trouver la géométrie des couronnes selon l'endroit où le code tourne : la ressource du
 # paquet mobility_core quand il est importable (dépôt, controller), sinon le fichier monté

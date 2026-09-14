@@ -11,7 +11,7 @@
           },
           "reflection": {
             "type": "string",
-            "description": "Synthèse des patterns et habitudes observés sur plusieurs jours, 200 mots max"
+            "description": "Summary of patterns and habits observed over several days, 200 words max"
           }
         },
         "required": [

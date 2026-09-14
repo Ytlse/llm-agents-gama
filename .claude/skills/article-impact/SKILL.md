@@ -42,7 +42,7 @@ rien : le dire en une ligne et s'arrêter là.
 
    ```
    === SIGNALEMENT ARTICLE ===
-   MAJEUR — fr/05_bare_llm.md §3
+   MAJEUR — fr/05_factual_neutral_prompt.md §3
      A changé : <quoi, avec l'ancienne et la nouvelle valeur>
      Devient faux : « <phrase ou chiffre du texte actuel> »
      Action suggérée : <ce qu'il faudrait réécrire>

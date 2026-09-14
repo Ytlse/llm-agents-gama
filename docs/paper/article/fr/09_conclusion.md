@@ -14,3 +14,6 @@
 4. **L'architecture hybride en cascade répond à la dichotomie fondamentale** : Réconcilier les deux questions de Baronchelli par une division du travail — confier $90\,\%$ du flux nominal au calage statistique supervisé (Tier 3), et réserver le raisonnement génératif LLM aux $10\,\%$ de situations complexes, perturbations et ruptures contextuelles (Tier 2).
 
 ---
+
+### Tickets associés à ce chapitre
+- [Ticket 061](../../../tickets/ticket_061_finalisation_chapitre_9_conclusion.md) — Finalisation et consolidation du Chapitre 9 (Conclusion & Enseignements fondamentaux)

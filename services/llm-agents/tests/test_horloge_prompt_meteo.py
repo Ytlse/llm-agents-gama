@@ -218,7 +218,7 @@ class TestMeteoALheureMurale:
         """
         assert weather_loader.day_weather_outlook(TS_VENDREDI_2330) is None
         matin = weather_loader.day_weather_outlook(_gama_ts(2026, 3, 16, 8, 0))
-        assert matin and "après-midi" in matin
+        assert matin and "afternoon" in matin
 
 
 class TestTirageMeteoParAgent:
@@ -400,7 +400,7 @@ def test_weather_loader_se_charge_par_chemin_sans_le_controleur():
         "sys.modules['_prod_wl'] = m\n"
         "spec.loader.exec_module(m)\n"
         "print(m.weather_to_natural_language({'temperature': 3.0, "
-        "'weather_label': 'Ciel dégagé/Ensoleillé', 'precip_mm': 0.0}))\n"
+        "'weather_label': 'Clear/Sunny', 'precip_mm': 0.0}))\n"
     )
     # `-I` : ni le répertoire du script, ni les variables d'environnement Python —
     # `services/llm-agents/` n'est donc PAS sur le path, comme chez `prompt_calibration`.
@@ -409,7 +409,7 @@ def test_weather_loader_se_charge_par_chemin_sans_le_controleur():
     assert r.returncode == 0, (
         "weather_loader n'est plus chargeable par chemin (import de tête à différer ?) :\n"
         + r.stderr)
-    assert "Météo : 3°C" in r.stdout
+    assert "Weather: 3°C" in r.stdout
 
 
 def test_la_meteo_ne_declare_aucun_fuseau():

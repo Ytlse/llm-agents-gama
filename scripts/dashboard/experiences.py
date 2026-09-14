@@ -1548,6 +1548,14 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
             fournisseur_fige = fournisseur_execute(d) or (
                 fournisseur_de(exp_fige.get("decideur")) if exp_fige.get("decideur")
                 else base["fournisseur"])
+            forces_synth = synth.get("choix_forces") or {}
+            n_forces = forces_synth.get("n")
+            part_forces = forces_synth.get("part")
+            if part_forces is None and n_forces is not None:
+                n_faits = couv.get("decides") or (synth.get("parts_modales") or {}).get("n")
+                if n_faits:
+                    part_forces = n_forces / n_faits
+            pct_forces = (part_forces * 100) if part_forces is not None else None
             lignes.append({**base, "decideur": dec_fige, "prompt": prompt_fige,
                            "fournisseur": fournisseur_fige,
                            "execution": nom, "etat": etat.get("etat", "?"), "raison": etat.get("raison"),
@@ -1560,8 +1568,9 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
                            # la couverture et les parts), `choix_forces_score` sur le seul
                            # périmètre scoré — premier jour simulé, dernière tentative. Sur
                            # les exécutions du 11/09, les deux diffèrent de 14 à 19 lignes.
-                           "choix_forces": (synth.get("choix_forces") or {}).get("n"),
-                           "part_forces": (synth.get("choix_forces") or {}).get("part"),
+                           "choix_forces": pct_forces,
+                           "choix_forces_n": n_forces,
+                           "part_forces": part_forces,
                            "choix_forces_score": (scores.get("choix_forces") or {}).get("n"),
                            # Scores (R5, R7, R9) : None → « — », jamais 0 ; drapeau périmée dérivé.
                            "composite_emd": comp.get("emd_jsd"), "composite_l1": comp.get("l1"),
@@ -2246,12 +2255,17 @@ def derniere_erreur_llm() -> Optional[dict]:
 def defauts() -> dict:
     """Valeurs de départ du formulaire — celles de l'exemple, sans rien d'implicite dans le fichier écrit."""
     variantes, active = variantes_prompt()
+    inaptes = modeles_inaptes()
+    distants = [m for m in modeles_par_portee()[1] if m not in inaptes]
+    modele_defaut = next(iter(distants), "") or next(iter(modeles_par_portee()[1]), "") or next(iter(modeles()), "")
     return {
         # Pas de « nom » : il se calcule (N1). Ce dictionnaire est aussi la liste des champs
         # retenus dans le brouillon du formulaire (R21) — un nom saisi n'y a plus sa place.
         "population": population_par_defaut(), "jeu": (jeux() or [{"nom": ""}])[0]["nom"],
         "variante": active or (variantes[0] if variantes else ""), "decideur_type": "passerelle_distant",
-        "modele": next(iter(modeles_par_portee()[1]), "") or next(iter(modeles()), ""), "temperature": 0.0, "graine_decideur": 42, "rejeu_de": "", "artefact": "",
+        "modele": modele_defaut, "temperature": 0.0,
+        "reflexion": None, "niveau_reflexion": None,
+        "graine_decideur": 42, "rejeu_de": "", "artefact": "",
         "mode": "sans_simulateur", "politique": "commune", "date": "2026-03-16", "graine_calendrier": 42,
         "horizon_jours": 1, "memoire": False, "graine_ordre": 42, "graine_tirage": 42, "parallelisme": 8,
         "max_candidats": 6, "attente_max_s": 120, "tolerances": dict(TOLERANCES_PROPOSEES), "derive_de": None,
@@ -2265,15 +2279,23 @@ def depuis_experience(e: dict) -> dict:
     """Recopie une expérience existante dans les champs du formulaire (E4 : dupliquer, s'inspirer)."""
     d = defauts()
     dec, cal, gab = e.get("decideur") or {}, e.get("calendrier") or {}, e.get("gabarit") or {}
+    params = dec.get("parametres") or {}
+    refl = params.get("thinking_budget")
+    if refl is not None:
+        try:
+            refl = int(refl)
+        except (TypeError, ValueError):
+            refl = None
+    niv_refl = params.get("thinking_level") or None
     d.update({
         "population": chemin_hote(str((e.get("population") or {}).get("chemin", d["population"]))),
         "jeu": (e.get("jeu") or {}).get("nom", d["jeu"]), "variante": gab.get("variante") or d["variante"],
         "decideur_type": choix_decideur(dec.get("type", "passerelle"), dec.get("modele"),
                                          modeles_par_portee()[0], dec.get("portee")),
         "modele": dec.get("modele") or d["modele"],
-        "temperature": float((dec.get("parametres") or {}).get("temperature", d["temperature"])),
-        "reflexion": (dec.get("parametres") or {}).get("thinking_budget", None),
-        "niveau_reflexion": (dec.get("parametres") or {}).get("thinking_level", None),
+        "temperature": float(params.get("temperature", d["temperature"])),
+        "reflexion": refl,
+        "niveau_reflexion": niv_refl,
         "graine_decideur": dec.get("graine") if dec.get("graine") is not None else d["graine_decideur"],
         "rejeu_de": dec.get("rejeu_de") or "", "artefact": dec.get("artefact") or "", "mode": e.get("mode", d["mode"]),
         "politique": cal.get("politique", d["politique"]), "date": str(cal.get("date", d["date"])),
@@ -2284,7 +2306,7 @@ def depuis_experience(e: dict) -> dict:
         "derive_de": e.get("nom"),
         # Aucun nom recopié : il se recalcule des paramètres (N1). Une copie qui ne change
         # rien retombe donc sur l'expérience source, et le formulaire le DIT au lieu de la
-        # réécrire — c'était l'accident de « Prompt_Minimaliste » le 2026-09-07.
+        # réécrire — cétait l'accident de « Prompt_Minimaliste » le 2026-09-07.
     })
     return d
 
@@ -2318,6 +2340,15 @@ def _valider_base(brut: dict) -> dict:
                 valeur = "passerelle_distant"
             elif valeur not in CHOIX_DECIDEUR:
                 continue
+        elif cle == "niveau_reflexion":
+            if valeur is not None and valeur not in ("minimal", "low", "medium", "high"):
+                continue
+        elif cle == "reflexion":
+            if valeur is not None:
+                try:
+                    valeur = int(valeur)
+                except (TypeError, ValueError):
+                    continue
         elif cle == "politique" and valeur not in POLITIQUES:
             continue
         elif cle == "mode" and valeur not in ("sans_simulateur", "simulateur"):
@@ -2338,8 +2369,12 @@ def _valider_base(brut: dict) -> dict:
         # substitution silencieuse qui finirait écrite dans `experience.yaml`.
         elif cle == "variante" and valeur not in variantes_prompt()[0]:
             continue
-        elif cle == "modele" and valeur not in modeles():
-            continue
+        elif cle == "modele":
+            dtype = brut.get("decideur_type") or base.get("decideur_type")
+            if dtype != "antigravity" and valeur not in modeles():
+                continue
+            if dtype != "antigravity" and valeur in modeles_inaptes():
+                continue
         elif cle == "jeu" and valeur not in {j["nom"] for j in jeux()}:
             continue
         base[cle] = valeur
@@ -2390,11 +2425,12 @@ def construire_experience(v: dict) -> dict:
     """Le fichier `experience.yaml` complet (E1 : tous les champs) depuis les valeurs du formulaire."""
     type_ = type_plateforme(v["decideur_type"])  # « distant » et « local » s'écrivent tous deux `passerelle`
     decideur = {"type": type_, "modele": None, "parametres": {}, "rejeu_de": None, "graine": None}
-    if type_ == "passerelle":
+    if type_ in ("passerelle", "antigravity"):
         # Le bord choisi est ÉCRIT : c'est lui qui restreint les instances au lancement, qui
         # nomme l'expérience (`_local`) et qui dit l'archive. Sans lui, un modèle servi des deux
         # côtés bascule du distant au local à l'épuisement du quota, sous un seul nom.
-        decideur["portee"] = portee_plateforme(v["decideur_type"])
+        if type_ == "passerelle":
+            decideur["portee"] = portee_plateforme(v["decideur_type"])
         params = {"temperature": float(v["temperature"]), "top_p": 1.0, "max_tokens": 4096}
         # Clé ABSENTE quand la réflexion n'est pas pilotée : une clé à None donnerait deux
         # empreintes différentes pour un même réglage, selon qu'on a ouvert le formulaire ou non.
@@ -3220,6 +3256,19 @@ def _suivi_du_registre(st, pd) -> None:
                 (f"{f} ⚠périmée" if p else f) if f else "—"
                 for f, p in zip(df["formule"], df["formule_perimee"])
             ]
+        # Choix forcés : pourcentage des choix forcés sur le total de choix faits (au moins 3 décimales).
+        if "choix_forces" in vue.columns and "choix_forces" in df.columns:
+            vue["choix_forces"] = [
+                (f"{float(p):.3f} %" if p is not None and pd.notna(p) else "—")
+                if not (isinstance(p, str) and p.endswith("%")) else p
+                for p in df["choix_forces"]
+            ]
+        if "part_forces" in vue.columns and "part_forces" in df.columns:
+            vue["part_forces"] = [
+                (f"{float(p) * 100:.3f} %" if p is not None and pd.notna(p) else "—")
+                if not (isinstance(p, str) and p.endswith("%")) else p
+                for p in df["part_forces"]
+            ]
         garde = appliquer_filtres(candidates, colonnes, retenues=choix["retenues"],
                                   bornes=choix["bornes"], texte=filtre)
         retirees = len(garde) - sum(garde)
@@ -3265,14 +3314,29 @@ def _suivi_du_registre(st, pd) -> None:
                 f"personne n'a choisi. Au plus fort : « {pire.get('experience')} » passe de "
                 f"{pire['composite_emd']:.2f} à {pire['composite_emd_hors_forces']:.2f} "
                 f"({pire['composite_emd_hors_forces'] - pire['composite_emd']:+.2f}) une fois "
-                f"ces lignes retirées. Leur nombre dépend du bras (colonne `choix_forces`) : "
+                f"ces lignes retirées. Leur part dépend du bras (colonne `choix_forces`) : "
                 f"le classement des deux colonnes de composite n'est pas le même, et aucune "
                 f"des deux n'est fausse. Ne citez pas l'une sans l'autre.")
         st.caption(f"{len(df)} ligne(s) affichée(s) sur {len(candidates)} — cliquez une ligne "
                    "pour voir son détail par sous-catégorie. La couverture accompagne chaque "
                    "score ; une exécution non scorée affiche « — », jamais 0.")
-        event = st.dataframe(vue, width="stretch", hide_index=True,
-                             on_select="rerun", selection_mode="single-row", key="exp-table")
+        cfg = {}
+        if hasattr(st, "column_config"):
+            cfg["column_config"] = {
+                "choix_forces": st.column_config.TextColumn(
+                    "choix_forces",
+                    help="Pourcentage des choix forcés (itinéraire unique) par rapport au nombre total de choix faits",
+                )
+            }
+        event = st.dataframe(
+            vue,
+            width="stretch",
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            key="exp-table",
+            **cfg,
+        )
 
         # Les actions portent sur la LIGNE COCHÉE du tableau (plus de sélecteur séparé), et
         # se dessinent AU-DESSUS du détail par sous-catégorie : on agit sur ce qu'on regarde.
@@ -3288,7 +3352,7 @@ def _suivi_du_registre(st, pd) -> None:
             reprenable = any(est_reprenable(l) for l in lignes
                              if l["experience"] == choix and l.get("execution"))
             st.markdown(f"**Actions sur « {choix} »**")
-            a1, a2, a3, a4 = st.columns(4)
+            a1, a2, a3, a4, a5 = st.columns(5)
             if a1.button("🔁 Rejouer", disabled=not lancer_fn, width="stretch", key="act-rejouer",
                          help="nouvelle exécution de la même expérience (jamais d'écrasure)"):
                 lancer_fn("experience-lancer",
@@ -3300,16 +3364,17 @@ def _suivi_du_registre(st, pd) -> None:
                           {"EXP": choix, "REQUIS": " ".join(services_requis_de(choix))})
                 st.toast(f"Reprise de « {choix} » lancée")
             if a3.button("📋 Dupliquer", width="stretch", key="act-dupliquer",
-                         help="recopie ses réglages dans le formulaire ci-dessus ; changez ce que vous voulez"):
+                         help="recopie ses réglages dans le formulaire ci-dessous ; changez ce que vous voulez"):
                 exps = experiences()
                 if choix in exps:
-                    st.session_state["exp_base"] = depuis_experience(exps[choix])
+                    st.session_state["exp_base"] = _valider_base(depuis_experience(exps[choix]))
                     st.session_state["exp_version"] = int(st.session_state.get("exp_version", 0)) + 1
                     st.rerun()
-            # UN clic, et le disque n'est pas touché : la ligne sort du tableau, l'archive reste
-            # là où elle est. Le retrait se restitue plus bas ; la suppression définitive, elle,
-            # ne se fait plus d'ici (`supprimer_experience` reste appelable en console).
-            if a4.button("🗑 Retirer du tableau", width="stretch", key="act-masquer",
+            if a4.button("♻️ Recharger passerelle", disabled=not lancer_fn, width="stretch", key=f"act-reload-passerelle-{choix}",
+                         help="`make passerelle-recharger` : redémarre api et worker pour charger les nouvelles variantes de prompts.yaml"):
+                lancer_fn("passerelle-recharger", {})
+                st.toast("Passerelle en cours de rechargement — suivi dans 📟 Activités en cours")
+            if a5.button("🗑 Retirer du tableau", width="stretch", key="act-masquer",
                          help="retire cette seule ligne du registre ; la définition et les "
                               "exécutions archivées restent intactes sur le disque"):
                 try:
@@ -3421,20 +3486,27 @@ def _formulaire(st, base: dict, version: int) -> dict:
                                       key=k("dtype"), format_func=lambda x: LIBELLES_DECIDEUR.get(x, x),
                                       help="« distant » : un fournisseur d'API (quota journalier, clés) ; « local » : un modèle servi par "
                                            "LM Studio sur cette machine — à charger avec assez de contexte, sans quota.")
-    if type_plateforme(v["decideur_type"]) == "passerelle":
+    if type_plateforme(v["decideur_type"]) in ("passerelle", "antigravity"):
         local = v["decideur_type"] == "passerelle_local"
-        locaux, distants = modeles_par_portee()
-        quotas = quotas_par_modele(_etat_passerelle_cache(st))
-        # Une liste par bord : le même sélecteur mêlait modèles à quota et modèles locaux, et
-        # les libellés « req/jour » n'avaient aucun sens pour un modèle servi par cette machine.
-        noms = [m for m in quotas if m in (locaux if local else distants)]
-        # Retrait des modèles que le lancement refuserait (quota hors d'atteinte, plafond de
-        # jetons par requête insuffisant). Compté et rendu juste sous le sélecteur : un retrait
-        # muet ferait croire à une disparition inexpliquée.
-        inaptes = modeles_inaptes()
-        ecartes = [m for m in noms if m in inaptes]
-        noms = [m for m in noms if m not in inaptes]
-        if local:
+        antigravity = v["decideur_type"] == "antigravity"
+        if antigravity:
+            tous_modeles = list(modeles().keys())
+            noms = tous_modeles if not base.get("modele") or base["modele"] in tous_modeles else [base["modele"], *tous_modeles]
+            ecartes = []
+            libelle, cle_widget = "Modèle (sous-agent Antigravity)", "modele-antigravity"
+            _lib_modele = None
+        elif local:
+            locaux, distants = modeles_par_portee()
+            quotas = quotas_par_modele(_etat_passerelle_cache(st))
+            # Une liste par bord : le même sélecteur mêlait modèles à quota et modèles locaux, et
+            # les libellés « req/jour » n'avaient aucun sens pour un modèle servi par cette machine.
+            noms = [m for m in quotas if m in locaux]
+            # Retrait des modèles que le lancement refuserait (quota hors d'atteinte, plafond de
+            # jetons par requête insuffisant). Compté et rendu juste sous le sélecteur : un retrait
+            # muet ferait croire à une disparition inexpliquée.
+            inaptes = modeles_inaptes()
+            ecartes = [m for m in noms if m in inaptes]
+            noms = [m for m in noms if m not in inaptes]
             etat_lm = _etat_lmstudio_cache(st)
             def _lib_modele(m: str) -> str:
                 d = lmstudio.diagnostic(m, etat_lm)
@@ -3442,6 +3514,12 @@ def _formulaire(st, base: dict, version: int) -> dict:
                 return f"{m} — {fiche + ' · ' if fiche else ''}{d.etat_court}"
             libelle, cle_widget = "Modèle local (LM Studio : chargé ? contexte ?)", "modele-local"
         else:
+            locaux, distants = modeles_par_portee()
+            quotas = quotas_par_modele(_etat_passerelle_cache(st))
+            noms = [m for m in quotas if m in distants]
+            inaptes = modeles_inaptes()
+            ecartes = [m for m in noms if m in inaptes]
+            noms = [m for m in noms if m not in inaptes]
             def _lib_modele(m: str) -> str:
                 q = quotas[m]
                 if q["inconnu"] and not q["marge"]:
@@ -3455,7 +3533,10 @@ def _formulaire(st, base: dict, version: int) -> dict:
                 n = len(q["instances"])
                 return f"{m} — {dispo} · {n} clé{'s' if n > 1 else ''}"
             libelle, cle_widget = "Modèle (RPD = requêtes/jour restantes)", "modele-distant"
-        v["modele"] = c3.selectbox(libelle, noms, index=noms.index(base["modele"]) if base["modele"] in noms else 0,
+        idx_modele = noms.index(base["modele"]) if base.get("modele") in noms else (
+            noms.index("gemini-3.8-flash") if antigravity and "gemini-3.8-flash" in noms else 0
+        )
+        v["modele"] = c3.selectbox(libelle, noms, index=idx_modele,
                                    key=k(cle_widget), format_func=_lib_modele) if noms else c3.text_input("Modèle", value=base["modele"], key=k(cle_widget))
         if ecartes:
             with c3.expander(f"🚫 {len(ecartes)} modèle(s) écarté(s) — inutilisables pour une expérience"):
@@ -3478,6 +3559,12 @@ def _formulaire(st, base: dict, version: int) -> dict:
         if niveaux:
             options = [CHOIX_NIVEAU_DEFAUT, *niveaux]
             courant = base.get("niveau_reflexion")
+            if courant is None and base.get("reflexion") is not None:
+                refl = base["reflexion"]
+                if refl == 0 and "minimal" in niveaux:
+                    courant = "minimal"
+                elif refl == -1 and "high" in niveaux:
+                    courant = "high"
             choix_n = c3.selectbox(
                 "Profondeur de réflexion", options,
                 index=options.index(courant) if courant in options else 0, key=k("refl-niv"),
@@ -3490,14 +3577,21 @@ def _formulaire(st, base: dict, version: int) -> dict:
             v["niveau_reflexion"] = None if choix_n == CHOIX_NIVEAU_DEFAUT else choix_n
         else:
             choix_refl, plafond_refl = choix_reflexion_pour(v["modele"])
+            refl_courant = base.get("reflexion")
+            if refl_courant is None and base.get("niveau_reflexion"):
+                niv = base["niveau_reflexion"]
+                if niv == "minimal":
+                    refl_courant = 0
+                elif niv == "high" and plafond_refl:
+                    refl_courant = plafond_refl
             choix = c3.selectbox("Profondeur de réflexion (budget, héritage)", choix_refl,
-                                 index=min(_index_reflexion(base.get("reflexion"), plafond_refl),
+                                 index=min(_index_reflexion(refl_courant, plafond_refl),
                                            len(choix_refl) - 1), key=k("refl"),
                                  help="aucun niveau n'est déclaré pour ce modèle : on retombe "
                                       "sur le budget numérique, que l'API accepte encore mais "
                                       "ne recommande plus. Déclarez `thinking_levels` dans "
                                       "providers.yaml pour obtenir le réglage par niveau.")
-            v["reflexion"] = _valeur_reflexion(choix, base.get("reflexion"), c3, k, plafond_refl)
+            v["reflexion"] = _valeur_reflexion(choix, refl_courant, c3, k, plafond_refl)
             c3.caption("Aucun `thinking_levels` déclaré pour ce modèle : relevez-les dans la "
                        "documentation du fournisseur pour régler la réflexion par niveau."
                        + ("" if plafond_refl else " Et sans `thinking_budget_max`, un budget "
@@ -3523,12 +3617,19 @@ def _formulaire(st, base: dict, version: int) -> dict:
     # est utile en soi), mais il ne se présente plus comme un réglage de l'exécution quand
     # celle-ci n'en lira rien : c'est ici que « minimal_persona » entrait dans un
     # `experience.yaml` de décideur LightGBM, et de là dans le tableau (cf. `_prompt_affiche`).
-    lit_un_prompt = type_plateforme(v["decideur_type"]) == "passerelle"
+    lit_un_prompt = type_plateforme(v["decideur_type"]) in ("passerelle", "antigravity")
     t = textes.get(v["variante"]) or {}
     prov = t.get("provenance") or {}
-    st.markdown(f"**📜 Prompt système « {v['variante']} »**" + (f" — {t['mots']} mots" if t.get("mots") else "")
-                + (f" · {prov.get('role')}" if prov.get("role") else "")
-                + ("" if lit_un_prompt else " — **non lu par ce décideur**"))
+    col_p_titre, col_p_reload = st.columns([3, 1], vertical_alignment="bottom")
+    col_p_titre.markdown(f"**📜 Prompt système « {v['variante']} »**" + (f" — {t['mots']} mots" if t.get("mots") else "")
+                         + (f" · {prov.get('role')}" if prov.get("role") else "")
+                         + ("" if lit_un_prompt else " — **non lu par ce décideur**"))
+    lancer_passerelle = st.session_state.get("_lancer")
+    if col_p_reload.button("♻️ Recharger la passerelle", key=k("reload_passerelle_prompt"),
+                           disabled=not lancer_passerelle, width="stretch",
+                           help="`make passerelle-recharger` : redémarre api et worker pour charger les nouvelles variantes de prompts.yaml"):
+        lancer_passerelle("passerelle-recharger", {})
+        st.toast("Passerelle en cours de rechargement — suivi dans 📟 Activités en cours")
     if not lit_un_prompt:
         st.caption("Ce décideur ne lit aucun prompt système : il décide sans texte. Le choix "
                    "ci-dessus n'entrera ni dans le nom calculé de l'expérience, ni dans la "
@@ -3907,6 +4008,27 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
     """`lancer(cible, variables)` démarre un job make (onglet Activités en cours) ; `inline` rend la sortie d'une cible courte ;
     `jobs()` liste les jobs du registre ; `arreter(id)` en arrête un (avant un lancement concurrent)."""
     st.session_state["_lancer"] = lancer
+
+    col_titre_mes, col_btn_rech = st.columns([3, 1], vertical_alignment="bottom")
+    col_titre_mes.subheader("📚 Mes expériences")
+    if col_btn_rech.button("♻️ Recharger la passerelle", key="top-recharger-passerelle",
+                           disabled=not lancer, width="stretch",
+                           help="`make passerelle-recharger` : redémarre api et worker pour charger les nouvelles variantes de prompts.yaml"):
+        lancer("passerelle-recharger", {})
+        st.toast("Passerelle en cours de rechargement — suivi dans 📟 Activités en cours")
+    # Les expériences archivées ou invalidées (gabarit obsolète) sortent du tableau : elles ne
+    # portent rien sur quoi s'appuyer. Rien n'est supprimé — le panneau ci-dessous les compte,
+    # dit pourquoi, et permet de les revoir (spec hygiène §3.2, §5).
+    toutes = lister()
+    lignes = [l for l in toutes if not masquee(l)]
+    _panneau_statuts(st, toutes)
+    if not lignes:
+        st.info("Aucune expérience enregistrée. Remplissez le formulaire ci-dessous, puis « Enregistrer » ou « Lancer ».")
+        _panneau_masques(st, vide=True)
+    else:
+        _suivi_du_registre(st, pd)
+
+    st.divider()
     st.subheader("🧪 Nouvelle expérience")
     services = _services_cache(st)
     controleur_ok = services is None or "controller" in services
@@ -3985,7 +4107,7 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
             f"« {exp['nom']} » a une exécution reprenable : `{derniere['execution']}` "
             f"({derniere['etat']}, {decisions_archivees(derniere['dossier'])} décisions déjà "
             f"archivées). « ▶ Lancer » en créerait une **nouvelle** et repaierait ces décisions. "
-            f"Pour la poursuivre : « ▶ Reprendre », dans « Mes expériences » plus bas."
+            f"Pour la poursuivre : « ▶ Reprendre », dans « Mes expériences » plus haut."
         )
 
     # Rendre la RAM aux autres applications quand l'expérience est finie. L'arrêt est CHAÎNÉ
@@ -4043,7 +4165,7 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
             lancer("run", {"OFFLINE": "1", "JEU": exp["jeu"]["nom"]})
         if arret_fin:
             st.session_state["exp_msg"] = f"les services seront arrêtés à la fin : {services_fin}"
-        st.toast(f"Expérience « {exp['nom']} » lancée — suivi ci-dessous et dans 📟 Activités en cours")
+        st.toast(f"Expérience « {exp['nom']} » lancée — suivi ci-dessus et dans 📟 Activités en cours")
     # Le warm-up n'apparaît que lorsqu'aucun jeu n'existe encore : préparer un SECOND jeu pour
     # une population déjà servie ne se fait pas d'ici (cas rare, source de confusion).
     if sans_jeu and b4.button("🔥 Warm-up : construire le jeu", type="primary",
@@ -4068,17 +4190,3 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
         st.code(st.session_state["exp_msg"], language="log")
     if not lancer:
         st.caption("Lancement indisponible dans ce contexte (registre de jobs absent).")
-
-    st.divider()
-    st.subheader("📚 Mes expériences")
-    # Les expériences archivées ou invalidées (gabarit obsolète) sortent du tableau : elles ne
-    # portent rien sur quoi s'appuyer. Rien n'est supprimé — le panneau ci-dessous les compte,
-    # dit pourquoi, et permet de les revoir (spec hygiène §3.2, §5).
-    toutes = lister()
-    lignes = [l for l in toutes if not masquee(l)]
-    _panneau_statuts(st, toutes)
-    if not lignes:
-        st.info("Aucune expérience enregistrée. Remplissez le formulaire ci-dessus, puis « Enregistrer » ou « Lancer ».")
-        _panneau_masques(st, vide=True)
-        return
-    _suivi_du_registre(st, pd)

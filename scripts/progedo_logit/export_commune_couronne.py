@@ -50,6 +50,11 @@ import geopandas as gpd
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in __import__("sys").path:
+    __import__("sys").path.insert(0, str(REPO_ROOT))
+
+from mobility_core.population_reference import (  # noqa: E402
+    COURONNES, COURONNES_FR, couronne_canonique)
 SIG_DIR = REPO_ROOT / "data" / "PROGEDO 2023" / "lil-1750-Documentation" / "SIG"
 DTIR_SHP = SIG_DIR / "EMC2_Toulouse_2023_DTIR_17072023.shp"
 ZF_SHP = SIG_DIR / "EMC2_Toulouse_2023_ZF_26052023.shp"
@@ -59,8 +64,12 @@ OUT_TABLE = OUT_DIR / "commune_couronne.json"
 OUT_GEOJSON = OUT_DIR / "couronne_perimetre.geojson"
 OUT_ZF_TABLE = OUT_DIR / "zf_couronne.json"
 
-# Ordre et libellés attendus — ceux de `cerema_values.yaml` / `COURONNES`.
-COURONNES = ("Toulouse", "1ere couronne", "2eme couronne", "3eme couronne")
+# La couche SIG de l'enquête écrit ses couronnes en FRANÇAIS dans `NOM_D2` — c'est la
+# source, elle ne bouge pas. La RESSOURCE produite porte, elle, la modalité canonique du
+# dispositif, anglaise depuis le ticket 074 : `CouronneTable.load()` la valide contre
+# `COURONNES` et refuserait un fichier français. La traduction se fait donc ici, une fois,
+# à l'écriture — et l'inventaire des modalités attendues reste celui de la couche.
+COURONNES_SOURCE = COURONNES_FR
 
 
 def build() -> dict:
@@ -74,11 +83,16 @@ def build() -> dict:
     dtir = gpd.read_file(DTIR_SHP)
     zf = gpd.read_file(ZF_SHP)
 
-    inconnues = set(dtir["NOM_D2"].unique()) - set(COURONNES)
+    inconnues = set(dtir["NOM_D2"].unique()) - set(COURONNES_SOURCE)
     if inconnues:
         raise SystemExit(
             f"Modalités de couronne inattendues dans NOM_D2 : {sorted(inconnues)}. "
             "Elles doivent être exactement celles de cerema_values.yaml.")
+
+    # UNE seule traduction, ici, juste après la validation : tout ce qui suit — table
+    # commune, table zone fine, géométrie, compteurs — porte alors la modalité canonique.
+    # Traduire plus loin aurait voulu dire la traduire quatre fois, et en oublier une.
+    dtir["NOM_D2"] = dtir["NOM_D2"].map(couronne_canonique)
 
     zf = zf.assign(num_dtir=zf["ZF"].astype(str).str[:3])
     orphelines = ~zf["num_dtir"].isin(dtir["NUM_DTIR"].astype(str))

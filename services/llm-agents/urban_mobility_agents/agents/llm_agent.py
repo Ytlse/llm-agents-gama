@@ -1,55 +1,85 @@
 import asyncio
-from functools import lru_cache
-from datetime import datetime, timezone
 import hashlib
 import json
-import demjson3
 import os
-import random
 import re
+import time
 import traceback
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from functools import lru_cache
+from typing import Any
 
-from typing import Tuple
-from loguru import logger
+import demjson3
 import numpy as np
-from pydantic import BaseModel
-from helper import categorize_date_time_short, get_weekday_category, humanize_date, humanize_date_short, humanize_time, time_to_bucket_text
-from llm.longterm import MultiUserLongTermMemory
-from llm.memory import MemoryEntry, MemoryType
-from llm.shortterm import UserShortTermMemory
-from models import Person, TravelPlan
-from sim_clock import gama_timestamp, wall_clock
+from llm_gateway.sdk import LLMGatewayClient
+from loguru import logger
+from mobility_llm import prompt_manager as _mobility_prompt_manager
 from mobility_llm.mode_choice import (
     UniformFallback,
     draw_index,
     mode_distribution,
     normalize_option_probabilities,
 )
-from llm_gateway.sdk import LLMGatewayClient
-from mobility_llm import prompt_manager as _mobility_prompt_manager
-from urban_mobility_agents.utils.history_log import HistoryStreamLog
-from text_helper import env_ob_to_text
+from pydantic import BaseModel
+
+from experiences.decision import ordre_presentation
+from helper import (
+    categorize_date_time_short,
+    get_weekday_category,
+    humanize_date,
+    humanize_date_short,
+    humanize_time,
+)
+from llm.axes import (
+    creneau_de,
+    meteo_de,
+    mode_canonique,
+    normaliser_lieu,
+    normaliser_motif,
+)
+from llm.cache import LlmSemanticCache
+from llm.concepts import (
+    CONCEPTS_MONTRES_PAR_PANIER,
+    CONFIRMER,
+    CONTREDIRE,
+    CREER,
+    PRECISER,
+    normaliser_operation,
+    panier_de,
+)
+from llm.gravite import (
+    CONTRAINTES_MODE_FORCE,
+    force_apres_rappel,
+    gravite_concept,
+    gravite_deterministe,
+    gravite_jugee,
+)
+from llm.longterm import MultiUserLongTermMemory
+from llm.memory import MemoryEntry, MemoryType
+from llm.noyau import memoire_noyau
+from llm.reflection_store import ReflectionMemoStore
+from llm.shortterm import UserShortTermMemory
+from models import Person, TravelPlan
 from settings import settings
-from typing import Dict, Any
+from sim_clock import gama_timestamp, wall_clock
+from text_helper import env_ob_to_text
 from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
+from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
-from urban_mobility_agents.utils.weather_loader import get_weather, weather_to_natural_language
 from urban_mobility_agents.utils.weather_draw import jours_eligibles, timestamp_meteo
-import time
+from urban_mobility_agents.utils.weather_loader import (
+    get_weather,
+    weather_to_natural_language,
+)
 from utils import create_background_task
 from world.population import PersonScheduler
-from loguru import logger
-from llm.cache import LlmSemanticCache
-from experiences.decision import ordre_presentation
-from llm.reflection_store import ReflectionMemoStore
-
 
 history_log = HistoryStreamLog.get_instance()
 
 
-def log_llm_cache_hit(agent_id: str, activity_id: Optional[str], sim_ts: float, mode: str,
+def log_llm_cache_hit(agent_id: str, activity_id: str | None, sim_ts: float, mode: str,
                       category: str = "itinary_multi_agent") -> None:
     """Trace une décision servie par le cache sémantique dans workdir/llm_cache_hits.jsonl.
 
@@ -128,8 +158,8 @@ def _weather_eligible_days() -> tuple[tuple[int, int], ...]:
 class Context(BaseModel):
     person: Person
     timestamp: int
-    activity_id: Optional[str] = None
-    data: Optional[dict] = None
+    activity_id: str | None = None
+    data: dict | None = None
 
 
 def log_chat(prompt: str, response: str, context: Context) -> str:
@@ -179,7 +209,7 @@ _PT_LEG_MODES = ("bus", "metro", "métro", "tram", "cableway", "transit", "publi
 _TRAITS_EXCLUDED_FROM_CACHE_KEY = ("name",)
 
 
-def _traits_signature(traits: Optional[dict]) -> str:
+def _traits_signature(traits: dict | None) -> str:
     """Signature stable des traits du persona, pour le `state_hash` du cache LLM.
 
     Sans elle, un trait qui ne conditionne pas l'offre — l'abonnement TC — change le
@@ -214,32 +244,67 @@ def _pt_subscription_note(mode_label: str, has_pt: bool) -> str:
         return ""
     if not any(k in ml for k in _PT_LEG_MODES):
         return ""
-    return (" Abonné aux transports en commun." if has_pt
-            else " Pas d'abonnement aux transports en commun.")
+    return (" Has a public transport pass." if has_pt
+            else " Has no public transport pass.")
 
 
 def _build_profile_narrative(traits: dict) -> str:
+    """Identité sociale du persona, en anglais (ticket 074, B-5).
+
+    Deux points de la bascule anglaise se jouent ici.
+
+    **L'occupation vient de `professional_activity`, avec `main_occupation` en repli.** Depuis
+    la cohorte v6, les deux sont anglais à la source ; l'ordre reste celui-ci parce que les
+    cohortes ANTÉRIEURES portent `main_occupation` en français, et qu'une trace archivée
+    relue doit continuer de rendre un récit anglais.
+
+    **Les motifs de déplacement habituels sont servis** (`travel_purposes`). Ils étaient
+    produits par le générateur, recalculés par `fix_minor_traits`, documentés comme « la liste
+    vue par le LLM » — et lus par personne. Un champ entretenu pour rien est plus trompeur
+    qu'un champ absent : il fait croire l'information servie.
+
+    **`_income_map` a disparu.** Cette table n'existait que pour franciser un champ déjà
+    anglais dans la population (`Very Low`, `Medium-High`…). La supprimer rend la valeur
+    telle qu'elle est ; il n'y a rien à traduire, seulement une traduction à retirer.
+    """
     name = traits.get("name", "")
     first_name = name.split()[0] if name else ""
     age = traits.get("age", "")
-    occupation = traits.get("main_occupation") or traits.get("professional_activity", "")
+    occupation = traits.get("professional_activity") or traits.get("main_occupation", "")
     household = traits.get("household_size")
-    _income_map = {
-        "Very Low": "très faible", "Low": "faible", "Medium": "moyen",
-        "Medium-Low": "moyen-bas", "Medium-High": "moyen-élevé", "High": "élevé", "Very High": "très élevé",
-    }
-    income = _income_map.get(traits.get("income") or "", (traits.get("income") or "").lower())
+    income = traits.get("income") or ""
 
     extras = []
     if household == 1:
-        extras.append("seul(e)")
+        extras.append("lives alone")
     elif household:
-        extras.append(f"famille de {household} pers.")
+        extras.append(f"household of {household}")
     if income:
-        extras.append(f"revenu {income}")
-    line1 = f"{first_name}, {age} ans, {occupation}"
+        extras.append(f"{income.lower()} income")
+    line1 = f"{first_name}, {age}, {occupation}"
     if extras:
         line1 += f" ({', '.join(extras)})"
+
+    # Motifs habituels. Une personne immobile n'en a aucun : la phrase est alors OMISE plutôt
+    # que rendue vide — « Usual trip purposes: » sans rien derrière se lirait comme une
+    # information manquante, quand c'est une information qui dit « cette personne ne sort pas ».
+    motifs = [str(m).strip() for m in (traits.get("travel_purposes") or []) if str(m).strip()]
+    if motifs:
+        line1 += f". Usual trip purposes: {', '.join(motifs)}"
+
+    # Couronne de résidence. SERVIE au modèle depuis le ticket 074 : elle situe la personne
+    # dans l'armature urbaine, ce qu'aucune autre information du prompt ne dit — l'adresse
+    # n'y est pas, et la distance d'un trajet ne dit rien de l'endroit où l'on habite.
+    #
+    # C'est aussi ce qui la fait basculer en anglais À LA SOURCE : tant qu'elle n'était qu'une
+    # clé de jointure vers l'enquête, sa langue n'engageait personne ; servie au modèle, elle
+    # engage la même règle que le reste du prompt.
+    #
+    # `hors périmètre` n'est PAS une couronne : c'est la cinquième modalité, et la servir telle
+    # quelle vaut mieux que la taire — le domicile est connu, il est simplement dehors.
+    couronne = str(traits.get("residence_zone") or "").strip()
+    if couronne:
+        line1 += f". Lives in: {couronne}"
 
     # La ligne « Mobilité : » a disparu le 2026-08-26. Ce qu'elle portait :
     #
@@ -258,6 +323,160 @@ def _build_profile_narrative(traits: dict) -> str:
     # Ne reste que l'identité sociale, seule information du bloc que les options ne
     # portent pas. Une ligne vide n'est pas rendue.
     return line1
+
+
+def _axes_de_la_decision(context: Context, plan, destination, weather) -> dict:
+    """Axes normalisés d'une entrée écrite par une décision d'itinéraire (lot 2).
+
+    C'est le seul endroit où le mode retenu, le motif et la météo du jour sont connus
+    ensemble. Les normaliser ici, une fois, plutôt qu'à chaque rappel.
+
+    `axe_lieu` reste vide pour une décision : elle porte un itinéraire, pas un arrêt. Il sera
+    renseigné par les concepts, dont la portée spatiale en désigne un. Vide vaut mieux que la
+    destination : deux trajets vers le même travail par deux modes différents ne sont pas le
+    même souvenir de lieu.
+    """
+    return {
+        "axe_objet": mode_canonique(plan.mode_label() if plan is not None else None),
+        "axe_lieu": None,
+        "axe_creneau": creneau_de(wall_clock(context.timestamp)),
+        "axe_motif": normaliser_motif(destination),
+        "axe_meteo": meteo_de(weather),
+    }
+
+
+@dataclass
+class ConceptLu:
+    """Un concept rendu par le modèle, ramené à une forme unique.
+
+    DEUX FORMATS d'entrée sont acceptés, et ce n'est pas de la complaisance :
+
+    - l'OBJET, depuis le lot 1 du ticket 071, qui porte `severity`, `valence`, puis `mode`
+      (lot 2) et `operation` / `target_id` (lot 3) ;
+    - le TABLEAU de cinq chaînes, format d'avant, qu'un run REPRIS relit dans son propre cache
+      de réflexions et dans les concepts déjà écrits. Sans cette tolérance, reprendre un run
+      perdrait les concepts accumulés.
+
+    Le `content` stocké reste le 5-uplet dans les deux cas : la gravité, la valence et les axes
+    vivent sur les CHAMPS de l'entrée, pas dans son texte. Aucun lecteur en aval ne change.
+    """
+
+    cinq: list
+    niveau: str | None = None
+    valence: str = "neutre"
+    mode: str | None = None
+    operation: str = CREER
+    cible: str = ""
+
+
+def _normaliser_concept(concept) -> ConceptLu:
+    if isinstance(concept, dict):
+        cinq = [
+            str(concept.get("content", "")),
+            str(concept.get("keywords", "")),
+            str(concept.get("spatial_scope", "")),
+            str(concept.get("temporal_scope", "")),
+            str(concept.get("purpose", "")),
+        ]
+        mode = str(concept.get("mode") or "").strip().lower() or None
+        if mode == "any":
+            # « any » est une RÉPONSE, pas une absence : le concept ne parle d'aucun mode.
+            # Il vaut `None` comme axe — et un axe absent ne s'apparie avec rien, ce qui est
+            # exact : ce concept n'a pas à remonter au titre d'un mode.
+            mode = None
+        return ConceptLu(
+            cinq=cinq,
+            niveau=concept.get("severity"),
+            valence=str(concept.get("valence") or "neutre"),
+            mode=mode,
+            operation=normaliser_operation(concept.get("operation")),
+            cible=str(concept.get("target_id") or "").strip(),
+        )
+    if isinstance(concept, (list, tuple)):
+        cinq = [str(x) for x in list(concept)[:5]]
+        cinq += [""] * (5 - len(cinq))
+        # Format d'avant le lot 1 : ni niveau, ni mode, ni opération n'ont été demandés. Le
+        # concept retombera sur la gravité déterministe de son groupe — ce qui est exact — et
+        # sur `creer`, le repli le moins destructeur.
+        return ConceptLu(cinq=cinq)
+    return ConceptLu(cinq=[str(concept), "", "", "", ""])
+
+
+def _concepts_du_jour(long_term_memory, person_id: str, paniers: set) -> list:
+    """Concepts existants des paniers touchés par la journée (ticket 071, lot 3).
+
+    ⚠ **Le panier ne peut pas être calculé après coup.** Il se définit sur le couple
+    (mode, motif) du concept NOUVEAU, mais les candidats doivent être montrés au modèle AVANT
+    qu'il n'écrive le sien — et un second appel est exclu par la contrainte transverse du
+    ticket : aucun lot ne coûte d'appel supplémentaire.
+
+    D'où la portée retenue : les paniers des **entrées consommées du jour**, c'est-à-dire les
+    modes et les motifs que l'agent a réellement empruntés. C'est exactement la bonne portée —
+    il réfléchit sur sa journée, les concepts qu'il pourrait corriger sont ceux qui en parlent.
+
+    Les concepts HORS SERVICE n'y figurent pas : il n'y a pas lieu de proposer au modèle de
+    corriger ce qu'on ne lui sert plus.
+    """
+    if long_term_memory is None or not paniers:
+        return []
+    long_term_memory.ensure_user_initialized(person_id)
+    entrees = long_term_memory.user_metadata.get(person_id, {}).get("entries", [])
+
+    par_panier: dict = {}
+    for e in entrees:
+        if str(e.memory_type) != str(MemoryType.CONCEPT.value) or not e.doc_id:
+            continue
+        if not e.est_servi or e.depasse_le:
+            continue
+        clef = panier_de(e.axe_objet, e.axe_motif)
+        if clef in paniers:
+            par_panier.setdefault(clef, []).append(e)
+
+    montres = []
+    for clef, candidats in par_panier.items():
+        # Les plus confiants d'abord, la dernière observation départageant : c'est ce que
+        # l'agent tient pour le plus sûr, donc ce qu'il a le plus de raisons de corriger.
+        candidats.sort(
+            key=lambda e: (
+                e.confiance,
+                e.derniere_observation or e.timestamp,
+            ),
+            reverse=True,
+        )
+        montres.extend(candidats[:CONCEPTS_MONTRES_PAR_PANIER])
+    return montres
+
+
+def _gravite_de_la_contrainte(context: Context) -> float:
+    """Gravité déterministe d'une décision, depuis la contrainte de chaîne (ticket 071, lot 1).
+
+    C'est la quatrième composante de `I_det`, « changement de mode contraint ». Elle n'arrive
+    ni par l'arrivée ni par le bus manqué mais par le chemin de DÉCISION : c'est là, et
+    seulement là, qu'on sait que l'agent a dû renoncer à un mode — il rentre avec ce qu'il a
+    pris (`retour_force`), ou ne peut pas partir comme il l'aurait voulu (`sortie_bloquee`).
+
+    Être passager d'un autre membre du ménage en est exclu : c'est un arrangement, pas une
+    dégradation subie (cf. `CONTRAINTES_MODE_FORCE`).
+    """
+    contrainte = str((context.data or {}).get("contrainte_chaine") or "")
+    valeur, _detail = gravite_deterministe(
+        mode_contraint=contrainte in CONTRAINTES_MODE_FORCE
+    )
+    return valeur
+
+
+# Version du schéma de sortie de la réflexion COURTE. À incrémenter dès que son contrat change
+# (champs, ou sémantique d'un champ) : elle entre dans la clé de mémoïsation et invalide donc le
+# cache accumulé sous l'ancien contrat, au lieu de le servir de travers.
+#   1 — ticket 071, lot 1 : chaque concept devient un objet et porte `severity` et `valence`.
+#   2 — ticket 071, lot 2 : chaque concept déclare son `mode`. Sans lui, le vivier par objet
+#       du rappel ne trouverait jamais rien : la mémoire longue ne contient que des
+#       réflexions et des concepts, et aucun ne dirait de quel mode il parle.
+#   3 — ticket 071, lot 3 : chaque concept déclare son `operation` et sa cible. Les concepts
+#       cessent de s'empiler : ils se confirment, se précisent ou se voient contredire.
+SCHEMA_REFLEXION_VERSION = 3
+
+
 
 
 class LlmAgent:
@@ -346,7 +565,14 @@ class LlmAgent:
             )
             return context.timestamp
 
-    def add_short_term_memory(self, context: Context, msg: str, timestamp: Optional[int] = None):
+    def add_short_term_memory(
+        self,
+        context: Context,
+        msg: str,
+        timestamp: int | None = None,
+        importance: float = 0.0,
+        axes: dict | None = None,
+    ):
         memory = self.get_short_term_memory(context.person.person_id)
         # L'horodatage du souvenir est l'heure MURALE de GAMA. Ce n'est pas cosmétique :
         # ce `datetime` finit dans le PROMPT (« - Time 16 March 2026, 05:12: … » via
@@ -356,7 +582,9 @@ class LlmAgent:
         memory.add_message(
             msg,
             wall_clock(timestamp or context.timestamp),
-            activity_id=context.activity_id
+            activity_id=context.activity_id,
+            importance=importance,
+            axes=axes,
         )
         history_log.log_shortterm_memory(
             timestamp=context.timestamp,
@@ -375,7 +603,7 @@ class LlmAgent:
             data=context.data,
         )
 
-    def parse_response_json(self, response: str) -> Tuple[Optional[dict], str]:
+    def parse_response_json(self, response: str) -> tuple[dict | None, str]:
         try:
             match = re.search(r'\{.*\}', response, re.DOTALL)
             assert match is not None, "No JSON found in response"
@@ -426,12 +654,29 @@ class LlmAgent:
 
         # logger.debug(f"Querying experiences with travel plans for user {context.person.person_id}, activity {context.activity_id}, query text: {text}")
 
+        # Ticket 071, lot 2 — les modes OFFERTS ouvrent le vivier par objet, et le contexte
+        # courant alimente les deux affinités. Sans les modes, le vivier B ne saurait pas quoi
+        # chercher ; sans le contexte, les affinités vaudraient zéro partout, ce qui est le
+        # score d'une discordance totale et non celui d'une absence d'information.
+        modes_offerts = {
+            m for m in (mode_canonique(o.mode_label()) for o in options) if m
+        }
+        contexte_axes = {
+            "axe_objet": modes_offerts,
+            "axe_lieu": None,
+            "axe_creneau": creneau_de(wall_clock(context.timestamp)),
+            "axe_motif": normaliser_motif(options[0].purpose if options else None),
+            "axe_meteo": meteo_de(get_weather(self._weather_timestamp(context))),
+        }
+
         hist = await self.long_term_memory.aquery_user_memories(
             person_id=context.person.person_id,
             query=text,
             top_k=settings.agent.long_term_max_entries_query,
             max_past_days=settings.agent.long_term_max_days_query,
             query_at=context.timestamp,
+            modes_offerts=sorted(modes_offerts),
+            contexte=contexte_axes,
         )
 
         # deduplicate entries based on content
@@ -468,7 +713,41 @@ class LlmAgent:
         ts = np.array(ts)
         sorted_indices = np.argsort(ts)
         resp = [resp[i] for i in sorted_indices]
-        return resp
+
+        # ── Ticket 071, lot 4 — la MÉMOIRE NOYAU ─────────────────────────────────
+        # Les dix souvenirs bruts laissent la place à un bloc permanent structuré, complété de
+        # deux ou trois entrées épisodiques rappelées pour la décision en cours. C'est le
+        # *working context* de MemGPT : un bloc toujours présent, le reste paginé à la demande.
+        #
+        # Les trois blocs sont CALCULÉS, aucun n'est écrit par le modèle — un texte réécrit
+        # périodiquement par un modèle dérive et invente, un bloc calculé reste vérifiable
+        # contre sa source. Le lot ne coûte donc AUCUN appel supplémentaire.
+        try:
+            _entrees = self.long_term_memory.user_metadata.get(
+                context.person.person_id, {}
+            ).get("entries", [])
+            _bloc = memoire_noyau(
+                self.long_term_memory.journal_trajets(context.person.person_id),
+                _entrees,
+                wall_clock(context.timestamp),
+            )
+        except Exception as err:  # noqa: BLE001
+            # Un bloc qui ne se construit pas ne doit pas faire perdre la décision — mais il
+            # ne doit pas non plus disparaître en silence : sans lui, l'agent retombe au
+            # comportement d'avant le lot 4 sans que rien ne le dise.
+            logger.warning(
+                f"[noyau] mémoire noyau non construite pour {context.person.person_id} "
+                f"({err}) — repli sur les souvenirs bruts seuls"
+            )
+            _bloc = []
+
+        if not _bloc:
+            return resp
+
+        # Les épisodiques sont les PLUS RÉCENTES du top-K, et il y en a deux ou trois, pas dix :
+        # le bloc porte désormais ce que les dix disaient de répétitif.
+        _n = int(settings.agent.memoire__episodiques_avec_noyau)
+        return _bloc + resp[-_n:] if _n > 0 else _bloc
 
     def get_personal_system_prompt(self, person: Person) -> str:
         identity_description = self.get_person_identity_description(person)
@@ -480,8 +759,8 @@ class LlmAgent:
         options: list[TravelPlan],
         destination: str,
         departure_time: int = 0,
-        anticipation: Optional[dict] = None,
-    ) -> Dict[str, Any]:
+        anticipation: dict | None = None,
+    ) -> dict[str, Any]:
         agent_id = context.person.person_id
         perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
         current_time = humanize_time(context.timestamp)
@@ -570,13 +849,13 @@ class LlmAgent:
 
     async def evaluate_and_choose_travel_plan(
         self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0,
-        anticipation: Optional[dict] = None,
+        anticipation: dict | None = None,
         *,
-        force_provider: Optional[str] = None,
-        allowed_providers: Optional[set] = None,
-        trace: Optional[dict] = None,
+        force_provider: str | None = None,
+        allowed_providers: set | None = None,
+        trace: dict | None = None,
         presentation_figee: bool = False,
-        option_order_seed: Optional[int] = None,
+        option_order_seed: int | None = None,
     ) -> tuple[int, str, str, dict]:
         """Choisit un itinéraire et renvoie (index, justification, provider, répartition).
 
@@ -675,7 +954,11 @@ class LlmAgent:
                     reason = "Décision récupérée depuis le cache sémantique LLM."
                 plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                 stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> served from LLM cache.\n{plan_summary}\nReasoning: {reason}"
-                self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
+                self.add_short_term_memory(
+                    context, stm_msg, timestamp=context.timestamp,
+                    importance=_gravite_de_la_contrainte(context),
+                    axes=_axes_de_la_decision(context, chosen_plan, destination, weather),
+                )
                 logger.debug(f"Cache hit for person {context.person.person_id}, activity {context.activity_id}, returning cached plan with reason: {reason}")
                 # Écriture jsonl déportée hors de l'event loop (open/write bloquants)
                 await asyncio.to_thread(
@@ -818,7 +1101,11 @@ class LlmAgent:
                     # Écriture de la décision en short-term memory pour alimenter la réflexion journalière
                     plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                     stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> chosen by gateway LLM.\n{plan_summary}\nReasoning: {reason}"
-                    self.add_short_term_memory(context, stm_msg, timestamp=context.timestamp)
+                    self.add_short_term_memory(
+                    context, stm_msg, timestamp=context.timestamp,
+                    importance=_gravite_de_la_contrainte(context),
+                    axes=_axes_de_la_decision(context, chosen_plan, destination, weather),
+                )
 
                     original_index = options.index(chosen_plan)
                     if _rec is not None:
@@ -942,7 +1229,7 @@ class LlmAgent:
 
         # Mémoïsation exacte (ticket 012) — même principe que la réflexion STM.
         memo_key = None
-        reflection: Optional[str] = None
+        reflection: str | None = None
         if self.reflection_memo is not None:
             memo_key = ReflectionMemoStore.make_key(
                 person_id=context.person.person_id,
@@ -997,6 +1284,62 @@ class LlmAgent:
         except Exception as e:
             logger.error(f"Failed to store LTM self-reflection for person {context.person.person_id}, err: {e}")
 
+    def _marquer_concept_modifie(self, person_id: str) -> None:
+        """Un concept mis à jour SUR PLACE doit être persisté comme une écriture neuve.
+
+        Les opérations `confirmer`, `preciser` et `contredire` n'ajoutent aucune entrée : elles
+        modifient un objet déjà en mémoire vive. Sans ce marquage, le compteur monterait en RAM
+        et retomberait à zéro au rechargement — la consolidation serait parfaitement invisible.
+        """
+        if self.long_term_memory is None:
+            return
+        self.long_term_memory._dirty.add(person_id)
+        self.long_term_memory._schedule_flush()
+
+    _JOURS_SANS_CONTRADICTION_ALARME = 2
+
+    def _compter_operations(self, operations: dict, jour_simule) -> None:
+        """Compteur d'opérations par cycle, et l'alarme du modèle qui confirme tout.
+
+        Un modèle qui ne contredit jamais laisse l'agent agir sur des croyances qui ont cessé
+        d'être vraies, et l'hystérésis que l'expérience cherche à observer devient ininterprétable
+        : la reprise se gagne par la confiance des concepts, pas par l'oubli.
+        """
+        if not operations:
+            return
+        if not hasattr(self, "_jours_sans_contradiction"):
+            self._jours_sans_contradiction: set = set()
+            self._alarme_confirme_tout = False
+
+        logger.info(
+            "[concepts] opérations du cycle — "
+            + ", ".join(f"{k} {v}" for k, v in sorted(operations.items()))
+        )
+
+        if operations.get(CONTREDIRE):
+            self._jours_sans_contradiction.clear()
+            if self._alarme_confirme_tout:
+                self._alarme_confirme_tout = False
+                logger.info("[concepts] le modèle contredit de nouveau ses croyances")
+            return
+
+        # Des concepts ont été produits, aucun ne contredit : le jour compte.
+        if operations.get(CONFIRMER) or operations.get(CREER):
+            self._jours_sans_contradiction.add(jour_simule)
+
+        if (
+            len(self._jours_sans_contradiction) > self._JOURS_SANS_CONTRADICTION_ALARME
+            and not self._alarme_confirme_tout
+        ):
+            self._alarme_confirme_tout = True
+            logger.error(
+                f"[ALARME] aucune contradiction de concept sur "
+                f"{len(self._jours_sans_contradiction)} jours simulés, alors que des concepts "
+                f"sont produits — le modèle confirme tout. Les croyances des agents ne se "
+                f"révisent plus, et la reprise mesurée par l'expérience d'hystérésis devient "
+                f"ininterprétable."
+            )
+
     async def reflect_on_short_term_memory(self, context: Context):
         mem = self.get_short_term_memory(context.person.person_id)
         group_messages, all_messages = mem.get_all_message_and_group()
@@ -1013,7 +1356,37 @@ class LlmAgent:
                     "purpose": activity.purpose if activity else None,
                     "observations": [msg.content for msg in group],
                 })
-        experiences_text = json.dumps(exp, indent=2, ensure_ascii=False)
+        # Ticket 071, lot 3 — les concepts que l'agent tient déjà sur les modes et motifs de
+        # sa journée sont montrés dans l'appel qui a DÉJÀ lieu. Le modèle désigne celui qu'il
+        # met à jour, ou n'en désigne aucun : coût marginal nul, aucun seuil de similarité
+        # arbitraire à calibrer, et il dispose du contexte qu'un seuil n'a pas.
+        _paniers = {
+            panier_de(m.axe_objet, m.axe_motif) for m in all_messages
+        }
+        _connus = _concepts_du_jour(
+            self.long_term_memory, context.person.person_id, _paniers
+        )
+        # Poignées courtes (K1, K2…) plutôt que les identifiants de documents : le modèle a
+        # moins de latitude pour en inventer un, et la correspondance est vérifiée au retour.
+        _par_poignee = {f"K{i + 1}": e for i, e in enumerate(_connus)}
+        experiences_text = json.dumps(
+            {
+                "today": exp,
+                "known_beliefs": [
+                    {
+                        "id": poignee,
+                        "belief": json.loads(e.content)[0]
+                        if e.content.startswith("[")
+                        else e.content,
+                        "times_observed": e.observations,
+                        "times_contradicted": e.contre_exemples,
+                    }
+                    for poignee, e in _par_poignee.items()
+                ],
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
 
         identity_description = self.get_person_identity_description(context.person)
         custom_guidelines = f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}" if settings.agent.reflection_custom_guidelines else ""
@@ -1022,7 +1395,7 @@ class LlmAgent:
         # ⇒ même introspection. Hit ⇒ appel LLM évité ; les effets (consommation
         # STM, écritures LTM) restent strictement identiques à un appel réel.
         memo_key = None
-        reflection: Optional[str] = None
+        reflection: str | None = None
         concepts: list = []
         if self.reflection_memo is not None:
             memo_key = ReflectionMemoStore.make_key(
@@ -1033,6 +1406,13 @@ class LlmAgent:
                 guidelines=custom_guidelines,
                 departure_timestamp=float(context.timestamp),
                 llm_params=settings.agent.llm_params,
+                # Le schéma de sortie a changé au lot 1 du ticket 071 : chaque concept porte
+                # un niveau de gravité. Une réponse mémoïsée sous l'ancien schéma n'en a pas,
+                # et la servir produirait des concepts de gravité nulle SANS ERREUR — or zéro
+                # est la gravité d'un trajet parfait. La version fait donc MANQUER le cache
+                # plutôt que de servir de travers. Le cache accumulé sous l'ancien schéma est
+                # perdu : c'est le prix du champ, et il est annoncé.
+                schema_version=SCHEMA_REFLEXION_VERSION,
             )
             hit = await asyncio.to_thread(self.reflection_memo.lookup, memo_key, "stm_reflection")
             if hit is not None:
@@ -1080,23 +1460,157 @@ class LlmAgent:
         self.get_short_term_memory(context.person.person_id).remove_batch(all_messages)
         start_timestamp = all_messages[0].timestamp
 
+        # Ticket 071, lot 1 — PLANCHER de gravité : la plus forte gravité déterministe parmi
+        # les entrées que cette réflexion consomme. C'est un FAIT mesuré par la simulation, que
+        # le jugement du modèle ne pourra pas descendre.
+        plancher = max((float(m.importance or 0.0) for m in all_messages), default=0.0)
+
+        # Axes de la journée consommée (lot 2). Ils sont pris sur l'entrée la PLUS GRAVE, et
+        # non sur la dernière ni sur la plus fréquente : c'est l'épisode qui a marqué la
+        # journée qui la caractérise. À gravité égale, la dernière l'emporte, parce qu'elle est
+        # la plus proche du moment où la réflexion est écrite.
+        _pivot = max(
+            all_messages,
+            key=lambda m: (float(m.importance or 0.0), m.timestamp),
+            default=None,
+        )
+        axes_du_groupe = {
+            "axe_objet": getattr(_pivot, "axe_objet", None),
+            "axe_lieu": getattr(_pivot, "axe_lieu", None),
+            "axe_creneau": getattr(_pivot, "axe_creneau", None),
+            "axe_motif": getattr(_pivot, "axe_motif", None),
+            "axe_meteo": getattr(_pivot, "axe_meteo", None),
+        }
+
         entries = []
         try:
+            # La réflexion narrative hérite du plancher : elle raconte la journée, et une
+            # journée qui contient un choc n'est pas une journée ordinaire. Le schéma ne
+            # demande pas de niveau pour la réflexion elle-même, seulement pour les concepts.
             entries.append(MemoryEntry(
                 person_id=context.person.person_id,
                 content=reflection,
                 timestamp=start_timestamp,
                 memory_type=MemoryType.REFLECTION,
+                importance=plancher,
+                **axes_du_groupe,
             ))
 
-            for concept in concepts:
+            # Le RANG ne sert que de départage à l'intérieur d'un même niveau : il faut donc
+            # savoir combien de concepts partagent chaque niveau, et dans quel ordre ils sont
+            # arrivés. Un ordre est relatif au lot ; une valeur doit être comparable d'un jour
+            # et d'un agent à l'autre.
+            normalises = [_normaliser_concept(c) for c in concepts]
+            effectif: dict = {}
+            for _lu in normalises:
+                effectif[_lu.niveau] = effectif.get(_lu.niveau, 0) + 1
+            rang_courant: dict = {}
+            operations_vues: dict = {}
+
+            for lu in normalises:
+                cinq, niveau, valence, mode = lu.cinq, lu.niveau, lu.valence, lu.mode
+                rang_courant[niveau] = rang_courant.get(niveau, 0) + 1
+                i_llm = gravite_jugee(
+                    niveau, n_niveau=effectif[niveau], rang=rang_courant[niveau]
+                )
+                importance = gravite_concept(i_llm, plancher)
+
+                # ── Ticket 071, lot 3 — le concept se CORRIGE au lieu de s'empiler ────────
+                operation = lu.operation
+                cible = _par_poignee.get(lu.cible) if lu.cible else None
+                if operation != CREER and cible is None:
+                    # Une cible inconnue ne doit pas faire perdre le concept ni toucher un
+                    # existant au hasard : on crée, et on le DIT. Un modèle qui désignerait
+                    # systématiquement des cibles fantômes passerait sinon inaperçu.
+                    logger.warning(
+                        f"[concepts] opération « {operation} » sur une cible inconnue "
+                        f"« {lu.cible} » | person={context.person.person_id} — repli sur "
+                        f"« {CREER} », aucun concept existant n'est modifié"
+                    )
+                    operation = CREER
+                operations_vues[operation] = operations_vues.get(operation, 0) + 1
+
+                if operation in (CONFIRMER, PRECISER):
+                    # Rien de neuf n'est écrit : le concept existant est mis à jour sur place.
+                    if operation == CONFIRMER:
+                        cible.observations = int(cible.observations or 0) + 1
+                    else:
+                        # `preciser` : le contenu est remplacé, compteurs et historique
+                        # CONSERVÉS — c'est la même croyance, dite plus finement.
+                        cible.content = json.dumps(cinq, ensure_ascii=False)
+                        cible.tags = ",".join(cinq[1:])
+                    cible.derniere_observation = start_timestamp
+                    cible.force = force_apres_rappel(cible.force)
+                    cible.importance = max(float(cible.importance or 0.0), importance)
+                    self._marquer_concept_modifie(context.person.person_id)
+                    continue
+
+                if operation == CONTREDIRE:
+                    cible.contre_exemples = int(cible.contre_exemples or 0) + 1
+                    cible.derniere_observation = start_timestamp
+                    if not cible.est_servi and not cible.depasse_le:
+                        # Marqué et DATÉ, jamais supprimé : cette mise à l'écart est la trace
+                        # lisible du changement d'habitude que l'expérience cherche.
+                        #
+                        # ⚠ La date est posée quand le concept CESSE D'ÊTRE SERVI, et non
+                        # quand il devient « dépassé » au sens des trois contre-exemples.
+                        # Défaut trouvé en écrivant les tests du lot 3 : un concept sort du
+                        # panier dès qu'il n'est plus servi, donc il n'est plus montré au
+                        # modèle, donc il ne peut plus être contredit. Avec peu
+                        # d'observations, le seuil de trois contradictions est ATTEIGNABLE
+                        # SEULEMENT si la mise hors service arrive après — sinon le concept
+                        # restait en service nul, jamais daté, et l'observable que
+                        # l'expérience d'hystérésis cherche n'était jamais écrit.
+                        #
+                        # La spécification rattache d'ailleurs la trace datée à la cessation
+                        # de service — « sous un seuil, le concept cesse d'être servi sans
+                        # être supprimé : sa mise à l'écart datée est la trace du changement
+                        # d'habitude » — et non au seuil de trois.
+                        cible.depasse_le = start_timestamp.isoformat()
+                        logger.info(
+                            f"[concepts] concept MIS À L'ÉCART pour "
+                            f"{context.person.person_id} : {cible.contre_exemples} "
+                            f"contradictions contre {cible.observations} confirmations, "
+                            f"confiance {cible.confiance:.2f} — il cesse d'être servi et "
+                            f"reste CONSERVÉ en mémoire"
+                            + (" ; dépassé au sens des trois contre-exemples"
+                               if cible.est_depasse else "")
+                        )
+                    self._marquer_concept_modifie(context.person.person_id)
+                    # et le concept qui prend la relève est écrit ci-dessous
+                if i_llm is not None and importance > i_llm:
+                    # Le fait a repris la main sur le jugement : c'est exactement ce que la
+                    # règle de sécurité doit produire, et il faut pouvoir le compter sur un run.
+                    logger.info(
+                        f"[gravite] jugement RELEVÉ par le fait mesuré | "
+                        f"person={context.person.person_id} niveau={niveau} "
+                        f"I_llm={i_llm:.2f} → I={importance:.2f}"
+                    )
                 entries.append(MemoryEntry(
                     person_id=context.person.person_id,
-                    content=json.dumps(concept, ensure_ascii=False),
+                    # Le contenu reste le 5-uplet canonique : la gravité, la valence et les
+                    # axes vivent sur les CHAMPS de l'entrée, pas dans son texte. Aucun lecteur
+                    # en aval ne change, et un concept écrit avant le lot 1 se relit à
+                    # l'identique.
+                    content=json.dumps(cinq, ensure_ascii=False),
                     timestamp=start_timestamp,
                     memory_type=MemoryType.CONCEPT,
-                    tags=",".join(concept[1:] if isinstance(concept, list) and len(concept) > 1 else [])
+                    tags=",".join(cinq[1:]),
+                    importance=importance,
+                    valence=valence,
+                    # Axes normalisés à l'écriture (lot 2). Le mode vient du modèle, qui sait
+                    # de quoi parle son concept ; le lieu de sa portée spatiale ; le motif de
+                    # son objet. Le créneau et la météo viennent de la journée consommée : un
+                    # concept n'a pas d'heure propre, il a celle de ce qui l'a produit.
+                    axe_objet=mode_canonique(mode),
+                    axe_lieu=normaliser_lieu(cinq[2] or None),
+                    axe_creneau=axes_du_groupe.get("axe_creneau"),
+                    axe_motif=normaliser_motif(cinq[4] or None),
+                    axe_meteo=axes_du_groupe.get("axe_meteo"),
                 ))
+            self._compter_operations(
+                operations_vues, wall_clock(context.timestamp).date().toordinal()
+            )
         except Exception as e:
             logger.exception(f"Failed to parse STM reflection response: {e}")
 

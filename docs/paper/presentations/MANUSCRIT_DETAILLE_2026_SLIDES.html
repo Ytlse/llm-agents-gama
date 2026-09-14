@@ -711,7 +711,7 @@
           </div>
           <div class="info-card">
             <div class="card-label coral"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> ÉTAPE 1</div>
-            <div style="font-size: 0.88rem; font-weight: 600;">Modèle Nu & Variabilité</div>
+            <div style="font-size: 0.88rem; font-weight: 600;">Prompt Factuel Neutre & Variabilité</div>
             <div class="metric-sub">Runs identiques $\tau \approx 0$</div>
           </div>
           <div class="info-card">
@@ -743,7 +743,7 @@
               L'intégration des grands modèles de langage (LLM) au sein des simulations multi-agents de mobilité urbaine ouvre des perspectives inédites pour modéliser le comportement humain sans recourir à des systèmes de règles manuelles rigides. Toutefois, l'évaluation de ces agents face à des données d'enquête réelles révèle une tension fondamentale entre <em>richesse narrative qualitative</em> et <em>fidélité distributionnelle quantitative</em>.
             </p>
             <p>
-              Dans cet article, nous proposons une évaluation empirique et critique des capacités décisionnelles des agents LLM appliqués au choix modal de transport sur l'aire métropolitaine de Toulouse. Nous suivons une démarche systématique (0: métriques macro/micro ; 1: modèle nu et variabilité ; 2: invalidation par l'ablation et audit face à LightGBM <strong>$78,5\,\%$</strong> d'accuracy ; 3: adaptation aux événements d'actualité presse locale et hystérésis 5 jours).
+              Dans cet article, nous proposons une évaluation empirique et critique des capacités décisionnelles des agents LLM appliqués au choix modal de transport sur l'aire métropolitaine de Toulouse. Nous suivons une démarche systématique (0: métriques macro/micro ; 1: prompt factuel neutre et circonstancié et variabilité ; 2: invalidation par l'ablation et audit face à LightGBM <strong>$78,5\,\%$</strong> d'accuracy ; 3: adaptation aux événements d'actualité presse locale et hystérésis 5 jours).
             </p>
             <p>
               En conclusion, nous formulons les <strong>perspectives d'une architecture hybride en cascade</strong> (Règles $\to$ LightGBM $90\,\%$ $\to$ LLM $10\,\%$) conciliant calage de masse et réactivité contextuelle.
@@ -757,7 +757,7 @@
               Integrating Large Language Models (LLMs) into agent-based mobility simulations offers new avenues for modeling human decision-making beyond rigid rule-based systems. However, benchmarking these agents against real-world travel surveys reveals a fundamental trade-off between qualitative semantic expressiveness and quantitative distributional fidelity.
             </p>
             <p>
-              We present an empirical assessment of LLM agents for mode choice in the Toulouse metropolitan area. Through a rigorous experimental progression (0: metric definitions; 1: bare LLM and multi-run variability; 2: ablation study and audit against a supervised LightGBM oracle at $78.5\%$ accuracy; 3: unstructured local news processing and 5-day hysteresis modeling), we highlight the boundaries of generative models.
+              We present an empirical assessment of LLM agents for mode choice in the Toulouse metropolitan area. Through a rigorous experimental progression (0: metric definitions; 1: factual, neutral and detailed prompt and multi-run variability; 2: ablation study and audit against a supervised LightGBM oracle at $78.5\%$ accuracy; 3: unstructured local news processing and 5-day hysteresis modeling), we highlight the boundaries of generative models.
             </p>
             <p>
               Finally, we outline the <strong>perspectives of a cascading hybrid architecture</strong> (Deterministic Rules $\to$ LightGBM for $90\%$ nominal flow $\to$ LLM for $10\%$ disruptions).
@@ -909,18 +909,18 @@
       </div>
     </div>
 
-    <!-- ==================== SLIDE 5 : ÉTAPE 1 - MODÈLE NU & VARIABILITÉ ==================== -->
+    <!-- ==================== SLIDE 5 : ÉTAPE 1 - PROMPT FACTUEL NEUTRE & VARIABILITÉ ==================== -->
     <div class="slide-container" data-slide="5">
       <div class="slide-card">
         <div class="slide-meta-tag"><i data-lucide="cpu" style="width: 12px; height: 12px;"></i> Étape 1</div>
-        <h2 class="slide-title">Étape 1 : Évaluation du Modèle Nu & Variabilité Multi-Runs</h2>
-        <div class="slide-subtitle">Comportement de base à prompt minimaliste neutre et étude de la dispersion inter-runs</div>
+        <h2 class="slide-title">Étape 1 : Évaluation sous Prompt Factuel Neutre & Variabilité Multi-Runs</h2>
+        <div class="slide-subtitle">Comportement de base à consigne factuelle neutre et étude de la dispersion inter-runs</div>
 
         <div class="grid-3" style="margin-bottom: 16px;">
           <div class="info-card accent-blue">
-            <div class="card-label blue"><i data-lucide="file-code" style="width: 13px; height: 13px;"></i> 1.1 Le Modèle Nu (Bare LLM)</div>
+            <div class="card-label blue"><i data-lucide="file-code" style="width: 13px; height: 13px;"></i> 1.1 Le Prompt Factuel Neutre et Circonstancié</div>
             <p style="font-size: 0.82rem;">
-              Description minimale neutre : profil individu + itinéraire OTP + consigne neutre <em>« Choisis l'itinéraire le plus approprié »</em>. Zero prompt engineering.
+              Description circonstanciée : profil persona complet + trajets physiques OTP + consigne neutre <em>« Choisis l'itinéraire le plus approprié »</em>. Zero prompt engineering.
             </p>
           </div>
 
@@ -962,7 +962,7 @@
             <div class="card-label amber"><i data-lucide="layers" style="width: 13px; height: 13px;"></i> L'Ablation en 4 Paliers Évaluatifs</div>
             <div style="font-size: 0.81rem; line-height: 1.45;">
               • <strong>Palier 0 :</strong> Planchers (Hasard 25%, Zero-Rule 56.7%, Plus Court OTP)<br>
-              • <strong>Palier 1 :</strong> Modèle Nu (Bare LLM, prompt neutre)<br>
+              • <strong>Palier 1 :</strong> Prompt Factuel Neutre et Circonstancié (Zero Prompt Engineering)<br>
               • <strong>Palier 2 :</strong> Modèle Calibré (Prompt Engineering & Personas)<br>
               • <strong>Palier 3 :</strong> Baselines Statistiques (MNL & Oracle LightGBM 78.54%)
             </div>
@@ -1646,7 +1646,7 @@
       "2. Résumé & Abstract (FR / EN)",
       "3. 1. Contexte & Positionnement Scientifique",
       "4. Étape 0 : Métriques & Validation Démographique",
-      "5. Étape 1 : Modèle Nu & Variabilité Multi-Runs",
+      "5. Étape 1 : Prompt Factuel Neutre & Variabilité Multi-Runs",
       "6. Étape 2 : Invalidation Ablation & Prompt vs Physique",
       "7. Étape 2 : Audit Unitaire vs Oracle LightGBM",
       "8. Étape 3a : Situations Exceptionnelles & Hystérésis 5j",

@@ -132,7 +132,26 @@ _AGE_BUCKETS = [(9, "5-9"), (14, "10-14"), (19, "15-19"), (24, "20-24"),
 _DIST_BUCKETS = [(1, "0-1km"), (2, "1-2km"), (5, "2-5km"),
                  (10, "5-10km"), (20, "10-20km"), (50, "20-50km")]
 
+# Libellé `main_occupation` du persona → identifiant de `cerema_values.yaml`.
+#
+# Les CLÉS portent les deux vocabulaires depuis le ticket 074 : la cohorte v6 pose des
+# libellés anglais (servis au modèle), les cohortes antérieures et leurs exécutions archivées
+# portent les français. Ne connaître qu'un seul vocabulaire ferait perdre toute la dimension
+# « occupation » en silence sur l'autre : les lignes ne manqueraient pas, elles tomberaient
+# dans « hors référentiel ».
+#
+# Les VALEURS ne bougent pas : ce sont les identifiants de l'enquête, que `prompt_calibration/`
+# lit aussi. Ils citent la source, ils ne la décrivent pas.
 OCCUPATION_MAP = {
+    # v6 et après
+    "Pupil (up to Baccalaureate)": "scolaire",
+    "Student": "etudiant",
+    "Full-time worker": "actif_temps_plein",
+    "Part-time worker": "actif_temps_partiel",
+    "Unemployed / job seeker": "chomeur_recherche_emploi",
+    "Homemaker": "personne_au_foyer",
+    "Retired": "Retraité",
+    # v5 et avant
     "Scolaire (jusqu'au Bac)": "scolaire",
     "Étudiant": "etudiant",
     "Travail à plein temps": "actif_temps_plein",

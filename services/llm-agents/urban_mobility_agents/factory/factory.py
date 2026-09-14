@@ -95,6 +95,7 @@ def _save_scenario_params(
     long_term_memory_enabled: bool,
     long_term_self_reflect_enabled: bool,
     simulation_max_days: Optional[int] = None,
+    accidents_enabled: bool = False,
 ) -> None:
     """Persiste les paramètres effectifs du scénario GAMA dans le répertoire d'expérience."""
     workdir = getattr(settings, 'workdir', None)
@@ -105,6 +106,12 @@ def _save_scenario_params(
         'number_of_llm_based_agents': llm_agents,
         'long_term_memory_enabled': long_term_memory_enabled,
         'long_term_self_reflect_enabled': long_term_self_reflect_enabled,
+        # Toujours écrit, y compris à `False` (ticket 070, R5). Contrairement à
+        # `simulation_max_days`, dont l'absence signale un run antérieur à son existence,
+        # un régime d'accidents non consigné ferait douter de TOUS les runs : le lecteur
+        # d'une archive ne pourrait plus dire si le silence vaut « désactivé » ou « la
+        # question ne se posait pas encore ».
+        'accidents_enabled': accidents_enabled,
     }
     # Horizon d'arrêt : consigné dès que GAMA le transmet (ticket 008, A5). Absent
     # des runs antérieurs — ne pas écrire de valeur par défaut, qui laisserait croire
@@ -125,6 +132,7 @@ def init_dynamic_scenario(
     long_term_memory_enabled: bool = None,
     long_term_self_reflect_enabled: bool = None,
     simulation_max_days: Optional[int] = None,
+    accidents_enabled: Optional[bool] = None,
 ) -> BaseScenario:
     """Initialise un nouveau run de simulation avec ses agents dynamiques."""
     logger.info("Création d'un nouveau scénario dynamique...")
@@ -139,6 +147,16 @@ def init_dynamic_scenario(
         settings.agent.long_term_memory_enabled = long_term_memory_enabled
     if long_term_self_reflect_enabled is not None:
         settings.agent.long_term_self_reflect_enabled = long_term_self_reflect_enabled
+    if accidents_enabled is not None:
+        settings.accidents.enabled = accidents_enabled
+
+    # Registre d'accidents du run (ticket 070). Ouvert ou fermé selon l'interrupteur, et il
+    # le journalise dans les deux cas : un run sans accidents doit le dire, sinon rien ne
+    # distingue « désactivé » de « la fonctionnalité est cassée ».
+    from trip_helper import accidents as accidents_module
+
+    accidents_module.reinitialiser()
+    accidents_module.initialiser()
 
     _save_scenario_params(
         population_size=settings.data.population_size,
@@ -146,6 +164,7 @@ def init_dynamic_scenario(
         long_term_memory_enabled=settings.agent.long_term_memory_enabled,
         long_term_self_reflect_enabled=settings.agent.long_term_self_reflect_enabled,
         simulation_max_days=simulation_max_days,
+        accidents_enabled=settings.accidents.enabled,
     )
 
     # Emprise du monde (ticket 031, partie 2) : le POLYGONE des 453 communes de l'enquête, uni à

@@ -86,6 +86,7 @@ class ReflectionMemoStore:
         guidelines: str = "",
         departure_timestamp: float = 0.0,
         llm_params: Optional[dict] = None,
+        schema_version: int = 1,
     ) -> str:
         """Empreinte exacte du prompt effectif de réflexion.
 
@@ -94,6 +95,14 @@ class ReflectionMemoStore:
         paramètres de génération (la température change la plume). La version du
         prompt système n'y figure pas : elle isole déjà le RÉPERTOIRE du store
         (checksum, cf. llm_agent.py).
+
+        `schema_version` (ticket 071, lot 1) entre aussi dans la clé. Le schéma de sortie de
+        la réflexion a changé — chaque concept porte désormais un niveau de gravité et une
+        valence — si bien qu'une réponse mémoïsée sous l'ancien schéma ne contient pas ce que
+        le code attend maintenant. La servir produirait des concepts de gravité nulle, sans
+        qu'aucune erreur n'apparaisse : une gravité nulle est exactement celle d'un trajet
+        parfait. La version fait donc MANQUER le cache plutôt que de servir de travers. Le
+        coût est assumé : le cache de réflexions accumulé sous l'ancien schéma est perdu.
         """
         material = json.dumps(
             {
@@ -104,6 +113,7 @@ class ReflectionMemoStore:
                 "guidelines": guidelines,
                 "departure_timestamp": departure_timestamp,
                 "llm_params": llm_params or {},
+                "schema_version": int(schema_version),
             },
             ensure_ascii=False,
             sort_keys=True,

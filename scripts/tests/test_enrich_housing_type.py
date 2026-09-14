@@ -29,6 +29,7 @@ import json
 import pytest
 
 from mobility_core.housing_type import (
+    LABEL_BY_KEY,
     MIN_RESOURCE_VERSION,
     MODALITY_KEYS,
     SIZE_MAX,
@@ -102,7 +103,7 @@ class TestPoseDuTrait:
     def test_le_trait_porte_le_libelle_de_la_reference(self, table):
         population = [_person(43.61), _person(43.50)]
         enrich_module.enrich(population, table, _FakeResolver())
-        assert _traits(population) == ["Grand habitat collectif", "Individuel isolé"]
+        assert _traits(population) == [LABEL_BY_KEY["grand_habitat_collectif"], LABEL_BY_KEY["individuel_isole"]]
 
     def test_le_decompte_est_rendu_par_modalite(self, table):
         counts = enrich_module.enrich([_person(43.61), _person(43.62), _person(43.50)],
@@ -147,7 +148,7 @@ class TestHorsCouche:
     def test_un_trait_herite_est_retire(self, table):
         """Une population enrichie sous une autre couche ne doit pas garder un trait
         que la couche courante ne sait plus justifier."""
-        population = [_person(45.0, **{TRAIT_KEY: "Individuel isolé"})]
+        population = [_person(45.0, **{TRAIT_KEY: LABEL_BY_KEY["individuel_isole"]})]
         enrich_module.enrich(population, table, _FakeResolver())
         assert TRAIT_KEY not in population[0]["identity"]["traits_json"]
 
@@ -183,7 +184,7 @@ class TestTailleDuMenage:
 
     def test_un_trait_herite_est_retire_faute_de_taille(self, table):
         """Le cas de la ré-imputation : le trait v1 posé sans la taille doit partir."""
-        population = [_person(43.61, size=None, **{TRAIT_KEY: "Individuel isolé"})]
+        population = [_person(43.61, size=None, **{TRAIT_KEY: LABEL_BY_KEY["individuel_isole"]})]
         enrich_module.enrich(population, table, _FakeResolver())
         assert TRAIT_KEY not in population[0]["identity"]["traits_json"]
 
@@ -218,8 +219,8 @@ class TestRecette:
         for size, (isolated, total) in spec.items():
             for index in range(total):
                 lat += 1e-4
-                label = ("Individuel isolé" if index < isolated
-                         else "Grand habitat collectif")
+                label = (LABEL_BY_KEY["individuel_isole"] if index < isolated
+                         else LABEL_BY_KEY["grand_habitat_collectif"])
                 population.append(_person(lat, size=size, **{TRAIT_KEY: label}))
         return population
 
@@ -265,7 +266,7 @@ class TestRecette:
     def test_l_effectif_utile_est_celui_des_adresses(self, table):
         """Six personas d'un même foyer partagent UN tirage : les compter six fois
         ferait croire la cellule six fois plus précise qu'elle n'est."""
-        population = [_person(43.61, size=4, **{TRAIT_KEY: "Individuel isolé"})
+        population = [_person(43.61, size=4, **{TRAIT_KEY: LABEL_BY_KEY["individuel_isole"]})
                       for _ in range(6)]
         measured = enrich_module.measure_by_size(population)
         assert measured[4]["n"] == 6
@@ -342,7 +343,7 @@ class TestCommande:
         self._stub_ressources(monkeypatch, table)
         assert _run(monkeypatch, str(path)) == 0
         assert _traits(json.loads(path.read_text(encoding="utf-8"))) == [
-            "Grand habitat collectif"]
+            LABEL_BY_KEY["grand_habitat_collectif"]]
 
     def test_population_introuvable_signalee(self, tmp_path, monkeypatch, table, capsys):
         self._stub_ressources(monkeypatch, table)
@@ -372,8 +373,8 @@ class TestCommande:
         for size, isolated, total in ((1, 40, 40), (4, 0, 40)):
             for index in range(total):
                 lat += 1e-4
-                label = ("Individuel isolé" if index < isolated
-                         else "Grand habitat collectif")
+                label = (LABEL_BY_KEY["individuel_isole"] if index < isolated
+                         else LABEL_BY_KEY["grand_habitat_collectif"])
                 population.append(_person(lat, size=size, **{TRAIT_KEY: label}))
         path.write_text(json.dumps(population), encoding="utf-8")
 

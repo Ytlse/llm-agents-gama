@@ -11,7 +11,7 @@
           },
           "summary": {
             "type": "string",
-            "description": "L'histoire générée à la première personne"
+            "description": "The generated first-person story"
           }
         },
         "required": [

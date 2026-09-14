@@ -2,10 +2,13 @@
 {# Le texte système n'est plus codé en dur ici : il provient de la variante active   #}
 {# dans prompts.yaml (clé active.itinary_multi_agent), injectée via `system_prompt`.  #}
 {# Le schéma JSON reste injecté depuis schemas.json via `schema`.                     #}
+{# Texte en ANGLAIS depuis le ticket 074. Les étiquettes de MODE et les noms propres  #}
+{# (arrêts, lignes, communes) sont INCHANGÉS : `parse_option_modes` relit les         #}
+{# premières dans ce texte même (models.py:192), les seconds sont invariants.         #}
 <!-- SYSTEM -->
 {{ system_prompt }}
 
-Schéma JSON attendu :
+Expected JSON schema:
 {{ schema }}
 
 <!-- USER -->
@@ -17,8 +20,8 @@ Schéma JSON attendu :
     fournie, sinon contexte partagé de la requête) : un lot peut ainsi mélanger
     des contextes différents sans qu'un préambule commun ne les écrase. #}
 {%- set agent_context = agent.context if (agent.context and agent.context != 'None') else shared_context %}
---- agent_id={{ agent.agent_id }} | Destination : {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Départ : {{ agent.departure_time }}{% endif %} ---
-{% if agent_context %}**Contexte :** {{ agent_context }}
+--- agent_id={{ agent.agent_id }} | Destination: {{ agent.destination }}{% if agent.destination_zone %} ({{ agent.destination_zone }}){% endif %}{% if agent.departure_time %} | Departure: {{ agent.departure_time }}{% endif %} ---
+{% if agent_context %}**Context:** {{ agent_context }}
 {% endif %}
 {#- Anticipation de la chaîne (ticket 014) : météo des tranches restantes de la
     journée (tous les agents) et agenda glissant (agents ayant un véhicule à
@@ -26,19 +29,19 @@ Schéma JSON attendu :
     vous » agissait comme une invitation (+5,5 pts de vélo mesurés) — la règle
     de chaîne vit dans le prompt système (variante expert_chaine). Puces « · »
     exprès : la consigne de sortie réserve les lignes « - [n] » aux options. #}
-{% if agent.day_outlook %}**Météo plus tard :** {{ agent.day_outlook }}.
+{% if agent.day_outlook %}**Weather later:** {{ agent.day_outlook }}.
 {% endif %}
 {{ agent.perception }}
 {% if agent.agenda %}
 
-**Trajets suivants prévus aujourd'hui :**
+**Further trips planned today:**
 {% for line in agent.agenda %}
     · {{ line }}
 {% endfor %}
 {% endif %}
 
-**Options de trajet** ({{ agent.trajectories | length }} options, indices 0 à {{ agent.trajectories | length - 1 }}) :
-{# Les étapes d'un itinéraire (« - Marche jusqu'à… », « - Bus '401' vers… ») sont
+**Trip options** ({{ agent.trajectories | length }} options, indices 0 to {{ agent.trajectories | length - 1 }}):
+{# Les étapes d'un itinéraire (« - Walk to… », « - Bus '401' to… ») sont
    ré-indentées en sous-puces « · » : rendues comme des puces « - » de même niveau
    que la ligne d'option, elles se lisaient comme des options supplémentaires et
    plusieurs modèles renumérotaient alors tout le bloc (index 0..35 pour 6 options),
@@ -49,7 +52,7 @@ Schéma JSON attendu :
 {% endfor %}
 
 {% if agent.history %}
-**Historique :**
+**History:**
 {% for entry in agent.history %}
 - {{ entry }}
 {% endfor %}
@@ -57,7 +60,7 @@ Schéma JSON attendu :
 
 {% endfor %}
 
-Réponds avec l'objet JSON final contenant les recommandations pour {{ agents | length }} persona(s).
-Pour chaque persona, recopie son `agent_id` **exactement** tel que fourni ci-dessus (identifiant numérique uniquement, sans le mot « PERSONA » ni le nom du persona).
-Pour chaque persona, note **toutes** ses options — une entrée `probabilities` par option, avec son `index` et son `mode` recopiés tels quels — et fais en sorte que les `probability` somment à 100. Une option que ce persona ne prendrait jamais reçoit 0.
-Seules les lignes `- [n]` sont des options : les sous-puces « · » détaillent les étapes d'une option et ne reçoivent jamais d'entrée `probabilities`. Les index repartent de 0 dans chaque bloc persona — n'utilise que ceux affichés entre crochets dans le bloc du persona que tu notes, jamais une numérotation continue d'un persona à l'autre.
+Reply with the final JSON object containing the recommendations for {{ agents | length }} persona(s).
+For each persona, copy its `agent_id` **exactly** as provided above (numeric identifier only, without the word "PERSONA" and without the persona's name).
+For each persona, rate **all** of its options — one `probabilities` entry per option, with its `index` and its `mode` copied as they appear — and make the `probability` values sum to 100. An option this persona would never take receives 0.
+Only the `- [n]` lines are options: the « · » sub-bullets detail the steps of an option and never receive a `probabilities` entry. Indices restart from 0 in each persona block — use only those shown in brackets in the block of the persona you are rating, never a numbering continued from one persona to the next.

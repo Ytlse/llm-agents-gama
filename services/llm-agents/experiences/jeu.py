@@ -34,6 +34,7 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from chaine_activites import paires_de_la_journee
+from experiences import froid
 from experiences.decision import SOURCE_ENREGISTREE, SOURCE_LOCALE, Proposition
 from experiences.population import InfoPopulation, sha256_fichier
 from helper import shift_weekend_departure_to_monday, to_timestamp_based_on_day
@@ -356,11 +357,11 @@ def _aplatir(d: dict, prefixe: str = "") -> dict[str, object]:
 def comparer_dependances(
     enregistrees: dict, courantes: dict
 ) -> tuple[list[str], list[str]]:
-    """(dépendances qui diffèrent, dépendances non vérifiables). `arbre_propre` n'est qu'informatif."""
+    """(dépendances qui diffèrent, dépendances non vérifiables). `arbre_propre` et `commit` sont informatifs (audit trail)."""
     a, b = _aplatir(enregistrees), _aplatir(courantes)
     differentes, non_verifiables = [], []
     for cle in sorted(set(a) | set(b)):
-        if cle == "arbre_propre":
+        if cle in ("arbre_propre", "commit"):
             continue
         va, vb = a.get(cle), b.get(cle)
         if va is None or vb is None:
@@ -777,8 +778,27 @@ class Jeu:
             lst.sort(key=lambda x: (x.depart_ts, x.ordinal))
 
     @classmethod
-    def charger(cls, dossier: str | Path, *, verifier: bool = True) -> Jeu:
+    def charger(
+        cls,
+        dossier: str | Path,
+        *,
+        verifier: bool = True,
+        archive_confirmee: str | None = None,
+    ) -> Jeu:
+        """Ouvre un jeu scellé. Point de passage UNIQUE de toute lecture de jeu.
+
+        `archive_confirmee` (ticket 074, A-4) porte le MOTIF d'une lecture en archive froide —
+        la garde de comparabilité D-7, par exemple, qui compare les chaînes d'activités de la
+        v6 à celles de la v5 gelée. Sans motif, un jeu rangé sous `archive/` est refusé : c'est
+        ici que le refus se pose, parce que c'est ici que tout le monde passe.
+        """
         dossier = Path(dossier)
+        froid.verifier(
+            dossier,
+            archive_confirmee,
+            quoi="un jeu scellé",
+            comment_lever="passer `archive_confirmee=\"<motif>\"` à `Jeu.charger`",
+        )
         chemin_manifest = dossier / FICHIER_MANIFEST
         if not chemin_manifest.is_file():
             raise JeuInvalide(f"aucun {FICHIER_MANIFEST} dans {dossier}")

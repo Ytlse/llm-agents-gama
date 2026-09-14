@@ -141,13 +141,15 @@ class TestAgendaLines:
     def test_meteo_differente_annotee(self, monkeypatch):
         monkeypatch.setattr(sc, "day_weather_outlook", lambda ts: None)
         monkeypatch.setattr(sc, "get_weather", lambda ts: (
-            {"weather_label": "Pluie", "temperature": 10.0, "weather_code": 61, "precip_mm": 4.0}
+            {"weather_label": "Light rain", "temperature": 10.0, "weather_code": 61, "precip_mm": 4.0}
             if ts > DEPARTURE else
-            {"weather_label": "Ensoleillé", "temperature": 12.0, "weather_code": 0, "precip_mm": 0.0}
+            {"weather_label": "Clear/Sunny", "temperature": 12.0, "weather_code": 0, "precip_mm": 0.0}
         ))
         person = _day(_person(), *self._acts())
         lines = _agenda_lines(person, person.identity.activities[0], DEPARTURE)
-        assert all("pluie prévu" in line for line in lines)
+        # Anglais depuis le ticket 074 : `_agenda_lines` est la neuvième surface de la bascule,
+        # et son suffixe météo part dans le prompt.
+        assert all("rain expected" in line for line in lines)
 
 
 # ── Assemblage du contexte d'anticipation ─────────────────────────────────────
@@ -170,12 +172,12 @@ class TestBuildAnticipation:
 
     def test_meteo_seule_pour_un_non_motorise(self, monkeypatch):
         monkeypatch.setattr(sc, "get_weather", lambda ts: None)
-        monkeypatch.setattr(sc, "day_weather_outlook", lambda ts: "soirée 13°C, Pluie")
+        monkeypatch.setattr(sc, "day_weather_outlook", lambda ts: "evening 13°C, Light rain")
         person = _day(_person(personal_bike="Pas de vélo", number_of_cars=0), *self._acts())
         antic = _build_anticipation(person, person.identity.activities[0], DEPARTURE)
         assert antic["trace"] == "meteo"
         assert antic["agenda"] == []
-        assert antic["outlook"] == "soirée 13°C, Pluie"
+        assert antic["outlook"] == "evening 13°C, Light rain"
 
     def test_rien_a_montrer_rend_none(self, monkeypatch):
         _no_weather(monkeypatch)

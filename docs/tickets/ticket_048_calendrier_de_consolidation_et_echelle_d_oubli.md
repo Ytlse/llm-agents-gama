@@ -73,13 +73,19 @@ l'ordre par ancienneté est **invariant** au paramètre d'oubli : seul l'espacem
 | 7 jours | 0,000 | 0,000 |
 
 Le critère de réfutation de l'hypothèse — « l'effet mémoire tombe si diviser λ par trois ne
-déplace pas la courbe » — peut donc se déclencher pour une raison **purement technique**.
+déplace pas la courbe » — pouvait donc se déclencher pour une raison **purement technique**.
+⚠ **Caduc depuis le 2026-09-14** : ce critère a été supprimé, avec le bras `exp_04d`
+(ticket 071, § 2.6, issue C). Le défaut décrit ici reste réel — il ne menace simplement plus
+un critère de réfutation.
 
 ### 3. Le paramètre d'oubli déclaré dans les expériences n'est branché sur rien
 
 `memory_decay_lambda` et `memory_horizon_days`, déclarés dans
-`docs/paper/methode/experience_plan/experiments.yaml`, ne sont lus par **aucun code**. Le
-bras de sensibilité à λ divisé par trois n'est aujourd'hui pas exécutable.
+`docs/paper/methode/experience_plan/experiments.yaml`, ne sont lus par **aucun code**.
+⚠ **Toujours à corriger après le 2026-09-14**, mais pour une autre raison : le bras de
+sensibilité à λ ÷ 3 est supprimé (ticket 071, issue C), et pourtant `exp_04a` continue de
+déclarer `memory_decay_lambda: 0.4` que le code n'applique pas — un run qui ne respecterait
+pas sa propre fiche.
 
 ## Décisions de l'auteur, 2026-09-11
 

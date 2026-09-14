@@ -1,0 +1,132 @@
+# Loi d'accidentalité du ticket 070, estimée sur BAAC/ONISR.
+#
+# MESURÉ le 2026-09-14 sur les millésimes 2019-2024, département 31, par
+# docs/traces/2026-09-14_20-40_loi_accidents_baac/mesure_loi_accidents.py (rejouable).
+# Source : data.gouv.fr, Licence Ouverte. 3 789 accidents corporels lus, 3 414 dans
+# l'emprise du graphe simulé, aucun non géolocalisé.
+#
+# CE QUI DEMANDE UN DÉNOMINATEUR ET CE QUI N'EN DEMANDE PAS — la distinction gouverne
+# tout ce fichier. L'heure, le jour et la classe d'axe sont TIRÉS par la simulation : la
+# distribution marginale des accidents observés est exactement ce qu'il faut, et diviser
+# par le trafic serait une faute (on obtiendrait le risque par véhicule-km, qui ferait
+# survenir autant d'accidents à 3 h qu'à 17 h). La météo, elle, est IMPOSÉE par le
+# bulletin du jour : elle réclamerait un risque relatif, donc un dénominateur.
+
+source: BAAC / ONISR — data.gouv.fr, Licence Ouverte
+millesimes: [2019, 2020, 2021, 2022, 2023, 2024]
+departement: '31'
+mesure_le: '2026-09-14'
+accidents_lus: 3789
+accidents_dans_emprise: 3414
+
+# Accidents corporels par jour DANS L'EMPRISE DU GRAPHE (périmètre des 453 communes),
+# et non sur tout le département : 90,1 % des accidents du 31 y tombent. L'ancienne
+# valeur d'amorçage, 1,73/jour, était celle du département entier — elle surestimait.
+taux_base_par_jour: 1.5578
+
+# ── Heure du sinistre : distribution TIRÉE, somme 1 ────────────────────────────────
+# Pointe du soir à 17 h (9,77 %), creux à 3 h (1,45 %) : un rapport de 6,7 entre les deux.
+# C'est ce que le tirage uniforme de la première tranche ignorait complètement.
+distribution_horaire:
+  '00': 0.020322
+  '01': 0.017947
+  '02': 0.018738
+  '03': 0.014516
+  '04': 0.015044
+  '05': 0.016627
+  '06': 0.020586
+  '07': 0.053312
+  '08': 0.058591
+  '09': 0.049353
+  '10': 0.042491
+  '11': 0.043811
+  '12': 0.044339
+  '13': 0.050145
+  '14': 0.047242
+  '15': 0.055688
+  '16': 0.073106
+  '17': 0.097651
+  '18': 0.071259
+  '19': 0.067828
+  '20': 0.046978
+  '21': 0.0256
+  '22': 0.026392
+  '23': 0.022433
+
+# ── Jour de semaine : facteur multiplicatif, moyenne 1 ─────────────────────────────
+# Amplitude modeste et régulière : vendredi 1,19, dimanche 0,83.
+facteur_jour_semaine:
+  lundi: 0.9293
+  mardi: 0.9902
+  mercredi: 1.1029
+  jeudi: 1.0253
+  vendredi: 1.1879
+  samedi: 0.9311
+  dimanche: 0.8332
+
+# ── Classe de vitesse autorisée : distribution TIRÉE, somme 1 ──────────────────────
+# Renseignée sur 97,9 % des accidents (`vma` du fichier lieux). Chaque arête du graphe
+# porte une vitesse, donc aucune table de correspondance à inventer.
+#
+# Le contraste avec la longueur du réseau est le résultat le plus parlant de la mesure,
+# et il justifie à lui seul le conditionnement : la classe 71-90 km/h porte 27,3 % des
+# accidents pour 4,4 % des kilomètres, quand la classe ≤ 30 km/h porte 8,0 % des
+# accidents pour 58,1 % des kilomètres. Tirer une arête au prorata de sa longueur, comme
+# le faisait la première tranche, plaçait donc 58 % des accidents en zone apaisée.
+distribution_classe_vitesse:
+  '<=30': 0.079515
+  '31-50': 0.574663
+  '51-70': 0.042049
+  '71-90': 0.272507
+  '>90': 0.031267
+
+# Kilomètres du graphe `drive` par classe — CONTRÔLE, pas dénominateur. Sert à vérifier
+# qu'une classe tirée existe bien dans le réseau simulé : une classe sans kilomètres est
+# un accident impossible à poser, et cela doit s'entendre plutôt que se taire.
+km_reseau_par_classe:
+  '<=30': 17750.6
+  '31-50': 10350.3
+  '51-70': 660.8
+  '71-90': 1350.2
+  '>90': 431.3
+
+# ── Météo : SEUL FACTEUR NON ÉTABLI, et il reste neutre ────────────────────────────
+#
+# Le calcul a été fait et son résultat est REJETÉ. Rapporter la part d'accidents par
+# condition à la fréquence de cette condition dans les relevés de Toulouse donne :
+#   normale × 1,36 · temps couvert × 0,17 · pluie légère × 0,47 · pluie forte × 1,23
+#   neige × 0,53 · brouillard × 33,7
+# soit « la pluie légère est deux fois plus sûre que la moyenne » et « le brouillard
+# multiplie le risque par 34 ». Aucune des deux n'est croyable.
+#
+# LA CAUSE EST UNE INCOMMENSURABILITÉ DES NOMENCLATURES, pas un manque de données.
+# `atm` est ce que l'agent verbalisateur a coché : 84 % des constats portent « normale »,
+# y compris sous un ciel couvert. La source météo locale, elle, classe 15,6 % des
+# créneaux en « couvert » et 20,2 % en « pluie légère » — cette dernière catégorie
+# absorbant le code 176 « pluie possible », qui est une prévision, pas une observation.
+# Les deux vocabulaires ne découpent pas le même monde ; leur rapport ne mesure rien.
+# Le brouillard s'y ajoute d'un défaut de dénominateur : 0,03 % des créneaux, soit une
+# poignée d'observations, et le ratio explose.
+#
+# TANT QUE CE FACTEUR N'EST PAS ÉTABLI, IL VAUT 1. Ajuster la correspondance jusqu'à
+# obtenir des nombres plausibles reviendrait à choisir le résultat. Les deux voies
+# propres sont : une source d'exposition découpée comme `atm`, ou un risque relatif
+# déclaré exogène (docs/arch/protocole-parametre-exogene.md).
+facteur_meteo_etabli: false
+facteur_meteo:
+  'normale': 1.0
+  'temps couvert': 1.0
+  'pluie légère': 1.0
+  'pluie forte': 1.0
+  'neige – grêle': 1.0
+  'brouillard – fumée': 1.0
+
+# Ce que le calcul rejeté avait produit — conservé pour que le rejet soit vérifiable,
+# jamais lu par le code.
+facteur_meteo_mesure_rejete:
+  'normale': 1.3621
+  'temps couvert': 0.1652
+  'pluie légère': 0.4725
+  'pluie forte': 1.2294
+  'neige – grêle': 0.5269
+  'brouillard – fumée': 33.7208

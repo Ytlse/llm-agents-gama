@@ -54,3 +54,19 @@ Un agent parti travailler à vélo n'a pas de voiture au bureau le soir. Cette �
 Le contrôleur tient donc, pour chaque agent, la position de ses véhicules personnels, et il en tire trois règles : un mode véhiculé n'est proposé que si le véhicule est garé au point de départ ; le véhicule du mode retenu suit son utilisateur à destination, les autres restent où ils sont ; et sur un trajet de retour, si un véhicule attend au départ, les itinéraires candidats sont restreints à ce mode. Cette dernière règle filtre les options, elle n'ajoute pas de décision. <!-- source: docs/arch/vehicle-chain.md, § Les trois règles -->
 
 Il faut en tirer la conséquence méthodologique, et le chapitre 6 y revient : une part de la répartition modale simulée est produite **sous** ces contraintes, pour être plus représentative des situations réelles. Un agent dont la voiture est restée au domicile ne choisit pas de ne pas conduire, il ne peut pas. C'est pourquoi le plancher et le plafond du chapitre 4 sont soumis exactement aux mêmes contraintes : sans cela, nous comparerions des décisions prises dans des mondes différents.
+
+---
+
+### Tickets associés à ce chapitre
+- [Ticket 050](../../../tickets/ticket_050_formalisation_mathematique_agent.md) — Formalisation mathématique du dispositif agentique ($\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$, $\mathcal{A}(o_t, C_i)$)
+- [Ticket 051](../../../tickets/ticket_051_reflexion_architecture_cognitive_memoire.md) — Réflexion, audit épistémologique et refonte de l'architecture mémoire des agents
+
+---
+
+<!-- NOTE DE TRAVAIL — à traiter, ne fait pas partie du texte -->
+
+> **À traiter (2026-09-14, ticket 070).** § 3.1, « La boucle est fermée » range *un bouchon né
+> d'un incident* parmi les faits que l'exécution produit. Le mécanisme n'existe toujours pas :
+> les accidents surviennent désormais au bon moment et au bon endroit (loi BAAC 2019-2024),
+> mais ils **n'allongent aucun trajet**. La phrase est donc en avance sur le code. Deux
+> issues : livrer le retard subi avant la soumission, ou nuancer la phrase.

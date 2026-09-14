@@ -1,17 +1,17 @@
 # Population scellée pour l'article AAMAS — ne pas modifier (cf. `regle`).
 version: sceau1
-nom: population_1000_AAMAS_v5
-scelle_le: '2026-09-04T13:47:53+00:00'
+nom: population_1000_AAMAS_v6
+scelle_le: '2026-09-14T19:27:45+00:00'
 population:
   fichier: population.json
-  sha256: de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce
+  sha256: 412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6
   n: 1000
-  source: data/population/toulouse_population_1000_AAMAS.json
-  source_sha256: de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce
+  source: data/population/toulouse_population_1000_AAMAS_v6.json
+  source_sha256: 412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6
 perimetre:
   definition: 453 communes de l'enquête EMC² Toulouse 2023, six départements (31,
     32, 81, 82, 09, 11), polygone communal — pas de rayon
-  table_communes: llm_module/data/commune_couronne.json
+  table_communes: packages/mobility_core/src/mobility_core/data/commune_couronne.json
   departements_attendus:
     '31': 346
     '32': 38
@@ -56,7 +56,7 @@ selection:
       hors_perimetre: 1
     menages: 5652
     fichier: /Users/yvesb/Documents/Projects/llm-agents-gama/scripts/data/population/Temp/4_zone_enriched/toulouse_population_10000.json
-    sha256: bb8f9095ef322a03400516e1c5ddd741bc59731601a9fbad3e2dec57a5eb026c
+    sha256: e90dc9236e78d81879063e89cc6e3b972c8d3030b7268526c18e7a4d9bf296b7
     residence_zone:
       deja_pose: 11315
       pose_sans_domicile: 14
@@ -111,7 +111,7 @@ selection:
     perte_apres_pt: 3.5
     candidats_par_menage: 150
     marges_non_mesurees: []
-    duree_s: 2.58
+    duree_s: 2.43
 controle:
   rapport: CONTROLE.md
   verdicts:
@@ -158,10 +158,13 @@ controle:
         mobiles avec un déplacement vers l''école un jour de semaine'
   synthese_des_ecarts: []
 depot:
-  git_head: 4dd30e3c728e6c588c05d33a704465d387c78524
+  git_head: 643bb3ae961fe180d01b3c07c68b128e2beaccaf
   branche: feat_cache_population
   arbre_propre: false
 regle: Ce dossier ne se modifie pas. Toute correction de la population produit un
   nouveau dossier scellé ; les jeux gelés et les runs qui citent celui-ci citent son
   sha256.
-note: ''
+note: Cohorte v6 — bascule anglaise du ticket 074. Même substrat que la v5 (mêmes
+  1 000 person_id, mêmes chaînes d'activités) ; seuls main_occupation, housing_type,
+  personal_bike, residence_zone et travel_purposes changent de langue, et les prénoms
+  sont désormais tirés d'une graine par person_id.

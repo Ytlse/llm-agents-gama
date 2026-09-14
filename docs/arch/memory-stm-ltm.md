@@ -35,7 +35,7 @@ décision de conception d'un accident d'implémentation — et les deux existent
 | Réflexion déclenchée par importance cumulée | Park et al. (2023) | **absent** → partie III |
 | Oubli d'Ebbinghaus, force renforcée au rappel | MemoryBank, Zhong et al. (2024) | → partie III |
 | Opérations explicites sur un souvenir existant | Mem0, Chhikara et al. (2025) ; A-MEM, Xu et al. (2025) | → partie III |
-| Récupération structurée avant sémantique | HippoRAG, Gutiérrez et al. (2024) | → partie III, **avec divergence** |
+| Génération de candidats multi-viviers | technique classique de recherche d'information | → partie III |
 | Mémoire noyau toujours en contexte | MemGPT, Packer et al. (2023) | → partie III |
 | Réflexion périodique et formation d'habitudes | GATSim, Liu et al. (2025) | en service (auto-réflexion à 3 jours) |
 | Ablation de mémoire comme protocole de preuve | Sensors 25(18), 5688 (2025) | protocole des expériences d'hystérésis |
@@ -79,7 +79,9 @@ partie III réintroduit. L'écart d'échelle est par ailleurs important :
 Leur demi-vie est de **5,8 jours**, la nôtre de **1,94 jour** : nos agents oublient trois fois
 plus vite. Ce n'est pas un défaut en soi — un mois de vie de village n'est pas une semaine de
 navette domicile-travail — mais c'est un choix, et il doit être su. Le bras de sensibilité des
-expériences, qui porte la constante à 7,7 jours, encadre la valeur de Park et al.
+expériences prend, depuis le 2026-09-14, la valeur de Park et al. elle-même comme second point,
+8,3 jours, là où la première version la fixait à 7,7 jours, λ divisé par trois (partie III,
+règle des constantes).
 
 **4. La normalisation min-max est abandonnée, et c'est notre divergence propre.** Park et al.
 écrivent explicitement qu'ils ramènent les trois composantes sur [0, 1] par min-max avant de
@@ -242,10 +244,16 @@ Un groupe = toutes les observations et décisions d'un même déplacement (de la
 
 ### Déclenchement
 
-La consolidation se déclenche à **deux** conditions, dont la première suffit.
+La consolidation se déclenche à **trois** conditions, dont la première rencontrée suffit. Elles
+sont additives : aucune ne remplace les autres.
 
 ```
 len(stm.recent_entries) >= settings.agent.stm_reflection_min_entries   # défaut : 10
+```
+
+```
+somme des gravités du tampon >= memoire__theta_gravite_cumulee   # Θ = 0,7
+et tampon non vide
 ```
 
 ```
@@ -254,7 +262,19 @@ et tampon non vide
 et le plancher n'a pas déjà servi cet agent aujourd'hui
 ```
 
-La seconde est le **plancher journalier** (ticket 048, depuis le 2026-09-11).
+La deuxième est le **déclenchement par rupture** (ticket 071, lot 1, depuis le 2026-09-14).
+C'est le mécanisme de Park et al. (2023, § 4.2), qui remplace un compte d'entrées par une somme
+d'importances — avec une différence à dire : chez eux le seuil cumulé se franchit deux ou trois
+fois par jour, c'est un régime **courant** ; ici il est **exceptionnel** par construction de Θ,
+réservé aux ruptures. La consolidation de base reste celle de la nuit.
+
+⚠ **Θ = 0,7 a été fixé sans mesure**, faute de run ayant jamais calculé la gravité
+déterministe. Le critère de vérification est « moins d'un déclenchement par agent et par semaine
+simulée » ; au-delà, une alarme `[ALARME]` part sur front montant et Θ doit monter. La ligne de
+journal du cycle compte les trois motifs **séparément**, sans quoi cette vérification demanderait
+de rejouer la simulation.
+
+La troisième est le **plancher journalier** (ticket 048, depuis le 2026-09-11).
 
 **Ce n'est pas une invention, c'est une restauration.** Vu, Gaudou & Oberoi (2025), dont ce
 dispositif est la continuation, écrivent que la mémoire courte « sert principalement d'entrée
@@ -374,6 +394,41 @@ Attendre le message « épuisées » avant d'arrêter les services si la LTM du 
 └── stm.remove_batch(entries_traitées)
 ```
 
+### Consolidation des concepts (ticket 071, lot 3)
+
+Un concept ne s'empile plus, il se **corrige**. Les concepts que l'agent tient déjà sur les
+modes et les motifs de sa journée lui sont montrés dans l'appel de réflexion **qui a déjà
+lieu** — coût marginal nul — et il désigne celui qu'il met à jour.
+
+| Opération | Effet |
+|---|---|
+| `creer` | nouveau concept |
+| `confirmer` | `observations += 1`, rien de neuf n'est écrit, force renforcée |
+| `preciser` | le contenu est remplacé, compteurs et historique conservés |
+| `contredire` | `contre_exemples += 1` sur la cible, et le nouveau concept prend la relève |
+
+```
+confiance = (observations + 1) / (observations + contre_exemples + 2)      # Laplace (1814)
+```
+
+Sous 0,5 — le concept a été contredit plus souvent que confirmé — il **cesse d'être servi**,
+et sa mise à l'écart est **datée**. Il n'est jamais supprimé : cette mise à l'écart datée EST
+la trace lisible du changement d'habitude que l'expérience d'hystérésis cherche.
+
+⚠ **Trois conséquences à connaître.**
+
+1. La date est posée à la **cessation de service**, pas au seuil de trois contre-exemples. Un
+   concept sort du panier dès qu'il n'est plus servi, donc il n'est plus montré, donc il ne peut
+   plus être contredit : rattacher la date au seuil de trois la rendait inatteignable pour un
+   concept peu observé, et l'observable n'aurait jamais été écrit.
+2. Le nombre de contradictions qu'un concept peut recevoir est **borné** par sa sortie du
+   panier. Un concept observé trois fois en reçoit quatre, puis plus aucune.
+3. La règle de non-exclusion du lot 2 gagne une **troisième exception**, avec l'identité de
+   l'agent et la fenêtre d'âge : le concept mis hors service.
+
+Le panier `(mode, motif)` désigne un **ensemble** de candidats, jamais un emplacement unique :
+une identité par couple condamnerait l'agent à une seule pensée par mode et par motif.
+
 ### Format des concepts (5-tuple)
 
 Chaque concept extrait est un tableau JSON de 5 éléments :
@@ -471,6 +526,31 @@ def _cleanup_metadata_cache(self):
 
 ## Algorithme de récupération (retrieval)
 
+### Étape 0 — Trois viviers, et non plus un (ticket 071, lot 2)
+
+Le vivier de candidats n'est plus produit par une seule passe sémantique. Trois passes
+s'unissent, dédupliquées par identifiant de document.
+
+| Vivier | Contenu | Coût |
+|---|---|---|
+| **A — sémantique** | les plus proches du texte de la situation, borne inchangée | un plongement de requête |
+| **B — par objet** | pour chaque mode offert dans les options, les souvenirs portant ce mode, les plus graves et les plus récents d'abord, 8 au plus par mode | nul, lecture en RAM |
+| **C — chocs** | les souvenirs au-dessus du seuil de gravité, 5 au plus, **sans aucune condition** de lieu, d'heure ni de motif | nul, lecture en RAM |
+
+Les viviers B et C lisent les métadonnées de l'agent, **déjà en mémoire vive** — rechargées du
+disque si l'agent avait été évincé du cache LRU. Aucun plongement, aucune requête au magasin
+vectoriel.
+
+**Le phénomène que cela permet d'observer.** Une chute à vélo à 8 h 12 boulevard de Strasbourg
+doit peser sur la décision de 18 h 40 où le vélo figure parmi les options. Ni le lieu, ni le
+créneau, ni le motif ne coïncident : seul l'objet les relie, et l'objet suffit. Le vivier C
+garantit en plus qu'un souvenir grave n'est jamais perdu par accident de classement.
+
+**Instrumentation.** La part du top-K issue de chaque vivier est journalisée sur une fenêtre de
+200 décisions. Deux alarmes sur front montant : le vivier B vide sur plus d'un tiers des
+décisions, signe d'une normalisation d'axes défaillante ; et plus de 95 % du top-K venant du
+seul vivier A, signe que les viviers structurés ne servent à rien.
+
 ### Étape 1 — Pré-filtrage ChromaDB
 
 ```python
@@ -487,7 +567,12 @@ Le filtrage par `person_id` est délégué à ChromaDB (clause `where`) ; la mar
 |--------|-----------|------------|
 | Isolation agent | `node.metadata["person_id"] == person_id` | Toujours |
 | Fenêtre passée | `delta_days <= max_past_days` (défaut : 30) | `long_term_max_days_query` |
-| Jour ouvré | week-day query ↔ week-day entrée | `long_term_filter_by_datetime` |
+| Jour ouvré et créneau | week-day et tranche horaire de la requête | `long_term_memory_filter_by_datetime` |
+
+Les filtres se **cumulent** depuis le 2026-09-14 (ticket 071, défaut C). Auparavant, activer le
+filtre par jour et créneau provoquait une sortie immédiate, et la fenêtre d'âge n'était **jamais
+appliquée** : un souvenir vieux de trois ans en temps simulé passait, pourvu qu'il tombe le même
+jour de semaine que la requête. Le défaut était dormant, l'option étant à faux par défaut.
 
 ### Étape 2 — Score composite
 
@@ -522,9 +607,11 @@ entre elles, leurs scores étant relatifs à des lots différents.
 
 Score brut fourni par ChromaDB (distance cosine dans l'espace 384-dim de `all-MiniLM-L6-v2`).
 
-#### Composante 2 — Score BLEU sur mots-clés (`imp_score`, poids 0.3)
+#### Composante 2 — Recouvrement lexical sur mots-clés (`imp_score`, poids 0.3)
 
 Mesure le chevauchement lexical entre la requête et le champ `tags` de l'entrée mémoire. Utilise des unigrammes (poids 0.7) et des bigrammes (poids 0.3) :
+
+⚠ **Ce n'est pas un BLEU**, contrairement à ce que le nom de la variable et la littérature d'origine laissent croire. Le BLEU de Papineni et al. (2002) est une moyenne géométrique de *précisions* d'n-grammes assortie d'une pénalité de brièveté, conçue pour évaluer une traduction. Ce qui est calculé ici est un **taux de rappel lexical pondéré**. L'appellation vient de Vu, Gaudou & Oberoi (2025), qui écrivent `similarity_score = BLEU-2(C, R)` ; elle est citée comme leur, pas reprise à notre compte.
 
 ```python
 def _bleu_score(self, query: str, keyword: str) -> float:
@@ -534,8 +621,11 @@ def _bleu_score(self, query: str, keyword: str) -> float:
     unigram_score = |kw_unigrams ∩ q_unigrams| / |kw_unigrams|
     bigram_score  = |kw_bigrams  ∩ q_bigrams | / |kw_bigrams |
 
-    return 0.7 * unigram_score + 0.3 * bigram_score
+    # Ticket 071 : sans bigrammes, tout le poids revient aux unigrammes
+    return 0.7 * unigram_score + 0.3 * bigram_score  if kw_bigrams else unigram_score
 ```
+
+⚠ **Le repli sur les unigrammes date du 2026-09-14** (ticket 071, défaut D). Une étiquette d'un seul mot n'a aucun bigramme : appliquer le poids 0,3 à un score nul la **plafonnait à 0,70** même en correspondance parfaite, contre 1,00 pour une étiquette de deux mots. La pénalité était arbitraire et permanente.
 
 **Exemple :** requête `"bus 401 ponctualité matin"`, tags `"bus 401, ponctualité"` → unigramme overlap = 3/3 = 1.0, bigramme overlap = `{(bus,401)} ∩ {(bus,401),(401,ponctualité)} = 1` → score = 0.7 × 1.0 + 0.3 × 0.5 = **0.85**.
 
@@ -640,14 +730,63 @@ if len(self.user_metadata[person_id]["entries"]) > 10000:
 ### Politique de rétention
 
 ```python
-def cleanup_user_memories(person_id, days_threshold=30):
-    cutoff_date = now - timedelta(days=days_threshold)
+def cleanup_user_memories(person_id, days_threshold=30, now=None):
+    sim_now = now or _sim_now(person_id)      # souvenir le plus récent de l'agent
+    if sim_now is None:
+        return                                 # on ne nettoie RIEN plutôt que de deviner
     for entry in entries:
+        if not entry.est_episodique:           # concepts, résumés
+            keep                               # jamais l'horloge (lot 3 : la contradiction)
+        age = sim_now - entry.horodatage_de_reference   # depuis le DERNIER RAPPEL
         keep if (
-            entry.timestamp > cutoff_date          OR
-            entry.memory_type in ["reflection", "summary"]
+            age <= days_threshold              OR   # plancher de sécurité
+            exp(-age / entry.force) >= memoire__purge_seuil_poids
         )
+    _delete_from_index(supprimés)              # retrait du vector store
 ```
+
+⚠ **La règle a changé le 2026-09-14** (ticket 071, lot 1). Elle reposait sur un seuil d'âge
+commun plus une exemption par **type** : les réflexions et les résumés ne partaient jamais. Deux
+conséquences fâcheuses, que le lot 1 corrige : un souvenir grave de trente et un jours tombait
+avec les trajets ordinaires, et les réflexions s'accumulaient sans fin.
+
+Deux registres, comme la taxonomie de Tulving (1972) le demande :
+
+| Registre | Ici | Ce qui l'efface |
+|---|---|---|
+| **Sémantique** | concepts, résumés | la **contradiction**, jamais l'horloge (lot 3) |
+| **Épisodique** | entrées brutes, réflexions | le **poids temporel** sous 1 %, soit ~4,6 constantes de temps |
+
+Treize jours pour un trajet banal jamais rappelé, quatre-vingt-onze pour un souvenir
+`marquant` : donc **jamais dans un run**. C'est désormais la gravité, et le nombre de rappels,
+qui décident de la survie — plus le seul calendrier. `days_threshold` reste un **plancher de
+sécurité** : rien de plus jeune n'est purgé, il ne peut que retarder une purge.
+
+⚠ **Le seuil se calcule en temps SIMULÉ depuis le 2026-09-14** (ticket 071, défaut A). Il se
+calculait auparavant sur `datetime.now()`, l'horloge de la **machine hôte**, alors que
+`entry.timestamp` porte l'heure murale de GAMA. Dès qu'un run rejouait une date antérieure de
+plus que le seuil, la condition de conservation était fausse pour **toutes** les entrées, et le
+nettoyage vidait concepts et conversations en bloc. Le défaut n'a jamais pu se produire, son
+seul déclencheur demandant dix mille entrées pour un agent, soit près de quatorze cents jours
+simulés.
+
+Le « maintenant » d'un agent est le souvenir le plus récent qu'il porte. **Un nettoyage qui ne
+sait pas dater ne nettoie rien** : jamais de repli sur l'horloge de la machine, une suppression
+ne devant pas dépendre de la date à laquelle le run a été lancé.
+
+⚠ **Les entrées retirées sortent aussi de l'index vectoriel** depuis la même date (défaut B).
+Sans cela, un souvenir absent des métadonnées continuait d'être renvoyé par ChromaDB et
+réinjecté dans les prompts. Trois précisions. L'identifiant de document est désormais **monotone
+et persisté** (`next_doc_index`), là où il dérivait de la longueur de la liste et entrait donc
+en collision après un nettoyage. Une suppression qui échoue est journalisée et **non propagée** :
+elle ne doit pas faire perdre la mise à jour des métadonnées. Et les entrées écrites avant ce
+ticket n'ont pas d'identifiant, donc ne sont pas adressables : elles sortent des métadonnées et
+restent dans l'index, ce qui est signalé en WARNING.
+
+**Résiduel assumé.** Un second chemin de divergence subsiste, indépendant du nettoyage : les
+entrées d'un format non relisible sont ignorées au chargement des métadonnées et restent dans
+l'index. Le fermer demanderait de vérifier l'appartenance de chaque document aux métadonnées
+actives à chaque rappel. Écarté comme disproportionné, consigné pour ne pas être oublié.
 
 Les réflexions et résumés sont **toujours conservés** indépendamment de leur âge. Seules les entrées CONCEPT ou CONVERSATION antérieures au seuil sont supprimées.
 
@@ -671,6 +810,45 @@ La réintroduction d'une gravité est spécifiée en **partie III, section 1**.
 Lorsque plus de 2 000 agents sont en RAM, les plus anciennement accédés sont flushés sur disque avant d'être retirés du dict Python, puis un `gc.collect()` libère la mémoire.
 
 ---
+
+## La mémoire noyau (ticket 071, lot 4)
+
+Les dix souvenirs bruts servis au modèle sont remplacés par un **bloc permanent structuré**,
+complété de deux ou trois entrées épisodiques rappelées pour la décision en cours. C'est le
+*working context* de MemGPT (Packer et al., 2023, § 2.1).
+
+```
+Mes habitudes                                 [ produit par le JOURNAL DES TRAJETS ]
+- work le matin : à vélo, 9 fois sur 11. 2 retard(s) de plus de 10 min
+
+Ce que je sais                                        [ produit par les CONCEPTS ]
+- Le bus 401 est fiable, sauf les jours de pluie.                          (12 obs.)
+
+Ce qui a changé récemment                    [ produit par les CHOCS et les MISES À L'ÉCART ]
+- Je ne crois plus que : la ligne A est fiable
+```
+
+**Les trois blocs sont CALCULÉS, aucun n'est écrit par le modèle**, et le lot ne coûte donc
+aucune inférence supplémentaire. La spécification ne calculait que les habitudes et confiait les
+connaissances au modèle ; depuis le lot 3, un concept porte son compteur d'observations, sa
+confiance et son état de service, si bien que le bloc se calcule exactement. L'argument du
+garde-fou — un texte réécrit périodiquement par un modèle dérive et invente — vaut pour les trois.
+
+**Le bloc ne porte aucune métadonnée sur lui-même** : ni date de mise à jour, ni nombre de jours
+de vécu. Une personne ne pense pas « mon résumé d'habitudes date de trois jours » ; lui donner
+cette phrase l'invite à raisonner sur le mécanisme de sa mémoire au lieu de raisonner sur son
+trajet. Un bloc vide est **absent**, et non présent avec un titre : un titre sans contenu dit au
+modèle qu'il devrait y avoir quelque chose.
+
+**Le journal des trajets n'existait pas** et a été créé : `MoveLogger` écrit dans `moves.csv` et
+rien d'autre, `PersonState` ne garde aucun historique, et relire un CSV à chaque décision est
+exclu. C'est un compteur par agent — modes retenus et retards subis, par couple motif-créneau —
+**persisté avec les métadonnées de l'agent**, ce qui réutilise l'écriture différée en place. Il
+est alimenté à l'ARRIVÉE, seul endroit où le mode retenu et le retard réellement subi sont connus
+ensemble.
+
+Le dernier bloc est l'endroit où l'hystérésis devient lisible dans le prompt lui-même, et non
+plus seulement dans les statistiques de sortie.
 
 ## Intégration dans la pipeline de décision
 
@@ -746,13 +924,15 @@ documentation.
 | Paramètre | Défaut | Effet |
 |-----------|--------|-------|
 | `long_term_max_entries_query` | 10 | Top-K renvoyé au LLM |
-| `long_term_max_days_query` | 30 | Fenêtre de look-back en jours |
-| `long_term_retrieval__sim_weight` | 0.4 | Poids similarité cosine |
-| `long_term_retrieval__keyword_weight` | 0.3 | Poids score BLEU |
-| `long_term_retrieval__time_weight` | 0.3 | Poids décroissance temporelle |
+| `long_term_max_days_query` | 60 | Fenêtre de look-back en jours. Portée de 30 à 60 au ticket 071, lot 0. Vaut l'**horizon de l'expérience**, plafonné par `memoire__fenetre_age_max_jours` : `experiences/cli.py` l'applique depuis `horizon_jours` au lancement. À 30 jours en dur, un run de soixante perdait son second mois sans qu'aucune ligne ne le dise. |
+| `long_term_retrieval__sim_weight` | 0.4 | Poids similarité cosine. **Passe à 0,30 au lot 2**, pas avant. |
+| `long_term_retrieval__keyword_weight` | 0.3 | Poids score BLEU. Devient l'**affinité catégorielle** et passe à 0,10 au lot 2. |
+| `long_term_retrieval__time_weight` | 0.3 | Poids décroissance temporelle. **Passe à 0,20 au lot 2.** |
+| `long_term_retrieval__importance_weight` | 0.20 | Poids de la gravité. **Déclaré au lot 0, lu par personne** jusqu'au lot 2. |
+| `long_term_retrieval__affinite_weight` | 0.20 | Poids de l'affinité d'axes. **Déclaré au lot 0, lu par personne** jusqu'au lot 2. |
 | `long_term_retrieval__force_base_jours` | 2.8 | Constante de temps de l'oubli, en jours |
 | `long_term_retrieval__default_reflection_importance_score` | 0.2 | ⚠ Nom trompeur : valeur de repli du score **BLEU** pour les entrées sans `tags`, pas une importance. |
-| `long_term_memory_filter_by_datetime` | false | Active deux filtres supplémentaires sur le vivier : même classe de jour (ouvré/week-end) et même tranche horaire que la requête. Coupe le vivier, à manier avec la règle de non-exclusion du lot 2 en tête. |
+| `long_term_memory_filter_by_datetime` | false | Active deux filtres supplémentaires sur le vivier : même classe de jour (ouvré/week-end) et même tranche horaire que la requête. Se **cumule** avec la fenêtre d'âge depuis le ticket 071 ; il l'annulait auparavant. Coupe le vivier, à manier avec la règle de non-exclusion du lot 2 en tête. |
 
 ### Auto-réflexion LTM
 
@@ -805,6 +985,7 @@ deviennent nécessaires dès la partie III, dont chaque section porte sa propre 
 - [cache-memory.md](cache-memory.md) — le cache sémantique des décisions, orthogonal à la mémoire, et la mémoïsation des réflexions
 - [llm-inference.md](llm-inference.md) — la file EDF, la contre-pression et l'alarme de backlog
 - [ticket 048](../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — le calendrier de consolidation, l'échelle d'oubli et le coût des réflexions
+- [ticket 071](../tickets/ticket_071_evolution_memoire_du_code_actuel_a_l_etat_vise.md) — les quatre défauts du rappel et du nettoyage, issus d'une expertise externe
 
 ---
 
@@ -827,12 +1008,33 @@ deviennent nécessaires dès la partie III, dont chaque section porte sa propre 
    d'extraction-puis-mise-à-jour de **Mem0, Chhikara et al. (2025)** et de l'évolution des
    notes d'**A-MEM, Xu et al. (2025)**.
 3. **Au rappel, rien ne filtre, tout pondère.** Hors identité de l'agent et fenêtre d'âge,
-   aucun critère n'exclut un souvenir. Cette règle est une **divergence délibérée** avec
-   HippoRAG, expliquée au lot 2.
+   aucun critère n'exclut un souvenir. La justification est au lot 2.
 
 ---
 
 ## Lot 1 — La gravité d'un souvenir
+
+> ✅ **LIVRÉ le 2026-09-14.** Ce lot n'est plus une spécification, c'est le dispositif en
+> service : la gravité déterministe (`llm/gravite.py`), les huit champs de `MemoryEntry` plus
+> `dernier_rappel`, la durée de vie couplée à la gravité, le renforcement additif au rappel, la
+> décroissance depuis le dernier rappel, le déclenchement par rupture et la rétention par le
+> poids. Voir la **partie II** pour la description de ce qui tourne ; ce qui suit garde le
+> raisonnement et les sources, qui se transportent à l'article.
+>
+> **Deux écarts avec le texte ci-dessous, décidés en cours de route :**
+> 1. la formule de départage est corrigée (départage nul pour un concept seul, gravité bornée
+>    sur [0, 1]) — voir plus bas ;
+> 2. un champ `dernier_rappel` s'ajoute aux huit, distinct de `timestamp` qui reste l'heure de
+>    l'ÉVÉNEMENT : celui-ci s'affiche dans le prompt et le faire glisser au rappel réécrirait
+>    l'histoire de l'agent.
+>
+> **Ce qui n'est PAS alimenté** : la composante « incident réseau » de la gravité déterministe.
+> GAMA ne joue pas encore les événements. La chaîne est posée de bout en bout et la composante
+> est **déclarée inactive** au démarrage — une composante sans source contribue zéro, et zéro
+> est exactement la valeur d'un trajet parfait. Les trois autres ne sont pas repondérées.
+>
+> Tests : `test_071_lot1_gravite.py` (57) et `test_071_lot1_chaine.py` (27).
+
 
 ### Structure
 
@@ -903,8 +1105,27 @@ banal décrocherait la note maximale. L'ordre à l'intérieur d'un même niveau 
 concepts que de ±0,05.
 
 ```
-I_llm = valeur(niveau) + 0.05 × (2 × (n_niveau - rang_dans_niveau) / max(n_niveau - 1, 1) - 1)
+ecart(n, rang) = 0                              si n = 1      # rien à départager
+               = 2 × (n - rang) / (n - 1) - 1   sinon         # +1 au premier, -1 au dernier
+
+I_llm = borne_0_1( valeur(niveau) + 0.05 × ecart(n_niveau, rang_dans_niveau) )
 ```
+
+> ⚠ **Corrigée le 2026-09-14, deux défauts trouvés en rédigeant les tests du lot 1**
+> (`specs/ticket_071/tests_lot1.md`, § 9). La formule précédente était
+> `valeur + 0,05 × (2 × (n - rang) / max(n - 1, 1) - 1)`.
+>
+> **Un concept seul dans son niveau était pénalisé de 0,05.** Avec `n = 1`, le terme valait
+> `2 × 0 / 1 - 1 = -1` : un `marquant` seul tombait à 0,95, un `genant` seul à 0,45. Or « seul
+> dans son niveau » est le cas le plus courant, une réflexion rendant zéro à cinq concepts. Le
+> départage vaut désormais **zéro** quand il n'y a qu'un candidat.
+>
+> **La gravité pouvait dépasser 1.** Un `marquant` premier de trois valait 1,05, et la durée de
+> vie qui en découle passait de 19,60 à 20,44 jours. La borne existait pour `I_det`, elle
+> manquait pour `I_llm` : elle est ajoutée.
+>
+> Aucun code n'est concerné, rien n'était implémenté. Les valeurs de la table ci-dessus sont
+> inchangées : seuls les cas limites bougeaient.
 
 **Règle de sécurité, non négociable.** La gravité retenue pour un concept est le **maximum**
 entre le jugement du modèle et la plus forte gravité déterministe du groupe d'entrées dont il
@@ -918,8 +1139,22 @@ I_concept = max(I_llm, max(I_det des entrées consommées))
 ### Déclenchement par gravité cumulée
 
 Le seuil de réflexion passe d'un **compte d'entrées** à une **somme de gravités**, ce qui est le
-mécanisme de Park et al. (2023), seuil fixé à 150 chez eux sur une échelle de 1 à 10. Le
-plancher journalier du ticket 048 reste en place comme garantie basse.
+mécanisme de Park et al. (2023), seuil fixé à 150 chez eux sur une échelle de 1 à 10.
+
+> ✅ **Arbitrage rendu et confirmé par l'auteur le 2026-09-14** (ticket 071, § 2.6, arbitrage 2).
+> **Le plancher journalier de 22 h, livré au ticket 048, est le régime de consolidation.** Le
+> déclenchement par gravité cumulée n'intervient en cours de journée que sur **rupture**,
+> `I_cumul ≥ Θ`, avec `Θ = 0,7`, le seuil du choc. La réflexion par déplacement, un temps envisagée, est
+> **abandonnée**. Trois raisons : la consolidation mnésique humaine est favorisée par le sommeil
+> et les périodes hors ligne (Diekelmann & Born, 2010), et l'extraction des régularités relève
+> d'un rejeu différé dans l'architecture à deux systèmes (McClelland, McNaughton & O'Reilly,
+> 1995) ; Vu et al. (2025, § 3.6) spécifient la réflexion à la fin de chaque jour simulé ; et le
+> coût mesuré au ticket 048 rend le régime par déplacement inutile, +22 % sur la campagne pour
+> une réactivité que rien ne réclame. Différence avec Park et al. à dire : chez eux le seuil se
+> franchit deux ou trois fois par jour, c'est un régime courant ; ici il est exceptionnel par
+> construction de `Θ`. **La mesure de `I_det` par agent-jour**, ticket 048, sert à vérifier que
+> ce seuil reste exceptionnel, moins d'un déclenchement par agent et par semaine, et à le
+> relever sinon.
 
 ### Oubli : une courbe, et un plancher
 
@@ -928,35 +1163,128 @@ est celui de **MemoryBank, Zhong, Guo, Gao, Ye & Wang (2024)**, qui applique la 
 d'Ebbinghaus et fait croître la force d'un souvenir à chaque rappel.
 
 ```
-force_initiale = S0 × (1 + k × importance)         # S0 = 2.8 jours, k = 3
+force_initiale = min(S0 × (1 + k × importance), FORCE_MAX)   # S0 = 2.8 jours, k = 6, FORCE_MAX = 30 jours
 ```
 
 `S0` vaut 2,8 jours **pour reproduire exactement la décroissance en service** : un `S0` plus
 court accélérerait l'oubli en silence, et tout écart mesuré ensuite deviendrait inattribuable.
-Un trajet banal part donc à près de trois jours, un souvenir `grave` à neuf jours, un souvenir
-`marquant` à onze.
+Sa règle de conception, écrite le 2026-09-14 : un trajet banal pèse moins de 10 % après une
+semaine, `exp(-7/2,8) = 0,08`. Son origine est à dire honnêtement dans l'article : la base de
+0,7 par jour est héritée de l'implémentation de Vu et al., **leur article donne la formule mais
+pas la valeur**.
+
+`k` vaut 6, et non 3 comme dans la première version de cette partie. La règle vient de l'ancre
+textuelle du niveau `marquant`, « je m'en souviendrai dans un mois » : un tel souvenir garde la
+moitié de son poids à deux semaines et un cinquième à trente jours. À `k = 3` il tombait à 7 %
+en un mois, ce qui contredisait la phrase qui le définit.
+
+| Niveau | Gravité | Durée de vie initiale | Poids à 7 j | à 14 j | à 30 j | à 60 j |
+|---|---|---|---|---|---|---|
+| trajet nominal | 0 | 2,8 j | 0,08 | 0,007 | — | — |
+| `genant` | 0,50 | 11,2 j | 0,54 | 0,29 | 0,07 | 0,005 |
+| `grave` | 0,75 | 15,4 j | 0,63 | 0,40 | 0,14 | 0,02 |
+| `marquant` | 1,00 | 19,6 j | 0,70 | 0,49 | 0,22 | 0,05 |
+
+Le plafond `FORCE_MAX` s'applique dès l'écriture : aucune durée de vie ne le dépasse, y compris
+dans le bras de sensibilité où `S0` triple.
 
 ```
-score_temps = max( exp(-Δt / force),  plancher )
-
-plancher = φ × importance   si importance ≥ I_choc     # φ = 0.5, I_choc = 0.7
-plancher = 0                sinon
+score_temps = exp(-Δt / force)
 ```
 
-**Le plancher est une divergence avec MemoryBank, et elle est délibérée.** Une courbe d'oubli
-uniforme efface le choc. Or un événement à forte charge se consolide au lieu de se lisser, et
-surtout : l'expérience d'hystérésis n'a de sens que si le souvenir de la panne survit assez
-longtemps pour peser sur les décisions des jours suivants. Le plancher borne la décroissance par
-le bas au-delà d'un seuil de gravité — un souvenir grave s'affaiblit mais ne sort jamais de
-l'index.
+> ⚠ **Révision du 2026-09-14, après expertise externe.** Une version antérieure ajoutait un
+> **plancher** sous cette courbe, `max(exp(-Δt/force), φ × importance)`, pour qu'un choc ne
+> s'efface jamais. Ce plancher est **supprimé**, pour deux raisons.
+>
+> **Le triple compte.** La gravité entrait alors trois fois dans le score : par la constante de
+> temps, par le plancher, et comme composante propre. Or l'expérience d'hystérésis a pour
+> critère de réfutation pré-enregistré qu'un allongement de la constante de temps déplace la
+> courbe de reprise. Avec trois canaux confondus, l'effet de l'oubli devient inséparable de
+> l'effet de la gravité, et le critère ne mesure plus ce qu'il prétend mesurer.
+>
+> **Le contresens psychologique.** Un plancher fige la composante d'**ancienneté**, ce qui
+> revient à poser que le temps cesse de s'écouler pour un souvenir grave. Ce n'est pas ce que
+> décrit la psychologie du souvenir marquant : la personne sait parfaitement que l'événement est
+> ancien. Ce qui reste élevé n'est pas sa récence, c'est son **accessibilité** et son **poids
+> décisionnel**.
 
-**Le rappel renforce**, comme chez MemoryBank, et comme chez Park et al. dont la fraîcheur
-décroît depuis le **dernier rappel** et non depuis la création (partie I, écart n° 3).
+La persistance d'un choc est donc portée par les deux mécanismes qui la portent honnêtement :
+une **constante de temps allongée** par la gravité, qui donne près de vingt jours à un souvenir
+`marquant` contre moins de trois à un trajet banal, et le **vivier des chocs** du lot 2, qui
+injecte ces souvenirs dans les candidats sans condition de contexte. Aucun des deux ne falsifie
+la décroissance temporelle.
+
+**Découplage : tranché le 2026-09-14, il n'y en a pas.** Même sans plancher, la gravité entre
+encore deux fois, par la constante de temps et par sa composante propre. Un découplage complet
+rendrait `force` indépendante de la gravité, la persistance reposant alors sur le seul vivier
+des chocs et sur la composante de gravité : plus propre pour l'ablation, plus pauvre
+cognitivement.
+
+> ✅ **Arbitrage rendu par l'auteur le 2026-09-14** (ticket 071, § 2.6, arbitrage 1, issue C).
+> **Le couplage `force = S0 × (1 + k × I)` est gardé tel quel, sans interrupteur.** Une relecture
+> extérieure proposait de le garder derrière un paramètre d'ablation `α ∈ {0, 1}`,
+> `force = S0 × (1 + α × k × I)`, avec `α = 0` réservé à un bras de sensibilité du chapitre 7.
+> Ce paramètre n'avait de raison d'être que si le critère de réfutation (ii) du chapitre 7 —
+> « diviser la vitesse d'oubli par trois ne déplace pas la courbe » — restait un critère de
+> réfutation. **Il a été supprimé**, avec le bras `exp_04d` qui l'exécutait : l'article ne
+> prétend pas isoler l'effet causal de l'oubli, la mémoire est un élément du dispositif et non
+> son sujet. Sans ce critère, `α` n'a plus d'objet et n'est pas implémenté. Ce qui reste à dire
+> devant un relecteur — la sensibilité au paramètre d'oubli choisi — l'est par la règle de
+> conception de `S0` et par son second point de sensibilité publié (§ « Paramètres de la
+> partie III »), non par un run.
+
+### Ce qui s'oublie au temps, et ce qui ne s'oublie pas
+
+> ⚠ **Ajout du 2026-09-14, après expertise externe.** La décroissance ci-dessus s'appliquait
+> indistinctement à **toutes** les entrées, y compris aux concepts. C'est un contresens cognitif.
+
+La taxonomie classique de la mémoire déclarative, d'Endel Tulving à la relecture qu'en donne le
+cadre CoALA de Sumers et al. pour les agents de langue, sépare deux régimes qui n'ont pas la
+même dynamique d'effacement.
+
+| Registre | Contenu ici | Ce qui l'efface |
+|---|---|---|
+| **Épisodique** | entrées brutes, réflexions narratives | le **temps**, courbe d'Ebbinghaus, renforcée au rappel |
+| **Sémantique** | concepts, résumés | la **contradiction**, jamais l'horloge seule |
+
+Qu'une ligne de bus sature les jours de pluie entre 8 h et 8 h 30 ne devient pas faux parce que
+dix jours ont passé. Sous le régime uniforme, ce concept tombait pourtant à moins de 3 % de son
+poids initial en dix jours et sortait du top-K, sans qu'aucune observation ne l'ait infirmé.
+
+**Règle retenue.** Pour une entrée de type `concept` ou `summary`, la composante temporelle n'est
+plus une décroissance d'horloge mais la **confiance** du lot 3, calculée sur les observations et
+les contre-exemples. Un concept jamais contredit garde son poids ; un concept contredit le perd,
+quelle que soit son ancienneté. La date de dernière observation reste utilisée, mais comme
+départage entre concepts de confiance égale, non comme facteur d'effacement.
 
 ```
-force ← min(force × (1 + κ), FORCE_MAX)            # κ = 0.15, FORCE_MAX = 30 jours
+score_temps(entrée) = exp(-Δt / force)      si épisodique
+score_temps(concept) = confiance            = (obs + 1) / (obs + contre_ex + 2)
+```
+
+Un concept dont la confiance passe sous **0,5** cesse d'être servi au modèle, sans être
+supprimé : sa mise à l'écart datée est la trace du changement d'habitude que l'expérience
+cherche à observer. Avec le lissage de Laplace, ce seuil a une lecture exacte : le concept a été
+contredit plus souvent que confirmé, `contre_exemples > observations`.
+
+**Le rappel renforce**, pour le registre épisodique, comme chez MemoryBank, et comme chez Park et
+al. dont la fraîcheur décroît depuis le **dernier rappel** et non depuis la création (partie I,
+écart n° 3).
+
+```
+force ← min(force + δ, FORCE_MAX)                  # δ = 1 jour, FORCE_MAX = 30 jours
 rappels ← rappels + 1
 ```
+
+> ⚠ **Révision du 2026-09-14.** La première version renforçait par un facteur, `force × 1,15`.
+> Sur un horizon de soixante jours, dix-sept rappels suffisaient à porter un trajet banal au
+> plafond, et tout ce qui est rappelé souvent aurait saturé. Le renforcement devient **additif** :
+> chaque rappel ajoute un jour de durée de vie. Un trajet banal rappelé vingt fois voit sa
+> constante de temps passer de 2,8 à 22,8 jours ; il atteint le plafond en vingt-huit rappels, un
+> souvenir `marquant` en onze. C'est aussi plus proche de l'apprentissage de base d'ACT-R, où
+> l'effet de la fréquence a des rendements décroissants (Anderson & Lebiere, 1998). Le plafond de
+> 30 jours a sa règle : aucun souvenir ne devient éternel, deux mois sans rappel ramènent un
+> souvenir au plafond à un huitième de son poids, `exp(-60/30) = 0,14`.
 
 **Conséquence de conception à assumer.** Si le choc ne s'oublie pas, le retour au mode abandonné
 ne peut plus s'expliquer par l'oubli. Il doit se gagner : chaque trajet réussi incrémente les
@@ -978,6 +1306,31 @@ dépassant le seuil ont été observés — signe d'un modèle qui nivelle.
 
 ## Lot 2 — Récupération structurée, sans exclusion
 
+> ✅ **LIVRÉ le 2026-09-14.** Les trois viviers, les cinq composantes du score, les axes
+> normalisés à l'écriture et le paramètre de plongement branché sont en service. Voir la
+> **partie II** pour ce qui tourne.
+>
+> **Trois écarts avec le texte ci-dessous, décidés en cours de route** — le détail et le
+> raisonnement sont dans `specs/ticket_071/tests_lot2.md` :
+>
+> 1. **L'affinité catégorielle se réduit à la MÉTÉO.** Le texte ci-dessous lui fait apparier
+>    « mode, créneau, motif, météo » — or trois de ces quatre attributs SONT déjà les axes de
+>    l'affinité d'axes. Ils auraient été comptés deux fois, avec des poids différents, sans que
+>    rien ne le dise : un score dont deux termes mesurent la même chose n'est plus
+>    interprétable, et la calibration des cinq poids aurait porté sur des composantes corrélées
+>    par construction. Un cinquième axe `axe_meteo` est ajouté à l'entrée de mémoire, la météo
+>    n'étant stockée nulle part.
+> 2. **`axe_objet` est un MODE canonique**, pas une ligne de réseau. Les exemples du texte
+>    (`metro_A`, `bus_401`) rendraient le vivier B toujours vide, puisqu'il apparie les modes
+>    offerts dans les options. La ligne et l'arrêt vont dans `axe_lieu`.
+> 3. **Le concept déclare son mode**, champ `mode` du schéma de réflexion. La mémoire longue ne
+>    contient que des réflexions et des concepts : sans ce champ, le vivier B n'aurait rien à
+>    apparier.
+>
+> ⚠ **Le lot 2 est livré SANS tests propres**, sur décision de l'auteur : ils viendront à la
+> fin du lot suivant. Le contrat à honorer est écrit dans `specs/ticket_071/tests_lot2.md`.
+
+
 ### Les trois viviers
 
 Le vivier de candidats n'est plus produit par une seule requête sémantique. Trois passes
@@ -989,13 +1342,24 @@ s'unissent, dédupliquées par identifiant de document.
 | **B — par objet** | Pour **chaque mode présent dans les options offertes**, les souvenirs portant cet `axe_objet`, triés par gravité puis par récence, huit au plus par mode. | Une clause de métadonnées par mode. Aucun embedding. |
 | **C — chocs** | Les souvenirs dont la gravité dépasse `I_choc`, cinq au plus, sans aucune condition de lieu, d'heure ni de motif. | Une clause de métadonnées. |
 
-### La divergence avec HippoRAG, et pourquoi elle est nécessaire
+### Pourquoi rien ne filtre
 
-**HippoRAG, Gutiérrez et al. (2024)** indexe la mémoire par une structure de graphe pour
-retrouver ce qu'une recherche sémantique plate manque. Nous en reprenons le principe — une
-structure explicite avant le sémantique — et nous en **inversons l'usage**. Chez eux, la
-structure **restreint** la recherche. Ici elle ne peut pas : le phénomène que le dispositif doit
-observer est précisément le **report d'un contexte sur un autre**.
+> ⚠ **Correction du 2026-09-14, après expertise externe.** Une version antérieure présentait ces
+> trois viviers comme une « inversion d'HippoRAG », en affirmant que chez Gutiérrez et al. (2024)
+> « la structure restreint la recherche ». **C'est un contresens.** HippoRAG procède par
+> diffusion d'activation sur un graphe d'entités et a précisément été conçu pour l'associativité
+> à sauts multiples entre contextes dissemblables : il ne restreint rien. L'article figurait dans
+> la liste de ceux qui n'ont **pas** été lus dans le corpus local, et la filiation a été écrite
+> sans l'avoir vérifiée. Elle est retirée.
+>
+> Ce que décrit ce lot est une **génération de candidats multi-viviers**, technique classique de
+> recherche d'information combinant recherche dense, présélection par facettes et vivier
+> d'exception. La nommer ainsi coûte moins cher qu'une filiation contestable. À noter que la
+> diffusion d'activation d'HippoRAG traiterait l'exemple ci-dessous au moins aussi bien : c'est
+> une piste, pas un repoussoir.
+
+La règle de non-exclusion, elle, reste entière et ne dépend d'aucune filiation. Le phénomène que
+le dispositif doit observer est le **report d'un contexte sur un autre**.
 
 > Une chute à vélo à 8 h 12 boulevard de Strasbourg doit peser sur la décision de 18 h 40 où le
 > vélo figure parmi les options. Ni le lieu, ni le créneau, ni le motif ne coïncident. Un filtre
@@ -1020,7 +1384,7 @@ Cinq composantes, sur le vivier réuni, toutes en valeur absolue sur [0, 1].
 | Recouvrement lexical | 0,10 | Vu et al. (2025), BLEU-2 |
 | Force temporelle | 0,20 | MemoryBank (2024), plancher compris |
 | Gravité | 0,20 | Park et al. (2023), restaurée |
-| Affinité d'axes | 0,20 | HippoRAG (2024), en bonus et non en veto |
+| Affinité d'axes | 0,20 | apport propre, en bonus et jamais en veto |
 
 Ces poids sont un point de départ à calibrer, pas un résultat.
 
@@ -1035,6 +1399,14 @@ affinite = ( 0.50 × [axe_objet   concorde]
 aucun axe ne concorde reste classable sur ses quatre autres composantes.
 
 ### Le modèle d'embedding
+
+> ⚠ **Révision du 2026-09-14, arbitrage de l'auteur.** Le dispositif bascule à **100 % anglais**
+> (ticket 074) : prompts, population, souvenirs. Le remplacement par un modèle **francophone**
+> perd donc son objet et **`Solon-embeddings-large-0.1` est abandonné comme cible**. Le modèle
+> anglophone hérité de Vu et al. redevient cohérent avec le corpus. Ce qui reste vrai et reste à
+> faire : **brancher le paramètre**, pour pouvoir comparer deux modèles sans toucher au code. Le
+> paragraphe ci-dessous est conservé pour mémoire du raisonnement, sa conclusion ne vaut plus.
+
 
 `all-MiniLM-L6-v2`, hérité de Vu et al. (2025), est entraîné sur l'anglais alors que tous les
 souvenirs sont en français : la composante la plus pondérée du score tourne sur des vecteurs
@@ -1057,6 +1429,16 @@ structurés ne servent à rien et que la conception est à revoir.
 
 ## Lot 3 — Un concept se corrige au lieu de s'empiler
 
+> ✅ **LIVRÉ le 2026-09-14.** Voir la **partie II** pour ce qui tourne. Deux écarts avec le texte
+> ci-dessous, décidés en cours de route (`specs/ticket_071/tests_lot3.md`) :
+>
+> 1. **`confirmer` ne rafraîchit PAS l'horodatage**, contrairement à ce qui est écrit plus bas :
+>    le lot 1 a posé que `timestamp` est l'heure de l'événement et s'affiche dans le prompt. Un
+>    champ `derniere_observation` distinct porte la date de la dernière confirmation.
+> 2. **La mise à l'écart est datée à la cessation de service**, pas au seuil de trois
+>    contre-exemples — sans quoi elle était inatteignable pour un concept peu observé.
+
+
 Aujourd'hui chaque réflexion émet jusqu'à cinq concepts, chacun écrit comme une entrée neuve.
 Rien ne les relie. Au bout d'un mois un agent porte des centaines de concepts, dont beaucoup
 répètent la même chose et certains se contredisent — et c'est le prompt de décision qui arbitre,
@@ -1066,22 +1448,51 @@ Le mécanisme vient de **Mem0, Chhikara et al. (2025)**, qui extrait puis appliq
 explicites sur la mémoire existante plutôt que d'empiler, et d'**A-MEM, Xu et al. (2025)**, dont
 les notes se lient et évoluent à l'arrivée d'un souvenir nouveau.
 
-### Identité et opérations
+### Le panier de candidats, et non une identité
+
+> ⚠ **Révision du 2026-09-14, après expertise externe.** Ce lot spécifiait
+> `identite = hash(axe_objet, axe_motif)`, une **faute de conception**. Tous les concepts d'un
+> agent portant le même couple mode-motif auraient partagé la même identité, donc le même
+> emplacement. Un agent pendulaire à vélo produisant successivement « la piste du canal est
+> protégée », « l'abri à vélos du campus sature à 8 h 30 » et « les pavés du centre sont
+> glissants par temps de pluie » aurait vu chaque concept **détruire le précédent**. Par
+> construction, un agent n'aurait pu tenir qu'**une seule pensée par couple mode-motif**.
+
+Le couple mode-motif devient un **panier de candidats**, pas une identité.
 
 ```
-identite = hash(axe_objet, axe_motif)
+panier = (axe_objet, axe_motif)        # correspondance exacte sur une métadonnée indexée
 ```
 
-Correspondance exacte sur une métadonnée indexée : aucun embedding, aucun appel réseau. Quatre
-opérations, choisies par le modèle via un champ `operation` ajouté au schéma de sortie de la
-réflexion existante.
+Il ne désigne plus *le* concept à mettre à jour, mais le petit ensemble de concepts qu'il
+*pourrait* s'agir de mettre à jour. La discrimination se fait ensuite **à l'intérieur du
+panier**, qui compte quelques unités et non l'index entier.
+
+Deux voies, la seconde étant retenue.
+
+- **Par similarité**, comme A-MEM, Xu et al. (2025) : le concept nouveau est comparé aux
+  concepts du panier, et au-delà d'un seuil de proximité il met à jour le plus proche. Rejetée
+  comme voie principale : un seuil fixe sur un plongement francophone est arbitraire et
+  demanderait une calibration que rien ne fonde.
+- **Par désignation du modèle**, retenue : les quelques concepts du panier sont montrés au
+  modèle dans l'appel de réflexion qui a déjà lieu, et il désigne celui qu'il met à jour, ou
+  déclare qu'il n'en met à jour aucun. Coût marginal nul, aucun seuil à calibrer, et le modèle
+  dispose du contexte que le panier seul n'a pas.
+
+La propriété essentielle de la version initiale est conservée : **aucun balayage de l'index
+n'est nécessaire**, la présélection restant une correspondance exacte sur une métadonnée.
+
+### Opérations
+
+Quatre opérations, choisies par le modèle via un champ `operation` ajouté au schéma de sortie de
+la réflexion existante, accompagné de l'identifiant du concept visé lorsqu'il y en a un.
 
 | Opération | Effet |
 |---|---|
 | `creer` | Aucune identité correspondante. Nouveau concept, `observations = 1`. |
 | `confirmer` | Même affirmation. Rien n'est écrit de neuf : `observations += 1`, horodatage rafraîchi, force renforcée. |
 | `preciser` | Affirmation compatible mais plus fine. Le contenu est remplacé ; compteurs et historique conservés. |
-| `contredire` | Affirmation incompatible. `contre_exemples += 1`. Au-delà d'un seuil, l'ancien concept est marqué **dépassé** et le nouveau prend la relève. |
+| `contredire` | Affirmation incompatible. `contre_exemples += 1`. L'ancien concept est marqué **dépassé** et le nouveau prend la relève quand il a été contredit **au moins trois fois et plus souvent que confirmé** : trois contradictions ne suffisent pas contre vingt confirmations, une majorité de contradictions ne suffit pas sur deux observations. |
 
 **Divergence avec Mem0 : il n'y a pas de suppression.** Leur jeu d'opérations comporte un
 `DELETE` ; un concept dépassé n'est ici jamais supprimé, seulement marqué et daté. La raison est
@@ -1108,6 +1519,17 @@ modèle qui confirme tout.
 ---
 
 ## Lot 4 — La mémoire noyau
+
+> ✅ **LIVRÉ le 2026-09-14.** Voir la **partie II**. Trois écarts avec le texte ci-dessous,
+> décidés en cours de route (`specs/ticket_071/tests_lot4.md`) :
+>
+> 1. **Les TROIS blocs sont calculés**, y compris celui des connaissances que le texte confie au
+>    modèle : le lot 3 a rendu les concepts assez structurés pour qu'il se calcule exactement, et
+>    le garde-fou vaut pour les trois.
+> 2. **Le journal des trajets a dû être créé** : il n'existait sous aucune forme interrogeable.
+> 3. **Un paramètre distinct** commande le nombre d'entrées épisodiques servies à côté du bloc,
+>    plutôt que de réutiliser le top-K du rappel.
+
 
 Les dix souvenirs bruts servis au modèle sont remplacés par un bloc permanent, court et
 structuré, complété de deux ou trois entrées épisodiques rappelées pour la décision en cours.
@@ -1151,20 +1573,66 @@ plus seulement dans les statistiques de sortie.
 
 ## Paramètres de la partie III
 
-| Paramètre | Défaut proposé | Effet |
-|---|---|---|
-| `memoire__retard_ref_s` | 1800 | Retard, en secondes, qui sature la composante de gravité. |
-| `memoire__force_k_importance` | 3,0 | Facteur d'allongement de la durée de vie par la gravité. |
-| `memoire__force_max_jours` | 30 | Plafond de renforcement au rappel. |
-| `memoire__force_kappa_rappel` | 0,15 | Renforcement à chaque rappel. |
-| `memoire__importance_choc` | 0,7 | Seuil du choc, soit le niveau `grave` et au-dessus. Ouvre le vivier C et le plancher de rappel. |
-| `memoire__plancher_phi` | 0,5 | Hauteur du plancher, proportionnelle à la gravité. |
-| `memoire__contre_exemples_seuil` | 3 | Contre-exemples avant qu'un concept soit marqué dépassé. |
-| `memoire__vivier_b_par_mode` | 8 | Souvenirs tirés par mode envisagé. |
-| `memoire__vivier_c_taille` | 5 | Souvenirs graves tirés sans condition. |
-| `long_term_retrieval__*_weight` | 0,30 / 0,10 / 0,20 / 0,20 / 0,20 | Les cinq poids du lot 2. |
+> ✅ **Lot 4 livré le 2026-09-14.** `memoire__episodiques_avec_noyau` s'ajoute aux douze
+> constantes. **Les quatre lots du volet CODE sont livrés.**
 
-`long_term_retrieval__force_base_jours` existe déjà et vaut 2,8 : c'est le `S0` du lot 1.
+> ✅ **Lot 3 livré le 2026-09-14.** `memoire__confiance_seuil_service` et
+> `memoire__contre_exemples_seuil` ont désormais un lecteur. Les douze constantes du § 2.10 sont
+> toutes en service.
+
+> ✅ **Lot 2 livré le 2026-09-14.** `memoire__vivier_b_par_mode` et `memoire__vivier_c_taille`
+> ont désormais un lecteur, et les **cinq** poids du rappel sont lus par le classement : ils ont
+> basculé ensemble à 0,30 / 0,10 / 0,20 / 0,20 / 0,20. Restent sans lecteur :
+> `confiance_seuil_service` et `contre_exemples_seuil`, qui attendent le lot 3.
+
+> ✅ **Lot 1 livré le 2026-09-14.** Les constantes suivantes ont désormais un LECTEUR :
+> `memoire__force_k_importance`, `force_delta_rappel_jours`, `force_max_jours`,
+> `purge_seuil_poids`, `retard_ref_s`, `importance_choc`, `theta_gravite_cumulee`. Restent sans
+> lecteur jusqu'aux lots suivants : `confiance_seuil_service`, `contre_exemples_seuil`,
+> `vivier_b_par_mode`, `vivier_c_taille`.
+
+> ✅ **Lot 0 livré le 2026-09-14.** Les constantes de ce tableau sont désormais **déclarées
+> dans `services/llm-agents/settings.py`**, préfixées `memoire__`, chacune avec sa règle de
+> conception en commentaire. Elles n'ont pas encore de lecteur : le code qui les lit arrive
+> lot par lot. La fenêtre d'âge, elle, est **câblée** : elle vaut l'horizon de l'expérience,
+> plafonné à 60 jours, appliqué par `experiences/cli.py`.
+>
+> ⚠ **Les cinq poids du rappel ne sont pas encore basculés.** `rank_nodes` n'en lit que trois,
+> qui gardent leurs valeurs en service (0,4 / 0,3 / 0,3). Les porter à 0,30 / 0,10 / 0,20 avant
+> que le classement ne lise les cinq ferait tomber la somme des poids lus à 0,60 ; comme les
+> composantes entrent en valeur **absolue** depuis le ticket 048 — la normalisation min-max a
+> justement été supprimée pour rendre deux décisions comparables — l'ordre des candidats
+> changerait sous un régime que personne n'a spécifié. Les cinq basculent ensemble, au lot 2.
+> Un test le verrouille : `tests/test_071_lot0_constantes.py`.
+
+> **Règle des constantes, fixée le 2026-09-14.** Chaque constante porte une règle de conception
+> en une phrase, rattachée au phénomène et non à l'horizon : **le même jeu vaut pour cinq jours
+> comme pour soixante**, seul l'horizon change entre expériences. Les valeurs sont fixées avant
+> tout run `exp_04*`, aucun n'ayant tourné à cette date. Ce qui rend une valeur défendable n'est
+> pas une citation mais trois choses : la règle, la date, et un point de sensibilité. Le point de
+> sensibilité est `S0 = 8,3` jours, la valeur publiée de Park et al. (2023), 0,995 par heure de
+> jeu, tout le reste étant fixe.
+
+| Paramètre | Valeur | Règle de conception |
+|---|---|---|
+| `long_term_retrieval__force_base_jours` (`S0`, existe déjà) | 2,8 | Un trajet banal pèse moins de 10 % après une semaine. Héritée de l'implémentation de Vu et al., non publiée dans leur article ; conservée parce qu'elle reproduit la décroissance en service. |
+| `memoire__force_k_importance` (`k`) | 6 | Un souvenir `marquant`, « je m'en souviendrai dans un mois », garde la moitié de son poids à deux semaines et un cinquième à trente jours. |
+| `memoire__force_delta_rappel_jours` (`δ`) | 1 | Chaque rappel ajoute un jour de durée de vie : un trajet banal atteint le plafond en vingt-huit rappels, un souvenir `marquant` en onze. Remplace le facteur multiplicatif `κ = 0,15`. |
+| `memoire__force_max_jours` (`FORCE_MAX`) | 30 | Aucun souvenir ne devient éternel : au plafond, deux mois sans rappel le ramènent à un huitième. S'applique aussi à la durée de vie initiale. |
+| `memoire__purge_seuil_poids` | 0,01 | Une entrée épisodique est purgée quand son poids temporel passe sous 1 %, soit 4,6 constantes de temps : 13 jours pour un trajet banal jamais rappelé, 90 pour un souvenir `marquant`, donc jamais dans un run. Les concepts ne sont jamais purgés, seulement marqués dépassés. Remplace les seuils par type du nettoyage en service. |
+| `long_term_max_days_query` (fenêtre d'âge, existe déjà) et `memory_horizon_days` du fichier d'expériences | = horizon de l'expérience, 60 au plus | Rien ne filtre par l'âge à l'intérieur d'un run, la décroissance suffit. Le défaut de 30 jours aurait coupé le second mois d'un run de soixante jours. |
+| `memoire__retard_ref_s` | 1800 | Retard qui sature la composante déterministe de gravité. **Règle à écrire** : à rattacher à la distribution des durées de déplacement de la cohorte, mesurable sans run. |
+| `memoire__importance_choc` | 0,7 | Seuil du choc, soit le niveau `grave` et au-dessus. Ouvre le vivier des chocs du lot 2. |
+| `memoire__theta_gravite_cumulee` (`Θ`) | 0,7, égal au seuil du choc | Un seul souvenir grave déclenche la réflexion en journée, ou une journée dont les retards cumulés en valent un. La panne de la ligne A des expériences d'hystérésis vaut 0,8 en gravité déterministe : à `Θ = 1,0`, le choc étudié n'aurait pas déclenché avant le soir. **À vérifier sur mesure** : moins d'un déclenchement par agent et par semaine, sinon `Θ` monte. |
+| `memoire__confiance_seuil_service` | 0,5 | Un concept cesse d'être servi quand il a été contredit plus souvent que confirmé, `contre_exemples > observations` sous Laplace. |
+| `memoire__contre_exemples_seuil` | 3, **et** confiance < 0,5 | Un concept est dépassé quand il a été contredit au moins trois fois et plus souvent que confirmé. |
+| `memoire__vivier_b_par_mode` | 8 | Souvenirs tirés par mode envisagé. Indépendant de l'horizon. |
+| `memoire__vivier_c_taille` | 5 | Souvenirs graves tirés sans condition. Indépendant de l'horizon. |
+| `long_term_retrieval__*_weight` | 0,30 / 0,10 / 0,20 / 0,20 / 0,20 | Les cinq poids du lot 2, à calibrer sur jeux gelés. Indépendants de l'horizon. |
+| `long_term_self_reflect_interval_days` (existe déjà) | 3 | Vingt passages sur soixante jours. Indépendant de l'horizon. |
+
+Restent tels quels, indépendants de l'horizon : la grille des cinq niveaux de gravité, les poids
+de la gravité déterministe, le top-K à 10, le plancher journalier à 22 h.
 
 ---
 
@@ -1182,7 +1650,7 @@ Cités d'après la bibliographie de l'état de l'art du projet, non lus intégra
 - **Zhong, W., Guo, L., Gao, Q., Ye, H. & Wang, Y. (2024)** — *MemoryBank*, AAAI-24, [arXiv:2305.10250](https://arxiv.org/abs/2305.10250). Courbe d'oubli d'Ebbinghaus, force renforcée au rappel.
 - **Chhikara, P. et al. (2025)** — *Mem0*, [arXiv:2504.19413](https://arxiv.org/abs/2504.19413). Extraction puis opérations explicites sur la mémoire existante.
 - **Xu, W. et al. (2025)** — *A-MEM: Agentic Memory*, NeurIPS, [arXiv:2502.12110](https://arxiv.org/abs/2502.12110). Notes qui se lient et évoluent.
-- **Gutiérrez, B. J. et al. (2024)** — *HippoRAG*, NeurIPS, [arXiv:2405.14831](https://arxiv.org/abs/2405.14831). Indexation structurée avant recherche sémantique.
+- **Gutiérrez, B. J. et al. (2024)** — *HippoRAG*, NeurIPS, [arXiv:2405.14831](https://arxiv.org/abs/2405.14831). Diffusion d'activation sur un graphe d'entités, pour l'associativité à sauts multiples entre contextes dissemblables. **Aucun mécanisme de ce document n'en dérive** : une filiation écrite sans lecture de l'article a été retirée le 2026-09-14. Reste une piste ouverte pour le lot 2.
 - **Packer, C. et al. (2023)** — *MemGPT*, [arXiv:2310.08560](https://arxiv.org/abs/2310.08560). Mémoire noyau toujours en contexte.
 - **Shinn, N. et al. (2023)** — *Reflexion*, NeurIPS, [arXiv:2303.11366](https://arxiv.org/abs/2303.11366). Réflexion verbale comme apprentissage.
 - **Liu, X. et al. (2025)** — *GATSim*, [arXiv:2506.23306](https://arxiv.org/abs/2506.23306). Réflexion hebdomadaire et formation d'habitudes en simulation de transport.
@@ -1194,3 +1662,8 @@ Cités d'après la bibliographie de l'état de l'art du projet, non lus intégra
 - ***Sensors* 25(18), 5688 (2025)** — grève de taxis à 80 % aux jours 11 à 15 d'un run de 20 jours, sous ablation des mémoires.
 - **Liu et al. (2025b)**, cité dans [arXiv:2412.06681](https://arxiv.org/abs/2412.06681) — inertie et théorie de l'esprit, équilibre d'heure de départ.
 - **Biais de statu quo et d'ancrage des modèles de langue** — [arXiv:2511.05766](https://arxiv.org/abs/2511.05766) ; EMNLP Findings 2024.
+
+Ajoutées le 2026-09-14 à la relecture du ticket 071, notices recoupées sur l'éditeur ou arXiv, non lues intégralement dans le dépôt :
+
+- **Diekelmann, S. & Born, J. (2010)** — *The memory function of sleep*, Nature Reviews Neuroscience 11(2), 114–126. La consolidation se fait au repos : fonde le plancher journalier.
+- **McClelland, J. L., McNaughton, B. L. & O'Reilly, R. C. (1995)** — *Why there are complementary learning systems in the hippocampus and neocortex*, Psychological Review 102(3), 419–457. Deux systèmes, épisodique rapide et sémantique lent : fonde la séparation des régimes d'oubli et le rejeu différé.

@@ -37,6 +37,13 @@ TERMINAL_TIME_EXPORT = REPO_ROOT / "scripts/progedo_logit/export_terminal_time.p
 
 @pytest.fixture(scope="module")
 def population_data():
+    # Sans cohorte scellée sous `data/population/`, ces tests ne mesurent rien : ils le
+    # DISENT, au lieu de tomber sur un `FileNotFoundError` que personne ne relie à la
+    # cause. Le cas est normal entre l'archivage froid d'une version et le scellement de
+    # la suivante (ticket 074, lot A) ; le compte doit revenir à zéro une fois la v6 scellée.
+    if not POP_FILE.exists():
+        pytest.skip(f"aucune cohorte scellée dans data/population/ (attendu {POP_FILE.name} "
+                    f"sous population_1000_AAMAS_v5 ou _v4) — substrat en archive froide")
     with open(POP_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -94,7 +101,9 @@ def test_tf02_respect_marges_demographiques():
     ctrl_v5 = REPO_ROOT / "data/population/population_1000_AAMAS_v5/CONTROLE.md"
     ctrl_v4 = REPO_ROOT / "data/population/population_1000_AAMAS_v4/CONTROLE.md"
     ctrl = ctrl_v5 if ctrl_v5.exists() else ctrl_v4
-    assert ctrl.exists()
+    if not ctrl.exists():
+        pytest.skip("aucun CONTROLE.md sous data/population/ — substrat en archive froide "
+                    "(ticket 074, lot A) ; le test revient avec le scellement de la v6")
     content = ctrl.read_text(encoding="utf-8")
     assert "marges conformes" in content or "13" in content or "12" in content
 
@@ -321,7 +330,13 @@ def test_tf24_car_scolaire_motif_etudes():
 
 
 def test_tf25_car_scolaire_gratuite():
-    """TF-25 : Gratuité du service de car scolaire (mention gratuit dans le texte rendu)."""
+    """TF-25 : Gratuité du service de car scolaire (la mention dans le texte SERVI au modèle).
+
+    Le texte est passé à l'anglais au ticket 074 : c'est « free », pas « gratuit ». Les deux
+    sont acceptés parce que les traces archivées portent encore le français — mais c'est bien
+    la gratuité qui est contrôlée, pas un mot : sans elle, un scolaire compare un car gratuit
+    à un abonnement payant sans le savoir.
+    """
     from trip_helper.school_bus import build_school_bus_option
     from text_helper import env_ob_to_text
     from models import Location, Activity, Person, PersonalIdentity
@@ -332,7 +347,7 @@ def test_tf25_car_scolaire_gratuite():
     plan = build_school_bus_option(p, home, edu, 28800, 28800)
     assert plan is not None
     text = env_ob_to_text("travel_plan", plan.model_dump())
-    assert "gratuit" in text.lower()
+    assert "free" in text.lower() or "gratuit" in text.lower()
 
 
 def test_tf26_car_scolaire_plage_horaire():

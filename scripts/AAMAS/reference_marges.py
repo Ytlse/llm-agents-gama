@@ -50,7 +50,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mobility_core.population_reference import (  # noqa: E402
-    COURONNES, couronne_population_shares, household_targets, population_reference)
+    COURONNES, COURONNES_FR, couronne_canonique, couronne_population_shares,
+    household_targets, population_reference)
 
 logger = logging.getLogger("aamas.reference")
 
@@ -137,11 +138,46 @@ def taille_menage_class(size) -> Optional[str]:
     return TAILLE_MENAGE[min(s, 5) - 1]
 
 
+#: Clé stable de `mobility_core.housing_type` → libellé publié par le rapport (p. 26).
+#: La CLÉ est le pivot, pas le libellé : elle est française et n'a pas bougé au ticket 074,
+#: quand le libellé du persona est passé de « Individuel isolé » à « Detached house ».
+_LOGEMENT_PAR_CLE: dict[str, str] = {
+    "individuel_isole": "Individuel isolé",
+    "individuel_accole": "Individuel accolé",
+    "petit_habitat_collectif": "Petit habitat collectif",
+    "grand_habitat_collectif": "Grand habitat collectif",
+    "autres": "Autres",
+}
+
+_logement_inconnus: set[str] = set()
+
+
 def logement_label(housing_type) -> Optional[str]:
-    """Libellé de logement d'un persona ; `None` si le trait n'est pas posé."""
+    """Libellé de logement d'un persona ; `None` si le trait n'est pas posé.
+
+    Le trait passe par `housing_type.key_for`, qui connaît les DEUX vocabulaires : les
+    libellés anglais de la v6 et les français des cohortes antérieures. Comparer le libellé
+    du persona à la liste française ferait tomber toute une cohorte v6 dans « Autres » —
+    et « Autres » EST une modalité publiée, donc rien ne dirait que la mesure est vide : on
+    lirait un écart de 99,6 points sur une seule ligne, sans savoir qu'il vient du
+    vocabulaire et non du tirage.
+    """
     if housing_type is None or str(housing_type) == "":
         return None
-    return str(housing_type) if str(housing_type) in LOGEMENT else "Autres"
+    from mobility_core.housing_type import key_for
+
+    texte = str(housing_type).strip()
+    cle = key_for(texte)
+    if cle is None:
+        # « Autres » reste le repli — c'est une modalité réelle — mais il se DIT une fois
+        # par valeur inconnue, sinon une modalité inventée en amont se compte en silence.
+        if texte not in _logement_inconnus:
+            _logement_inconnus.add(texte)
+            logger.error("[ALARME] logement : modalité %r hors des deux vocabulaires connus "
+                         "(%s) — comptée dans « Autres »", texte,
+                         ", ".join(sorted(_LOGEMENT_PAR_CLE)))
+        return "Autres"
+    return _LOGEMENT_PAR_CLE[cle]
 
 
 def oui_non(value) -> Optional[str]:
@@ -220,6 +256,31 @@ def _sha256(path: Path) -> str:
 
 # ── Cible jointe gelée ─────────────────────────────────────────────────────────
 
+def _couronnes_canoniques(doc: dict) -> dict:
+    """Rend la cible jointe avec ses couronnes dans la langue du dispositif.
+
+    Le fichier gelé est une CITATION de l'enquête : il garde les libellés du rapport
+    (`1ere couronne`), et son `sha256` est publié dans `empreintes.txt` — le traduire
+    romprait le sceau de toutes les cohortes déjà scellées. La traduction se fait donc
+    ici, à la lecture, comme pour l'occupation (`occupation_du_spec`) et le logement
+    (`key_for`) : la frontière est le seul endroit où les deux vocabulaires se voient.
+
+    Sans cela, le contrôle ne trouvait plus une seule des quatre lignes et refusait de
+    servir — ce qui est le bon comportement, mais pour une raison qui n'est pas la
+    bonne (`[ALARME] cible jointe : ligne '1st ring' absente`).
+    """
+    doc = dict(doc)
+    if isinstance(doc.get("cible_pct"), dict):
+        doc["cible_pct"] = {couronne_canonique(c): v for c, v in doc["cible_pct"].items()}
+    marges = doc.get("marges_pct")
+    if isinstance(marges, dict) and isinstance(marges.get("couronne"), dict):
+        marges = dict(marges)
+        marges["couronne"] = {couronne_canonique(c): v
+                              for c, v in marges["couronne"].items()}
+        doc["marges_pct"] = marges
+    return doc
+
+
 def cible_jointe(path: Path = JOINT_TARGET) -> dict:
     """La cible jointe gelée, validée : version, sommes, modalités.
 
@@ -236,6 +297,7 @@ def cible_jointe(path: Path = JOINT_TARGET) -> dict:
         raise ReferenceError(
             f"cible jointe {path.name} en version {doc.get('version')!r}, attendu "
             f"{JOINT_VERSION!r} : le contrôle ne sert pas une cible périmée « au mieux ».")
+    doc = _couronnes_canoniques(doc)
     cells = doc.get("cible_pct") or {}
     total = 0.0
     for couronne in COURONNES:
@@ -398,7 +460,7 @@ def recompute_from_microdata() -> dict:
 
     joined = per.merge(men[["ZFM", "ECH", "motor"]].rename(columns={"ZFM": "ZFP"}),
                        on=["ZFP", "ECH"], how="left")
-    joined["couronne"] = joined["ZFP"].str[:3].map(couronne_of)
+    joined["couronne"] = joined["ZFP"].str[:3].map(couronne_of).map(couronne_canonique)
     unmatched = int(joined["motor"].isna().sum())
     unknown_zone = int(joined["couronne"].isna().sum())
     if unmatched or unknown_zone:
@@ -601,7 +663,26 @@ def freeze_marges(doc: dict, path: Path = MARGES_TARGET) -> Path:
     return path
 
 
+def _couronnes_francaises(doc: dict) -> dict:
+    """L'inverse de :func:`_couronnes_canoniques`, pour l'écriture du fichier gelé.
+
+    Le fichier gelé reste dans la langue de l'enquête, quelle que soit celle du
+    dispositif : son `sha256` est publié, et les cohortes déjà scellées le citent.
+    """
+    vers_fr = dict(zip(COURONNES, COURONNES_FR))
+    doc = dict(doc)
+    if isinstance(doc.get("cible_pct"), dict):
+        doc["cible_pct"] = {vers_fr.get(c, c): v for c, v in doc["cible_pct"].items()}
+    marges = doc.get("marges_pct")
+    if isinstance(marges, dict) and isinstance(marges.get("couronne"), dict):
+        marges = dict(marges)
+        marges["couronne"] = {vers_fr.get(c, c): v for c, v in marges["couronne"].items()}
+        doc["marges_pct"] = marges
+    return doc
+
+
 def freeze(doc: dict, path: Path = JOINT_TARGET) -> Path:
+    doc = _couronnes_francaises(doc)
     header = (
         "# Cible JOINTE couronne × motorisation — base PERSONNE — EMC² Toulouse 2023.\n"
         "#\n"

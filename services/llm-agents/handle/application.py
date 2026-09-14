@@ -750,6 +750,7 @@ async def init(request: WorldInitRequest):
         long_term_memory_enabled=request.long_term_memory_enabled,
         long_term_self_reflect_enabled=request.long_term_self_reflect_enabled,
         simulation_max_days=request.simulation_max_days,
+        accidents_enabled=request.accidents_enabled,
     )
     loop_container.set_scenario(scenario)
 

@@ -1,7 +1,6 @@
 # scalable_memory.py - Scalable long-term memory system optimized for 1000+ users
 import asyncio
 import json
-import math
 import time
 from datetime import datetime, timedelta
 import string
@@ -15,6 +14,11 @@ from sim_clock import gama_timestamp, wall_clock
 from loguru import logger
 import numpy as np
 from prometheus_client import Histogram
+
+# Modèle de plongement par défaut, hérité de l'implémentation de Vu et al. (2025). C'est un
+# modèle Sentence-Transformers (Reimers & Gurevych, 2019) entraîné sur un corpus anglophone
+# d'après sa fiche — cohérent avec le corpus depuis la bascule anglaise du ticket 074.
+MODELE_PLONGEMENT_DEFAUT = "all-MiniLM-L6-v2"
 
 LTM_QUERY_DURATION = Histogram(
     'ltm_query_duration_seconds',
@@ -37,6 +41,8 @@ from llama_index.core import (
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 
+from llm.axes import affinite_axes, affinite_meteo
+from llm.gravite import est_purgeable, force_apres_rappel, force_initiale, poids_temporel
 from llm.memory import MemoryEntry
 
 class VectorStoreFactory:
@@ -164,7 +170,27 @@ class MultiUserLongTermMemory:
     def _init_shared_index(self, use_async: bool = False):
         """Initialize single shared vector store index"""
         from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-        Settings.embed_model = HuggingFaceEmbedding(model_name="all-MiniLM-L6-v2")
+
+        # Ticket 071, lot 2 — le modèle de plongement vient du PARAMÈTRE. Il était codé en dur
+        # ici alors que `settings.agent.embedding_model` existait : un paramètre qui ne commande
+        # rien est un mensonge de configuration, et il interdisait de comparer deux modèles sans
+        # toucher au code.
+        #
+        # ⚠ Le modèle ne CHANGE pas : le défaut reste celui en service. Le passage à un modèle
+        # francophone, un temps prévu, est abandonné — le dispositif bascule en anglais
+        # (ticket 074), et le modèle hérité de Vu et al. redevient cohérent avec le corpus.
+        # Tout changement ultérieur imposerait une RECONSTRUCTION COMPLÈTE de l'index, les
+        # vecteurs n'étant pas comparables d'un modèle à l'autre.
+        modele = (settings.agent.embedding_model or "").strip() or MODELE_PLONGEMENT_DEFAUT
+        if modele != MODELE_PLONGEMENT_DEFAUT:
+            logger.warning(
+                f"[ltm] modèle de plongement NON STANDARD : « {modele} » au lieu de "
+                f"« {MODELE_PLONGEMENT_DEFAUT} ». L'index doit avoir été reconstruit avec ce "
+                f"modèle, sans quoi les similarités n'ont aucun sens."
+            )
+        else:
+            logger.info(f"[ltm] modèle de plongement : {modele}")
+        Settings.embed_model = HuggingFaceEmbedding(model_name=modele)
         Settings.llm = None
 
         if self.vector_store:
@@ -356,8 +382,26 @@ class MultiUserLongTermMemory:
         self.ensure_user_initialized(person_id)
         
         # Create document with namespace for user isolation
-        doc_id = f"{person_id}_{len(self.user_metadata[person_id]['entries'])}"
+        # Ticket 071 (défaut B) — l'identifiant dérivait de la LONGUEUR de la liste. Après un
+        # nettoyage la liste raccourcit, et les identifiants suivants entraient en collision
+        # avec ceux déjà indexés. Le compteur est désormais monotone et persisté.
+        doc_index = self.user_metadata[person_id].get("next_doc_index")
+        if doc_index is None:  # métadonnées d'avant le ticket 071
+            doc_index = len(self.user_metadata[person_id]["entries"])
+        self.user_metadata[person_id]["next_doc_index"] = doc_index + 1
+        doc_id = f"{person_id}_{doc_index}"
+
+        # Ticket 071, lot 1 — la durée de vie est fixée À L'ÉCRITURE, depuis la gravité.
+        # `force = min(S0 × (1 + k × I), FORCE_MAX)`, plafond compris : aucune entrée ne part
+        # au-delà, même quand S0 triple. Une entrée déjà qualifiée (réflexion rejouée, reprise
+        # de run) garde la sienne.
+        if entry.force is None:
+            entry.force = force_initiale(entry.importance)
+
         doc = Document(
+            # `id_` rend le document adressable pour la suppression : sans lui, une entrée
+            # retirée des métadonnées resterait indéfiniment dans l'index vectoriel.
+            id_=doc_id,
             text=str(entry.content),
             metadata={
                 "person_id": person_id,
@@ -366,6 +410,17 @@ class MultiUserLongTermMemory:
                 "namespace": f"user_{person_id}",  # Key for isolation
                 "doc_id": doc_id,
                 "tags": entry.tags,
+                # Qualification du souvenir (lot 1). Elle est recopiée ici pour que les viviers
+                # B et C du lot 2 puissent filtrer sans embedding. ⚠ C'est un INSTANTANÉ figé à
+                # l'écriture : `force` et `rappels` évoluent ensuite, et l'autorité sur ces deux
+                # champs reste les métadonnées de l'agent, jamais cette copie. Le classement lit
+                # donc l'entrée, pas ce dictionnaire (cf. `rank_nodes`).
+                "importance": float(entry.importance or 0.0),
+                "axe_objet": entry.axe_objet or "",
+                "axe_lieu": entry.axe_lieu or "",
+                "axe_creneau": entry.axe_creneau or "",
+                "axe_motif": entry.axe_motif or "",
+                "valence": entry.valence or "neutre",
             }
         )
         
@@ -373,6 +428,7 @@ class MultiUserLongTermMemory:
         await self.shared_index.ainsert(doc)
         
         # Update user metadata
+        entry.doc_id = doc_id
         self.user_metadata[person_id]["entries"].append(entry)
         # logger.debug(f"Add memory entry for user {person_id}: {entry.to_dict()}")
 
@@ -422,7 +478,16 @@ class MultiUserLongTermMemory:
         delta_days = (search_datetime - message_datetime).days
         return delta_days <= max_past_days
 
-    async def aquery_user_memories(self, person_id: str, query: str, top_k: int = 8, max_past_days: int = 30, query_at: Optional[int] = None) -> List[MemorySearchResult]:
+    async def aquery_user_memories(
+        self,
+        person_id: str,
+        query: str,
+        top_k: int = 8,
+        max_past_days: int = 30,
+        query_at: Optional[int] = None,
+        modes_offerts: Optional[List[str]] = None,
+        contexte: Optional[Dict[str, Any]] = None,
+    ) -> List[MemorySearchResult]:
         """Query memories with namespace filtering"""
         _t0 = time.monotonic()
         self.ensure_user_initialized(person_id)
@@ -437,12 +502,19 @@ class MultiUserLongTermMemory:
         logger.debug(f"Querying user long term memories for person {person_id}, at {query_at}")
 
         def filter_message(metadata: dict) -> bool:
+            # Ticket 071 (défaut C) — les deux filtres se CUMULENT. Avant, le filtre par jour
+            # ouvré et créneau sortait immédiatement, si bien que la fenêtre d'âge
+            # (`max_past_days`) n'était jamais appliquée quand l'option était active : un
+            # souvenir vieux de trois ans en temps simulé passait, pourvu qu'il tombe le même
+            # jour de semaine que la requête.
             msg_datetime = datetime.fromisoformat(metadata["timestamp"])
+            if max_past_days >= 0 and not self._filter_memory_by_past_days(
+                msg_datetime, query_at_datetime, max_past_days
+            ):
+                return False
             if self.long_term_memory_filter_by_datetime and query_at_datetime:
                 return self._filter_memory_by_working_day(msg_datetime, query_at_datetime) \
                     and self._filter_memory_by_peak_time(msg_datetime, query_at_datetime)
-            if max_past_days >= 0:
-                return self._filter_memory_by_past_days(msg_datetime, query_at_datetime, max_past_days)
             return True
         
         from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters
@@ -459,23 +531,86 @@ class MultiUserLongTermMemory:
             nodes = await retriever.aretrieve(query)
             logger.debug(f"Retrieved {len(nodes)} raw nodes for user {person_id}")
 
-            # Défense en profondeur : re-vérifie person_id côté Python
+            # Le classement et les filtres lisent les métadonnées de l'agent, pas la copie
+            # figée dans l'index : `force`, `rappels` et les compteurs de concepts évoluent,
+            # et l'index n'est pas réécrit pour autant. Les entrées sont déjà en RAM ici —
+            # `ensure_user_initialized` les a rechargées du disque si l'agent avait été évincé
+            # du cache LRU. Construit AVANT les viviers : le filtre des concepts hors service
+            # en a besoin.
+            entrees_par_doc = {
+                e.doc_id: e
+                for e in self.user_metadata.get(person_id, {}).get("entries", [])
+                if getattr(e, "doc_id", None)
+            }
+
+            # ── Vivier A : sémantique. Défense en profondeur sur person_id côté Python.
             user_results = []
+            vus = set()
             for node in nodes:
                 if (node.metadata.get("person_id") == person_id and \
                     filter_message(node.metadata)):
+                    _meta = dict(node.metadata)
+                    _meta.setdefault("vivier", "A")
+                    _doc = _meta.get("doc_id")
+                    if _doc and _doc in vus:
+                        continue
+                    if _doc:
+                        vus.add(_doc)
                     user_results.append(
                         MemorySearchResult(
                             content=node.text,
-                            metadata=node.metadata,
+                            metadata=_meta,
                             score=getattr(node, 'score', 0.0)
                         )
                     )
+
+            # ── Viviers B et C : structurés, lus en RAM, sans plongement (ticket 071, lot 2).
+            # Ils s'AJOUTENT au vivier sémantique et sont dédupliqués par identifiant de
+            # document. La fenêtre d'âge leur est appliquée comme aux autres : c'est le seul
+            # filtre qui subsiste, avec l'identité de l'agent.
+            for res in self.viviers_structures(person_id, modes_offerts):
+                _doc = res.metadata.get("doc_id")
+                if _doc in vus or not filter_message(res.metadata):
+                    continue
+                vus.add(_doc)
+                user_results.append(res)
+
+            # Ticket 071, lot 3 — les concepts MIS HORS SERVICE sont écartés du rappel. Ils
+            # restent dans les métadonnées : ils ne sont pas supprimés, leur mise à l'écart
+            # datée est l'observable que l'expérience d'hystérésis cherche.
+            #
+            # ⚠ C'est la TROISIÈME exception à la règle de non-exclusion du lot 2, avec
+            # l'identité de l'agent et la fenêtre d'âge. Elle est écrite comme une exception
+            # et non fondue dans la règle : « rien ne filtre » se transporte à l'article, et
+            # y deviendrait faux sans mention.
+            _avant = len(user_results)
+            user_results = [
+                r for r in user_results
+                if (entrees_par_doc.get((r.metadata or {}).get("doc_id")) is None
+                    or entrees_par_doc[(r.metadata or {}).get("doc_id")].est_servi)
+            ]
+            _ecartes = _avant - len(user_results)
+            if _ecartes:
+                logger.debug(
+                    f"[concepts] {_ecartes} concept(s) hors service écarté(s) du rappel pour "
+                    f"{person_id} — contredits plus souvent que confirmés, conservés en mémoire"
+                )
             # Re-rank the results
-            scores = self.rank_nodes(query, query_at, user_results)
+            scores = self.rank_nodes(
+                query, query_at, user_results, entrees_par_doc, contexte
+            )
             # get topk user_results by scores
             top_k_indices = np.argsort(scores)[-top_k:][::-1]
             result = [user_results[i] for i in top_k_indices]
+
+            self._compter_viviers(person_id, user_results, result)
+
+            # Le rappel RENFORCE, et seulement ce qui a été réellement servi au modèle : les
+            # candidats écartés du top-K n'ont pas été rappelés. C'est la mécanique de
+            # MemoryBank, et le corollaire de Park et al. dont la fraîcheur décroît depuis le
+            # dernier rappel et non depuis la création.
+            self._renforcer_les_servis(person_id, result, entrees_par_doc, query_at_datetime)
+
             LTM_QUERY_DURATION.observe(time.monotonic() - _t0)
             return result
 
@@ -484,70 +619,348 @@ class MultiUserLongTermMemory:
             logger.exception(f"Error querying memories for user {person_id}: {e}")
             return []
 
-    def rank_nodes(self, query: str, query_at: Optional[int], nodes: List[MemorySearchResult]) -> np.ndarray:
-        """Rank nodes based on their relevance to the query."""
+    # Fenêtre d'observation des viviers, en nombre de décisions. Les alarmes se lisent sur
+    # une fenêtre et non sur un coup : un vivier B vide sur UNE décision est banal — l'agent
+    # n'a pas encore de souvenir du mode offert. Vide sur un tiers d'une fenêtre, c'est une
+    # normalisation d'axes défaillante.
+    _FENETRE_VIVIERS = 200
+
+    def _compter_viviers(
+        self,
+        person_id: str,
+        candidats: List[MemorySearchResult],
+        servis: List[MemorySearchResult],
+    ) -> None:
+        """Part du top-K issue de chaque vivier, et les deux alarmes du lot 2.
+
+        C'est la mesure DIRECTE de l'utilité des viviers structurés. Sans elle, on ne saurait
+        pas distinguer « les viviers B et C remontent des souvenirs que A ratait » de « ils ne
+        servent à rien et la conception est à revoir ».
+        """
+        if not hasattr(self, "_viviers_fenetre"):
+            self._viviers_fenetre: list = []
+            self._alarme_vivier_b = False
+            self._alarme_vivier_a = False
+
+        parts = {"A": 0, "B": 0, "C": 0}
+        for r in servis:
+            parts[(r.metadata or {}).get("vivier", "A")] = (
+                parts.get((r.metadata or {}).get("vivier", "A"), 0) + 1
+            )
+        b_propose = any((c.metadata or {}).get("vivier") == "B" for c in candidats)
+        self._viviers_fenetre.append((parts, b_propose))
+        if len(self._viviers_fenetre) > self._FENETRE_VIVIERS:
+            self._viviers_fenetre = self._viviers_fenetre[-self._FENETRE_VIVIERS:]
+
+        n = len(self._viviers_fenetre)
+        if n < self._FENETRE_VIVIERS:
+            return  # une fenêtre incomplète ne déclenche rien : trop peu pour conclure
+
+        sans_b = sum(1 for p, propose in self._viviers_fenetre if not propose)
+        total_servis = sum(sum(p.values()) for p, _ in self._viviers_fenetre) or 1
+        part_a = sum(p.get("A", 0) for p, _ in self._viviers_fenetre) / total_servis
+
+        logger.info(
+            f"[viviers] fenêtre de {n} décisions — part du top-K : "
+            f"A {part_a:.0%}, B {sum(p.get('B', 0) for p, _ in self._viviers_fenetre) / total_servis:.0%}, "
+            f"C {sum(p.get('C', 0) for p, _ in self._viviers_fenetre) / total_servis:.0%} "
+            f"| vivier B vide sur {sans_b / n:.0%} des décisions"
+        )
+
+        if sans_b / n > 1 / 3 and not self._alarme_vivier_b:
+            self._alarme_vivier_b = True
+            logger.error(
+                f"[ALARME] vivier B vide sur {sans_b / n:.0%} des {n} dernières décisions "
+                f"(seuil : un tiers) — la normalisation des axes est probablement défaillante, "
+                f"les souvenirs ne portent pas le mode des options offertes"
+            )
+        elif sans_b / n <= 1 / 6 and self._alarme_vivier_b:
+            self._alarme_vivier_b = False
+            logger.info("[viviers] le vivier B est de nouveau alimenté")
+
+        if part_a > 0.95 and not self._alarme_vivier_a:
+            self._alarme_vivier_a = True
+            logger.error(
+                f"[ALARME] {part_a:.0%} du top-K vient du SEUL vivier sémantique sur les {n} "
+                f"dernières décisions (seuil : 95 %) — les viviers structurés n'apportent rien "
+                f"et la conception du lot 2 est à revoir"
+            )
+        elif part_a <= 0.90 and self._alarme_vivier_a:
+            self._alarme_vivier_a = False
+            logger.info("[viviers] les viviers structurés contribuent de nouveau au top-K")
+
+    def journal_trajets(self, person_id: str) -> dict:
+        """Journal des trajets de l'agent — le compteur d'où sortent ses habitudes (lot 4)."""
+        self.ensure_user_initialized(person_id)
+        return self.user_metadata[person_id].setdefault("journal", {})
+
+    def noter_trajet(
+        self,
+        person_id: str,
+        motif: Optional[str],
+        creneau: Optional[str],
+        mode: Optional[str],
+        retard_s: float = 0.0,
+    ) -> None:
+        """Enregistre un trajet accompli dans le journal de l'agent.
+
+        Le journal est PERSISTÉ avec les métadonnées : il réutilise l'écriture différée déjà en
+        place. Sans persistance, un run repris repartirait sans habitudes, et le bloc des
+        habitudes mentirait par omission tout le premier jour.
+        """
+        from llm.noyau import noter_trajet as _noter
+
+        _noter(self.journal_trajets(person_id), motif, creneau, mode, retard_s)
+        self._dirty.add(person_id)
+        self._schedule_flush()
+
+    def viviers_structures(
+        self,
+        person_id: str,
+        modes_offerts: Optional[List[str]] = None,
+    ) -> List[MemorySearchResult]:
+        """Viviers B (par objet) et C (chocs), lus dans les métadonnées de l'agent.
+
+        Aucun plongement, aucune requête au magasin vectoriel : les souvenirs de l'agent sont
+        déjà en RAM ici — `ensure_user_initialized` les recharge du disque si l'agent avait été
+        évincé du cache LRU. Le coût est une lecture de liste de quelques centaines d'éléments.
+
+        **B — par objet.** Pour chaque mode offert dans les options de la décision, les
+        souvenirs portant ce mode, les plus graves et les plus récents d'abord. C'est lui qui
+        fait remonter une chute à vélo du matin sur une décision du soir : ni le lieu, ni le
+        créneau, ni le motif ne coïncident, mais l'objet les relie, et l'objet suffit.
+
+        **C — chocs.** Les souvenirs au-dessus du seuil de gravité, **sans aucune condition**
+        de lieu, d'heure ni de motif. Il garantit qu'un souvenir grave n'est jamais perdu par
+        accident de classement.
+        """
+        self.ensure_user_initialized(person_id)
+        entrees = self.user_metadata.get(person_id, {}).get("entries", [])
+        if not entrees:
+            return []
+
+        par_mode = int(settings.agent.memoire__vivier_b_par_mode)
+        taille_c = int(settings.agent.memoire__vivier_c_taille)
+        seuil_choc = float(settings.agent.memoire__importance_choc)
+
+        def _cle(e: MemoryEntry):
+            # Gravité d'abord, récence ensuite : à gravité égale, le plus frais passe devant.
+            return (float(e.importance or 0.0), e.horodatage_de_reference)
+
+        retenus: Dict[str, MemoryEntry] = {}
+        origines: Dict[str, str] = {}
+
+        for mode in {m for m in (modes_offerts or []) if m}:
+            candidats = [e for e in entrees if e.axe_objet == mode and e.doc_id]
+            for e in sorted(candidats, key=_cle, reverse=True)[:par_mode]:
+                retenus.setdefault(e.doc_id, e)
+                origines.setdefault(e.doc_id, "B")
+
+        chocs = [
+            e for e in entrees
+            if e.doc_id and float(e.importance or 0.0) >= seuil_choc
+        ]
+        for e in sorted(chocs, key=_cle, reverse=True)[:taille_c]:
+            retenus.setdefault(e.doc_id, e)
+            origines.setdefault(e.doc_id, "C")
+
+        return [
+            MemorySearchResult(
+                content=entree.content,
+                metadata={
+                    "person_id": person_id,
+                    "timestamp": entree.timestamp.isoformat(),
+                    "memory_type": str(entree.memory_type),
+                    "doc_id": doc_id,
+                    "tags": entree.tags,
+                    "vivier": origines[doc_id],
+                },
+                # Aucune similarité sémantique n'a été calculée pour ces candidats : ils
+                # n'ont pas été trouvés par le texte. Zéro est la valeur EXACTE de leur
+                # similarité mesurée, pas un défaut — et les quatre autres composantes les
+                # classent.
+                score=0.0,
+            )
+            for doc_id, entree in retenus.items()
+        ]
+
+    def rank_nodes(
+        self,
+        query: str,
+        query_at: Optional[int],
+        nodes: List[MemorySearchResult],
+        entrees_par_doc: Optional[Dict[str, MemoryEntry]] = None,
+        contexte: Optional[Dict[str, Any]] = None,
+    ) -> np.ndarray:
+        """Rank nodes based on their relevance to the query.
+
+        `entrees_par_doc` (ticket 071, lot 1) donne accès à l'entrée AUTORITAIRE derrière
+        chaque nœud : sa durée de vie propre et la date de son dernier rappel. Absent, le
+        classement retombe sur l'horodatage de l'index et la constante de temps par défaut,
+        c'est-à-dire exactement le comportement d'avant le lot 1.
+        """
         if not nodes:
             return np.array([])
 
-        sim_score_weight = settings.agent.long_term_retrieval__sim_weight
-        imp_score_weight = settings.agent.long_term_retrieval__keyword_weight
-        time_decay_weight = settings.agent.long_term_retrieval__time_weight
-        default_reflection_importance_score = settings.agent.long_term_retrieval__default_reflection_importance_score
+        sim_w = settings.agent.long_term_retrieval__sim_weight
+        cat_w = settings.agent.long_term_retrieval__keyword_weight
+        temps_w = settings.agent.long_term_retrieval__time_weight
+        grav_w = settings.agent.long_term_retrieval__importance_weight
+        axes_w = settings.agent.long_term_retrieval__affinite_weight
 
-        # similarity score
-        _sim_score = np.array([n.score for n in nodes])
-        # logger.debug(f"Sim score debug: {_sim_score.min()}, {_sim_score.max()}, {_sim_score.mean()}")
-        # importance score based on keywords, use bleu score with the query
-        keyword_only = [(n.metadata.get("tags", "") or "") for n in nodes]
-        _imp_score = np.array([
-            self._bleu_score(query, kw) if kw else default_reflection_importance_score for kw in keyword_only
+        entrees = entrees_par_doc or {}
+        ctx = contexte or {}
+
+        def _entree(n):
+            return entrees.get((n.metadata or {}).get("doc_id"))
+
+        # 1. Similarité sémantique. Bornée : le magasin vectoriel peut sortir de [0, 1], et les
+        # candidats des viviers structurés n'ont pas de similarité mesurée — elle vaut zéro,
+        # ce qui est exact, et leurs quatre autres composantes les classent.
+        _sim = np.clip(np.array([n.score for n in nodes]), 0.0, 1.0)
+
+        # 2. Affinité catégorielle — la MÉTÉO seule (arbitrage du 2026-09-14, issue A). Elle
+        # remplace le score dit « BLEU-2 », qui était un taux de rappel lexical asymétrique sur
+        # les étiquettes et non le BLEU de Papineni et al. Réduite à la météo parce que ses
+        # trois autres attributs — mode, créneau, motif — SONT déjà les axes de la composante
+        # suivante : les compter deux fois rendrait le score ininterprétable.
+        _cat = np.array([
+            affinite_meteo(getattr(_entree(n), "axe_meteo", None), ctx.get("axe_meteo"))
+            for n in nodes
         ])
-        # logger.debug(f"Importance score debug: {_imp_score.min()}, {_imp_score.max()}, {_imp_score.mean()}")
-        # time decay score
-        _time_decay_score = np.array([
-            self._time_decay_score(n.metadata.get("timestamp"), query_at) for n in nodes
+
+        # 3. Poids temporel : exp(-Δt / force), Δt depuis le dernier rappel.
+        _temps = np.array([
+            self._time_decay_score(
+                n.metadata.get("timestamp"), query_at, entree=_entree(n)
+            )
+            for n in nodes
         ])
-        # logger.debug(f"Time decay score debug: {_time_decay_score.min()}, {_time_decay_score.max()}, {_time_decay_score.mean()}")
 
-        # Ticket 048 — la normalisation min-max PAR COMPOSANTE est abandonnée.
-        # Elle ramenait mécaniquement le meilleur candidat du lot à 1 et le pire à 0,
-        # quel que soit l'écart réel : le souvenir le plus récent valait toujours 1 et le
-        # plus ancien 0. Comme la décroissance est monotone, l'ordre par ancienneté était
-        # INVARIANT à la constante de temps — seul l'espacement bougeait — si bien que le
-        # bras de sensibilité des expériences d'hystérésis pouvait ne rien mesurer pour une
-        # raison purement technique. Deux décisions n'étaient pas non plus comparables entre
-        # elles, leurs scores étant relatifs à des lots différents.
-        # Les trois composantes entrent donc en valeur ABSOLUE sur [0, 1] :
-        #   - imp_score (BLEU) et time_decay le sont par construction ;
-        #   - sim_score vient du vector store et peut sortir de l'intervalle → borné.
-        _sim_score = np.clip(_sim_score, 0.0, 1.0)
+        # 4. Gravité du souvenir. Composante restaurée de Park et al. (2023), que Vu et al.
+        # avaient écartée.
+        _grav = np.array([
+            float(getattr(_entree(n), "importance", 0.0) or 0.0) for n in nodes
+        ])
 
-        combined_score = _sim_score * sim_score_weight + _imp_score * imp_score_weight + _time_decay_score * time_decay_weight
+        # 5. Affinité d'axes, en BONUS et jamais en veto : un axe discordant contribue zéro,
+        # il ne retranche rien. Hors identité de l'agent et fenêtre d'âge, RIEN ne filtre.
+        _axes = np.array([
+            affinite_axes(
+                getattr(_entree(n), "axe_objet", None),
+                getattr(_entree(n), "axe_lieu", None),
+                getattr(_entree(n), "axe_creneau", None),
+                getattr(_entree(n), "axe_motif", None),
+                objet_courant=ctx.get("axe_objet"),
+                lieu_courant=ctx.get("axe_lieu"),
+                creneau_courant=ctx.get("axe_creneau"),
+                motif_courant=ctx.get("axe_motif"),
+            )
+            for n in nodes
+        ])
+
+        # Ticket 048 — la normalisation min-max PAR COMPOSANTE reste abandonnée. Elle ramenait
+        # mécaniquement le meilleur candidat du lot à 1 et le pire à 0, quel que soit l'écart
+        # réel : deux décisions n'étaient pas comparables, et l'ordre par ancienneté était
+        # INVARIANT à la constante de temps. Les cinq composantes entrent en valeur ABSOLUE.
+        combined_score = (
+            _sim * sim_w
+            + _cat * cat_w
+            + _temps * temps_w
+            + _grav * grav_w
+            + _axes * axes_w
+        )
 
         return combined_score
 
-    def _time_decay_score(self, timestamp_str: str, query_at: Optional[int]) -> float:
-        if not timestamp_str or query_at is None:
+    def _time_decay_score(
+        self,
+        timestamp_str: str,
+        query_at: Optional[int],
+        entree: Optional[MemoryEntry] = None,
+    ) -> float:
+        """Poids temporel d'un souvenir, sur [0, 1] et en valeur ABSOLUE.
+
+        Ticket 071, lot 1 — deux changements par rapport au ticket 048 :
+
+        - la constante de temps n'est plus commune, c'est celle du souvenir, fonction de sa
+          gravité : près de vingt jours pour un souvenir `marquant` contre moins de trois pour
+          un trajet banal ;
+        - le Δt se compte depuis le **dernier rappel** et non depuis l'écriture, comme chez
+          Park et al. (2023, § 4.1) et MemoryBank. Un souvenir souvent rappelé reste frais ;
+          un souvenir jamais rappelé vieillit depuis son écriture, comme avant.
+
+        `gama_timestamp` et non `.timestamp()` : `query_at` est un horodatage GAMA (heure
+        murale) et les `datetime` des souvenirs portent des champs muraux — les soustraire
+        après un passage par le fuseau du processus ajouterait une heure d'ancienneté fictive.
+
+        Sans entrée autoritaire (entrée écrite avant le lot 1, ou test qui ne fournit que des
+        nœuds), on retombe sur l'horodatage de l'index et la constante par défaut.
+        """
+        if query_at is None:
             return 0.0
 
-        try:
-            timestamp = datetime.fromisoformat(timestamp_str)
-        except ValueError:
-            return 0.0
+        if entree is not None:
+            # Ticket 071, lot 3 — DEUX RÉGIMES, et c'est le point le plus fort du ticket.
+            # Pour un concept ou un résumé, la composante temporelle n'est plus une
+            # décroissance d'horloge mais la CONFIANCE. Qu'une ligne sature les jours de pluie
+            # entre 8 h et 8 h 30 ne devient pas faux parce que dix jours ont passé — or sous
+            # le régime uniforme ce concept tombait à 2,8 % de son poids en dix jours et
+            # sortait du top-K sans qu'aucune observation ne l'ait infirmé.
+            if not entree.est_episodique:
+                return float(entree.confiance)
+            reference = entree.horodatage_de_reference
+            force = entree.force
+        else:
+            if not timestamp_str:
+                return 0.0
+            try:
+                reference = datetime.fromisoformat(timestamp_str)
+            except ValueError:
+                return 0.0
+            force = None
 
-        # Calculate time decay based on the difference between query time and message time.
-        # `gama_timestamp` et non `.timestamp()` : `query_at` est un horodatage GAMA (heure
-        # murale) et `timestamp` un `datetime` naïf portant des champs muraux — les
-        # soustraire après un passage par le fuseau du processus ajouterait une heure
-        # d'ancienneté fictive à chaque souvenir.
-        # Décroissance exponentielle de constante de temps `force_base_jours` (ticket 048).
-        # Le score est ABSOLU sur [0, 1] : il n'est plus renormalisé par rapport au lot de
-        # candidats (cf. `rank_nodes`), sans quoi le paramètre serait presque inopérant.
-        force_jours = settings.agent.long_term_retrieval__force_base_jours
-        if force_jours <= 0:
-            return 0.0
-        time_diff = max(0, (query_at - gama_timestamp(timestamp)) / (24*3600))  # Convert to days
-        return float(math.exp(-time_diff / force_jours))
+        time_diff = max(0, (query_at - gama_timestamp(reference)) / (24 * 3600))
+        return poids_temporel(time_diff, force)
+
+    def _renforcer_les_servis(
+        self,
+        person_id: str,
+        servis: List[MemorySearchResult],
+        entrees_par_doc: Dict[str, MemoryEntry],
+        quand: Optional[datetime],
+    ) -> int:
+        """`force ← min(force + δ, FORCE_MAX)` et `rappels += 1` sur les entrées SERVIES.
+
+        Trois précautions qui ne sont pas des détails :
+
+        - seules les entrées du top-K sont renforcées, pas les candidats : un souvenir écarté
+          du classement n'a pas été rappelé ;
+        - `timestamp` n'est JAMAIS touché — il s'affiche dans le prompt et sert de côté gauche
+          aux filtres par jour et par ancienneté. Le faire glisser réécrirait l'histoire de
+          l'agent, qui croirait que sa chute à vélo a eu lieu hier. Seul `dernier_rappel` bouge ;
+        - l'écriture disque passe par le mécanisme `dirty` existant : aucun accès disque
+          synchrone sur le chemin d'une décision.
+
+        Sans horloge simulée (`quand is None`), on renforce quand même la durée de vie mais on
+        ne date pas le rappel : jamais de repli sur l'horloge de la machine.
+        """
+        if not servis or not entrees_par_doc:
+            return 0
+        renforces = 0
+        for resultat in servis:
+            entree = entrees_par_doc.get((resultat.metadata or {}).get("doc_id"))
+            if entree is None:
+                continue
+            entree.force = force_apres_rappel(entree.force)
+            entree.rappels = int(entree.rappels or 0) + 1
+            if quand is not None:
+                entree.dernier_rappel = quand
+            renforces += 1
+        if renforces:
+            self._dirty.add(person_id)
+            self._schedule_flush()
+        return renforces
 
     def _bleu_score(self, query: str, keyword: str) -> float:
         if not keyword or not query:
@@ -571,41 +984,135 @@ class MultiUserLongTermMemory:
 
         # Combine unigram and bigram scores with weights
         # Weight unigrams more heavily as they're more likely to match
-        combined_score = (0.7 * unigram_score + 0.3 * bigram_score)
+        # Ticket 071 (défaut D) — une étiquette d'un seul mot n'a AUCUN bigramme : appliquer
+        # le poids 0.3 à un score nul la plafonnait à 0.70 même en correspondance parfaite,
+        # contre 1.00 pour une étiquette de deux mots. Sans bigrammes, le poids revient en
+        # entier aux unigrammes.
+        if kw_bigrams:
+            combined_score = (0.7 * unigram_score + 0.3 * bigram_score)
+        else:
+            combined_score = unigram_score
         
         return combined_score
 
-    def cleanup_user_memories(self, person_id: str, days_threshold: int = 30):
-        """Cleanup old memories for specific user"""
+    def _sim_now(self, person_id: str) -> Optional[datetime]:
+        """Heure murale SIMULÉE de référence pour cet agent, ou None si indéterminable.
+
+        Le souvenir le plus récent de l'agent porte l'heure murale de GAMA : c'est le seul
+        « maintenant » qui ait un sens ici. L'horloge de la machine hôte n'en est pas un.
+        """
+        entries = self.user_metadata.get(person_id, {}).get("entries") or []
+        stamps = [e.timestamp for e in entries if getattr(e, "timestamp", None) is not None]
+        return max(stamps) if stamps else None
+
+    def cleanup_user_memories(self, person_id: str, days_threshold: int = 30,
+                              now: Optional[datetime] = None):
+        """Cleanup old memories for specific user.
+
+        Ticket 071 (défaut A) — le seuil se calculait sur `datetime.now()`, l'horloge de la
+        MACHINE, alors que `entry.timestamp` porte l'heure murale de GAMA. Dès qu'un run
+        rejouait une date antérieure de plus que le seuil, la condition de conservation était
+        fausse pour TOUTES les entrées et le nettoyage vidait concepts et conversations.
+
+        Règle retenue : un nettoyage qui ne sait pas établir le temps simulé ne nettoie RIEN.
+        Jamais de repli sur l'horloge de la machine — une suppression ne doit pas dépendre de
+        la date à laquelle le run a été lancé.
+        """
         self.ensure_user_initialized(person_id)
-        
+
         if person_id not in self.user_metadata:
             return
-        
-        cutoff_date = datetime.now() - timedelta(days=days_threshold)
+
+        sim_now = now or self._sim_now(person_id)
+        if sim_now is None:
+            logger.warning(
+                f"[cleanup] Temps simulé indéterminable pour {person_id} — aucun souvenir "
+                f"horodaté : nettoyage ABANDONNÉ (jamais de repli sur l'horloge machine)"
+            )
+            return
+
         original_count = len(self.user_metadata[person_id]["entries"])
 
-        # Filter entries by date and type (entries are MemoryEntry objects)
+        # Ticket 071, lot 1 — la rétention cesse d'être aveugle au contenu du souvenir.
+        #
+        # AVANT : un seuil d'âge commun, plus une exemption par TYPE (les réflexions et les
+        # résumés ne partaient jamais). Deux conséquences fâcheuses : un souvenir grave de
+        # trente et un jours tombait avec les trajets ordinaires, et les réflexions
+        # s'accumulaient sans fin.
+        #
+        # MAINTENANT, deux régimes, comme la taxonomie de Tulving (1972) le demande :
+        #   - SÉMANTIQUE (concepts, résumés) : jamais purgé par l'horloge. Un concept ne
+        #     devient pas faux parce que dix jours ont passé ; il se perd par CONTRADICTION,
+        #     et sa mise à l'écart datée est l'observable que l'expérience cherche (lot 3) ;
+        #   - ÉPISODIQUE (entrées brutes, réflexions) : purgé quand son poids temporel passe
+        #     sous le seuil, soit ~4,6 constantes de temps. Treize jours pour un trajet banal
+        #     jamais rappelé, quatre-vingt-onze pour un souvenir `marquant` — donc jamais dans
+        #     un run. La gravité et les rappels décident, plus le seul calendrier.
+        #
+        # `days_threshold` reste un PLANCHER de sécurité : rien de plus jeune n'est purgé,
+        # quelle que soit sa durée de vie. Il ne peut donc que retarder une purge, jamais la
+        # provoquer.
         filtered_entries = []
+        supprimes = []
         for entry in self.user_metadata[person_id]["entries"]:
             try:
-                # Keep if recent or special type
-                if (entry.timestamp > cutoff_date or
-                        str(entry.memory_type) in ("reflection", "summary")):
+                if not entry.est_episodique:
+                    filtered_entries.append(entry)
+                    continue
+                age_jours = (
+                    sim_now - entry.horodatage_de_reference
+                ).total_seconds() / 86400.0
+                if age_jours <= days_threshold:
+                    filtered_entries.append(entry)
+                elif est_purgeable(age_jours, entry.force):
+                    supprimes.append(entry)
+                else:
                     filtered_entries.append(entry)
 
             except (TypeError, AttributeError):
                 # Keep malformed entries to be safe
                 filtered_entries.append(entry)
-        
+
+        # Ticket 071 (défaut B) — retirer aussi de l'index vectoriel. Sans cela, une entrée
+        # absente des métadonnées continuait d'être renvoyée par ChromaDB et réinjectée dans
+        # les prompts de décision. L'échec d'une suppression ne doit pas faire perdre la mise
+        # à jour des métadonnées : il est journalisé, pas propagé.
+        self._delete_from_index(supprimes, person_id)
+
         # Update metadata
         self.user_metadata[person_id]["entries"] = filtered_entries
-        self.user_metadata[person_id]["last_cleanup"] = datetime.now().isoformat()
+        self.user_metadata[person_id]["last_cleanup"] = sim_now.isoformat()
         self._save_user_metadata(person_id)
-        
+
         removed_count = original_count - len(filtered_entries)
         if removed_count > 0:
-            logger.info(f"Cleaned up {removed_count} old memories for user {person_id}")
+            logger.info(
+                f"Cleaned up {removed_count} old memories for user {person_id} "
+                f"(seuil {days_threshold} j avant {sim_now.isoformat()}, temps simulé)"
+            )
+
+    def _delete_from_index(self, entries: List[MemoryEntry], person_id: str) -> int:
+        """Retire du vector store les documents des entrées données. Fail-open et journalisé."""
+        if not entries or self.shared_index is None:
+            return 0
+        supprimes = 0
+        sans_id = 0
+        for entry in entries:
+            doc_id = getattr(entry, "doc_id", None)
+            if not doc_id:
+                sans_id += 1  # entrée écrite avant le ticket 071 : non adressable
+                continue
+            try:
+                self.shared_index.delete_ref_doc(doc_id, delete_from_docstore=True)
+                supprimes += 1
+            except Exception as exc:  # noqa: BLE001 — une suppression ratée ne doit rien casser
+                logger.warning(f"[cleanup] Suppression index échouée pour {doc_id}: {exc}")
+        if sans_id:
+            logger.warning(
+                f"[cleanup] {sans_id} souvenir(s) de {person_id} sans identifiant de document "
+                f"(écrits avant le ticket 071) : retirés des métadonnées, CONSERVÉS dans l'index"
+            )
+        return supprimes
     
     def batch_cleanup_users(self, user_ids: List[str], days_threshold: int = 30):
         """Batch cleanup for multiple users"""

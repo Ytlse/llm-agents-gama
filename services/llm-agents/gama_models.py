@@ -41,6 +41,10 @@ class WorldInitRequest(BaseRequest):
     # consigne dans scenario_params.yaml : sans lui, le périmètre temporel d'un run
     # archivé n'est plus reconstituable (ticket 008, A5).
     simulation_max_days: Optional[int] = None
+    # Interrupteur d'accidents (ticket 070). Absent des runs antérieurs : `None` signifie
+    # « GAMA ne l'a pas transmis », et le contrôleur garde alors sa valeur de configuration.
+    # Ne jamais confondre avec `False`, qui est une décision explicite de l'expérimentateur.
+    accidents_enabled: Optional[bool] = None
 
 class WorldSyncRequest(BaseRequest):
     ready_count: Optional[int] = None

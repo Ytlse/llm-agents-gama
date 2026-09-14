@@ -432,6 +432,31 @@ def cmd_estimer(a: argparse.Namespace) -> int:
     return 0
 
 
+def appliquer_fenetre_age(exp) -> int:
+    """Règle la fenêtre d'âge du rappel sur l'horizon de l'expérience (ticket 071, § 2.7).
+
+    Jusqu'ici `long_term_max_days_query` valait 30 jours en dur, quel que soit l'horizon
+    déclaré : une expérience de soixante jours perdait son second mois d'un coup, sans
+    qu'aucune ligne de journal ne le dise. Rien ne doit filtrer par l'âge À L'INTÉRIEUR
+    d'un run — la décroissance temporelle suffit à faire taire un vieux souvenir.
+
+    Appliqué MÊME quand la mémoire est coupée : une valeur inerte vaut mieux qu'une
+    valeur fausse si la mémoire est rallumée plus tard dans le processus.
+
+    Rend la fenêtre retenue, en jours, pour que l'appelant puisse la tracer.
+    """
+    from settings import settings
+
+    fenetre = settings.agent.fenetre_age_pour_horizon(exp.horizon_jours)
+    settings.agent.long_term_max_days_query = fenetre
+    print(
+        f"mémoire : {'active' if exp.memoire else 'coupée'} — fenêtre d'âge au rappel "
+        f"{fenetre} j (horizon {exp.horizon_jours} j, plafond "
+        f"{settings.agent.memoire__fenetre_age_max_jours} j)"
+    )
+    return fenetre
+
+
 def cmd_lancer(a: argparse.Namespace) -> int:
     exp = _charger_experience_par_nom(a.experience)
     jeu, info, moniteur, refus = _preparer_lancement(
@@ -461,6 +486,7 @@ def cmd_lancer(a: argparse.Namespace) -> int:
 
     # Le décideur et le gabarit sont ceux de l'expérience : réglages imposés au processus.
     settings.agent.long_term_memory_enabled = bool(exp.memoire)
+    appliquer_fenetre_age(exp)
     settings.cache.enabled = False  # chaque décision non archivée est demandée (RG-2)
     # La définition commande la chaîne des véhicules, pas l'environnement (R13).
     appliquer_reglages_chaine(exp)

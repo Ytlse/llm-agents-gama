@@ -1,14 +1,12 @@
-
+import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
-import shutil
+from typing import Any, ClassVar
+
+import yaml
 from loguru import logger
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
-
-import yaml
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -62,7 +60,11 @@ def _run_artifacts_disabled() -> bool:
     simulation en cours. Un import de test observe la configuration, il
     n'ouvre pas un run.
     """
-    if os.environ.get("APP_NO_RUN_ARTIFACTS", "").strip().lower() in ("1", "true", "yes"):
+    if os.environ.get("APP_NO_RUN_ARTIFACTS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
         return True
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return True
@@ -76,38 +78,39 @@ def _run_artifacts_disabled() -> bool:
     return argv0 in ("pytest", "unittest") or argv0.startswith("pytest")
 
 
-def merge_configs(*config_paths: str) -> Dict[str, Any]:
+def merge_configs(*config_paths: str) -> dict[str, Any]:
     """Merge multiple YAML files, with later files overriding earlier ones."""
     merged_config = {}
-    
+
     for path in config_paths:
         if Path(path).exists():
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 config = yaml.safe_load(f)
                 if config:
                     merged_config = deep_merge(merged_config, config)
-    
+
     return merged_config
 
-def deep_merge(base: Dict, override: Dict) -> Dict:
+
+def deep_merge(base: dict, override: dict) -> dict:
     """Deep merge two dictionaries."""
     result = base.copy()
-    
+
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = deep_merge(result[key], value)
         else:
             result[key] = value
-    
+
     return result
 
 
 class WorkdirPathResolutionMixin:
     """Mixin to handle path resolution in nested models."""
-    
+
     # Define path fields at class level
-    _in_workdir_path_fields: ClassVar[List[str]] = []
-    
+    _in_workdir_path_fields: ClassVar[list[str]] = []
+
     def resolve_paths(self, workdir: Path):
         """Resolve relative paths to absolute paths."""
         for field_name in self._in_workdir_path_fields:
@@ -118,7 +121,7 @@ class WorkdirPathResolutionMixin:
                     setattr(self, field_name, str(resolved_path))
 
 
-def _candidats_providers_yaml() -> List[Path]:
+def _candidats_providers_yaml() -> list[Path]:
     """Emplacements sondés pour providers.yaml, dans l'ordre de priorité.
 
     Configuration de DÉPLOIEMENT du gateway (hors du paquet depuis le ticket 037, itération 2) :
@@ -127,7 +130,7 @@ def _candidats_providers_yaml() -> List[Path]:
     `<dépôt>/llm-agents` sur l'hôte (racine à UN cran) mais `/app` dans le conteneur, où
     `/app/../config` = `/config` n'existe pas et où le fichier est monté sous `/app/config`.
     """
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     from_env = os.environ.get("LLM_GATEWAY_PROVIDERS_FILE")
     if from_env:
         candidates.append(Path(from_env))
@@ -139,7 +142,7 @@ def _candidats_providers_yaml() -> List[Path]:
     return [c for c in candidates if not (str(c) in vus or vus.add(str(c)))]
 
 
-def _find_providers_yaml() -> Optional[Path]:
+def _find_providers_yaml() -> Path | None:
     """Cherche providers.yaml dans les emplacements standards et retourne le premier trouvé."""
     candidates = _candidats_providers_yaml()
     for p in candidates:
@@ -156,39 +159,41 @@ def _find_providers_yaml() -> Optional[Path]:
 
 
 class ProviderConfig(BaseModel):
-    api_key:           SecretStr = SecretStr("")
-    rpm_limit:         int
-    base_url:          str
-    default_model:     str
-    weight:            float = 1.0
-    batch_max_agents:  int   = 5
-    concurrency_limit: int   = 2
-    disable_timeout:   int   = 180
+    api_key: SecretStr = SecretStr("")
+    rpm_limit: int
+    base_url: str
+    default_model: str
+    weight: float = 1.0
+    batch_max_agents: int = 5
+    concurrency_limit: int = 2
+    disable_timeout: int = 180
     # Attente du client pour une tâche servie par cette instance (s) ; None = défaut du client.
-    wait_timeout:      Optional[float] = None
-    adapter:           str   = ""
+    wait_timeout: float | None = None
+    adapter: str = ""
 
 
 class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
-    model_config = SettingsConfigDict(env_nested_delimiter='__')
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
 
-    redis_url:                 str   = "redis://localhost:6379/0"
-    celery_broker_url:         str   = "redis://localhost:6379/1"
-    celery_result_backend:     str   = "redis://localhost:6379/2"
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
     circuit_breaker_threshold: float = 0.95
-    max_retries:               int   = 50
-    backoff_base_seconds:      float = 1.0
+    max_retries: int = 50
+    backoff_base_seconds: float = 1.0
     # Cooldown court du provider fautif lors d'un basculement (parse error / 4xx) :
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
     provider_switch_cooldown_seconds: int = 30
-    batch_max_agents:          int   = 5
-    batch_delay_seconds:       float = 3.0  # miroir de llm_gateway.config (fenêtre d'accumulation du micro-batching)
+    batch_max_agents: int = 5
+    batch_delay_seconds: float = (
+        3.0  # miroir de llm_gateway.config (fenêtre d'accumulation du micro-batching)
+    )
 
     # Clés API lues depuis l'env : PROVIDER_KEYS__groq=gsk-...
-    provider_keys: Dict[str, SecretStr] = {}
+    provider_keys: dict[str, SecretStr] = {}
 
     # Construit après validation depuis providers.yaml + provider_keys
-    providers: Dict[str, ProviderConfig] = {}
+    providers: dict[str, ProviderConfig] = {}
 
     @model_validator(mode="after")
     def build_providers(self) -> "LlmConfig":
@@ -202,7 +207,9 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
         result = {}
         for name, entry in defaults.items():
             adapter_name = entry.get("adapter", name)
-            key = self.provider_keys.get(name) or self.provider_keys.get(adapter_name, SecretStr(""))
+            key = self.provider_keys.get(name) or self.provider_keys.get(
+                adapter_name, SecretStr("")
+            )
             result[name] = ProviderConfig(api_key=key, **entry)
         self.providers = result
         return self
@@ -222,8 +229,8 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
     geo_crs: str = "EPSG:4326"
     geo_projection: str = "EPSG:3857"
     # Grid settings
-    grid_size: int = 1000 # 1km
-    time_step: int = 900 # 15 minutes
+    grid_size: int = 1000  # 1km
+    time_step: int = 900  # 15 minutes
     # Dynamic throttling: min_interval = cap * min(1, n / population)^k
     # where n = itineraries in progress (backlog). Threshold relative to the
     # population so the cap is always reachable (n can never exceed population).
@@ -296,12 +303,14 @@ class WorldConfig(BaseSettings, WorkdirPathResolutionMixin):
 
 
 class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["solari_cache_file"]
+    _in_workdir_path_fields: ClassVar[list[str]] = ["solari_cache_file"]
 
-    mode: str = "SOLARI" # SOLARI or OTP
+    mode: str = "SOLARI"  # SOLARI or OTP
 
     # GTFS settings
-    gtfs_file: str = str(_racine_partagee("data", "gtfs") / "data" / "gtfs" / "tisseo_gtfs") + os.sep
+    gtfs_file: str = (
+        str(_racine_partagee("data", "gtfs") / "data" / "gtfs" / "tisseo_gtfs") + os.sep
+    )
     # Table des tracés publiée par `scripts/data/gama/export_trip_info.py` :
     # `route_id → {shape_id → {stop_id: stop_sequence}}` pour les TROIS réseaux, plus
     # le catalogue des arrêts qu'ils desservent. Sans elle, `get_shape_id_from_route_info`
@@ -317,7 +326,12 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     # témoins dans SON propre répertoire.
     shape_lookup_file: str = str(
         _racine_partagee("services", "GAMA", "CityTransport")
-        / "services" / "GAMA" / "CityTransport" / "includes" / "shape_lookup.json")
+        / "services"
+        / "GAMA"
+        / "CityTransport"
+        / "includes"
+        / "shape_lookup.json"
+    )
     # `route_type` GTFS → nom du mode servi à l'agent dans son prompt (« Trajet en
     # Train 12 »). Une clé manquante s'affiche « Unknown » : le TER (route_type=2)
     # entre ici le 2026-09-04 avec le mode `rail` demandé à OTP (ticket 031, q. 16).
@@ -344,7 +358,7 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     # (`geography.PERIMETER_CACHE_KEY`, ticket 031 partie 2). La clé du disque historique de
     # 30 km (`geography.PRODUCTION_CACHE_KEY_30KM`) reste acceptée pour un audit ; toute autre
     # clé doit avoir son pickle en cache — rien n'est téléchargé à sa place.
-    osmnx_graph_key: Optional[str] = None
+    osmnx_graph_key: str | None = None
     # Active le cache persistant des graphes OSMnx sur disque entre les redémarrages
     # (évite de re-télécharger/reconstruire les graphes ville+distance à chaque démarrage)
     osmnx_cache_enabled: bool = True
@@ -363,11 +377,13 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     n_trip_in_grid: int = 5
     otp_cache_enabled: bool = True
     otp_persistent_cache_dir: str = "/app/data/cache/otp"
-    recursion_search_depth: int = 0  # 0 means no recursion, 1 means one level of recursion
+    recursion_search_depth: int = (
+        0  # 0 means no recursion, 1 means one level of recursion
+    )
     search_window_m: int = 30
     transit_access_egress_modes: list[str] = ["foot"]
-    max_trip_candidates: int = 6 # maximum number of trip candidates to be selected
-    fixed_day: Optional[str] = None
+    max_trip_candidates: int = 6  # maximum number of trip candidates to be selected
+    fixed_day: str | None = None
 
     # Fuseau du RÉSEAU simulé, pour lire l'horloge murale que GAMA publie
     # (`sim_clock`). Vide (défaut) = lu dans l'`agency_timezone` des feeds GTFS en
@@ -382,14 +398,17 @@ class GTFSConfig(BaseSettings, WorkdirPathResolutionMixin):
     # 5 h murales étaient demandées à OTP comme 6 h locales (235 points sans
     # itinéraire au lieu de 605 sur la population scellée v4). Un conteneur mal
     # configuré ne doit pas déplacer les itinéraires.
-    network_timezone: Optional[str] = None
+    network_timezone: str | None = None
 
 
 class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["population_cache_prefix", "state_file"]
+    _in_workdir_path_fields: ClassVar[list[str]] = [
+        "population_cache_prefix",
+        "state_file",
+    ]
 
     # Agent settings
-    population_size: Optional[int] = 1
+    population_size: int | None = 1
     population_cache_prefix: str = "./population_"
     # Seed déterministe pour l'échantillonnage aléatoire des agents depuis la sortie
     # eqasim : garantit le même sous-ensemble d'agents (donc les mêmes trajets) d'un run
@@ -401,23 +420,23 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     # eqasim. Le fichier est pris ENTIER : s'il ne compte pas exactement
     # `population_size` agents (après filtre bbox éventuel), le chargement REFUSE plutôt
     # que de ré-échantillonner — un sceau ne se rogne pas en silence.
-    population_file: Optional[str] = None
+    population_file: str | None = None
     # ── Jeu de déplacements enregistré (ticket 035, spec 04) ─────────────────────
     # Dossier d'un jeu préparé par `python -m experiences preparer-jeu` (data/jeux/<nom>).
     # Désigné, la simulation SERT ses propositions au lieu d'appeler les moteurs (G3), après
     # contrôle que le jeu porte bien l'empreinte de la population chargée (G1 : refus sinon).
     # Absent : comportement historique inchangé, calcul en vol (G2). Posé par `make run JEU=<nom>`.
-    jeu_enregistre: Optional[str] = None
+    jeu_enregistre: str | None = None
     # Tolérance horaire par groupe de modes (walk, bike, car, transit, rail) : "insensible",
     # "heure" (recalcul si l'heure pleine change) ou {pas_min: N}. OBLIGATOIRE dès qu'un jeu est
     # désigné — aucun défaut dans le code (E1, question 8) ; les valeurs proposées sont dans
     # config/config.yaml, commentées.
-    jeu_tolerances_horaires: Optional[dict[str, Any]] = None
+    jeu_tolerances_horaires: dict[str, Any] | None = None
     # Part des recalculs horaires qui rendent les propositions déjà enregistrées au-delà de
     # laquelle l'ALARME « tolérance trop sensible » se lève (G7, front montant).
     jeu_seuil_recalcul_sans_effet: float = 0.3
     state_file: str = "./state.json"
-    number_of_llm_based_agents: Optional[int] = 0
+    number_of_llm_based_agents: int | None = 0
 
     # Eqasim settings
     synthetic_file_prefix: str = "toulouse_"
@@ -425,26 +444,39 @@ class DataConfig(BaseSettings, WorkdirPathResolutionMixin):
     generate_personality_traits: bool = False
 
     # Debug
-    debug_people_ids: Optional[list[str]] = None
+    debug_people_ids: list[str] | None = None
 
 
 class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["long_term_memory_storage_dir", "chat_log_dir"]
+    _in_workdir_path_fields: ClassVar[list[str]] = [
+        "long_term_memory_storage_dir",
+        "chat_log_dir",
+    ]
 
-    embedding_model: Optional[str] = None
+    embedding_model: str | None = None
     chat_log_dir: str = "chat_logs"
     long_term_memory_storage_dir: str = "long_term_memory"
     long_term_memory_filter_by_datetime: bool = False
-    long_term_memory_enabled: bool = True #surchargé par la valeur GAMA
+    long_term_memory_enabled: bool = True  # surchargé par la valeur GAMA
     long_term_max_entries_query: int = 10
-    long_term_max_days_query: int = 30
+    # Fenêtre d'âge au rappel, EN JOURS. Portée de 30 à 60 au ticket 071 (§ 2.10) :
+    # rien ne doit filtrer par l'âge À L'INTÉRIEUR d'un run, la décroissance temporelle
+    # suffit à faire taire un vieux souvenir. À 30 jours, un run de soixante jours
+    # perdait son second mois d'un coup, sans qu'aucune ligne de journal ne le dise.
+    # Règle : fenêtre = horizon de l'expérience, plafonnée à `memoire__fenetre_age_max_jours`.
+    # C'est `experiences/cli.py` qui l'applique depuis `horizon_jours`.
+    long_term_max_days_query: int = 60
     # Plafond du cache LRU des métadonnées LTM. Doit rester au-dessus du nombre
     # d'agents : en dessous, chaque décision provoque une éviction (relecture +
     # réécriture disque) puisque les agents sont parcourus en round-robin.
     # Les métadonnées pèsent ~3 Ko/agent, donc 2 000 agents ≈ 6 Mo en mémoire.
     long_term_max_loaded_metadata: int = 2000
-    long_term_reflect_interval: int = 6 * 3600  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
-    stm_reflection_min_entries: int = 10        # déclenche la réflexion STM dès que N entrées accumulées
+    long_term_reflect_interval: int = (
+        6 * 3600
+    )  # 6 hours (legacy — non utilisé si stm_reflection_min_entries > 0)
+    stm_reflection_min_entries: int = (
+        10  # déclenche la réflexion STM dès que N entrées accumulées
+    )
     # Échéance FALLBACK (temps SIMULÉ) d'une réflexion STM, utilisée seulement si
     # l'agent n'a aucune activité horodatée. Depuis le ticket 010, l'échéance EDF
     # normale est le RÉVEIL de l'agent (première activité planifiée du jour
@@ -465,9 +497,31 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     stm_reflection_daily_floor_enabled: bool = True
     stm_reflection_daily_floor_hour: int = 22
 
-    long_term_retrieval__sim_weight: float = 0.4
-    long_term_retrieval__keyword_weight: float = 0.3
-    long_term_retrieval__time_weight: float = 0.3
+    # ── Les cinq composantes du score de rappel (ticket 071, lot 2) ──────────────
+    # ✅ Les CINQ sont lues par `rank_nodes` depuis le lot 2 (2026-09-14), et leur somme vaut
+    # 1,00. Elles ont basculé ENSEMBLE, et c'était la condition : les composantes entrent en
+    # valeur ABSOLUE depuis le ticket 048 — la normalisation min-max a justement été supprimée
+    # pour rendre deux décisions comparables — si bien qu'une somme différente de 1 ferait
+    # tourner le dispositif sous un régime de score que personne n'a spécifié. Un test du
+    # lot 0 verrouille l'invariant sur les poids RÉELLEMENT lus par le classement.
+    #
+    # Valeurs de départ du ticket 071 § 2.10, À CALIBRER sur jeux gelés : ce sont des poids
+    # proposés, pas un résultat.
+    long_term_retrieval__sim_weight: float = 0.30
+    # AFFINITÉ CATÉGORIELLE depuis le lot 2. Le nom est conservé pour ne pas casser les
+    # surcharges d'expérience existantes ; ce qu'il pèse, lui, a changé deux fois.
+    # Il pesait un recouvrement lexical sur les étiquettes, appelé « BLEU-2 » alors que ce
+    # n'en est pas un — c'est un taux de rappel asymétrique, là où le BLEU de Papineni et al.
+    # (2002) est une précision n-gramme avec pénalité de brièveté.
+    # Il pèse maintenant l'appariement de la MÉTÉO, et d'elle seule : les trois autres
+    # attributs envisagés (mode, créneau, motif) SONT les axes de `affinite_weight`, et les
+    # compter deux fois rendrait le score ininterprétable (arbitrage du 2026-09-14, issue A).
+    long_term_retrieval__keyword_weight: float = 0.10
+    long_term_retrieval__time_weight: float = 0.20
+    # Gravité du souvenir — composante de Park et al. (2023), que Vu et al. avaient écartée.
+    long_term_retrieval__importance_weight: float = 0.20
+    # Affinité d'axes (objet, lieu, créneau, motif), en BONUS et jamais en veto.
+    long_term_retrieval__affinite_weight: float = 0.20
     long_term_retrieval__default_reflection_importance_score: float = 0.2
     # Constante de temps de l'oubli, EN JOURS : le score temporel d'un souvenir vaut
     # exp(-Δt / force_base_jours). Remplace l'ancienne base d'exponentielle par jour
@@ -479,7 +533,79 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # conversion depuis un λ déclaré, force = 1 / λ. Ticket 048.
     long_term_retrieval__force_base_jours: float = 2.8
 
-    long_term_self_reflect_enabled: bool = True #surchargé par la valeur GAMA
+    # ══ Constantes de la mémoire visée (ticket 071, § 2.10) ═════════════════════
+    # Fixées et PUBLIÉES le 2026-09-14. Règle de tenue : chaque constante porte une
+    # règle de conception rattachée au PHÉNOMÈNE et non à l'horizon — le même jeu vaut
+    # pour cinq jours comme pour soixante. Ce qui rend une valeur défendable n'est pas
+    # une citation mais trois choses : la règle, la date, et un point de sensibilité.
+    # Le point de sensibilité du dispositif est `force_base_jours = 8,3` j, la valeur
+    # publiée par Park et al. (2023), contre 2,8 j héritée de l'implémentation de Vu et al.
+    #
+    # ⚠ ÉTAT DE LIVRAISON : ce bloc est le lot 0. AUCUNE de ces constantes n'est encore
+    # lue par du code — elles le deviennent lot par lot. Déclarées d'un bloc pour que la
+    # spécification et la configuration disent la même chose dès maintenant.
+
+    # Allongement de la durée de vie par la gravité : force = S0 × (1 + k × importance).
+    # Règle : un souvenir `marquant` — « je m'en souviendrai dans un mois » — garde la
+    # moitié de son poids à deux semaines et un cinquième à trente jours. À k = 3 il
+    # tombait à 7 % en un mois, ce qui contredisait la phrase qui le définit. Lot 1.
+    memoire__force_k_importance: float = 6.0
+    # Renforcement au rappel : force ← min(force + δ, FORCE_MAX). ADDITIF et non
+    # multiplicatif — un facteur × 1,15 saturait en dix-sept rappels tout ce qui est
+    # rappelé souvent. Règle : chaque rappel ajoute un jour de durée de vie ; un trajet
+    # banal atteint le plafond en vingt-huit rappels, un souvenir `marquant` en onze. Lot 1.
+    memoire__force_delta_rappel_jours: float = 1.0
+    # Plafond de durée de vie, appliqué DÈS L'ÉCRITURE et pas seulement au renforcement :
+    # aucune durée de vie ne le dépasse, y compris quand S0 triple. Règle : aucun souvenir
+    # ne devient éternel — au plafond, deux mois sans rappel le ramènent à un huitième,
+    # exp(-60/30) = 0,14. Lot 1.
+    memoire__force_max_jours: float = 30.0
+    # Purge d'une entrée ÉPISODIQUE quand son poids temporel passe sous ce seuil, soit
+    # 4,6 constantes de temps : 13 jours pour un trajet banal jamais rappelé, 90 pour un
+    # souvenir `marquant` — donc jamais dans un run. Remplace les seuils par type du
+    # nettoyage en service. Les concepts ne sont JAMAIS purgés, seulement marqués
+    # dépassés : leur mise à l'écart datée est l'observable que l'expérience cherche. Lot 1.
+    memoire__purge_seuil_poids: float = 0.01
+    # Retard qui SATURE la composante déterministe de gravité, en secondes.
+    # ⚠ Sa règle de conception reste à écrire : à rattacher à la distribution des durées
+    # de déplacement de la cohorte, mesurable sans run. La valeur est celle du ticket. Lot 1.
+    memoire__retard_ref_s: int = 1800
+    # Seuil du choc, soit le niveau `grave` et au-dessus. Ouvre le vivier C du lot 2,
+    # qui sert ces souvenirs SANS aucune condition de lieu, d'heure ni de motif. Lot 1 et 2.
+    memoire__importance_choc: float = 0.7
+    # Θ — déclenchement de la réflexion EN JOURNÉE sur gravité cumulée. Égal au seuil du
+    # choc : un seul souvenir grave déclenche, ou une journée dont les retards cumulés en
+    # valent un. Régime de base = le plancher journalier de 22 h (ticket 048) ; celui-ci
+    # est l'EXCEPTION, réservée aux ruptures. La panne de la ligne A des expériences
+    # d'hystérésis vaut 0,8 en gravité déterministe : à Θ = 1,0 le choc étudié n'aurait
+    # pas déclenché avant le soir.
+    # ⚠ À VÉRIFIER SUR MESURE : moins d'un déclenchement par agent et par semaine, sinon
+    # Θ monte. La mesure demande un run GAMA (ticket 071, rang 2). Lot 1.
+    memoire__theta_gravite_cumulee: float = 0.7
+    # Sous ce seuil, un concept cesse d'être SERVI au modèle — sans être supprimé.
+    # Lecture exacte sous le lissage de Laplace : le concept a été contredit plus souvent
+    # qu'il n'a été confirmé, contre_exemples > observations. Lot 3.
+    memoire__confiance_seuil_service: float = 0.5
+    # Un concept est marqué DÉPASSÉ à ce nombre de contre-exemples ET confiance < 0,5.
+    # Les deux conditions, pas une seule : ni trois contradictions contre vingt
+    # confirmations, ni une majorité de contradictions sur deux observations. Lot 3.
+    memoire__contre_exemples_seuil: int = 3
+    # Vivier B du lot 2 : souvenirs tirés PAR MODE envisagé, triés par gravité puis par
+    # récence. Aucun plongement. Indépendant de l'horizon.
+    memoire__vivier_b_par_mode: int = 8
+    # Vivier C du lot 2 : souvenirs graves tirés sans condition de contexte. C'est lui qui
+    # fait peser une chute à vélo du matin sur une décision du soir. Indépendant de l'horizon.
+    memoire__vivier_c_taille: int = 5
+    # Plafond de la fenêtre d'âge au rappel, en jours. La fenêtre effective vaut
+    # l'horizon de l'expérience, plafonné ici (cf. `long_term_max_days_query`).
+    memoire__fenetre_age_max_jours: int = 60
+    # Entrées ÉPISODIQUES servies à côté de la mémoire noyau (lot 4). Paramètre DISTINCT de
+    # `long_term_max_entries_query`, qui reste le top-K du rappel : réutiliser le même nom pour
+    # deux choses différentes rendrait toute mesure de sensibilité ambiguë.
+    memoire__episodiques_avec_noyau: int = 3
+    # ════════════════════════════════════════════════════════════════════════════
+
+    long_term_self_reflect_enabled: bool = True  # surchargé par la valeur GAMA
     long_term_self_reflect_interval_days: int = 3
     long_term_self_reflect_window_days: int = 5
 
@@ -568,13 +694,15 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     vehicle_orphan_alarm_min_returns: int = 200
 
     quantify_time_window: bool = True
-    reflection_custom_guidelines: Optional[str] = None
+    reflection_custom_guidelines: str | None = None
 
     # Remote LLM settings
     # 120s laisse au worker le temps d'absorber un cooldown 5xx (120s) + backoff et de
     # basculer sur un autre provider AVANT que le client abandonne (sinon fallback).
     remote_llm_poll_timeout: float = 120.0  # timeout (secondes) d'une tâche LLM
-    stm_reflection_min_tpm: Optional[int] = 30000  # exclut les providers sous ce seuil TPM pour la STM reflection
+    stm_reflection_min_tpm: int | None = (
+        30000  # exclut les providers sous ce seuil TPM pour la STM reflection
+    )
     # Backpressure : quand le client SDK lève l'alarme (N échecs consécutifs), il
     # bloque les nouvelles soumissions jusqu'à ce que la pile in-flight retombe
     # sous ce ratio de worker_concurrency (0.2 = 20 %). 0 désactive la backpressure.
@@ -591,9 +719,24 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     remote_llm_circuit_failure_threshold: int = 10
     remote_llm_circuit_probe_interval: float = 60.0  # secondes entre deux sondes
 
+    def fenetre_age_pour_horizon(self, horizon_jours: int) -> int:
+        """Fenêtre d'âge du rappel, en jours, pour une expérience d'horizon donné.
+
+        Ticket 071 § 2.10 : la fenêtre vaut l'HORIZON de l'expérience, plafonné par
+        `memoire__fenetre_age_max_jours`. Rien ne doit filtrer par l'âge à l'intérieur
+        d'un run — la décroissance temporelle suffit à faire taire un vieux souvenir, et
+        une coupe nette à 30 jours retirait son second mois à un run de soixante sans
+        qu'aucune ligne de journal ne le dise.
+
+        Un horizon nul ou négatif n'a pas de sens ici : il rendrait la fenêtre vide,
+        c'est-à-dire une mémoire muette qu'aucun symptôme ne distinguerait d'une mémoire
+        coupée. Il est ramené à un jour.
+        """
+        return max(1, min(int(horizon_jours), int(self.memoire__fenetre_age_max_jours)))
+
 
 class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = []
+    _in_workdir_path_fields: ClassVar[list[str]] = []
 
     enabled: bool = True
     cache_dir: str = "/app/data/llm_cache"
@@ -605,8 +748,61 @@ class CacheConfig(BaseSettings, WorkdirPathResolutionMixin):
     reflection_memo_enabled: bool = True
 
 
+class AccidentsConfig(BaseSettings, WorkdirPathResolutionMixin):
+    """Accidents tirés au sort sur les axes (ticket 070, première tranche).
+
+    Cette tranche ne produit QUE l'existence des accidents : ils sont tirés, posés sur une
+    arête du graphe routier et journalisés. **Aucune durée d'itinéraire n'est modifiée** —
+    le retard subi, les gardes de cache et le souvenir viennent dans une tranche ultérieure.
+    C'est voulu : un accident qui ne ralentit personne ne peut pas empoisonner un cache
+    adressé sans la date, ni faire resservir une décision prise sans le retard.
+
+    LA LOI DE TIRAGE EST MESURÉE, et elle ne vit pas ici : les coefficients estimés sur
+    BAAC/ONISR 2019-2024 sont dans ``config/accidents_baac.yaml``, avec la raison de chaque
+    choix. Ce bloc ne porte que les réglages d'exécution. Une seule variable de la loi reste
+    NON ÉTABLIE, le facteur météo, et le fichier de coefficients dit pourquoi son calcul a
+    été rejeté plutôt qu'ajusté.
+    """
+
+    _in_workdir_path_fields: ClassVar[list[str]] = []
+
+    # Surchargé par la valeur GAMA au /init. Faux par défaut : un run qui ne demande rien
+    # se comporte exactement comme avant cette évolution.
+    enabled: bool = False
+
+    # SURCHARGE du taux de base, en accidents par journée simulée. `None` — le défaut — fait
+    # lire le taux mesuré dans `config/accidents_baac.yaml` (1,56/jour dans l'emprise du
+    # graphe). Ne renseigner ce champ que pour rendre le mécanisme observable en
+    # développement : une valeur ici REMPLACE la mesure, et tout run qui la porte cesse
+    # d'être représentatif. Les facteurs jour de semaine et météo s'appliquent par-dessus.
+    taux_journalier: float | None = None
+
+    # Durée d'un accident, en minutes. AUCUNE SOURCE ne la donne aujourd'hui : le flux DATEX
+    # des DIR, seule source de durées réelles, n'est pas encore archivé. Ces bornes sont des
+    # HYPOTHÈSES DÉCLARÉES, et elles ne servent pour l'instant qu'à donner une fin à
+    # l'événement — rien ne dépend de leur exactitude tant que le retard n'est pas branché.
+    duree_min_minutes: int = 20
+    duree_max_minutes: int = 90
+
+    # Graine du tirage. Fixée pour qu'un run rejoué tire les mêmes accidents : sans elle,
+    # deux exécutions du même scénario ne seraient plus comparables, et l'écart serait mis
+    # sur le compte des agents.
+    graine: int = 70
+
+    # Garde-fou : au-delà, on refuse de tirer plutôt que de remplir l'état du monde. Un taux
+    # saisi à 1730 au lieu de 1,73 est une faute de frappe, pas une intention.
+    taux_journalier_max: float = 500.0
+
+
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
-    _in_workdir_path_fields: ClassVar[List[str]] = ["agent_memory_events_jsonl", "agent_memory_events_csv", "log_file", "llm_exchanges_file", "llm_cache_hits_file", "pipeline_log_file"]
+    _in_workdir_path_fields: ClassVar[list[str]] = [
+        "agent_memory_events_jsonl",
+        "agent_memory_events_csv",
+        "log_file",
+        "llm_exchanges_file",
+        "llm_cache_hits_file",
+        "pipeline_log_file",
+    ]
 
     # Agent memory events log (STM + LTM observations, reflections, concepts)
     agent_memory_events_jsonl: str = "agent_memory_events.jsonl"
@@ -637,6 +833,7 @@ class Settings(BaseSettings):
     agent: AgentConfig = AgentConfig()
     llm: LlmConfig = LlmConfig()
     cache: CacheConfig = CacheConfig()
+    accidents: AccidentsConfig = AccidentsConfig()
 
     # Directory settings
     workdir: Path = Path.cwd()
@@ -646,19 +843,19 @@ class Settings(BaseSettings):
     # def resolve_workdir(cls, v):
     #     """Ensure workdir is an absolute Path."""
     #     return Path(v).resolve()
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def resolve_all_paths(self):
         """Résout tous les chemins relatifs des sous-configs par rapport à workdir après validation Pydantic."""
         # This will only be triggered if you instantiate Settings via pydantic's validation process,
         # e.g., Settings(**data), not when you subclass or access attributes directly.
         # If you use Settings.from_yaml_files or FactorySettings, it will be triggered.
         # If you instantiate Settings without validation, it won't.
-        for field_name, field_value in self.__dict__.items():
+        for field_value in self.__dict__.values():
             if isinstance(field_value, WorkdirPathResolutionMixin):
                 field_value.resolve_paths(self.workdir)
         return self
-    
+
     def _resolve_nested_paths(self, model_instance: BaseModel, path_fields: list):
         """Resolve paths in a nested model instance."""
         for path_field in path_fields:
@@ -669,19 +866,21 @@ class Settings(BaseSettings):
                     setattr(model_instance, path_field, str(resolved_path))
 
     @classmethod
-    def from_yaml_files(cls, *yaml_paths: str, workdir: str = None) -> 'Settings':
+    def from_yaml_files(
+        cls, *yaml_paths: str, workdir: str | None = None
+    ) -> "Settings":
         """Load and merge multiple YAML files."""
         merged_data = merge_configs(*yaml_paths)
         # Remove workdir from YAML data — it is now derived from the config file name
-        merged_data.pop('workdir', None)
+        merged_data.pop("workdir", None)
         if workdir:
-            merged_data['workdir'] = Path(workdir).resolve()
+            merged_data["workdir"] = Path(workdir).resolve()
         return cls(**merged_data)
 
 
 class FactorySettings:
-    _instance: Optional[Settings] = None
-    _creation_time: Optional[datetime] = None
+    _instance: Settings | None = None
+    _creation_time: datetime | None = None
 
     @classmethod
     def get(cls) -> Settings:
@@ -700,9 +899,11 @@ class FactorySettings:
 
         # Le workdir d'expérience (experiments/archive/<YYYY-MM-DD>_<HH_MM>) est
         # créé et archivé inconditionnellement à chaque démarrage.
-        now = datetime.now()
+        now = datetime.now()  # noqa: DTZ005 — heure locale VOULUE : nomme le répertoire d'expérience, lu par un humain
         cls._creation_time = now
-        experiments_dir = _resolve_experiments_dir(Path(base_config_path).resolve().parent.parent)
+        experiments_dir = _resolve_experiments_dir(
+            Path(base_config_path).resolve().parent.parent
+        )
         # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
         # workdir du run précédent (cible du symlink experiments/current) au lieu
         # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
@@ -710,7 +911,11 @@ class FactorySettings:
         # y sont retrouvés par les chemins _in_workdir_path_fields. La simulation
         # GAMA, elle, repart à t0 du jour simulé (pas de gel d'état côté GAMA,
         # cf. ticket 002) — les caches rendent le rejeu quasi instantané.
-        _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in ("1", "true", "yes")
+        _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
         _current_link = experiments_dir / "current"
         if _resume and _current_link.is_symlink() and _current_link.resolve().is_dir():
             workdir = str(_current_link.resolve())
@@ -743,7 +948,7 @@ class FactorySettings:
         # logger.info(f"Settings loaded from: {yaml_files}")
         # logger.info(f"All settings: {cls._instance.model_dump_json(indent=2)}")
         return cls._instance
-    
+
     @classmethod
     def save_static_config(cls) -> None:
         """
@@ -758,23 +963,29 @@ class FactorySettings:
             static_config_path = cls._instance.workdir / "static_config.yaml"
             with open(static_config_path, "w", encoding="utf-8") as f:
                 yaml.dump(
-                    cls._instance.model_dump(mode="json"), 
-                    f, 
-                    default_flow_style=False, 
+                    cls._instance.model_dump(mode="json"),
+                    f,
+                    default_flow_style=False,
                     allow_unicode=True,
-                    sort_keys=False
+                    sort_keys=False,
                 )
             logger.info(f"Configuration statique mise à jour : {static_config_path}")
 
     def __getattribute__(self, name):
         """Délègue tous les accès d'attributs au singleton Settings sous-jacent."""
         # Handle special methods and private attributes directly
-        if name.startswith('_') or name in ('get', 'force_reload', 'force_reload_paths', 'save_static_config', 'claim_run'):
+        if name.startswith("_") or name in (
+            "get",
+            "force_reload",
+            "force_reload_paths",
+            "save_static_config",
+            "claim_run",
+        ):
             return super().__getattribute__(name)
-        
+
         # Delegate all other attributes to the Settings instance
         return getattr(self.get(), name)
-    
+
     @classmethod
     def claim_run(cls) -> Settings:
         """Déclare que CE processus ouvre le run : déplace les symlinks vers son workdir.
@@ -823,8 +1034,13 @@ class FactorySettings:
         # Redirect GAMA results into this experiment's workdir.
         gama_results_dir = cls._instance.workdir / "gama_results"
         gama_results_dir.mkdir(parents=True, exist_ok=True)
-        gama_results_link = (_racine_partagee("services", "GAMA", "CityTransport")
-                             / "services" / "GAMA" / "CityTransport" / "results")
+        gama_results_link = (
+            _racine_partagee("services", "GAMA", "CityTransport")
+            / "services"
+            / "GAMA"
+            / "CityTransport"
+            / "results"
+        )
         if gama_results_link.parent.exists():
             # Le lien est écrit ici mais LU ailleurs — par GAMA sur l'hôte, ou par le
             # conteneur `gama` (qui monte ./services/GAMA sur /services/GAMA et
@@ -852,7 +1068,10 @@ class FactorySettings:
             # l'avait cassé — le workdir doit vivre sous un répertoire nommé
             # `experiments` à la racine du dépôt. Sinon le lien pend, et GAMA échoue
             # sur `save` par une I/O error qui ne nomme pas la cause.
-            if experiments_dir.name == "experiments" and not within_experiments.startswith(".."):
+            if (
+                experiments_dir.name == "experiments"
+                and not within_experiments.startswith("..")
+            ):
                 logger.info(
                     f"Sorties GAMA redirigées : {gama_results_link} → {relative_target}"
                 )
@@ -864,8 +1083,10 @@ class FactorySettings:
                     f"{experiments_dir}). GAMA échouera sur `save` en I/O error."
                 )
 
-        logger.info(f"Run ouvert par ce processus : experiments/current → "
-                    f"archive/{cls._instance.workdir.name}")
+        logger.info(
+            f"Run ouvert par ce processus : experiments/current → "
+            f"archive/{cls._instance.workdir.name}"
+        )
         return cls._instance
 
     @classmethod
@@ -873,7 +1094,7 @@ class FactorySettings:
         """Force reload the settings."""
         cls._instance = None
         return cls.get()
-    
+
     @classmethod
     def force_reload_paths(cls) -> Settings:
         """Force le rechargement complet des settings (alias de force_reload)."""

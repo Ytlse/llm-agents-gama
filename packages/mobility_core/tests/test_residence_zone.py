@@ -89,7 +89,7 @@ def test_les_cles_de_trait_sont_distinctes_et_lisibles():
 def test_un_secteur_a_deux_couronnes_est_refuse():
     """La table doit être une FONCTION du secteur, sinon le classement est ambigu."""
     zones = [ZoneCouronne("101101000", "101", "Toulouse", "31555", "Toulouse"),
-             ZoneCouronne("101102000", "101", "1ere couronne", "31555", "Toulouse")]
+             ZoneCouronne("101102000", "101", "1st ring", "31555", "Toulouse")]
     with pytest.raises(ResidenceZoneError, match="deux couronnes"):
         CouronneTable(zones)
 
@@ -245,7 +245,7 @@ def test_le_classement_metrique_diverge_et_c_est_documente(table: CouronneTable)
 
     lat, lon = 43.535540410127076, 1.484410194839593
     assert metrique(lat, lon) == "Toulouse"
-    assert CommunalZones.load().classify(lat, lon) == "1ere couronne"
+    assert CommunalZones.load().classify(lat, lon) == "1st ring"
 
 
 # ── Le cadre de tirage (ticket 026) ──────────────────────────────────────────
@@ -276,9 +276,9 @@ def test_le_cadre_haute_garonne_est_un_sous_ensemble_strict():
     complet, cadre = table.counts(), table.counts(["31"])
     assert len(table.communes(["31"])) == 346
     assert cadre["Toulouse"] == complet["Toulouse"] == 1
-    assert cadre["1ere couronne"] == complet["1ere couronne"]
+    assert cadre["1st ring"] == complet["1st ring"]
     # C'est là que la limite mord, et elle est publiée (perimetre-population.md, n°6).
-    assert cadre["3eme couronne"] == 175 < complet["3eme couronne"] == 275
+    assert cadre["3rd ring"] == 175 < complet["3rd ring"] == 275
 
 
 @needs_communes

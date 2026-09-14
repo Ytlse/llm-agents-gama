@@ -63,12 +63,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from mobility_core.population_reference import occupation_enquete
+
+logger = logging.getLogger(__name__)
 
 RESOURCE_DIR = Path(__file__).resolve().parent / "data"
 
@@ -153,6 +158,26 @@ def _knot_values(age: float) -> dict[str, float]:
     }
 
 
+_occupations_inconnues: set[str] = set()
+
+
+def _alarme_occupation_inconnue(valeur: object, occupations: Sequence[str]) -> None:
+    """Dit une fois qu'une occupation est tombée dans la modalité de référence.
+
+    Front montant par valeur : sans ça, l'alarme se lèverait pour chacun des 11 329
+    personas d'un vivier et noierait `make error`.
+    """
+    texte = str(valeur)
+    if texte in _occupations_inconnues:
+        return
+    _occupations_inconnues.add(texte)
+    logger.error(
+        "[ALARME] occupation %r hors du vocabulaire de la loi ajustée — toutes ses "
+        "indicatrices restent à zéro, donc la MODALITÉ DE RÉFÉRENCE. Modalités "
+        "attendues : %s. Une cohorte entière dans la référence tire le trait vers la "
+        "moyenne sans que rien ne manque nulle part.", texte, list(occupations))
+
+
 def design_vector(age: float | None,
                   gender: str | None,
                   main_occupation: str | None,
@@ -171,9 +196,19 @@ def design_vector(age: float | None,
 
     Une valeur manquante n'est jamais devinée « au plus fréquent » : la densité
     retombe sur sa médiane de périmètre (publiée dans la ressource), la distance sur
-    zéro, et l'absence est comptée par l'appelant. Une modalité d'occupation hors
-    vocabulaire laisse toutes ses indicatrices à zéro — c'est-à-dire la modalité de
-    référence, pas une modalité inventée.
+    zéro, et l'absence est comptée par l'appelant.
+
+    L'OCCUPATION PASSE PAR LE VOCABULAIRE DE L'ENQUÊTE. La ressource nomme ses variables
+    `occ_Travail à plein temps` : ce sont les modalités sur lesquelles les coefficients
+    ont été ajustés, et elles font partie de l'artefact gelé. Le persona, lui, dit
+    `Full-time worker` depuis le ticket 074. Comparer les deux chaînes telles quelles
+    laissait TOUTES les indicatrices à zéro — la modalité de référence pour l'ensemble
+    de la cohorte, sans une ligne de journal ; mesuré sur la v6, l'écart de
+    `permis_adultes` à sa cible passait de 2,52 à 5,23 points.
+
+    Une modalité qu'aucun des deux vocabulaires ne connaît laisse encore ses indicatrices
+    à zéro — c'est la modalité de référence, pas une modalité inventée — mais elle se
+    **dit** désormais, une fois par valeur inconnue.
     """
     a = float(age or 0.0)
     density = median_density if density_hh_km2 is None or (
@@ -190,8 +225,11 @@ def design_vector(age: float | None,
         "dist_center10": float(dist_center_km or 0.0) / 10.0,
         **_knot_values(a),
     }
+    enquete = occupation_enquete(main_occupation)
+    if enquete is None and main_occupation not in (None, ""):
+        _alarme_occupation_inconnue(main_occupation, occupations)
     for occupation in occupations:
-        values[f"occ_{occupation}"] = 1.0 if main_occupation == occupation else 0.0
+        values[f"occ_{occupation}"] = 1.0 if enquete == occupation else 0.0
     missing = [f for f in features if f not in values]
     if missing:
         raise KeyError(f"Variables du vecteur de design inconnues : {missing}")

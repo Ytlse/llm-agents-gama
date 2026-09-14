@@ -13,6 +13,35 @@ Le gateway LLM (paquet `llm_gateway/`, ex-`llm_module`) fait office de répartit
 > l'explication du pipeline vu depuis la simulation. Les chemins ci-dessous sont ceux des
 > nouveaux paquets.
 
+> **Depuis le 2026-09-14 (ticket 074), tout ce qui atteint le modèle est en ANGLAIS.** Huit
+> surfaces ont basculé ensemble : les 22 variantes de `prompts.yaml`, les 4 gabarits de catégorie,
+> les 9 descriptions de schéma de sortie, les 7 gabarits de description d'itinéraire, les libellés
+> terminaux de `config/terminal_time.yaml`, le récit de persona (`_build_profile_narrative`), le
+> bulletin météo, et la table des 48 conditions (`data/weather/meteo_toulouse_codes.csv`, colonne
+> `Condition_EN` ajoutée sans écraser `Condition`).
+>
+> Le prompt servi n'était **pas** français auparavant : il était mixte. Les motifs (`work`,
+> `home`), les étiquettes de mode (`car`, `bicycle`, `foot,bus,foot`) et les durées
+> (`very long (20 minutes or more)`) étaient déjà anglais, par sédimentation et non par choix. La
+> bascule met au propre ; elle ne corrige pas une erreur.
+>
+> **Trois choses n'ont pas bougé, et ne devaient pas.** Les étiquettes de mode :
+> `parse_option_modes` les relit *dans le texte du prompt* ([models.py:192](../../services/llm-agents/models.py)),
+> et elles alimentent `canonical_mode`, la loss de calibration et les parts modales de `moves.csv`.
+> Les noms propres — arrêts GTFS, lignes, communes — restent français, comme dans n'importe quelle
+> langue. Les libellés d'occupation à la source (`scripts/synthesis/frames.py`, `scripts/progedo_logit/`)
+> sont des clés de jointure : la bascule se fait **à l'affichage**, en préférant
+> `professional_activity` (déjà anglais) à `main_occupation`.
+>
+> `config/terminal_time.yaml` passe de `tt4` à `tt5` **sans qu'aucune valeur numérique change** :
+> ses libellés partent dans `Transit.step_label`, et le cache OTP mémorise les `TravelPlan`
+> sérialisés. Sans bump, un cache chaud aurait resservi « Rejoindre la voiture » sous un en-tête
+> anglais — constaté sur les plans du jeu v5 archivé. `routing_version` (r3) n'est pas bumpée : le
+> cache de routage OSMnx ne mémorise que du temps réseau, et le recalcul à froid (~2 h) est épargné.
+>
+> L'état français est gelé dans `archive/2026-09-14_avant_bascule_anglaise/` — archive FROIDE,
+> décrite dans [plateforme-experiences.md](plateforme-experiences.md) § 6 quater.
+
 ---
 
 ## Vue d'ensemble

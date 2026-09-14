@@ -163,7 +163,10 @@ def measure_by_size(population: list[dict]) -> dict[int, dict]:
         home = identity.get("home") or {}
         row = rows[size]
         row["n"] += 1
-        row["isolated"] += int(label == "Individuel isolé")
+        # Par la CLÉ, jamais par le libellé : celui-ci a changé de langue avec la v6
+        # (ticket 074), et une comparaison littérale aurait compté zéro individuel isolé
+        # sur toute la population — une pente de +0,0 pt là où l'enquête en mesure +38,2.
+        row["isolated"] += int(key_for(label) == "individuel_isole")
         if home.get("lat") is not None and home.get("lon") is not None:
             row["addresses"].add((address_key(home["lat"], home["lon"]), size))
     return {size: {"n": row["n"],

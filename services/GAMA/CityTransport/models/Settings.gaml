@@ -139,12 +139,16 @@ global {
 	string _cfg_ltm  <- first(_cfg_lines where (each index_of "long_term_memory_enabled:" = 0));
 	string _cfg_ltsr <- first(_cfg_lines where (each index_of "long_term_self_reflect_enabled:" = 0));
 	string _cfg_days <- first(_cfg_lines where (each index_of "simulation_max_days:" = 0));
+	string _cfg_acc  <- first(_cfg_lines where (each index_of "accidents_enabled:" = 0));
 
 	int population_size <- 100;
 	float part_of_llm_based_agents <- 1.0;
 	bool long_term_memory_enabled <- true;
 	bool long_term_self_reflect_enabled <- true;
 	int simulation_max_days <- 7;
+	// Accidents tirés au sort sur les axes (ticket 070). FAUX PAR DÉFAUT : un run qui ne
+	// demande rien se comporte exactement comme avant cette évolution.
+	bool accidents_enabled <- false;
 
 	// Nombre de cycles (itérations de la boucle) pour la calibration du prompt,
 	// lancée à la demande depuis l'IHM (bouton "Lancer la calibration du prompt").
@@ -157,7 +161,8 @@ global {
 				+ "part_of_llm_based_agents: " + string(part_of_llm_based_agents) + "\n"
 				+ "long_term_memory_enabled: " + string(long_term_memory_enabled) + "\n"
 				+ "long_term_self_reflect_enabled: " + string(long_term_self_reflect_enabled) + "\n"
-				+ "simulation_max_days: " + string(simulation_max_days);
+				+ "simulation_max_days: " + string(simulation_max_days) + "\n"
+				+ "accidents_enabled: " + string(accidents_enabled);
 			save content to: SIM_CONFIG_PATH format: "text" rewrite: true;
 		}
 	}
@@ -170,6 +175,9 @@ global {
 		long_term_memory_enabled <- (_cfg_ltm != nil) ? ((_cfg_ltm split_with ":")[1] contains "true") : false;
 		long_term_self_reflect_enabled <- (_cfg_ltsr != nil) ? (string((_cfg_ltsr split_with ":")[1]) contains "true") : false;
 		simulation_max_days <- (_cfg_days != nil) ? int(string((_cfg_days split_with ":")[1]) replace(" ", "")) : 7;
+		// Absent du fichier = régime jamais demandé, donc faux. Jamais de repli à vrai :
+		// une configuration incomplète ne doit pas activer un régime en silence.
+		accidents_enabled <- (_cfg_acc != nil) ? ((_cfg_acc split_with ":")[1] contains "true") : false;
 	}
 
 	reflex auto_save_sim_config when: cycle = 2 {

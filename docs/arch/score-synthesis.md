@@ -357,7 +357,9 @@ a joué, mais elle ne mesure pas la même chose qu'un choix libre entre tous les
 détail des valeurs est dans [vehicle-chain.md](vehicle-chain.md). Sur un run antérieur à
 la colonne, le bloc disparaît de la page plutôt que d'afficher « 100 % aucune ».
 
-Le **lieu de résidence** (Toulouse / 1re / 2e / 3e couronne, plus `hors périmètre`)
+Le **lieu de résidence** (`Toulouse` / `1st ring` / `2nd ring` / `3rd ring`, plus
+`outside perimeter` ; libellés français avant le ticket 074, relus tels quels sur un run
+archivé)
 n'est pas recalculé par la page : elle relit la colonne `Lieu de résidence` telle
 que le run l'a écrite. Et depuis le **ticket 021**, `move_logger.py` ne la calcule
 plus non plus : il **recopie** le trait `residence_zone` du persona, posé à la

@@ -54,14 +54,13 @@
     4.5.4 Les quatre garde-fous structurels anti-surapprentissage (Zéro seuil, populations cloisonnées, comptages pondérés, compaction)
     4.5.5 Statut du Palier 2 dans l'architecture de la preuve (plafond Tier 3 de SILICA)
 
-5. LES LLM NUS ET LEUR VARIABILITÉ                 brouillon — article/fr/05_bare_llm.md
-   5.1 Prompt neutre et offre d'itinéraires
-   5.2 Comparaison entre modèles, tous à température 0
-   5.3 Variabilité inter-graines et intervalles de confiance
-   5.4 Taux de bascule individuelle et test de McNemar sur décisions appariées
+5. ÉVALUATION SOUS PROMPT FACTUEL NEUTRE ET CIRCONSTANCIÉ ET VARIABILITÉ  brouillon — article/fr/05_factual_neutral_prompt.md
+   5.1 Définition du prompt factuel neutre et circonstancié
+   5.2 Benchmark multi-modèles et diversité des voies d'inférence (Pilotage)
+   5.3 Protocole de variabilité et dispersion inter-runs à température 0
 
 6. ABLATION EN QUATRE PALIERS ET RÉFÉRENCES TABULAIRES   brouillon — article/fr/06_ablation.md
-   6.1 Les quatre paliers : planchers -> LLM nu -> prompt calibré -> références tabulaires
+   6.1 Les quatre paliers : planchers -> prompt factuel neutre et circonstancié -> prompt calibré -> références tabulaires
    6.2 Test de H0 sur la cohorte scellée
    6.3 Audit unitaire à parité informationnelle, contrat de 21 variables
    6.4 Prévalence des temps terminaux physiques

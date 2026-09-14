@@ -131,17 +131,18 @@ L'évaluation compare systématiquement les modèles à travers 4 paliers d'info
 │ 0.2 Prior Empirique (Zero-Rule) : Prédit toujours Voiture ──► 56,7 % acc.   │
 │ 0.3 Heuristique du Plus Rapide : Min(Durée OTP) ──► Physique réseau pure.   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ PALIER 1 : MODÈLE NU / BARE LLM (Zero Prompt Engineering)                   │
+│ PALIER 1 : PROMPT FACTUEL NEUTRE ET CIRCONSTANCIÉ (Zero Prompt Engineering) │
 │ • Profil complet personne + Itinéraires réels OpenTripPlanner (OTP).        │
 │ • Prompt neutre : « Choisis l'itinéraire le plus approprié ».               │
-│ • Modèles évalués :                                                         │
-│   - Modèles Français / Européens : Mistral (Mistral-Small, Mistral-Nemo)    │
-│   - Modèle Ouvert Local : Qwen-2.5-32B-Instruct (Déterministe tau=0.0)      │
-│   - Modèle Propriétaire : Google Gemini-Flash                               │
+│ • Diversité des voies d'inférence (Pilotage, tous à tau=0.0) :               │
+│   - Propriétaires distants : Google Gemini, Mistral AI                      │
+│   - Ouverts managés (LPU Cloud) : Qwen 3.8, GPT-OSS-120B, Gemma             │
+│   - Ouverts locaux (LM Studio) : Qwen 3.8, Mistral 3.2                      │
+│   - Décideur autonome Antigravity                                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ PALIER 2 : MODÈLE CALIBRÉ (Prompt Engineering & Optimisation)               │
 │ • Injection de consignes comportementales et personas enrichis.             │
-│ • Mesure du gain net : Delta = Score(Calibré) - Score(Nu).                  │
+│ • Mesure du gain net : Delta = Score(Calibré) - Score(Neutre).              │
 │ • Le gain n'est retenu que s'il excède la dispersion inter-graines (± 1,2).  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ PALIER 2 bis : MODÈLE FEW-SHOT (k exemples d'enquête dans le prompt)        │
@@ -212,6 +213,6 @@ Comparer « agent avec article » à « oracle sans article » ne démontre rien
 
 **Pré-enregistration.** La grille d'expertise des 30 articles (impacts modaux de 0 à 3 étoiles, échelle spatiale, crédibilité, verdict) a été écrite **avant tout appel au modèle**. Gelée par empreinte git et datée, elle fournit $4 \times 30 = 120$ prédictions directionnelles signées. L'évaluation rapporte le **taux de signe correct** et un **$\kappa$ pondéré** (intensité ordinale), et publie la grille intégrale en annexe.
 
-**Absence de vérité terrain, déclarée.** Aucune enquête ne suit les mêmes individus jour après jour autour d'un incident : la *valeur* du taux de reprise à $J+1$ n'est comparable à rien. Ce qui est testable est l'**ordre des bras**, la **monotonie** de la remontée, la **sensibilité** à $\gamma$ et $\lambda$, et la comparaison de la demi-vie mesurée aux élasticités publiées après grèves et pannes.
+**Absence de vérité terrain, déclarée.** Aucune enquête ne suit les mêmes individus jour après jour autour d'un incident : la *valeur* du taux de reprise à $J+1$ n'est comparable à rien. Ce qui est testable est l'**ordre des bras**, la **monotonie** de la remontée, et la comparaison de la demi-vie mesurée aux élasticités publiées après grèves et pannes.
 
-**H3 est réfutée si :** (i) l'agent sans registre montre la même inertie à $J+1$ ; (ii) diviser $\lambda$ par trois ne déplace pas la courbe ; (iii) un article placebo produit le même report modal que l'article pertinent.
+**H3 est réfutée si :** (i) l'agent sans registre montre la même inertie à $J+1$ ; (ii) la remontée sur $J+1$ à $J+5$ n'est pas monotone ; (iii) un article placebo produit le même report modal que l'article pertinent.

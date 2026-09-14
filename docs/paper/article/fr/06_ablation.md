@@ -18,8 +18,8 @@ Pour isoler le gain de chaque couche de modélisation, nous comparons 4 paliers 
 │ • 0.2 Prior Empirique (Zero-Rule) ──► Prédit toujours Voiture (56,7 % acc). │
 │ • 0.3 Heuristique du Plus Court/Plus Rapide ──► Min(Durée OTP).             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ PALIER 1 : MODÈLE NU / BARE LLM (Zero Prompt Engineering)                   │
-│ • Prompt neutre + Options d'itinéraires OTP.                                │
+│ PALIER 1 : PROMPT FACTUEL NEUTRE ET CIRCONSTANCIÉ (Zero Prompt Engineering) │
+│ • Persona complet + options d'itinéraires OTP/OSM + consigne neutre.        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ PALIER 2 : MODÈLE CALIBRÉ (Prompt Engineering Optimisé)                     │
 │ • Injection de consignes contextuelles et personas enrichis.                │
@@ -79,3 +79,8 @@ Réel Marche          20              748          110           2726        | 7
 * **LLM** : Décide en optimisant le compromis temps/confort perçu et l'exposition météo, ce qui explique sa tendance à privilégier les TC sur des distances marchables.
 
 ---
+
+### Tickets associés à ce chapitre
+- [Ticket 056](../../../tickets/ticket_056_audit_et_reflexion_resultats_prompt_expert.md) — Audit méthodologique, vérification de la chaîne de mesure et réflexion sur les résultats du prompt expert (v2/v4)
+- [Ticket 057](../../../tickets/ticket_057_audit_et_reflexion_double_lecture_tabulaire.md) — Audit méthodologique et réflexion sur la double lecture tabulaire en chaîne vs hors chaîne
+- [Ticket 058](../../../tickets/ticket_058_perimetre_et_methode_audit_unitaire.md) — Clarification du périmètre et méthodologie de l'audit unitaire à parité des 21 variables

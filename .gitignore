@@ -219,3 +219,10 @@ specs/ticket_044/questions.md
 specs/ticket_044/temoin_random_forest.md
 specs/ticket_045/questions.md
 specs/ticket_045/substrat-unique-v5.md
+
+# Ticket 074 — archive FROIDE de l'état français, à la racine du dépôt. Restaurable et
+# auditable, jamais utilisée ni référencée (`experiences.froid` refuse d'y résoudre un nom,
+# et `scripts/tests/test_074_archive_froide.py` le vérifie). Hors git, conformément à la
+# doctrine « traces sur disque, pas dans git » : 500 Mo de jeux scellés et d'exécutions.
+# Le MANIFEST.yaml et le README.md qu'elle contient disent ce qu'elle porte et d'où ça vient.
+archive/

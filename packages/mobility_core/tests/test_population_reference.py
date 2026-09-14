@@ -15,6 +15,7 @@ import pytest
 import yaml
 
 from mobility_core.population_reference import (
+    COURONNE_VERS_CEREMA,
     COURONNES,
     MIN_AGE,
     OUT_OF_PERIMETER,
@@ -63,10 +64,19 @@ def test_couronnes_identiques_a_cerema_values(reference):
     """
     cerema = yaml.safe_load(CEREMA_VALUES.read_text(encoding="utf-8"))
     cibles = set(cerema["parts_modales_2023"]["lieu_residence"])
-    # `cerema_values.yaml` indexe par identifiant (souligné), le cadrage par libellé.
-    cadrage = {z.replace(" ", "_") for z in COURONNES}
+    # Depuis le ticket 074 les deux vocabulaires DIFFÈRENT, et c'est assumé : le cadrage est
+    # en anglais parce qu'il est servi au modèle (« Lives in: 3rd ring »), les cibles restent
+    # françaises parce qu'elles franchissent la frontière de `prompt_calibration/`.
+    #
+    # Ce que ce test garde n'a pas changé pour autant : il faut qu'il existe une correspondance
+    # TOTALE et BIJECTIVE entre les deux. C'est le critère du ticket 020 — si une modalité de
+    # cadrage ne désigne aucune cible, les parts modales par zone se comparent à des cibles qui
+    # ne parlent pas des mêmes communes, et personne ne le voit.
+    cadrage = {COURONNE_VERS_CEREMA[z] for z in COURONNES}
     assert cadrage == cibles, (
         f"modalités divergentes : cadrage {sorted(cadrage)} contre cibles {sorted(cibles)}")
+    assert len(COURONNE_VERS_CEREMA) == len(COURONNES) == len(cibles), (
+        "la correspondance cadrage ↔ cibles n'est plus bijective")
 
 
 def test_le_hors_perimetre_n_est_pas_une_couronne():
@@ -86,7 +96,7 @@ def test_concentration_spatiale_cible(reference):
     shares = couronne_population_shares()
     assert set(shares) == set(COURONNES)
     assert abs(sum(shares.values()) - 100.0) < 0.01
-    coeur = shares["Toulouse"] + shares["1ere couronne"]
+    coeur = shares["Toulouse"] + shares["1st ring"]
     publiee = 100.0 * reference["population"]["concentration"][
         "coeur_agglomeration_toulouse_plus_1ere_couronne"]
     assert abs(coeur - publiee) < 1.0, (

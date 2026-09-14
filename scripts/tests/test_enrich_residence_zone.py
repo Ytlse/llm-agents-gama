@@ -46,9 +46,9 @@ from scripts.data.population import enrich_residence_zone as enrich_module
 # Quatre zones fines, une par couronne, sur quatre secteurs distincts.
 ZONES = [
     ZoneCouronne("101101000", "101", "Toulouse", "31555", "Toulouse"),
-    ZoneCouronne("201101000", "201", "1ere couronne", "31069", "Blagnac"),
-    ZoneCouronne("301101000", "301", "2eme couronne", "31088", "Bruguières"),
-    ZoneCouronne("401101000", "401", "3eme couronne", "31009", "Alan"),
+    ZoneCouronne("201101000", "201", "1st ring", "31069", "Blagnac"),
+    ZoneCouronne("301101000", "301", "2nd ring", "31088", "Bruguières"),
+    ZoneCouronne("401101000", "401", "3rd ring", "31009", "Alan"),
 ]
 
 
@@ -85,8 +85,8 @@ class FakeGeometry:
         return self._mapping.get(int(lat), OUT_OF_PERIMETER)
 
 
-GEOMETRY_TRUTH = {43: "Toulouse", 42: "1ere couronne", 41: "2eme couronne",
-                  40: "3eme couronne"}
+GEOMETRY_TRUTH = {43: "Toulouse", 42: "1st ring", 41: "2nd ring",
+                  40: "3rd ring"}
 
 
 def table() -> CouronneTable:
@@ -110,9 +110,9 @@ def test_le_trait_porte_la_couronne_et_la_commune():
     assert traits(people[0])[TRAIT_KEY] == "Toulouse"
     assert traits(people[0])[COMMUNE_TRAIT_KEY] == "Toulouse"
     assert traits(people[0])[INSEE_TRAIT_KEY] == "31555"
-    assert traits(people[1])[TRAIT_KEY] == "1ere couronne"
+    assert traits(people[1])[TRAIT_KEY] == "1st ring"
     assert traits(people[1])[COMMUNE_TRAIT_KEY] == "Blagnac"
-    assert counts["Toulouse"] == 1 and counts["1ere couronne"] == 1
+    assert counts["Toulouse"] == 1 and counts["1st ring"] == 1
 
 
 def test_hors_couche_recoit_hors_perimetre_et_aucune_commune():
@@ -151,7 +151,7 @@ def test_zone_resolue_mais_absente_de_la_table_ne_pose_rien():
 
 
 def test_une_valeur_changee_est_comptee():
-    people = [person(43.6, **{TRAIT_KEY: "3eme couronne"})]
+    people = [person(43.6, **{TRAIT_KEY: "3rd ring"})]
     counts = enrich_module.enrich(people, table(), FakeResolver())
 
     assert traits(people[0])[TRAIT_KEY] == "Toulouse"
@@ -192,14 +192,14 @@ def test_un_desaccord_avec_la_geometrie_fait_echouer():
     """La porte du ticket : le classement par code doit égaler celui par appartenance."""
     people = [person(43.6)]
     counts = enrich_module.enrich(people, table(), FakeResolver())
-    menteuse = FakeGeometry({43: "2eme couronne"})
+    menteuse = FakeGeometry({43: "2nd ring"})
 
     failures = enrich_module.report(counts, audit_of(people, menteuse))
     assert failures and "APPARTENANCE" in failures[0]
 
 
 def test_une_modalite_hors_referentiel_fait_echouer():
-    people = [person(43.6, **{TRAIT_KEY: "4eme couronne"})]
+    people = [person(43.6, **{TRAIT_KEY: "4th ring"})]
     checks = audit_of(people)  # sans passer par enrich : le trait est déjà là, faux
     failures = enrich_module.report({}, checks)
     assert any("hors référentiel" in f for f in failures)

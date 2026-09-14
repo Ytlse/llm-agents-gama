@@ -112,7 +112,10 @@ logger = logging.getLogger("aamas.seal")
 SELECTION_NAMESPACE = "aamas_seal_v4"   # sel du hachage des MÉNAGES — inchangé, cf. ci-dessus
 SELECTION_RULE = "aamas_seal_v5"
 SEAL_VERSION = "sceau1"
-DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v5"
+# La cohorte COURANTE. La règle de sélection, elle, reste `aamas_seal_v5` : la v6 est la
+# même cohorte dans une autre langue (ticket 074), pas une nouvelle façon de la tirer —
+# bumper la règle aurait laissé croire que le tirage avait changé.
+DEFAULT_SEAL_DIR = REPO_ROOT / "data" / "population" / "population_1000_AAMAS_v6"
 
 # Périmètre de la population (ticket 031, option A) : les 453 communes de l'EMC² 2023, six
 # départements, délimitées par le POLYGONE DES COMMUNES (table `commune_couronne.json`), pas par

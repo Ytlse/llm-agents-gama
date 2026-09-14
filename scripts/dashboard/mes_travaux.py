@@ -53,7 +53,7 @@ ETAT_PATH = Path(__file__).resolve().parent / "mes_travaux.yaml"
 # titre dérivé de sa clé (pour ne jamais masquer une fiche d'une phase non listée).
 _PHASES: list[tuple[str, str]] = [
     ("phase_0_planchers", "Phase 0 — Planchers statistiques & heuristiques"),
-    ("phase_1_bare_llm", "Phase 1 — Modèles nus (Bare LLM)"),
+    ("phase_1_bare_llm", "Phase 1 — Prompt factuel neutre et circonstancié"),
     ("phase_2_prompt_calibration", "Phase 2 — Prompt calibré & few-shot"),
     ("phase_3_baselines_statistiques", "Phase 3 — Plafond tabulaire supervisé"),
     ("phase_4_hysteresis", "Phase 4 — Hystérésis post-incident"),

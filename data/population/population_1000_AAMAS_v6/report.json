@@ -1,9 +1,9 @@
 {
- "date": "2026-09-04T13:47:53+00:00",
+ "date": "2026-09-14T19:27:45+00:00",
  "population": {
-  "path": "data/population/toulouse_population_1000_AAMAS.json",
+  "path": "data/population/toulouse_population_1000_AAMAS_v6.json",
   "n": 1000,
-  "sha256": "de73532e82c84f62eb72c8a614f3c27767bf5cca1d1574d3574f4a96b65bd8ce"
+  "sha256": "412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6"
  },
  "parametres": {
   "borne_pt": 1.0,
@@ -455,7 +455,7 @@
     },
     {
      "marge": "couronne",
-     "modalite": "1ere couronne",
+     "modalite": "1st ring",
      "n": 341,
      "observe_pct": 34.1,
      "ic95": [
@@ -470,7 +470,7 @@
     },
     {
      "marge": "couronne",
-     "modalite": "2eme couronne",
+     "modalite": "2nd ring",
      "n": 142,
      "observe_pct": 14.2,
      "ic95": [
@@ -485,7 +485,7 @@
     },
     {
      "marge": "couronne",
-     "modalite": "3eme couronne",
+     "modalite": "3rd ring",
      "n": 154,
      "observe_pct": 15.4,
      "ic95": [
@@ -565,7 +565,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "1ere couronne × sans voiture",
+     "modalite": "1st ring × sans voiture",
      "n": 19,
      "observe_pct": 1.9,
      "ic95": null,
@@ -577,7 +577,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "1ere couronne × une voiture",
+     "modalite": "1st ring × une voiture",
      "n": 122,
      "observe_pct": 12.2,
      "ic95": [
@@ -592,7 +592,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "1ere couronne × deux voitures et +",
+     "modalite": "1st ring × deux voitures et +",
      "n": 200,
      "observe_pct": 20.0,
      "ic95": [
@@ -607,7 +607,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "2eme couronne × sans voiture",
+     "modalite": "2nd ring × sans voiture",
      "n": 4,
      "observe_pct": 0.4,
      "ic95": null,
@@ -619,7 +619,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "2eme couronne × une voiture",
+     "modalite": "2nd ring × une voiture",
      "n": 39,
      "observe_pct": 3.9,
      "ic95": [
@@ -634,7 +634,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "2eme couronne × deux voitures et +",
+     "modalite": "2nd ring × deux voitures et +",
      "n": 99,
      "observe_pct": 9.9,
      "ic95": [
@@ -649,7 +649,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "3eme couronne × sans voiture",
+     "modalite": "3rd ring × sans voiture",
      "n": 6,
      "observe_pct": 0.6,
      "ic95": null,
@@ -661,7 +661,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "3eme couronne × une voiture",
+     "modalite": "3rd ring × une voiture",
      "n": 44,
      "observe_pct": 4.4,
      "ic95": [
@@ -676,7 +676,7 @@
     },
     {
      "marge": "couronne_x_motorisation",
-     "modalite": "3eme couronne × deux voitures et +",
+     "modalite": "3rd ring × deux voitures et +",
      "n": 104,
      "observe_pct": 10.4,
      "ic95": [
@@ -1350,55 +1350,55 @@
     "mesurable": true
    },
    {
-    "cellule": "1ere couronne × sans voiture",
+    "cellule": "1st ring × sans voiture",
     "n": 19,
     "attendu_independance": 46.4,
     "mesurable": false
    },
    {
-    "cellule": "1ere couronne × une voiture",
+    "cellule": "1st ring × une voiture",
     "n": 122,
     "attendu_independance": 128.6,
     "mesurable": true
    },
    {
-    "cellule": "1ere couronne × deux voitures et +",
+    "cellule": "1st ring × deux voitures et +",
     "n": 200,
     "attendu_independance": 166.1,
     "mesurable": true
    },
    {
-    "cellule": "2eme couronne × sans voiture",
+    "cellule": "2nd ring × sans voiture",
     "n": 4,
     "attendu_independance": 19.3,
     "mesurable": false
    },
    {
-    "cellule": "2eme couronne × une voiture",
+    "cellule": "2nd ring × une voiture",
     "n": 39,
     "attendu_independance": 53.5,
     "mesurable": false
    },
    {
-    "cellule": "2eme couronne × deux voitures et +",
+    "cellule": "2nd ring × deux voitures et +",
     "n": 99,
     "attendu_independance": 69.2,
     "mesurable": true
    },
    {
-    "cellule": "3eme couronne × sans voiture",
+    "cellule": "3rd ring × sans voiture",
     "n": 6,
     "attendu_independance": 20.9,
     "mesurable": false
    },
    {
-    "cellule": "3eme couronne × une voiture",
+    "cellule": "3rd ring × une voiture",
     "n": 44,
     "attendu_independance": 58.1,
     "mesurable": false
    },
    {
-    "cellule": "3eme couronne × deux voitures et +",
+    "cellule": "3rd ring × deux voitures et +",
     "n": 104,
     "attendu_independance": 75.0,
     "mesurable": true
@@ -1519,5 +1519,5 @@
   "à publier": 0,
   "non mesurable": 0
  },
- "duree_s": 1.1
+ "duree_s": 0.9
 }

@@ -8,25 +8,25 @@
         "properties": {
           "agent_id": {
             "type": "string",
-            "description": "Recopie exactement l'agent_id fourni pour ce persona (identifiant numérique uniquement, sans préfixe ni nom)."
+            "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)."
           },
           "probabilities": {
             "type": "array",
-            "description": "Une entrée par option proposée à ce persona, sans exception. La somme des `probability` doit valoir exactement 100.",
+            "description": "One entry per option offered to this persona, without exception. The `probability` values must sum to exactly 100.",
             "items": {
               "type": "object",
               "properties": {
                 "index": {
                   "type": "integer",
-                  "description": "Index de l'option, tel qu'affiché entre crochets."
+                  "description": "Index of the option, as shown in brackets."
                 },
                 "mode": {
                   "type": "string",
-                  "description": "Mode de l'option, recopié depuis l'option."
+                  "description": "Mode of the option, copied from the option."
                 },
                 "probability": {
                   "type": "number",
-                  "description": "Probabilité en % (0 à 100) que ce persona retienne cette option. 0 si l'option lui est impossible."
+                  "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them."
                 }
               },
               "required": [

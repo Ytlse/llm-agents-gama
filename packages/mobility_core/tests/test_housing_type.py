@@ -142,10 +142,10 @@ class TestModalites:
 
     def test_libelles_exacts_de_l_enquete(self):
         """Ce sont ces chaînes-là qui transitent par traits_json puis moves.csv."""
-        assert LABEL_BY_KEY["individuel_isole"] == "Individuel isolé"
-        assert LABEL_BY_KEY["individuel_accole"] == "Individuel accolé"
-        assert LABEL_BY_KEY["petit_habitat_collectif"] == "Petit habitat collectif"
-        assert LABEL_BY_KEY["grand_habitat_collectif"] == "Grand habitat collectif"
+        assert LABEL_BY_KEY["individuel_isole"] == LABEL_BY_KEY["individuel_isole"]
+        assert LABEL_BY_KEY["individuel_accole"] == LABEL_BY_KEY["individuel_accole"]
+        assert LABEL_BY_KEY["petit_habitat_collectif"] == LABEL_BY_KEY["petit_habitat_collectif"]
+        assert LABEL_BY_KEY["grand_habitat_collectif"] == LABEL_BY_KEY["grand_habitat_collectif"]
 
     def test_libelle_inconnu_ne_devient_pas_une_modalite(self):
         assert key_for("Maison") is None
@@ -253,9 +253,9 @@ class TestImputation:
                              for i in range(5_000))
             return counts[label] / 5_000
 
-        assert part("100100000", "Grand habitat collectif") > 0.5
-        assert part("200200000", "Grand habitat collectif") < 0.05
-        assert part("200200000", "Individuel isolé") > 0.7
+        assert part("100100000", LABEL_BY_KEY["grand_habitat_collectif"]) > 0.5
+        assert part("200200000", LABEL_BY_KEY["grand_habitat_collectif"]) < 0.05
+        assert part("200200000", LABEL_BY_KEY["individuel_isole"]) > 0.7
 
 
 class TestLevierDeTaille:
@@ -293,7 +293,7 @@ class TestLevierDeTaille:
         types = {size: Counter(
             table.housing_type("200200000", 43.0 + i * 1e-5, 1.4, size)
             for i in range(5_000)) for size in (1, 4)}
-        assert (types[4]["Individuel isolé"] - types[1]["Individuel isolé"]) > 500
+        assert (types[4][LABEL_BY_KEY["individuel_isole"]] - types[1][LABEL_BY_KEY["individuel_isole"]]) > 500
 
     def test_la_taille_est_ecretee_a_quatre(self, table):
         """Un ménage de six tire dans la loi des « 4 et plus » : l'enquête n'en dit

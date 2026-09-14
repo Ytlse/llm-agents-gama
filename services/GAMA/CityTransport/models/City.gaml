@@ -128,6 +128,9 @@ experiment e type: gui {
     parameter "Long-term memory" category: "Simulation" var: long_term_memory_enabled <- true;
     parameter "Long-term self-reflection" category: "Simulation" var: long_term_self_reflect_enabled <- true;
     parameter "Max simulated days (0 = unlimited)" category: "Simulation" var: simulation_max_days min: 0 max: 365 step: 1;
+    // Ticket 070 — première tranche : les accidents EXISTENT (tirés, posés sur une arête,
+    // journalisés). Aucune durée de trajet n'est modifiée à ce stade.
+    parameter "Accidents sur les axes" category: "Simulation" var: accidents_enabled <- false;
 
     // Evaluation features
     parameter "Public Transport - Dump stop arrival diff time" category:"Features" var: ft_public_transport_eval <- false;

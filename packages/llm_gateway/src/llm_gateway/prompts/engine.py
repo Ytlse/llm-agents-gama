@@ -45,15 +45,48 @@ _SECTION_SYSTEM = "<!-- SYSTEM -->"
 _SECTION_USER   = "<!-- USER -->"
 
 # Le contenu calibré dans prompts.yaml inclut le schéma JSON littéral en fin de texte
-# (« Schéma JSON attendu : {...} »). Le template le ré-injecte dynamiquement via
+# (« Expected JSON schema: {...} »). Le template le ré-injecte dynamiquement via
 # {{ schema }} depuis schemas.json ; on retire donc ce bloc du prompt système.
-_SCHEMA_HEADING = re.compile(r"\n\s*Schéma JSON attendu\s*:.*", re.DOTALL)
+#
+# LES DEUX ORTHOGRAPHES, et ce n'est pas de la tolérance de confort (ticket 074, B-1) : la
+# bascule du dispositif en anglais a traduit cette phrase dans les 22 variantes, mais les
+# exécutions archivées ont été décidées sur des variantes françaises, et leurs empreintes de
+# gabarit se recalculent en relisant l'archive (`verifier_validite=False`). Ne garder que la
+# forme anglaise ferait servir — et hacher — un bloc de schéma en double dans ce cas-là :
+# les empreintes scellées cesseraient d'être reproductibles, ce qui est précisément ce que
+# l'archivage ne doit pas casser.
+_SCHEMA_HEADING = re.compile(
+    r"\n\s*(?:Expected JSON schema|Schéma JSON attendu)\s*:.*", re.DOTALL
+)
+
+
+# Segment de chemin qui marque une archive froide (ticket 074, A-4) : restaurable et
+# auditable, jamais utilisée ni référencée. La règle est celle de `experiences.froid`, et elle
+# est DUPLIQUÉE ici volontairement — `llm_gateway` est un paquet générique qui ne connaît ni
+# `experiences` ni le domaine de la mobilité. Même parti pris que `core.quota` vis-à-vis de
+# `prompt_calibration` : quatre lignes copiées valent mieux qu'une dépendance à l'envers.
+SEGMENT_ARCHIVE = "archive"
+
+
+class PromptsArchives(ValueError):
+    """Un `prompts.yaml` rangé en archive froide a été désigné pour être SERVI."""
+
+
+def _refuser_si_archive(path: Path) -> None:
+    if SEGMENT_ARCHIVE in path.resolve().parts:
+        raise PromptsArchives(
+            f"prompts.yaml rangé en archive froide, chargement refusé : {path}\n"
+            f"  Un store de prompts sous `{SEGMENT_ARCHIVE}/` est conservé pour être audité ou "
+            f"restauré, jamais servi à un modèle. Le store vivant est celui de "
+            f"`mobility_llm/prompts/prompts.yaml`."
+        )
 
 
 def _load_prompts_store(path: Path | None) -> dict[str, Any]:
     """Charge le store de prompts (active: + prompts:). Vide si absent ou non fourni."""
     if path is None or not path.exists():
         return {"active": {}, "prompts": {}}
+    _refuser_si_archive(path)
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     data.setdefault("active", {})
@@ -62,6 +95,15 @@ def _load_prompts_store(path: Path | None) -> dict[str, Any]:
     # à un prompt dépend de sa famille, la même phrase étant licite dans l'une et fautive dans
     # l'autre. Déclarée, jamais devinée du nom.
     data.setdefault("familles", {"minimale": [], "defaut": "experte"})
+    # Index des noms d'avant le renommage (ticket 074, C-5). Les définitions d'expériences
+    # ARCHIVÉES portent `variante: expert_gem_3.8_v2` et ne seront jamais réécrites — l'archive
+    # est froide. Sans cet index, recalculer l'empreinte d'une exécution passée deviendrait
+    # impossible, ce qui est exactement ce qu'un renommage ne doit pas casser.
+    data["_par_ancien_nom"] = {
+        str(e["_ancien_nom"]): nom
+        for nom, e in (data["prompts"] or {}).items()
+        if isinstance(e, Mapping) and e.get("_ancien_nom")
+    }
     return data
 
 
@@ -291,10 +333,27 @@ class PromptManager:
         """
         if variante:
             entry = self._store["prompts"].get(variante)
+            if entry is None:
+                # Ancien nom d'avant le renommage du ticket 074 : on résout, et on le DIT.
+                # Résoudre en silence ferait croire que le nom demandé existe encore, et la
+                # prochaine trace écrite le reconduirait. L'avertissement nomme le canonique.
+                canonique = (self._store.get("_par_ancien_nom") or {}).get(variante)
+                if canonique:
+                    logger.warning(
+                        f"variante de prompt {variante!r} : nom d'avant le renommage du "
+                        f"2026-09-14 (ticket 074) — résolue en {canonique!r}. Les définitions "
+                        f"vivantes doivent porter le nom canonique ; seules les traces "
+                        f"archivées gardent l'ancien."
+                    )
+                    variante, entry = canonique, self._store["prompts"].get(canonique)
             if not entry or "content" not in entry:
+                connues = sorted(self._store["prompts"])
+                anciens = sorted(self._store.get("_par_ancien_nom") or {})
                 raise ValueError(
                     f"variante de prompt {variante!r} introuvable dans prompts.yaml "
-                    f"(connues : {', '.join(sorted(self._store['prompts']))})"
+                    f"(connues : {', '.join(connues)}"
+                    + (f" ; anciens noms résolus : {', '.join(anciens)}" if anciens else "")
+                    + ")"
                 )
             if verifier_validite:
                 bloc = _invalidation_de(entry)
@@ -452,4 +511,4 @@ class PromptManager:
         return [m for m in messages if m.content]
 
 
-__all__ = ["PromptManager"]
+__all__ = ["PromptManager", "PromptsArchives"]

@@ -29,14 +29,16 @@ purge la clé plutôt que d'y écrire `home`.
 
 **La possession reste une condition indépendante, testée en premier.** Ce dict décrit une
 position, pas un droit d'usage : il ne fait jamais apparaître un véhicule chez quelqu'un
-qui n'en a pas. Un agent `personal_bike = "Pas de vélo"` ou `number_of_cars = 0` est
+qui n'en a pas. Un agent `personal_bike = "No bike"` (`Pas de vélo` avant le ticket 074 ; les deux
+sont reconnus) ou `number_of_cars = 0` est
 écarté du mode avant toute question de position — au verrou de sortie
 (`_vehicle_available`), au verrou de retour (`_vehicles_parked_at`) comme au décompte des
 orphelins (`_orphaned_vehicles`). Les deux véhicules se comportent désormais pareil face à
 une donnée manquante : champ `personal_bike` absent ⇒ **pas de vélo** et **alarme**
 (ticket 015, lot 1), champ `number_of_cars` absent ou nul ⇒ pas de voiture.
 
-Le défaut du vélo était l'inverse — champ absent ⇒ « vélo normal » — au nom de la
+Le défaut du vélo était l'inverse — champ absent ⇒ « regular bike » (« vélo normal »
+avant le ticket 074) — au nom de la
 rétrocompatibilité avec les populations générées avant que le trait existe. Une population
 dépourvue du trait mettait ainsi **100 % des agents à vélo, en silence**, sur le mode dont
 la part modale est la plus scrutée du projet. Le repli prive maintenant l'agent d'un mode

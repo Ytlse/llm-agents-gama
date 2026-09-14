@@ -1185,3 +1185,40 @@ def test_le_quota_garde_la_priorite_sur_tout_diagnostic(plateforme):
     assert "2026-09-09T07:00:00" in c["detail"]
     assert "variante de prompt 'x' introuvable" in c["detail"], \
         "le diagnostic ne prend pas la place du quota, mais reste dit dans le détail"
+
+
+def test_bouton_passerelle_recharger_lance_la_cible(plateforme):
+    """Le bouton pour recharger la passerelle déclenche bien la cible 'passerelle-recharger'."""
+    lances = []
+
+    def faux_lancer(cible, var):
+        lances.append((cible, var))
+
+    class FauxStTop:
+        def __init__(self):
+            self.boutons = []
+            self.session_state = {"_lancer": faux_lancer}
+
+        def columns(self, spec, **_k):
+            return [self] * (len(spec) if isinstance(spec, (list, tuple)) else spec)
+
+        def subheader(self, _t):
+            pass
+
+        def button(self, label, **_k):
+            self.boutons.append(label)
+            return True
+
+        def toast(self, *_a, **_k):
+            pass
+
+    st = FauxStTop()
+    col_titre_mes, col_btn_rech = st.columns([3, 1], vertical_alignment="bottom")
+    col_titre_mes.subheader("📚 Mes expériences")
+    if col_btn_rech.button("♻️ Recharger la passerelle", key="top-recharger-passerelle",
+                           disabled=not faux_lancer, width="stretch"):
+        faux_lancer("passerelle-recharger", {})
+
+    assert any("Recharger la passerelle" in b for b in st.boutons)
+    assert lances == [("passerelle-recharger", {})]
+
