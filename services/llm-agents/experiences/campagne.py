@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -344,17 +345,44 @@ def prochain_reveil(maintenant: datetime | None = None) -> tuple[str, int]:
 # ── La boucle de pilotage ────────────────────────────────────────────────────
 
 
+def journal_lancement(exp: str) -> Path:
+    """Où va la sortie d'un lancement détaché.
+
+    Elle allait dans `/dev/null`, et c'est ainsi que le premier lancement de chaque
+    expérience a échoué SANS UN MOT le 2026-09-15 : `lancer --reprendre` refuse quand il n'y
+    a rien à reprendre, il le disait sur sa sortie standard, et personne ne la lisait. Un
+    lancement détaché dont on jette la sortie est un lancement dont on ignore le sort.
+    """
+    base = dossier_experiences() / exp / "lancements"
+    base.mkdir(parents=True, exist_ok=True)
+    return base / f"{datetime.now(timezone.utc):%Y-%m-%d_%H_%M_%S}.log"
+
+
 def _lancer_experience(exp: str) -> None:
     """Démarre une expérience, détachée, par le même chemin que l'ordonnanceur.
 
-    On ne réimplémente pas le lancement : `ordonnanceur._lancer_detache` sait déjà passer
-    par `docker compose exec`, et `lancer` sait déjà réserver ses clés ou se mettre en file.
-    `attendre_fenetre` n'est pas transmis : c'est le DÉFAUT du runner, et l'ordonnanceur ne
-    transmet que son refus explicite.
+    On ne réimplémente pas le lancement : `lancer` sait réserver ses clés ou se mettre en
+    file, et `attendre_fenetre` est son défaut — l'ordonnanceur ne transmet que son refus.
+
+    `--reprendre` N'EST PASSÉ QUE S'IL Y A DE QUOI REPRENDRE. La CLI refuse le drapeau sur
+    une expérience qui n'a jamais tourné (« rien à reprendre : aucune exécution pour cette
+    expérience »), et le passer d'office faisait échouer le PREMIER lancement de chacune des
+    vingt — donc la campagne entière, sur sa toute première action.
     """
     from experiences import ordonnanceur as O
 
-    O._lancer_detache({"exp": exp, "args": {"reprendre": True}})
+    reprendre = derniere_execution(exp) is not None
+    argv = O._argv_lancer({"exp": exp, "args": {"reprendre": reprendre}})
+    sortie = journal_lancement(exp)
+    logger.info(f"[campagne] lancement de {exp}"
+                f"{' (reprise)' if reprendre else ' (première exécution)'} — "
+                f"sortie dans {sortie.parent.name}/{sortie.name}")
+    with sortie.open("w", encoding="utf-8") as flux:
+        subprocess.Popen(
+            argv, cwd=str(racine_depot()), stdout=flux, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True,
+            env={**os.environ, "TERM": "dumb", "NO_COLOR": "1", "PYTHONUNBUFFERED": "1"},
+        )
 
 
 def _tour_ordonnanceur() -> None:
@@ -476,7 +504,9 @@ def lancer(
                 lancees.pop(exp, None)
                 logger.warning(
                     f"[campagne] {exp} lancée il y a plus de "
-                    f"{DELAI_ECRITURE_ETAT_S:.0f} s sans avoir écrit d'état — on la relance.")
+                    f"{DELAI_ECRITURE_ETAT_S:.0f} s sans avoir écrit d'état — on la relance. "
+                    f"Le refus éventuel est dans "
+                    f"{(dossier_experiences() / exp / 'lancements')}.")
             elif exp in vue.jamais_lancees:
                 vue.jamais_lancees.remove(exp)
                 vue.en_vol.append(exp)
@@ -637,6 +667,7 @@ __all__ = [
     "ecrire_etat",
     "etat_experience",
     "etat_par_defaut",
+    "journal_lancement",
     "lire_etat",
     "prochain_reveil",
 ]

@@ -73,9 +73,11 @@ def banc(tmp_path, monkeypatch):
     monkeypatch.setenv("CAMPAGNES_DIR", str(campagnes))
 
     lances: list[str] = []
+    vrai_lancement = C._lancer_experience
     monkeypatch.setattr(C, "_lancer_experience", lances.append)
     monkeypatch.setattr(C, "_tour_ordonnanceur", lambda: None)
-    return {"experiences": experiences, "campagnes": campagnes, "lances": lances}
+    return {"experiences": experiences, "campagnes": campagnes, "lances": lances,
+            "vrai_lancement": vrai_lancement}
 
 
 def _ecrire_campagne(banc, nom: str, phases: list[dict], **extra) -> None:
@@ -320,3 +322,54 @@ class TestLecture:
     def test_prochain_reveil_rend_une_date_future_et_ses_secondes(self):
         quand, secondes = C.prochain_reveil()
         assert quand.endswith("+00:00") and 0 < secondes <= 24 * 3600
+
+# ── Le lancement lui-même ────────────────────────────────────────────────────
+
+
+class TestLancementReel:
+    """Ces tests exercent le VRAI `_lancer_experience` (seul `Popen` est simulé).
+
+    Les tests ci-dessus le remplacent par une liste, ce qui les rend rapides et lisibles —
+    mais les rendait aussi aveugles à ce qui s'est produit le 2026-09-15 : la campagne
+    passait `--reprendre` d'office, la CLI le refuse sur une expérience qui n'a jamais
+    tourné, et la sortie du lancement partait dans `/dev/null`. La campagne s'est arrêtée
+    sur sa toute première action, sans un mot.
+    """
+
+    @pytest.fixture
+    def lancer_vrai(self, deux_phases, monkeypatch):
+        """Rend `(lancement, argv_vus, kwargs_vus)` — sans défaire le banc."""
+        argv_vus: list[list[str]] = []
+        kwargs_vus: list[dict] = []
+
+        def _popen(argv, **kw):
+            argv_vus.append(list(argv))
+            kwargs_vus.append(kw)
+            return None
+
+        monkeypatch.setattr(C.subprocess, "Popen", _popen)
+        return deux_phases["vrai_lancement"], argv_vus, kwargs_vus
+
+    def test_une_experience_neuve_est_lancee_SANS_reprendre(self, lancer_vrai):
+        lancement, argv, _ = lancer_vrai
+        lancement("t1")
+        assert "--reprendre" not in argv[-1], (
+            "`lancer --reprendre` refuse quand il n'y a rien à reprendre : le passer d'office "
+            "fait échouer le PREMIER lancement de chaque expérience.")
+        assert "--experience" in argv[-1] and "t1" in argv[-1]
+
+    def test_une_experience_deja_tentee_est_lancee_AVEC_reprendre(self, deux_phases,
+                                                                  lancer_vrai):
+        _poser_etat(deux_phases["experiences"], "t1", "interrompue")
+        lancement, argv, _ = lancer_vrai
+        lancement("t1")
+        assert "--reprendre" in argv[-1]
+
+    def test_la_sortie_du_lancement_est_CONSERVEE_pas_jetee(self, deux_phases, lancer_vrai):
+        """Un lancement détaché dont on jette la sortie est un lancement dont on ignore le sort."""
+        lancement, _, kwargs = lancer_vrai
+        lancement("t1")
+        flux = kwargs[-1].get("stdout")
+        assert flux is not None and flux != C.subprocess.DEVNULL
+        journaux = list((deux_phases["experiences"] / "t1" / "lancements").glob("*.log"))
+        assert journaux, "le refus éventuel du lancement doit rester lisible quelque part"
