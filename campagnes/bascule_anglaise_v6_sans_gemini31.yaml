@@ -1,6 +1,6 @@
 # Ticket 074 — le lot lancé le 2026-09-15, gemini-3.1 mis de côté.
-# Écartées : les 2 bras gemini-3.1 (gardés dans `bascule_anglaise_v6.yaml`) et les 2
-# témoins random forest (lanceur dédié non paramétrable sur la v6 — à traiter à part).
+# Écartés : les 2 bras gemini-3.1 (dans `bascule_anglaise_v6.yaml`) et les 2 témoins
+# random forest (lanceur dédié non paramétrable sur la v6 — à traiter à part).
 nom: bascule_anglaise_v6_sans_gemini31
 version: campagne1
 note: 'Sous-ensemble de `bascule_anglaise_v6` : les 14 témoins et les 6 bras LLM qui ne sont PAS sur gemini-3.1-flash-lite.
@@ -34,9 +34,15 @@ phases:
   raison: Consomment du quota. La campagne dort à l'épuisement et reprend à l'expérience courante au renouvellement,
     jamais au début. Hors gemini-3.1-flash-lite.
   experiences:
-  - exp_agy-gemini-38-f_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_a600_t0_nosim
   - exp_gemini-35-fl_proexp04_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
   - exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
   - exp_gemini-35-fl_proexp06_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
   - exp_gemini-35-fl_proexp08_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
   - exp_gemini-35-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+- nom: llm_antigravity
+  raison: 'EN DERNIER, et c''est délibéré. Antigravity passe par un sous-agent : si aucun n''est disponible,
+    l''exécution reste en `en_attente_agent`, qui n''est PAS un état final — la campagne l''attendrait
+    indéfiniment et les bras par passerelle ne partiraient jamais. Mesuré le 2026-09-15 : 0 décision sur
+    3 161 après cinq minutes, zéro sollicitation. Placé ici, il ne bloque rien.'
+  experiences:
+  - exp_agy-gemini-38-f_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_a600_t0_nosim

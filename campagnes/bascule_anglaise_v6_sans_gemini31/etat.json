@@ -2,9 +2,9 @@
  "campagne": "bascule_anglaise_v6_sans_gemini31",
  "version": "campagne1",
  "demarree_le": "2026-09-14T22:37:55+00:00",
- "maj": "2026-09-15T04:49:37+00:00",
+ "maj": "2026-09-15T05:18:30+00:00",
  "phase_courante": "llm",
- "courante": "exp_agy-gemini-38-f_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_a600_t0_nosim",
+ "courante": "exp_gemini-35-fl_proexp04_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim",
  "faites": [
   "exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim",
   "exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim",
@@ -31,6 +31,6 @@
  ],
  "echouees": {},
  "sommeils": [],
- "pid": 28457,
+ "pid": 39423,
  "terminee_le": null
 }
