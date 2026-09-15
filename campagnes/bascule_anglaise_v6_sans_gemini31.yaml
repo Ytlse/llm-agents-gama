@@ -1,7 +1,6 @@
 # Ticket 074 — le lot lancé le 2026-09-15, gemini-3.1 mis de côté.
-# Écartées ici, gardées dans `bascule_anglaise_v6.yaml` :
-#   exp_gemini-31-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
-#   exp_gemini-31-fl_promin02_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_t0_nosim
+# Écartées : les 2 bras gemini-3.1 (gardés dans `bascule_anglaise_v6.yaml`) et les 2
+# témoins random forest (lanceur dédié non paramétrable sur la v6 — à traiter à part).
 nom: bascule_anglaise_v6_sans_gemini31
 version: campagne1
 note: 'Sous-ensemble de `bascule_anglaise_v6` : les 14 témoins et les 6 bras LLM qui ne sont PAS sur gemini-3.1-flash-lite.
@@ -14,8 +13,10 @@ substrat:
   sceau: 412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6
 phases:
 - nom: temoins
-  raison: Aucun appel LLM, quelques minutes. S'ils échouent, le substrat est en cause et on l'apprend
-    avant d'avoir dépensé le moindre quota.
+  raison: 'Aucun appel LLM, quelques minutes. S''ils échouent, le substrat est en cause et on l''apprend
+    avant d''avoir dépensé le moindre quota. Le témoin random forest est ABSENT : son lanceur dédié (scripts/progedo_logit/lancer_experience_rf.py,
+    règle R7 du ticket 044) construit sa propre définition sur une population codée en dur, antérieure
+    à la v5. Le rendre paramétrable est un travail à part.'
   experiences:
   - exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
   - exp_alea_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
@@ -29,8 +30,6 @@ phases:
   - exp_majvoiture_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
   - exp_mnl_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
   - exp_mnl_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
-  - exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
-  - exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nosim
 - nom: llm
   raison: Consomment du quota. La campagne dort à l'épuisement et reprend à l'expérience courante au renouvellement,
     jamais au début. Hors gemini-3.1-flash-lite.

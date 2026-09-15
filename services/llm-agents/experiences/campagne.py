@@ -112,6 +112,12 @@ class Campagne:
     phases: tuple[Phase, ...]
     note: str = ""
     substrat: dict = field(default_factory=dict)
+    #: expérience → commande de lancement dédiée, quand `experiences lancer` ne convient pas.
+    #: Le cas connu est le témoin random forest : la règle R7 du ticket 044 le tient HORS de
+    #: `decideur_modele.FAMILLES` pour qu'il ne devienne pas un arbitre, et son lanceur
+    #: dédié inscrit sa famille le temps de son propre processus. Sans cette échappatoire,
+    #: la campagne le relançait indéfiniment sur un « Format d'artefact inattendu ».
+    lanceurs: dict = field(default_factory=dict)
 
     @property
     def toutes(self) -> tuple[str, ...]:
@@ -197,7 +203,14 @@ def charger(nom: str) -> Campagne:
         phases=tuple(phases),
         note=str(doc.get("note") or ""),
         substrat=doc.get("substrat") or {},
+        lanceurs={str(k): list(v) for k, v in (doc.get("lanceurs") or {}).items()},
     )
+    hors_campagne = sorted(set(campagne.lanceurs) - set(campagne.toutes))
+    if hors_campagne:
+        raise CampagneInvalide(
+            f"{chemin.name} : `lanceurs` désigne {hors_campagne}, qui ne sont dans aucune "
+            "phase. Un lanceur pour une expérience absente ne servira jamais et masque une "
+            "faute de frappe.")
     manquantes = [
         e
         for e in campagne.toutes
@@ -358,7 +371,7 @@ def journal_lancement(exp: str) -> Path:
     return base / f"{datetime.now(timezone.utc):%Y-%m-%d_%H_%M_%S}.log"
 
 
-def _lancer_experience(exp: str) -> None:
+def _lancer_experience(exp: str, lanceurs: dict | None = None) -> None:
     """Démarre une expérience, détachée, par le même chemin que l'ordonnanceur.
 
     On ne réimplémente pas le lancement : `lancer` sait réserver ses clés ou se mettre en
@@ -371,12 +384,18 @@ def _lancer_experience(exp: str) -> None:
     """
     from experiences import ordonnanceur as O
 
-    reprendre = derniere_execution(exp) is not None
-    argv = O._argv_lancer({"exp": exp, "args": {"reprendre": reprendre}})
+    dedie = (lanceurs or {}).get(exp)
+    if dedie:
+        argv = [str(m).replace("{exp}", exp) for m in dedie]
+        logger.info(f"[campagne] lancement DÉDIÉ de {exp} : {' '.join(argv)}")
+    else:
+        reprendre = derniere_execution(exp) is not None
+        argv = O._argv_lancer({"exp": exp, "args": {"reprendre": reprendre}})
     sortie = journal_lancement(exp)
-    logger.info(f"[campagne] lancement de {exp}"
-                f"{' (reprise)' if reprendre else ' (première exécution)'} — "
-                f"sortie dans {sortie.parent.name}/{sortie.name}")
+    if not dedie:
+        logger.info(f"[campagne] lancement de {exp}"
+                    f"{' (reprise)' if reprendre else ' (première exécution)'} — "
+                    f"sortie dans {sortie.parent.name}/{sortie.name}")
     with sortie.open("w", encoding="utf-8") as flux:
         subprocess.Popen(
             argv, cwd=str(racine_depot()), stdout=flux, stderr=subprocess.STDOUT,
@@ -502,11 +521,33 @@ def lancer(
                 lancees.pop(exp, None)
             elif time.time() - quand > DELAI_ECRITURE_ETAT_S:
                 lancees.pop(exp, None)
-                logger.warning(
-                    f"[campagne] {exp} lancée il y a plus de "
-                    f"{DELAI_ECRITURE_ETAT_S:.0f} s sans avoir écrit d'état — on la relance. "
-                    f"Le refus éventuel est dans "
-                    f"{(dossier_experiences() / exp / 'lancements')}.")
+                # Un lancement qui n'écrit jamais d'état est un lancement qui a ÉCHOUÉ, pas
+                # un lancement lent. Il compte donc comme une tentative — sans quoi la
+                # campagne le relance indéfiniment : mesuré le 2026-09-15, 178 relances en
+                # six heures sur un témoin dont l'artefact était refusé, la phase bloquée et
+                # les bras LLM jamais atteints. Un blocage silencieux vaut moins qu'un échec
+                # déclaré : au moins l'échec laisse passer la suite.
+                tentatives[exp] = tentatives.get(exp, 0) + 1
+                journal = dossier_experiences() / exp / "lancements"
+                if tentatives[exp] > TENTATIVES_MAX:
+                    etat["echouees"][exp] = {
+                        "motif": f"lancée {tentatives[exp]} fois sans jamais écrire d'état "
+                                 f"— voir {journal}",
+                        "tentatives": tentatives[exp], "le": _iso()}
+                    etat["restantes"] = [e for e in etat["restantes"] if e != exp]
+                    if etat.get("courante") == exp:
+                        etat["courante"] = None
+                    ecrire_etat(nom, etat)
+                    logger.error(
+                        f"[ALARME] [campagne] {exp} lancée {tentatives[exp]} fois sans jamais "
+                        f"écrire d'état — déclarée en échec, la campagne passe à la suivante. "
+                        f"Le refus est dans {journal}.")
+                else:
+                    logger.warning(
+                        f"[campagne] {exp} lancée il y a plus de "
+                        f"{DELAI_ECRITURE_ETAT_S:.0f} s sans avoir écrit d'état — relance "
+                        f"{tentatives[exp]}/{TENTATIVES_MAX}. Le refus éventuel est dans "
+                        f"{journal}.")
             elif exp in vue.jamais_lancees:
                 vue.jamais_lancees.remove(exp)
                 vue.en_vol.append(exp)
@@ -573,7 +614,7 @@ def lancer(
                 etat["courante"] = exp
                 ecrire_etat(nom, etat)
                 lancees[exp] = time.time()
-                _lancer_experience(exp)
+                _lancer_experience(exp, campagne.lanceurs)
             vue.en_vol.append(exp)
 
         # ── Sommeil de quota : tout ce qui vole dort ──────────────────────────
@@ -609,7 +650,7 @@ def lancer(
                     f"[campagne] ▶ {suivante} (phase {phase.nom}, "
                     f"{len(etat['faites']) + 1}/{total})")
                 lancees[suivante] = time.time()
-                _lancer_experience(suivante)
+                _lancer_experience(suivante, campagne.lanceurs)
 
         if tours % 20 == 0:
             logger.info(

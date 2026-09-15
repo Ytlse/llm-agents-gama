@@ -74,7 +74,10 @@ def banc(tmp_path, monkeypatch):
 
     lances: list[str] = []
     vrai_lancement = C._lancer_experience
-    monkeypatch.setattr(C, "_lancer_experience", lances.append)
+    # Le vrai `_lancer_experience` prend (exp, lanceurs) : le simulacre doit accepter les
+    # deux, sinon il masque la signature au lieu de la remplacer.
+    monkeypatch.setattr(C, "_lancer_experience",
+                        lambda exp, lanceurs=None: lances.append(exp))
     monkeypatch.setattr(C, "_tour_ordonnanceur", lambda: None)
     return {"experiences": experiences, "campagnes": campagnes, "lances": lances,
             "vrai_lancement": vrai_lancement}
@@ -373,3 +376,80 @@ class TestLancementReel:
         assert flux is not None and flux != C.subprocess.DEVNULL
         journaux = list((deux_phases["experiences"] / "t1" / "lancements").glob("*.log"))
         assert journaux, "le refus éventuel du lancement doit rester lisible quelque part"
+
+# ── Le lancement qui n'aboutit jamais ────────────────────────────────────────
+
+
+class TestLancementQuiNAboutitPas:
+    """Un lancement refusé par la plateforme n'écrit jamais d'état. Que fait la campagne ?
+
+    Elle le relançait SANS FIN : mesuré le 2026-09-15, 178 relances en six heures sur le
+    témoin random forest, dont l'artefact est refusé par `decideur_modele` (règle R7 du
+    ticket 044). La phase des témoins n'a jamais été close, et les six bras LLM n'ont jamais
+    été atteints — une nuit entière perdue, sans une seule alarme.
+
+    Un blocage silencieux vaut moins qu'un échec déclaré : au moins l'échec laisse passer
+    la suite.
+    """
+
+    def test_un_lancement_muet_finit_par_etre_declare_en_echec(self, deux_phases, monkeypatch,
+                                                               journal):
+        # Le délai de grâce est ramené à zéro : on teste la logique, pas la patience.
+        monkeypatch.setattr(C, "DELAI_ECRITURE_ETAT_S", 0.0)
+        C.lancer("c", max_tours=8, dormir=lambda _s: None)
+        etat = C.lire_etat("c")
+        assert "t1" in etat["echouees"], "un lancement qui n'aboutit jamais doit être déclaré"
+        assert "sans jamais écrire d'état" in etat["echouees"]["t1"]["motif"]
+        assert sum("[ALARME]" in m and "t1" in m for m in journal) == 1
+
+    def test_et_la_campagne_passe_a_la_SUIVANTE(self, deux_phases, monkeypatch):
+        monkeypatch.setattr(C, "DELAI_ECRITURE_ETAT_S", 0.0)
+        C.lancer("c", max_tours=8, dormir=lambda _s: None)
+        assert "t2" in deux_phases["lances"], (
+            "un échec ne doit pas bloquer la phase : c'est exactement ce qui a coûté la nuit "
+            "du 2026-09-15.")
+
+    def test_le_nombre_de_relances_est_BORNE(self, deux_phases, monkeypatch):
+        monkeypatch.setattr(C, "DELAI_ECRITURE_ETAT_S", 0.0)
+        C.lancer("c", max_tours=20, dormir=lambda _s: None)
+        relances_t1 = deux_phases["lances"].count("t1")
+        assert relances_t1 <= C.TENTATIVES_MAX + 1, (
+            f"t1 relancée {relances_t1} fois — la borne est {C.TENTATIVES_MAX}")
+
+
+# ── Lanceur dédié ────────────────────────────────────────────────────────────
+
+
+class TestLanceurDedie:
+    """Certaines expériences ne passent pas par `experiences lancer`.
+
+    Le témoin random forest en est une : la règle R7 du ticket 044 le tient hors de
+    `decideur_modele.FAMILLES` pour qu'il ne devienne pas un arbitre, et son lanceur dédié
+    inscrit sa famille le temps de son propre processus. La campagne doit pouvoir le dire,
+    plutôt que de buter dessus.
+    """
+
+    def test_un_lanceur_declare_est_utilise_tel_quel(self, banc, monkeypatch):
+        _definir_experience(banc["experiences"], "special")
+        _ecrire_campagne(banc, "c", [{"nom": "p", "experiences": ["special"]}],
+                         lanceurs={"special": ["/bin/echo", "--experience", "{exp}"]})
+        argv_vus: list[list[str]] = []
+        monkeypatch.setattr(C.subprocess, "Popen",
+                            lambda argv, **kw: argv_vus.append(list(argv)))
+        banc["vrai_lancement"]("special", C.charger("c").lanceurs)
+        assert argv_vus[-1] == ["/bin/echo", "--experience", "special"], (
+            "`{exp}` doit être remplacé par le nom de l'expérience")
+
+    def test_sans_lanceur_declare_on_passe_par_la_plateforme(self, deux_phases, monkeypatch):
+        argv_vus: list[list[str]] = []
+        monkeypatch.setattr(C.subprocess, "Popen",
+                            lambda argv, **kw: argv_vus.append(list(argv)))
+        deux_phases["vrai_lancement"]("t1", C.charger("c").lanceurs)
+        assert "experiences" in argv_vus[-1] and "lancer" in argv_vus[-1]
+
+    def test_un_lanceur_pour_une_experience_absente_est_refuse(self, banc):
+        _definir_experience(banc["experiences"], "x")
+        _ecrire_campagne(banc, "c", [{"nom": "p", "experiences": ["x"]}],
+                         lanceurs={"absente": ["/bin/echo"]})
+        with pytest.raises(C.CampagneInvalide, match="absente"):
+            C.charger("c")
