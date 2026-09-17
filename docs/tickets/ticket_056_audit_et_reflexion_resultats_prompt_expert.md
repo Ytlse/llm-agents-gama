@@ -55,4 +55,4 @@ Face à une amélioration aussi brutale et non monotone, l'exigence de rigueur s
 - [ ] Le prompt v2 a été audité et certifié sans fuite de priors locaux ni violation du zéro seuil.
 - [ ] L'écart v2 vs v3 est scientifiquement expliqué par l'analyse des rationales.
 - [ ] La variante v4 a été mesurée et intégrée à l'analyse comparative.
-- [ ] Aucune affirmation prématurée n'est introduite dans `fr/06_ablation.md` tant que cet audit n'est pas validé.
+- [ ] Aucune affirmation prématurée n'est introduite dans `fr/06_results.md` tant que cet audit n'est pas validé.

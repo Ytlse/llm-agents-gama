@@ -21,6 +21,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from experiences import decision as D
+from experiences import journal
 from experiences.archive import (
     ETAT_ARRETEE,
     ETAT_EN_ATTENTE_QUOTA,
@@ -204,20 +205,13 @@ def _anticipation(person: Person, activity_id: str, departure_time: int) -> dict
 
 
 def _methode_moves(decision: D.Decision, decideur) -> str:
-    if decision.methode == D.METHODE_CHOIX_UNIQUE:
-        return "Un seul itinéraire disponible"
-    if decision.methode == D.METHODE_SANS_SOLUTION:
-        return "Pas de solution de déplacement"
-    if decision.methode == D.METHODE_REPLI_UNIFORME:
-        return "LLM Error (Default index) — repli uniforme"
-    if decision.methode == D.METHODE_MODELE_NON_IMPUTABLE:
-        # Non-décision du modèle (hors domaine) : sans mode choisi, exclue du score.
-        return "Modèle : hors domaine (non imputable)"
-    return (
-        "LLM"
-        if not getattr(decideur, "sans_quota", True)
-        else f"Décideur {getattr(decideur, 'nom', '?')}"
-    )
+    """Conservé pour les appelants historiques ; la règle vit dans `journal.methode_moves`.
+
+    Ticket 081 — l'étiquette se calcule désormais sur la MÉTHODE seule, pas sur un objet
+    `Decision`, pour que la régénération d'un journal depuis l'archive produise exactement
+    les mêmes libellés que l'écriture en vivant.
+    """
+    return journal.methode_moves(decision.methode, decideur)
 
 
 FICHIER_PROGRESSION = (
@@ -517,6 +511,25 @@ async def executer(
                 f"arrêt forcé consigné (processus interrompu sans clôture)"
             )
         execution.ajouter_interruption("reprise", depuis=derniere)
+        if moves is not None:
+            # Ticket 081 — le journal est reconstruit AVANT la première décision neuve.
+            # Les décisions resservies ne repassent pas par l'écriture de ligne (elles ne
+            # sollicitent rien) : sans cette reconstruction, `moves.csv` resterait tel que
+            # le processus interrompu l'avait laissé, et le score porterait sur une
+            # fraction du travail sans que rien ne le dise. Régénérer plutôt que compléter
+            # rend le journal indépendant de l'histoire des interruptions.
+            try:
+                await journal.regenerer(execution, jeu, personnes, decideur)
+            except Exception as exc:  # noqa: BLE001
+                # Fail-open : la reprise doit aboutir même si la reconstruction échoue. Le
+                # journal reste incomplet, mais il ne sera pas scoré en silence — le
+                # garde-fou de `score.calculer` refuse un journal tronqué (ticket 081, lot A).
+                logger.error(
+                    f"[ALARME] Régénération du journal impossible à la reprise de "
+                    f"{execution.nom} : {type(exc).__name__}: {exc} ; l'exécution "
+                    f"continue, mais son `moves.csv` reste incomplet et son scoring "
+                    f"sera refusé à la clôture"
+                )
     execution.changer_etat(ETAT_EN_COURS)
     execution.mettre_a_jour_regime(
         parallelisme=exp.regroupement.parallelisme,
@@ -719,7 +732,8 @@ async def executer(
                         raison_epuisement.update(
                             {
                                 "raison": erreur,
-                                "reprise": reprise_annoncee or prochaine_fenetre_quota(),
+                                "reprise": reprise_annoncee
+                                or prochaine_fenetre_quota(),
                             }
                         )
                         epuise.set()
@@ -752,48 +766,16 @@ async def executer(
                         dep.purpose,
                     )
                 if moves is not None:
-                    plus_rapide = min(
-                        (p.plan for p in props),
-                        key=lambda pl: pl.duration or float("inf"),
-                        default=None,
-                    )
-                    await moves.ecrire(
-                        person=personne,
-                        plan=decision.retenue.plan if decision.retenue else None,
-                        purpose=dep.purpose,
-                        selection_method=_methode_moves(decision, decideur),
-                        provider_model=(
-                            decision.reponse.fournisseur if decision.reponse else ""
-                        ),
-                        faster_itinerary=plus_rapide,
-                        reasoning=(decision.reponse.raison if decision.reponse else ""),
-                        chain_constraint=decision.trace.get("contrainte_chaine", ""),
-                        anticipation=(ctx.anticipation or {}).get("trace", "")
-                        if ctx.anticipation
-                        else "",
-                        move_id=f"{dep.person_id}:{dep.activity_id}",
-                        simulated_time=ctx.timestamp,
-                        start_time=(
-                            decision.retenue.plan.start_time
-                            if decision.retenue
-                            else None
-                        ),
-                        available_options=[p.plan for p in props],
-                        activity_id=dep.activity_id,
-                        mode_probabilities=(
-                            decision.reponse.distribution if decision.reponse else None
-                        ),
-                        sources=",".join(
-                            f"{k}:{v}"
-                            for k, v in sorted(
-                                Counter(
-                                    str(v).split(":")[0]
-                                    for v in decision.trace["sources"].values()
-                                ).items()
-                            )
-                        ),
-                        ecartees=D.resumer_ecartees(decision.trace["ecartees"]),
-                        lot=str(decision.trace.get("identifiant_lot") or ""),
+                    # Ticket 081 — UNE seule fonction écrit une ligne de journal, ici comme
+                    # à la régénération d'une reprise. La trace qu'on vient d'archiver suffit
+                    # à la produire : c'est ce qui garantit qu'un journal reconstruit depuis
+                    # l'archive est identique à celui qu'aurait écrit le chemin vivant.
+                    await journal.ecrire_ligne(
+                        moves,
+                        personne=personne,
+                        trace=decision.trace,
+                        props=props,
+                        decideur=decideur,
                     )
             prog.personnes_terminees += 1
 

@@ -40,13 +40,22 @@ Ce document centralise les **actions de rédaction**, les **points d'arbitrage m
    - Présenter $H_0$ non pas comme une surprise algorithmique, mais comme l'**établissement rigoureux d'une borne structurelle** (Tier 3 de SILICA) face au discours techno-optimiste de la littérature (CitySim, AgentMove) qui affirme ou suggère que les capacités de raisonnement des LLM suffisent à émuler fidèlement la mobilité humaine.
    - Poser l'**asymétrie d'exposition** (31 279 trajets réels vus contre 0) comme objet d'étude méthodologique : quel est le coût distributionnel de l'absence d'enquête locale pour une ville ?
 2. **Démonstration de l'apport scientifique au-delà du régime nominal :**
-   - **Régimes non tabulés (Section 7) :** L'oracle supervisé excelle sur la routine, mais s'avère **aveugle et amnésique** face aux chocs (panne inopinée, article de presse locale, alerte canicule). L'agent LLM y démontre sa véritable valeur ajoutée : adaptation sémantique et inertie cognitive (hystérésis sur 5 jours).
-   - **L'architecture hybride en cascade (Section 8) :** L'apport n'est pas l'élimination du LLM, mais sa juste place : filtrage déterministe en amont, oracle tabulaire rapide et précis pour 90 % des flux nominaux (0 token, latence < 1 ms), et délégation au LLM pour les 10 % d'exceptions, d'incertitude ou de contextes complexes.
-3. **Documents liés :** [`fr/01_introduction.md`](fr/01_introduction.md), [`fr/06_ablation.md`](fr/06_ablation.md) § 6.2/6.7, [`fr/08_limits_and_hybrid.md`](fr/08_limits_and_hybrid.md) § 8.1/8.2, [`ameliorations.md`](ameliorations.md) § 6.
+   - **Régimes non tabulés (Section 7) :** Les références tabulaires excellent sur la routine, mais s'avère **aveugle et amnésique** face aux chocs (panne inopinée, article de presse locale, alerte canicule). L'agent LLM y démontre sa véritable valeur ajoutée : adaptation sémantique et inertie cognitive (hystérésis sur 5 jours).
+   - **L'architecture hybride en cascade (Section 8) :** L'apport n'est pas l'élimination du LLM, mais sa juste place : filtrage déterministe en amont, référence tabulaire rapide et précise pour 90 % des flux nominaux (0 token, latence < 1 ms), et délégation au LLM pour les 10 % d'exceptions, d'incertitude ou de contextes complexes.
+3. **Documents liés :** [`fr/01_introduction.md`](fr/01_introduction.md), [`fr/06_results.md`](fr/06_results.md) § 6.2/6.7, [`fr/08_limits_and_hybrid.md`](fr/08_limits_and_hybrid.md) § 8.1/8.2, [`ameliorations.md`](ameliorations.md) § 6.
 
 ---
 
 ## 3. Formalisation mathématique du dispositif agentique (Chapitre 3)
+
+> ✅ **Pris en charge le 15 septembre 2026** (ticket 050), avec une réserve de l'auteur. Le quadruplet
+> est posé au § 3.1 de [`fr/03_architecture.md`](fr/03_architecture.md) et le tirage au § 3.3 ; miroirs
+> anglais et LaTeX à parité (`brouillon v0.5`).
+> **Le deuxième point est rendu en clair, sans notation** — décision de l'auteur du même jour : la
+> phrase dit que l'agent choisit dans la liste finie des itinéraires qui existent pour ce déplacement,
+> ce que les deux moteurs produisent moins ce que l'éligibilité et la position de ses véhicules lui
+> retirent, et que deux agents partis du même endroit à la même heure n'ont pas la même liste.
+> `plan/PLAN.md` § 3 n'est pas repris : il décrit le plan, non le texte.
 
 **Remarque / Action de rédaction :**
 > *« Remplacer la description narrative du dispositif par une formalisation propre en un bloc compact :*

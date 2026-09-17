@@ -42,8 +42,12 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import os
+from pathlib import Path
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Optional, Sequence
+
+from loguru import logger
 
 from sim_clock import gama_timestamp, wall_clock
 
@@ -60,7 +64,7 @@ def _jour_de_lannee(jour: dt.date) -> tuple[int, int]:
 def jours_eligibles(
     debut: str,
     fin: str,
-    jours_semaine: Optional[tuple[int, ...]] = None,
+    jours_semaine: tuple[int, ...] | None = None,
 ) -> tuple[tuple[int, int], ...]:
     """Jours (mois, jour) de la fenêtre, éventuellement filtrés par jour de semaine.
 
@@ -102,7 +106,7 @@ def indice_agent(graine: int, person_id: str, cardinal: int) -> int:
     """
     if cardinal <= 0:
         raise ValueError("cardinal nul")
-    empreinte = hashlib.sha256(f"{graine}|{person_id}".encode("utf-8")).digest()
+    empreinte = hashlib.sha256(f"{graine}|{person_id}".encode()).digest()
     return int.from_bytes(empreinte[:8], "big") % cardinal
 
 
@@ -111,8 +115,110 @@ def date_meteo(
     graine: int,
     jours: Sequence[tuple[int, int]],
 ) -> tuple[int, int]:
-    """Le (mois, jour) attribué à cet agent."""
+    """Le (mois, jour) de DÉPART attribué à cet agent."""
     return tuple(jours[indice_agent(graine, person_id, len(jours))])
+
+
+# ── Progression : la date tirée est un DÉPART, pas une assignation (ticket 075) ──────────
+#
+# Le tirage seul suffisait tant qu'un run tenait en une journée simulée. Sur soixante jours, il
+# faisait relire soixante fois le même bulletin au même agent : aucune persistance d'épisode
+# pluvieux, aucune saison, et une mémoire épisodique qui se construit sur une météo immobile.
+# La date tirée devient donc le PREMIER jour, avancé d'un jour calendaire par jour simulé.
+#
+# ⚠ L'arithmétique se fait sur une année NON bissextile, et ce n'est pas un détail : la source
+# (`data/weather/meteo_toulouse_12_mois.csv`) porte 365 jours et **aucun 29 février**. Compter
+# sur une année bissextile ferait tomber une journée sur 366 dans un trou — `get_weather`
+# rendrait `None` et le bulletin disparaîtrait du prompt sans qu'aucune ligne ne le dise.
+_ANNEE_ARITHMETIQUE = 2023
+
+# Le 29 février n'est signalé qu'une fois : il peut sortir du tirage de départ (la fenêtre
+# « année » est décrite sur 2024, bissextile), et l'alarme doit se voir sans noyer le journal.
+_29_FEVRIER_SIGNALE = False
+
+
+def avancer_date(mois: int, jour: int, jours_ecoules: int) -> tuple[int, int]:
+    """Le (mois, jour) situé `jours_ecoules` jours après `(mois, jour)`.
+
+    L'année est ignorée par le chargeur météo : le 31 décembre est donc suivi du 1ᵉʳ janvier,
+    sans rupture ni fin de fenêtre. Un 29 février en entrée — possible quand la fenêtre de
+    tirage est décrite sur une année bissextile — est ramené au 1ᵉʳ mars, parce que la source
+    ne le porte pas.
+    """
+    global _29_FEVRIER_SIGNALE
+    if (mois, jour) == (2, 29):
+        if not _29_FEVRIER_SIGNALE:
+            _29_FEVRIER_SIGNALE = True
+            logger.info(
+                "[météo] 29 février tiré comme jour de départ : ramené au 1ᵉʳ mars — la "
+                "source météo porte 365 jours et ne contient pas cette date."
+            )
+        mois, jour = 3, 1
+    # L'avancement se fait sur le RANG dans l'année, pas par addition de jours à une date :
+    # additionner ferait sortir de l'année arithmétique dès que la somme dépasse le 31 décembre,
+    # et la date d'arrivée retomberait dans l'année suivante — bissextile une fois sur quatre.
+    # Défaut trouvé par le test A5bis : `31 décembre + 60 jours` rendait le 29 février, que la
+    # source ne porte pas. Le rang, lui, boucle sur 365 par construction.
+    rang = dt.date(_ANNEE_ARITHMETIQUE, mois, jour).timetuple().tm_yday
+    rang = (rang - 1 + int(jours_ecoules)) % 365
+    arrivee = dt.date(_ANNEE_ARITHMETIQUE, 1, 1) + dt.timedelta(days=rang)
+    return arrivee.month, arrivee.day
+
+
+@lru_cache(maxsize=4)
+def dates_declarees(fichier: str) -> dict[str, tuple[int, int]]:
+    """`person_id → (mois, jour)` du jour décrit, lu une fois et gardé.
+
+    Le fichier vit à côté de la population et porte des dates `AAAA-MM-JJ`. Seuls le mois et
+    le jour comptent : `weather_loader.get_weather` indexe par (mois, jour), et l'année de nos
+    relevés n'est pas celle de l'enquête. On apparie donc le BON JOUR CALENDAIRE dans l'année
+    dont on dispose, ce qui reste un appariement saisonnier, pas la météo vécue.
+    """
+    import json
+
+    brut = json.loads(Path(fichier).read_text(encoding="utf-8"))
+    table: dict[str, tuple[int, int]] = {}
+    for person_id, texte in brut.items():
+        try:
+            date = dt.date.fromisoformat(str(texte))
+        except ValueError:
+            continue
+        table[str(person_id)] = (date.month, date.day)
+    logger.info(
+        f"[météo] dates déclarées chargées : {len(table)} personne(s) depuis {fichier}"
+    )
+    if len(table) < len(brut):
+        logger.warning(
+            f"[météo] {len(brut) - len(table)} date(s) illisible(s) dans {fichier} : "
+            "ces personnes retombent sur le tirage par graine"
+        )
+    return table
+
+
+def date_declaree(person_id: object, fichier: object) -> tuple[int, int] | None:
+    """Le (mois, jour) décrit par cette personne, si la table en porte un.
+
+    Défensive par contrat : ce chemin d'accès ne doit JAMAIS faire tomber le dispositif « une
+    météo par agent ». Un réglage absent, d'un type inattendu ou pointant sur un fichier
+    illisible rend `None`, et le tirage par graine reprend — ce qui est le comportement
+    d'avant le ticket 058, pas une dégradation silencieuse d'autre chose.
+    """
+    if not isinstance(fichier, (str, os.PathLike)) or not str(fichier).strip():
+        return None
+    chemin = Path(fichier)
+    if not chemin.is_file():
+        logger.warning(
+            f"[météo] table de dates déclarées introuvable ({chemin}) : tirage par graine"
+        )
+        return None
+    try:
+        return dates_declarees(str(chemin)).get(str(person_id))
+    except Exception as err:  # pragma: no cover — garde-fou
+        logger.error(
+            f"[ALARME] table de dates déclarées illisible ({chemin} : {err}) — tirage par "
+            "graine ; les bulletins ne sont PAS ceux des jours d'enquête"
+        )
+        return None
 
 
 def timestamp_meteo(
@@ -120,8 +226,15 @@ def timestamp_meteo(
     person_id: str,
     graine: int,
     jours: Sequence[tuple[int, int]],
+    jours_ecoules: int = 0,
+    date_imposee: tuple[int, int] | None = None,
 ) -> int:
     """Timestamp à passer à `get_weather` : la date de l'agent, l'heure du départ.
+
+    `jours_ecoules` est le nombre de jours simulés écoulés depuis le début du run. À zéro — un
+    run d'une seule journée, ou le premier jour d'un run long — la date rendue est **exactement**
+    celle du tirage : une expérience déjà mesurée et scellée rejoue la même météo qu'avant le
+    ticket 075. Au-delà, l'agent avance d'un jour calendaire par jour simulé.
 
     L'heure, la minute et la seconde de la journée simulée sont conservées : le
     bulletin est lu par créneaux de 3 h, et un départ à 08:00 doit continuer de
@@ -137,7 +250,9 @@ def timestamp_meteo(
     GAMA ignore les bascules : en champs muraux, la conservation de l'heure est
     exacte par construction, sur toute la fenêtre.
     """
-    mois, jour = date_meteo(person_id, graine, jours)
+    mois, jour = date_imposee or date_meteo(person_id, graine, jours)
+    if jours_ecoules:
+        mois, jour = avancer_date(mois, jour, jours_ecoules)
     reference = wall_clock(timestamp_simule)
     substitue = reference.replace(year=_ANNEE_PIVOT, month=mois, day=jour)
     return gama_timestamp(substitue)

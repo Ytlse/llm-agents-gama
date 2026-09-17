@@ -26,7 +26,9 @@ L'arbitrage scientifique retenu réoriente profondément cette section :
 4. **Ajout du footer des tickets associés** au bas de `04.5_prompt_calibration.md`.
 
 ## Critères d'acceptation
-- [ ] Le texte du chapitre 4.5 n'étale plus de calculs lourds d'algorithmes génétiques.
-- [ ] L'argument de sobriété écologique et computationnelle est clairement posé.
-- [ ] Le statut du Palier 2 comme prompt qualitatif sans seuil est préservé.
-- [ ] Le footer de `04.5_prompt_calibration.md` référence le ticket 054.
+- [x] Le texte du chapitre 4.5 n'étale plus de calculs lourds d'algorithmes génétiques (absorbé dans le Chapitre 5 § 5.3.3).
+- [x] L'argument de sobriété écologique et computationnelle est clairement posé ($80\,000$ inférences évitées au § 5.3.3).
+- [x] Le statut du Palier 2 comme prompt qualitatif sans seuil est préservé (règle du zéro seuil au § 5.3.4).
+- [x] Le footer du chapitre référence le ticket 054 (intégré dans le footer de `05_factual_neutral_prompt.md`).
+
+**Clôture le 2026-09-17 (Terminé)** : Livré dans le Chapitre 5 restructuré (`docs/paper/article/fr/05_factual_neutral_prompt.md` § 5.3) suite à l'absorption du chapitre 4.5. L'argumentaire de sobriété Green AI et les 4 garde-fous y sont intégralement formalisés.

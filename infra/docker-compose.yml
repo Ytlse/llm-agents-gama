@@ -5,7 +5,11 @@ x-gateway-env: &gateway-env
   LLM_GATEWAY_REDIS__URL: redis://redis:6379/0
   LLM_GATEWAY_EXECUTOR__CELERY_BROKER_URL: redis://redis:6379/1
   LLM_GATEWAY_EXECUTOR__CELERY_RESULT_BACKEND: redis://redis:6379/2
-  LLM_GATEWAY_PROVIDERS_FILE: /app/config/llm_gateway/providers.yaml
+  # Fichier des fournisseurs. Indirection ajoutée au ticket 075 : le défaut ne change pas, mais
+  # un run peut désigner un fichier RESTREINT le temps de son exécution — par exemple
+  # providers.gemini31.yaml, qui ne déclare que gemini-3.1-flash-lite :
+  #   LLM_GATEWAY_PROVIDERS_FILE=/app/config/llm_gateway/providers.gemini31.yaml make run OFFLINE=1
+  LLM_GATEWAY_PROVIDERS_FILE: ${LLM_GATEWAY_PROVIDERS_FILE:-/app/config/llm_gateway/providers.yaml}
   # Les sources montées sous /app/<paquet> doivent PRÉCÉDER les copies installées dans
   # site-packages. WORKDIR ne suffit pas : `celery` et `uvicorn` sont des scripts console,
   # sys.path[0] est /usr/local/bin, pas le répertoire courant. Sans cette ligne, api et
@@ -35,6 +39,8 @@ x-shared-env: &shared-env
   # Reprise à chaud (`make run CONT=1`) : le contrôleur réutilise le workdir
   # pointé par experiments/current au lieu d'en créer un nouveau (settings.py).
   CONTINUE_RUN: ${CONTINUE_RUN:-}
+  # Ticket 091 — nom du run repris. Vide = aucune réutilisation de mémoire ni de décisions.
+  REPRISE_RUN: ${REPRISE_RUN:-}
   TZ: Europe/Paris
   # ── Clés Google de la SIMULATION (ticket 008) ──────────────────────────────
   # Les quotas free tier Gemini se comptent par projet ET par modèle : chaque clé
@@ -404,7 +410,7 @@ services:
       GAMA_WS_URL: ${GAMA_WS_URL:-ws://host.docker.internal:3001}
       PYTHONPATH: /app:/opt
       # Le contrôleur lit la liste des fournisseurs pour dimensionner les expériences (ressources.py).
-      LLM_GATEWAY_PROVIDERS_FILE: /app/config/llm_gateway/providers.yaml
+      LLM_GATEWAY_PROVIDERS_FILE: ${LLM_GATEWAY_PROVIDERS_FILE:-/app/config/llm_gateway/providers.yaml}
       # Ticket 035 — plateforme d'expériences : où vivent jeux, expériences et le référentiel d'enquête
       EXPERIENCES_DIR: /app/data/experiences
       JEUX_DIR: /app/data/jeux

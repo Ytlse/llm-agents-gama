@@ -108,7 +108,9 @@ async def create_task(payload: LLMRequest, request: Request) -> dict:
     # providers qui vaut 1 et rendrait le dispatch toujours immédiat) ; le worker
     # replafonnera au pop selon le batch_max_agents du provider sélectionné.
     settings = deps.settings
-    batch_limit = settings.get_dispatch_threshold(payload.force_provider)
+    batch_limit = settings.get_dispatch_threshold(
+        payload.force_provider, instances_admises=payload.instances_admises
+    )
     # Budget de sortie d'une tâche : le load balancer écarte les providers dont
     # le plafond de complétion (max_output_tokens) ne peut pas servir une seule tâche.
     min_output_required = payload.parameters.get("max_tokens")
@@ -116,13 +118,25 @@ async def create_task(payload: LLMRequest, request: Request) -> dict:
     if queue_size >= batch_limit:
         await loop.run_in_executor(
             None,
-            lambda: process_batch_task.delay(batch_key, payload.force_provider, payload.min_tpm_required, min_output_required),
+            lambda: process_batch_task.delay(
+                batch_key,
+                payload.force_provider,
+                payload.min_tpm_required,
+                min_output_required,
+                payload.instances_admises,
+            ),
         )
     elif await deps.queue.try_mark_scheduled(batch_key, ttl=int(settings.batching.delay_seconds) + 30):
         await loop.run_in_executor(
             None,
             lambda: process_batch_task.apply_async(
-                args=[batch_key, payload.force_provider, payload.min_tpm_required, min_output_required],
+                args=[
+                    batch_key,
+                    payload.force_provider,
+                    payload.min_tpm_required,
+                    min_output_required,
+                    payload.instances_admises,
+                ],
                 countdown=settings.batching.delay_seconds,
             ),
         )

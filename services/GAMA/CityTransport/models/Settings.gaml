@@ -146,9 +146,20 @@ global {
 	bool long_term_memory_enabled <- true;
 	bool long_term_self_reflect_enabled <- true;
 	int simulation_max_days <- 7;
-	// Accidents tirés au sort sur les axes (ticket 070). FAUX PAR DÉFAUT : un run qui ne
-	// demande rien se comporte exactement comme avant cette évolution.
-	bool accidents_enabled <- false;
+	// Accidents tirés au sort sur les axes (ticket 070). VRAI PAR DÉFAUT depuis le 2026-09-15,
+	// sur décision de l'auteur : le régime réaliste devient l'ordinaire, et c'est son absence
+	// qui doit être demandée. ⚠ Tout run porte donc des accidents — inoffensif tant qu'ils
+	// n'allongent aucun trajet, à surveiller dès que le retard subi sera branché.
+	bool accidents_enabled <- true;
+
+	// Accident POSÉ À LA MAIN (ticket 070, travail F). C'est de cette pose que viennent les
+	// figures : le tirage aléatoire, à fréquence réelle, ne touche que ~0,6 déplacement par
+	// journée simulée à 1 000 agents. Défauts calés sur la rocade toulousaine à Empalot,
+	// heure de pointe du matin.
+	float accident_pose_lat <- 43.5735;
+	float accident_pose_lon <- 1.4330;
+	int accident_pose_heure <- 8;       // heure murale du jour simulé courant
+	int accident_pose_duree <- 45;      // minutes
 
 	// Nombre de cycles (itérations de la boucle) pour la calibration du prompt,
 	// lancée à la demande depuis l'IHM (bouton "Lancer la calibration du prompt").
@@ -175,9 +186,11 @@ global {
 		long_term_memory_enabled <- (_cfg_ltm != nil) ? ((_cfg_ltm split_with ":")[1] contains "true") : false;
 		long_term_self_reflect_enabled <- (_cfg_ltsr != nil) ? (string((_cfg_ltsr split_with ":")[1]) contains "true") : false;
 		simulation_max_days <- (_cfg_days != nil) ? int(string((_cfg_days split_with ":")[1]) replace(" ", "")) : 7;
-		// Absent du fichier = régime jamais demandé, donc faux. Jamais de repli à vrai :
-		// une configuration incomplète ne doit pas activer un régime en silence.
-		accidents_enabled <- (_cfg_acc != nil) ? ((_cfg_acc split_with ":")[1] contains "true") : false;
+		// Absent du fichier = le régime n'a jamais été tranché pour ce poste : on prend le
+		// défaut, désormais VRAI. Un `sim_params.yaml` antérieur au 2026-09-15 ne porte pas la
+		// clé et activera donc les accidents — c'est voulu, et c'est pourquoi les tickets qui
+		// lancent un run portent un avertissement sur ce paramètre.
+		accidents_enabled <- (_cfg_acc != nil) ? ((_cfg_acc split_with ":")[1] contains "true") : true;
 	}
 
 	reflex auto_save_sim_config when: cycle = 2 {

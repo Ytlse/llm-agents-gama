@@ -25,6 +25,15 @@ Si elle est absente, reconstruis ses cinq exigences de mémoire (architecture
 narrative, ablation, évaluation équitable multidimensionnelle, honnêteté sur la
 portée, transparence/reproductibilité).
 
+# Style : pas de signature d'IA
+
+Quatre familles de marqueurs sont proscrites et mesurées : cadratin employé comme seul outil
+d'apposition et gras qui porte l'argument ; lexique prédictible (*crucial*, *catalyseur*,
+*delve*, *seamless*) ; structure d'essai symétrique et conclusion en *En résumé* ; équilibrage
+systématique des arguments. Après toute écriture dans `docs/paper/article/`, lancer
+`make paper-style F=<chapitre>` et rendre compte des constats. Détail : skill `article-verrou`,
+section « Style » ; ticket 083.
+
 # Mémoire persistante
 
 Tu démarres à froid à chaque appel : ta seule mémoire est

@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-from mobility_core.population_reference import OUT_OF_PERIMETER
 from pathlib import Path
 from typing import Any, Optional
 
@@ -28,8 +28,16 @@ from mobility_core.housing_type import (
     REFERENCE_KEYS as HOUSING_REFERENCE_KEYS,
     key_for as housing_key_for,
 )
+from mobility_core.population_reference import (
+    COURONNE_DEPUIS_FR,
+    COURONNE_VERS_CEREMA,
+    OUT_OF_PERIMETER,
+    OUT_OF_PERIMETER_FR,
+)
 
 from .sources import REPO_ROOT, Manifest, probe
+
+logger = logging.getLogger("synthesis.frames")
 
 # ── Conventions de correspondance (moves.csv → catégories EMC²) ──────────────
 
@@ -167,6 +175,99 @@ OCCUPATION_MAP = {
 # donnerait `hors_périmètre`, qui ne joindrait rien et disparaîtrait sans un mot.
 OUT_OF_PERIMETER_KEY = "hors_perimetre"
 
+# Libellé `Lieu de résidence` du journal → identifiant de `cerema_values.yaml`.
+#
+# POURQUOI CETTE TABLE EXISTE (ticket 082). Jusqu'ici la traduction se réduisait à un
+# `replace(" ", "_")`, ce qui suffisait tant que le journal écrivait « 1ere couronne ».
+# Depuis la bascule anglaise (ticket 074) il écrit « 1st ring », que ce remplacement
+# transforme en `1st_ring` — une clé que la référence ne ventile pas. Les trois couronnes
+# hors Toulouse ont ainsi quitté les pages de score de TOUTE exécution v6 **sans qu'une
+# seule ligne ne manque** : elles étaient toutes comptées, toutes rangées sous « hors
+# référentiel », et la dimension ne publiait plus qu'une strate sur quatre.
+#
+# La table est DÉRIVÉE de `mobility_core.population_reference`, jamais recopiée : ce module
+# est l'unique déclaration des modalités de couronne, partagée avec la génération de
+# population et le journal. Une quatrième recopie finirait par diverger sans que rien ne le
+# signale — c'est exactement ce que `normalize_housing` évite en passant par
+# `mobility_core.housing_type`.
+#
+# Les VALEURS restent françaises : ce sont les identifiants de l'enquête, que
+# `prompt_calibration/` lit aussi, et que le modèle ne voit jamais.
+PLACE_MAP: dict[str, str] = {
+    # v6 et après (modalité canonique, servie au modèle dans le récit de persona)
+    **COURONNE_VERS_CEREMA,
+    # v5 et avant, par composition : « 1ere couronne » → « 1st ring » → `1ere_couronne`
+    **{ancien: COURONNE_VERS_CEREMA[canonique]
+       for ancien, canonique in COURONNE_DEPUIS_FR.items()},
+    # Relecture d'un journal déjà normalisé (page regénérée depuis une trace réécrite) :
+    # la clé est son propre antécédent, comme dans `normalize_housing`.
+    **{cle: cle for cle in COURONNE_VERS_CEREMA.values()},
+}
+
+# Les deux écritures de la modalité hors périmètre. Ce n'est PAS une couronne : elle n'a
+# aucune cible par zone (ticket 021), et le second membre rendu par `normalize_place` le
+# dit. Elle est donc comptée, pas jointe.
+PLACE_OUT_OF_PERIMETER_LABELS = frozenset(
+    {OUT_OF_PERIMETER, OUT_OF_PERIMETER_FR, OUT_OF_PERIMETER_KEY}
+)
+
+# Les clés que l'ancien `replace(" ", "_")` fabriquait sur un libellé anglais : `1st_ring`
+# et ses deux sœurs. Elles ne désignent rien dans la référence, et un `scores.json` qui en
+# porte une a été calculé AVANT le ticket 082 — sa dimension « lieu de résidence » est
+# amputée de trois strates. C'est la signature qui permet à `experiences.score` de déclarer
+# ces fichiers périmés et d'en forcer le recalcul complet, une fois.
+#
+# Dérivée, pas énumérée : si un libellé entre dans `PLACE_MAP` demain, sa forme fantôme
+# entre ici le même jour. Les libellés v5 en sont exclus d'eux-mêmes — « 1ere couronne »
+# souligné donne `1ere_couronne`, qui EST la clé de l'enquête, et ces scores-là sont justes.
+PLACE_CLES_FANTOMES = frozenset(
+    libelle.replace(" ", "_") for libelle in PLACE_MAP
+    if libelle.replace(" ", "_") not in set(PLACE_MAP.values())
+)
+
+# Libellés de résidence et de logement qu'aucune table ne connaît, comptés par libellé.
+# Ils ne traversent plus : un libellé inconnu qui produirait une clé fantôme redeviendrait
+# la panne du ticket 082, muette et invisible sur les pages.
+PLACES_INCONNUES: Counter = Counter()
+LOGEMENTS_INCONNUS: Counter = Counter()
+OCCUPATIONS_INCONNUES: Counter = Counter()
+
+# Motifs sans équivalent EMC², écartés de la dimension et non signalés : ce sont des
+# valeurs normales du journal, pas des libellés à traduire. Tout ce qui n'est ni dans
+# `MOTIF_MAP` ni ici est en revanche inattendu, et se dit.
+MOTIFS_HORS_ENQUETE = frozenset({"home", "leisure", "other"})
+MOTIFS_INCONNUS: Counter = Counter()
+
+
+def _signaler_libelle_inconnu(compteur: Counter, colonne: str, libelle: str,
+                              consequence: str) -> None:
+    """Compte un libellé illisible, et le dit en ERROR à sa PREMIÈRE occurrence.
+
+    Sur front montant : un journal de 3 000 lignes porte le même libellé inconnu 3 000
+    fois, et trois mille lignes d'alarme identiques noieraient le journal au lieu de
+    l'alerter. Le compteur, lui, garde le volume.
+    """
+    premiere = compteur[libelle] == 0
+    compteur[libelle] += 1
+    if premiere:
+        logger.error(
+            f"[ALARME] Libellé illisible dans la colonne « {colonne} » : {libelle!r} — "
+            f"{consequence} Table de correspondance à compléter dans "
+            f"`scripts/synthesis/frames.py` (ticket 082)."
+        )
+
+
+def reinitialiser_compteurs_libelles() -> None:
+    """Remet à zéro les compteurs de libellés inconnus (front montant des alarmes).
+
+    Appelé entre deux lectures indépendantes — les tests, et le rescoring global qui
+    enchaîne des dizaines d'exécutions : sans cette remise à zéro, la deuxième
+    exécution portant le même libellé inconnu ne dirait plus rien.
+    """
+    for compteur in (PLACES_INCONNUES, LOGEMENTS_INCONNUS,
+                     OCCUPATIONS_INCONNUES, MOTIFS_INCONNUS):
+        compteur.clear()
+
 # Nom de la ligne qui porte la masse hors référentiel d'une dimension. Elle n'a ni
 # cible ni L1 : elle existe pour que « exclu des cibles » ne se confonde jamais avec
 # « inexistant ». `global_view` fait la même chose de sa masse hors modes scorés.
@@ -224,20 +325,39 @@ def distance_to_cat(km: float) -> Optional[str]:
 def normalize_place(value: str) -> tuple[Optional[str], bool]:
     """« Lieu de résidence » du journal → clé EMC², et le fait qu'elle soit référencée.
 
-    Depuis le ticket 021 la colonne porte quatre couronnes **et** `hors périmètre` : un
-    domicile connu, situé hors des 453 communes de l'enquête. Ce n'est pas une couronne
-    — le ranger en 3ᵉ a fait publier un stratum dont 76 % des habitants n'étaient pas
-    dans l'enquête —, il n'a donc **aucune cible** par zone, et le second membre du
-    couple dit qu'il ne joindra aucune ligne de référence. C'est ce qui permet de le
-    COMPTER plutôt que de le voir disparaître, exactement comme `normalize_housing` le
-    fait de la modalité « Autres ».
+    La traduction passe par `PLACE_MAP`, qui connaît les deux vocabulaires : l'anglais
+    servi au modèle depuis le ticket 074 (« 1st ring ») et le français des cohortes
+    antérieures (« 1ere couronne »). Les deux rendent `1ere_couronne`, la clé de
+    l'enquête, et une exécution archivée se relit comme une exécution du jour.
+
+    Depuis le ticket 021 la colonne porte aussi `hors périmètre` : un domicile connu,
+    situé hors des 453 communes de l'enquête. Ce n'est pas une couronne — le ranger en
+    3ᵉ a fait publier un stratum dont 76 % des habitants n'étaient pas dans l'enquête —,
+    il n'a donc **aucune cible** par zone, et le second membre du couple dit qu'il ne
+    joindra aucune ligne de référence. C'est ce qui permet de le COMPTER plutôt que de
+    le voir disparaître, exactement comme `normalize_housing` le fait de la modalité
+    « Autres ».
+
+    **Un libellé inconnu ne traverse plus** (ticket 082). L'ancienne version rendait
+    `text.replace(" ", "_")` et son second membre `True` : tout libellé produisait une
+    clé d'apparence valide, que la référence ne ventilait pas et que la page rangeait
+    silencieusement en « hors référentiel ». Il rend désormais `(None, False)`, il est
+    compté par libellé, et la première occurrence lève une `[ALARME]`.
     """
     text = (value or "").strip()
     if not text:
         return None, False
-    if text == OUT_OF_PERIMETER:
+    if text in PLACE_OUT_OF_PERIMETER_LABELS:
         return OUT_OF_PERIMETER_KEY, False
-    return text.replace(" ", "_"), True
+    key = PLACE_MAP.get(text)
+    if key is None:
+        _signaler_libelle_inconnu(
+            PLACES_INCONNUES, "Lieu de résidence", text,
+            "la décision sort de la dimension « lieu de résidence » au lieu d'être "
+            "comparée à la cible de sa couronne.",
+        )
+        return None, False
+    return key, True
 
 
 def normalize_housing(value: str) -> tuple[Optional[str], bool]:
@@ -262,6 +382,15 @@ def normalize_housing(value: str) -> tuple[Optional[str], bool]:
         # Déjà une clé (relecture d'un journal écrit autrement), sinon inconnue.
         key = text if text in HOUSING_MODALITY_KEYS else None
     if key is None:
+        # Ticket 082 — l'audit des colonnes traduites. `housing_key_for` connaît les deux
+        # vocabulaires, donc cette branche ne se produit pas sur les cohortes connues :
+        # elle existe pour que le jour où un libellé change, on l'apprenne le jour même
+        # et non en relisant un tableau à trois strates six mois plus tard.
+        _signaler_libelle_inconnu(
+            LOGEMENTS_INCONNUS, "Type de logement", text,
+            "la décision sort de la dimension « type de logement » au lieu d'être "
+            "comparée à la cible de son habitat.",
+        )
         return None, False
     return key, key in HOUSING_REFERENCE_KEYS
 
@@ -414,18 +543,79 @@ def latest_attempts(raws: list[dict]) -> tuple[list[dict], dict]:
     }
 
 
+def couples_repetes(raws: list[dict]) -> int:
+    """Combien de couples (personne, activité) apparaissent sur PLUS d'un jour simulé.
+
+    C'est la seule chose que la coupe au premier jour est là pour retirer (ticket 057, R2).
+    Un journal qui n'en porte aucun n'a rien à faire couper : couper quand même y retire des
+    déplacements uniques, et c'est ce qui vidait le périmètre de ses départs du matin.
+
+    Une ligne sans identifiant de personne ou d'activité ne s'apparie à rien : elle ne compte
+    pas comme répétition, exactement comme dans ``latest_attempts``.
+    """
+    jours: dict[tuple[str, str], set] = {}
+    for raw in raws:
+        person = (raw.get("ID Personne") or "").strip()
+        activity = (raw.get("ID Activité") or "").strip()
+        if not person or not activity:
+            continue
+        jours.setdefault((person, activity), set()).add(
+            simulated_day(raw.get("Temps simulé") or "")
+        )
+
+    return sum(1 for days in jours.values() if len(days) > 1)
+
+
+def _une_occurrence_par_deplacement(raws: list[dict]) -> tuple[list[dict], int]:
+    """R1/R4 — un couple (personne, activité) ne sort qu'une fois, au plus petit jour simulé.
+
+    Filet de sécurité, pas règle principale : quand R2 a décidé de couper, il ne reste déjà
+    plus qu'une occurrence et cette passe ne retire rien. Elle existe pour que l'invariant
+    « un déplacement compte une fois » tienne même si le critère de coupe se trompe un jour.
+    """
+    garde: dict[tuple[str, str], dict] = {}
+    non_appariables: set[int] = set()
+    for raw in raws:
+        person = (raw.get("ID Personne") or "").strip()
+        activity = (raw.get("ID Activité") or "").strip()
+        if not person or not activity:
+            non_appariables.add(id(raw))
+            continue
+        cle = (person, activity)
+        tenu = garde.get(cle)
+        if tenu is None or simulated_day(raw.get("Temps simulé") or "") < simulated_day(
+            tenu.get("Temps simulé") or ""
+        ):
+            garde[cle] = raw
+    gardes = {id(raw) for raw in garde.values()} | non_appariables
+    retenus = [raw for raw in raws if id(raw) in gardes]
+    return retenus, len(raws) - len(retenus)
+
+
 def read_moves(path: Path, exclude_methods: list[str],
-               first_day_only: bool = True) -> tuple[list[dict], dict]:
+               first_day_only: bool | str = "auto",
+               horizon_jours: int | None = None) -> tuple[list[dict], dict]:
     """Lit moves.csv et annote chaque trajet de ses catégories EMC².
 
-    ``first_day_only`` borne la lecture au **premier jour simulé** du run. Même
-    quand le run est censé s'arrêter à 24 h, le bootstrap et l'horizon glissant de
-    planification débordent au-delà : sur le run de référence, 2 538 couples
-    (personne, activité) réapparaissaient un jour plus tard, avec le même mode dans
-    57,8 % des cas. Ces répétitions ne sont pas des décisions supplémentaires, elles
-    pèsent seulement deux fois dans les parts modales. Le volet 2 applique la même
-    coupe sur ``sim_day`` (``common_set_eval.build_sample``) : c'est ce qui garantit
-    aux trois volets un périmètre unique.
+    **Un déplacement compte une fois, et une seule** (ticket 057, R1) : c'est l'invariant,
+    et tout ce qui suit ne sert qu'à choisir *quelle* occurrence garder.
+
+    ``first_day_only`` borne la lecture au **premier jour simulé** du run. La coupe est là
+    pour les répétitions : le bootstrap et l'horizon glissant de planification débordent
+    au-delà de 24 h, et sur le run de référence 2 538 couples (personne, activité)
+    réapparaissaient un jour plus tard, avec le même mode dans 57,8 % des cas. Ces répétitions
+    ne sont pas des décisions supplémentaires, elles pèsent seulement deux fois dans les parts
+    modales. Le volet 2 applique la même coupe sur ``sim_day``
+    (``common_set_eval.build_sample``) : c'est ce qui garantit aux trois volets un périmètre
+    unique.
+
+    ``"auto"`` (défaut) ne coupe que quand il y a de quoi couper — ``horizon_jours > 1``, ou
+    au moins un couple répété (R2). **Sans cela, la coupe retire des déplacements uniques** :
+    sur les exécutions sans simulateur du 2026-09-14, elle écartait 866 décisions sur 3 299
+    pour zéro doublon, dont 797 départs du matin, que ``jeu.py:deplacements_attendus()`` date
+    du lendemain parce que l'activité « home » d'origine enjambe minuit. Le périmètre scoré
+    montait alors à 56,9 % de retours au domicile, contre 43,8 % sur la journée entière et
+    39,0 % dans l'enquête. ``True`` et ``False`` restent acceptés et forcent la décision (R6).
 
     Cette coupe ne suffit pas sur un run **repris à chaud** : la reprise rejoue
     le jour simulé dans le même dossier d'expérience, et les deux tentatives
@@ -433,11 +623,11 @@ def read_moves(path: Path, exclude_methods: list[str],
     récente, en amont de la coupe ; le nombre de lignes ainsi écartées sort dans
     ``exclues_reprise``.
     """
-    kept_day = first_simulated_day(path) if first_day_only else None
+    # Front montant par exécution : le rescoring global enchaîne des dizaines de
+    # journaux, et sans cette remise à zéro seul le premier dirait son libellé illisible.
+    reinitialiser_compteurs_libelles()
     rows: list[dict] = []
     stats = Counter()
-    if kept_day:
-        stats["jour_retenu"] = kept_day
     with Path(path).open(encoding="utf-8") as fh:
         raws = list(csv.DictReader(fh))
     stats["total"] = len(raws)
@@ -446,10 +636,34 @@ def read_moves(path: Path, exclude_methods: list[str],
     if reprise["reprise"]:
         stats["reprise"] = True
         stats["jours_de_calcul"] = reprise["jours_de_calcul"]
+
+    repetes = couples_repetes(raws)
+    stats["couples_repetes"] = repetes
+    if first_day_only == "auto":
+        if horizon_jours is not None and horizon_jours > 1:
+            motif = "horizon"
+        elif repetes:
+            motif = "repetitions"
+        else:
+            motif = "aucune"
+    else:
+        motif = "forcee" if first_day_only else "aucune"
+    stats["coupe"] = motif
+    kept_day = first_simulated_day(path) if motif != "aucune" else None
+    if kept_day:
+        stats["jour_retenu"] = kept_day
+
+    # R1/R4 — APRÈS la coupe : si elle a joué, il ne reste qu'une occurrence et rien n'est
+    # retiré ici ; si elle n'a pas joué, ce filet garantit quand même l'unicité.
+    raws, doublons = _une_occurrence_par_deplacement(
+        [r for r in raws if not kept_day or simulated_day(r.get("Temps simulé") or "") == kept_day]
+        if kept_day
+        else raws
+    )
+    if kept_day:
+        stats["exclues_jour"] = stats["total"] - stats["exclues_reprise"] - len(raws) - doublons
+    stats["exclues_doublon"] = doublons
     for raw in raws:
-        if kept_day and simulated_day(raw.get("Temps simulé") or "") != kept_day:
-            stats["exclues_jour"] += 1
-            continue
         if raw.get("Méthode de sélection") in exclude_methods:
             stats["exclues_methode"] += 1
             continue
@@ -457,10 +671,27 @@ def read_moves(path: Path, exclude_methods: list[str],
         if chosen is None:
             stats["sans_mode"] += 1
             continue
-        occupation = OCCUPATION_MAP.get((raw.get("Occupation principale") or "").strip())
+        occupation_brute = (raw.get("Occupation principale") or "").strip()
+        occupation = OCCUPATION_MAP.get(occupation_brute)
         if occupation is None:
             stats["occupation_inconnue"] += 1
-        motif = MOTIF_MAP.get((raw.get("Motifs de déplacement") or "").strip())
+            if occupation_brute:
+                _signaler_libelle_inconnu(
+                    OCCUPATIONS_INCONNUES, "Occupation principale", occupation_brute,
+                    "la décision sort de la dimension « occupation », qui pèse dans le "
+                    "composite.",
+                )
+        motif_brut = (raw.get("Motifs de déplacement") or "").strip()
+        motif = MOTIF_MAP.get(motif_brut)
+        if motif is None and motif_brut and motif_brut not in MOTIFS_HORS_ENQUETE:
+            # `home`, `leisure` et `other` sont des valeurs normales sans équivalent
+            # EMC² : elles sortent de la dimension sans rien signaler. Tout le reste est
+            # un libellé qu'on ne sait pas lire, et qui se dit.
+            stats["motif_inconnu"] += 1
+            _signaler_libelle_inconnu(
+                MOTIFS_INCONNUS, "Motifs de déplacement", motif_brut,
+                "la décision sort de la dimension « motif », qui pèse dans le composite.",
+            )
         probas = {}
         for col, mode in PROBA_COLUMNS.items():
             value = (raw.get(col) or "").strip()
@@ -474,19 +705,28 @@ def read_moves(path: Path, exclude_methods: list[str],
             stats["avec_distribution"] += 1
         else:
             stats["sans_distribution"] += 1
-        logement, logement_reference = normalize_housing(
-            raw.get("Type de logement") or "")
+        logement_brut = (raw.get("Type de logement") or "").strip()
+        logement, logement_reference = normalize_housing(logement_brut)
         if logement is None:
-            stats["type_logement_vide"] += 1
+            # Vide et illisible ne sont pas la même panne : la colonne vide est un cas
+            # NORMAL (population enrichie avant le ticket 019, hors couche de zones
+            # fines), le libellé illisible est un bug de traduction. Les confondre, c'est
+            # ce qui a laissé passer le ticket 082 six semaines.
+            stats["type_logement_vide" if not logement_brut
+                  else "type_logement_inconnu"] += 1
         elif not logement_reference:
             # Modalité connue de l'enquête mais absente de la ventilation publiée
             # (« Autres ») : elle ne joindra aucune ligne de référence. On la
             # compte ici, faute de quoi elle disparaîtrait du bilan.
             stats["type_logement_hors_referentiel"] += 1
-        lieu_residence, lieu_reference = normalize_place(
-            raw.get("Lieu de résidence") or "")
+        lieu_brut = (raw.get("Lieu de résidence") or "").strip()
+        lieu_residence, lieu_reference = normalize_place(lieu_brut)
         if lieu_residence is None:
-            stats["lieu_residence_vide"] += 1
+            # Même distinction que pour le logement : une population enrichie avant le
+            # ticket 021 écrit la colonne VIDE, ce qui est attendu ; un libellé que la
+            # table ne connaît pas est un défaut, et il porte un compteur à lui.
+            stats["lieu_residence_vide" if not lieu_brut
+                  else "lieu_residence_inconnu"] += 1
         elif not lieu_reference:
             # `hors périmètre` (ticket 021) : domicile connu, hors des 453 communes de
             # l'enquête. Aucune cible par zone, donc exclu des strates — mais compté

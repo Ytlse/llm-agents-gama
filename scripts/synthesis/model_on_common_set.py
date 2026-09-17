@@ -164,6 +164,12 @@ _OCCUPATION_VERS_SPEC = {
     "Unemployed / job seeker": "Chômeur/recherche d'emploi",
     "Homemaker": "Personne au foyer",
     "Retired": "Retraité",
+    # Ajoutée le 2026-09-16 pour l'audit unitaire (ticket 058). Les personas d'enquête portent
+    # « Other », traduction de la modalité « Autre » de l'enquête, que la cohorte v6 n'expose
+    # pas. Sans cette entrée, `occupation_du_spec` rendait « Other », hors des catégories du
+    # spec, donc `__missing__` — coefficient nul, comportement de la modalité de référence,
+    # sans un mot dans le journal. 26 enquêtés sur 2 930 étaient concernés.
+    "Other": "Autre",
 }
 
 
@@ -278,11 +284,13 @@ def offered_mass(probabilities: dict[str, float], offered: list[str]) -> float:
 #: d'arbitre comportemental et non de cible de fidélité, le troisième la régression
 #: logistique à noyau (ticket 043), second arbitre du même bloc.
 #:
-#: Le témoin random forest n'y est PAS, et c'est la règle R7 du ticket 044 : un témoin ne
-#: devient pas un arbitre. Il se joue par son lanceur dédié, qui remplace `load_policy` dans
-#: le seul espace de noms du décideur, sans que ce module le connaisse.
+#: La forêt aléatoire y entre au ticket 088 § 3.3. Elle en était absente parce que le ticket
+#: 043 modifiait cette ligne en parallèle, et son lanceur contournait l'attente en remplaçant
+#: `load_policy` dans l'espace de noms du décideur. La règle R7 du ticket 044 — un témoin ne
+#: devient pas un arbitre — tient à `POLICY_CLASS_TO_CAT` et aux modules de synthèse, pas à
+#: l'absence d'un format dans ce tuple.
 POLICY_FORMATS = ("lightgbm_mode_choice_policy", "mnl_mode_choice_policy",
-                  "klr_mode_choice_policy")
+                  "klr_mode_choice_policy", "rf_mode_choice_policy")
 
 
 def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
@@ -313,6 +321,16 @@ def load_policy(path: Path, spec: dict) -> tuple[Any, dict]:
     artefact = json.loads(Path(path).read_text(encoding="utf-8"))
     if artefact.get("format") not in POLICY_FORMATS:
         raise ValueError(f"Format d'artefact inattendu : {artefact.get('format')!r}.")
+
+    # La forêt ne se recharge pas, elle se RÉAJUSTE : aucun arbre n'est sérialisé dans son
+    # artefact, qui porte ses hyperparamètres et le SHA de sa matrice d'entraînement.
+    # `charger_rf` pose les mêmes trois refus que la suite de cette fonction, plus un contrôle
+    # que les trois autres familles n'ont pas besoin d'avoir — la forêt réajustée reproduit-elle
+    # les métriques publiées ? — et il rend le même couple (prédicteur, artefact). Import
+    # paresseux : aucune exécution lightgbm, mnl ou klr ne paie le coût de scikit-learn.
+    if artefact["format"] == "rf_mode_choice_policy":
+        from scripts.progedo_logit.mode_choice_rf import charger_rf
+        return charger_rf(Path(path), spec)
     if artefact.get("spec_version") != spec.get("spec_version"):
         raise ValueError(
             f"Le modèle a été entraîné sous le contrat de features v"

@@ -18,6 +18,7 @@ bord d'import.
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterable
 
 from llm_gateway.config import ProviderConfig
 from llm_gateway.core.selection import build_swrr_sequence
@@ -25,6 +26,16 @@ from llm_gateway.ports.rate_limiter import RateLimiter
 from llm_gateway.telemetry.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class RestrictionInstances(ValueError):
+    """La liste d'instances admises ne désigne rien d'exploitable — ticket 084.
+
+    ⚠ **Une restriction fausse n'est jamais « aucune restriction ».** C'est la règle qui donne
+    sa valeur au lot : une faute de frappe qui vaudrait « sers-toi partout » rendrait douteuse
+    toute mesure prise sous restriction, sans qu'aucune ligne ne le signale. Elle est donc levée
+    à la sélection, avant qu'un seul appel ne soit payé.
+    """
 
 
 class LoadBalancer:
@@ -43,6 +54,30 @@ class LoadBalancer:
         self._sequence: list[str] = self._build_sequence()
         if policy == "cascade":
             logger.info(f"Routage en CASCADE : ordre de priorité = {self._cascade()}")
+
+    def _admises(self, admises: Iterable[str] | None) -> frozenset[str] | None:
+        """Ensemble des instances admises, VALIDÉ, ou `None` quand rien n'est restreint.
+
+        Ticket 084. Trois retours possibles et un seul silence : `None` (pas de restriction)
+        et un ensemble non vide. Tout le reste lève — liste ne désignant aucune instance
+        connue, ou mélangeant connues et inconnues. Une liste à moitié fausse est une erreur
+        de configuration, pas une intention à deviner.
+        """
+        if admises is None:
+            return None
+        demandees = frozenset(str(nom).strip() for nom in admises if str(nom).strip())
+        if not demandees:
+            # Liste vide == absence de restriction. C'est le cas d'un réglage déclaré mais non
+            # renseigné, et il doit se comporter exactement comme avant le ticket.
+            return None
+        inconnues = demandees - set(self._providers)
+        if inconnues:
+            raise RestrictionInstances(
+                f"instances admises inconnues : {sorted(inconnues)} — connues : "
+                f"{sorted(self._providers)}. Une liste à moitié fausse n'est pas une "
+                f"restriction partielle, c'est une erreur de configuration."
+            )
+        return demandees
 
     def _cascade(self) -> list[str]:
         """L'ordre de priorité en mode cascade : celui de la configuration, doublons ôtés.
@@ -93,6 +128,7 @@ class LoadBalancer:
         force: str | None = None,
         min_tpm: int | None = None,
         min_output: int | None = None,
+        admises: Iterable[str] | None = None,
     ) -> str:
         """
         Retourne le nom du fournisseur à utiliser et réserve atomiquement un slot RPM.
@@ -104,11 +140,29 @@ class LoadBalancer:
             min_output: Si fourni, exclut les providers dont le plafond de complétion
                         max_output_tokens < min_output (budget de sortie d'une tâche).
                         Les providers sans limite connue (None) restent éligibles.
+            admises:    Ticket 084 — LISTE des instances admises à servir cette requête. La
+                        restriction est honorée ICI, avant toute réservation et donc avant
+                        qu'un appel ne soit payé. C'est ce qui la distingue du filtre client
+                        `allowed_providers`, qui rejette une réponse déjà facturée. `None` ou
+                        liste vide : aucune restriction, comportement d'avant le ticket.
 
         Raises:
-            RuntimeError: Si tous les fournisseurs sont saturés ou indisponibles.
+            RuntimeError: Si tous les fournisseurs admis sont saturés ou indisponibles.
+            RestrictionInstances: Si `admises` ne désigne aucune instance connue, ou en mêle
+                        des inconnues — une liste fausse n'est jamais « aucune restriction ».
         """
+        _admises = self._admises(admises)
+
         if force:
+            # Deux contraintes contradictoires sont une erreur de configuration, pas une
+            # priorité à arbitrer en silence : servir l'épinglé reviendrait à ignorer la
+            # restriction, et l'inverse à ignorer l'épinglage. On refuse, en le disant.
+            if _admises is not None and force not in _admises:
+                raise RestrictionInstances(
+                    f"fournisseur forcé '{force}' hors des instances admises "
+                    f"{sorted(_admises)} — contraintes contradictoires, aucune n'est "
+                    f"arbitrée en silence."
+                )
             if self._try_reserve(force, min_tpm=min_tpm, min_output=min_output):
                 return force
             raise RuntimeError(
@@ -120,6 +174,10 @@ class LoadBalancer:
             # (quota du jour, cooldown, débit par minute saturé), et le refus est journalisé
             # pour qu'un basculement se lise dans les logs.
             ordre = self._cascade()
+            if _admises is not None:
+                # L'ORDRE de la cascade est conservé, seul l'ensemble se réduit : la priorité
+                # déclarée dans la configuration reste la priorité sous restriction.
+                ordre = [nom for nom in ordre if nom in _admises]
             for rang, candidate in enumerate(ordre):
                 if self._try_reserve(candidate, min_tpm=min_tpm, min_output=min_output):
                     if rang:
@@ -131,6 +189,12 @@ class LoadBalancer:
             raise RuntimeError(
                 "Tous les fournisseurs LLM sont saturés ou ont atteint leur limite de concurrence. "
                 f"Cascade épuisée dans l'ordre : {', '.join(ordre)}."
+                + (
+                    f" Restriction en vigueur : {sorted(_admises)} — aucun recours hors de "
+                    f"cet ensemble n'est tenté."
+                    if _admises is not None
+                    else ""
+                )
             )
 
         # Rotation normale — le lock ne protège que la lecture/écriture du curseur.
@@ -141,12 +205,24 @@ class LoadBalancer:
                 candidate = self._sequence[self._cursor % seq_len]
                 self._cursor += 1
 
+            # Le curseur avance même sur une instance écartée : la séquence pondérée reste
+            # parcourue à l'identique, et deux requêtes aux restrictions différentes ne se
+            # décalent pas l'une l'autre.
+            if _admises is not None and candidate not in _admises:
+                continue
+
             if self._try_reserve(candidate, min_tpm=min_tpm, min_output=min_output):
                 return candidate
 
         raise RuntimeError(
             "Tous les fournisseurs LLM sont saturés ou ont atteint leur limite de concurrence. "
             "Réessayez dans quelques secondes."
+            + (
+                f" Restriction en vigueur : {sorted(_admises)} — aucun recours hors de cet "
+                f"ensemble n'est tenté."
+                if _admises is not None
+                else ""
+            )
         )
 
     def _try_reserve(

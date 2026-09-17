@@ -45,3 +45,43 @@ totale) ; le retard vécu (+45 min) ne concerne que les agents déjà en cours d
 
 ## Q10 — Faut-il un bras M-bis sur une seconde famille de modèles au palier minimal ?
 **Hypothèse :** oui si le budget le permet après G2 (Tier 2 SILICA) ; sinon déclaré comme limite.
+
+---
+
+## Ajouts de la révision du 2026-09-15
+
+Les questions Q1 à Q10 ci-dessus restent ouvertes, sauf Q6 (tranchée : la formule reste
+descriptive, et le bras de sensibilité λ est **supprimé** — ticket 071 § 2.6, issue C) et Q3
+(reformulée en Q15).
+
+## Q11 — Quel choc pour le chapitre 7 ? (bloque toute campagne)
+**Contexte :** un choc **météo** est jouable aujourd'hui sans une ligne de code (canicule des 11-12
+août 2025 à 43 et 42 °C, ou neige des 20-21 novembre), grâce à la progression de date du ticket 075.
+La **panne de métro** que l'article annonce demande 1 à 2 jours : `banned` est déjà déclaré dans la
+requête OTP et jamais lié, plus une garde de cache OTP et la levée du refus E6.
+**Hypothèse retenue :** météo pour la répétition générale du dispositif d'analyse, panne de métro
+pour la mesure publiée. **Alternative :** tout jouer en météo et réécrire le chapitre.
+
+## Q12 — Le sort de l'oracle (bloque le dispositif à trois bras)
+Le bras M ne vit que dans GAMA, le bras O que dans la plateforme, et aucun chemin ne les compare
+terme à terme. **Hypothèse retenue :** rejeu hors ligne des décisions du run GAMA par l'oracle depuis
+`moves.csv` (pont de format, pas de décideur nouveau). **Alternatives :** brancher le décideur
+`modele` dans le contrôleur GAMA (propre, coûteux) ; ou assumer la comparaison indirecte.
+
+## Q13 — Effectif de la campagne
+Cinq agents lisent une mémoire mais ne mesurent aucune part modale ; cent agents mesurent mais le
+temps réel GAMA à cette échelle n'a jamais été observé (11,4 min par jour simulé à 5 agents).
+**Hypothèse retenue :** palier intermédiaire à 20 agents pour mesurer le débit et le regroupement
+avant d'engager 100.
+
+## Q14 — Les week-ends dans l'horizon
+`no_weekend_departures: true` reporte tout départ de samedi et dimanche au lundi : sur 60 jours
+calendaires, ~17 journées sont quasi vides et les lundis surchargés. **Hypothèse retenue :** ne
+compter que les jours ouvrés dans l'horizon (cohérent avec Q1), et le déclarer dans le manifeste du
+run. **Alternative :** garder les 60 jours calendaires et publier l'horizon effectif.
+
+## Q15 — Un modèle ou deux (choix / mémoire)
+**Hypothèse retenue :** un seul modèle pour tout, tant que le regroupement n'est pas mesuré à
+l'échelle — la mesure du 14 septembre montre que la mémoire ne pèse que 39 % des appels, et non le
+double annoncé. **Alternative :** confier les consolidations à Mistral (sans plafond journalier) si
+le palier à 20 agents montre que le quota est bien le facteur limitant.

@@ -30,6 +30,17 @@ CONTROLLER_HTTP_URL = os.environ.get("GAMA_HTTP_URL", "http://controller")
 CONTROLLER_HTTP_PORT = int(os.environ.get("GAMA_HTTP_PORT", "8002"))
 CONNECT_TIMEOUT_S = int(os.environ.get("GAMA_CONNECT_TIMEOUT_S", "180"))
 
+# Ticket 092 — délai accordé à GAMA pour répondre à un ping avant que la connexion soit
+# réputée morte. Le défaut de `websockets` est 20 s, et GAMA se bloque pendant qu'il attend
+# les décisions du LLM : en CACHE=0 c'est le régime NORMAL, et en pénurie de jetons l'attente
+# est plus longue encore, la règle du dépôt étant d'attendre le renouvellement plutôt que de
+# dégrader. Mesuré sur le run 2026-09-16_12_48 : 23 pauses, médiane 9,0 s, maximum 40,9 s,
+# trois au-dessus de 20 s — le run est mort à la troisième, GAMA Server arrêtant l'expériment
+# dont le client s'est déconnecté. Le ping reste ÉMIS : on desserre le délai de réponse, on
+# ne coupe pas la détection d'une connexion vraiment morte.
+PING_TIMEOUT_S = int(os.environ.get("GAMA_PING_TIMEOUT_S", "1200"))
+PING_INTERVAL_S = int(os.environ.get("GAMA_PING_INTERVAL_S", "20"))
+
 # Types de messages du protocole GAMA Server signalant un échec de commande.
 ERROR_TYPES = {
     "MalformedRequest",
@@ -54,7 +65,12 @@ async def connect_with_retries() -> websockets.WebSocketClientProtocol:
     elapsed = 0
     while True:
         try:
-            ws = await websockets.connect(GAMA_SERVER_URL, max_size=10**7)
+            ws = await websockets.connect(
+                GAMA_SERVER_URL,
+                max_size=10**7,
+                ping_interval=PING_INTERVAL_S,
+                ping_timeout=PING_TIMEOUT_S,
+            )
             log(f"✅ Connecté à GAMA Server ({GAMA_SERVER_URL})")
             return ws
         except Exception as exc:

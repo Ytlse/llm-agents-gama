@@ -16,10 +16,25 @@ from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, LLMRequest
 
 
 def compute_batch_key(request: LLMRequest) -> str:
-    """Clé de batch : MD5(catégorie + paramètres + provider forcé + min_tpm)."""
+    """Clé de batch : MD5(catégorie + paramètres + provider forcé + min_tpm + instances admises).
+
+    ⚠ **Toute contrainte de routage doit entrer ici** (ticket 084). Un lot est servi par UNE
+    instance : deux requêtes aux restrictions différentes fusionnées dans le même lot feraient
+    servir l'une par un fournisseur qu'elle excluait, sans qu'aucune trace ne le dise. C'est la
+    seule garde contre ce mélange, et elle est silencieuse quand on l'oublie.
+
+    Les instances admises entrent TRIÉES et dédupliquées : c'est un ensemble, pas une séquence,
+    et deux déclarations du même ensemble dans un ordre différent doivent partager leur lot.
+    """
     params_str = json.dumps(request.parameters, sort_keys=True)
+    admises = (
+        ",".join(sorted(set(request.instances_admises)))
+        if request.instances_admises
+        else None
+    )
     hash_str = hashlib.md5(
-        f"{request.category}:{params_str}:{request.force_provider}:{request.min_tpm_required}".encode()
+        f"{request.category}:{params_str}:{request.force_provider}:"
+        f"{request.min_tpm_required}:{admises}".encode()
     ).hexdigest()
     return f"{request.category}:{hash_str}"
 

@@ -11,6 +11,12 @@
 !/population/population_1000_AAMAS_v4/
 !/population/population_1000_AAMAS_v5/
 !/population/population_1000_AAMAS_v6/
+# Population de MISE AU POINT du ticket 093 — dix personas dont les décisions sont
+# observables. Versionnée (80 Ko) bien qu'elle ne soit PAS un sceau AAMAS : le run de
+# référence dont elle est tirée vit sous `data/experiences/`, qui est ignoré. Hors git, la
+# sélection ne serait ni rejouable ni vérifiable sur une autre machine, et son critère
+# resterait théorique.
+!/population/population_10_mesurables_093/
 /population_samples
 /po_toulouse.small
 !/population/sauvegardes/

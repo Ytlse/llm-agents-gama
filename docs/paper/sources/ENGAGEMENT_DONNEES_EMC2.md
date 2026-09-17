@@ -1,6 +1,6 @@
 # Engagement d'utilisation des microdonnées EMC² 2023 (Quetelet-Progedo-Diffusion, lil-1750)
 
-<!-- Dernière mise à jour : 2026-09-11 -->
+<!-- Dernière mise à jour : 2026-09-15 -->
 
 **Document :** `v1.0` (11 septembre 2026). Recopie l'engagement signé auprès de
 Quetelet-Progedo-Diffusion pour l'accès aux microdonnées de l'enquête, puis dit ce qu'il impose
@@ -85,9 +85,21 @@ les communications, pas sur les publications acceptées.
 
 ## 5. Ce qui reste à compléter
 
-1. **Le modèle de citation exact.** La convention l'annexe (« cf. ci-après ») ; il n'a pas été
-   recopié ici. En attendant, l'article porte un emplacement à remplir et une formulation
-   provisoire, clairement marquée comme telle.
+1. ~~**Le modèle de citation exact.**~~ Fourni par l'auteur le 15 septembre 2026 et recopié mot
+   pour mot dans l'annexe G de l'article. Le libellé imposé est :
+
+   > doi:10.13144/lil-0933
+   > Enquête Ménages Déplacements (EMD), Toulouse / Grande agglomération toulousaine
+   > (EMD, Toulouse / Grande agglomération toulousaine) - 2023, CEREMA, Syndicat mixte
+   > des transports en commun de l'agglomération toulousaine (producteurs), PROGEDO-ADISP
+   > (diffuseur)
+
+   **Millésime tranché le 15 septembre 2026.** Le modèle tel que délivré portait « 2013 ». L'auteur
+   confirme que l'enquête reçue et utilisée est celle de **2023**, comme déjà établi en section 1 :
+   le millésime est donc corrigé dans la citation publiée, et le reste du libellé recopié sans
+   changement. Le DOI `lil-0933` est laissé tel que le diffuseur l'a attribué ; il ne se réécrit pas.
+   Reste ouvert : le producteur nommé par le modèle est le *Syndicat mixte des transports en commun
+   de l'agglomération toulousaine*, que Tisséo Collectivités a depuis absorbé. Le modèle fait foi.
 2. **La version en double insu.** La mention du registre de traitement de l'établissement et
    l'identité du signataire ne peuvent pas figurer dans la version soumise ; elles reviennent
    dans la version finale.

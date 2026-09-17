@@ -17,6 +17,19 @@ Les campagnes de mesure récentes conduites avec le modèle **Gemini 3.5** (`gem
 - **Composite hors choix uniques** : **$8{,}0910$**.
 - En apparence, ces valeurs placent le modèle LLM devant les oracles tabulaires supervisés en chaîne (LightGBM : $10{,}4569$).
 
+> **Rectificatif du 2026-09-15 ([ticket 080](ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md)).**
+> Les trois chiffres ci-dessus proviennent d'une exécution dont le `moves.csv` était tronqué à
+> 274 lignes (arrêt forcé puis reprise à froid) : ils portent sur 198 décisions et 85 personas.
+> Rescoré sur les 3 299 décisions, le bras vaut **6,17** de composite et **12,53** hors choix
+> unique ; le même prompt sur la cohorte v6 (`prompt_expert_04`) vaut **5,30** et **10,39** —
+> **derrière** les quatre familles tabulaires en chaîne. L'écart au LightGBM v6 est de
+> +0,98 [−0,26 ; +2,39] en différence appariée. Le protocole ci-dessous garde tout son sens ;
+> sa cible change : mesurer une dispersion propre au LLM face à un écart de l'ordre du point,
+> non expliquer une victoire. Deux ajouts : (1) la première exécution à faire est un **rejeu à
+> l'identique** de `pe04` sur v6, même graine, pour isoler le non-déterminisme pur ; (2) l'axe 2
+> pèse plus que la cinquième graine, parce que l'écart-type apparié d'échantillonnage de cohorte
+> (≈ 0,7 à N = 1 000) ne baisse pas avec les graines. Le jeu de référence n'est plus v5 mais v6.
+
 Cependant, une analyse épistémologique et méthodologique rigoureuse met en évidence une vulnérabilité critique pour une soumission de premier plan à **AAMAS 2027** :
 > **L'ensemble de ces mesures spectaculaires repose à ce jour sur un seul jeu de population (`population_1000_AAMAS_v5`, $N = 1\,000$ agents) et sur une seule graine aléatoire (`seed = 42`).**
 

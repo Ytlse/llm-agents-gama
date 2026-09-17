@@ -41,7 +41,8 @@ global {
         // Load calendar information from GTFS data
         map calendar_info <- TRIP_INFO["calendar"] as map;
         list<string> t_dates <- calendar_info["dates"] as list;
-        map<string, int> t_data <- calendar_info["data"] as map;
+        // Masque TEXTE depuis le 2026-09-15 (ticket 075) : voir PublicTransport.gaml.
+        map<string, string> t_data <- calendar_info["data"] as map;
 
         // Create the travel agent factory with GTFS data
         create travel_agent_factory number: 1 with: [
@@ -128,13 +129,32 @@ experiment e type: gui {
     parameter "Long-term memory" category: "Simulation" var: long_term_memory_enabled <- true;
     parameter "Long-term self-reflection" category: "Simulation" var: long_term_self_reflect_enabled <- true;
     parameter "Max simulated days (0 = unlimited)" category: "Simulation" var: simulation_max_days min: 0 max: 365 step: 1;
-    // Ticket 070 — première tranche : les accidents EXISTENT (tirés, posés sur une arête,
+    // Ticket 070 — les accidents EXISTENT (tirés selon la loi BAAC, posés sur une arête,
     // journalisés). Aucune durée de trajet n'est modifiée à ce stade.
-    parameter "Accidents sur les axes" category: "Simulation" var: accidents_enabled <- false;
+    // VRAI PAR DÉFAUT depuis le 2026-09-15 : décocher est désormais le geste explicite.
+    parameter "Accidents sur les axes" category: "Simulation" var: accidents_enabled <- true;
 
     // Evaluation features
     parameter "Public Transport - Dump stop arrival diff time" category:"Features" var: ft_public_transport_eval <- false;
     parameter "Evaluate - Multimodal Choices" category:"Evaluation" var: ft_evaluate_modality_choices <- true;
+
+    // Accident posé à la main (ticket 070, travail F) — bouton plus bas.
+    parameter "Accident posé - latitude" category: "Accidents" var: accident_pose_lat;
+    parameter "Accident posé - longitude" category: "Accidents" var: accident_pose_lon;
+    parameter "Accident posé - heure (0-23)" category: "Accidents" var: accident_pose_heure min: 0 max: 23 step: 1;
+    parameter "Accident posé - durée (min)" category: "Accidents" var: accident_pose_duree min: 1 max: 600 step: 5;
+
+    // Pose un accident CHOISI sur l'arête la plus proche du point, aujourd'hui à l'heure dite.
+    // Même mécanisme et même monde que les accidents tirés au sort : seul le déclenchement
+    // diffère. ⚠ Sans effet si « Accidents sur les axes » est décoché — le contrôleur refuse
+    // la pose et le dit dans son journal.
+    user_command "Poser un accident maintenant" category: "Accidents" {
+        ask simulation {
+            ask llm_agent_sync {
+                do poser_accident;
+            }
+        }
+    }
 
     // Prompt calibration — launched on demand via the button below
     parameter "Calibration - cycles (itérations)" category: "Calibration" var: calibration_cycles min: 1 max: 200 step: 1;

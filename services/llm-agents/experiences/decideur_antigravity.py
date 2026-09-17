@@ -47,6 +47,7 @@ class DecideurAntigravity:
         attente_max_s: int = 120,
         parametres: dict | None = None,
         execution=None,
+        demarrage_max_s: float | None = None,
     ) -> None:
         self.agent = agent
         self.modele = str(modele)
@@ -54,6 +55,13 @@ class DecideurAntigravity:
         self.attente_max_s = int(attente_max_s)
         self.parametres = dict(parametres or {})
         self.execution = execution
+        # Garde-fou de démarrage à froid (§4.5 bis). Mesuré le 2026-09-15 : un canal sans
+        # sous-agent laisse l'exécution en `en_attente_agent` — état NON final — avec 0 décision
+        # sur 3 161 pendant plus de six heures, et la campagne bloquée derrière. Passé ce délai
+        # sans la MOINDRE réponse, l'exécution s'arrête au lieu de dormir la nuit.
+        self.demarrage_max_s = float(
+            demarrage_max_s if demarrage_max_s is not None else attente_max_s
+        )
 
         if echanges is None:
             if execution is not None:
@@ -74,7 +82,10 @@ class DecideurAntigravity:
         self._alarme_timeout_levee: bool = False
         self._alarme_rejet_levee: bool = False
         self._alarme_litterale_levee: bool = False
+        self._alarme_parametres_levee: bool = False
         self._debut: float = time.time()
+        self._premiere_reponse: bool = False
+        self._arret_demarrage_demande: bool = False
 
         # Cache du schéma de sortie de la catégorie
         cat = CATEGORIES["itinary_multi_agent"]
@@ -84,8 +95,47 @@ class DecideurAntigravity:
 
         logger.info(
             f"[antigravity] Initialisation — modèle attendu: {self.modele}, "
-            f"échanges: {self.echanges}, attente max: {self.attente_max_s}s"
+            f"échanges: {self.echanges}, attente max: {self.attente_max_s}s, "
+            f"démarrage max: {self.demarrage_max_s:.0f}s, "
+            f"paramètres transmis: {self.parametres or '—'}"
         )
+
+    def _verifier_demarrage(self, now: float) -> None:
+        """Arrête l'exécution si AUCUN sous-agent n'a jamais répondu (§4.5 bis).
+
+        Le garde-fou ne vaut que pour le démarrage : dès la première réponse reçue, il se
+        désarme définitivement et le comportement d'origine (état `en_attente_agent`, timeout
+        par déplacement) reprend la main. L'arrêt passe par le fichier STOP du dossier
+        d'exécution, mécanisme existant : le runner clôt alors proprement en `arretee`, qui est
+        un état FINAL, donc la campagne enchaîne au lieu d'attendre.
+        """
+        if self._premiere_reponse or self._arret_demarrage_demande:
+            return
+        if now - self._debut < self.demarrage_max_s:
+            return
+        self._arret_demarrage_demande = True
+        logger.error(
+            f"[ALARME] [antigravity] Aucun sous-agent n'a répondu en "
+            f"{self.demarrage_max_s:.0f}s depuis le démarrage — 0 réponse pour "
+            f"{len(self._demandes_en_cours)} demande(s) en attente. Arrêt de l'exécution : "
+            f"un canal Antigravity sans agent ne se débloque pas seul. Vérifier qu'une session "
+            f"Antigravity surveille bien {self.dossier_demandes}."
+        )
+        if self.execution is None:
+            return
+        # Import tardif : `runner` importe `decideurs`, qui importe ce module. L'import en
+        # tête de fichier serait circulaire.
+        from experiences.runner import FICHIER_STOP
+
+        try:
+            (Path(self.execution.dossier) / FICHIER_STOP).write_text(
+                "antigravity: aucun sous-agent n'a répondu au démarrage\n", encoding="utf-8"
+            )
+        except OSError as exc:  # pragma: no cover - dépend du système de fichiers
+            logger.error(
+                f"[antigravity] Fichier STOP non écrit ({exc}) : l'exécution ne s'arrêtera "
+                "pas toute seule."
+            )
 
     def _verifier_journal_et_alarmes(self, now: float) -> None:
         """Toutes les 30s : statut et alarmes sur front montant (§4.7)."""
@@ -99,7 +149,8 @@ class DecideurAntigravity:
                 f"[antigravity] Statut — en attente: {len(self._demandes_en_cours)}, "
                 f"âge max: {age_max:.1f}s, servies: {self.compteurs['servies']}, "
                 f"replis: {self.compteurs['replis']}, rejets: {self.compteurs['rejets']}, "
-                f"sans sortie littérale: {self.compteurs['sans_sortie_litterale']}"
+                f"sans sortie littérale: {self.compteurs['sans_sortie_litterale']}, "
+                f"sans paramètres appliqués: {self.compteurs['sans_parametres_appliques']}"
             )
             self._dernier_log_status = now
 
@@ -181,6 +232,11 @@ class DecideurAntigravity:
             "n_options": len(presentees),
             "messages": messages_dict,
             "schema_sortie": self._schema_sortie,
+            # Réglages d'échantillonnage DEMANDÉS. Ils étaient stockés sans être transmis :
+            # le `temperature: 0.0` de l'experience.yaml n'atteignait jamais le sous-agent, et
+            # l'archive laissait croire à un décodage glouton que rien n'imposait. Le sous-agent
+            # répond par `parametres_appliques`, qui dit ce qu'il a pu appliquer.
+            "parametres": dict(self.parametres),
         }
 
         # Nettoyer une éventuelle réponse orpheline antérieure
@@ -212,6 +268,7 @@ class DecideurAntigravity:
                         )
 
                 self._verifier_journal_et_alarmes(now)
+                self._verifier_demarrage(now)
 
                 # Timeout par déplacement (§4.5)
                 if elapsed >= self.attente_max_s:
@@ -268,6 +325,9 @@ class DecideurAntigravity:
                             modele_verifie=False,
                             presente=presente,
                         )
+
+                    # Première réponse du canal : le garde-fou de démarrage se désarme.
+                    self._premiere_reponse = True
 
                     # Réponse valide reçue : déplacer la demande vers traitées
                     traitee_path = self.dossier_demandes_traitees / demande_fichier
@@ -387,6 +447,22 @@ class DecideurAntigravity:
                             )
                             self._alarme_litterale_levee = True
 
+                    # Ce que le sous-agent déclare avoir appliqué des paramètres demandés. Une
+                    # réponse muette n'est PAS « température 0 » : elle est archivée comme un
+                    # trou, exactement comme `sortie_litterale` (P8, même raison).
+                    parametres_appliques = resp.get("parametres_appliques")
+                    if parametres_appliques is None and self.parametres:
+                        self.compteurs["sans_parametres_appliques"] += 1
+                        if not self._alarme_parametres_levee:
+                            logger.warning(
+                                "[antigravity] Réponse sans `parametres_appliques` alors que "
+                                f"{self.parametres} ont été demandés — la trace ne dira pas si "
+                                "le réglage a été appliqué. Le champ est attendu dans chaque "
+                                "fichier de réponse ; `{}` est une réponse valable et signifie "
+                                "« aucun paramètre applicable »."
+                            )
+                            self._alarme_parametres_levee = True
+
                     return ReponseDecideur(
                         index=idx_presentees,
                         fournisseur=self.nom,
@@ -400,6 +476,7 @@ class DecideurAntigravity:
                         # `reponse_brute` : un trou déclaré vaut mieux qu'une copie qu'on
                         # prendrait pour la sortie du modèle.
                         sortie_litterale=resp.get("sortie_litterale"),
+                        parametres_appliques=parametres_appliques,
                         raison=reason,
                         souvenirs=[],
                         presente=presente,

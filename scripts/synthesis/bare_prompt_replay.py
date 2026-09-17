@@ -245,8 +245,11 @@ def build_records(run_dir: Path, exclude: list[str]) -> list:
     traits = load_population(next(run_dir.glob("population_*[0-9].json")))
     rows, read_stats = frames.read_moves(run_dir / "moves.csv", exclude)
     kept_day = read_stats.get("jour_retenu")
+    # `kept_day` vaut None quand `read_moves` n'a PAS coupé (ticket 057 : rien à couper,
+    # ni horizon au-delà d'un jour ni couple répété). Le journal d'échanges ne doit alors
+    # pas être coupé non plus — comparé à None, le filtre vidait l'échantillon en silence.
     entries = [e for e in itinerary_entries(run_dir / "llm_exchanges.jsonl")
-               if e.get("sim_day") == kept_day]
+               if not kept_day or e.get("sim_day") == kept_day]
 
     # `build_decision_records` s'appelle LOT PAR LOT et renvoie `(records, anomalies)`.
     # L'appeler sur la liste entière rend un tuple de deux éléments qu'une lecture

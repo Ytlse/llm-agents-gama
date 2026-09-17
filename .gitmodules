@@ -1,0 +1,3 @@
+[submodule "prompt_calibration"]
+	path = prompt_calibration
+	url = https://github.com/Ytlse/prompt_calibration.git

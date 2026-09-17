@@ -309,29 +309,49 @@ class GatewaySettings(BaseSettings):
 
     # ── Lecture des capacités ───────────────────────────────────────────────
 
-    def get_batch_max_agents(self, force_provider: str | None = None) -> int:
-        """Limite de lot du worker : celle du provider forcé, sinon le min des providers (conservateur)."""
+    def _providers_retenus(self, instances_admises: list[str] | None = None) -> dict:
+        """Les providers sur lesquels dimensionner un lot — ticket 084.
+
+        Sans restriction, tous. Avec, les seules instances admises : dimensionner sur
+        l'ensemble complet alors qu'une poignée seulement peut servir donnerait une taille de
+        lot et un seuil de dispatch calés sur des capacités inatteignables. Une restriction
+        qui ne désigne aucun provider connu est ignorée ICI — la sélection la refusera avec un
+        message qui nomme le fautif, et ce n'est pas au dimensionnement de lever.
+        """
+        if not instances_admises:
+            return self.providers
+        retenus = {k: v for k, v in self.providers.items() if k in set(instances_admises)}
+        return retenus or self.providers
+
+    def get_batch_max_agents(
+        self, force_provider: str | None = None, instances_admises: list[str] | None = None
+    ) -> int:
+        """Limite de lot du worker : celle du provider forcé, sinon le min des providers retenus."""
         if force_provider:
             cfg = self.providers.get(force_provider)
             if cfg:
                 return cfg.batch_max_agents
-        if self.providers:
-            return min(p.batch_max_agents for p in self.providers.values())
+        retenus = self._providers_retenus(instances_admises)
+        if retenus:
+            return min(p.batch_max_agents for p in retenus.values())
         return self.batching.max_agents
 
-    def get_dispatch_threshold(self, force_provider: str | None = None) -> int:
+    def get_dispatch_threshold(
+        self, force_provider: str | None = None, instances_admises: list[str] | None = None
+    ) -> int:
         """Taille de file déclenchant un dispatch immédiat côté API.
 
-        Provider forcé : sa capacité. Sinon la cible de lot, bornée par le plus gros provider —
-        surtout PAS le min des providers, qui vaut 1 à cause des petits TPM et rendrait la fenêtre
-        d'accumulation inopérante.
+        Provider forcé : sa capacité. Sinon la cible de lot, bornée par le plus gros provider
+        RETENU — surtout PAS le min des providers, qui vaut 1 à cause des petits TPM et rendrait
+        la fenêtre d'accumulation inopérante.
         """
         if force_provider:
             cfg = self.providers.get(force_provider)
             if cfg:
                 return cfg.batch_max_agents
-        if self.providers:
-            return min(self.batching.target_agents, max(p.batch_max_agents for p in self.providers.values()))
+        retenus = self._providers_retenus(instances_admises)
+        if retenus:
+            return min(self.batching.target_agents, max(p.batch_max_agents for p in retenus.values()))
         return self.batching.target_agents
 
     # ── Alias à plat (compatibilité une version ; préférer les groupes) ─────

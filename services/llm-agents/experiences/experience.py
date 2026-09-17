@@ -16,12 +16,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-
 from experiences.chemins import racine_depot, racine_llm_agents
 from experiences.jeu import Jeu, dependances_courantes, perime
 from experiences.population import InfoPopulation
+from loguru import logger
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 MODE_SANS_SIMULATEUR = "sans_simulateur"
 MODE_SIMULATEUR = "simulateur"
@@ -62,7 +61,12 @@ GABARIT_OPTION_REL = Path(
 # Plan d'expériences : ratios de jetons mesurés, dernier repli de l'estimation de coût.
 # Sous `methode/` — l'oublier faisait rendre `None` en silence (ticket 045, question 3).
 CHEMIN_PLAN_EXPERIENCES = (
-    racine_depot() / "docs" / "paper" / "methode" / "experience_plan" / "experiments.yaml"
+    racine_depot()
+    / "docs"
+    / "paper"
+    / "methode"
+    / "experience_plan"
+    / "experiments.yaml"
 )
 
 
@@ -586,13 +590,28 @@ def refuser_si_impossible(
     population: InfoPopulation,
     *,
     instances_disponibles: list[str] | None = None,
+    instances_servantes: list[str] | None = None,
+    detail_epuisement: str | None = None,
     perime_accepte: bool = False,
     dependances: dict | None = None,
     periodes: dict | None = None,
 ) -> tuple[list[str], list[str]]:
-    """(refus, avertissements). Un refus dit la raison ET l'action ; aucune exécution n'est créée."""
+    """(refus, avertissements). Un refus dit la raison ET l'action ; aucune exécution n'est créée.
+
+    `instances_disponibles` et `instances_servantes` sont DEUX ensembles distincts (ticket 085,
+    lot C) : celles qui ont encore du quota, et celles qui servent ce modèle, quel que soit leur
+    quota. Les confondre faisait annoncer « aucune instance ne sert ce modèle » quand le motif
+    réel était « le quota du jour n'est pas encore renouvelé ».
+
+    `instances_servantes=None` les confond volontairement : c'est le comportement des appelants
+    écrits avant ce lot, dont le message ne bouge pas d'un mot. `detail_epuisement` porte le
+    compte requêtes/jour par instance (`MoniteurRessources.raison_epuisement()`), et n'est lu que
+    dans la branche d'épuisement.
+    """
     refus: list[str] = []
     avert: list[str] = []
+    if instances_servantes is None:
+        instances_servantes = instances_disponibles
 
     mismatch = jeu.verifier_population(population)
     if mismatch:
@@ -664,6 +683,26 @@ def refuser_si_impossible(
         exp.decideur.type == "passerelle"
         and instances_disponibles is not None
         and not instances_disponibles
+        and instances_servantes
+    ):
+        # Ticket 085, lot C — le modèle EST servi, mais plus aucune instance n'a de quota. C'est
+        # un motif entièrement différent du suivant, et il appelle une action différente :
+        # attendre la fenêtre, pas corriger une configuration. Le 2026-09-16, les deux clés
+        # gemini 3.5 étaient saines mais leur quota journalier n'était pas encore renouvelé
+        # (fenêtre America/Los_Angeles, remise à zéro à 09:00 CEST) — et le refus annonçait que
+        # personne ne servait le modèle, juste après l'avoir listé parmi les modèles servis.
+        refus.append(
+            f"les {len(instances_servantes)} instance(s) qui servent le modèle "
+            f"{exp.decideur.modele!r} ({', '.join(instances_servantes)}) sont momentanément "
+            f"épuisées"
+            + (f" — {detail_epuisement}" if detail_epuisement else "")
+            + " → attendez le renouvellement du quota, ou relancez avec --attendre-fenetre"
+        )
+    if (
+        exp.decideur.type == "passerelle"
+        and instances_disponibles is not None
+        and not instances_disponibles
+        and not instances_servantes
     ):
         # Nommer le fichier LU et les modèles qu'il sert : un refus qui renvoie vers
         # « providers.yaml » sans dire lequel a été lu envoie chercher une panne de quota alors

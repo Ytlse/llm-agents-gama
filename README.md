@@ -57,11 +57,36 @@ Vue d'ensemble technique : [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Dépôts externes
 
-| Module | Emplacement local | Dépôt git séparé |
-|--------|------------------|-----------------|
-| EQUASIM Toulouse | `services/eqasim-toulouse/` | repo indépendant (voir [docs/setup/population.md](docs/setup/population.md)) |
+| Module | Emplacement local | Dépôt git séparé | Lien avec ce dépôt |
+|--------|------------------|-----------------|--------------------|
+| EQUASIM Toulouse | `services/eqasim-toulouse/` | repo indépendant (voir [docs/setup/population.md](docs/setup/population.md)) | aucun — dossier exclu du suivi git (`.gitignore`) |
+| Calibration de prompt | `prompt_calibration/` | [Ytlse/prompt_calibration](https://github.com/Ytlse/prompt_calibration) | **sous-module** — ce dépôt épingle le commit utilisé |
 
-Le dossier `services/eqasim-toulouse/` est intentionnellement absent du suivi git de ce dépôt (`.gitignore`).
+### Cloner
+
+```bash
+git clone --recursive <url-de-ce-depot>
+```
+
+Sur un clone déjà fait sans `--recursive` :
+
+```bash
+git submodule update --init
+```
+
+**Pourquoi un sous-module, et pas une simple copie côte à côte.** `scripts/synthesis/`
+importe `calibration.metrics` du dépôt de calibration (par `sys.path`, cf.
+`import_calibration()` dans `scripts/synthesis/sources.py`) : la *loss* affichée sur une page
+de score est celle du moteur, jamais une copie. `model_compare.py` inscrit d'ailleurs
+`prompt_calibration/calibration/metrics.py` au manifeste des sources d'une page — mais rien
+n'y disait, avant le ticket 039, **quelle version** l'avait produite. Le sous-module
+enregistre ce commit dans le parent : un score republié reste rattachable au code qui l'a
+calculé.
+
+Conséquences au quotidien : `git status` du dépôt parent signale désormais que le
+sous-module a bougé (nouveau commit, ou modifications non commitées) — c'est le signal, pas
+du bruit. Pour déplacer l'épingle après avoir avancé dans `prompt_calibration/` :
+`git add prompt_calibration` depuis la racine.
 
 ---
 

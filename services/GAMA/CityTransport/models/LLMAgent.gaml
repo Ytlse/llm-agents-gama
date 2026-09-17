@@ -166,6 +166,29 @@ species llm_agent_sync skills:[network] {
 	 * Le nombre de cycles (itérations de la boucle) provient du paramètre
 	 * global `calibration_cycles`, réglable depuis l'IHM.
 	 */
+	/**
+	 * Pose un accident CHOISI côté contrôleur (POST /accidents), sur l'arête du graphe la
+	 * plus proche du point réglé dans l'IHM, à l'heure dite du jour simulé courant.
+	 * Refusé — et journalisé comme tel — si le régime d'accidents est décoché.
+	 */
+	action poser_accident {
+		// Minuit du jour simulé courant, plus l'heure demandée.
+		int _minuit <- CURRENT_TIMESTAMP - (CURRENT_TIMESTAMP mod 86400);
+		int _debut <- _minuit + accident_pose_heure * 3600;
+		write "[ACCIDENT] Pose demandée en (" + accident_pose_lat + ", " + accident_pose_lon
+			+ ") à " + accident_pose_heure + " h pour " + accident_pose_duree + " min...";
+		do send to: "/accidents" contents: [
+			"POST",
+			to_json([
+				"lat"::accident_pose_lat,
+				"lon"::accident_pose_lon,
+				"debut_ts"::_debut,
+				"duree_minutes"::accident_pose_duree
+			]),
+			["Content-Type"::"application/json"]
+		];
+	}
+
 	action launch_calibration {
 		write "[CALIBRATION] Requête de lancement — " + calibration_cycles + " cycle(s)...";
 		do send to: "/calibrate" contents: [

@@ -181,6 +181,15 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     circuit_breaker_threshold: float = 0.95
     max_retries: int = 50
     backoff_base_seconds: float = 1.0
+    # Ticket 084 — instances de passerelle admises à servir les décisions de CE run.
+    # Vide : aucune restriction, la cascade choisit librement. Renseignée, la passerelle refuse
+    # de servir depuis une autre instance, À LA SÉLECTION et non après coup.
+    #
+    # Sert à mener une expérience sur une famille de modèles pendant que la passerelle en sert
+    # d'autres à un autre travail : le fichier de fournisseurs est global à la pile, ce réglage
+    # ne l'est pas.
+    instances_admises: list[str] = []
+
     # Cooldown court du provider fautif lors d'un basculement (parse error / 4xx) :
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
     provider_switch_cooldown_seconds: int = 30
@@ -451,7 +460,29 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[list[str]] = [
         "long_term_memory_storage_dir",
         "chat_log_dir",
+        "journal_memoire_dir",
     ]
+
+    # ── Journal de mémoire, un Markdown par agent (ticket 075) ──────────────────
+    # ÉTEINT par défaut, et ce n'est pas de la prudence de façade : le journal écrit l'état
+    # COMPLET de la mémoire après chaque consolidation. À cinq agents c'est ce qu'on vient
+    # lire ; à mille, ce sont des centaines de mégaoctets que personne n'ouvrira jamais.
+    journal_memoire_enabled: bool = False
+    journal_memoire_dir: str = "memoires"
+
+    # ── Trace des souvenirs servis (ticket 077, lot E1) ─────────────────────────
+    # ÉTEINTE par défaut, pour la même raison que le journal : une ligne par décision et par
+    # souvenir servi. La MESURE de concentration du lot D2, elle, tourne toujours — elle ne
+    # coûte qu'un compteur borné en RAM, et c'est elle qui porte l'alarme.
+    trace_rappel_enabled: bool = False
+
+    # ── Trace des opérations de concept et mesures par jour (ticket 093) ────────
+    # ÉTEINTES par défaut, comme les deux ci-dessus. La trace écrit une ligne par opération de
+    # concept — quelques dizaines par jour et par agent au plus. Les mesures relisent le workdir
+    # une fois par journée simulée, à l'heure du point de reprise : à dix agents c'est immédiat,
+    # à mille il faut le vouloir.
+    trace_concepts_enabled: bool = False
+    mesures_jour_enabled: bool = False
 
     embedding_model: str | None = None
     chat_log_dir: str = "chat_logs"
@@ -642,6 +673,11 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # "annee" et ce drapeau est faux.
     weather_weekdays_only: bool = True
     weather_draw_seed: int = 42
+    # Table `person_id → "AAAA-MM-JJ"` du jour RÉELLEMENT décrit, quand il est connu — cas
+    # des populations d'enquêtés, où l'on n'a pas à tirer une date puisque l'enquête la porte
+    # (ticket 058). Le runner la renseigne par convention : un `dates_meteo.json` posé à côté
+    # de la population. Absente, le tirage par graine reprend, inchangé.
+    weather_dates_file: str | None = None
 
     llm_params: dict[str, Any] = {
         "temperature": 0,
@@ -766,9 +802,12 @@ class AccidentsConfig(BaseSettings, WorkdirPathResolutionMixin):
 
     _in_workdir_path_fields: ClassVar[list[str]] = []
 
-    # Surchargé par la valeur GAMA au /init. Faux par défaut : un run qui ne demande rien
-    # se comporte exactement comme avant cette évolution.
-    enabled: bool = False
+    # Surchargé par la valeur GAMA au /init. VRAI PAR DÉFAUT depuis le 2026-09-15 : le régime
+    # réaliste devient l'ordinaire, et c'est son absence qui se demande. Conséquence assumée —
+    # un `/init` qui ne porte pas la clé (GAMA antérieur au ticket 070) active les accidents.
+    # ⚠ Inoffensif tant qu'aucune durée n'est modifiée ; à réexaminer le jour où le retard subi
+    # sera branché, car tout run en subira alors l'effet sans l'avoir demandé.
+    enabled: bool = True
 
     # SURCHARGE du taux de base, en accidents par journée simulée. `None` — le défaut — fait
     # lire le taux mesuré dans `config/accidents_baac.yaml` (1,56/jour dans l'emprise du
@@ -776,6 +815,15 @@ class AccidentsConfig(BaseSettings, WorkdirPathResolutionMixin):
     # développement : une valeur ici REMPLACE la mesure, et tout run qui la porte cesse
     # d'être représentatif. Les facteurs jour de semaine et météo s'appliquent par-dessus.
     taux_journalier: float | None = None
+
+    # Facteur multiplicatif appliqué au temps de parcours d'une arête pendant qu'un accident
+    # y est actif. ⚠ HYPOTHÈSE DÉCLARÉE, PAS UNE MESURE : aucune source ne donne l'ampleur du
+    # ralentissement aujourd'hui — le flux DATEX des DIR, seul à porter des durées réelles,
+    # n'est pas encore archivé. La valeur est du même ordre que ce qu'un blocage partiel
+    # produit sur l'échelle de la table TomTom (dont les facteurs de congestion plafonnent
+    # vers 1,8), sans plus de justification que cela. Tout effet mesuré sur les agents sera
+    # l'effet de CE nombre : il se publie avec le résultat, jamais en silence.
+    facteur_ralentissement: float = 3.0
 
     # Durée d'un accident, en minutes. AUCUNE SOURCE ne la donne aujourd'hui : le flux DATEX
     # des DIR, seule source de durées réelles, n'est pas encore archivé. Ces bornes sont des
@@ -794,6 +842,30 @@ class AccidentsConfig(BaseSettings, WorkdirPathResolutionMixin):
     taux_journalier_max: float = 500.0
 
 
+class ChocsConfig(BaseSettings, WorkdirPathResolutionMixin):
+    """Choc déclaré, subi par les agents (ticket 079).
+
+    Un choc, c'est un RETARD CHIFFRÉ plus une PHRASE VÉCUE, posés sur des agents désignés à des
+    jours désignés. Il ne coupe aucune ligne et ne dégrade aucune offre : c'est le **régime
+    subi**, où l'agent décide en voyant l'offre nominale puis encaisse. Le jour du choc ne
+    mesure donc aucun choix, et tout l'effet des jours suivants est imputable au souvenir — ce
+    qui est exactement ce que l'Étape 3a cherche à établir.
+
+    La déclaration vit dans son propre fichier, pas ici : `config/chocs/*.yaml`. Ce bloc ne porte
+    que de quoi la désigner, comme `AccidentsConfig` ne porte pas la loi BAAC.
+    """
+
+    _in_workdir_path_fields: ClassVar[list[str]] = []
+
+    # Faux par défaut : un run qui ne demande rien se comporte exactement comme avant ce ticket.
+    enabled: bool = False
+
+    # Chemin de la déclaration. `None` — le défaut — vaut « aucun choc ». Un fichier désigné et
+    # invalide fait ÉCHOUER le chargement : mieux vaut un refus franc au démarrage qu'un run de
+    # soixante jours qui ne fait rien et dont personne ne saura pourquoi.
+    fichier: str | None = None
+
+
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[list[str]] = [
         "agent_memory_events_jsonl",
@@ -801,6 +873,9 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
         "log_file",
         "llm_exchanges_file",
         "llm_cache_hits_file",
+        "trace_rappel_file",
+        "trace_concepts_file",
+        "mesures_dir",
         "pipeline_log_file",
     ]
 
@@ -814,6 +889,12 @@ class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     # LLM cache hit log (décisions servies depuis le cache sémantique → aucun appel LLM,
     # donc absentes de llm_exchanges.jsonl ; nécessaire pour mesurer l'économie de tokens)
     llm_cache_hits_file: str = "llm_cache_hits.jsonl"
+    trace_rappel_file: str = "trace_rappel.jsonl"
+    # Opérations de concept (ticket 093) : une ligne par créé / confirmé / précisé / contredit.
+    trace_concepts_file: str = "operations_concept.jsonl"
+    # Répertoire des CSV de mesures par jour simulé. Créé à la première écriture, jamais à
+    # l'import.
+    mesures_dir: str = "mesures"
 
     # Application log
     log_file: str = "app.log"
@@ -834,6 +915,7 @@ class Settings(BaseSettings):
     llm: LlmConfig = LlmConfig()
     cache: CacheConfig = CacheConfig()
     accidents: AccidentsConfig = AccidentsConfig()
+    chocs: ChocsConfig = ChocsConfig()
 
     # Directory settings
     workdir: Path = Path.cwd()
@@ -904,27 +986,37 @@ class FactorySettings:
         experiments_dir = _resolve_experiments_dir(
             Path(base_config_path).resolve().parent.parent
         )
-        # Reprise à chaud (`make run CONT=1` → CONTINUE_RUN=1) : on réutilise le
-        # workdir du run précédent (cible du symlink experiments/current) au lieu
-        # d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde son
-        # en-tête, app.log continue), state.json et les checkpoints de population
-        # y sont retrouvés par les chemins _in_workdir_path_fields. La simulation
-        # GAMA, elle, repart à t0 du jour simulé (pas de gel d'état côté GAMA,
-        # cf. ticket 002) — les caches rendent le rejeu quasi instantané.
+        # Reprise à chaud (`make run … REPRISE=<nom>` → REPRISE_RUN) : on réutilise le workdir
+        # du run NOMMÉ au lieu d'en créer un nouveau. Les journaux s'y APPENDENT (moves.csv garde
+        # son en-tête, app.log continue), state.json et les checkpoints de population y sont
+        # retrouvés par les chemins _in_workdir_path_fields. La simulation GAMA, elle, repart à
+        # t0 de son calendrier et rejoue les jours déjà vécus (pas de gel d'état côté GAMA, cf.
+        # ticket 002) ; la mémoire est gelée pendant ce rejeu (ticket 075) et les décisions y
+        # sont resservies depuis la trace du run (ticket 090) au lieu d'être repayées.
         _resume = os.environ.get("CONTINUE_RUN", "").strip().lower() in (
             "1",
             "true",
             "yes",
         )
-        _current_link = experiments_dir / "current"
-        if _resume and _current_link.is_symlink() and _current_link.resolve().is_dir():
-            workdir = str(_current_link.resolve())
-        else:
-            if _resume:
-                logger.warning(
-                    "CONTINUE_RUN demandé mais experiments/current ne pointe vers aucun "
-                    "run existant — démarrage d'un run neuf."
+        # Ticket 091 — une reprise se NOMME. Le lien `experiments/current` ne fait pas foi : il a
+        # pointé deux fois le 2026-09-16 sur un run autre que celui qu'on croyait reprendre, et
+        # suivre un lien mouvant pour retrouver une mémoire revient à réutiliser au hasard.
+        _nomme = os.environ.get("REPRISE_RUN", "").strip()
+        if _nomme:
+            _repris = experiments_dir / "archive" / _nomme
+            if not _repris.is_dir():
+                raise RuntimeError(
+                    f"REPRISE={_nomme} : aucun run de ce nom sous {experiments_dir / 'archive'} "
+                    f"— la reprise se nomme, et le nom doit exister."
                 )
+            workdir = str(_repris)
+        elif _resume:
+            raise RuntimeError(
+                "CONTINUE_RUN sans REPRISE : une reprise se nomme. Relancez avec "
+                "`make run … REPRISE=<nom du run>` — sans quoi rien ne garantit que la mémoire "
+                "retrouvée est celle de cette expérience (ticket 091)."
+            )
+        else:
             exp_name = f"{now.strftime('%Y-%m-%d')}_{now.strftime('%H_%M')}"
             workdir = str(experiments_dir / "archive" / exp_name)
 
@@ -1053,34 +1145,71 @@ class FactorySettings:
             # un lien correct dans ce conteneur seulement, et pendant partout ailleurs.
             within_experiments = os.path.relpath(gama_results_dir, experiments_dir)
             relative_target = Path("../../../experiments") / within_experiments
-            # Plusieurs workers hypercorn importent ce module en parallèle :
-            # unlink/symlink doivent tolérer qu'un autre worker soit passé avant.
-            if gama_results_link.is_symlink():
-                gama_results_link.unlink(missing_ok=True)
-            elif gama_results_link.exists():
-                gama_results_link.rename(gama_results_link.parent / "results_legacy")
-            try:
-                gama_results_link.symlink_to(relative_target)
-            except FileExistsError:
-                pass
+            # ⚠ L'écriture du lien est CONDITIONNELLE depuis le ticket 075 (voir ci-dessous) :
+            # elle était faite ici, avant toute vérification, et un processus mal placé
+            # retirait sa sortie à la simulation en cours. Plusieurs workers hypercorn
+            # important ce module en parallèle, unlink/symlink tolèrent toujours qu'un autre
+            # worker soit passé avant.
             # Le lien ne se résout pas depuis ce processus (le contrôleur ne voit
             # pas /experiments) : ce qu'on peut vérifier, c'est l'invariant qui
             # l'avait cassé — le workdir doit vivre sous un répertoire nommé
             # `experiments` à la racine du dépôt. Sinon le lien pend, et GAMA échoue
             # sur `save` par une I/O error qui ne nomme pas la cause.
+            # ⚠ Le nom du répertoire ne suffit PAS à valider l'invariant, et c'est ce qui a
+            # cassé le run du 2026-09-14 (ticket 075) : un processus lancé depuis
+            # `services/llm-agents/` résout son `experiments_dir` en
+            # `services/llm-agents/experiments`, dont le NOM est bien « experiments » et dont
+            # le chemin relatif ne commence par aucun `..`. Le lien était donc écrit, il
+            # pointait vers un répertoire qui n'existe que sous `services/llm-agents/`, et
+            # GAMA — qui lit le lien depuis la racine — tombait sur une I/O error en plein
+            # run, sans que rien ne nomme la cause. Ce qu'il faut vérifier, c'est que le
+            # répertoire d'expériences est bien celui de LA RACINE, la même que celle où vit
+            # `services/GAMA/CityTransport`.
+            #
+            # La vérification ne peut se faire que là où elle a un SENS. Dans le conteneur
+            # `controller`, `services/GAMA` est monté sur `/services/GAMA` et les expériences
+            # sur `/app/experiments` : la racine vue d'ici est `/`, où `experiments` n'existe
+            # pas, et aucune comparaison locale ne peut valider quoi que ce soit — le lien
+            # s'écrit alors sur la foi de la disposition des montages, comme avant. Sur
+            # l'hôte, en revanche, `<racine>/experiments` EXISTE : si le répertoire
+            # d'expériences de ce processus n'est pas celui-là, le lien qu'il écrirait
+            # pendrait, et on refuse.
+            _racine = _racine_partagee("services", "GAMA", "CityTransport")
+            _experiences_de_la_racine = _racine / "experiments"
+            _incoherent = (
+                _experiences_de_la_racine.is_dir()
+                and experiments_dir.resolve() != _experiences_de_la_racine.resolve()
+            )
             if (
-                experiments_dir.name == "experiments"
+                not _incoherent
+                and experiments_dir.name == "experiments"
                 and not within_experiments.startswith("..")
             ):
+                if gama_results_link.is_symlink():
+                    gama_results_link.unlink(missing_ok=True)
+                elif gama_results_link.exists():
+                    gama_results_link.rename(
+                        gama_results_link.parent / "results_legacy"
+                    )
+                try:
+                    gama_results_link.symlink_to(relative_target)
+                except FileExistsError:
+                    pass
                 logger.info(
                     f"Sorties GAMA redirigées : {gama_results_link} → {relative_target}"
                 )
             else:
+                # REFUS d'écrire, et non plus alarme après coup : le lien en place appartient
+                # peut-être à une simulation en cours, et le remplacer par un lien pendant la
+                # ferait échouer sur `save`. Un processus qui n'est pas le propriétaire du run
+                # ne doit pas pouvoir lui retirer sa sortie.
                 logger.error(
-                    f"[ALARME] Symlink de sortie GAMA pendant : {gama_results_link} → "
-                    f"{relative_target} ne résoudra aucun répertoire depuis "
-                    f"services/GAMA/CityTransport (workdir : {gama_results_dir}, experiments_dir : "
-                    f"{experiments_dir}). GAMA échouera sur `save` en I/O error."
+                    f"[ALARME] Redirection des sorties GAMA REFUSÉE : le répertoire "
+                    f"d'expériences de ce processus ({experiments_dir}) n'est pas celui de la "
+                    f"racine ({_experiences_de_la_racine}). Le lien {gama_results_link} est "
+                    f"laissé TEL QUEL — il appartient peut-être à une simulation en cours, et "
+                    f"le réécrire la ferait échouer sur `save`. Posez APP_EXPERIMENTS_DIR si "
+                    f"ce processus doit vraiment ouvrir un run."
                 )
 
         logger.info(

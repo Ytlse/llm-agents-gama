@@ -277,6 +277,27 @@ def est_purgeable(delta_jours: float, force: float | None) -> bool:
 # ── Déclaration de ce qui est actif ──────────────────────────────────────────────
 
 
+def composantes_sans_source() -> tuple[str, ...]:
+    """Les composantes qui n'ont, À CET INSTANT, rien pour les alimenter.
+
+    `COMPOSANTES_INACTIVES` liste celles qui n'ont pas de source *par défaut*. Depuis le
+    ticket 079, `incident_reseau` en sort **dès qu'un choc déclaré la porte** : le choc EST la
+    source que le ticket 071 avait laissée en attente. Sans choc chargé, elle reste déclarée
+    inactive — une composante sans source doit continuer de le dire, faute de quoi son zéro se
+    confondrait avec celui d'un trajet parfait.
+    """
+    inertes = list(COMPOSANTES_INACTIVES)
+    if "incident_reseau" in inertes:
+        try:
+            from llm.chocs import incident_reseau_a_une_source
+
+            if incident_reseau_a_une_source():
+                inertes.remove("incident_reseau")
+        except Exception:  # noqa: BLE001 — l'absence du module ne change pas la déclaration
+            pass
+    return tuple(inertes)
+
+
 def journal_des_composantes() -> str:
     """Ligne de démarrage nommant les composantes de `I_det` actives et inactives.
 
@@ -289,8 +310,9 @@ def journal_des_composantes() -> str:
         "incident_reseau": POIDS_INCIDENT_RESEAU,
         "mode_contraint": POIDS_MODE_CONTRAINT,
     }
-    actives = [f"{n} ({p:.2f})" for n, p in toutes.items() if n not in COMPOSANTES_INACTIVES]
-    inactives = [f"{n} ({p:.2f})" for n, p in toutes.items() if n in COMPOSANTES_INACTIVES]
+    inertes = set(composantes_sans_source())
+    actives = [f"{n} ({p:.2f})" for n, p in toutes.items() if n not in inertes]
+    inactives = [f"{n} ({p:.2f})" for n, p in toutes.items() if n in inertes]
     ligne = (
         f"[gravite] composantes de la gravité déterministe — ACTIVES : {', '.join(actives)}"
         f" | INACTIVES (aucune source, contribuent 0) : {', '.join(inactives) or 'aucune'}"

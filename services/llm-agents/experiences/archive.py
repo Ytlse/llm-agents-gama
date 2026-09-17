@@ -22,10 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-from loguru import logger
-
 from experiences.decision import valider_trace
 from experiences.population import sha256_fichier
+from loguru import logger
 
 VERSION_EXECUTION = "execution1"
 ETAT_DEFINIE = "definie"
@@ -35,7 +34,9 @@ ETAT_EPUISEE = "epuisee"
 ETAT_ARRETEE = "arretee"
 ETAT_TERMINEE = "terminee"
 ETAT_EN_ATTENTE_QUOTA = "en_attente_quota"  # in-process : dort jusqu'à la fenêtre quota (R4, --attendre-fenetre)
-ETAT_EN_ATTENTE_AGENT = "en_attente_agent"  # in-process : dort en attente d'un sous-agent Antigravity
+ETAT_EN_ATTENTE_AGENT = (
+    "en_attente_agent"  # in-process : dort en attente d'un sous-agent Antigravity
+)
 ETAT_INTERROMPUE = (
     "interrompue"  # processus mort sans clôture, réconcilié par l'ordonnanceur (R7)
 )
@@ -236,6 +237,18 @@ class Execution:
             self.dossier / F_EXECUTION,
             yaml.safe_dump(self.config, allow_unicode=True, sort_keys=False),
         )
+
+    def noter_reglages_herites(self, **champs) -> None:
+        """Consigne des réglages SUBIS par l'exécution, à la création comme à la reprise.
+
+        Ticket 085 (B4) : une reprise rouvre une exécution existante, et sa trace serait fausse si
+        la restriction de routage avait changé depuis le lancement. Une mesure archivée doit dire
+        sous quelle restriction elle a été prise, pas sous laquelle elle a commencé.
+        """
+        herites = dict(self.config.get("reglages_herites") or {})
+        herites.update(champs)
+        self.config["reglages_herites"] = herites
+        self._sauver_config()
 
     def mettre_a_jour_regime(self, **champs) -> None:
         self.config.setdefault("regime_applique", {}).update(champs)

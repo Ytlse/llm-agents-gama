@@ -333,7 +333,18 @@ class DecideurPasserelle:
         if not isinstance(idx, int) or idx < 0:
             erreur = str(trace.get("erreur") or raison or "réponse inexploitable")
             reprise_a = trace.get("reprise_a")
-            if trace.get("genre_erreur") == "quota_journalier":
+            if trace.get("genre_erreur") == "restriction_instances":
+                # Ticket 085, lot A. Une contradiction de configuration — restriction de routage
+                # incompatible avec l'instance épinglée — n'est NI une passerelle occupée NI un
+                # quota épuisé. La ranger dans l'un de ces deux seaux envoie chercher un quota là
+                # où il n'y a qu'une ligne de YAML à corriger : c'est ce qui a coûté trois heures
+                # le 2026-09-16. Le type est nouveau, et c'est voulu.
+                #
+                # `configuration` est inconnu de `runner.py` : il tombe dans la branche d'attente,
+                # exactement comme avant. Ce lot rend le motif juste et rapide, il ne change pas ce
+                # que le client en fait (§ 9 du ticket, Q1 de `specs/ticket_085/questions.md`).
+                erreur = "configuration: " + erreur
+            elif trace.get("genre_erreur") == "quota_journalier":
                 # Le fournisseur l'a QUALIFIÉ lui-même (429 « per day ») : on ne devine plus
                 # d'après le texte. Canal ajouté le 2026-09-08 — le message reformulé par le
                 # worker (« Providers saturés ou indisponibles ») tombait dans _RE_OCCUPEE et
@@ -362,7 +373,9 @@ class DecideurPasserelle:
                 presente={"payload": trace.get("payload")},
                 reponse_brute=trace.get("reponse_brute"),
                 reprise_a=(
-                    reprise_a.isoformat() if hasattr(reprise_a, "isoformat") else reprise_a
+                    reprise_a.isoformat()
+                    if hasattr(reprise_a, "isoformat")
+                    else reprise_a
                 ),
             )
         return ReponseDecideur(
@@ -421,6 +434,10 @@ def construire_decideur(
             attente_max_s=attente_max_s,
             parametres=spec.parametres,
             execution=execution,
+            # Non exposé dans l'experience.yaml : le délai de démarrage suit celui d'un
+            # déplacement. Un canal qui n'a servi AUCUNE décision en `attente_max_s` n'est pas
+            # lent, il est mort.
+            demarrage_max_s=None,
         )
     if spec.type == "modele":
         # Import tardif : LightGBM / geopandas ne sont chargés que si on décide par modèle.

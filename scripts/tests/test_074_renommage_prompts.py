@@ -129,8 +129,13 @@ def test_chaque_variante_garde_son_ancien_nom(store: dict) -> None:
     assert len(anciens) == len(set(anciens)), "deux variantes revendiquent le même ancien nom"
 
 
+# `expert_gem_3.8_v2` a quitté cette liste le 2026-09-17 : la variante qu'il nommait
+# (`prompt_expert_04`) a été SUPPRIMÉE du fichier à la demande de l'auteur. Conséquence
+# assumée, et c'est la raison d'être de ce test : les deux expériences archivées qui la
+# désignent ne se rejouent plus. Son texte reste lisible dans l'archive froide du 2026-09-14
+# et dans l'historique git, mais plus par le `PromptManager`.
 @pytest.mark.parametrize("ancien", [
-    "prompt_minimal", "expert_gem_3.8_v2", "expert_gem_3.8_v2_neutre_justif",
+    "prompt_minimal", "expert_gem_3.8_v2_neutre_justif",
     "expert_gem_3.8_v3", "prompt_optimise_v4", "expert_m4",
 ])
 def test_les_variantes_de_la_campagne_se_relisent_par_leur_ancien_nom(
@@ -196,11 +201,11 @@ def test_le_renommage_leve_une_collision_d_abreviation(store: dict) -> None:
     collisions = {a: v for a, v in abrege.items() if len(v) > 1}
     assert not collisions, f"abréviations en collision après renommage : {collisions}"
 
-    # Et la collision existait bien AVANT — sinon ce test ne garde rien.
-    anciens = [e["_ancien_nom"] for e in store["prompts"].values()]
-    avant: dict[str, list[str]] = {}
-    for nom in anciens:
-        avant.setdefault(abreger_variante(nom), []).append(nom)
-    assert any(len(v) > 1 for v in avant.values()), (
-        "aucune collision dans les anciens noms : ce test ne verrouille rien"
+    # Et la collision existait bien AVANT — sinon ce test ne garde rien. Le couple est écrit
+    # EN DUR depuis le 2026-09-17 : `prompt_expert_04`, qui portait `expert_gem_3.8_v2`, a été
+    # supprimé du fichier, si bien que la collision n'est plus dérivable des `_ancien_nom`
+    # vivants. Le fait historique, lui, n'a pas bougé — et c'est lui que ce test verrouille.
+    couple_historique = ("expert_gem_3.8_v2", "expert_gem_3.8_v2_neutre_justif")
+    assert abreger_variante(couple_historique[0]) == abreger_variante(couple_historique[1]), (
+        "les deux anciens noms ne collisionnent plus : ce test ne verrouille rien"
     )

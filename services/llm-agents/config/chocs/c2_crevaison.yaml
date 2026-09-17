@@ -1,0 +1,28 @@
+# C2 — Crevaison · vélo
+# Individuel, et c'est le cas le plus intéressant : RIEN ne change dans le graphe, donc tout
+# effet observé les jours suivants ne peut venir que de la mémoire.
+# ⚠ Le jour 13 ne rend pas le vélo réellement indisponible (cf. config/chocs/README.md) : seul
+#   le souvenir le porte.
+choc: c2_crevaison
+libelle: "Flat tyre on the way"
+source: "scénario déclaré — Aldred (2016), TR-A 90, sur le poids des incidents vécus à vélo"
+
+exposition:
+  regle: tirage
+  part: 0.30
+  graine: 79
+
+jours:
+  - jour: 12
+    retard_min: 35
+    incident_reseau: true
+    vecu: >-
+      Flat tyre halfway through the ride. I spent twenty minutes patching it on the
+      pavement, hands covered in grease, then pushed the bike the rest of the way on foot.
+      I arrived late and filthy.
+  - jour: 13
+    retard_min: 0
+    incident_reseau: false
+    vecu: >-
+      My bike is still out of action after yesterday. I had to sort out another way of
+      getting around.

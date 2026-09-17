@@ -1,0 +1,37 @@
+# 9. Conclusion
+
+<!-- Dernière mise à jour : 2026-09-17 -->
+
+**Document:** chapter 9 of the AAMAS 2027 paper. English master; French mirror in [`fr/09_conclusion.md`](../fr/09_conclusion.md); LaTeX rendering for Overleaf in [`overleaf/09_conclusion.tex`](../overleaf/09_conclusion.tex).
+**Status:** `draft v0` (17 September 2026) — first English master, a faithful translation of the French `brouillon v0`, itself extracted from `MANUSCRIT_DETAILLE_2026.md` `v1.6` (3 September 2026), § 7. The whole manuscript is frozen in [`../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md`](../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md).
+**Reservations:** two things to take up before this becomes a chapter, carried over from the French header and not repaired by the translation:
+1. *The "Tier 1 / 2 / 3" vocabulary.* The written chapters replace it with *exploratory / robust / transferable*, the certification steps of SILICA. It is translated as it stands here, five occurrences, and must be aligned before submission.
+2. *The section cross-references,* which follow the old numbering of the manuscript.
+The figures were cross-checked against their source in the repository on 15 September 2026 and now carry their provenance — except the speed ratio, withdrawn for want of a measurement.
+**Place in the paper:** section of the same number in the plan announced in § 1.4 of [`../en/01_introduction.md`](../en/01_introduction.md). Progress: [`../README.md`](../README.md).
+
+---
+
+1. **No LLM for static mass prediction (the Tier 3 ceiling).** In direct agreement with the results of the SILICA benchmark (*Bin Tareaf et al., 2026*), LLM agents fail to reproduce faithfully the empirical distribution of human mobility without heavy statistical calibration. Supervised trees (LightGBM) are free in tokens and four times more faithful in argmax: $7.30\text{ pt}$ of L1 error against $29.81\text{ pt}$.
+   <!-- source: scripts/progedo_logit/mode_choice_policy_metrics.json — test.mode_shares.l1_argmax = 0.0730 over 13,045 trips, accuracy 78.54 %, probability-mass error 2.69 pt; scripts/synthesis/avancement.yaml — run 2026-08-24_17_34, global L1 29.81 pt, 2,911 decisions -->
+
+   **Two reservations.** The two errors are not measured on the same substrate: $7.30$ comes from the sealed test set of the survey, $29.81$ from a simulation run. The factor of four assumes that they compare term for term, which remains to be established. The speed ratio announced by the manuscript — about 2,700 times, less than a second against 45 minutes for 10,000 trips — has no source in the repository: it is withdrawn pending measurement.
+
+2. **The value of the LLM lies in context dependence and adaptation (Tier 2 validity).** In line with the thesis of Baronchelli (*Baronchelli, 2026*), the interest of LLMs does not lie in their status as a statistical human proxy, but in their emergent adaptive behaviour: untabulated dependence (local press, disgust, crowd density, pleasantness) and non-independent dependence (hysteresis at $J+1$ with short-term memory $\mathcal{M}_t$, intra-household arbitration, spatial chain of vehicles). Everywhere else, a tabular model does better and costs less.
+
+3. **A lesson about measurement, transferable beyond this case.** A variant at $93.4\,\%$ accuracy on the survey produced the **worst** score in simulation ($9.28$ against $7.40$ of composite, the "all decisions" reading), the distance reconstructed from the declared duration containing the retained mode. Any evaluation of a generative agent must be scored **where the model serves**, not where it is easy to score.
+
+   The ordering was checked under the two readings of the composite on 12 September 2026, the three published figures being first reproduced identically. Excluding single itineraries, production moves to $10.07$ and the variant to $11.31$: the variant remains the worst, but the margin falls from $1.88$ to $1.24$ points. Citing these two numbers without naming the reading is inaccurate.
+   <!-- source: docs/traces/2026-09-12_11-30_ticket047_ordre_des_composites_conclusion/ — run experiments/archive/2026-08-27_17_57, moves.csv fingerprint 929a0ecd0fd0 identical on all three sides, 3,249 decisions of which 665 with a single itinerary -->
+
+4. **The hybrid cascade architecture answers the fundamental dichotomy.** Reconcile Baronchelli's two questions by a division of labour: give $90\,\%$ of the nominal flow to supervised statistical calibration (Tier 3), and reserve generative LLM reasoning for the $10\,\%$ of complex situations, disruptions and contextual ruptures (Tier 2).
+
+5. **Cost and reproducibility decide where fidelity does not.** A simulated day requires $5{,}040$ seconds from the `gemini-3.5-flash-lite` decider under the expert prompt, against $35$ seconds from the kernel regression and from gradient boosting for the same $3{,}154$ decisions. The tabular methods return exactly the same probabilities from one run to the next, where the agent changes one in seven. As long as the question asked is the modal split of a territory on an ordinary day, the tabular method therefore remains the appropriate tool: two orders of magnitude cheaper, perfectly reproducible, and not separable from the best agent on the two readings of § 6.4.
+
+   Reach works the other way, and it is the only one of the three quantities that does: the tabular methods answer only for the variables they were taught, where the agent receives an instruction in natural language. What chapter 6 establishes is not that a generative agent does better, but that a qualitative instruction free of any numerical threshold brings it within reach of a model that has read $39{,}203$ survey trips, and that it installs in it a distance elasticity the model does not have. The interest of the agent begins where the survey stops, and chapter 7 exploits that on two regimes no survey tabulates.
+   <!-- source: synthese.json, compteurs.duree_s — gemini-3.5 under the minimal prompt (corrected set) 5,613 s for 2,506 solicitations, under prompt_expert_05 (earlier set) 5,040 s for 2,108 solicitations; lgbm 34.8 s and klr 35.2 s on the corrected set, random forest 266 s. The prompt_expert_05 arm of the corrected set was resumed after a quota ran out, 3,019 of its 3,154 decisions being re-served: its duration of 540 s measures a resumption, not a full day, and does not serve as a cost reference. The duration of a language-model decider is dominated by the rate limiting of the gateway, not by computation: the ratio measures an operating cost, not a complexity. Reproducibility: indirect measurement, 86.1 % agreement on the most likely mode between two runs of the same prompt on two successive cohorts — it confounds the non-determinism of the model with the effect of the change of cohort; identical replay, alone in separating the two terms, is ticket 073 axis 1. This point comes from § 6.7 of version v0.2 of chapter 6, moved here on 2026-09-17 at the author's request. -->
+
+---
+
+### Tickets attached to this chapter
+- [Ticket 061](../../../tickets/ticket_061_finalisation_chapitre_9_conclusion.md) — Finalisation and consolidation of chapter 9 (Conclusion and fundamental lessons)

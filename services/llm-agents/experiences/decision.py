@@ -302,6 +302,14 @@ class ReponseDecideur:
     modele_verifie: bool | None = (
         None  # antigravity P1 : False si le modèle est déclaré sans attestation passerelle
     )
+    parametres_appliques: dict | None = (
+        # Antigravity : ce que le sous-agent déclare avoir RÉELLEMENT appliqué des
+        # `parametres` envoyés (température, top_p, max_tokens). Le canal IPC ne peut pas
+        # imposer un réglage d'échantillonnage à un agent d'IDE : la seule chose honnête est
+        # donc de lui demander ce qu'il a appliqué et de l'archiver. `None` = le sous-agent
+        # n'a rien déclaré, ce qui N'EST PAS « température 0 » mais « on ne sait pas ».
+        None
+    )
     sortie_litterale: str | None = (
         # P8 (spec hygiène §8) — la sortie du modèle TELLE QU'ÉMISE, jamais reformatée ni
         # re-sérialisée. `reponse_brute` a montré sa limite : sur le canal antigravity, ses
@@ -398,6 +406,8 @@ def construire_trace(
     }
     if reponse and reponse.modele_verifie is not None:
         t["modele_verifie"] = reponse.modele_verifie
+    if reponse and reponse.parametres_appliques is not None:
+        t["parametres_appliques"] = reponse.parametres_appliques
     return t
 
 

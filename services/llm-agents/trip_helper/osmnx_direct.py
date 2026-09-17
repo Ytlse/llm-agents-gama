@@ -603,19 +603,41 @@ def _zone_factor(zone: str, dt: datetime) -> float:
                     "(congestion_zones.ensure_zones)")
 
 
-def _congested_travel_time(G, gdf, dt: datetime) -> tuple[float, float]:
-    """``(durée congestionnée, durée libre)`` d'un itinéraire : Σ arêtes travel_time × facteur(zone, heure).
+def _congested_travel_time(G, gdf, dt: datetime) -> tuple[float, float, int]:
+    """``(durée congestionnée, durée libre, arêtes accidentées)`` d'un itinéraire.
 
-    ``gdf`` est la sortie de `ox.routing.route_to_gdf` (index (u, v, key)) ; la zone est celle du
-    nœud d'origine ``u``. Le facteur global rapporté ailleurs est le rapport des deux durées, soit
+    Σ arêtes travel_time × facteur(zone, heure) × facteur(accident, heure). ``gdf`` est la
+    sortie de `ox.routing.route_to_gdf` (index (u, v, key)) ; la zone est celle du nœud
+    d'origine ``u``. Le facteur global rapporté ailleurs est le rapport des deux durées, soit
     la moyenne des facteurs pondérée par le temps libre.
+
+    L'ACCIDENT ENTRE ICI, et nulle part ailleurs (ticket 070, travail C). C'est le seul
+    endroit du dispositif qui connaisse les arêtes réellement empruntées : les agents GAMA se
+    déplacent à vol d'oiseau, mais leur vitesse est calée sur la durée calculée ici
+    (`Inhabitant.gaml:390`), donc un itinéraire allongé fait bien arriver l'agent en retard.
+
+    ⚠ L'agent NE CONTOURNE PAS : le chemin a été choisi en temps libre, avant cet appel. Le
+    surcoût s'applique au chemin déjà retenu. Le contournement demanderait de recalculer le
+    plus court chemin sur des poids modifiés — hors périmètre déclaré.
     """
+    from trip_helper import accidents as _accidents
+
+    registre = _accidents.registre()
+    ts = int(dt.timestamp()) if registre is not None else 0
+
     free_s = 0.0
     cong_s = 0.0
-    for (u, _v, _k), tt in zip(gdf.index, gdf["travel_time"].to_numpy(dtype=float)):
+    n_accidentees = 0
+    for (u, v, _k), tt in zip(gdf.index, gdf["travel_time"].to_numpy(dtype=float)):
         free_s += tt
-        cong_s += tt * _zone_factor(G.nodes[u].get(NODE_ZONE_KEY), dt)
-    return cong_s, free_s
+        facteur = _zone_factor(G.nodes[u].get(NODE_ZONE_KEY), dt)
+        if registre is not None:
+            f_accident = registre.facteur_arete((u, v), ts)
+            if f_accident != 1.0:
+                n_accidentees += 1
+                facteur *= f_accident
+        cong_s += tt * facteur
+    return cong_s, free_s, n_accidentees
 
 
 def _infra_penalty(G, route_nodes: list, osmnx_mode: str) -> float:
@@ -781,7 +803,18 @@ def _route_sync(
     # si un bout touchait Toulouse, « agglomération » sinon — 1,84 un lundi à 8 h en pleine campagne.
     cong_s = free_s
     if osmnx_mode == "drive":
-        cong_s, _ = _congested_travel_time(G, gdf, congestion_dt)
+        cong_s, _free_s, _n_acc = _congested_travel_time(G, gdf, congestion_dt)
+        if _n_acc:
+            from trip_helper import accidents as _accidents
+
+            _registre = _accidents.registre()
+            if _registre is not None:
+                _registre.compter_trajet_touche()
+                logger.info(
+                    f"[accidents] Trajet retardé : {_n_acc} arête(s) accidentée(s) sur "
+                    f"l'itinéraire, durée {int(_free_s)} s → {int(cong_s)} s "
+                    f"(départ {congestion_dt:%Y-%m-%d %H:%M})"
+                )
 
     # Round up to at least one second and apply all modifiers.
     return {
@@ -859,8 +892,28 @@ async def get_direct_plan(
         return None
 
     # Persistent cache lookup (after fast reject to avoid caching trivial misses).
+    #
+    # GARDE ACCIDENTS (ticket 070, travail D). Ce cache est adressé SANS LA DATE — sa clé est
+    # (version, jour de semaine, créneau, mode, coordonnées). Une durée contenant un accident
+    # y serait donc resservie à tous les mardis 8 h, y compris aux runs qui n'ont demandé
+    # aucun accident. Tant qu'un accident est actif, on ne lit ni n'écrit : `_p_key` reste
+    # `None`, ce qui neutralise d'un coup la lecture ci-dessous et les deux écritures plus bas.
+    #
+    # La garde est VOLONTAIREMENT GROSSIÈRE — un accident actif n'importe où suffit à
+    # contourner le cache, même pour un itinéraire qui ne le croise pas. On ne connaît pas le
+    # chemin avant de l'avoir calculé : filtrer finement demanderait de router d'abord, donc
+    # de renoncer au cache de toute façon. Coût assumé : à ~1,5 accident par jour de 20 à
+    # 90 minutes, une à trois heures par journée simulée où le routage voiture calcule à froid.
     _p_key = _p_date = _p_dow = _p_bucket = None
+    _accidents_actifs = False
     if _persistent_cache is not None:
+        from trip_helper import accidents as _accidents_mod
+
+        _reg = _accidents_mod.registre()
+        _accidents_actifs = _reg is not None and _reg.a_des_accidents_actifs(
+            int(congestion_dt.timestamp())
+        )
+    if _persistent_cache is not None and not _accidents_actifs:
         _p_key, _p_date, _p_dow, _p_bucket = _persistent_cache.__class__.make_key(
             congestion_dt, trip_mode,
             round(origin.lat, 5), round(origin.lon, 5),

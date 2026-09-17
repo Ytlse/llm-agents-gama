@@ -9,6 +9,7 @@ présence, et elle est déclarée comme telle plutôt qu'omise.
 from __future__ import annotations
 
 import pathlib
+from datetime import datetime, timezone
 
 import pytest
 from settings import AccidentsConfig
@@ -91,13 +92,18 @@ def test_r3_interrupteur_persiste_et_recharge():
     assert "accidents_enabled <- (_cfg_acc != nil)" in settings_gaml, "non relu"
 
 
-def test_r2_faux_par_defaut_partout():
-    """R2 — faux par défaut côté GAMA comme côté contrôleur."""
+def test_r2_vrai_par_defaut_partout():
+    """R2 — vrai par défaut côté GAMA comme côté contrôleur (décision du 2026-09-15).
+
+    Le régime réaliste est l'ordinaire : c'est sa DÉSACTIVATION qui demande un geste. Un
+    `sim_params.yaml` antérieur, sans la clé, doit donc activer les accidents et non les taire.
+    """
     settings_gaml = (MODELES / "Settings.gaml").read_text(encoding="utf-8")
-    assert "bool accidents_enabled <- false;" in settings_gaml
-    # Et le repli de lecture ne remonte jamais à vrai sur configuration absente.
-    assert 'contains "true") : false;' in settings_gaml
-    assert AccidentsConfig().enabled is False
+    assert "bool accidents_enabled <- true;" in settings_gaml
+    assert 'contains "true") : true;' in settings_gaml, "le repli sur config absente doit valoir vrai"
+    city = (MODELES / "City.gaml").read_text(encoding="utf-8")
+    assert "var: accidents_enabled <- true;" in city
+    assert AccidentsConfig().enabled is True
 
 
 def test_r4_interrupteur_transmis_au_init():
@@ -142,7 +148,11 @@ def test_r5_etat_effectif_ecrit_meme_a_faux(tmp_path, monkeypatch):
 
 
 def test_r6_interrupteur_a_faux_ne_tire_rien(monkeypatch):
-    """R6 — régime inactif : aucun registre, donc aucun accident."""
+    """R6 — régime explicitement désactivé : aucun registre, donc aucun accident.
+
+    Depuis que le défaut est à vrai, ce test doit DÉSACTIVER explicitement : c'est le geste
+    de l'expérimentateur qui décoche, et c'est lui qu'on vérifie.
+    """
     from settings import settings
 
     monkeypatch.setattr(settings.accidents, "enabled", False)
@@ -240,21 +250,153 @@ def test_r13_journee_simulee_ancree_sur_le_debut_du_run():
 # ── Non-goal vérifié : aucune durée n'est modifiée par cette tranche ─────────
 
 
-def test_aucune_duree_d_itineraire_n_est_modifiee_par_cette_tranche():
-    """Le registre n'est lu par aucun calcul d'itinéraire — c'est ce qui rend les caches sûrs.
+# ── R8 / R9 / R10 — le retard subi et ses deux gardes ────────────────────────
 
-    Si ce test tombe, c'est que le retard a été branché : il faut alors que les gardes de
-    cache (R9) et la clé de décision (R10) soient livrées EN MÊME TEMPS, sans quoi une durée
-    perturbée se retrouve resservie à des runs qui n'ont rien demandé.
+
+def _gdf(aretes, travel_times):
+    """Une sortie de `route_to_gdf` minimale : un index (u, v, k) et une colonne travel_time."""
+    import pandas as pd
+
+    index = pd.MultiIndex.from_tuples([(u, v, 0) for u, v in aretes])
+    return pd.DataFrame({"travel_time": travel_times}, index=index)
+
+
+class _GrapheZones:
+    """Un graphe réduit à ce que `_congested_travel_time` lui demande : la zone de ses nœuds."""
+
+    def __init__(self, noeuds):
+        from trip_helper.congestion_zones import NODE_ZONE_KEY, ZONE_OUTSIDE
+
+        self.nodes = {n: {NODE_ZONE_KEY: ZONE_OUTSIDE} for n in noeuds}
+
+
+def test_r8_itineraire_traversant_un_accident_est_allonge(monkeypatch):
+    """R8 — la durée rendue est strictement supérieure, et l'arête fautive est comptée."""
+    from trip_helper import accidents as mod
+    from trip_helper.osmnx_direct import _congested_travel_time
+
+    registre = _registre(taux=5.0)
+    registre.tirer_journee(1, T0)
+    assert registre._poser(
+        Accident(arete=(2, 3), debut_ts=T0, duree_s=3600, classe_vitesse="31-50")
+    )
+    monkeypatch.setattr(mod, "_registre", registre)
+
+    cong_s, free_s, n_acc = _congested_travel_time(
+        _GrapheZones([1, 2, 3, 4]),
+        _gdf([(1, 2), (2, 3), (3, 4)], [100.0, 200.0, 100.0]),
+        datetime.fromtimestamp(T0 + 600, tz=timezone.utc),
+    )
+
+    assert free_s == 400.0
+    assert n_acc == 1, "l'arête accidentée n'a pas été reconnue"
+    attendu = 100.0 + 200.0 * AccidentsConfig().facteur_ralentissement + 100.0
+    assert cong_s == pytest.approx(attendu)
+    assert cong_s > free_s
+
+
+def test_r8_itineraire_hors_accident_est_inchange(monkeypatch):
+    """R8 — un itinéraire qui ne croise rien garde sa durée libre."""
+    from trip_helper import accidents as mod
+    from trip_helper.osmnx_direct import _congested_travel_time
+
+    registre = _registre(taux=5.0)
+    registre.tirer_journee(1, T0)
+    registre._poser(Accident(arete=(1, 2), debut_ts=T0, duree_s=3600))
+    monkeypatch.setattr(mod, "_registre", registre)
+
+    cong_s, free_s, n_acc = _congested_travel_time(
+        _GrapheZones([2, 3, 4]),
+        _gdf([(2, 3), (3, 4)], [100.0, 100.0]),
+        datetime.fromtimestamp(T0 + 600, tz=timezone.utc),
+    )
+    assert n_acc == 0
+    assert cong_s == pytest.approx(free_s)
+
+
+def test_r8_accident_expire_ne_ralentit_plus(monkeypatch):
+    """R8 — hors de sa fenêtre, l'accident n'a plus d'effet."""
+    from trip_helper import accidents as mod
+    from trip_helper.osmnx_direct import _congested_travel_time
+
+    registre = _registre(taux=5.0)
+    registre.tirer_journee(1, T0)
+    registre._poser(Accident(arete=(1, 2), debut_ts=T0, duree_s=600))
+    monkeypatch.setattr(mod, "_registre", registre)
+
+    _cong, _free, n_acc = _congested_travel_time(
+        _GrapheZones([1, 2]),
+        _gdf([(1, 2)], [100.0]),
+        datetime.fromtimestamp(T0 + 1200, tz=timezone.utc),
+    )
+    assert n_acc == 0
+
+
+def test_r9_le_cache_d_itineraires_est_contourne_pendant_un_accident():
+    """R9 — ni lecture ni écriture tant qu'un accident est actif.
+
+    Le prédicat est exercé ici ; le fait que la garde soit BRANCHÉE dessus se vérifie sur le
+    texte du module — le chemin complet est asynchrone et tient au réseau, il n'est pas
+    exerçable en test unitaire. Vérification de présence, déclarée comme telle.
     """
-    osmnx = (
+    registre = _registre(taux=5.0)
+    registre.tirer_journee(1, T0)
+    registre._poser(Accident(arete=(1, 2), debut_ts=T0 + 3600, duree_s=1800))
+
+    assert registre.a_des_accidents_actifs(T0 + 4000) is True
+    assert registre.a_des_accidents_actifs(T0) is False, "avant l'accident"
+    assert registre.a_des_accidents_actifs(T0 + 7200) is False, "après l'accident"
+
+    source = (
         pathlib.Path(__file__).resolve().parents[1] / "trip_helper" / "osmnx_direct.py"
+    ).read_text(encoding="utf-8")
+    assert "_reg.a_des_accidents_actifs(" in source
+    assert "if _persistent_cache is not None and not _accidents_actifs:" in source, (
+        "la garde n'est pas branchée sur le prédicat : une durée perturbée peut entrer au cache"
     )
-    source = osmnx.read_text(encoding="utf-8")
-    assert "accidents" not in source, (
-        "osmnx_direct lit désormais les accidents : livrez les gardes de cache (R9) et la "
-        "clé de décision (R10) dans la même tranche."
+
+
+def test_r10_la_cle_de_decision_porte_les_accidents_actifs():
+    """R10 — deux états du monde distincts donnent deux signatures distinctes."""
+    registre = _registre(taux=5.0)
+    registre.tirer_journee(1, T0)
+    assert registre.signature_active(T0 + 600) == "", "aucun accident posé : signature vide"
+
+    registre._poser(Accident(arete=(1, 2), debut_ts=T0, duree_s=3600))
+    avec = registre.signature_active(T0 + 600)
+    assert avec, "un accident actif doit produire une signature"
+    assert registre.signature_active(T0 + 7200) == "", "hors fenêtre : signature vide"
+
+    registre._poser(Accident(arete=(3, 4), debut_ts=T0, duree_s=3600))
+    assert registre.signature_active(T0 + 600) != avec, "deux accidents ≠ un accident"
+
+    agent = (
+        pathlib.Path(__file__).resolve().parents[1]
+        / "urban_mobility_agents"
+        / "agents"
+        / "llm_agent.py"
+    ).read_text(encoding="utf-8")
+    assert 'anticipation_key = f"{anticipation_key}|accidents:{_sig}"' in agent, (
+        "la signature n'entre pas dans la clé : un agent retardé se verrait resservir sa "
+        "décision d'avant le retard"
     )
+
+
+def test_le_retard_et_ses_deux_gardes_sont_livres_ensemble():
+    """Le bloc C/D/E est indivisible, et ce test le garde.
+
+    Livrer le retard sans la garde du cache d'itinéraires empoisonnerait des runs qui n'ont
+    demandé aucun accident ; sans la clé de décision, un agent retardé rejouerait son choix
+    d'avant. Si l'un des trois disparaît, ce test tombe.
+    """
+    racine = pathlib.Path(__file__).resolve().parents[1]
+    osmnx = (racine / "trip_helper" / "osmnx_direct.py").read_text(encoding="utf-8")
+    agent = (racine / "urban_mobility_agents" / "agents" / "llm_agent.py").read_text(
+        encoding="utf-8"
+    )
+    assert "registre.facteur_arete((u, v), ts)" in osmnx, "C — le retard a disparu"
+    assert "not _accidents_actifs" in osmnx, "D — la garde du cache d'itinéraires a disparu"
+    assert "accidents:{_sig}" in agent, "E — la clé de décision a disparu"
 
 
 def test_accident_actif_sur_sa_fenetre_seulement():
@@ -408,4 +550,59 @@ def test_surcharge_de_taux_remplace_la_mesure():
     lundi = accidents_module.wall_clock(T0).weekday()
     assert registre_force._taux_du_jour(lundi, None) > registre_mesure._taux_du_jour(
         lundi, None
+    )
+
+
+# ── F — la pose manuelle, d'où viendront les figures ─────────────────────────
+
+
+def test_f_pose_manuelle_accroche_l_arete_la_plus_proche():
+    """F — un point se résout en arête, et l'accident entre dans le même registre."""
+    aretes = [
+        (1, 2, 1000.0, 50),
+        (2, 3, 1000.0, 50),
+        (3, 4, 1000.0, 80),
+    ]
+    registre = _registre(taux=5.0, aretes=aretes)
+    registre._positions = {1: (43.60, 1.44), 2: (43.57, 1.43), 3: (43.50, 1.40), 4: (43.40, 1.30)}
+    registre.tirer_journee(1, T0)
+    avant = len(registre.accidents)
+
+    pose = registre.poser_manuellement(lat=43.5701, lon=1.4301, debut_ts=T0 + 3 * 3600, duree_minutes=45)
+
+    assert pose is not None
+    assert pose.arete == (2, 3), f"arête la plus proche mal choisie : {pose.arete}"
+    assert pose.duree_s == 45 * 60
+    assert len(registre.accidents) == avant + 1, "l'accident posé doit entrer dans le registre"
+    # Et il agit exactement comme un accident tiré : même fenêtre, même facteur.
+    assert registre.facteur_arete((2, 3), T0 + 3 * 3600 + 60) > 1.0
+    assert registre.facteur_arete((2, 3), T0) == 1.0
+
+
+def test_f_pose_manuelle_refuse_une_duree_non_positive():
+    """F — refus journalisé, et rien n'entre dans l'état du monde."""
+    registre = _registre(taux=5.0)
+    registre._positions = {1: (43.6, 1.4), 2: (43.6, 1.4), 3: (43.6, 1.4), 4: (43.6, 1.4), 5: (43.6, 1.4)}
+    registre.tirer_journee(1, T0)
+    avant = len(registre.accidents)
+    assert registre.poser_manuellement(43.6, 1.4, T0, 0) is None
+    assert len(registre.accidents) == avant
+
+
+def test_f_bouton_et_endpoint_existent():
+    """F — le geste est offert dans l'IHM et au contrôleur.
+
+    Vérification de présence, comme R1 et R3 : ni l'IHM GAMA ni la route HTTP ne sont
+    exerçables depuis un test unitaire.
+    """
+    city = (MODELES / "City.gaml").read_text(encoding="utf-8")
+    assert 'user_command "Poser un accident maintenant"' in city
+    llm_agent = (MODELES / "LLMAgent.gaml").read_text(encoding="utf-8")
+    assert 'do send to: "/accidents"' in llm_agent
+    app = (
+        pathlib.Path(__file__).resolve().parents[1] / "handle" / "application.py"
+    ).read_text(encoding="utf-8")
+    assert '@app.post(\n    "/accidents",' in app
+    assert "régime d'accidents désactivé pour ce run" in app, (
+        "une pose dans un run où le régime est décoché doit être refusée explicitement"
     )

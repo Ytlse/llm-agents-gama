@@ -186,7 +186,10 @@ prompts:
         édité depuis 'expert_gem_3.8_v2' par 5 mutations cognitives qualitatives sans seuil (M1 météo et exposition réelle, M2 logistique d'emport de proximité, M3 réalité budgétaire et coût d'usage neutre démographiquement, M4 frictions fixes automobiles sur 1-2 km, M5 neutralisation de la consigne 4 retirant l'a priori modal contre la marche) validées sur 20 cas empiriques chacune (100 cas appariés au total)
       date: '2026-09-13'
       mots: 444
-      derive_de: prompt_expert_04
+      # `derive_de` RETIRÉ le 2026-09-17 : le parent (prompt_expert_04) a été supprimé à la
+      # demande de l'auteur, et un `derive_de` qui ne pointe rien casse l'invariant « toute
+      # référence interne désigne une variante existante ». La filiation reste énoncée en
+      # clair dans `role` et `obtention` ci-dessus, par le nom d'origine de la variante.
       mutations:
         - "M1 Météo et exposition réelle : fin de la météo-paranoïa, pluie modérée ordinaire vs repli systématique en voiture"
         - "M2 Logistique d'emport du quotidien : distinction achats volumineux vs courses légères de quartier à pied"
@@ -249,7 +252,10 @@ prompts:
         identique au caractère près à 'expert_gem_3.8_v2', à l'exception de la consigne 4 où la clause ', en précisant si c''est le cas pourquoi la marche n''obtient pas la plus forte probabilité' est supprimée (règle M1).
       date: '2026-09-13'
       mots: 277
-      derive_de: prompt_expert_04
+      # `derive_de` RETIRÉ le 2026-09-17 : le parent (prompt_expert_04) a été supprimé à la
+      # demande de l'auteur, et un `derive_de` qui ne pointe rien casse l'invariant « toute
+      # référence interne désigne une variante existante ». La filiation reste énoncée en
+      # clair dans `role` et `obtention` ci-dessus, par le nom d'origine de la variante.
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
     _traduction:
       de: fr
@@ -260,57 +266,6 @@ prompts:
       reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
       source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
     _ancien_nom: expert_gem_3.8_v2_neutre_justif
-  prompt_expert_04:
-    _neutralite:
-      verdict: conforme
-      famille: experte
-      le: '2026-09-14'
-      sha256_texte: b6982b833ef9db155e159088fe1daa6a2d3f23dcc7c91b6d1bffa9b0bd27aabc
-      auditeur: prompt-auditor (agent independant)
-      regles_evaluees:
-        - C1
-        - C2
-        - C3
-        - C4
-        - C5
-        - E1
-      langue: en
-      constats: []
-    content: |
-      Select the optimal travel mode taking the persona into account.
-
-      Situational trade-off principles:
-      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
-      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
-      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
-      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
-
-      [Output instructions]
-
-      1. Analyse the profile through these principles.
-      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
-      3. Return only a valid JSON object — no markdown, no extra text.
-      4. Justify the distribution in one concise sentence, stating where applicable why walking does not get the highest probability.
-
-      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
-    _provenance:
-      role: correction de 'expert_gem_3.8_v1' — le multiplicateur de durée est retiré au profit d'un qualificatif, la clause ne fixe plus de seuil chiffré
-      obtention: >-
-        « Face à des liaisons collectives qui doublent la duré… » devient « Face à des liaisons collectives qui augmentent signi… ». Aucune autre différence, au caractère près.
-        Audit du 2026-09-10 : la clause d'origine tombait sous C1 (seuil chiffré suivi d'une
-        consigne de rang), un multiplicateur écrit en lettres restant un nombre.
-      date: '2026-09-10'
-      derive_de: prompt_expert_03
-      reference: specs/hygiene-prompts-et-plateforme-experiences.md
-    _traduction:
-      de: fr
-      vers: en
-      le: '2026-09-14'
-      par: claude-opus-5
-      sha256_source: 018b598bb223dc518974e83545bd38f4af2fa6dd625f715dd182154fec399814
-      reference: docs/tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md
-      source_archivee: archive/2026-09-14_avant_bascule_anglaise/prompts/prompts.yaml
-    _ancien_nom: expert_gem_3.8_v2
   prompt_expert_03:
     _archive:
       statut: archive
@@ -347,7 +302,9 @@ prompts:
         doublent la durée […] l'usager privilégie […] son véhicule disponible ». Seuil chiffré
         suivi d'un mode nommé — forme la plus directe visée par C1. Second constat, non bloquant :
         C5, le changement de famille depuis le parent minimal_persona n'était pas explicite.
-      remplace_par: prompt_expert_04
+      # prompt_expert_04 a été SUPPRIMÉ le 2026-09-17 à la demande de l'auteur ; le
+      # remplacement désigne désormais son ablation, seule survivante de la lignée.
+      remplace_par: prompt_expert_05
       reference: specs/hygiene-prompts-et-plateforme-experiences.md
     content: |
       Select the optimal travel mode taking the persona into account.

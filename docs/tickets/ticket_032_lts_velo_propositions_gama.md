@@ -1,5 +1,16 @@
 # Ticket 032 — Profil de sécurité du trajet vélo (données OSM) et mise à jour des propositions pour llm_agent_gama
 
+
+> ⚠ **AVANT DE LANCER UN RUN GAMA — vérifier l'état des accidents sur les axes.**
+> Depuis le 2026-09-15, le paramètre « Accidents sur les axes » (catégorie `Simulation`) est
+> **VRAI par défaut**, et depuis le 2026-09-15 les accidents **allongent** les itinéraires
+> qui les traversent (ticket 070, travaux C/D/E). Tout run en tire selon la loi BAAC
+> 2019-2024, et en subit l'effet. ⚠ **Les runs d'avant et d'après le 2026-09-15 ne sont pas
+> comparables.**
+> Décocher la case si la mesure doit se faire sur un réseau intact, et **lire
+> `accidents_enabled` dans le `scenario_params.yaml`** du run avant d'en interpréter les
+> résultats. Détail : [`docs/arch/accidents-sur-les-axes.md`](../arch/accidents-sur-les-axes.md).
+
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité. Ce qui suit est une **spécification**.
 

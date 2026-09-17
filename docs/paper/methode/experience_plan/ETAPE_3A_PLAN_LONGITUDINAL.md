@@ -486,3 +486,239 @@ Tailles : S = quelques jours, M = une à deux semaines. L1, L2 et L3 sont indép
 - *« Pas de vérité terrain. »* — Assumé (§0) ; ce qui est testé est l'ordre des bras, la monotonie, la sensibilité, l'ordre de grandeur face à Larcom, van Exel, Loder.
 - *« Effet de l'article plutôt que de la mémoire. »* — Le choc I1 principal ne passe par **aucun** texte exogène : seulement le vécu. Le choc individuel I4 n'a même aucune trace dans le graphe.
 - *« Résultat dépendant du modèle. »* — Bras M-bis sur une seconde famille au palier minimal (Tier 2, SILICA).
+
+---
+
+# RÉVISION DU 2026-09-15 — état des lieux six jours après le plan v0.1
+
+> Le plan ci-dessus date du 2026-09-09 et n'a pas été validé (porte G0 toujours ouverte).
+> Entre-temps le dépôt a beaucoup bougé : mémoire refondue (ticket 071), run long outillé et
+> exécuté (075), défauts de ce run instruits (077), accidents peuplés (070), bascule anglaise et
+> cohorte v6 (074), pipeline de campagne (074 lot D). Cette section dit **ce qui est tombé, ce qui
+> tient, et ce qui a changé de nature**. Elle ne réécrit pas le plan : elle le corrige là où il est
+> devenu faux.
+
+## 1. Les huit manques du § 1.2, six jours après
+
+| # | Manque du 2026-09-09 | État au 2026-09-15 |
+|---|---|---|
+| 1 | Aucun événement joué | **Toujours vrai.** `experience.py:621-626` refuse encore. Mais un choc **météo** est jouable sans code (§ 4), et la panne de métro est à 1-2 jours de travail : `banned` est déjà déclaré dans la requête OTP (`otp.py:48,54`) et jamais lié |
+| 2 | Oracle non branchable dans GAMA | **Toujours vrai**, et c'est devenu le point dur du dispositif à trois bras (§ 3) |
+| 3 | Multi-jours théorique | **Tombé pour l'exécution, pas pour la mesure.** `simulation_max_days: 60` en service, un run de 32 jours a tourné ; mais **tous** les post-traitements coupent encore au premier jour (`frames.py:417`, `first_day_only=True` chez tous les appelants) |
+| 4 | STM perdue à la pause | **Tombé.** Point de reprise quotidien à 3 h simulées, rejeu à mémoire gelée (`reprise.py`, `ancre_run.py`) |
+| 5 | Décideur non épinglé côté GAMA | **Toujours vrai.** Le run du 14 septembre porte 8 décisions `mistral_key1` à côté de 352 Gemini, après une reprise où le fichier de fournisseurs restreint n'était plus en vigueur |
+| 6 | Cache sémantique dangereux | **Neutralisé en pratique** : 0 % de service mesuré en régime nominal (297 miss `no_candidates` sur 314). Le risque s'est inversé — c'est le **rejeu** qui repaie, pas le cache qui triche |
+| 7 | Souvenirs non tracés côté GAMA | **Tombé pour la lecture humaine** (journal Markdown par agent, ticket 075), **pas pour la mesure** : ni identifiant, ni vivier, ni score, ni rang par décision (lot E du 077) |
+| 8 | Nettoyage LTM à l'heure réelle | **Dépassé, et remplacé par pire** : la purge n'est appelée nulle part en run (`cleanup_user_memories` sans appelant hors garde-fou des 10 000 entrées). La loi d'oubli ne s'exerce qu'au classement |
+
+## 2. Ce que la refonte de la mémoire change pour ce plan
+
+Le § 1.3 du plan (« la mémoire actuelle ne peut pas porter une habitude au-delà d'une semaine ») est
+**périmé**. En service aujourd'hui :
+
+```
+force      = min(2,8 × (1 + 6·I), 30)   jours      # posée à l'écriture, I = gravité
+force     += 1 jour à chaque rappel servi
+poids      = exp(-Δt / force)                       # Δt depuis le DERNIER RAPPEL
+```
+
+Un trajet banal vit 2,8 jours ; un incident `gênant` 11,2 ; un choc à I = 0,8 **16,2 jours** ; un
+`marquant` 19,6. Le vivier C repêche les souvenirs de gravité ≥ 0,7 **sans condition de contexte**,
+et la gravité pèse 0,20 dans le score de rappel. **L'hystérésis est donc mécaniquement possible**,
+ce qu'elle n'était pas le 9 septembre.
+
+Trois conséquences pour le plan :
+
+- **§ 7 (« améliorer la mémoire ») est livré.** Les variantes M2 (importance), M3 (oubli avec
+  renforcement), M4 (registre d'habitudes), M5 (réflexion périodique) sont dans le code, sourcées
+  (ACT-R, MemoryBank/Ebbinghaus, Park, GATSim, Sumers, McGaugh, Diekelmann) et cataloguées pour
+  citation dans `docs/paper/sources/DEPOT_MEMOIRE_TICKET_071.md`. Il n'y a plus d'échelle
+  d'ablation à construire : il y a un mécanisme à **mesurer**.
+- **Le bras M-λ est supprimé.** Décision de l'auteur du 2026-09-14 (ticket 071 § 2.6, issue C) : le
+  critère de réfutation (ii) devient la **monotonie de la reprise**, le paramètre α et le bras
+  `exp_04d` disparaissent. L'article ne fait plus reposer H3 sur l'effet isolé d'un paramètre
+  d'oubli.
+- **Un seuil à connaître** : `memoire__importance_choc = 0,7` alors que la composante retard de la
+  gravité **plafonne à 0,50**. Un retard seul, même de deux heures, n'entre jamais dans le vivier
+  des chocs ; il faut le cumul avec une correspondance ratée (+0,20) ou un mode contraint (+0,10).
+  La composante `incident_reseau` (0,20) est déclarée **inactive** faute de source — elle attend
+  précisément le mécanisme d'événement.
+
+## 3. Le point dur : les trois bras ne sont pas jouables dans le même mode
+
+C'est le manque n° 2, devenu structurant maintenant que le reste avance.
+
+| Bras | Mode où il vit | Horizon |
+|---|---|---|
+| **M** — LLM + mémoire | `make run` (GAMA) **seul** | multi-jours |
+| **A** — LLM amnésique | GAMA **ou** plateforme | multi-jours en GAMA, 1 jour sinon |
+| **O** — oracle (LightGBM, MNL, KLR) | plateforme **seule** | 1 jour |
+
+La plateforme refuse `memoire`, `evenements` et `horizon_jours > 1` (`experience.py:607-619`) et
+refuse de piloter GAMA (`cli.py:478-482`) ; le contrôleur GAMA n'importe aucun décideur tabulaire.
+Une exécution GAMA n'écrit d'ailleurs pas dans `data/experiences/` : **il n'existe aucun chemin
+outillé pour comparer terme à terme un bras GAMA et un bras plateforme.**
+
+Trois issues, à trancher :
+
+1. **Brancher le décideur `modele` dans le contrôleur GAMA** — le plus propre, le plus coûteux. Les
+   trois oracles deviennent des bras de simulation à part entière.
+2. **Assumer la comparaison indirecte** : l'oracle ne joue que le jour nominal, et l'argument « il
+   est amnésique par construction » se démontre par construction, pas par run. Gratuit, plus faible.
+3. **Rejouer les décisions du run GAMA par l'oracle hors ligne**, déplacement par déplacement, depuis
+   `moves.csv`. Intermédiaire : demande un pont de format, pas un décideur nouveau.
+
+## 4. Le choc : la météo est jouable aujourd'hui, sans une ligne de code
+
+Découverte de la cartographie du 2026-09-15. Le fichier météo (`data/weather/meteo_toulouse_12_mois.csv`,
+365 jours réels) contient des épisodes extrêmes datés, et le mécanisme de **progression de la date**
+livré par le ticket 075 fait avancer chaque agent d'un jour calendaire par jour simulé :
+
+| Choc | Dates de la source | Réglage |
+|---|---|---|
+| Canicule | 2025-08-11 (43 °C), 08-12 (42), 08-16 (41) | `weather_window: ["2025-08-09","2025-08-09"]` → nominal 9-10, choc 11-12, rétabli 13+ |
+| Neige | 2025-11-20 (3 mm), 11-21 (5 mm) | départ 2025-11-18 |
+
+`weather_per_agent_dates: true`, `weather_weekdays_only: false`. Heure de départ, offre TC et agenda
+inchangés : *ceteris paribus* exact. **C'est le seul protocole « nominal / choc / rétabli » complet
+disponible immédiatement**, et il vaut pour une répétition générale du dispositif d'analyse.
+
+Ce qu'on ne peut pas faire : fabriquer un bulletin (pas de chemin d'override des valeurs).
+
+### 4 bis. ⚠ Correction du 2026-09-15 : la météo produit de l'adaptation, pas de l'hystérésis
+
+Vérification faite après coup dans `llm/gravite.py`. Ce qui rend un souvenir durable est sa
+**gravité**, et la gravité déterministe n'a que quatre composantes :
+
+| Composante | Poids | Source |
+|---|---|---|
+| Retard subi | 0,50 (sature à 30 min) | mesurée par la simulation |
+| Correspondance ratée | 0,20 | mesurée |
+| **Incident réseau** | **0,20** | **aucune source — composante déclarée inactive** |
+| Mode contraint | 0,10 | mesurée |
+
+Le seuil du vivier des chocs vaut **0,70**. Or **une canicule ne produit aucun retard** : son
+souvenir naît donc à gravité déterministe **nulle**, vit 2,8 jours, et ne franchit jamais le seuil
+qui le ferait repêcher sans condition de contexte. Pire, la météo est un **axe de rappel** : un
+souvenir de jour chaud s'apparie mal à une journée normale, donc il est rappelé **moins** une fois
+le choc passé — l'inverse exact de l'hystérésis.
+
+Il reste deux porteurs possibles pour un choc météo : la gravité **jugée** par le modèle sur un
+concept (`grave` = 0,75, `marquant` = 1,00, règle du maximum), et le **vivier B** qui remonte tout
+souvenir portant le mode offert, sans seuil de gravité. Les deux fonctionnent, mais aucun n'est
+ancré dans un fait mesuré par la simulation — et c'est précisément ce qu'un relecteur attaque.
+
+**Conséquence, qui corrige la recommandation du § 4 :** la météo reste le meilleur banc d'essai du
+dispositif d'analyse, mais **l'hystérésis publiable demande un choc qui produise un retard mesuré**.
+La panne de métro (`banned` OTP, 1 à 2 jours) est le plus petit ajout qui rende H3 défendable :
+45 minutes de retard saturent la composante retard à 0,50, une correspondance ratée ajoute 0,20, et
+le souvenir franchit le seuil à 0,70. C'est aussi ce qui donnerait enfin une source à la composante
+`incident_reseau`, câblée de bout en bout et inerte depuis le premier jour.
+
+Ordre de coût des autres chocs : **panne de métro / grève** (1-2 j : `banned` OTP + garde de cache
+OTP + levée du refus E6 + source pour `incident_reseau`) ; **accident routier** (semaines : le retard
+subi n'existe pas, et il ne se livre qu'avec deux gardes de cache — un itinéraire perturbé ne doit
+ni être lu ni être écrit dans le cache OSMnx, adressé sans la date) ; **incident individuel**
+(`tc_timeout` existe déjà et alimente la gravité, l'incident *provoqué* n'existe pas).
+
+## 5. Ce qui est sur le chemin critique : le ticket 077
+
+Le run de 32 jours a tourné sans planter. **Ce qu'il a appris est faux.**
+
+| Constat | Mesure |
+|---|---|
+| Marches fantômes (attente avant départ journalisée en marche) | **398 événements sur 412** de distance nulle |
+| Trajets voiture journalisés en transport collectif « Unknown Unknown » | **253** |
+| Un seul mot de mode sur sept traverse la traduction des axes | `axe_objet` nul sur **211 concepts sur 231** |
+| `known_beliefs` vide à la réflexion | **159 blocs sur 235 (68 %)** |
+| Corrections de concept en 30 jours | **0 précision, 1 contradiction** ; 225 concepts sur 231 restés à confiance 0,50 |
+| Purges, mises hors service | **0** |
+
+Xavier (609) prend la voiture **117 fois sur 117**, et **62 de ses 83 réflexions** parlent de marches
+de cinq à douze heures qui n'ont jamais eu lieu. Ses auto-réflexions consolident :
+*« I have fallen into a habit of walking for over five hours daily »*.
+
+**Un run de 60 jours lancé aujourd'hui produirait soixante jours de la même erreur.** Les lots A
+(vocabulaire des modes), B (observations GAMA) et C (trajets à itinéraire unique invisibles) du
+ticket 077 sont donc le préalable absolu à toute campagne — et ils ne coûtent **aucun appel LLM**.
+
+## 6. Coûts : la mesure remplace l'estimation, et l'incertitude s'est déplacée
+
+Mesuré sur `experiments/archive/2026-09-14_23_58` (5 agents, 31 jours, 553 appels) :
+
+| Poste | Tâches par agent-jour |
+|---|---|
+| Décision (`itinary_multi_agent`) | 2,17 |
+| Consolidation (`stm_reflection`) | 1,08 |
+| Auto-réflexion (`ltm_self_reflection`) | 0,32 |
+| **Total** | **3,57** |
+
+La part mémoire vaut **39 % des appels**, soit 0,65 appel mémoire par décision — la borne basse
+annoncée par le ticket 048. Les quatre lots du 071 n'ont effectivement rien coûté.
+
+L'incertitude n'est plus sur le nombre de tâches, elle est sur le **regroupement**, jamais mesuré à
+grande échelle en mode GAMA (1,33 agent par requête observé sur la campagne hors simulateur, contre
+une capacité de 15 pour Gemini 3.5 flash-lite) :
+
+| Cohorte × 60 jours | Tâches | Jours de quota à 1 000 RPD, sans regroupement | avec regroupement à 10 |
+|---|---|---|---|
+| 5 agents | 1 070 | ~1 | ~1 |
+| 20 agents | 4 300 | ~4 | ~1 |
+| 100 agents | 21 400 | **~21** | **~2** |
+| 200 agents | 42 800 | **~43** | **~4** |
+
+**Et le quota n'est peut-être pas le facteur limitant.** Le run mesuré avance à **11,4 minutes de
+temps réel par jour simulé à 5 agents** — 60 jours = 11 h de pas GAMA, avant tout appel. Le débit à
+100 agents n'a jamais été mesuré. Trois autres bornes matérielles : les points de reprise pèsent
+**0,38 Mo par jour simulé à 5 agents** sans aucune rotation (≈ 14 Go à 100 agents sur 60 jours) ; le
+run est mort sur une coupure WebSocket `1006` après 32 jours ; et `no_weekend_departures: true`
+reporte tout départ de week-end au lundi, soit **≈ 17 journées quasi vides sur 60**.
+
+## 7. Ce que la demande initiale demandait, et où ça en est
+
+| Demande du 2026-09-09 | État |
+|---|---|
+| GAMA offline, population limitée ~100, à calibrer | Multi-jours prouvé **à 5 agents** ; jamais tenté à 100 |
+| 5 jours minimum, jusqu'à 2 mois | **32 jours atteints**, horizon 60 configuré |
+| Bras LLM + mémoire | Jouable, mécanisme refondu |
+| Bras LLM amnésique | Commutateur propre ; **aucun run témoin n'existe** |
+| Bras oracle LightGBM | Existe, plus MNL et KLR ; **pas jouable dans GAMA** (§ 3) |
+| Pause / reprise à tout moment | Livré ; mais le rejeu **repaie ~75 %** des décisions et écrase les points anciens |
+| Différents profils | **5 profils contrastés extraits** (`population_5_memoire_075`) ; stratification à 100-200 non faite |
+| Améliorer la mémoire depuis les papiers, citer | **Fait** (ticket 071, 24 références cataloguées avec leur statut de dépôt) |
+| Protocole scientifique AAMAS | Le plan ci-dessus tient ; § 7 périmé, bras M-λ supprimé |
+| Un modèle par tâche, éventuellement choix ≠ mémoire | `gemini-3.1-flash-lite` réservé au run long ; séparation choix/mémoire **non implémentée** |
+| Simulateur de coût | Non écrit — mais la **mesure réelle** le remplace en partie (§ 6) |
+| Liste d'incidents marquants | Catalogue de 12 au § 4.4 ; **seule la météo est jouable** |
+| Tout enregistrer | Journal de mémoire livré ; **lot E du 077 manquant** (souvenirs servis par décision, options présentées, index tiré, statut cache) |
+
+## 8. Ordre de marche proposé
+
+```
+ 1. Réparer ce que la mémoire apprend        ticket 077 lots A, B, C      gratuit     ← chemin critique
+ 2. Rendre un run long mesurable             first_day_only, sim_day,     gratuit
+                                             rotation des points,
+                                             scripts d'analyse (lot F)
+ 3. Instrumenter l'effet de la mémoire       ticket 077 lot E             gratuit
+ 4. Répétition générale : choc météo         5 agents, ~10 jours          ~1 j de quota
+    + témoin amnésique apparié               mêmes graines
+ 5. Choisir le choc du chapitre 7            météo, ou panne métro (1-2 j de code)
+ 6. Monter en effectif par paliers           5 → 20 → 100, en mesurant    à chiffrer au palier
+                                             temps réel et regroupement
+ 7. Trancher le sort de l'oracle             brancher dans GAMA, rejeu hors ligne, ou comparaison indirecte
+```
+
+Les étapes 1 à 3 ne consomment aucun quota et conditionnent tout le reste. L'étape 4 est le premier
+moment où le dispositif produit une courbe.
+
+## 9. Questions à trancher (ajoutées à `specs/ticket_041/questions.md`)
+
+- **Q11** — Le choc du chapitre 7 : météo (jouable maintenant, mais l'article annonce une panne
+  métro) ou panne de métro (1-2 jours de code, cohérent avec le texte écrit) ?
+- **Q12** — L'oracle : branché dans GAMA, rejoué hors ligne, ou comparaison assumée comme indirecte ?
+- **Q13** — Effectif de la campagne : 5 agents lisent une mémoire mais ne mesurent aucune part
+  modale ; 100 agents mesurent mais le temps réel GAMA n'est pas connu. Palier intermédiaire à 20 ?
+- **Q14** — Week-ends : `no_weekend_departures: true` vide ~17 jours sur 60. Les compter dans
+  l'horizon, ou ne simuler que les jours ouvrés (hypothèse Q1 du plan) ?
+- **Q15** — Séparation des modèles choix / mémoire : la mettre en œuvre pour lever le goulot de
+  quota, ou garder un seul modèle et payer la simplicité de l'argument ?

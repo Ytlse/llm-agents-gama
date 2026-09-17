@@ -13,6 +13,11 @@ le grep et la citation restent libres.
 avant/après), s'arrêter, attendre un oui. **Un seul accord par tâche**, couvrant les
 fichiers annoncés dans ce diff et rien d'autre.
 
+**Style :** l'article ne porte pas la signature d'une IA. Quatre familles proscrites
+(typographie, lexique prédictible, structure symétrique, lissage sémantique) ; après toute
+écriture, `make paper-style F=<chapitre>`, y compris quand l'écriture est passée par `Bash`.
+Détail dans la skill `article-verrou`, section « Style ». Ticket 083.
+
 Le harness demande aussi via `permissions.ask` sur `Edit`/`Write` — mais **pas** sur une
 écriture passée par `Bash` (`sed -i`, `>`, heredoc, `git checkout`). Ces chemins-là sont
 soumis à la même règle : c'est à moi de l'appliquer.
@@ -146,6 +151,11 @@ Quick commands for analyzing the latest run:
 | `make capacity` | Pipeline capacity analysis |
 | `make init` | Initialization timing breakdown |
 | `make error` | Quick scan for ERROR logs and [ALARME] entries |
+| `make memoire-rapport RUN=…` | Per-persona memory report (HTML): mode timelines, itinerary tables (proposed vs chosen), concepts, habits |
+| `make mesures RUN=…` | CSV par jour simulé (ticket 093) : parts modales **et part décidée**, habitude/rupture par activité, vivier et opérations de concept, choc |
+| `make mesures-continuite AVANT=… APRES=…` | Recette du ticket 093 : vérifie qu'une coupure n'a ni dédoublé, ni troué, ni fait bouger une courbe |
+| `make personas-mesurables RUN=…` | Sélectionne des personas dont les décisions sont observables, depuis un run déjà joué |
+| `make personas-verifier [POP=…]` | Vérifie qu'une population de personas est bien celle que son MANIFEST décrit |
 | `make warning` | Quick scan for WARNING logs |
 
 **Use when:** Debugging slow runs, agent inactivity, cache misses, init bottlenecks.
@@ -187,6 +197,10 @@ Quick commands for analyzing the latest run:
 
 ### After changes to memory (STM/LTM):
 - `docs/arch/memory-stm-ltm.md`
+- `docs/changelog.md`
+
+### After changes to per-day measurements or persona selection:
+- `docs/arch/mesures-personas.md`
 - `docs/changelog.md`
 
 ### After changes to settings or configuration:

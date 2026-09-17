@@ -54,7 +54,9 @@ def test_duree_congestionnee_est_la_somme_par_arete():
     """Une arête par zone : la ville et l'agglomération sont congestionnées, l'extérieur non."""
     G = _graph()
     gdf = ox.routing.route_to_gdf(G, [1, 2, 3, 4], weight="travel_time")
-    cong, free = od._congested_travel_time(G, gdf, LUNDI_8H)
+    # Troisième valeur : le nombre d'arêtes accidentées (ticket 070, travail C), nul ici.
+    cong, free, n_acc = od._congested_travel_time(G, gdf, LUNDI_8H)
+    assert n_acc == 0
     ville = od._zone_factor(ZONE_CITY, LUNDI_8H)
     agglo = od._zone_factor(ZONE_AGGLO, LUNDI_8H)
     assert free == pytest.approx(300.0)
@@ -66,7 +68,9 @@ def test_duree_congestionnee_est_la_somme_par_arete():
 def test_trajet_hors_agglomeration_a_un_facteur_de_un():
     G = _graph()
     gdf = ox.routing.route_to_gdf(G, [3, 4], weight="travel_time")
-    cong, free = od._congested_travel_time(G, gdf, LUNDI_8H)
+    # Troisième valeur : le nombre d'arêtes accidentées (ticket 070, travail C), nul ici.
+    cong, free, n_acc = od._congested_travel_time(G, gdf, LUNDI_8H)
+    assert n_acc == 0
     assert cong == pytest.approx(free) == pytest.approx(100.0)
 
 

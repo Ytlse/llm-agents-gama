@@ -50,13 +50,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+from experiences import refus as REFUS
 from experiences.archive import (
     ETAT_ARRETEE,
     ETAT_EN_ATTENTE_QUOTA,
+    ETAT_EN_PAUSE,
     ETAT_EPUISEE,
     ETAT_INTERROMPUE,
     ETAT_TERMINEE,
     F_ETAT,
+    F_EXECUTION,
 )
 from experiences.chemins import racine_depot
 from experiences.experience import dossier_experiences
@@ -85,11 +88,38 @@ DELAI_ECRITURE_ETAT_S = 120.0
 #: passer à la suivante. Deux, parce qu'un échec unique est souvent un service qui redémarre.
 TENTATIVES_MAX = 2
 
+# Nombre de passes de REPÊCHAGE en fin de campagne. Une passe reprend tout ce qui a été
+# reporté (quota épuisé alors qu'autre chose pouvait tourner) et tout ce qui a échoué, les
+# compteurs de tentatives remis à zéro. Deux passes suffisent : la première rattrape le quota
+# d'un fournisseur renouvelé entre-temps, la seconde couvre un second épuisement. Au-delà, ce
+# n'est plus un quota, c'est une panne — et une campagne qui boucle sans fin ne se voit pas.
+REPECHAGES_MAX = 2
+
 #: États depuis lesquels une expérience peut être reprise telle quelle.
 ETATS_REPRENABLES = (ETAT_EPUISEE, ETAT_ARRETEE, ETAT_INTERROMPUE)
 
+#: Préfixe de la `raison` d'interruption posée par le chien de garde d'inactivité
+#: (`runner`, `inactivite:<N>s`). C'est la trace STRUCTURÉE de la pause subie : le message
+#: de `etat.json`, lui, est écrit pour des humains et peut être reformulé sans préavis.
+RAISON_PAUSE_SUBIE = "inactivite:"
+
+#: Au-delà, une expérience que la campagne croit « en vol » n'a plus donné signe de vie
+#: depuis trop longtemps pour que ce soit un calcul lent : son état n'a pas bougé d'un
+#: octet. Front montant, une alarme par expérience — la campagne ne tue rien, elle le DIT.
+#: Trente minutes : une exécution vivante réécrit son `etat.json` à chaque archivage, et le
+#: chien de garde du runner met en pause dès 420 s sans avancée.
+EN_VOL_FIGE_S = 1800.0
+
 F_STOP = "STOP"
 F_ETAT_CAMPAGNE = "etat.json"
+
+#: Ce qu'on doit retrouver dans la ligne de commande d'un pid pour le reconnaître comme une
+#: campagne en cours, et non comme un pid recyclé par le système.
+SIGNATURE_LANCEMENT = "campagne-lancer"
+
+#: Code de sortie d'un lancement refusé parce que la campagne tourne déjà. Distinct de 1
+#: (des expériences ont échoué) et de 130 (arrêt demandé) : ici rien n'a été tenté.
+CODE_DEJA_EN_VOL = 3
 
 
 class CampagneInvalide(ValueError):
@@ -276,6 +306,26 @@ def etat_experience(exp: str) -> dict:
     }
 
 
+def _fige_depuis(infos: dict) -> float | None:
+    """Secondes écoulées depuis la dernière écriture de l'état, ou None si indatable.
+
+    Une exécution vivante réécrit son `etat.json` en avançant. Un état qui ne bouge plus
+    est donc une exécution qui n'avance plus — sans avoir à tester la vie d'un pid, ce que
+    la campagne ne peut pas faire depuis l'hôte : les pid des exécutions appartiennent au
+    namespace du conteneur.
+    """
+    depuis = infos.get("depuis")
+    if not depuis:
+        return None
+    try:
+        quand = datetime.fromisoformat(str(depuis))
+    except ValueError:
+        return None
+    if quand.tzinfo is None:
+        quand = quand.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - quand).total_seconds()
+
+
 # ── État persistant de la campagne ───────────────────────────────────────────
 
 
@@ -290,6 +340,11 @@ def etat_par_defaut(campagne: Campagne) -> dict:
         "faites": [],
         "restantes": list(campagne.toutes),
         "echouees": {},
+        # Reportées : mises de côté parce que LEUR quota était épuisé alors que d'autres
+        # expériences pouvaient encore tourner. Ce n'est pas un échec — elles repassent à la
+        # passe de repêchage. Dormir 24 h devant une file pleine était le vrai défaut.
+        "reportees": {},
+        "repechages": 0,
         "sommeils": [],
         "pid": os.getpid(),
         "terminee_le": None,
@@ -333,6 +388,65 @@ def arreter(nom: str) -> bool:
 
 def _lever_arret(nom: str) -> None:
     (dossier_etat(nom) / F_STOP).unlink(missing_ok=True)
+
+
+# ── Un seul lancement à la fois ──────────────────────────────────────────────
+
+
+def _ligne_de_commande(pid: int) -> str | None:
+    """La ligne de commande du processus `pid`, ou None — soit qu'il n'existe plus, soit
+    qu'on n'ait pas pu le demander. Les deux cas rendent None À DESSEIN : le garde-fou
+    ci-dessous échoue OUVERT. Un doute sur l'état d'un pid ne doit jamais empêcher une
+    campagne de démarrer ; il n'y a qu'une seule chose pire que deux campagnes en parallèle,
+    c'est zéro campagne parce qu'un `ps` a hoqueté."""
+    try:
+        vu = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.warning(
+            f"[campagne] pid {pid} non interrogeable ({e}) — le garde-fou du double "
+            "lancement laisse passer, à vous de vérifier qu'aucune campagne ne tourne déjà.")
+        return None
+    return vu.stdout.strip() or None
+
+
+def _est_lancement_de(ligne: str, nom: str) -> bool:
+    """Cette ligne de commande est-elle un `campagne-lancer` de la campagne `nom` ?
+
+    On compare le nom sur le JETON qui suit `--nom`, pas en sous-chaîne : une campagne
+    nommée `c` se reconnaîtrait dans à peu près n'importe quoi, à commencer par le nom de
+    toutes les autres.
+    """
+    if SIGNATURE_LANCEMENT not in ligne:
+        return False
+    jetons = ligne.replace("--nom=", "--nom ").split()
+    return any(a == "--nom" and b == nom for a, b in zip(jetons, jetons[1:]))
+
+
+def campagne_en_vol(nom: str) -> int | None:
+    """Le pid d'un `campagne-lancer {nom}` DÉJÀ en cours sur cette machine, sinon None.
+
+    Pourquoi : deux processus lancés sur la même campagne écrivent le MÊME `etat.json`, à
+    tour de rôle, sans se voir. Le 2026-09-16, deux lancements à vingt minutes d'intervalle
+    se sont disputé les mêmes expériences pendant une demi-journée, en ont marqué deux
+    « arrêt demandé — 0/3299 archivées », puis ont déclaré la campagne TERMINÉE alors qu'un
+    bras n'avait jamais tourné. Rien dans le journal ne le disait.
+
+    Le pid seul ne suffit pas à conclure : le système les recycle. On confirme sur la ligne
+    de commande, qui doit porter `campagne-lancer` ET le nom de la campagne.
+    """
+    etat = lire_etat(nom)
+    if not etat or etat.get("terminee_le"):
+        return None
+    pid = etat.get("pid")
+    if not isinstance(pid, int) or pid == os.getpid():
+        return None
+    ligne = _ligne_de_commande(pid)
+    if not ligne or not _est_lancement_de(ligne, nom):
+        return None
+    return pid
 
 
 # ── Fenêtre de quota ─────────────────────────────────────────────────────────
@@ -431,19 +545,137 @@ class _Vue:
     jamais_lancees: list[str] = field(default_factory=list)
 
 
-def _observer(experiences: list[str], echouees: dict) -> _Vue:
+def _refus_du_dernier_lancement(exp: str) -> tuple[str | None, list[str]]:
+    """Ce que le dernier lancement refusé a déposé, ou `(None, [])` s'il n'a rien dit.
+
+    On ne lit QUE le marqueur le plus récent, et seulement s'il est postérieur au dernier
+    journal de lancement : un marqueur d'hier ne dit rien du lancement d'aujourd'hui.
+    """
+    base = dossier_experiences() / exp / "lancements"
+    if not base.is_dir():
+        return None, []
+    marqueurs = sorted(base.glob(f"*{REFUS.SUFFIXE_MARQUEUR}"))
+    if not marqueurs:
+        return None, []
+    journaux = sorted(p for p in base.glob("*.log"))
+    if journaux and journaux[-1].stem > marqueurs[-1].name.split(".")[0]:
+        return None, []
+    try:
+        contenu = json.loads(marqueurs[-1].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, []
+    return contenu.get("classe"), list(contenu.get("motifs") or [])
+
+
+def _reporter_experience(exp: str) -> bool:
+    """Arrête une expérience endormie sur son quota, pour rendre la main à la suivante.
+
+    Passe par le fichier STOP de son dossier d'exécution — le mécanisme d'arrêt existant, que
+    le runner surveille déjà. L'exécution se clôt en `arretee`, donc reprenable : c'est ce qui
+    permet à la passe de repêchage de la relancer là où elle s'était arrêtée, sans rien perdre.
+    """
+    dossier = derniere_execution(exp)
+    if dossier is None:
+        return False
+    try:
+        (dossier / "STOP").write_text(
+            "campagne: quota épuisé, expérience reportée à la passe de repêchage\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:  # pragma: no cover - dépend du système de fichiers
+        logger.error(f"[campagne] report de {exp} impossible ({exc})")
+        return False
+    return True
+
+
+def _reste_ailleurs(
+    campagne: Campagne, etat: dict, phase: Phase, en_vol: list[str]
+) -> list[str]:
+    """Ce qui pourrait tourner MAINTENANT si on laissait tomber ce qui dort sur son quota.
+
+    La phase courante d'abord, puis toutes les suivantes : un quota épuisé chez un fournisseur
+    ne dit rien des autres, et une campagne multi-fournisseurs n'a aucune raison d'attendre
+    la fenêtre de l'un pour lancer les bras de l'autre.
+    """
+    index = campagne.phases.index(phase)
+    a_venir = [phase, *campagne.phases[index + 1:]]
+    return [
+        e
+        for p in a_venir
+        for e in p.experiences
+        if e not in etat["faites"]
+        and e not in etat["echouees"]
+        and e not in etat["reportees"]
+        # Ce qui vole DÉJÀ n'est pas « autre chose à faire » : sans cette exclusion, les
+        # expériences endormies se compteraient elles-mêmes comme une alternative à
+        # elles-mêmes, et la campagne ne dormirait jamais.
+        and e not in en_vol
+    ]
+
+
+def _pause_est_subie(dossier: str | Path | None) -> bool:
+    """Cette exécution en pause attend-elle qu'on la reprenne, ou qu'on la laisse ?
+
+    `en_pause` recouvre trois situations que le runner distingue, mais que l'état seul
+    confond :
+
+    * le **chien de garde** a coupé après 420 s sans avancée — le processus est mort, plus
+      personne ne la reprendra ;
+    * l'exécution s'est arrêtée **incomplète** sans que personne ne demande de pause — même
+      chose, son propre message dit « reprendre » ;
+    * un **humain** a demandé la pause — elle attend une décision humaine, pas la campagne.
+
+    Les deux premières sont *subies* : la campagne les reprend. La troisième ne se reprend
+    pas dans le dos de celui qui l'a demandée. Le discriminant est la trace structurée
+    `interruptions[].raison`, pas le message de `etat.json` : celui-ci s'adresse à des
+    humains et peut être reformulé sans que rien ne casse visiblement.
+
+    Mesuré le 2026-09-16 : sans cette distinction, une pause de chien de garde figeait la
+    campagne pour de bon — comptée « en vol », elle n'était ni reprise, ni déclarée en échec,
+    et les expériences derrière elle n'étaient jamais lancées. Six heures de silence.
+
+    Un `execution.yaml` illisible ou absent rend `True`. Un blocage silencieux et sans borne
+    est pire qu'une reprise de trop : la reprise est plafonnée par `TENTATIVES_MAX`, après
+    quoi l'expérience est déclarée en échec et la campagne continue. Le blocage, lui, n'a
+    aucun plafond.
+    """
+    if dossier is None:
+        return True
+    try:
+        config = yaml.safe_load((Path(dossier) / F_EXECUTION).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return True
+    if not isinstance(config, dict):
+        return True
+    pauses = [
+        i
+        for i in (config.get("interruptions") or [])
+        if isinstance(i, dict) and i.get("cause") == "pause"
+    ]
+    if not pauses:
+        # Aucune pause demandée, et pourtant l'exécution est en pause : c'est le cas
+        # « incomplète — reprendre » du runner.
+        return True
+    return str(pauses[-1].get("raison") or "").startswith(RAISON_PAUSE_SUBIE)
+
+
+def _observer(experiences: list[str], echouees: dict, reportees: dict | None = None) -> _Vue:
     vue = _Vue()
+    reportees = reportees or {}
     for exp in experiences:
-        if exp in echouees:
+        if exp in echouees or exp in reportees:
             continue
-        etat = etat_experience(exp)["etat"]
+        infos = etat_experience(exp)
+        etat = infos["etat"]
         if etat == ETAT_TERMINEE:
             vue.faites.append(exp)
         elif etat == "definie":
             vue.jamais_lancees.append(exp)
-        elif etat in ETATS_REPRENABLES:
+        elif etat in ETATS_REPRENABLES or (
+            etat == ETAT_EN_PAUSE and _pause_est_subie(infos["dossier"])
+        ):
             vue.a_reprendre.append(exp)
-        else:  # en_cours, en_pause, en_attente_quota, en_attente_agent
+        else:  # en_cours, pause demandée, en_attente_quota, en_attente_agent
             vue.en_vol.append(exp)
             if etat == ETAT_EN_ATTENTE_QUOTA:
                 vue.dorment.append(exp)
@@ -466,9 +698,26 @@ def lancer(
     teste pas.
     """
     campagne = charger(nom)
+
+    # AVANT de toucher quoi que ce soit — en particulier avant de lever le drapeau d'arrêt,
+    # qu'un second lancement effacerait sous les pieds du premier.
+    deja = campagne_en_vol(nom)
+    if deja is not None:
+        logger.error(
+            f"[ALARME] [campagne] {nom} TOURNE DÉJÀ (pid {deja}) — ce lancement s'arrête "
+            "sans rien toucher. Deux processus sur la même campagne écrivent le même "
+            "etat.json sans se voir : ils se disputent les expériences et finissent par en "
+            f"déclarer perdues qui n'ont jamais tourné. Suivre celle qui tourne : "
+            f"make campagne-etat NOM={nom} — l'arrêter : make campagne-arreter NOM={nom}")
+        return CODE_DEJA_EN_VOL
+
     _lever_arret(nom)
 
     etat = (lire_etat(nom) if reprendre else None) or etat_par_defaut(campagne)
+    # Un état écrit avant l'introduction du report ne porte pas ces clés : les poser ici évite
+    # de faire dépendre la reprise d'une migration de fichier.
+    etat.setdefault("reportees", {})
+    etat.setdefault("repechages", 0)
     etat["pid"] = os.getpid()
     if reprendre and etat.get("terminee_le"):
         logger.info(f"[campagne] {nom} était déjà terminée le {etat['terminee_le']} — "
@@ -488,6 +737,10 @@ def lancer(
     tentatives: dict[str, int] = {}
     depuis: dict[str, float] = {}
     alarme_sommeil = False
+    # Front montant de l'alarme « en vol mais figé », une entrée par expérience : sans elle
+    # le message repartirait à chaque tour, soit deux fois par minute, et noierait le journal
+    # qu'il est censé rendre lisible.
+    alarme_en_vol: set[str] = set()
     # Une expérience qu'on vient de lancer n'a pas encore écrit son `etat.json` : le temps
     # que `lancer` démarre, réserve ses clés et ouvre son dossier d'exécution, elle se lit
     # encore « definie ». Sans ce délai de grâce, la campagne la relançait à chaque tour —
@@ -514,7 +767,37 @@ def lancer(
             raise CampagneInvalide(
                 f"l'état de {nom} désigne la phase {etat['phase_courante']!r}, absente du "
                 "fichier de campagne. Corrigez le fichier, ou relancez avec --recommencer.")
-        vue = _observer(list(phase.experiences), etat["echouees"])
+        vue = _observer(list(phase.experiences), etat["echouees"], etat["reportees"])
+
+        # ── En vol, vraiment ? ────────────────────────────────────────────────
+        # Le délai de grâce ci-dessous ne surveille que les lancements de CE processus
+        # (`lancees`) : une exécution bloquée avant un redémarrage de la campagne échappait
+        # à toute surveillance. Ici on ne suppose rien du pid — on regarde si l'état bouge.
+        # La campagne ne tue rien et ne relance rien : elle le DIT, et c'est déjà ce qui
+        # manquait le 2026-09-16, où six heures se sont passées sans un mot.
+        #
+        # Ce qui DORT sur son quota est exclu : son état ne bouge pas non plus, mais c'est
+        # une attente comprise, déjà consignée par le sommeil de lot et son alarme des 26 h.
+        # L'alarmer ici doublerait le message et ferait passer une attente normale pour une
+        # anomalie — exactement ce qu'une alarme doit éviter.
+        for exp in [e for e in vue.en_vol if e not in vue.dorment]:
+            fige = _fige_depuis(etat_experience(exp))
+            if fige is None or fige < EN_VOL_FIGE_S:
+                alarme_en_vol.discard(exp)
+                continue
+            if exp in alarme_en_vol:
+                continue
+            alarme_en_vol.add(exp)
+            infos = etat_experience(exp)
+            logger.error(
+                f"[ALARME] [campagne] {exp} est comptée EN VOL, mais son état n'a pas bougé "
+                f"depuis {fige / 60:.0f} min — état {infos['etat']!r}, motif : "
+                f"{infos.get('raison')!r}, dossier {infos['dossier']}. La campagne ne la "
+                f"touche pas et attend derrière elle. Reprendre : "
+                f"make experience-reprendre EXP={exp} — arrêter : "
+                f"make experience-arreter EXP={exp}"
+            )
+
         # Ce qu'on vient de lancer compte comme en vol tant que son état n'est pas écrit.
         for exp, quand in list(lancees.items()):
             if exp in vue.faites or exp in vue.en_vol or exp in vue.a_reprendre:
@@ -527,8 +810,40 @@ def lancer(
                 # six heures sur un témoin dont l'artefact était refusé, la phase bloquée et
                 # les bras LLM jamais atteints. Un blocage silencieux vaut moins qu'un échec
                 # déclaré : au moins l'échec laisse passer la suite.
+                # …SAUF quand le lanceur a dit pourquoi il refusait. Il dépose alors un
+                # marqueur à côté de son journal : une pénurie de quota du jour n'est pas une
+                # panne, elle se REPORTE sans consommer de tentative, et la passe de repêchage
+                # la reprendra. Le 2026-09-16, quatre bras ont été déclarés cassés pour cette
+                # seule raison qu'on ne lisait pas ce que le refus disait.
+                classe, motifs = _refus_du_dernier_lancement(exp)
+                if classe is not None and REFUS.est_reportable(classe):
+                    etat["reportees"][exp] = {
+                        "motif": "; ".join(motifs)[:300] or classe, "classe": classe,
+                        "le": _iso()}
+                    if etat.get("courante") == exp:
+                        etat["courante"] = None
+                    ecrire_etat(nom, etat)
+                    logger.info(
+                        f"[campagne] ⏭ {exp} REPORTÉE au lancement — {classe} : le lanceur a "
+                        f"refusé de créer l'exécution faute de quota du jour. Aucune tentative "
+                        f"décomptée ; elle repassera à la passe de repêchage.")
+                    continue
                 tentatives[exp] = tentatives.get(exp, 0) + 1
                 journal = dossier_experiences() / exp / "lancements"
+                if classe is not None:
+                    # Le refus a une raison connue : la dire, plutôt que « sans jamais écrire
+                    # d'état », qui envoie chercher une panne inexistante.
+                    etat["echouees"][exp] = {
+                        "motif": f"lancement refusé ({classe}) : " + "; ".join(motifs)[:300],
+                        "classe": classe, "tentatives": tentatives[exp], "le": _iso()}
+                    etat["restantes"] = [e for e in etat["restantes"] if e != exp]
+                    if etat.get("courante") == exp:
+                        etat["courante"] = None
+                    ecrire_etat(nom, etat)
+                    logger.error(
+                        f"[ALARME] [campagne] {exp} : lancement refusé — {classe}. "
+                        + "; ".join(motifs)[:200])
+                    continue
                 if tentatives[exp] > TENTATIVES_MAX:
                     etat["echouees"][exp] = {
                         "motif": f"lancée {tentatives[exp]} fois sans jamais écrire d'état "
@@ -567,20 +882,63 @@ def lancer(
 
         # ── Phase close ? ─────────────────────────────────────────────────────
         reste = [e for e in phase.experiences
-                 if e not in etat["faites"] and e not in etat["echouees"]]
+                 if e not in etat["faites"]
+                 and e not in etat["echouees"]
+                 and e not in etat["reportees"]]
         if not reste:
             suivantes = [p for p in campagne.phases
                          if campagne.phases.index(p) > campagne.phases.index(phase)]
             if not suivantes:
+                # ── Repêchage : rien n'est abandonné sans une seconde chance ───────
+                # Tout ce qui a été reporté (quota) ou déclaré en échec repasse, compteurs de
+                # tentatives remis à zéro. Sans cette passe, un quota épuisé en milieu de
+                # campagne coûtait l'expérience pour de bon : elle sortait de l'observation et
+                # n'y revenait pas, même en relançant la campagne.
+                a_repecher = list(etat["reportees"]) + list(etat["echouees"])
+                if a_repecher and etat["repechages"] < REPECHAGES_MAX:
+                    etat["repechages"] += 1
+                    reportees, echouees = dict(etat["reportees"]), dict(etat["echouees"])
+                    etat["reportees"], etat["echouees"] = {}, {}
+                    for exp in reportees:
+                        # Un report n'est pas une tentative ratée : compteur remis à neuf.
+                        tentatives.pop(exp, None)
+                    for exp in echouees:
+                        # Un échec réel n'a droit qu'à UNE relance par passe de repêchage, pas
+                        # à un compteur neuf : sans cela une expérience cassée se relancerait
+                        # TENTATIVES_MAX fois à chaque passe, et le plafond ne voudrait plus rien.
+                        tentatives[exp] = TENTATIVES_MAX - 1
+                    premiere = next(
+                        (p for p in campagne.phases
+                         if any(e in a_repecher for e in p.experiences)),
+                        campagne.phases[0],
+                    )
+                    etat["phase_courante"] = premiere.nom
+                    etat["courante"] = None
+                    ecrire_etat(nom, etat)
+                    logger.info(
+                        f"[campagne] ↺ REPÊCHAGE {etat['repechages']}/{REPECHAGES_MAX} — "
+                        f"{len(reportees)} reportée(s) et {len(echouees)} en échec repassent, "
+                        f"depuis la phase {premiere.nom!r} : "
+                        + " · ".join(a_repecher)
+                    )
+                    continue
+
                 etat["terminee_le"] = _iso()
                 etat["courante"] = None
                 ecrire_etat(nom, etat)
                 echecs = len(etat["echouees"])
+                reports = len(etat["reportees"])
                 logger.info(
                     f"[campagne] {nom} TERMINÉE — {len(etat['faites'])}/{total} faites, "
-                    f"{echecs} en échec, {len(etat['sommeils'])} mise(s) en sommeil, "
-                    f"{tours} tour(s).")
-                if echecs:
+                    f"{echecs} en échec, {reports} encore reportée(s), "
+                    f"{etat['repechages']} repêchage(s), "
+                    f"{len(etat['sommeils'])} mise(s) en sommeil, {tours} tour(s).")
+                for exp, det in etat["reportees"].items():
+                    logger.error(
+                        f"[ALARME] [campagne] {exp} reste REPORTÉE après "
+                        f"{etat['repechages']} repêchage(s) — {det.get('motif')}. Son quota ne "
+                        "s'est pas rouvert dans la campagne : relancez-la seule plus tard.")
+                if echecs or reports:
                     for exp, det in etat["echouees"].items():
                         logger.error(f"[campagne] échec non résolu : {exp} — {det.get('motif')}")
                     return 1
@@ -617,8 +975,29 @@ def lancer(
                 _lancer_experience(exp, campagne.lanceurs)
             vue.en_vol.append(exp)
 
-        # ── Sommeil de quota : tout ce qui vole dort ──────────────────────────
+        # ── Quota épuisé : reporter plutôt que dormir devant une file pleine ──
+        # Dormir est juste quand il n'y a RIEN d'autre à faire, et faux dès qu'une autre
+        # expérience pourrait tourner — un quota épuisé chez un fournisseur ne dit rien des
+        # autres. Mesuré le 2026-09-15 : une campagne à trois fournisseurs dormait jusqu'à 24 h
+        # sur le quota du premier, les bras des deux autres à l'arrêt derrière.
         if vue.en_vol and vue.dorment and len(vue.dorment) == len(vue.en_vol):
+            ailleurs = _reste_ailleurs(campagne, etat, phase, vue.en_vol)
+            if ailleurs:
+                for exp in vue.dorment:
+                    motif = etat_experience(exp).get("raison") or ETAT_EN_ATTENTE_QUOTA
+                    if _reporter_experience(exp):
+                        etat["reportees"][exp] = {"motif": str(motif), "le": _iso()}
+                        if etat.get("courante") == exp:
+                            etat["courante"] = None
+                        logger.info(
+                            f"[campagne] ⏭ {exp} REPORTÉE (quota : {motif}) — "
+                            f"{len(ailleurs)} expérience(s) peuvent tourner sans elle. "
+                            "Elle repassera à la passe de repêchage, reprise là où elle "
+                            "s'est arrêtée."
+                        )
+                ecrire_etat(nom, etat)
+                dormir(intervalle_s)
+                continue
             quand, secondes = prochain_reveil()
             if secondes > SOMMEIL_SUSPECT_S and not alarme_sommeil:
                 alarme_sommeil = True
@@ -683,6 +1062,8 @@ def etat_lisible(nom: str) -> dict:
                    for p in campagne.phases],
         "total": len(campagne.toutes),
         "faites": faites,
+        "reportees": (etat or {}).get("reportees", {}),
+        "repechages": (etat or {}).get("repechages", 0),
         "etat": etat,
         "arret_demande": demande_arret(nom),
         "par_experience": par_experience,
@@ -692,12 +1073,14 @@ def etat_lisible(nom: str) -> dict:
 
 
 __all__ = [
+    "CODE_DEJA_EN_VOL",
     "INTERVALLE_S",
     "VERSION_CAMPAGNE",
     "Campagne",
     "CampagneInvalide",
     "Phase",
     "arreter",
+    "campagne_en_vol",
     "etat_lisible",
     "lancer",
     "charger",

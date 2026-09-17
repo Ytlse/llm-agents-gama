@@ -10,14 +10,20 @@ une durée d'accident à tous les mardis 8 h — et aucune décision d'agent ne 
 à tort par le cache de décisions, dont la clé est construite sur les codes d'options et ignore
 les durées. Les deux pièges sont neutralisés par construction, pas par vigilance.
 
-CE QUE LA LOI DE TIRAGE VAUT AUJOURD'HUI. Un taux journalier constant, une heure uniforme, une
-arête tirée proportionnellement à sa longueur. **Ce n'est pas représentatif** : BAAC permet de
-conditionner à l'heure, au jour, à la météo et à la classe de vitesse, et rien de tout cela
-n'est fait ici. `tirer_journee` est l'unique fonction à remplacer pour le devenir — c'est la
-couture, et c'est tout ce que cette tranche prétend livrer.
+CE QUE LA LOI DE TIRAGE VAUT AUJOURD'HUI. Elle est MESURÉE sur BAAC/ONISR 2019-2024 (3 789
+accidents corporels du département 31, 3 414 dans l'emprise du graphe) et conditionne trois
+variables : le NOMBRE par le jour de semaine, l'HEURE par la distribution horaire observée, la
+CLASSE D'AXE par la distribution en vitesse autorisée — l'arête étant ensuite tirée au prorata
+de sa longueur DANS sa classe. Les coefficients vivent dans `config/accidents_baac.yaml`, qui
+porte aussi la raison de chaque choix.
 
-⚠ UN COMPTAGE À ZÉRO N'EST PAS UNE PANNE, et l'inverse est vrai aussi : à 1,73 accident par
-jour sur un département, beaucoup de journées simulées n'en verront aucun. C'est le
+⚠ UNE SEULE VARIABLE RESTE NON ÉTABLIE : le facteur météo. Son estimation a été faite et
+REJETÉE (les nomenclatures `atm` et celle de la source météo locale ne découpent pas le même
+monde), il vaut donc 1. Le fichier de coefficients conserve le calcul rejeté pour que le refus
+soit vérifiable.
+
+⚠ UN COMPTAGE À ZÉRO N'EST PAS UNE PANNE, et l'inverse est vrai aussi : à 1,56 accident par
+jour sur l'emprise simulée, beaucoup de journées simulées n'en verront aucun. C'est le
 comportement correct. C'est pourquoi le journal dit toujours combien ont été tirés, y compris
 zéro — sans ce compteur, « aucun accident » et « le tirage ne tourne pas » se ressemblent trop.
 """
@@ -45,7 +51,7 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 CleArete = tuple[int, int]
 
 # Au-delà, on refuse de tirer : un état du monde qui enfle sans borne est un bug, pas un
-# scénario. Le seuil est très au-dessus de tout tirage plausible (1,73/jour).
+# scénario. Le seuil est très au-dessus de tout tirage plausible (1,56/jour mesuré).
 MAX_ACCIDENTS_PAR_JOUR = 200
 
 
@@ -172,6 +178,10 @@ class CompteursJournee:
     jour: int
     tires: int = 0
     refuses: int = 0
+    # Déplacements dont l'itinéraire a traversé une arête accidentée. Publié même à zéro :
+    # sans lui, « aucun effet mesuré » et « aucun trajet touché » sont indiscernables, et
+    # c'est le motif récurrent du dépôt — l'absence de mesure déguisée en résultat.
+    trajets_touches: int = 0
 
 
 class RegistreAccidents:
@@ -193,6 +203,8 @@ class RegistreAccidents:
         # La classe se tire sur la loi BAAC, l'arête au prorata de sa longueur DANS la classe.
         self._aretes: dict[str, list[tuple[CleArete, float]]] = {}
         self._cles: set[CleArete] = set()
+        # (lat, lon) des nœuds, pour résoudre un point en arête lors d'une pose manuelle.
+        self._positions: dict[int, tuple[float, float]] | None = None
 
     # ── Préparation ──────────────────────────────────────────────────────────
 
@@ -222,6 +234,16 @@ class RegistreAccidents:
 
         self._aretes = par_classe
         self._cles = {cle for aretes in par_classe.values() for cle, _ in aretes}
+        # Positions des nœuds : seule la pose manuelle s'en sert, mais elles ne sont
+        # disponibles qu'ici, au moment où le graphe est sous la main.
+        try:
+            self._positions = {
+                n: (float(d["y"]), float(d["x"]))
+                for n, d in graphe.nodes(data=True)
+                if "x" in d and "y" in d
+            }
+        except (AttributeError, TypeError, KeyError, ValueError):
+            self._positions = None
 
         if not par_classe:
             logger.error(
@@ -410,7 +432,8 @@ class RegistreAccidents:
         logger.info(
             f"[accidents] Jour {jour} ({JOURS[jour_semaine]}) — taux conditionné "
             f"{taux:.3f}/jour, accidents tirés={compteurs.tires}, refusés={compteurs.refuses}, "
-            f"actifs au total={len(self._accidents)}"
+            f"actifs au total={len(self._accidents)}, "
+            f"trajets touchés la veille={self._compteurs[-2].trajets_touches if len(self._compteurs) > 1 else 0}"
         )
         for accident in poses:
             logger.info(f"[accidents]   posé : {accident}")
@@ -443,15 +466,118 @@ class RegistreAccidents:
         return [a for a in self._accidents if a.actif_a(ts)]
 
     def accident_sur(self, arete: CleArete, ts: int) -> Accident | None:
-        """L'accident actif sur cette arête à cet instant, s'il y en a un.
-
-        Non utilisé par cette tranche — aucune durée n'est modifiée. C'est le point d'entrée
-        que la tranche « retard subi » consommera depuis `_congested_travel_time`.
-        """
+        """L'accident actif sur cette arête à cet instant, s'il y en a un."""
         for a in self._accidents:
             if a.arete == arete and a.actif_a(ts):
                 return a
         return None
+
+    def facteur_arete(self, arete: CleArete, ts: int) -> float:
+        """Ce par quoi multiplier le temps de parcours de cette arête à cet instant.
+
+        Rend 1,0 quand aucun accident n'y est actif — le cas de très loin le plus fréquent,
+        et c'est pourquoi la recherche s'arrête au premier test.
+        """
+        if not self._accidents:
+            return 1.0
+        return (
+            float(self._config.facteur_ralentissement)
+            if self.accident_sur(arete, ts) is not None
+            else 1.0
+        )
+
+    def poser_manuellement(
+        self, lat: float, lon: float, debut_ts: int, duree_minutes: int
+    ) -> Accident | None:
+        """Pose un accident CHOISI, sur l'arête du graphe la plus proche d'un point.
+
+        C'est le geste de l'expérimentateur, et c'est de LUI que viendront les figures : le
+        tirage aléatoire, lui, ne peut rien montrer à ces cohortes (0,6 déplacement touché par
+        journée simulée à 1 000 agents). Même mécanisme, même monde, autre déclenchement —
+        l'accident posé entre dans le même registre et suit exactement le même chemin.
+
+        Rend l'accident posé, ou `None` en le journalisant si la pose est refusée.
+        """
+        if not self.pret:
+            logger.error(
+                "[ALARME] Pose manuelle impossible : réseau non indexé. "
+                f"Demande ({lat}, {lon}) à {debut_ts} ignorée."
+            )
+            return None
+        if duree_minutes <= 0:
+            logger.error(
+                f"[ALARME] Pose manuelle refusée : durée {duree_minutes} min non positive."
+            )
+            return None
+
+        arete, classe = self._arete_la_plus_proche(lat, lon)
+        if arete is None:
+            logger.error(
+                f"[ALARME] Pose manuelle refusée : aucune arête trouvée près de ({lat}, {lon})."
+            )
+            return None
+
+        accident = Accident(
+            arete=arete,
+            debut_ts=int(debut_ts),
+            duree_s=int(duree_minutes) * 60,
+            classe_vitesse=classe or "",
+        )
+        if not self._poser(accident):
+            return None
+        if self._compteurs:
+            self._compteurs[-1].tires += 1
+        logger.info(f"[accidents] POSÉ À LA MAIN : {accident}")
+        return accident
+
+    def _arete_la_plus_proche(self, lat: float, lon: float) -> tuple[CleArete | None, str | None]:
+        """L'arête dont un extrémité est la plus proche du point, par distance euclidienne.
+
+        Approximation assumée : on compare des degrés, pas des mètres, et on ne regarde que
+        les nœuds. À l'échelle d'une agglomération et pour désigner « la rocade ici », c'est
+        suffisant — et cela évite de dépendre d'osmnx dans ce module.
+        """
+        if self._positions is None:
+            logger.error(
+                "[ALARME] Positions des nœuds non indexées : la pose manuelle ne peut pas "
+                "résoudre un point en arête. Le graphe a-t-il été chargé ?"
+            )
+            return None, None
+        meilleure, distance2 = None, float("inf")
+        for classe, aretes in self._aretes.items():
+            for cle, _cumul in aretes:
+                pos = self._positions.get(cle[0])
+                if pos is None:
+                    continue
+                d2 = (pos[0] - lat) ** 2 + (pos[1] - lon) ** 2
+                if d2 < distance2:
+                    meilleure, distance2 = (cle, classe), d2
+        return meilleure if meilleure else (None, None)
+
+    def compter_trajet_touche(self) -> None:
+        """Un déplacement de plus dont l'itinéraire a traversé une arête accidentée."""
+        if self._compteurs:
+            self._compteurs[-1].trajets_touches += 1
+
+    def signature_active(self, ts: int) -> str:
+        """Signature des accidents actifs à cet instant, pour les clés de cache.
+
+        VOLONTAIREMENT GROSSIÈRE : elle décrit l'état du monde, pas ce que l'agent traverse.
+        Deux agents dont aucun itinéraire ne croise l'accident auront quand même une clé
+        distincte de celle d'un monde sans accident. C'est sur-invalider, jamais
+        sous-invalider — l'erreur est du bon côté, et la bonne façon d'y remédier serait de
+        connaître l'itinéraire au moment de bâtir la clé, ce qui n'est pas le cas ici.
+        """
+        actifs = self.actifs_a(ts)
+        if not actifs:
+            return ""
+        return ",".join(
+            sorted(f"{a.arete[0]}-{a.arete[1]}@{a.debut_ts}" for a in actifs)
+        )
+
+    def a_des_accidents_actifs(self, ts: int) -> bool:
+        """Y a-t-il un accident en cours ? Décide de contourner les caches."""
+        return any(a.actif_a(ts) for a in self._accidents)
 
     @property
     def accidents(self) -> list[Accident]:

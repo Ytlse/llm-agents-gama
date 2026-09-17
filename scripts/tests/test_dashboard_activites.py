@@ -956,7 +956,9 @@ class FauxStFiltre(FauxStRegistre):
     def dataframe(self, donnees, *_a, **_k):
         if not self.profondeur:
             self.tableaux += 1
-            self.vues.append(donnees)
+            # Hors référence, le tableau grise ses lignes (R22) et Streamlit reçoit un `Styler` :
+            # on garde la table nue, c'est elle que ces tests-ci interrogent.
+            self.vues.append(getattr(donnees, "data", donnees))
         return None
 
 
@@ -1222,3 +1224,71 @@ def test_bouton_passerelle_recharger_lance_la_cible(plateforme):
     assert any("Recharger la passerelle" in b for b in st.boutons)
     assert lances == [("passerelle-recharger", {})]
 
+
+
+# ── Le coût d'un battement (2026-09-16) ──────────────────────────────────────
+
+
+class TestCoutDunBattement:
+    """Un volet plus lent que sa propre période sature un cœur pour toujours, en silence.
+
+    Mesuré le 2026-09-16 : `activites_en_cours()` coûtait 9 s à chaud, 28 s à froid, et son
+    fragment le redemandait toutes les 5 s. Le tableau de bord a brûlé 210 minutes de CPU en
+    dix heures, à 98 % en continu, sans un seul signal. 88 % de ce temps partait dans
+    `yaml.safe_load`, qui prend l'analyseur Python alors que libyaml est installé ; et un
+    tiers des lectures étaient des relectures du même fichier — `providers.yaml` cinquante-six
+    fois par appel.
+
+    Ce qui est vérifié ici n'est pas une durée — une assertion sur l'horloge est instable sur
+    une machine chargée, et c'est précisément une machine chargée qu'on veut mesurer. C'est le
+    NOMBRE D'ANALYSES, qui est la cause : il ne doit plus y avoir de relecture inutile, et un
+    fichier qui n'a pas bougé ne doit plus jamais être réanalysé.
+    """
+
+    @pytest.fixture(autouse=True)
+    def cache_neuf(self):
+        experiences._yaml_analyse.cache_clear()
+        yield
+        experiences._yaml_analyse.cache_clear()
+
+    def test_libyaml_est_utilise_quand_il_est_la(self):
+        """×7,9 mesuré sur les fichiers du dépôt. `yaml.safe_load` ne le prend jamais seul."""
+        if not getattr(yaml, "__with_libyaml__", False):
+            pytest.skip("libyaml absent de cet interpréteur : l'analyseur Python est le bon repli")
+        assert experiences._CHARGEUR_YAML is yaml.CSafeLoader
+
+    def test_le_meme_fichier_lu_deux_fois_n_est_analyse_qu_une_fois(self, plateforme):
+        manifeste = plateforme / "jeux" / "j_clos" / "MANIFEST.yaml"
+        assert experiences._yaml(manifeste) == experiences._yaml(manifeste)
+        infos = experiences._yaml_analyse.cache_info()
+        assert (infos.misses, infos.hits) == (1, 1), (
+            "`providers.yaml` était analysé 56 fois dans un seul battement")
+
+    def test_un_battement_qui_se_repete_ne_reanalyse_RIEN(self, plateforme):
+        experiences.activites_en_cours()
+        apres_premier = experiences._yaml_analyse.cache_info().misses
+        assert apres_premier > 0, "le premier battement doit bien lire quelque chose"
+
+        experiences.activites_en_cours()
+        assert experiences._yaml_analyse.cache_info().misses == apres_premier, (
+            "un second battement sans rien de changé sur le disque ne doit coûter aucune "
+            "analyse : c'est ce qui ramène le coût de 9 s à moins de 100 ms.")
+
+    def test_un_fichier_REECRIT_est_bien_relu(self, plateforme):
+        """Le garde-fou du cache : `ajouter_variante` réécrit `prompts.yaml` puis le relit
+        aussitôt pour vérifier son propre travail. Un cache qui servirait l'ancien contenu
+        ferait échouer cette vérification — ou pire, la ferait réussir à tort."""
+        manifeste = plateforme / "jeux" / "j_neuf" / "MANIFEST.yaml"
+        assert experiences._yaml(manifeste).get("clos") is False
+
+        time.sleep(0.01)  # que le mtime bouge, même sur un système de fichiers grossier
+        manifeste.write_text(yaml.safe_dump({"nom": "j_neuf", "clos": True}), encoding="utf-8")
+        assert experiences._yaml(manifeste).get("clos") is True, (
+            "un fichier réécrit doit être relu : la clé du cache porte la taille ET le mtime")
+
+    def test_un_fichier_absent_ou_illisible_ne_leve_pas(self, plateforme):
+        assert experiences._yaml(plateforme / "jamais_ecrit.yaml") == {}
+        assert experiences._yaml(plateforme / "jeux") == {}, "un dossier n'est pas un fichier"
+        casse = plateforme / "casse.yaml"
+        casse.write_text("{ ceci n'est pas: du yaml: du tout", encoding="utf-8")
+        assert experiences._yaml(casse) == {}

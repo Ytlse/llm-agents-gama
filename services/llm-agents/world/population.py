@@ -156,7 +156,7 @@ class WorldPopulation:
         """Write the full population (with current scheduled_start_time) to path atomically."""
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump([p.model_dump() for p in self.get_people_list()], f, ensure_ascii=False, indent=2)
+            json.dump([p.model_dump(mode="json") for p in self.get_people_list()], f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
         logger.info(f"[checkpoint] Population snapshot written → {path}")
 

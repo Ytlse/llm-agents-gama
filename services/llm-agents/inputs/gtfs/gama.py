@@ -6,7 +6,6 @@ suitable for the GAMA multi-agent simulation platform. It processes transit sche
 routes, and calendar information to create simulation-ready data structures.
 """
 
-from collections import defaultdict
 from typing import Optional
 from scipy.sparse import coo_matrix
 from inputs.gtfs.reader import GTFSData
@@ -123,8 +122,14 @@ class GamaGTFS:
         Creates a compact binary representation where each service ID maps to a bitmask
         indicating which dates the service operates. Each bit represents a date.
 
+        ⚠ Le masque n'est plus un ENTIER mais une CHAÎNE de "0"/"1", un caractère par date
+        (2026-09-15, ticket 075). L'entier de GAMA tient sur 32 bits : au-delà de la 31ᵉ date,
+        `1 << idx` ne se relisait plus correctement côté modèle, et au 32ᵉ jour de calendrier
+        le diviseur `BITWISE_BIT_VAL[32]` valait 0 — « Division by zero », simulation morte.
+        Trouvé au jour 32 d'un run de soixante jours. Une chaîne n'a pas de largeur maximale :
+        le calendrier peut désormais couvrir l'horizon qu'on veut.
+
         Note: TODO This function only works for exception_type = 1 and empty calendar.txt
-        Limited to 64 dates maximum due to bitmask size.
 
         Returns:
             dict: Binary calendar data with dates and service bitmasks
@@ -136,17 +141,23 @@ class GamaGTFS:
         all_dates: list[datetime.datetime] = [min_date + datetime.timedelta(days=i) 
               for i in range((max_date - min_date).days + 1)]
         all_dates = sorted([date.strftime("%Y%m%d") for date in all_dates])
-        assert len(all_dates) <= 64, f"Number of dates is too large to use binary map: {len(all_dates)}. Please use build_calendar_sparse_matrix instead."
         _map_dates = {date: i for i, date in enumerate(all_dates)}
         all_service_ids = sorted(calendar_dates['service_id'].unique())
-        _map_service_ids = defaultdict(int)
+        # Un masque par service, initialisé à « aucun jour servi » : les caractères sont posés
+        # ensuite, date par date. Une liste mutable plutôt qu'une concaténation de chaînes —
+        # le feed fusionné porte des milliers de services.
+        _map_service_ids: dict[str, list[str]] = {}
         grouped_service__calendar_dates = calendar_dates.groupby('service_id').agg({'date': list}).reset_index()
         for i, service_id in tqdm.tqdm(enumerate(all_service_ids), desc="Build Service-Calendar sparse matrix", total=len(all_service_ids)):
             all_dates_of_service = sorted(grouped_service__calendar_dates[grouped_service__calendar_dates['service_id'] == service_id]['date'].values[0])
             if all_dates_of_service:
+                masque = _map_service_ids.setdefault(
+                    service_id, ["0"] * len(all_dates)
+                )
                 for date in all_dates_of_service:
-                    idx = _map_dates[date]
-                    _map_service_ids[service_id] |= (1 << idx)
+                    idx = _map_dates.get(date)
+                    if idx is not None:
+                        masque[idx] = "1"
         # Total number of elements
         total_elements = len(all_service_ids) * len(all_dates)
         non_zero = len(calendar_dates)
@@ -156,7 +167,8 @@ class GamaGTFS:
 
         return {
             "dates": all_dates,
-            "data": _map_service_ids,
+            # Chaînes, pas entiers : `"".join` à la toute fin, une seule fois par service.
+            "data": {sid: "".join(m) for sid, m in _map_service_ids.items()},
         }
         
     def build_trips(self, use_cache=True):

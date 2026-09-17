@@ -1,8 +1,10 @@
 # Interrupteur d'accidents dans GAMA
 
-> Ticket 070, première tranche. Spécifie **l'interrupteur et ce qu'il commande**, pas le
-> modèle d'accidentalité complet. Le tirage conditionné aux statistiques BAAC (travail A du
-> dossier de faisabilité) fait l'objet d'une spec séparée.
+> Ticket 070. Spécifie **l'interrupteur et ce qu'il commande**. Livré : l'existence des
+> accidents et l'interrupteur (2026-09-14), la loi conditionnée BAAC (R14 à R19, même jour),
+> le **retard subi et ses deux gardes de cache** (R8 à R10) ainsi que la **pose manuelle**
+> (2026-09-15). Reste hors périmètre le **souvenir** du retard, qui demande que l'information
+> remonte du routage jusqu'à l'agent et touche une chaîne mémoire en cours de refonte.
 
 ## Problème
 
@@ -25,8 +27,12 @@ des deux régimes il a connu.
 
 - **R1** — L'IHM GAMA expose un interrupteur booléen « Accidents sur les axes », dans la
   catégorie `Simulation`, à côté des interrupteurs de mémoire existants.
-- **R2** — L'interrupteur vaut **faux par défaut**. Un run qui ne demande rien ne subit aucun
-  accident, et se comporte exactement comme avant cette évolution.
+- **R2** — L'interrupteur vaut **vrai par défaut** (décision du 2026-09-15). Le régime
+  réaliste est l'ordinaire ; c'est sa désactivation qui demande un geste explicite. Un
+  `sim_params.yaml` antérieur, qui ne porte pas la clé, active donc les accidents.
+- **R20 (déduite)** — Tout ticket dont la réalisation passe par un run GAMA porte un
+  avertissement sur l'état de ce paramètre. Un régime actif par défaut qui ne serait signalé
+  nulle part ferait attribuer ses effets à la mesure en cours.
 - **R3** — L'état de l'interrupteur est persisté dans `config/sim_params.yaml` et rechargé au
   démarrage de GAMA, comme les autres paramètres de scénario.
 - **R4** — L'état de l'interrupteur est transmis au contrôleur dans la charge utile du
@@ -59,6 +65,9 @@ des deux régimes il a connu.
 - **R10 (déduite)** — La clé du cache de décisions LLM porte l'état d'accident du déplacement.
   Sans cela, un agent retardé se voit resservir la décision qu'il avait prise sans le retard :
   la clé est construite sur les codes d'options, insensibles aux durées.
+- **R21** — L'expérimentateur peut **poser** un accident choisi : un point, une heure, une
+  durée. L'accident posé entre dans le même registre et suit exactement le même chemin qu'un
+  accident tiré. Une pose dans un run où le régime est décoché est **refusée et journalisée**.
 - **R11 (déduite)** — À chaque journée simulée, le journal indique le nombre d'accidents tirés
   et le nombre de déplacements touchés, **y compris quand ces nombres valent zéro**. Sans ce
   compteur, « aucun effet » et « aucun accident » sont indiscernables.
@@ -73,7 +82,8 @@ des deux régimes il a connu.
 | Règle | Entrée | Sortie attendue |
 |---|---|---|
 | R1 | Ouvrir l'expérience dans l'IHM GAMA | Le paramètre « Accidents sur les axes » apparaît sous `Simulation` |
-| R2 | `sim_params.yaml` absent, démarrage | `accidents_enabled` vaut `false` |
+| R2 | `sim_params.yaml` absent, démarrage | `accidents_enabled` vaut `true` |
+| R20 | Lire un ticket ouvert qui lance un run GAMA | Il porte l'avertissement sur `accidents_enabled` |
 | R3 | Cocher, lancer, quitter, rouvrir GAMA | L'interrupteur est toujours coché |
 | R4 | Lancer avec l'interrupteur coché | La requête `/init` contient `accidents_enabled: true` |
 | R5 | Lancer avec l'interrupteur décoché | `scenario_params.yaml` contient `accidents_enabled: false` |
@@ -88,6 +98,8 @@ des deux régimes il a connu.
 | R8 | Itinéraire voiture traversant une arête avec accident actif au départ | Durée rendue strictement supérieure à la durée du même itinéraire sans accident |
 | R9 | Deux calculs du même itinéraire, l'un pendant un accident actif | Aucune entrée ajoutée au cache pour le calcul perturbé ; le second calcul ne resert pas la durée perturbée |
 | R10 | Même agent, mêmes options, une fois avec et une fois sans accident actif | Deux clés de cache de décision distinctes |
+| R21 | Poser un accident près d'un point, régime actif | L'accident est accroché à l'arête la plus proche et ralentit sur sa fenêtre |
+| R21 | Poser un accident, régime décoché | Refus explicite, alarme au journal, état du monde inchangé |
 | R11 | Run d'une journée sans aucun accident tiré | Le journal porte une ligne `accidents tirés=0, déplacements touchés=0` |
 | R12 | Pose d'un accident sur une arête inconnue, ou de durée `0` | Refus journalisé nommant l'arête et la valeur ; état du monde inchangé |
 | R13 | Deux runs, même graine, interrupteur différent | Populations, agendas et bulletins météo identiques |
@@ -101,11 +113,13 @@ des deux régimes il a connu.
   variables tirées — c'est la conclusion de la mesure, pas un renoncement : diviser par
   l'exposition donnerait un risque par véhicule-km, quand le tirage a besoin d'une fréquence
   d'événements. Les kilomètres par classe restent publiés comme contrôle.
-- **La pose manuelle d'un accident** par l'expérimentateur (travail F) : elle viendra s'appuyer
-  sur le même état du monde, mais n'est pas dans cette tranche.
-- **Le souvenir** de l'agent retardé (travail G).
+- **Le souvenir** de l'agent retardé (travail G). Pour l'écrire il faudrait que « ce trajet a
+  traversé un accident, +N min » remonte du routage — seul endroit qui connaisse les arêtes —
+  jusqu'à l'agent, en traversant le `TravelPlan`. La chaîne mémoire est par ailleurs en cours
+  de refonte (tickets 071 et 075) : y écrire maintenant entrerait en collision.
 - **Le contournement** : l'agent subit le retard, il ne recalcule pas son itinéraire pour
-  éviter l'accident.
+  éviter l'accident. Le chemin est choisi en temps LIBRE avant que le surcoût ne s'applique ;
+  contourner demanderait de recalculer le plus court chemin sur des poids modifiés.
 - **Faire rouler les agents sur le graphe routier** — chantier séparé, hors sujet ici.
 - **L'agent victime** d'un accident : hors d'atteinte des cohortes (0,0025 agent par journée).
 - **Toute figure ou résultat publiable** : l'exposition mesurée (38,5 déplacements touchés par

@@ -70,15 +70,100 @@ un chemin cassé peut se déguiser en donnée absente : 25 tests météo passaie
 déplacer un répertoire périme les règles qui le nomment : `zf_couronne.json`, déversionné pour
 raison de licence au ticket 038, se serait reversionné en silence.
 
+## Pas 4, 5 et 6 — exécutés le 2026-09-15
+
+### Pas 4 — le `Makefile` délègue (principe 3)
+
+1 419 lignes ramenées à **109**. Les 120 cibles vivent dans sept modules de `make/`, une
+section par fichier — `docker.mk` (27), `choix-modal.mk` (37), `experiences.mk` (30),
+`synthese.mk` (13), `tests.mk` (8), `gama.mk` (3), `pilotage.mk` (2). Aucune recette n'a
+changé : le fichier racine ne garde que la configuration, puis `include make/*.mk`.
+
+**Trois pièges, qui étaient le vrai contenu du pas.**
+
+`PROJECT_ROOT` se calculait par `$(lastword $(MAKEFILE_LIST))` — juste tant qu'aucun
+`include` ne le précède, faux dès qu'un `include` bouge d'une ligne, et toute la résolution
+de chemins du dépôt bascule avec lui, **en silence**. Passé à `$(firstword …)`, vrai quel
+que soit l'ordre. Même famille que les `parents[N]` du pas 3 : compter des crans, c'est
+parier sur une disposition.
+
+`make help` lisait `$(firstword $(MAKEFILE_LIST))` : après découpage il n'aurait plus listé
+que les cibles du fichier racine — c'est-à-dire aucune. Passé à `$(MAKEFILE_LIST)`.
+
+Le tableau de bord lisait le Makefile **comme un fichier**
+(`scripts/dashboard/makefiles.py`). Sans suivi des `include`, ses 120 cibles cliquables
+tombaient à zéro — sans exception ni test rouge, juste des boutons absents. C'est le piège
+que le pas 3 avait déjà rencontré sous une autre forme (25 tests météo passés de
+« réussis » à « ignorés »). `parse_makefile` développe désormais les `include`, chaque cible
+porte le module qui la définit, et `test_makefiles_includes.py` garde le point.
+
+`.DEFAULT_GOAL := up` est posé explicitement : sans lui, la cible par défaut devenait la
+première cible du premier `.mk` lu, donc l'ordre alphabétique des fichiers décidait de ce
+que fait un `make` nu.
+
+**Vérifié :** `make help` rend les mêmes 104 lignes au mot près (l'ordre seul change,
+les modules étant lus alphabétiquement) ; la base de règles de `make -pn` est identique —
+mêmes 195 cibles, mêmes 104 `.PHONY`, mêmes recettes, seule la provenance (fichier, ligne)
+bouge ; aucun avertissement « overriding recipe » ; le tableau de bord retrouve ses 120
+cibles avec la même documentation.
+
+### Pas 5 — `prompt_calibration` devient un sous-module
+
+Le ticket posait « dépendance ou sous-module ». La mesure a tranché : le parent **importe le
+code** du dépôt imbriqué. `scripts/synthesis/sources.py` le dit en toutes lettres — on
+l'ajoute au `sys.path` *« plutôt que de dupliquer la loss : un score affiché ici doit être
+exactement celui du moteur »* — et son message d'erreur demande à l'humain de cloner le
+dépôt à cet emplacement. La dépendance packagée ne collait pas : c'est une application
+déployée sur VM, pas une bibliothèque.
+
+Ce que le statu quo coûtait touchait à la science du projet : `model_compare.py` inscrit
+`prompt_calibration/calibration/metrics.py` au manifeste des sources d'une page de score,
+**sans qu'aucun commit ne soit enregistré**. Un score republié six mois plus tard n'était
+pas rattachable à la loss qui l'a produit. Le sous-module épingle ce commit dans le parent.
+
+Exclusion retirée du `.gitignore`, `.gitmodules` déclaré, commit `8be8f26` épinglé. Le
+dépôt imbriqué n'a pas bougé (même HEAD, même branche, mêmes modifications en attente) et
+les quatre couplages tiennent : import du moteur, lecture de son Makefile par le tableau de
+bord (25 cibles), `make -C prompt_calibration pull-db`, montage compose.
+
+**À trancher par l'auteur :** l'épingle porte sur `8be8f26` (branche
+`feat/diag-plan-arbitre`), l'état présent sur le disque. `origin/main` est en avance à
+`f8d55d8`, qui contient la fusion de cette branche. Déplacer l'épingle, une fois le choix
+fait : `git -C prompt_calibration checkout main && git add prompt_calibration`.
+
+### Pas 6 — `docs/paper` : pas de migration, une règle
+
+Le ticket supposait un problème de poids. La mesure dit le contraire : chacun des binaires
+suivis sous `docs/paper/` a exactement **une** version dans l'historique (`figures/` en deux
+commits, `sources/` en trois). 34 Mo écrits une fois coûtent 34 Mo dans le pack — le régime
+que git gère le mieux. LFS ajouterait une dépendance à chaque clone et un quota, pour ne
+rien économiser.
+
+Le vrai risque est ailleurs, et il est amorcé : `plot_experiences.py` et `plot_familles.py`
+écrivent **par défaut** dans `docs/paper/figures/`, qui est versionné (les quatre
+`familles_composite_l1_*` datent du 14/09, les deux `comparaison_experiences_*` du 09/09).
+Chaque régénération commitée ajoute un blob de plus. La règle — une figure ne se committe
+que citée par un chapitre gelé, sinon `--sortie docs/synthesis/<nom>` — est écrite dans
+`docs/paper/README.md`, et les deux générateurs avertissent en chiffrant le poids quand ils
+écrasent un fichier suivi par git.
+
+L'article n'a pas été touché : seuls `.gitignore`, `docs/paper/README.md` et les deux
+générateurs ont changé.
+
 ## Ce qui reste
 
-- **`Makefile` : 1 346 lignes.** Le principe 3 demande qu'il délègue ; il porte encore tout.
-- **`prompt_calibration`** : toujours un dépôt git imbriqué, 0 fichier suivi par le parent. Le
-  choix dépendance / sous-module n'est pas tranché.
-- **`docs/paper` (32 Mo suivis)** et les pages de synthèse archivées : le sort (LFS ou dépôt de
-  publication) n'est pas tranché. L'article est verrouillé : il n'a pas été touché.
+- **`Divers/`** attend un tri manuel de l'auteur.
 - **`llm_module/`** reste à la racine, délibérément : coquille de compatibilité sans
   `pyproject.toml`, sans `src/`, sans tests, que plus rien n'importe dans le dépôt. La ranger
-  dans `packages/` la promouvrait au rang qu'elle est censée quitter. Son retrait appartient au
-  ticket 037 (version 2.0).
-- **`Divers/`** attend un tri manuel de l'auteur.
+  dans `packages/` la promouvrait au rang qu'elle est censée quitter. Son retrait appartient
+  au ticket 037 (version 2.0).
+- **L'épingle du sous-module** est à confirmer (voir pas 5).
+
+## Ce que la suite de tests a appris
+
+Le chiffre « 2 échecs préexistants » du pas 3 avait trois jours et n'était plus vrai. Surtout,
+**le périmètre du run change le résultat** : `test_dashboard_app.py` seul rend 2 échecs sur 53,
+le même fichier dans la suite entière en rend 40 — une pollution entre modules de test, pas une
+régression. Comparer un run de fichier à un run de suite a failli faire accuser le découpage.
+En isolation, 12 échecs subsistent (météo, fenêtre GTFS, onglet « Campagne » ajouté sans sa
+table de slugs, statuts de tickets), tous étrangers aux fichiers de ce ticket.

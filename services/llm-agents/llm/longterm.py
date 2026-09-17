@@ -1,19 +1,19 @@
 # scalable_memory.py - Scalable long-term memory system optimized for 1000+ users
 import asyncio
-import json
-import time
-from datetime import datetime, timedelta
-import string
-from typing import List, Dict, Optional, Any
-from pathlib import Path
 import hashlib
+import json
+import string
+import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from loguru import logger
+from prometheus_client import Histogram
 from settings import settings
 from sim_clock import gama_timestamp, wall_clock
-
-from loguru import logger
-import numpy as np
-from prometheus_client import Histogram
 
 # Modèle de plongement par défaut, hérité de l'implémentation de Vu et al. (2025). C'est un
 # modèle Sentence-Transformers (Reimers & Gurevych, 2019) entraîné sur un corpus anglophone
@@ -21,10 +21,11 @@ from prometheus_client import Histogram
 MODELE_PLONGEMENT_DEFAUT = "all-MiniLM-L6-v2"
 
 LTM_QUERY_DURATION = Histogram(
-    'ltm_query_duration_seconds',
-    'Durée des appels aquery_user_memories (ChromaDB)',
+    "ltm_query_duration_seconds",
+    "Durée des appels aquery_user_memories (ChromaDB)",
     buckets=[0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10],
 )
+
 
 @dataclass
 class MemorySearchResult:
@@ -32,131 +33,143 @@ class MemorySearchResult:
     metadata: dict
     score: float = 0.0
 
+
 from llama_index.core import (
-    VectorStoreIndex, 
-    Document, 
+    Document,
+    Settings,
     StorageContext,
+    VectorStoreIndex,
     load_index_from_storage,
-    Settings
 )
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
-
 from llm.axes import affinite_axes, affinite_meteo
-from llm.gravite import est_purgeable, force_apres_rappel, force_initiale, poids_temporel
+from llm.trace_rappel import tracer_rappel
+from llm.gravite import (
+    est_purgeable,
+    force_apres_rappel,
+    force_initiale,
+    poids_temporel,
+)
+from llm.journal_memoire import journal
 from llm.memory import MemoryEntry
+
 
 class VectorStoreFactory:
     """Factory for creating optimized vector stores"""
-    
+
     @staticmethod
-    def create_chroma_store(storage_dir: Path) -> Optional[BasePydanticVectorStore]:
+    def create_chroma_store(storage_dir: Path) -> BasePydanticVectorStore | None:
         """Create ChromaDB vector store with optimizations"""
         try:
             import chromadb
             from llama_index.vector_stores.chroma import ChromaVectorStore
-            
+
             chroma_client = chromadb.PersistentClient(
                 path=str(storage_dir / "chroma_db"),
             )
-            
+
             chroma_collection = chroma_client.get_or_create_collection(
-                "memory_collection",
-                metadata={"hnsw:space": "cosine"}
+                "memory_collection", metadata={"hnsw:space": "cosine"}
             )
-            
+
             return ChromaVectorStore(chroma_collection=chroma_collection)
-            
+
         except ImportError:
             logger.warning("ChromaDB not available, falling back to simple storage")
             return None
-    
+
     # @staticmethod
     # def create_qdrant_store(storage_dir: Path) -> Optional[BasePydanticVectorStore]:
     #     """Create Qdrant vector store with optimizations"""
     #     try:
     #         import qdrant_client
     #         from llama_index.vector_stores.qdrant import QdrantVectorStore
-            
+
     #         client = qdrant_client.QdrantClient(
     #             path=str(storage_dir / "qdrant_db"),
     #             grpc_port=6334,
     #             prefer_grpc=True
     #         )
-            
+
     #         return QdrantVectorStore(
     #             client=client,
     #             collection_name="memory_collection",
     #             parallel=4
     #         )
-            
+
     #     except ImportError:
     #         print("Qdrant not available, falling back to simple storage")
     #         return None
-    
+
     # @staticmethod
     # def create_pinecone_store(config: Dict[str, Any]) -> Optional[BasePydanticVectorStore]:
     #     """Create Pinecone vector store"""
     #     try:
     #         import pinecone
     #         from llama_index.vector_stores.pinecone import PineconeVectorStore
-            
+
     #         api_key = config.get("api_key")
     #         environment = config.get("environment")
     #         index_name = config.get("index_name", "memory-index")
-            
+
     #         if api_key and environment:
     #             pinecone.init(api_key=api_key, environment=environment)
     #             return PineconeVectorStore(
     #                 pinecone_index=pinecone.Index(index_name)
     #             )
-                
+
     #     except ImportError:
     #         print("Pinecone not available, falling back to simple storage")
     #         return None
 
+
 class MultiUserLongTermMemory:
-    def __init__(self, 
-                 storage_dir: str = "/tmp/memory_storage",
-                 vector_store_type: str = "chroma",
-                 vector_store_config: Dict = None,
-                 max_loaded_metadata: int = 2000,
-                 use_async: bool = False,
-                 long_term_memory_filter_by_datetime: bool = True):
-        
+    def __init__(
+        self,
+        storage_dir: str = "/tmp/memory_storage",
+        vector_store_type: str = "chroma",
+        vector_store_config: dict = None,
+        max_loaded_metadata: int = 2000,
+        use_async: bool = False,
+        long_term_memory_filter_by_datetime: bool = True,
+    ):
+
         self.use_async = use_async
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(exist_ok=True)
-        
+
         self.vector_store_type = vector_store_type
         self.vector_store_config = vector_store_config or {}
         self.max_loaded_metadata = max_loaded_metadata
         self.long_term_memory_filter_by_datetime = long_term_memory_filter_by_datetime
-        
+
         # Shared vector store - KEY OPTIMIZATION
         self.vector_store = self._create_vector_store()
         self.shared_index = None
-        
+
         # LRU cache for user metadata
-        self.user_metadata: Dict[str, Dict[str, Any]] = {}
-        self.metadata_access_times: Dict[str, datetime] = {}
+        self.user_metadata: dict[str, dict[str, Any]] = {}
+        self.metadata_access_times: dict[str, datetime] = {}
 
         # Écriture différée des métadonnées : les agents modifiés sont marqués dirty
         # et flushés par rafale (debounce) au lieu d'une réécriture disque par entrée.
         self._dirty: set = set()
-        self._flush_task: Optional[asyncio.Task] = None
-        
+        self._flush_task: asyncio.Task | None = None
+
         # Performance metrics
         self.metrics = {
             "queries": 0,
             "cache_hits": 0,
             "cache_misses": 0,
-            "memory_cleanups": 0
+            "memory_cleanups": 0,
         }
 
         self._init_shared_index(use_async=self.use_async)
-        logger.info(f"Initialized scalable memory with {vector_store_type} vector store")
-    
-    def _create_vector_store(self) -> Optional[BasePydanticVectorStore]:
+        logger.info(
+            f"Initialized scalable memory with {vector_store_type} vector store"
+        )
+
+    def _create_vector_store(self) -> BasePydanticVectorStore | None:
         """Create vector store based on type"""
         if self.vector_store_type == "chroma":
             return VectorStoreFactory.create_chroma_store(self.storage_dir)
@@ -181,7 +194,9 @@ class MultiUserLongTermMemory:
         # (ticket 074), et le modèle hérité de Vu et al. redevient cohérent avec le corpus.
         # Tout changement ultérieur imposerait une RECONSTRUCTION COMPLÈTE de l'index, les
         # vecteurs n'étant pas comparables d'un modèle à l'autre.
-        modele = (settings.agent.embedding_model or "").strip() or MODELE_PLONGEMENT_DEFAUT
+        modele = (
+            settings.agent.embedding_model or ""
+        ).strip() or MODELE_PLONGEMENT_DEFAUT
         if modele != MODELE_PLONGEMENT_DEFAUT:
             logger.warning(
                 f"[ltm] modèle de plongement NON STANDARD : « {modele} » au lieu de "
@@ -194,61 +209,73 @@ class MultiUserLongTermMemory:
         Settings.llm = None
 
         if self.vector_store:
-            storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
+            storage_context = StorageContext.from_defaults(
+                vector_store=self.vector_store
+            )
             try:
-                self.shared_index = load_index_from_storage(storage_context, use_async=use_async)
+                self.shared_index = load_index_from_storage(
+                    storage_context, use_async=use_async
+                )
                 logger.info("Loaded existing shared vector index")
             except:
-                self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
+                self.shared_index = VectorStoreIndex.from_documents(
+                    [], storage_context=storage_context, use_async=use_async
+                )
                 logger.info("Created new shared vector index")
         else:
             # Fallback to simple index
             index_path = self.storage_dir / "shared_index"
             if index_path.exists():
                 try:
-                    storage_context = StorageContext.from_defaults(persist_dir=str(index_path))
-                    self.shared_index = load_index_from_storage(storage_context, use_async=use_async)
+                    storage_context = StorageContext.from_defaults(
+                        persist_dir=str(index_path)
+                    )
+                    self.shared_index = load_index_from_storage(
+                        storage_context, use_async=use_async
+                    )
                     logger.info("Loaded simple vector index")
                     return
                 except Exception as e:
                     logger.warning(f"Simple vector index unreadable ({e}) — recreating")
             # Aucun index existant (ou index illisible) : repartir d'un StorageContext neuf
             storage_context = StorageContext.from_defaults()
-            self.shared_index = VectorStoreIndex.from_documents([], storage_context=storage_context, use_async=use_async)
+            self.shared_index = VectorStoreIndex.from_documents(
+                [], storage_context=storage_context, use_async=use_async
+            )
             self._persist_shared_index()
             logger.info("Created new simple vector index")
-    
+
     def _persist_shared_index(self):
         """Persist shared index (only for simple storage)"""
         if not self.vector_store:
             index_path = self.storage_dir / "shared_index"
             self.shared_index.storage_context.persist(persist_dir=str(index_path))
-    
+
     def _get_user_metadata_path(self, person_id: str) -> Path:
         """Get metadata file path with sharding"""
         # Use sharding to avoid too many files in one directory
         # shard = abs(hash(person_id)) % 100
-        id_bytes = str(person_id).encode('utf-8')
+        id_bytes = str(person_id).encode("utf-8")
         hash_obj = hashlib.md5(id_bytes)
         hash_int = int(hash_obj.hexdigest()[:8], 16)
         shard = hash_int % 100
         shard_dir = self.storage_dir / "user_metadata" / f"shard_{shard:02d}"
         shard_dir.mkdir(parents=True, exist_ok=True)
         return shard_dir / f"{person_id}.json"
-    
-    def _load_user_metadata(self, person_id: str) -> Dict[str, Any]:
+
+    def _load_user_metadata(self, person_id: str) -> dict[str, Any]:
         """Load user metadata from disk"""
         metadata_path = self._get_user_metadata_path(person_id)
-        
+
         if metadata_path.exists():
             try:
-                with open(metadata_path, 'r', encoding='utf-8') as f:
+                with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
                     # Ignore les entrées non-dict (fichiers écrits par l'ancien format
                     # bogué qui sérialisait les MemoryEntry en chaînes via default=str)
-                    metadata['entries'] = [
+                    metadata["entries"] = [
                         MemoryEntry.from_dict(entry)
-                        for entry in metadata.get('entries', [])
+                        for entry in metadata.get("entries", [])
                         if isinstance(entry, dict)
                     ]
                     self.metadata_access_times[person_id] = datetime.now()
@@ -256,26 +283,26 @@ class MultiUserLongTermMemory:
                     return metadata
             except Exception as e:
                 logger.error(f"Error loading metadata for user {person_id}: {e}")
-        
+
         # Default metadata for new user
         metadata = {
-            "entries": [], 
-            "last_cleanup": None, 
+            "entries": [],
+            "last_cleanup": None,
             "last_reflection": None,
             "person_id": person_id,
             "created_at": datetime.now().isoformat(),
             "memory_usage_mb": 0,
-            "total_entries": 0
+            "total_entries": 0,
         }
         self.metadata_access_times[person_id] = datetime.now()
         self.metrics["cache_misses"] += 1
         return metadata
-    
+
     def _save_user_metadata(self, person_id: str):
         """Save user metadata to disk"""
         if person_id not in self.user_metadata:
             return
-            
+
         metadata_path = self._get_user_metadata_path(person_id)
 
         try:
@@ -290,10 +317,14 @@ class MultiUserLongTermMemory:
             }
             # Sérialisation unique : le memory_usage_mb écrit dans le fichier est celui
             # de la sauvegarde précédente (valeur purement indicative, décalée d'un save).
-            metadata_json = json.dumps(serializable, indent=2, default=str, ensure_ascii=False)
-            metadata["memory_usage_mb"] = len(metadata_json.encode('utf-8')) / (1024 * 1024)
+            metadata_json = json.dumps(
+                serializable, indent=2, default=str, ensure_ascii=False
+            )
+            metadata["memory_usage_mb"] = len(metadata_json.encode("utf-8")) / (
+                1024 * 1024
+            )
 
-            with open(metadata_path, 'w', encoding='utf-8') as f:
+            with open(metadata_path, "w", encoding="utf-8") as f:
                 f.write(metadata_json)
             self.metadata_access_times[person_id] = datetime.now()
 
@@ -325,10 +356,7 @@ class MultiUserLongTermMemory:
             return
 
         # Sort by access time and remove oldest
-        sorted_users = sorted(
-            self.metadata_access_times.items(),
-            key=lambda x: x[1]
-        )
+        sorted_users = sorted(self.metadata_access_times.items(), key=lambda x: x[1])
 
         users_to_remove = len(self.user_metadata) - self.max_loaded_metadata
         removed_count = 0
@@ -348,8 +376,10 @@ class MultiUserLongTermMemory:
         self.metrics["memory_cleanups"] += 1
 
         if removed_count > 0:
-            logger.info(f"Cleaned up metadata cache: removed {removed_count} users from memory")
-    
+            logger.info(
+                f"Cleaned up metadata cache: removed {removed_count} users from memory"
+            )
+
     def ensure_user_initialized(self, person_id: str):
         """Ensure user metadata is loaded with cache management"""
         if person_id not in self.user_metadata:
@@ -370,17 +400,23 @@ class MultiUserLongTermMemory:
         self.ensure_user_initialized(person_id)
         return bool(self.user_metadata[person_id]["entries"])
 
-    def get_last_user_memories(self, person_id: str, from_date: datetime) -> List[MemoryEntry]:
+    def get_last_user_memories(
+        self, person_id: str, from_date: datetime
+    ) -> list[MemoryEntry]:
         """Get last user memories from a specific date"""
         self.ensure_user_initialized(person_id)
         # logger.debug(f"Retrieving memories for user {person_id} since {from_date}, data: {self.user_metadata[person_id]['entries'][::-1]}")
-        return [entry for entry in self.user_metadata[person_id]['entries'] if entry.timestamp >= from_date]
+        return [
+            entry
+            for entry in self.user_metadata[person_id]["entries"]
+            if entry.timestamp >= from_date
+        ]
 
     async def aadd_memory(self, entry: MemoryEntry):
         """Add memory to shared vector store with user namespace"""
         person_id = entry.person_id
         self.ensure_user_initialized(person_id)
-        
+
         # Create document with namespace for user isolation
         # Ticket 071 (défaut B) — l'identifiant dérivait de la LONGUEUR de la liste. Après un
         # nettoyage la liste raccourcit, et les identifiants suivants entraient en collision
@@ -421,15 +457,20 @@ class MultiUserLongTermMemory:
                 "axe_creneau": entry.axe_creneau or "",
                 "axe_motif": entry.axe_motif or "",
                 "valence": entry.valence or "neutre",
-            }
+            },
         )
-        
+
         # Add to shared index
         await self.shared_index.ainsert(doc)
-        
+
         # Update user metadata
         entry.doc_id = doc_id
         self.user_metadata[person_id]["entries"].append(entry)
+        # Ticket 075 — trace lisible de l'écriture. `journal()` rend `None` quand le journal
+        # est éteint : ni fichier, ni appel disque sur le chemin d'une décision.
+        _journal = journal()
+        if _journal is not None:
+            _journal.ecriture(person_id, entry.timestamp, entry)
         # logger.debug(f"Add memory entry for user {person_id}: {entry.to_dict()}")
 
         # Memory limits per user
@@ -444,21 +485,29 @@ class MultiUserLongTermMemory:
         self._schedule_flush()
 
         # Periodic persistence for simple storage
-        if not self.vector_store and len(self.user_metadata[person_id]["entries"]) % 10 == 0:
+        if (
+            not self.vector_store
+            and len(self.user_metadata[person_id]["entries"]) % 10 == 0
+        ):
             self._persist_shared_index()
 
-    def _filter_memory_by_working_day(self, message_datetime: datetime, search_datetime: datetime) -> bool:
+    def _filter_memory_by_working_day(
+        self, message_datetime: datetime, search_datetime: datetime
+    ) -> bool:
         # Filter by working day first
         # Convert search_time (seconds since epoch) to day of week
         search_day_of_week = search_datetime.weekday()  # 0=Monday, 6=Sunday
         entry_day_of_week = message_datetime.weekday()
-        if (search_day_of_week < 5 and entry_day_of_week >=5) or \
-            (search_day_of_week >=5 and entry_day_of_week < 5):
+        if (search_day_of_week < 5 and entry_day_of_week >= 5) or (
+            search_day_of_week >= 5 and entry_day_of_week < 5
+        ):
             return False
-        
+
         return True
-    
-    def _filter_memory_by_peak_time(self, message_datetime: datetime, search_datetime: datetime) -> bool:
+
+    def _filter_memory_by_peak_time(
+        self, message_datetime: datetime, search_datetime: datetime
+    ) -> bool:
         # TODO: Because we do reflection in batch, so the time could be wrong
         # If we do reflection for every entry (arrival), we can filter by peak time
 
@@ -469,12 +518,14 @@ class MultiUserLongTermMemory:
         # TODO: For now, we assume all memories are valid
         # We just need a lot of memories to make the model faster converge
         return True
-    
-    def _filter_memory_by_past_days(self, message_datetime: datetime, search_datetime: datetime, max_past_days: int) -> bool:
+
+    def _filter_memory_by_past_days(
+        self, message_datetime: datetime, search_datetime: datetime, max_past_days: int
+    ) -> bool:
         # Filter by past days
         if max_past_days < 0:
             return True
-        
+
         delta_days = (search_datetime - message_datetime).days
         return delta_days <= max_past_days
 
@@ -484,10 +535,10 @@ class MultiUserLongTermMemory:
         query: str,
         top_k: int = 8,
         max_past_days: int = 30,
-        query_at: Optional[int] = None,
-        modes_offerts: Optional[List[str]] = None,
-        contexte: Optional[Dict[str, Any]] = None,
-    ) -> List[MemorySearchResult]:
+        query_at: int | None = None,
+        modes_offerts: list[str] | None = None,
+        contexte: dict[str, Any] | None = None,
+    ) -> list[MemorySearchResult]:
         """Query memories with namespace filtering"""
         _t0 = time.monotonic()
         self.ensure_user_initialized(person_id)
@@ -499,7 +550,9 @@ class MultiUserLongTermMemory:
         # fin de soirée.
         query_at_datetime = wall_clock(query_at) if query_at else None
 
-        logger.debug(f"Querying user long term memories for person {person_id}, at {query_at}")
+        logger.debug(
+            f"Querying user long term memories for person {person_id}, at {query_at}"
+        )
 
         def filter_message(metadata: dict) -> bool:
             # Ticket 071 (défaut C) — les deux filtres se CUMULENT. Avant, le filtre par jour
@@ -513,10 +566,11 @@ class MultiUserLongTermMemory:
             ):
                 return False
             if self.long_term_memory_filter_by_datetime and query_at_datetime:
-                return self._filter_memory_by_working_day(msg_datetime, query_at_datetime) \
-                    and self._filter_memory_by_peak_time(msg_datetime, query_at_datetime)
+                return self._filter_memory_by_working_day(
+                    msg_datetime, query_at_datetime
+                ) and self._filter_memory_by_peak_time(msg_datetime, query_at_datetime)
             return True
-        
+
         from llama_index.core.vector_stores.types import MetadataFilter, MetadataFilters
 
         try:
@@ -525,7 +579,9 @@ class MultiUserLongTermMemory:
             # La marge ×5 laisse de quoi re-ranker (décroissance temporelle, mots-clés).
             retriever = self.shared_index.as_retriever(
                 similarity_top_k=min(max(top_k * 5, 32), 100),
-                filters=MetadataFilters(filters=[MetadataFilter(key="person_id", value=person_id)]),
+                filters=MetadataFilters(
+                    filters=[MetadataFilter(key="person_id", value=person_id)]
+                ),
             )
 
             nodes = await retriever.aretrieve(query)
@@ -547,8 +603,9 @@ class MultiUserLongTermMemory:
             user_results = []
             vus = set()
             for node in nodes:
-                if (node.metadata.get("person_id") == person_id and \
-                    filter_message(node.metadata)):
+                if node.metadata.get("person_id") == person_id and filter_message(
+                    node.metadata
+                ):
                     _meta = dict(node.metadata)
                     _meta.setdefault("vivier", "A")
                     _doc = _meta.get("doc_id")
@@ -560,7 +617,7 @@ class MultiUserLongTermMemory:
                         MemorySearchResult(
                             content=node.text,
                             metadata=_meta,
-                            score=getattr(node, 'score', 0.0)
+                            score=getattr(node, "score", 0.0),
                         )
                     )
 
@@ -585,9 +642,12 @@ class MultiUserLongTermMemory:
             # y deviendrait faux sans mention.
             _avant = len(user_results)
             user_results = [
-                r for r in user_results
-                if (entrees_par_doc.get((r.metadata or {}).get("doc_id")) is None
-                    or entrees_par_doc[(r.metadata or {}).get("doc_id")].est_servi)
+                r
+                for r in user_results
+                if (
+                    entrees_par_doc.get((r.metadata or {}).get("doc_id")) is None
+                    or entrees_par_doc[(r.metadata or {}).get("doc_id")].est_servi
+                )
             ]
             _ecartes = _avant - len(user_results)
             if _ecartes:
@@ -605,11 +665,29 @@ class MultiUserLongTermMemory:
 
             self._compter_viviers(person_id, user_results, result)
 
+            # Ticket 077, lots E1 et D2 — ce qui a été servi, avec son score et son vivier,
+            # et la concentration des rappels. C'est ici, et seulement ici, que le top-K, les
+            # scores qui l'ont produit et les viviers d'origine sont connus ensemble.
+            tracer_rappel(
+                person_id,
+                query_at,
+                result,
+                {
+                    str((user_results[i].metadata or {}).get("doc_id") or ""): float(
+                        scores[i]
+                    )
+                    for i in top_k_indices
+                },
+                len(user_results),
+            )
+
             # Le rappel RENFORCE, et seulement ce qui a été réellement servi au modèle : les
             # candidats écartés du top-K n'ont pas été rappelés. C'est la mécanique de
             # MemoryBank, et le corollaire de Park et al. dont la fraîcheur décroît depuis le
             # dernier rappel et non depuis la création.
-            self._renforcer_les_servis(person_id, result, entrees_par_doc, query_at_datetime)
+            self._renforcer_les_servis(
+                person_id, result, entrees_par_doc, query_at_datetime
+            )
 
             LTM_QUERY_DURATION.observe(time.monotonic() - _t0)
             return result
@@ -628,8 +706,8 @@ class MultiUserLongTermMemory:
     def _compter_viviers(
         self,
         person_id: str,
-        candidats: List[MemorySearchResult],
-        servis: List[MemorySearchResult],
+        candidats: list[MemorySearchResult],
+        servis: list[MemorySearchResult],
     ) -> None:
         """Part du top-K issue de chaque vivier, et les deux alarmes du lot 2.
 
@@ -650,7 +728,7 @@ class MultiUserLongTermMemory:
         b_propose = any((c.metadata or {}).get("vivier") == "B" for c in candidats)
         self._viviers_fenetre.append((parts, b_propose))
         if len(self._viviers_fenetre) > self._FENETRE_VIVIERS:
-            self._viviers_fenetre = self._viviers_fenetre[-self._FENETRE_VIVIERS:]
+            self._viviers_fenetre = self._viviers_fenetre[-self._FENETRE_VIVIERS :]
 
         n = len(self._viviers_fenetre)
         if n < self._FENETRE_VIVIERS:
@@ -687,7 +765,9 @@ class MultiUserLongTermMemory:
             )
         elif part_a <= 0.90 and self._alarme_vivier_a:
             self._alarme_vivier_a = False
-            logger.info("[viviers] les viviers structurés contribuent de nouveau au top-K")
+            logger.info(
+                "[viviers] les viviers structurés contribuent de nouveau au top-K"
+            )
 
     def journal_trajets(self, person_id: str) -> dict:
         """Journal des trajets de l'agent — le compteur d'où sortent ses habitudes (lot 4)."""
@@ -697,9 +777,9 @@ class MultiUserLongTermMemory:
     def noter_trajet(
         self,
         person_id: str,
-        motif: Optional[str],
-        creneau: Optional[str],
-        mode: Optional[str],
+        motif: str | None,
+        creneau: str | None,
+        mode: str | None,
         retard_s: float = 0.0,
     ) -> None:
         """Enregistre un trajet accompli dans le journal de l'agent.
@@ -717,8 +797,8 @@ class MultiUserLongTermMemory:
     def viviers_structures(
         self,
         person_id: str,
-        modes_offerts: Optional[List[str]] = None,
-    ) -> List[MemorySearchResult]:
+        modes_offerts: list[str] | None = None,
+    ) -> list[MemorySearchResult]:
         """Viviers B (par objet) et C (chocs), lus dans les métadonnées de l'agent.
 
         Aucun plongement, aucune requête au magasin vectoriel : les souvenirs de l'agent sont
@@ -747,8 +827,8 @@ class MultiUserLongTermMemory:
             # Gravité d'abord, récence ensuite : à gravité égale, le plus frais passe devant.
             return (float(e.importance or 0.0), e.horodatage_de_reference)
 
-        retenus: Dict[str, MemoryEntry] = {}
-        origines: Dict[str, str] = {}
+        retenus: dict[str, MemoryEntry] = {}
+        origines: dict[str, str] = {}
 
         for mode in {m for m in (modes_offerts or []) if m}:
             candidats = [e for e in entrees if e.axe_objet == mode and e.doc_id]
@@ -757,8 +837,7 @@ class MultiUserLongTermMemory:
                 origines.setdefault(e.doc_id, "B")
 
         chocs = [
-            e for e in entrees
-            if e.doc_id and float(e.importance or 0.0) >= seuil_choc
+            e for e in entrees if e.doc_id and float(e.importance or 0.0) >= seuil_choc
         ]
         for e in sorted(chocs, key=_cle, reverse=True)[:taille_c]:
             retenus.setdefault(e.doc_id, e)
@@ -787,10 +866,10 @@ class MultiUserLongTermMemory:
     def rank_nodes(
         self,
         query: str,
-        query_at: Optional[int],
-        nodes: List[MemorySearchResult],
-        entrees_par_doc: Optional[Dict[str, MemoryEntry]] = None,
-        contexte: Optional[Dict[str, Any]] = None,
+        query_at: int | None,
+        nodes: list[MemorySearchResult],
+        entrees_par_doc: dict[str, MemoryEntry] | None = None,
+        contexte: dict[str, Any] | None = None,
     ) -> np.ndarray:
         """Rank nodes based on their relevance to the query.
 
@@ -824,40 +903,48 @@ class MultiUserLongTermMemory:
         # les étiquettes et non le BLEU de Papineni et al. Réduite à la météo parce que ses
         # trois autres attributs — mode, créneau, motif — SONT déjà les axes de la composante
         # suivante : les compter deux fois rendrait le score ininterprétable.
-        _cat = np.array([
-            affinite_meteo(getattr(_entree(n), "axe_meteo", None), ctx.get("axe_meteo"))
-            for n in nodes
-        ])
+        _cat = np.array(
+            [
+                affinite_meteo(
+                    getattr(_entree(n), "axe_meteo", None), ctx.get("axe_meteo")
+                )
+                for n in nodes
+            ]
+        )
 
         # 3. Poids temporel : exp(-Δt / force), Δt depuis le dernier rappel.
-        _temps = np.array([
-            self._time_decay_score(
-                n.metadata.get("timestamp"), query_at, entree=_entree(n)
-            )
-            for n in nodes
-        ])
+        _temps = np.array(
+            [
+                self._time_decay_score(
+                    n.metadata.get("timestamp"), query_at, entree=_entree(n)
+                )
+                for n in nodes
+            ]
+        )
 
         # 4. Gravité du souvenir. Composante restaurée de Park et al. (2023), que Vu et al.
         # avaient écartée.
-        _grav = np.array([
-            float(getattr(_entree(n), "importance", 0.0) or 0.0) for n in nodes
-        ])
+        _grav = np.array(
+            [float(getattr(_entree(n), "importance", 0.0) or 0.0) for n in nodes]
+        )
 
         # 5. Affinité d'axes, en BONUS et jamais en veto : un axe discordant contribue zéro,
         # il ne retranche rien. Hors identité de l'agent et fenêtre d'âge, RIEN ne filtre.
-        _axes = np.array([
-            affinite_axes(
-                getattr(_entree(n), "axe_objet", None),
-                getattr(_entree(n), "axe_lieu", None),
-                getattr(_entree(n), "axe_creneau", None),
-                getattr(_entree(n), "axe_motif", None),
-                objet_courant=ctx.get("axe_objet"),
-                lieu_courant=ctx.get("axe_lieu"),
-                creneau_courant=ctx.get("axe_creneau"),
-                motif_courant=ctx.get("axe_motif"),
-            )
-            for n in nodes
-        ])
+        _axes = np.array(
+            [
+                affinite_axes(
+                    getattr(_entree(n), "axe_objet", None),
+                    getattr(_entree(n), "axe_lieu", None),
+                    getattr(_entree(n), "axe_creneau", None),
+                    getattr(_entree(n), "axe_motif", None),
+                    objet_courant=ctx.get("axe_objet"),
+                    lieu_courant=ctx.get("axe_lieu"),
+                    creneau_courant=ctx.get("axe_creneau"),
+                    motif_courant=ctx.get("axe_motif"),
+                )
+                for n in nodes
+            ]
+        )
 
         # Ticket 048 — la normalisation min-max PAR COMPOSANTE reste abandonnée. Elle ramenait
         # mécaniquement le meilleur candidat du lot à 1 et le pire à 0, quel que soit l'écart
@@ -876,8 +963,8 @@ class MultiUserLongTermMemory:
     def _time_decay_score(
         self,
         timestamp_str: str,
-        query_at: Optional[int],
-        entree: Optional[MemoryEntry] = None,
+        query_at: int | None,
+        entree: MemoryEntry | None = None,
     ) -> float:
         """Poids temporel d'un souvenir, sur [0, 1] et en valeur ABSOLUE.
 
@@ -926,9 +1013,9 @@ class MultiUserLongTermMemory:
     def _renforcer_les_servis(
         self,
         person_id: str,
-        servis: List[MemorySearchResult],
-        entrees_par_doc: Dict[str, MemoryEntry],
-        quand: Optional[datetime],
+        servis: list[MemorySearchResult],
+        entrees_par_doc: dict[str, MemoryEntry],
+        quand: datetime | None,
     ) -> int:
         """`force ← min(force + δ, FORCE_MAX)` et `rappels += 1` sur les entrées SERVIES.
 
@@ -948,6 +1035,7 @@ class MultiUserLongTermMemory:
         if not servis or not entrees_par_doc:
             return 0
         renforces = 0
+        renforcees: list[MemoryEntry] = []
         for resultat in servis:
             entree = entrees_par_doc.get((resultat.metadata or {}).get("doc_id"))
             if entree is None:
@@ -957,9 +1045,16 @@ class MultiUserLongTermMemory:
             if quand is not None:
                 entree.dernier_rappel = quand
             renforces += 1
+            renforcees.append(entree)
         if renforces:
             self._dirty.add(person_id)
             self._schedule_flush()
+            # Ticket 075 — le rappel MODIFIE la mémoire (durée de vie, compteur, date) : il a sa
+            # ligne au journal. Sans horloge simulée, rien n'est écrit plutôt que daté de
+            # l'horloge de la machine.
+            _journal = journal()
+            if _journal is not None and quand is not None:
+                _journal.rappel(person_id, quand, renforcees)
         return renforces
 
     def _bleu_score(self, query: str, keyword: str) -> float:
@@ -967,8 +1062,16 @@ class MultiUserLongTermMemory:
             return 0.0
 
         # Tokenize keywords and query
-        kw_tokens = [token.strip(string.punctuation) for token in keyword.lower().split() if token.strip(string.punctuation)]
-        query_tokens = [token.strip(string.punctuation) for token in query.lower().split() if token.strip(string.punctuation)]
+        kw_tokens = [
+            token.strip(string.punctuation)
+            for token in keyword.lower().split()
+            if token.strip(string.punctuation)
+        ]
+        query_tokens = [
+            token.strip(string.punctuation)
+            for token in query.lower().split()
+            if token.strip(string.punctuation)
+        ]
 
         # Calculate unigram (1-gram) overlap
         kw_unigrams = set(kw_tokens)
@@ -977,8 +1080,14 @@ class MultiUserLongTermMemory:
         unigram_score = unigram_overlap / len(kw_unigrams) if kw_unigrams else 0.0
 
         # Calculate bigram (2-gram) overlap
-        kw_bigrams = set(zip(kw_tokens[:-1], kw_tokens[1:])) if len(kw_tokens) > 1 else set()
-        query_bigrams = set(zip(query_tokens[:-1], query_tokens[1:])) if len(query_tokens) > 1 else set()
+        kw_bigrams = (
+            set(zip(kw_tokens[:-1], kw_tokens[1:])) if len(kw_tokens) > 1 else set()
+        )
+        query_bigrams = (
+            set(zip(query_tokens[:-1], query_tokens[1:]))
+            if len(query_tokens) > 1
+            else set()
+        )
         bigram_overlap = len(kw_bigrams.intersection(query_bigrams))
         bigram_score = bigram_overlap / len(kw_bigrams) if kw_bigrams else 0.0
 
@@ -989,24 +1098,27 @@ class MultiUserLongTermMemory:
         # contre 1.00 pour une étiquette de deux mots. Sans bigrammes, le poids revient en
         # entier aux unigrammes.
         if kw_bigrams:
-            combined_score = (0.7 * unigram_score + 0.3 * bigram_score)
+            combined_score = 0.7 * unigram_score + 0.3 * bigram_score
         else:
             combined_score = unigram_score
-        
+
         return combined_score
 
-    def _sim_now(self, person_id: str) -> Optional[datetime]:
+    def _sim_now(self, person_id: str) -> datetime | None:
         """Heure murale SIMULÉE de référence pour cet agent, ou None si indéterminable.
 
         Le souvenir le plus récent de l'agent porte l'heure murale de GAMA : c'est le seul
         « maintenant » qui ait un sens ici. L'horloge de la machine hôte n'en est pas un.
         """
         entries = self.user_metadata.get(person_id, {}).get("entries") or []
-        stamps = [e.timestamp for e in entries if getattr(e, "timestamp", None) is not None]
+        stamps = [
+            e.timestamp for e in entries if getattr(e, "timestamp", None) is not None
+        ]
         return max(stamps) if stamps else None
 
-    def cleanup_user_memories(self, person_id: str, days_threshold: int = 30,
-                              now: Optional[datetime] = None):
+    def cleanup_user_memories(
+        self, person_id: str, days_threshold: int = 30, now: datetime | None = None
+    ):
         """Cleanup old memories for specific user.
 
         Ticket 071 (défaut A) — le seuil se calculait sur `datetime.now()`, l'horloge de la
@@ -1079,6 +1191,13 @@ class MultiUserLongTermMemory:
         # à jour des métadonnées : il est journalisé, pas propagé.
         self._delete_from_index(supprimes, person_id)
 
+        # Ticket 075 — ce qui est oublié se lit dans le journal de l'agent, avec l'âge et la
+        # force qui l'ont fait tomber : un souvenir qui disparaît sans trace est indistinguable
+        # d'un souvenir qui n'a jamais été écrit.
+        _journal = journal()
+        if _journal is not None and supprimes:
+            _journal.purge(person_id, sim_now, supprimes)
+
         # Update metadata
         self.user_metadata[person_id]["entries"] = filtered_entries
         self.user_metadata[person_id]["last_cleanup"] = sim_now.isoformat()
@@ -1091,7 +1210,7 @@ class MultiUserLongTermMemory:
                 f"(seuil {days_threshold} j avant {sim_now.isoformat()}, temps simulé)"
             )
 
-    def _delete_from_index(self, entries: List[MemoryEntry], person_id: str) -> int:
+    def _delete_from_index(self, entries: list[MemoryEntry], person_id: str) -> int:
         """Retire du vector store les documents des entrées données. Fail-open et journalisé."""
         if not entries or self.shared_index is None:
             return 0
@@ -1106,35 +1225,37 @@ class MultiUserLongTermMemory:
                 self.shared_index.delete_ref_doc(doc_id, delete_from_docstore=True)
                 supprimes += 1
             except Exception as exc:  # noqa: BLE001 — une suppression ratée ne doit rien casser
-                logger.warning(f"[cleanup] Suppression index échouée pour {doc_id}: {exc}")
+                logger.warning(
+                    f"[cleanup] Suppression index échouée pour {doc_id}: {exc}"
+                )
         if sans_id:
             logger.warning(
                 f"[cleanup] {sans_id} souvenir(s) de {person_id} sans identifiant de document "
                 f"(écrits avant le ticket 071) : retirés des métadonnées, CONSERVÉS dans l'index"
             )
         return supprimes
-    
-    def batch_cleanup_users(self, user_ids: List[str], days_threshold: int = 30):
+
+    def batch_cleanup_users(self, user_ids: list[str], days_threshold: int = 30):
         """Batch cleanup for multiple users"""
         cleaned_count = 0
         for person_id in user_ids:
             try:
                 self.cleanup_user_memories(person_id, days_threshold)
                 cleaned_count += 1
-                
+
                 # Periodic cache cleanup during batch
                 if cleaned_count % 50 == 0:
                     self._cleanup_metadata_cache()
-                    
+
             except Exception as e:
                 logger.error(f"Error cleaning up user {person_id}: {e}")
-        
+
         logger.info(f"Batch cleanup completed for {cleaned_count} users")
-    
-    def get_all_users(self) -> List[str]:
+
+    def get_all_users(self) -> list[str]:
         """Get all users efficiently by scanning shard directories"""
         users = set(self.user_metadata.keys())
-        
+
         # Scan shard directories
         metadata_dir = self.storage_dir / "user_metadata"
         if metadata_dir.exists():
@@ -1142,23 +1263,23 @@ class MultiUserLongTermMemory:
                 if shard_dir.is_dir():
                     for metadata_file in shard_dir.glob("*.json"):
                         users.add(metadata_file.stem)
-        
+
         return list(users)
-    
-    def get_user_stats(self, person_id: str) -> Dict[str, Any]:
+
+    def get_user_stats(self, person_id: str) -> dict[str, Any]:
         """Get statistics for specific user"""
         self.ensure_user_initialized(person_id)
-        
+
         if person_id not in self.user_metadata:
             return {"person_id": person_id, "error": "User not found"}
-        
+
         metadata = self.user_metadata[person_id]
-        
+
         # Calculate recent entries
         recent_24h = 0
         recent_7d = 0
         now = datetime.now()
-        
+
         for entry in metadata["entries"]:
             try:
                 if now - entry.timestamp < timedelta(hours=24):
@@ -1167,7 +1288,7 @@ class MultiUserLongTermMemory:
                     recent_7d += 1
             except (TypeError, AttributeError):
                 continue
-        
+
         return {
             "person_id": person_id,
             "total_entries": len(metadata["entries"]),
@@ -1179,8 +1300,8 @@ class MultiUserLongTermMemory:
             "memory_usage_mb": metadata.get("memory_usage_mb", 0),
             "in_memory_cache": True,
         }
-    
-    def get_system_stats(self) -> Dict[str, Any]:
+
+    def get_system_stats(self) -> dict[str, Any]:
         """Get system-wide statistics"""
         return {
             "total_users": len(self.get_all_users()),
@@ -1188,77 +1309,80 @@ class MultiUserLongTermMemory:
             "max_loaded_metadata": self.max_loaded_metadata,
             "vector_store_type": self.vector_store_type,
             "storage_dir": str(self.storage_dir),
-            "cache_hit_ratio": self.metrics["cache_hits"] / max(self.metrics["cache_hits"] + self.metrics["cache_misses"], 1),
+            "cache_hit_ratio": self.metrics["cache_hits"]
+            / max(self.metrics["cache_hits"] + self.metrics["cache_misses"], 1),
             "total_queries": self.metrics["queries"],
             "memory_cleanups": self.metrics["memory_cleanups"],
             "memory_optimized": True,
-            "using_shared_index": True
+            "using_shared_index": True,
         }
-    
+
     def force_cleanup_all_users(self, days_threshold: int = 30):
         """Force cleanup for all users (maintenance operation)"""
         all_users = self.get_all_users()
         logger.info(f"Starting cleanup for {len(all_users)} users...")
-        
+
         # Process in batches to manage memory
         batch_size = 50
         for i in range(0, len(all_users), batch_size):
-            batch = all_users[i:i + batch_size]
+            batch = all_users[i : i + batch_size]
             self.batch_cleanup_users(batch, days_threshold)
-            
+
             # Progress update
-            logger.info(f"Cleanup progress: {min(i + batch_size, len(all_users))}/{len(all_users)} users")
-        
+            logger.info(
+                f"Cleanup progress: {min(i + batch_size, len(all_users))}/{len(all_users)} users"
+            )
+
         # Final cleanup
         self._cleanup_metadata_cache()
         if not self.vector_store:
             self._persist_shared_index()
-        
+
         logger.info("Force cleanup completed for all users")
-    
-    def get_memory_usage_breakdown(self) -> Dict[str, Any]:
+
+    def get_memory_usage_breakdown(self) -> dict[str, Any]:
         """Get detailed memory usage breakdown"""
         total_entries = 0
         total_size_mb = 0
         user_count = len(self.user_metadata)
-        
+
         for metadata in self.user_metadata.values():
             total_entries += len(metadata.get("entries", []))
             total_size_mb += metadata.get("memory_usage_mb", 0)
-        
+
         return {
             "loaded_users": user_count,
             "total_entries_in_cache": total_entries,
             "total_cache_size_mb": total_size_mb,
             "avg_entries_per_user": total_entries / max(user_count, 1),
             "avg_size_per_user_mb": total_size_mb / max(user_count, 1),
-            "cache_efficiency": f"{user_count}/{self.max_loaded_metadata}"
+            "cache_efficiency": f"{user_count}/{self.max_loaded_metadata}",
         }
-    
-    def get_user_all_memories(self, person_id: str) -> List[MemoryEntry]:
+
+    def get_user_all_memories(self, person_id: str) -> list[MemoryEntry]:
         """Get all memories for a specific user"""
         self.ensure_user_initialized(person_id)
-        
+
         if person_id not in self.user_metadata:
             return []
 
         # Entries are already MemoryEntry objects (converted at load time)
         return list(self.user_metadata[person_id]["entries"])
 
-    async def aexport_user_data(self, person_id: str) -> Dict[str, Any]:
+    async def aexport_user_data(self, person_id: str) -> dict[str, Any]:
         """Export all data for a specific user"""
         self.ensure_user_initialized(person_id)
-        
+
         if person_id not in self.user_metadata:
             return {"error": "User not found"}
-        
+
         # Get user metadata
         user_data = {
             "person_id": person_id,
             "metadata": self.user_metadata[person_id].copy(),
-            "stats": self.get_user_stats(person_id)
+            "stats": self.get_user_stats(person_id),
         }
-        
+
         # Query all memories for this user
         try:
             all_memories = await self.aquery_user_memories(person_id, "", top_k=1000)
@@ -1266,8 +1390,8 @@ class MultiUserLongTermMemory:
         except Exception as e:
             user_data["memories"] = []
             user_data["export_error"] = str(e)
-        
+
         return user_data
-    
+
     def __str__(self) -> str:
         return f"ScalableLongTermMemory({self.vector_store_type}, {len(self.user_metadata)} users cached)"

@@ -21,11 +21,26 @@ Conséquences, posées avant toute ligne de code :
 - **P2** — Une exécution `modele_verifie: false` **ne fournit aucune mesure de parts modales**
   publiable, et ne sert pas de référence dans le plan d'expériences. Elle vaut pour ce qu'elle
   est : banc de mise au point de la mécanique, et mesure de coût nul.
+- **P2 bis** (2026-09-15) — Les **réglages d'échantillonnage ne sont pas garantis** sur ce canal.
+  `parametres` est transmis dans la demande, et le sous-agent répond par `parametres_appliques`,
+  qui dit ce qu'il a pu appliquer. Une réponse muette est comptée et archivée comme un trou,
+  jamais comme « température 0 ». Conséquence : une exécution `antigravity` ne peut pas se
+  réclamer du protocole « tous les modèles à température nulle » sans produire ce champ.
+  Avant ce correctif, `parametres` était construit puis ignoré : le `temperature: 0.0` des
+  `experience.yaml` n'atteignait jamais le sous-agent, et rien dans l'archive ne le disait.
 - **P3** — La vérification du modèle est un **contrôle manuel de l'auteur** (décision du
   2026-09-09) : il s'assure hors du code que le sous-agent est bien servi par le modèle déclaré.
   Aucune machinerie n'est ajoutée pour l'imiter — `modele_verifie: false` dit seulement que la
   garantie ne vient pas du code. Si un canal de vérification apparaît côté Antigravity, il
   alimente le même champ et le drapeau bascule à `true`.
+
+- **P4** (2026-09-15) — **Un canal sans sous-agent s'arrête.** Si aucune réponse n'arrive dans
+  les `demarrage_max_s` secondes suivant le lancement (par défaut `attente_max_s`), le décideur
+  pose le fichier `STOP` du dossier d'exécution et lève une `[ALARME]`. Le runner clôt alors en
+  `arretee`, état **final**, et une campagne enchaîne au bras suivant. Le garde-fou se désarme
+  définitivement à la première réponse reçue : un canal lent mais vivant n'est jamais arrêté.
+  Motif : `en_attente_agent` n'est pas un état final ; le 2026-09-15, une exécution y est restée
+  plus de six heures avec 0 décision sur 3 161, la campagne bloquée derrière.
 
 Cette version ne cherche donc pas à retrouver un résultat connu (cf. §8) : elle vérifie que la
 mécanique produit une archive valide, complète et honnête sur ce qu'elle est.

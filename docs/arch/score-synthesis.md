@@ -256,6 +256,82 @@ Divergence **déclarée et non corrigée** : refaire les jeux gelés casserait l
 de toute la trajectoire de calibration déjà mesurée. L'encadré ne s'affiche que si la
 divergence existe — une mise en garde permanente cesse d'être lue.
 
+## 3 bis. Le journal doit recouvrir les décisions — la règle R24
+
+`moves.csv` est le **substrat du composite** : le scoreur ne lit que lui. `synthese.json`,
+lui, compte ce que l'exécution a réellement décidé (`couverture.decides`). Les deux
+voyageaient côte à côte dans le même `scores.json` **sans jamais se comparer**.
+
+Ce que cela a coûté : l'exécution `2026-09-12_11_24_28` a été publiée à **5,35** de composite
+sur **274 lignes** de journal, pour **3 154** décisions archivées. Le chiffre a été repris
+dans deux tickets et au chapitre 6 de l'article avant d'être reconnu faux. Sur le journal
+reconstitué, le même bras vaut **6,16**.
+
+La cause, en une phrase : à la reprise d'une exécution interrompue, les décisions archivées
+sont **resservies** sans solliciter le décideur, et ce chemin n'écrivait aucune ligne de
+journal. Le journal restait tel que le processus interrompu l'avait laissé.
+
+### La règle
+
+Avant tout calcul, `score.calculer` compare le nombre **brut** de lignes du journal (avant la
+coupe au premier jour simulé, avant `latest_attempts`) à `couverture.decides`. Au-delà de
+**2 %** de déficit :
+
+- `[ALARME] Journal des mouvements incomplet` en ERROR, visible par `make error`, à **front
+  montant** — une fois par exécution et par processus, sans quoi `score --toutes` noierait le
+  signal dans sa propre répétition ;
+- **aucun `scores.json`**, aucune page ;
+- un `scores.json` **déjà écrit** sur ce journal est renommé `scores.invalide.json` — retiré
+  de la circulation mais conservé pour l'audit, c'est lui qui a produit le chiffre publié — et
+  sa page est supprimée.
+
+Le seuil est **mesuré, pas décrété**. Balayage du 2026-09-15 sur les 43 exécutions des deux
+racines : les 37 exécutions saines portent 3 161 lignes pour 3 151 à 3 155 décidées, soit un
+déficit **toujours négatif** (le journal porte en plus les lignes `sans_solution`, que
+`decides` exclut). L'exécution fautive est à +91,31 %. Un plancher à 2 % laisse 63 lignes de
+marge et sépare les deux régimes d'un facteur 45.
+
+Le contrôle qui a autorisé un score est publié avec lui, dans `perimetre_verifie` : la page de
+synthèse en fait une tuile « Journal vérifié », le tableau de bord une colonne `journal`. Un
+score qui ne porte pas ce champ est réputé **périmé**, ce qui force un calcul complet et fait
+passer tout l'historique devant la règle — une fois.
+
+Trois valeurs, jamais deux : « complet », « INCOMPLET », et « non comparable » quand
+`couverture.decides` est absent ou nul. Ne rien pouvoir comparer n'est pas avoir comparé avec
+succès.
+
+### La reprise régénère le journal
+
+À la reprise, `moves.csv` est reconstruit **intégralement** depuis `decisions.jsonl` et le jeu
+scellé, avant la première décision neuve. Régénérer plutôt que compléter rend le journal
+indépendant de l'histoire des interruptions, et permet de réparer les exécutions déjà
+archivées.
+
+Une ligne se reconstitue sans rien emprunter : la trace archivée porte la retenue, les
+présentées, la distribution, les sources, les écartées, la contrainte de chaîne et
+l'anticipation ; le jeu scellé porte les `TravelPlan` complets, donc les distances. Le runner
+et la régénération appellent **la même fonction**, `journal.ecrire_ligne` — deux écritures qui
+divergent est exactement la panne que cette règle referme.
+
+Vérifié sur une exécution complète : le journal régénéré est identique colonne par colonne, et
+le score identique au dernier chiffre. Deux colonnes font exception et ne le peuvent pas :
+« Trajet » est un compteur de processus, et l'archive n'horodate pas les décisions une par une,
+donc « Heure de calcul » est uniforme. Le drapeau `reprise` de la lecture du score disparaît
+alors ; les interruptions de `synthese.json` restent la source de vérité sur ce point.
+
+En ligne de commande :
+
+```bash
+python -m experiences journal <execution> --regenerer
+python -m experiences journal --verifier --toutes
+```
+
+`--jeu` et `--population` remplacent les chemins figés quand ils ne sont pas résolubles sur
+l'hôte (l'archive porte des chemins conteneur), `--motif-archive` lève le garde d'archive
+froide. Les empreintes de `execution.yaml` sont vérifiées : régénérer depuis une autre cohorte
+ou un autre jeu est **refusé**, parce que cela produirait un journal plausible, scorable et
+faux.
+
 ## 4. Les trois volets
 
 ### Périmètre commun aux trois volets
@@ -273,19 +349,53 @@ définies une fois et appliquées à la source.
 | `Pas de solution de déplacement` | Aucun mode ne relie l'OD |
 | `LLM Error (Default index)` | **Ce n'est pas une décision, c'est un repli.** Le prompt n'a pas répondu ; le contrôleur prend l'itinéraire d'index 0. Sur le run de référence, 100 % de ces lignes retenaient le plus rapide, soit 64,7 % de voiture. Les garder revenait à noter le prompt sur un choix qu'il n'a pas fait |
 
-**2. Un seul jour simulé** — le **premier** présent dans le run, jamais une date en dur.
-Même quand le run est censé s'arrêter à 24 h, le bootstrap et l'horizon glissant de
-planification font déborder le journal au-delà : sur le run de référence, 2 538 couples
-(personne, activité) réapparaissaient un jour plus tard, 2,17 fois en moyenne, avec le
-même mode dans 57,8 % des cas. Ces répétitions ne sont pas des décisions supplémentaires,
-elles pèsent seulement deux fois dans les parts modales.
+**2. Un seul jour simulé — quand il y a de quoi couper** (ticket 057). Le **premier** jour
+présent dans le run, jamais une date en dur. Même quand le run est censé s'arrêter à 24 h, le
+bootstrap et l'horizon glissant de planification font déborder le journal au-delà : sur le run
+de référence, 2 538 couples (personne, activité) réapparaissaient un jour plus tard, 2,17 fois
+en moyenne, avec le même mode dans 57,8 % des cas. Ces répétitions ne sont pas des décisions
+supplémentaires, elles pèsent seulement deux fois dans les parts modales.
+
+La coupe est là **pour ces répétitions**, et elle ne s'applique que là où il y en a :
+
+| condition | coupe | motif publié |
+|---|---|---|
+| l'exécution déclare `horizon_jours > 1` | oui | `horizon` |
+| au moins un couple (personne, activité) sur plus d'un jour simulé | oui | `repetitions` |
+| ni l'un ni l'autre | **non** | `aucune` |
+| l'appelant passe `first_day_only=True` ou `False` | selon | `forcee` / `aucune` |
+
+**Pourquoi la condition, et pas la coupe systématique.** Sur les exécutions *sans simulateur*
+à horizon d'un jour, il n'y a aucune répétition — et la coupe écartait quand même 866 décisions
+sur 3 299, dont **797 le déplacement de rang 0** de chaque persona. La cause est ailleurs :
+`experiences/jeu.py:deplacements_attendus()` résout l'heure de départ contre
+`precedente.start_time`, et pour la première paire de la journée `precedente` est l'activité
+« home » qui enjambe minuit ; le départ du matin lui étant antérieur, il bascule au lendemain.
+Le périmètre scoré montait ainsi à 56,9 % de retours au domicile, contre 43,8 % sur la journée
+entière et 39,0 % dans l'enquête, et l'écart entre les deux lectures du composite passait de
++2,24 à +5,64 points EMD chez `lgbm`.
+
+**L'invariant, lui, ne dépend d'aucune condition** : un couple (`ID Personne`, `ID Activité`)
+ne sort qu'une fois de `read_moves`, et c'est l'occurrence du plus petit jour simulé. La coupe
+choisit *quelle* occurrence ; ce filet garantit *qu'une seule* sorte, même si le critère se
+trompe. Vérifié sur les 25 exécutions du dépôt le 2026-09-16 : zéro doublon.
+
+`scores.json` publie le motif appliqué (`lecture.coupe`), le nombre de couples répétés et les
+lignes écartées par chaque règle ; `choix_forces.perimetre` le dit en clair à côté du compte.
+Spec : `specs/ticket_057/perimetre_de_score.md`.
 
 **Deux points d'entrée, pas un** — c'est le piège de cette coupe :
 
-| Volet | Source | Point d'intervention | Champ |
-|---|---|---|---|
-| 1 et 3 | `moves.csv` | `frames.read_moves` | colonne « Temps simulé » (via `frames.simulated_day`) |
-| 2 | `llm_exchanges.jsonl` | `common_set_eval.build_sample` | champ `sim_day` du journal |
+| Volet | Source | Point d'intervention | Champ | Condition |
+|---|---|---|---|---|
+| 1 et 3 | `moves.csv` | `frames.read_moves` | colonne « Temps simulé » (via `frames.simulated_day`) | conditionnelle (tableau ci-dessus) |
+| 2 | `llm_exchanges.jsonl` | `common_set_eval.build_sample` | champ `sim_day` du journal | systématique |
+
+Les deux points d'entrée ne portent plus la même règle depuis le ticket 057, et c'est
+délibéré : le volet 2 lit des runs GAMA, dont l'horizon glissant produit réellement des
+répétitions, là où les volets 1 et 3 lisent aussi des exécutions sans simulateur qui n'en
+produisent aucune. Si le volet 2 venait à lire une exécution sans simulateur, la condition
+devrait y être portée aussi.
 
 Le volet 2 ne lit pas `moves.csv` : il reconstruit son échantillon depuis le journal
 d'échanges. Oublier ce second point ferait porter aux trois volets des périmètres
@@ -349,6 +459,69 @@ Conventions de correspondance appliquées :
   le résidu « autres » d'EMC² ; la masse écartée est mesurée et affichée ;
 - `Motifs de déplacement` mélange libellés traduits et bruts ; `home`, `leisure`
   et `other` n'ont pas d'équivalent EMC² et sortent de la dimension motif.
+
+#### Les colonnes traduites, et la table qui les ramène aux clés de l'enquête
+
+La bascule anglaise du [ticket 074](../tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md)
+a changé la **langue** de quatre colonnes du journal — celles qui sont servies au modèle
+dans le récit de persona. Les clés de `cerema_values.yaml` n'ont pas bougé : elles
+franchissent une frontière de dépôt (`prompt_calibration/` les lit) et le modèle ne les
+voit jamais. **La traduction se fait ici**, à la lecture, et chaque colonne traduite a sa
+table :
+
+| Colonne de `moves.csv` | v6 et après | v5 et avant | Clé EMC² | Table |
+|---|---|---|---|---|
+| `Lieu de résidence` | `1st ring` | `1ere couronne` | `1ere_couronne` | `PLACE_MAP` |
+| `Occupation principale` | `Full-time worker` | `Travail à plein temps` | `actif_temps_plein` | `OCCUPATION_MAP` |
+| `Type de logement` | `Detached house` | `Individuel isolé` | `individuel_isole` | `mobility_core.housing_type` |
+| `Motifs de déplacement` | `work` | `Travail` | `travail` | `MOTIF_MAP` |
+| `Mode de transport Choisi` | `Voiture Privée` | `Voiture Privée` | `voiture` | `CHOSEN_MODE_MAP` |
+| `Modes proposés au LLM` | `Voiture Privée` | `Voiture Privée` | `voiture` | `CHOSEN_MODE_MAP` |
+
+Les deux dernières lignes sont **françaises des deux côtés** : ces libellés ne sont pas
+servis au modèle, la bascule ne les a pas touchés. Le test paramétré
+`scripts/tests/test_residence_couronnes_synthesis.py` passe une ligne v5 et une ligne v6
+du même persona sur les six colonnes et vérifie qu'elles produisent la **même** trame —
+y compris là où rien n'a changé, pour que le jour où l'une bascule, le test le dise.
+
+`PLACE_MAP` n'énumère rien : elle est **dérivée** de
+`mobility_core.population_reference`, unique déclaration des modalités de couronne,
+partagée avec la génération de population et le journal. Une quatrième recopie finirait
+par diverger en silence. Même principe que `normalize_housing`, qui passe par
+`mobility_core.housing_type`.
+
+**Un libellé inconnu ne traverse plus.** `normalize_place` rendait auparavant
+`text.replace(" ", "_")` avec un second membre `True` : n'importe quel libellé produisait
+une clé d'apparence valide. Sur les 15 exécutions v6 scorées au 2026-09-15, `1st ring`
+devenait `1st_ring`, que
+la référence ne ventile pas, et les trois couronnes hors Toulouse se retrouvaient dans la
+ligne « hors référentiel » — comptées, donc, mais plus jamais publiées comme strates. La
+dimension `lieu_residence` étant hors composite, aucun chiffre ne bougeait et rien ne
+signalait la perte. Le
+[ticket 082](../tickets/ticket_082_couronnes_de_residence_v6_non_reconnues_par_le_scoreur.md)
+a fermé cette voie : un libellé hors table sort de la dimension, se compte
+(`lieu_residence_inconnu`, `type_logement_inconnu`, `occupation_inconnue`,
+`motif_inconnu`) et lève une `[ALARME]` à sa **première** occurrence — front montant, pour
+qu'un journal de 3 000 lignes fautives produise une alarme et un compteur à 3 000, pas
+3 000 alarmes.
+
+Deux distinctions que ces compteurs tiennent, et qu'il ne faut pas refermer :
+
+- **vide n'est pas illisible.** Une population enrichie avant le
+  [ticket 021](../tickets/ticket_021_couronne_residence_post_traitement.md) écrit la
+  colonne de résidence vide, et un domicile hors couche de zones fines n'a pas de type de
+  logement : ce sont des cas **normaux** (`lieu_residence_vide`, `type_logement_vide`). Un
+  libellé que la table ne connaît pas est un défaut de traduction, et porte son propre
+  compteur ;
+- **`home`, `leisure` et `other` ne sont pas des défauts.** Ces motifs existent dans le
+  journal et n'ont pas d'équivalent EMC² : ils sortent de la dimension sans rien signaler.
+  Tout autre motif hors `MOTIF_MAP` est, lui, inattendu et se dit.
+
+Enfin, un `scores.json` calculé avant le ticket 082 porte la clé fantôme `1st_ring` dans
+la ligne « hors référentiel » de sa dimension résidence. `experiences.score.scores_perimes`
+en fait un critère de **péremption** : sans cela, `--toutes` rejouerait ces fichiers depuis
+leurs scores bruts — le rejeu ne recalcule que le composite, jamais le détail par strate —
+et la correction n'atteindrait aucune page publiée.
 
 La colonne **`Contrainte de chaîne`** (écrite depuis le ticket 008) est lue et
 **ventilée dans le bilan de lecture**, pas utilisée comme filtre : une décision prise sur
@@ -1106,12 +1279,23 @@ trois composites comparables : sans elle, ils porteraient sur des déplacements 
 
 **Trois choses à savoir avant de relancer.**
 
-1. ⚠ **L'expérience n'est pas rejouable par la CLI.** `python -m experiences lancer
-   --experience exp_rf_jtir_nosim` échoue sur un format d'artefact inconnu. Elle a été lancée
-   par `scripts/progedo_logit/lancer_experience_rf.py`, qui enregistre la famille `rf` **au
-   moment de l'exécution** — les deux lignes de table (`FAMILLES`, `POLICY_FORMATS`) ont été
-   laissées au ticket 043, qui modifiait ces fichiers au même moment. Le dossier de
-   l'expérience porte un `LISEZ-MOI.md` qui le dit.
+1. **L'expérience est rejouable par la CLI depuis le 2026-09-16** (ticket 088 § 3.3). La
+   famille `rf` est déclarée dans les deux tables — `FAMILLES`
+   (`experiences/decideur_modele.py`) et `POLICY_FORMATS` / `load_policy`
+   (`scripts/synthesis/model_on_common_set.py`) — au lieu d'être inscrite en mémoire par le
+   lanceur, qui remplaçait au passage `load_policy` dans l'espace de noms du décideur. Ces
+   deux lignes avaient été laissées au ticket 043, qui modifiait les mêmes fichiers au même
+   moment ; il est clos. **Depuis l'hôte, avec la racine du dépôt et `services/llm-agents`
+   dans `PYTHONPATH`** (voir le point 3 pour le « depuis l'hôte ») :
+
+   ```bash
+   PYTHONPATH="$PWD:$PWD/services/llm-agents" \
+     services/llm-agents/.venv/bin/python -m experiences lancer --experience exp_rf_…
+   ```
+
+   Le lanceur reste utile pour *définir* l'expérience à partir de celle du logit ; il vérifie
+   désormais la déclaration au lieu de l'injecter. Le dossier de l'expérience porte un
+   `LISEZ-MOI.md` qui rappelle la contrainte d'hôte.
 2. **Rien n'a été écrit à la main.** L'exécution est produite par le code de la plateforme —
    décision, renormalisation, tirage, compteurs, scoring. Un `scores.json` tapé au clavier ne
    serait pas comparable au 6,1734 du logit, puisque l'un sortirait du code de scoring et
@@ -1234,7 +1418,7 @@ make klr-predict          # KLR sur le MÊME run, par le MÊME chemin de prédic
 make bi-oracle            # les blocs → data/bi_oracle.json (C1 à deux arbitres)
 make forest               # témoin random forest (~18 min, hors ligne, indépendant du reste)
 make forest FOREST_ARGS=--artefact          # + le contrat de rejeu (12 ko) et sa matrice (1,4 Mo)
-python -m scripts.progedo_logit.lancer_experience_rf   # le témoin joué comme expérience (~5 min)
+python -m scripts.progedo_logit.lancer_experience_rf   # la forêt jouée comme expérience (~5 min, sur l'hôte)
 ```
 
 `bi_oracle` refuse de composer un chiffre si le numérateur et le dénominateur ne viennent pas
@@ -1258,7 +1442,7 @@ donc sous le même nom.
 | `scripts/progedo_logit/mode_choice_logit.py` | Contrat et évaluateur pur numpy du logit — prédit sans scikit-learn |
 | `scripts/progedo_logit/fit_mode_choice_forest.py` | **Témoin** random forest : d'où vient l'avantage du booster ? (`make forest`) — mesures seules, aucun arbre sérialisé |
 | `scripts/progedo_logit/mode_choice_rf.py` | `RFPredictor` : réajuste la forêt en ~10 s depuis un `.npz` de 1,4 Mo, puis **vérifie qu'elle reproduit les métriques publiées** |
-| `scripts/progedo_logit/lancer_experience_rf.py` | Lanceur ponctuel de `exp_rf_jtir_nosim` — enregistre la famille `rf` à l'exécution, sans toucher aux tables |
+| `scripts/progedo_logit/lancer_experience_rf.py` | Définit l'expérience de la forêt depuis celle du logit, ramène le chemin de population sur l'hôte, puis lance. La famille `rf` est déclarée dans les tables depuis le ticket 088 § 3.3 : ce script la vérifie, il ne l'injecte plus |
 | `scripts/progedo_logit/mode_choice_eval.py` | Métriques **partagées** par les deux oracles et le témoin (CEL, GMPCA, parts modales, L1) |
 | `scripts/synthesis/charts.py` | SVG en ligne (bullet, profils ordinaux, matrice) |
 | `scripts/synthesis/render.py` | Assemblage HTML — page complète (`render()`) et pages dédiées « Détail par sous-catégorie » (`render_detail()`, spécifiées par `DETAIL_PAGES`) |

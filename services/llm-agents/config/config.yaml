@@ -10,15 +10,55 @@ gtfs:
   mode: OTP
 
 agent:
+  # Variante de prompt système servie à la décision d'itinéraire (ticket 035 : la passerelle
+  # la lit dans `parameters.prompt_variant`). Sans cette clé, c'est `active:` de
+  # `prompts.yaml` qui décide — aujourd'hui `prompt_expert_16`.
+  #
+  # `prompt_expert_05` (ex-`expert_gem_3.8_v2_neutre_justif`, 2026-09-13) : choix de l'auteur
+  # du 2026-09-16. Verdict de neutralité conforme, non invalidé. C'est la variante que les
+  # expériences `proexp05` de la campagne emploient, donc le run de mémoire se compare à un
+  # bras déjà mesuré à mille agents.
+  # ⚠ Ce bloc REMPLACE le dictionnaire par défaut, il ne s'y ajoute pas. Les trois valeurs
+  # ci-dessous sont donc recopiées de `settings.py` : sans elles, température, top_p et budget
+  # de sortie disparaissaient des appels — trouvé par le test de régénération du journal du
+  # ticket 081, qui a vu la colonne « Température » diverger.
+  llm_params:
+    temperature: 0
+    top_p: 1.0
+    max_tokens: 4096
+    prompt_variant: prompt_expert_05
+
   reschedule_activity_departure_time: false
   quantify_time_window: false
   long_term_reflect_interval: 86400
+  # TEMPORAIRE A SUPPRIMER (debug ticket 077 : réduire le prompt stm_reflection sous le plafond ITPM 7000 de Groq)
+  stm_reflection_min_entries: 5
+
 
   # Le dispositif sous test.
   weather_per_agent_dates: true
-  weather_window: enquete          # 2022-09-20 → 2023-02-18, jours ouvrés
-  weather_weekdays_only: true
+  # Ticket 075 — fenêtre ANNÉE et week-ends compris : la date tirée est un jour de DÉPART,
+  # avancé d'un jour calendaire par jour simulé. Sur soixante jours, chaque agent parcourt
+  # soixante journées météo réellement consécutives (épisodes pluvieux qui durent, saison qui
+  # avance) au lieu de relire soixante fois le même bulletin. La fenêtre d'enquête, elle, aurait
+  # fait boucler la moitié des agents du 18 février au 20 septembre en plein run.
+  weather_window: annee
+  weather_weekdays_only: false
   weather_draw_seed: 42
+
+  # Journal de mémoire (ticket 075) : un Markdown par agent dans <workdir>/memoires/.
+  # ⚠ À REMETTRE À false avant tout run à mille agents — il écrit l'état COMPLET de la mémoire
+  # après chaque consolidation.
+  journal_memoire_enabled: true
+
+  # Trace des souvenirs servis (ticket 077, lot E1) : une ligne JSONL par rappel, avec le
+  # vivier d'origine, le score et le rang de chaque souvenir du top-K. Même consigne que
+  # ci-dessus : à remettre à false avant tout run à mille agents.
+  trace_rappel_enabled: true
+  # Ticket 093 — trace des opérations de concept et mesures par jour simulé (CSV + séries
+  # Grafana). Éteintes par défaut : à dix agents c'est immédiat, à mille il faut le vouloir.
+  trace_concepts_enabled: true
+  mesures_jour_enabled: true
 
 # Cache sémantique des décisions LLM.
 #
@@ -30,8 +70,26 @@ agent:
 #
 # Coût à connaître : ~4x plus d'appels, et le run est d'autant plus lent.
 # Bascule au lancement : `make run CACHE=0` / `make run CACHE=1`.
+# Ticket 084 — seules ces instances de passerelle peuvent servir les décisions de CE run.
+# Les onze instances Google restent chargées pour les autres travaux : la restriction voyage
+# avec la requête et est honorée À LA SÉLECTION, pas après coup. Liste vide = aucune restriction.
+# TEMPORAIRE A SUPPRIMER (debug ticket 077 - bascule Groq)
+llm:
+  instances_admises: [groq_openai_120_key1, groq_qwen_qwen3_8_27b_key1]
+
 cache:
+  # Ticket 075 — ACTIF pour le run de soixante jours, et ce n'est pas une économie de confort :
+  # la reprise à chaud rejoue les jours déjà vécus, et sans cache ce rejeu repaierait chaque
+  # décision. À ~1 400 sollicitations attendues contre 1 000 requêtes/jour de quota gemini 3.1,
+  # le run n'atteindrait jamais le jour 60.
+  #
+  # Répertoire DÉDIÉ : le cache n'est pas indexé par modèle (cf. `llm/cache.py`, `_make_state_hash`).
+  # Un cache partagé resservirait des décisions produites par mistral ou gemini 3.5, et le run
+  # cesserait d'être « gemini 3.1 exclusivement » sans qu'aucune ligne ne le dise.
   enabled: false
+  # Sous-répertoire du point de montage ./data/cache/llm : un chemin hors montage vivrait
+  # DANS le conteneur et disparaîtrait à sa recréation — donc à la première reprise.
+  cache_dir: /app/data/llm_cache/gemini31_memoire_075
 
 # ── Population scellée (article AAMAS) ─────────────────────────────────────────
 # Le run prend ce fichier ENTIER, à la place de la recherche par taille et de tout appel à
@@ -48,7 +106,10 @@ cache:
 # Les sceaux précédents restent disponibles : population_1000_AAMAS_v3 (sha256 8d8bfa3645fa77fb…,
 # Haute-Garonne seule) et population_1000_AAMAS (v2, sha256 f67b07772f3dced9…).
 data:
-  population_file: /data/eqasim-output/population_1000_AAMAS_v5/population.json
+  # Ticket 075 — population de TEST à cinq agents (PAS un sceau AAMAS : cf. son MANIFEST).
+  # La référence de l'article reste /data/eqasim-output/population_1000_AAMAS_v6/population.json,
+  # à remettre ici avant tout run de mesure.
+  population_file: /data/eqasim-output/population_10_mesurables_093/population.json
 
   # ── Jeu de déplacements enregistré (ticket 035, spec 04) ────────────────────────────────
   # `make run JEU=<nom>` écrit `jeu_enregistre` ici et recrée le contrôleur ; sans lui, calcul en
@@ -63,3 +124,6 @@ data:
   #   car: heure
   #   transit: {pas_min: 10}
   #   rail: {pas_min: 10}
+chocs:
+  enabled: true
+  fichier: /app/config/chocs/c6_voiture_suspecte.yaml

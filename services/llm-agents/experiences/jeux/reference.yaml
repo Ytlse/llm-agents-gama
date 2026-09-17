@@ -1,0 +1,27 @@
+# Le jeu (substrat d'itinéraires) de RÉFÉRENCE — spec `tableau-experiences-colonnes-et-filtres`,
+# règle R22.
+#
+# Un score composite ne se compare qu'à l'intérieur d'un même jeu : mêmes personas, même jour,
+# même offre d'itinéraires, même météo. Le tableau « Mes expériences » du tableau de bord grise
+# donc toute exécution qui a tourné sur un autre jeu que celui nommé ici — elle reste lisible,
+# reprenable et scorée, mais son chiffre ne se met pas en regard des autres.
+#
+# Ce fichier est versionné en git PARCE QUE c'est une décision scientifique : `data/jeux/` est
+# ignoré, et un drapeau posé dans un manifeste de jeu n'aurait laissé aucune trace. Changer de
+# référence = éditer `jeu` ci-dessous, déplacer l'ancienne valeur dans `anciens`, et dire
+# pourquoi. Le tableau de bord relit ce fichier à chaque battement : aucun redémarrage.
+
+jeu: population_1000_AAMAS_v6_20260316_EN_c
+depuis: '2026-09-16'
+raison: >-
+  Ticket 088. Le jeu précédent portait, pour 797 des 894 personas mobiles, une offre
+  d'itinéraires et une météo calculées pour le 17 mars au lieu du 16 : `deplacements_attendus()`
+  ancrait le curseur sur le `start_time` d'une activité « home » enjambant minuit, et la règle de
+  report datait le départ du matin du lendemain. Tout ce qui a été mesuré sur l'ancien substrat
+  est rejoué par la campagne `rejeu_jeu_corrige_v6`.
+
+# Les références précédentes, gardées pour que le grisé d'aujourd'hui se relise demain.
+anciens:
+  - jeu: population_1000_AAMAS_v6_20260316_EN
+    jusquau: '2026-09-16'
+    raison: Substrat daté du 17 mars pour 797 des 894 personas mobiles (ticket 088).

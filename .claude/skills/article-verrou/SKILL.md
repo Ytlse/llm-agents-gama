@@ -43,6 +43,58 @@ ne le modifie sans un accord humain explicite, donné dans la conversation.
 `python -c`, `git checkout`, `mv`. Ces chemins-là relèvent de cette skill : ils passent
 par la même procédure, sans exception.
 
+## Style : l'article ne porte pas la signature d'une IA
+
+Une évaluation à double insu lit un manuscrit rédigé avec assistance. Quatre familles de
+marqueurs se mesurent, et le corpus porte sa propre norme : les chapitres les plus relus par
+l'auteur sont à 0,0 et 0,7 cadratin pour 1000 mots de prose quand les brouillons montent à
+17,5 (mesure du 2026-09-15, ticket 083).
+
+**À l'écriture, éviter :**
+
+1. **Typographie.** Le cadratin employé comme seul outil d'apposition, la glose énumérative
+   accrochée à chaque concept, le gras qui porte l'argument à la place de la phrase, les
+   amorces en gras répétées sous le même libellé. Deux-points, parenthèses et phrase suivante
+   font le même travail sans le tic.
+2. **Lexique prédictible.** *En fin de compte*, *il convient de noter*, *crucial*, *catalyseur*,
+   *tisser*, *dévoiler* ; *ultimately*, *delve*, *seamless*, *pivotal*, *underscore*.
+3. **Structure symétrique.** L'essai à trois volets, le triptyque *tout d'abord / ensuite /
+   enfin*, la conclusion introduite par *En résumé*, les sections calibrées à la même longueur.
+4. **Lissage sémantique.** L'équilibrage systématique des arguments, « bien que X présente des
+   limites, Y offre des perspectives ». Un article prend position ; il le fait avec ses chiffres.
+
+**Trois règles de fond, écrites dans [`docs/paper/article/README.md`](../../../docs/paper/article/README.md).**
+Elles ne se déduisent pas des quatre familles ci-dessus, et une session qui ne les a pas lues les
+enfreint de bonne foi. Les voici en résumé ; le README fait foi.
+
+1. **Pas de formule-slogan en tête de paragraphe.** « X, pas Y », « ceci n'est pas cela », « une
+   famille, pas un oracle désigné » : la tournure annonce une posture au lieu d'énoncer un fait,
+   et elle survit aux mesures qui la contredisent. Un paragraphe commence par ce qu'il établit.
+   Cela vaut aussi pour les titres de règles, de sections et de tableaux.
+2. **Le chapitre ne plaide pas.** Une phrase qui défend un choix contre une objection que personne
+   n'a formulée sort du texte. Corollaire : un chiffre qui n'alimente aucune affirmation du
+   chapitre sort du corps du texte et vit en commentaire HTML ou en annexe.
+3. **Ce qui n'entre pas dans le texte.** La fabrication plutôt que la mesure : versions archivées,
+   dossier « immuable », fichier « figé dans le dépôt », empreintes. La traçabilité vit dans les
+   commentaires `<!-- source: … -->` à côté du chiffre.
+
+Le détecteur ne voit aucune des trois : elles se vérifient à la relecture, pas à la commande.
+
+**Après l'écriture, contrôler :**
+
+```
+make paper-style F=docs/paper/article/fr/03_architecture.md
+```
+
+Un hook `PostToolUse` le lance automatiquement après un `Edit` ou un `Write` sur un chapitre,
+et il est fail-open : détecteur absent ou en erreur, l'écriture aboutit. Il **ne voit pas** les
+écritures passées par `Bash` — même angle mort que le verrou lui-même. Sur ces chemins-là, la
+commande se lance à la main, sans exception.
+
+Le détecteur est un **signal, pas une autorité**. Un passage signalé peut être conservé : la
+famille lexicale, notamment, sort en informatif parce qu'elle a produit treize constats et zéro
+correction. Mais la décision s'énonce dans la réponse, elle ne se tait pas.
+
 ## Ce que le verrou n'est pas
 
 Ce n'est pas un refus. Une demande d'écriture sur l'article est légitime : la skill impose

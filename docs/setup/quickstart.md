@@ -64,6 +64,12 @@ make run OFFLINE=1 MEM=0         # coupe la mémoire des agents : LTM ET auto-r�
 
 make stop-run                    # arrêt à chaud : stoppe GAMA et le launcher,
                                  # laisse le reste de la pile en place
+                                 # ⚠ `make run` l'appelle DÉJÀ en première étape
+                                 # (ticket 089) : un lancement pendant un run en
+                                 # cours ARRÊTE ce run au lieu d'être refusé.
+                                 # Sans cet arrêt, GAMA gardait l'expériment du
+                                 # run précédent et le nouveau s'y ajoutait —
+                                 # deux réseaux complets en mémoire, puis l'OOM.
 make run OFFLINE=1 CONT=1        # reprise : réutilise le workdir du run précédent
                                  # (experiments/current) — journaux appendés,
                                  # state.json et checkpoints retrouvés, métriques
@@ -71,11 +77,24 @@ make run OFFLINE=1 CONT=1        # reprise : réutilise le workdir du run préc�
 ```
 
 Sémantique de la reprise (`CONT=1`) : le contrôleur reprend **le même répertoire
-d'expérience** ; la simulation GAMA, elle, repart à `t0` du jour simulé — GAMA ne
-sait pas geler son état en plein trajet (ticket 002). Les caches (décisions LLM,
-OTP, OSMnx) et `state.json` rendent ce rejeu quasi instantané et déterministe :
-en pratique, la simulation « rattrape » le point d'interruption en quelques
-minutes sans re-consommer de quota LLM.
+d'expérience** ; la simulation GAMA, elle, repart à son `t0` et rejoue les jours déjà
+vécus. Les caches (décisions LLM, OTP, OSMnx) et `state.json` rendent ce rejeu rapide.
+
+⚠ **Correction du 2026-09-14** : la phrase « GAMA ne sait pas geler son état » datait du
+ticket 002 et n'est plus exacte pour la version en service. L'image
+`gamaplatform/gama:2025.06.4` embarque `gama.extension.serialize` (`save_simulation`,
+`restore`) — sauvegarder l'état de GAMA et repartir au jour *k* sans rejeu est donc possible
+en principe. Ce qui n'est pas mesuré sur NOTRE modèle : taille du `.gsim`, durée, et ce qui
+survit au tour (graphes routiers, structures GTFS, agents à skills).
+
+**Mémoire des agents et reprise (ticket 075).** Le rejeu, sur un run à mémoire active,
+réécrirait des souvenirs déjà écrits. Le contrôleur écrit donc chaque nuit simulée à 3 h un
+**point de reprise** (`<workdir>/checkpoints_memoire/jour_XXX/` : mémoire longue, journaux
+`memoires/`, ancre du run). À la reprise — au `/init` de GAMA, pas au démarrage du conteneur —
+l'état est restauré à ce point, puis **la mémoire est gelée** jusqu'à ce que l'horloge simulée
+le dépasse : les agents circulent et décident, mais n'apprennent rien de ce qu'ils savent déjà.
+Le dégel est journalisé (`[reprise] DÉGEL au …`). Pendant le gel, le cache de décisions
+s'adresse à la branche exacte, donc rend la décision que le run d'origine a prise.
 
 Ce que fait le mode offline :
 

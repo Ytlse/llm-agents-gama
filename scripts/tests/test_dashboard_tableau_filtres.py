@@ -124,7 +124,10 @@ class FauxSt:
         return key in self.clics
 
     def dataframe(self, donnees, **_k):
-        self.tables.append(donnees)
+        # Le tableau grise ses lignes hors référence (R22) : ce que Streamlit reçoit est alors
+        # un `Styler`, pas un `DataFrame`. On garde la table NUE — c'est elle que les tests
+        # interrogent, et le style se vérifie ailleurs (`test_dashboard_jeu_reference.py`).
+        self.tables.append(getattr(donnees, "data", donnees))
         return self.event
 
     # — écritures —
@@ -199,6 +202,16 @@ def vue_isolee(tmp_path, monkeypatch):
     return tmp_path / "vue" / "vue.yaml"
 
 
+@pytest.fixture(autouse=True)
+def sans_jeu_de_reference(tmp_path, monkeypatch):
+    """Aucun jeu de référence désigné : ces tests-ci ne parlent pas du grisé (R22).
+
+    Sans cela ils liraient le fichier versionné du dépôt, et changer de substrat de référence
+    ferait tomber des tests qui n'ont rien à voir avec lui.
+    """
+    monkeypatch.setattr(D, "JEU_REFERENCE_YAML", tmp_path / "absent" / "reference.yaml")
+
+
 @pytest.fixture
 def plateforme(tmp_path, monkeypatch):
     """Trois expériences : deux terminées et scorées, une en cours jamais scorée."""
@@ -230,23 +243,30 @@ def _dessiner(st) -> None:
 # ── R1 · R2 — les colonnes affichées ─────────────────────────────────────────
 
 
-def test_R1_dix_colonnes_par_defaut_dans_l_ordre_annonce():
+def test_R1_les_colonnes_par_defaut_dans_l_ordre_annonce():
     st = FauxSt()
     presentes = list(D.COLONNES_REGISTRE)
     choix = D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")
     assert choix["colonnes"] == list(D.COLONNES_REGISTRE_DEFAUT)
-    for sortie in ("scores", "jeu", "jeu_etat", "chaine", "formule"):
+    for sortie in ("scores", "jeu_etat", "chaine", "formule"):
         assert sortie not in choix["colonnes"], sortie
 
 
+def test_R21_jeu_est_au_defaut_entre_prompt_et_mode():
+    """Le substrat se lit sans rappeler la colonne : c'est lui qui décide du grisé (R22)."""
+    colonnes = D._panneau_colonnes_et_filtres(FauxSt(), LIGNES, list(D.COLONNES_REGISTRE),
+                                              "")["colonnes"]
+    assert colonnes.index("prompt") < colonnes.index("jeu") < colonnes.index("mode")
+
+
 def test_R2_une_colonne_rappelee_reprend_sa_place():
-    """Rappelée, `jeu` se replace entre `prompt` et `mode` — jamais recollée en bout de ligne."""
+    """Rappelée, `jeu_etat` se replace entre `jeu` et `mode` — jamais recollée en bout de ligne."""
     st = FauxSt()
     presentes = list(D.COLONNES_REGISTRE)
     D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")
-    st.session_state[D._cle_vue(st, "colonnes")] = list(D.COLONNES_REGISTRE_DEFAUT) + ["jeu"]
+    st.session_state[D._cle_vue(st, "colonnes")] = list(D.COLONNES_REGISTRE_DEFAUT) + ["jeu_etat"]
     colonnes = D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")["colonnes"]
-    assert colonnes.index("prompt") < colonnes.index("jeu") < colonnes.index("mode")
+    assert colonnes.index("jeu") < colonnes.index("jeu_etat") < colonnes.index("mode")
 
 
 def test_R2_les_cinq_colonnes_restent_proposees_au_selecteur():

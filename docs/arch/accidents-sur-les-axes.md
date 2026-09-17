@@ -1,12 +1,20 @@
 # Accidents sur les axes
 
-Régime optionnel dans lequel des accidents surviennent au hasard sur le réseau routier pendant
-la journée simulée. Piloté par un interrupteur dans l'IHM GAMA, **faux par défaut**.
+Régime dans lequel des accidents surviennent au hasard sur le réseau routier pendant la
+journée simulée. Piloté par un interrupteur dans l'IHM GAMA, **vrai par défaut** depuis le
+2026-09-15.
 
-> **État au 2026-09-14.** Les accidents **existent** et leur tirage est **conditionné aux
-> statistiques BAAC** : heure, jour de semaine et classe d'axe. **Aucune durée d'itinéraire
-> n'est modifiée** — le retard subi et le souvenir de l'agent viennent dans des tranches
-> ultérieures. Une seule variable de la loi reste non établie, le facteur météo. Spécification :
+> ⚠ **Le régime est actif par défaut, et il RALENTIT depuis le 2026-09-15.** Tout run tire des
+> accidents sans qu'on l'ait demandé, et ces accidents allongent désormais les itinéraires qui
+> les traversent. Les runs d'avant et d'après ce jour ne sont donc **pas comparables**. Les
+> tickets ouverts qui lancent un run portent l'avertissement correspondant ; avant
+> d'interpréter un run, lire `accidents_enabled` dans son `scenario_params.yaml`.
+
+> **État au 2026-09-15.** Les accidents existent, leur tirage est **conditionné aux
+> statistiques BAAC** (heure, jour de semaine, classe d'axe), ils **allongent les itinéraires**
+> qui les traversent, et l'expérimentateur peut en **poser** un à la main. Restent hors
+> périmètre le **souvenir** du retard et le **contournement**. Une variable de la loi reste non
+> établie, le facteur météo. Spécification :
 > [`specs/accidents-interrupteur-gama.md`](../../specs/accidents-interrupteur-gama.md).
 
 ## L'interrupteur, de l'IHM au run archivé
@@ -15,7 +23,7 @@ Sept points, exactement le chemin que suit déjà `long_term_memory_enabled` :
 
 | Étape | Fichier | Rôle |
 |---|---|---|
-| Déclaration et persistance | `services/GAMA/CityTransport/models/Settings.gaml` | `bool accidents_enabled <- false` ; écrit et relu dans `config/sim_params.yaml` |
+| Déclaration et persistance | `services/GAMA/CityTransport/models/Settings.gaml` | `bool accidents_enabled <- true` ; écrit et relu dans `config/sim_params.yaml` |
 | Exposition dans l'IHM | `services/GAMA/CityTransport/models/City.gaml` | paramètre « Accidents sur les axes », catégorie `Simulation` |
 | Transmission | `services/GAMA/CityTransport/models/LLMAgent.gaml` | clé `accidents_enabled` dans la charge utile du `POST /init` |
 | Validation | `services/llm-agents/gama_models.py` | `WorldInitRequest.accidents_enabled: Optional[bool]` |
@@ -24,9 +32,13 @@ Sept points, exactement le chemin que suit déjà `long_term_memory_enabled` :
 | Configuration | `services/llm-agents/settings.py` | `AccidentsConfig` : taux, durées, graine, garde-fous |
 
 **`None` n'est pas `False`.** Un `/init` qui ne porte pas la clé vient d'un GAMA antérieur à
-cette évolution : le contrôleur garde alors sa valeur de configuration. Un `False` explicite,
-lui, est une décision de l'expérimentateur. Confondre les deux ferait désactiver en silence un
-régime demandé par fichier de configuration.
+cette évolution : le contrôleur garde alors sa valeur de configuration — donc **vrai**. Un
+`False` explicite, lui, est une décision de l'expérimentateur. Confondre les deux ferait
+désactiver en silence un régime demandé par fichier de configuration.
+
+De même, un `sim_params.yaml` antérieur au 2026-09-15 ne porte pas la clé : GAMA prend alors
+le défaut et **active** les accidents. C'est voulu, et c'est la raison de l'avertissement porté
+par les tickets qui lancent un run.
 
 **L'état effectif est toujours écrit** dans le `scenario_params.yaml` du run, y compris quand
 il vaut `false`. Contrairement à `simulation_max_days`, dont l'absence signale un run antérieur
@@ -112,26 +124,61 @@ Ajuster la correspondance jusqu'à obtenir des nombres plausibles reviendrait à
 résultat. Les deux voies propres : une source d'exposition découpée comme `atm`, ou un risque
 relatif déclaré exogène ([protocole](protocole-parametre-exogene.md)).
 
-## Pourquoi aucune durée n'est modifiée dans cette tranche
+## Le retard, et les deux gardes qui l'accompagnent obligatoirement
 
-Ce n'est pas un découpage de commodité. Deux caches rendraient un retard dangereux, et les deux
-sont neutralisés par construction tant qu'aucune durée ne bouge :
+Un déplacement en voiture dont l'itinéraire traverse une arête accidentée voit sa durée
+allongée : le facteur d'accident se multiplie au temps de parcours de cette arête, à côté du
+facteur de zone TomTom, dans
+[`_congested_travel_time`](../../services/llm-agents/trip_helper/osmnx_direct.py). C'est le
+seul endroit du dispositif qui connaisse les arêtes réellement empruntées — les agents GAMA se
+déplacent à vol d'oiseau, mais leur vitesse est calée sur la durée calculée là
+(`Inhabitant.gaml:390`), donc un itinéraire allongé fait bien arriver l'agent en retard.
+
+**L'ampleur du ralentissement est une hypothèse déclarée, pas une mesure.** Aucune source ne la
+donne : le flux DATEX des DIR, seul à porter des durées réelles, n'est pas archivé. Le facteur
+vit dans `AccidentsConfig.facteur_ralentissement`. Tout effet mesuré sur les agents sera l'effet
+de **ce** nombre : il se publie avec le résultat.
+
+**L'agent ne contourne pas.** Le chemin a été choisi en temps libre, avant que le surcoût ne
+s'applique. Contourner demanderait de recalculer le plus court chemin sur des poids modifiés.
+
+### Deux caches auraient rendu ce retard dangereux
+
+Livrer le retard sans ces deux gardes aurait faussé des runs en silence. Elles sont arrivées
+dans le même geste, et un test le vérifie.
 
 - **Le cache d'itinéraires** est adressé **sans la date** (`version | jour de semaine | créneau
   | mode | coordonnées`). Une durée contenant un accident y serait resservie à tous les mardis
-  8 h, y compris aux runs qui n'ont demandé aucun accident.
+  8 h, y compris aux runs qui n'ont demandé aucun accident. **Garde :** tant qu'un accident est
+  actif, ni lecture ni écriture. Volontairement grossière — un accident actif n'importe où
+  suffit à contourner le cache, car on ne connaît pas le chemin avant de l'avoir calculé. Coût
+  assumé : une à trois heures par journée simulée où le routage voiture calcule à froid.
 - **Le cache de décisions LLM** construit sa clé sur les **codes d'options** — des routes et
-  des arrêts — donc **insensible aux durées** par construction
-  (`llm/cache.py`, `_make_state_hash`). Un agent retardé de 25 minutes se verrait resservir la
-  décision qu'il avait prise sans le retard, sans qu'aucun journal ne le signale.
+  des arrêts — donc **insensible aux durées** par construction (`llm/cache.py`,
+  `_make_state_hash`). Un agent retardé de vingt minutes se verrait resservir la décision prise
+  sans le retard. **Garde :** la signature des accidents actifs entre dans `extra_key`.
+  Grossière elle aussi — elle décrit l'état du monde, pas ce que l'agent traverse : deux agents
+  dont aucun itinéraire ne croise l'accident auront quand même des clés distinctes. C'est
+  sur-invalider, jamais sous-invalider.
 
-Le même piège s'est déjà produit trois fois dans le dépôt — temps terminal, traits du persona,
-contexte d'anticipation — dont une fois au prix d'un vidage manuel de cache. Le champ
-`extra_key` existe pour ça et sera le véhicule de l'accident le jour venu.
+Le même piège s'était déjà produit trois fois dans le dépôt — temps terminal, traits du persona,
+contexte d'anticipation — dont une au prix d'un vidage manuel de cache. Celle-ci est la
+quatrième, et `extra_key` existait pour elle.
 
-Un test garde cette frontière : `test_aucune_duree_d_itineraire_n_est_modifiee_par_cette_tranche`
-échoue dès que `osmnx_direct` lit le registre, en rappelant que les deux gardes doivent être
-livrées dans la même tranche que le retard.
+## Poser un accident à la main
+
+C'est de là que viendront les figures : le tirage aléatoire, à fréquence réelle, ne touche que
+~0,6 déplacement par journée simulée à 1 000 agents et ne peut rien montrer. Même mécanisme,
+même monde, autre déclenchement.
+
+- **Depuis l'IHM GAMA** : catégorie `Accidents`, régler latitude, longitude, heure et durée,
+  puis le bouton « Poser un accident maintenant ». Défauts calés sur la rocade à Empalot, 8 h.
+- **Depuis un script** : `POST /accidents` avec `{lat, lon, debut_ts, duree_minutes}`.
+
+L'accident est accroché à l'arête du graphe la plus proche du point et entre dans le même
+registre que les accidents tirés. ⚠ Une pose dans un run où le régime est décoché est
+**refusée**, avec une alarme au journal : sans ce refus, l'expérimentateur croirait avoir posé
+un accident dans un monde qui n'en veut pas.
 
 ## Journalisation
 
@@ -156,7 +203,7 @@ plusieurs heures coûterait infiniment plus cher que l'absence d'accidents ce jo
 
 ## Ce que ce régime ne fait pas
 
-- Il ne **ralentit personne** (cette tranche).
+- Il ne fait pas **contourner** : l'agent subit le retard sur le chemin qu'il avait choisi.
 - Il ne rend aucun agent **victime** d'un accident : 0,0025 agent impliqué par journée simulée
   à 1 000 agents, hors d'atteinte des cohortes.
 - Il ne fait pas **rouler les agents sur le graphe** : ils se déplacent à vol d'oiseau

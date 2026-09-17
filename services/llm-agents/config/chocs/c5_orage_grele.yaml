@@ -1,0 +1,21 @@
+# C5 — Orage de grêle · marche, vélo, deux-roues motorisés
+# Frappe les modes exposés, ceux que les quatre autres cas laissent de côté.
+# ⚠ C'est ici, et SEULEMENT ici, qu'un choc météo devient mémorable. Une canicule seule ne
+#   produit aucun retard : sa gravité déterministe vaut zéro, le souvenir vit 2,8 jours et ne
+#   franchit jamais le seuil du vivier des chocs. Déclarer l'orage comme incident lui donne
+#   l'ancrage mesuré qui lui manque.
+choc: c5_orage_grele
+libelle: "Violent hailstorm"
+source: "scénario déclaré — Böcker et al. (2013), Transport Reviews 33(1), sur l'effet météo"
+
+exposition:
+  regle: mode
+  modes: [walking, cycling, motorbike]
+
+jours:
+  - jour: 12
+    retard_min: 15
+    incident_reseau: true
+    vecu: >-
+      A violent hailstorm caught me right out in the open. I sheltered in a doorway for
+      twenty minutes and still arrived soaked through, with my shoes full of water.

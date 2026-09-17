@@ -18,6 +18,7 @@
     comparer        EXEC_A EXEC_B
     synthese        EXEC
     erreurs         [EXEC | --experience NOM]  rapproche decisions.jsonl du jeu (manquants, trous, tentatives)
+    journal         [EXEC] --verifier [--toutes] | --regenerer   le moves.csv recouvre-t-il les décisions ? (R24)
 
 Dans le conteneur : `docker compose exec controller python -m experiences …` (les cibles `make`
 de la racine encapsulent ces appels).
@@ -28,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -90,7 +92,9 @@ def appliquer_reglages_chaine(exp) -> None:
 
     settings.agent.vehicle_chain_enabled = bool(getattr(exp, "vehicule_chaine", True))
     settings.agent.vehicle_return_home_lock = bool(getattr(exp, "verrou_retour", True))
-    if not (settings.agent.vehicle_chain_enabled and settings.agent.vehicle_return_home_lock):
+    if not (
+        settings.agent.vehicle_chain_enabled and settings.agent.vehicle_return_home_lock
+    ):
         logger.warning(
             f"[execution] chaîne des véhicules RÉDUITE par la définition : "
             f"position du véhicule {'active' if settings.agent.vehicle_chain_enabled else 'COUPÉE'}, "
@@ -325,8 +329,7 @@ def cmd_dupliquer(a: argparse.Namespace) -> int:
                 f"indice ajouté (N10)"
             )
     print(
-        f"expérience {nouvelle.nom!r} créée depuis {exp.nom!r} : "
-        f"{E.sauver_experience(nouvelle)}"
+        f"expérience {nouvelle.nom!r} créée depuis {exp.nom!r} : {E.sauver_experience(nouvelle)}"
     )
     return 0
 
@@ -377,23 +380,65 @@ def _preparer_lancement(exp: E.Experience, *, accepter_perime: bool):
     )
 
     moniteur = None
-    instances = None
+    # Ticket 085, lot C — DEUX ensembles, deux noms. Une seule variable portait d'abord « les
+    # instances qui servent ce modèle » puis, écrasée, « celles qui ont encore du quota » : le
+    # refus lisait la seconde et annonçait la première, si bien qu'un quota pas encore renouvelé
+    # s'annonçait « aucune instance ne sert ce modèle » — juste après avoir listé ce modèle parmi
+    # les modèles servis (2026-09-16).
+    servantes = None
+    disponibles = None
     if exp.decideur.type == "passerelle":
         providers = charger_providers()
-        instances = instances_pour_modele(
+        servantes = instances_pour_modele(
             exp.decideur.modele or "", providers, exp.decideur.portee
         )
-        moniteur = MoniteurRessources(instances, providers)
+        moniteur = MoniteurRessources(servantes, providers)
         moniteur.rafraichir()
-        instances = (
-            moniteur.instances_disponibles() if moniteur.joignable else instances
+        disponibles = (
+            moniteur.instances_disponibles() if moniteur.joignable else servantes
         )
     refus, avert = E.refuser_si_impossible(
-        exp, jeu, info, instances_disponibles=instances, perime_accepte=accepter_perime
+        exp,
+        jeu,
+        info,
+        instances_disponibles=disponibles,
+        instances_servantes=servantes,
+        detail_epuisement=(moniteur.raison_epuisement() if moniteur else None),
+        perime_accepte=accepter_perime,
     )
     for w in avert:
         logger.warning(f"[experience] {w}")
     return jeu, info, moniteur, refus
+
+
+def _ecrire_marqueur_refus(nom_exp: str, motifs: list[str]) -> None:
+    """Dépose, à côté du journal de lancement, ce qu'un refus vaut pour l'appelant.
+
+    Une campagne lance en tâche de fond : elle ne lit ni la sortie standard ni le code de retour,
+    et ne voit donc qu'une absence d'`etat.json`. Sans ce marqueur, elle conclut à une expérience
+    cassée là où il n'y a qu'une fenêtre de quota à attendre — c'est ce qui a coûté quatre bras
+    le 2026-09-16. Best-effort : un marqueur non écrit ne doit jamais empêcher un refus de se
+    prononcer, le refus lui-même reste sur la sortie et dans le journal.
+    """
+    from experiences import refus as REF
+
+    try:
+        base = E.dossier_experiences() / nom_exp / "lancements"
+        base.mkdir(parents=True, exist_ok=True)
+        classe = REF.classer(motifs)
+        chemin = base / (
+            f"{datetime.now(timezone.utc):%Y-%m-%d_%H_%M_%S}{REF.SUFFIXE_MARQUEUR}"
+        )
+        chemin.write_text(
+            json.dumps(
+                {"classe": classe, "reportable": REF.est_reportable(classe),
+                 "motifs": list(motifs), "le": f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%S+00:00}"},
+                ensure_ascii=False, indent=1,
+            ),
+            encoding="utf-8",
+        )
+    except Exception as e:  # noqa: BLE001 — jamais au prix du refus lui-même
+        logger.warning(f"[lancer] marqueur de refus non écrit ({type(e).__name__}: {e})")
 
 
 def _aptitude(exp, est: dict) -> tuple[list[str], list[str]]:
@@ -457,6 +502,55 @@ def appliquer_fenetre_age(exp) -> int:
     return fenetre
 
 
+def appliquer_instances_admises(exp, moniteur) -> list[str]:
+    """Règle la restriction de routage sur le MODÈLE de l'expérience (ticket 085, § 5).
+
+    La restriction du ticket 084 vivait dans `services/llm-agents/config/config.yaml`, fichier
+    **global à la pile**, lu par tout processus lancé depuis le conteneur `controller`. Une
+    expérience en gemini 3.5, qui épingle sa propre instance, portait donc les deux contraintes à
+    la fois ; le routeur refusait, à raison, deux contraintes contradictoires. C'était un défaut
+    de portée, pas de règle : un choix PAR RUN n'a rien à faire dans un fichier partagé.
+
+    La liste est dérivée du modèle plutôt que recopiée à la main. C'est le bon invariant : il
+    reste vrai quand une clé est ajoutée aux fournisseurs, et il est cohérent par construction
+    avec l'instance épinglée, qui sert ce même modèle. Elle n'est PAS filtrée par la disponibilité
+    — une clé momentanément au plafond reste admise ; l'arbitrage du quota est le travail du
+    moniteur, pas celui de la restriction.
+
+    Rend la liste retenue, pour que l'appelant puisse la consigner.
+    """
+    from experiences.ressources import instances_pour_modele
+    from settings import settings
+
+    ancienne = list(settings.llm.instances_admises or [])
+    if exp.decideur.type != "passerelle":
+        # Y compris quand le fichier en portait une : la restriction suit l'expérience dans les
+        # deux sens. Un décideur local, aléatoire ou par rejeu ne sollicite aucune instance.
+        retenue: list[str] = []
+    else:
+        retenue = instances_pour_modele(
+            exp.decideur.modele or "",
+            getattr(moniteur, "providers", {}) or {},
+            exp.decideur.portee,
+        )
+    if ancienne and set(ancienne) != set(retenue):
+        # Un écrasement MUET de contrainte scientifique est le défaut qu'on corrige ici, pas un
+        # moyen acceptable de le corriger. Le fichier reste en place pour `make run`, qui n'a pas
+        # d'injection par run (§ 3 du ticket) — mais son écrasement se lit dans le journal.
+        logger.warning(
+            f"[execution] instances_admises du fichier ÉCRASÉE par l'expérience : "
+            f"{ancienne} → {retenue or 'aucune restriction'}. Le fichier "
+            f"`config/config.yaml` reste la source du seul chemin `make run`."
+        )
+    settings.llm.instances_admises = retenue
+    print(
+        f"instances admises : {', '.join(retenue) if retenue else 'aucune restriction'} "
+        f"(dérivées du modèle {exp.decideur.modele or '—'!r}"
+        f"{f', portée {exp.decideur.portee}' if exp.decideur.portee else ''})"
+    )
+    return retenue
+
+
 def cmd_lancer(a: argparse.Namespace) -> int:
     exp = _charger_experience_par_nom(a.experience)
     jeu, info, moniteur, refus = _preparer_lancement(
@@ -467,14 +561,13 @@ def cmd_lancer(a: argparse.Namespace) -> int:
     refus_apt, avert_apt = _aptitude(exp, E.estimer(exp, jeu, moniteur=moniteur))
     for m in avert_apt:
         print(f"AVERTISSEMENT : {m}")
-    refus = list(refus) + (
-        [] if a.ignorer_aptitude else refus_apt
-    )
+    refus = list(refus) + ([] if a.ignorer_aptitude else refus_apt)
     if a.ignorer_aptitude and refus_apt:
         for m in refus_apt:
             print(f"AVERTISSEMENT (aptitude ignorée) : {m}")
     if refus:
         print("REFUSÉ — aucune exécution créée :\n- " + "\n- ".join(refus))
+        _ecrire_marqueur_refus(exp.nom, refus)
         return 1
     if exp.mode != E.MODE_SANS_SIMULATEUR:
         print(
@@ -488,6 +581,8 @@ def cmd_lancer(a: argparse.Namespace) -> int:
     settings.agent.long_term_memory_enabled = bool(exp.memoire)
     appliquer_fenetre_age(exp)
     settings.cache.enabled = False  # chaque décision non archivée est demandée (RG-2)
+    # La restriction de routage est PROPRE À CE RUN, pas à la pile (ticket 085, lot B).
+    admises = appliquer_instances_admises(exp, moniteur)
     # La définition commande la chaîne des véhicules, pas l'environnement (R13).
     appliquer_reglages_chaine(exp)
     settings.agent.mode_draw_seed = exp.graine_tirage
@@ -512,6 +607,20 @@ def cmd_lancer(a: argparse.Namespace) -> int:
             )
 
     personnes, info = charger_population(exp.population.chemin)
+    # Jour météo réellement décrit : une population d'enquêtés porte la date de sa journée, et
+    # il n'y a pas à la tirer (ticket 058). La table vit À CÔTÉ de la population — pas dedans,
+    # pour ne pas entrer dans le narratif ni dans la clé du cache. Fichier absent : rien ne
+    # change, le tirage par graine reste le dispositif.
+    _dates_meteo = Path(exp.population.chemin)
+    _dates_meteo = (
+        (_dates_meteo if _dates_meteo.is_dir() else _dates_meteo.parent) / "dates_meteo.json"
+    )
+    if _dates_meteo.is_file():
+        settings.agent.weather_dates_file = str(_dates_meteo)
+        logger.info(
+            f"[météo] dates déclarées trouvées ({_dates_meteo}) : le bulletin de chaque "
+            "personne sera celui de son jour d'enquête, sans tirage"
+        )
     dossier_exp = exp.dossier()
     # Lancer ne réécrit PAS la définition : elle est chargée par nom, telle qu'elle est sur
     # disque, et un run ne doit pas la muter. La seule écriture est l'ajout de la nouvelle
@@ -544,7 +653,8 @@ def cmd_lancer(a: argparse.Namespace) -> int:
                 "graine_ordre": exp.graine_ordre,
                 "graine_tirage": exp.graine_tirage,
                 "graine_calendrier": exp.calendrier.graine,
-                "echantillonnage_decideur": exp.decideur.type in ("passerelle", "antigravity"),
+                "echantillonnage_decideur": exp.decideur.type
+                in ("passerelle", "antigravity"),
             },
             reglages_herites=reglages_herites_de(exp),
         )
@@ -562,6 +672,19 @@ def cmd_lancer(a: argparse.Namespace) -> int:
             set(exp.executions_connues) | sur_disque | {execution.nom}
         )
         E.sauver_experience(exp, dossier_exp)
+    # Ticket 085 (B4) — la restriction sous laquelle les décisions vont être prises entre dans la
+    # trace, création comme reprise : une mesure archivée doit dire sous quelle restriction elle a
+    # été prise. Un changement entre le lancement et la reprise se journalise plutôt que de rester
+    # muet dans un `execution.yaml` devenu faux.
+    _admises_tracees = (execution.config.get("reglages_herites") or {}).get(
+        "instances_admises"
+    )
+    if _admises_tracees is not None and set(_admises_tracees) != set(admises):
+        logger.warning(
+            f"[execution] reprise sous une AUTRE restriction qu'au lancement : "
+            f"{_admises_tracees} → {admises or 'aucune restriction'} ; la trace est mise à jour"
+        )
+    execution.noter_reglages_herites(instances_admises=list(admises))
     settings.app.llm_exchanges_file = str(execution.dossier / "llm_exchanges.jsonl")
 
     # Admission par clé (spec parallelisation_experiences) : parallèle si les clés de l'expérience
@@ -793,6 +916,72 @@ def cmd_score(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_journal(a: argparse.Namespace) -> int:
+    """Vérifie ou régénère le `moves.csv` d'une exécution (ticket 081).
+
+    `--verifier` constate sans rien écrire ; `--regenerer` reconstruit le journal depuis
+    `decisions.jsonl` et le jeu scellé, puis laisse le rescoring au `score`.
+    """
+    import asyncio
+
+    from experiences import journal as JN
+    from experiences import score as S
+
+    if a.toutes or (a.verifier and not a.execution):
+        racine = Path(a.racine) if a.racine else (S.REPO_ROOT / "data" / "experiences")
+        constats = [JN.verifier(d) for d in JN.executions(racine)]
+        if a.json:
+            print(json.dumps(constats, ensure_ascii=False, indent=1))
+            return 0
+        incomplets = 0
+        print(
+            f"{'exécution':<22} {'état':<11} {'lignes':>7} {'décidées':>9} {'écart':>8}  verdict"
+        )
+        for c in constats:
+            rel = (
+                "—"
+                if c["ecart_relatif"] is None
+                else f"{100 * c['ecart_relatif']:+.2f}%"
+            )
+            verdict = {True: "complet", False: "INCOMPLET", None: "non comparable"}[
+                c["complet"]
+            ]
+            incomplets += c["complet"] is False
+            print(
+                f"{c['execution']:<22} {c['etat']!s:<11} {c['lignes_journal']:>7} "
+                f"{c['decides']!s:>9} {rel:>8}  {verdict}"
+            )
+        print(f"\n{len(constats)} exécution(s) balayée(s), {incomplets} incomplète(s)")
+        return 1 if incomplets else 0
+
+    if not a.execution:
+        print("ERREUR : préciser une exécution, ou --toutes", file=sys.stderr)
+        return 2
+
+    if a.verifier:
+        print(json.dumps(JN.verifier(a.execution), ensure_ascii=False, indent=1))
+        return 0
+
+    execution = JN.ouvrir(a.execution, motif_archive=a.motif_archive)
+    jeu, personnes, info = JN.resoudre_sources(
+        execution,
+        jeu=a.jeu,
+        population=a.population,
+        motif_archive=a.motif_archive,
+    )
+    bilan = asyncio.run(
+        JN.regenerer(
+            execution,
+            jeu,
+            personnes,
+            JN.EtiquetteDecideur.depuis_execution(execution.config),
+            info_population=info,
+        )
+    )
+    print(json.dumps(bilan, ensure_ascii=False, indent=1))
+    return 0
+
+
 def cmd_erreurs(a: argparse.Namespace) -> int:
     """Rapproche decisions.jsonl du jeu : tentatives par type, déplacements manquants, journées à trous."""
     from experiences.erreurs import diagnostiquer, formater
@@ -898,9 +1087,7 @@ def _campagne_estimer(nom: str) -> int:
         for exp_nom in phase.experiences:
             try:
                 exp = _charger_experience_par_nom(exp_nom)
-                jeu = J.Jeu.charger(
-                    E.dossier_jeux() / exp.jeu.nom, verifier=False
-                )
+                jeu = J.Jeu.charger(E.dossier_jeux() / exp.jeu.nom, verifier=False)
                 couverts = int(jeu.couverture()["deplacements_couverts"])
             except Exception as err:  # noqa: BLE001 — un devis raté ne bloque pas le total
                 print(f"     {exp_nom:58s}  devis impossible : {err}")
@@ -919,8 +1106,10 @@ def _campagne_estimer(nom: str) -> int:
     for nom_phase, appels in par_phase:
         print(f"     {nom_phase:58s}  {appels:>7d} appel(s) LLM")
     print(f"     {'CAMPAGNE':58s}  {total:>7d} appel(s) LLM")
-    print("\n  Source : déplacements couverts du jeu de chaque expérience "
-          "(mêmes chiffres que `experience-estimer`, champ `sollicitations`).")
+    print(
+        "\n  Source : déplacements couverts du jeu de chaque expérience "
+        "(mêmes chiffres que `experience-estimer`, champ `sollicitations`)."
+    )
     return 0
 
 
@@ -954,16 +1143,21 @@ def cmd_campagne_etat(a: argparse.Namespace) -> int:
     sommeils = etat.get("sommeils") or []
     if sommeils:
         cumul = sum(s.get("duree_s") or 0 for s in sommeils) / 3600
-        print(f"  sommeils       : {len(sommeils)} ({cumul:.1f} h cumulées) ; "
-              f"dernier jusqu'à {sommeils[-1].get('jusqu')}")
-    print(f"  prochain renouvellement de quota : {vue['prochain_reveil']} "
-          f"(dans {vue['secondes_avant_reveil'] / 3600:.1f} h)")
+        print(
+            f"  sommeils       : {len(sommeils)} ({cumul:.1f} h cumulées) ; "
+            f"dernier jusqu'à {sommeils[-1].get('jusqu')}"
+        )
+    print(
+        f"  prochain renouvellement de quota : {vue['prochain_reveil']} "
+        f"(dans {vue['secondes_avant_reveil'] / 3600:.1f} h)"
+    )
     echecs = etat.get("echouees") or {}
     if echecs:
         print(f"\n  ⚠ {len(echecs)} en échec :")
         for exp_nom, det in echecs.items():
-            print(f"     {exp_nom:60s} {det.get('motif')} "
-                  f"({det.get('tentatives')} tentative(s))")
+            print(
+                f"     {exp_nom:60s} {det.get('motif')} ({det.get('tentatives')} tentative(s))"
+            )
     print("\n  état par expérience :")
     for exp_nom, st in vue["par_experience"].items():
         print(f"     {st['etat']:18s} {exp_nom}")
@@ -974,8 +1168,10 @@ def cmd_campagne_arreter(a: argparse.Namespace) -> int:
     from experiences import campagne as C
 
     C.arreter(a.nom)
-    print(f"Arrêt demandé pour la campagne {a.nom!r}. "
-          "L'exécution en cours se termine ; aucune autre ne sera lancée.")
+    print(
+        f"Arrêt demandé pour la campagne {a.nom!r}. "
+        "L'exécution en cours se termine ; aucune autre ne sera lancée."
+    )
     return 0
 
 
@@ -1057,9 +1253,11 @@ def construire_parser() -> argparse.ArgumentParser:
     s.add_argument("--decideur-modele")
     s.add_argument(
         "--artefact",
-        help=("artefact du décideur `modele` (défaut : le booster LightGBM) — "
-              "p. ex. scripts/progedo_logit/mnl_model.json pour le logit multinomial, "
-              "scripts/progedo_logit/klr_model.json pour la logistique à noyau"),
+        help=(
+            "artefact du décideur `modele` (défaut : le booster LightGBM) — "
+            "p. ex. scripts/progedo_logit/mnl_model.json pour le logit multinomial, "
+            "scripts/progedo_logit/klr_model.json pour la logistique à noyau"
+        ),
     )
 
     s = sub.add_parser("estimer")
@@ -1155,10 +1353,16 @@ def construire_parser() -> argparse.ArgumentParser:
     )
     s.set_defaults(fn=cmd_campagne_lancer)
     s.add_argument("--nom", required=True)
-    s.add_argument("--recommencer", action="store_true",
-                   help="ignore l'état existant et repart de zéro")
-    s.add_argument("--estimer", action="store_true",
-                   help="dit le budget et sort, sans rien enfiler")
+    s.add_argument(
+        "--recommencer",
+        action="store_true",
+        help="ignore l'état existant et repart de zéro",
+    )
+    s.add_argument(
+        "--estimer",
+        action="store_true",
+        help="dit le budget et sort, sans rien enfiler",
+    )
     s.add_argument("--intervalle", type=float, default=30.0)
 
     s = sub.add_parser("campagne-etat", help="avancement d'une campagne")
@@ -1199,7 +1403,9 @@ def construire_parser() -> argparse.ArgumentParser:
         help="garder la ligne visible au registre malgré le statut",
     )
 
-    s = sub.add_parser("statuts", help="statut de toutes les expériences, masquées comprises")
+    s = sub.add_parser(
+        "statuts", help="statut de toutes les expériences, masquées comprises"
+    )
     s.set_defaults(fn=cmd_statuts)
     s.add_argument("--json", action="store_true")
 
@@ -1233,6 +1439,45 @@ def construire_parser() -> argparse.ArgumentParser:
     s.add_argument(
         "--formule", help="nom de formule du registre (défaut : la référence)"
     )
+
+    s = sub.add_parser(
+        "journal",
+        help="vérifie ou régénère le moves.csv d'une exécution depuis decisions.jsonl "
+        "(ticket 081) ; --verifier --toutes balaie tout l'historique",
+    )
+    s.set_defaults(fn=cmd_journal)
+    s.add_argument("execution", nargs="?", help="dossier d'exécution")
+    s.add_argument(
+        "--regenerer",
+        action="store_true",
+        help="reconstruit moves.csv depuis decisions.jsonl et le jeu scellé",
+    )
+    s.add_argument(
+        "--verifier",
+        action="store_true",
+        help="constate l'écart entre le journal et les décisions archivées, sans rien écrire",
+    )
+    s.add_argument(
+        "--toutes",
+        action="store_true",
+        help="balaie toutes les exécutions d'une racine",
+    )
+    s.add_argument(
+        "--racine", help="racine des expériences balayées (défaut : data/experiences)"
+    )
+    s.add_argument(
+        "--jeu", help="dossier du jeu scellé, si le chemin figé n'est pas résoluble"
+    )
+    s.add_argument(
+        "--population",
+        help="dossier de la cohorte scellée, si le chemin figé est un chemin conteneur",
+    )
+    s.add_argument(
+        "--motif-archive",
+        dest="motif_archive",
+        help="motif de dérogation pour lire une exécution, un jeu ou une cohorte en archive froide",
+    )
+    s.add_argument("--json", action="store_true")
 
     s = sub.add_parser(
         "erreurs",

@@ -177,8 +177,11 @@ def select_subset(run_dir: Path, exclude_methods: list[str]) -> tuple[list[dict]
                           (r.get("ID Activité") or "").strip()): r for r in raws}
 
     population = next(run_dir.glob("population_*[0-9].json"))
+    # `kept_day` vaut None quand `read_moves` n'a PAS coupé (ticket 057 : rien à couper,
+    # ni horizon au-delà d'un jour ni couple répété). Le journal d'échanges ne doit alors
+    # pas être coupé non plus — comparé à None, le filtre vidait l'échantillon en silence.
     entries = [e for e in itinerary_entries(run_dir / "llm_exchanges.jsonl")
-               if e.get("sim_day") == kept_day]
+               if not kept_day or e.get("sim_day") == kept_day]
     traits = load_population(population)
     records: list[dict] = []
     anomalies_total = 0

@@ -138,7 +138,13 @@ species travel_agent_factory {
 	// parameters
 	list<map<string, unknown>> data_trip_list;
 	list<string> trip_dates_list;
-	map<string,int> trip_calendar_map;
+	// Masque de calendrier par service : une CHAÎNE de "0"/"1", un caractère par date de
+	// `trip_dates_list`. C'était un entier servant de masque binaire jusqu'au 2026-09-15 —
+	// et l'entier de GAMA tient sur 32 bits : au 32ᵉ jour de calendrier, `BITWISE_BIT_VAL[32]`
+	// valait 0 et le modèle mourait sur « Division by zero », après avoir silencieusement mal
+	// lu les jours 31 et 32. Trouvé au jour 32 du run de soixante jours (ticket 075). Une
+	// chaîne n'a pas de largeur maximale.
+	map<string,string> trip_calendar_map;
 	
 	int time_24h -> CURRENT_TIMESTAMP_24H;
 	map<string,int> trip_dates_map <- [];
@@ -186,7 +192,16 @@ species travel_agent_factory {
 			return false;
 		}
 		int date_index <- trip_dates_map[date_str];
-		return !even(trip_calendar_map[service_id] div BITWISE_BIT_VAL[date_index]);
+		string masque <- trip_calendar_map[service_id];
+		if masque = nil or length(masque) <= date_index {
+			// Service absent du calendrier, ou masque plus court que la fenêtre : pas de
+			// course, et on le DIT. Un `false` muet ferait disparaître des lignes entières
+			// sans qu'aucune ligne de journal ne le signale.
+			warn "is_trip_available_today: service " + service_id + " sans masque à l'index "
+				+ string(date_index) + " (" + date_str + ") — aucune course pour ce service";
+			return false;
+		}
+		return (masque at date_index) = "1";
 	}
 	
 	reflex schedule_next_trip {

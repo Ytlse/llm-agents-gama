@@ -423,6 +423,26 @@ zéro, c'est-à-dire la modalité de référence pour 100 % des personas. Détai
 
 ---
 
+## 6 ante. Une population de TEST à cinq agents (ticket 075) — ce n'est pas un sceau
+
+`data/population/population_5_memoire_075/` contient cinq habitants prélevés **tels quels** dans
+le sceau v6 par `scripts/data/population/extraire_sous_population.py`. Elle sert à **lire** la
+mémoire d'un agent sur soixante jours simulés : à mille agents, personne n'ouvre les journaux ;
+à cinq, tout se lit.
+
+⚠ **Elle ne se contrôle pas et ne se scelle pas.** Cinq agents n'ont aucune marge à respecter :
+les treize contrôles du § 3 n'ont pas de sens sur cet effectif, et le MANIFEST du répertoire le
+dit en toutes lettres. Aucun chiffre de l'article ne peut en sortir. La référence de mesure
+reste `population_1000_AAMAS_v6`.
+
+**La sélection est un prédicat, pas un tirage.** Cinq profils volontairement contrastés —
+pendulaire voiture (609), cycliste urbain (899549), usager des transports collectifs (616478),
+scolaire (11195), retraité à motifs multiples (41275) —, chacun pris comme le PREMIER agent du
+sceau qui satisfait son critère, dans l'ordre des identifiants. Deux extractions rendent les
+mêmes cinq agents, et le MANIFEST porte le critère de chacun.
+
+---
+
 ## 6 bis. La population scellée v5 du 2026-09-04 — treize marges sur treize
 
 `data/population/population_1000_AAMAS_v5/` — sha256 `de73532e82c84f62…`, **1 000 personas en

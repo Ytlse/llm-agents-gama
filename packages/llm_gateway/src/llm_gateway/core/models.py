@@ -52,6 +52,16 @@ class LLMRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict, description="Paramètres additionnels pour le prompt")
     # Optionnel : forcer un fournisseur spécifique (contourne le load balancer)
     force_provider: str | None = None
+    # Ticket 084 — LISTE des instances admises à servir cette requête, honorée À LA SÉLECTION.
+    #
+    # ⚠ Ce champ DOIT être déclaré ici. `LLMRequest` n'interdit pas les champs supplémentaires :
+    # une restriction posée par le client sans figurer dans ce modèle serait ignorée en silence
+    # par la validation FastAPI — ni exception, ni journal, et une mesure prise sous une
+    # restriction qui n'a jamais existé. C'est la raison d'être du cas B1 du contrat de test.
+    #
+    # À distinguer du filtre client `allowed_providers` (`llm_agent.py`), qui rejette une
+    # réponse DÉJÀ facturée : celui-ci empêche l'appel, l'autre le constate.
+    instances_admises: list[str] | None = None
     # Optionnel : TPM minimum requis — le load balancer exclut les providers en dessous de ce seuil
     min_tpm_required: int | None = None
     context: str | None = Field(default=None, description="Contexte global de la ville (ex: trafic, météo)")

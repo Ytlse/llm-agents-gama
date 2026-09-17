@@ -79,7 +79,7 @@ providers:
     adapter:           mistral
     rpm_limit:         30   # en-tête x-ratelimit-limit-req-minute, mesuré 2026-09-10
     tpm_limit:         800000  # en-tête x-ratelimit-limit-tokens-minute, mesuré 2026-09-10
-    tpd_limit:         33000000  # GARDE-FOU : prorata journalier du quota mensuel, PARTAGÉ avec mistral_key1
+    tpd_limit:         100000000  # GARDE-FOU : prorata journalier du quota mensuel, PARTAGÉ avec mistral_key1
     base_url:          https://api.mistral.ai/v1
     # L'ID DATÉ, pas l'alias `mistral-large-latest` : un alias déplacé sur un autre modèle
     # ferait porter à l'empreinte scellée d'une expérience un nom de modèle faux, sans que
@@ -300,10 +300,13 @@ providers:
   groq_openai_120_key1:
     adapter:           groq
     rpm_limit:         30
-    tpm_limit:         8000
+    # TEMPORAIRE A SUPPRIMER (debug ticket 077 : éviter le verrou 60s artificiel de tpm_limit=8000 face au reset sub-seconde de Groq)
+    # tpm_limit:         8000
     rpd_limit:         1000   # quota requêtes/jour (en-têtes x-ratelimit)
-    max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
-    tpd_limit:         200000
+    # TEMPORAIRE A SUPPRIMER (debug ticket 077 : borner batch_max_agents à 2 sans verrouiller le TPM à 60s)
+    max_tokens_per_request: 6000
+    # TEMPORAIRE A SUPPRIMER (debug ticket 077 : pas de tpd_limit local pour Groq dont la fenêtre est glissante)
+    # tpd_limit:         200000
     base_url:          https://api.groq.com/openai/v1
     default_model:     openai/gpt-oss-120b
     max_output_tokens: 65536
@@ -402,32 +405,34 @@ providers:
   #   disable_timeout:   120
 
   # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  cerebras_gemma_4_31b_key1:
-    adapter:            cerebras
-    rpm_limit:          5
-    tpm_limit:          30000
-    rpd_limit:          2400  # quota requêtes/jour (free tier)
-    tpd_limit:          1000000
-    base_url:           https://api.cerebras.ai/v1
-    default_model:      gemma-4-31b
-    weight:             0.33  # min(5, 30000/3000)/15
-    concurrency_limit:  1
-    disable_timeout:    120
+  # [obsolète 2026-09-17] default_model 'gemma-4-31b' absent de /models
+  # cerebras_gemma_4_31b_key1:
+  #   adapter:            cerebras
+  #   rpm_limit:          5
+  #   tpm_limit:          30000
+  #   rpd_limit:          2400  # quota requêtes/jour (free tier)
+  #   tpd_limit:          1000000
+  #   base_url:           https://api.cerebras.ai/v1
+  #   default_model:      gemma-4-31b
+  #   weight:             0.33  # min(5, 30000/3000)/15
+  #   concurrency_limit:  1
+  #   disable_timeout:    120
 
-  # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
-  groq_qwen_qwen3_6_27b_key1:
-    adapter:            groq
-    rpm_limit:          30
-    tpm_limit:          8000
-    rpd_limit:          1000  # quota requêtes/jour (free tier)
-    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
-    base_url:           https://api.groq.com/openai/v1
-    default_model:      qwen/qwen3.6-27b
-    weight:             0.18  # min(30, 8000/3000)/15
-    concurrency_limit:  3
-    disable_timeout:    120
+  # # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
+  # [obsolète 2026-09-17] default_model 'qwen/qwen3.6-27b' absent de /models
+  # groq_qwen_qwen3_6_27b_key1:
+  #   adapter:            groq
+  #   rpm_limit:          30
+  #   tpm_limit:          8000
+  #   rpd_limit:          1000  # quota requêtes/jour (free tier)
+  #   max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
+  #   base_url:           https://api.groq.com/openai/v1
+  #   default_model:      qwen/qwen3.6-27b
+  #   weight:             0.18  # min(30, 8000/3000)/15
+  #   concurrency_limit:  3
+  #   disable_timeout:    120
 
-  # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
+  # # Ajouté par make providers le 2026-08-03 — quotas free tier relevés
   google_gemini_3_flash_preview_key1:
     adapter:            google
     # Reset du quota journalier en heure du Pacifique, PAS en UTC : la journée
@@ -524,9 +529,11 @@ providers:
   groq_qwen_qwen3_8_27b_key1:
     adapter:            groq
     rpm_limit:          30
-    tpm_limit:          8000
+    # TEMPORAIRE A SUPPRIMER (debug ticket 077 : éviter le verrou 60s artificiel de tpm_limit=8000 face au reset sub-seconde de Groq)
+    # tpm_limit:          8000
     rpd_limit:          1000  # quota requêtes/jour (free tier)
-    max_tokens_per_request: 8000  # = TPM free tier (requête unique au-delà → HTTP 413)
+    # TEMPORAIRE A SUPPRIMER (debug ticket 077 : borner batch_max_agents à 2 sans verrouiller le TPM à 60s)
+    max_tokens_per_request: 6000
     base_url:           https://api.groq.com/openai/v1
     default_model:      qwen/qwen3.8-27b
     weight:             0.18  # min(30, 8000/3000)/15

@@ -48,6 +48,22 @@ _HIERARCHIE = None
 MODES_INCONNUS: dict[str, int] = {}
 
 
+# Valeur du champ `mode` par laquelle le schéma de `stm_reflection` dit « ce concept ne porte
+# PAS sur un mode ». Ce n'est pas un mode inconnu : le compter comme tel noierait le compteur
+# des vraies anomalies sous une valeur parfaitement légitime.
+_SANS_MODE = frozenset({"any"})
+
+
+def _modes_canoniques() -> frozenset[str]:
+    """Les modes canoniques que la hiérarchie sait produire, DÉRIVÉS de la ressource gelée.
+
+    Jamais écrits en dur ici : `canonical_order()` les tient du même JSON que les rangs, et une
+    liste recopiée dans ce module divergerait de la hiérarchie le jour où elle bouge, sans que
+    rien ne le dise.
+    """
+    return frozenset(_hierarchie().canonical_order())
+
+
 def mode_canonique(mode_label: str | None) -> str | None:
     """Mode canonique du MODE PRINCIPAL d'un trajet, depuis son étiquette de jambes.
 
@@ -56,15 +72,38 @@ def mode_canonique(mode_label: str | None) -> str | None:
     le dépôt. Une cascade écrite ici en dupliquerait une sixième, et une liste incomplète rend
     un chiffre plausible et faux.
 
+    **Deux vocabulaires entrent ici, et c'est délibéré** (ticket 077, lot A). Les décisions
+    d'itinéraire portent des étiquettes de JAMBES (`foot`, `bus`, `bicycle`) ; le schéma JSON de
+    `stm_reflection` impose au modèle les modes CANONIQUES (`walking`, `cycling`,
+    `public_transport`…). Jusqu'au 2026-09-15 seule la première famille traversait : sur les sept
+    valeurs que le schéma autorise, `car` était la seule à être aussi une étiquette de jambe, et
+    les six autres rendaient `None`. Conséquence mesurée sur le run de trente jours du 075 —
+    `axe_objet` vide sur 211 concepts sur 231, paniers dégénérés, `known_beliefs` vide dans 68 %
+    des appels de réflexion, et le mécanisme de correction des concepts du 071 (lot 3) jamais
+    exécuté : 0 précision et 1 contradiction pour 231 créations.
+
+    Un mode déjà canonique est donc **son propre canonique**. La reconnaissance se fait sur
+    l'ensemble dérivé de la ressource gelée, pas sur une liste écrite ici.
+
     ⚠ Cette fonction LIT l'étiquette de mode, elle ne la remplace pas. `parse_option_modes`
     relit ces étiquettes dans le texte du prompt : les changer casserait la calibration et les
-    parts modales.
+    parts modales. Le présent ajout n'en change aucune — il ACCEPTE un vocabulaire de plus.
     """
     if not mode_label:
         return None
     jambes = [j.strip() for j in str(mode_label).split(",") if j.strip()]
     if not jambes:
         return None
+
+    # Étiquette unique : elle peut être un mode déjà canonique. Testé AVANT la hiérarchie, qui
+    # ne connaît que les jambes et rendrait `None` sur « walking » comme sur un mot inventé.
+    if len(jambes) == 1:
+        seul = jambes[0].lower()
+        if seul in _SANS_MODE:
+            return None
+        if seul in _modes_canoniques():
+            return seul
+
     canonique = _hierarchie().primary_canonical(jambes)
     if canonique is None:
         clef = ",".join(jambes)

@@ -1,0 +1,67 @@
+# C6 — Moteur suspect · voiture · UN agent nommé
+#
+# Cas d'étude demandé le 2026-09-15 : suivre un agent plus longtemps et relier sa mémoire à son
+# changement d'habitude. Conçu comme la moitié d'une comparaison APPARIÉE — le même run, mêmes
+# graines, tourne une seconde fois sans `CHOC=` : tout écart après le jour 6 vient du choc.
+#
+# POURQUOI UN RETARD, ET PAS SEULEMENT UNE INQUIÉTUDE. La demande initiale était « la voiture
+# fait des bruits bizarres, je ne suis pas rassuré ». Une inquiétude sans retard mesuré donne une
+# gravité de 0,00 et un souvenir qui vit 2,8 jours : il s'éteint avant d'avoir pesé sur une seule
+# décision. La gravité se calcule sur ce que la simulation a MESURÉ, et c'est la garde qui empêche
+# de fabriquer le résultat qu'on prétend mesurer. L'inquiétude reste donc dans le `vecu` ; le
+# retard lui donne son poids.
+#
+# ⚠ 25 puis 12 minutes, et non 60 puis 30 : la composante de retard SATURE à 30 minutes
+#   (`memoire__retard_ref_s`). Un profil resté au-dessus aurait donné la même gravité les deux
+#   jours, et la décrue n'aurait existé que dans le texte.
+#   Gravité obtenue, vérifiée au chargement : 0,62 au jour 6 puis 0,40 au jour 7 ; durées de
+#   vie 13,2 j puis 9,5 j. Le souvenir du jour 6 s'éteint donc vers le jour 19 : un run de
+#   20 jours porte l'arc complet, chute et reprise.
+#
+# ⚠ Le souvenir n'atteint PAS le seuil du vivier des chocs (0,70). Il est donc rappelé par le
+#   vivier par objet — quand la voiture figure dans les options — et non hors contexte. C'est
+#   voulu : un moteur qui fait du bruit n'est pas une panne de réseau, et c'est justement ce qui
+#   rend le cas intéressant, puisque la voiture lui est proposée à chaque trajet.
+#
+# SUJET. 899549, Corinne, 53 ans, Toulouse. Habitude voiture en formation (60 % de ses trajets sur
+# le run du 15/09) ET alternative crédible : ses transports collectifs mettent 22 à 23 minutes
+# contre 20 à 22 en voiture. Xavier (609) aurait été un mauvais sujet : sa seule alternative est
+# 1 h 19 de marche, donc ne pas changer n'apprendrait rien et changer serait invraisemblable.
+choc: c6_voiture_suspecte
+libelle: "Engine trouble"
+source: "scénario déclaré — cas d'étude individuel, aucune source externe revendiquée"
+
+exposition:
+  regle: agents
+  agents: ["899549"]
+  # Restreint aux trajets faits EN VOITURE. Sans cette ligne, Corinne aurait lu « the engine
+  # made a grinding noise » au retour d'un trajet en bus — elle est multimodale, 60 % de
+  # voiture sur le run du 15/09 — et sa mémoire aurait enregistré une histoire impossible.
+  modes: [car]
+
+# ⚠ JOURS 8 ET 9, ET NON 6 ET 7 — corrigé le 2026-09-17.
+# Les jours du run se comptent en jours de CALENDRIER depuis l'ancre (lundi 16 mars), alors que
+# la simulation SAUTE les week-ends (`agent.no_weekend_departures`). Posés aux jours 6 et 7, ces
+# chocs tombaient sur le samedi 21 et le dimanche 22 : ils n'ont jamais été appliqués, et la
+# comptabilité du run est passée du jour 5 (relatif -1) au jour 8 (relatif +2) avec
+# « 0 exposé(s) ».
+#
+#   jours 1-5 = lundi 16 → vendredi 20 mars   (5 journées vécues, l'habitude se forme)
+#   jours 6-7 = samedi 21, dimanche 22        (SAUTÉS)
+#   jour  8   = lundi 23 mars                 ← 6e journée vécue, premier choc
+#   jour  9   = mardi 24 mars                 ← 7e journée vécue, second choc
+#
+# Le protocole d'origine — cinq journées d'habitude avant le choc — est donc respecté.
+# À réécrire en « 6 et 7 » le jour où le comptage passera en jours vécus.
+jours:
+  - jour: 8
+    retard_min: 25
+    incident_reseau: true
+    vecu: >-
+      The engine made a grinding noise and the car stalled twice on the way. I pulled over
+      and waited before it would start again. I no longer trust this car.
+  - jour: 9
+    retard_min: 12
+    incident_reseau: true
+    vecu: >-
+      The noise is back. I keep listening to the engine instead of watching the road.

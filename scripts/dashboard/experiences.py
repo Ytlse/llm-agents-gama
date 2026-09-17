@@ -27,6 +27,7 @@ import time
 from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from stat import S_ISREG
 from typing import Callable, Optional
 
 import yaml
@@ -51,6 +52,11 @@ PROMPTS_YAML = REPO_ROOT / "packages" / "mobility_llm" / "src" / "mobility_llm" 
 # un test le garde. Le refactor du module LLM a déplacé ce fichier et celle-ci avait suivi
 # à moitié, ce qui vidait la liste des modèles du formulaire sans le dire.
 PROVIDERS_YAML = REPO_ROOT / "config" / "llm_gateway" / "providers.yaml"
+# Le jeu (substrat d'itinéraires) qui fait référence : ce qui a tourné sur un AUTRE jeu ne se
+# compare pas à lui, et le tableau le grise (R22). Versionné en git, comme la formule de score
+# et pour la même raison — c'est une décision scientifique, pas un réglage de poste. Le
+# manifeste du jeu ne pouvait pas porter ce drapeau : `data/jeux/` est ignoré par git.
+JEU_REFERENCE_YAML = REPO_ROOT / "services" / "llm-agents" / "experiences" / "jeux" / "reference.yaml"
 ETAT_ARCHIVE_MANQUANTE = "archive manquante"
 # Dossier qui range ce qui a été retiré du service (cohortes, jeux). Rien de ce qui vit
 # dessous n'est proposé au choix, quel que soit l'état de « Masquer les obsolètes » : ce
@@ -127,14 +133,19 @@ ETAT_FORMULAIRE = REPO_ROOT / "experiments" / ".dashboard" / "formulaire_experie
 # elle n'est jamais recollée en bout de ligne.
 COLONNES_REGISTRE = ("scores", "experience", "execution", "etat", "decideur", "fournisseur",
                      "prompt", "jeu", "jeu_etat", "mode", "chaine", "couverture",
-                     "choix_forces", "part_forces", "choix_forces_score",
+                     "journal", "choix_forces", "part_forces", "choix_forces_score",
                      "composite_emd", "composite_emd_hors_forces",
                      "composite_l1", "composite_l1_hors_forces", "formule")
 
-# R1 — les douze colonnes affichées par défaut. Les autres restent rappelables (R2) :
-# `jeu`, `jeu_etat` et `chaine` disent la comparabilité de deux exécutions, `formule` le
-# calcul qui a produit le chiffre, `scores` n'est qu'un repère (`composite_emd` à « — » dit
-# déjà qu'une exécution n'est pas scorée).
+# R1 — les treize colonnes affichées par défaut. Les autres restent rappelables (R2) :
+# `jeu_etat` et `chaine` disent la comparabilité de deux exécutions, `formule` le calcul qui a
+# produit le chiffre, `scores` n'est qu'un repère (`composite_emd` à « — » dit déjà qu'une
+# exécution n'est pas scorée).
+#
+# R21 (2026-09-16) — `jeu` est PASSÉE au défaut. Trois substrats cohabitent dans le registre
+# depuis la correction du ticket 088, et un composite ne se compare qu'à l'intérieur d'un même
+# jeu : rappelable au sélecteur, la colonne ne l'était par personne, et rien à l'écran ne
+# disait que deux lignes voisines n'avaient pas couru la même course.
 #
 # Ticket 047 — `choix_forces` et `composite_emd_hors_forces` sont par DÉFAUT, et pas
 # rappelables : le composite affiché compte les décisions à itinéraire unique, dont le
@@ -143,7 +154,7 @@ COLONNES_REGISTRE = ("scores", "experience", "execution", "etat", "decideur", "f
 # EMD et change le classement. Une colonne qu'il faut rappeler pour voir cela serait une
 # colonne que personne ne rappelle.
 COLONNES_REGISTRE_DEFAUT = ("experience", "execution", "etat", "decideur", "fournisseur",
-                            "prompt", "mode", "couverture", "choix_forces",
+                            "prompt", "jeu", "mode", "couverture", "choix_forces",
                             "composite_emd", "composite_emd_hors_forces", "composite_l1")
 
 # R17 — celles-ci se filtrent par bornes, pas par liste de valeurs : `composite_l1` porte
@@ -291,11 +302,51 @@ def _json(p: Path) -> dict:
         return {}
 
 
-def _yaml(p: Path) -> dict:
+#: L'analyseur YAML de libyaml quand il est disponible, l'analyseur Python sinon.
+#: `yaml.safe_load` prend TOUJOURS le second, même quand le premier est installé — et le
+#: tableau de bord relit plusieurs Mio de YAML à chaque battement de fragment. Mesuré le
+#: 2026-09-16 sur les fichiers du dépôt : 752 ms en Python pur contre 95 ms par libyaml,
+#: soit ×7,9, pour 88 % du temps de calcul d'un battement.
+_CHARGEUR_YAML = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+@lru_cache(maxsize=512)
+def _yaml_analyse(chemin: str, _taille: int, _mtime_ns: int) -> dict:
+    """Analyse un fichier UNE fois pour un état donné du fichier.
+
+    La clé porte la taille ET la date de modification : un fichier réécrit est donc relu.
+    C'est ce qui rend la mémoïsation sûre pour `ajouter_variante`, qui réécrit `prompts.yaml`
+    puis le relit aussitôt pour vérifier son propre travail. Même convention que les caches
+    de `app.py` (`cached_log_counts`, `cached_agent_states`), pour la même raison.
+
+    ⚠ Le dictionnaire rendu est PARTAGÉ entre tous les appelants : aucun ne doit le modifier.
+    Vérifié avant d'introduire ce cache — les trente-deux appels de `_yaml` ne font que lire.
+    """
     try:
-        return yaml.safe_load(p.read_text(encoding="utf-8")) or {} if p.is_file() else {}
+        texte = Path(chemin).read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    try:
+        return yaml.load(texte, Loader=_CHARGEUR_YAML) or {}
     except yaml.YAMLError:
         return {}
+
+
+def _yaml(p: Path) -> dict:
+    """Le même fichier lu deux fois dans le même battement ne coûte qu'une fois.
+
+    Mesuré le 2026-09-16 sur `activites_en_cours()` : 199 lectures pour 131 fichiers
+    distincts, dont `config/llm_gateway/providers.yaml` cinquante-six fois — 3,8 Mio de YAML
+    analysés là où 2,3 suffisaient. Et d'un battement à l'autre, un fichier qui n'a pas bougé
+    ne coûte plus rien du tout.
+    """
+    try:
+        infos = p.stat()
+    except OSError:
+        return {}
+    if not S_ISREG(infos.st_mode):
+        return {}
+    return _yaml_analyse(str(p), infos.st_size, infos.st_mtime_ns)
 
 
 def empreinte_population(chemin_relatif: str) -> dict:
@@ -1167,6 +1218,28 @@ def _formule_reference_sha() -> Optional[str]:
         return None
 
 
+def jeu_reference() -> Optional[str]:
+    """Le nom du jeu de référence, ou None si personne ne l'a désigné.
+
+    Relu à chaque appel, sans cache : le fichier édité pendant que le tableau tourne prend
+    effet au battement suivant du fragment, comme la formule de score. Fichier absent, vide
+    ou illisible → None, et le tableau le DIT (R22) plutôt que de griser au hasard : un gris
+    silencieux et un gris faux se ressemblent trop.
+    """
+    nom = (_yaml(JEU_REFERENCE_YAML) or {}).get("jeu")
+    return nom.strip() if isinstance(nom, str) and nom.strip() else None
+
+
+def hors_reference(jeu: Optional[str], reference: Optional[str]) -> bool:
+    """Cette ligne a-t-elle couru sur un AUTRE substrat que la référence ?
+
+    Deux abstentions, et elles sont volontaires : sans référence désignée rien n'est hors
+    référence, et une ligne dont le jeu ne se lit pas non plus. On ne grise que ce qu'on sait
+    faux — pas ce qu'on ignore.
+    """
+    return bool(reference and jeu and jeu != reference)
+
+
 def formule_reference() -> Optional[dict]:
     """Nom, SHA et poids de la formule de référence courante (pour le panneau)."""
     try:
@@ -1328,6 +1401,22 @@ def famille_artefact(chemin: Optional[str]) -> Optional[str]:
     return _famille_du_format(str(p), (stat.st_size, stat.st_mtime_ns))
 
 
+def _libelle_journal(perimetre: Optional[dict]) -> Optional[str]:
+    """Ticket 081 — le journal scoré recouvrait-il les décisions archivées ?
+
+    Trois valeurs et pas deux. « — » n'est pas « complet » : c'est un score calculé avant que
+    la règle n'existe, donc un contrôle qui n'a pas eu lieu. Les confondre reproduirait
+    exactement la lecture qui a fait publier un composite sur 274 lignes le 2026-09-12.
+    """
+    if not perimetre:
+        return None
+    complet = perimetre.get("complet")
+    if complet is None:
+        return "non comparable"
+    ecart = perimetre.get("ecart_relatif") or 0.0
+    return "complet" if complet else f"INCOMPLET ({100 * ecart:+.0f} %)"
+
+
 def _decideur_label(dec: Optional[dict]) -> str:
     """Le décideur affiché : le modèle seul pour la passerelle (le préfixe « passerelle: » est
     du bruit), sinon « type:modele » (ex. rejeu, aleatoire) ; vide si aucun type.
@@ -1475,6 +1564,205 @@ def libelle_chaine(exp: dict) -> str:
     return "position seule" if chaine else "verrou seul"
 
 
+# ── Fiche des conditions (spec fiche-conditions-experience) ──────────────────
+# Le nom calculé porte tous les réglages en abrégé (`proexp04`, `t0`, `nosim`) et ne se relit
+# plus. La fiche les dit en toutes lettres, LUS DANS LA DÉFINITION — jamais décodés depuis le
+# nom, qui ferait un second décodeur dérivant du premier. Une valeur absente est une ligne
+# absente (R2) : la fiche dit ce que la définition dit, ni « — » ni défaut inventé.
+
+#: Dossier des campagnes (`<nom>.yaml`, `<nom>/etat.json`, `<nom>/STOP`), pour les marqueurs
+#: « planifiée » du registre. Même chemin que `scripts/dashboard/campagne.py`.
+DOSSIER_CAMPAGNES = REPO_ROOT / "campagnes"
+
+#: Ce que dit le registre d'une ligne qui va tourner (R10) et d'une qui tourne (R9).
+MARQUE_EN_COURS = "⏳"
+MARQUE_PLANIFIEE = "📅"
+
+_LIBELLE_MODE = {"sans_simulateur": "sans simulateur", "simulateur": "avec simulateur"}
+
+
+def fiche_conditions(exp: Optional[dict]) -> list[tuple[str, str]]:
+    """Les conditions d'une expérience, en toutes lettres et dans l'ordre de lecture (R1).
+
+    Entrée : le dict d'un `experience.yaml` (ou de la définition figée d'une `execution.yaml`).
+    Sortie : `[(libellé, valeur), …]`, sans ligne pour ce que la définition ne dit pas (R2).
+    Le prompt n'y figure que si le décideur en lit un (R3) — même règle que la colonne du
+    registre. Une définition vide ou illisible donne une fiche vide (R13), jamais une exception.
+    """
+    if not isinstance(exp, dict) or not exp:
+        return []
+    fiche: list[tuple[str, str]] = []
+    dec = exp.get("decideur") if isinstance(exp.get("decideur"), dict) else {}
+    params = dec.get("parametres") if isinstance(dec.get("parametres"), dict) else {}
+
+    decideur = _decideur_label(dec)
+    if decideur:
+        fiche.append(("décideur", decideur))
+    if dec.get("artefact"):
+        fiche.append(("artefact", Path(str(dec["artefact"])).name))
+    if dec.get("rejeu_de"):
+        fiche.append(("rejeu de", str(dec["rejeu_de"])))
+    fournisseur = fournisseur_de(dec) if dec else SANS_FOURNISSEUR
+    if fournisseur and fournisseur != SANS_FOURNISSEUR:
+        fiche.append(("fournisseur", fournisseur))
+    prompt = _prompt_affiche((exp.get("gabarit") or {}).get("variante"), dec)
+    if prompt != "—":
+        fiche.append(("prompt", prompt))
+    if params.get("temperature") is not None:
+        fiche.append(("température", str(params["temperature"])))
+    if params.get("thinking_level"):
+        fiche.append(("réflexion", str(params["thinking_level"])))
+    elif params.get("thinking_budget") is not None:
+        fiche.append(("réflexion", f"budget {params['thinking_budget']}"))
+
+    chemin_pop = str((exp.get("population") or {}).get("chemin") or "")
+    if chemin_pop:
+        fiche.append(("population", Path(chemin_pop).name))
+    jeu = (exp.get("jeu") or {}).get("nom")
+    if jeu:
+        fiche.append(("jeu", str(jeu)))
+    if exp.get("mode"):
+        fiche.append(("mode", _LIBELLE_MODE.get(str(exp["mode"]), str(exp["mode"]))))
+    cal = exp.get("calendrier") if isinstance(exp.get("calendrier"), dict) else {}
+    bouts = [str(cal[k]) for k in ("politique", "date") if cal.get(k) is not None]
+    if cal.get("graine") is not None:
+        bouts.append(f"graine {cal['graine']}")
+    if bouts:
+        fiche.append(("calendrier", " · ".join(bouts)))
+    if exp.get("horizon_jours") is not None:
+        fiche.append(("horizon", f"{exp['horizon_jours']} jour(s)"))
+    if "memoire" in exp:
+        fiche.append(("mémoire", "activée" if exp["memoire"] else "désactivée"))
+    if "vehicule_chaine" in exp or "verrou_retour" in exp:
+        fiche.append(("chaîne des véhicules", libelle_chaine(exp)))
+    par = (exp.get("regroupement") or {}).get("parallelisme")
+    if par is not None:
+        fiche.append(("parallélisme", str(par)))
+    if exp.get("max_candidats") is not None:
+        fiche.append(("candidats max", str(exp["max_candidats"])))
+    if exp.get("attente_max_s") is not None:
+        fiche.append(("attente max", f"{exp['attente_max_s']} s"))
+    graines = [f"{nom} {exp[cle]}" for nom, cle in (("ordre", "graine_ordre"), ("tirage", "graine_tirage"))
+               if exp.get(cle) is not None]
+    if dec.get("graine") is not None:
+        graines.append(f"décideur {dec['graine']}")
+    if graines:
+        fiche.append(("graines", " · ".join(graines)))
+    return fiche
+
+
+def fiche_de_ligne(ligne: dict) -> list[tuple[str, str]]:
+    """La fiche d'une ligne du registre : la définition FIGÉE de l'exécution d'abord (R4).
+
+    `execution.yaml` porte sous `experience` la définition telle qu'elle était au lancement ;
+    c'est elle qui a décidé, pas la définition courante — deux exécutions d'une même expérience
+    peuvent donc afficher deux fiches. Sans snapshot (ligne « definie », dossier disparu), on
+    lit `experience.yaml`. Le fournisseur RÉELLEMENT sollicité, quand la ligne le porte, l'emporte
+    sur celui déduit de la définition — c'est l'archive qui le dit.
+    """
+    dossier = Path(str(ligne.get("dossier") or ""))
+    exp: dict = {}
+    # `execution` vaut NaN sur une ligne « definie » sortie d'un DataFrame : seul du texte compte.
+    if isinstance(ligne.get("execution"), str) and dossier.is_dir():
+        exp = (_yaml(dossier / "execution.yaml") or {}).get("experience") or {}
+    if not exp:
+        nom = str(ligne.get("experience") or "")
+        exp = _yaml(DOSSIER / nom / "experience.yaml") if nom else {}
+    fiche = fiche_conditions(exp)
+    f = str(ligne.get("fournisseur") or "").strip()
+    if f and f != SANS_FOURNISSEUR and any(l == "fournisseur" for l, _ in fiche):
+        fiche = [(l, f if l == "fournisseur" else v) for l, v in fiche]
+    return fiche
+
+
+def fiche_en_ligne(fiche: list[tuple[str, str]]) -> str:
+    """La fiche sur une ligne, pour les barres d'avancement (R5) : mêmes valeurs, même ordre."""
+    return " · ".join(f"{l} {v}" for l, v in fiche)
+
+
+def rendre_fiche(st, fiche: list[tuple[str, str]], *, titre: Optional[str] = None) -> None:
+    """La fiche en table libellé / valeur (R5, R6). Fiche vide : on le dit (R13)."""
+    if titre:
+        st.markdown(titre)
+    if not fiche:
+        st.caption("Conditions illisibles : la définition de cette expérience manque ou est tronquée.")
+        return
+    st.markdown("\n".join(["| condition | valeur |", "|---|---|",
+                           *[f"| {l} | {v} |" for l, v in fiche]]))
+
+
+def _processus_vivant(pid) -> bool:
+    """Le processus existe-t-il encore sur l'hôte ? Signal 0 : on ne lui envoie rien d'autre."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def campagne_vivante(nom: str, dossier: Optional[Path] = None) -> bool:
+    """Une campagne PLANIFIE encore (R11) : état présent, non terminée, sans `STOP`, pilote vivant.
+
+    Sans le test du processus, une 📅 survivrait à un `kill` du pilote ou à un redémarrage :
+    la page promettrait des lancements que plus rien ne fera.
+    """
+    d = Path(dossier) if dossier is not None else DOSSIER_CAMPAGNES
+    etat = _json(d / nom / "etat.json")
+    if not etat or etat.get("terminee_le"):
+        return False
+    if (d / nom / "STOP").exists():
+        return False
+    return _processus_vivant(etat.get("pid"))
+
+
+def planifiees_par_campagne(dossier: Optional[Path] = None) -> dict[str, str]:
+    """Expérience → campagne vivante qui la porte encore dans ses `restantes` (R10, R14).
+
+    Lu dans les `etat.json` écrits par le pilote : la page ne déduit aucun ordre de passage,
+    elle lit ce qui reste. Deux campagnes vivantes sur une même expérience : la première par
+    ordre alphabétique l'emporte (R14).
+    """
+    d = Path(dossier) if dossier is not None else DOSSIER_CAMPAGNES
+    if not d.is_dir():
+        return {}
+    planifiees: dict[str, str] = {}
+    for chemin in sorted(d.glob("*/etat.json")):
+        nom = chemin.parent.name
+        if not campagne_vivante(nom, d):
+            continue
+        for exp in _json(chemin).get("restantes") or []:
+            planifiees.setdefault(str(exp), nom)
+    return planifiees
+
+
+def decorer_etat(ligne: dict, planifiees: dict[str, str]) -> str:
+    """La cellule `etat` AFFICHÉE : ⏳ pour ce qui tourne (R9), 📅 pour ce qu'une campagne
+    va lancer ou reprendre (R10), suffixe « obsolète » sinon. Ce qui tourne n'est plus « à
+    venir » : ⏳ seul (R15). La valeur filtrable et triable reste `ligne["etat"]` (R12)."""
+    etat = str(ligne.get("etat") or "")
+    if etat == ETAT_EN_COURS:
+        return f"{MARQUE_EN_COURS} {etat}"
+    campagne_nom = planifiees.get(str(ligne.get("experience") or ""))
+    # Une exécution MENÉE À TERME que l'état du pilote liste encore dans ses `restantes` (il
+    # n'est réécrit que par moments) n'est pas « à venir » : la campagne la compte faite et ne
+    # la rejoue pas (R16). Vu le 2026-09-15 sur les deux témoins random forest.
+    if campagne_nom and not ligne.get("obsolete") and not est_terminee(ligne):
+        return f"{MARQUE_PLANIFIEE} {etat} · planifiée (campagne {campagne_nom})"
+    if ligne.get("obsolete"):
+        return f"{etat} · obsolète ({'résultat complet' if est_terminee(ligne) else 'partielle'})"
+    return etat
+
+
 def _statut_experience(exp_dir: Path) -> dict:
     """Statut d'une expérience, best-effort — un marqueur illisible vaut « actif »."""
     st = _json(exp_dir / "statut.json")
@@ -1497,9 +1785,24 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
     if not dossier.is_dir():
         return lignes
     ref_sha = _formule_reference_sha()  # pour dériver le drapeau « périmée » (R7)
+    ref_jeu = jeu_reference()           # …et celui de « hors référence » (R22)
+    etats_jeu: dict[str, str] = {}
+
+    def _etat_jeu(nom: str) -> str:
+        """`etat_du_jeu` mémoïsé le temps de cet appel.
+
+        Il relit tout `data/jeux/` à chaque fois. Appelé une fois par EXÉCUTION depuis R21 —
+        soixante lignes, quatre jeux — il ferait deux cent quarante lectures de manifeste à
+        chaque battement du fragment, toutes les cinq secondes.
+        """
+        if nom not in etats_jeu:
+            etats_jeu[nom] = etat_du_jeu(nom)
+        return etats_jeu[nom]
+
     for exp_dir in sorted(p for p in dossier.iterdir() if (p / "experience.yaml").is_file()):
         exp = _yaml(exp_dir / "experience.yaml")
         base_variante = (exp.get("gabarit") or {}).get("variante")
+        jeu_defini = (exp.get("jeu") or {}).get("nom")
         # Statut de l'expérience (spec hygiène §3.2) : `lister()` ne masque RIEN ici — plusieurs
         # vues (activités en cours, reprise) doivent voir toutes les lignes. Le champ est exposé,
         # et c'est la vue qui décide de filtrer.
@@ -1509,8 +1812,12 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
                 "decideur": _decideur_label(exp.get("decideur")),
                 "fournisseur": fournisseur_de(exp.get("decideur")),
                 "prompt": _prompt_affiche(base_variante, exp.get("decideur")),
-                "jeu": (exp.get("jeu") or {}).get("nom"),
-                "jeu_etat": etat_du_jeu((exp.get("jeu") or {}).get("nom") or ""),
+                # Le jeu de la DÉFINITION : il ne vaut que pour les lignes sans exécution
+                # (« definie », archive disparue). Dès qu'une exécution existe, c'est le jeu
+                # figé dans son instantané qui prend la place — voir `jeu_fige` plus bas.
+                "jeu": jeu_defini,
+                "jeu_etat": _etat_jeu(jeu_defini or ""),
+                "hors_reference": hors_reference(jeu_defini, ref_jeu),
                 # La chaîne des véhicules en toutes lettres. Le nom la porte déjà (`nochn`,
                 # `noret`), mais il faut connaître la convention pour la lire : une colonne
                 # dit « active » ou « coupée » sans rien à décoder. C'est un réglage qui
@@ -1548,6 +1855,12 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
             fournisseur_fige = fournisseur_execute(d) or (
                 fournisseur_de(exp_fige.get("decideur")) if exp_fige.get("decideur")
                 else base["fournisseur"])
+            # R21 — le jeu suit le snapshot lui aussi, et ce n'est pas une symétrie gratuite :
+            # le correctif du ticket 088 a re-pointé les définitions sur le substrat corrigé,
+            # si bien que les trente exécutions de l'ancien s'affichaient sous le nom du
+            # nouveau. Une colonne qui nomme le substrat d'après la définition COURANTE dit
+            # le contraire de ce qui a tourné — et c'est cette colonne-là qui décide du gris.
+            jeu_fige = (exp_fige.get("jeu") or {}).get("nom") or base["jeu"]
             forces_synth = synth.get("choix_forces") or {}
             n_forces = forces_synth.get("n")
             part_forces = forces_synth.get("part")
@@ -1558,6 +1871,8 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
             pct_forces = (part_forces * 100) if part_forces is not None else None
             lignes.append({**base, "decideur": dec_fige, "prompt": prompt_fige,
                            "fournisseur": fournisseur_fige,
+                           "jeu": jeu_fige, "jeu_etat": _etat_jeu(jeu_fige or ""),
+                           "hors_reference": hors_reference(jeu_fige, ref_jeu),
                            "execution": nom, "etat": etat.get("etat", "?"), "raison": etat.get("raison"),
                            "reprise_possible_a": etat.get("reprise_possible_a"), "date": conf.get("cree_le"),
                            "decides": couv.get("decides"), "attendus": couv.get("attendus"), "couverture": couv.get("taux"),
@@ -1572,6 +1887,11 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
                            "choix_forces_n": n_forces,
                            "part_forces": part_forces,
                            "choix_forces_score": (scores.get("choix_forces") or {}).get("n"),
+                           # Ticket 081 — le contrôle qui a autorisé ce composite : le journal
+                           # scoré recouvrait-il les décisions archivées ? « — » pour un score
+                           # antérieur à la règle, jamais « complet » : un contrôle qui n'a pas
+                           # eu lieu ne se lit pas comme un contrôle réussi.
+                           "journal": _libelle_journal(scores.get("perimetre_verifie")),
                            # Scores (R5, R7, R9) : None → « — », jamais 0 ; drapeau périmée dérivé.
                            "composite_emd": comp.get("emd_jsd"), "composite_l1": comp.get("l1"),
                            "composite_emd_hors_forces": comp.get("emd_jsd_hors_choix_unique"),
@@ -2174,6 +2494,8 @@ def activites_en_cours() -> dict:
             "pause_demandee": _demande_depuis(dossier / "PAUSE"),
             "arret_demande": _demande_depuis(dossier / "STOP"),
             "immobile_depuis_s": p.get("immobile_depuis_s"),
+            # R8 — les conditions sur une ligne, lues dans la définition figée de l'exécution.
+            "conditions": fiche_en_ligne(fiche_de_ligne(ligne)),
         })
     return {"executions": executions, "jeux": jeux_en_preparation(),
             "definies": len({l["experience"] for l in lignes}),
@@ -2577,6 +2899,10 @@ def rendre_activites(st, act: dict, *, compact: bool = False) -> None:
             texte += f" · écrit il y a {int(age)} s" if compact else f" · progression écrite il y a {int(age)} s"
         st.progress(min(1.0, (e["pourcent"] or 0) / 100), text=texte)
         if not compact:
+            # R8 — les conditions sous la barre, jamais dans la vue d'ensemble compacte : une
+            # ligne par exécution y reste la règle.
+            if e.get("conditions"):
+                st.caption(f"🧾 {e['conditions']}")
             _boutons_arret(st, e, index)
     for j in en_preparation:
         _ligne_jeu(st, j, compact=compact)
@@ -3094,11 +3420,12 @@ def _panneau_colonnes_et_filtres(st, candidates: list[dict], presentes: list[str
     with st.expander("🔎 Colonnes et filtres", expanded=False):
         st.multiselect(
             "Colonnes affichées", presentes, key=cle_cols,
-            help="les dix colonnes par défaut sont celles du suivi courant ; `jeu`, `jeu_etat`, "
-                 "`chaine`, `formule` et l'icône 📊 se rappellent ici quand on en a besoin")
+            help="les colonnes par défaut sont celles du suivi courant, `jeu` compris (c'est "
+                 "lui qui décide du grisé) ; `jeu_etat`, `chaine`, `formule` et l'icône 📊 se "
+                 "rappellent ici quand on en a besoin")
         colonnes = [c for c in COLONNES_REGISTRE if c in set(st.session_state[cle_cols])]
         if not colonnes:
-            st.caption("Aucune colonne choisie : le tableau reprend ses dix colonnes par défaut.")
+            st.caption("Aucune colonne choisie : le tableau reprend ses colonnes par défaut.")
             colonnes = [c for c in COLONNES_REGISTRE_DEFAUT if c in presentes]
         retenues: dict[str, list[str]] = {}
         bornes: dict[str, tuple] = {}
@@ -3244,12 +3571,16 @@ def _suivi_du_registre(st, pd) -> None:
         # change ; une obsolète partielle, elle, ne sera jamais reprise (la reprise ne porte
         # que sur la dernière exécution). Confondre les deux ferait passer un résultat
         # exploitable pour un déchet.
-        if "etat" in vue.columns and "obsolete" in df.columns:
-            vue["etat"] = [
-                (f"{e} · obsolète ({'résultat complet' if est_terminee(l) else 'partielle'})"
-                 if l.get("obsolete") else e)
-                for e, l in zip(df["etat"], df.to_dict("records"))
-            ]
+        # …et, depuis la spec fiche-conditions-experience, ⏳ sur ce qui tourne (R9) et 📅 sur
+        # ce qu'une campagne vivante va lancer ou reprendre (R10) — sur la copie AFFICHÉE
+        # seulement : `candidates`, qui sert aux filtres et au tri, garde l'état nu (R12).
+        if "etat" in vue.columns:
+            planifiees = planifiees_par_campagne()
+            vue["etat"] = [decorer_etat(l, planifiees) for l in df.to_dict("records")]
+        # R21 — un jeu absent s'écrit « — », comme les scores : une case vide se lit comme
+        # une valeur, et ici elle se lirait comme « même substrat que le voisin ».
+        if "jeu" in vue.columns:
+            vue["jeu"] = [j if isinstance(j, str) and j else "—" for j in df["jeu"]]
         # Formule périmée : suffixe visible ⚠ sur la colonne formule (R7).
         if "formule" in vue.columns and "formule_perimee" in df.columns:
             vue["formule"] = [
@@ -3320,6 +3651,28 @@ def _suivi_du_registre(st, pd) -> None:
         st.caption(f"{len(df)} ligne(s) affichée(s) sur {len(candidates)} — cliquez une ligne "
                    "pour voir son détail par sous-catégorie. La couverture accompagne chaque "
                    "score ; une exécution non scorée affiche « — », jamais 0.")
+        # R22 — hors référence : la ligne entière en gris. Un composite ne se compare qu'à
+        # l'intérieur d'un même substrat, et trois jeux cohabitent dans le registre depuis la
+        # correction du ticket 088. Le gris ne touche que la copie AFFICHÉE : `df` et
+        # `candidates` gardent les valeurs nues, donc ni le tri ni les filtres ne le voient.
+        ref_jeu = jeu_reference()
+        hors = [bool(l.get("hors_reference")) for l in df.to_dict("records")]
+        if not ref_jeu:
+            st.caption("Aucun jeu de référence désigné dans "
+                       "`services/llm-agents/experiences/jeux/reference.yaml` : aucune ligne "
+                       "n'est grisée, et la colonne `jeu` est seule à dire sur quel substrat "
+                       "chaque exécution a tourné.")
+        elif any(hors):
+            st.caption(f"⬜ {sum(hors)} ligne(s) grisée(s) : elles ont tourné sur un autre jeu "
+                       f"que la référence « {ref_jeu} ». Leur score ne se compare pas à celui "
+                       f"des lignes noires — la colonne `jeu` dit lequel elles ont couru.")
+        rendu = vue
+        if any(hors):
+            # Streamlit ne rend d'un Styler que `color` et `background-color` : le gris passe,
+            # une italique ne passerait pas.
+            rendu = vue.style.apply(
+                lambda ligne: ["color: #9aa0a6" if hors[ligne.name] else "" for _ in ligne],
+                axis=1)
         cfg = {}
         if hasattr(st, "column_config"):
             cfg["column_config"] = {
@@ -3329,7 +3682,7 @@ def _suivi_du_registre(st, pd) -> None:
                 )
             }
         event = st.dataframe(
-            vue,
+            rendu,
             width="stretch",
             hide_index=True,
             on_select="rerun",
@@ -3389,6 +3742,11 @@ def _suivi_du_registre(st, pd) -> None:
                 st.caption("Aucune exécution reprenable pour cette expérience : ni en pause, ni "
                            "épuisée, ni interrompue, ni abandonnée en cours — et une exécution "
                            "obsolète ne se reprend pas, la reprise ne portant que sur la dernière.")
+            # R6 — les conditions de CETTE ligne (définition figée de l'exécution si c'en est
+            # une), en clair : le nom calculé les porte en abrégé et ne se relit plus.
+            rendre_fiche(st, fiche_de_ligne(ligne_choisie),
+                         titre="**🧾 Conditions de « " + str(choix)
+                               + (f" / {execution_choisie}" if execution_choisie else "") + " »**")
         else:
             st.caption("Cliquez une ligne du tableau pour agir dessus (rejouer, reprendre, dupliquer) ou voir son détail.")
 
@@ -3408,6 +3766,8 @@ def _suivi_du_registre(st, pd) -> None:
                                  + (f" · reste ≈ {_duree(p['reste_s'])}" if p.get("reste_s") is not None else "")
                                  + f" · {p.get('sollicitations')} sollicitations"
                                  + (f" · {p.get('attentes')} attentes" if p.get("attentes") else ""))
+            # R7 — ce qui tourne, dans quelles conditions : sur une ligne, sous la barre.
+            st.caption("🧾 " + (fiche_en_ligne(fiche_de_ligne(l)) or "conditions illisibles"))
             _boutons_arret(st, l, index, prefixe="reg")
 
         _apercu_ligne_selectionnee(st, event, df)

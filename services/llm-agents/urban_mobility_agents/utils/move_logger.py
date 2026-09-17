@@ -135,6 +135,24 @@ CSV_HEADERS = [
     "Écartées (motifs)",
     # Identifiant du lot de la passerelle qui a porté la décision (spec 03, S5) — vide sinon.
     "Identifiant lot",
+    # Ticket 077, lot E2 — l'index RETENU parmi les options présentées, pour TOUTE décision.
+    # Il n'existait que dans `pipeline_timing.csv`, et seulement pour 66 des 514 trajets du run
+    # du ticket 075 : impossible d'y lire si l'agent changeait d'itinéraire à motif constant.
+    "Index retenu",
+    # Nombre d'options réellement présentées. Sans lui, un index de 0 ne se distingue pas d'un
+    # choix contraint : l'absence d'alternative produirait une « fidélité » parfaite.
+    "Options présentées",
+    # Ticket 077, lot E5 — la décision vient-elle du cache sémantique ou d'un appel direct.
+    # « cache », « direct », ou vide quand aucun modèle n'a été sollicité.
+    "Origine de la décision",
+    # Ticket 077, lot E3 — descriptif des options présentées, index par index.
+    "Options (descriptif)",
+    # Ticket 079 — le choc en vigueur, et le jour RELATIF à son premier jour (−2, −1, 0, +1…).
+    # Renseignés pour TOUTE décision, y compris les jours nominaux : le jour relatif est
+    # l'abscisse des courbes d'hystérésis, et une abscisse qui n'existerait que les jours de
+    # choc ne tracerait rien. Vides quand aucun choc n'est déclaré.
+    "Choc",
+    "Jour relatif au choc",
 ]
 
 
@@ -222,6 +240,56 @@ def _available_modes_summary(options: Optional[list]) -> str:
     return " | ".join(_plan_transport_mode(opt) for opt in options)
 
 
+def _contexte_choc(start_time_ms: Optional[int]) -> tuple:
+    """Ticket 079 — `(identifiant du choc, jour relatif)` pour cette décision.
+
+    Renseigné pour TOUTE décision d'un run à choc, y compris les jours nominaux : le jour
+    relatif est l'abscisse des courbes d'hystérésis, et une abscisse qui n'existerait que les
+    jours de choc ne tracerait rien. Deux valeurs vides quand aucun choc n'est déclaré, ce qui
+    laisse les runs sans choc rigoureusement identiques à ce qu'ils étaient.
+
+    Ne lève jamais : une colonne de contexte absente vaut mieux qu'une décision perdue.
+    """
+    try:
+        from llm import chocs as chocs_module
+
+        registre = chocs_module.registre()
+        if registre is None or start_time_ms is None:
+            return ("", "")
+        return (registre.choc.choc_id, registre.jour_relatif(int(start_time_ms) // 1000))
+    except Exception:  # noqa: BLE001
+        return ("", "")
+
+
+def _options_descriptif(options: Optional[list]) -> str:
+    """Descriptif des options PRÉSENTÉES — ticket 077, lot E3.
+
+    « 0:car:487s:6.5km | 1:foot,bus,foot:3480s:7.5km ». Un champ par option, dans l'ordre de
+    la liste, donc l'index y est celui que porte la colonne « Index retenu ».
+
+    ⚠ Pourquoi cette colonne existe. Jusqu'ici, le descriptif des options n'était reconstituable
+    qu'en relisant le TEXTE des prompts de `llm_exchanges.jsonl`, et l'appariement d'un trajet
+    à son bloc de prompt ne retrouvait que 247 des 430 trajets du run du ticket 075. Sans
+    descriptif, on ne peut pas dire si un agent a changé d'ITINÉRAIRE à mode constant — ce qui
+    est précisément la question que la mémoire pose.
+
+    La durée est en secondes et la distance en kilomètres : deux unités déjà employées par les
+    colonnes voisines, et aucun arrondi qui masquerait deux options proches.
+    """
+    if not options:
+        return ""
+    parts = []
+    for index, option in enumerate(options):
+        try:
+            duree = int(max(0, (option.end_time - option.start_time) // 1000))
+        except (AttributeError, TypeError):
+            duree = ""
+        parts.append(
+            f"{index}:{option.mode_label() or '?'}:{duree}s:{_plan_distance_km(option)}km"
+        )
+    return " | ".join(parts)
+
+
 def _mode_probability_cells(distribution: Optional[dict]) -> list:
     """Ventile la répartition par mode sur une colonne par mode (ordre `_CANONICAL_FR`).
 
@@ -245,7 +313,10 @@ def _plan_distance_km(plan: Optional[TravelPlan]) -> str:
 class GamaArrivalsLogger:
     _instance: Optional["GamaArrivalsLogger"] = None
 
-    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s", "started_at", "schedule_at", "departure_delay_s", "timed_out"]
+    # Ticket 079 — `retard_injecte_s` est en DERNIÈRE position et distinct de `delay_s` :
+    # l'un est ce que la simulation a mesuré, l'autre ce qu'un choc déclaré a fait subir. Les
+    # confondre rendrait toute relecture d'une campagne à choc impossible.
+    _HEADERS = ["move_id", "person_id", "arrive_at", "expected_arrive_at", "delay_s", "started_at", "schedule_at", "departure_delay_s", "timed_out", "retard_injecte_s"]
 
     def __init__(self):
         self._path: Optional[Path] = None
@@ -267,22 +338,25 @@ class GamaArrivalsLogger:
                 csv.writer(f).writerow(self._HEADERS)
 
     def _write_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
-                       started_at: Optional[int], schedule_at: Optional[int], timed_out: bool):
+                       started_at: Optional[int], schedule_at: Optional[int], timed_out: bool,
+                       retard_injecte_s: int = 0):
         self._ensure_header()
         delay_s = arrive_at - expected_arrive_at
         departure_delay_s = (started_at - schedule_at) if started_at is not None and schedule_at is not None else None
         with open(self._path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([move_id, person_id, arrive_at, expected_arrive_at, delay_s,
-                                    started_at, schedule_at, departure_delay_s, timed_out])
+                                    started_at, schedule_at, departure_delay_s, timed_out,
+                                    int(retard_injecte_s)])
 
     async def log_arrival(self, move_id: str, person_id: str, arrive_at: int, expected_arrive_at: int,
                           started_at: Optional[int] = None, schedule_at: Optional[int] = None,
-                          timed_out: bool = False):
+                          timed_out: bool = False, retard_injecte_s: int = 0):
         # Écriture déportée hors de l'event loop (open/write bloquants) ; le lock asyncio
         # garantit l'ordre des lignes et l'unicité de l'écriture d'en-tête.
         async with self._lock:
             await asyncio.to_thread(self._write_arrival, move_id, person_id, arrive_at,
-                                    expected_arrive_at, started_at, schedule_at, timed_out)
+                                    expected_arrive_at, started_at, schedule_at, timed_out,
+                                    retard_injecte_s)
 
 
 class MoveLogger:
@@ -335,6 +409,8 @@ class MoveLogger:
         sources: str = "",
         ecartees: str = "",
         lot: str = "",
+        selected_index: Optional[int] = None,
+        origine_decision: str = "",
     ):
         async with self._lock:
             computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -390,6 +466,11 @@ class MoveLogger:
                 sources or "",
                 ecartees or "",
                 lot or "",
+                "" if selected_index is None else int(selected_index),
+                len(available_options) if available_options else 0,
+                origine_decision or "",
+                _options_descriptif(available_options),
+                *_contexte_choc(start_time),
             ]
 
             # Écriture déportée hors de l'event loop (open/write bloquants)

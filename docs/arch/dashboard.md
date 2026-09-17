@@ -160,7 +160,16 @@ statut) exécutées en direct avec la sortie affichée dans la page
 (`run_make_inline`).
 
 Les Makefile restent lus par `makefiles.py` — c'est lui qui résout la cible et ses
-variables derrière chaque bouton. Ce qui a disparu, c'est son **affichage** en
+variables derrière chaque bouton. Depuis le ticket 039 (pas 4), il **suit les `include`** :
+le Makefile racine ne porte plus que sa configuration et un `include make/*.mk`, et les
+120 cibles vivent dans les sept modules de `make/`. Sans ce suivi, le parseur lirait un
+fichier sans une seule cible et **tous** les boutons du tableau de bord tomberaient — sans
+exception ni test rouge, juste des boutons absents. `scripts/tests/test_makefiles_includes.py`
+garde ce point, et chaque `Target` porte le module qui la définit, pas le fichier racine.
+
+L'expansion s'arrête à ce qu'un `include` contient ici : une variable affectée plus haut,
+`$(sort …)`, `$(wildcard …)` et un joker. Un include qu'on ne sait pas résoudre est ignoré —
+une cible manquante vaut mieux qu'un tableau de bord qui refuse de s'ouvrir. Ce qui a disparu, c'est son **affichage** en
 catalogue : une liste de 79 cibles que personne ne parcourait, doublée par des
 boutons mieux placés. Une cible qui n'a de bouton nulle part se lance dans un
 terminal, et `make help` en donne la liste documentée — l'onglet était le seul
@@ -251,8 +260,11 @@ type, message, personne). Elle dit d'un coup d'œil ce qui coince — quota, pas
 sans historique ni dépliage.
 
 Trois blocs, dans cet ordre : **ce qui tourne d'après le disque** (mêmes exécutions
-et mêmes jeux que la tuile de la vue d'ensemble, rafraîchis toutes les 5 s), **les
-exécutions arrêtées** (10 s), puis **les cibles `make` lancées depuis cette session**.
+et mêmes jeux que la tuile de la vue d'ensemble), **les exécutions arrêtées**, puis **les
+cibles `make` lancées depuis cette session**. Les volets qui relisent le disque battent
+toutes les **15 s** (`app.py`, constante `BATTEMENT`) : la cadence doit rester plus longue
+que le travail d'un battement, sinon le tableau de bord ne cesse jamais de calculer — voir
+« Le coût d'un battement » plus bas.
 L'ordre dit la primauté : le registre de jobs ne connaît que cette session, le disque
 connaît tout le reste.
 
@@ -262,6 +274,15 @@ Dans les deux blocs d'exécutions du volet, chaque ligne est **préfixée du fou
 « — / » ferait croire à une information manquante. La tuile compacte de la vue d'ensemble le
 porte aussi, puisque c'est le même rendu (deux rendus du même état finiraient par se
 contredire).
+
+Sous la barre de chaque exécution en cours, une légende **🧾 dit ses conditions en clair**
+(spec `specs/fiche-conditions-experience.md`) : décideur, fournisseur, prompt, température,
+réflexion, population, jeu, mode, calendrier, horizon, mémoire, chaîne des véhicules,
+parallélisme, candidats max, attente max, graines. Elle est lue dans la **définition figée de
+l'exécution** (`execution.yaml`), pas décodée depuis le nom — le nom porte ces réglages en
+abrégé (`proexp04`, `t0`, `nosim`) et ne se relit plus. La tuile compacte de la vue d'ensemble
+ne la porte pas : elle reste une ligne par exécution. C'est la même fiche que celle du registre
+(cf. « La fiche des conditions » dans l'onglet 🧪 Expériences).
 
 ### Les exécutions arrêtées, leur cause, leur reprise
 
@@ -618,10 +639,10 @@ ne peut donc pas faire perdre de vue une exécution qui tourne ni ses boutons Pa
 (une exécution qui tourne est de toute façon la dernière de son expérience, donc jamais
 obsolète).
 
-**Dix colonnes, et un filtre par colonne** (spec `specs/tableau-experiences-colonnes-et-filtres.md`,
+**Les colonnes du défaut, et un filtre par colonne** (spec `specs/tableau-experiences-colonnes-et-filtres.md`,
 2026-09-11). Le tableau s'ouvre sur `experience`, `execution`, `etat`, `decideur`, `fournisseur`,
-`prompt`, `mode`, `couverture`, `composite_emd`, `composite_l1` — les quinze colonnes d'avant se
-lisaient de gauche à droite pour retrouver une ligne. Les cinq autres (`scores`, `jeu`, `jeu_etat`,
+`prompt`, `jeu`, `mode`, `couverture`, `composite_emd`, `composite_l1` — les quinze colonnes d'avant se
+lisaient de gauche à droite pour retrouver une ligne. Les autres (`scores`, `jeu_etat`,
 `chaine`, `formule`) ne sont pas perdues : le dépli **🔎 Colonnes et filtres** les rappelle d'un
 clic, et une colonne rappelée **reprend sa place** dans l'ordre canonique au lieu d'être recollée
 en bout de ligne. Chaque colonne affichée y porte son propre sélecteur, à la manière d'un tableur :
@@ -672,6 +693,40 @@ réapparaît d'elle-même tant qu'elle écrit. L'effacement définitif du dossie
 (`supprimer_experience`) n'est plus branché à l'IHM : un clic y détruisait des heures de calcul sans
 retour possible. Le tableau de bord lit et écrit des fichiers et n'importe pas la pile du
 contrôleur ; une exécution dont le dossier a disparu reste listée « archive manquante ».
+
+### La fiche des conditions, et les marqueurs ⏳ / 📅 (spec `fiche-conditions-experience`)
+
+Le nom calculé d'une expérience porte tous ses réglages en abrégé et ne se relit plus. Trois
+endroits les disent désormais **en toutes lettres**, à partir d'une seule fiche
+(`fiche_conditions`) pour que deux rendus ne puissent pas se contredire :
+
+| Où | Rendu |
+|---|---|
+| ligne cliquée du registre, sous ses boutons d'action | table **🧾 Conditions de « … »** : condition / valeur |
+| bloc « ⏳ expérience / exécution — en cours », sous sa barre | une ligne, valeurs séparées par « · » |
+| volet « 📟 Activités en cours », sous chaque barre | la même ligne |
+
+La fiche porte, dans cet ordre : décideur, fournisseur, prompt, température, réflexion (niveau
+ou budget), population, jeu, mode, calendrier, horizon, mémoire, chaîne des véhicules,
+parallélisme, candidats max, attente max, graines. Trois règles : **une valeur absente est une
+ligne absente** — jamais « — » ni un défaut inventé ; **le prompt ne figure que si le décideur en
+lit un** (même règle que la colonne `prompt`) ; pour une exécution, la fiche se lit dans la
+**définition figée** de `execution.yaml`, comme les colonnes `decideur`, `prompt` et
+`fournisseur` — deux exécutions d'une même expérience peuvent donc afficher deux fiches, et le
+fournisseur réellement sollicité l'emporte sur celui déduit de la définition. Une définition
+tronquée donne une fiche vide et une légende « conditions illisibles », pas une page qui tombe.
+
+Depuis qu'une campagne enchaîne les expériences, la colonne `etat` distingue aussi ce qui tourne
+de ce qui va tourner : **⏳** préfixe une exécution `en_cours` ; **📅 … · planifiée (campagne
+<nom>)** marque une ligne dont l'expérience figure dans les `restantes` de l'état d'une campagne
+**vivante** — `etat.json` présent, sans `terminee_le`, sans fichier `STOP`, et dont le `pid`
+existe encore sur l'hôte. Sans ce test du processus, une 📅 survivrait à un `kill` du pilote et
+promettrait des lancements que plus rien ne fera. Une exécution `epuisee` que la campagne
+reprendra porte 📅 ; ce qui tourne porte ⏳ seul, jamais les deux ; une exécution `terminee`
+n'en porte aucun même si l'état du pilote, réécrit seulement par moments, la liste encore dans
+ses `restantes` — la campagne la compte faite et ne la rejoue pas. Ces marqueurs, comme le
+suffixe « obsolète », décorent la **copie affichée** : la valeur filtrable et triable reste
+l'état nu, et filtrer sur `etat = en_cours` rend les mêmes lignes qu'avant.
 
 ### Tout ce qui vit se rafraîchit seul
 
@@ -1061,7 +1116,38 @@ le dit et ne le réécrit pas.
 change la définition pour les exécutions à venir : une case de confirmation garde le
 bouton. Les exécutions archivées ne bougent pas, chacune portant sa propre copie figée
 de la définition dans son `execution.yaml`. Dans « Mes expériences », la colonne
-`jeu_etat` dit si le jeu d'une expérience est prêt.
+`jeu` dit sur quel jeu l'exécution a tourné (voir ci-dessous) et `jeu_etat`, rappelable au
+sélecteur, dit si le jeu d'une expérience est prêt.
+
+### Le substrat de référence, et ce qui n'y est pas
+
+**La colonne `jeu` dit le substrat RÉELLEMENT couru, et ce qui a couru ailleurs est grisé**
+(spec `tableau-experiences-colonnes-et-filtres`, R21-R22 ; ticket 088, 2026-09-16). Deux
+mécanismes, et ils vont ensemble.
+
+*Le jeu affiché est celui figé dans l'exécution*, comme le décideur, le prompt et le
+fournisseur : `execution.yaml` porte le substrat sous lequel l'exécution a tourné. Lire la
+définition courante serait un piège, et il s'est refermé : le correctif du ticket 088 a
+re-pointé les définitions sur le jeu corrigé, si bien que les trente exécutions de l'ancien
+s'affichaient sous le nom du nouveau. Une expérience jamais lancée n'a rien à figer — c'est
+alors sa définition qui parle. Pas de jeu du tout : « — », jamais une case vide.
+
+*Le jeu de référence se désigne dans un fichier versionné*,
+`services/llm-agents/experiences/jeux/reference.yaml`, clé `jeu`. Toute ligne affichée qui a
+tourné sur un autre jeu est **grisée**, et leur nombre est écrit sous le tableau avec le nom de
+la référence — un composite ne se compare qu'à l'intérieur d'un même substrat : mêmes personas,
+même jour, même offre d'itinéraires, même météo. Rien n'est retiré ni bloqué pour autant : la
+ligne reste sélectionnable, reprenable, scorée. Le gris ne vit que sur la copie affichée (un
+`Styler` pandas, seul moyen qu'offre Streamlit de colorer une ligne) — tri, filtres et
+sélecteurs continuent de voir les valeurs nues.
+
+Trois abstentions délibérées : sans référence désignée (fichier absent, vide ou illisible)
+**aucune ligne n'est grisée**, et la page le dit — un gris silencieux et un gris faux se
+ressemblent trop ; une ligne dont le jeu ne se lit pas n'est jamais grisée, on ne grise que ce
+qu'on sait faux ; et le fichier est relu à chaque battement du fragment, donc changer de
+référence ne demande aucun redémarrage. Le manifeste du jeu ne pouvait pas porter ce drapeau :
+`data/jeux/` est ignoré par git, et désigner le substrat de référence est une décision
+scientifique, qui doit laisser une trace.
 
 ### Le libellé d'un jeu en construction
 
@@ -1127,7 +1213,7 @@ Un nom d'expérience est calculé et abrégé : `exp_gemini-35-fl_proexp04_jtir_
 Personne ne lit ça à l'œil. `campagne.libelle()` rend
 
 > gemini-3.5-flash-lite · T=0.0 · prompt prompt_expert_04 · cohorte population_1000_AAMAS_v6 ·
-> jeu population_1000_AAMAS_v6_20260316_EN · sans simulateur
+> jeu population_1000_AAMAS_v6_20260316_EN_c · sans simulateur
 
 en lisant **`experience.yaml`**, pas en redécoupant le nom. Relire le nom pour le gloser
 reviendrait à écrire un second décodeur, qui dériverait du premier à la première retouche des
@@ -1184,3 +1270,42 @@ Ajoute un **bloc de travail libre** rattaché à une phase (titre + description)
 et associable à un run comme une fiche du plan, mais vit dans `mes_travaux.yaml`, pas dans
 le plan canonique — de quoi tracer un travail hors des fiches prévues sans polluer
 `experiments.yaml`.
+
+---
+
+## Le coût d'un battement
+
+Les volets « temps réel » sont des `st.fragment(run_every=…)` : Streamlit rejoue leur corps
+tout seul, à intervalle fixe, sans relancer la page. La règle qui les gouverne tient en une
+phrase : **un battement doit coûter moins de temps que sa propre période.** Un volet plus lent
+que son rythme redemande du travail plus vite qu'il n'en rend, sur l'unique verrou d'exécution
+de Streamlit — la file ne se vide jamais et un cœur est saturé en permanence, sans un mot.
+
+C'est arrivé, et c'est resté invisible dix heures (2026-09-16) : `activites_en_cours()` coûtait
+**9 s à chaud, 28 s à froid**, son fragment le redemandait **toutes les 5 s**, et le tableau de
+bord a brûlé 210 minutes de CPU en dix heures à 98 %. Deux causes, toutes deux mesurées :
+
+| Cause | Mesure | Correctif |
+|---|---|---|
+| `yaml.safe_load` prend l'analyseur **Python** même quand libyaml est installé | 752 ms contre 95 ms sur les fichiers du dépôt, soit **×7,9** — 88 % du temps d'un battement | `_CHARGEUR_YAML = yaml.CSafeLoader` dans `experiences.py` |
+| le même fichier relu plusieurs fois par battement | 199 lectures pour 131 fichiers distincts ; `providers.yaml` **56 fois** par appel | `_yaml_analyse`, mémoïsé sur `(chemin, taille, mtime_ns)` |
+
+Résultat : de **9 000 ms à 49 ms** par battement, et de 98 % à 6 % d'un cœur, onglet ouvert.
+
+**La clé du cache porte le mtime, et ce n'est pas un détail.** `ajouter_variante` réécrit
+`prompts.yaml` puis le relit aussitôt pour vérifier son propre travail ; un cache qui servirait
+l'ancien contenu ferait échouer cette vérification, ou la ferait réussir à tort. Même convention
+que `cached_log_counts` et `cached_agent_states` dans `app.py`.
+
+⚠ Le dictionnaire rendu par `_yaml` est **partagé** entre appelants : aucun ne doit le modifier.
+C'était vrai des trente-deux appels au moment d'introduire le cache — un nouvel appelant qui
+mute le résultat corromprait tous les autres.
+
+**Le garde-fou.** `battement_surveille()` chronomètre chaque volet et lève une `[ALARME]` quand
+un battement dépasse sa période, sur front montant, avec retour au calme journalisé lui aussi.
+La leçon du 2026-09-16 n'est pas « c'était lent » mais « personne ne pouvait le savoir ».
+
+Ce qui est vérifié en test (`scripts/tests/test_dashboard_activites.py`) n'est pas une durée —
+une assertion sur l'horloge est instable, et c'est justement une machine chargée qu'on mesure —
+mais le **nombre d'analyses** : un second battement sans rien de changé sur le disque ne doit
+coûter aucune analyse, et un fichier réécrit doit être relu.

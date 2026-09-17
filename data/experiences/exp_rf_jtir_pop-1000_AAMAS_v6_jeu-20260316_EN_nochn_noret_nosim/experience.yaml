@@ -1,6 +1,6 @@
 nom: exp_rf_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_nochn_noret_nosim
 population:
-  chemin: /data/eqasim-output/population_1000_AAMAS_v6
+  chemin: /Users/yvesb/Documents/Projects/llm-agents-gama/data/population/population_1000_AAMAS_v6
 jeu:
   nom: population_1000_AAMAS_v6_20260316_EN
   dossier: null
@@ -41,4 +41,6 @@ vehicule_chaine: false
 verrou_retour: false
 derive_de: null
 renomme_de: null
-executions_connues: []
+executions_connues:
+- 2026-09-14_22_47_09
+- 2026-09-15_05_35_22

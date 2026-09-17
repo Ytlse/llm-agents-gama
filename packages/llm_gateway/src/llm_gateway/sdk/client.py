@@ -121,6 +121,7 @@ class LLMGatewayClient:
         backpressure_release_ratio: float = 0.2,
         circuit_failure_threshold: int = 10,
         circuit_probe_interval: float = 60.0,
+        instances_admises: list[str] | None = None,
     ):
         self._base_url = base_url.rstrip("/")
         self._wait_timeout = wait_timeout
@@ -151,6 +152,17 @@ class LLMGatewayClient:
         self._circuit_next_probe_at = 0.0
         self._circuit_probe_inflight = False
         self._circuit_waiters = 0
+        # Ticket 092 — la restriction d'instances appartient au CLIENT, pas à un appel.
+        # Le ticket 084 la posait sur le seul payload de décision ; les réflexions STM et LTM
+        # partaient sans elle et étaient servies en cascade. Mesuré le 2026-09-16 : décisions
+        # sur gemini 3.1, consolidation mémoire sur mistral, sur une expérience dont l'objet
+        # EST la mémoire. Posée ici, elle couvre les trois appels et tout appel futur.
+        self._instances_admises = list(instances_admises or [])
+        if self._instances_admises:
+            logger.info(
+                f"[gateway] restriction d'instances active sur TOUS les appels de ce client : "
+                f"{self._instances_admises}"
+            )
 
     @property
     def circuit_open(self) -> bool:
@@ -194,6 +206,11 @@ class LLMGatewayClient:
         """
         payload = request.model_dump(exclude_none=True) if isinstance(request, LLMRequest) else request
         category = payload.get("category", "unknown")
+
+        # La restriction du client ne fait que COMBLER : un appelant qui porte la sienne reste
+        # maître de son routage (cas A4 du contrat).
+        if self._instances_admises and not payload.get("instances_admises"):
+            payload = {**payload, "instances_admises": list(self._instances_admises)}
 
         # Disjoncteur ouvert : la soumission est SUSPENDUE jusqu'au rétablissement du
         # gateway (aucune décision dégradée — on attend le renouvellement des quotas).

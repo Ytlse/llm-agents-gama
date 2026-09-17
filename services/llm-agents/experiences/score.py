@@ -20,11 +20,11 @@ import json
 import sys
 import time
 from pathlib import Path
-
-from experiences.chemins import racine_depot
 from typing import Any
 
+import yaml
 from experiences import formule as F
+from experiences.chemins import racine_depot
 from loguru import logger
 
 # ── Accès au pipeline de synthèse et au moteur de loss ───────────────────────
@@ -68,6 +68,38 @@ METHODE_CHOIX_UNIQUE_MOVES = "Un seul itinéraire disponible"
 # plafonne à 0,32 point EMD ; chaîne active, il va de 2,62 à 12,22 et change le classement
 # des bras. Un seuil à 1,0 sépare exactement les deux régimes.
 ECART_LECTURES_ALARME = 1.0
+
+# ── Ticket 081 — un journal tronqué ne produit jamais de score ────────────────
+# `moves.csv` est le SUBSTRAT du composite ; `couverture.decides` compte ce que l'exécution a
+# réellement décidé. Les deux se regardaient dans le même `scores.json` sans jamais se
+# comparer. L'exécution du 2026-09-12 a été publiée à 5,35 sur 274 lignes quand son archive en
+# portait 3 299 : le chiffre a été cité dans trois documents avant d'être reconnu faux (il vaut
+# 6,17 sur le journal reconstitué).
+#
+# Seuil calé sur le balayage des 38 exécutions du dépôt (2026-09-15) : une exécution saine
+# compte 3 161 lignes pour 3 151 à 3 155 décidées, soit un déficit TOUJOURS NÉGATIF, de −0,2 à
+# −0,3 % — le journal porte en plus les lignes `sans_solution`, que `decides` exclut.
+# L'exécution fautive, elle, est à +91,3 %. Un plancher à 2 % laisse 63 lignes de marge sur
+# 3 154 et sépare les deux régimes d'un facteur 45 : il ne peut pas se déclencher à tort sur
+# l'historique connu, et il ne peut pas manquer une troncature.
+TOLERANCE_JOURNAL = 0.02
+
+# Exécutions déjà signalées dans ce processus — l'alarme part sur FRONT MONTANT. Sans cela,
+# `score --toutes` rejouerait la même ligne ERROR à chaque passage et `make error` noierait le
+# signal dans sa propre répétition. Le nom sort de l'ensemble dès que le contrôle repasse, si
+# bien qu'un journal régénéré puis retronqué ré-alarme.
+_JOURNAUX_SIGNALES: set[str] = set()
+
+
+class JournalIncomplet(ValueError):
+    """Le journal des mouvements ne recouvre pas les décisions archivées : pas de score.
+
+    Distincte du refus de R21 (« exécution non terminée ») parce qu'elle appelle un remède
+    différent : R21 attend la fin de l'exécution, celle-ci demande de régénérer le journal
+    (`python -m experiences journal <execution> --regenerer`) et invalide le `scores.json`
+    qui aurait été écrit sur le journal tronqué.
+    """
+
 
 # Chemin canonique du référentiel dans le dépôt (EF-77 : lu, jamais recopié).
 CEREMA_DEPOT = REPO_ROOT / "scripts" / "data" / "population" / "cerema_values.yaml"
@@ -129,6 +161,125 @@ def scorer_pour(formule: F.Formule) -> tuple[Any | None, str | None]:
     return scorer, None
 
 
+_MOTIF_COUPE = {
+    "aucune": "toutes les décisions du journal, tentative la plus récente",
+    "horizon": "premier jour simulé (horizon déclaré au-delà d'un jour), tentative la plus récente",
+    "repetitions": "premier jour simulé (couples répétés dans le journal), tentative la plus récente",
+    "forcee": "premier jour simulé (coupe imposée par l'appelant), tentative la plus récente",
+}
+
+
+def _libelle_perimetre(stats: dict) -> str:
+    """R5 — le périmètre effectivement scoré, dit en clair à côté du compte qu'il porte.
+
+    Un compte posé à côté d'un composite qu'il ne recouvre pas est l'erreur que le ticket 047
+    a fermée ; un périmètre annoncé qui n'est plus celui appliqué en serait la récidive.
+    """
+    motif = str(stats.get("coupe") or "aucune")
+    base = _MOTIF_COUPE.get(motif, _MOTIF_COUPE["aucune"])
+    repetes = int(stats.get("couples_repetes") or 0)
+    doublons = int(stats.get("exclues_doublon") or 0)
+    detail = f" ; {repetes} couple(s) répété(s)" if repetes else ""
+    detail += f" ; {doublons} doublon(s) écarté(s)" if doublons else ""
+    return f"lecture du score : {base}{detail}"
+
+
+def _horizon_jours(dossier: Path) -> int | None:
+    """Nombre de jours que l'exécution déclarait couvrir — `None` si l'archive ne le dit pas.
+
+    Sert au critère de coupe du périmètre (ticket 057, R2) : au-delà d'un jour, le journal
+    porte plusieurs journées et le score n'en retient qu'une. Lu dans `execution.yaml`, qui
+    fige la définition de l'expérience au lancement — pas dans `data/experiences/<nom>/`, qui
+    a pu être redéfini depuis.
+    """
+    try:
+        config = yaml.safe_load(
+            (dossier / "execution.yaml").read_text(encoding="utf-8")
+        )
+    except (OSError, yaml.YAMLError):
+        return None
+    valeur = ((config or {}).get("experience") or {}).get("horizon_jours")
+    try:
+        return int(valeur)
+    except (TypeError, ValueError):
+        return None
+
+
+def _couverture_de(synthese: dict) -> dict:
+    """Le bloc `couverture` d'une synthèse, quel que soit l'endroit où il a été écrit."""
+    return (
+        (synthese.get("parts_modales") or {}).get("couverture")
+        or synthese.get("couverture")
+        or {}
+    )
+
+
+def mesurer_perimetre(lignes_journal: int, synthese: dict) -> dict:
+    """Constat brut, sans jugement : le journal recouvre-t-il les décisions archivées ?
+
+    Séparée de la règle pour que le balayage (`journal --verifier`) puisse constater sans
+    lever et sans alarmer. `complet` est `None` quand `couverture.decides` est absent ou nul :
+    il n'y a alors rien à comparer, et dire « complet » serait prendre la vacuité pour une
+    vérification — dans ce dépôt, c'est le motif d'erreur le plus tenace.
+    """
+    decides = (_couverture_de(synthese) or {}).get("decides")
+    decides = int(decides) if isinstance(decides, (int, float)) else None
+    ecart = None if not decides else decides - lignes_journal
+    relatif = None if not decides else ecart / decides
+    return {
+        "lignes_journal": int(lignes_journal),
+        "decides": decides,
+        "ecart": ecart,
+        "ecart_relatif": relatif,
+        "tolerance": TOLERANCE_JOURNAL,
+        "complet": None if relatif is None else relatif <= TOLERANCE_JOURNAL,
+    }
+
+
+def verifier_perimetre(dossier: Path, stats: dict, synthese: dict) -> dict:
+    """R24 — refuse de scorer un journal qui ne recouvre pas les décisions archivées.
+
+    Le compte comparé est `stats["total"]`, le nombre BRUT de lignes du fichier, avant la
+    coupe au premier jour simulé et avant `latest_attempts` : c'est bien la question « le
+    journal a-t-il été écrit en entier ? », pas « combien de lignes entrent au composite ? ».
+
+    Lève `JournalIncomplet` sous le seuil, après une `[ALARME]` à front montant.
+    """
+    constat = mesurer_perimetre(int(stats.get("total") or 0), synthese)
+    cle = str(Path(dossier).resolve())
+    if constat["complet"] is not False:
+        _JOURNAUX_SIGNALES.discard(cle)
+        return constat
+    if cle not in _JOURNAUX_SIGNALES:
+        _JOURNAUX_SIGNALES.add(cle)
+        causes = [
+            str(i.get("cause"))
+            for i in (synthese.get("interruptions") or [])
+            if i.get("cause")
+        ]
+        logger.error(
+            f"[ALARME] Journal des mouvements incomplet — "
+            f"{synthese.get('experience')}/{synthese.get('execution') or Path(dossier).name} : "
+            f"{constat['lignes_journal']} ligne(s) dans moves.csv pour "
+            f"{constat['decides']} décision(s) archivées, soit "
+            f"{100 * constat['ecart_relatif']:.1f} % de déficit (tolérance "
+            f"{100 * TOLERANCE_JOURNAL:.0f} %). Cause probable : "
+            + (
+                f"interruption(s) {', '.join(causes)} — les décisions resservies à la "
+                f"reprise n'écrivaient pas de ligne de journal."
+                if causes
+                else "aucune interruption consignée ; le journal a été tronqué autrement."
+            )
+            + " AUCUN score n'est écrit : un composite calculé sur ce journal porterait sur "
+            "une fraction du travail sans le dire. Régénérer le journal avec "
+            f"`python -m experiences journal {Path(dossier).name} --regenerer`, puis rescorer."
+        )
+    raise JournalIncomplet(
+        f"journal incomplet, non scorable (R24) : {Path(dossier).name} — "
+        f"{constat['lignes_journal']} ligne(s) pour {constat['decides']} décisions archivées"
+    )
+
+
 def _detail_par_dimension(frame_attendu: list[dict], cerema: dict) -> dict:
     """Détail par strate pour les 7 dimensions (R5, R16).
 
@@ -144,6 +295,31 @@ def _detail_par_dimension(frame_attendu: list[dict], cerema: dict) -> dict:
             "strates": strates,
         }
     return detail
+
+
+def lire_perimetre(
+    dossier: str | Path, exclusions: list[str]
+) -> tuple[list[dict], dict]:
+    """Le périmètre de score d'une exécution — **le seul endroit** qui le décide (ticket 057).
+
+    Deux lectures sortent d'ici, la principale et celle hors itinéraire unique ; les tests et
+    toute analyse qui veut refaire le calcul passent par cette fonction plutôt que de
+    re-spécifier la coupe. C'est cette duplication-là qui avait laissé le périmètre du scoreur
+    diverger de celui que les vérifications croyaient reproduire.
+
+    La coupe au premier jour simulé ne s'applique QUE s'il y a de quoi couper (R2/R3) :
+    horizon déclaré au-delà d'un jour, ou couples répétés dans le journal. Appliquée
+    systématiquement, elle retirait 866 décisions sur 3 299 des exécutions sans simulateur
+    pour zéro doublon — dont 797 départs du matin, que `jeu.py:deplacements_attendus()` date
+    du lendemain parce que l'activité « home » d'origine enjambe minuit.
+    """
+    dossier = Path(dossier)
+    return frames.read_moves(
+        dossier / F_MOVES,
+        exclusions,
+        first_day_only="auto",
+        horizon_jours=_horizon_jours(dossier),
+    )
 
 
 def calculer(
@@ -167,7 +343,11 @@ def calculer(
     moves = dossier / F_MOVES
     cerema_path = _resoudre_cerema(synthese)
     cerema = frames.load_cerema(cerema_path)
-    rows, stats = frames.read_moves(moves, EXCLURE_METHODES, first_day_only=True)
+    rows, stats = lire_perimetre(dossier, EXCLURE_METHODES)
+    # R24 (ticket 081) — AVANT tout calcul : un journal qui ne recouvre pas les décisions
+    # archivées ne produit pas de score. Placé ici, au seul endroit par lequel passent la
+    # clôture, `score --execution` et le recalcul global.
+    perimetre = verifier_perimetre(dossier, stats, synthese)
 
     variants = frames.simulation_frames(rows)
     attendu = variants["attendu"]
@@ -198,8 +378,8 @@ def calculer(
     # choix à itinéraire unique déplace le composite de −3,75 à +12,22 points EMD selon le
     # bras, et qu'elle change le classement (`lgbm` 4,50 → 10,46 passe derrière `klr`). Un
     # composite publié sans sa seconde lecture ne dit pas s'il note un décideur ou une offre.
-    rows_hors, _ = frames.read_moves(
-        moves, EXCLURE_METHODES + [METHODE_CHOIX_UNIQUE_MOVES], first_day_only=True
+    rows_hors, _ = lire_perimetre(
+        dossier, EXCLURE_METHODES + [METHODE_CHOIX_UNIQUE_MOVES]
     )
     attendu_hors = frames.simulation_frames(rows_hors)["attendu"]
     bruts_hors = scorer.score(attendu_hors, cerema) if attendu_hors else {}
@@ -219,7 +399,7 @@ def calculer(
         "part": (n_forces / n_scorees) if n_scorees else None,
         "n_scorees": n_scorees,
         "n_hors_choix_unique": n_hors,
-        "perimetre": "lecture du score : premier jour simulé, tentative la plus récente",
+        "perimetre": _libelle_perimetre(stats),
         "n_execution": forces_execution.get("n"),
         "part_execution": forces_execution.get("part"),
         "perimetre_execution": "toutes les décisions archivées (synthese.json)",
@@ -230,11 +410,7 @@ def calculer(
         ),
     }
 
-    couverture = (
-        (synthese.get("parts_modales") or {}).get("couverture")
-        or synthese.get("couverture")
-        or {}
-    )
+    couverture = _couverture_de(synthese)
 
     contenu = {
         "execution": synthese.get("execution") or dossier.name,
@@ -248,6 +424,10 @@ def calculer(
             "sha256": _sha256_fichier(cerema_path),
         },
         "couverture": couverture,
+        # R24 (ticket 081) — le contrôle qui a AUTORISÉ ce score, publié avec lui. Un score
+        # sans ce champ a été calculé avant la règle : `scores_perimes` le déclare périmé
+        # pour forcer un calcul complet, une fois.
+        "perimetre_verifie": perimetre,
         "composite": {
             "emd_jsd": emd.get("composite"),
             "l1": l1.get("composite"),
@@ -383,6 +563,26 @@ def ecrire(dossier: str | Path, contenu: dict) -> Path:
     return p
 
 
+def _couronnes_fantomes(scores: dict) -> bool:
+    """Ticket 082 — ce `scores.json` porte-t-il une couronne de résidence non traduite ?
+
+    Signature exacte de la panne : la ligne « hors référentiel » de la dimension
+    `lieu_residence` porte une clé comme `1st_ring`, que l'ancien `normalize_place`
+    fabriquait sur un libellé anglais et que la référence ne ventile pas. Les trois
+    couronnes hors Toulouse manquent alors aux strates.
+
+    Ce n'est pas un critère d'apparence — « moins de quatre strates » se produirait aussi
+    sur un run légitimement petit. C'est la trace de la clé fautive elle-même.
+    """
+    strates = ((scores.get("detail") or {}).get("lieu_residence") or {}).get("strates")
+    for strate in strates or []:
+        if strate.get("cat") != frames.OFF_REFERENCE_ROW:
+            continue
+        if set(strate.get("categories") or {}) & frames.PLACE_CLES_FANTOMES:
+            return True
+    return False
+
+
 def scores_perimes(dossier: str | Path) -> bool:
     """R17 — un scores.json calculé sur un moves.csv qui a changé depuis est périmé.
 
@@ -391,6 +591,26 @@ def scores_perimes(dossier: str | Path) -> bool:
     ticket n'a pas `scores_bruts_hors_choix_unique`, donc un rejeu le laisserait à « non
     mesuré » pour toujours, et tout l'historique resterait muet sur la grandeur que ce
     ticket rend obligatoire. Le déclarer périmé force un calcul complet — une fois.
+
+    Ticket 082 — l'est enfin celui dont les couronnes de résidence n'ont pas été traduites.
+    Même raisonnement, même remède : le rejeu ne recalcule QUE le composite, jamais le
+    détail par strate. Sans ce critère, `--toutes` réécrirait les exécutions v6 scorées avec
+    leurs pages amputées de trois couronnes sur quatre, et la correction n'atteindrait
+    jamais un seul fichier publié.
+
+    Ticket 081 — l'est aussi celui qui ne porte pas `perimetre_verifie`, c'est-à-dire tout
+    score écrit avant que la règle R24 n'existe. Le rejeu hors-ligne ne relit jamais
+    `moves.csv` : sans ce critère, un score calculé sur un journal tronqué se rejouerait
+    indéfiniment sous les nouvelles formules, en gardant son composite faux et en ne
+    déclenchant jamais le contrôle. Le calcul complet qu'il force est ce qui fait passer
+    l'historique entier devant le garde-fou, une fois.
+
+    Ticket 057 — l'est enfin celui dont `lecture` ne dit pas quelle coupe a été appliquée,
+    donc tout score écrit quand la coupe au premier jour simulé était systématique. Le
+    périmètre lui-même a changé : ces scores portent 2 347 décisions là où le journal en
+    compte 3 154, et aucun rejeu de formule ne les corrigerait — il recompose les composites
+    depuis des scores bruts calculés sur l'ancien périmètre. Même remède que les précédents :
+    un calcul complet, une fois.
     """
     dossier = Path(dossier)
     scores = _lire_json(dossier / F_SCORES)
@@ -398,7 +618,42 @@ def scores_perimes(dossier: str | Path) -> bool:
         return True
     if not (scores.get("scores_bruts_hors_choix_unique") or {}).get("emd_jsd"):
         return True
+    if _couronnes_fantomes(scores):
+        return True
+    if not scores.get("perimetre_verifie"):
+        return True
+    if not (scores.get("lecture") or {}).get("coupe"):
+        return True
     return scores.get("moves_sha256") != _sha256_fichier(dossier / F_MOVES)
+
+
+def invalider(dossier: str | Path, motif: str) -> Path | None:
+    """Retire de la circulation un `scores.json` que la règle refuse désormais (R24).
+
+    Renommé, pas supprimé : le fichier reste auditable — c'est lui qui a produit le chiffre
+    publié, et l'effacer rendrait la correction impossible à retracer. La page HTML, elle,
+    est supprimée : elle n'a pas d'autre rôle que d'être lue, et un rendu qui survit à son
+    score se lit comme un score valide.
+    """
+    dossier = Path(dossier)
+    source = dossier / F_SCORES
+    if not source.is_file():
+        return None
+    cible = dossier / "scores.invalide.json"
+    contenu = _lire_json(source)
+    contenu["invalide"] = {"motif": motif, "le": frames_now()}
+    cible.write_text(
+        json.dumps(contenu, ensure_ascii=False, indent=1, sort_keys=True),
+        encoding="utf-8",
+    )
+    source.unlink()
+    (dossier / "synthese_scores.html").unlink(missing_ok=True)
+    logger.error(
+        f"[ALARME] Score invalidé — {dossier.name} : {motif}. Composite publié "
+        f"{(contenu.get('composite') or {}).get('emd_jsd')} écarté ; l'ancien fichier est "
+        f"conservé sous {cible.name} pour audit, la page de synthèse est supprimée."
+    )
+    return cible
 
 
 def score_execution(
@@ -414,6 +669,12 @@ def score_execution(
     formule = formule or registre.reference
     try:
         contenu = calculer(dossier, formule, scorer=scorer)
+    except JournalIncomplet as exc:
+        # R24 — le refus ne suffit pas : un `scores.json` calculé AVANT la règle est encore
+        # sur le disque, lisible par la page et le tableau comme s'il était valide. C'est
+        # exactement ce qui s'est produit le 2026-09-12. On le retire de la circulation.
+        invalider(dossier, str(exc))
+        return None
     except ValueError as exc:
         logger.info(f"[score] {dossier.name} non scoré : {exc}")
         return None
@@ -551,15 +812,20 @@ def frames_now() -> str:
 
 
 __all__ = [
+    "TOLERANCE_JOURNAL",
+    "JournalIncomplet",
     "calculer",
     "ecrire",
     "est_reference",
     "est_terminee",
+    "invalider",
+    "mesurer_perimetre",
     "rejouer",
     "rescorer_tout",
     "score_execution",
     "scorer_a_la_cloture",
     "scorer_pour",
     "scores_perimes",
+    "verifier_perimetre",
     "volet_pour",
 ]

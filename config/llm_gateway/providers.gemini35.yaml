@@ -1,0 +1,50 @@
+# config/llm_gateway/providers.gemini35.yaml — cas d'étude « choc et changement d'habitude ».
+#
+# Fichier de fournisseurs RESTREINT : `gemini-3.5-flash-lite` et rien d'autre. Même raison qu'à
+# `providers.gemini31.yaml` : la clé Google porte neuf instances, et la blanchir en retirerait
+# huit autres. Le seul moyen de n'avoir qu'un modèle est de ne déclarer que lui.
+#
+# Les deux instances sont recopiées À L'IDENTIQUE du fichier complet. Elles se distinguent par
+# leur CLÉ (projets Google différents), donc par leur seau de quota : 2 x 500 requêtes/jour,
+# remises à zéro à minuit heure du Pacifique, soit 9 h à Paris.
+#
+# USAGE :
+#   LLM_GATEWAY_PROVIDERS_FILE=/app/config/llm_gateway/providers.gemini35.yaml \
+#     make run OFFLINE=1 CACHE=0 CHOC=c6_voiture_suspecte
+#
+# ⚠ Ce fichier ne doit PAS devenir le fichier par défaut : sans cascade, une panne Google arrête
+# le run au lieu de le faire glisser sur mistral. C'est voulu ici, et seulement ici.
+
+providers:
+  google_gemini35_key1:
+    thinking_levels:
+    - minimal
+    - low
+    - medium
+    - high
+    adapter: google
+    quota_reset_tz: America/Los_Angeles
+    rpm_limit: 15
+    tpm_limit: 250000
+    rpd_limit: 500
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    default_model: gemini-3.5-flash-lite
+    weight: 1.0
+    concurrency_limit: 2
+    disable_timeout: 120
+  google_gemini35_key2:
+    thinking_levels:
+    - minimal
+    - low
+    - medium
+    - high
+    adapter: google
+    quota_reset_tz: America/Los_Angeles
+    rpm_limit: 15
+    tpm_limit: 250000
+    rpd_limit: 500
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    default_model: gemini-3.5-flash-lite
+    weight: 1.0
+    concurrency_limit: 2
+    disable_timeout: 120

@@ -21,8 +21,10 @@ Lancement : `make dashboard` depuis la racine du dépôt.
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -233,6 +235,52 @@ def status_dot(kind: str) -> str:
     return {"good": "🟢", "warning": "🟠", "critical": "🔴", "muted": "⚪"}.get(kind, "⚪")
 
 
+# ── Battement des fragments ──────────────────────────────────────────────────
+
+#: Période des volets qui relisent le disque. Elle valait 5 s pour certains, alors qu'un
+#: battement en coûtait 9 à 28 — le volet redemandait donc du travail six fois plus vite
+#: qu'il n'en rendait, sur l'unique verrou d'exécution de Streamlit. Le tableau de bord ne
+#: cessait plus jamais de calculer : mesuré le 2026-09-16, 210 minutes de CPU en 10 heures,
+#: à 98 % en continu. Un battement coûte aujourd'hui moins de 100 ms.
+BATTEMENT = "15s"
+
+_JOURNAL = logging.getLogger(__name__)
+#: Front montant de l'alarme, par volet : on la lève une fois, pas à chaque battement.
+_BATTEMENT_LENT: dict[str, bool] = {}
+
+
+def battement_surveille(nom: str, periode_s: float = 15.0):
+    """Décorateur : journalise une [ALARME] quand un volet met plus de temps que sa période.
+
+    C'est exactement le défaut qui a tenu dix heures sans le moindre signal — un volet plus
+    lent que son propre rythme sature un cœur pour toujours, sans rien dire. Front montant
+    pour ne pas noyer le journal, et retour au calme journalisé lui aussi : un tableau de
+    bord muet quand tout va bien ne permet pas de distinguer « ça marche » de « ça ne
+    tourne plus ».
+    """
+    def decorateur(fn):
+        def enveloppe(*args, **kwargs):
+            debut = time.perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                duree = time.perf_counter() - debut
+                lent = duree > periode_s
+                if lent and not _BATTEMENT_LENT.get(nom):
+                    _JOURNAL.error(
+                        f"[ALARME] volet {nom} : un battement a pris {duree:.1f} s pour une "
+                        f"période de {periode_s:.0f} s. Il redemande du travail plus vite "
+                        f"qu'il n'en rend : le tableau de bord va saturer un cœur en continu.")
+                elif _BATTEMENT_LENT.get(nom) and not lent:
+                    _JOURNAL.info(f"volet {nom} : battement revenu à {duree * 1000:.0f} ms, "
+                                  f"sous sa période de {periode_s:.0f} s.")
+                _BATTEMENT_LENT[nom] = lent
+        enveloppe.__name__ = getattr(fn, "__name__", nom)
+        enveloppe.__doc__ = fn.__doc__
+        return enveloppe
+    return decorateur
+
+
 # ── Barre latérale ────────────────────────────────────────────────────────────
 @st.fragment(run_every="10s")
 def render_sidebar_jobs() -> None:
@@ -336,13 +384,15 @@ def render_jobs_live() -> None:
         render_job(job, expanded=(index == 0))
 
 
-@st.fragment(run_every="5s")
+@st.fragment(run_every=BATTEMENT)
+@battement_surveille("activites_disque")
 def render_activites_disque() -> None:
     """Exécutions et jeux en cours d'après le DISQUE : indépendant du registre de cette session."""
     experiences.rendre_activites(st, experiences.activites_en_cours())
 
 
-@st.fragment(run_every="10s")
+@st.fragment(run_every=BATTEMENT)
+@battement_surveille("reprenables_disque")
 def render_reprenables_disque() -> None:
     """Les exécutions ARRÊTÉES et leur cause, avec de quoi les relancer.
 
@@ -356,7 +406,8 @@ def render_reprenables_disque() -> None:
     experiences.rendre_reprenables(st, experiences.interrompues(), lancer=launch_target)
 
 
-@st.fragment(run_every="10s")
+@st.fragment(run_every=BATTEMENT)
+@battement_surveille("sonde_conteneurs")
 def render_sonde_conteneurs() -> None:
     """La sonde des conteneurs : son bouton, et ce qu'elle a relevé.
 
@@ -399,7 +450,8 @@ def render_sonde_conteneurs() -> None:
             st.caption(alarme[:300])
 
 
-@st.fragment(run_every="5s")
+@st.fragment(run_every=BATTEMENT)
+@battement_surveille("derniere_erreur_llm")
 def render_derniere_erreur_llm() -> None:
     """La dernière erreur LLM remontée — une seule ligne, remplacée à chaque nouvelle.
 

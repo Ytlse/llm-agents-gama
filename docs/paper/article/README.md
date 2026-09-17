@@ -24,22 +24,50 @@ modification du fichier, à mettre à jour **dans la même passe** que le texte 
 version, eux, restent dans l'en-tête. Un commentaire qui ne bouge pas quand le texte bouge est
 pire que pas de date du tout.
 
+**Pas de formule-slogan en tête de paragraphe.** « Une famille, pas un oracle désigné »,
+« X, pas Y », « ceci n'est pas cela » : ces tournures annoncent une posture au lieu d'énoncer un
+fait, elles ne se vérifient pas, et elles survivent aux mesures qui les contredisent — celle-là
+est restée en place alors que le § 4.4 désignait l'oracle sous critère écrit. Un paragraphe
+commence par ce qu'il établit.
+
+**Le chapitre ne plaide pas.** Une phrase qui défend un choix contre une objection que personne
+n'a formulée sort du texte : « ce n'est pas un raffinement de présentation », « elle n'est pas
+cosmétique », la mise en garde méthodologique préventive contre un test qu'on n'emploie pas, la
+déclaration défensive d'un réglage. Le chapitre dit ce qu'il fait et sur quoi, et prend position
+avec ses chiffres ; l'objection se traite au chapitre des limites, ou pas du tout. Corollaire :
+un chiffre qui n'alimente aucune affirmation du chapitre sort du corps du texte, et vit en
+commentaire HTML ou en annexe. Règle tirée de la relecture du chapitre 4, 16 septembre 2026.
+
+**Ce qui n'entre pas dans le texte.** Une phrase qui décrit la fabrication plutôt que la mesure
+n'a pas sa place dans un chapitre : versions antérieures archivées, dossier « immuable » ou « en
+service », fichier « figé dans le dépôt », empreintes, ce qui est gelé où. Le texte dit ce qui est
+mesuré, sur quoi et comment ; la traçabilité vit dans les commentaires HTML `<!-- source: … -->`
+à côté du chiffre, et dans le dépôt.
+
 ## État d'avancement
 
 | # | Chapitre | EN | FR | LaTeX | Relecture |
 |---|---|---|---|---|---|
-| 0 | Résumé (*abstract*) | `v0.4` | `v0.4` | `v0.4` | [00](relecture/00_abstract.md) |
-| 1 | Introduction | `v0.19` | `v0.19` | `v0.19` | [01](relecture/01_introduction.md) |
+| 0 | Résumé (*abstract*) | `v0.6` | `v0.6` | `v0.6` | [00](relecture/00_abstract.md) |
+| 1 | Introduction | `v0.22` | `v0.22` | `v0.22` | [01](relecture/01_introduction.md) |
 | 2 | État de l'art (*related work*) | `v0.17` | `v0.17` | `v0.17` | dans le fichier du ch. 1 |
-| 3 | Le dispositif (*architecture*) | — | `brouillon v0.4` | — | — |
-| 4 | Métriques et socle d'évaluation | — | `brouillon v0.8` | — | — |
-| 4.5 | Calibration du prompt (optimisation réfléchie) | — | `brouillon v0.1` | — | — |
-| 5 | Évaluation sous prompt factuel neutre et circonstancié et variabilité | — | `brouillon v0.2` | — | — |
-| 6 | Ablation en quatre paliers et références tabulaires | — | `brouillon v0.1` | — | — |
+| 3 | Le dispositif (*architecture*) | `brouillon v0.5` | `brouillon v0.5` | `brouillon v0.5` | — |
+| 4 | Métriques et socle d'évaluation | — | `brouillon v0.16` | `v0.16` | — |
+| 5 | Quatre façons de choisir, une seule information *(protocole)* | — | `brouillon v0.8` | — | — |
+| 6 | Résultats | — | `brouillon v0.4` | — | — |
 | 7 | Régimes non tabulés | — | brouillon | — | — |
 | 8 | Limites et implications hybrides | — | brouillon | — | — |
 | 9 | Conclusion | — | brouillon | — | — |
 | 99 | Annexes techniques | — | brouillon | — | — |
+
+**Restructuration du 15 septembre 2026 — chapitres 5 et 6.** Le chapitre intercalaire 4.5 **a été
+absorbé** par le chapitre 5, qui devient le chapitre de **protocole** (ce que l'on compare) ; le 6
+reste celui des **résultats**. Le fichier d'origine est archivé sous
+[`../archive/04.5_prompt_calibration_v0.1.md`](../archive/04.5_prompt_calibration_v0.1.md). Le titre du chapitre 6 n'est plus arrêté : les scores recalculés
+depuis le dépôt contredisent l'hypothèse H0 de non-atteinte qu'il devait établir. Idée directrice,
+titre et répercussions sur le résumé, le § 1.3 et le chapitre 9 sont en décision au
+[ticket 080](../../tickets/ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md).
+L'avancement document par document du français est tenu dans [`fr/README.md`](fr/README.md).
 
 ## L'ordre de travail : le français d'abord, les traductions à la fin
 
@@ -49,7 +77,7 @@ arrêté. `en/` reste le texte de référence pour la soumission — c'est l'ord
 change, pas le statut des arbres.
 
 Conséquence sur la parité : tant qu'un chapitre est en `brouillon`, l'absence d'anglais et de LaTeX
-est normale et `make paper-parite` ne la compte pas comme un écart. Les chapitres 3 (`brouillon v0.4`) et 4 (`brouillon v0.5`) sont les premiers
+est normale et `make paper-parite` ne la compte pas comme un écart. Les chapitres 3 (`brouillon v0.5`) et 4 (`brouillon v0.5`) sont les premiers
 écrits dans cet ordre : texte neuf, et non un extrait du manuscrit.
 
 `brouillon` = texte français extrait du manuscrit détaillé `v1.6` (3 septembre 2026), **antérieur**

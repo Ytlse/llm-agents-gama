@@ -1,15 +1,9 @@
 # Ticket 046 — L'agent voit sa journée, le modèle tabulaire non : que dit le contrat ?
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
-> vérité. Ouvert le 2026-09-11 à la demande de l'auteur, **rien n'est lancé**.
+> vérité. Ouvert le 2026-09-11 à la demande de l'auteur. **CLOS le 2026-09-17 (Terminé)**.
 >
-> **Ce ticket n'implémente rien. Il examine des solutions et les chiffre.** Décision de
-> l'auteur à l'ouverture : *en attendant, on reste en l'état* — l'agent garde son anticipation,
-> le protocole ne bouge pas, et le [ticket 045](ticket_045_substrat_unique_v5_et_reconstruction_des_experiences.md)
-> continue sur le substrat v5 sans attendre cette réponse.
->
-> Prérequis : aucun. **Bloque** la publication de la section 1.3 et de tout chiffre qui s'en
-> réclame, parce qu'aucune mesure ne se publie sous un contrat faux.
+> **Arbitrage final :** Option C retenue et rédigée dans le manuscrit (Résumé, § 1.3 de l'Introduction et § 4.3 du Chapitre 4). L'anticipation de la journée via l'agenda et la météo est conservée et le surplus d'information est formellement déclaré dans le contrat d'évaluation plutôt que de prétendre à une parité stricte d'information. L'Option D a été instruite au ticket 057. Le protocole expérimental reste en l'état sans coût computationnel additionnel.
 
 ## Le fait, en une phrase
 

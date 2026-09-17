@@ -467,6 +467,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true",
                         help="affiche le bilan sans écrire providers.yaml")
+    parser.add_argument("--provider", type=str, default=None,
+                        help="filtre sur un adapter ou une instance spécifique (ex: groq, google, mistral)")
     args = parser.parse_args()
 
     env = load_env(ENV_FILE)
@@ -477,7 +479,7 @@ def main() -> int:
 
     # Quotas Google (une seule fois, partagés entre instances)
     google_quotas: dict[str, dict[str, int]] = {}
-    if any(c.get("adapter", n) == "google" for n, c in cfg.items()):
+    if (args.provider is None or args.provider == "google") and any(c.get("adapter", n) == "google" for n, c in cfg.items()):
         try:
             google_quotas = google_freetier_quotas()
         except Exception as e:
@@ -488,6 +490,8 @@ def main() -> int:
 
     for name, c in cfg.items():
         adapter = c.get("adapter", name)
+        if args.provider and args.provider not in (adapter, name):
+            continue
         base_url, model = c["base_url"], c["default_model"]
         key = env.get(f"PROVIDER_KEYS__{name}") or env.get(f"PROVIDER_KEYS__{adapter}")
         if not key:
@@ -562,6 +566,8 @@ def main() -> int:
         return f"{adapter}_" + re.sub(r"[^a-z0-9]+", "_", model.lower()).strip("_")
 
     for adapter, fresh in sorted(fresh_by_adapter.items()):
+        if args.provider and args.provider != adapter:
+            continue
         if adapter == "mistral":
             # quota PAR COMPTE, partagé entre modèles : un modèle de plus
             # n'apporte aucune capacité — information seulement

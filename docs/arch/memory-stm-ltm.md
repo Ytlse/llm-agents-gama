@@ -429,6 +429,47 @@ la trace lisible du changement d'habitude que l'expérience d'hystérésis cherc
 Le panier `(mode, motif)` désigne un **ensemble** de candidats, jamais un emplacement unique :
 une identité par couple condamnerait l'agent à une seule pensée par mode et par motif.
 
+#### Compter ces opérations (ticket 093)
+
+Les quatre opérations sont écrites dans le journal lisible `memoires/<agent>.md`, qui **n'est pas
+une source de mesure** — son propre en-tête le dit. Depuis le ticket 093, une trace structurée les
+consigne aussi : une ligne JSONL par opération dans `operations_concept.jsonl`, sous
+`agent.trace_concepts_enabled` (éteint par défaut). Elle est **gelée pendant le rejeu** d'une
+reprise : une opération rejouée n'est pas une opération, la mémoire est gelée et ne décide rien.
+
+C'est la courbe la plus parlante du dispositif. Mesuré sur dix jours et cinq agents : **38 créés,
+61 confirmés, une seule contradiction** — celle de Corinne, le jour du choc. Sans événement
+injecté, la mémoire n'a jamais rien révisé.
+
+⚠ Trace éteinte, les colonnes de `<run>/mesures/memoire_par_jour.csv` restent **vides** et non à
+zéro : « aucune contradiction » et « on ne compte pas les contradictions » ne doivent pas se citer
+pareil. Voir `docs/arch/mesures-personas.md`.
+
+### Le vocabulaire des modes (ticket 077, lot A)
+
+`mode_canonique()` accepte **deux vocabulaires**, et c'est délibéré. Les décisions d'itinéraire
+portent des étiquettes de **jambes** (`foot`, `bus`, `bicycle`), que la hiérarchie AUAT/CEREMA
+sait ramener à un mode. Le schéma JSON de la réflexion impose au modèle les modes **canoniques**
+(`walking`, `cycling`, `public_transport`, `train`, `motorbike`, `car`, plus `any` qui signifie
+« ce concept ne porte pas sur un mode »).
+
+⚠ **Jusqu'au 2026-09-15, seul le premier vocabulaire traversait.** Sur les sept valeurs que le
+schéma autorise, `car` était la seule à être aussi une étiquette de jambe ; les six autres
+rendaient `None`. Le run de trente jours du ticket 075 en porte la trace complète :
+
+| Conséquence | Mesure |
+|---|---|
+| Concepts sans axe d'objet | 211 sur 231 |
+| Appels de réflexion sans aucune croyance montrée | 159 blocs sur 235 (68 %), et 63 sur 63 pour l'agent sans voiture |
+| Opérations de correction appliquées | 0 précision, 1 contradiction |
+| Concepts restés à confiance 0,50 | 225 sur 231 |
+| Part du top-K venant du seul vivier sémantique | 100 % |
+
+Le modèle n'y est pour rien : quand une croyance lui est montrée, il la confirme **74 fois sur
+76**. La liste des modes canoniques acceptés est **dérivée de la ressource gelée**
+(`canonical_order()`), jamais écrite dans `axes.py` : une liste recopiée divergerait le jour où
+la hiérarchie bouge.
+
 ### Format des concepts (5-tuple)
 
 Chaque concept extrait est un tableau JSON de 5 éléments :
@@ -847,6 +888,14 @@ exclu. C'est un compteur par agent — modes retenus et retards subis, par coupl
 est alimenté à l'ARRIVÉE, seul endroit où le mode retenu et le retard réellement subi sont connus
 ensemble.
 
+⚠ **Le mode ne se relit pas dans la mémoire courte** (ticket 077, lot C, révisé le 2026-09-15).
+Une première version cherchait, à l'arrivée, l'entrée de décision du trajet dans le tampon court.
+Les consolidations vident ce tampon entre le départ et l'arrivée : la décision avait le plus
+souvent disparu, et le journal enregistrait **2 trajets pour 40 arrivées** — le bloc « Mes
+habitudes » était alors absent de **tous** les prompts de décision. Le contrôleur note donc le
+mode retenu au moment de la DÉCISION, dans une table `(agent, activité) → mode` purgée à la
+lecture. Le motif et le créneau, eux, viennent de l'arrivée : ce sont les seuls qu'elle porte.
+
 Le dernier bloc est l'endroit où l'hystérésis devient lisible dans le prompt lui-même, et non
 plus seulement dans les statistiques de sortie.
 
@@ -919,6 +968,13 @@ documentation.
 | `stm_reflection_min_tpm` | 30 000 | Débit minimal en jetons par minute exigé d'un fournisseur pour recevoir une réflexion. Écarte les instances trop lentes d'une tâche à contexte long. |
 | `long_term_reflect_interval` | 24 h | **Hérité, non utilisé** tant que `stm_reflection_min_entries > 0`. Ancien déclenchement temporel de la réflexion, antérieur au seuil volumétrique. |
 
+### Observation (ticket 077)
+
+| Paramètre | Défaut | Effet |
+|-----------|--------|-------|
+| `trace_rappel_enabled` | false | Écrit une ligne JSONL par rappel dans `trace_rappel.jsonl` : le top-K servi, avec pour chaque souvenir son identifiant, son type, son **vivier d'origine**, son score composite et son rang. Éteint, rien n'est écrit — mais la **mesure de concentration** tourne toujours, elle ne coûte qu'un compteur borné en RAM. |
+| `trace_rappel_file` | `trace_rappel.jsonl` | Destination de la trace, résolue dans le répertoire de run. |
+
 ### Récupération
 
 | Paramètre | Défaut | Effet |
@@ -969,6 +1025,16 @@ documentation.
 | `[ALARME] N réflexion(s) STM au-delà de leur échéance (réveil de l'agent)` | front montant, au sync | La garantie « la LTM du matin intègre la veille » n'est plus tenue : file EDF surchargée ou fournisseurs saturés. Diagnostic par `make capacity`. Se réarme quand le compte revient à zéro. |
 
 Les alarmes se relisent d'un coup avec `make error`.
+
+### Les alarmes du ticket 077
+
+| Alarme | Seuil | Ce qu'elle dit |
+|---|---|---|
+| `aucune croyance montrée au modèle dans N %` | 50 % sur 50 réflexions | Le panier `(mode, motif)` ne désigne aucun candidat. Le modèle ne peut ni confirmer ni préciser : il ne lui reste qu'à créer, et les concepts s'empilent en reformulations. **C'est la garde du lot A** : vérifier d'abord que les axes d'objet ne sont pas vides. |
+| `concentration des rappels à N %` | 80 % sur 200 rappels, réarmée sous 65 % | Les dix souvenirs les plus servis occupent la quasi-totalité du top-K. Le rappel s'auto-renforce : ce que l'agent a appris tôt évince ce qu'il apprend ensuite. ⚠ Un rappel qui sert **tout** ce que l'agent possède n'entre pas dans la mesure : sans cette garde, l'alarme se levait au cinquième jour simulé et ne mesurait que la taille de la mémoire, pas une sélection. |
+
+Les deux se déclenchent sur **front montant** et se réarment sous un seuil bas. Sans hystérésis,
+une valeur qui oscille autour d'un seuil unique inonderait le journal.
 
 ### Ce qui n'est pas instrumenté
 
@@ -1635,6 +1701,122 @@ Restent tels quels, indépendants de l'horizon : la grille des cinq niveaux de g
 de la gravité déterministe, le top-K à 10, le plancher journalier à 22 h.
 
 ---
+
+## Observer la mémoire : le journal par agent (ticket 075)
+
+Les mécanismes ci-dessus sont validés par 249 tests unitaires. Aucun ne dit ce que la mémoire
+d'un agent **devient** quand elle vit soixante jours simulés. Le journal de mémoire répond à
+cette question-là, et à aucune autre.
+
+`llm/journal_memoire.py` écrit **un Markdown par agent** dans `<workdir>/memoires/<person_id>.md`,
+en continu pendant le run :
+
+| Événement | Ce qui est écrit |
+|---|---|
+| Consolidation STM → LTM | section datée, **motif** (`seuil` / `plancher journalier` / `rupture`), ce qui l'a déclenchée, les entrées consommées, la réflexion, puis l'**état complet** de la mémoire après |
+| Auto-réflexion LTM | sa propre section : elle ne consomme aucune entrée courte, elle relit la mémoire longue |
+| Opération de concept | `créé` / `confirmé` / `précisé` / `contredit`, contenu et compteurs **avant → après**, mise à l'écart datée le cas échéant |
+| Écriture épisodique | une ligne : type, contenu, gravité, force |
+| Rappel | une ligne : combien de souvenirs servis, force et compteur après renforcement |
+| Purge | une ligne par entrée oubliée, âge depuis le dernier rappel et force |
+
+Le **motif** vient du contrôleur, capturé au moment de l'éligibilité et transmis par
+`Context.data` : quand la réflexion s'exécute (file EDF, la nuit simulée), le tampon a changé et
+le motif ne serait plus retrouvable.
+
+**Réglages.** `agent.journal_memoire_enabled` (défaut **false**) et `agent.journal_memoire_dir`
+(défaut `memoires`, résolu dans le workdir). Éteint, le journal ne coûte ni fichier ni appel
+disque — à mille agents, l'état complet écrit à chaque consolidation ferait des centaines de
+mégaoctets que personne n'ouvrirait.
+
+⚠ **Ce n'est pas une source de mesure.** Les chiffres se prennent dans les métadonnées de la
+mémoire et dans `moves.csv`. Ce fichier est fait pour être **lu**.
+
+## Relire un run : le rapport par persona (ticket 077, lot F)
+
+Le journal ci-dessus se lit agent par agent, jour par jour. Il ne répond pas à la question qui
+vient ensuite : *cet agent a-t-il changé de comportement, et sur quoi s'appuyait-il pour
+décider ?* Le rapport la pose sur un run entier, en un fichier.
+
+    python -m scripts.analysis.memoire.rapport <dossier_run> -o <sortie.html>
+    make memoire-rapport RUN=experiments/archive/2026-09-14_23_58
+
+Sortie : **un seul HTML autonome** sous `docs/traces/<date_heure>_rapport_memoire/`, hors git.
+Bibliothèque standard uniquement, SVG en ligne (`scripts/analysis/memoire/`, quatre modules :
+`sources`, `mesures`, `graphiques`, `rapport`). Deux exécutions sur le même run rendent le
+**même octet** : aucun horodatage de génération n'entre dans le corps.
+
+Ce que le rapport montre, par persona :
+
+| Pièce | Ce qu'elle dit |
+|---|---|
+| Frise des modes | une ligne par motif, une colonne par jour, la couleur du mode retenu (palette du dépôt) — l'habitude s'y voit s'installer |
+| **Tableau des itinéraires** | une ligne par itinéraire distinct **proposé**, une colonne par jour : bleu clair proposé, bleu foncé retenu, gris quand l'appariement a échoué |
+| Décisivité et entropie | par semaine, sur la répartition de `moves.csv` ; une semaine sans décision probabilisée coupe le tracé au lieu de valoir zéro |
+| Concepts | groupés par thème, avec observations, contre-exemples, confiance (Laplace) et force ; les reformulations d'un même thème sont groupées |
+| Habitudes et auto-réflexion | le `journal` des métadonnées LTM et la dernière synthèse long terme |
+
+Puis une section transversale : contamination des observations (marches fantômes, voiture
+journalisée en transport collectif), taux de `known_beliefs` vide, concentration des rappels.
+
+**Trois pièges du format, traités une fois pour toutes** dans `sources.py` :
+
+1. `llm_exchanges.jsonl` **n'est pas du JSONL** malgré l'extension — objets JSON indentés
+   concaténés, lus par `raw_decode` en boucle ;
+2. `moves.csv` porte les **trajets rejoués** après redémarrage. La clé de décision est
+   `(ID Personne, ID Activité, Temps simulé)` — l'identifiant d'activité seul se répète d'un jour
+   sur l'autre. On garde la première ligne par heure de calcul ; le rapport **déclare** le nombre
+   d'exclus (84 sur le run du 2026-09-14) ;
+3. les **options proposées n'existent que dans le texte des prompts**. L'appariement se fait par
+   `(agent, jour, motif)` et heure de départ la plus proche ; un trajet non retrouvé donne une
+   colonne **grise déclarée**, jamais une case vide muette. Le lot E.3 rendra cet appariement
+   inutile au run suivant.
+
+⚠ **Une section vide se déclare comme vide.** Un agent sans concept produit tout de même sa
+section, avec la mention explicite qu'il s'agit d'une absence de mesure et non d'un résultat
+propre. Dans ce dépôt, l'absence de mesure produit volontiers le score parfait.
+
+Contrat de test : `specs/ticket_077/tests.md` § F, vérifié par
+`services/llm-agents/tests/test_077_lotF_rapport.py` (fixtures minimales, plus un test de bout en
+bout sur le run de référence quand il est présent).
+
+## Reprise à chaud d'un run long (ticket 075)
+
+`make run OFFLINE=1 CONT=1` réutilise le répertoire du run — donc **retrouve la mémoire
+pleine** — pendant que GAMA repart à son t0 et rejoue les jours déjà vécus. Sans précaution, ces
+jours rejoués réécrivent des souvenirs déjà écrits : épisodes en double, compteurs
+d'observations et de contre-exemples incrémentés deux fois.
+
+Deux pièces, dans `urban_mobility_agents/utils/reprise.py` :
+
+1. **Un point de reprise par jour simulé**, écrit à **3 h** — après le drainage nocturne des
+   réflexions et après le plancher de 22 h, donc sur des tampons de mémoire courte vides. Il
+   contient la mémoire longue, les `.md` du journal, l'ancre du run et les compteurs. Écriture
+   atomique (répertoire temporaire puis renommage) : un point interrompu n'est jamais valide.
+2. **Le rejeu à mémoire gelée** : au redémarrage, l'état est restauré au dernier point, puis
+   toute écriture de mémoire est suspendue jusqu'à ce que l'horloge simulée dépasse ce point.
+   Le point d'étranglement est `add_short_term_memory` : sans entrée courte, aucun agent ne
+   devient éligible à la consolidation. Les décisions et les déplacements, eux, ont lieu.
+3. **La trace de rejeu** (`utils/rejeu_decisions.py`, ticket 090) : chaque décision vivante est
+   consignée sous `(personne, activité, instant)` dans `<workdir>/decisions_rejeu.jsonl`, et
+   resservie pendant le gel **sans appel au modèle**.
+
+⚠ **La phrase « le cache les sert sans appel au modèle » était vraie en général et fausse sur les
+runs de mesure**, où le cache sémantique est coupé — c'est la condition d'un run journalisé sur
+son périmètre complet. Le rejeu y repayait donc chaque décision : mesuré le 2026-09-16, huit jours
+rejoués, une centaine d'appels, trois quarts d'heure d'attente réseau pour retrouver un état déjà
+connu. D'où la troisième pièce.
+
+**La trace n'est pas le cache.** Sa source est le workdir de CE run et non un répertoire partagé ;
+sa clé n'est pas une empreinte d'état non indexée par modèle ; sa portée s'arrête avec
+`gel_actif()` — sans cette condition elle deviendrait un cache permanent ; et une clé manquée est
+comptée puis **alarmée** au-delà de 20 %, là où le cache recalculerait en silence. Une manquée ne
+fait pas échouer le run — on appelle le modèle — mais un rejeu qui ne retrouve pas ses propres
+choix ne reconstruit pas l'état qu'on croit reprendre.
+
+L'**ancre du run** (`utils/ancre_run.py`) est restaurée depuis le point et n'est jamais
+réancrée sur le premier timestamp du rejeu : sinon la progression de la date météo rembobinerait
+pour tous les agents.
 
 # Sources
 

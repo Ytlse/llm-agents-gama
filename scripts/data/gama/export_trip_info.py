@@ -102,8 +102,13 @@ from scripts.data.gama.export_gtfs_layers import FEEDS_DEFAUT, _a_des_geometries
 INCLUDES = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "includes"
 SETTINGS_GAML = REPO_ROOT / "services" / "GAMA" / "CityTransport" / "models" / "Settings.gaml"
 
-# Le masque binaire du calendrier côté modèle : 64 bits, un par date.
-LIMITE_MASQUE = 64
+# Longueur maximale de la fenêtre de calendrier, en jours. Ce n'était pas un choix mais une
+# CONTRAINTE : le calendrier de GAMA était un masque binaire porté par un entier, et l'entier de
+# GAMA tient sur 32 bits — la limite réelle était donc 31 dates, pas 64, et un run de soixante
+# jours mourait au jour 32 sur « Division by zero » (ticket 075, 2026-09-15). Le masque est
+# maintenant une chaîne de "0"/"1" : il n'a plus de largeur maximale, et ce plafond n'est plus
+# qu'un garde-fou de bon sens sur la taille du feed exporté.
+LIMITE_MASQUE = 366
 
 CODE_RESSOURCE = 1
 CODE_REFUS = 2
@@ -386,11 +391,14 @@ def courses_du_jour(donnees: dict, jour: str) -> dict[str, int]:
     calendrier = donnees["calendar"]
     if jour not in calendrier["dates"]:
         return {}
-    bit = 1 << calendrier["dates"].index(jour)
+    index_du_jour = calendrier["dates"].index(jour)
     masques = calendrier["data"]
     compte: dict[str, int] = {}
     for trip in donnees["trip_list"]:
-        if masques.get(trip["service_id"], 0) & bit:
+        # Masque TEXTE depuis le 2026-09-15 (ticket 075) : un caractère par date. L'ancien
+        # masque entier débordait l'entier 32 bits de GAMA au-delà de la 31ᵉ date.
+        _masque = masques.get(trip["service_id"], "")
+        if len(_masque) > index_du_jour and _masque[index_du_jour] == "1":
             cle = str(int(trip["route_type"]))
             compte[cle] = compte.get(cle, 0) + 1
     return dict(sorted(compte.items(), key=lambda kv: int(kv[0])))

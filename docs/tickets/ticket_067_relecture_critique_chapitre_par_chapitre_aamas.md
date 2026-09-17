@@ -26,7 +26,7 @@ La revue porte sur l'ensemble des chapitres de l'article dans `docs/paper/articl
 | **Ch. 3** | `03_architecture.md` | Formalisation mathématique de l'agent (Ticket 050), rigueur du modèle de mémoire CoALA/ACT-R (Ticket 051). |
 | **Ch. 4 & 4.5** | `04_metrics_and_substrate.md`, `04.5_prompt_calibration.md` | Sanctuarisation du substrat v5, asymétrie d'évaluation (Ticket 046), sobriété Green AI (Ticket 054). |
 | **Ch. 5** | `05_factual_neutral_prompt.md` | Benchmark multi-modèles, quantification de la dispersion $\tau=0,0$, test de McNemar apparié (Ticket 055). |
-| **Ch. 6** | `06_ablation.md` | Test de $H_0$, audit de la double lecture en chaîne vs hors chaîne (Ticket 057), audit unitaire à parité (Ticket 058). |
+| **Ch. 6** | `06_results.md` | Test de $H_0$, audit de la double lecture en chaîne vs hors chaîne (Ticket 057), audit unitaire à parité (Ticket 058). |
 | **Ch. 7** | `07_untabulated_regimes.md` | Étape 3a (hystérésis longitudinale, Ticket 041/063) et Étape 3b (presse locale, plan 5 conditions, Ticket 059/064). |
 | **Ch. 8** | `08_limits_and_hybrid.md` | Limite de l'itinéraire mixte (Ticket 049), formalisation de la cascade hybride (Ticket 060). |
 | **Ch. 9** | `09_conclusion.md` | Portée des 4 enseignements fondamentaux, leçons transférables à la communauté MAS (Ticket 061). |

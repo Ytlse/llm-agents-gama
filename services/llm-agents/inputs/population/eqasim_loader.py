@@ -22,7 +22,12 @@ from models import Activity, BBox, Location, Person, PersonalIdentity, PersonSta
 from settings import settings
 from utils import fake
 
-from mobility_core.population_reference import COURONNES, OUT_OF_PERIMETER
+from mobility_core.population_reference import (
+    COURONNES,
+    OUT_OF_PERIMETER,
+    OUT_OF_PERIMETER_FR,
+    couronne_canonique,
+)
 from mobility_core.residence_zone import TRAIT_KEY as RESIDENCE_TRAIT_KEY
 
 # Filtre d'ADMISSION de la population (ticket 026, étage 3).
@@ -60,9 +65,21 @@ def perimeter_verdict(person, bbox: Optional[BBox]) -> tuple[bool, str]:
 
     zone = (person.identity.traits_json or {}).get(RESIDENCE_TRAIT_KEY)
     if zone:
-        if zone in _ADMITTED_ZONES:
+        # Ticket 081 — la modalité est TRADUITE avant d'être jugée. Une cohorte d'avant la
+        # bascule anglaise (ticket 074) porte « 1ere couronne » là où le canon dit « 1st
+        # ring » : lue telle quelle, elle tombait entière en « zone inconnue » et le filtre
+        # en rejetait 637 sur 1 000 — mesuré le 2026-09-15 en rouvrant la cohorte v5 gelée.
+        # Le chargement n'échouait pas : il rendait 363 personnes, et l'appelant croyait les
+        # avoir toutes. `couronne_canonique` existe exactement pour cette relecture.
+        canonique = couronne_canonique(zone)
+        if canonique in _ADMITTED_ZONES:
             return True, ""
-        return False, OUT_OF_PERIMETER if zone == OUT_OF_PERIMETER else f"zone inconnue ({zone})"
+        if canonique in (OUT_OF_PERIMETER, OUT_OF_PERIMETER_FR):
+            # Rejetée, mais NOMMÉE : hors périmètre est une modalité de l'enquête, pas une
+            # valeur qu'on ne comprend pas. Les confondre masquerait une cohorte mal traduite
+            # derrière un rejet légitime.
+            return False, OUT_OF_PERIMETER
+        return False, f"zone inconnue ({zone})"
 
     if bbox is None:
         return True, ""

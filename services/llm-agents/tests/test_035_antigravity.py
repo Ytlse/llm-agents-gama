@@ -722,3 +722,272 @@ async def test_decideur_compte_les_reponses_sans_sortie_litterale(tmp_path):
     _, rep = await asyncio.gather(repondre(), d.choisir(person, ctx, presentees))
     assert rep.sortie_litterale is None
     assert d.compteurs["sans_sortie_litterale"] == 1
+
+
+# ── Paramètres d'échantillonnage et garde-fou de démarrage (correctifs 2026-09-15) ──────
+
+
+def _mock_agent(agent_id: str):
+    agent = MagicMock()
+    agent.build_travel_plan_payload = AsyncMock(
+        return_value={
+            "category": "itinary_multi_agent",
+            "agents": [
+                {
+                    "agent_id": agent_id,
+                    "perception": "test",
+                    "destination": "work",
+                    "trajectories": [{"mode": "car"}, {"mode": "walk"}],
+                }
+            ],
+            "parameters": {},
+        }
+    )
+    return agent
+
+
+def _deux_options():
+    return [
+        Proposition(plan=_plan("c", "car", duration=100), source="enregistree"),
+        Proposition(plan=_plan("w", "walk", duration=200), source="enregistree"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_demande_porte_les_parametres_demandes(tmp_path):
+    """La température doit ATTEINDRE le sous-agent : elle était stockée sans être envoyée."""
+    person = _person("201")
+    ctx = _ctx(activity_id="p1", purpose="work", timestamp=100, departure_time=100)
+
+    decideur = DecideurAntigravity(
+        agent=_mock_agent("201"),
+        modele="gemini-3.8-flash",
+        echanges=tmp_path / "echanges",
+        attente_max_s=1,
+        parametres={"temperature": 0.0, "top_p": 1.0, "max_tokens": 4096},
+    )
+
+    await decideur.choisir(person, ctx, _deux_options())
+
+    ecrites = list((tmp_path / "echanges" / "demandes").glob("*.json"))
+    assert len(ecrites) == 1, "la demande doit rester sur le disque après un timeout"
+    corps = json.loads(ecrites[0].read_text(encoding="utf-8"))
+    assert corps["parametres"] == {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "max_tokens": 4096,
+    }
+
+
+@pytest.mark.asyncio
+async def test_parametres_appliques_remontent_dans_la_reponse(tmp_path):
+    """Ce que le sous-agent déclare avoir appliqué est archivé tel quel."""
+    person = _person("202")
+    ctx = _ctx(activity_id="p2", purpose="work", timestamp=100, departure_time=100)
+    echanges = tmp_path / "echanges"
+
+    decideur = DecideurAntigravity(
+        agent=_mock_agent("202"),
+        modele="gemini-3.8-flash",
+        echanges=echanges,
+        attente_max_s=5,
+        parametres={"temperature": 0.0},
+    )
+
+    async def repondre():
+        reponses = echanges / "reponses"
+        for _ in range(100):
+            demandes = list((echanges / "demandes").glob("*.json"))
+            if demandes:
+                (reponses / demandes[0].name).write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "person_id": "202",
+                            "activity_id": "p2",
+                            "modele_declare": "gemini-3.8-flash",
+                            "parametres_appliques": {"temperature": 0.0},
+                            "sortie_litterale": '{"agents": []}',
+                            "agents": [
+                                {
+                                    "agent_id": "202",
+                                    "probabilities": [
+                                        {"index": 0, "mode": "car", "probability": 60},
+                                        {"index": 1, "mode": "walk", "probability": 40},
+                                    ],
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                return
+            await asyncio.sleep(0.05)
+
+    rep, _ = await asyncio.gather(decideur.choisir(person, ctx, _deux_options()), repondre())
+    assert rep.index is not None
+    assert rep.parametres_appliques == {"temperature": 0.0}
+    assert decideur.compteurs["sans_parametres_appliques"] == 0
+
+
+@pytest.mark.asyncio
+async def test_reponse_muette_sur_les_parametres_est_comptee(tmp_path):
+    """Une réponse sans `parametres_appliques` est un TROU, jamais « température 0 »."""
+    person = _person("203")
+    ctx = _ctx(activity_id="p3", purpose="work", timestamp=100, departure_time=100)
+    echanges = tmp_path / "echanges"
+
+    decideur = DecideurAntigravity(
+        agent=_mock_agent("203"),
+        modele="gemini-3.8-flash",
+        echanges=echanges,
+        attente_max_s=5,
+        parametres={"temperature": 0.0},
+    )
+
+    async def repondre():
+        reponses = echanges / "reponses"
+        for _ in range(100):
+            demandes = list((echanges / "demandes").glob("*.json"))
+            if demandes:
+                (reponses / demandes[0].name).write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "person_id": "203",
+                            "activity_id": "p3",
+                            "modele_declare": "gemini-3.8-flash",
+                            "agents": [
+                                {
+                                    "agent_id": "203",
+                                    "probabilities": [
+                                        {"index": 0, "mode": "car", "probability": 60},
+                                        {"index": 1, "mode": "walk", "probability": 40},
+                                    ],
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                return
+            await asyncio.sleep(0.05)
+
+    rep, _ = await asyncio.gather(decideur.choisir(person, ctx, _deux_options()), repondre())
+    assert rep.index is not None
+    assert rep.parametres_appliques is None, "un trou déclaré, pas une valeur inventée"
+    assert decideur.compteurs["sans_parametres_appliques"] == 1
+
+
+@pytest.mark.asyncio
+async def test_demarrage_sans_sous_agent_arrete_l_execution(tmp_path):
+    """Sans la moindre réponse, l'exécution s'arrête au lieu de dormir la nuit."""
+    person = _person("204")
+    ctx = _ctx(activity_id="p4", purpose="work", timestamp=100, departure_time=100)
+    dossier_exec = tmp_path / "execution"
+    dossier_exec.mkdir()
+
+    mock_exec = MagicMock()
+    mock_exec.dossier = dossier_exec
+    mock_exec.etat.return_value = {"etat": ETAT_EN_COURS}
+
+    decideur = DecideurAntigravity(
+        agent=_mock_agent("204"),
+        modele="gemini-3.8-flash",
+        echanges=tmp_path / "echanges",
+        attente_max_s=1,
+        execution=mock_exec,
+        demarrage_max_s=0.0,
+    )
+
+    rep = await decideur.choisir(person, ctx, _deux_options())
+
+    assert rep.index is None
+    assert (dossier_exec / "STOP").is_file(), (
+        "le garde-fou doit poser le fichier STOP : c'est lui qui clôt l'exécution en `arretee`, "
+        "état FINAL, donc la campagne enchaîne"
+    )
+
+
+@pytest.mark.asyncio
+async def test_garde_fou_desarme_apres_la_premiere_reponse(tmp_path):
+    """Un canal lent mais vivant ne doit jamais être arrêté par le garde-fou."""
+    person = _person("205")
+    ctx = _ctx(activity_id="p5", purpose="work", timestamp=100, departure_time=100)
+    echanges = tmp_path / "echanges"
+    dossier_exec = tmp_path / "execution"
+    dossier_exec.mkdir()
+
+    mock_exec = MagicMock()
+    mock_exec.dossier = dossier_exec
+    mock_exec.etat.return_value = {"etat": ETAT_EN_COURS}
+
+    decideur = DecideurAntigravity(
+        agent=_mock_agent("205"),
+        modele="gemini-3.8-flash",
+        echanges=echanges,
+        attente_max_s=5,
+        execution=mock_exec,
+        demarrage_max_s=0.0,
+    )
+    # Le canal a déjà servi : le garde-fou est désarmé pour le reste du run.
+    decideur._premiere_reponse = True
+
+    async def repondre():
+        reponses = echanges / "reponses"
+        for _ in range(100):
+            demandes = list((echanges / "demandes").glob("*.json"))
+            if demandes:
+                (reponses / demandes[0].name).write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "person_id": "205",
+                            "activity_id": "p5",
+                            "modele_declare": "gemini-3.8-flash",
+                            "parametres_appliques": {},
+                            "agents": [
+                                {
+                                    "agent_id": "205",
+                                    "probabilities": [
+                                        {"index": 0, "mode": "car", "probability": 60},
+                                        {"index": 1, "mode": "walk", "probability": 40},
+                                    ],
+                                }
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                return
+            await asyncio.sleep(0.05)
+
+    rep, _ = await asyncio.gather(decideur.choisir(person, ctx, _deux_options()), repondre())
+    assert rep.index is not None
+    assert not (dossier_exec / "STOP").exists()
+    assert rep.parametres_appliques == {}, "« aucun paramètre applicable » est une réponse"
+
+
+def test_trace_porte_les_parametres_appliques():
+    """`parametres_appliques` doit atteindre decisions.jsonl, comme `modele_verifie`."""
+    person = _person("206")
+    ctx = _ctx(activity_id="p6", purpose="work", timestamp=100, departure_time=100)
+    prop = Proposition(plan=_plan("car", "car", duration=100), source="enregistree")
+
+    reponse = ReponseDecideur(
+        index=0,
+        fournisseur="antigravity:gemini-3.8-flash",
+        modele_verifie=False,
+        parametres_appliques={"temperature": "non applicable"},
+    )
+    trace = construire_trace(person, ctx, [prop], [], prop, "decideur", reponse, "")
+    assert trace["parametres_appliques"] == {"temperature": "non applicable"}
+
+    # Et sans déclaration, la clé n'existe PAS : une trace muette ne doit pas se lire
+    # comme « paramètres appliqués = {} ».
+    muette = ReponseDecideur(index=0, fournisseur="antigravity:x", modele_verifie=False)
+    trace_muette = construire_trace(person, ctx, [prop], [], prop, "decideur", muette, "")
+    assert "parametres_appliques" not in trace_muette

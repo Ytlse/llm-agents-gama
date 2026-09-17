@@ -31,7 +31,7 @@ Conformément aux engagements légaux de non-cession à des tiers, ces microdonn
    - Les données réelles d'enquête sont récupérables directement via le portail officiel par tout pair souhaitant vérifier le volet d'entraînement de l'oracle.
 
 ## Critères d'acceptation
-- [ ] Le Chapitre 4 mentionne clairement que les données sont publiques pour la recherche et indique où les obtenir.
-- [ ] L'Annexe G contient l'URL du portail Quetelet-Progedo et les instructions pas-à-pas pour les relecteurs.
-- [ ] Le modèle officiel de citation Cerema / Tisséo est formalisé.
-- [ ] Le footer du Chapitre 4 référence le ticket 053.
+- [x] Le Chapitre 4 mentionne clairement que les données sont publiques pour la recherche et indique où les obtenir.
+- [x] L'Annexe G contient l'URL du portail Quetelet-Progedo et les instructions pas-à-pas pour les relecteurs.
+- [x] Le modèle officiel de citation est formalisé. Libellé fourni par l'auteur le 2026-09-15 et publié en annexe G (`doi:10.13144/lil-0933`), avec le millésime porté de 2013 à **2023** sur arbitrage de l'auteur du même jour — le reste du libellé est recopié sans changement. L'article reste cohérent sur « EMC² 2023 ».
+- [x] Le footer du Chapitre 4 référence le ticket 053.

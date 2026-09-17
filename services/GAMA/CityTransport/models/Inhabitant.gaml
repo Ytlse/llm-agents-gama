@@ -116,12 +116,20 @@ species passenger parent: in_transfer virtual: true {
 
     // Suivi des métriques
     int step_started_at <- 0;                              // Horodatage du début de l'étape actuelle
+    // Ticket 077, lot B1 — le plan est REÇU bien avant que l'agent ne parte : il attend
+    // `schedule_at`. Tant que ce drapeau est faux, le chronomètre d'étape n'a pas de sens, et
+    // le poser à la réception faisait absorber toute l'attente par le premier segment. Mesuré
+    // sur le run du ticket 075 : 398 observations de marche sur 412 avaient une distance NULLE
+    // et une durée exactement égale au retard au départ. Des agents motorisés se relisaient
+    // ensuite comme marcheurs de cinq à douze heures.
+    bool plan_started <- false;                            // Le trajet a-t-il RÉELLEMENT commencé
     float on_vehicle_capacity_utilization <- 0.0;          // Capacité du véhicule lors de l'embarquement
     float trip_traveled_duration <- 0.0;                   // Durée totale du trajet jusqu'à présent
 
     // Actions virtuelles pour la collecte de métriques (à implémenter par les sous-classes)
     action submit_ob_transfer(float segment_duration, float dist, int ob_step_idx) virtual: true;
     action submit_ob_transit(float segment_duration, float dist, int ob_step_idx, float capacity) virtual: true;
+    action submit_ob_vehicle(float segment_duration, float dist, string vehicle_mode) virtual: true;
     action submit_ob_tripfeedback(float trip_duration) virtual: true;
     action submit_vehicle_wait_time(float wait_duration, int ob_step_idx) virtual: true;
     action submit_ob_tc_timeout(float wait_duration, int ob_step_idx) virtual: true;
@@ -185,6 +193,9 @@ species passenger parent: in_transfer virtual: true {
         step_idx <- 0;
         trip_traveled_duration <- 0.0;
         step_started_at <- CURRENT_TIMESTAMP;
+        // Le chronomètre sera REPOSÉ au premier mouvement réel (ticket 077, lot B1). La valeur
+        // ci-dessus reste un repli : si l'agent part sans attendre, les deux coïncident.
+        plan_started <- false;
 
         do passenger_reset_plan();
 
@@ -329,22 +340,42 @@ species passenger parent: in_transfer virtual: true {
 		
 		 is_ready <- false;
 		 is_active <- true;
-		
+
+		// Ticket 077, lot B1 — l'agent vient de franchir `schedule_at` : c'est MAINTENANT que
+		// le trajet commence. Sans cette remise à zéro, le premier segment porte l'attente qui
+		// l'a précédé, et la mémoire de l'agent la lit comme un temps de marche.
+		if !plan_started {
+			plan_started <- true;
+			step_started_at <- CURRENT_TIMESTAMP;
+		}
+
 		point dest <- list_destination[step_idx];
 		
 		// passer à l'étape suivante si la destination de l'étape précédente est atteinte
 		if location distance_to dest < moving_close_dist {
 			// essayer de soumettre l'observation
-			bool is_transfer <- list_route_id[step_idx] = _WALK_;
+			string _route <- list_route_id[step_idx];
+			bool is_transfer <- _route = _WALK_;
+			// Ticket 077, lot B2 — un véhicule PERSONNEL n'est ni une marche, ni un transport
+			// collectif. Il partait auparavant sur la branche transit, dont le gabarit
+			// interroge le GTFS : 253 trajets en voiture du run du 075 ont été rendus au
+			// modèle comme « Trip by Unknown Unknown » entre deux arrêts sans nom.
+			bool is_own_vehicle <- _route = _CAR_ or _route = _BIKE_;
 			float _duration <- float(CURRENT_TIMESTAMP-step_started_at);
 			// métriques
 			trip_traveled_duration <- trip_traveled_duration + _duration;
-			
+
 			if is_transfer {
 				do submit_ob_transfer(
 					_duration,
 					last_dist_traveled,
 					step_idx
+				);
+			} else if is_own_vehicle {
+				do submit_ob_vehicle(
+					_duration,
+					last_dist_traveled,
+					_route = _CAR_ ? "car" : "bike"
 				);
 			} else {
 				do submit_ob_transit(
@@ -550,6 +581,25 @@ species inhabitant parent: passenger {
 		OB_LIST << ob;
 	}
 	
+	/**
+	 * Soumettre une observation pour un segment parcouru avec un VÉHICULE PERSONNEL
+	 * (ticket 077, lot B2). Ni arrêt d'origine, ni arrêt d'arrivée, ni ligne : un véhicule
+	 * personnel n'en a pas, et prétendre le contraire produit le « Unknown Unknown » que ce
+	 * ticket supprime.
+	 */
+	action submit_ob_vehicle(float segment_duration, float dist, string vehicle_mode) {
+		map<string,unknown> ob <- [
+			"type"::"vehicle",
+			"timestamp"::CURRENT_TIMESTAMP,
+			"moving_id"::moving_id,
+			"activity_id"::activity_id,
+			"mode"::vehicle_mode,
+			"distance"::dist,
+			"duration"::segment_duration
+		];
+		OB_LIST << ob;
+	}
+
 	/**
 	 * Soumettre une observation pour le temps d'attente à un arrêt
 	 * Enregistre combien de temps l'agent a attendu un véhicule

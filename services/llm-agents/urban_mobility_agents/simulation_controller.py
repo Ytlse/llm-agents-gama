@@ -29,10 +29,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from llm_gateway.telemetry.alarms import fire_alarme
-from loguru import logger
-from prometheus_client import Counter, Gauge, Histogram
-
 from backpressure import ThroughputEwma
 from chaine_activites import activite_suivante
 from experiences.decision import (  # ticket 035, spec 02 — la décision unique
@@ -56,11 +52,18 @@ from helper import (
     to_24h_timestamp_full,
     to_timestamp_based_on_day,
 )
+from llm.axes import creneau_de, mode_canonique, normaliser_motif
+from llm.gravite import gravite_deterministe, journal_des_composantes
+from llm.journal_memoire import journal
+from llm_gateway.telemetry.alarms import fire_alarme
+from loguru import logger
 from models import Activity, BBox, Location, Person, PersonMove, TravelPlan
+from prometheus_client import Counter, Gauge, Histogram
 from settings import settings
 from sim_clock import wall_clock
 from text_helper import env_ob_to_text, parse_ob
 from trip_helper import accidents as accidents_module
+from llm import chocs as chocs_module
 from trip_helper.base import TripHelper
 from trip_helper.school_bus import (
     SCHOOL_BUS_CHOSEN,
@@ -78,10 +81,12 @@ from urban_mobility_agents.candidats import (  # noqa: F401 — ré-exportés (t
     _unknown_metric_modes,
 )
 from urban_mobility_agents.core.scenario import Action, BaseScenario, Observation
+from urban_mobility_agents.utils.ancre_run import ancrer, jours_ecoules
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
-from llm.gravite import gravite_deterministe, journal_des_composantes
+from urban_mobility_agents.utils import mesures_jour
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
+from urban_mobility_agents.utils.reprise import degeler_si_depasse, ecrire_point
 from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
 from urban_mobility_agents.vehicle_chain import (  # noqa: F401 — ré-exportés (ticket 035, D1)
     _VEHICLE_MODES,
@@ -309,6 +314,12 @@ for _status in ("on_time", "late"):
 
 _POPULATION_CHECKPOINT_HOUR = 2 * 3600  # 2:00 AM simulation time
 
+# Heure simulée du point de reprise (ticket 075). 3 h, et pas 2 h comme le checkpoint de
+# population : le plancher de consolidation tombe à 22 h et ses réflexions se drainent toute la
+# nuit (ticket 010). Prendre le point à 2 h le prendrait au milieu de ce drainage, donc sur une
+# mémoire à moitié écrite — exactement ce qu'un point de reprise ne doit jamais capturer.
+_REPRISE_CHECKPOINT_HOUR = 3 * 3600
+
 
 def _next_checkpoint_ts(
     after_ts: int, hour_24h: int = _POPULATION_CHECKPOINT_HOUR
@@ -475,6 +486,15 @@ class SimulationLoopV1(BaseScenario):
         # True pendant bootstrap_all_agents : distingue les décisions de pré-calcul (/init)
         # des décisions live (simulation en marche) pour la métrique ACTIVITY_DECISIONS.
         self._in_bootstrap = False
+        # Ticket 077, lot C — mode retenu par activité, pour le journal des habitudes.
+        # Il ne peut PAS être relu dans le tampon de mémoire courte à l'arrivée : entre la
+        # décision et l'arrivée, une consolidation a pu consommer l'entrée (`remove_batch`),
+        # et le trajet disparaissait alors des habitudes. Mesuré sur le run du 15/09 à 10:03 :
+        # 1 à 2 trajets journalisés par agent pour une quarantaine d'arrivées, et le bloc
+        # « Mes habitudes » absent de TOUS les prompts de décision.
+        # La clé est (agent, activité) : elle se réécrit d'un jour simulé à l'autre, donc la
+        # table reste bornée par le nombre d'activités d'une journée.
+        self._mode_par_activite: dict[tuple[str, str], str] = {}
         self.model = world_model
         self.trip_helper = trip_helper
         self.agent = agent
@@ -554,6 +574,8 @@ class SimulationLoopV1(BaseScenario):
         self._current_sim_timestamp: int = 0
         self._push_fn: Callable[[Action], Coroutine] | None = None
         self._next_population_checkpoint_at: int | None = None
+        # Ticket 075 — prochain point de reprise (3 h simulées), posé au premier sync.
+        self._next_reprise_at: int | None = None
         # Suivi temporel : heure réelle franchie à chaque tranche de 24h de temps simulé
         self._sim_start_ts: int | None = None  # premier timestamp simulé observé
         self._sim_real_start: float | None = (
@@ -1476,6 +1498,47 @@ class SimulationLoopV1(BaseScenario):
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.population.dump_population_snapshot, path)
 
+    async def _ecrire_point_de_reprise(self, timestamp: int) -> None:
+        """Point de reprise de la nuit : mémoire longue, journal, ancre, compteurs.
+
+        Les métadonnées de mémoire sont FLUSHÉES avant la copie : elles s'écrivent en différé
+        par rafale (mécanisme `dirty` de `MultiUserLongTermMemory`), et copier sans flush
+        capturerait un état plus vieux que celui que la simulation a réellement atteint.
+        """
+        jour = jours_ecoules(timestamp) + 1
+        try:
+            memoire = getattr(self.agent, "long_term_memory", None)
+            if memoire is not None:
+                await memoire.aflush_dirty()
+            await asyncio.to_thread(
+                ecrire_point,
+                settings.workdir,
+                jour,
+                timestamp,
+                compteurs={
+                    "agents": len(self.population.get_people_list()),
+                    "souvenirs_par_agent": {
+                        pid: len(meta.get("entries", []))
+                        for pid, meta in getattr(memoire, "user_metadata", {}).items()
+                    }
+                    if memoire is not None
+                    else {},
+                },
+            )
+        except Exception as exc:
+            # FAIL-OPEN : perdre un point coûte le rejeu d'une journée, faire tomber le run
+            # coûte les soixante.
+            logger.error(
+                f"[ALARME] [reprise] écriture du point du jour {jour} impossible ({exc!r}) — "
+                f"une interruption repartirait du point précédent."
+            )
+        # Ticket 093 — les mesures de la journée close, APRÈS le point de reprise : elles y
+        # lisent l'instantané d'état (entrées de mémoire, durée de vie médiane), qui ne se
+        # reconstitue pas après coup. Le module est fail-open et éteint par défaut : il ne peut
+        # ni faire tomber la simulation, ni la ralentir quand personne ne mesure.
+        if mesures_jour.actif():
+            await asyncio.to_thread(mesures_jour.ecrire_mesures_du_jour, settings.workdir)
+
     async def _tirer_accidents_du_jour(self, timestamp: int) -> None:
         """Tire les accidents de la journée simulée en cours, si le régime est actif.
 
@@ -1493,7 +1556,9 @@ class SimulationLoopV1(BaseScenario):
 
                 graphes, _ = await _GraphStore.get()
                 registre.charger_aretes(graphes["drive"])
-            jour, debut_jour_ts = accidents_module.jour_simule(timestamp, self._sim_start_ts)
+            jour, debut_jour_ts = accidents_module.jour_simule(
+                timestamp, self._sim_start_ts
+            )
             registre.tirer_journee(jour, debut_jour_ts)
         except Exception as exc:
             logger.error(
@@ -1541,6 +1606,11 @@ class SimulationLoopV1(BaseScenario):
             self._sim_start_ts = timestamp
             self._sim_real_start = time.monotonic()
             self._next_day_log_at = timestamp + 86400
+            # Ticket 075 — l'ancre du run, dont dépendent la progression de la date météo, la
+            # datation du journal de mémoire et les points de reprise. `ancrer` ne fait rien si
+            # une reprise a déjà restauré la sienne : c'est ce qui empêche le rejeu de
+            # rembobiner la météo de tous les agents.
+            ancrer(timestamp)
             # Jour de semaine du départ de simulation (audit A6). L'enquête EMC² compte
             # les déplacements de la veille d'un jour de passation mardi→samedi : jour de
             # référence LUNDI à VENDREDI, jamais de week-end. Un run comparable démarre un
@@ -1596,6 +1666,25 @@ class SimulationLoopV1(BaseScenario):
                 self._write_population_checkpoint(self._next_population_checkpoint_at)
             )
             self._next_population_checkpoint_at += 86400
+
+        # ── Reprise à chaud (ticket 075) ─────────────────────────────────────────────────
+        # Le DÉGEL d'abord : tant que l'horloge n'a pas dépassé le point de reprise, l'agent
+        # rejoue des journées déjà apprises et n'écrit rien. Vérifié à chaque sync, pas une
+        # fois par jour — le dégel doit tomber à l'instant exact, pas au prochain matin.
+        if degeler_si_depasse(timestamp):
+            _j = journal()
+            if _j is not None:
+                _j.degeler("rejeu terminé")
+        # Puis le point du jour, à 3 h simulées : après le drainage nocturne des réflexions et
+        # après le plancher de 22 h, donc sur des tampons de mémoire courte vides.
+        if self._next_reprise_at is None:
+            self._next_reprise_at = _next_checkpoint_ts(
+                timestamp, _REPRISE_CHECKPOINT_HOUR
+            )
+        elif timestamp >= self._next_reprise_at:
+            _ts_point = self._next_reprise_at
+            self._next_reprise_at += 86400
+            self._spawn(self._ecrire_point_de_reprise(_ts_point))
 
         # --- Phase 2 : réflexion STM déclenchée par volume d'entrées ---
         # Chaque réflexion part en file EDF (kind "reflect") avec pour échéance le
@@ -1688,11 +1777,44 @@ class SimulationLoopV1(BaseScenario):
                         )
                     _due = self._stm_reflect_due.setdefault(_p.person_id, _wake_ts)
 
-                    def _make_reflect_coro(_person=_p, _ts=timestamp):
+                    # Ticket 075 — le motif est CAPTURÉ ICI, au moment de l'éligibilité :
+                    # quand la réflexion s'exécutera (file EDF, la nuit simulée), le tampon
+                    # aura changé et le motif ne serait plus retrouvable.
+                    if _p.person_id in _par_rupture:
+                        _motif = "rupture"
+                        _declencheur = (
+                            f"gravité cumulée du tampon ≥ Θ = "
+                            f"{settings.agent.memoire__theta_gravite_cumulee} — régime "
+                            f"exceptionnel, réservé aux chocs"
+                        )
+                    elif _p.person_id in _par_plancher:
+                        _motif = "plancher journalier"
+                        _declencheur = (
+                            f"heure dite ({settings.agent.stm_reflection_daily_floor_hour} h) "
+                            f"et tampon non vide — consolidation de base, une fois par jour "
+                            f"simulé au plus"
+                        )
+                    else:
+                        _motif = "seuil"
+                        _declencheur = (
+                            f"{len(self.agent.get_short_term_memory(_p.person_id).recent_entries)} "
+                            f"entrées accumulées, seuil "
+                            f"{settings.agent.stm_reflection_min_entries}"
+                        )
+
+                    def _make_reflect_coro(
+                        _person=_p,
+                        _ts=timestamp,
+                        _motif=_motif,
+                        _declencheur=_declencheur,
+                    ):
                         async def _reflect_one():
                             try:
                                 await self.agent.trigger_short_term_reflection_for_all_people(
-                                    timestamp=_ts, people=[_person]
+                                    timestamp=_ts,
+                                    people=[_person],
+                                    motif=_motif,
+                                    declencheur=_declencheur,
                                 )
                                 _mem = self.agent.get_short_term_memory(
                                     _person.person_id
@@ -1813,6 +1935,17 @@ class SimulationLoopV1(BaseScenario):
         # zéro, ce qui est un FAIT (aucun retard mesuré) et non une valeur manquante.
         _retard_observe_s = 0.0
 
+        # ── Ticket 079 — le choc déclaré, s'il y en a un ──────────────────────────────────
+        # ⚠ RÈGLE QUI NE SE NÉGOCIE PAS : le retard INJECTÉ ne se confond jamais avec le
+        # retard MESURÉ. Deux variables, deux colonnes, deux champs dans la trace. Sans cette
+        # séparation, aucune relecture ne pourrait plus distinguer ce que la simulation a
+        # produit de ce qu'on lui a fait dire, et une mesure d'hystérésis qui ne le distingue
+        # pas n'est pas publiable.
+        _choc = None
+        _retard_injecte_s = 0
+        _incident_reseau = False
+        _correspondance_choc = False
+
         if observation.env_ob_code in ("arrival", "tc_timeout"):
             _started_at = observation.data.get("started_at")
             _schedule_at = observation.data.get("schedule_at")
@@ -1838,6 +1971,28 @@ class SimulationLoopV1(BaseScenario):
                         f"({_err}) — gravité de retard tenue pour nulle"
                     )
                     _retard_observe_s = 0.0
+            # Ticket 079 — le choc s'applique à l'ARRIVÉE, après la décision : l'agent a
+            # choisi en voyant l'offre nominale, il encaisse ensuite. C'est le régime SUBI, et
+            # c'est ce qui rend le jour du choc muet sur le choix et les jours suivants
+            # entièrement imputables au souvenir.
+            _registre_chocs = chocs_module.registre()
+            if _registre_chocs is not None and observation.env_ob_code == "arrival":
+                # Le mode vient de la table posée à la DÉCISION (ticket 077, lot C). Lu sans
+                # le consommer : le journal des habitudes le retirera plus bas.
+                _mode_du_trajet = self._mode_par_activite.get(
+                    (person.person_id, str(observation.activity_id))
+                )
+                _choc = _registre_chocs.applique(
+                    person.person_id, _mode_du_trajet, observation.timestamp
+                )
+                if _choc is not None:
+                    _retard_injecte_s = _choc.retard_injecte_s
+                    _incident_reseau = _choc.incident_reseau
+                    _correspondance_choc = _choc.correspondance_ratee
+                    # Le vécu est JOINT à l'observation, jamais substitué : l'agent doit garder
+                    # ce que la simulation a mesuré, et y ajouter ce qu'il a vécu.
+                    ob_text = f"{ob_text}\n[ INCIDENT ] {_choc.vecu}"
+
             await GamaArrivalsLogger.get_instance().log_arrival(
                 move_id=str(observation.data.get("moving_id", "")),
                 person_id=observation.person_id,
@@ -1848,6 +2003,7 @@ class SimulationLoopV1(BaseScenario):
                 started_at=int(_started_at) if _started_at is not None else None,
                 schedule_at=int(_schedule_at) if _schedule_at is not None else None,
                 timed_out=_timed_out,
+                retard_injecte_s=_retard_injecte_s,
             )
             if (
                 observation.env_ob_code == "arrival"
@@ -1904,10 +2060,19 @@ class SimulationLoopV1(BaseScenario):
         #   - `tc_timeout` EST la correspondance ratée : l'agent a vu partir son véhicule.
         # La composante « mode contraint » arrive par le chemin de DÉCISION (le contexte porte
         # `contrainte_chaine`), et « incident réseau » n'a pas encore de source.
+        # Ticket 079 — la gravité porte la SOMME des deux retards, et `incident_reseau`
+        # trouve ici la source que le ticket 071 lui avait laissée en attente.
         _gravite, _detail = gravite_deterministe(
-            retard_s=_retard_observe_s,
-            correspondance_ratee=(observation.env_ob_code == "tc_timeout"),
+            retard_s=_retard_observe_s + _retard_injecte_s,
+            correspondance_ratee=(
+                observation.env_ob_code == "tc_timeout" or _correspondance_choc
+            ),
+            incident_reseau=_incident_reseau,
         )
+        if _choc is not None and _registre_chocs is not None:
+            _registre_chocs.tracer(
+                _choc, person.person_id, observation.timestamp, _gravite, _detail
+            )
         if _gravite > 0:
             logger.debug(
                 f"[gravite] {person.person_id} — {observation.env_ob_code} : I_det="
@@ -1943,19 +2108,44 @@ class SimulationLoopV1(BaseScenario):
         # de l'agent. C'est ici, et seulement ici, que le mode retenu et le retard RÉELLEMENT
         # subi sont connus ensemble : le mode vient de l'entrée de décision, écrite plus tôt
         # dans la journée, et le retard de l'observation d'arrivée.
-        if observation.env_ob_code == "arrival" and self.agent.long_term_memory is not None:
+        if (
+            observation.env_ob_code == "arrival"
+            and self.agent.long_term_memory is not None
+        ):
             try:
-                _stm = self.agent.get_short_term_memory(person.person_id).recent_entries
-                _decision = next(
-                    (e for e in reversed(_stm) if e.axe_objet), None
+                # ⚠ Ticket 077, lot C — le mode de CE trajet, et d'aucun autre.
+                # Il est lu dans la table posée à la DÉCISION, jamais dans le tampon de
+                # mémoire courte : celui-ci est vidé par les consolidations, si bien que
+                # l'entrée de décision a souvent disparu quand l'arrivée survient. Remonter
+                # au dernier `axe_objet` du tampon attribuait l'arrivée au trajet PRÉCÉDENT
+                # (run du 075 : les 58 retours de l'agent 609 rangés sous le motif « work »
+                # de l'aller) ; exiger l'activité dans le tampon ne trouvait presque plus
+                # rien (run du 15/09 : 2 trajets journalisés pour 40 arrivées).
+                _mode_retenu = self._mode_par_activite.pop(
+                    (person.person_id, str(observation.activity_id)), None
                 )
-                if _decision is not None:
+                if _mode_retenu is None:
+                    # Rien n'est enregistré, et l'écart se voit. Attribuer l'arrivée à une
+                    # décision antérieure produirait une habitude fausse, ce qui est pire
+                    # qu'une habitude absente : le bloc du prompt est lu par le modèle.
+                    logger.warning(
+                        f"[noyau] arrivée sans mode retenu connu pour "
+                        f"{person.person_id} (activité {observation.activity_id}) — "
+                        f"trajet NON journalisé, habitudes incomplètes"
+                    )
+                else:
+                    # Le motif et le créneau viennent de l'ARRIVÉE qu'on enregistre. Seul
+                    # le mode vient de la décision : c'est la seule des trois choses qu'une
+                    # arrivée ne porte pas.
+                    _motif = normaliser_motif(
+                        observation.data.get("purpose") or person.state.heading_to
+                    )
                     self.agent.long_term_memory.noter_trajet(
                         person.person_id,
-                        _decision.axe_motif,
-                        _decision.axe_creneau,
-                        _decision.axe_objet,
-                        retard_s=_retard_observe_s,
+                        _motif,
+                        creneau_de(wall_clock(observation.timestamp)),
+                        _mode_retenu,
+                        retard_s=_retard_observe_s + _retard_injecte_s,
                     )
             except Exception as _err:  # noqa: BLE001 — le journal ne doit rien faire tomber
                 logger.warning(
@@ -2643,6 +2833,9 @@ class SimulationLoopV1(BaseScenario):
         # `sortie_bloquee`. Ces lignes restent dans le scoring : la colonne explique,
         # elle ne filtre pas.
         chain_constraint = ""
+        # Ticket 077, lot E5 — d'où vient la décision : « cache », « direct », ou vide
+        # quand aucun modèle n'a été sollicité (itinéraire unique, pas de déplacement).
+        _origine_decision = ""
         # Anticipation (ticket 014) : construit seulement si la décision atteint le
         # LLM — les chemins cache/mono-option n'affichent aucun prompt.
         anticipation: dict | None = None
@@ -2835,6 +3028,25 @@ class SimulationLoopV1(BaseScenario):
             if len(itineraries) == 1:
                 reasoning = "Un seul itinéraire disponible, sélection automatique"
                 selection_method = "Un seul itinéraire disponible"
+                # Ticket 077, lot C — un trajet sans alternative reste un DÉPLACEMENT que la
+                # mémoire doit connaître. Il n'appelle pas le modèle, donc il ne passait par
+                # aucun des deux endroits qui écrivent une entrée de décision : 116 des 514
+                # trajets du run du 075 étaient invisibles à la mémoire, et leurs arrivées
+                # étaient attribuées au trajet précédent faute de décision appariable.
+                if person.is_llm_based and self.agent:
+                    self.agent.note_decision_contrainte(
+                        Context(
+                            person=person,
+                            timestamp=timestamp,
+                            activity_id=next_activity.id,
+                            data={
+                                "type": "travel_plan",
+                                "contrainte_chaine": chain_constraint or "",
+                            },
+                        ),
+                        itineraries[0],
+                        next_activity.purpose,
+                    )
             elif person.is_llm_based and self.agent:
                 context = Context(
                     person=person,
@@ -2854,6 +3066,7 @@ class SimulationLoopV1(BaseScenario):
                     anticipation = _build_anticipation(
                         person, next_activity, departure_time
                     )
+                _trace_decision: dict = {}
                 (
                     plan_index,
                     reasoning,
@@ -2865,6 +3078,14 @@ class SimulationLoopV1(BaseScenario):
                     destination=next_activity.purpose,
                     departure_time=departure_time,
                     anticipation=anticipation,
+                    trace=_trace_decision,
+                )
+                # Une décision servie par le cache n'écrit aucune ligne dans
+                # `llm_exchanges.jsonl` : sans cette colonne, elle est indiscernable d'un
+                # appel direct dans `moves.csv`, et le compte des appels économisés se fait
+                # à l'aveugle.
+                _origine_decision = (
+                    "cache" if _trace_decision.get("cache") else "direct"
                 )
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     selection_method = "LLM"
@@ -2938,6 +3159,16 @@ class SimulationLoopV1(BaseScenario):
             phase="bootstrap" if self._in_bootstrap else "live",
         ).inc()
 
+        # Ticket 077, lot C — le mode retenu est noté ICI, où il est certain, et relu à
+        # l'arrivée. `mode_canonique` lit l'étiquette de jambes du plan : c'est le même
+        # vocabulaire que les axes des souvenirs.
+        if plan is not None and next_activity.id:
+            _mode_retenu = mode_canonique(plan.mode_label())
+            if _mode_retenu:
+                self._mode_par_activite[(person.person_id, str(next_activity.id))] = (
+                    _mode_retenu
+                )
+
         _weather = get_weather(timestamp)
         await MoveLogger.get_instance().log_move(
             person=person,
@@ -2949,6 +3180,10 @@ class SimulationLoopV1(BaseScenario):
             provider_model=provider_info or "",
             faster_itinerary=faster_itinerary,
             reasoning=reasoning,
+            # Ticket 077, lots E2 et E5 — l'index retenu et l'origine de la décision, pour
+            # TOUTE décision et non plus pour les seules qui passaient par le chronométrage.
+            selected_index=plan_index,
+            origine_decision=_origine_decision,
             weather_temp=_weather["temperature"] if _weather else None,
             weather_condition=_weather["weather_label"] if _weather else None,
             weather_precip_mm=_weather["precip_mm"] if _weather else None,

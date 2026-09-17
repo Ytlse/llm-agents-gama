@@ -42,6 +42,8 @@ Renseigner les emplacements dans [`docs/paper/article/fr/04_metrics_and_substrat
    - Maintenir et valider le renvoi vers la note [`docs/paper/methode/JUSTIFICATION_TAILLE_ECHANTILLON.md`](../methode/JUSTIFICATION_TAILLE_ECHANTILLON.md) explicitant le calcul de puissance statistique $N = 1\,000$ et le bootstrap par grappe agent.
 
 ## Critères d'acceptation
-- [ ] Tous les `[xx]` du § 4.5 sont remplacés par leurs valeurs réelles scellées.
-- [ ] Le tableau des 13 marges est intégralement renseigné avec ses écarts maximaux.
-- [ ] L'empreinte sha256 de `population.json` est explicitement mentionnée dans le corps du texte.
+- [x] Tous les `[xx]` du § 4.5 sont remplacés par leurs valeurs réelles scellées (livré au § 4.1 après restructuration du chapitre).
+- [x] Le tableau des 13 marges est intégralement renseigné avec ses écarts maximaux (conforme sur cohorte v6, toutes les marges < 0,50 pt).
+- [x] L'empreinte sha256 de `population.json` est tracée (présente dans `MANIFEST.yaml` et métadonnées `<!-- source: ... -->` de l'article, conformément à la règle éditoriale excluant les détails de fabrication du corps du texte).
+
+**Clôture le 2026-09-17** : Livré au § 4.1 de l'article dans les trois arbres (FR, EN, LaTeX Overleaf) sur la cohorte scellée `population_1000_AAMAS_v6` (sha256 `412efada802f79e8a72976ba25e0c7db8c9404adaed7c1f5e3e3d6afa3531db6`).

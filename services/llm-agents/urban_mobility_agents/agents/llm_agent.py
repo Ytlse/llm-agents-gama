@@ -5,6 +5,7 @@ import os
 import re
 import time
 import traceback
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -12,17 +13,6 @@ from typing import Any
 
 import demjson3
 import numpy as np
-from llm_gateway.sdk import LLMGatewayClient
-from loguru import logger
-from mobility_llm import prompt_manager as _mobility_prompt_manager
-from mobility_llm.mode_choice import (
-    UniformFallback,
-    draw_index,
-    mode_distribution,
-    normalize_option_probabilities,
-)
-from pydantic import BaseModel
-
 from experiences.decision import ordre_presentation
 from helper import (
     categorize_date_time_short,
@@ -55,20 +45,39 @@ from llm.gravite import (
     gravite_deterministe,
     gravite_jugee,
 )
+from llm.journal_memoire import journal
 from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
 from llm.noyau import memoire_noyau
 from llm.reflection_store import ReflectionMemoStore
 from llm.shortterm import UserShortTermMemory
+from llm.trace_concepts import tracer_operation
+from llm_gateway.sdk import LLMGatewayClient
+from loguru import logger
+from mobility_llm import prompt_manager as _mobility_prompt_manager
+from mobility_llm.mode_choice import (
+    UniformFallback,
+    draw_index,
+    mode_distribution,
+    normalize_option_probabilities,
+)
 from models import Person, TravelPlan
+from pydantic import BaseModel
 from settings import settings
 from sim_clock import gama_timestamp, wall_clock
 from text_helper import env_ob_to_text
 from urban_mobility_agents.agents.prompt_manager import PromptManager
 from urban_mobility_agents.agents.prompt_types import PromptName
+from urban_mobility_agents.utils import rejeu_decisions
+from urban_mobility_agents.utils.ancre_run import jours_ecoules
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
-from urban_mobility_agents.utils.weather_draw import jours_eligibles, timestamp_meteo
+from urban_mobility_agents.utils.reprise import gel_actif
+from urban_mobility_agents.utils.weather_draw import (
+    date_declaree,
+    jours_eligibles,
+    timestamp_meteo,
+)
 from urban_mobility_agents.utils.weather_loader import (
     get_weather,
     weather_to_natural_language,
@@ -79,8 +88,13 @@ from world.population import PersonScheduler
 history_log = HistoryStreamLog.get_instance()
 
 
-def log_llm_cache_hit(agent_id: str, activity_id: str | None, sim_ts: float, mode: str,
-                      category: str = "itinary_multi_agent") -> None:
+def log_llm_cache_hit(
+    agent_id: str,
+    activity_id: str | None,
+    sim_ts: float,
+    mode: str,
+    category: str = "itinary_multi_agent",
+) -> None:
     """Trace une décision servie par le cache sémantique dans workdir/llm_cache_hits.jsonl.
 
     Un hit ne déclenche aucun appel LLM (donc aucune ligne dans llm_exchanges.jsonl) : ce log
@@ -97,7 +111,11 @@ def log_llm_cache_hit(agent_id: str, activity_id: str | None, sim_ts: float, mod
             # processus : laissé tel quel exprès, pour rester octet pour octet le champ que
             # `llm_module.telemetry.logger` écrit de son côté (paquet séparé, qui ne peut
             # pas importer `sim_clock`).
-            "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime("%Y-%m-%d") if sim_ts else None,
+            "sim_day": datetime.fromtimestamp(sim_ts, tz=timezone.utc).strftime(
+                "%Y-%m-%d"
+            )
+            if sim_ts
+            else None,
             "agent_id": str(agent_id),
             "activity_id": str(activity_id or ""),
             "category": category,
@@ -115,8 +133,11 @@ def _format_distribution(distribution: dict) -> str:
     Le dictionnaire complet (modes à 0 % inclus) reste la source pour les métriques :
     ce format n'est destiné qu'aux traces lisibles (mémoire court terme, logs).
     """
-    parts = [f"{mode} {pct * 100:.0f}%" for mode, pct in
-             sorted(distribution.items(), key=lambda kv: -kv[1]) if pct > 0]
+    parts = [
+        f"{mode} {pct * 100:.0f}%"
+        for mode, pct in sorted(distribution.items(), key=lambda kv: -kv[1])
+        if pct > 0
+    ]
     return " · ".join(parts) or "aucune"
 
 
@@ -150,9 +171,23 @@ def _weather_eligible_days() -> tuple[tuple[int, int], ...]:
     jours = jours_eligibles(debut, fin, jours_semaine)
     logger.info(
         f"[météo] une date par agent : {len(jours)} journée(s) éligible(s) dans "
-        f"{debut} → {fin}" + (f", jours de semaine {jours_semaine}" if jours_semaine else "")
+        f"{debut} → {fin}"
+        + (f", jours de semaine {jours_semaine}" if jours_semaine else "")
     )
     return jours
+
+
+def _traits_de(person) -> dict:
+    """Traits du persona pour l'en-tête du journal, ou vide.
+
+    Défensif À DESSEIN : le journal ne connaît rien de la structure d'une personne et ne doit
+    JAMAIS faire tomber une consolidation pour un en-tête. Un double de test sans `identity` a
+    suffi à casser dix tests le 2026-09-14 — c'est exactement le genre d'accident qu'un
+    observateur n'a pas le droit de provoquer.
+    """
+    identite = getattr(person, "identity", None)
+    traits = getattr(identite, "traits_json", None) if identite is not None else None
+    return traits if isinstance(traits, dict) else {}
 
 
 class Context(BaseModel):
@@ -167,7 +202,9 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    type_suffix = f"-{context.data['type']}" if context.data and context.data.get('type') else ""
+    type_suffix = (
+        f"-{context.data['type']}" if context.data and context.data.get("type") else ""
+    )
     # Heure MURALE de GAMA (`sim_clock`) : le nom du fichier doit se relire à côté du
     # prompt qu'il contient, et celui-ci porte la même heure.
     sim_time = datetime.strftime(wall_clock(context.timestamp), "%d_%H%M")
@@ -193,7 +230,17 @@ def log_chat(prompt: str, response: str, context: Context) -> str:
 # `cableway` jusqu'au 2026-08-26 — le Téléo y était compté en marche ; un test de parité
 # verrouille désormais les deux dernières. La loss est l'instrument de mesure : toute
 # évolution s'y chiffre avant de s'appliquer (amendement A13 du protocole).
-_PT_LEG_MODES = ("bus", "metro", "métro", "tram", "cableway", "transit", "public_transport", "rail", "train")
+_PT_LEG_MODES = (
+    "bus",
+    "metro",
+    "métro",
+    "tram",
+    "cableway",
+    "transit",
+    "public_transport",
+    "rail",
+    "train",
+)
 
 
 # Traits du persona EXCLUS de la signature de cache. `name` seulement, et pour une raison
@@ -222,8 +269,11 @@ def _traits_signature(traits: dict | None) -> str:
     """
     if not traits:
         return ""
-    kept = {k: v for k, v in sorted(traits.items())
-            if k not in _TRAITS_EXCLUDED_FROM_CACHE_KEY}
+    kept = {
+        k: v
+        for k, v in sorted(traits.items())
+        if k not in _TRAITS_EXCLUDED_FROM_CACHE_KEY
+    }
     raw = json.dumps(kept, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -244,8 +294,9 @@ def _pt_subscription_note(mode_label: str, has_pt: bool) -> str:
         return ""
     if not any(k in ml for k in _PT_LEG_MODES):
         return ""
-    return (" Has a public transport pass." if has_pt
-            else " Has no public transport pass.")
+    return (
+        " Has a public transport pass." if has_pt else " Has no public transport pass."
+    )
 
 
 def _build_profile_narrative(traits: dict) -> str:
@@ -270,7 +321,9 @@ def _build_profile_narrative(traits: dict) -> str:
     name = traits.get("name", "")
     first_name = name.split()[0] if name else ""
     age = traits.get("age", "")
-    occupation = traits.get("professional_activity") or traits.get("main_occupation", "")
+    occupation = traits.get("professional_activity") or traits.get(
+        "main_occupation", ""
+    )
     household = traits.get("household_size")
     income = traits.get("income") or ""
 
@@ -288,7 +341,9 @@ def _build_profile_narrative(traits: dict) -> str:
     # Motifs habituels. Une personne immobile n'en a aucun : la phrase est alors OMISE plutôt
     # que rendue vide — « Usual trip purposes: » sans rien derrière se lirait comme une
     # information manquante, quand c'est une information qui dit « cette personne ne sort pas ».
-    motifs = [str(m).strip() for m in (traits.get("travel_purposes") or []) if str(m).strip()]
+    motifs = [
+        str(m).strip() for m in (traits.get("travel_purposes") or []) if str(m).strip()
+    ]
     if motifs:
         line1 += f". Usual trip purposes: {', '.join(motifs)}"
 
@@ -477,8 +532,6 @@ def _gravite_de_la_contrainte(context: Context) -> float:
 SCHEMA_REFLEXION_VERSION = 3
 
 
-
-
 class LlmAgent:
     DEFAULT_IDENTITY = ""
 
@@ -493,7 +546,7 @@ class LlmAgent:
         else:
             self.long_term_memory = None
             logger.info("Long-term memory disabled — ChromaDB initialization skipped")
-        
+
         # Instance du client LLM (Singleton naturel pour cet Agent) — SDK typé
         # (AsyncClient httpx réutilisé entre les appels, résultats TaskResult)
         self.llm_client = LLMGatewayClient(
@@ -503,8 +556,13 @@ class LlmAgent:
             backpressure_release_ratio=settings.agent.remote_llm_backpressure_ratio,
             circuit_failure_threshold=settings.agent.remote_llm_circuit_failure_threshold,
             circuit_probe_interval=settings.agent.remote_llm_circuit_probe_interval,
+            # Ticket 092 — posée sur le CLIENT : elle couvre les trois appels du run
+            # (décision, réflexion STM, auto-réflexion LTM) et tout appel ajouté plus tard.
+            instances_admises=list(settings.llm.instances_admises or []),
         )
-        self.prompt_manager = PromptManager(os.path.join(os.path.dirname(__file__), "prompts"))
+        self.prompt_manager = PromptManager(
+            os.path.join(os.path.dirname(__file__), "prompts")
+        )
 
         if settings.cache.enabled:
             population_name = f"{settings.data.synthetic_file_prefix}population_{settings.data.population_size}"
@@ -512,8 +570,12 @@ class LlmAgent:
             # (mobility_llm/prompts/prompts.yaml) change, le checksum change et le cache
             # repart à neuf au lieu de réutiliser des décisions obsolètes.
             prompt_checksum = _mobility_prompt_manager().active_prompt_checksum()
-            cache_dir = os.path.join(settings.cache.cache_dir, prompt_checksum, population_name)
-            logger.info(f"LLM cache isolé par prompt — checksum={prompt_checksum}, dir={cache_dir}")
+            cache_dir = os.path.join(
+                settings.cache.cache_dir, prompt_checksum, population_name
+            )
+            logger.info(
+                f"LLM cache isolé par prompt — checksum={prompt_checksum}, dir={cache_dir}"
+            )
             self.llm_cache = LlmSemanticCache(
                 cache_dir=cache_dir,
                 semantic_threshold=settings.cache.semantic_threshold,
@@ -523,7 +585,8 @@ class LlmAgent:
             # cache de décisions : l'isolation par checksum de prompt est héritée.
             self.reflection_memo = (
                 ReflectionMemoStore(cache_dir=cache_dir)
-                if settings.cache.reflection_memo_enabled else None
+                if settings.cache.reflection_memo_enabled
+                else None
             )
         else:
             self.llm_cache = None
@@ -533,13 +596,15 @@ class LlmAgent:
         if user_id not in self.short_term_memory:
             self.short_term_memory[user_id] = UserShortTermMemory(user_id)
         return self.short_term_memory[user_id]
-    
+
     def _weather_timestamp(self, context: Context) -> int:
         """Timestamp servant à lire le bulletin météo de cet agent.
 
         Par défaut, l'horloge simulée — comportement historique. Quand
         `weather_per_agent_dates` est actif, la seule DATE est remplacée par un
-        jour de l'année tiré déterministement depuis l'identifiant de l'agent :
+        jour de l'année — **celui que la personne a réellement décrit** quand une table de
+        dates déclarées accompagne la population (ticket 058), sinon un jour tiré
+        déterministement depuis l'identifiant de l'agent :
         sur une journée simulée unique, tous les agents partageraient sinon une
         seule météo, et l'effet météo serait par construction non mesurable
         (ticket 023). L'heure du départ est conservée, l'offre de transport
@@ -554,6 +619,15 @@ class LlmAgent:
                 context.person.person_id,
                 settings.agent.weather_draw_seed,
                 jours,
+                # Le jour décrit, quand il est connu : il n'y a pas à tirer ce que l'enquête
+                # porte. Absent, `date_imposee` vaut None et le tirage reprend à l'identique.
+                date_imposee=date_declaree(
+                    context.person.person_id, settings.agent.weather_dates_file
+                ),
+                # Ticket 075 — la date tirée est un DÉPART : elle avance d'un jour calendaire
+                # par jour simulé écoulé. À zéro (run d'une journée, ou premier jour d'un run
+                # long), le bulletin est exactement celui d'avant le ticket.
+                jours_ecoules=jours_ecoules(context.timestamp),
             )
         except Exception as err:  # pragma: no cover - garde-fou de production
             # Un tirage impossible ne doit pas faire tomber une décision : on
@@ -573,6 +647,13 @@ class LlmAgent:
         importance: float = 0.0,
         axes: dict | None = None,
     ):
+        # Ticket 075 — rejeu d'une reprise à chaud : l'agent revit une journée qu'il a DÉJÀ
+        # apprise. Le point d'étranglement est ici : sans entrée de mémoire courte, aucun agent
+        # ne devient éligible à la consolidation, donc rien ne se réécrit en mémoire longue.
+        # Les décisions et les déplacements, eux, continuent — il faut bien que la simulation
+        # retrouve son état.
+        if gel_actif():
+            return
         memory = self.get_short_term_memory(context.person.person_id)
         # L'horodatage du souvenir est l'heure MURALE de GAMA. Ce n'est pas cosmétique :
         # ce `datetime` finit dans le PROMPT (« - Time 16 March 2026, 05:12: … » via
@@ -594,6 +675,49 @@ class LlmAgent:
             data=context.data,
         )
 
+    def note_decision_contrainte(self, context: Context, plan, destination) -> None:
+        """Écrit en mémoire courte un déplacement dont le mode n'a pas été CHOISI.
+
+        Ticket 077, lot C. Un trajet à itinéraire unique n'appelle pas le modèle : il ne
+        passait donc par aucun des deux endroits qui écrivent une entrée de décision, et la
+        mémoire ignorait purement et simplement qu'un déplacement avait eu lieu. Sur le run
+        de trente jours du 075, **116 trajets sur 514** étaient dans ce cas — tous les
+        retours des agents ruraux, c'est-à-dire la moitié de leur vécu.
+
+        Deux conséquences, toutes deux mesurées. La réflexion du soir recevait les
+        observations physiques du trajet sans la décision qui les explique. Et le journal des
+        habitudes, qui s'alimente à l'arrivée en cherchant la décision correspondante, n'en
+        trouvait aucune.
+
+        **Le texte dit que le choix était contraint, et ne prétend pas qu'un modèle a
+        choisi.** Un agent qui se relit doit pouvoir distinguer ce qu'il a décidé de ce qu'il
+        a subi : lui faire lire « chosen by gateway LLM » sur un trajet sans alternative lui
+        ferait tirer une préférence d'une absence d'option — exactement le motif que ce
+        dépôt traque, où l'absence de mesure produit volontiers le score parfait.
+        """
+        if plan is None:
+            return
+        plan_summary = env_ob_to_text("travel_plan", plan.model_dump())
+        stm_msg = (
+            f"[ TRAVEL_PLAN ] Plan to head <{destination}>. "
+            f"No choice was possible: this was the only available itinerary.\n"
+            f"{plan_summary}\n"
+            f"Reasoning: the mode was imposed by the absence of any alternative, "
+            f"not preferred."
+        )
+        self.add_short_term_memory(
+            context,
+            stm_msg,
+            timestamp=context.timestamp,
+            importance=_gravite_de_la_contrainte(context),
+            axes=_axes_de_la_decision(
+                context,
+                plan,
+                destination,
+                get_weather(self._weather_timestamp(context)),
+            ),
+        )
+
     async def aadd_long_term_memory(self, context: Context, msg: MemoryEntry):
         await self.long_term_memory.aadd_memory(msg)
         history_log.log_longterm_memory(
@@ -605,7 +729,7 @@ class LlmAgent:
 
     def parse_response_json(self, response: str) -> tuple[dict | None, str]:
         try:
-            match = re.search(r'\{.*\}', response, re.DOTALL)
+            match = re.search(r"\{.*\}", response, re.DOTALL)
             assert match is not None, "No JSON found in response"
 
             json_str = match.group(0)
@@ -620,20 +744,22 @@ class LlmAgent:
         except Exception as e:
             traceback.print_exc()
             print(f"Error parsing response: {e}, response raw: {response}")
-            
+
         try:
             parsed = demjson3.decode(json_str)
             return parsed, ""
         except demjson3.JSONDecodeError as e:
             traceback.print_exc()
             print(f"Error parsing response: {e}, response raw: {response}")
-        
+
         return None, response.strip()
 
     def get_person_identity_description(self, person: Person) -> str:
         return _build_profile_narrative(person.identity.traits_json)
 
-    async def query_past_experiences_for_travel(self, context: Context, options: list[TravelPlan]) -> list[str]:
+    async def query_past_experiences_for_travel(
+        self, context: Context, options: list[TravelPlan]
+    ) -> list[str]:
         def get_plan_text(plan: TravelPlan) -> str:
             return env_ob_to_text("travel_plan_query", plan.model_dump())
 
@@ -649,7 +775,7 @@ class LlmAgent:
             temporal_keyword=categorize_date_time_short(context.timestamp),
             weekday=get_weekday_category(context.timestamp).upper(),
             destination=options[0].purpose,
-            travel_options=travel_options
+            travel_options=travel_options,
         )
 
         # logger.debug(f"Querying experiences with travel plans for user {context.person.person_id}, activity {context.activity_id}, query text: {text}")
@@ -684,7 +810,11 @@ class LlmAgent:
         for entry in hist:
             if entry.content not in unique_hist:
                 unique_hist[entry.content] = entry
-        hist = sorted(list(unique_hist.values()), key=lambda x: x.metadata['timestamp'], reverse=True)
+        hist = sorted(
+            list(unique_hist.values()),
+            key=lambda x: x.metadata["timestamp"],
+            reverse=True,
+        )
 
         # logger.debug(f"Found {len(hist)} relevant experiences for travel plans for user {context.person.person_id}, activity {context.activity_id}")
 
@@ -699,15 +829,23 @@ class LlmAgent:
         ts = []
         for entry in hist:
             if str(entry.metadata["memory_type"]) == str(MemoryType.REFLECTION.value):
-                date_str = datetime.strftime(datetime.fromisoformat(entry.metadata['timestamp']), '%A, %B %d')
+                date_str = datetime.strftime(
+                    datetime.fromisoformat(entry.metadata["timestamp"]), "%A, %B %d"
+                )
                 resp.append(f"[{date_str}] {entry.content}")
-                ts.append(datetime.fromisoformat(entry.metadata['timestamp']).timestamp())
+                ts.append(
+                    datetime.fromisoformat(entry.metadata["timestamp"]).timestamp()
+                )
             elif str(entry.metadata["memory_type"]) == str(MemoryType.CONCEPT.value):
                 concept = json.loads(entry.content)
                 resp.append(f"[Concept] {concept[0]}" if concept else "")
-                ts.append(datetime.fromisoformat(entry.metadata['timestamp']).timestamp())
+                ts.append(
+                    datetime.fromisoformat(entry.metadata["timestamp"]).timestamp()
+                )
             else:
-                logger.debug(f"Unknown memory type for entry: {entry.metadata['memory_type']}")
+                logger.debug(
+                    f"Unknown memory type for entry: {entry.metadata['memory_type']}"
+                )
 
         # sort the entries by timestamp asc
         ts = np.array(ts)
@@ -751,8 +889,10 @@ class LlmAgent:
 
     def get_personal_system_prompt(self, person: Person) -> str:
         identity_description = self.get_person_identity_description(person)
-        return self.prompt_manager.get_prompt(PromptName.PERSONAL_SYSTEM, identity_description=identity_description)
-    
+        return self.prompt_manager.get_prompt(
+            PromptName.PERSONAL_SYSTEM, identity_description=identity_description
+        )
+
     async def build_travel_plan_payload(
         self,
         context: Context,
@@ -762,9 +902,14 @@ class LlmAgent:
         anticipation: dict | None = None,
     ) -> dict[str, Any]:
         agent_id = context.person.person_id
-        perception = self.get_person_identity_description(context.person) # TODO To be remplace by feeling and perception about transport modes
+        perception = self.get_person_identity_description(
+            context.person
+        )  # TODO To be remplace by feeling and perception about transport modes
         current_time = humanize_time(context.timestamp)
-        city_context = weather_to_natural_language(get_weather(self._weather_timestamp(context))) or "None"
+        city_context = (
+            weather_to_natural_language(get_weather(self._weather_timestamp(context)))
+            or "None"
+        )
 
         history = []
         if settings.agent.long_term_memory_enabled:
@@ -777,7 +922,11 @@ class LlmAgent:
                 _rec.T_ltm_end = time.time()
 
         # Abonnement TC : porté par l'option, pas par le persona (cf. `_pt_subscription_note`).
-        _has_pt = bool((context.person.identity.traits_json or {}).get("has_pt_subscription", False))
+        _has_pt = bool(
+            (context.person.identity.traits_json or {}).get(
+                "has_pt_subscription", False
+            )
+        )
 
         def _describe(opt: TravelPlan) -> str:
             """Texte de l'option, avec la mention d'abonnement sur sa PREMIÈRE ligne.
@@ -809,7 +958,11 @@ class LlmAgent:
             for i, opt in enumerate(options)
         ]
 
-        dest_zone = options[0].end_location.zone if options and options[0].end_location else None
+        dest_zone = (
+            options[0].end_location.zone
+            if options and options[0].end_location
+            else None
+        )
 
         return {
             "category": "itinary_multi_agent",
@@ -821,8 +974,12 @@ class LlmAgent:
                     "perception": perception,
                     "destination": destination,
                     "destination_zone": dest_zone,
-                    "departure_time": humanize_time(departure_time) if departure_time else None,
-                    "departure_timestamp": float(departure_time) if departure_time else None,
+                    "departure_time": humanize_time(departure_time)
+                    if departure_time
+                    else None,
+                    "departure_timestamp": float(departure_time)
+                    if departure_time
+                    else None,
                     "current_time": current_time,
                     # Météo/trafic propre à l'agent (et non plus au niveau requête) :
                     # la clé de batch hache `parameters`, donc en sortant la météo des
@@ -839,16 +996,18 @@ class LlmAgent:
                     "day_outlook": (anticipation or {}).get("outlook"),
                     "agenda": (anticipation or {}).get("agenda") or [],
                     "history": history,
-                    "trajectories": trajectories
+                    "trajectories": trajectories,
                 }
             ],
-            "parameters": {
-                **settings.agent.llm_params
-            }
+            "parameters": {**settings.agent.llm_params},
         }
 
     async def evaluate_and_choose_travel_plan(
-        self, context: Context, options: list[TravelPlan], destination: str, departure_time: int = 0,
+        self,
+        context: Context,
+        options: list[TravelPlan],
+        destination: str,
+        departure_time: int = 0,
         anticipation: dict | None = None,
         *,
         force_provider: str | None = None,
@@ -878,6 +1037,24 @@ class LlmAgent:
         assert options, "No travel options provided for planning trip."
         anticipation_key = (anticipation or {}).get("signature", "")
 
+        # GARDE ACCIDENTS (ticket 070, travail E). La clé du cache de décisions est bâtie sur
+        # les CODES D'OPTIONS — des routes et des arrêts — donc insensible aux DURÉES par
+        # construction (`llm/cache.py`, `_make_state_hash`). Sans ce complément, un agent dont
+        # le trajet vient d'être allongé de vingt minutes se verrait resservir la décision
+        # qu'il avait prise sans le retard, et aucun journal ne le signalerait.
+        #
+        # C'est la QUATRIÈME occurrence du même piège dans le dépôt — après le temps terminal,
+        # les traits du persona et le contexte d'anticipation, dont l'une a coûté un vidage
+        # manuel de cache. `extra_key` existe précisément pour ça.
+        if departure_time:
+            from trip_helper import accidents as _accidents
+
+            _registre = _accidents.registre()
+            if _registre is not None:
+                _sig = _registre.signature_active(int(departure_time))
+                if _sig:
+                    anticipation_key = f"{anticipation_key}|accidents:{_sig}"
+
         # Ordre déterministe pour les clés de cache (indépendant du shuffle)
         sorted_options = sorted(options, key=lambda p: p.get_code() or "")
         # Ordre de présentation DÉTERMINISTE (ticket 035, D7) : dérivé de la graine, de
@@ -888,7 +1065,9 @@ class LlmAgent:
         else:
             shuffled_options = ordre_presentation(
                 options,
-                settings.agent.option_order_seed if option_order_seed is None else option_order_seed,
+                settings.agent.option_order_seed
+                if option_order_seed is None
+                else option_order_seed,
                 context.person.person_id,
                 context.activity_id,
             )
@@ -908,7 +1087,9 @@ class LlmAgent:
             settings.agent.mode_draw_seed,
             context.person.person_id,
             context.activity_id,
-            datetime.fromtimestamp(context.timestamp, tz=timezone.utc).strftime("%Y-%m-%d"),
+            datetime.fromtimestamp(context.timestamp, tz=timezone.utc).strftime(
+                "%Y-%m-%d"
+            ),
         )
 
         # --- Cache hybride (avant l'appel LLM) ---
@@ -923,9 +1104,30 @@ class LlmAgent:
         payload = None
         memory_text = None
         if has_memories:
-            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time, anticipation)
+            payload = await self.build_travel_plan_payload(
+                context, shuffled_options, destination, departure_time, anticipation
+            )
             # Texte mémoire : sérialisation du champ history déjà calculé dans le payload
-            memory_text = json.dumps(payload["agents"][0].get("history", []), ensure_ascii=False)
+            memory_text = json.dumps(
+                payload["agents"][0].get("history", []), ensure_ascii=False
+            )
+
+        # ── Ticket 075 — pendant le REJEU d'une reprise à chaud ──────────────────────────
+        # La branche par similarité compare la mémoire COURANTE à celle qui a produit la
+        # décision cachée. Or pendant un rejeu la mémoire est figée au point de reprise,
+        # donc plus jamais identique à ce qu'elle était à cet instant du run d'origine : le
+        # seuil de 0,95 n'est pas atteint et la décision repart au modèle. Mesuré le
+        # 2026-09-14 sur le rejeu d'un jour : 33 % de service seulement, onze décisions sur
+        # dix-huit repayées. Sur un rejeu de quarante jours, ce serait plus d'une journée de
+        # quota dépensée pour réapprendre ce qu'on sait déjà.
+        #
+        # ⚠ Ce n'est PAS une dégradation, et c'est l'inverse d'un repli : la branche EXACTE
+        # s'adresse au point écrit par le run d'origine pour ce même agent, cette même
+        # activité, ce même créneau, cette même météo et ces mêmes options. Ce qu'elle rend
+        # est donc la décision que le run d'origine A PRISE. Un appel neuf, lui, rendrait une
+        # décision prise sur une mémoire que l'agent n'avait pas encore à ce moment-là.
+        # Un miss reste un miss : le modèle est appelé normalement.
+        _memory_text_cache = None if gel_actif() else memory_text
 
         if self.llm_cache is not None:
             cache_hit = await self.llm_cache.lookup(
@@ -933,7 +1135,7 @@ class LlmAgent:
                 activity_id=context.activity_id,
                 timestamp=context.timestamp,
                 options=sorted_options,
-                memory_text=memory_text,
+                memory_text=_memory_text_cache,
                 weather=weather,
                 activity_purpose=activity_purpose,
                 seed_parts=seed_parts,
@@ -955,11 +1157,17 @@ class LlmAgent:
                 plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
                 stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> served from LLM cache.\n{plan_summary}\nReasoning: {reason}"
                 self.add_short_term_memory(
-                    context, stm_msg, timestamp=context.timestamp,
+                    context,
+                    stm_msg,
+                    timestamp=context.timestamp,
                     importance=_gravite_de_la_contrainte(context),
-                    axes=_axes_de_la_decision(context, chosen_plan, destination, weather),
+                    axes=_axes_de_la_decision(
+                        context, chosen_plan, destination, weather
+                    ),
                 )
-                logger.debug(f"Cache hit for person {context.person.person_id}, activity {context.activity_id}, returning cached plan with reason: {reason}")
+                logger.debug(
+                    f"Cache hit for person {context.person.person_id}, activity {context.activity_id}, returning cached plan with reason: {reason}"
+                )
                 # Écriture jsonl déportée hors de l'event loop (open/write bloquants)
                 await asyncio.to_thread(
                     log_llm_cache_hit,
@@ -968,12 +1176,42 @@ class LlmAgent:
                     sim_ts=float(context.timestamp),
                     mode=cache_hit.get("mode", ""),
                 )
-                return (original_index, reason, f"cache:{cache_hit.get('mode', '')}",
-                        cache_hit.get("distribution") or {})
+                return (
+                    original_index,
+                    reason,
+                    f"cache:{cache_hit.get('mode', '')}",
+                    cache_hit.get("distribution") or {},
+                )
+
+        # Ticket 090 — pendant le rejeu d'une reprise à chaud, resservir la décision que CE run
+        # a déjà prise, au lieu de la repayer. La condition `gel_actif()` est essentielle : hors
+        # de la fenêtre de rejeu, la trace deviendrait un cache permanent, et le run cesserait
+        # d'être journalisé sur son périmètre complet. Une clé manquée n'est pas un échec — on
+        # appelle le modèle — mais elle est comptée, et alarmée au-delà d'un seuil : un rejeu qui
+        # ne retrouve pas ses propres choix ne reconstruit pas l'état qu'on croit reprendre.
+        if gel_actif():
+            _rejoue = rejeu_decisions.chercher(
+                context.person.person_id, context.activity_id, float(context.timestamp)
+            )
+            if _rejoue is not None:
+                _plan = next(
+                    (o for o in options if o.get_code() == _rejoue.get("code_plan")), None
+                )
+                if _plan is not None:
+                    # Aucune écriture de mémoire ici : le rejeu ne doit rien réapprendre, et le
+                    # gel du ticket 075 l'interdit déjà de son côté.
+                    return (
+                        options.index(_plan),
+                        _rejoue.get("raison", ""),
+                        f"rejeu:{_rejoue.get('fournisseur', '')}",
+                        _rejoue.get("distribution") or {},
+                    )
 
         # Cache miss sur la branche « mémoire vide » : le payload reste à construire.
         if payload is None:
-            payload = await self.build_travel_plan_payload(context, shuffled_options, destination, departure_time, anticipation)
+            payload = await self.build_travel_plan_payload(
+                context, shuffled_options, destination, departure_time, anticipation
+            )
 
         _pl = PipelineLogger.get()
         _rec = _pl.get_record(context.person.person_id) if _pl is not None else None
@@ -981,6 +1219,14 @@ class LlmAgent:
         try:
             if _rec is not None:
                 _rec.T_llm_start = time.time()
+            # Ticket 084 — la restriction de routage part AVEC la requête : la passerelle
+            # refuse alors de servir depuis une autre instance, à la sélection et donc avant
+            # qu'un appel ne soit payé. Ticket 092 : elle n'est plus posée ICI mais sur le
+            # client, seuil unique par lequel sortent AUSSI les réflexions STM et LTM — les
+            # poser appel par appel avait laissé la mémoire se faire écrire par un autre
+            # modèle. Le filtre `allowed_providers` ci-dessous reste une défense en
+            # profondeur : il constate après coup ce que la restriction empêche.
+
             attente_instance = None
             if force_provider:
                 payload["force_provider"] = force_provider
@@ -989,7 +1235,9 @@ class LlmAgent:
                 # (calé sur un fournisseur distant) les ferait expirer avant leur tour.
                 _cfg = settings.llm.providers.get(force_provider)
                 attente_instance = getattr(_cfg, "wait_timeout", None) if _cfg else None
-            llm_result = await self.llm_client.execute(payload, wait_timeout=attente_instance)
+            llm_result = await self.llm_client.execute(
+                payload, wait_timeout=attente_instance
+            )
             _t_after_llm = time.time()
             provider_used = llm_result.provider_used or ""
             if trace is not None:
@@ -997,12 +1245,23 @@ class LlmAgent:
                 trace["fournisseur"] = provider_used
                 trace["identifiant_lot"] = llm_result.task_id
                 trace["souvenirs"] = list(payload["agents"][0].get("history", []) or [])
-                trace["presentees_modes"] = [t.get("mode") for t in payload["agents"][0]["trajectories"]]
+                trace["presentees_modes"] = [
+                    t.get("mode") for t in payload["agents"][0]["trajectories"]
+                ]
                 trace["reponse_brute"] = (
-                    json.dumps([a.model_dump() for a in llm_result.agents], ensure_ascii=False, default=str)
-                    if llm_result.agents else None
+                    json.dumps(
+                        [a.model_dump() for a in llm_result.agents],
+                        ensure_ascii=False,
+                        default=str,
+                    )
+                    if llm_result.agents
+                    else None
                 )
-            if allowed_providers is not None and llm_result.ok and provider_used not in allowed_providers:
+            if (
+                allowed_providers is not None
+                and llm_result.ok
+                and provider_used not in allowed_providers
+            ):
                 # Substitution silencieuse de la passerelle (bascule vers un autre modèle
                 # après erreur de parse) : refusée, jamais archivée comme décision (Q3).
                 if trace is not None:
@@ -1034,9 +1293,12 @@ class LlmAgent:
                     # Modes tels qu'ils ont été envoyés dans le prompt : ils permettent de
                     # réaligner une réponse dont les index sont hors bornes (le modèle a
                     # renuméroté les options) au lieu d'en perdre la masse.
-                    sent_modes = [t.get("mode") for t in payload["agents"][0]["trajectories"]]
+                    sent_modes = [
+                        t.get("mode") for t in payload["agents"][0]["trajectories"]
+                    ]
                     shuffled_weights = normalize_option_probabilities(
-                        agent_result.probabilities, len(shuffled_options),
+                        agent_result.probabilities,
+                        len(shuffled_options),
                         modes=sent_modes,
                         context=f"agent={context.person.person_id} activity={context.activity_id}",
                     )
@@ -1047,7 +1309,9 @@ class LlmAgent:
                     if trace is not None:
                         trace["poids_presentes"] = [float(w) for w in shuffled_weights]
                         trace["repli_uniforme"] = weights_are_fallback
-                    position_in_sorted = {id(opt): i for i, opt in enumerate(sorted_options)}
+                    position_in_sorted = {
+                        id(opt): i for i, opt in enumerate(sorted_options)
+                    }
                     weights = [0.0] * len(sorted_options)
                     for opt, w in zip(shuffled_options, shuffled_weights):
                         weights[position_in_sorted[id(opt)]] += w
@@ -1099,13 +1363,19 @@ class LlmAgent:
                         )
 
                     # Écriture de la décision en short-term memory pour alimenter la réflexion journalière
-                    plan_summary = env_ob_to_text("travel_plan", chosen_plan.model_dump())
+                    plan_summary = env_ob_to_text(
+                        "travel_plan", chosen_plan.model_dump()
+                    )
                     stm_msg = f"[ TRAVEL_PLAN ] Plan to head <{destination}> chosen by gateway LLM.\n{plan_summary}\nReasoning: {reason}"
                     self.add_short_term_memory(
-                    context, stm_msg, timestamp=context.timestamp,
-                    importance=_gravite_de_la_contrainte(context),
-                    axes=_axes_de_la_decision(context, chosen_plan, destination, weather),
-                )
+                        context,
+                        stm_msg,
+                        timestamp=context.timestamp,
+                        importance=_gravite_de_la_contrainte(context),
+                        axes=_axes_de_la_decision(
+                            context, chosen_plan, destination, weather
+                        ),
+                    )
 
                     original_index = options.index(chosen_plan)
                     if _rec is not None:
@@ -1123,28 +1393,51 @@ class LlmAgent:
                         )
                     elif self.llm_cache is not None:
                         mode = chosen_plan.mode_label()
-                        _cache_task = create_background_task(self.llm_cache.store(
-                            agent_id=context.person.person_id,
-                            activity_id=context.activity_id,
-                            timestamp=context.timestamp,
-                            options=sorted_options,
-                            memory_text=memory_text,
-                            chosen_plan_code=chosen_plan.get_code(),
-                            mode=mode,
-                            weather=weather,
-                            probabilities=weights,
-                            extra_key=anticipation_key,
-                            traits_key=_traits_signature(context.person.identity.traits_json),
-                        ))
-                        _cache_task.add_done_callback(
-                            lambda t: logger.warning(f"Cache store failed: {t.exception()}") if not t.cancelled() and t.exception() else None
+                        _cache_task = create_background_task(
+                            self.llm_cache.store(
+                                agent_id=context.person.person_id,
+                                activity_id=context.activity_id,
+                                timestamp=context.timestamp,
+                                options=sorted_options,
+                                memory_text=memory_text,
+                                chosen_plan_code=chosen_plan.get_code(),
+                                mode=mode,
+                                weather=weather,
+                                probabilities=weights,
+                                extra_key=anticipation_key,
+                                traits_key=_traits_signature(
+                                    context.person.identity.traits_json
+                                ),
+                            )
                         )
-                        logger.debug(f"Cache store task created for person {context.person.person_id}, activity {context.activity_id}, chosen plan mode: {mode}")
+                        _cache_task.add_done_callback(
+                            lambda t: (
+                                logger.warning(f"Cache store failed: {t.exception()}")
+                                if not t.cancelled() and t.exception()
+                                else None
+                            )
+                        )
+                        logger.debug(
+                            f"Cache store task created for person {context.person.person_id}, activity {context.activity_id}, chosen plan mode: {mode}"
+                        )
 
                     if trace is not None:
                         trace["distribution"] = distribution
                         trace["index_presente"] = shuffled_options.index(chosen_plan)
                         trace["raison"] = reason
+                    # Ticket 090 — consigner la décision pour qu'une reprise à chaud la
+                    # ressorte sans la repayer. Rien n'est tracé pendant le gel : une journée
+                    # rejouée ne se trace pas deux fois.
+                    if not gel_actif():
+                        rejeu_decisions.tracer(
+                            context.person.person_id,
+                            context.activity_id,
+                            float(context.timestamp),
+                            code_plan=chosen_plan.get_code(),
+                            raison=reason,
+                            fournisseur=provider_used,
+                            distribution=distribution,
+                        )
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
                     return original_index, reason, provider_used, distribution
 
@@ -1152,7 +1445,9 @@ class LlmAgent:
                     _rec.T_extract_end = time.time()
 
             error_msg = llm_result.error or "Format de réponse invalide ou timeout."
-            logger.warning(f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}")
+            logger.warning(
+                f"aplan_trip: gateway a retourné un résultat invalide pour {context.person.person_id}: {error_msg}"
+            )
             if trace is not None:
                 trace["erreur"] = error_msg
                 # Nature de l'échec telle que le gateway l'a qualifiée. Le texte seul ne
@@ -1171,36 +1466,66 @@ class LlmAgent:
                 trace["erreur"] = str(e)
             return -1, str(e), "", {}
 
-    async def trigger_short_term_reflection_for_all_people(self, timestamp: int, people: list[Person]):
+    async def trigger_short_term_reflection_for_all_people(
+        self,
+        timestamp: int,
+        people: list[Person],
+        motif: str = "",
+        declencheur: str = "",
+    ):
         """
         Reflect on all short-term memories of all people at the given timestamp.
         This is used to process all short-term memories at once, e.g. at the end of the day.
+
+        `motif` et `declencheur` (ticket 075) : ce qui a rendu l'agent éligible — `seuil`,
+        `plancher journalier` ou `rupture` — est calculé par le CONTRÔLEUR, seul à connaître
+        l'état du tampon au moment du test. Sans ces deux champs, le journal de mémoire
+        constate une consolidation sans pouvoir dire ce qui l'a provoquée, c'est-à-dire
+        l'essentiel de ce qu'on vient y lire. Vides, rien ne change : la consolidation a lieu
+        à l'identique.
         """
         if settings.agent.long_term_memory_enabled is False:
             logger.info("Long-term memory is disabled, skipping reflection.")
             return
-        
+
         import asyncio
 
         sem = asyncio.Semaphore(10)
 
         async def _reflect_one(person):
             async with sem:
-                context = Context(person=person, timestamp=timestamp, data={"type": "reflection"})
+                context = Context(
+                    person=person,
+                    timestamp=timestamp,
+                    data={
+                        "type": "reflection",
+                        "motif": motif,
+                        "declencheur": declencheur,
+                    },
+                )
                 await self.reflect_on_short_term_memory(context)
 
         await asyncio.gather(*[_reflect_one(p) for p in people])
 
-    async def trigger_long_term_reflection_for_all_people(self, timestamp: int, from_date: datetime, people: list[Person]):
-        if settings.agent.long_term_memory_enabled is False or settings.agent.long_term_self_reflect_enabled is False:
-            logger.info("Long-term memory is disabled or Self reflection is disable, skipping self reflection.")
+    async def trigger_long_term_reflection_for_all_people(
+        self, timestamp: int, from_date: datetime, people: list[Person]
+    ):
+        if (
+            settings.agent.long_term_memory_enabled is False
+            or settings.agent.long_term_self_reflect_enabled is False
+        ):
+            logger.info(
+                "Long-term memory is disabled or Self reflection is disable, skipping self reflection."
+            )
+            return
+        if gel_actif():
+            # Rejeu d'une reprise (ticket 075) : cette auto-réflexion a déjà eu lieu et son
+            # entrée est déjà en mémoire. La refaire l'écrirait deux fois.
             return
 
         for person in people:
             context = Context(
-                person=person,
-                timestamp=timestamp,
-                data={"type": "self_reflection"}
+                person=person, timestamp=timestamp, data={"type": "self_reflection"}
             )
             await self.reflect_on_long_term_memory(context, from_date)
 
@@ -1214,7 +1539,9 @@ class LlmAgent:
             from_date=from_date,
         )
         if not all_entries:
-            logger.info(f"No long-term memory available for reflection for {context.person.person_id}")
+            logger.info(
+                f"No long-term memory available for reflection for {context.person.person_id}"
+            )
             return
 
         # `gama_timestamp` et non `.timestamp()` : le `datetime` du souvenir porte des
@@ -1239,7 +1566,9 @@ class LlmAgent:
                 departure_timestamp=float(context.timestamp),
                 llm_params=settings.agent.llm_params,
             )
-            hit = await asyncio.to_thread(self.reflection_memo.lookup, memo_key, "ltm_self_reflection")
+            hit = await asyncio.to_thread(
+                self.reflection_memo.lookup, memo_key, "ltm_self_reflection"
+            )
             if hit is not None:
                 reflection = hit["reflection"]
                 logger.info(
@@ -1250,27 +1579,36 @@ class LlmAgent:
         if reflection is None:
             payload = {
                 "category": "ltm_self_reflection",
-                "agents": [{
-                    "agent_id": context.person.person_id,
-                    "perception": identity_description,
-                    "context": entries_text,
-                    "departure_timestamp": float(context.timestamp),
-                }],
+                "agents": [
+                    {
+                        "agent_id": context.person.person_id,
+                        "perception": identity_description,
+                        "context": entries_text,
+                        "departure_timestamp": float(context.timestamp),
+                    }
+                ],
                 "parameters": {**settings.agent.llm_params},
             }
 
             llm_result = await self.llm_client.execute(payload)
             results = llm_result.agents
             if not results:
-                logger.error(f"LTM self-reflection gateway returned no result for {context.person.person_id}")
+                logger.error(
+                    f"LTM self-reflection gateway returned no result for {context.person.person_id}"
+                )
                 return
             # AgentResponse accepte les champs hors schéma (extra=allow) —
             # "reflection" est porté par la catégorie ltm_self_reflection.
             reflection = getattr(results[0], "reflection", "") or ""
             if self.reflection_memo is not None:
                 await asyncio.to_thread(
-                    self.reflection_memo.store, memo_key, context.person.person_id,
-                    "ltm_self_reflection", reflection, None, llm_result.provider_used or "",
+                    self.reflection_memo.store,
+                    memo_key,
+                    context.person.person_id,
+                    "ltm_self_reflection",
+                    reflection,
+                    None,
+                    llm_result.provider_used or "",
                 )
 
         try:
@@ -1280,9 +1618,29 @@ class LlmAgent:
                 timestamp=wall_clock(context.timestamp),
                 memory_type=MemoryType.REFLECTION,
             )
+            # Ticket 075 — l'auto-réflexion long terme est une consolidation d'un autre genre :
+            # elle ne consomme aucune entrée de mémoire courte, elle relit la mémoire longue.
+            # Elle a sa section pour cette raison même, sinon sa trace se confondrait avec une
+            # écriture ordinaire.
+            _journal = journal()
+            if _journal is not None:
+                _journal.ouvrir_agent(
+                    context.person.person_id, _traits_de(context.person)
+                )
+                _journal.consolidation_debut(
+                    context.person.person_id,
+                    wall_clock(context.timestamp),
+                    "auto-réflexion long terme",
+                    "relecture périodique de la mémoire longue "
+                    f"(intervalle {settings.agent.long_term_reflect_interval} s simulées)",
+                    [],
+                )
+                _journal.reflexion(context.person.person_id, reflection)
             await self.aadd_long_term_memory(context, entry)
         except Exception as e:
-            logger.error(f"Failed to store LTM self-reflection for person {context.person.person_id}, err: {e}")
+            logger.error(
+                f"Failed to store LTM self-reflection for person {context.person.person_id}, err: {e}"
+            )
 
     def _marquer_concept_modifie(self, person_id: str) -> None:
         """Un concept mis à jour SUR PLACE doit être persisté comme une écriture neuve.
@@ -1340,6 +1698,46 @@ class LlmAgent:
                 f"ininterprétable."
             )
 
+    # Fenêtre d'observation du taux de croyances montrées, en nombre d'appels de réflexion.
+    _FENETRE_CROYANCES = 50
+    # Au-delà, le mécanisme de correction des concepts est hors service DE FAIT : le modèle
+    # ne peut confirmer ni préciser ce qu'on ne lui montre pas. Mesuré à 68 % sur le run du
+    # ticket 075, et à 100 % pour l'agent sans voiture — d'où 0 précision sur 231 concepts.
+    _SEUIL_CROYANCES_VIDES = 0.5
+
+    def _compter_croyances_montrees(self, person_id: str, montrees: int) -> None:
+        """Taux d'appels de réflexion où l'agent ne s'est vu montrer AUCUNE croyance.
+
+        Ticket 077, lot E4. C'est le dénominateur qui manquait au run du 075 : sans lui, la
+        redondance des concepts s'impute au modèle, alors que la mesure l'innocente — quand
+        `known_beliefs` n'est pas vide, il confirme 74 fois sur 76. Ce compteur est la GARDE
+        du lot A : si les paniers se vident de nouveau, pour cette raison ou pour une autre,
+        l'alarme le dit avant qu'un run de trente jours ne soit à refaire.
+        """
+        if not hasattr(self, "_croyances_fenetre"):
+            self._croyances_fenetre: deque = deque(maxlen=self._FENETRE_CROYANCES)
+            self._alarme_croyances_vides = False
+        self._croyances_fenetre.append(1 if montrees == 0 else 0)
+        if len(self._croyances_fenetre) < self._FENETRE_CROYANCES:
+            return
+        part_vide = sum(self._croyances_fenetre) / len(self._croyances_fenetre)
+        if part_vide >= self._SEUIL_CROYANCES_VIDES and not self._alarme_croyances_vides:
+            self._alarme_croyances_vides = True
+            logger.error(
+                f"[ALARME] aucune croyance montrée au modèle dans {part_vide:.0%} des "
+                f"{len(self._croyances_fenetre)} dernières réflexions (seuil : "
+                f"{self._SEUIL_CROYANCES_VIDES:.0%}) — le panier (mode, motif) ne désigne "
+                f"aucun candidat. Le modèle ne peut ni confirmer ni préciser : il ne lui "
+                f"reste qu'à créer, et les concepts s'empilent en reformulations. Vérifier "
+                f"d'abord que les axes d'objet des concepts ne sont pas vides."
+            )
+        elif part_vide < self._SEUIL_CROYANCES_VIDES and self._alarme_croyances_vides:
+            self._alarme_croyances_vides = False
+            logger.info(
+                f"[concepts] croyances de nouveau montrées au modèle "
+                f"({1 - part_vide:.0%} des appels) — alarme réarmée"
+            )
+
     async def reflect_on_short_term_memory(self, context: Context):
         mem = self.get_short_term_memory(context.person.person_id)
         group_messages, all_messages = mem.get_all_message_and_group()
@@ -1351,24 +1749,29 @@ class LlmAgent:
         exp = []
         for group in group_messages:
             if group:
-                activity = PersonScheduler(context.person).get_activity(group[0].activity_id) if group[0].activity_id else None
-                exp.append({
-                    "purpose": activity.purpose if activity else None,
-                    "observations": [msg.content for msg in group],
-                })
+                activity = (
+                    PersonScheduler(context.person).get_activity(group[0].activity_id)
+                    if group[0].activity_id
+                    else None
+                )
+                exp.append(
+                    {
+                        "purpose": activity.purpose if activity else None,
+                        "observations": [msg.content for msg in group],
+                    }
+                )
         # Ticket 071, lot 3 — les concepts que l'agent tient déjà sur les modes et motifs de
         # sa journée sont montrés dans l'appel qui a DÉJÀ lieu. Le modèle désigne celui qu'il
         # met à jour, ou n'en désigne aucun : coût marginal nul, aucun seuil de similarité
         # arbitraire à calibrer, et il dispose du contexte qu'un seuil n'a pas.
-        _paniers = {
-            panier_de(m.axe_objet, m.axe_motif) for m in all_messages
-        }
+        _paniers = {panier_de(m.axe_objet, m.axe_motif) for m in all_messages}
         _connus = _concepts_du_jour(
             self.long_term_memory, context.person.person_id, _paniers
         )
         # Poignées courtes (K1, K2…) plutôt que les identifiants de documents : le modèle a
         # moins de latitude pour en inventer un, et la correspondance est vérifiée au retour.
         _par_poignee = {f"K{i + 1}": e for i, e in enumerate(_connus)}
+        self._compter_croyances_montrees(context.person.person_id, len(_par_poignee))
         experiences_text = json.dumps(
             {
                 "today": exp,
@@ -1389,7 +1792,11 @@ class LlmAgent:
         )
 
         identity_description = self.get_person_identity_description(context.person)
-        custom_guidelines = f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}" if settings.agent.reflection_custom_guidelines else ""
+        custom_guidelines = (
+            f"\n**IMPORTANT CUSTOM GUIDELINES** {settings.agent.reflection_custom_guidelines}"
+            if settings.agent.reflection_custom_guidelines
+            else ""
+        )
 
         # Mémoïsation exacte (ticket 012) : même agent, même vécu, mêmes consignes
         # ⇒ même introspection. Hit ⇒ appel LLM évité ; les effets (consommation
@@ -1414,7 +1821,9 @@ class LlmAgent:
                 # perdu : c'est le prix du champ, et il est annoncé.
                 schema_version=SCHEMA_REFLEXION_VERSION,
             )
-            hit = await asyncio.to_thread(self.reflection_memo.lookup, memo_key, "stm_reflection")
+            hit = await asyncio.to_thread(
+                self.reflection_memo.lookup, memo_key, "stm_reflection"
+            )
             if hit is not None:
                 reflection, concepts = hit["reflection"], hit["concepts"]
                 logger.info(
@@ -1426,12 +1835,14 @@ class LlmAgent:
             payload = {
                 "category": "stm_reflection",
                 "min_tpm_required": settings.agent.stm_reflection_min_tpm,
-                "agents": [{
-                    "agent_id": context.person.person_id,
-                    "perception": identity_description,
-                    "context": experiences_text,
-                    "departure_timestamp": float(context.timestamp),
-                }],
+                "agents": [
+                    {
+                        "agent_id": context.person.person_id,
+                        "perception": identity_description,
+                        "context": experiences_text,
+                        "departure_timestamp": float(context.timestamp),
+                    }
+                ],
                 "parameters": {
                     "custom_guidelines": custom_guidelines,
                     **settings.agent.llm_params,
@@ -1441,7 +1852,9 @@ class LlmAgent:
             llm_result = await self.llm_client.execute(payload)
             results = llm_result.agents
             if not results:
-                logger.error(f"STM reflection gateway returned no result for {context.person.person_id}")
+                logger.error(
+                    f"STM reflection gateway returned no result for {context.person.person_id}"
+                )
                 return
 
             agent_result = results[0]
@@ -1453,12 +1866,38 @@ class LlmAgent:
             if self.reflection_memo is not None:
                 # Le store refuse le vide (D3) : un échec de génération ne se rejoue pas.
                 await asyncio.to_thread(
-                    self.reflection_memo.store, memo_key, context.person.person_id,
-                    "stm_reflection", reflection, concepts, llm_result.provider_used or "",
+                    self.reflection_memo.store,
+                    memo_key,
+                    context.person.person_id,
+                    "stm_reflection",
+                    reflection,
+                    concepts,
+                    llm_result.provider_used or "",
                 )
 
         self.get_short_term_memory(context.person.person_id).remove_batch(all_messages)
         start_timestamp = all_messages[0].timestamp
+
+        # ── Ticket 075 — ouverture de la section de journal ──────────────────────────────
+        # Le MOTIF est calculé par le contrôleur au moment de l'éligibilité (seuil d'entrées,
+        # plancher de 22 h, rupture de gravité cumulée) : il descend par `context.data`. Sans
+        # lui, le journal dirait qu'une consolidation a eu lieu sans pouvoir dire pourquoi —
+        # c'est-à-dire l'essentiel de ce qu'on vient y lire.
+        _journal = journal()
+        if _journal is not None:
+            _motif = (context.data or {}).get("motif") or "non précisé"
+            _journal.ouvrir_agent(
+                context.person.person_id, _traits_de(context.person)
+            )
+            _journal.consolidation_debut(
+                context.person.person_id,
+                wall_clock(context.timestamp),
+                _motif,
+                (context.data or {}).get("declencheur")
+                or "motif non transmis par le contrôleur",
+                all_messages,
+            )
+            _journal.reflexion(context.person.person_id, reflection)
 
         # Ticket 071, lot 1 — PLANCHER de gravité : la plus forte gravité déterministe parmi
         # les entrées que cette réflexion consomme. C'est un FAIT mesuré par la simulation, que
@@ -1487,14 +1926,16 @@ class LlmAgent:
             # La réflexion narrative hérite du plancher : elle raconte la journée, et une
             # journée qui contient un choc n'est pas une journée ordinaire. Le schéma ne
             # demande pas de niveau pour la réflexion elle-même, seulement pour les concepts.
-            entries.append(MemoryEntry(
-                person_id=context.person.person_id,
-                content=reflection,
-                timestamp=start_timestamp,
-                memory_type=MemoryType.REFLECTION,
-                importance=plancher,
-                **axes_du_groupe,
-            ))
+            entries.append(
+                MemoryEntry(
+                    person_id=context.person.person_id,
+                    content=reflection,
+                    timestamp=start_timestamp,
+                    memory_type=MemoryType.REFLECTION,
+                    importance=plancher,
+                    **axes_du_groupe,
+                )
+            )
 
             # Le RANG ne sert que de départage à l'intérieur d'un même niveau : il faut donc
             # savoir combien de concepts partagent chaque niveau, et dans quel ordre ils sont
@@ -1532,6 +1973,9 @@ class LlmAgent:
 
                 if operation in (CONFIRMER, PRECISER):
                     # Rien de neuf n'est écrit : le concept existant est mis à jour sur place.
+                    # Ticket 075 — mise à jour SUR PLACE : sans l'avant, aucune trace ne dirait
+                    # jamais ce que cette opération a changé.
+                    _avant = (cible.content, cible.observations, cible.confiance)
                     if operation == CONFIRMER:
                         cible.observations = int(cible.observations or 0) + 1
                     else:
@@ -1543,9 +1987,28 @@ class LlmAgent:
                     cible.force = force_apres_rappel(cible.force)
                     cible.importance = max(float(cible.importance or 0.0), importance)
                     self._marquer_concept_modifie(context.person.person_id)
+                    tracer_operation(
+                        context.person.person_id,
+                        "confirmé" if operation == CONFIRMER else "précisé",
+                        start_timestamp,
+                        doc_id=str(getattr(cible, "doc_id", "") or ""),
+                    )
+                    if _journal is not None:
+                        _journal.operation_concept(
+                            context.person.person_id,
+                            "confirmé" if operation == CONFIRMER else "précisé",
+                            avant=str(_avant[0]),
+                            apres=str(cible.content)
+                            if operation == PRECISER
+                            else "(inchangé)",
+                            observations=f"{_avant[1]} → {cible.observations}",
+                            confiance=f"{_avant[2]:.2f} → {cible.confiance:.2f}",
+                        )
                     continue
 
                 if operation == CONTREDIRE:
+                    _contre_avant = int(cible.contre_exemples or 0)
+                    _confiance_avant = cible.confiance
                     cible.contre_exemples = int(cible.contre_exemples or 0) + 1
                     cible.derniere_observation = start_timestamp
                     if not cible.est_servi and not cible.depasse_le:
@@ -1573,10 +2036,33 @@ class LlmAgent:
                             f"contradictions contre {cible.observations} confirmations, "
                             f"confiance {cible.confiance:.2f} — il cesse d'être servi et "
                             f"reste CONSERVÉ en mémoire"
-                            + (" ; dépassé au sens des trois contre-exemples"
-                               if cible.est_depasse else "")
+                            + (
+                                " ; dépassé au sens des trois contre-exemples"
+                                if cible.est_depasse
+                                else ""
+                            )
                         )
                     self._marquer_concept_modifie(context.person.person_id)
+                    tracer_operation(
+                        context.person.person_id,
+                        "contredit",
+                        start_timestamp,
+                        doc_id=str(getattr(cible, "doc_id", "") or ""),
+                    )
+                    if _journal is not None:
+                        _journal.operation_concept(
+                            context.person.person_id,
+                            "contredit",
+                            avant=str(cible.content),
+                            contre_exemples=f"{_contre_avant} → {cible.contre_exemples}",
+                            confiance=f"{_confiance_avant:.2f} → {cible.confiance:.2f}",
+                            note=(
+                                f"**mis à l'écart** le {str(cible.depasse_le)[:16]} — il cesse "
+                                f"d'être servi, il n'est PAS supprimé"
+                                if cible.depasse_le and not cible.est_servi
+                                else ""
+                            ),
+                        )
                     # et le concept qui prend la relève est écrit ci-dessous
                 if i_llm is not None and importance > i_llm:
                     # Le fait a repris la main sur le jugement : c'est exactement ce que la
@@ -1586,28 +2072,30 @@ class LlmAgent:
                         f"person={context.person.person_id} niveau={niveau} "
                         f"I_llm={i_llm:.2f} → I={importance:.2f}"
                     )
-                entries.append(MemoryEntry(
-                    person_id=context.person.person_id,
-                    # Le contenu reste le 5-uplet canonique : la gravité, la valence et les
-                    # axes vivent sur les CHAMPS de l'entrée, pas dans son texte. Aucun lecteur
-                    # en aval ne change, et un concept écrit avant le lot 1 se relit à
-                    # l'identique.
-                    content=json.dumps(cinq, ensure_ascii=False),
-                    timestamp=start_timestamp,
-                    memory_type=MemoryType.CONCEPT,
-                    tags=",".join(cinq[1:]),
-                    importance=importance,
-                    valence=valence,
-                    # Axes normalisés à l'écriture (lot 2). Le mode vient du modèle, qui sait
-                    # de quoi parle son concept ; le lieu de sa portée spatiale ; le motif de
-                    # son objet. Le créneau et la météo viennent de la journée consommée : un
-                    # concept n'a pas d'heure propre, il a celle de ce qui l'a produit.
-                    axe_objet=mode_canonique(mode),
-                    axe_lieu=normaliser_lieu(cinq[2] or None),
-                    axe_creneau=axes_du_groupe.get("axe_creneau"),
-                    axe_motif=normaliser_motif(cinq[4] or None),
-                    axe_meteo=axes_du_groupe.get("axe_meteo"),
-                ))
+                entries.append(
+                    MemoryEntry(
+                        person_id=context.person.person_id,
+                        # Le contenu reste le 5-uplet canonique : la gravité, la valence et les
+                        # axes vivent sur les CHAMPS de l'entrée, pas dans son texte. Aucun lecteur
+                        # en aval ne change, et un concept écrit avant le lot 1 se relit à
+                        # l'identique.
+                        content=json.dumps(cinq, ensure_ascii=False),
+                        timestamp=start_timestamp,
+                        memory_type=MemoryType.CONCEPT,
+                        tags=",".join(cinq[1:]),
+                        importance=importance,
+                        valence=valence,
+                        # Axes normalisés à l'écriture (lot 2). Le mode vient du modèle, qui sait
+                        # de quoi parle son concept ; le lieu de sa portée spatiale ; le motif de
+                        # son objet. Le créneau et la météo viennent de la journée consommée : un
+                        # concept n'a pas d'heure propre, il a celle de ce qui l'a produit.
+                        axe_objet=mode_canonique(mode),
+                        axe_lieu=normaliser_lieu(cinq[2] or None),
+                        axe_creneau=axes_du_groupe.get("axe_creneau"),
+                        axe_motif=normaliser_motif(cinq[4] or None),
+                        axe_meteo=axes_du_groupe.get("axe_meteo"),
+                    )
+                )
             self._compter_operations(
                 operations_vues, wall_clock(context.timestamp).date().toordinal()
             )
@@ -1615,4 +2103,34 @@ class LlmAgent:
             logger.exception(f"Failed to parse STM reflection response: {e}")
 
         for entry in entries:
+            if entry.memory_type == MemoryType.CONCEPT:
+                # La trace est écrite ICI et non dans le journal : le journal est éteint par
+                # défaut et se lit, il ne se mesure pas (son propre en-tête le dit). Faire
+                # dépendre la courbe des opérations de son activation rendrait la mesure
+                # tributaire d'un réglage de confort.
+                tracer_operation(
+                    context.person.person_id,
+                    "créé",
+                    start_timestamp,
+                    doc_id=str(getattr(entry, "doc_id", "") or ""),
+                )
+            if _journal is not None and entry.memory_type == MemoryType.CONCEPT:
+                _journal.operation_concept(
+                    context.person.person_id,
+                    "créé",
+                    apres=str(entry.content),
+                    note=f"gravité {float(entry.importance or 0.0):.2f}",
+                )
             await self.aadd_long_term_memory(context, entry)
+
+        # Ticket 075 — l'état COMPLET de la mémoire après la consolidation, seul moment où il
+        # est écrit : c'est le point de comparaison d'une consolidation à la suivante. Il est
+        # lu dans les métadonnées de l'agent, jamais reconstruit depuis les entrées du jour.
+        if _journal is not None:
+            _journal.consolidation_fin(
+                context.person.person_id,
+                wall_clock(context.timestamp),
+                self.long_term_memory.user_metadata.get(
+                    context.person.person_id, {}
+                ).get("entries", []),
+            )

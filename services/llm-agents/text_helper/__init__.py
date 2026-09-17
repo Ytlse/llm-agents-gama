@@ -5,6 +5,8 @@ from text_helper.type import EnvOb, EnvObCode
 REGISTERED_MODELS: dict[EnvObCode, Any] = {
     "transfer": hm.EnvObTransfer,
     "transit": hm.EnvObTransit,
+    # Ticket 077, lot B2 — un véhicule personnel n'est pas un transport collectif.
+    "vehicle": hm.EnvObVehicle,
     "arrival": hm.EnvObArrival,
     "travel_plan": hm.TravelPlanWrapper,
     "travel_plan_query": hm.TravelPlanLiteWrapper,
@@ -17,7 +19,13 @@ def env_ob_to_text(code: EnvObCode, ob: dict, purpose: str = None, weather=None)
         raise ValueError(f"Unknown EnvOb type: {code}")
 
     instance = REGISTERED_MODELS[code](**ob)
-    if weather is not None and code in ("transit", "transfer", "wait_in_stop", "arrival"):
+    if weather is not None and code in (
+        "transit",
+        "transfer",
+        "vehicle",
+        "wait_in_stop",
+        "arrival",
+    ):
         return instance.describe(weather=weather).strip()
     return instance.describe().strip()
 

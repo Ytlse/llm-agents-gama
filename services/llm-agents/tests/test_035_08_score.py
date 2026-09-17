@@ -77,9 +77,8 @@ def test_R1_composite_vient_du_scorer(exec_tmp, registre):
     # Le composite de calculer() égale celui d'un Scorer appliqué à la même trame.
     contenu = S.calculer(exec_tmp, registre.reference)
     scorer, _ = S.scorer_pour(registre.reference)
-    rows, _ = S.frames.read_moves(
-        exec_tmp / "moves.csv", S.EXCLURE_METHODES, first_day_only=True
-    )
+    # Ticket 057 — le périmètre se lit par `lire_perimetre`, seul endroit qui le décide.
+    rows, _ = S.lire_perimetre(exec_tmp, S.EXCLURE_METHODES)
     attendu = S.frames.simulation_frames(rows)["attendu"]
     cerema = S.frames.load_cerema(
         S._resoudre_cerema(json.loads((exec_tmp / "synthese.json").read_text()))
@@ -169,6 +168,41 @@ def test_R17_substrat_lie_moves(exec_tmp, registre):
     assert not S.scores_perimes(exec_tmp)
     (exec_tmp / "moves.csv").write_text("Référence\nmodifié\n", encoding="utf-8")
     assert S.scores_perimes(exec_tmp)
+
+
+def test_082_couronnes_fantomes_periment_le_scores_json(exec_tmp, registre):
+    """Ticket 082 — un scores.json portant `1st_ring` doit forcer un calcul complet.
+
+    Le rejeu hors-ligne ne recalcule que le composite : sans ce critère, `--toutes`
+    réécrirait les exécutions v6 en conservant une dimension « lieu de résidence »
+    amputée de trois couronnes sur quatre.
+    """
+    S.score_execution(exec_tmp, registre.reference)
+    assert not S.scores_perimes(exec_tmp)
+    scores = json.loads((exec_tmp / "scores.json").read_text())
+    strates = scores["detail"]["lieu_residence"]["strates"]
+    strates.append({
+        "cat": S.frames.OFF_REFERENCE_ROW, "n": 12, "actual": {}, "target": {},
+        "l1": None, "covered": False, "excluded_mass": 12.0,
+        "categories": {"1st_ring": {"mass": 12.0, "n": 12}},
+    })
+    (exec_tmp / "scores.json").write_text(json.dumps(scores), encoding="utf-8")
+    assert S.scores_perimes(exec_tmp)
+
+
+def test_082_hors_perimetre_ne_perime_rien(exec_tmp, registre):
+    """La ligne « hors référentiel » est LÉGITIME quand elle porte `hors_perimetre`
+    (ticket 021) : la confondre avec la panne ferait recalculer tout l'historique à
+    chaque passage, sans qu'aucun chiffre ne change."""
+    S.score_execution(exec_tmp, registre.reference)
+    scores = json.loads((exec_tmp / "scores.json").read_text())
+    scores["detail"]["lieu_residence"]["strates"].append({
+        "cat": S.frames.OFF_REFERENCE_ROW, "n": 3, "actual": {}, "target": {},
+        "l1": None, "covered": False, "excluded_mass": 3.0,
+        "categories": {S.frames.OUT_OF_PERIMETER_KEY: {"mass": 3.0, "n": 3}},
+    })
+    (exec_tmp / "scores.json").write_text(json.dumps(scores), encoding="utf-8")
+    assert not S.scores_perimes(exec_tmp)
 
 
 def test_R21_partielle_non_scoree(exec_tmp, registre):

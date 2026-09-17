@@ -682,6 +682,26 @@ machine est bloquée » et « la campagne attend 07:00 UTC, il reste 4 h 12 ».
 tronqué par une coupure ferait repartir la campagne du début, c'est-à-dire redépenser tout
 le quota déjà consommé.
 
+**Un report, distinct d'un échec** (2026-09-17). Trois situations que la campagne confondait :
+
+| Situation | Ce qu'elle fait | Décompte une tentative ? |
+|---|---|---|
+| Quota du jour épuisé, en vol ou au lancement | **reporte** — l'expérience sort de l'observation et repasse au repêchage | non |
+| Charge supérieure au quota journalier | échoue, en nommant la cause | oui |
+| Configuration invalide, jeu périmé, lancement muet | échoue comme avant | oui |
+
+Le canal est un **marqueur** `lancements/<horodatage>.refus.json` que le lanceur dépose quand il
+refuse de créer une exécution : la campagne lance en tâche de fond, elle ne lit ni la sortie
+standard ni le code de retour du lanceur. `experiences/refus.py` porte la règle de classement, à
+un seul endroit et testée. Un marqueur antérieur au dernier journal de lancement est ignoré.
+
+Sans cela, le 2026-09-16, quatre bras attendant du quota ont été déclarés « lancée 3 fois sans
+jamais écrire d'état » — un message qui envoie chercher une panne inexistante.
+
+**Une passe de repêchage.** À la fin des phases, tout ce qui a été reporté ou a échoué repasse,
+compteurs remis à neuf pour les reports, une relance de plus par passe pour les échecs. Deux
+passes au maximum : une campagne qui boucle sans fin ne se voit pas.
+
 ### Où ça tourne, et pourquoi
 
 Sur l'**hôte**, comme l'ordonnanceur : le lancement passe par `docker compose exec`, qui n'a
@@ -696,12 +716,40 @@ délai de grâce (120 s), la campagne la relançait **à chaque tour** — et un
 deux fois écrase sa propre exécution. Au-delà du délai, c'est que le lancement a échoué avant
 d'ouvrir son dossier : on le dit, et on relance.
 
+### Ce qui se reprend, et ce qui ne se reprend pas
+
+`en_pause` recouvre trois situations que le runner distingue et que l'état seul confond :
+
+| Origine | `interruptions[].raison` | La campagne |
+|---|---|---|
+| chien de garde — 420 s sans avancée | `inactivite:<N>s` | **reprend** : le processus est mort, personne d'autre ne le fera |
+| exécution arrêtée **incomplète**, pause jamais demandée | *(aucune interruption)* | **reprend** : son propre message dit « reprendre » |
+| pause demandée par un **humain** | `manuelle` | **laisse** : elle attend une décision humaine, pas un ordonnanceur |
+
+Le discriminant est la trace **structurée** d'`execution.yaml`, jamais le message de
+`etat.json` — celui-ci s'adresse à des humains et peut être reformulé sans que rien ne casse
+visiblement. Un `execution.yaml` illisible penche vers la reprise : elle est plafonnée par
+`TENTATIVES_MAX`, alors qu'un blocage n'a aucun plafond.
+
+Mesuré le 2026-09-16 : sans cette distinction, une pause de chien de garde figeait la
+campagne pour de bon. Comptée « en vol », l'expérience n'était ni reprise (`en_pause` n'est
+pas dans `ETATS_REPRENABLES`), ni endormie (ce n'est pas un quota), ni relancée (le délai de
+grâce ne surveille que les lancements du processus courant). Six heures sans un mot, et les
+expériences derrière elle jamais lancées.
+
 ### Alarmes (doctrine du dépôt, front montant)
 
 | Quand | Ce qui est dit |
 |---|---|
 | une expérience échoue 2 fois de suite | `[ALARME]` — elle est déclarée en échec, **la campagne continue sans elle** |
 | un sommeil dépasserait 26 h | `[ALARME]` — une fenêtre de quota en fait 24 ; c'est l'horloge ou les fuseaux qu'il faut regarder |
+| une expérience « en vol » dont l'état n'a pas bougé depuis 30 min | `[ALARME]` — elle nomme l'expérience, son état, son dossier, et les deux commandes qui débloquent (`experience-reprendre`, `experience-arreter`). **La campagne ne touche à rien** : elle dit qu'elle attend, et qui |
+
+Cette dernière ne teste aucun pid — la campagne tourne sur l'hôte et les pid des exécutions
+appartiennent au namespace du conteneur. Elle regarde si l'`etat.json` bouge, ce qu'une
+exécution vivante fait à chaque archivage. Ce qui **dort sur son quota** en est exclu : son
+état ne bouge pas non plus, mais c'est une attente comprise, déjà couverte par le sommeil de
+lot — l'alarmer ferait passer une attente normale pour une anomalie.
 
 ### Ce qu'elle ne fait pas
 

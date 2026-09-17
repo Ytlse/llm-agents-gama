@@ -53,44 +53,44 @@ POPULATION_HOTE = "data/population/population_1000_AAMAS"
 DERIVE_DE = "exp_mnl_jtir_nosim"
 NOM_DEFAUT = "exp_rf_jtir_nosim"
 
-#: Avertissement déposé À CÔTÉ de l'experience.yaml. Une expérience qu'on ne peut pas
-#: relancer par la voie normale doit le dire d'elle-même — le découvrir en essayant coûte une
-#: demi-heure. Pas *dans* l'`experience.yaml` : son schéma est strict et refuse toute clé hors
-#: contrat, ce qui est une bonne chose (une expérience ne doit pas porter de champ libre que
-#: personne ne valide). Un fichier voisin se voit en ouvrant le dossier, et ne triche pas avec
-#: le schéma.
-LISEZ_MOI = """# exp_rf_jtir_nosim — NON REJOUABLE par la CLI
+#: Note déposée À CÔTÉ de l'experience.yaml. Cette expérience a une contrainte que les trois
+#: autres familles n'ont pas — elle se lance depuis l'hôte — et une expérience qui se lance
+#: autrement que ses voisines doit le dire d'elle-même. Pas *dans* l'`experience.yaml` : son
+#: schéma est strict et refuse toute clé hors contrat, ce qui est une bonne chose (une
+#: expérience ne doit pas porter de champ libre que personne ne valide). Un fichier voisin se
+#: voit en ouvrant le dossier, et ne triche pas avec le schéma.
+LISEZ_MOI = """# exp_rf_… — se lance depuis l'HÔTE, pas depuis le conteneur
 
-Témoin **random forest** du [ticket 044](../../../docs/tickets/ticket_044_temoin_random_forest.md),
-lancé par `scripts/progedo_logit/lancer_experience_rf.py`.
+Forêt aléatoire du [ticket 044](../../../docs/tickets/ticket_044_temoin_random_forest.md),
+quatrième méthode de référence du § 4.4.
 
-## Pourquoi ce fichier existe
+## Comment la lancer
 
-Ce script enregistre la famille `rf` **au moment de l'exécution**, sans l'écrire dans les
-tables de la plateforme. Conséquence directe :
-
-```
-python -m experiences lancer --experience exp_rf_jtir_nosim     # ÉCHOUE
-```
-
-L'exécution échoue sur un format d'artefact inconnu (`rf_mode_choice_policy`). **Pour
-relancer, repasser par le script :**
+Depuis la racine du dépôt, **sur l'hôte** :
 
 ```bash
-python -m scripts.progedo_logit.lancer_experience_rf
+services/llm-agents/.venv/bin/python -m experiences lancer --experience <nom>
 ```
 
-## Ce qu'il faudrait pour la rendre rejouable
+ou par le lanceur, qui définit l'expérience si elle n'existe pas encore :
 
-Deux lignes, pas davantage :
+```bash
+services/llm-agents/.venv/bin/python scripts/progedo_logit/lancer_experience_rf.py --vers <nom>
+```
 
-- `rf_mode_choice_policy: "rf"` dans `FAMILLES` (`services/llm-agents/experiences/decideur_modele.py`)
-- `rf_mode_choice_policy` dans `POLICY_FORMATS` et son branchement dans `load_policy`
-  (`scripts/synthesis/model_on_common_set.py`)
+`make experience-lancer` ne convient PAS : cette cible exécute dans le conteneur
+`controller`, voir la dernière section.
 
-Elles ont été laissées de côté le 2026-09-11 parce que le **ticket 043** (régression
-logistique à noyau) modifiait ces deux fichiers au même moment, et y ajoutait exactement une
-entrée aux mêmes tables. Écrire en parallèle aurait écrasé l'un des deux travaux.
+## Ce qui a changé le 2026-09-16 (ticket 088 § 3.3)
+
+La famille `rf` est déclarée dans les deux tables de la plateforme — `FAMILLES`
+(`services/llm-agents/experiences/decideur_modele.py`) et `POLICY_FORMATS` / `load_policy`
+(`scripts/synthesis/model_on_common_set.py`). Jusque-là, le lanceur les contournait en
+inscrivant la famille en mémoire et en remplaçant `load_policy` dans l'espace de noms du
+décideur, si bien que l'expérience n'était pas rejouable par la CLI. Elle l'est.
+
+Ces deux lignes avaient été laissées de côté le 2026-09-11 parce que le **ticket 043**
+(régression logistique à noyau) modifiait les mêmes tables au même moment. Il est clos.
 
 ## Ce qui n'a PAS été bricolé
 
@@ -105,9 +105,18 @@ publiées** avant de décider quoi que ce soit.
 
 ## Pourquoi elle tourne sur l'hôte et non dans le `controller`
 
-Le conteneur porte **scikit-learn 1.9.0**, la forêt a été estimée sous **1.8.0**, et les deux
-ne donnent pas la même forêt — mesuré et non supposé : exactitude +0,000188, CEL +0,0008. Le
-garde-fou de reproduction refuse donc de démarrer dans le conteneur, ce qui est son travail.
+Le conteneur porte **scikit-learn 1.9.1** (mesuré le 2026-09-16 ; il portait la 1.9.0 au
+2026-09-11), la forêt a été estimée sous **1.8.0**, et deux versions ne donnent pas la même
+forêt — mesuré et non supposé : exactitude +0,000188, CEL +0,0008. Le garde-fou de
+reproduction, qui réajuste puis compare les métriques publiées à 1e-9 près, refuse donc de
+démarrer dans le conteneur. C'est son travail.
+
+Aligner la version dans l'image a été envisagé au ticket 088 § 3.3 et écarté le 2026-09-16 :
+cela déplacerait le réajustement de l'hôte (macOS arm64) vers un conteneur Linux, où rien ne
+garantit une forêt bit-à-bit identique même à version égale, et ferait donc courir aux
+chiffres publiés du § 4.4 un risque que la parité d'exécution ne justifie pas. Le chapitre 4
+affirme une parité d'**estimation** — mêmes microdonnées, même découpage, mêmes poids, même
+encodage, mêmes métriques — et elle est vraie quel que soit l'endroit où la forêt s'exécute.
 
 Conséquence sur la définition : `population.chemin` désigne le chemin **hôte**
 (`data/population/…`) là où `exp_mnl_jtir_nosim` désigne le chemin conteneur
@@ -120,29 +129,31 @@ par une matrice `.npz` de 1,4 Mo que numpy seul sait relire, et non par le parqu
 """
 
 
-def enregistrer_famille_rf() -> None:
-    """Rend la famille `rf` visible du décideur, pour la durée de ce processus seulement.
+def verifier_famille_rf() -> None:
+    """La famille `rf` est-elle bien déclarée dans la plateforme ?
 
-    Le décideur importe `load_policy` dans **son** espace de noms
-    (`from scripts.synthesis.model_on_common_set import load_policy`) : le remplacer ici ne
-    touche ni le module d'origine ni le disque. Le libellé de famille reste **dérivé du
-    format** de l'artefact, jamais écrit en dur — c'est ce qui empêche une exécution du RF de
-    s'annoncer « lightgbm » dans les traces, et un libellé faux est pire qu'un libellé absent.
+    Jusqu'au ticket 088 § 3.3, cette fonction INSCRIVAIT la famille pour la durée du processus
+    et remplaçait `load_policy` dans l'espace de noms du décideur. Les deux tables la portent
+    désormais (`decideur_modele.FAMILLES`, `model_on_common_set.POLICY_FORMATS`) : il n'y a
+    plus rien à injecter, seulement à vérifier que ce script et la plateforme s'accordent.
+    Un contrôle plutôt qu'un silence — si quelqu'un retire la ligne, l'échec doit être lisible
+    ici et pas trois minutes plus tard sur « format d'artefact non reconnu ».
     """
     from experiences import decideur_modele
-    from scripts.progedo_logit.mode_choice_rf import RF_FORMAT, charger_rf
-    from scripts.synthesis.model_on_common_set import load_policy as load_officiel
+    from scripts.progedo_logit.mode_choice_rf import RF_FORMAT
+    from scripts.synthesis.model_on_common_set import POLICY_FORMATS
 
-    decideur_modele.FAMILLES[RF_FORMAT] = "rf"
-
-    def load_policy(path, spec):
-        artefact_lu = json.loads(Path(path).read_text(encoding="utf-8"))
-        if artefact_lu.get("format") == RF_FORMAT:
-            return charger_rf(Path(path), spec)
-        return load_officiel(path, spec)
-
-    decideur_modele.load_policy = load_policy
-    print(f"[lanceur] famille « rf » enregistrée pour ce processus ({RF_FORMAT})")
+    manquantes = []
+    if decideur_modele.FAMILLES.get(RF_FORMAT) != "rf":
+        manquantes.append("experiences/decideur_modele.py : FAMILLES")
+    if RF_FORMAT not in POLICY_FORMATS:
+        manquantes.append("scripts/synthesis/model_on_common_set.py : POLICY_FORMATS")
+    if manquantes:
+        raise SystemExit(
+            f"La famille « rf » ({RF_FORMAT}) n'est pas déclarée dans : "
+            + " ; ".join(manquantes)
+            + ". Voir le ticket 088 § 3.3 — elle y est entrée le 2026-09-16.")
+    print(f"[lanceur] famille « rf » déclarée dans la plateforme ({RF_FORMAT})")
 
 
 def _chemin_population_hote(chemin_yaml: Path) -> None:
@@ -202,7 +213,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             f"Artefact du témoin absent : {ARTEFACT}. Produisez-le avec "
             "`make forest FOREST_ARGS=--artefact`.")
 
-    enregistrer_famille_rf()
+    verifier_famille_rf()
     code = definir(args.vers)
     if code != 0 or args.definir_seulement:
         return code

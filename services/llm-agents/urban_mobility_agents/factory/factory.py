@@ -158,6 +158,14 @@ def init_dynamic_scenario(
     accidents_module.reinitialiser()
     accidents_module.initialiser()
 
+    # Choc déclaré du run (ticket 079). Même règle que les accidents : ouvert ou fermé, il le
+    # journalise. Un refus de chargement ARRÊTE ici — mieux vaut un échec franc au démarrage
+    # qu'un run de soixante jours qui ne fait rien et dont personne ne saura pourquoi.
+    from llm import chocs as chocs_module
+
+    chocs_module.reinitialiser()
+    chocs_module.initialiser(workdir=settings.workdir)
+
     _save_scenario_params(
         population_size=settings.data.population_size,
         llm_agents=settings.data.number_of_llm_based_agents,

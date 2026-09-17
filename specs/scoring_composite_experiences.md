@@ -64,6 +64,12 @@ sur ses propres expériences locales.
   **affichage hors composite** (non pondérés), comme dans `docs/synthesis`.
 - **R17 (déduite)** — `scores.json` est lié à `moves_sha256` : si le `moves.csv` de l'exécution
   a changé depuis, le score est réputé **périmé** et re-calculé, jamais servi en silence.
+  Deux extensions, même raison : le rejeu hors-ligne (R6) ne recompose que le composite, jamais
+  le détail par strate, donc tout contenu de `scores.json` qu'un rejeu ne peut PAS réparer doit
+  entrer dans la péremption sous peine de rester faux pour toujours. Est donc périmé aussi
+  (a) le fichier dépourvu de `scores_bruts_hors_choix_unique` — ticket 047, la seconde lecture ;
+  (b) celui dont la ligne « hors référentiel » de `lieu_residence` porte une clé fantôme
+  (`1st_ring`, …) — ticket 082, les couronnes non traduites.
 - **R18 (déduite)** — Si le moteur de calibration (`prompt_calibration/calibration/metrics.py`)
   est indisponible, aucun `scores.json` n'est produit et le tableau affiche « — » (pas `0`),
   avec un message ; la page se génère sans scores.
@@ -86,6 +92,33 @@ sur ses propres expériences locales.
   panne du scoring laisse l'exécution `terminee` sans `scores.json`, journalise une `[ALARME]`
   nommant l'expérience et l'exécution, et laisse le bouton global comme porte de secours.
   Une exécution qui a produit toutes ses décisions n'est jamais mise en échec par un rendu.
+- **R24 (tranchée 2026-09-15, ticket 081)** — **Un journal incomplet n'est pas scorable.**
+  Avant tout calcul, le nombre BRUT de lignes de `moves.csv` est comparé à
+  `couverture.decides` de `synthese.json`. Au-delà de **2 %** de déficit, le scoring
+  **refuse** : `[ALARME] Journal des mouvements incomplet` (front montant, une fois par
+  exécution et par processus), pas de `scores.json`, pas de page — et un `scores.json`
+  déjà écrit sur ce journal est **retiré de la circulation**, renommé `scores.invalide.json`
+  pour rester auditable, sa page supprimée. Le contrôle qui a autorisé un score est publié
+  avec lui dans `perimetre_verifie` ; un `scores.json` qui ne le porte pas est réputé
+  **périmé** (R17), ce qui force un calcul complet et fait passer tout l'historique devant
+  la règle, une fois.
+
+  Pourquoi une règle et pas une heuristique : `moves.csv` est le substrat du composite et
+  `couverture.decides` compte ce qui a été décidé ; les deux voyageaient dans le même
+  fichier sans jamais se comparer. L'exécution `2026-09-12_11_24_28` a été publiée à 5,35
+  sur 274 lignes pour 3 154 décisions, et le chiffre a traversé trois documents avant
+  d'être reconnu faux (il vaut 6,16 sur le journal reconstitué).
+
+  Le seuil est mesuré, pas décrété : sur les 37 exécutions saines du dépôt (2026-09-15),
+  le déficit est **toujours négatif**, de −0,19 % à −0,32 % — le journal porte en plus les
+  lignes `sans_solution`, que `decides` exclut. L'exécution fautive est à +91,31 %. Un
+  plancher à 2 % laisse 63 lignes de marge sur 3 154 et sépare les deux régimes d'un
+  facteur 45.
+
+  Corollaire côté exécution : **une reprise régénère le journal** intégralement depuis
+  `decisions.jsonl` et le jeu scellé, avant la première décision neuve — les décisions
+  resservies n'écrivaient aucune ligne. La régénération est aussi une commande,
+  `python -m experiences journal <execution> --regenerer`.
 
 ## Critères d'acceptation
 
@@ -121,6 +154,9 @@ sur ses propres expériences locales.
 - **R16** — `test_R16_lieu_logement_hors_composite` : `lieu_residence` et `type_logement`
   apparaissent dans la page mais ne pèsent pas dans le composite.
 - **R17** — `test_R17_substrat_lie_moves` : modifier `moves.csv` marque le score à recalculer.
+  `test_082_couronnes_fantomes_periment_le_scores_json` : une clé `1st_ring` en « hors
+  référentiel » force le recalcul ; `test_082_hors_perimetre_ne_perime_rien` : la même ligne
+  portant `hors_perimetre` est légitime (ticket 021) et ne périme rien.
 - **R18** — `test_R18_sans_moteur_pas_de_zero` : sans le module de calibration, aucune ligne
   n'affiche de composite chiffré (« — », pas `0`).
 - **R19** — `test_R19_formule_invalide_refusee` : un YAML avec une dimension inconnue ou un poids
@@ -137,6 +173,14 @@ sur ses propres expériences locales.
   aboutit dans un processus qui n'a construit aucun `Scorer`.
 - **R22** — `test_R22_rescore_global_seul` : le recalcul n'est offert que globalement ; aucune
   action de re-score n'est attachée à une ligne.
+- **R24** — `tests/test_081_journal_tronque.py` : un journal tronqué à 10 % ne produit aucun
+  `scores.json` et lève UNE `[ALARME]` quel que soit le nombre de scorings (front montant qui
+  se réarme quand le journal redevient complet) ; un `scores.json` déjà écrit sur ce journal
+  est renommé `scores.invalide.json` et sa page supprimée ; un score sans `perimetre_verifie`
+  est périmé ; les exécutions complètes gardent leur composite au centième ; une reprise à
+  froid laisse un journal complet et scorable ; `journal --regenerer` reproduit le journal
+  colonne par colonne (sauf « Trajet » et « Heure de calcul », que l'archive ne porte pas) et
+  rend le même score ; régénérer depuis une autre cohorte est refusé.
 
 ## Non-goals
 

@@ -3,17 +3,29 @@
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité. Ouvert le 2026-09-14, **en cours** depuis le même jour.
 >
-> **CE QUI EST LIVRÉ (2026-09-14).** Un interrupteur « Accidents sur les axes » dans l'IHM
-> GAMA, faux par défaut, persisté et consigné dans le `scenario_params.yaml` de chaque run.
+> **CE QUI EST LIVRÉ (2026-09-14, défaut basculé le 2026-09-15).** Un interrupteur
+> « Accidents sur les axes » dans l'IHM GAMA, **VRAI par défaut** depuis le 2026-09-15,
+> persisté et consigné dans le `scenario_params.yaml` de chaque run. Les sept tickets ouverts
+> qui lancent un run GAMA portent désormais un avertissement sur ce paramètre (018, 032, 033,
+> 048, 071, 075, 079).
 > Les accidents **existent** : tirés selon une loi estimée sur BAAC 2019-2024 (heure, jour de
 > semaine, classe de vitesse), posés sur une arête du graphe, journalisés avec leurs compteurs
 > y compris à zéro. Spec `specs/accidents-interrupteur-gama.md`, 25 tests, doc
 > `docs/arch/accidents-sur-les-axes.md`.
 >
-> **CE QUI RESTE.** Le **retard subi** — et il ne se livre qu'avec ses deux gardes de cache,
-> sans quoi une durée perturbée serait resservie à des runs qui n'ont rien demandé. Puis la
-> pose manuelle, le souvenir, le facteur météo (calculé, **rejeté**, neutre) et la
-> vérification de linéarité en taille de cohorte. Les lots sont au § « Ce qu'il faut faire ».
+> **LIVRÉ LE 2026-09-15 — LE RETARD ET LA POSE.** Un accident allonge désormais les
+> itinéraires qui le traversent (travail C), avec ses **deux gardes de cache** livrées dans le
+> même geste (D et E) : sans elles, une durée perturbée serait resservie à des runs qui n'ont
+> rien demandé, et un agent retardé rejouerait sa décision d'avant. L'expérimentateur peut
+> **poser** un accident choisi depuis l'IHM ou par `POST /accidents` (travail F).
+>
+> **CE QUI RESTE.** Le **souvenir** du retard (travail G) — il faudrait que l'information
+> remonte du routage jusqu'à l'agent, et la chaîne mémoire est en refonte (tickets 071, 075).
+> Le **contournement**. Le **facteur météo** (calculé, **rejeté**, neutre) et la vérification
+> de **linéarité** en taille de cohorte.
+>
+> ⚠ **Les runs d'avant et d'après le 2026-09-15 ne sont pas comparables** : le régime est actif
+> par défaut et les accidents ralentissent.
 >
 > **L'article promet déjà ce mécanisme.** Le chapitre 3 range « un bouchon né d'un incident »
 > parmi les faits que l'exécution produit et qui reviennent dans la boucle de mémoire

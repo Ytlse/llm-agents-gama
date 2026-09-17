@@ -559,3 +559,29 @@ le lancement est laissé à l'auteur (décision du 2026-09-14 : préserver le qu
   français ne trouve aucune ligne, et un contrôle naïf rend alors un écart de 0. Les politiques
   ajustées ont reçu la même garde : au-delà de 40 % d'une catégorie tombée dans `__missing__`,
   `[ALARME]`.
+
+### Le 2026-09-16 : une campagne ne tourne plus deux fois, et le bras Antigravity sort
+
+**Le défaut.** Rien n'empêchait un second `make campagne-lancer` sur une campagne déjà en vol.
+Les deux processus lisent et réécrivent le même `campagnes/<nom>/etat.json` sans se voir : ils
+se répartissent les expériences au hasard de leurs tours, se marquent mutuellement des « arrêt
+demandé », consomment les deux passes de repêchage, et le premier qui arrive au bout écrit
+`terminee_le`. Mesuré ce jour-là : `bascule_anglaise_v6` s'est déclarée terminée avec vingt
+bras faits, un bras interrompu à 53/3299 compté en échec, et un bras jamais lancé.
+
+**Le garde-fou (D-9).** `campagne.lancer()` refuse le lancement si `campagne_en_vol(nom)` rend
+un pid, et sort en `CODE_DEJA_EN_VOL` (3) **avant** `_lever_arret()` — un second lancement qui
+efface le drapeau d'arrêt du premier serait pire que pas de garde du tout. Deux précautions :
+
+- la reconnaissance se fait sur la **ligne de commande** du pid (`campagne-lancer` et le jeton
+  qui suit `--nom`), pas sur le pid seul : le système les recycle, et une campagne nommée `c`
+  se reconnaîtrait en sous-chaîne dans à peu près n'importe quoi ;
+- elle échoue **ouvert**. Si `ps` n'est pas interrogeable, on journalise un WARNING et on laisse
+  passer. Zéro campagne parce qu'un `ps` a hoqueté est un défaut plus coûteux que celui-ci.
+
+**Le bras Antigravity.** `agy-gemini-38-f_promin02` est retiré de `bascule_anglaise_v6`, comme
+les cinq bras `agy-*` l'avaient été de `multimodeles_v6` la veille, et pour la même raison :
+une session Antigravity doit être ouverte à l'instant du lancement, ce qu'une campagne qui
+tourne seule la nuit ne peut pas garantir, et la règle P2 de `specs/decideur-antigravity.md`
+leur interdit de toute façon toute part modale publiable. La campagne porte donc **21**
+expériences (14 témoins, 7 LLM). Les définitions restent dans `data/experiences/`.

@@ -133,14 +133,21 @@ Chaque fichier `echanges/demandes/<person_id>__<activity_id>.json` contient :
     {"role": "system", "content": "..."},
     {"role": "user", "content": "..."}
   ],
-  "schema_sortie": { ... }
+  "schema_sortie": { ... },
+  "parametres": {"temperature": 0.0, "top_p": 1.0, "max_tokens": 4096}
 }
 ```
 
+`parametres` porte les réglages d'échantillonnage **demandés** par l'expérience (champ ajouté le
+2026-09-15 ; il était stocké côté runner sans jamais être transmis, si bien que le
+`temperature: 0.0` de l'`experience.yaml` n'atteignait pas le sous-agent).
+
 ### 3.2 Décision par Sous-Agent
 Pour chaque demande :
-1. Extraire les `messages`, le `modele_attendu` et le `schema_sortie`.
+1. Extraire les `messages`, le `modele_attendu`, le `schema_sortie` et les `parametres`.
 2. Invoquer un sous-agent (ou traiter directement dans la session si le modèle actif correspond à `modele_attendu`) en lui soumettant le prompt exact *verbatim*, sans ajout de consigne ni préambule.
+   **Appliquer les `parametres` dans la mesure où l'environnement le permet**, et retenir ce qui
+   a effectivement été appliqué : c'est l'objet du champ `parametres_appliques` de la réponse.
 3. Le sous-agent doit renvoyer la sélection conforme au schéma :
 ```json
 {
@@ -167,6 +174,7 @@ Format strict de la réponse déposée :
   "person_id": "<person_id>",
   "activity_id": "<activity_id>",
   "modele_declare": "<modele_attendu>",
+  "parametres_appliques": {"temperature": 0.0},
   "agents": [ ... ]
 }
 ```
@@ -175,6 +183,31 @@ Format strict de la réponse déposée :
 > - `modele_declare` doit correspondre exactement au `modele_attendu`.
 > - `person_id` et `activity_id` doivent correspondre exactement au fichier de demande.
 > - Si le délai dépasse `attente_max_s / 4` (30s par défaut), le runner bascule en état `en_attente_agent` pour avertir du ralentissement, puis revient en `en_cours` dès réception.
+
+#### `parametres_appliques` — dire ce qui a été appliqué, pas ce qui était demandé
+
+Champ attendu dans **chaque** réponse dès que la demande porte des `parametres`. Il dit ce qui a
+réellement été appliqué, et sa valeur honnête peut être vide.
+
+| Situation | Valeur à écrire |
+|---|---|
+| Le réglage a pu être appliqué | `{"temperature": 0.0}` — les clés effectivement honorées |
+| L'environnement ne permet aucun réglage d'échantillonnage | `{}` — « aucun paramètre applicable », et c'est une réponse valable |
+| Une partie seulement a été appliquée | seulement les clés honorées ; ne pas recopier les autres |
+
+**Ne jamais recopier `parametres` sans l'avoir appliqué.** Le canal IPC ne peut pas imposer un
+réglage d'échantillonnage à un agent d'IDE : la seule chose vérifiable est ce que le sous-agent
+déclare. Une réponse muette est comptée (`sans_parametres_appliques`), journalisée en WARNING, et
+archivée comme un **trou** — jamais comme « température 0 ». C'est la même règle que pour
+`sortie_litterale` (P8) : un trou déclaré vaut mieux qu'une valeur qu'on prendrait pour une mesure.
+
+> [!WARNING]
+> **Garde-fou de démarrage.** Si aucune réponse n'arrive dans les `attente_max_s` secondes qui
+> suivent le lancement, le runner pose un fichier `STOP` dans le dossier d'exécution et la clôt
+> en `arretee`. Une session Antigravity doit donc surveiller `echanges/demandes/` **avant** ou
+> dès le lancement. Mesuré le 2026-09-15 : sans ce garde-fou, une exécution sans sous-agent est
+> restée en `en_attente_agent` plus de six heures avec 0 décision sur 3 161, bloquant la campagne
+> derrière elle.
 
 ---
 

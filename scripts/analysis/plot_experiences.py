@@ -34,6 +34,13 @@ import yaml
 from matplotlib.lines import Line2D
 
 RACINE = Path(__file__).resolve().parents[2]
+# La racine dans sys.path : le module frère s'importe en `scripts.analysis.*`, pas par
+# son nom nu — un import nu ne marche qu'en lançant le fichier, pas en `python -m`.
+if str(RACINE) not in sys.path:
+    sys.path.insert(0, str(RACINE))
+
+from scripts.analysis.figures_versionnees import signaler
+
 DOSSIER_EXPERIENCES = RACINE / "data" / "experiences"
 
 # exp_gemini-31-fl_expcham5_jtir_t0_nosim est volontairement absente : son
@@ -334,6 +341,9 @@ def dessiner(points: list[dict], sortie: Path) -> list[Path]:
         figure.savefig(chemin, facecolor=SURFACE)
         ecrits.append(chemin)
     plt.close(figure)
+    # Ticket 039, pas 6 : la sortie par DÉFAUT est versionnée. Une régénération doit
+    # dire ce qu'elle vient de coûter, sinon la croissance ne se voit qu'au pack.
+    signaler(ecrits)
     return ecrits
 
 

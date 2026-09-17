@@ -65,6 +65,16 @@ pile de backpressure et du scan) :
    (7-20 s observés : calculs CPU, réflexions STM) faisaient expirer le keepalive
    et fermaient la socket (1006) en pleine rafale de push. Les stalls restent
    surveillés par `controller_event_loop_lag_seconds` (`[ALARME]` au-delà de 5 s).
+1bis. **Le lanceur headless a la même fragilité, et son propre seuil** (ticket 092) :
+   `scripts/gama/launch_headless.py` tient la connexion à GAMA **Server** (port 6868), que
+   le point 1 ne couvre pas — celui-ci concerne la connexion contrôleur ↔ simulation (3001).
+   Il partait sur les défauts de `websockets` (`ping_timeout=20`) alors que GAMA se bloque en
+   attendant les décisions du LLM : en `CACHE=0` c'est le régime nominal, et davantage encore
+   en pénurie de jetons. Mesuré le 2026-09-16 : 23 pauses, médiane 9 s, maximum 40,9 s, trois
+   au-dessus du seuil — le run est mort au jour 1 à la troisième, GAMA Server arrêtant
+   l'expériment dont le client s'est déconnecté. Porté à **20 minutes**
+   (`GAMA_PING_TIMEOUT_S`), le ping restant émis toutes les 20 s pour que la mort réelle d'une
+   connexion soit toujours détectée.
 2. **Rollback sur envoi non délivré** : `send_message` (`handle/websocket.py`) avale les
    exceptions d'envoi et retourne `False`. `_push_planned_move` vérifie ce retour au même
    titre qu'une exception : rollback complet (agent remis en IDLE, move restauré), le scan

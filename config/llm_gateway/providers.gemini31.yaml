@@ -1,0 +1,43 @@
+# config/llm_gateway/providers.gemini31.yaml — ticket 075.
+#
+# Fichier de fournisseurs RESTREINT : `gemini-3.1-flash-lite` et rien d'autre. Il sert au run de
+# soixante jours du ticket 075, qui demande ce modèle exclusivement.
+#
+# POURQUOI UN FICHIER, ET PAS DES CLÉS BLANCHIES. Un fournisseur sans clé est exclu de la
+# rotation (`filter_providers_without_api_key`), mais la clé Google porte NEUF instances : la
+# blanchir retirerait aussi gemini 3.5, 3.6, 3.7, 3.8 et les gemma, et la garder les laisserait
+# toutes entrer dans la cascade. Le seul moyen de n'avoir qu'un modèle est de ne déclarer que lui.
+#
+# USAGE :
+#   LLM_GATEWAY_PROVIDERS_FILE=/app/config/llm_gateway/providers.gemini31.yaml make run OFFLINE=1
+#
+# Les deux instances sont les mêmes que dans le fichier complet, recopiées à l'identique — elles
+# se distinguent par leur CLÉ (projets Google différents), donc par leur seau de quota : 2 x 500
+# requêtes/jour, remises à zéro à minuit heure du Pacifique, soit 9 h à Paris.
+#
+# ⚠ Ce fichier ne doit PAS devenir le fichier par défaut : sans cascade, une panne Google arrête
+# le run au lieu de le faire glisser sur mistral. C'est voulu ici, et seulement ici.
+
+providers:
+  google_gemini31_key1:
+    adapter: google
+    quota_reset_tz: America/Los_Angeles
+    rpm_limit: 15
+    tpm_limit: 250000
+    rpd_limit: 500
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    default_model: gemini-3.1-flash-lite
+    weight: 1.0
+    concurrency_limit: 2
+    disable_timeout: 120
+  google_gemini31_key2:
+    adapter: google
+    quota_reset_tz: America/Los_Angeles
+    rpm_limit: 15
+    tpm_limit: 250000
+    rpd_limit: 500
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    default_model: gemini-3.1-flash-lite
+    weight: 1.0
+    concurrency_limit: 2
+    disable_timeout: 120

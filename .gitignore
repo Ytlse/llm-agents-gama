@@ -157,8 +157,11 @@ scratch/
 # ============================================================
 # EQUASIM Toulouse
 services/eqasim-toulouse/
-# Calibration de prompt (github.com/Ytlse/prompt_calibration)
-prompt_calibration/
+# Calibration de prompt : SOUS-MODULE déclaré depuis le ticket 039 (pas 5), plus une
+# exclusion. Le parent enregistre désormais le COMMIT de github.com/Ytlse/prompt_calibration
+# qui a produit un score : `scripts/synthesis/` importe `calibration.metrics` par sys.path,
+# et `model_compare.py` inscrit ce fichier dans le manifeste des sources d'une page — sans
+# rien dire, jusqu'ici, de la version. Voir .gitmodules.
 # Assistant personnel — dépôt git autonome imbriqué
 docs/slides/README.md
 # Les traces d'expériences se versionnent PAR DATE ET HEURE sur disque (docs/traces/<AAAA-MM-JJ_HH-MM>_…),
@@ -191,6 +194,11 @@ data/experiences/
 !data/experiences/*/experience.yaml
 data/experiences/.masques.json
 services/llm-agents/data/experiences/
+# Ticket 039 / 074 — campagnes de rejeu : même partage que les expériences ci-dessus. Le `.yaml`
+# de campagne est une DÉFINITION, il se versionne : c'est lui qui dit quoi rejouer. `etat.json`
+# est de l'ÉTAT D'EXÉCUTION (phase courante, faites, restantes, échouées, sommeils) — il est
+# réécrit à chaque tour et salissait tous les commits pris pendant qu'une campagne tourne.
+campagnes/*/etat.json
 # copie de services/llm-agents/config/config.yaml appliquée au dernier `make run` (détection de changement)
 .config.yaml.applique
 
@@ -235,3 +243,6 @@ specs/ticket_045/substrat-unique-v5.md
 archive/
 docs/paper/mémoire/*
 docs/paper/memoire
+data/experiences/*
+
+609_FR.md

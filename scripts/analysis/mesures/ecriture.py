@@ -1,0 +1,223 @@
+"""Écriture des CSV de mesures — ticket 093, lot 2.
+
+DEUX RÉGIMES, ET LA DISTINCTION EST LE CŒUR DU LOT
+--------------------------------------------------
+**Les flux sont réécrits en entier, à chaque fois.** Trajets, parts modales, habitudes, vivier,
+opérations de concept : tout se recalcule depuis des journaux datés et dédupliqués. Un jour rejoué
+après une reprise ne peut donc pas se dédoubler, et une coupure ne peut pas trouer la courbe. La
+continuité devient une propriété de construction, et non une précaution qu'il faudra penser à
+reprendre.
+
+**Les états sont écrits une fois et jamais réécrits.** Un état ne se reconstitue pas : la `force`
+d'un souvenir croît à chaque rappel, et le nombre d'entrées d'un agent au jour 3 n'est plus lisible
+au jour 10. Pire, mesuré le 2026-09-16 sur le run `2026-09-16_15_58` : **le rejeu d'une reprise
+écrase les points de reprise des journées déjà vécues avec l'état gelé.** Les points `jour_002` à
+`jour_009` y portent tous exactement le même contenu — 101 entrées, mêmes compteurs par agent —
+parce qu'ils ont été réécrits pendant le rejeu, alors que la mémoire était gelée. La croissance du
+vivier sur les huit premiers jours est perdue pour ce run.
+
+D'où la règle : une ligne d'état déjà écrite est **conservée telle quelle**. Le premier passage la
+fixe, au moment où l'information existe encore. C'est aussi ce qui rend le cas F1 vrai pour les
+états : ils ne peuvent pas changer, puisqu'on ne les recalcule pas.
+
+⚠ Le répertoire est créé à la PREMIÈRE ÉCRITURE, jamais à l'import : un import qui sème un
+répertoire de run est un défaut déjà payé une fois dans ce dépôt (ticket 075, journal de mémoire).
+"""
+
+from __future__ import annotations
+
+import csv
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Sequence
+
+from scripts.analysis.memoire.sources import MODES
+from scripts.analysis.mesures.calcul import Mesures, calculer
+
+REPERTOIRE = "mesures"
+
+FICHIER_CHOIX_MODAL = "choix_modal_par_jour.csv"
+FICHIER_HABITUDES = "habitudes_par_activite.csv"
+FICHIER_MEMOIRE = "memoire_par_jour.csv"
+FICHIER_DUREES = "duree_de_vie_par_type.csv"
+FICHIER_CHOC = "choc_par_jour.csv"
+
+
+@dataclass(frozen=True)
+class Table:
+    """Un CSV : son nom, ses colonnes, sa clé, et les colonnes d'ÉTAT qu'on ne réécrit pas."""
+
+    fichier: str
+    colonnes: tuple[str, ...]
+    cle: tuple[str, ...]
+    colonnes_d_etat: tuple[str, ...] = ()
+
+
+def _colonnes_choix_modal() -> tuple[str, ...]:
+    return (
+        "jour_simule", "date_simulee", "person_id", "trajets", "trajets_decides",
+        "part_decidee", "modes_distincts", *[f"part_{mode}" for mode in MODES],
+        "trajets_mode_inconnu",
+    )
+
+
+TABLES = {
+    "choix_modal": Table(FICHIER_CHOIX_MODAL, _colonnes_choix_modal(),
+                         ("jour_simule", "person_id")),
+    "habitudes": Table(
+        FICHIER_HABITUDES,
+        ("jour_simule", "date_simulee", "person_id", "activite", "motif", "mode", "occurrences",
+         "mode_veille", "reprise_veille", "mode_habituel", "conforme_habitude",
+         "observations_fenetre"),
+        ("jour_simule", "person_id", "activite"),
+    ),
+    "memoire": Table(
+        FICHIER_MEMOIRE,
+        ("jour_simule", "date_simulee", "person_id", "rappels", "vivier_min", "vivier_median",
+         "vivier_max", "souvenirs_servis", "concepts_crees", "concepts_confirmes",
+         "concepts_precises", "concepts_contredits", "operations_hors_vocabulaire",
+         "etat_lu_dans", "entrees_ltm"),
+        ("jour_simule", "person_id"),
+        colonnes_d_etat=("etat_lu_dans", "entrees_ltm"),
+    ),
+    "durees_de_vie": Table(
+        FICHIER_DUREES,
+        ("jour_simule", "date_simulee", "person_id", "type_souvenir", "entrees",
+         "duree_vie_mediane_jours", "etat_lu_dans"),
+        ("jour_simule", "person_id", "type_souvenir"),
+        colonnes_d_etat=("entrees", "duree_vie_mediane_jours", "etat_lu_dans"),
+    ),
+    "chocs": Table(
+        FICHIER_CHOC,
+        ("jour_simule", "date_simulee", "person_id", "choc_id", "expositions",
+         "minutes_injectees", "incidents_reseau", "correspondances_ratees",
+         "souvenir_choc_servi", "decisions_avec_souvenir_choc", "appariement"),
+        ("jour_simule", "person_id", "choc_id"),
+    ),
+}
+
+# Correspondance opération de concept → colonne. Les colonnes sont fixes et nommées en clair :
+# une colonne par opération vaut mieux qu'un couple (opération, compte) que personne ne pivote.
+_COLONNE_OPERATION = {
+    "créé": "concepts_crees",
+    "confirmé": "concepts_confirmes",
+    "précisé": "concepts_precises",
+    "contredit": "concepts_contredits",
+}
+
+
+def _valeur(valeur: Any) -> str:
+    """Rendu CSV. `None` devient une cellule VIDE — jamais un zéro.
+
+    Dans ce dépôt, le zéro est le score parfait : une vacuité écrite `0` se lit comme une
+    conformité totale ou une contradiction jamais survenue, et se cite comme telle.
+    """
+    if valeur is None:
+        return ""
+    if isinstance(valeur, bool):
+        return "1" if valeur else "0"
+    if isinstance(valeur, float):
+        return f"{valeur:.4f}".rstrip("0").rstrip(".") or "0"
+    return str(valeur)
+
+
+def _lignes(mesures: Mesures, nom: str) -> list[dict[str, Any]]:
+    if nom == "choix_modal":
+        return [
+            {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
+             "person_id": l.person_id, "trajets": l.trajets,
+             "trajets_decides": l.trajets_decides, "part_decidee": l.part_decidee,
+             "modes_distincts": l.modes_distincts,
+             **{f"part_{mode}": l.parts.get(mode, 0.0) for mode in MODES},
+             "trajets_mode_inconnu": l.trajets_mode_inconnu}
+            for l in mesures.choix_modal
+        ]
+    if nom == "habitudes":
+        return [
+            {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
+             "person_id": l.person_id, "activite": l.activite, "motif": l.motif,
+             "mode": l.mode, "occurrences": l.occurrences, "mode_veille": l.mode_veille,
+             "reprise_veille": l.reprise_veille, "mode_habituel": l.mode_habituel,
+             "conforme_habitude": l.conforme_habitude,
+             "observations_fenetre": l.observations_fenetre}
+            for l in mesures.habitudes
+        ]
+    if nom == "memoire":
+        return [
+            {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
+             "person_id": l.person_id, "rappels": l.rappels, "vivier_min": l.vivier_min,
+             "vivier_median": l.vivier_median, "vivier_max": l.vivier_max,
+             "souvenirs_servis": l.souvenirs_servis,
+             **{_COLONNE_OPERATION[op]: valeur for op, valeur in l.operations.items()},
+             "operations_hors_vocabulaire": l.operations_hors_vocabulaire,
+             "etat_lu_dans": l.etat_lu_dans, "entrees_ltm": l.entrees_ltm}
+            for l in mesures.memoire
+        ]
+    if nom == "durees_de_vie":
+        return [
+            {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
+             "person_id": l.person_id, "type_souvenir": l.type_souvenir,
+             "entrees": l.entrees, "duree_vie_mediane_jours": l.duree_vie_mediane_jours,
+             "etat_lu_dans": l.etat_lu_dans}
+            for l in mesures.durees_de_vie
+        ]
+    return [
+        {"jour_simule": l.jour_simule, "date_simulee": l.date_simulee,
+         "person_id": l.person_id, "choc_id": l.choc_id, "expositions": l.expositions,
+         "minutes_injectees": l.minutes_injectees, "incidents_reseau": l.incidents_reseau,
+         "correspondances_ratees": l.correspondances_ratees,
+         "souvenir_choc_servi": l.souvenir_choc_servi,
+         "decisions_avec_souvenir_choc": l.decisions_avec_souvenir_choc,
+         "appariement": l.appariement}
+        for l in mesures.chocs
+    ]
+
+
+def _deja_ecrites(chemin: Path, table: Table) -> dict[tuple[str, ...], dict[str, str]]:
+    """Lignes du CSV existant, indexées par leur clé. Vide si le fichier n'existe pas."""
+    if not chemin.is_file():
+        return {}
+    with chemin.open(newline="", encoding="utf-8") as flux:
+        return {
+            tuple(ligne.get(colonne, "") for colonne in table.cle): ligne
+            for ligne in csv.DictReader(flux)
+        }
+
+
+def _ecrire_table(repertoire: Path, table: Table, lignes: Sequence[dict[str, Any]]) -> Path:
+    chemin = repertoire / table.fichier
+    anciennes = _deja_ecrites(chemin, table)
+    with chemin.open("w", newline="", encoding="utf-8") as flux:
+        ecrivain = csv.writer(flux)
+        ecrivain.writerow(table.colonnes)
+        for ligne in lignes:
+            clef = tuple(_valeur(ligne.get(colonne)) for colonne in table.cle)
+            ancienne = anciennes.get(clef)
+            rendue = []
+            for colonne in table.colonnes:
+                valeur = _valeur(ligne.get(colonne))
+                # Un état déjà écrit est CONSERVÉ : il a été mesuré quand l'information existait
+                # encore, et la recalculer aujourd'hui donnerait une autre valeur — ou la valeur
+                # gelée qu'un rejeu a laissée derrière lui.
+                if colonne in table.colonnes_d_etat and ancienne is not None:
+                    conservee = ancienne.get(colonne, "")
+                    valeur = conservee if conservee != "" else valeur
+                rendue.append(valeur)
+            ecrivain.writerow(rendue)
+    return chemin
+
+
+def ecrire(mesures: Mesures, repertoire: Path | str | None = None) -> dict[str, Path]:
+    """Écrit les cinq CSV et rend leurs chemins, indexés par nom de table."""
+    racine = Path(repertoire) if repertoire else Path(mesures.chemin_run) / REPERTOIRE
+    racine.mkdir(parents=True, exist_ok=True)
+    return {
+        nom: _ecrire_table(racine, table, _lignes(mesures, nom))
+        for nom, table in TABLES.items()
+    }
+
+
+def mesurer_et_ecrire(chemin_run: Path | str,
+                      repertoire: Path | str | None = None) -> dict[str, Path]:
+    """Le chemin complet : calcul puis écriture. C'est ce qu'appellent le CLI et le contrôleur."""
+    return ecrire(calculer(chemin_run), repertoire)

@@ -67,12 +67,23 @@ FAMILLES = {
     # Ticket 043 : la logistique à noyau rejoint la table sans autre changement — c'est
     # tout l'intérêt d'un libellé DÉRIVÉ du format plutôt qu'écrit en dur.
     "klr_mode_choice_policy": "klr",
-    # PAS de `rf_mode_choice_policy` ici, et c'est délibéré (ticket 044, règle R7) : le témoin
-    # random forest ne doit pas devenir un ARBITRE. Son lanceur dédié
-    # (`scripts/progedo_logit/lancer_experience_rf.py`) inscrit sa famille dans cette table
-    # POUR LA DURÉE DE SON PROCESSUS et remplace `load_policy` dans l'espace de noms du
-    # décideur — l'exécution produite est une vraie exécution de la plateforme, sans que les
-    # modules de score connaissent le témoin.
+    # Ticket 088 § 3.3 : la forêt aléatoire rejoint la table. Elle en était tenue à l'écart
+    # parce que le ticket 043 modifiait ces mêmes lignes en parallèle ; il est clos. Son
+    # lanceur inscrivait jusqu'ici la famille POUR LA DURÉE DE SON PROCESSUS et remplaçait
+    # `load_policy` dans l'espace de noms du décideur — un aiguillage invisible depuis ce
+    # fichier, qui rendait l'expérience non rejouable par la CLI.
+    #
+    # La règle R7 du ticket 044 (« un témoin ne devient pas un arbitre ») n'est pas portée
+    # par cette table : ce qui tient la forêt hors du score composite des oracles, c'est
+    # `POLICY_CLASS_TO_CAT` et les modules de synthèse, pas l'absence d'un libellé ici. Le
+    # libellé reste DÉRIVÉ du format de l'artefact, jamais écrit en dur : c'est ce qui
+    # empêche une exécution de la forêt de s'annoncer « lightgbm » dans les traces.
+    #
+    # La forêt se réajuste au chargement (aucun arbre n'est sérialisé) et vérifie qu'elle
+    # reproduit les métriques publiées à 1e-9 près. Elle a été estimée sous scikit-learn
+    # 1.8.0 ; le conteneur `controller` porte la 1.9.1, sous laquelle ce contrôle échoue —
+    # c'est son travail. Cette expérience se lance donc depuis l'HÔTE.
+    "rf_mode_choice_policy": "rf",
 }
 
 

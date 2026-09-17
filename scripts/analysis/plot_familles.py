@@ -55,6 +55,7 @@ for _chemin in (RACINE, RACINE / "scripts"):
     if str(_chemin) not in sys.path:
         sys.path.insert(0, str(_chemin))
 
+from scripts.analysis.figures_versionnees import signaler
 from scripts.dashboard import experiences as registre  # noqa: E402
 
 logger = logging.getLogger("plot_familles")
@@ -424,6 +425,9 @@ def _ecrire(figure, sortie: Path) -> list[Path]:
         figure.savefig(chemin, facecolor=SURFACE)
         ecrits.append(chemin)
     plt.close(figure)
+    # Ticket 039, pas 6 : la sortie par DÉFAUT est versionnée. Une régénération doit
+    # dire ce qu'elle vient de coûter, sinon la croissance ne se voit qu'au pack.
+    signaler(ecrits)
     return ecrits
 
 

@@ -2,6 +2,7 @@
 
 **Objet :** chaque citation de [`chapitres/01_INTRODUCTION_EN.md`](en/01_introduction.md) et [`chapitres/02_RELATED_WORK_EN.md`](en/02_related_work.md) (v0.3) et de son miroir français.
 **Mise à jour du 8 septembre 2026 (v0.3) :** à la demande de K. Oberoi, les éléments de contexte de Vu, Gaudou & Oberoi (2025) reviennent en section 1, reformulés phrase à phrase ; leurs cinq références sont réintégrées (A28 à A31, et A19 pour Feng). Leurs PDF manquent dans `etat_de_lart/` : les cases restent ouvertes tant qu'ils n'y sont pas.
+**Mise à jour du 17 septembre 2026 (v0.18) :** A32 (MATSim) retrouve une phrase citante. L'entrée la donnait en § 1 ; aucune phrase des chapitres 1 et 2 ne la citait plus depuis que l'état de l'art a quitté l'introduction, et la référence restait au bib sans appel. Le paragraphe d'ouverture du § 2.2 la cite désormais, aux côtés de A5 (Park et al.), dont l'entrée annonçait déjà le § 2.2. Aucune citation nouvelle : les onze références proposées par une refonte du chapitre (Simon, Kahneman & Tversky, McKelvey & Palfrey, Wardrop, Rosenthal, Hong, Li, Gao, Sun, Ge) n'ont pas été retenues, faute de PDF au dépôt et de phrase du protocole qui les emploie.
 **Mise à jour du 10 septembre 2026 (v0.14) :** entrée A33 pour GTA (Lämmer, Colley & Ebel, 2026), repéré après la v0.13 et absent de tout l'état de l'art antérieur. Ses chiffres sont recoupés sur le préprint, pas sur la version ACM : la case reste ouverte.
 **Créé le :** 8 septembre 2026, à la suite de la relecture de la v0.1 (voir `archive/INTRODUCTION_EN_v0.1.md`).
 **Règle AAMAS rappelée :** les auteurs sont responsables de l'exactitude des citations ; un article aux citations erronées risque un refus d'emblée ([`INSTRUCTIONS_SOUMISSION_AAMAS.md`](SOUMISSION_AAMAS_2027.md), § 4).
@@ -166,7 +167,7 @@ Cocher une case = les quatre conditions vérifiées à la main, pas seulement le
 
 ### A24. Ke et al. (2017) — LightGBM
 - [ ] PDF : `etat_de_lart/Ke_2017_LightGBM.pdf`
-- Phrase citante : § 4 C1 (v0.7), définition de l'oracle supervisé : un modèle LightGBM ajusté sur les microdonnées de l'enquête, plafond de référence.
+- Phrase citante : § 4 C1 (v0.7), définition des références tabulaires supervisées, dont un modèle LightGBM ajusté sur les microdonnées de l'enquête.
 - Bib : `ke2017lightgbm` (présente).
 
 ### A25. Hörl & Balać (2021) — eqasim
@@ -188,7 +189,7 @@ Cocher une case = les quatre conditions vérifiées à la main, pas seulement le
 
 ### A34. Microdonnées EMC² 2023 (Quetelet-Progedo-Diffusion, lil-1750)
 - [ ] **Modèle de citation à recopier depuis l'annexe de la convention** — le libellé écrit aujourd'hui dans l'Annexe G est provisoire et marqué comme tel. Tant que cette case n'est pas cochée, aucune version n'est envoyée au diffuseur.
-- Phrases citantes : § 4.7 (conditions d'accès et conséquences sur le matériel supplémentaire), Annexe G, et partout où un chiffre est ajusté sur microdonnées (logit, oracle, marges recalculées).
+- Phrases citantes : § 4.7 (conditions d'accès et conséquences sur le matériel supplémentaire), Annexe G, et partout où un chiffre est ajusté sur microdonnées (logit, références tabulaires, marges recalculées).
 - Engagements associés (usage recherche, non-cession, information du diffuseur) : [`../sources/ENGAGEMENT_DONNEES_EMC2.md`](../sources/ENGAGEMENT_DONNEES_EMC2.md).
 - Bib : `progedo2023emc2microdata` (créée le 11 septembre 2026).
 
@@ -218,7 +219,7 @@ Cocher une case = les quatre conditions vérifiées à la main, pas seulement le
 
 ### A32. Horni, Nagel & Axhausen (2016) — MATSim
 - [ ] Ouvrage Ubiquity Press (doi 10.5334/baw), pas de PDF — le README de l'état de l'art le liste parmi les téléchargements manuels.
-- Phrase citante : § 1, aux côtés de Smith et al. 1995, simulation multi-agents de transport centrée sur l'individu.
+- Phrase citante : § 2.2, ouverture — boucle co-évolutive hors ligne, programmes notés par une fonction écrite à l'avance, agent qui ne délibère pas. **Déplacée le 17 septembre 2026 (v0.18) :** l'entrée la donnait en § 1 aux côtés de Smith et al. 1995, mais la phrase avait disparu des deux chapitres quand l'état de l'art est devenu le chapitre 2.
 - **Attribution :** Vu et al. citent « W Axhausen et al., 2016 » ; l'ordre des éditeurs de l'ouvrage est Horni, Nagel & Axhausen, et c'est ainsi que la v0.3 le cite.
 - Bib : `horni2016matsim` (présente).
 
@@ -290,7 +291,7 @@ Chaque chiffre conservé dans la v0.2 doit se recalculer depuis un fichier du d�
 - [ ] Vivier eqasim : 5 063 personnes — même manifeste.
 - [ ] Contrôle démographique : 6 marges conformes, 2 non mesurables — `CONTROLE.md` du même dossier.
 - [ ] Déplacements du jour évalué : 2 693 planifiés, 2 645 exploitables — `compteurs.json` des exécutions du 7 septembre 2026.
-- [ ] Jeu de test scellé de l'oracle : 13 045 trajets, découpage par ménage — `scripts/progedo_logit/mode_choice_policy_metrics.json` (`test.n_rows`).
+- [ ] Jeu de test scellé des références tabulaires : 13 045 trajets, découpage par ménage — `scripts/progedo_logit/mode_choice_policy_metrics.json` (`test.n_rows`).
 - [ ] Contrat de 21 variables, `spec_version 2` — `scripts/progedo_logit/feature_spec.json`.
 - [ ] Jusqu'à six itinéraires présentés — `max_candidats: 6` dans `experience.yaml` des expériences jouées.
 - [x] Corpus de 30 articles, 7 classés « éliminer » — plus mentionné dans l'introduction depuis la v0.7 (cinq articles, choisis avant tout appel) ; reste vrai pour l'annexe.

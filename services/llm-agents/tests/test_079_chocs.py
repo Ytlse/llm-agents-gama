@@ -1,0 +1,403 @@
+"""Ticket 079 — chocs déclarés, subis par les agents.
+
+Contrat de référence : `specs/ticket_079/tests.md`. Les cas portent les numéros de règle (R1,
+R7, R21…) pour qu'un test et sa raison d'être se retrouvent.
+
+Tout ici est PUR : aucun simulateur, aucun modèle, aucun appel réseau. L'injection dans le
+contrôleur est vérifiée par lecture de source (R14, R15), comme le fait le test-frontière du
+ticket 070.
+"""
+
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from llm import chocs as chocs_module
+from llm.chocs import RefusDeChoc, RegistreChocs, charger
+from llm.gravite import composantes_sans_source, force_initiale, gravite_deterministe
+from settings import settings
+
+CONFIG_CHOCS = Path(__file__).resolve().parents[1] / "config" / "chocs"
+
+VECU_VALIDE = "I was stuck for an hour on the ring road, and I arrived in a foul mood."
+
+
+def _declaration(**surcharges) -> dict:
+    base = {
+        "choc": "test_choc",
+        "libelle": "Choc de test",
+        "source": "test",
+        "exposition": {"regle": "mode", "modes": ["car"]},
+        "jours": [{"jour": 12, "retard_min": 60, "vecu": VECU_VALIDE}],
+    }
+    base.update(surcharges)
+    return base
+
+
+def _ecrire(tmp_path: Path, declaration: dict) -> Path:
+    p = tmp_path / "choc.yaml"
+    p.write_text(yaml.safe_dump(declaration, allow_unicode=True), encoding="utf-8")
+    return p
+
+
+@pytest.fixture(autouse=True)
+def _registre_propre():
+    chocs_module.reinitialiser()
+    yield
+    chocs_module.reinitialiser()
+
+
+# ── A. Lecture et refus (lot 1) ──────────────────────────────────────────────────────────
+def test_R1_declaration_valide_se_charge(tmp_path):
+    choc = charger(_ecrire(tmp_path, _declaration()))
+    assert choc.choc_id == "test_choc"
+    assert choc.premier_jour == 12 and choc.dernier_jour == 12
+    assert choc.jours[12].retard_s == 3600
+    assert choc.jours[12].incident_reseau is True  # défaut : un choc EST un incident
+    assert choc.empreinte  # l'empreinte du fichier voyage avec la déclaration
+
+
+def test_R2_sans_fichier_le_registre_reste_vide():
+    """Un run qui ne demande rien se comporte exactement comme avant ce ticket."""
+    settings.chocs.enabled = False
+    settings.chocs.fichier = None
+    assert chocs_module.initialiser() is None
+    assert chocs_module.registre() is None
+    assert chocs_module.incident_reseau_a_une_source() is False
+
+
+def test_R3_le_chargement_se_journalise(tmp_path, caplog):
+    settings.chocs.enabled = True
+    settings.chocs.fichier = str(_ecrire(tmp_path, _declaration()))
+    settings.cache.enabled = False
+    chocs_module.initialiser()
+    assert chocs_module.registre() is not None
+    assert chocs_module.registre().choc.libelle == "Choc de test"
+
+
+@pytest.mark.parametrize(
+    "surcharge, motif",
+    [
+        ({"jours": []}, "aucune journée"),
+        ({"jours": [{"jour": 0, "retard_min": 10, "vecu": VECU_VALIDE}]}, "n° 1"),
+        (
+            {
+                "jours": [
+                    {"jour": 3, "retard_min": 10, "vecu": VECU_VALIDE},
+                    {"jour": 3, "retard_min": 20, "vecu": VECU_VALIDE},
+                ]
+            },
+            "deux entrées",
+        ),
+        ({"jours": [{"jour": 3, "retard_min": -5, "vecu": VECU_VALIDE}]}, "négatif"),
+        ({"jours": [{"jour": 3, "retard_min": 10, "vecu": "  "}]}, "vide"),
+    ],
+)
+def test_R4_declarations_invalides_refusees(tmp_path, surcharge, motif):
+    with pytest.raises(RefusDeChoc) as err:
+        charger(_ecrire(tmp_path, _declaration(**surcharge)))
+    assert motif in str(err.value)
+
+
+def test_R5_regle_exposition_inconnue_refusee(tmp_path):
+    d = _declaration(exposition={"regle": "au_hasard", "modes": ["car"]})
+    with pytest.raises(RefusDeChoc, match="inconnue"):
+        charger(_ecrire(tmp_path, d))
+
+
+def test_R6_mode_hors_hierarchie_refuse(tmp_path):
+    """Le vocabulaire vient de `llm/axes.py`, jamais d'une liste recopiée ici."""
+    d = _declaration(exposition={"regle": "mode", "modes": ["teleportation"]})
+    with pytest.raises(RefusDeChoc, match="hors de la hiérarchie"):
+        charger(_ecrire(tmp_path, d))
+
+
+def test_R5bis_mode_sans_liste_refuse(tmp_path):
+    with pytest.raises(RefusDeChoc, match="sans aucun mode"):
+        charger(_ecrire(tmp_path, _declaration(exposition={"regle": "mode", "modes": []})))
+
+
+# ── B. Le vécu est du vécu (lot 4) ───────────────────────────────────────────────────────
+@pytest.mark.parametrize(
+    "texte",
+    [
+        "You should avoid the ring road tomorrow.",
+        "Avoid the metro from now on.",
+        "Remember to take the bike instead.",
+        "Tu devrais éviter la rocade demain.",
+        "Don't take the car again.",
+    ],
+)
+def test_R7_consigne_deguisee_en_vecu_refusee(tmp_path, texte):
+    """Refus FRANC, pas un avertissement : une consigne qui passe fabrique le résultat."""
+    d = _declaration(jours=[{"jour": 3, "retard_min": 10, "vecu": texte}])
+    with pytest.raises(RefusDeChoc):
+        charger(_ecrire(tmp_path, d))
+
+
+def test_R8_vecu_sans_premiere_personne_avertit_mais_passe(tmp_path):
+    d = _declaration(
+        jours=[{"jour": 3, "retard_min": 10, "vecu": "Flat tyre, hands covered in grease."}]
+    )
+    choc = charger(_ecrire(tmp_path, d))  # ne lève pas
+    assert choc.jours[3].vecu.startswith("Flat tyre")
+
+
+# Les cinq cas LIVRÉS par le ticket 079, nommés et non comptés : le répertoire accueille aussi
+# les cas d'étude déclarés au fil des expériences (c6 le 2026-09-15), et un test qui compte les
+# fichiers interdirait d'en ajouter un sans toucher au test — ce qui n'est pas ce qu'il veut dire.
+CAS_DU_TICKET = (
+    "c1_bouchon_rocade",
+    "c2_crevaison",
+    "c3_panne_reseau",
+    "c4_train_supprime",
+    "c5_orage_grele",
+)
+
+
+def test_R9_les_cinq_cas_livres_passent():
+    modes_couverts = set()
+    for nom in CAS_DU_TICKET:
+        chemin = CONFIG_CHOCS / f"{nom}.yaml"
+        assert chemin.is_file(), f"cas du ticket manquant : {nom}"
+        choc = charger(chemin)  # aucune exception, aucun refus
+        assert choc.jours
+        modes_couverts |= set(choc.exposition.modes)
+    # Les six modes du dépôt sont couverts par au moins un cas.
+    assert modes_couverts == {
+        "car", "cycling", "public_transport", "walking", "train", "motorbike",
+    }
+
+
+def test_R9bis_tous_les_cas_du_repertoire_se_chargent():
+    """Y compris les cas d'étude ajoutés après le ticket : aucun fichier mort dans ce dossier."""
+    fichiers = sorted(CONFIG_CHOCS.glob("c*.yaml"))
+    assert len(fichiers) >= len(CAS_DU_TICKET)
+    for f in fichiers:
+        choc = charger(f)
+        assert choc.jours, f"{f.name} ne déclare aucun jour"
+
+
+# ── C. Application (lot 2) ───────────────────────────────────────────────────────────────
+def _registre(tmp_path, **surcharges) -> RegistreChocs:
+    return RegistreChocs(charger(_ecrire(tmp_path, _declaration(**surcharges))))
+
+
+def test_R10_agent_expose_recoit_retard_texte_et_incident(tmp_path, monkeypatch):
+    r = _registre(tmp_path)
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    a = r.applique("609", "car", 1000)
+    assert a is not None
+    assert a.retard_injecte_s == 3600
+    assert a.incident_reseau is True
+    assert a.vecu == VECU_VALIDE
+    assert a.raison == "mode:car"
+
+
+def test_R12_agent_non_expose_ne_recoit_rien(tmp_path, monkeypatch):
+    r = _registre(tmp_path)
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    assert r.applique("609", "cycling", 1000) is None
+    assert r._compteurs.epargnes == 1  # le témoin interne est COMPTÉ, pas déduit
+
+
+def test_R13_jour_nominal_nappelle_rien_mais_garde_labscisse(tmp_path, monkeypatch):
+    r = _registre(tmp_path)
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 10))
+    assert r.applique("609", "car", 1000) is None
+    assert r.jour_relatif(1000) == -2  # deux jours AVANT le choc
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 15))
+    assert r.jour_relatif(1000) == +3
+
+
+def test_R14_aucun_moteur_ditineraire_nest_sollicite():
+    """Frontière du régime subi : le module n'IMPORTE aucun moteur d'itinéraire.
+
+    Contrôlé sur les imports et non sur le texte du fichier : la docstring parle des moteurs
+    précisément pour dire qu'elle n'y touche pas, et un test qui lirait le texte brut
+    interdirait d'expliquer la règle qu'il vérifie.
+    """
+    import ast
+
+    arbre = ast.parse((Path(__file__).resolve().parents[1] / "llm" / "chocs.py").read_text("utf-8"))
+    importes = set()
+    for noeud in ast.walk(arbre):
+        if isinstance(noeud, ast.Import):
+            importes |= {a.name for a in noeud.names}
+        elif isinstance(noeud, ast.ImportFrom) and noeud.module:
+            importes.add(noeud.module)
+    for interdit in ("trip_helper", "otp", "osmnx", "gtfs"):
+        assert not any(interdit in m for m in importes), (
+            f"chocs.py importe « {interdit} » : le régime subi ne sollicite AUCUN moteur "
+            f"d'itinéraire. Un choc qui dégrade l'offre relève d'un autre ticket."
+        )
+
+
+def test_R15_lagenda_est_decale_par_le_retard_MESURE_seulement():
+    """Le retard injecté ne replanifie rien : la replanification lit l'observation de GAMA."""
+    ctrl = (
+        Path(__file__).resolve().parents[1]
+        / "urban_mobility_agents"
+        / "simulation_controller.py"
+    ).read_text("utf-8")
+    assert "arrival_late_seconds=ob.late" in ctrl, (
+        "la replanification doit lire le retard de l'OBSERVATION"
+    )
+    for ligne in ctrl.splitlines():
+        if "reschedule" in ligne.lower():
+            assert "_retard_injecte_s" not in ligne, (
+                "le retard injecté ne doit jamais entrer dans une replanification : "
+                "l'agenda resterait comparable entre un run à choc et son homologue nominal"
+            )
+
+
+# ── D. Exposition ────────────────────────────────────────────────────────────────────────
+def test_R17_exposition_par_mode(tmp_path, monkeypatch):
+    r = _registre(tmp_path, exposition={"regle": "mode", "modes": ["car", "motorbike"]})
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    assert r.applique("1", "car", 0) is not None
+    assert r.applique("2", "motorbike", 0) is not None
+    assert r.applique("3", "walking", 0) is None
+    assert r.applique("4", None, 0) is None
+
+
+def test_R18_tirage_deterministe_et_stable(tmp_path, monkeypatch):
+    d = {"regle": "tirage", "part": 0.3, "graine": 79}
+    r1 = _registre(tmp_path, exposition=d)
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    touches_1 = {p for p in map(str, range(200)) if r1.applique(p, "car", 0)}
+    # Un second registre, construit séparément : même graine, mêmes agents touchés.
+    r2 = _registre(tmp_path, exposition=d)
+    touches_2 = {p for p in map(str, range(200)) if r2.applique(p, "car", 0)}
+    assert touches_1 == touches_2
+    # Et l'ordre d'arrivée des observations ne change rien.
+    r3 = _registre(tmp_path, exposition=d)
+    touches_3 = {p for p in reversed(list(map(str, range(200)))) if r3.applique(p, "car", 0)}
+    assert touches_1 == touches_3
+
+
+def test_R19_la_part_tiree_est_celle_declaree(tmp_path, monkeypatch):
+    r = _registre(tmp_path, exposition={"regle": "tirage", "part": 0.30, "graine": 79})
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    touches = sum(1 for p in map(str, range(2000)) if r.applique(p, "car", 0))
+    assert 0.27 <= touches / 2000 <= 0.33
+
+
+def test_R20_exposition_par_agents_designes(tmp_path, monkeypatch):
+    r = _registre(tmp_path, exposition={"regle": "agents", "agents": ["609", "41275"]})
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    assert r.applique("609", "walking", 0) is not None  # sans `modes`, le mode n'entre pas en compte
+    assert r.applique("99999", "car", 0) is None
+
+
+def test_R20bis_agents_designes_et_modes_declares_se_conjuguent(tmp_path, monkeypatch):
+    """`modes` était parsé, validé, puis IGNORÉ par la règle `agents` (2026-09-15).
+
+    Un champ accepté et sans effet est pire qu'un champ refusé : rien ne le signale. Le cas
+    qui l'exige est un incident de VOITURE posé sur un agent multimodal — sans conjonction, il
+    lisait « the engine made a grinding noise » au retour d'un trajet en bus, et sa mémoire
+    enregistrait une histoire impossible.
+    """
+    r = _registre(
+        tmp_path,
+        exposition={"regle": "agents", "agents": ["899549"], "modes": ["car"]},
+    )
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    assert r.applique("899549", "car", 0) is not None
+    assert r.applique("899549", "public_transport", 0) is None
+    assert r.applique("899549", "walking", 0) is None
+    assert r.applique("899549", None, 0) is None  # mode inconnu : on n'expose pas au hasard
+    assert r.applique("609", "car", 0) is None  # l'agent non désigné reste épargné
+
+
+# ── E. Gravité et mémoire ────────────────────────────────────────────────────────────────
+def test_R21_un_bouchon_dune_heure_atteint_le_seuil_de_choc():
+    """Le calcul n'est pas recopié : il vient de `llm/gravite.py`."""
+    gravite, detail = gravite_deterministe(retard_s=3600, incident_reseau=True)
+    assert gravite == pytest.approx(0.70, abs=1e-9)
+    assert gravite >= settings.agent.memoire__importance_choc  # entre au vivier des chocs
+    assert detail.retard == pytest.approx(0.50)
+    assert detail.incident_reseau == pytest.approx(0.20)
+    assert force_initiale(gravite) == pytest.approx(14.56, abs=0.01)  # jours, contre 2,8
+
+
+def test_R21bis_la_panne_reseau_est_le_choc_le_plus_marquant():
+    gravite, _ = gravite_deterministe(
+        retard_s=2700, correspondance_ratee=True, incident_reseau=True
+    )
+    assert gravite == pytest.approx(0.90, abs=1e-9)
+    assert force_initiale(gravite) == pytest.approx(17.92, abs=0.01)
+
+
+def test_R22_incident_reseau_cesse_detre_inactif_quand_un_choc_le_porte(tmp_path):
+    assert "incident_reseau" in composantes_sans_source()  # sans choc : déclarée inactive
+    settings.chocs.enabled = True
+    settings.chocs.fichier = str(_ecrire(tmp_path, _declaration()))
+    settings.cache.enabled = False
+    chocs_module.initialiser()
+    assert chocs_module.incident_reseau_a_une_source() is True
+    assert "incident_reseau" not in composantes_sans_source()
+
+
+def test_R22bis_un_choc_sans_incident_reseau_ne_la_reveille_pas(tmp_path):
+    d = _declaration(
+        jours=[{"jour": 3, "retard_min": 10, "vecu": VECU_VALIDE, "incident_reseau": False}]
+    )
+    settings.chocs.enabled = True
+    settings.chocs.fichier = str(_ecrire(tmp_path, d))
+    settings.cache.enabled = False
+    chocs_module.initialiser()
+    assert chocs_module.incident_reseau_a_une_source() is False
+    assert "incident_reseau" in composantes_sans_source()
+
+
+# ── F. Trace (lot 3) ─────────────────────────────────────────────────────────────────────
+def test_R27_chaque_application_laisse_une_ligne(tmp_path, monkeypatch):
+    import json
+
+    journal = tmp_path / "chocs.jsonl"
+    r = RegistreChocs(charger(_ecrire(tmp_path, _declaration())), journal=journal)
+    monkeypatch.setattr(RegistreChocs, "jour_du_run", staticmethod(lambda ts: 12))
+    a = r.applique("609", "car", 1_700_000_000)
+    gravite, detail = gravite_deterministe(retard_s=a.retard_injecte_s, incident_reseau=True)
+    r.tracer(a, "609", 1_700_000_000, gravite, detail)
+    ligne = json.loads(journal.read_text("utf-8").strip())
+    assert ligne["person_id"] == "609"
+    assert ligne["choc_id"] == "test_choc"
+    assert ligne["jour_relatif"] == 0
+    assert ligne["retard_injecte_s"] == 3600
+    assert ligne["vecu"] == VECU_VALIDE
+    assert ligne["gravite"] == pytest.approx(0.70)
+    assert ligne["gravite_detail"]["incident_reseau"] == pytest.approx(0.20)
+
+
+def test_R28_la_declaration_est_archivee_dans_le_run(tmp_path):
+    workdir = tmp_path / "run"
+    settings.chocs.enabled = True
+    settings.chocs.fichier = str(_ecrire(tmp_path, _declaration()))
+    settings.cache.enabled = False
+    chocs_module.initialiser(workdir=workdir)
+    assert (workdir / "choc.yaml").is_file()
+    assert "test_choc" in (workdir / "choc.yaml").read_text("utf-8")
+
+
+def test_R11_les_deux_retards_ne_se_confondent_jamais():
+    """Le contrôleur additionne pour la gravité, mais journalise SÉPARÉMENT."""
+    ctrl = (
+        Path(__file__).resolve().parents[1]
+        / "urban_mobility_agents"
+        / "simulation_controller.py"
+    ).read_text("utf-8")
+    assert "_retard_observe_s + _retard_injecte_s" in ctrl  # la gravité voit la somme
+    assert "retard_injecte_s=_retard_injecte_s" in ctrl  # le journal voit les deux
+    logger = (
+        Path(__file__).resolve().parents[1]
+        / "urban_mobility_agents"
+        / "utils"
+        / "move_logger.py"
+    ).read_text("utf-8")
+    assert '"retard_injecte_s"' in logger and '"delay_s"' in logger

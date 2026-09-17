@@ -30,15 +30,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-
 from chaine_activites import paires_de_la_journee
 from experiences import froid
 from experiences.decision import SOURCE_ENREGISTREE, SOURCE_LOCALE, Proposition
 from experiences.population import InfoPopulation, sha256_fichier
 from helper import shift_weekend_departure_to_monday, to_timestamp_based_on_day
+from loguru import logger
 from models import Location, Person, TravelPlan
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from settings import settings
 
 VERSION_JEU = "jeu1"
@@ -180,7 +179,21 @@ def deplacements_attendus(
                 if act.scheduled_start_time is not None
                 else act.end_time
             )
-            maintenant = base + int(precedente.start_time)
+            # Ticket 057 — l'activité d'origine peut ENJAMBER MINUIT, et c'est le cas de la
+            # première de chaque journée : les chaînes de la cohorte commencent par « home »,
+            # qui débute la veille au soir. Son `start_time` appartient donc au jour PRÉCÉDENT,
+            # et l'ancrer sur `base` place le curseur à 20:07 du jour simulé. Le départ du
+            # matin lui étant antérieur, la ligne de report le datait du LENDEMAIN : 797 des
+            # 894 personas de la v6 perdaient leur premier déplacement, écarté ensuite par la
+            # coupe du scoreur, et le jeu enregistrait pour eux un itinéraire calculé au
+            # mauvais jour. Une activité qui enjambe minuit se reconnaît à son `start_time`
+            # postérieur à son `end_time` ; on recule alors le curseur d'une journée.
+            debut_precedente = int(precedente.start_time)
+            if precedente.end_time is not None and debut_precedente > int(
+                precedente.end_time
+            ):
+                debut_precedente -= 86400
+            maintenant = base + debut_precedente
             depart = to_timestamp_based_on_day(int(cible_24h), maintenant)
             if depart < maintenant:
                 depart += 86400
@@ -232,7 +245,14 @@ def etat_depot() -> tuple[str | None, bool | None]:
     """
     commit = (os.getenv(ENV_COMMIT) or "").strip() or None
     brut = (os.getenv(ENV_ARBRE_PROPRE) or "").strip().lower()
-    propre = {"1": True, "true": True, "oui": True, "0": False, "false": False, "non": False}.get(brut)
+    propre = {
+        "1": True,
+        "true": True,
+        "oui": True,
+        "0": False,
+        "false": False,
+        "non": False,
+    }.get(brut)
     if commit is not None:
         return commit, propre
     statut = _git("status", "--porcelain", "--untracked-files=no")
@@ -289,7 +309,10 @@ def chemin_graphe_otp(dossier_flux: Path) -> Path | None:
     journalise : rendre `None` en silence est indistinguable d'un graphe inchangé.
     """
     dossier_flux = Path(dossier_flux)
-    for candidat in (dossier_flux.parent / _FICHIER_GRAPHE_OTP, dossier_flux / _FICHIER_GRAPHE_OTP):
+    for candidat in (
+        dossier_flux.parent / _FICHIER_GRAPHE_OTP,
+        dossier_flux / _FICHIER_GRAPHE_OTP,
+    ):
         if candidat.is_file():
             return candidat
     logger.warning(
@@ -797,7 +820,7 @@ class Jeu:
             dossier,
             archive_confirmee,
             quoi="un jeu scellé",
-            comment_lever="passer `archive_confirmee=\"<motif>\"` à `Jeu.charger`",
+            comment_lever='passer `archive_confirmee="<motif>"` à `Jeu.charger`',
         )
         chemin_manifest = dossier / FICHIER_MANIFEST
         if not chemin_manifest.is_file():

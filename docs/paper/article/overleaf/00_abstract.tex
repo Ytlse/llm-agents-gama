@@ -1,19 +1,33 @@
 % =====================================================================
-% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v0.5 (13 September 2026)
-% Dernière mise à jour : 2026-09-13
+% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v1.2 (17 September 2026)
+% Dernière mise à jour : 2026-09-17
 % Chapter 0 of the paper: the abstract. To be inserted before 01_introduction.tex.
 % Ready to paste into the Overleaf project (acmart + natbib: \citep, \citet).
 % Derived file: regenerate after every validated pass of ../en/00_abstract.md.
-% Placeholders <xx> are filled from methode/experience_plan/experiments.yaml.
-% Submission word count: 241 (placeholders count as one word, LaTeX commands excluded),
-% i.e. -29.1 % on the 340-word version of 10 September 2026, inside the 100-300 OpenReview bound.
-% Open point (see ../relecture/00_abstract.md, item 3): the two biased modes are left as
-% placeholders — v0.2 announced cycling, the run of 8 September 2026 measures public transport.
+% Submission word count: 297 (placeholders count as one word, LaTeX commands excluded),
+% inside the 100-300 OpenReview bound, with 3 words of margin. No short cut is left in
+% paragraph 4: the next one would take a whole sentence.
+% Placeholders: the three <xx> await the local-press campaign (ticket 064): the size of
+% the shift, the number of frozen predictions and the verification rate. The <x.x> is the
+% fading constant of the hysteresis regime (§ 7.2.2), awaiting the longitudinal campaign
+% (tickets 041 and 063).
+% Paragraph 4 is corrected: the campaign runs on five articles, not thirty; the count of
+% frozen predictions becomes a placeholder, chapter 7 writing twenty where the author
+% does not yet fix it; and the shift is read against the article-free control (condition
+% C1, ticket 064). At v1.1 the second comparator goes: the clause on the tabular reference
+% moving only when the event withdraws a mode is out of the abstract and stays in § 7.2.
+% At v1.2 the hysteresis regime changes shock: the metro failure gives way to a bike fall,
+% which touches neither the network nor any of the 21 variables, so no tabular reference
+% can move and any gap read the next day comes from memory alone. The second press example
+% (Jardin des Plantes) pays for it. CHAPTER 7 DOES NOT FOLLOW YET: its § 7.2 still
+% describes the network failure, severity 0.70 and a 14.6-day trace, where a fall is 0.50
+% and 11.2 days; and the shock case itself has yet to be written.
+% Previous version frozen as ../../archive/00_abstract_TEX_v1.1.tex.
 % =====================================================================
 
 \begin{abstract}
-Urban mobility simulations rely on tabular models or on explicit rules; either way the space of representable behaviours is fixed a priori: a factor encoded as neither variable nor rule cannot influence any decision. LLM agents promise to lift it; we ask two separate questions: can such a population stand in statistically for a territory's, and can it react to contexts no survey tabulates?
-\\\\We evaluate mode choice in Toulouse against the certified EMC$^2$ 2023 survey, under a contract that gives every model the same information: 1,000 sealed eqasim personas, 3,299 trips, OpenTripPlanner itineraries, decisions inside GAMA, and the same 21 variables for the LLM agent, a multinomial logit and a LightGBM oracle fitted on the survey. Four levels are compared --- naive floors, factual, neutral and detailed prompt, a prompt rewritten by hand toward the published shares, tabular references --- the agent's probability mass over the modes actually offered being read against the tabular models' renormalised probabilities.
-\\\\We test one pre-registered hypothesis: neither LLM condition reaches the tabular reference within the equivalence margin --- L1 errors of $\langle \textbf{xx} \rangle$ and $\langle \textbf{xx} \rangle$ points against $\langle \textbf{xx} \rangle$ (logit) and $\langle \textbf{xx} \rangle$ (oracle). Two regimes no survey tabulates are then judged on robustness, not fidelity: five-day hysteresis after a metro line failure, with and without decaying memory, and five dated local news events with twenty pre-registered directional predictions, $\langle \textbf{xx} \rangle$\,\% met.
-\\\\This argues for hybrid architectures: the tabular model secures calibration, the LLM agent handles departures from the nominal regime.
+Urban mobility simulations rely on tabular models estimated from surveys or on explicit rules: the space of representable behaviours is fixed a priori, a factor encoded as neither variable nor rule being unable to influence any decision. Yet multimodal choice is multidimensional: logical variables (time, effort, comfort) intertwine there with subjective factors tied to personality and experience. LLM-based agents promise to lift that limit: fed on vast corpora, they carry heuristics that surveys do not record.
+\\Against the certified EMC$^2$ 2023 survey, we measure the calibration gap between these agents and the models estimated on it, then test whether they respond to situations no variable encodes. The contract gives every decider the same 21 variables: 1,000 sealed personas, 3,299 trips on real networks, a car prior as floor and four tabular references: the multinomial logit, gradient boosting, the kernel regression and the random forest.
+\\Without prompt engineering, the agent stays two to four times further from the survey than the tabular references, depending on the model carrying it. A qualitative prompt without numeric thresholds brings the best model within 1.4 points, in distribution, of gradient boosting, which read 39,203 survey trips the agent never saw. The agent and gradient boosting name a different most-likely mode on one trip in three, tabular methods on one in ten.
+\\We then measure adaptation: does the agent respond to subjective factors no survey has recorded? Same persona, same day, one dated Toulouse news article added (bed bugs in the metro): shares move $\langle \mathrm{xx} \rangle$ points against the article-free control, contract variables unchanged. Five articles carry $\langle \mathrm{xx} \rangle$ predictions frozen before any call to the model, $\langle \mathrm{xx} \rangle$\,\% of them met. A bike fall on day two leaves a memory, the network untouched. The next day, ideal weather, the agent still avoids the bike; without memory, it does not. The gap fades over $\langle \mathrm{x.x} \rangle$ days.
 \end{abstract}

@@ -96,10 +96,11 @@ def test_le_scoring_publie_les_deux_lectures_sans_option(scores):
 def test_la_seconde_lecture_egale_un_scoring_direct_sans_ces_lignes(scores, registre):
     """Elle n'est pas approchée depuis la première : c'est le MÊME Scorer sur la trame filtrée."""
     scorer, _ = S.scorer_pour(registre.reference)
-    rows, _ = S.frames.read_moves(
-        EXEC_REELLE / "moves.csv",
-        S.EXCLURE_METHODES + [S.METHODE_CHOIX_UNIQUE_MOVES],
-        first_day_only=True,
+    # Ticket 057 — par `lire_perimetre`, et non en re-spécifiant la coupe ici : c'est cette
+    # duplication qui avait laissé le test reproduire un périmètre qui n'était plus celui du
+    # scoreur, et passer pendant que les deux divergeaient.
+    rows, _ = S.lire_perimetre(
+        EXEC_REELLE, S.EXCLURE_METHODES + [S.METHODE_CHOIX_UNIQUE_MOVES]
     )
     attendu = S.frames.simulation_frames(rows)["attendu"]
     cerema = S.frames.load_cerema(

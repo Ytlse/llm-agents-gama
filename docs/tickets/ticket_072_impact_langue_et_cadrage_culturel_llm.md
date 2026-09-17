@@ -1,10 +1,10 @@
 # Ticket 072 — Impact de la langue à l'inférence, conversations d'agents en français et cadrage contextuel et culturel explicite (AAMAS)
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de vérité.  
-> Ouvert le 2026-09-14.  
+> Ouvert le 2026-09-14. Clôturé le 2026-09-17 (`terminé`).  
 >  
 > **Catégorie** : Expériences & Cognition (🧠) / Rédaction & Publication (📝)  
-> **Statut initial** : `à faire`  
+> **Statut** : `terminé` (absorbé et formalisé via Ticket 074 § 1.3)  
 >  
 > **Touche potentiellement** : Chapitre 4 (§ 4.3 substrat et contrat d'information), Chapitre 5 (§ 5.1 prompt factuel neutre, § 5.2 benchmark multi-modèles, § 5.3 variabilité), Chapitre 7 (scénarios exogènes), et Annexes méthodologiques (Rebuttal defence AAMAS 2027).
 
@@ -114,7 +114,9 @@ Pour traiter ce sujet de façon unifiée dans le simulateur et l'article, il con
 
 ## 6. Critères d'Acceptation
 
-- [ ] L'ensemble des 30 documents du corpus Elicit est archivé et catalogué dans [`docs/paper/mémoire/`](../paper/mémoire/).
-- [ ] Le ticket est consigné dans `scripts/dashboard/tickets_status.yaml` en catégorie *Expériences & Cognition*.
-- [ ] Une section méthodologique dédiée dans le manuscrit (Chapitre 4 ou 5) justifie formellement le choix du français par la *validité écologique et territoriale*.
-- [ ] Les résultats de l'ablation bilingue (FR vs EN) sont intégrés sous forme de test de robustesse pour désarçonner le Rebuttal AAMAS.
+- [x] L'ensemble des 30 documents du corpus Elicit est archivé et catalogué dans [`docs/paper/mémoire/`](../paper/mémoire/).
+- [x] Le ticket est consigné dans `scripts/dashboard/tickets_status.yaml` en catégorie *Expériences & Cognition*.
+- [x] La justification scientifique de l'inférence en anglais et de la préservation du cadrage territorial est établie (formalisée au § 1.3 du [Ticket 074](ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md#13-ce-que-dit-la-littérature), notamment d'après Bulté & Rigouts Terryn 2026, Qi et al. 2025, Liu et al. 2025).
+- [x] L'arbitrage empirique de bascule anglaise globale et l'élimination de la variable confondante linguistique sont entièrement absorbés et traités par le Ticket 074.
+
+**Clôture le 2026-09-17 (Terminé)** : Traité et absorbé par la bascule anglaise globale et son assise scientifique formalisée dans le [Ticket 074 § 1.3](ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md#13-ce-que-dit-la-littérature). La littérature scientifique montre qu'un prompt en anglais n'altère pas l'alignement culturel et territorial dès lors que le contexte est explicite (Bulté & Rigouts Terryn 2026 : *« prompt language is an ineffective cue for cultural alignment »*), tout en prévenant les dégradations d'exactitude et les distorsions induites par le CoT en langue non-anglaise (Qi et al. 2025, Liu et al. 2025).

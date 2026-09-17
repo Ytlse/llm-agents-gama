@@ -1,0 +1,18 @@
+# C4 — Train supprimé · train
+# Peu d'agents concernés, gravité forte. L'exposition par mode suffit : seuls les trajets
+# comportant une jambe ferroviaire remontent `train` comme mode principal.
+choc: c4_train_supprime
+libelle: "Regional train cancelled"
+source: "scénario déclaré"
+
+exposition:
+  regle: mode
+  modes: [train]
+
+jours:
+  - jour: 12
+    retard_min: 50
+    incident_reseau: true
+    vecu: >-
+      My regional train was cancelled with no explanation at all. I waited fifty minutes on
+      an open platform, in the cold, for the next one.

@@ -1,0 +1,35 @@
+# C1 — Bouchon majeur sur la rocade · voiture et deux-roues motorisés
+# Trois jours d'affilée, intensité DÉCROISSANTE : c'est le cas qui exerce le profil par jour.
+# ⚠ Les valeurs ENJAMBENT le seuil de saturation du retard (RETARD_REF = 30 min) : au-delà, la
+#   composante de retard vaut 0,50 quoi qu'il arrive. Un profil 60/40/25 aurait donné la MÊME
+#   gravité les jours 1 et 2 (0,70 tous les deux), et la décrue n'aurait existé que dans le texte.
+#   Avec 60/25/12 : gravité 0,70 → 0,62 → 0,37, et durée de vie 14,6 → 13,2 → 9,0 jours.
+# Valeurs assumées comme scénario ; ordre de grandeur adossé à Zhu et al. (2010), qui mesurent
+# un ré-équilibrage du trafic en plusieurs semaines après une rupture d'infrastructure.
+choc: c1_bouchon_rocade
+libelle: "Major congestion on the ring road"
+source: "scénario déclaré — ordre de grandeur adossé à Zhu et al. (2010), TR-A 44(10)"
+
+exposition:
+  regle: mode
+  modes: [car, motorbike]
+
+jours:
+  - jour: 12
+    retard_min: 60
+    incident_reseau: true
+    vecu: >-
+      Stuck for a solid hour on the ring road, bumper to bumper. Horns everywhere, and a
+      man got out of his car to see what was going on. I turned up soaked in sweat and in
+      a foul mood.
+  - jour: 13
+    retard_min: 25
+    incident_reseau: true
+    vecu: >-
+      The ring road again. Shorter than yesterday, but I knew straight away it had started
+      over.
+  - jour: 14
+    retard_min: 12
+    incident_reseau: true
+    vecu: >-
+      Still crawling along. I am starting to wonder whether this is worth it.

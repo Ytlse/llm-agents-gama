@@ -16,6 +16,78 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _TARGET_RE = re.compile(r"^([A-Za-z0-9_.\-]+(?:[ \t]+[A-Za-z0-9_.\-]+)*)[ \t]*:(?!=)")
 _DOC_RE = re.compile(r"^##[ \t]?(.*)$")
+_INCLUDE_RE = re.compile(r"^[ \t]*[-s]?include[ \t]+(.+?)[ \t]*$")
+_VAR_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)[ \t]*[:?+]?=[ \t]*(.*)$")
+_REF_RE = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
+# Fonctions make qui ne font que filtrer une liste de chemins : pour trouver les
+# fichiers, les déballer suffit — `sort` et `wildcard` ne changent pas l'ensemble.
+_FUNC_RE = re.compile(r"\$[({](?:sort|wildcard)[ \t]+(.*)[)}]$")
+
+
+def _lire_avec_includes(chemin: Path) -> list[tuple[Path, int, str]]:
+    """Lit un Makefile et SES `include`, et rend (fichier, n° de ligne, ligne).
+
+    Le ticket 039 a éclaté le Makefile racine en `make/*.mk` : sans ce suivi, le
+    tableau de bord ne verrait plus que le fichier racine, donc AUCUNE cible.
+    L'expansion se limite à ce qu'un `include` contient en pratique ici — des
+    variables déjà affectées plus haut, `$(sort …)`, `$(wildcard …)` et un joker.
+    Un include qu'on ne sait pas résoudre est IGNORÉ : mieux vaut une cible
+    manquante qu'un plantage du tableau de bord.
+    """
+    # PROJECT_ROOT vaut, côté make, le dossier du Makefile racine. On le pose ici
+    # plutôt que de réimplémenter $(patsubst)/$(dir)/$(abspath).
+    variables = {"PROJECT_ROOT": str(chemin.parent)}
+    lignes: list[tuple[Path, int, str]] = []
+    vus: set[Path] = set()
+
+    def expanse(texte: str) -> str:
+        for _ in range(5):  # les imbrications sont peu profondes ; borne l'auto-référence
+            nouveau = _REF_RE.sub(lambda m: variables.get(m.group(1), m.group(0)), texte)
+            if nouveau == texte:
+                break
+            texte = nouveau
+        while True:
+            fonction = _FUNC_RE.match(texte.strip())
+            if not fonction:
+                return texte.strip()
+            texte = fonction.group(1)
+
+    def avaler(fichier: Path) -> None:
+        reel = fichier.resolve()
+        if reel in vus or not fichier.is_file():
+            return
+        vus.add(reel)
+        for lineno, raw in enumerate(fichier.read_text(encoding="utf-8").splitlines(), 1):
+            inclusion = _INCLUDE_RE.match(raw)
+            if inclusion:
+                motif = expanse(inclusion.group(1))
+                if "$" in motif:  # expansion incomplète : on n'invente pas
+                    continue
+                for morceau in motif.split():
+                    base = Path(morceau)
+                    if not base.is_absolute():
+                        base = fichier.parent / base
+                    candidats = (sorted(Path(base.anchor or ".").glob(
+                        str(base).lstrip("/"))) if any(c in morceau for c in "*?[")
+                        else [base])
+                    for candidat in candidats:
+                        avaler(candidat)
+                continue
+            affectation = _VAR_RE.match(raw)
+            if affectation:
+                nom, valeur = affectation.group(1), expanse(affectation.group(2))
+                # Une valeur qu'on ne sait pas expanser ne doit pas écraser une valeur
+                # connue : le Makefile racine réaffecte PROJECT_ROOT avec un
+                # $(patsubst $(dir $(abspath …))) qu'on n'évalue pas, et l'amorce
+                # ci-dessus — le dossier du Makefile — est justement ce qu'il calcule.
+                if "$" not in valeur or nom not in variables:
+                    variables[nom] = valeur
+            lignes.append((fichier, lineno, raw))
+
+    avaler(chemin)
+    return lignes
+
+
 
 # ── Drapeaux d'exécution ──────────────────────────────────────────────────────
 # long        : ne rend pas la main (suivi de logs, serveur, run GAMA)
@@ -321,7 +393,7 @@ def parse_makefile(project: Project) -> list[Target]:
     doc_lines: list[str] = []
     seen: set[str] = set()
 
-    for lineno, raw in enumerate(project.makefile.read_text(encoding="utf-8").splitlines(), 1):
+    for fichier, lineno, raw in _lire_avec_includes(project.makefile):
         doc = _DOC_RE.match(raw)
         if doc:
             doc_lines.append(doc.group(1).strip())
@@ -350,7 +422,7 @@ def parse_makefile(project: Project) -> list[Target]:
                     project=project.key,
                     project_label=project.label,
                     cwd=project.cwd,
-                    makefile=project.makefile,
+                    makefile=fichier,
                     line=lineno,
                     doc=" ".join(doc_lines).strip(),
                     group=group,

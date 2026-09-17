@@ -97,6 +97,151 @@ bascule quand le lot portait un `force_provider` : le lot échoue avec un motif 
 l'instance épinglée, et l'alarme `alarme:bascule_refusee` est levée. Les lots sans épinglage
 gardent la bascule.
 
+## Restreindre une requête à une liste d'instances (ticket 084)
+
+Une requête peut déclarer `instances_admises`, la **liste** des instances autorisées à la servir.
+La restriction est honorée par `LoadBalancer.select_provider`, l'unique point de décision du
+routage, donc **avant qu'un appel ne soit payé**. Elle couvre les trois branches : fournisseur
+forcé, cascade, rotation pondérée.
+
+```yaml
+# services/llm-agents/config/config.yaml — véhicule du seul chemin `make run`
+llm:
+  instances_admises: [google_gemini31_key1, google_gemini31_key2]
+```
+
+⚠ **Ce fichier est global à la pile.** `experiences lancer` n'en tient pas compte : il dérive sa
+propre liste du modèle de l'expérience et l'impose aux réglages du processus — voir la section
+suivante. Renseigner ce fichier ne contraint donc que `make run`.
+
+**Ce qu'elle résout.** Le fichier de fournisseurs est global à la pile : api, worker et
+contrôleur partagent une seule valeur, donc un seul travail à la fois. `force_provider` épingle
+une instance et supprime le basculement entre deux clés d'un même modèle. Ce réglage-ci permet de
+mener une expérience sur une famille de modèles pendant que la passerelle en sert d'autres.
+
+| Règle | Comportement |
+|---|---|
+| Liste absente ou vide | aucune restriction, comportement d'avant le ticket sur les trois branches |
+| Liste ne désignant aucune instance connue, ou en mêlant des inconnues | `RestrictionInstances` — une liste fausse n'est **jamais** « aucune restriction » |
+| Toutes les admises saturées | erreur qui **les nomme**, aucun recours hors de l'ensemble |
+| Fournisseur forcé hors des admises | refus — deux contraintes contradictoires ne s'arbitrent pas en silence |
+| Bascule après incident (4xx, réponse illisible, crédits épuisés) | la restriction est **reportée** au rejeu |
+| Taille de lot et seuil de dispatch | calculés sur les instances admises |
+
+### Elle couvre TOUS les appels du run, pas seulement les décisions (ticket 092)
+
+La restriction est une propriété du **client**, posée dans `LLMGatewayClient.execute` — le seuil
+unique par lequel sortent les trois appels du run. Le service la donne une fois à la construction
+du client, depuis `settings.llm.instances_admises`.
+
+| Appel | Catégorie |
+|---|---|
+| Choix d'itinéraire | `itinary_multi_agent` |
+| Réflexion à court terme (consolidation mémoire) | `stm_reflection` |
+| Auto-réflexion à long terme | `ltm_self_reflection` |
+
+⚠ **Pourquoi au seuil et non sur chaque payload.** Le ticket 084 posait la restriction sur le seul
+payload de décision. Mesuré le 2026-09-16 sur un run dont l'objet d'étude était la mémoire :
+5 décisions servies par `google_gemini31_key1`, et la `stm_reflection` servie par `mistral_key1`.
+Les souvenirs étaient donc rédigés par un modèle non déclaré, sans qu'aucune ligne ne le signale.
+Recopier la consigne sur les deux payloads manquants aurait laissé le même trou au quatrième site
+d'appel ajouté plus tard.
+
+**Le client ne fait que combler.** Un appelant qui porte sa propre restriction reste maître de son
+routage : elle n'est jamais écrasée. Sans restriction déclarée, aucune clé n'est ajoutée au
+payload.
+
+**La cascade conserve son ordre** et ne réduit que l'ensemble : la priorité déclarée dans la
+configuration reste la priorité sous restriction. Dans la rotation, le curseur avance même sur une
+instance écartée, si bien que deux requêtes aux restrictions différentes ne se décalent pas.
+
+⚠ **Deux pièges qui ne se voient pas.** `LLMRequest` n'interdit pas les champs supplémentaires :
+une restriction posée par le client sans être déclarée dans le modèle serait ignorée par la
+validation, sans exception ni journal. Et la clé de lot est la **seule** garde contre le mélange
+de deux restrictions dans un même lot, qui ferait servir l'une par un fournisseur qu'elle
+excluait ; les instances y entrent triées et dédupliquées.
+
+**À distinguer de `allowed_providers`**, conservé : celui-ci rejette une réponse **déjà
+facturée**. Il devient une défense en profondeur — s'il se déclenche alors que la liste est
+transmise, c'est une régression côté passerelle.
+
+---
+
+## La restriction est propre à UN run (ticket 085)
+
+Deux chemins de lancement coexistent, et ils ne lisent pas la même chose.
+
+| | `experiences lancer` | `make run` |
+|---|---|---|
+| Processus | éphémère, un par expérience | service `controller`, permanent |
+| Restriction de routage | **dérivée du modèle** de l'expérience, imposée en mémoire | **lue dans `config.yaml`** à l'import |
+| Verrou par clé API | pris | jamais pris |
+| Mode | sans simulateur uniquement | seul chemin avec GAMA |
+
+`experiences lancer` appelle `appliquer_instances_admises`, au même endroit et de la même façon
+que `appliquer_fenetre_age` règle la fenêtre mémoire. La liste vient de
+`instances_pour_modele(modele, providers, portee)` :
+
+- **dérivée du modèle**, jamais recopiée à la main — l'invariant reste vrai quand une clé est
+  ajoutée aux fournisseurs, et il est cohérent par construction avec l'instance épinglée, qui sert
+  ce même modèle ;
+- **pas filtrée par la disponibilité** — une clé momentanément au plafond reste admise ;
+  l'arbitrage du quota appartient au moniteur, pas à la restriction ;
+- **vide hors décideur `passerelle`**, y compris quand le fichier en portait une : la restriction
+  suit l'expérience dans les deux sens ;
+- **journalisée** au lancement, et consignée dans `execution.yaml` (`reglages_herites`) à la
+  création comme à la reprise — une mesure archivée dit sous quelle restriction elle a été prise.
+
+Écraser une valeur non vide du fichier sort en WARNING, avec l'ancienne et la nouvelle liste : un
+écrasement muet de contrainte scientifique est le défaut qu'on corrige, pas un moyen de le
+corriger.
+
+> Le 2026-09-16, une ligne posée dans `config.yaml` pour protéger un run gemini 3.1 a fait refuser
+> toutes les décisions d'un run gemini 3.5 lancé à côté : l'expérience portait les deux contraintes
+> à la fois, et le routeur avait raison de refuser. Défaut de portée, pas de règle — un choix par
+> run n'a rien à faire dans un fichier partagé, mutable et non versionné, que `make run` réécrit en
+> place pendant qu'une autre expérience le lit.
+
+## Un refus déterministe se dit en une seconde (ticket 085, lot A)
+
+`RestrictionInstances` est un `ValueError` ; la boucle d'attente du worker n'intercepte que
+`RuntimeError`. L'exception traversait donc la tâche **avant** `rt.queue.pop` : le lot restait en
+file, chaque dispatch suivant le reprenait et échouait à l'identique. Un échec qui se réarme seul,
+jusqu'au disjoncteur.
+
+Le worker rattrape désormais l'exception, **draine** la file du lot (`pop` est borné par un nombre
+d'agents : un seul appel en laisserait derrière), lève le drapeau de dispatch (`clear_scheduled`,
+sinon le lot suivant attend son TTL pour rien), et marque chaque tâche en échec avec **les deux
+contraintes nommées** — la liste admise et le fournisseur épinglé.
+
+**Il ne réessaie pas.** L'erreur est déterministe : un rejeu ne peut que la reproduire. Aucun slot
+RPM/TPM n'est à restituer, la sélection ayant échoué avant toute réservation.
+
+L'échec porte `error_kind="restriction_instances"`, que le client traduit en `configuration:` —
+**ni** `passerelle_occupee`, **ni** `epuise`. Ranger une contradiction de configuration dans le
+seau « passerelle débordée » envoie chercher un quota là où il n'y a qu'une ligne de YAML à
+corriger : c'est ce qui a coûté trois heures. Le comportement du runner face à ce type est
+inchangé — il attend et réessaie, et la pause pour immobilité fait le reste.
+
+| Avant | Après |
+|---|---|
+| `passerelle_occupee: Timeout expiré` à 120 s | motif exact en moins d'une seconde |
+| lot laissé en file, repris à chaque dispatch | file drainée, refus dit une fois |
+| disjoncteur ouvert au dixième échec | aucune 5xx : la faute n'est pas une panne |
+
+## Ce que le ticket 085 n'a pas traité
+
+- **Le verrou par clé ne couvre pas `make run`.** Il n'est pris que par `experiences lancer` :
+  un run passant par `make run` ne tient aucune clé, alors qu'il peut partager ses clés API avec
+  une expérience. Le chemin `make run` est invisible à toute la coordination inter-expériences.
+- **`cache.enabled` et `cache_dir`** ont rigoureusement la même forme que `instances_admises`
+  avant ce ticket : un état par run logé dans un fichier partagé. Ils attendent leur incident.
+- **Vider `config.yaml`** suppose d'abord de donner à `make run` son injection par run. Le vider
+  sans cela ne déplacerait pas la restriction, il la supprimerait — pour le run qui l'avait
+  motivée, et sans qu'aucune ligne ne le dise.
+
+---
+
 > Avant, le garde-fou n'existait que côté client : la réponse substituée arrivait, était refusée,
 > et le lot était perdu — l'exécution `2026-09-07_19_45_31` a enchaîné 8 sollicitations, 8 refus et
 > 0 décision archivée sans qu'aucune ERROR ne sorte.

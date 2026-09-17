@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from llm_gateway.adapters.base import (
     ProviderClientError,
@@ -31,6 +31,7 @@ from llm_gateway.adapters.base import (
     ProviderServerError,
     get_adapter,
 )
+from llm_gateway.balancer.router import RestrictionInstances
 from llm_gateway.config import get_settings, learn_provider_max_output_tokens
 from llm_gateway.core.inference import resolve_inference
 from llm_gateway.core.models import _FALLBACK_PRIORITY_SCORE, InternalRequest, Task, TaskStatus
@@ -76,7 +77,10 @@ celery_app = create_celery_app(get_settings())
     bind=True,
     max_retries=get_settings().resilience.max_retries,
 )
-def process_batch_task(self, batch_key: str, force_provider: str | None = None, min_tpm_required: int | None = None, min_output_required: int | None = None) -> None:
+def process_batch_task(self, batch_key: str, force_provider: str | None = None,
+                       min_tpm_required: int | None = None,
+                       min_output_required: int | None = None,
+                       instances_admises: list[str] | None = None) -> None:
     """
     Point d'entrée Celery pour le traitement par lot (micro-batching).
     `bind=True` pour accéder à `self.retry()`.
@@ -93,8 +97,45 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
     _p5_provider_wait_start = time.monotonic()
     while True:
         try:
-            provider_name = rt.balancer.select_provider(force=force_provider, min_tpm=min_tpm_required, min_output=min_output_required)
+            provider_name = rt.balancer.select_provider(
+                force=force_provider,
+                min_tpm=min_tpm_required,
+                min_output=min_output_required,
+                admises=instances_admises,
+            )
             break
+        except RestrictionInstances as e:
+            # Ticket 085, lot A. `RestrictionInstances` est un ValueError : il traversait la
+            # tâche AVANT le `rt.queue.pop` ci-dessous, laissant le lot EN FILE — chaque
+            # dispatch suivant le reprenait et échouait à l'identique. Ce n'était pas un échec
+            # qui coûte 120 s une fois, c'était un échec qui se réarme tout seul, jusqu'au
+            # disjoncteur (incident du 2026-09-16, trois heures perdues).
+            #
+            # Un refus déterministe se dit UNE fois, TOUT DE SUITE, et ne se réessaie jamais :
+            # la contradiction est dans la configuration, un rejeu ne peut que la reproduire.
+            #
+            # Aucun slot RPM/TPM à restituer : la sélection a échoué AVANT toute réservation.
+            rt.queue.clear_scheduled(batch_key)
+            tasks = _vider_file(rt, batch_key)
+            motif = (
+                f"Restriction d'instances non satisfiable : {e} "
+                f"[instances admises déclarées : {sorted(instances_admises) if instances_admises else 'aucune'} ; "
+                f"fournisseur épinglé : {force_provider or 'aucun'}] — "
+                f"refus déterministe, aucun rejeu n'est planifié : corrigez la configuration."
+            )
+            rt.metrics.incr("alarme:restriction_instances")
+            logger.error(
+                f"[ALARME] Restriction d'instances non satisfiable — {len(tasks)} tâche(s) "
+                f"refusée(s) SANS rejeu | batch_key={batch_key} "
+                f"instances_admises={instances_admises or 'aucune'} "
+                f"force_provider={force_provider or 'aucun'} detail={e}"
+            )
+            for t in tasks:
+                # `error_kind` porte la nature de l'échec jusqu'au client : ce n'est ni une
+                # passerelle occupée ni un quota épuisé, et le ranger dans l'un de ces deux
+                # seaux envoie chercher un quota là où il n'y a qu'une ligne de YAML à corriger.
+                _fail_task(rt, t, motif, error_kind="restriction_instances")
+            return
         except RuntimeError:
             if time.monotonic() >= deadline:
                 if self.request.retries < res.saturation_retries:
@@ -176,6 +217,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 min_tpm_required=min_tpm_required,
                 min_output_required=min_output_required,
                 force_provider=force_provider,
+                instances_admises=instances_admises,
             )
 
         except ProviderServerError as e:
@@ -196,21 +238,27 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
 
         except ProviderClientError as e:
             if e.status_code == 429 and is_daily_quota_error(str(e)):
-                # Quota du JOUR épuisé, de la bouche du fournisseur (`quotaId` en
-                # …PerDayPerProjectPerModel…). Son `retryDelay` ne vaut rien ici : 0,7 s à 57 s
-                # relevés le 2026-09-08 pour une fenêtre qui ne rouvrait que 7 h plus tard. Un
-                # cooldown court faisait donc boucler l'instance sur des 429 pendant 15 min,
-                # pendant que le compteur local affichait 49 requêtes sur 500 (il ne voit pas le
-                # trafic des autres outils). C'est la réponse du fournisseur qui tranche.
-                cfg_p = settings.providers.get(e.provider)
-                tz = getattr(cfg_p, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
-                reprise = next_quota_reset(tz)
+                # Quota du JOUR épuisé. Pour Google Gemini, son `retryDelay` ne vaut rien (0,7s à 57s)
+                # et la réouverture est à minuit (next_quota_reset). Pour Groq en revanche, la fenêtre
+                # est glissante (TPD) et son `ratelimit_reset` indique le temps exact de déblocage.
+                # TEMPORAIRE A SUPPRIMER (debug ticket 077 : support de la fenêtre glissante Groq)
+                raw_reset = getattr(e, "ratelimit_reset", None)
+                if e.provider.startswith("groq") and raw_reset:
+                    cooldown = _parse_ratelimit_reset_seconds(raw_reset, default=3600)
+                    reprise = datetime.now(UTC) + timedelta(seconds=cooldown)
+                    logger.warning(
+                        f"[quota] Groq fenêtre glissante TPD atteinte sur '{e.provider}' — "
+                        f"reprise calculée à {reprise.isoformat(timespec='seconds')} ({cooldown}s) "
+                        f"d'après ratelimit_reset={raw_reset!r}"
+                    )
+                else:
+                    cfg_p = settings.providers.get(e.provider)
+                    tz = getattr(cfg_p, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
+                    reprise = next_quota_reset(tz)
                 ttl = rt.limiter.mark_quota_exhausted_until(e.provider, kind="rpd", until=reprise)
                 logger.error(
                     f"[ALARME] Quota journalier épuisé sur '{e.provider}' — instance écartée "
-                    f"jusqu'à {reprise.isoformat(timespec='seconds')} ({ttl}s) | task_id={batch_id} "
-                    f"tz={tz} retry_delay_annonce={getattr(e, 'ratelimit_reset', None)!r} (ignoré : "
-                    f"il ne mesure pas le temps jusqu'au reset)"
+                    f"jusqu'à {reprise.isoformat(timespec='seconds')} ({ttl}s) | task_id={batch_id}"
                 )
                 if force_provider is None and self.request.retries < self.max_retries:
                     # Instance non épinglée : le lot repart, le balancer écartera celle-ci et
@@ -253,6 +301,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 _credits_epuises(
                     self, rt, tasks, batch_key, e,
                     force_provider=force_provider,
+                    instances_admises=instances_admises,
                     min_tpm_required=min_tpm_required,
                     min_output_required=min_output_required,
                 )
@@ -283,6 +332,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                     min_tpm_required=min_tpm_required,
                     min_output_required=min_output_required,
                     force_provider=force_provider,
+                    instances_admises=instances_admises,
                 )
 
         except RuntimeError as e:
@@ -304,6 +354,7 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
                 min_output_required=min_output_required,
                 final_error_msg=f"{str(e)}\nRaw LLM response:\n{e.raw}",
                 force_provider=force_provider,
+                instances_admises=instances_admises,
             )
 
         except Exception as e:
@@ -315,7 +366,10 @@ def process_batch_task(self, batch_key: str, force_provider: str | None = None, 
         else:
             # Succès complet : relancer un worker s'il reste des éléments dans cette file
             if rt.queue.size(batch_key) > 0:
-                process_batch_task.delay(batch_key, force_provider, min_tpm_required, min_output_required)
+                process_batch_task.delay(
+                    batch_key, force_provider, min_tpm_required, min_output_required,
+                    instances_admises,
+                )
     finally:
         # Quoi qu'il arrive (succès, échec, retry, timeout...), on libère le slot !
         rt.limiter.decr_active(provider_name)
@@ -612,6 +666,23 @@ def _execute_batch(rt: WorkerRuntime, tasks: list[Task], batch_id: str, provider
     )
 
 
+def _vider_file(rt: WorkerRuntime, batch_key: str, plafond: int = 10_000) -> list[Task]:
+    """Dépile TOUT ce que porte la file du lot — ticket 085, lot A.
+
+    `BatchQueue.pop` est borné par un nombre d'AGENTS, pas de tâches : un seul appel en laisse
+    derrière lui dès que le lot dépasse la limite. Ce qui reste serait repris au dispatch suivant
+    et échouerait à l'identique — précisément le réarmement que ce lot supprime. On boucle donc
+    jusqu'à file vide, sous un plafond qui borne la boucle sans jamais être atteint en pratique.
+    """
+    tasks: list[Task] = []
+    while len(tasks) < plafond:
+        lot = rt.queue.pop(batch_key, 1000)
+        if not lot:
+            break
+        tasks.extend(lot)
+    return tasks
+
+
 def _providers_merely_busy(statuses: dict[str, dict], force_provider: str | None) -> bool:
     """Vrai si au moins un provider éligible est seulement OCCUPÉ, pas en panne.
 
@@ -657,6 +728,7 @@ def _credits_epuises(
     force_provider: str | None,
     min_tpm_required: int | None,
     min_output_required: int | None,
+    instances_admises: list[str] | None = None,
 ) -> None:
     """HTTP 402 : le compte du fournisseur n'a plus de crédit.
 
@@ -699,6 +771,7 @@ def _credits_epuises(
         reason="Crédits épuisés (HTTP 402)",
         min_tpm_required=min_tpm_required,
         min_output_required=min_output_required,
+            instances_admises=instances_admises,
     )
 
 
@@ -714,6 +787,7 @@ def _switch_provider_or_fail(
     min_output_required: int | None,
     final_error_msg: str | None = None,
     force_provider: str | None = None,
+    instances_admises: list[str] | None = None,
 ) -> None:
     """Bascule le batch vers un AUTRE modèle plutôt que d'échouer sec.
 
@@ -763,6 +837,11 @@ def _switch_provider_or_fail(
                 "force_provider": None,
                 "min_tpm_required": min_tpm_required,
                 "min_output_required": min_output_required,
+                # Ticket 084 — la restriction SURVIT à la bascule. Sans cette ligne, elle
+                # disparaissait au premier incident : le rejeu repartait en rotation libre et
+                # le lot pouvait finir servi par un modèle que l'appelant avait exclu, sans
+                # qu'aucune trace ne le dise. C'est le défaut que le lot supprime.
+                "instances_admises": instances_admises,
             },
         )
     terminal_msg = final_error_msg or f"{reason} — échec après {max_switches} bascule(s) de provider : {exc}"

@@ -17,9 +17,9 @@ import json
 import sys
 from pathlib import Path
 
-from experiences.chemins import racine_depot
 from experiences import formule as F
 from experiences import score as S
+from experiences.chemins import racine_depot
 
 # Ancre plutôt que compte de crans — cf. `experiences.chemins` (ticket 039).
 REPO_ROOT = racine_depot()
@@ -54,6 +54,30 @@ def _en_tete_decideur(scores: dict, synthese: dict) -> str:
         )
     modele = dec.get("modele") or dec.get("type") or "décideur"
     return f"Volet 1 — Décideur LLM · <code>{escape(str(modele))}</code>"
+
+
+def _tuile_journal(perimetre: dict | None) -> tuple[str, str, str]:
+    """Ticket 081 — le contrôle qui a autorisé ce score, visible sur la page qui le publie.
+
+    La page est autonome : quelqu'un qui cite un composite doit pouvoir vérifier, sans ouvrir
+    un journal ni un terminal, que le fichier scoré recouvrait bien les décisions archivées.
+    Un score publié le 2026-09-12 portait sur 274 lignes pour 3 154 décisions, et rien sur la
+    page ne le disait.
+    """
+    if not perimetre:
+        # Score antérieur à la règle : ne pas afficher « vérifié » pour un contrôle qui n'a
+        # pas eu lieu. Dans ce dépôt, l'absence de mesure se déguise trop volontiers en
+        # résultat parfait.
+        return ("Journal vérifié", "—", "score antérieur au contrôle")
+    lignes, decides = perimetre.get("lignes_journal"), perimetre.get("decides")
+    if perimetre.get("complet") is None:
+        return ("Journal vérifié", "—", f"{lignes} ligne(s), décisions non comparables")
+    relatif = perimetre.get("ecart_relatif") or 0.0
+    return (
+        "Journal vérifié",
+        "complet" if perimetre.get("complet") else "INCOMPLET",
+        f"{lignes} ligne(s) pour {decides} décisions ({relatif * 100:+.1f} %)",
+    )
 
 
 def _bandeau_statut(st: dict | None) -> str:
@@ -133,6 +157,7 @@ def rendu(
                 forces_txt,
             ),
             ("Couverture", taux_txt, couv_txt),
+            _tuile_journal(scores.get("perimetre_verifie")),
         ]
     )
 
