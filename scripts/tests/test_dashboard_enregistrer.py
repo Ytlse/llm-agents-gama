@@ -288,14 +288,23 @@ def test_R11_la_sortie_de_validation_est_etiquetee_et_bornee(plateforme):
 def test_le_prompt_affiche_ne_l_est_que_pour_un_decideur_qui_en_lit_un(plateforme):
     """Le tableau ne présente une variante de prompt que si l'exécution en lira une (N5).
 
-    `experiences/cli.py` ne transmet `parameters.prompt_variant` que sous
-    `decideur.type == "passerelle"` : pour les quatre autres décideurs, `gabarit.variante`
-    est un résidu du formulaire. Le 2026-09-08, `exp_lgbm_jtir_nosim` (LightGBM) annonçait
-    « minimal_persona » alors que son archive ne porte pas un seul échange LLM.
+    Deux défauts SYMÉTRIQUES sont couverts ici, et il a fallu les deux pour que ce test dise
+    quelque chose. Le 2026-09-08, `exp_lgbm_jtir_nosim` (LightGBM) annonçait
+    « minimal_persona » alors que son archive ne porte pas un seul échange LLM : un prompt
+    affiché pour un décideur qui n'en lit aucun. Le 2026-09-21, l'inverse : `typesafe`
+    manquait à la liste et TOUTE exécution Jev affichait « — », alors que sa consigne nomme
+    son expérience et se scelle dans son empreinte. Ce test-ci n'énumérait que des décideurs
+    muets, donc il passait dans les deux cas — c'est cette omission qui a laissé filer le
+    second défaut.
+
+    `typesafe` reçoit la variante amputée de son bloc de sortie ; la COLONNE affiche quand
+    même le nom nu, pour garder une valeur unique par variante dans le filtre. La troncature
+    se dit dans la fiche de détail (cf. `test_la_fiche_dit_la_troncature_du_prompt_de_jev`).
     """
     attendu = {}
     for surcharges, prompt in (
         ({"decideur_type": "passerelle", "modele": "m1"}, "b_min"),
+        ({"decideur_type": "typesafe", "modele": "jev-1.13.0"}, "b_min"),
         ({"decideur_type": "modele"}, "—"),
         ({"decideur_type": "aleatoire"}, "—"),
         ({"decideur_type": "duree_minimale"}, "—"),
@@ -356,3 +365,33 @@ def test_terminee_ne_se_confond_pas_avec_les_autres_etats_finaux():
                  "epuisee", "arretee", "interrompue", "archive manquante", "?"):
         assert not experiences.est_terminee({"etat": etat}), etat
     assert not experiences.est_terminee({}) and not experiences.est_terminee(None)
+
+
+def test_le_formulaire_sait_declarer_une_experience_jev(plateforme):
+    """Une expérience Jev se crée depuis le tableau de bord, pas seulement par son YAML.
+
+    Défaut du 2026-09-21 : le formulaire n'écrivait `modele` que pour la passerelle et
+    Antigravity. Pour `typesafe`, `construire_experience` laissait `modele: None` ; or
+    `segment_decideur` nomme ce décideur d'après sa VERSION (`jev-1130`), si bien que le nom
+    sortait VIDE et qu'`enregistrer` refusait — sans que rien ne dise que le champ manquant
+    était la version. Les six expériences du lot de mutations ont dû être écrites à la main.
+
+    Ce test tient les trois maillons ensemble : le champ est écrit, le nom se calcule, et le
+    fichier se range. Casser l'un des trois le fait tomber.
+    """
+    exp = experiences.construire_experience(
+        _valeurs(variante="b_min", decideur_type="typesafe", modele="jev-1.13.0")
+    )
+    assert exp["decideur"]["type"] == "typesafe"
+    assert exp["decideur"]["modele"] == "jev-1.13.0", "la version est ÉCRITE, sinon le nom ne se calcule pas"
+    assert exp["decideur"]["parametres"] == {}, (
+        "ni température ni réflexion : Jev n'en a pas, et les sceller ferait croire à un réglage appliqué"
+    )
+    assert "jev-1130" in exp["nom"], f"le nom porte la version : {exp['nom']}"
+    assert "bmin" in exp["nom"], f"le nom porte la variante de prompt (N5) : {exp['nom']}"
+
+    chemin, _ = experiences.enregistrer(exp)
+    assert chemin.is_file()
+    relu = yaml.safe_load(chemin.read_text(encoding="utf-8"))
+    assert relu["decideur"]["modele"] == "jev-1.13.0"
+    assert relu["gabarit"]["variante"] == "b_min"

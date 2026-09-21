@@ -246,3 +246,9 @@ docs/paper/memoire
 data/experiences/*
 
 609_FR.md
+reports/*
+
+# Dépendances Node — générateurs de planches (scripts/slides/, ticket 071)
+node_modules/
+package-lock.json
+package.json

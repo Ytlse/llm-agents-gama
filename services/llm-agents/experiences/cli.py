@@ -79,6 +79,8 @@ def reglages_herites_de(exp) -> dict:
         "max_trip_candidates": settings.gtfs.max_trip_candidates,
         "vehicule_chaine": bool(getattr(exp, "vehicule_chaine", True)),
         "verrou_retour": bool(getattr(exp, "verrou_retour", True)),
+        "troncature_15": bool(getattr(exp, "troncature_15", False)),
+        "mode_choice_truncation_threshold": settings.agent.mode_choice_truncation_threshold,
     }
 
 
@@ -393,10 +395,11 @@ def _preparer_lancement(exp: E.Experience, *, accepter_perime: bool):
             exp.decideur.modele or "", providers, exp.decideur.portee
         )
         moniteur = MoniteurRessources(servantes, providers)
+        moniteur.reinitialiser_quotas(servantes)
         moniteur.rafraichir()
-        disponibles = (
-            moniteur.instances_disponibles() if moniteur.joignable else servantes
-        )
+        # Au lancement, on ne bloque pas sur les compteurs ou verrous locaux résiduels :
+        # on teste directement la première clé en réel, puis la seconde en cas de 429.
+        disponibles = list(servantes) if servantes else []
     refus, avert = E.refuser_si_impossible(
         exp,
         jeu,
@@ -585,6 +588,10 @@ def cmd_lancer(a: argparse.Namespace) -> int:
     admises = appliquer_instances_admises(exp, moniteur)
     # La définition commande la chaîne des véhicules, pas l'environnement (R13).
     appliquer_reglages_chaine(exp)
+    # La définition commande la troncature du Consideration Set (0.15 si activée, 0.0 sinon).
+    settings.agent.mode_choice_truncation_threshold = (
+        0.15 if bool(getattr(exp, "troncature_15", False)) else 0.0
+    )
     settings.agent.mode_draw_seed = exp.graine_tirage
     settings.agent.option_order_seed = exp.graine_ordre
     settings.agent.weather_per_agent_dates = exp.calendrier.politique != "commune"
@@ -722,7 +729,9 @@ def cmd_lancer(a: argparse.Namespace) -> int:
     from experiences.decideurs import construire_decideur
 
     agent = None
-    if exp.decideur.type in ("passerelle", "antigravity"):
+    # `typesafe` en a besoin lui aussi : la présentation servie à Jev sort du même
+    # `build_travel_plan_payload` que les bras LLM (ticket 096, T1).
+    if exp.decideur.type in ("passerelle", "antigravity", "typesafe"):
         from urban_mobility_agents.agents.llm_agent import LlmAgent
 
         agent = LlmAgent()
@@ -737,6 +746,7 @@ def cmd_lancer(a: argparse.Namespace) -> int:
         dossier_echanges=dossier_echanges,
         attente_max_s=exp.attente_max_s,
         execution=execution,
+        gabarit=exp.gabarit,
     )
     # Traçabilité (R3) : tout le journal de l'exécution ([execution]/[ALARME]) est aussi archivé dans
     # le dossier ; lancé via `docker compose exec`, il n'allait sinon que sur le terminal lanceur.

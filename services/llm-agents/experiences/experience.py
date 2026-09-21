@@ -18,6 +18,7 @@ from typing import Any, Literal
 import yaml
 from experiences.chemins import racine_depot, racine_llm_agents
 from experiences.jeu import Jeu, dependances_courantes, perime
+from experiences.nommage import TYPES_LISANT_UN_PROMPT
 from experiences.population import InfoPopulation
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -33,6 +34,7 @@ TYPES_DECIDEUR = (
     "aleatoire",
     "modele",
     "majoritaire_voiture",
+    "typesafe",
 )
 GROUPES_TOLERANCE = ("walk", "bike", "car", "transit", "rail")
 
@@ -119,6 +121,9 @@ class DecideurSpec(_Strict):
         "aleatoire",
         "modele",
         "majoritaire_voiture",
+        # Ticket 096 — Jev (TypeSafe). Ni passerelle (pas de chat, pas de schéma JSON) ni
+        # modèle (rien n'est entraîné ici) : une troisième famille, zéro-shot et calibrée.
+        "typesafe",
     ]
     modele: str | None = None
     # Quel bord sert ce modèle : `local` (LM Studio sur cette machine) ou `distant` (une API à
@@ -149,6 +154,23 @@ class DecideurSpec(_Strict):
             erreurs.append(
                 "decideur.rejeu_de est obligatoire pour un décideur de rejeu"
             )
+        if self.type == "typesafe":
+            # Un alias résolu au lancement scellerait une version que l'`experience.yaml` ne
+            # porte pas : le refus est la seule façon de garder l'empreinte vraie (S3/S4).
+            from experiences.decideur_typesafe import RE_VERSION_FIGEE
+
+            if not self.modele:
+                erreurs.append(
+                    "decideur.modele est obligatoire pour un décideur typesafe "
+                    "(ex. `jev-1.13.0`)"
+                )
+            elif not RE_VERSION_FIGEE.match(str(self.modele)):
+                erreurs.append(
+                    f"decideur.modele {self.modele!r} n'est pas une version figée : attendu "
+                    "`jev-<majeur>.<mineur>.<correctif>` (ex. `jev-1.13.0`). Les alias "
+                    "`jev-latest` et `jev-preview` sont interdits — ils rendraient l'empreinte "
+                    "mensongère au premier changement de version, en silence."
+                )
         if self.type == "aleatoire" and self.graine is None:
             erreurs.append("decideur.graine est obligatoire pour un décideur aléatoire")
         if self.portee and self.type != "passerelle":
@@ -267,6 +289,9 @@ class Experience(_Strict):
     # même nom, si bien que rien dans leur trace ne disait laquelle était laquelle.
     vehicule_chaine: bool = True
     verrou_retour: bool = True
+    # Troncature du Consideration Set (ticket 077, Hauser & Wernerfelt 1990) :
+    # Si True, les options de choix modal < 15 % sont éliminées avant tirage catégoriel.
+    troncature_15: bool = False
     derive_de: str | None = None
     # Ancien nom, quand l'expérience a été renommée par la migration du nommage calculé
     # (spec nommage-canonique-experiences, N12). Filiation ≠ renommage : `derive_de` dit
@@ -466,7 +491,7 @@ def _sha_fichier(p: Path) -> str | None:
         return None
 
 
-def _empreinte_decideur(spec: DecideurSpec) -> dict:
+def _empreinte_decideur(spec: DecideurSpec, gabarit: GabaritRef | None = None) -> dict:
     """Empreinte du décideur. Pour le type `modele`, SCELLE le SHA du FICHIER artefact (R12) :
     relancer avec un autre artefact donne un SHA différent, le même artefact le même SHA."""
     d = {
@@ -477,6 +502,18 @@ def _empreinte_decideur(spec: DecideurSpec) -> dict:
     }
     if spec.type == "antigravity":
         d["modele_verifie"] = False
+    if spec.type == "typesafe":
+        # L'empreinte de gabarit hache la variante ENTIÈRE ; ce qui part chez Jev en est une
+        # dérivée (bloc `[Output instructions]` retiré, le type Choice le remplace). Sans ce
+        # sha-là, changer la règle d'amputation ne bougerait aucune empreinte et deux
+        # exécutions incomparables porteraient la même signature (C2/C3).
+        from experiences.decideur_typesafe import sha_instructions
+
+        d["variante"] = getattr(gabarit, "variante", None)
+        d["instructions_sha256"] = sha_instructions(
+            getattr(gabarit, "categorie", "itinary_multi_agent"),
+            getattr(gabarit, "variante", None),
+        )
     if spec.type == "modele":
         chemin = Path(spec.artefact) if spec.artefact else _POLICY_DEFAUT
         if not chemin.is_absolute():
@@ -502,7 +539,7 @@ def empreintes(
         },
         "jeu": {"nom": jeu.nom, "sha256": jeu.empreinte},
         "gabarit": empreinte_gabarit(exp.gabarit.categorie, exp.gabarit.variante),
-        "decideur": _empreinte_decideur(exp.decideur),
+        "decideur": _empreinte_decideur(exp.decideur, exp.gabarit),
         "depot": {
             "commit": deps.get("commit"),
             "arbre_propre": deps.get("arbre_propre"),
@@ -647,7 +684,11 @@ def refuser_si_impossible(
                 "un événement exige la politique de calendrier `commune` → calendrier.politique: commune"
             )
 
-    if exp.decideur.type in ("passerelle", "antigravity") and exp.gabarit.variante:
+    # `TYPES_LISANT_UN_PROMPT` et non une liste recopiée : jusqu'au 2026-09-21, `typesafe`
+    # manquait ici, et une expérience Jev se rangeait sans un mot sur une variante inexistante
+    # — l'échec ne sortait qu'à la première décision, au milieu d'un run (vérifié ce jour-là
+    # sur `prompt_expert_21`, accepté avant d'être écrit dans `prompts.yaml`).
+    if exp.decideur.type in TYPES_LISANT_UN_PROMPT and exp.gabarit.variante:
         connues = variantes_de_prompt()
         if connues and exp.gabarit.variante not in connues:
             refus.append(

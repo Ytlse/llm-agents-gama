@@ -1,8 +1,9 @@
-# C6 — Moteur suspect · voiture · UN agent nommé
+# C6 — Moteur suspect · voiture · agents nommés
 #
 # Cas d'étude demandé le 2026-09-15 : suivre un agent plus longtemps et relier sa mémoire à son
 # changement d'habitude. Conçu comme la moitié d'une comparaison APPARIÉE — le même run, mêmes
-# graines, tourne une seconde fois sans `CHOC=` : tout écart après le jour 6 vient du choc.
+# graines, tourne une seconde fois sans `CHOC=` : tout écart après le jour 15 vient du choc.
+# ⚠ Ce bras témoin n'a jamais tourné. Sans lui, aucun écart mesuré ici n'est attribuable.
 #
 # POURQUOI UN RETARD, ET PAS SEULEMENT UNE INQUIÉTUDE. La demande initiale était « la voiture
 # fait des bruits bizarres, je ne suis pas rassuré ». Une inquiétude sans retard mesuré donne une
@@ -11,57 +12,71 @@
 # de fabriquer le résultat qu'on prétend mesurer. L'inquiétude reste donc dans le `vecu` ; le
 # retard lui donne son poids.
 #
-# ⚠ 25 puis 12 minutes, et non 60 puis 30 : la composante de retard SATURE à 30 minutes
-#   (`memoire__retard_ref_s`). Un profil resté au-dessus aurait donné la même gravité les deux
-#   jours, et la décrue n'aurait existé que dans le texte.
-#   Gravité obtenue, vérifiée au chargement : 0,62 au jour 6 puis 0,40 au jour 7 ; durées de
-#   vie 13,2 j puis 9,5 j. Le souvenir du jour 6 s'éteint donc vers le jour 19 : un run de
-#   20 jours porte l'arc complet, chute et reprise.
+# ══ PROTOCOLE TEMPOREL (2026-09-18) ══════════════════════════════════════════════════════
 #
-# ⚠ Le souvenir n'atteint PAS le seuil du vivier des chocs (0,70). Il est donc rappelé par le
-#   vivier par objet — quand la voiture figure dans les options — et non hors contexte. C'est
-#   voulu : un moteur qui fait du bruit n'est pas une panne de réseau, et c'est justement ce qui
-#   rend le cas intéressant, puisque la voiture lui est proposée à chaque trajet.
+# Les jours du run se comptent en jours de CALENDRIER ; la simulation SAUTE les week-ends.
+#   Semaine 1 : J1-J5   (ouvrés 1-5)   | J6-J7   = samedi, dimanche
+#   Semaine 2 : J8-J12  (ouvrés 6-10)  | J13-J14 = samedi, dimanche
+#   Semaine 3 : J15 (ouvré 11, premier choc), J16 (ouvré 12, second choc)
+# Dix jours ouvrés de baseline, puis le choc. Horizon total 42 jours calendaires.
 #
-# SUJET. 899549, Corinne, 53 ans, Toulouse. Habitude voiture en formation (60 % de ses trajets sur
-# le run du 15/09) ET alternative crédible : ses transports collectifs mettent 22 à 23 minutes
-# contre 20 à 22 en voiture. Xavier (609) aurait été un mauvais sujet : sa seule alternative est
-# 1 h 19 de marche, donc ne pas changer n'apprendrait rien et changer serait invraisemblable.
+# Gravité obtenue au J15 : retard 30/30 × 0,50 = 0,50 · incident_reseau 0,20 → 0,70. Elle
+# atteint le seuil de choc d'origine (0,70, comparaison `>=`) SANS qu'il soit besoin de
+# l'abaisser : le réglage `memoire__importance_choc: 0.50` posé dans config.yaml le 18/09 n'a
+# rien changé pour ce jour-là et élargit le vivier C à tous les souvenirs de gravité ≥ 0,50.
+# Le J16 (0,53), lui, en dépend — mais il ne s'est jamais appliqué (voir plus bas).
+#
+# ══ RÉÉCRITURE DU 2026-09-19 (ticket 077, lot H) ═════════════════════════════════════════
+#
+# Les deux `vecu` concluaient à la place de l'agent : « I no longer trust this car at all »,
+# « I am seriously thinking about not using this car anymore ». La réflexion nocturne en a tiré
+# « consider alternative transport options », phrase servie ensuite à chacune des 40 décisions
+# des 14 jours suivants. On ne mesurait plus un agent qui apprend, mais un modèle qui ne se
+# contredit pas. Les deux textes ne disent plus que des faits et des sensations ; la croyance
+# « cette voiture n'est pas fiable » doit être PRODUITE par la réflexion, ou ne pas l'être.
+# Les règles R9 et R10 refusent désormais au chargement ce que ces textes contenaient.
+#
+# ⚠ LE SECOND CHOC NE S'EST JAMAIS APPLIQUÉ au run du 2026-09-19. L'exposition est restreinte
+# aux trajets en voiture, et l'agent n'en faisait plus au J16 : `chocs.jsonl` ne porte que
+# quatre applications, toutes au J15. Un choc de renforcement ne peut frapper que ceux qui
+# n'ont pas déjà réagi. C'est assumé — on ne retombe pas en panne dans une voiture qu'on ne
+# prend pas — mais une journée de choc close sans exposé lève désormais une `[ALARME]`, et
+# l'analyse doit lire `chocs.jsonl`, jamais ce fichier, pour savoir ce qui a eu lieu.
+#
 choc: c6_voiture_suspecte
 libelle: "Engine trouble"
 source: "scénario déclaré — cas d'étude individuel, aucune source externe revendiquée"
 
+# Une panne réparée ne se reproduit pas à l'identique trois heures plus tard. Au run du
+# 2026-09-19, sans cette ligne, le choc s'est appliqué aux QUATRE trajets en voiture de la
+# journée : quatre dépannages de trente minutes, quatre fois le même récit, là où le protocole
+# en comptait un seul. L'intensité valait quatre fois l'intensité annoncée.
+cadence: jour
+
 exposition:
   regle: agents
-  agents: ["899549"]
+  # Trois personas pour la cohorte séquentielle (`scripts/experiment/run_sequential_cohort.py`,
+  # un run par persona). Dans un run à une personne, les deux autres identifiants sont inertes
+  # et c'est voulu — le même fichier de choc sert les trois bras.
+  agents: ["899549", "1250941", "861500"]
   # Restreint aux trajets faits EN VOITURE. Sans cette ligne, Corinne aurait lu « the engine
   # made a grinding noise » au retour d'un trajet en bus — elle est multimodale, 60 % de
   # voiture sur le run du 15/09 — et sa mémoire aurait enregistré une histoire impossible.
   modes: [car]
 
-# ⚠ JOURS 8 ET 9, ET NON 6 ET 7 — corrigé le 2026-09-17.
-# Les jours du run se comptent en jours de CALENDRIER depuis l'ancre (lundi 16 mars), alors que
-# la simulation SAUTE les week-ends (`agent.no_weekend_departures`). Posés aux jours 6 et 7, ces
-# chocs tombaient sur le samedi 21 et le dimanche 22 : ils n'ont jamais été appliqués, et la
-# comptabilité du run est passée du jour 5 (relatif -1) au jour 8 (relatif +2) avec
-# « 0 exposé(s) ».
-#
-#   jours 1-5 = lundi 16 → vendredi 20 mars   (5 journées vécues, l'habitude se forme)
-#   jours 6-7 = samedi 21, dimanche 22        (SAUTÉS)
-#   jour  8   = lundi 23 mars                 ← 6e journée vécue, premier choc
-#   jour  9   = mardi 24 mars                 ← 7e journée vécue, second choc
-#
-# Le protocole d'origine — cinq journées d'habitude avant le choc — est donc respecté.
-# À réécrire en « 6 et 7 » le jour où le comptage passera en jours vécus.
+# Chocs au début de la 3e semaine (jours ouvrés 11 et 12), après 10 jours ouvrés de baseline.
 jours:
-  - jour: 8
-    retard_min: 25
+  - jour: 15
+    retard_min: 30
     incident_reseau: true
     vecu: >-
-      The engine made a grinding noise and the car stalled twice on the way. I pulled over
-      and waited before it would start again. I no longer trust this car.
-  - jour: 9
-    retard_min: 12
+      The engine made a grinding noise and the car stalled on the expressway.
+      I pulled over onto the hard shoulder and waited 30 minutes for roadside assistance
+      before it would restart. I arrived very late, shaken.
+  - jour: 16
+    retard_min: 20
     incident_reseau: true
     vecu: >-
-      The noise is back. I keep listening to the engine instead of watching the road.
+      Warning lights came on again and the grinding noise was back, louder than the day
+      before. I drove at reduced speed the whole way, listening to the engine.
+      I arrived 20 minutes late.

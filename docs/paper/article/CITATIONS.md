@@ -4,6 +4,7 @@
 **Mise à jour du 8 septembre 2026 (v0.3) :** à la demande de K. Oberoi, les éléments de contexte de Vu, Gaudou & Oberoi (2025) reviennent en section 1, reformulés phrase à phrase ; leurs cinq références sont réintégrées (A28 à A31, et A19 pour Feng). Leurs PDF manquent dans `etat_de_lart/` : les cases restent ouvertes tant qu'ils n'y sont pas.
 **Mise à jour du 17 septembre 2026 (v0.18) :** A32 (MATSim) retrouve une phrase citante. L'entrée la donnait en § 1 ; aucune phrase des chapitres 1 et 2 ne la citait plus depuis que l'état de l'art a quitté l'introduction, et la référence restait au bib sans appel. Le paragraphe d'ouverture du § 2.2 la cite désormais, aux côtés de A5 (Park et al.), dont l'entrée annonçait déjà le § 2.2. Aucune citation nouvelle : les onze références proposées par une refonte du chapitre (Simon, Kahneman & Tversky, McKelvey & Palfrey, Wardrop, Rosenthal, Hong, Li, Gao, Sun, Ge) n'ont pas été retenues, faute de PDF au dépôt et de phrase du protocole qui les emploie.
 **Mise à jour du 10 septembre 2026 (v0.14) :** entrée A33 pour GTA (Lämmer, Colley & Ebel, 2026), repéré après la v0.13 et absent de tout l'état de l'art antérieur. Ses chiffres sont recoupés sur le préprint, pas sur la version ACM : la case reste ouverte.
+**Mise à jour du 21 septembre 2026 :** entrées A34 à A39, les cinq références de langue d'inférence citées par le § 4.1 et le § 8.6 (ticket 074). Toutes ont leur PDF au dépôt, dans `docs/paper/mémoire/` et non dans `etat_de_lart/` : c'est le corpus reconstitué du ticket 072. Les auteurs sont relevés sur les premières pages des PDF, les champs `authors` des métadonnées JSON de ce dossier étant vides. Trois points restent à trancher avant soumission et sont notés entrée par entrée : la lecture du troisième auteur de Bazoge et al., l'année de Bulté & Rigouts Terryn, et les deux caractères CJK du titre de Liu et al. que pdflatex ne compose pas.
 **Créé le :** 8 septembre 2026, à la suite de la relecture de la v0.1 (voir `archive/INTRODUCTION_EN_v0.1.md`).
 **Règle AAMAS rappelée :** les auteurs sont responsables de l'exactitude des citations ; un article aux citations erronées risque un refus d'emblée ([`INSTRUCTIONS_SOUMISSION_AAMAS.md`](SOUMISSION_AAMAS_2027.md), § 4).
 
@@ -16,7 +17,10 @@ Une citation reste dans l'introduction seulement si les quatre conditions sont r
 1. **Le PDF est dans `etat_de_lart/`** (ou l'ouvrage est consulté pour les livres sans PDF) ;
 2. **L'attribution est exacte** : auteurs dans l'ordre, année, support, identifiant ;
 3. **La phrase de l'introduction qui la cite est appuyée par un passage identifié** (page ou section notée ici) ;
-4. **La clé BibTeX existe** dans [`references.bib`](../sources/references.bib).
+4. **La clé BibTeX existe** dans [`sample.bib`](../sources/sample.bib), celle que le template
+   LaTeX appelle (`\bibliography{sample}`). Le fichier `sample.bib` que cette condition
+   nommait jusqu'au 21 septembre 2026 avait été supprimé au commit `8c1871a` : la porte
+   désignait un fichier absent, donc ne filtrait plus rien.
 
 Cocher une case = les quatre conditions vérifiées à la main, pas seulement le fichier ouvert.
 
@@ -234,33 +238,211 @@ Cocher une case = les quatre conditions vérifiées à la main, pas seulement le
 
 ---
 
+### A34. Qi et al. (2025) — langue de la trace de raisonnement
+
+- [x] PDF : `docs/paper/mémoire/22_When_Models_Reason_in_Your_Language_Controlling_Thinking_Language_Come.pdf` (corpus du ticket 072, hors `etat_de_lart/`).
+- Phrase citante : § 4.1, premier des quatre résultats qui appuient l'exécution en anglais.
+- À pointer : titre et résumé — contraindre la langue de la trace coûte de l'exactitude.
+- **Attribution :** six auteurs relevés sur la première page du PDF, dans l'ordre Qi, Chen, Xiong, Fernández, Bitterman, Bisazza. Findings of EMNLP 2025, doi 10.18653/v1/2025.findings-emnlp.1103, arXiv:2505.22888v2.
+- Bib : `qi2025thinking` (créée le 21 septembre 2026).
+
+---
+
+### A35. Liu et al. (2025) — biais de langue locale en recommandation agentique
+
+- [x] PDF : `docs/paper/mémoire/04_7_Points_to_Tsinghua_but_10_Points_to__Assessing_Large_Language_Models.pdf`.
+- Phrase citante : § 4.1, deuxième résultat.
+- À pointer : résumé et section de résultats — prévalence du biais de langue locale, aggravé par le raisonnement explicite.
+- **Attribution :** quatre auteurs relevés sur la première page, dans l'ordre Liu, Wang, Cheng, Kurohashi. Le premier auteur est **Qianying Liu**, homonymie à éviter avec les deux autres Liu du corpus. Findings of ACL 2025, doi 10.18653/v1/2025.findings-acl.1355, arXiv:2502.17945v2.
+- **Point de compilation :** le titre publié porte deux caractères CJK (清华) que pdflatex ne compose pas. Le `note` de l'entrée le signale ; à trancher avant soumission (substitution ou changement de moteur).
+- Bib : `liu2025agenticbias` (créée le 21 septembre 2026).
+
+---
+
+### A36. Bazoge et al. (2026) — anglais contre français, raisonnement diagnostique
+
+- [x] PDF : `docs/paper/mémoire/08_Prompting_language_influences_diagnostic_reasoning_and_accuracy_of_lar.pdf`.
+- Phrase citante : § 4.1, troisième résultat, seul du corpus à comparer directement l'anglais et le français.
+- À pointer : résumé — 180 vignettes, 16 spécialités, 5 modèles, 2 médecins évaluateurs, échelle 18 points, écart moyen 0,37 à 0,91 avec p ajusté < 0,05, o3 sans effet de langue.
+- **Attribution à confirmer :** la première page présente les auteurs sur deux lignes sans séparateur. Lecture retenue : Adrien Bazoge, Josselin Corvellec, Sofiane Djillali Sid-Ahmed, Pierre-Antoine Gourraud — le troisième nom pouvant se lire autrement. **À recouper sur la notice arXiv avant soumission.** Préprint arXiv:2605.19173v1, doi 10.48550/arXiv.2605.19173.
+- Bib : `bazoge2026prompting` (créée le 21 septembre 2026).
+
+---
+
+### A37. Bulté & Rigouts Terryn (2026) — langue du prompt contre cadrage culturel explicite
+
+- [x] PDF : `docs/paper/mémoire/09_LLMs_and_Cultural_Values_the_Impact_of_Prompt_Language_and_Explicit_Cu.pdf`.
+- Phrase citante : § 4.1, quatrième résultat — l'ancrage territorial ne se perd pas à la traduction.
+- À pointer : résumé et conclusion sur l'efficacité du cadrage culturel explicite formulé en anglais.
+- **Attribution :** deux auteurs, contribution égale, dans l'ordre Bulté, Rigouts Terryn. Le patronyme du second est en deux mots, « Rigouts Terryn », et se saisit entier comme nom de famille dans le bib.
+- **Année à confirmer :** le PDF est un préprint arXiv:2511.03980v1 daté du 6 novembre **2025** ; le doi 10.1162/COLI.a.583 est celui de *Computational Linguistics*. L'entrée porte 2026 comme le ticket 074, le `note` signale l'écart. **À trancher sur la notice éditeur avant soumission.**
+- Bib : `bulte2026cultural` (créée le 21 septembre 2026).
+
+---
+
+### A38. Ying et al. (2025) — synergie langue-culture
+
+- [x] PDF : `docs/paper/mémoire/14_Disentangling_Language_and_Culture_for_Evaluating_Multilingual_Large_L.pdf`.
+- Phrase citante : § 4.1, première des deux réserves — bénéfice auquel l'exécution en anglais renonce.
+- À pointer : résumé, phénomène de « Cultural-Linguistic Synergy » et sondage d'interprétabilité sur les neurones activés.
+- **Attribution :** six auteurs relevés sur la première page, dans l'ordre Ying, Tang, Zhao, Cao, Rong, Zhang. ACL 2025 (volume long), doi 10.18653/v1/2025.acl-long.1082, arXiv:2505.24635.
+- Bib : `ying2025disentangling` (créée le 21 septembre 2026).
+
+---
+
+### A39. Soegeng et al. (2026) — biais occidental induit par l'anglais
+
+- [x] PDF : `docs/paper/mémoire/11_Cross-Lingual_Consensus_Aligning_Multilingual_Cultural_Knowledge_via_M.pdf`.
+- Phrase citante : § 4.1, seconde réserve, **et § 8.6**, où elle porte la limite déclarée du chapitre 8.
+- À pointer : introduction — la performance est la meilleure en anglais, mais la connaissance culturelle présente dans les représentations en langue locale y est mal récupérée.
+- **Attribution :** trois auteurs relevés sur la première page, dans l'ordre Soegeng, Sutanto, Nguyen. Préprint arXiv:2605.22137v2, doi 10.48550/arXiv.2605.22137.
+- Bib : `soegeng2026crosslingual` (créée le 21 septembre 2026).
+
+---
+
+### Écartée — Ananthram et al. (2025)
+
+Le § 1.3 du [ticket 074](../../tickets/ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne.md) la compte parmi les réserves à énoncer : le français étant bien représenté au pré-entraînement, le coût de l'exécution en français restait faible. Vérification sur le PDF (`docs/paper/mémoire/19_…` et `27_…`, même doi 10.48550/arXiv.2406.11665) : *See It from My Perspective*, ICLR 2025, porte sur des **modèles vision-langage en compréhension d'images**. Transposer sa conclusion à une tâche de décision textuelle n'est pas soutenable dans un texte relu en double insu. Ce qu'elle apportait est conservé sans citation, par la phrase du § 4.1 qui déclare qu'aucune mesure de ce travail n'établit que l'exécution en français dégradait les scores. Aucune entrée bib créée.
+
+---
+
+---
+
+## A bis. Références de mémoire — déposées le 21 septembre 2026 (ticket 071)
+
+Avant ce dépôt, l'article ne citait **aucune** référence de mémoire hors Reflexion, alors que
+la section 3.4 décrit l'architecture de Park et al. adaptée par Vu et al. Les onze PDF sont
+dans `etat_de_lart/` (§ 9 de son README) et leurs onze clés dans `sample.bib`.
+
+⚠ **Les conditions 1, 2 et 4 sont remplies ; la 3 ne l'est pas.** Neuf de ces onze ne sont
+citées nulle part dans le texte : leur phrase citante reste à écrire, et leur case reste donc
+ouverte. Seules A49 et A50 sont déjà appelées par le texte.
+
+⚠ **Restent hors dépôt et donc non citables :** les huit références de psychologie sous licence
+éditeur et les trois ouvrages sans PDF. **Tulving (1972) est le cas à trancher** : le § 3.4 FR
+et EN lui attribue la distinction épisodique / sémantique, sans PDF ni clé. Consulter l'ouvrage
+et poser la mention, ou renoncer à l'attribution. Manifeste complet :
+[`../../sources/DEPOT_MEMOIRE_TICKET_071.md`](../../sources/DEPOT_MEMOIRE_TICKET_071.md).
+
+### A40. Sumers, Yao, Narasimhan & Griffiths (2024)
+- [x] PDF : `etat_de_lart/Sumers_2024_CoALA.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 — à écrire ; la section décrit la distinction épisodique / sémantique portée aux agents de langue sans encore l'attribuer.
+- À pointer : § 3, la taxonomie des mémoires d'un agent de langue.
+- **Attribution :** paru dans *TMLR*, février 2024 — **pas** à NeurIPS 2023, notice recoupée le 14 septembre 2026. arXiv:2309.02427.
+- Bib : `sumers2024coala` (créée le 21 septembre 2026).
+
+### A41. Zhong, Guo, Gao, Ye & Wang (2024)
+- [x] PDF : `etat_de_lart/Zhong_2024_MemoryBank.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 — à écrire ; la courbe d'oubli et le renforcement au rappel viennent de là.
+- À pointer : § 3, la mise en œuvre de la courbe d'Ebbinghaus et le renforcement à chaque rappel.
+- **Attribution :** actes **AAAI-24**. arXiv:2305.10250.
+- Bib : `zhong2024memorybank` (créée le 21 septembre 2026).
+
+### A42. Chhikara, Khant, Aryan, Singh & Yadav (2025)
+- [x] PDF : `etat_de_lart/Chhikara_2025_Mem0.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : ch. 8 — à écrire ; les opérations sur les concepts sont désignées par le modèle, non par un seuil.
+- À pointer : § 3, les opérations de mémoire décidées par le modèle.
+- **Attribution :** préprint arXiv:2504.19413.
+- Bib : `chhikara2025mem0` (créée le 21 septembre 2026).
+
+### A43. Xu, Liang, Mei, Gao, Tan & Zhang (2025)
+- [x] PDF : `etat_de_lart/Xu_2025_A-MEM.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : ch. 8 — à écrire. ⚠ À citer **avec sa divergence** : la voie par seuil de similarité y est décrite, et ce dépôt l'a écartée.
+- À pointer : § 3, l'évolution des notes et le lien par similarité.
+- **Attribution :** **NeurIPS 2025**. arXiv:2502.12110.
+- Bib : `xu2025amem` (créée le 21 septembre 2026).
+
+### A44. Packer, Wooders, Lin, Fang, Patil, Stoica & Gonzalez (2023)
+- [x] PDF : `etat_de_lart/Packer_2023_MemGPT.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : ch. 8 — à écrire ; le *working context* est l'origine directe de la mémoire noyau du lot 4.
+- À pointer : § 3.1, le *main context* et sa partition.
+- **Attribution :** préprint arXiv:2310.08560.
+- Bib : `packer2023memgpt` (créée le 21 septembre 2026).
+
+### A45. Liu, Li & Ma (2025)
+- [x] PDF : `etat_de_lart/Liu_2025_GATSim.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 — à écrire ; réflexion périodique et formation d'habitudes **en contexte transport**, le voisin le plus proche du dispositif.
+- À pointer : § sur la mémoire de l'agent et la réflexion périodique.
+- **Attribution :** préprint arXiv:2506.23306, v3 du 6 février 2026 — la version déposée. ⚠ Une citation de chiffre doit nommer la version.
+- Bib : `liu2025gatsim` (créée le 21 septembre 2026).
+
+### A46. Jiménez Gutiérrez, Shu, Gu, Yasunaga & Su (2024)
+- [x] PDF : `etat_de_lart/Gutierrez_2024_HippoRAG.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : ch. 8 — à écrire, **comme piste seulement** : aucun mécanisme du dépôt n'en dérive, et le laisser croire serait faux.
+- À pointer : § 2, l'indexation inspirée de l'hippocampe.
+- **Attribution :** **NeurIPS 2024**. arXiv:2405.14831.
+- Bib : `gutierrez2024hipporag` (créée le 21 septembre 2026).
+
+### A47. Reimers & Gurevych (2019)
+- [x] PDF : `etat_de_lart/Reimers_2019_Sentence-BERT.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 — à écrire ; le cadre dont `all-MiniLM-L6-v2` est un modèle.
+- À pointer : § 3, l'architecture siamoise et l'usage des plongements de phrase.
+- **Attribution :** **EMNLP-IJCNLP 2019**, p. 3982-3992. arXiv:1908.10084.
+- Bib : `reimers2019sbert` (créée le 21 septembre 2026).
+
+### A48. Papineni, Roukos, Ward & Zhu (2002)
+- [x] PDF : `etat_de_lart/Papineni_2002_BLEU.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 — à écrire, et **uniquement pour ne pas appeler BLEU ce qui n'en est pas un**.
+- À pointer : § 2, la définition de la précision n-gramme modifiée.
+- **Attribution :** actes **ACL 2002**, p. 311-318. ACL Anthology P02-1040.
+- Bib : `papineni2002bleu` (créée le 21 septembre 2026).
+
+### A49. Shinn, Cassano, Berman, Gopinath, Narasimhan & Yao (2023)
+- [x] PDF : `etat_de_lart/Shinn_2023_Reflexion.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 5, l'auto-réflexion verbale — **la phrase citante existe déjà**, c'est le dépôt qui manquait.
+- À pointer : § 2, la boucle de réflexion verbale et sa mémoire épisodique.
+- **Attribution :** **NeurIPS 2023**. arXiv:2303.11366v4. ⚠ Elle était citée dans le chapitre 5 **sans PDF ni clé** avant le 21 septembre 2026 : seule référence de mémoire que l'article nommait, et la seule à ne passer aucune des quatre conditions.
+- Bib : `shinn2023reflexion` (créée le 21 septembre 2026).
+
+### A50. Laplace (1814)
+- [x] PDF : `etat_de_lart/Laplace_1814_Essai_Probabilites.pdf` (déposé le 21 septembre 2026, titre vérifié sur la première page).
+- Phrase citante : § 3.4 et ch. 7, la règle de succession dont dérive la confiance d'un concept — **la phrase citante existe déjà au ch. 7**.
+- À pointer : la règle de succession, dans la partie sur la probabilité des événements futurs.
+- **Attribution :** ⚠ Le fichier déposé est la **réimpression Gauthier-Villars** (coll. « Les Maîtres de la Pensée Scientifique », éd. Solovine), **pas l'original Courcier de 1814** que la notice bibliographique donne. Numérisation d'archive du domaine public, sans couche de texte : la pagination à pointer est celle de la réimpression.
+- Bib : `laplace1814essai` (créée le 21 septembre 2026).
+
+---
+
 ## B. Entrées BibTeX créées (récapitulatif)
 
 Créées le 8 septembre 2026 ; les listes d'auteurs de A21, A22 et A23 sont à confirmer sur le PDF (note dans le bib).
 
-- [x] `adam2025survey` — A4 — créée dans references.bib le 8 septembre 2026
-- [x] `chopra2024limits` — A6 — créée dans references.bib le 8 septembre 2026
-- [x] `liu2024toward` — A7 — créée dans references.bib le 8 septembre 2026
-- [x] `bougie2025citysim` — A8 — créée dans references.bib le 8 septembre 2026
-- [x] `alves2026evaluating` — A9 — créée dans references.bib le 8 septembre 2026
-- [x] `vu2025modeling` — A10 — créée dans references.bib le 8 septembre 2026
-- [x] `argyle2023outofone` — A11 — créée dans references.bib le 8 septembre 2026
-- [x] `meister2024benchmarking` — A12 — créée dans references.bib le 8 septembre 2026
-- [x] `kambhatla2025improving` — A13 — créée dans references.bib le 8 septembre 2026
-- [x] `huang2025distribution` — A14 — créée dans references.bib le 8 septembre 2026
-- [x] `nguyen2025prompt` — A15 — créée dans references.bib le 8 septembre 2026
-- [x] `feng2024agentmove` — A19 — créée dans references.bib le 8 septembre 2026
-- [x] `secheresse2025gaapo` — A20 — créée dans references.bib le 8 septembre 2026
-- [x] `guo2023evoprompt` — A21 — créée dans references.bib le 8 septembre 2026
-- [x] `pryzant2023automatic` — A22 — créée dans references.bib le 8 septembre 2026
-- [x] `opsahlong2024optimizing` — A23 — créée dans references.bib le 8 septembre 2026
+- [x] `adam2025survey` — A4 — créée dans sample.bib le 8 septembre 2026
+- [x] `chopra2024limits` — A6 — créée dans sample.bib le 8 septembre 2026
+- [x] `liu2024toward` — A7 — créée dans sample.bib le 8 septembre 2026
+- [x] `bougie2025citysim` — A8 — créée dans sample.bib le 8 septembre 2026
+- [x] `alves2026evaluating` — A9 — créée dans sample.bib le 8 septembre 2026
+- [x] `vu2025modeling` — A10 — créée dans sample.bib le 8 septembre 2026
+- [x] `argyle2023outofone` — A11 — créée dans sample.bib le 8 septembre 2026
+- [x] `meister2024benchmarking` — A12 — créée dans sample.bib le 8 septembre 2026
+- [x] `kambhatla2025improving` — A13 — créée dans sample.bib le 8 septembre 2026
+- [x] `huang2025distribution` — A14 — créée dans sample.bib le 8 septembre 2026
+- [x] `nguyen2025prompt` — A15 — créée dans sample.bib le 8 septembre 2026
+- [x] `feng2024agentmove` — A19 — créée dans sample.bib le 8 septembre 2026
+- [x] `secheresse2025gaapo` — A20 — créée dans sample.bib le 8 septembre 2026
+- [x] `guo2023evoprompt` — A21 — créée dans sample.bib le 8 septembre 2026
+- [x] `pryzant2023automatic` — A22 — créée dans sample.bib le 8 septembre 2026
+- [x] `opsahlong2024optimizing` — A23 — créée dans sample.bib le 8 septembre 2026
 - [x] `smith1995transims` — A28 — créée le 8 septembre 2026 (v0.3)
 - [x] `grignard2018impact` — A29 — créée le 8 septembre 2026 (v0.3)
 - [x] `oberoi2024personalisation` — A30 — créée le 8 septembre 2026 (v0.3)
 - [x] `fourez2025transport` — A31 — créée le 8 septembre 2026 (v0.3)
-- [x] `lammer2026gta` — A33 — créée dans references.bib le 10 septembre 2026 (v0.14)
+- [x] `lammer2026gta` — A33 — créée dans sample.bib le 10 septembre 2026 (v0.14)
 
 ---
+
+Ajoutées le 21 septembre 2026 (ticket 071), toutes dans `sample.bib` :
+- [x] `sumers2024coala` — A40 — créée dans sample.bib le 21 septembre 2026
+- [x] `zhong2024memorybank` — A41 — créée dans sample.bib le 21 septembre 2026
+- [x] `chhikara2025mem0` — A42 — créée dans sample.bib le 21 septembre 2026
+- [x] `xu2025amem` — A43 — créée dans sample.bib le 21 septembre 2026
+- [x] `packer2023memgpt` — A44 — créée dans sample.bib le 21 septembre 2026
+- [x] `liu2025gatsim` — A45 — créée dans sample.bib le 21 septembre 2026
+- [x] `gutierrez2024hipporag` — A46 — créée dans sample.bib le 21 septembre 2026
+- [x] `reimers2019sbert` — A47 — créée dans sample.bib le 21 septembre 2026
+- [x] `papineni2002bleu` — A48 — créée dans sample.bib le 21 septembre 2026
+- [x] `shinn2023reflexion` — A49 — créée dans sample.bib le 21 septembre 2026
+- [x] `laplace1814essai` — A50 — créée dans sample.bib le 21 septembre 2026
 
 ## C. Citations retirées de la v0.1 et motif
 

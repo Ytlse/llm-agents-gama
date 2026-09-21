@@ -34,6 +34,12 @@ Aucun chiffre n'est écrit à la main : chaque valeur est lue dans le dernier
 suffixe `_c_`) n'a pas encore abouti, la valeur de l'ancien jeu est prise et la
 figure le signale — par une astérisque, et par un WARNING au journal.
 
+Ce repli n'a plus de quoi s'exercer : depuis le ticket 098, l'ancien jeu et ses
+exécutions sont en archive froide. Les treize décideurs se lisent tous sur le jeu
+corrigé, et le journal l'énonce à chaque passage (« 13 sur 13, 0 sur l'ancien jeu »).
+Si ce chiffre baisse un jour, c'est qu'un décideur manque au rejeu — pas qu'il faut
+aller rouvrir l'archive.
+
 Usage :
     services/llm-agents/.venv/bin/python scripts/analysis/plot_chapitre6.py
     … --sortie docs/paper/figures --copie docs/paper/article/images
@@ -76,18 +82,26 @@ RESOLUTION = 1.3
 SUFFIXE = "_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN"
 
 PLANCHER, MINIMAL, EXPERT, TABULAIRE = "plancher", "minimal", "expert", "tabulaire"
+# Cinquième groupe, ticket 096 : un System One model — la catégorie sous laquelle TypeSafe range
+# Jev — qui rend une probabilité par option sans produire de texte, ni modèle de langue génératif
+# ni méthode ajustée sur l'enquête. Il n'entre dans AUCUNE figure sans `--avec-jev` : le chapitre 6
+# de référence en compte treize, et une figure qui en montrerait quinze sans que son texte bouge
+# serait pire qu'absente.
+JEV = "jev"
 
 COULEURS_GROUPES = {
     PLANCHER: "#8d8b86",
     MINIMAL: "#eb6834",
     EXPERT: "#2a78d6",
     TABULAIRE: "#1baf7a",
+    JEV: "#9b51e0",
 }
 LIBELLES_GROUPES = {
     PLANCHER: "Baselines (no behavioural information)",
     MINIMAL: "Language models, minimal prompt",
     EXPERT: "Language models, expert prompt",
     TABULAIRE: "Tabular methods fitted on the survey",
+    JEV: "System One model",
 }
 
 COULEURS_MODELES = {
@@ -138,11 +152,38 @@ DECIDEURS = [
      f"exp_lgbm{SUFFIXE}_c_nosim", f"exp_lgbm{SUFFIXE}_nosim"),
 ]
 
+# Ticket 096. Séparés de DECIDEURS, et c'est le point : `--avec-jev` les y verse, son absence
+# laisse le chapitre de référence exactement où il est.
+DECIDEURS_JEV = [
+    ("jev_min", "Jev 1.13 (TypeSafe)  · minimal prompt", JEV, "jev-1.13.0",
+     f"exp_jev-1130_promin02{SUFFIXE}_c_nosim", f"exp_jev-1130_promin02{SUFFIXE}_nosim"),
+    # Ticket 096, addendum du 2026-09-21 : la consigne réglée POUR ce porteur, et la seule
+    # dont le score soit EN ÉCHANTILLON — les écarts qui l'ont produite ont été lus sur la
+    # cohorte qui la note. Le bras sous prompt_expert_05, consigne reçue d'un autre porteur,
+    # ne figure plus parmi les décideurs depuis le 2026-09-21 : deux barres « expert prompt »
+    # sur la même échelle ne se lisaient pas. Il reste dans VARIANTES_JEV, où la figure
+    # d'ingénierie en fait la pointe hors échantillon de sa flèche.
+    ("jev_exp32", "Jev 1.13 (TypeSafe)  · expert prompt", JEV, "jev-1.13.0",
+     f"exp_jev-1130_proexp32{SUFFIXE}_c_nosim", f"exp_jev-1130_proexp32{SUFFIXE}_nosim"),
+]
+
 # Trois statuts, trois façons de tracer le point : le prompt minimal (aucune
 # ingénierie), le prompt expert évalué hors échantillon (celui que le chapitre
 # publie), et les variantes ajustées au vu de la cohorte évaluée — borne haute
 # d'ajustement en échantillon, § 5.3.5, qui ne se compare pas aux précédentes.
 MINIMAL_V, HORS_ECH, EN_ECH = "minimal", "hors_echantillon", "en_echantillon"
+
+# Ticket 096 — versé dans VARIANTES par `--avec-jev` seulement (cf. DECIDEURS_JEV).
+VARIANTES_JEV = {
+    "jev-1.13.0": [
+        ("promin02", "minimal prompt", MINIMAL_V,
+         f"exp_jev-1130_promin02{SUFFIXE}_c_nosim", f"exp_jev-1130_promin02{SUFFIXE}_nosim"),
+        ("proexp05", "expert prompt", HORS_ECH,
+         f"exp_jev-1130_proexp05{SUFFIXE}_c_nosim", f"exp_jev-1130_proexp05{SUFFIXE}_nosim"),
+        ("proexp32", "prompt tuned for it", EN_ECH,
+         f"exp_jev-1130_proexp32{SUFFIXE}_c_nosim", f"exp_jev-1130_proexp32{SUFFIXE}_nosim"),
+    ],
+}
 
 VARIANTES = {
     "gemini-3.5-flash-lite": [
@@ -188,6 +229,10 @@ PAIRES_SUBSTRAT = {
         ("jeu corrigé", f"exp_gemini-35-fl_promin02{SUFFIXE}_c_t0_nosim",
          [f"exp_gemini-35-fl_proexp05{SUFFIXE}_c_t0_nosim",
           f"exp_gemini-35-fl_proexp04{SUFFIXE}_c_t0_nosim"]),
+        # Candidat mort depuis le ticket 098 : ces deux expériences sont en archive froide,
+        # `dernier_score` n'y trouve plus rien et le couple est écarté. Gardé pour que la règle
+        # « les deux termes d'un delta viennent du MÊME substrat » reste lisible le jour où un
+        # troisième jeu la reposera.
         ("jeu antérieur", f"exp_gemini-35-fl_promin02{SUFFIXE}_t0_nosim",
          [f"exp_gemini-35-fl_proexp05{SUFFIXE}_t0_nosim"]),
     ],
@@ -230,11 +275,44 @@ def libelle_strate(cat: str) -> str:
     return LIBELLES_STRATES.get(cat, cat)
 
 
+#: Expériences dont le chapitre publie une exécution PRÉCISE, et non « la dernière ».
+#:
+#: Rejouer un bras à l'identique — pour mesurer le bruit du fournisseur, par exemple — crée une
+#: seconde exécution, et « la dernière » déplace alors en silence un chiffre déjà relu. Mesuré
+#: le 2026-09-21 : le réplicat du bras Jev sous prompt expert faisait passer toutes les figures
+#: de 4,19 à 4,14 sans qu'une ligne du chapitre bouge. L'écart est inférieur au bruit — ce qui
+#: est précisément le problème : il ne se voit pas.
+#:
+#: Épingler ici est réservé aux bras que le texte CITE. Pour les autres, « la dernière » reste
+#: la règle : c'est elle qui fait profiter les figures d'un rejeu sans rien demander.
+EXECUTIONS_FIGEES = {
+    # Le § 6.1 publie 4,19 / 7,25 / 12,59 pour cette exécution-là (ticket 096, lot 2).
+    f"exp_jev-1130_proexp05{SUFFIXE}_c_nosim": "2026-09-21_06_25_29",
+}
+
+
 def dernier_score(experience: str) -> dict | None:
-    """Le `scores.json` de l'exécution la plus récente, ou None si aucune n'est scorée."""
+    """Le `scores.json` de l'exécution publiée : celle qu'épingle `EXECUTIONS_FIGEES`, sinon la
+    plus récente. None si aucune n'est scorée."""
     dossier = DOSSIER_EXPERIENCES / experience / "executions"
     if not dossier.is_dir():
         return None
+    figee = EXECUTIONS_FIGEES.get(experience)
+    if figee:
+        fichier = dossier / figee / "scores.json"
+        if fichier.is_file():
+            try:
+                with fichier.open(encoding="utf-8") as flux:
+                    donnees = json.load(flux)
+                donnees["_execution"] = figee
+                return donnees
+            except (OSError, json.JSONDecodeError) as erreur:
+                logger.error("scores.json épinglé illisible pour %s (%s) : %s", experience, figee, erreur)
+        else:
+            # Dire, et non retomber en silence sur une autre exécution : une épingle qui ne
+            # pointe rien est une erreur de configuration, pas une valeur par défaut.
+            logger.error("exécution épinglée introuvable pour %s : %s — repli sur la plus récente",
+                         experience, figee)
     for execution in sorted(dossier.iterdir(), reverse=True):
         fichier = execution / "scores.json"
         if not fichier.is_file():
@@ -250,16 +328,32 @@ def dernier_score(experience: str) -> dict | None:
     return None
 
 
+#: Où l'ancien jeu a été gelé (ticket 098). Le repli ci-dessous ne peut donc plus aboutir ;
+#: le chemin sert à le DIRE, pas à y lire quoi que ce soit.
+ARCHIVE_ANCIEN_JEU = "archive/2026-09-21_ancien_jeu_v6_EN"
+
+
 def resoudre(exp_corrige: str, exp_ancien: str) -> tuple[dict | None, bool]:
-    """Le score du jeu corrigé si le rejeu a abouti, celui de l'ancien jeu sinon."""
+    """Le score du jeu corrigé si le rejeu a abouti, celui de l'ancien jeu sinon.
+
+    Le second terme est mort depuis le ticket 098 : l'ancien jeu et ses exécutions sont en
+    archive froide, `dernier_score` n'y trouve plus rien. Le repli reste écrit parce qu'il
+    documente l'ordre de préférence, et parce qu'un jeu futur reposera la même question — mais
+    son échec doit nommer l'archive, sans quoi un rejeu incomplet et un substrat gelé rendraient
+    le même `None` muet, et se diagnostiqueraient comme le même problème.
+    """
     score = dernier_score(exp_corrige)
     if score is not None:
         return score, False
     score = dernier_score(exp_ancien)
     if score is None:
         logger.error(
-            "[ALARME] Aucun score pour ce décideur, ni sur le jeu corrigé ni sur l'ancien : %s",
+            "[ALARME] Aucun score pour ce décideur sur le jeu corrigé (%s), et le repli sur "
+            "l'ancien jeu (%s) ne peut plus aboutir : il est gelé sous %s/ depuis le ticket 098. "
+            "Ce décideur doit être rejoué sur le jeu corrigé.",
             exp_corrige,
+            exp_ancien,
+            ARCHIVE_ANCIEN_JEU,
         )
         return None, False
     logger.warning(
@@ -341,8 +435,10 @@ def figure_echelle(decideurs: list[dict], sortie: Path) -> list[Path]:
     for bord in ("top", "right", "left"):
         axes.spines[bord].set_visible(False)
 
+    groupes_presents = [g for g in (PLANCHER, MINIMAL, EXPERT, JEV, TABULAIRE)
+                        if any(d["groupe"] == g for d in ordre)]
     legende = [Patch(facecolor=COULEURS_GROUPES[g], label=LIBELLES_GROUPES[g])
-               for g in (PLANCHER, MINIMAL, EXPERT, TABULAIRE)]
+               for g in groupes_presents]
     axes.legend(handles=legende, loc="upper right", fontsize=8.5, frameon=False,
                 bbox_to_anchor=(1.0, 0.62))
     figure.tight_layout(rect=(0, 0.035, 1, 1))
@@ -354,8 +450,12 @@ def figure_echelle(decideurs: list[dict], sortie: Path) -> list[Path]:
 def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
     """Ce que l'ingénierie de prompt fait parcourir à chaque modèle."""
     figure, axes = plt.subplots(figsize=(9.6, 5.0))
-    modeles = [m for m in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "mistral-large-2512")
+    modeles = [m for m in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+                           "mistral-large-2512", "jev-1.13.0")
                if m in VARIANTES]
+    # Quatre porteurs au lieu de trois : la légende, posée en haut à droite, tombait sur la
+    # deuxième ligne. Elle descend hors de la zone tracée dès qu'un quatrième apparaît.
+    legende_sous_axe = len(modeles) > 3
 
     if tabulaires:
         axes.axvspan(min(tabulaires), max(tabulaires), color="#1baf7a", alpha=0.16, zorder=1)
@@ -418,10 +518,12 @@ def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
                markersize=8, linestyle="none", alpha=0.55,
                label="variants tuned on the evaluated cohort"),
     ]
-    axes.legend(handles=legende, loc="upper right", fontsize=8.5, frameon=False,
-                bbox_to_anchor=(1.0, 0.72))
+    axes.legend(handles=legende, fontsize=8.5, frameon=False,
+                **({"loc": "lower center", "bbox_to_anchor": (0.5, -0.30), "ncol": 3}
+                   if legende_sous_axe
+                   else {"loc": "upper right", "bbox_to_anchor": (1.0, 0.72)}))
     axes.set_xlim(right=axes.get_xlim()[1] + 0.9)
-    figure.tight_layout(rect=(0, 0.045, 1, 1))
+    figure.tight_layout(rect=(0, 0.16 if legende_sous_axe else 0.045, 1, 1))
     if replis:
         figure.text(0.012, 0.012, NOTE_REPLI, fontsize=8, color="#55534f")
     return ecrire(figure, sortie, "ch6_ingenierie")
@@ -760,9 +862,22 @@ def main() -> int:
     analyseur.add_argument("--copie", type=Path, default=COPIE_DEFAUT,
                            help="dossier où les figures sont recopiées pour l'article")
     analyseur.add_argument("--sans-copie", action="store_true")
+    analyseur.add_argument(
+        "--avec-jev", action="store_true",
+        help="ajoute les deux bras Jev 1.13 (ticket 096) — quinze décideurs au lieu de treize, "
+             "et un cinquième groupe. Réservé à la version alternative du chapitre : le chapitre "
+             "de référence en compte treize, et ses légendes le disent.",
+    )
     arguments = analyseur.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s : %(message)s")
+    if arguments.avec_jev:
+        DECIDEURS.extend(DECIDEURS_JEV)
+        VARIANTES.update(VARIANTES_JEV)
+        NOMS_MODELES.update({"jev-1.13.0": "Jev 1.13 (TypeSafe)"})
+        COULEURS_MODELES.update({"jev-1.13.0": COULEURS_GROUPES[JEV]})
+        logger.info("Deux bras Jev versés : %d décideurs, %d porteurs de consigne",
+                    len(DECIDEURS), len(VARIANTES))
     depart = time.monotonic()
     logger.info("Figures du chapitre 6 : lecture des scores du dépôt")
 

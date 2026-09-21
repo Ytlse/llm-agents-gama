@@ -83,26 +83,19 @@ def verifier(
     par_requete = (jetons_entree or 0) + (jetons_sortie or 0)
     requis = int(sollicitations * MARGE_QUOTA)
 
-    # 1. Quota journalier. Refus seulement si l'écart est absurde ; sinon avertissement,
-    # parce qu'une exécution se reprend et peut s'étaler sur plusieurs fenêtres de quota.
+    # 1. Quota journalier. Uniquement un avertissement : une exécution se reprend et peut
+    # s'étaler sur plusieurs fenêtres de quota. Les limites déclaratives de providers.yaml
+    # ou les estimations brutes de déplacements ne doivent jamais bloquer un lancement légitime.
     rpd = _somme(providers, instances, "rpd_limit")
     if rpd is not None and rpd > 0 and rpd < requis:
         jours = sollicitations / rpd
-        if rpd * FACTEUR_QUOTA_ABSURDE < requis:
-            refus.append(
-                f"quota journalier hors d'atteinte pour {modele!r} : {rpd} requêtes/jour "
-                f"cumulées sur {len(instances)} instance(s) contre {sollicitations} "
-                f"sollicitations attendues, soit ~{jours:.0f} jours de quota → choisissez un "
-                f"modèle mieux doté, réduisez le jeu, ou passez par un canal sans quota"
-            )
-        else:
-            avert.append(
-                f"quota journalier plus court que la charge pour {modele!r} : {rpd} "
-                f"requêtes/jour déclarées contre {sollicitations} sollicitations "
-                f"(~{jours:.1f} jours) → l'exécution s'étalera sur plusieurs fenêtres, avec "
-                f"reprise. Les limites de providers.yaml sont déclaratives et connues comme "
-                f"parfois fausses : ce n'est pas un refus"
-            )
+        avert.append(
+            f"quota journalier plus court que la charge pour {modele!r} : {rpd} "
+            f"requêtes/jour déclarées contre {sollicitations} sollicitations "
+            f"(~{jours:.1f} jours) → l'exécution s'étalera sur plusieurs fenêtres, avec "
+            f"reprise. Les limites de providers.yaml sont déclaratives et connues comme "
+            f"parfois fausses : ce n'est pas un refus"
+        )
 
     # 2. Plafond par requête — chaque appel serait tronqué.
     if par_requete:

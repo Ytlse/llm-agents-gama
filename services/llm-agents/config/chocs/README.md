@@ -32,6 +32,19 @@ Le refus est franc, pas un avertissement : un avertissement au milieu d'un journ
 personne, et une consigne qui passe ne biaise pas un peu — elle fabrique exactement le résultat
 qu'on prétend mesurer.
 
+Depuis le 2026-09-19, il ne **conclut** pas davantage. Un verdict sur un mode (« I no longer trust
+this car », « this bus line is unreliable ») et une intention pour demain (« I am thinking about
+not using this car anymore », « from now on I will take the metro ») sont refusés au même titre.
+La croyance est ce que la réflexion de l'agent doit produire ; l'écrire ici revient à mesurer sa
+propre consigne. Un doute reste admis — « I am starting to wonder whether this is worth it » — et
+un fait passé aussi, même modal : « I had to sort out another way of getting around ».
+
+## Combien de fois par jour
+
+`cadence: trajet` (défaut) — chaque trajet éligible subit le choc : un bouchon dure toute la
+journée. `cadence: jour` — seul le premier : une panne réparée ne se reproduit pas à l'identique
+trois heures plus tard. Le défaut est journalisé au chargement, une valeur inconnue est refusée.
+
 ## Les valeurs sont un scénario déclaré
 
 Retards et durées ne sont pas mesurés sur une source : ce sont des hypothèses assumées, avec la

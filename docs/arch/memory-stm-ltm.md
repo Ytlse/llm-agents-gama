@@ -899,6 +899,92 @@ lecture. Le motif et le créneau, eux, viennent de l'arrivée : ce sont les seul
 Le dernier bloc est l'endroit où l'hystérésis devient lisible dans le prompt lui-même, et non
 plus seulement dans les statistiques de sortie.
 
+### La durée d'un choc se DÉRIVE de sa gravité (ticket 095, lot A)
+
+Un souvenir de gravité de choc est servi dans « Ce qui a changé récemment » **tant que son poids
+de décroissance dépasse un seuil**. La durée n'est plus un entier posé : elle se calcule, souvenir
+par souvenir, à partir de la gravité de l'événement.
+
+```
+poids(t) = exp(-t / force)        force = min(S0 × (1 + k × gravité), 30)   S0 = 2,8   k = 6
+durée    = force × ln(1 / SEUIL)                                           SEUIL = 0,35
+servi    = max(PLANCHER, min(PLAFOND, durée))                 PLANCHER = 2 j  PLAFOND = 30 j
+```
+
+C'est la MÊME courbe que celle du rappel (MemoryBank, Zhong et al. 2024) : la durée d'un effet
+cesse d'être un paramètre posé à côté du modèle d'oubli pour en devenir une conséquence.
+
+| Gravité | force | durée servie | Exemple |
+|---:|---:|---:|---|
+| 0,10 | 4,48 j | **4,70 j** | contrariété |
+| 0,30 | 7,84 j | **8,23 j** | incident mineur |
+| 0,62 | 13,22 j | **13,88 j** | bouchon C1 au jour 2 — sous le seuil d'entrée du bloc |
+| 0,70 | 14,56 j | **15,29 j** | C6, moteur suspect — la gravité mesurée au ticket 077 |
+| 0,90 | 17,92 j | **18,81 j** | C3, panne réseau |
+| 1,00 | 19,60 j | **20,58 j** | maximum atteignable par la gravité |
+
+**L'âge se compte depuis l'ÉVÉNEMENT**, pas depuis le dernier rappel : ce bloc annonce
+l'ancienneté d'un changement, pas celle de sa dernière lecture. Le renforcement au rappel
+continue de jouer, mais par la `force`, donc sur la durée — il ne rajeunit pas l'événement.
+
+**Les deux bornes ne mordent pas au même endroit, et aucune ne mord par la gravité.**
+`borne_0_1` plafonne la gravité à 1,0 : la durée maximale issue de la gravité vaut 20,58 j, sous
+le plafond, et la durée minimale vaut 2,94 j à gravité nulle, au-dessus du plancher. Le **plafond
+mord par le renforcement au rappel** — `force_apres_rappel` ajoute un jour par rappel jusqu'à 30,
+et à force = 30 la durée calculée vaut 31,49 j. Sans lui, un souvenir grave et souvent rappelé
+repousserait indéfiniment sa propre échéance dans un bloc de taille fixe (`changements_max = 3`) :
+la fenêtre cesserait d'être une fenêtre pour devenir une archive. Le plancher, lui, est une borne
+de sûreté : **il ne faut pas citer « 2 jours » comme durée minimale observée.**
+
+### Le mode `fixe`, et pourquoi il reste
+
+`memoire__mode_fenetre_changements` vaut `derivee` par défaut depuis le 2026-09-21. À `fixe`, le
+comportement d'avant le ticket 095 revient : un souvenir de gravité de choc est servi tant qu'il a
+moins de `memoire__fenetre_changements_jours` jours — **14 par défaut** — puis **plus du tout**.
+Coupure franche, et non décroissance : la force du souvenir n'entre pas dans cette décision.
+
+C'est le mode des **bras de contrôle méthodologique**, ceux qui doivent reproduire les campagnes
+des 19 et 20 septembre 2026. ⚠ **Un run archivé ne se compare à un run neuf qu'en déclarant
+`fixe`.**
+
+⚠ **Ce paramètre gouverne la durée observable d'un effet de choc, et il était écrit en dur.**
+Sur `experiments/archive/2026-09-19_07_31`, le choc tombe le 30 mars ; le récit quitte le bloc
+le 13 avril, quatorze jours plus tard jour pour jour.
+
+| | P(voiture) annoncée par le modèle |
+|---|---|
+| tant que le récit est dans le prompt | **6,9 %** (n = 18) |
+| une fois sorti | **55,2 %** (n = 33) |
+
+La bascule se produit **d'un prompt à l'autre** : 5 % au dernier qui le porte, 60 % au premier
+qui ne le porte plus. Le rapport du run attribuait ce retour à la décroissance exponentielle du
+souvenir, dont la durée de vie calculée valait ~14,6 jours. Les deux explications prédisent la
+même date, et rien dans le dispositif ne permettait de les départager — c'est pour cela que le
+paramètre est devenu un réglage : à 7 et à 21 jours, elles ne prédisent plus la même chose.
+
+**La valeur 0 est l'ablation déclarée** : aucun souvenir de choc n'entre dans le bloc. Une valeur
+négative est ramenée à 0 et journalisée — elle ne doit pas se lire comme un réglage accepté.
+
+**Deux fenêtres, volontairement.** Seule celle des souvenirs de choc est réglable. Celle des
+croyances mises à l'écart reste la constante historique de 14 jours : les faire varier ensemble
+confondrait deux changements dans une seule mesure.
+
+**La sortie de fenêtre se journalise**, une fois par souvenir et par agent, au front montant :
+
+```
+[noyau] 899549 : le souvenir de choc du 2026-03-30 est sorti du bloc « ce qui a changé
+        récemment » (durée 15.29 j dérivée d'une gravité de 0.70 (force 14.56 j, durée
+        calculée 15.29 j)) — plus aucun souvenir de choc ne pèse sur ses décisions.
+```
+
+Elle porte **ce qui a produit la durée**, et non la seule date : gravité, force, durée calculée,
+et le nom de la borne quand une borne a mordu. Une durée servie sans sa cause ne se vérifie pas
+après coup — c'est exactement ce qui a rendu indiscernables, deux jours durant, la décroissance
+du souvenir et la coupure de fenêtre. En mode `fixe`, la ligne nomme la fenêtre en jours et ne
+prétend à aucune durée dérivée.
+
+Sans cette ligne, l'événement n'était lisible qu'en relisant le texte des prompts après le run.
+
 ## Intégration dans la pipeline de décision
 
 ```text
@@ -1050,7 +1136,8 @@ deviennent nécessaires dès la partie III, dont chaque section porte sa propre 
 - [agents-lifecycle.md](agents-lifecycle.md) — le contexte d'appel dans le cycle de planification
 - [cache-memory.md](cache-memory.md) — le cache sémantique des décisions, orthogonal à la mémoire, et la mémoïsation des réflexions
 - [llm-inference.md](llm-inference.md) — la file EDF, la contre-pression et l'alarme de backlog
-- [ticket 048](../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — le calendrier de consolidation, l'échelle d'oubli et le coût des réflexions
+- [ticket 048](../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — le calendrier de consolidation, l'échelle d'oubli et le coût des réflexions (**clos le 2026-09-21** ; son reliquat est le lot F du ticket 095)
+- [ticket 095](../tickets/ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md) — la durée d'un souvenir dérivée de sa gravité, l'enquête du soir, et le reliquat du 048
 - [ticket 071](../tickets/ticket_071_evolution_memoire_du_code_actuel_a_l_etat_vise.md) — les quatre défauts du rappel et du nettoyage, issus d'une expertise externe
 
 ---
@@ -1062,7 +1149,10 @@ deviennent nécessaires dès la partie III, dont chaque section porte sa propre 
 > d'appel supplémentaire au modèle : tout ce que le modèle y produit est demandé à l'intérieur
 > des réflexions qui ont déjà lieu.
 >
-> Préalable livré : le [ticket 048](../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md).
+> Préalable livré : le [ticket 048](../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md),
+> **clos le 2026-09-21**. Ce qu'il n'avait pas exécuté — la mesure du taux d'entrées par agent-jour,
+> la garantie « avant le réveil », le rejeu des mesures min-max et la conversion d'`experiments.yaml`
+> — est le **lot F** du [ticket 095](../tickets/ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md).
 
 ## Trois règles
 
@@ -1218,9 +1308,11 @@ mécanisme de Park et al. (2023), seuil fixé à 150 chez eux sur une échelle d
 > coût mesuré au ticket 048 rend le régime par déplacement inutile, +22 % sur la campagne pour
 > une réactivité que rien ne réclame. Différence avec Park et al. à dire : chez eux le seuil se
 > franchit deux ou trois fois par jour, c'est un régime courant ; ici il est exceptionnel par
-> construction de `Θ`. **La mesure de `I_det` par agent-jour**, ticket 048, sert à vérifier que
-> ce seuil reste exceptionnel, moins d'un déclenchement par agent et par semaine, et à le
-> relever sinon.
+> construction de `Θ`. **La mesure de `I_det` par agent-jour** sert à vérifier que ce seuil reste
+> exceptionnel, moins d'un déclenchement par agent et par semaine, et à le relever sinon. Cette
+> mesure était portée par le ticket 048 ; depuis la clôture de celui-ci le 2026-09-21 elle est au
+> **lot F1 du [ticket 095](../tickets/ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md)**, qui
+> la relèvera sur les campagnes E2/E3 — les premiers runs GAMA courants sur cohorte v5.
 
 ### Oubli : une courbe, et un plancher
 
@@ -1360,6 +1452,34 @@ interprétable plutôt qu'une décroissance paramétrée. Le protocole d'épreuv
 mémoire**, comme dans l'étude de grève de taxis publiée dans *Sensors* 25(18), 5688 (2025), et
 comme l'exige le degré « robuste » du benchmark SILICA, qui demande qu'un résultat survive à une
 remise à zéro de la mémoire.
+
+### Régime Système 1 / Système 2 : évalué, non retenu
+
+> ⚠ **Arbitrage de l'auteur, 2026-09-11, confirmé le 2026-09-14.** Il ne vivait que dans le
+> ticket 071 § 2.9 et nulle part dans cette doc — une session qui lit la doc seule reproposait
+> le raccourci de routine sans savoir qu'il avait été tranché. Consigné ici le 2026-09-21 au
+> titre du ticket 051 § C.
+
+L'expertise du ticket 051 pose la distinction de la psychologie de l'habitude : un déplacement
+nominal relève d'un automatisme machinal (Système 1) et n'a pas à mobiliser une délibération
+(Système 2). Portée au dispositif, elle donne un court-circuit — dérouler la routine sans
+appeler le modèle, et ne le réveiller que sur rupture : retard important, incident réseau,
+alerte météo. Le gain serait réel, une journée de 1 000 personas coûtant quelque 3 millions de
+tokens (§ 8.3 de l'article).
+
+**Ce n'est pas retenu, et la raison n'est pas le coût.** Coder l'habitude interdirait de montrer
+qu'elle émerge. Le reproche que l'expertise adresse par ailleurs au dispositif — un modèle de
+fréquences habillé d'une couche de langage — s'appliquerait alors à sa propre proposition : la
+répétition observée serait celle que la règle impose.
+
+**Ce qui en tient lieu : la mesure.** Aucune ligne n'impose à un agent de reprendre le mode de
+la veille ; la répétition, quand elle apparaît, vient du rappel de ses propres trajets.
+L'observable est la décroissance de l'entropie des choix d'un même agent au fil des jours
+simulés, sur la fenêtre longitudinale du § 7.2 de l'article. `make mesures RUN=…` porte déjà la
+part décidée et l'habitude ou la rupture par activité, par jour simulé (ticket 093) ; l'entropie
+par agent n'est pas encore calculée. Un court-circuit de routine devient une optimisation
+défendable le jour où cette mesure existe — et il fournirait alors le critère d'aiguillage que
+la cascade du § 8.4 de l'article laisse vide.
 
 ### Instrumentation du lot 1
 
@@ -1697,6 +1817,17 @@ plus seulement dans les statistiques de sortie.
 | `long_term_retrieval__*_weight` | 0,30 / 0,10 / 0,20 / 0,20 / 0,20 | Les cinq poids du lot 2, à calibrer sur jeux gelés. Indépendants de l'horizon. |
 | `long_term_self_reflect_interval_days` (existe déjà) | 3 | Vingt passages sur soixante jours. Indépendant de l'horizon. |
 
+⚠ **Aucune de ces valeurs ne se redéfinit dans `config/config.yaml`** (règle posée le
+2026-09-19, vérifiée par `test_077_lotJ_reglages_experience.py`). Une expérience qui veut en
+faire varier une passe par l'**environnement** (`AGENT__MEMOIRE__…`) : le réglage appartient
+alors au run, il se retrouve dans son identité, et il disparaît avec lui.
+
+Posé dans `config.yaml`, il devient la norme du dépôt sans que personne ne l'ait décidé. C'est
+arrivé le 18 septembre : `memoire__importance_choc` y est passé de 0,70 à 0,50 pour un choc qui
+franchissait déjà le seuil — la gravité valait exactement 0,70 et la comparaison est `>=`. Effet
+recherché : nul. Effet obtenu : six souvenirs de plus dans le vivier C, et une trentaine de tests
+rouges énonçant la règle que la configuration venait de contredire.
+
 Restent tels quels, indépendants de l'horizon : la grille des cinq niveaux de gravité, les poids
 de la gravité déterministe, le top-K à 10, le plancher journalier à 22 h.
 
@@ -1849,3 +1980,4 @@ Ajoutées le 2026-09-14 à la relecture du ticket 071, notices recoupées sur l'
 
 - **Diekelmann, S. & Born, J. (2010)** — *The memory function of sleep*, Nature Reviews Neuroscience 11(2), 114–126. La consolidation se fait au repos : fonde le plancher journalier.
 - **McClelland, J. L., McNaughton, B. L. & O'Reilly, R. C. (1995)** — *Why there are complementary learning systems in the hippocampus and neocortex*, Psychological Review 102(3), 419–457. Deux systèmes, épisodique rapide et sémantique lent : fonde la séparation des régimes d'oubli et le rejeu différé.
+- **Verplanken, B. & Aarts, H. (1999)** — *Habit, attitude, and planned behaviour: is habit an empty construct or an interesting case of goal-directed automaticity?*, European Review of Social Psychology 10(1), 101–134. L'habitude comme automatisme dirigé par le but : c'est la source du régime Système 1 / Système 2 évalué puis écarté ci-dessus. ⚠ Notice reprise du ticket 051, **non recoupée** sur l'éditeur — à vérifier avant toute citation dans l'article, où la porte de `CITATIONS.md` exige en outre le PDF dans `docs/paper/sources/etat_de_lart/`.

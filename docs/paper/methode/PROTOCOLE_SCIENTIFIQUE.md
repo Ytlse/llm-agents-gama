@@ -4,7 +4,7 @@
 **Auteurs :** Yves B., Benoit Gaudou, Kamaldeep Singh Oberoi  
 **Cadre de recherche :** Projet LLM-Agents GAMA / Défis Clés Occitanie (MIDOC)  
 **Version :** `v1.5` (3 septembre 2026) — *Correction du tableau de conformité démographique (§ 2.1) : les cibles sont désormais celles du rapport AUAT/CEREMA (p. 10, 11, 21) ou des recalculs sur microdonnées gelés, et la cohorte est la population scellée v3 mesurée par `scripts/AAMAS/control_population.py` ; les chiffres précédents n'avaient pas de source (Annexe F du manuscrit, n° 12). Reprend `v1.4` : intégration du cadre de stress-test SILICA (Bin Tareaf et al., 2026) et de la dichotomie de Baronchelli (2025, 2026) : formalisation des trois niveaux de validation (Tier 1/2/3), règles de comparabilité (argmax, renormalisation sur l'offre, effectif), randomisation des options contre les biais de primauté, et critères de réfutation explicites*  
-**Fichiers associés :** [`MANUSCRIT_DETAILLE_2026.md`](../archive/MANUSCRIT_DETAILLE_2026_v1.6.md), [`PLAN_ARTICLE_2026.md`](../article/plan/PLAN.md), [`BIBLIOGRAPHIE.md`](../sources/BIBLIOGRAPHIE.md), [`references.bib`](../sources/references.bib), [`SLIDES_SEMINAIRE_2026_v1.0.html`](../archive/SLIDES_SEMINAIRE_2026_v1.0.html)  
+**Fichiers associés :** [`MANUSCRIT_DETAILLE_2026.md`](../archive/MANUSCRIT_DETAILLE_2026_v1.6.md), [`PLAN_ARTICLE_2026.md`](../article/plan/PLAN.md), [`BIBLIOGRAPHIE.md`](../sources/BIBLIOGRAPHIE.md), [`sample.bib`](../sources/sample.bib), [`SLIDES_SEMINAIRE_2026_v1.0.html`](../archive/SLIDES_SEMINAIRE_2026_v1.0.html)  
 
 ---
 

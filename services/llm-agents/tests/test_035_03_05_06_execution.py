@@ -682,18 +682,121 @@ def test_Q9_derniere_ligne_tronquee(banc):
     assert dec.appels == 2 and c["etat"] == "terminee"
 
 
-def test_Q11_epuisement_anticipe():
+def test_Q11_le_plafond_declare_n_ecarte_pas():
+    """Q11 abrogée le 2026-09-21 (ticket 097) : `rpd_limit` est déclaratif, pas mesuré.
+
+    Une instance dont le compteur local dépasse le plafond annoncé reste admise ; seul un
+    refus réel du fournisseur (`quota_exhausted`, posé par un 429) l'écarte. L'ancienne
+    règle écartait `g1` dès que le besoin dépassait la marge — donc sur la foi d'un chiffre
+    recopié d'une documentation fournisseur, jamais sur une mesure.
+    """
     m = _moniteur(
         {
             "g1": {"daily_requests": 493, "rpd_limit": 500, "quota_exhausted": False},
             "g2": {"daily_requests": 500, "rpd_limit": 500, "quota_exhausted": True},
         }
     )
-    assert (
-        m.instances_disponibles(besoin=7) == ["g1"]
-        and m.instances_disponibles(besoin=10) == []
-        and m.epuise(10)
+    # Le besoin annoncé ne joue plus : g1 est admise en deçà comme au-delà de sa marge.
+    assert m.instances_disponibles(besoin=7) == ["g1"]
+    assert m.instances_disponibles(besoin=10) == ["g1"]
+    assert not m.epuise(10)
+    # g2 reste écartée : son quota a été refusé pour de bon, pas seulement dépassé sur le papier.
+    assert "g2" not in m.instances_disponibles(besoin=1)
+
+
+def test_Q11_le_refus_reel_ecarte_toujours():
+    """Contrepartie de l'abrogation : toutes les instances refusées ⇒ épuisement (Q4)."""
+    m = _moniteur(
+        {
+            "g1": {"daily_requests": 500, "rpd_limit": 500, "quota_exhausted": True},
+            "g2": {"daily_requests": 500, "rpd_limit": 500, "quota_exhausted": True},
+        }
     )
+    assert m.instances_disponibles() == []
+    assert m.epuise()
+
+
+def _traces_plafond(messages: list[str]) -> list[str]:
+    return [x for x in messages if "[PLAFOND]" in x]
+
+
+def test_097_le_depassement_du_plafond_est_journalise():
+    """Le plafond n'écarte plus (Q11 abrogée) — il lui reste à laisser une trace.
+
+    Sans ce WARNING, l'abrogation supprimerait le garde-fou ET la mesure : un fournisseur
+    qui sert au-delà du chiffre recopié dans `providers.yaml` démentirait ce chiffre en
+    silence, et le fichier resterait faux.
+    """
+    etat = {
+        "g1": {"daily_requests": 612, "rpd_limit": 500, "quota_exhausted": False},
+        "g2": {"daily_requests": 120, "rpd_limit": 500, "quota_exhausted": False},
+    }
+    messages: list[str] = []
+    sink = logger.add(lambda m: messages.append(str(m)), level="WARNING")
+    try:
+        m = _moniteur(etat)  # premier rafraîchissement
+        m.rafraichir()  # second, à état identique : front montant, donc rien de plus
+        traces = _traces_plafond(messages)
+        assert len(traces) == 1
+        assert "g1" in traces[0] and "612/500" in traces[0] and "112" in traces[0]
+        # Le dépassement journalisé n'écarte pas : c'est tout l'objet du ticket 097.
+        assert m.instances_disponibles() == ["g1", "g2"]
+
+        # Fenêtre suivante : le compteur retombe, puis redépasse → la trace se rejoue.
+        etat["g1"]["daily_requests"] = 3
+        m.rafraichir()
+        etat["g1"]["daily_requests"] = 501
+        m.rafraichir()
+        assert len(_traces_plafond(messages)) == 2
+    finally:
+        logger.remove(sink)
+
+
+def test_097_le_refus_reel_mesure_la_limite():
+    """Le 429 est la seule mesure de la limite du fournisseur ; la trace la consigne.
+
+    `daily_requests` au moment du refus EST le plafond réel — ici 412 contre les 500
+    déclarés : c'est ce chiffre-là qui permettra de corriger `providers.yaml`.
+    """
+    etat = {"g1": {"daily_requests": 412, "rpd_limit": 500, "quota_exhausted": False}}
+    messages: list[str] = []
+    sink = logger.add(lambda m: messages.append(str(m)), level="WARNING")
+    try:
+        m = MoniteurRessources(
+            ["g1"],
+            {"g1": {"default_model": "m", "rpd_limit": 500}},
+            lecteur=lambda url: etat,
+        )
+        m.rafraichir()
+        assert _traces_plafond(messages) == []  # sous le plafond, rien à dire
+        etat["g1"]["quota_exhausted"] = True
+        m.rafraichir()
+        m.rafraichir()  # front montant : le refus ne se répète pas dans le journal
+        traces = _traces_plafond(messages)
+        assert len(traces) == 1
+        assert "412" in traces[0] and "500" in traces[0] and "-88" in traces[0]
+        assert m.instances_disponibles() == []  # le refus, lui, écarte toujours (Q4)
+    finally:
+        logger.remove(sink)
+
+
+def test_097_sans_chiffre_mesure_aucune_trace():
+    """Pas de plafond déclaré, ou pas de compteur : rien à comparer, donc rien à supposer."""
+    etat = {"g1": {"quota_exhausted": True}, "g2": {"daily_requests": 900}}
+    messages: list[str] = []
+    sink = logger.add(lambda m: messages.append(str(m)), level="WARNING")
+    try:
+        m = MoniteurRessources(
+            ["g1", "g2"],
+            {"g1": {"default_model": "m", "rpd_limit": 500}, "g2": {"default_model": "m"}},
+            lecteur=lambda url: etat,
+        )
+        m.rafraichir()
+        assert _traces_plafond(messages) == []
+        # Silencieux ne veut pas dire indulgent : g1 reste écartée par son refus.
+        assert m.instances_disponibles() == ["g2"]
+    finally:
+        logger.remove(sink)
 
 
 # ═══════════════ Spec 06 ═══════════════

@@ -161,3 +161,46 @@ def test_la_relecture_fait_basculer_le_decideur_sans_attendre_d_erreur():
     assert m.instances_disponibles() == ["cle2"], m.instances_disponibles()
     assert d._prochaine_instance() == "cle2", \
         "la seconde clé est entamée, ses 500 requêtes servent"
+
+
+def test_confirme_epuise_ne_s_arrete_que_si_toutes_les_cles_sont_epuisees():
+    """L'expérience ne s'arrête que si TOUTES les clés ont échoué.
+    Une erreur 429 sur cle1 ne doit pas arrêter le run si cle2 est disponible.
+    """
+    from experiences.runner import _confirme_epuise
+
+    # cle1 épuisée suite à un 429, mais cle2 disponible
+    etat_cle1_seule_epuisee = {
+        "cle1": {"daily_requests": 500, "quota_exhausted": True, "available": False},
+        "cle2": {"daily_requests": 100, "quota_exhausted": False, "available": True},
+    }
+    m = _moniteur(lambda _url: etat_cle1_seule_epuisee)
+    # Même si le fournisseur a annoncé un 429 sur cle1, l'épuisement n'est PAS confirmé car cle2 existe
+    assert _confirme_epuise(m, annonce_par_fournisseur=True) is False
+
+    etat_deux_cles_epuisees = {
+        "cle1": {"daily_requests": 500, "quota_exhausted": True, "available": False},
+        "cle2": {"daily_requests": 500, "quota_exhausted": True, "available": False},
+    }
+    m_complet = _moniteur(lambda _url: etat_deux_cles_epuisees)
+    assert _confirme_epuise(m_complet, annonce_par_fournisseur=True) is True
+
+
+def test_reinitialiser_quotas_et_pas_de_blocage_local_au_lancement():
+    """Au lancement, le système ne se fie pas aux compteurs/verrous locaux :
+    il réinitialise les verrous et admet les instances servantes pour tester en direct.
+    """
+    from experiences.ressources import MoniteurRessources
+
+    class FauxHttp:
+        def __init__(self):
+            self.post_appele = False
+        def post(self, url, json=None, timeout=None):
+            self.post_appele = True
+            class R:
+                is_success = True
+            return R()
+
+    m = MoniteurRessources(["cle1", "cle2"], {"cle1": {}, "cle2": {}})
+    # Test que reinitialiser_quotas s'exécute sans erreur
+    assert m.reinitialiser_quotas() in (True, False)

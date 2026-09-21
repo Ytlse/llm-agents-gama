@@ -282,30 +282,38 @@ class TestInMemoryRateLimiter:
             self._reserve_no_smoothing(limiter, "p")
         assert limiter.is_quota_exhausted("p") is False
 
-    def test_rpd_limit_sets_provider_aside(self):
+    def test_rpd_limit_is_informative_and_does_not_block_locally(self):
         cfg = ProviderConfig(
             api_key=SecretStr("k"), rpm_limit=1_000_000, rpd_limit=3,
             base_url="http://x", default_model="m", concurrency_limit=100,
         )
         limiter = InMemoryRateLimiter({"p": cfg})
         granted = sum(1 for _ in range(10) if self._reserve_no_smoothing(limiter, "p"))
-        assert granted == 3
+        # RPD limit est déclaratif et informatif : toutes les requêtes sont admises pour mesure
+        assert granted == 10
+        assert limiter.is_quota_exhausted("p") is False
+        assert limiter.daily_requests("p") == 10
+        # Seul un signal 429 écarte l'instance
+        limiter.mark_quota_exhausted_until("p")
         assert limiter.is_quota_exhausted("p") is True
-        assert limiter.daily_requests("p") == 3
-        # Provider écarté : plus aucune réservation
         assert self._reserve_no_smoothing(limiter, "p") is False
 
-    def test_tpd_limit_enforced_after_token_accounting(self):
+    def test_tpd_limit_is_informative_and_does_not_block_locally(self):
         cfg = ProviderConfig(
             api_key=SecretStr("k"), rpm_limit=1_000_000, tpd_limit=100,
             base_url="http://x", default_model="m", concurrency_limit=100,
         )
         limiter = InMemoryRateLimiter({"p": cfg})
         assert self._reserve_no_smoothing(limiter, "p") is True
-        limiter.record_tokens("p", 150)  # dépasse le quota tokens/jour
+        limiter.record_tokens("p", 150)  # dépasse le quota tokens/jour déclaré
         assert limiter.daily_tokens("p") == 150
-        assert self._reserve_no_smoothing(limiter, "p") is False
+        # Ne bloque pas localement
+        assert self._reserve_no_smoothing(limiter, "p") is True
+        assert limiter.is_quota_exhausted("p") is False
+        # Seul un 429 écarte l'instance
+        limiter.mark_quota_exhausted_until("p")
         assert limiter.is_quota_exhausted("p") is True
+        assert self._reserve_no_smoothing(limiter, "p") is False
 
 
 # ---------------------------------------------------------------------------

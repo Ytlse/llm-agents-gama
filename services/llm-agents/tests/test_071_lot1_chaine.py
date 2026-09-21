@@ -419,21 +419,26 @@ def test_H1_de_l_observation_a_la_duree_de_vie_du_concept():
     mem = _tampon(I_NOMINAL, I_QUART, I_PANNE, I_NOMINAL)
 
     # 1. la journée constitue une rupture
-    assert mem.gravite_cumulee() == pytest.approx(0.25 + 0.80)
+    # ⚠ Ticket 095 — la panne de 45 minutes vaut 0,94 et non plus 0,80 : au-dessus du retard de
+    # référence, la composante de retard ne fait plus palier. Le cumul de la journée monte donc
+    # lui aussi, et la rupture est franchie plus tôt.
+    assert mem.gravite_cumulee() == pytest.approx(0.25 + 0.9426990406, abs=1e-9)
     assert _declenche_par_rupture(mem) is True
 
     # 2. le plancher est le pire de la journée, pas le dernier ni la moyenne
     plancher = mem.gravite_maximale()
-    assert plancher == pytest.approx(0.80)
+    assert plancher == pytest.approx(0.9426990406, abs=1e-9)
 
     # 3. le modèle sous-estime : le fait reprend la main
     from llm.gravite import gravite_concept, gravite_jugee
 
     importance = gravite_concept(gravite_jugee("noticeable"), plancher)
-    assert importance == pytest.approx(0.80), "le jugement ne peut pas dégrader un fait mesuré"
+    assert importance == pytest.approx(
+        0.9426990406, abs=1e-9
+    ), "le jugement ne peut pas dégrader un fait mesuré"
 
     # 4. la durée de vie suit la gravité retenue
-    assert force_initiale(importance) == pytest.approx(16.24, abs=0.01)
+    assert force_initiale(importance) == pytest.approx(18.64, abs=0.01)
 
 
 def test_H2_un_jour_sans_rien_ne_declenche_ni_ne_qualifie():

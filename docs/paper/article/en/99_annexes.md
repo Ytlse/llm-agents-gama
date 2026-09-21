@@ -1,10 +1,10 @@
 # Technical appendices (draft)
 
-<!-- Dernière mise à jour : 2026-09-17 -->
+<!-- Dernière mise à jour : 2026-09-21 -->
 
 **Document:** appendices of the AAMAS 2027 paper. English master; French mirror in [`fr/99_annexes.md`](../fr/99_annexes.md); LaTeX rendering for Overleaf in [`overleaf/99_annexes.tex`](../overleaf/99_annexes.tex).
 **Status:** `draft v0` (17 September 2026) — first English master. Appendices A to G translate the French `brouillon v0`, itself extracted from `MANUSCRIT_DETAILLE_2026.md` `v1.6` (3 September 2026); appendix H translates the detailed results written on 17 September 2026 for chapter 6. The whole manuscript is frozen in [`../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md`](../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md).
-**Three things to take up in appendices A to G before submission,** carried over from the French header and **not** repaired by the translation: the "Tier 1 / 2 / 3" vocabulary, replaced in the written chapters by *exploratory / robust / transferable*; the figures, to be cross-checked against their source in the repository rather than copied from here; and the section cross-references, which follow the old numbering of the manuscript. Appendix H does not carry these reservations: it is written on the corrected set and its figures carry their source.
+**Two things to take up in appendices A to G before submission,** carried over from the French header and **not** repaired by the translation: the figures, to be cross-checked against their source in the repository rather than copied from here; and the section cross-references, which follow the old numbering of the manuscript. The "Tier 1 / 2 / 3" vocabulary has left these appendices — checked on 21 September 2026, not one occurrence remains; it was withdrawn without this header saying so. Appendix H does not carry these reservations: it is written on the corrected set and its figures carry their source.
 **Place in the paper:** section of the same number in the plan announced in § 1.4 of [`../en/01_introduction.md`](../en/01_introduction.md). Progress: [`../README.md`](../README.md).
 
 ---
@@ -25,9 +25,9 @@ vLLM server `Qwen/Qwen2.5-32B-Instruct-AWQ` at $\tau = 0.0$ with a fixed seed.
 
 Non-convex loss landscape justifying the pivot towards the hybrid architecture.
 
-### Appendix E: dictionary of the 21 variables of the evaluation contract
+### Appendix E: dictionary of the 21 variables of the comparison protocol
 
-The parity contract of § 4.3 designates these 21 variables, and them alone. The list is fixed in the repository (`spec_version 2`) and it is that same file that builds the design matrix of the four tabular methods: neither the logit, nor gradient boosting, nor the random forest, nor the kernel regression sees anything else. <!-- source: scripts/progedo_logit/feature_spec.json -->
+The comparison protocol of § 4.3 designates these 21 variables, and them alone. The list is fixed in the repository (`spec_version 2`) and it is that same file that builds the design matrix of the four tabular methods: neither the logit, nor gradient boosting, nor the random forest, nor the kernel regression sees anything else. <!-- source: scripts/progedo_logit/feature_spec.json -->
 
 **Person and household — 12 variables**
 
@@ -65,7 +65,7 @@ The parity contract of § 4.3 designates these 21 variables, and them alone. The
 | `density_orig` | numeric | population density of the origin zone |
 | `density_dest` | numeric | population density of the destination zone |
 
-The inner centre is the centroid of the fine zones of the Capitole sector, and the distances are computed in the legal projection. A 19-variable variant, without the two distances to the inner centre, has been measured — accuracy **[xx]**, composite **[xx]** — and two alternative definitions of distance were set aside; the contract served is the 21-variable one.
+The inner centre is the centroid of the fine zones of the Capitole sector, and the distances are computed in the legal projection. A 19-variable variant, without the two distances to the inner centre, has been measured — accuracy **[xx]**, composite **[xx]** — and two alternative definitions of distance were set aside; the protocol served is the 21-variable one.
 
 What the agent receives **in addition** to these 21 variables — the agenda of its remaining trips, the weather of the coming time slots, the itineraries themselves — is described in § 4.3, and the wording of that asymmetry is not settled.
 
@@ -86,11 +86,11 @@ Every figure of the manuscript was cross-checked against the measurements the re
 | 7 | "Tabular model blind to the event" | It is not blind, it is not informed → **condition 5** (tabular reference receiving the encoded event) |
 | 8 | Press effect measured against a condition with no article | Addition of the **paraphrase with no modal cue** and **placebo article** conditions |
 | 9 | "$10\,000\times$ faster" | **Withdrawn.** The ratio announced in `v1.4` ($\approx 2\,700\times$) came from the comparative table of the manuscript, not from a measurement in the repository: the cross-check of 15 September 2026 found no source. The figure is set aside pending measurement (chapter 9, point 1) |
-| 10 | Perimeter of the unit audit ($1\,000$ vs $13\,045$ trips) | Perimeters made explicit: tabular references on $13\,045$, LLM on a subsample of $1\,000$ drawn from the same set |
+| 10 | Perimeter of the unit audit ($1\,000$ vs $13\,045$ trips) | Perimeter unified: the nine deciders are measured on the same ground, $9\,621$ trips declared by $2\,930$ respondents, each on their own day and survey date. The tabular landmarks on $13\,045$ remain published in § 5.3; they hold outside the vehicle chain and are not commensurable |
 | 11 | Composite weights announced at $0.40 / 0.20 / 0.20 / 0.20$ with $\sum w = 1$ | Weights actually served: global $1.0$ · absence $1.0$ · age $0.5$ · occupation $0.5$ · purpose $0.5$ · gender $0.3$ · distance $0.3$ — **weighted sum, not renormalised** |
 | 12 *(v1.6)* | Demographic conformity table (§ 2.2): targets $51.8 / 19.4 / 62.1 / 18.5 / 22.3 / 46.1 / 31.6 / 84.2$ and cohort $51.9 / 19.2 / 62.4 / 18.4 / 22.1 / 46.5 / 31.4 / 84.0$ **with no source** — they match neither the AUAT report (5–17 year olds: 16 %; household car ownership: 19 / 45 / 35 %, p. 21), nor the measured reference population (16.2 % of 5–17 year olds, 13.0 % of personas with no car) | Targets replaced by those of the report (pp. 10, 11, 21) and, for the unpublished margins (sex, licence, immobile), by frozen recomputations on microdata; cohort = sealed population v3 measured by `scripts/AAMAS/control_population.py` (13 margins, TOST $\pm 1$ pt); conformity is declared **by construction** for the allocated margins |
 
-*Cross-checking sources:* `scripts/progedo_logit/mode_choice_policy_metrics.json` (accuracy, LogLoss, confusion matrix, gain importances), `scripts/progedo_logit/feature_spec.json` (variable contract), `docs/arch/score-synthesis.md` (renormalisation over the offer, sample-size control, substrate guards), `docs/changelog.md` (terminal times per mode, measured distance variants).
+*Cross-checking sources:* `scripts/progedo_logit/mode_choice_policy_metrics.json` (accuracy, LogLoss, confusion matrix, gain importances), `scripts/progedo_logit/feature_spec.json` (protocol variables), `docs/arch/score-synthesis.md` (renormalisation over the offer, sample-size control, substrate guards), `docs/changelog.md` (terminal times per mode, measured distance variants).
 
 ---
 
@@ -137,7 +137,7 @@ The itinerary offer submitted to the agents is not part of the archive either, f
 
 ### Appendix H: detailed results of chapter 6
 
-Chapter 6 publishes only the lessons; this appendix carries the complete tables they rest on. Substrate: cohort `population_1000_AAMAS_v6`, set `population_1000_AAMAS_v6_20260316_EN_c` (corrected set of [ticket 088](../../../tickets/ticket_088_jeu_corrige_et_rejeu_complet.md)), 3,154 scored decisions, 868 mobile people. Every decider is measured on it: the replay campaign finished on 2026-09-17 at 09:25, and no figure in this appendix is read off the earlier substrate.
+Chapter 6 publishes only the lessons; this appendix carries the complete tables they rest on. Substrate: cohort `population_1000_AAMAS_v6`, set `population_1000_AAMAS_v6_20260316_EN_c`, <!-- corrected set of ticket 088 --> 3,154 scored decisions, 868 mobile people. Every decider is measured on it: the replay campaign finished on 2026-09-17 at 09:25, and no figure in this appendix is read off the earlier substrate.
 
 #### H.1 The paired differences, on the three readings
 
@@ -197,7 +197,7 @@ Mean of the stratum L1 errors, weighted by the size of the covered strata. The d
 
 ![The four modes by trip purpose](../images/ch99_modes_motif.png)
 
-*Figure H.4 — The four modes by trip purpose. Education is the purpose where the agent moves furthest from the target after tuning, and it moves away in the direction of the car: the lever of the cost of engaging a vehicle acts on a population that has none.*
+*Figure H.4 — The four modes by trip purpose. Education is the purpose where the agent moves furthest from the target after tuning, and it moves away in the direction of the car, on a population that none of the four principles targets.*
 
 #### H.3 The modal shares of each decider
 
@@ -256,13 +256,75 @@ The median gap between the distributions of two agents is four times the one tha
 | Variant | Status | Composite | Excluding single choice | L1 on global shares |
 |---|---|---:|---:|---:|
 | `prompt_minimal_02` | no engineering | 7.02 | 10.39 | 24.08 |
-| `prompt_expert_05` | tuned out of sample | 4.86 | 6.86 | 13.85 |
+| `prompt_expert_05` | ablation retained in view of the cohort | 4.86 | 6.86 | 13.85 |
 | `prompt_expert_06` | tuned in sight of the evaluated cohort | 5.33 | 7.24 | 15.39 |
 | `prompt_expert_08` | tuned in sight of the evaluated cohort | 6.58 | 10.32 | 21.74 |
 
-All on `gemini-3.5-flash-lite`. The two variants tuned in sight of the evaluated cohort were meant to give an upper bound, since they saw the residuals on which they are then judged; they do worse than the variant tuned out of sample. What the protocol foresaw as an in-sample fitting ceiling is therefore not reached by the prompts that had access to it.
+All on `gemini-3.5-flash-lite`. The three expert variants saw the cohort, to different degrees: `prompt_expert_06` and `prompt_expert_08` were rewritten on its residuals, `prompt_expert_05` touched it only through the retention of one ablation. The first two were meant to give an in-sample fitting upper bound; they do worse than the third. The ceiling the protocol expected is not reached by the prompts that had the most access to the residuals.
 
-<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim; prompt_expert_07 declared, not played; prompt_expert_04 deleted from the repository on 2026-09-17. The optimisation procedure is described in § 5.3, its guard-rails in § 5.3.4. Order of magnitude of the search, declared by the author: a dozen iterations on gemini-3.5-flash-lite, two or three on each of the other two models. -->
+<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim; prompt_expert_07 declared, not played; prompt_expert_04 deleted from the repository on 2026-09-17. The optimisation procedure is described in § 5.2, its guard-rails in § 5.2.3. Order of magnitude of the search, declared by the author: a dozen iterations on gemini-3.5-flash-lite, two or three on each of the other two models. -->
+
+---
+
+### Appendix I: the unit audit, decider by decider
+
+The substrate differs from that of appendix H: the days the respondents actually described,
+9,621 trips made by 2,930 people, each carrying the declared mode (protocol of § 5.4). These
+figures do not compare with those of appendix H, which bear on the synthetic cohort.
+
+#### I.1 Overall agreement
+
+| Decider | Weighted accuracy | On arbitrated decisions | Cross-entropy | GMPCA |
+|---|---:|---:|---:|---:|
+| Gradient boosting | 71.5 | 67.4 | 0.419 | 0.657 |
+| Kernel logistic regression | 70.6 | 66.2 | 0.438 | 0.646 |
+| Random forest | 69.9 | 65.5 | 0.445 | 0.641 |
+| Multinomial logit | 68.6 | 64.2 | 0.478 | 0.620 |
+| Shortest duration | 68.1 | 65.3 | — | — |
+| Expert prompt | 67.6 | 65.2 | **0.356** | **0.701** |
+| All-car | 66.7 | 61.7 | — | — |
+| Minimal prompt | 64.8 | 61.6 | 0.460 | 0.631 |
+| Uniform random | 23.5 | 21.5 | 1.260 | 0.284 |
+
+The ordering reverses from one column to the next: the expert prompt is sixth on accuracy and
+first on cross-entropy. The two hard baselines receive none, infinite from the first error on.
+
+#### I.2 Precision and recall per mode
+
+| Decider | bike | car | transit | walking |
+|---|---|---|---|---|
+| Gradient boosting | 27.3 / 20.4 | 85.3 / 79.0 | 53.8 / 61.7 | 53.2 / 63.4 |
+| Kernel logistic regression | 25.2 / 19.3 | 85.2 / 78.1 | 52.6 / 60.4 | 51.1 / 62.7 |
+| Random forest | 25.5 / 13.9 | 84.5 / 77.2 | 51.2 / 60.6 | 50.8 / 64.0 |
+| Multinomial logit | 24.2 / 18.3 | 84.3 / 76.8 | 49.1 / 57.5 | 49.1 / 60.0 |
+| Shortest duration | 16.9 / 25.8 | 74.4 / 92.3 | 53.5 / 39.7 | 81.3 / 19.2 |
+| Expert prompt | 15.0 / 22.5 | 80.1 / 80.4 | 49.7 / 55.2 | 62.9 / 47.2 |
+| All-car | 16.1 / 2.3 | 72.6 / 95.8 | 42.3 / 25.3 | 35.9 / 16.2 |
+| Minimal prompt | 14.7 / 24.1 | 81.2 / 75.1 | 42.8 / 60.0 | 61.2 / 44.2 |
+
+Precision / recall, in %. Declared counts: 431 bike, 5,971 car, 1,562 transit, 1,652 walking.
+
+Both levels recall bikes better than any fitted method, 22.5 and 24.1 % against 20.4 for
+gradient boosting, and pay for it in precision, 15.0 and 14.7 % against 27.3. They lose walking,
+recall 47.2 and 44.2 % against 63.4. Their precision on walking is nonetheless the best of the
+table, 62.9 %: when they announce walking they are right, they do not announce it often enough.
+
+#### I.3 The confusion matrix of the expert prompt
+
+| declared \ predicted | bike | car | transit | walking |
+|---|---:|---:|---:|---:|
+| bike | 97 | 227 | 62 | 45 |
+| car | 345 | 4,799 | 540 | 283 |
+| transit | 88 | 481 | 862 | 132 |
+| walking | 116 | 488 | 269 | 779 |
+
+The audit carries a ceiling: 1,295 trips, 13.5 %, have their declared mode absent from the
+options presented, removed by the vehicle chain or by the option cap. No decider could find it.
+The count runs from 1,226 to 1,428 depending on the decider.
+
+The two figures of this audit are in § 6.4, figures 6.5 and 6.6.
+
+<!-- source: scripts/progedo_logit/audit_unitaire_058.py over the set enquete_058_test_20260316, nine deciders, runs from 2026-09-16 to 2026-09-19; the two LLM arms are exp_gemini-35-fl_{promin02,proexp05}_jtir_pop-enquete_058_test_…, 12,562 decisions each. Figures regenerated by scripts/analysis/plot_audit_unitaire.py. Trips with a broken chaining (11) are set aside, and 9,612 to 9,618 are scored depending on the decider. -->
 
 ---
 

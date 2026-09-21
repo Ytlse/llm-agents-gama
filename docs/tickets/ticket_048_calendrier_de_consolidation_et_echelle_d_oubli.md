@@ -1,5 +1,28 @@
 # Ticket 048 — Le calendrier de consolidation, l'échelle d'oubli, et qui paie les réflexions
 
+> ## 🔒 CLOS le 2026-09-21 — le reliquat vit au ticket 095
+>
+> **Livré le 2026-09-11**, les trois points de code : plancher journalier de consolidation à 22 h
+> (`settings.py:497-498`, branche « plancher » de `simulation_controller.py:1654`), normalisation
+> min-max abandonnée au profit de valeurs absolues (`longterm.py:862`), constante de temps d'oubli
+> EN JOURS (`long_term_retrieval__force_base_jours = 2.8`, `settings.py:534`). 15 tests dans
+> `test_048_calendrier_et_oubli.py`.
+>
+> **Reporté au [ticket 095](ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md)**, parce que les
+> deux tickets portent le même paramètre — le `S0 = 2,8` de sa fenêtre dérivée **est** la constante
+> livrée ici — et parce que ses campagnes E2/E3 sont les runs GAMA que ce reliquat attendait :
+>
+> | Reste du 048 | Destination |
+> |---|---|
+> | Mesurer le taux d'entrées par agent-jour, puis trancher le régime (action 2) | 095, **lot F1** |
+> | Vérifier la garantie « avant le réveil » sous ce volume (fin de l'action 1) | 095, **lot F2** |
+> | Rejouer les mesures publiées qui dépendaient de la min-max (fin de l'action 3) | 095, **lot F3** |
+> | Convertir `memory_decay_lambda` / `memory_horizon_days` d'`experiments.yaml` (action 4, données) | 095, **lot F4** |
+> | Instruire la piste des modèles locaux (action 5) | 095, **lot C** |
+>
+> Ce qui suit reste lisible tel qu'écrit le 2026-09-11 : c'est le raisonnement et le chiffrage qui
+> ont produit ces décisions, et le lot F du 095 s'y appuie sans les recopier en entier.
+
 
 > ⚠ **AVANT DE LANCER UN RUN GAMA — vérifier l'état des accidents sur les axes.**
 > Depuis le 2026-09-15, le paramètre « Accidents sur les axes » (catégorie `Simulation`) est
@@ -12,7 +35,9 @@
 > résultats. Détail : [`docs/arch/accidents-sur-les-axes.md`](../arch/accidents-sur-les-axes.md).
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
-> vérité. Ouvert le 2026-09-11 à la demande de l'auteur, **rien n'est lancé**.
+> vérité. Ouvert le 2026-09-11 à la demande de l'auteur. ⚠ Cette phrase a longtemps dit
+> « **rien n'est lancé** » alors que le code était livré le jour même : voir le bandeau de
+> clôture ci-dessus.
 >
 > Ce ticket est le **préalable bloquant** de l'architecture mémoire décrite dans
 > [`docs/arch/memory-stm-ltm.md`](../arch/memory-stm-ltm.md), **partie III**.
@@ -200,20 +225,29 @@ cascade ne provoque pas de chargement à la volée ; le contexte par défaut est
 
 ## Ce qu'il faut faire
 
-1. **Déclencher une réflexion par jour simulé au minimum.** Le seuil volumétrique devient une
+*Annoté le 2026-09-21 à la clôture : chaque action porte son état et, si elle reste ouverte, sa
+destination au ticket 095.*
+
+1. ✅ **LIVRÉ le 2026-09-11 — Déclencher une réflexion par jour simulé au minimum.** Le seuil volumétrique devient une
    borne haute et non une condition : une réflexion part de toute façon en fin de journée
    simulée, tampon non vide, quel que soit son remplissage. L'échéance EDF reste le réveil de
    l'agent. Vérifier que la garantie « avant le réveil » tient encore sous ce volume, et que
    la contre-pression prédictive reste faisable.
-2. **Mesurer le taux réel d'entrées par agent-jour** sur un run courant avec GAMA et cohorte v5,
+   ⏭ Sa dernière phrase — la garantie « avant le réveil » et la contre-pression prédictive —
+   reste à vérifier une fois le volume mesuré : **095, lot F2**.
+2. ⏭ **REPRIS AU 095, LOT F1 — Mesurer le taux réel d'entrées par agent-jour** sur un run courant avec GAMA et cohorte v5,
    aucun run exploitable ne le permettant aujourd'hui, puis trancher entre plancher journalier et
    régime par déplacement au vu du coût mesuré et non estimé.
-3. **Supprimer la normalisation min-max** des composantes du classement, et rejouer les mesures
+3. ✅ **LIVRÉ / ⏭ REPRIS AU 095, LOT F3 — Supprimer la normalisation min-max** des composantes du classement, et rejouer les mesures
    déjà publiées qui en dépendent.
-4. **Remplacer le paramètre d'oubli** par une constante de temps en jours, la brancher
+   La suppression est en service (`longterm.py:862`) ; le **rejeu des mesures publiées** qui en
+   dépendaient part au lot F3.
+4. ✅ **LIVRÉ / ⏭ REPRIS AU 095, LOT F4 — Remplacer le paramètre d'oubli** par une constante de temps en jours, la brancher
    réellement, convertir les déclarations d'expériences existantes, et faire de même pour
    l'horizon de mémoire.
-5. **Instruire la piste locale** selon le protocole d'admission ci-dessus, sur jeux gelés, et
+   Le paramètre existe et est branché (`settings.py:534`) ; la **conversion des déclarations
+   d'`experiments.yaml`** part au lot F4.
+5. ⏭ **REPRIS AU 095, LOT C — Instruire la piste locale** selon le protocole d'admission ci-dessus, sur jeux gelés, et
    publier le tableau d'écart. Conclusion possible : aucun candidat admis.
 
 ## Hors périmètre
@@ -223,6 +257,10 @@ récupération structurée et embedding francophone, consolidation des concepts,
 dépendent de ce ticket, ils n'en font pas partie.
 
 ## Ce que ce ticket bloque
+
+> ⚠ **Caduc depuis la clôture du 2026-09-21.** Ce blocage n'est pas levé, il **change de porteur** :
+> il vit désormais au lot F du ticket 095. Le ticket 041, seul dépendant, avait déjà repassé cette
+> dépendance en note le 2026-09-17.
 
 L'expérience d'hystérésis et tout chiffre qui s'en réclame. Tant que le point 1 n'est pas
 livré, la position du choc dans le calendrier de consolidation est une variable non contrôlée

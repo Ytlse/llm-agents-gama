@@ -1,9 +1,9 @@
 # Annexes techniques (brouillon)
 
-<!-- Dernière mise à jour : 2026-09-15 -->
+<!-- Dernière mise à jour : 2026-09-21 -->
 
 **Document :** brouillon français du chapitre, extrait de `MANUSCRIT_DETAILLE_2026.md` `v1.6` (3 septembre 2026), Annexes Techniques — « Annexes Techniques ». Le manuscrit entier est figé dans [`../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md`](../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md).
-**Statut :** `brouillon v0` — texte **antérieur** à la réécriture de l'introduction (dont la v0.1 date du 8 septembre 2026). Trois choses à reprendre avant d'en faire un chapitre : le vocabulaire « Tier 1 / 2 / 3 », que les chapitres rédigés remplacent par *exploratory / robust / transferable* (étapes de certification de SILICA) ; les chiffres, à recouper depuis leur source dans le dépôt et non recopiés d'ici ; les renvois de section, qui suivent l'ancienne numérotation du manuscrit. Ni maître anglais ni rendu LaTeX à ce stade. **Ajout du 11 septembre 2026 :** l'annexe G, écrite hors manuscrit, porte la source des données d'enquête, sa citation et les engagements de la convention `lil-1750`. **Ajout du 15 septembre 2026 ([ticket 053](../../../tickets/ticket_053_acces_donnees_recherche_et_reproductibilite.md)) :** l'annexe G porte aussi la démarche d'accès au portail de diffusion, le dépôt des fichiers reçus dans l'arborescence locale, les commandes de rejeu de l'ajustement, et la frontière de l'archive de soumission.
+**Statut :** `brouillon v0` — texte **antérieur** à la réécriture de l'introduction (dont la v0.1 date du 8 septembre 2026). Deux choses à reprendre avant d'en faire un chapitre : les chiffres, à recouper depuis leur source dans le dépôt et non recopiés d'ici ; les renvois de section, qui suivent l'ancienne numérotation du manuscrit. Le vocabulaire « Tier 1 / 2 / 3 » a quitté ces annexes — vérifié le 21 septembre 2026, aucune occurrence n'y subsiste ; il était retiré sans que cet en-tête le dise. Ni maître anglais ni rendu LaTeX à ce stade. **Ajout du 11 septembre 2026 :** l'annexe G, écrite hors manuscrit, porte la source des données d'enquête, sa citation et les engagements de la convention `lil-1750`. **Ajout du 15 septembre 2026 ([ticket 053](../../../tickets/ticket_053_acces_donnees_recherche_et_reproductibilite.md)) :** l'annexe G porte aussi la démarche d'accès au portail de diffusion, le dépôt des fichiers reçus dans l'arborescence locale, les commandes de rejeu de l'ajustement, et la frontière de l'archive de soumission.
 **Place dans l'article :** section du même numéro dans le plan annoncé en 1.4 de [`../en/01_introduction.md`](../en/01_introduction.md). État d'avancement : [`../README.md`](../README.md).
 
 ---
@@ -20,9 +20,9 @@ Serveur vLLM `Qwen/Qwen2.5-32B-Instruct-AWQ` à $\tau=0.0$ et seed fixée.
 ### Annexe D : Bilan de la Calibration & Justification du Pivot
 Paysage de perte non convexe justifiant le pivot vers l'architecture hybride.
 
-### Annexe E : Dictionnaire des 21 variables du contrat d'évaluation
+### Annexe E : Dictionnaire des 21 variables du protocole de comparaison
 
-Le contrat de parité de la section 4.3 désigne ces 21 variables, et elles seules. La liste est figée
+Le protocole de comparaison de la section 4.3 désigne ces 21 variables, et elles seules. La liste est figée
 dans le dépôt (`spec_version 2`) et c'est ce même fichier qui construit la matrice de dessin des
 quatre méthodes tabulaires : ni le logit, ni le gradient boosté, ni la forêt aléatoire, ni la régression à noyau ne
 voient autre chose. <!-- source: scripts/progedo_logit/feature_spec.json -->
@@ -66,7 +66,7 @@ voient autre chose. <!-- source: scripts/progedo_logit/feature_spec.json -->
 L'hypercentre est le centroïde des zones fines du secteur du Capitole, et les distances sont
 calculées en projection légale. Une variante à 19 variables, sans les deux distances à
 l'hypercentre, a été mesurée — exactitude **[xx]**, composite **[xx]** — et deux définitions
-alternatives de la distance ont été écartées ; le contrat servi est celui à 21 variables.
+alternatives de la distance ont été écartées ; le protocole servi est celui à 21 variables.
 
 Ce que l'agent reçoit **en plus** de ces 21 variables — l'agenda de ses trajets restants, la météo
 des tranches horaires à venir, les itinéraires eux-mêmes — est décrit en section 4.3, et la formulation de cette
@@ -89,11 +89,11 @@ Chaque chiffre du manuscrit a été recoupé avec les mesures produites par le d
 | 7 | « Modèle tabulaire aveugle à l'événement » | Il n'est pas aveugle, il n'est pas informé → **condition 5** (référence tabulaire recevant l'événement encodé) |
 | 8 | Effet presse mesuré contre une condition sans article | Ajout des conditions **paraphrase sans indice modal** et **article placebo** |
 | 9 | « $10\,000\times$ plus rapide » | **Retiré.** Le rapport annoncé en `v1.4` ($\approx 2\,700\times$) venait du tableau comparatif du manuscrit, non d'une mesure du dépôt : le recoupement du 15 septembre 2026 n'a trouvé aucune source. Le chiffre est écarté jusqu'à mesure (chapitre 9, point 1) |
-| 10 | Périmètre de l'audit unitaire ($1\,000$ vs $13\,045$ trajets) | Périmètres explicités : références tabulaires sur $13\,045$, LLM sur un sous-échantillon de $1\,000$ tiré du même jeu |
+| 10 | Périmètre de l'audit unitaire ($1\,000$ vs $13\,045$ trajets) | Périmètre unifié : les neuf décideurs sont mesurés sur le même terrain, $9\,621$ déplacements déclarés par $2\,930$ enquêtés, chacun sur sa journée et sa date d'enquête. Les repères tabulaires sur $13\,045$ restent publiés au § 5.3 ; ils valent hors contrainte de chaîne et ne sont pas commensurables |
 | 11 | Poids du composite annoncés à $0,40 / 0,20 / 0,20 / 0,20$ avec $\sum w = 1$ | Poids réellement servis : global $1,0$ · absence $1,0$ · âge $0,5$ · occupation $0,5$ · motif $0,5$ · genre $0,3$ · distance $0,3$ — **somme pondérée non renormalisée** |
 | 12 *(v1.6)* | Tableau de conformité démographique (§ 2.2) : cibles $51,8 / 19,4 / 62,1 / 18,5 / 22,3 / 46,1 / 31,6 / 84,2$ et cohorte $51,9 / 19,2 / 62,4 / 18,4 / 22,1 / 46,5 / 31,4 / 84,0$ **sans source** — elles ne correspondent ni au rapport AUAT (5-17 ans : 16 % ; motorisation des ménages : 19 / 45 / 35 %, p. 21), ni à la population de référence mesurée (16,2 % de 5-17 ans, 13,0 % de personas sans voiture) | Cibles remplacées par celles du rapport (p. 10, 11, 21) et, pour les marges non publiées (sexe, permis, immobiles), par des recalculs sur microdonnées gelés ; cohorte = population scellée v3 mesurée par `scripts/AAMAS/control_population.py` (13 marges, TOST $\pm 1$ pt) ; la conformité est déclarée **par construction** pour les marges allouées |
 
-*Sources de recoupement :* `scripts/progedo_logit/mode_choice_policy_metrics.json` (accuracy, LogLoss, matrice de confusion, importances de gain), `scripts/progedo_logit/feature_spec.json` (contrat de variables), `docs/arch/score-synthesis.md` (renormalisation sur l'offre, témoin d'effectif, gardes de substrat), `docs/changelog.md` (temps terminaux par mode, variantes de distance mesurées).
+*Sources de recoupement :* `scripts/progedo_logit/mode_choice_policy_metrics.json` (accuracy, LogLoss, matrice de confusion, importances de gain), `scripts/progedo_logit/feature_spec.json` (variables du protocole), `docs/arch/score-synthesis.md` (renormalisation sur l'offre, témoin d'effectif, gardes de substrat), `docs/changelog.md` (temps terminaux par mode, variantes de distance mesurées).
 
 ---
 
@@ -192,7 +192,7 @@ au moment de la version non anonyme, avec les remerciements au diffuseur.
 
 Le chapitre 6 ne publie que les enseignements ; cette annexe porte les tableaux complets sur
 lesquels ils reposent. Substrat : cohorte `population_1000_AAMAS_v6`, jeu
-`population_1000_AAMAS_v6_20260316_EN_c` (jeu corrigé du [ticket 088](../../../tickets/ticket_088_jeu_corrige_et_rejeu_complet.md)),
+`population_1000_AAMAS_v6_20260316_EN_c`, <!-- jeu corrigé du ticket 088 -->
 3 154 décisions scorées, 868 personnes mobiles. Tous les décideurs y sont mesurés : la campagne
 de rejeu s'est terminée le 2026-09-17 à 09:25, et aucun chiffre de cette annexe n'est lu sur le
 substrat antérieur.
@@ -278,8 +278,8 @@ collectifs des étudiants, eux, passent de 37,9 à 35,5 % après réglage quand 
 ![Les quatre modes par motif de déplacement](../images/ch99_modes_motif.png)
 
 *Figure H.4 — Les quatre modes par motif de déplacement. Le motif études est celui où l'agent
-s'éloigne le plus de la cible après réglage, et il s'en éloigne dans le sens de la voiture : le
-levier de coût d'engagement d'un véhicule joue sur une population qui n'en dispose pas.*
+s'éloigne le plus de la cible après réglage, et il s'en éloigne dans le sens de la voiture, sur
+une population qu'aucun des quatre principes ne vise.*
 
 #### H.3 Les parts modales de chaque décideur
 
@@ -345,17 +345,86 @@ méthodes tabulaires.
 | Variante | Statut | Composite | Hors choix unique | L1 parts globales |
 |---|---|---:|---:|---:|
 | `prompt_minimal_02` | aucune ingénierie | 7,02 | 10,39 | 24,08 |
-| `prompt_expert_05` | réglée hors échantillon | 4,86 | 6,86 | 13,85 |
+| `prompt_expert_05` | ablation retenue au vu de la cohorte | 4,86 | 6,86 | 13,85 |
 | `prompt_expert_06` | ajustée au vu de la cohorte évaluée | 5,33 | 7,24 | 15,39 |
 | `prompt_expert_08` | ajustée au vu de la cohorte évaluée | 6,58 | 10,32 | 21,74 |
 
-Toutes sur `gemini-3.5-flash-lite`. Les deux variantes ajustées au vu de la cohorte évaluée
-devaient donner une borne haute, puisqu'elles ont vu les résidus sur lesquels elles sont ensuite
-jugées ; elles font moins bien que la variante réglée hors échantillon. Ce que le protocole
-prévoyait comme un plafond d'ajustement en échantillon n'est donc pas atteint par les prompts qui
-y avaient accès.
+Toutes sur `gemini-3.5-flash-lite`. Les trois variantes expertes ont vu la cohorte, à des degrés
+différents : `prompt_expert_06` et `prompt_expert_08` ont été réécrites sur ses résidus,
+`prompt_expert_05` n'y a touché que par la rétention d'une ablation. Les deux premières devaient
+donner une borne haute d'ajustement en échantillon ; elles font moins bien que la troisième. Le
+plafond que le protocole attendait n'est pas atteint par les prompts qui avaient le plus accès
+aux résidus.
 
-<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim ; prompt_expert_07 déclaré, non joué ; prompt_expert_04 supprimé du dépôt le 2026-09-17. La procédure d'optimisation est décrite au § 5.3, ses garde-fous au § 5.3.4. Ordre de grandeur de la recherche, déclaré par l'auteur : une douzaine d'itérations sur gemini-3.5-flash-lite, deux ou trois sur chacun des deux autres modèles. -->
+<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim ; prompt_expert_07 déclaré, non joué ; prompt_expert_04 supprimé du dépôt le 2026-09-17. La procédure d'optimisation est décrite au § 5.2, ses garde-fous au § 5.2.3. Ordre de grandeur de la recherche, déclaré par l'auteur : une douzaine d'itérations sur gemini-3.5-flash-lite, deux ou trois sur chacun des deux autres modèles. -->
+
+---
+
+### Annexe I : l'audit unitaire, décideur par décideur
+
+Le substrat diffère de celui de l'annexe H : les journées réellement décrites par les enquêtés,
+9 621 déplacements de 2 930 personnes, chacun portant le mode déclaré (protocole du § 5.4). Ces
+chiffres ne se comparent pas à ceux de l'annexe H, qui portent sur la cohorte synthétique.
+
+#### I.1 L'accord global
+
+| Décideur | Exactitude pondérée | Sur décisions arbitrées | Entropie croisée | GMPCA |
+|---|---:|---:|---:|---:|
+| Gradient boosté | 71,5 | 67,4 | **0,299** | **0,741** |
+| Régression logistique à noyau | 70,6 | 66,2 | 0,324 | 0,724 |
+| Forêt aléatoire | 69,9 | 65,5 | 0,321 | 0,726 |
+| Logit multinomial | 68,6 | 64,2 | 0,358 | 0,699 |
+| Durée minimale | 68,1 | 65,3 | — | — |
+| Prompt expert | 67,6 | 65,2 | 0,342 | 0,711 |
+| Tout-voiture | 66,7 | 61,7 | — | — |
+| Prompt minimal | 64,8 | 61,6 | 0,383 | 0,682 |
+| Hasard uniforme | 23,5 | 21,5 | — | — |
+
+Le prompt expert gagne une place d'une colonne à l'autre : il passe derrière le logit
+multinomial sur l'exactitude et devant lui sur l'entropie croisée, les trois autres méthodes
+tabulaires restant devant sur les deux. Les deux planchers durs ne reçoivent pas d'entropie
+croisée, infinie dès la première erreur, et le hasard uniforme ne couvre pas le support commun.
+
+L'entropie croisée et le GMPCA sont mesurés sur le support commun : les 5 451 décisions
+arbitrées que notent tous les décideurs à distribution comparés ici.
+
+#### I.2 Précision et rappel par mode
+
+| Décideur | vélo | voiture | TC | marche |
+|---|---|---|---|---|
+| Gradient boosté | 27,3 / 20,4 | 85,3 / 79,0 | 53,8 / 61,7 | 53,2 / 63,4 |
+| Régression logistique à noyau | 25,2 / 19,3 | 85,2 / 78,1 | 52,6 / 60,4 | 51,1 / 62,7 |
+| Forêt aléatoire | 25,5 / 13,9 | 84,5 / 77,2 | 51,2 / 60,6 | 50,8 / 64,0 |
+| Logit multinomial | 24,2 / 18,3 | 84,3 / 76,8 | 49,1 / 57,5 | 49,1 / 60,0 |
+| Durée minimale | 16,9 / 25,8 | 74,4 / 92,3 | 53,5 / 39,7 | 81,3 / 19,2 |
+| Prompt expert | 15,0 / 22,5 | 80,1 / 80,4 | 49,7 / 55,2 | 62,9 / 47,2 |
+| Tout-voiture | 16,1 / 2,3 | 72,6 / 95,8 | 42,3 / 25,3 | 35,9 / 16,2 |
+| Prompt minimal | 14,7 / 24,1 | 81,2 / 75,1 | 42,8 / 60,0 | 61,2 / 44,2 |
+
+Précision / rappel, en %. Effectifs déclarés : 431 vélo, 5 971 voiture, 1 562 TC, 1 652 marche.
+
+Les deux paliers rappellent le vélo mieux que toute méthode ajustée, 22,5 et 24,1 % contre 20,4
+au gradient boosté, et le paient en précision, 15,0 et 14,7 % contre 27,3. Ils perdent la marche,
+rappel 47,2 et 44,2 % contre 63,4. Leur précision sur la marche est pourtant la meilleure du
+tableau, 62,9 % : quand ils annoncent la marche ils ont raison, ils ne l'annoncent pas assez
+souvent.
+
+#### I.3 La matrice de confusion du prompt expert
+
+| déclaré \ prédit | vélo | voiture | TC | marche |
+|---|---:|---:|---:|---:|
+| vélo | 97 | 227 | 62 | 45 |
+| voiture | 345 | 4 799 | 540 | 283 |
+| TC | 88 | 481 | 862 | 132 |
+| marche | 116 | 488 | 269 | 779 |
+
+L'audit porte un plafond : 1 295 déplacements, 13,5 %, ont leur mode déclaré absent des options
+présentées, retiré par le verrou de chaîne ou par le plafond d'options. Aucun décideur ne pouvait
+le trouver. Le compte va de 1 226 à 1 428 selon le décideur.
+
+Les deux figures de cet audit sont au § 6.5, figures 6.5 et 6.6.
+
+<!-- source: scripts/progedo_logit/audit_unitaire_058.py sur le jeu enquete_058_test_20260316, neuf décideurs, exécutions du 2026-09-16 au 2026-09-19 ; les deux bras LLM sont exp_gemini-35-fl_{promin02,proexp05}_jtir_pop-enquete_058_test_…, 12 562 décisions chacun. Figures régénérées par scripts/analysis/plot_audit_unitaire.py. Les déplacements dont l'enchaînement est rompu (11) sont écartés, et 9 612 à 9 618 sont notés selon le décideur. -->
 
 ---
 

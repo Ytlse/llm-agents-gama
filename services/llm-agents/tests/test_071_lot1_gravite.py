@@ -29,16 +29,24 @@ from llm.gravite import (
 )
 from settings import settings
 
+# La valeur du poids de retard, énoncée ici pour que le test la garde en vue.
+POIDS_RETARD_ATTENDU = 0.50
+
 # ── Scénarios de référence (specs/ticket_071/tests_lot1.md, § 2) ────────────────
 # Ils viennent de ce que la simulation produit : une observation `arrival` porte un retard,
 # une observation `tc_timeout` dit un véhicule manqué, la chaîne des véhicules dit un mode
 # contraint. (retard_s, correspondance_ratee, incident_reseau, mode_contraint, I_det attendu)
+#
+# ⚠ MISE À JOUR DU TICKET 095 (2026-09-21). La composante de retard ne fait plus PALIER au
+# retard de référence. EN DESSOUS de 30 minutes, rien ne change : les quatre premiers scénarios
+# gardent leurs valeurs au millième près. AU-DESSUS, le palier est remplacé par une montée qui
+# décélère, et la panne de la ligne A — 45 minutes — passe de 0,80 à 0,94.
 SCENARIOS = {
     "nominal": (0, False, False, False, 0.00),
     "petit_retard": (540, False, False, False, 0.15),
     "quart_heure": (900, False, False, False, 0.25),
     "demi_heure": (1800, False, False, False, 0.50),
-    "panne_ligne_a": (2700, True, False, True, 0.80),
+    "panne_ligne_a": (2700, True, False, True, 0.9426990406),
 }
 
 
@@ -55,19 +63,76 @@ def test_A1_les_cinq_scenarios_de_reference(nom):
     assert _det(nom) == pytest.approx(SCENARIOS[nom][4], abs=1e-9)
 
 
-def test_A1bis_la_panne_de_la_ligne_a_vaut_exactement_le_seuil_du_choc_plus_un_dixieme():
-    """La panne des expériences d'hystérésis doit valoir 0,80.
+def test_A1bis_la_panne_de_la_ligne_a_reste_au_dessus_du_seuil_du_choc():
+    """La panne des expériences d'hystérésis doit dépasser franchement le seuil du choc.
 
-    C'est la valeur sur laquelle le ticket appuie le choix de Θ = 0,7 : « à Θ = 1,0 le choc
-    étudié n'aurait pas déclenché ». Si le code en produit une autre, c'est le réglage de Θ qui
-    devient indéfendable, pas seulement ce test qui casse.
+    C'est l'argument sur lequel le ticket 071 appuie le choix de Θ = 0,7 : « à Θ = 1,0 le choc
+    étudié n'aurait pas déclenché ». La valeur exacte a monté de 0,80 à 0,89 avec la composante
+    asymptotique (ticket 095) ; ce que le test garde, c'est la propriété — elle franchit le
+    seuil, et avec de la marge.
     """
-    assert _det("panne_ligne_a") == pytest.approx(0.80, abs=1e-9)
+    assert _det("panne_ligne_a") == pytest.approx(0.9426990406, abs=1e-9)
     assert _det("panne_ligne_a") > settings.agent.memoire__importance_choc
 
 
-def test_A2_le_retard_sature_a_retard_ref():
-    """Au-delà du retard de référence, la composante ne monte plus."""
+def test_A2_aucun_retard_n_est_confondu_avec_un_autre():
+    """Ticket 095 — le palier est supprimé, et c'est la raison d'être du changement.
+
+    Sous le palier, 45, 60 et 90 minutes donnaient RIGOUREUSEMENT la même gravité : un profil de
+    choc décroissant resté au-dessus de 30 minutes était invisible du mécanisme et n'existait que
+    dans le texte. C'était le premier piège de toute nouvelle déclaration de choc.
+    """
+    valeurs = [gravite_deterministe(m * 60)[0] for m in (30, 45, 60, 90, 120, 240)]
+    assert valeurs == sorted(valeurs)
+    assert len(set(valeurs)) == len(valeurs), "deux retards différents rendent la même gravité"
+
+
+def test_A2bis_la_composante_reste_bornee_par_son_maximum():
+    """Supprimer le palier ne veut pas dire laisser filer : elle APPROCHE 0,70 sans l'atteindre.
+
+    Une composante linéaire non bornée vaudrait 1,0 dès 60 minutes, la gravité totale étant
+    bornée à 1 — le mur serait déplacé, pas supprimé, et les trois autres composantes cesseraient
+    de peser quoi que ce soit.
+    """
+    maxi = float(settings.agent.memoire__retard_gravite_max)
+    for minutes in (45, 60, 120):
+        assert gravite_deterministe(minutes * 60)[0] < maxi
+    # Au-delà, la décroissance exponentielle passe sous la précision du flottant et l'égalité
+    # devient atteignable. Ce qui compte est qu'elle ne soit JAMAIS dépassée.
+    for minutes in (600, 6000):
+        assert gravite_deterministe(minutes * 60)[0] <= maxi
+
+
+def test_A2ter_rien_ne_change_en_dessous_du_retard_de_reference():
+    """La garantie qui rend le changement sûr : les trois quarts du catalogue sont sous 30 min.
+
+    Une exponentielle pure passant par le point d'ancrage aurait été 1,75 fois plus raide à
+    l'origine — neuf minutes seraient passées de 0,15 à 0,22, et tous les petits incidents
+    seraient devenus plus graves. Personne n'a demandé cela.
+    """
+    from llm import gravite as g
+
+    for secondes in (0, 300, 540, 900, 1500, 1800):
+        assert gravite_deterministe(secondes)[0] == pytest.approx(
+            POIDS_RETARD_ATTENDU * min(secondes / 1800, 1.0), abs=1e-12
+        ), f"{secondes} s a bougé sous le retard de référence"
+    assert g.POIDS_RETARD == POIDS_RETARD_ATTENDU
+
+
+def test_A2quinquies_la_pente_est_continue_au_point_d_ancrage():
+    """Sans cela, une seconde de plus que la référence vaudrait un SAUT de gravité."""
+    avant = gravite_deterministe(1800)[0] - gravite_deterministe(1799)[0]
+    apres = gravite_deterministe(1801)[0] - gravite_deterministe(1800)[0]
+    assert apres == pytest.approx(avant, rel=1e-3)
+
+
+def test_A2quater_le_mode_palier_reste_disponible(monkeypatch):
+    """Le comportement d'avant se déclare, pour reproduire un run antérieur au 2026-09-21."""
+    from llm import gravite as g
+
+    monkeypatch.setattr(
+        settings.agent, "memoire__retard_saturation", g.MODE_RETARD_PALIER, raising=False
+    )
     assert gravite_deterministe(2700)[0] == pytest.approx(0.50)
     assert gravite_deterministe(36_000)[0] == pytest.approx(0.50)
 
@@ -119,11 +184,20 @@ def test_A7_la_composante_sans_source_est_declaree_au_journal():
 
 
 def test_A8_les_autres_composantes_ne_sont_pas_repondrees():
-    """Avec l'incident inactif, les trois composantes disponibles plafonnent à 0,80.
+    """Aucune composante n'est repondérée pour « compenser » l'absence d'une autre.
 
-    Repondérer pour « compenser » l'absence changerait l'échelle de gravité en silence.
+    ⚠ Ticket 095 — la somme des quatre maxima ne vaut plus 1,00 mais 1,20 : rendre la composante
+    de retard discriminante au-delà de 30 minutes lui demande de pouvoir dépasser 0,50, et il n'y
+    a pas de façon de le faire en gardant la somme à 1 sans baisser les trois autres poids, ce qui
+    déclasserait des chocs du catalogue. Conséquence assumée : le BORNAGE à 1 mord désormais pour
+    la combinaison extrême — retard très long ET correspondance ratée ET mode contraint. Elle
+    n'existe dans aucun choc déclaré, où le maximum atteint est 0,99 (panne réseau C3).
     """
-    assert gravite_deterministe(36_000, True, False, True)[0] == pytest.approx(0.80)
+    assert gravite_deterministe(36_000, True, False, True)[0] == pytest.approx(1.00)
+    # Et la repondération silencieuse reste interdite : chaque composante garde son poids.
+    _, detail = gravite_deterministe(0, True, False, True)
+    assert detail.correspondance_ratee == pytest.approx(0.20)
+    assert detail.mode_contraint == pytest.approx(0.10)
 
 
 # ═════════════════════ B. Niveau nommé et règle du maximum ══════════════════════
@@ -148,7 +222,7 @@ def test_B2_le_modele_ne_peut_pas_degrader_un_fait_mesure():
     ratée et mode contraint ne doit pas pouvoir la dégrader : le fait l'emporte.
     """
     i_llm = gravite_jugee("notable")
-    assert gravite_concept(i_llm, _det("panne_ligne_a")) == pytest.approx(0.80)
+    assert gravite_concept(i_llm, _det("panne_ligne_a")) == pytest.approx(0.9426990406, abs=1e-9)
 
 
 def test_B3_quand_le_modele_est_d_accord_son_jugement_passe():
@@ -167,7 +241,9 @@ def test_B4_la_surestimation_n_est_bornee_que_par_le_plafond():
 def test_B5_le_maximum_porte_sur_tout_le_groupe_consomme():
     """Le pire du groupe, pas le dernier ni la moyenne."""
     groupe = [_det("petit_retard"), _det("panne_ligne_a"), _det("nominal")]
-    assert gravite_concept(gravite_jugee("anodin"), max(groupe)) == pytest.approx(0.80)
+    assert gravite_concept(gravite_jugee("anodin"), max(groupe)) == pytest.approx(
+        0.9426990406, abs=1e-9
+    )
 
 
 def test_B6_un_niveau_inconnu_ne_fait_pas_perdre_la_reflexion():

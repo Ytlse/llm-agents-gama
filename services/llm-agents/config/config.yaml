@@ -31,12 +31,37 @@ agent:
   reschedule_activity_departure_time: false
   quantify_time_window: false
   long_term_reflect_interval: 86400
-  # TEMPORAIRE A SUPPRIMER (debug ticket 077 : réduire le prompt stm_reflection sous le plafond ITPM 7000 de Groq)
-  stm_reflection_min_entries: 5
+  # ⚠ `stm_reflection_min_entries: 5` RETIRÉ le 2026-09-19. Il avait été posé pour tenir sous
+  # le plafond de jetons d'entrée de Groq, passerelle qui n'est plus utilisée. C'est surtout un
+  # réglage d'EXPÉRIENCE — il double la fréquence des réflexions, donc la vitesse à laquelle la
+  # mémoire se forme. Il appartient au run : `AGENT__STM_REFLECTION_MIN_ENTRIES`, posé par
+  # `scripts/experiment/run_sequential_cohort.py` et enregistré dans `identite_run.json`.
 
-
-  # Le dispositif sous test.
-  weather_per_agent_dates: true
+  # ── Rejeu 30 jours (Ticket 077) ─────────────────────────────────────────────
+  # 1. ⚠ RETIRÉS le 2026-09-19 : `vehicle_chain_enabled: false`, `vehicle_return_home_lock: false`.
+  #    La désactivation du chaînage (ticket 040, ablation lot 1) reste la décision de l'auteur du
+  #    2026-09-18, mais elle appartient au BRAS D'EXPÉRIENCE, pas au dépôt : posée ici, elle a
+  #    rendu rouges les treize tests qui énoncent la règle du chaînage, et elle ne figurait dans
+  #    aucune identité de run. Elle se pose désormais par `AGENT__VEHICLE_CHAIN_ENABLED` et
+  #    `AGENT__VEHICLE_RETURN_HOME_LOCK`, et s'enregistre dans `identite_run.json`.
+  # 2. ⚠ RETIRÉ le 2026-09-19 : `mode_choice_truncation_threshold: 0.15`.
+  #    Il change la LOI DE TIRAGE : les colonnes `P(…)` de `moves.csv` cessent d'être la
+  #    distribution échantillonnée. C'est le plus « expérimental » des quatre, et il se pose par
+  #    `AGENT__MODE_CHOICE_TRUNCATION_THRESHOLD`.
+  # 3. ⚠ RETIRÉ le 2026-09-19 : `memoire__importance_choc: 0.50`.
+  #    Abaisser le seuil de choc était inutile ET c'était une règle de mémoire, que le § 9 du
+  #    ticket 077 s'interdit de toucher. La gravité du premier choc de c6 vaut exactement 0,70
+  #    et la comparaison est `>=` : il franchissait le seuil d'origine sans qu'on l'abaisse.
+  #    Seul le second choc (0,533) en dépendait — et il ne s'est jamais appliqué. Le seul effet
+  #    mesuré a été d'élargir le vivier C (rappel hors contexte) à six souvenirs de plus.
+  #    Une règle de mémoire se fait varier par l'ENVIRONNEMENT (MEMOIRE__IMPORTANCE_CHOC, nom
+  #    NU sans préfixe), où elle appartient au run et se retrouve dans son identité — jamais ici.
+  #
+  # 4. ⚠ RETIRÉ le 2026-09-19 : `weather_per_agent_dates: false`.
+  #    Sa valeur était déjà celle du défaut de `settings.py`, donc rien ne change ; mais tant
+  #    qu'une clé figure ici, elle l'emporte sur l'environnement — le YAML est passé à
+  #    l'initialisation, qui prime. Un bras qui voudrait la météo par agent ne pouvait pas
+  #    l'obtenir. Elle se pose par `WEATHER_PER_AGENT_DATES`.
   # Ticket 075 — fenêtre ANNÉE et week-ends compris : la date tirée est un jour de DÉPART,
   # avancé d'un jour calendaire par jour simulé. Sur soixante jours, chaque agent parcourt
   # soixante journées météo réellement consécutives (épisodes pluvieux qui durent, saison qui
@@ -70,12 +95,22 @@ agent:
 #
 # Coût à connaître : ~4x plus d'appels, et le run est d'autant plus lent.
 # Bascule au lancement : `make run CACHE=0` / `make run CACHE=1`.
-# Ticket 084 — seules ces instances de passerelle peuvent servir les décisions de CE run.
-# Les onze instances Google restent chargées pour les autres travaux : la restriction voyage
-# avec la requête et est honorée À LA SÉLECTION, pas après coup. Liste vide = aucune restriction.
-# TEMPORAIRE A SUPPRIMER (debug ticket 077 - bascule Groq)
-llm:
-  instances_admises: [groq_openai_120_key1, groq_qwen_qwen3_8_27b_key1]
+# Ticket 084 — seules les instances admises peuvent servir les appels de CE run. Les onze
+# instances Google restent chargées pour les autres travaux : la restriction voyage avec la
+# requête et est honorée À LA SÉLECTION, pas après coup. Liste vide = aucune restriction.
+#
+# ⚠ `instances_admises` A ÉTÉ RETIRÉ D'ICI le 2026-09-21 (ticket 095, lot C), et ce n'est pas
+# un oubli. Posé dans ce fichier, il PRIMAIT sur l'environnement : l'orchestrateur de campagne
+# posait `LLM__INSTANCES_ADMISES` depuis le 2026-09-08 et cette variable n'a JAMAIS eu le
+# moindre effet — ni le bon nom, ni la déclaration en passe-plat, ni la priorité. La restriction
+# d'un bras ne se déclarait donc pas, elle se subissait.
+#
+# La valeur par défaut vit désormais dans `infra/docker-compose.yml`, en passe-plat
+# (`INSTANCES_ADMISES`), à l'identique de ce qui était posé ici. Un bras d'expérience la
+# surcharge, elle entre dans son `identite_run.json`, et elle disparaît avec lui.
+#
+# Même règle que les réglages de mémoire du ticket 077, lot J : une règle qui appartient au RUN
+# ne se redéfinit pas dans le fichier du dépôt.
 
 cache:
   # Ticket 075 — ACTIF pour le run de soixante jours, et ce n'est pas une économie de confort :
@@ -109,7 +144,7 @@ data:
   # Ticket 075 — population de TEST à cinq agents (PAS un sceau AAMAS : cf. son MANIFEST).
   # La référence de l'article reste /data/eqasim-output/population_1000_AAMAS_v6/population.json,
   # à remettre ici avant tout run de mesure.
-  population_file: /data/eqasim-output/population_10_mesurables_093/population.json
+  population_file: /data/eqasim-output/population_1_861500/population.json
 
   # ── Jeu de déplacements enregistré (ticket 035, spec 04) ────────────────────────────────
   # `make run JEU=<nom>` écrit `jeu_enregistre` ici et recrée le contrôleur ; sans lui, calcul en
@@ -126,4 +161,4 @@ data:
   #   rail: {pas_min: 10}
 chocs:
   enabled: true
-  fichier: /app/config/chocs/c6_voiture_suspecte.yaml
+  fichier: /app/config/chocs/c6_voiture_suspecte__861500.yaml

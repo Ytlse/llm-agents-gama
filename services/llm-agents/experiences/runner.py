@@ -415,16 +415,13 @@ def _confirme_epuise(
 ) -> bool:
     """L'épuisement est-il RÉEL ?
 
-    `annonce_par_fournisseur` (429 « per day », cf. `genre_erreur`) tranche seul : le moniteur
-    lit `/health`, donc un compteur qui ne voit QUE le trafic de ce gateway. Le 2026-09-08 il
-    affichait 49 requêtes sur 500 — instance « disponible » — pendant que Google refusait pour
-    dépassement des 500 ; l'exécution a attendu 15 min une clé fermée jusqu'à 09:00.
+    Si un moniteur est présent, l'expérience ne s'arrête QUE si toutes les instances servant
+    ce modèle sont épuisées (ex. échec sur les deux clés Google). Un 429 reçu sur une clé
+    n'épuise que cette instance : tant qu'une autre instance reste disponible, l'expérience
+    bascule dessus et n'est pas considérée comme épuisée.
 
-    Sinon : sans moniteur, un 429/402 fait foi ; avec moniteur, seule sa vue rafraîchie tranche
-    (une instance encore disponible ⇒ le 429 était transitoire).
+    Sans moniteur, un 429/402 (ou annonce_par_fournisseur) fait foi.
     """
-    if annonce_par_fournisseur:
-        return True
     if moniteur is None:
         return True
     moniteur.rafraichir()
@@ -721,23 +718,27 @@ async def executer(
                     reprise_annoncee = (
                         decision.reponse.reprise_a if decision.reponse else None
                     )
-                    if type_err == "epuise" and _confirme_epuise(
-                        moniteur, annonce_par_fournisseur=bool(reprise_annoncee)
-                    ):
-                        if attendre_fenetre:
-                            await _attendre_fenetre_quota(
-                                erreur, reprise_annoncee
-                            )  # R4 : dort jusqu'à la fenêtre, puis retente
-                            continue
-                        raison_epuisement.update(
-                            {
-                                "raison": erreur,
-                                "reprise": reprise_annoncee
-                                or prochaine_fenetre_quota(),
-                            }
-                        )
-                        epuise.set()
-                        return
+                    if type_err == "epuise":
+                        if _confirme_epuise(
+                            moniteur, annonce_par_fournisseur=bool(reprise_annoncee)
+                        ):
+                            if attendre_fenetre:
+                                await _attendre_fenetre_quota(
+                                    erreur, reprise_annoncee
+                                )  # R4 : dort jusqu'à la fenêtre, puis retente
+                                continue
+                            raison_epuisement.update(
+                                {
+                                    "raison": erreur,
+                                    "reprise": reprise_annoncee
+                                    or prochaine_fenetre_quota(),
+                                }
+                            )
+                            epuise.set()
+                            return
+                        # Épuisement partiel (une seule clé a échoué, une autre reste disponible) :
+                        # on bascule immédiatement sur l'instance disponible suivante sans attendre.
+                        continue
                     if type_err == "substitution_refusee":
                         continue  # une autre instance, tout de suite (Q3)
                     # Erreur transitoire (passerelle occupée, timeout, 429 non confirmé…) : on ATTEND,

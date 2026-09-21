@@ -12,19 +12,31 @@ script, sur les journées réellement décrites par les enquêtés (ticket 058).
 | Matrice de confusion 4 × 4, effectifs et pondérée | tous |
 | Rappel et précision par mode | tous |
 | Exactitude par bande de distance | tous |
-| Entropie croisée et GMPCA | **seulement ceux qui rendent une distribution, et seulement sur les décisions arbitrées** |
+| Entropie croisée et GMPCA | **seulement ceux qui rendent une distribution, sur le support commun** |
+| Taux de zéro sur mode offert | tous ceux qui rendent une distribution |
 
 L'entropie croisée d'une décision dure est infinie dès la première erreur. Lisser un
 plancher pour lui donner un chiffre produirait une valeur qui dépend du lissage et de rien
 d'autre : les planchers « toujours la voiture » et « durée minimale » n'en reçoivent donc
 pas, et la colonne reste vide pour eux.
 
-**Elle se calcule sur les décisions arbitrées dont la distribution laisse une masse non nulle
-au mode déclaré**, et le nombre des autres se publie à côté. Un zéro exact n'a pas d'entropie
-croisée : le terme vaut moins l'infini, et la bibliothèque le borne à son seuil de troncature,
-si bien que la moyenne mesure le seuil plutôt que le décideur. Mesuré sur le gradient boosté :
-**4,21 nats en comptant les zéros, 0,42 sans eux**, pour 850 décisions sur 7 438 (11,4 %)
-concernées. Publier le seul 4,21 serait publier `1e-15`.
+**Elle se calcule sur le SUPPORT COMMUN : les décisions arbitrées que tous les décideurs
+comparés notent.** Un zéro exact n'a pas d'entropie croisée — le terme vaut moins l'infini, et
+la bibliothèque le borne à son seuil de troncature, si bien que la moyenne mesurerait le seuil
+plutôt que le décideur. Mesuré sur le gradient boosté : **4,21 nats en comptant les zéros, 0,42
+sans eux**. Publier le seul 4,21 serait publier `1e-15`.
+
+Écarter ces décisions décideur par décideur, en revanche, rend les valeurs incomparables :
+chacun est alors noté sur l'ensemble qu'il se choisit en tranchant plus ou moins dur, 5 923
+décisions pour le prompt expert contre 6 588 pour le gradient boosté, et le plus tranchant
+retire le plus de ses propres échecs. D'où l'intersection, et `--definisseur` pour dire qui la
+définit. Corrigé le 2026-09-21 : l'ordre des décideurs s'en trouve changé, cf.
+`docs/traces/2026-09-21_11-45_ticket058_entropie_support_commun/`.
+
+Ce que le support commun jette est publié à côté, comme résultat : **le taux de décisions où le
+mode déclaré était dans les options présentées et où le décideur lui a donné zéro**. Il ne
+dépend d'aucun plancher de probabilité, et il oppose deux familles de sorties — une softmax ne
+produit pas de zéro exact, une distribution verbalisée si.
 
 Ces zéros ont deux causes, qu'il faut séparer parce qu'elles ne coûtent pas au même :
 
@@ -85,6 +97,13 @@ VERITE_DEFAUT = "verite_058_test.csv"
 
 # Les quatre classes de l'enquête, dans l'ordre du spec (`TARGET_CLASSES`).
 CLASSES = ("bike", "car", "transit", "walk")
+
+# Qui définit le support commun de l'entropie croisée. Les planchers en sont exclus :
+# `alea` répartit au hasard et laisse des milliers de décisions à zéro sur le mode déclaré,
+# qu'il raboterait pour tout le monde ; `durmin` et `majvoiture` tranchent dur et ne rendent
+# pas de distribution. Ils sont NOTÉS sur le support quand ils le couvrent, ils ne le
+# définissent pas.
+PLANCHERS = ("alea", "durmin", "majvoiture")
 INDEX = {c: i for i, c in enumerate(CLASSES)}
 
 # Mode canonique de la plateforme → classe de l'enquête. Les deux-roues motorisés tombent avec
@@ -223,6 +242,7 @@ def rappel_precision(matrice: np.ndarray) -> dict[str, dict[str, float]]:
 def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
     """Les métriques d'une exécution, contre les modes déclarés."""
     y, yhat, poids, probas, bandes, arbitrees = [], [], [], [], [], []
+    identifiants, offert = [], []
     compte = Counter()
     par_bande: dict[str, list[int]] = defaultdict(list)
 
@@ -261,6 +281,8 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
                 compte["decision_forcee"] += 1
             arbitrees.append(0 if forcee else 1)
 
+            identifiants.append(str(decision["activity_id"]))
+            offert.append(declare in classes_presentees)
             y.append(INDEX[declare])
             yhat.append(INDEX[classe_choisie])
             poids.append(float(reference["sample_weight"] or 1.0))
@@ -272,7 +294,7 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
 
     if not y:
         logger.error(f"[ALARME] Aucune décision notable dans {execution} : rien à publier")
-        return {}
+        return {}, {}
 
     y_arr = np.asarray(y)
     yhat_arr = np.asarray(yhat)
@@ -311,10 +333,20 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
         "compteurs": dict(compte),
     }
 
-    # Entropie croisée : sur les décisions ARBITRÉES qui portent une distribution. Le
-    # sous-ensemble est le même pour tous les décideurs à distribution — c'est ce qui la garde
-    # comparable — et il exclut les choix forcés, dont le terme d'erreur ne mesure que le
-    # seuil de troncature de la bibliothèque.
+    # Le détail par décision, rendu à l'appelant pour qu'il construise le support commun :
+    # activity_id -> (mode déclaré, distribution, poids), sur les décisions arbitrées qui
+    # portent une distribution, ZÉROS COMPRIS. C'est l'appelant qui filtre.
+    notables = {
+        identifiants[i]: (int(y[i]), probas[i], float(poids[i]))
+        for i in range(len(y))
+        if arbitrees[i] and probas[i] is not None
+    }
+
+    # Entropie croisée par décideur, sur SON propre sous-ensemble : les décisions arbitrées
+    # dont sa distribution laisse une masse non nulle au mode déclaré. Cette lecture n'est pas
+    # comparable d'un décideur à l'autre — plus il tranche dur, plus elle retire de ses propres
+    # échecs — et elle ne sert qu'à mesurer l'écart avec le support commun. C'est
+    # `cel_weighted_support_commun` qui se publie.
     retenus = [
         i
         for i, p in enumerate(probas)
@@ -326,6 +358,20 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
         if p is not None and arbitrees[i] and p[y[i]] <= 0
     ]
     resultat["mode_declare_a_zero"] = len(exclus)
+
+    # Ce que le support commun jette, et qui est pourtant un résultat : les décisions où le
+    # mode déclaré ÉTAIT dans les options présentées et où le décideur lui a donné zéro. Ce
+    # n'est pas la règle qui a retiré l'option, c'est lui qui l'a exclue. Le taux se compare
+    # d'un décideur à l'autre sans dépendre d'aucun plancher de probabilité.
+    offerts_arbitres = [
+        i for i in range(len(y)) if arbitrees[i] and offert[i] and probas[i] is not None
+    ]
+    zeros_propres = [i for i in offerts_arbitres if probas[i][y[i]] <= 0]
+    resultat["arbitrees_mode_offert"] = len(offerts_arbitres)
+    resultat["zeros_mode_offert"] = len(zeros_propres)
+    resultat["taux_zero_mode_offert"] = (
+        len(zeros_propres) / len(offerts_arbitres) if offerts_arbitres else None
+    )
     # Une distribution dégénérée (toute la masse sur un mode) n'est pas une distribution : le
     # décideur a tranché dur et l'a écrit sous forme de probabilités. Filtrée sur les décisions
     # justes, son entropie croisée vaut 0 par construction — un chiffre qui ne dit rien.
@@ -337,7 +383,8 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
         resultat["entropie_croisee_motif"] = (
             "décision dure : la distribution rendue est dégénérée (masse 1 sur un mode)"
         )
-        return resultat
+        resultat["distribution_degeneree"] = True
+        return resultat, notables
     if retenus and len(retenus) >= int(0.5 * arbitrees_arr.sum()):
         resultat["entropie_croisee_notes"] = len(retenus)
         mesures = evaluate_proba(
@@ -358,15 +405,96 @@ def auditer(execution: Path, verite: dict, offre: dict) -> dict[str, Any]:
             f"décision dure : {manquantes} décision(s) arbitrée(s) sur "
             f"{int(arbitrees_arr.sum())} sans distribution"
         )
-    return resultat
+    return resultat, notables
+
+
+# Deux bras LLM ne se distinguent que par leur suffixe de prompt (`…_promin02`,
+# `…_proexp05`) : une colonne trop étroite les rendait identiques à l'affichage.
+LARGEUR_NOM = 22
+
+
+def support_commun(
+    notables: dict[str, dict[str, tuple[int, list[float], float]]],
+    resultats: dict[str, dict[str, Any]],
+    definisseurs_demandes: list[str] | None = None,
+) -> set[str]:
+    """Les décisions que TOUS les décideurs comparés notent, et l'entropie croisée dessus.
+
+    Sans cela, chaque décideur est noté sur les décisions où il laisse une masse non nulle au
+    mode déclaré, c'est-à-dire sur un ensemble qu'il choisit lui-même en tranchant plus ou
+    moins dur. Deux entropies croisées calculées sur 5 923 et 6 588 décisions ne se comparent
+    pas. Le support commun est l'intersection, définie par les décideurs comparés — les
+    planchers en sont exclus, cf. PLANCHERS — et tout le monde y est noté.
+    """
+    # Qui définit le support décide de sa taille : un décideur de plus le rabote pour tout le
+    # monde. Par défaut, tous ceux qui rendent une distribution non dégénérée ; --definisseur
+    # restreint à la comparaison qu'on publie.
+    definisseurs = [
+        nom
+        for nom, detail in notables.items()
+        if detail
+        and nom not in PLANCHERS
+        and (definisseurs_demandes is None or nom in definisseurs_demandes)
+        and not resultats.get(nom, {}).get("distribution_degeneree")
+        and resultats.get(nom, {}).get("etat_execution") in (None, "terminee")
+    ]
+    if not definisseurs:
+        logger.warning("Aucun décideur ne peut définir un support commun : entropie non publiée")
+        return set()
+
+    support: set[str] | None = None
+    for nom in definisseurs:
+        avec_masse = {
+            cle for cle, (y, proba, _) in notables[nom].items() if proba[y] > 0
+        }
+        support = avec_masse if support is None else (support & avec_masse)
+    support = support or set()
+
+    plancher = min(len(notables[nom]) for nom in definisseurs)
+    logger.info(
+        f"Support commun de l'entropie croisée : {len(support)} décisions, "
+        f"définies par {len(definisseurs)} décideurs ({', '.join(sorted(definisseurs))})"
+    )
+    if plancher and len(support) < 0.60 * plancher:
+        logger.error(
+            f"[ALARME] Support commun trop étroit : {len(support)} décisions contre {plancher} "
+            f"chez le décideur le moins couvrant ({len(support) / plancher:.0%}) — l'entropie "
+            f"croisée ne porterait plus que sur les cas faciles"
+        )
+
+    for nom, detail in notables.items():
+        resultat = resultats.get(nom)
+        if not resultat or resultat.get("distribution_degeneree"):
+            continue
+        manquantes = support - detail.keys()
+        resultat["support_commun_notes"] = len(support) - len(manquantes)
+        if manquantes:
+            # Un décideur qui ne couvre pas tout le support serait noté sur autre chose que
+            # les autres : c'est exactement ce qu'on vient de corriger, on ne le réintroduit pas.
+            resultat["cel_weighted_support_commun"] = None
+            resultat["support_commun_motif"] = (
+                f"{len(manquantes)} décision(s) du support commun absente(s) de ce décideur"
+            )
+            continue
+        mesures = evaluate_proba(
+            np.asarray([detail[cle][1] for cle in sorted(support)]),
+            np.asarray([detail[cle][0] for cle in sorted(support)]),
+            np.asarray([detail[cle][2] for cle in sorted(support)]),
+            list(CLASSES),
+        )
+        for cle in ("cel_weighted", "cel_unweighted", "gmpca_weighted", "gmpca_unweighted"):
+            if cle in mesures:
+                resultat[f"{cle}_support_commun"] = mesures[cle]
+    return support
 
 
 def rendre(resultats: dict[str, dict[str, Any]]) -> None:
     """Le tableau lu par un humain. Les valeurs vides sont des vides, pas des zéros."""
     entete = (
-        f"{'décideur':16s} {'notés':>7s} {'exact.':>8s} {'pondérée':>9s} "
-        f"{'arbitrées':>10s} {'forcées':>8s} {'entropie':>9s} "
-        f"{'vélo R':>7s} {'TC R':>7s} {'marche R':>9s} {'hors options':>13s} {'à zéro':>7s}"
+        f"{'décideur':{LARGEUR_NOM}s} {'notés':>7s} {'exact.':>8s} {'pondérée':>9s} "
+        f"{'arbitrées':>10s} {'forcées':>8s} {'entropie':>9s} {'support':>8s} "
+        f"{'vélo R':>7s} {'TC R':>7s} {'marche R':>9s} {'hors options':>13s} "
+        f"{'0/offert':>9s}"
     )
     print("\n" + entete)
     print("-" * len(entete))
@@ -374,20 +502,24 @@ def rendre(resultats: dict[str, dict[str, Any]]) -> None:
         if not r:
             continue
         if r.get("etat_execution") not in (None, "terminee"):
-            nom = f"{nom[:12]} PARTIEL"
-        ec = r.get("cel_weighted")
+            nom = f"{nom[: LARGEUR_NOM - 8]} PARTIEL"
+        # Publiée : l'entropie croisée du SUPPORT COMMUN. Celle du support propre reste dans
+        # le JSON, elle ne se compare à rien.
+        ec = r.get("cel_weighted_support_commun")
+        taux_zero = r.get("taux_zero_mode_offert")
         par_mode = r.get("par_mode", {})
         print(
-            f"{nom[:16]:16s} {r['notes']:7d} {r['exactitude_non_ponderee']:8.1%} "
+            f"{nom[:LARGEUR_NOM]:{LARGEUR_NOM}s} {r['notes']:7d} {r['exactitude_non_ponderee']:8.1%} "
             f"{r['exactitude_ponderee']:9.1%} "
             f"{(f'{r["exactitude_arbitrees"]:.1%}' if r.get("exactitude_arbitrees") is not None else '—'):>10s} "
             f"{(f'{r["exactitude_forcees"]:.1%}' if r.get("exactitude_forcees") is not None else '—'):>8s} "
             f"{(f'{ec:.4f}' if ec is not None else '—'):>9s} "
+            f"{r.get('support_commun_notes', 0):8d} "
             f"{par_mode.get('bike', {}).get('rappel', float('nan')):7.1%} "
             f"{par_mode.get('transit', {}).get('rappel', float('nan')):7.1%} "
             f"{par_mode.get('walk', {}).get('rappel', float('nan')):9.1%} "
             f"{r['compteurs'].get('mode_declare_absent_des_presentees', 0):13d} "
-            f"{r.get('mode_declare_a_zero', 0):7d}"
+            f"{(f'{taux_zero:.1%}' if taux_zero is not None else '—'):>9s}"
         )
     print(f"\nClasses, dans l'ordre des matrices : {', '.join(CLASSES)}")
 
@@ -398,6 +530,12 @@ def main() -> None:
     parseur.add_argument("--verite", default=VERITE_DEFAUT)
     parseur.add_argument("--experience", action="append", help="répétable ; défaut : toutes")
     parseur.add_argument("--sortie", type=Path, help="fichier JSON des résultats détaillés")
+    parseur.add_argument(
+        "--definisseur",
+        action="append",
+        help="répétable ; nom court d'un décideur qui définit le support commun de "
+        "l'entropie croisée. Défaut : tous ceux qui rendent une distribution non dégénérée",
+    )
     args = parseur.parse_args()
 
     verite = charger_verite(ICI / args.verite)
@@ -415,6 +553,7 @@ def main() -> None:
         logger.info(f"Expériences trouvées sur le jeu {args.jeu} : {len(noms)}")
 
     resultats: dict[str, dict[str, Any]] = {}
+    notables: dict[str, dict[str, tuple[int, list[float], float]]] = {}
     for nom in noms:
         dossier = dossier_experiences / nom
         execution = derniere_execution(dossier) if dossier.is_dir() else None
@@ -423,7 +562,7 @@ def main() -> None:
             continue
         court = nom.replace("exp_", "").split("_jtir")[0]
         etat = etat_execution(execution)
-        resultats[court] = auditer(execution, verite, offre)
+        resultats[court], notables[court] = auditer(execution, verite, offre)
         r = resultats[court]
         if r:
             r["etat_execution"] = etat
@@ -442,6 +581,8 @@ def main() -> None:
 
     if not resultats:
         raise SystemExit("aucun résultat : lancer d'abord les expériences sur ce jeu")
+
+    support_commun(notables, resultats, args.definisseur)
 
     rendre(resultats)
 

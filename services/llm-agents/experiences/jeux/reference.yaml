@@ -25,3 +25,8 @@ anciens:
   - jeu: population_1000_AAMAS_v6_20260316_EN
     jusquau: '2026-09-16'
     raison: Substrat daté du 17 mars pour 797 des 894 personas mobiles (ticket 088).
+    # Gelé le 2026-09-21 (ticket 098) : le substrat et les 31 exécutions décidées dessus ont
+    # quitté `data/` pour l'archive froide ci-dessous. Ils n'y sont plus lisibles sans motif
+    # écrit (`experiences.froid`). Ce champ n'est lu par personne — il répond à la question
+    # que le grisé d'hier posera demain : « où est passé ce jeu ? ».
+    archive_froide: archive/2026-09-21_ancien_jeu_v6_EN

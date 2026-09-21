@@ -204,14 +204,17 @@ de la cohorte —, le tirage par graine reste le dispositif, inchangé.
 |---|---|---|---|---|---|
 | `lgbm` | 71,5 % | 67,4 % | 82,7 % | 0,419 | 20,4 % |
 | `klr` | 70,6 % | 66,2 % | 82,5 % | 0,438 | 19,3 % |
+| `rf` | 69,9 % | 65,5 % | 82,9 % | 0,445 | 13,9 % |
 | `mnl` | 68,6 % | 64,2 % | 82,0 % | 0,478 | 18,3 % |
 | `durmin` | 68,1 % | 65,3 % | 76,0 % | — | 25,8 % |
 | `majvoiture` | 66,7 % | 61,7 % | 79,7 % | — | 2,3 % |
 | `alea` | 23,5 % | 21,5 % | 41,7 % | 1,260 | 11,4 % |
 
 L'heuristique de durée minimale égale le logit multinomial (68,1 % contre 68,6 %) et rattrape
-plus de vélos que le gradient boosté. La forêt aléatoire manque : elle refuse de tourner sous
-scikit-learn 1.9.1 alors que son artefact a été estimé sous 1.8.0.
+plus de vélos que le gradient boosté. La forêt aléatoire refusait de tourner dans le conteneur
+(scikit-learn 1.9.1 contre 1.8.0 à l'estimation, écart 1,9e-4 au-delà de la tolérance de
+1e-9) ; jouée le 17 septembre par `scripts/progedo_logit/lancer_experience_rf.py`, côté hôte
+où le venv porte 1.8.0, elle se place troisième.
 
 
 ### Le lancement du palier A butte sur deux garde-fous, dont un se trompe (17 septembre 2026)
@@ -231,3 +234,165 @@ ni `--ignorer-aptitude`, ni `--attendre-fenetre`, que le message d'erreur suggè
 le renouvellement du quota le lève (minuit heure du Pacifique, soit 9 h à Paris). Le message
 gagnerait à ne pas conseiller un drapeau sans effet à cet endroit.
 
+
+
+### Le palier A est sous tous les témoins (18 septembre 2026)
+
+`exp_gemini-35-fl_promin02_jtir_pop-enquete_058_test_jeu-58_test_20260316_t0_nosim` est allée
+au bout : 2 930 personnes, 12 562 décisions archivées, **0 erreur**, 4 707 sollicitations pour
+3 h 03 de travail effectif étalées sur deux fenêtres de quota (8 attentes `epuise`, reprise
+automatique par `--attendre-fenetre`).
+
+| Décideur | Exactitude pondérée | Arbitrées | Forcées | Entropie croisée | Rappel vélo | Rappel TC | Rappel marche |
+|---|---|---|---|---|---|---|---|
+| `lgbm` (meilleur témoin) | 71,5 % | 67,4 % | 82,7 % | 0,419 | 20,4 % | 61,7 % | 63,4 % |
+| `durmin` (plancher) | 68,1 % | 65,3 % | 76,0 % | — | 25,8 % | 39,7 % | 19,2 % |
+| **palier A** (`prompt_minimal_02`) | **64,8 %** | **61,6 %** | **76,2 %** | **0,460** | **24,1 %** | **60,0 %** | **44,2 %** |
+
+Le palier A ne franchit aucun témoin, pas même le plancher « durée minimale ». Le chiffre
+mesuré sur ses 1 038 premières décisions (61,6 % pondéré) a tenu : la mesure complète le place
+à 64,8 %, l'écart venant de l'ordre des clés et non d'une dérive.
+
+Ce que le tableau montre autrement : le palier A est **le seul décideur à tenir les trois
+rappels à la fois** — vélo 24,1 % (contre 20,4 % pour le gradient boosté), transports collectifs
+60,0 %, marche 44,2 %. Les quatre modèles tabulaires achètent leur exactitude sur la marche et
+la voiture ; le plancher de durée rattrape les vélos mais s'effondre sur les transports
+collectifs (39,7 %) et la marche (19,2 %). Le palier A répartit ses erreurs au lieu de les
+concentrer — ce qui coûte en exactitude et se lit comme une distribution modale moins dégénérée.
+
+Son plafond est aussi le plus bas du tableau : **1 428 déplacements dont le mode déclaré n'était
+pas dans les options présentées** (contre 947 à 1 285 pour les autres), parce que le verrou de
+chaîne retire la voiture d'autant plus souvent que le décideur a lui-même écarté la voiture
+plus tôt dans la journée. L'offre est path-dépendante : « tout le monde sur la même offre » est
+faux, et le plafond partagé se limite aux 85 déplacements dont le jeu lui-même ne porte pas le
+mode déclaré.
+
+Reste le palier B (`prompt_expert_05`) pour clore l'audit.
+
+Le palier B porte **deux dossiers d'exécution**, dont un abandonné à 122 décisions
+(`2026-09-18_11_13_16`, état `arretee`). Son lancement s'était fait sans
+`EXP_DEPOT_COMMIT` : `dependances_courantes` avertit alors que « l'état du dépôt n'est pas
+vérifiable », et `execution.yaml` garde `depot.commit: null` — le champ s'écrit à l'ouverture
+et une reprise ne le remplit pas. Les deux bras du même audit n'auraient pas eu la même
+provenance. Relancée deux minutes plus tard avec la variable posée, l'exécution retenue
+(`2026-09-18_11_20_47`) porte `commit: 8c1871ae`. Coût de la réparation : 16 requêtes.
+`derniere_execution()` prenant le dossier au nom le plus grand, l'audit lit bien la seconde.
+
+Le palier B a ensuite été **tué à 17,8 %** (2 208 décisions, 0 erreur) par le démarrage de
+`make run OFFLINE=1` à 14 h 29 min 40 s : le lancement du run recrée la pile et le `controller`
+est sorti onze secondes plus tard, emportant le processus. C'est la mécanique déjà consignée
+pour les campagnes, avec un autre déclencheur — **toute recréation de la pile tue une exécution
+en cours**, et rien ne l'en protège aujourd'hui. Un signe précurseur était lisible : la
+progression était immobile depuis 296 s sur un `passerelle_occupee`, les attentes montant à 33
+saturations et 8 réponses inexploitables.
+
+Séquelle d'état : un SIGKILL laisse `etat.json` sur `en_cours` avec un horodatage figé, l'arrêt
+étant coopératif. `experiences reconcilier` (dans le conteneur) la requalifie en `interrompue`
+avec le motif « processus 2601 disparu (clé google_key2) » et le compte exact des décisions
+archivées — à lancer après tout arrêt brutal, sinon le registre montre une exécution active qui
+ne tourne plus.
+
+Reprise du 18 septembre à 14 h 34 : le palier B est passé de 2 208 à **4 496 décisions**
+(46,4 % des 9 695 exploitables, aucun doublon) avant d'épuiser les deux clés à 15 h 46.
+L'alarme attendue est bien levée — `[ALARME] plus aucune clé disponible — key1 : 500/500 ;
+key2 : 511/500` — et l'état porte `en_attente_quota` avec `reprise_possible_a:
+2026-09-19T07:00:00+00:00`. **La clé 2 a dépassé sa limite de 11 requêtes** (511/500) : le
+compteur journalier laisse passer au-delà du plafond, à regarder côté passerelle.
+
+Le processus, lui, n'a pas survécu à l'attente : le `controller` a été recréé une troisième
+fois à 16 h 25 (relance du lanceur GAMA `launch_headless.py`), ce qui a rendu `--attendre-fenetre`
+sans effet — le sommeil vit dans le processus, pas sur le disque. **Une exécution en attente de
+fenêtre ne se réveille donc pas si la pile bouge entre-temps** : la reprise du 19 septembre doit
+être commandée, elle ne se fera pas d'elle-même.
+
+Enseignement d'exploitation : `make run OFFLINE=1` relance son lanceur, et chaque relance
+recrée le `controller`. Un bras d'audit ne peut pas tourner de façon fiable pendant un run
+offline ; surveiller la fin du run par le pid de `make` est faux, ce processus rendant la main
+aussitôt — le signal juste est l'absence du lanceur `launch_headless.py` et l'arrêt du
+conteneur `gama`.
+
+## L'audit unitaire est complet (19 septembre 2026)
+
+`proexp05` est allée au bout le 19 septembre à 09 h 57 : 2 930 personnes, 12 562 décisions,
+**0 erreur**, 4 311 sollicitations, aucun doublon malgré deux reprises. Les neuf décideurs sont
+mesurés sur le même terrain — 9 621 déplacements déclarés, dont 9 613 à 9 618 notés selon le
+décideur.
+
+| Décideur | Exact. pondérée | Arbitrées | Forcées | Entropie croisée | GMPCA | Vélo R | TC R | Marche R | Hors options |
+|---|---|---|---|---|---|---|---|---|---|
+| `lgbm` | 71,5 % | 67,4 % | 82,7 % | 0,419 | 0,657 | 20,4 % | 61,7 % | 63,4 % | 1 226 |
+| `klr` | 70,6 % | 66,2 % | 82,5 % | 0,438 | — | 19,3 % | 60,4 % | 62,7 % | 1 248 |
+| `rf` | 69,9 % | 65,5 % | 82,9 % | 0,445 | — | 13,9 % | 60,6 % | 64,0 % | 1 277 |
+| `mnl` | 68,6 % | 64,2 % | 82,0 % | 0,478 | — | 18,3 % | 57,5 % | 60,0 % | 1 285 |
+| `durmin` | 68,1 % | 65,3 % | 76,0 % | — | — | 25,8 % | 39,7 % | 19,2 % | 1 067 |
+| **palier B** (`prompt_expert_05`) | **67,6 %** | **65,2 %** | **76,4 %** | **0,356** | **0,701** | 22,5 % | 55,2 % | 47,2 % | 1 295 |
+| `majvoiture` | 66,7 % | 61,7 % | 79,7 % | — | — | 2,3 % | 25,3 % | 16,2 % | 947 |
+| **palier A** (`prompt_minimal_02`) | **64,8 %** | **61,6 %** | **76,2 %** | **0,460** | **0,631** | 24,1 % | 60,0 % | 44,2 % | 1 428 |
+| `alea` | 23,5 % | 21,5 % | 41,7 % | 1,260 | — | 11,4 % | 60,5 % | 28,8 % | 3 226 |
+
+**Le résultat ne se lit pas dans la colonne d'exactitude.** Sur l'accord dur, le palier B est
+sixième : il ne bat que le plancher « toujours la voiture » et le palier A, et reste un demi-point
+sous l'heuristique de durée minimale. Sur la **qualité de la distribution**, il est premier du
+tableau — entropie croisée **0,356 contre 0,419** au meilleur modèle tabulaire, GMPCA **0,701
+contre 0,657**. Le prompt calibré se trompe à peu près aussi souvent que les autres, mais il se
+trompe en gardant de la masse sur le mode déclaré, là où les modèles tabulaires tranchent net.
+Le palier A, lui, est dernier des décideurs sérieux sur les deux lectures.
+
+**Le désaccord porte sur les courtes distances.** Au-delà de 10 km tout le monde a raison parce
+que tout est en voiture (80 à 94 %) ; l'écart entre décideurs se joue sous 2 km, où vit un tiers
+de l'échantillon (3 233 déplacements sur 9 616).
+
+| Bande | `lgbm` | palier B | palier A | `durmin` | `majvoiture` | n |
+|---|---|---|---|---|---|---|
+| 0–1 km | 62,4 % | 53,7 % | 51,6 % | 40,3 % | 36,9 % | 1 683 |
+| 1–2 km | 55,5 % | 56,3 % | 53,2 % | 58,1 % | 58,1 % | 1 550 |
+| 2–5 km | 69,8 % | 68,9 % | 65,5 % | 73,2 % | 70,6 % | 2 705 |
+| 5–10 km | 80,2 % | 76,0 % | 72,2 % | 79,8 % | 77,7 % | 2 078 |
+| 10–20 km | 83,2 % | 80,7 % | 78,1 % | 82,8 % | 82,7 % | 1 115 |
+| 20–50 km | 87,6 % | 86,1 % | 86,8 % | 86,4 % | 87,4 % | 468 |
+| > 50 km | 94,1 % | 94,1 % | 94,1 % | 94,1 % | 94,1 % | 17 |
+
+Sur le premier kilomètre, les deux paliers dominent largement les deux planchers (53,7 % et
+51,6 % contre 40,3 % et 36,9 %) et perdent contre le gradient boosté. C'est la seule bande où
+les décideurs se départagent vraiment.
+
+**Où ça se paie : le vélo est sur-attribué, la marche sous-attribuée.** Les deux paliers
+proposent le vélo bien plus souvent qu'il n'est déclaré — précision 15,0 % (palier B) et 14,7 %
+(palier A) contre 27,3 % pour le gradient boosté, à rappel comparable. Symétriquement, leur
+rappel de la marche plafonne à 47,2 % et 44,2 % quand les modèles tabulaires tiennent 60 à 64 %.
+Les paliers déplacent de la marche vers le vélo ; c'est le même biais que celui vu à l'agrégat,
+et l'audit unitaire montre qu'il ne se compense pas — il se paie déplacement par déplacement.
+
+**Les plafonds.** Le plafond partagé est mince : 86 déplacements dont le jeu lui-même ne porte
+pas le mode déclaré. Le plafond propre à chaque décideur, lui, est lourd et inégal — de 947
+(`majvoiture`) à 1 428 (palier A) déplacements dont le mode déclaré n'était pas dans les options
+présentées, 1 295 pour le palier B. L'offre étant path-dépendante sous contrainte de chaîne,
+**« tous les décideurs sur la même offre » est faux** et ne doit pas être écrit.
+
+
+## Correction du 2026-09-21 : l'entropie croisée était incomparable
+
+Le script ne notait chaque décideur que sur les décisions où sa distribution laissait une masse
+non nulle au mode déclaré. Le sous-ensemble dépendait donc du décideur — 5 923 décisions pour le
+palier B, 6 588 pour le gradient boosté — et la comparaison publiée au § 6.5 et à l'annexe I
+reposait dessus. Un décideur qui tranche dur retirait ses propres échecs de son score.
+
+L'entropie croisée et le GMPCA se calculent désormais sur le **support commun**, l'intersection
+des décisions que notent tous les décideurs comparés, 5 451 décisions pour les six décideurs à
+distribution de l'article. `--definisseur` restreint la liste de ceux qui le définissent ; les
+planchers (`alea`, `durmin`, `majvoiture`) en sont exclus par construction. Une alarme se lève
+si l'intersection descend sous 60 % du décideur le moins couvrant.
+
+**Ce que ça change.** Le palier B ne devance plus que le logit multinomial, là où il passait
+devant les quatre méthodes tabulaires : 0,342 contre 0,299 (gradient boosté), 0,321 (forêt),
+0,324 (noyau) et 0,358 (logit). L'ordre est le même si les deux bras `jev` du ticket 096
+définissent aussi le support. Le hasard uniforme ne couvre pas le support commun et n'y reçoit
+pas de valeur.
+
+**Grandeur nouvelle, non publiée dans l'article à la demande de l'auteur :** la part des
+décisions arbitrées où le mode déclaré était dans les options présentées et où le décideur lui a
+donné zéro. 8,9 % pour le palier B (580 sur 6 503), 5,5 % pour le palier A, 0,0 % pour les quatre
+méthodes tabulaires, dont la sortie ne produit pas de zéro exact. Elle vit dans le JSON de
+l'audit et dans la trace.
+
+Trace : `docs/traces/2026-09-21_11-45_ticket058_entropie_support_commun/`.

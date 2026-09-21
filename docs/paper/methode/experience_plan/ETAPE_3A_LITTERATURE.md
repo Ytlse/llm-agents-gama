@@ -3,7 +3,7 @@
 > Recherche du 2026-09-09 pour le [plan longitudinal](ETAPE_3A_PLAN_LONGITUDINAL.md) (ticket 041).
 > **[V]** référence et chiffre vérifiés en ligne ; **[V-partiel]** référence vérifiée, chiffre de
 > source secondaire ; **[non vérifié]** souvenir non confirmé. Les DOI ne sont indiqués que
-> lorsqu'ils ont été vus. À fusionner dans `BIBLIOGRAPHIE.md` / `references.bib` au lot L8,
+> lorsqu'ils ont été vus. À fusionner dans `BIBLIOGRAPHIE.md` / `sample.bib` au lot L8,
 > après relecture humaine (aucun de ces éléments n'entre en mémoire persistante sans validation).
 
 ## A. Formation des habitudes et variabilité jour-à-jour

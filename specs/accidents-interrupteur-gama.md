@@ -48,8 +48,10 @@ des deux régimes il a connu.
 - **R15** — L'HEURE d'un accident suit la distribution horaire mesurée, jamais l'uniforme.
 - **R16** — La CLASSE DE VITESSE de l'axe suit la distribution mesurée ; l'arête est ensuite
   tirée au prorata de sa longueur **à l'intérieur de cette classe**.
-- **R17** — Le facteur MÉTÉO n'est appliqué que s'il est déclaré établi. Tant qu'il ne l'est
-  pas, il vaut 1 et la météo du jour ne change rien au tirage.
+- **R17** — La météo **ne conditionne pas** l'accidentalité (décision du 2026-09-21) : le
+  facteur vaut 1 et le jour du bulletin ne change rien au tirage. Le garde-fou reste en place —
+  un facteur n'est appliqué que s'il est déclaré établi — mais son absence n'est plus un
+  chantier en attente, c'est une limite assumée.
 - **R18 (déduite)** — Une loi dont une distribution ne somme pas à 1, ou dont un facteur n'a
   pas pour moyenne 1, est refusée au chargement. Sans ce contrôle, le taux moyen du run
   serait déplacé sans qu'aucun journal ne le dise.
@@ -92,7 +94,7 @@ des deux régimes il a connu.
 | R14 | Vendredi (×1,188) contre dimanche (×0,833) | Le taux conditionné du vendredi est strictement supérieur |
 | R15 | 60 journées simulées à taux élevé | La part d'accidents à 17 h dépasse trois fois celle de 3 h |
 | R16 | Réseau à 58 % en zone apaisée, 34 % en urbain | Moins de 20 % des accidents en zone apaisée ; l'urbain domine |
-| R17 | Même jour, avec et sans « pluie forte » | Taux identiques tant que `facteur_meteo_etabli` est faux |
+| R17 | Même jour, avec et sans « pluie forte » | Taux identiques : la météo ne conditionne pas le tirage |
 | R18 | Loi dont la distribution horaire somme à 0,24 | `ValueError` au chargement, aucun tirage |
 | R19 | Loi portant une classe absente du graphe | Alarme au chargement ; la masse va aux classes présentes |
 | R8 | Itinéraire voiture traversant une arête avec accident actif au départ | Durée rendue strictement supérieure à la durée du même itinéraire sans accident |
@@ -106,9 +108,14 @@ des deux régimes il a connu.
 
 ## Non-goals
 
-- **Le facteur météo établi.** Son estimation a été faite et REJETÉE (nomenclatures
-  incommensurables entre `atm` et la source météo locale) : il vaut 1. L'établir demande soit
-  une source d'exposition découpée comme `atm`, soit un risque relatif déclaré exogène.
+- **Le facteur météo.** Tranché le 2026-09-21 : la météo ne conditionne pas l'accidentalité,
+  et ce n'est pas remis à plus tard. Raison principale, mesurée : **les conditions à risque
+  n'existent pas dans le monde simulé** — sur les 2 920 créneaux d'une année servie par
+  `weather_loader`, le brouillard en occupe **1** et la neige **4**, et le jeu gelé
+  `jeu-20260316` n'en porte aucun. Estimer un coefficient pour une condition absente du jeu de
+  données serait sans objet. Raison seconde : pour les conditions qui restent, `atm` et la
+  source météo locale sont incommensurables. Seul un jeu météo portant réellement ces
+  conditions rouvrirait la question.
 - **La normalisation par les kilomètres de réseau.** Elle n'a pas lieu d'être pour les
   variables tirées — c'est la conclusion de la mesure, pas un renoncement : diviser par
   l'exposition donnerait un risque par véhicule-km, quand le tirage a besoin d'une fréquence
@@ -153,9 +160,10 @@ des deux régimes il a connu.
    dans l'emprise du graphe (3 414 des 3 789 accidents du département y tombent). Le champ
    `accidents.taux_journalier` reste disponible comme surcharge de développement, `None` par
    défaut.
-3. **Le facteur météo, établi comment ?** Le calcul par exposition a été rejeté (voir
-   Non-goals). Faut-il chercher une source d'exposition découpée comme `atm`, le déclarer
-   exogène, ou laisser la météo sans effet sur l'accidentalité ?
+3. ~~**Le facteur météo, établi comment ?**~~ **Tranché le 2026-09-21** : la météo reste sans
+   effet sur l'accidentalité. La question était mal posée — on cherchait à mieux estimer un
+   coefficient sans vérifier que la condition existe dans le jeu de données servi. Elle n'y
+   est pas.
 4. **L'ampleur du retard.** Aucune source n'en donne aujourd'hui (le flux DATEX n'est pas
    archivé). C'est un paramètre exogène : passe-t-il par
    `docs/arch/protocole-parametre-exogene.md` dès cette tranche, ou porte-t-il une valeur

@@ -41,6 +41,15 @@ x-shared-env: &shared-env
   CONTINUE_RUN: ${CONTINUE_RUN:-}
   # Ticket 091 — nom du run repris. Vide = aucune réutilisation de mémoire ni de décisions.
   REPRISE_RUN: ${REPRISE_RUN:-}
+  # Ticket 095, lot D — RUN ENFANT. Nom (ou chemin) du run PARENT dont ce bras hérite le socle
+  # commun : il démarre sur le dernier point de reprise du parent au lieu de rejouer — et de
+  # repayer — les quatorze premiers jours. Vide = run ordinaire.
+  RUN_PARENT: ${RUN_PARENT:-}
+  # Les champs d'identité que cet enfant DÉCLARE faire varier par rapport à son parent, séparés
+  # par des virgules (p. ex. `choc,mode_fenetre_changements`). Tout autre écart fait refuser le
+  # démarrage : un enfant hérite de la MÉMOIRE de son parent, et une mémoire produite sous
+  # d'autres réglages décrit une autre expérience que celle qu'il va jouer.
+  CHAMPS_LIBRES: ${CHAMPS_LIBRES:-}
   TZ: Europe/Paris
   # ── Clés Google de la SIMULATION (ticket 008) ──────────────────────────────
   # Les quotas free tier Gemini se comptent par projet ET par modèle : chaque clé
@@ -99,10 +108,14 @@ x-shared-env: &shared-env
   # Même clé : les deux instances Mistral se distinguent par leur modèle, pas par leur clé.
   PROVIDER_KEYS__mistral_large3_key1: ${PROVIDER_KEYS__mistral:-}
   PROVIDER_KEYS__groq_openai_120_key1: ${PROVIDER_KEYS__groq:-}
+  PROVIDER_KEYS__groq_openai_20_key1: ${PROVIDER_KEYS__groq:-}
   PROVIDER_KEYS__groq_qwen_qwen3_6_27b_key1: ${PROVIDER_KEYS__groq:-}
   PROVIDER_KEYS__groq_qwen_qwen3_8_27b_key1: ${PROVIDER_KEYS__groq:-}
   PROVIDER_KEYS__cerebras_gptoss120b_key1: ${PROVIDER_KEYS__cerebras:-}
   PROVIDER_KEYS__cerebras_gemma_4_31b_key1: ${PROVIDER_KEYS__cerebras:-}
+  # OpenAI — 1 instance
+  PROVIDER_KEYS__openai_gpt56_luna_key1: ${PROVIDER_KEYS__openai:-}
+  PROVIDER_KEYS__openai_key1: ${PROVIDER_KEYS__openai:-}
   # ── LM Studio (modèles locaux servis par l'hôte, port 1234 ; weight 0 = épinglage seul) ──
   # Un seul interrupteur : PROVIDER_KEYS__lmstudio dans .env (valeur libre, LM Studio ne
   # vérifie pas la clé). Vide ou absent, toutes les instances lmstudio_* sont exclues au démarrage.
@@ -122,6 +135,7 @@ x-shared-env: &shared-env
   PROVIDER_KEYS__mistral: ${PROVIDER_KEYS__mistral:-}
   PROVIDER_KEYS__groq: ${PROVIDER_KEYS__groq:-}
   PROVIDER_KEYS__cerebras: ${PROVIDER_KEYS__cerebras:-}
+  PROVIDER_KEYS__openai: ${PROVIDER_KEYS__openai:-}
   PROVIDER_KEYS__lmstudio: ${PROVIDER_KEYS__lmstudio:-}
 
 x-osmnx-service: &osmnx-service
@@ -411,6 +425,66 @@ services:
       PYTHONPATH: /app:/opt
       # Le contrôleur lit la liste des fournisseurs pour dimensionner les expériences (ressources.py).
       LLM_GATEWAY_PROVIDERS_FILE: ${LLM_GATEWAY_PROVIDERS_FILE:-/app/config/llm_gateway/providers.yaml}
+      # ── Réglages d'EXPÉRIENCE (ticket 077, lot L) ─────────────────────────────
+      # Passe-plat, sur le modèle de CONTINUE_RUN : compose ne transmet au conteneur que ce
+      # qu'il déclare. Sans ces lignes, un `VEHICLE_CHAIN_ENABLED=false` posé sur l'hôte
+      # n'atteint rien, et le run tourne aux valeurs par défaut sans que rien ne le dise —
+      # c'est exactement ce qui est arrivé le 2026-09-19 à 16:44.
+      #
+      # ⚠ NOM NU, sans préfixe `AGENT__` : les sous-configurations sont des `BaseSettings`
+      # sans préfixe (`settings.py`). `AGENT__VEHICLE_CHAIN_ENABLED` n'est lu par personne, et
+      # l'orchestrateur de cohorte l'a posé pendant des semaines sans le moindre effet.
+      #
+      # ⚠ Les défauts ci-dessous DOIVENT rester ceux de `settings.py` — deux valeurs par défaut
+      # écrites à deux endroits divergent. `test_077_lotL_passage_reglages.py` les tient ensemble.
+      #
+      # ⚠ Une clé présente dans `config/config.yaml` l'emporte sur ces variables : le YAML est
+      # passé à l'initialisation, qui prime sur l'environnement. C'est pourquoi le lot K les a
+      # retirées du fichier.
+      VEHICLE_CHAIN_ENABLED: ${VEHICLE_CHAIN_ENABLED:-true}
+      VEHICLE_RETURN_HOME_LOCK: ${VEHICLE_RETURN_HOME_LOCK:-true}
+      MODE_CHOICE_TRUNCATION_THRESHOLD: ${MODE_CHOICE_TRUNCATION_THRESHOLD:-0.0}
+      STM_REFLECTION_MIN_ENTRIES: ${STM_REFLECTION_MIN_ENTRIES:-10}
+      WEATHER_PER_AGENT_DATES: ${WEATHER_PER_AGENT_DATES:-false}
+      # Ticket 084/085/095 — instances de passerelle admises à servir les appels de CE run.
+      # Accepte une liste plate JSON, ou une TABLE `catégorie → instances` (lot C du 095).
+      #
+      # ⚠ Le nom est le nom NU du champ : `INSTANCES_ADMISES`, PAS `LLM__INSTANCES_ADMISES`.
+      # L'orchestrateur de campagne a posé le second du 2026-09-08 au 2026-09-21 : mauvais nom,
+      # non déclaré ici, et de toute façon `config.yaml` primait. Il n'a jamais rien fait.
+      # Le défaut reproduit ce que `config.yaml` posait jusqu'au 2026-09-21.
+      INSTANCES_ADMISES: '${INSTANCES_ADMISES:-["google_gemini31_key1","google_gemini31_key2"]}'
+      MEMOIRE__IMPORTANCE_CHOC: ${MEMOIRE__IMPORTANCE_CHOC:-0.7}
+      # Ticket 095 — ce que devient la composante de retard AU-DELÀ du retard de référence.
+      # `asymptote` : elle monte encore, en décélérant. `palier` : le comportement d'avant le
+      # 2026-09-21, où 30, 45 et 60 minutes valaient rigoureusement la même gravité. À déclarer
+      # `palier` pour reproduire un run antérieur.
+      MEMOIRE__RETARD_SATURATION: ${MEMOIRE__RETARD_SATURATION:-asymptote}
+      MEMOIRE__RETARD_GRAVITE_MAX: ${MEMOIRE__RETARD_GRAVITE_MAX:-0.7}
+      MEMOIRE__RETARD_REF_S: ${MEMOIRE__RETARD_REF_S:-1800}
+      MEMOIRE__FENETRE_CHANGEMENTS_JOURS: ${MEMOIRE__FENETRE_CHANGEMENTS_JOURS:-14}
+      MEMOIRE__CHANGEMENTS_MAX: ${MEMOIRE__CHANGEMENTS_MAX:-3}
+      # Ticket 095, lot A — la durée d'un souvenir de choc se DÉRIVE de sa gravité. `derivee`
+      # est le défaut ; `fixe` reproduit le comportement d'avant le ticket et lit alors
+      # MEMOIRE__FENETRE_CHANGEMENTS_JOURS ci-dessus. Le mode entre dans identite_run.json.
+      MEMOIRE__MODE_FENETRE_CHANGEMENTS: ${MEMOIRE__MODE_FENETRE_CHANGEMENTS:-derivee}
+      MEMOIRE__SEUIL_SERVICE_CHANGEMENT: ${MEMOIRE__SEUIL_SERVICE_CHANGEMENT:-0.35}
+      MEMOIRE__PLANCHER_CHANGEMENT_JOURS: ${MEMOIRE__PLANCHER_CHANGEMENT_JOURS:-2.0}
+      MEMOIRE__PLAFOND_CHANGEMENT_JOURS: ${MEMOIRE__PLAFOND_CHANGEMENT_JOURS:-30.0}
+      # ── Dispositifs d'expérience (ticket 077) ─────────────────────────────────
+      # Même oubli que les réglages ci-dessus, trouvé le 2026-09-21 : l'orchestrateur les
+      # posait sur l'hôte, compose ne les déclarait pas, et les deux dispositifs n'ont JAMAIS
+      # tourné — ni l'enquête d'affinité modale, ni la mise en veille sur quota. Zéro ligne
+      # `[enquete]` dans les journaux des trois bras de la campagne.
+      EXPERIMENT_SURVEY_ENABLED: ${EXPERIMENT_SURVEY_ENABLED:-0}
+      EXPERIMENT_SURVEY_DAYS: ${EXPERIMENT_SURVEY_DAYS:-}
+      # Ticket 095, lot B — modes interrogés par l'enquête du soir. Vide : les quatre d'Adam &
+      # Gaudou (voiture, transports_collectifs, velo, marche). À étendre à `train` ou
+      # `deux_roues` quand le choc du run les vise (C4, C5), sans quoi l'instrument interroge
+      # quatre modes dont aucun n'est celui que le choc a frappé.
+      EXPERIMENT_SURVEY_MODES: ${EXPERIMENT_SURVEY_MODES:-}
+      EXPERIMENT_TARGET_PERSONAS: ${EXPERIMENT_TARGET_PERSONAS:-}
+      EXPERIMENT_HIBERNATE_ON_QUOTA: ${EXPERIMENT_HIBERNATE_ON_QUOTA:-0}
       # Ticket 035 — plateforme d'expériences : où vivent jeux, expériences et le référentiel d'enquête
       EXPERIENCES_DIR: /app/data/experiences
       JEUX_DIR: /app/data/jeux
@@ -566,9 +640,19 @@ services:
       - "9090:9090"
     volumes:
       - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./data/prometheus_data:/prometheus
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   grafana:
     image: grafana/grafana:latest
@@ -588,7 +672,8 @@ services:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
 
   # ─────────────────────────────────────────────
   # GAMA Server — simulation multi-agents headless (profil "offline")
@@ -635,3 +720,4 @@ services:
 volumes:
   redis_data:
   grafana_data:
+  prometheus_data:

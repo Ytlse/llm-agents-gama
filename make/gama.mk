@@ -67,6 +67,9 @@ ifeq ($(CONT),)
 	mkdir -p data/grafana_data data/prometheus_data; \
 	echo "🗑️  Purge des compteurs Redis (wmetrics:)..."; \
 	$(COMPOSE) exec -T redis redis-cli --scan --pattern "wmetrics:*" | xargs -r $(COMPOSE) exec -T redis redis-cli del 2>/dev/null || true; \
+	echo "♻️  Arrêt du contrôleur pour un démarrage à neuf..."; \
+	$(COMPOSE) stop controller 2>/dev/null || true; \
+	$(COMPOSE) rm -f controller 2>/dev/null || true;
 
 else
 	@echo "♻️  Reprise à chaud : workdir, métriques et compteurs conservés ($(shell readlink experiments/current))"
@@ -114,6 +117,8 @@ endif
 	@if ! cmp -s $(APP_CONFIG) .config.yaml.applique; then \
 		echo "♻️  $(APP_CONFIG) a changé depuis le dernier lancement : recréation du contrôleur"; \
 		$(COMPOSE) up -d --force-recreate --no-deps controller && cp $(APP_CONFIG) .config.yaml.applique; \
+	else \
+		cp $(APP_CONFIG) .config.yaml.applique 2>/dev/null || true; \
 	fi
 	@$(MAKE) wait-ready
 ifneq ($(OFFLINE),)

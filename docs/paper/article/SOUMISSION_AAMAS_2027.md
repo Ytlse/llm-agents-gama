@@ -5,6 +5,30 @@
 
 ---
 
+## 0. Calendrier officiel
+
+Relevé le 2026-09-21 sur la page de l'appel principal
+([warwick.ac.uk](https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/call-for-main-track/)).
+Toutes les échéances tombent en fin de journée, *Anywhere on Earth* (UTC−12).
+
+| Étape | Date |
+|---|---|
+| Author registration on OpenReview | **17 septembre 2026** |
+| Abstract submission | **1er octobre 2026** |
+| Paper submission | **8 octobre 2026** |
+| Rebuttal period | 20 – 24 novembre 2026 |
+| Author notification | 21 décembre 2026 |
+| Camera-ready paper | 25 janvier 2027 |
+| Conférence | 3 – 7 mai 2027 |
+
+Contact soumission : `aamas2027pcs@gmail.com`.
+
+**L'enregistrement des auteurs sur OpenReview est antérieur à celui du résumé**, et cette
+page-ci n'en donnait que la règle relative (« au moins 2 semaines avant »), pas la date. Rien
+ne pouvait donc alerter à son approche.
+
+---
+
 ## 1. Format et Contraintes Générales
 
 - **Langue :** Les articles doivent être rédigés en anglais.
@@ -28,7 +52,7 @@
    - **Date limite de création de compte :** au moins **2 semaines avant** la date limite de soumission du résumé.
 2. **Enregistrement du Résumé (Abstract) :**
    - **Obligatoire 1 semaine avant** la date limite de soumission finale.
-   - Contenu : Texte brut de **100 à 300 mots**.
+   - Contenu : Texte brut d'**environ 100 à 300 mots**. Le texte officiel dit « registering an abstract of your paper (of **around** 100-300 words in plain text) » : c'est une fourchette indicative, pas un plafond dur, et elle porte sur le champ texte d'OpenReview. Le résumé composé dans le PDF n'a pas de limite de mots propre — seules les 8 pages du papier le bornent. <!-- source : https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/instructions/, relevé le 2026-09-21 ; le mot « around » manquait à la transcription antérieure -->
    - Informations complémentaires requises : Sélection des mots-clés caractérisant l'article.
 3. **Choix du Domaine (Track) :**
    - L'article doit être rattaché à l'un des domaines officiels de l'AAMAS.

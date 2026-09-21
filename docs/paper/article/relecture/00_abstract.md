@@ -132,6 +132,6 @@ Multi-agent simulations of urban mobility traditionally rely on tabular models, 
 5. **Le prompt calibré nommé pour ce qu'il est** — réécrit à la main vers les parts publiées — donc un instrument, seule position tenable face à CityReal (Bougie, Ye & Watanabe, 2026).
 6. **Correction factuelle**, point 4.13 : la réponse n'est plus lue « comme décision retenue », la décision en simulation étant un tirage dans la masse.
 
-**Retiré de la version de l'auteur :** `accuracy, log-loss` (métrique non définie par le protocole) ; « bicycle fall, etc. » (seule la panne de la ligne A est dans C3) ; « short- and medium-term memory register » (C3 ne définit qu'un tampon à court terme décroissant) ; « a kinetic of N days » (cinq jours, fixé) ; plancher et plafond isolés (remplacés par les quatre paliers) ; les modes nommés (voir point 3 ci-dessus).
+**Retiré de la version de l'auteur :** `accuracy, log-loss` (métrique non définie par le protocole) ; « bicycle fall, etc. » (seule la panne de la ligne A est dans C3) ; « short- and medium-term memory register » (le dispositif n'expose à la décision qu'une mémoire longue, dont la constante de temps s'exprime en jours) ; « a kinetic of N days » (cinq jours, fixé) ; plancher et plafond isolés (remplacés par les quatre paliers) ; les modes nommés (voir point 3 ci-dessus).
 
 **Décompte.** 241 mots au décompte de soumission, 242 au découpage naïf, soit **−29,1 %** sur 340. Dans la borne de 100 à 300 mots.

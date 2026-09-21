@@ -91,10 +91,18 @@ def test_available_absent_reste_permissif():
     assert not hors_service({}) and not occupee({})
 
 
-def test_le_quota_du_jour_reste_un_motif_distinct():
+def test_le_quota_du_jour_declaratif_ne_bloque_pas_sans_429():
+    """Le plafond local est déclaratif et informatif : marge nulle ne bloque pas si quota_exhausted est False."""
     m = _moniteur({
         "cerebras_gpt-oss-120b": {"available": True, "disabled": False, "cooldown": False,
                                   "quota_exhausted": False, "daily_requests": 1000},
     })
-    assert not m.disponible("cerebras_gpt-oss-120b"), "marge nulle : 1000/1000"
+    assert m.disponible("cerebras_gpt-oss-120b"), "plafond informatif : disponible tant qu'aucun 429 n'est posé"
     assert not occupee({"available": True}), "disponible n'est pas occupée"
+
+    # En revanche, le flag quota_exhausted posé suite à un 429 rend l'instance indisponible
+    m_epuise = _moniteur({
+        "cerebras_gpt-oss-120b": {"available": False, "disabled": False, "cooldown": False,
+                                  "quota_exhausted": True, "daily_requests": 1000},
+    })
+    assert not m_epuise.disponible("cerebras_gpt-oss-120b")

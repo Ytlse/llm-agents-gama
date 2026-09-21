@@ -34,6 +34,12 @@ class AgentSpec(BaseModel):
     goal: str | None = None
     constraints: str | None = None
     feeling: str | None = None
+    # Mode interrogé par l'enquête du soir (ticket 095, lot B). UN prompt par mode, le mode
+    # nommé et les autres jamais cités ; absent, c'est le prompt des PRIORITÉS, qui ne nomme
+    # aucun mode. Déclaré ici parce que `extra="ignore"` jette en silence tout champ inconnu :
+    # sans cette ligne, le gabarit recevrait un mode vide et poserait les six questions dans le
+    # vide, sans qu'aucune erreur ne le dise.
+    mode_interroge: str | None = None
     # Anticipation de la chaîne de la journée (ticket 014).
     day_outlook: str | None = None            # météo des tranches restantes du jour
     agenda: list[str] = Field(default_factory=list)  # trajets restants (agenda glissant)

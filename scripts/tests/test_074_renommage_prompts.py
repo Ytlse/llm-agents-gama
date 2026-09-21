@@ -122,11 +122,31 @@ def test_la_numerotation_suit_la_genealogie(store: dict) -> None:
 # ── C-5 : les anciens noms restent résolubles ─────────────────────────────────────────────
 
 
-def test_chaque_variante_garde_son_ancien_nom(store: dict) -> None:
-    sans = [n for n, e in store["prompts"].items() if not e.get("_ancien_nom")]
-    assert not sans, f"variantes sans `_ancien_nom` : {sans}"
-    anciens = [e["_ancien_nom"] for e in store["prompts"].values()]
+def test_chaque_variante_renommee_garde_son_ancien_nom(store: dict) -> None:
+    """`_ancien_nom` est dû par les variantes qui ONT ÉTÉ renommées, et par elles seules.
+
+    Le renommage du ticket 074 a porté sur les 22 variantes d'alors, toutes traduites du
+    français ce jour-là : chacune porte donc `_traduction`, et c'est exactement ce qui la
+    désigne comme antérieure à la bascule. Une variante écrite en anglais APRÈS n'a jamais eu
+    d'autre nom — lui réclamer un `_ancien_nom` obligerait à en inventer un, c'est-à-dire à
+    faire mentir le champ dont ce test protège la fiabilité.
+
+    Constaté le 2026-09-21, quand sept variantes neuves (`prompt_expert_25` et `31` à `36`)
+    ont fait tomber ce test sans qu'aucun ancien nom ne soit devenu irrésoluble. La propriété
+    C-5 qu'il garde — « un ancien nom se résout encore en lecture » — n'était pas en cause.
+    """
+    renommees = {n: e for n, e in store["prompts"].items() if e.get("_traduction")}
+    assert renommees, "aucune variante d'avant la bascule : le test ne mesure plus rien"
+    sans = [n for n, e in renommees.items() if not e.get("_ancien_nom")]
+    assert not sans, f"variantes renommées sans `_ancien_nom` : {sans}"
+    anciens = [e["_ancien_nom"] for e in renommees.values()]
     assert len(anciens) == len(set(anciens)), "deux variantes revendiquent le même ancien nom"
+
+    # Le garde symétrique : une variante NÉE après la bascule ne doit pas se réclamer d'un
+    # ancien nom qu'elle n'a pas eu — ce serait rendre résoluble un nom qui n'a jamais servi.
+    usurpatrices = [n for n, e in store["prompts"].items()
+                    if not e.get("_traduction") and e.get("_ancien_nom")]
+    assert not usurpatrices, f"variantes postérieures à la bascule s'inventant un ancien nom : {usurpatrices}"
 
 
 # `expert_gem_3.8_v2` a quitté cette liste le 2026-09-17 : la variante qu'il nommait

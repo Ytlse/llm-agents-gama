@@ -90,17 +90,13 @@ class InMemoryRateLimiter:
         return getattr(cfg, "quota_reset_tz", DEFAUT_FUSEAU_QUOTA) or DEFAUT_FUSEAU_QUOTA
 
     def _daily_quota_exhausted(self, provider: str, cfg: ProviderConfig) -> bool:
-        if cfg.rpd_limit is None and cfg.tpd_limit is None:
-            return False
-        if time.time() < self._quota_exhausted_until.get(provider, 0.0):
-            return True
-        if cfg.rpd_limit is not None and self.daily_requests(provider) >= cfg.rpd_limit:
-            self._quota_exhausted_until[provider] = time.time() + seconds_until_quota_reset(self._tz(provider))
-            return True
-        if cfg.tpd_limit is not None and self.daily_tokens(provider) >= cfg.tpd_limit:
-            self._quota_exhausted_until[provider] = time.time() + seconds_until_quota_reset(self._tz(provider))
-            return True
-        return False
+        """True si le provider a été écarté pour quota journalier (sur parole du fournisseur).
+
+        Le plafond local (rpd_limit/tpd_limit) est déclaratif et informatif : il ne bloque
+        plus localement les réservations afin de pouvoir mesurer les dépassements réels.
+        Seule la présence d'une exclusion temporelle (posée lors d'un 429 effectif
+        via mark_quota_exhausted_until) écarte le provider."""
+        return time.time() < self._quota_exhausted_until.get(provider, 0.0)
 
     def record_tokens(self, provider: str, tokens: int) -> None:
         if tokens > 0:
@@ -126,6 +122,10 @@ class InMemoryRateLimiter:
 
     def is_quota_exhausted(self, provider: str) -> bool:
         return time.time() < self._quota_exhausted_until.get(provider, 0.0)
+
+    def clear_quota_exhausted(self, provider: str) -> None:
+        """Lève le verrou d'épuisement de quota journalier pour ce provider afin de re-tester l'API."""
+        self._quota_exhausted_until.pop(provider, None)
 
     def release_slot(self, provider: str, est_tokens: int | None = None) -> None:
         if self._rpm[provider] > 0:

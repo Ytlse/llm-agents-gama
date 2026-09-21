@@ -1,0 +1,211 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% LaTeX Template for AAMAS-2027 (based on sigconf.tex)
+%%% Prepared by the AAMAS-2027 Publication Chairs based on the version from AAMAS-2026.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% main.tex — master file of the paper. Created 2026-09-21.
+%
+% WHAT THIS FILE IS. The chapters live one per file next to it (00_abstract.tex to
+%   99_annexes.tex) and are pulled in by \input below. Nothing else assembles them:
+%   before this file existed, the Overleaf project held the only copy of the preamble,
+%   so no cross-reference and no overfull box was detectable from the repository.
+%
+% FILES TO UPLOAD to the Overleaf project, flat, next to this one:
+%   aamas.cls, ACM-Reference-Format.bst, by.pdf, by.eps      (from template/)
+%   sample.bib                                               (from ../../sources/, NOT from template/)
+%   the PNGs of ../images/                                   (see \graphicspath below)
+%
+% THE BIBLIOGRAPHY IS NOT template/sample.bib. That file is the ACM demo, eleven dummy
+%   keys, and none of the 35 keys this paper cites is in it: every \citep would print [?].
+%   The real file is ../../sources/sample.bib, which carries all 35. Checked 2026-09-21.
+%
+% COMPILE TWICE (pdfLaTeX + BibTeX + pdfLaTeX + pdfLaTeX). The appendices define
+%   app:variables, app:margins, app:detail and app:unit, referenced from chapters 4 and 6;
+%   a single pass prints them as ??.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% == IMPORTANT ==
+%%% Use the first variant below to anonymize your submission (no author information shown).
+%%% Use the second variant below for the final paper (including author information).
+%%% For further information on anonymity and double-blind reviewing,
+%%% please consult the call for paper information
+%%% https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/
+
+%%%% For anonymized submission, use this
+\documentclass[sigconf,anonymous]{aamas}
+\renewcommand{\texttt}[1]{{\ttfamily\hyphenchar\font=`\-\relax\hyphenpenalty=10000\relax #1}}
+%%%% For camera-ready, use this
+%\documentclass[sigconf]{aamas}
+
+%%% Load required packages here (note that many are included already).
+
+\usepackage{balance}  % for balancing columns on the final page
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{array}    % >{...} column prefixes, needed by the L column below
+\usepackage{tabularx} % width-constrained tables, see the note on table widths
+\newcommand{\todo}[1]{\textbf{[#1]}}
+
+%%% TABLE WIDTHS. \columnwidth is 240 pt in sigconf (8.5in paper, inner=outer=54pt,
+%%%   columnsep=2pc). Seven single-column tables overran it. They are now set in
+%%%   tabularx over \columnwidth with a ragged-right L column that absorbs the slack:
+%%%   the text column wraps instead of spilling into the neighbouring column, whatever
+%%%   the font metrics turn out to be.
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+%%% FLOAT PLACEMENT. Chapter 6 declares ten floats for less than one page of running
+%%%   text, six of them full width. With [t] as the only allowed position and the stock
+%%%   float counters, the queue could never drain and figures surfaced two or three
+%%%   sections later. Two changes answer that: the floats now carry [tbp] (or [tp] when
+%%%   starred, since standard LaTeX has no bottom area for those), and the counters below
+%%%   let a page hold more of them.
+%%%   A third change, \afterpage{\clearpage} at the end of each chapter carrying full-width
+%%%   floats, was removed on 2026-09-21: it is incompatible with double-column floats and
+%%%   aborted the build on "Float(s) lost". The float mass is unchanged: see the note at the
+%%%   end of 06_results.tex.
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\setcounter{dbltopnumber}{2}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\dbltopfraction}{0.85}
+\renewcommand{\bottomfraction}{0.5}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.75}
+\renewcommand{\dblfloatpagefraction}{0.75}
+
+%%% Where the figures are looked up. The second path lets the file compile from the
+%%% repository, where the PNGs sit in ../images/; on Overleaf the images are flat next
+%%% to the .tex and the first path serves.
+\graphicspath{{./}{images/}{../images/}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% AAMAS-2027 copyright block (do not change!)
+
+\makeatletter
+\gdef\@copyrightpermission{
+  \begin{minipage}{0.2\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{\includegraphics[width=0.90\textwidth]{by}}
+  \end{minipage}\hfill
+  \begin{minipage}{0.8\columnwidth}
+   \href{https://creativecommons.org/licenses/by/4.0/}{This work is licensed under a Creative Commons Attribution International 4.0 License.}
+  \end{minipage}
+  \vspace{5pt}
+}
+\makeatother
+
+\setcopyright{ifaamas}
+\acmConference[AAMAS 2027]{Proc.\@ of the 26th International Conference
+on Autonomous Agents and Multiagent Systems (AAMAS 2027)}{3--7 May 2027}{Hanoi, Vietnam}{M.~Baldoni, F.~Fang, W.~Yeoh, N.~Yorke-Smith (eds.)}
+\copyrightyear{2027}
+\acmYear{2027}
+\acmDOI{}
+%\acmPrice{}
+\acmISBN{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% == IMPORTANT ==
+%%% Use this command to specify your OpenReview submission number.
+%%% In anonymous mode, it will be printed on the first page.
+
+\acmSubmissionID{<<OpenReview submission id>>}
+
+%%% Use this command to specify the track you want to submit your paper to.
+
+\submissionType{Research Paper Track}
+%\submissionType{AAAI Track}
+%\submissionType{Demonstration Track}
+%\submissionType{Blue Sky Ideas Track}
+%\submissionType{JAAMAS Track}
+%\submissionType{Doctoral Consortium}
+
+%%% Use this command to specify the title of your paper.
+
+\title[LLM à AAMAS 2027]{Limits and Perspectives of Simulating human behaviour using
+Generative agents in Multimodal Transport systems}
+
+%%% Provide names, affiliations, and email addresses for all authors.
+
+\author{Yves Bru}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{yves.bru@gmail.com}
+
+\author{Benoit Gaudou}
+\affiliation{
+  \institution{UMR IRIT, Université Toulouse Capitole}
+  \city{Toulouse}
+  \country{France}}
+\email{benoit.gaudou@ut-capitole.fr}
+
+\author{Kamaldeep Singh Oberoi}
+\affiliation{
+  \institution{CESI, CESI LINEACT}
+  \city{Toulouse}
+  \country{France}}
+\email{ksoberoi@cesi.fr}
+
+%%% The abstract. It carries its own abstract environment and belongs in the preamble,
+%%% before \begin{document}, as the AAMAS sample does.
+
+\input{00_abstract}
+
+%%% Use this command to specify a few keywords describing your work.
+
+\keywords{Generative agents; Large language models; Agent-based simulation;
+Urban mobility; Mode choice; Travel survey calibration}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Body of the paper, one \section per file, in reading order.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\input{01_introduction}
+\input{02_related_work}
+\input{03_architecture}
+\input{04_metrics_and_substrate}
+\input{05_factual_neutral_prompt}
+\input{06_results}
+\input{07_untabulated_regimes}
+\input{08_limits_and_hybrid}
+\input{09_conclusion}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% The acknowledgments section is defined using the "acks" environment
+%%% (rather than an unnumbered section). Its text is omitted under the
+%%% "anonymous" option, so it stays empty until the camera-ready.
+
+%\begin{acks}
+%  <<funding and thanks, camera-ready only>>
+%\end{acks}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Column balancing on the final page, required for the final paper.
+\balance
+
+%%% The next two lines define, first, the bibliography style to be
+%%% applied, and, second, the bibliography file to be used.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{sample}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Appendices. They come AFTER the bibliography, and \appendix is issued here
+%%% rather than inside 99_annexes.tex, which does not issue it itself.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+\input{99_annexes}
+
+\end{document}

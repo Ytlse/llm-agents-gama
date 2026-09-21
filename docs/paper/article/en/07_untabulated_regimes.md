@@ -1,6 +1,6 @@
 # 7. Responding to what no variable encodes
 
-<!-- Dernière mise à jour : 2026-09-17 -->
+<!-- Dernière mise à jour : 2026-09-21 -->
 
 **Document:** chapter 7 of the AAMAS 2027 paper — the chapter of the regimes no survey variable carries: chapter 6 measures the agent on the 21 inputs of the contract, this one measures it on a newspaper article of the day and on yesterday's delay. English master; French mirror in [`fr/07_untabulated_regimes.md`](../fr/07_untabulated_regimes.md); LaTeX rendering for Overleaf in [`overleaf/07_untabulated_regimes.tex`](../overleaf/07_untabulated_regimes.tex).
 **Status:** `draft v1.0` (17 September 2026) — first English master, translated from the French `brouillon v1.0` of the same day. The French carries the version history; it is not repeated here. **No result is published: neither campaign has been run**, and every expected quantity carries the name of the run that will produce it.
@@ -9,7 +9,7 @@
 
 ---
 
-Chapter 6 compares the deciders on the 21 variables of the contract, and the four tabular references come ahead of the best expert prompt there, 3.60 to 4.09 of composite against 4.49. Those 21 variables describe a person, a purpose, an hour and a geometry; none carries the weather, none carries a travel duration, none carries an event of the day. <!-- source: scripts/progedo_logit/feature_spec.json, 21 inputs: 12 persona, 2 purpose, 1 departure hour, 6 geometry -->
+Chapter 6 compares the deciders on the 21 variables of the protocol, and the four tabular references come ahead of the best expert prompt there, 3.60 to 4.09 of composite against 4.49. Those 21 variables describe a person, a purpose, an hour and a geometry; none carries the weather, none carries a travel duration, none carries an event of the day. <!-- source: scripts/progedo_logit/feature_spec.json, 21 inputs: 12 persona, 2 purpose, 1 departure hour, 6 geometry -->
 
 This chapter measures the same deciders on two regimes the survey does not tabulate: a press article published in the morning, and a delay suffered the day before. No survey follows the same travellers through a dated Toulouse event, so no value measured here has a target. What is tested is the sign of a displacement, the ordering of the conditions, and the monotonicity of a return, all three written before the first call to the model.
 
@@ -35,7 +35,7 @@ Each event is played under five conditions on the same 3,299 trips of the sealed
 | C4 | Agent, control text | a real local article of comparable length, with no plausible link to mode choice | the effect of the content from the effect of adding a text |
 | C5 | Tabular reference, encoded event | the event translated into the offer: links cut, frequencies degraded | what a tabular reference makes of the event when it reaches it |
 
-Condition C5 exists only when the event modifies the offer. The 21 variables carrying neither weather nor duration, the only channel by which an event reaches a tabular reference is rule 3 of the contract: a mode removed from the offer leaves the prediction, which renormalises over the remaining modes. The La Machine parade thus translates into cuts in the graph and modes removed; the bedbug rumour does not translate, and C5 is identical to C1 there. The reach is measured and published rather than assumed: on a ring-road closure, 18.2 % of the car trips between 7 and 9 a.m. use the affected axis. <!-- source: trace 2026-09-14_11-20_exposition_rocade_lot0bis; the measurement bears on an event since set aside, it gives the order of magnitude, not the value for the five -->
+Condition C5 exists only when the event modifies the offer. The 21 variables carrying neither weather nor duration, the only channel by which an event reaches a tabular reference is rule 3 of the protocol: a mode removed from the offer leaves the prediction, which renormalises over the remaining modes. The La Machine parade thus translates into cuts in the graph and modes removed; the bedbug rumour does not translate, and C5 is identical to C1 there. The reach is measured and published rather than assumed: on a ring-road closure, 18.2 % of the car trips between 7 and 9 a.m. use the affected axis. <!-- source: trace 2026-09-14_11-20_exposition_rocade_lot0bis; the measurement bears on an event since set aside, it gives the order of magnitude, not the value for the five -->
 
 ### 7.1.3 Predictions and measurement
 
@@ -87,9 +87,9 @@ A ten-day pilot on five agents gives the measure of what this prediction demands
 
 ## 7.3 What this chapter carries
 
-The two regimes give a reading of what the 21 variables of the contract do not carry: the reaction to a text published in the morning, and the persistence of a delay suffered the day before. Their reach is bounded by what the device encodes: a single shock, a single model, a tabular condition informed only where the event reaches the offer, and a count of exposed agents that decides what is measurable.
+The two regimes give a reading of what the 21 variables of the protocol do not carry: the reaction to a text published in the morning, and the persistence of a delay suffered the day before. Their reach is bounded by what the device encodes: a single shock, a single model, a tabular condition informed only where the event reaches the offer, and a count of exposed agents that decides what is measurable.
 
-Chapter 8 discusses the limits of the contract and the implications for hybrid designs; the execution cost of the language-model conditions is in chapter 9.
+Chapter 8 discusses the limits of the protocol and the implications for hybrid designs; the execution cost of the language-model conditions is in chapter 9.
 
 <!-- CROSS-REFERENCE TO CHECK: the French says "chapitre 9", but the cost of a simulated day is § 8.3 of chapter 8, and chapter 9 carries no cost figure since the speed ratio was withdrawn for want of a source. Translated faithfully; the arbitration belongs to the author. -->
 
@@ -98,9 +98,12 @@ Chapter 8 discusses the limits of the contract and the implications for hybrid d
 ### Tickets attached to this chapter
 
 - [Ticket 041](../../../tickets/ticket_041_etape_3a_hysteresis_longitudinale.md) — longitudinal protocol, arms, sample size, calendar and pre-registered predictions
-- [Ticket 048](../../../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — consolidation floor at 10 p.m. and forgetting constant in days
+- [Ticket 048](../../../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — consolidation floor at 10 p.m. and forgetting constant in days; closed on 21 September 2026, its remainder is batch F of ticket 095
 - [Ticket 059](../../../tickets/ticket_059_etape_3b_presse_locale_et_predictions_preenregistrees.md) — five-condition protocol, press corpus and concordance metrics
 - [Ticket 063](../../../tickets/ticket_063_campagne_experimentale_hysteresis_longitudinale.md) — longitudinal hysteresis campaign
 - [Ticket 064](../../../tickets/ticket_064_campagne_experimentale_presse_locale_et_scoring.md) — local press campaign and scoring
 - [Ticket 071](../../../tickets/ticket_071_evolution_memoire_du_code_actuel_a_l_etat_vise.md) — deterministic severity, recall pools and memory lifetime
 - [Ticket 077](../../../tickets/ticket_077_la_memoire_apprend_sur_des_observations_fausses.md) — integrity of the observations memory learns from
+- [Ticket 079](../../../tickets/ticket_079_chocs_declares_vecus_par_les_agents.md) — declaration of a shock suffered and of the memory it leaves
+- [Ticket 093](../../../tickets/ticket_093_personas_mesurables_et_suivi_des_habitudes.md) — per-simulated-day measurements, habits and concept operations
+- [Ticket 095](../../../tickets/ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md) — memory lifetime derived from severity, evening survey, and the consolidation calendar carried over from 048

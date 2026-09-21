@@ -36,7 +36,7 @@ par la classe) : `\citet` continue de fonctionner et donne « Auteur [12] », ma
 faire sur le PDF compilé, pas sur le markdown.
 
 **Noms d'auteurs complets dans la bibliographie.** « Donald E. Knuth », pas « D. E. Knuth ». Vérifié
-le 10 septembre 2026 sur `docs/paper/sources/references.bib` : aucune entrée en initiales seules.
+le 10 septembre 2026 sur `docs/paper/sources/sample.bib` : aucune entrée en initiales seules.
 
 **Tableaux.** `table` + `tabular` avec `booktabs`, légende **au-dessus**, `\midrule` réservé à la
 séparation de l'en-tête et des données — c'est ce qui permet aux technologies d'assistance de

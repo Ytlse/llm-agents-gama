@@ -286,6 +286,28 @@ def test_R3_le_prompt_ne_figure_que_si_le_decideur_en_lit_un():
     assert dict(D.fiche_conditions(llm))["prompt"] == "minimal_persona"
 
 
+def test_R3_le_classifieur_typé_lit_un_prompt_et_la_fiche_dit_qu_il_est_tronqué():
+    """Jev lit une variante — et pas la même que le bras LLM sous le même nom.
+
+    Le bloc `[Output instructions]` lui est retiré avant l'envoi (le type `Choice` le
+    remplace), et le texte réellement servi porte son propre sha dans l'empreinte. Deux
+    lignes « prompt_expert_05 », l'une Jev l'autre LLM, désignent donc deux textes. La
+    colonne du registre garde le nom nu pour ne pas scinder son filtre ; c'est ici, où il y
+    a la place, que la troncature se dit.
+    """
+    jev = {"decideur": {"type": "typesafe", "modele": "jev-1.13.0"},
+           "gabarit": {"variante": "prompt_expert_05"}}
+    prompt = dict(D.fiche_conditions(jev)).get("prompt")
+    assert prompt is not None, "Jev lit un prompt : la fiche ne peut pas l'omettre"
+    assert prompt.startswith("prompt_expert_05"), "la variante se nomme telle quelle"
+    assert "bloc de sortie" in prompt, "la troncature est DITE, sinon la fiche ment par omission"
+
+    # Contrôle symétrique : un bras LLM sous la même variante ne porte PAS la mention.
+    llm = {"decideur": {"type": "passerelle", "modele": "m"},
+           "gabarit": {"variante": "prompt_expert_05"}}
+    assert dict(D.fiche_conditions(llm))["prompt"] == "prompt_expert_05"
+
+
 def test_R4_la_fiche_d_une_execution_lit_sa_definition_figee(plateforme):
     d = D.DOSSIER / "exp_llm" / "executions" / EXEC_LLM
     fige = json.loads(json.dumps(DEFINITION_LLM))
@@ -447,3 +469,18 @@ def test_R15_ce_qui_tourne_n_est_plus_a_venir(plateforme):
     _dessiner(st)
     assert _cellule_etat(st, "exp_llm") == "⏳ en_cours"
     assert _cellule_etat(st, "exp_def").startswith("📅 ")
+
+
+def test_fiche_conditions_troncature_15():
+    """Vérifie l'affichage de la troncature 15 % dans la fiche des conditions."""
+    exp_avec = {"troncature_15": True}
+    fiche_avec = dict(D.fiche_conditions(exp_avec))
+    assert fiche_avec.get("troncature 15 %") == "activée (Consideration Set)"
+
+    exp_sans = {"troncature_15": False}
+    fiche_sans = dict(D.fiche_conditions(exp_sans))
+    assert fiche_sans.get("troncature 15 %") == "désactivée"
+
+    exp_muet = {}
+    fiche_muet = dict(D.fiche_conditions(exp_muet))
+    assert "troncature 15 %" not in fiche_muet

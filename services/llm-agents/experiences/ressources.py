@@ -244,6 +244,11 @@ class MoniteurRessources:
         # Âge de l'instantané, en horloge monotone : `rafraichir_si_perime` s'en sert pour
         # ne pas marteler `/health`. None = jamais lu, donc périmé d'office.
         self.maj_monotone: float | None = None
+        # Fronts montants des deux traces du plafond déclaré (ticket 097). Depuis le
+        # 2026-09-21 `rpd_limit` n'écarte plus une instance : il ne reste de lui que ces
+        # journaux, et sans eux l'abrogation supprimerait le garde-fou ET la mesure.
+        self._plafond_franchi: set[str] = set()
+        self._refus_signale: set[str] = set()
 
     def rafraichir(self) -> None:
         etat = self._lecteur(self.base_url)
@@ -253,6 +258,84 @@ class MoniteurRessources:
             # L'âge ne repart QUE sur une lecture réussie : une passerelle injoignable laisse
             # l'instantané précédent en place (fail-safe) et le laisse périmé, donc réessayé.
             self.maj_monotone = time.monotonic()
+            # Une seule lecture de `/health` ⇒ un seul point d'observation. Surtout pas
+            # dans `disponible()`, appelé à chaque décision : le journal serait noyé.
+            self._journaliser_plafond()
+
+    def _journaliser_plafond(self) -> None:
+        """Journalise ce que le plafond déclaré ne décide plus (ticket 097).
+
+        `rpd_limit` est recopié à la main depuis des documentations fournisseur périmées,
+        muettes ou disparues ; il n'écarte plus une clé. Deux faits restent à consigner, sur
+        front montant pour ne pas répéter la même ligne à chaque rafraîchissement :
+
+        1. le fournisseur sert AU-DELÀ du plafond annoncé — la valeur du fichier est trop
+           basse, et c'est la seule occasion de l'apprendre ;
+        2. le fournisseur refuse — `daily_requests` à cet instant EST sa limite réelle, celle
+           que le plafond déclaré prétendait connaître.
+        """
+        for i in self.instances:
+            e = self.etat.get(i) or {}
+            limite = (self.providers.get(i) or {}).get("rpd_limit")
+            compteur = e.get("daily_requests")
+            if limite is None or compteur is None:
+                # Rien de mesuré à comparer : on se tait plutôt que de supposer un chiffre —
+                # c'est exactement le défaut que le ticket 097 corrige.
+                continue
+            limite, consomme = int(limite), int(compteur)
+
+            # (1) Dépassement silencieux. Strictement au-delà : à `consomme == limite`, le
+            # plafond n'est pas encore démenti.
+            if consomme > limite and not e.get("quota_exhausted"):
+                if i not in self._plafond_franchi:
+                    self._plafond_franchi.add(i)
+                    logger.warning(
+                        f"[ressources] [PLAFOND] {i} : {consomme}/{limite} requêtes/jour — "
+                        f"plafond déclaré dépassé de {consomme - limite} et le fournisseur "
+                        f"sert toujours ; valeur de providers.yaml à remesurer "
+                        f"(en-têtes x-ratelimit-*)"
+                    )
+            elif consomme <= limite:
+                # Compteur retombé sous le plafond : fenêtre suivante, la trace se rejouera.
+                self._plafond_franchi.discard(i)
+
+            # (2) Refus réel : la limite mesurée, enfin.
+            if e.get("quota_exhausted"):
+                if i not in self._refus_signale:
+                    self._refus_signale.add(i)
+                    logger.warning(
+                        f"[ressources] [PLAFOND] {i} refusée par le fournisseur (429) à "
+                        f"{consomme} requêtes/jour — limite réelle observée ; plafond déclaré "
+                        f"{limite} (écart {consomme - limite:+d})"
+                    )
+            else:
+                self._refus_signale.discard(i)
+
+    def reinitialiser_quotas(self, instances: list[str] | None = None) -> bool:
+        """Lève les verrous locaux d'épuisement de quota (passerelle / Redis) pour tester les clés en direct."""
+        import httpx
+
+        cibles = list(instances) if instances is not None else self.instances
+        url = self.base_url.rstrip("/") + "/providers/reset-quota"
+        reussi = False
+        try:
+            r = httpx.post(url, json={"providers": cibles}, timeout=5.0)
+            if r.is_success:
+                reussi = True
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[ressources] reset quota via passerelle non effectué ({e})")
+
+        try:
+            import redis
+            redis_url = os.getenv("REDIS_URL") or os.getenv("LLM_GATEWAY_REDIS__URL")
+            if redis_url:
+                cli = redis.Redis.from_url(redis_url)
+                for inst in cibles:
+                    cli.delete(f"quota_exhausted:{inst}")
+                reussi = True
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[ressources] reset quota direct Redis non effectué ({e})")
+        return reussi
 
     def perime(self, age_max_s: float) -> bool:
         """L'instantané a-t-il dépassé `age_max_s` ? Jamais lu ⇒ périmé."""
@@ -294,9 +377,9 @@ class MoniteurRessources:
             return False
         if e.get("quota_exhausted"):
             return False
-        marge = self.marge(instance)
-        if marge is not None and marge < besoin:
-            return False  # Q11 : anticipé, avant le premier 429
+        # Le plafond local est déclaratif et informatif : on ne bloque plus par anticipation
+        # (marge < besoin), afin de mesurer les dépassements réels. Seul un 429 réel
+        # posant `quota_exhausted: True` écarte l'instance.
         return True
 
     def instances_disponibles(self, besoin: int = 1) -> list[str]:

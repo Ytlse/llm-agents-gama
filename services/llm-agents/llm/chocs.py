@@ -66,6 +66,15 @@ from sim_clock import wall_clock
 # personne et un run entier sans le moindre symptôme.
 REGLES_EXPOSITION: tuple[str, ...] = ("mode", "tirage", "agents")
 
+# Cadence d'application, par agent et par journée de choc. `trajet` = chaque arrivée éligible
+# subit le choc (un bouchon dure toute la journée) ; `jour` = seule la PREMIÈRE arrivée éligible
+# de la journée le subit (une panne réparée ne se reproduit pas à l'identique trois heures plus
+# tard). Le run du 19 septembre a appliqué quatre fois le même dépannage de trente minutes dans
+# la même journée, là où le protocole en comptait un : l'intensité réelle valait quatre fois
+# l'intensité annoncée, et rien ne le disait.
+CADENCES: tuple[str, ...] = ("trajet", "jour")
+CADENCE_PAR_DEFAUT = "trajet"
+
 # Marqueurs d'une CONSIGNE déguisée en vécu. Le format `Evenement` du ticket 035 portait déjà la
 # règle sur son champ `description` — « texte porté aux agents, jamais consigne » — mais elle n'y
 # était qu'une phrase de documentation. Ici elle devient vérifiable, et elle REFUSE.
@@ -80,6 +89,43 @@ MARQUEURS_CONSIGNE: tuple[str, ...] = (
     "make sure", "next time you", "from now on",
     "tu devrais", "tu dois", "évite ", "evite ", "pense à", "pense a",
     "il faut que tu", "n'oublie pas", "la prochaine fois", "désormais tu",
+)
+
+# Marqueurs d'un VERDICT — une croyance durable sur un mode ou un véhicule. R9.
+#
+# La croyance est exactement ce que l'étape de réflexion existe pour produire : l'écrire à la
+# main court-circuite le seul mécanisme que l'expérience prétend mesurer. Le run du 19 septembre
+# l'a payé — `vecu` : « I no longer trust this car at all » ; concept « appris » le soir même :
+# « My car is unreliable ». Le second n'est que la reformulation du premier.
+#
+# La liste est calibrée sur le corpus du dépôt, pas devinée : les cinq chocs c1 à c5 passent
+# sans modification, et « I am starting to wonder whether this is worth it » (c1, jour 14) reste
+# accepté — un doute n'est pas un verdict.
+MARQUEURS_VERDICT: tuple[str, ...] = (
+    "no longer trust", "cannot trust", "can't trust", "never trust",
+    "is unreliable", "are unreliable", "'s unreliable", "was unreliable",
+    "is not reliable", "isn't reliable", "not reliable at all",
+    "can't rely on", "cannot rely on", "can no longer rely",
+    "ne fais plus confiance", "n'ai plus confiance", "plus confiance en",
+    "n'est pas fiable", "pas fiable du tout", "ne peux plus compter sur",
+)
+
+# Marqueurs d'une INTENTION MODALE — ce que l'agent fera demain. R10.
+#
+# Famille distincte de la précédente, et refusée par un message distinct : les deux se relâchent
+# séparément le jour où l'auteur voudra discuter la ligne. Un fait PASSÉ, même modal, reste
+# accepté — « I had to sort out another way of getting around » (c2, jour 13) décrit une journée
+# vécue, pas une résolution.
+MARQUEURS_INTENTION: tuple[str, ...] = (
+    "thinking about not using", "thinking of not using", "considering not using",
+    "thinking about not taking", "considering not taking",
+    "i will not use", "i won't use", "i will stop using", "i'll stop using",
+    "i am not going to use", "i'm not going to use", "i will never use",
+    "i will never drive", "i will never take", "i will stop driving",
+    "from now on i", "i will take the", "i'll take the", "i will use the",
+    "alternative transport", "another mode of transport", "switch to the",
+    " prendrai", "je vais arrêter", "je vais arreter", "je ne conduirai",
+    "désormais je", "desormais je", "un autre mode de transport",
 )
 
 # Adresse à la deuxième personne, en tête de phrase ou isolée. Un vécu se raconte à la première
@@ -139,6 +185,7 @@ class Choc:
     source: str | None
     exposition: Exposition
     jours: dict[int, JourDeChoc]
+    cadence: str = CADENCE_PAR_DEFAUT
     empreinte: str = ""
 
     @property
@@ -170,6 +217,9 @@ class CompteursJournee:
     exposes: int = 0
     epargnes: int = 0
     retard_injecte_s: int = 0
+    # Arrivées éligibles NON touchées parce que l'agent l'avait déjà été le jour même
+    # (`cadence: jour`). Comptées à part : ce n'est ni une exposition, ni un agent épargné.
+    deja_touches: int = 0
 
 
 class RefusDeChoc(ValueError):
@@ -200,6 +250,25 @@ def _verifier_vecu(texte: str, choc_id: str, jour: int) -> None:
             f"laisse aucun souvenir, il ne sert à rien"
         )
     bas = nu.lower()
+    # R9 et R10 AVANT R7 : « from now on I will take the metro » est une intention à la première
+    # personne, pas une consigne à la deuxième. L'ordre décide du message rendu, et un message
+    # qui nomme la mauvaise faute envoie corriger le mauvais mot.
+    for marqueur in MARQUEURS_VERDICT:
+        if marqueur in bas:
+            raise RefusDeChoc(
+                f"choc « {choc_id} », jour {jour} : `vecu` porte un VERDICT sur un mode — "
+                f"« {marqueur.strip()} ». La croyance est ce que la réflexion de l'agent doit "
+                f"produire ; l'écrire ici revient à mesurer sa propre consigne. "
+                f"Racontez le fait : « the engine stalled twice », jamais « this car is unreliable »"
+            )
+    for marqueur in MARQUEURS_INTENTION:
+        if marqueur in bas:
+            raise RefusDeChoc(
+                f"choc « {choc_id} », jour {jour} : `vecu` annonce une INTENTION modale — "
+                f"« {marqueur.strip()} ». Ce que l'agent fera demain est le résultat qu'on "
+                f"mesure, pas une donnée d'entrée. Un fait passé reste permis : "
+                f"« I had to sort out another way of getting around »"
+            )
     for marqueur in MARQUEURS_CONSIGNE:
         if marqueur in bas:
             raise RefusDeChoc(
@@ -272,6 +341,19 @@ def charger(chemin: str | Path) -> Choc:
         agents=agents,
     )
 
+    cadence_brute = str(data.get("cadence") or "").strip().lower()
+    if cadence_brute and cadence_brute not in CADENCES:
+        raise RefusDeChoc(
+            f"choc « {choc_id} » : `cadence` « {cadence_brute} » inconnue — "
+            f"attendu {' ou '.join(CADENCES)}. Une cadence mal orthographiée changerait "
+            f"silencieusement l'intensité du choc."
+        )
+    cadence = cadence_brute or CADENCE_PAR_DEFAUT
+    logger.info(
+        f"[chocs] choc « {choc_id} » : cadence « {cadence} »"
+        + ("" if cadence_brute else f" (non déclarée, valeur par défaut {CADENCE_PAR_DEFAUT})")
+    )
+
     jours_bruts = data.get("jours") or []
     if not jours_bruts:
         raise RefusDeChoc(f"choc « {choc_id} » : aucune journée déclarée dans `jours`")
@@ -310,6 +392,7 @@ def charger(chemin: str | Path) -> Choc:
         source=data.get("source"),
         exposition=exposition,
         jours=jours,
+        cadence=cadence,
         empreinte=empreinte,
     )
 
@@ -327,6 +410,10 @@ class RegistreChocs:
         self._journal = journal
         self._compteurs = CompteursJournee()
         self._exposes_vus: set[str] = set()
+        # `cadence: jour` — qui a déjà été touché DANS la journée en cours. Remis à zéro au
+        # basculement de journée, jamais accumulé sur le run : un agent est touché une fois
+        # par jour de choc, pas une fois pour tout le run.
+        self._touches_du_jour: set[str] = set()
 
     # ── Temps ────────────────────────────────────────────────────────────────────────────
     @staticmethod
@@ -398,6 +485,13 @@ class RegistreChocs:
         if not expose:
             self._compteurs.epargnes += 1
             return None
+        if self.choc.cadence == "jour" and str(person_id) in self._touches_du_jour:
+            # Ni exposé, ni épargné : l'agent EST exposé, il a déjà subi le choc aujourd'hui.
+            # Confondre ce cas avec un épargné ferait passer un choc appliqué une fois pour un
+            # choc qui rate trois trajets sur quatre.
+            self._compteurs.deja_touches += 1
+            return None
+        self._touches_du_jour.add(str(person_id))
         self._compteurs.exposes += 1
         self._compteurs.retard_injecte_s += profil.retard_s
         self._exposes_vus.add(str(person_id))
@@ -417,6 +511,7 @@ class RegistreChocs:
         if self._compteurs.jour_run:
             self.journaliser_compteurs()
         self._compteurs = CompteursJournee(jour_run=jour)
+        self._touches_du_jour.clear()
 
     def journaliser_compteurs(self) -> None:
         """Compteurs de la journée écoulée, journalisés MÊME À ZÉRO.
@@ -428,11 +523,24 @@ class RegistreChocs:
         if not c.jour_run:
             return
         actif = c.jour_run in self.choc.jours
+        deja = f", {c.deja_touches} déjà touché(s) ce jour" if c.deja_touches else ""
         logger.info(
             f"[chocs] jour {c.jour_run} du run (relatif {c.jour_run - self.choc.premier_jour:+d}) "
             f"— {'JOUR DE CHOC' if actif else 'nominal'} : {c.exposes} exposé(s), "
-            f"{c.epargnes} épargné(s), {c.retard_injecte_s // 60} min de retard injecté au total"
+            f"{c.epargnes} épargné(s){deja}, {c.retard_injecte_s // 60} min de retard injecté au "
+            f"total (cadence « {self.choc.cadence} »)"
         )
+        if actif and c.exposes == 0:
+            # Une journée de choc qui ne touche personne est un protocole qui n'a pas eu lieu.
+            # Le run du 19 septembre en a eu une — second choc restreint aux trajets en voiture,
+            # sur un agent qui ne conduisait plus — dite en INFO, donc lue par personne, et le
+            # rapport a continué d'annoncer deux jours de choc.
+            logger.error(
+                f"[ALARME] [chocs] jour {c.jour_run} du run déclaré JOUR DE CHOC et clos avec "
+                f"0 exposé sur {c.epargnes} arrivée(s) éligible(s) examinée(s) : le choc « "
+                f"{self.choc.choc_id} » n'a PAS eu lieu ce jour-là. Ne pas le compter comme "
+                f"une journée de choc dans l'analyse."
+            )
 
     def tracer(self, applique: ChocApplique, person_id: str, timestamp: int,
                gravite: float, detail: Any) -> None:

@@ -540,7 +540,11 @@ par rapport à la première version de la spécification :
 `S0 = 2,8` jours ne change pas ; sa règle est qu'un trajet banal pèse moins de 10 % après une
 semaine, et son origine est à dire : héritée de l'implémentation de Vu et al., **non publiée
 dans leur article**. `RETARD_REF` attend encore sa règle, à rattacher à la distribution des
-durées de déplacement de la cohorte, mesurable sans run.
+durées de déplacement de la cohorte, mesurable sans run. **Cette dette a quitté ce ticket le
+2026-09-21 : elle est le lot F5 du [ticket 095](ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md).**
+Raison du transfert : le 095 a retouché la forme de cette courbe le même jour (palier →
+asymptote) et `RETARD_REF` en est l'ancre préservée ; la laisser ici, dans un critère déjà
+coché, revenait à ne la confier à personne.
 
 **Coût d'un horizon de soixante jours**, à chiffrer avant de le fixer : d'après les volumes du
 ticket 048, douze fois un bras de cinq jours, décisions et mémoire comprises. Depuis l'issue C
@@ -721,6 +725,30 @@ vient de le démontrer.
 
 Globalement détaille beaucoup plus le fonctionnement de la mémoire 20 slides
 
+### ✅ Reconstruit le 2026-09-21 — et ce n'était pas trois affirmations, c'était l'axe
+
+Le constat ci-dessus sous-estimait le problème. Ce jeu était bâti sur *« voilà ce qui cloche
+aujourd'hui → voilà les briques qu'on va poser → voilà ce qu'on y gagnera »* : sa slide 2
+vendait des angles morts, sa slide 5 opposait un « Aujourd'hui » à un futur. **Les cinq lots
+étant livrés et le 077 ayant suivi, le proposé EST l'actuel** : on ne promet pas ce qui est
+fait. Ce n'étaient donc pas trois slides à corriger mais l'histoire entière à refaire.
+
+Nouvel axe, arbitré par l'auteur : **la vie d'un souvenir**, en vingt planches et cinq actes.
+Un seul cas — trente minutes de retard un mardi à 17 h 10, ligne A interrompue — traverse tout
+le deck, du trajet qui crée le souvenir à la décision du vendredi qu'il infléchit. Le deck
+**décrit** un dispositif qui existe ; il ne plaide plus pour un dispositif à construire.
+
+Générateur versionné : [`scripts/slides/memoire_agents_mobilite.js`](../../scripts/slides/memoire_agents_mobilite.js).
+Les chiffres du deck sont réunis dans un objet `CAS` en tête du fichier et ont été relevés **en
+exécutant** `llm/gravite.py` : gravité 0,70, durée de vie 14,56 j contre 2,80 j pour un trajet
+banal, 81,4 % du poids restant à J+3. Trois débordements de texte ont été trouvés au rendu
+(LibreOffice → PDF → PNG) et corrigés — le XML ne les montrait pas.
+
+**Un écart relevé en écrivant la planche 4 :** la spécification cible annonçait « 15 champs
+plus 3 sur les concepts ». Le code en porte **23** — 17 communs, 5 propres au concept, plus
+`schema_version`. L'arbitrage du lot 2 (cinquième axe, météo) et le lot 3 ont creusé l'écart.
+La planche dit le compte du code et signale celui de la spécification.
+
 ## 4.3 Comment mettre à jour
 
 Le générateur du premier jeu est versionné dans
@@ -728,8 +756,26 @@ Le générateur du premier jeu est versionné dans
 modifie le générateur, jamais le `.pptx`.** Node résout `pptxgenjs` depuis le répertoire courant,
 donc la commande se lance depuis un dossier où le module est installé.
 
-⚠ Un fichier `~$architecture_proposée.pptx` traîne dans `Divers/` : la présentation est ouverte
-dans PowerPoint. La régénérer pendant ce temps écrase un fichier verrouillé.
+✅ **Les deux obstacles matériels sont levés le 2026-09-21.** `pptxgenjs` est installé
+(`npm install pptxgenjs`, et `node_modules/` est entré au `.gitignore`, il n'y était pas). Le
+fichier `~$architecture_proposée.pptx` a disparu : la présentation n'est plus ouverte.
+
+**Le deck 1 n'avait pas besoin d'être régénéré.** L'hypothèse « le `.pptx` est en retard sur son
+générateur », tirée des dates de fichiers, était fausse : le `22:32` du 14/09 que portent
+`scripts/slides/` et `specs/ticket_071/` est un horodatage de masse, trace d'un `git checkout`,
+pas d'une édition. Vérifié en régénérant et en diffant : **le XML des planches est identique**,
+seuls l'horodatage de création et les classeurs Excel embarqués diffèrent. Le binaire n'a donc
+pas été remplacé par un contenu identique.
+
+**La charte est extraite** dans [`scripts/slides/_charte.js`](../../scripts/slides/_charte.js) :
+palette, polices, gabarit et les quatre aides de tracé, partagés par les deux générateurs. Deux
+générateurs qui redéclarent chacun leur palette divergent à la première retouche. L'extraction a
+été validée par la même épreuve : deck 1 régénéré, XML identique. Le mode d'emploi et l'épreuve
+sont dans [`scripts/slides/README.md`](../../scripts/slides/README.md).
+
+**Défaut corrigé au passage :** les générateurs écrivaient dans le répertoire courant, ce qui
+déposait un `.pptx` orphelin à la racine du dépôt dès qu'on les lançait d'ailleurs. Le défaut
+est désormais `Divers/<nom>.pptx`.
 
 ---
 
@@ -756,7 +802,10 @@ service** et peuvent partir dès qu'un accord est donné.
 - [x] L'arbitrage 2 du § 2.6 est confirmé par l'auteur le 2026-09-14 et écrit dans
       `memory-stm-ltm.md`, partie III, paramètre `Θ` compris.
 - [x] Les constantes de la spécification cible sont fixées avec leurs règles et publiées, § 2.10
-      et partie III de la spécification ; reste la règle de `RETARD_REF`.
+      et partie III de la spécification. **`RETARD_REF` faisait exception** : sa règle de conception
+      n'était pas écrite, et elle était consignée ici même, à l'intérieur de cette case cochée —
+      donc invisible. Elle est **sortie du 071 le 2026-09-21** et portée par le **lot F5 du
+      ticket 095**, qui tient l'échelle de gravité depuis son passage palier → asymptote.
 - [x] La question du § 2.6 sur le critère (ii) est tranchée le 2026-09-14 — **issue C**, le
       critère et le bras `exp_04d` sont supprimés. L'arbitrage 1 en découle : pas de paramètre
       `α`, couplage gardé tel quel, écrit dans `memory-stm-ltm.md`.
@@ -784,12 +833,12 @@ service** et peuvent partir dès qu'un accord est donné.
       à ma place.
 - [ ] Le signalement du § 3.5 est traité : les deux énoncés incomplets sont corrigés sous accord
       explicite, ou la décision de les laisser est écrite.
-- [ ] Les deux jeux de planches reflètent l'état du code, le second étant **reconstruit en
-      une vingtaine de slides** qui détaillent le fonctionnement de la mémoire, avec son
-      générateur versionné comme le premier.
-      **Bloqué le 2026-09-14, deux obstacles matériels** : `pptxgenjs` n'est installé nulle part
-      dans le dépôt — aucun `node_modules` — et `Divers/~$architecture_proposée.pptx` traîne
-      toujours, donc la présentation est **ouverte dans PowerPoint** et la régénérer écraserait
-      un fichier verrouillé. Installer une dépendance et écraser un fichier ouvert ne se font pas
-      sans accord. La matière, elle, est prête : les quatre lots livrés et leurs six arbitrages
-      sont écrits dans `specs/ticket_071/` et dans la partie II de `memory-stm-ltm.md`.
+- [x] **Les deux jeux de planches reflètent l'état du code, le 2026-09-21.** Le second est
+      reconstruit en **vingt planches** sur un axe neuf — *la vie d'un souvenir*, l'ancien axe
+      « actuel contre proposé » étant devenu sans objet — avec son générateur versionné comme le
+      premier, et une charte commune extraite. Le premier n'a pas eu à bouger : vérifié en
+      régénérant et en diffant son XML, il portait déjà les révisions du 14/09. Les deux
+      obstacles matériels du 2026-09-14 sont levés : `pptxgenjs` installé sous accord de
+      l'auteur, `node_modules/` ajouté au `.gitignore`, et le fichier de verrou PowerPoint
+      disparu. Mode d'emploi, épreuve de non-régression et vérification du rendu :
+      `scripts/slides/README.md`.

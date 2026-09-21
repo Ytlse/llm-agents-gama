@@ -1,0 +1,25 @@
+# ENGENDRÉ par scripts/experiment/run_sequential_cohort.py — ne pas éditer.
+# Source : c6_voiture_suspecte.yaml. Seule l'exposition est restreinte au persona 861500.
+choc: c6_voiture_suspecte
+libelle: Engine trouble
+source: scénario déclaré — cas d'étude individuel, aucune source externe revendiquée
+cadence: jour
+exposition:
+  regle: agents
+  agents:
+  - '861500'
+  modes:
+  - car
+jours:
+- jour: 15
+  retard_min: 30
+  incident_reseau: true
+  vecu: The engine made a grinding noise and the car stalled on the expressway. I
+    pulled over onto the hard shoulder and waited 30 minutes for roadside assistance
+    before it would restart. I arrived very late, shaken.
+- jour: 16
+  retard_min: 20
+  incident_reseau: true
+  vecu: Warning lights came on again and the grinding noise was back, louder than
+    the day before. I drove at reduced speed the whole way, listening to the engine.
+    I arrived 20 minutes late.

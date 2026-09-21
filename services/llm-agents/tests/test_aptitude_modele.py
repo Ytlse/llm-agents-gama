@@ -25,11 +25,12 @@ def _verifier(providers, instances=None, **kw):
     )
 
 
-def test_quota_absurde_refuse():
-    """20 requêtes/jour pour 2 285 sollicitations = 114 jours : aucun étalement ne rattrape ça."""
-    refus, _ = _verifier({"i": {"rpd_limit": 20, "rpm_limit": 5}})
-    assert refus and "hors d'atteinte" in refus[0]
-    assert "114 jours" in refus[0] or "jours de quota" in refus[0]
+def test_quota_court_meme_tres_long_avertit_sans_refuser():
+    """Même pour 114 jours théoriques, le quota court reste un avertissement et ne refuse pas."""
+    refus, avert = _verifier({"i": {"rpd_limit": 20, "rpm_limit": 5}})
+    assert refus == []
+    assert any("plus court que la charge" in m for m in avert)
+    assert any("ce n'est pas un refus" in m for m in avert)
 
 
 def test_quota_juste_court_avertit_sans_refuser():

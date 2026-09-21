@@ -21,8 +21,12 @@ jours ». L'ancienneté utile est déjà portée, énoncé par énoncé, par les
 from __future__ import annotations
 
 import json
+import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from loguru import logger
+from llm.gravite import force_initiale
 from settings import settings
 
 # Une occurrence n'est pas une habitude. En dessous, la ligne n'est pas écrite : dire « vélo,
@@ -31,9 +35,149 @@ OCCURRENCES_MIN_HABITUDE = 3
 # Au-delà, le bloc coûte des jetons sans rien apprendre au modèle.
 HABITUDES_MAX = 4
 CONNAISSANCES_MAX = 6
-CHANGEMENTS_MAX = 3
-# Fenêtre du bloc « ce qui a changé récemment », en jours simulés.
-FENETRE_CHANGEMENTS_JOURS = 14
+
+# La fenêtre du bloc « ce qui a changé récemment » et son plafond de lignes sont des RÉGLAGES
+# (`memoire__fenetre_changements_jours`, `memoire__changements_max`) et non des constantes :
+# c'est la fenêtre qui décide combien de temps un choc pèse sur les décisions, et elle était
+# écrite en dur. Cf. ticket 077, lot I.
+
+# Fenêtre des CROYANCES MISES À L'ÉCART, inchangée depuis le lot 4 du 071 et volontairement
+# laissée en constante : le bras d'ablation ne fait varier que la fenêtre des souvenirs de choc.
+FENETRE_CROYANCES_ECARTEES_JOURS = 14
+
+# Souvenirs de choc dont la sortie de fenêtre a déjà été annoncée : (agent, instant du souvenir).
+# Front montant — sans lui, la ligne se répéterait à chaque décision et noierait ce qu'elle dit.
+_SORTIES_ANNONCEES: set[tuple[str, str]] = set()
+_FENETRE_NEGATIVE_DITE = False
+
+# ── Les deux modes de service du bloc de changements (ticket 095, lot A) ─────────
+MODE_DERIVEE = "derivee"
+MODE_FIXE = "fixe"
+_MODES = (MODE_DERIVEE, MODE_FIXE)
+
+# Réglages hors domaine déjà signalés. Une alarme qui se répète à chaque décision cesse d'en
+# être une ; une alarme muette laisse un repli passer pour un réglage accepté.
+_REGLAGES_FAUTIFS_DITS: set[str] = set()
+
+
+def reinitialiser() -> None:
+    """Oublie ce qui a déjà été annoncé. Réservé aux tests."""
+    global _FENETRE_NEGATIVE_DITE
+    _SORTIES_ANNONCEES.clear()
+    _REGLAGES_FAUTIFS_DITS.clear()
+    _FENETRE_NEGATIVE_DITE = False
+
+
+def _alarmer_une_fois(cle: str, message: str) -> None:
+    """Signale un réglage hors domaine UNE fois, en ERROR : c'est une mesure qui dérive."""
+    if cle in _REGLAGES_FAUTIFS_DITS:
+        return
+    _REGLAGES_FAUTIFS_DITS.add(cle)
+    logger.error(message)
+
+
+def _fenetre_jours() -> int:
+    """La fenêtre en vigueur, lue à CHAQUE appel.
+
+    Figée à l'import, une surcharge d'environnement — donc le bras d'ablation — ne servirait
+    à rien.
+    """
+    global _FENETRE_NEGATIVE_DITE
+    brut = int(settings.agent.memoire__fenetre_changements_jours)
+    if brut < 0:
+        if not _FENETRE_NEGATIVE_DITE:
+            _FENETRE_NEGATIVE_DITE = True
+            logger.warning(
+                f"[noyau] fenêtre « ce qui a changé récemment » négative ({brut} j) — ramenée "
+                f"à 0, donc aucun souvenir de choc dans le bloc. Si c'est l'ablation qui est "
+                f"voulue, déclarer 0 ; une valeur négative ne doit pas se lire comme un réglage "
+                f"accepté."
+            )
+        return 0
+    return brut
+
+def _mode_fenetre() -> str:
+    """`derivee` ou `fixe`, lu à CHAQUE appel. Un mode inconnu ne s'interprète pas."""
+    brut = str(getattr(settings.agent, "memoire__mode_fenetre_changements", MODE_DERIVEE)).strip()
+    if brut in _MODES:
+        return brut
+    _alarmer_une_fois(
+        f"mode:{brut}",
+        f"[ALARME] [noyau] mode de fenêtre « ce qui a changé récemment » inconnu ({brut!r}) — "
+        f"repli sur {MODE_DERIVEE!r}. Modes admis : {list(_MODES)}. Un bras lancé sous ce "
+        f"réglage ne mesure PAS ce qu'il déclare mesurer.",
+    )
+    return MODE_DERIVEE
+
+
+def _seuil_service() -> float:
+    """Le seuil de poids sous lequel un souvenir quitte le bloc. Domaine ouvert ]0, 1[."""
+    defaut = 0.35
+    brut = float(getattr(settings.agent, "memoire__seuil_service_changement", defaut))
+    if 0.0 < brut < 1.0:
+        return brut
+    _alarmer_une_fois(
+        f"seuil:{brut}",
+        f"[ALARME] [noyau] seuil de service du bloc de changements hors de ]0, 1[ ({brut}) — "
+        f"repli sur {defaut}. À 1 la durée serait nulle (une ablation que personne n'a "
+        f"déclarée), à 0 elle serait infinie.",
+    )
+    return defaut
+
+
+def _bornes_duree() -> tuple[float, float]:
+    """Plancher et plafond de la durée servie, en jours, remis dans l'ordre s'il le faut."""
+    plancher = float(getattr(settings.agent, "memoire__plancher_changement_jours", 2.0))
+    plafond = float(getattr(settings.agent, "memoire__plafond_changement_jours", 30.0))
+    if plancher > plafond:
+        _alarmer_une_fois(
+            f"bornes:{plancher}:{plafond}",
+            f"[ALARME] [noyau] plancher de durée ({plancher} j) supérieur au plafond "
+            f"({plafond} j) — les deux bornes sont échangées. Sans cet échange, aucun souvenir "
+            f"de choc ne serait jamais servi.",
+        )
+        plancher, plafond = plafond, plancher
+    return max(0.0, plancher), max(0.0, plafond)
+
+
+@dataclass(frozen=True)
+class DureeService:
+    """Ce qu'il faut pour justifier une date de sortie, et pas seulement l'annoncer."""
+
+    jours: float        # la durée SERVIE, bornes appliquées
+    brute: float        # `force × ln(1/seuil)`, avant bornes
+    force: float        # la constante de temps de l'oubli de ce souvenir, en jours
+    gravite: float
+    borne: str          # "plancher", "plafond", ou "" quand aucune borne n'a mordu
+
+
+def duree_service_jours(entree) -> DureeService:
+    """Combien de jours ce souvenir de choc reste servi dans « ce qui a changé récemment ».
+
+    `poids(t) = exp(-t / force)` décroît ; le souvenir est servi tant que ce poids dépasse le
+    seuil, soit `t ≤ force × ln(1 / seuil)`. La forme vient de MemoryBank (Zhong et al., 2024) —
+    c'est la même que celle du rappel, et c'est le point : la durée d'un effet cesse d'être un
+    entier posé à côté du modèle d'oubli pour en devenir une conséquence.
+
+    La `force` est celle PORTÉE par l'entrée, qui a pu croître au rappel. Absente — entrée
+    écrite avant le lot 1 du ticket 071 —, elle est recalculée depuis la gravité plutôt que
+    traitée comme nulle : une force nulle rendrait une durée nulle, c'est-à-dire une ablation.
+    """
+    gravite = float(getattr(entree, "importance", 0.0) or 0.0)
+    force = getattr(entree, "force", None)
+    force = float(force) if force else force_initiale(gravite)
+    brute = force * math.log(1.0 / _seuil_service())
+    plancher, plafond = _bornes_duree()
+    borne = ""
+    jours = brute
+    if jours > plafond:
+        jours, borne = plafond, "plafond"
+    elif jours < plancher:
+        jours, borne = plancher, "plancher"
+    return DureeService(
+        jours=jours, brute=brute, force=force, gravite=gravite, borne=borne
+    )
+
 
 _LIBELLE_MODE = {
     "walking": "à pied",
@@ -152,42 +296,124 @@ def bloc_connaissances(entrees) -> list[str]:
 # ── Ce qui a changé récemment ────────────────────────────────────────────────────
 
 
-def bloc_changements(entrees, maintenant: datetime | None) -> list[str]:
+def _annoncer_sortie(
+    person_id: str | None,
+    dans: list,
+    hors: list[tuple],
+    mode: str,
+    fenetre: int,
+) -> None:
+    """Le jour où un souvenir de choc quitte le bloc, et ce jour-là seulement.
+
+    C'est l'événement qui, sur le run du 2026-09-19, coïncide au prompt près avec le retour de
+    la voiture. Il était jusqu'ici invisible : il fallait relire le texte des prompts pour le
+    reconstituer, et le rapport du run lui a attribué une autre cause.
+
+    ⚠ La ligne porte désormais **ce qui a produit la durée** — gravité, force, durée calculée,
+    et le nom de la borne quand une borne a mordu — et non plus la seule date. Une durée servie
+    sans sa cause ne se vérifie pas après coup : c'est exactement ce qui a rendu indiscernables,
+    pendant deux jours, la décroissance du souvenir et la coupure de fenêtre.
+    """
+    if not person_id or not hors:
+        return
+    for entree, duree in sorted(hors, key=lambda kv: kv[0].timestamp, reverse=True):
+        cle = (str(person_id), entree.timestamp.isoformat())
+        if cle in _SORTIES_ANNONCEES:
+            continue
+        _SORTIES_ANNONCEES.add(cle)
+        if mode == MODE_FIXE:
+            cause = f"fenêtre fixe de {fenetre} j"
+        elif duree is None:
+            cause = "durée indéterminée"
+        else:
+            cause = (
+                f"durée {duree.jours:.2f} j dérivée d'une gravité de {duree.gravite:.2f} "
+                f"(force {duree.force:.2f} j, durée calculée {duree.brute:.2f} j)"
+            )
+            if duree.borne:
+                cause += f", ramenée par le {duree.borne}"
+        reste = (
+            "" if dans else " — plus aucun souvenir de choc ne pèse sur ses décisions"
+        )
+        logger.info(
+            f"[noyau] {person_id} : le souvenir de choc du "
+            f"{entree.timestamp:%Y-%m-%d} est sorti du bloc « ce qui a changé récemment » "
+            f"({cause}){reste}."
+        )
+
+
+def bloc_changements(
+    entrees, maintenant: datetime | None, person_id: str | None = None
+) -> list[str]:
     """« Ce qui a changé récemment » : les chocs, et les croyances mises à l'écart.
 
     La mise à l'écart d'un concept est l'observable que l'expérience d'hystérésis cherche.
     C'est ici qu'elle devient lisible dans le prompt lui-même, et non plus seulement dans les
     statistiques de sortie.
+
+    ⚠ DEUX fenêtres, et c'est voulu. Celle des souvenirs de choc dépend du MODE déclaré — en
+    `derivee`, elle se calcule souvenir par souvenir depuis la gravité ; en `fixe`, elle vaut
+    `memoire__fenetre_changements_jours` pour tous. Celle des croyances mises à l'écart reste la
+    constante historique : la faire bouger en même temps confondrait deux changements dans une
+    seule mesure.
+
+    ⚠ L'âge d'un souvenir se compte depuis `timestamp`, l'instant de l'ÉVÉNEMENT, et non depuis
+    `dernier_rappel`. Ce bloc annonce l'ancienneté d'un CHANGEMENT, pas celle de sa dernière
+    lecture : un choc relu hier n'est pas un choc d'hier. Le renforcement au rappel continue de
+    jouer, mais par la `force`, donc sur la durée — pas en rajeunissant l'événement.
+
+    `person_id` ne sert qu'au journal ; il est facultatif pour que les appels purs restent purs.
     """
     if maintenant is None:
         return []
-    depuis = maintenant - timedelta(days=FENETRE_CHANGEMENTS_JOURS)
+    mode = _mode_fenetre()
+    fenetre = _fenetre_jours()
+    depuis_chocs = maintenant - timedelta(days=fenetre)
+    depuis_croyances = maintenant - timedelta(days=FENETRE_CROYANCES_ECARTEES_JOURS)
     seuil_choc = float(settings.agent.memoire__importance_choc)
     lignes: list[tuple[datetime, str]] = []
+    chocs_dans: list = []
+    chocs_hors: list[tuple] = []
 
     for e in entrees:
         if e.est_episodique:
-            if float(e.importance or 0.0) >= seuil_choc and e.timestamp >= depuis:
-                lignes.append((e.timestamp, _enonce(e)))
+            if float(e.importance or 0.0) >= seuil_choc:
+                duree = None
+                if mode == MODE_FIXE:
+                    # Fenêtre à 0 : ABLATION déclarée, aucun souvenir de choc ne passe — y
+                    # compris celui de l'instant même, que `>= maintenant` laisserait entrer.
+                    servi = fenetre > 0 and e.timestamp >= depuis_chocs
+                else:
+                    duree = duree_service_jours(e)
+                    age_jours = (maintenant - e.timestamp).total_seconds() / 86400.0
+                    servi = age_jours <= duree.jours
+                if servi:
+                    chocs_dans.append(e)
+                    lignes.append((e.timestamp, _enonce(e)))
+                else:
+                    chocs_hors.append((e, duree))
             continue
         if e.depasse_le:
             try:
                 quand = datetime.fromisoformat(e.depasse_le)
             except (TypeError, ValueError):
                 continue
-            if quand >= depuis:
+            if quand >= depuis_croyances:
                 lignes.append(
                     (quand, f"Je ne crois plus que : {_enonce(e)}")
                 )
 
+    _annoncer_sortie(person_id, chocs_dans, chocs_hors, mode, fenetre)
     lignes.sort(key=lambda kv: kv[0], reverse=True)
-    return [texte for _, texte in lignes[:CHANGEMENTS_MAX]]
+    return [texte for _, texte in lignes[: int(settings.agent.memoire__changements_max)]]
 
 
 # ── Le bloc complet ──────────────────────────────────────────────────────────────
 
 
-def memoire_noyau(journal: dict, entrees, maintenant: datetime | None) -> list[str]:
+def memoire_noyau(
+    journal: dict, entrees, maintenant: datetime | None, person_id: str | None = None
+) -> list[str]:
     """Le bloc permanent, en lignes prêtes pour le gabarit.
 
     Un bloc vide est ABSENT et non présent avec un titre : un titre sans contenu dit au modèle
@@ -196,7 +422,7 @@ def memoire_noyau(journal: dict, entrees, maintenant: datetime | None) -> list[s
     sections = (
         ("Mes habitudes", bloc_habitudes(journal or {})),
         ("Ce que je sais", bloc_connaissances(entrees or [])),
-        ("Ce qui a changé récemment", bloc_changements(entrees or [], maintenant)),
+        ("Ce qui a changé récemment", bloc_changements(entrees or [], maintenant, person_id)),
     )
     sortie: list[str] = []
     for titre, lignes in sections:

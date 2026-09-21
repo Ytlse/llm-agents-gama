@@ -19,6 +19,11 @@ ne le modifie sans un accord humain explicite, donné dans la conversation.
 
 ## Procédure
 
+**Rappeler chaque remarque avant d'y répondre.** Quand la demande arrive en liste — une
+remarque par point, numérotée ou non — la réponse suit le même découpage et rappelle chaque
+question en une ligne avant de la traiter. Sans ce rappel, l'auteur doit remonter à son propre
+message pour savoir à quoi répond le diff qu'on lui présente.
+
 1. **Avant d'écrire, recenser.** Lister les fichiers de l'article que la tâche va toucher.
    Si la liste est vide, il n'y a pas de verrou à lever : continuer.
 

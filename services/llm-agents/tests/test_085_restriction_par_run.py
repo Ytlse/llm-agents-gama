@@ -86,18 +86,31 @@ def test_B1_le_seul_lecteur_de_la_restriction_lit_bien_les_reglages_du_processus
 
     Ticket 092 — la restriction n'est plus recopiée sur le payload de décision mais donnée au
     CLIENT à sa construction, seuil unique par lequel sortent AUSSI les réflexions STM et LTM.
-    Le maillon gardé ici est le même — des réglages du processus jusqu'à la requête — mais il
-    passe désormais par le constructeur. Que les trois catégories la portent effectivement est
-    vérifié par `test_092_restriction_sur_tous_les_appels.py`.
+
+    Ticket 095, lot C — elle se décline désormais PAR CATÉGORIE, et le lecteur des réglages
+    devient `utils.routage`. Le maillon gardé ici est le même — des réglages du processus
+    jusqu'à la requête — mais il passe par ce module, et le client reçoit l'UNION comme filet
+    pour qu'un appel ajouté plus tard soit restreint par défaut plutôt que libre.
     """
     source = (RACINE / "urban_mobility_agents" / "agents" / "llm_agent.py").read_text(
         encoding="utf-8"
     )
-    assert "settings.llm.instances_admises" in source
-    assert "instances_admises=list(settings.llm.instances_admises or [])" in source, (
-        "la restriction doit être remise au client à sa construction : posée appel par appel, "
-        "elle avait laissé la consolidation mémoire partir chez un autre modèle (ticket 092)"
+    routage = (RACINE / "urban_mobility_agents" / "utils" / "routage.py").read_text(
+        encoding="utf-8"
     )
+    assert "settings.llm.instances_admises" in routage, (
+        "`utils.routage` est le lecteur des réglages : s'il cessait de les lire, la "
+        "restriction serait vide partout sans qu'aucun test ne le dise."
+    )
+    assert "instances_admises=toutes_les_instances()" in source, (
+        "le client garde un filet : posée appel par appel SANS filet, la restriction avait "
+        "laissé la consolidation mémoire partir chez un autre modèle (ticket 092)"
+    )
+    for categorie in ("itinary_multi_agent", "stm_reflection", "ltm_self_reflection"):
+        assert f'instances_pour("{categorie}")' in source, (
+            f"la catégorie {categorie} ne pose pas sa liste blanche : elle retomberait sur le "
+            f"filet du client, donc sur l'union, donc sans routage."
+        )
 
 
 def test_B2_la_liste_est_celle_des_instances_servant_le_modele_filtree_par_portee(banc, reglages):  # noqa: F811
@@ -221,22 +234,38 @@ def test_B5_un_decideur_hors_passerelle_nimpose_aucune_restriction(banc, reglage
     assert reglages.llm.instances_admises == []
 
 
-def test_B6_le_fichier_reste_le_vehicule_de_make_run():
-    """`make run` lit `config.yaml` à l'import et n'a aucune injection par run (§ 3 du ticket).
+def test_B6_la_restriction_survit_au_deplacement_hors_du_yaml():
+    """Ce que le lot B protège : vider `config.yaml` ne doit pas SUPPRIMER la restriction.
 
-    Le vider ne déplacerait pas la restriction, il la SUPPRIMERAIT — et précisément pour le run de
-    soixante jours qui l'avait motivée, sans qu'aucune ligne ne le dise. La clé doit donc rester
-    déclarée et lue ; c'est sa valeur, pas sa présence, qui appartient à l'opérateur.
+    La version d'origine de ce test exigeait que la clé RESTE dans `config.yaml`, en nommant sa
+    propre condition de levée : « tant que `make run` n'a pas son équivalent par run ». Cette
+    condition est remplie depuis le 2026-09-21 (ticket 095, lot C) : `infra/docker-compose.yml`
+    déclare `INSTANCES_ADMISES` en passe-plat, avec un défaut identique à ce que le YAML posait.
+
+    Le déplacement était NÉCESSAIRE : posée dans `config.yaml`, la clé primait sur
+    l'environnement, et aucun bras d'expérience ne pouvait déclarer la sienne. L'orchestrateur
+    de campagne a posé une variable sans effet du 2026-09-08 au 2026-09-21 sans que rien ne le
+    signale.
+
+    Ce qui est gardé ici est l'invariant, pas l'emplacement : la restriction existe par défaut,
+    et le champ reste lu par le modèle de configuration.
     """
-    config = yaml.safe_load((RACINE / "config" / "config.yaml").read_text(encoding="utf-8"))
-    assert "instances_admises" in config.get("llm", {}), (
-        "le lot B ne vide pas config.yaml : il n'est pas en droit de le faire tant que "
-        "`make run` n'a pas son équivalent par run"
+    import json as _json
+    import re as _re
+
+    compose = (RACINE.parents[1] / "infra" / "docker-compose.yml").read_text(encoding="utf-8")
+    m = _re.search(r"^\s*INSTANCES_ADMISES:\s*'\$\{INSTANCES_ADMISES:-(.*?)\}'\s*$", compose, _re.M)
+    assert m, (
+        "la restriction a disparu du passe-plat : `make run` repartirait sans aucune "
+        "restriction, et rien ne le dirait"
+    )
+    assert _json.loads(m.group(1)) == ["google_gemini31_key1", "google_gemini31_key2"], (
+        "le défaut ne reproduit plus ce que config.yaml posait avant le déplacement"
     )
     from settings import settings
 
     assert hasattr(settings.llm, "instances_admises"), (
-        "le champ reste lu par le modèle de configuration : sans lui, le fichier serait inerte"
+        "le champ reste lu par le modèle de configuration : sans lui, le passe-plat serait inerte"
     )
 
 

@@ -38,13 +38,14 @@ Extraire le nom du modèle depuis la consigne et le faire correspondre à son id
 
 ### 1.2 Dérivation Canonique du Nom d'Expérience
 Le nom suit la grammaire N2/N10 :
-`exp_agy-<slug>_<prompt>_jtir_t<temp>_nosim`
+`exp_agy-<slug>_<prompt>[_cset15]_jtir_t<temp>_nosim`
 
 En cas de substitution de modèle sur une expérience source :
 - Remplacer le segment décideur par `agy-<slug>`.
-- Conserver la variante de gabarit (`minper`, `expcha`, etc.), le tirage (`jtir`), la température (`t0`) et le mode (`nosim`).
+- Conserver la variante de gabarit (`minper`, `expcha`, etc.), l'éventuel indicateur de troncature (`cset15` si `troncature_15: true`), le tirage (`jtir`), la température (`t0`) et le mode (`nosim`).
 - **Exemple** : `exp_agy-gemini-31-f_minper_jtir_t0_nosim` + `gemini 3.8 flash High`
   → `exp_agy-gemini-38-f_minper_jtir_t0_nosim`.
+- **Exemple avec troncature 15 %** : `exp_agy-gemini-38-f_minper_cset15_jtir_t0_nosim`.
 
 ### 1.3 Fichier `experience.yaml`
 1. Vérifier si `data/experiences/<NOM_EXP>/experience.yaml` existe déjà.

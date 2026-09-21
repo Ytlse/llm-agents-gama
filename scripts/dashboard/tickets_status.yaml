@@ -1563,38 +1563,36 @@ tickets:
       date: '2026-09-14'
       aamas: 2
   ticket_034_velo_cle_stable_une_seule_loi:
-    status: amélioration
+    status: terminé
     category: Données & Population
     note: >-
-      DÉCISION NON PRISE (2026-09-03) : l'auteur n'est pas certain de l'implémenter ; le ticket
-      consigne le constat pour trancher sur des chiffres. Deux mesures du 2026-09-03 au soir :
-      (1) le vélo d'un persona dépend de sa position dans le fichier — l'attribution et le type
-      de vélo hachent l'index de fichier et une clé d'adresse suffixée en cas de collision ;
-      201 des 1 000 personas de la v4 scellée portent un `personal_bike` différent de celui
-      qu'ils avaient dans le vivier pré-imputé (logement, permis, abonnement, couronne : 0),
-      distribution globale inchangée ; (2) la loi vit à deux endroits contre la décision du
-      2026-08-24 (lot 4 du ticket 015 rejeté) : `_assign_personal_bike` est actif dans le fork
-      eqasim et l'étape 8 réécrit 4,7 % du vivier. Proposé : clé `person_id` + `household.id`,
-      sel personal_bike_v2, au prochain scellement (v5) ; retrait de la loi du fork ; clôture
-      du 015. Options (a) déclarer seulement, (b) lot 1, (c) lots 1 et 2 — recommandation (c).
-      DÉPEND DE : aucun ticket — il ne dépend pas d'un ticket mais d'un ÉVÉNEMENT : la prochaine
-      génération de cohorte, avec laquelle il se livre pour ne resceller qu'une fois. Le 073, qui
-      réclame trois à cinq cohortes, est l'occasion la plus probable.
-
-    triage:
-      faisabilite: 4
-      surete: 2
-      jeux_de_test: true
-      motif: >-
-        Le lot 2 est livré ; il ne reste que le lot 1, dont le code est spécifié ligne à ligne (`person_id`,
-        `household.id`, sel `personal_bike_v2`). Mais il rebat le vélo d'environ un persona sur
-        cinq : rescellement obligatoire. À livrer AVEC la prochaine cohorte, jamais seul, pour ne
-        resceller qu'une fois.
-        AAMAS ⭐⭐⭐ (3/5) — une clé de tirage stable est ce qui rend une cohorte régénérable à
-        l'identique, et le 073 en demande trois à cinq nouvelles : la reproductibilité annoncée
-        passe par là.
-      date: '2026-09-14'
-      aamas: 3
+      CLOS le 2026-09-21 sur décision de l'auteur : option (a) du ticket — le lot 2 est livré, le
+      lot 1 (clé de tirage stable) est ABANDONNÉ, la limite reste déclarée. Motif : trop tard dans
+      le calendrier de l'article, et l'occasion prévue est passée — le lot devait partir avec le
+      prochain scellement, or la v6 a été scellée le 2026-09-14T19:27 avec le sel `personal_bike_v1`
+      inchangé. Le livrer maintenant imposerait une v7 et un rescellement pour lui seul, ce que le
+      ticket voulait précisément éviter. CE QUI RESTE VRAI DANS LE DÉPÔT, et qui est une limite
+      assumée, pas un bug ouvert : `DRAW_SALT = "personal_bike_v1"`
+      (packages/mobility_core/src/mobility_core/bike_ownership.py:136), les clés de tirage hachent
+      la position dans le fichier (`bike-holder:{household_key}:{member.index}` ligne 436,
+      `bike-kind:` ligne 495) et la clé de ménage reste l'adresse suffixée
+      (scripts/data/population/enrich_personal_bike.py:178) — donc le `personal_bike` d'un persona
+      de la v6 n'est pas comparable à celui qu'il porte dans le vivier source, et une cohorte
+      réordonnée ou ré-extraite rebat le parc d'environ un persona sur cinq. Les marges, les douze
+      contrôles vélo et le sceau v6 ne sont pas en cause : le bruit est symétrique, la distribution
+      globale ne bouge pas. Documenté dans docs/arch/velo-equipement.md (§ Déterminisme). Si une
+      cohorte v7 est un jour scellée (ticket 073), le lot 1 est spécifié ligne à ligne dans le .md
+      et se rouvre en ticket neuf. LIVRÉ le 2026-09-04 — lot 2, une seule loi : `_assign_personal_bike`
+      retiré du fork eqasim (services/eqasim-toulouse/synthesis/population/enriched.py, `grep` vide),
+      colonne retirée de l'export, défaut « Pas de vélo » supprimé de llm_agents.py, fuite du trait
+      hérité fermée pour les personas sans adresse (compteur `trait_herite_retire_sans_adresse`).
+      Mesuré : 14 personas concernés, tous sans domicile, tous exclus par la sélection ; cohorte
+      scellée identique au bit près (même sha256, mêmes 513 ménages, mêmes `person_id`). Lot 3 fait :
+      le ticket 015 est `terminé`. CONSTAT D'ORIGINE (2026-09-03) : le vélo d'un persona dépend de sa
+      position dans le fichier — 201 des 1 000 personas de la v4 scellée portaient un `personal_bike`
+      différent de celui du vivier pré-imputé (logement, permis, abonnement, couronne : 0) ; et la loi
+      vivait à deux endroits contre la décision du 2026-08-24 (lot 4 du ticket 015 rejeté), l'étape 8
+      réécrivant 4,7 % du vivier.
   ticket_035_plateforme_gestion_experiences_decouplage_spec_fonctionnelle:
     status: terminé
     category: Ingénierie & Système
@@ -1763,7 +1761,7 @@ tickets:
       référence. Le lot 2 (possession, permis) n'est pas repris : il est écarté, pas différé.
 
   ticket_041_etape_3a_hysteresis_longitudinale:
-    status: bloqué
+    status: à faire
     category: Expériences & Cognition
     note: >-
       Plan v0.1 rédigé le 2026-09-09 (docs/paper/methode/experience_plan/ETAPE_3A_PLAN_LONGITUDINAL.md),
@@ -1780,6 +1778,24 @@ tickets:
       actions restantes ne sont pas faites » — et l'étape 3a EST cette expérience. Son instrument
       de choc, lui, est arrivé : les lots 1 à 4 du 079 sont livrés. Statut passé à `bloqué` le
       2026-09-16 : le ticket ne peut pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets.
+      RÉVISION DU 2026-09-17 : statut repassé de `bloqué` à `à faire`. Le blocage annoncé n'était
+      pas un ticket mais l'attente de validation de l'auteur (porte G0), et la convention du
+      2026-09-16 veut qu'un blocage non ticketé se dise dans la note sans basculer le statut.
+      DÉPEND DE : aucun ticket — validation de l'auteur sur le plan v0.1.
+      UN DES MANQUES BLOQUANTS EST TOMBÉ : « pas d'événement joué » (§ Pourquoi maintenant) est
+      levé par le ticket 079, livré le 2026-09-15 — un choc déclaré fait subir un retard à l'agent
+      et lui laisse un souvenir, six cas et un levier `make run CHOC=`. Restent les manques qui
+      appartiennent aux lots de ce ticket : oracle LightGBM non branché dans le chemin GAMA (L3),
+      multi-jours robuste (L1), et la demi-vie de mémoire, que les mesures du 077 chiffrent
+      désormais — 89 % des réflexions et 74 % des concepts vivent 4,5 jours ou moins, soit une
+      fenêtre glissante de 3 à 5 jours, ce qui documente l'incapacité à porter une habitude que le
+      plan postulait sans la mesurer.
+      MISE À JOUR DU 2026-09-21 : le ticket 048, que la ligne « ⛔ DÉPEND DE » ci-dessus nommait
+      avant la révision du 17, est CLOS. Son reliquat — mesure du taux d'entrées par agent-jour,
+      garantie EDF, rejeu des mesures min-max, conversion d'experiments.yaml — est repris au lot F
+      du ticket 095. Le blocage de l'expérience d'hystérésis n'est donc pas levé : il change de
+      porteur, et c'est au 095 qu'il faut le lire désormais. Statut inchangé (`à faire`), le seul
+      vrai blocage restant étant la validation de l'auteur sur le plan v0.1.
 
     triage:
       faisabilite: 2
@@ -1997,10 +2013,21 @@ tickets:
       publication des parts modales par bras.
 
   ticket_048_calendrier_de_consolidation_et_echelle_d_oubli:
-    status: en cours
+    status: terminé
     category: Expériences & Cognition
     note: >-
-      Ouvert le 2026-09-11 à la demande de l'auteur ; LES TROIS POINTS DE CODE SONT LIVRÉS le
+      CLOS LE 2026-09-21, SON RELIQUAT EST REPRIS AU TICKET 095 — décision de l'auteur, les deux
+      sujets étant le même paramètre : le `S0 = 2,8` de la fenêtre dérivée du 095 EST la constante
+      de temps livrée ici. Répartition : mesure du taux d'entrées par agent-jour et arbitrage du
+      régime → 095 lot F1 ; garantie « avant le réveil » sous ce volume → F2 ; rejeu des mesures
+      publiées qui dépendaient de la min-max → F3 ; conversion de memory_decay_lambda /
+      memory_horizon_days d'experiments.yaml (exp_04a, l. 389-390) → F4 ; piste des modèles locaux
+      et son protocole d'admission sur jeux gelés → 095 lot C. Les campagnes E2/E3 du 095 sont les
+      runs GAMA courants que ce reliquat attendait depuis dix jours sans pouvoir les prendre : la
+      mesure F1 se relève sur un bras déjà payé. Bloc `triage` retiré (règle 2 de la skill
+      suivi-tickets, épreuve test_R34). Le seul dépendant, le 041, avait déjà repassé cette
+      dépendance en note le 2026-09-17 : aucun déblocage en cascade à annoncer. HISTORIQUE
+      CI-DESSOUS, inchangé. Ouvert le 2026-09-11 à la demande de l'auteur ; LES TROIS POINTS DE CODE SONT LIVRÉS le
       2026-09-11 (détail en fin de note), le reste tient à une mesure aujourd'hui impossible.
       Préalable BLOQUANT de
       l'architecture mémoire proposée (docs/arch/memory-stm-ltm.md, partie III) : il ne
@@ -2055,26 +2082,17 @@ tickets:
       BLOQUE l'expérience d'hystérésis tant que les actions restantes ne sont pas faites.
       DÉPEND DE : aucun ticket — sa mesure manquante — le taux d'entrées par agent-jour — demande
       un run GAMA courant, qu'il peut lancer lui-même : aucun ticket ne le lui doit.
-
-    triage:
-      faisabilite: 4
-      surete: 3
-      jeux_de_test: false
-      motif: >-
-        ÉCART LEVÉ le 2026-09-14, vérifié dans le code : le 071 § 2.0 avait raison, les trois
-        décisions y sont — plancher journalier à 22 h (`settings.py:497-498`, branche « plancher »
-        de `simulation_controller.py:1654`), normalisation min-max abandonnée au profit de valeurs
-        absolues (`longterm.py:862`), constante d'oubli EN JOURS
-        (`long_term_retrieval__force_base_jours = 2.8`, `settings.py:534`). Le conflit n'était pas
-        entre deux tickets mais DANS la note du 048, dont la première phrase disait « rien n'est
-        lancé » quand sa fin disait « LIVRÉ ». Corrigé. Ce qui reste vrai dans les deux lectures :
-        le taux d'entrées par agent-jour n'est mesurable sur aucun run exploitable — les runs récents
-        sont hors simulateur et ne portent aucune observation.
-        AAMAS ⭐⭐⭐⭐ (4/5) — il tranche le calendrier de consolidation que le § 3.4 décrit, et il
-        BLOQUE l'expérience d'hystérésis du chapitre 7 tant que ses actions restantes ne sont
-        pas faites.
-      date: '2026-09-14'
-      aamas: 4
+      CLÔTURE DU 2026-09-21, ce qu'elle emporte : l'intérêt AAMAS ⭐⭐⭐⭐ que portait le triage
+      retiré ne disparaît pas, il passe au 095 avec le lot F — le calendrier de consolidation
+      décrit au § 3.4 est tranché et en service, et c'est désormais le 095 qui BLOQUE l'expérience
+      d'hystérésis du chapitre 7. Le ticket .md porte un bandeau de clôture en tête avec le
+      tableau de répartition, et ses cinq actions sont annotées une à une (livré / repris au 095).
+      ARTICLE MIS À JOUR LE 2026-09-21, sous accord explicite de l'auteur via la skill
+      article-verrou : le chapitre 7 FR (note de travail, point 6) nomme désormais le lot F4 du
+      095 au lieu du 048 comme porteur du blocage, et les listes « Tickets associés » du FR et de
+      l'EN portent la clôture du 048 et la ligne du 095. Cinq passages, deux fichiers ;
+      `make paper-style` vert sur les deux (0 écart bloquant, 1,2 cadratin et 4,9 gras pour 1000
+      mots). Le blocage lui-même n'est PAS levé : la conversion d'experiments.yaml reste à faire.
   ticket_049_itineraire_mixte_limite_a_publier:
     status: terminé
     category: Rédaction & Publication
@@ -2131,28 +2149,46 @@ tickets:
       qui existent pour son déplacement. Le chapitre passe en `brouillon v0.5` dans les trois
       arbres (fr, en, LaTeX).
   ticket_051_reflexion_architecture_cognitive_memoire:
-    status: en cours
+    status: terminé
     category: Expériences & Cognition
     note: >-
-      Ouvert le 2026-09-13 (Task 3 de suivi_actions_publication.md). Tâche d'audit scientifique,
+      TERMINÉ le 2026-09-21, les trois critères de clôture cochés dans le ticket avec leur
+      preuve vérifiée contre le dépôt et non contre une note. Deux des quatre verrous
+      conceptuels sont tranchés CONTRE la proposition d'origine, et c'est le résultat du
+      ticket : le seuil `cos > 0,85` du § B est écarté au profit du panier de candidats et de
+      la désignation par le modèle (llm/concepts.py, panier_de) — un seuil fixe sur un
+      plongement n'a pas de fondement mesuré ; le régime Système 1 / Système 2 du § C est
+      écarté au profit de la MESURE de l'habitude, coder l'automatisme interdisant de montrer
+      qu'il émerge. P1 et P2 livrés le 2026-09-14 par les lots du 071, revérifiés ligne à
+      ligne le 21 : longterm.py:1119 (temps simulé, nettoyage abandonné plutôt que repli sur
+      l'horloge machine), :1188 (suppression propagée à l'index), :564 (max_past_days évalué
+      sous le filtre jour ouvré), :902 (affinité catégorielle et météo à la place du terme dit
+      « BLEU-2 », _bleu_score en :1060 conservée mais plus câblée), aucun plancher temporel.
+      P3 moitié chapitre 3 : § 3.4 repris en entier le 15/09 (passe du 050), `v0.7` le 17 ;
+      plus aucune occurrence de « BLEU-2 » ni d'HippoRAG dans docs/paper/article/. P3 moitié
+      chapitre 8 LIVRÉE le 2026-09-21 sous accord de l'auteur : § 8.5 neuf dans fr/, en/ et
+      overleaf/, chapitre en `brouillon v0.2`, détecteur de style à 0,5 cadratin/1000 mots dans
+      les deux langues (norme du corpus relu : 0,0 à 0,7). Il ne porte PAS la prospective que
+      le ticket demandait — « valoriser l'architecture bi-niveau » — mais la version tranchée :
+      un chapitre de limites qui promeut ce qu'on a refusé de coder serait faux. Aucune
+      référence bibliographique ajoutée à l'article : nommer la littérature de l'habitude
+      déclencherait la porte de CITATIONS.md, dont le PDF n'est pas dans etat_de_lart/ ;
+      l'ancrage et la notice Verplanken & Aarts (1999), marquée NON RECOUPÉE, vivent dans
+      docs/arch/memory-stm-ltm.md, qui gagne le même jour le § « Régime Système 1 / Système 2 :
+      évalué, non retenu » — l'arbitrage ne vivait que dans le 071 § 2.9 et était invisible
+      d'une session lisant la doc d'architecture. P4 (séparation physique des magasins,
+      résolution vectorielle) n'appartient pas à ce ticket et reste au 071 : les deux registres
+      partagent aujourd'hui une seule collection ChromaDB par agent, ce que le § 8.5 publie
+      comme limite. RELEVÉ AU PASSAGE, non corrigé : plan/PLAN.md annonce pour le chapitre 8
+      des sous-sections (« cadre comparatif de performance », « interactions intra-ménage »)
+      qui n'existent dans aucune version du chapitre — décalage antérieur à cette tâche, sous
+      verrou, à traiter avec son propre accord.
+      HISTORIQUE — Ouvert le 2026-09-13 (Task 3 de suivi_actions_publication.md). Tâche d'audit scientifique,
       de réflexion épistémologique et de cadrage conceptuel sur l'architecture mémoire : dissociation
       mémoire épisodique vs sémantique (CoALA, ACT-R), résolution d'identité conceptuelle vectorielle
       (pattern A-MEM / Mem0), théorie de l'habitude à deux vitesses (Système 1 machinal / Système 2 délibératif),
       assainissement mathématique du rappel (Jaccard contextuel, fin du triple-compte de la gravité) et
       correction des vices cachés de synchronisation d'horloge dans longterm.py.
-
-    triage:
-      faisabilite: 4
-      surete: 4
-      jeux_de_test: false
-      motif: >-
-        Les trois anomalies de `longterm.py` (horloge machine contre temps simulé, orphelins ChromaDB,
-        filtre de fenêtre court-circuité) sont corrigées au 14 septembre. Reste l'arbitrage conceptuel
-        épisodique/sémantique et la rédaction du § 3.4 — aucun code en production à bouger.
-        AAMAS ⭐⭐⭐ (3/5) — il instruit les verrous conceptuels que le § 3.4 et les limites du
-        chapitre 8 exposent, sans les figer lui-même.
-      date: '2026-09-14'
-      aamas: 3
   ticket_052_documentation_cohorte_scellee_v5:
     status: terminé
     category: Données & Population
@@ -2197,7 +2233,7 @@ tickets:
       Le ticket est explicitement cité dans le footer du chapitre 5.
 
   ticket_055_benchmark_multimodeles_et_variabilite:
-    status: à faire
+    status: en cours
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-13 (Task 10 & 11 de suivi_actions_publication.md). Rédiger la synthèse comparative
@@ -2232,7 +2268,30 @@ tickets:
       donc les quatre bras Claude sortent et le multi-modèles ne repose plus que sur deux
       familles, Google et Mistral Large. Statut passé à `bloqué` le 2026-09-16 : le ticket ne peut
       pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets. DÉBLOQUÉ le 2026-09-17 : le ticket 088 est terminé, les neuf bras à décideur LLM sont rejoués sur le jeu corrigé et leurs scores sont dans data/experiences/exp_*_EN_c_*.
+      STATUT PASSÉ À `en cours` LE 2026-09-21, règle 1 de la skill `suivi-tickets` : du travail
+      est engagé et le ticket disait « à faire ». Preuves dans sa propre note : le bras
+      `gpt-56-luna_proexp05` a été lancé puis marqué `epuisee` à 181/3161 déplacements,
+      l'adaptateur OpenAI est modifié et non commité (`openai_adapter.py`,
+      `tests/unit/test_openai_adapter.py` non suivi), et la clé payante est déclarée depuis le
+      18/09. Ce qui reste : faire tenir ce bras, lui ajouter son palier minimal `promin02` — un
+      seul palier mesure un niveau, pas l'écart de calibration — ou basculer sur le repli
+      gratuit (`gpt-oss-120b` chez Groq ou Cerebras).
 
+      ÉTAT DU 2026-09-18 — la réplication multi-modèles tient déjà sur DEUX familles, et la
+      troisième est engagée mais cassée. Sur le jeu corrigé, l'ablation de consigne se réplique
+      sur gemini-3.5 (7,02 → 4,86), gemini-3.1 (12,38 → 8,98) et mistral-large (14,75 → 7,63) :
+      trois modèles, deux fournisseurs, même signe. La troisième famille au sens fournisseur est
+      OpenAI, activée le 2026-09-18 (`openai_gpt56_luna_key1`, gpt-5.6-luna, 50 rpm, clé payante,
+      providers.yaml non commité). SON BRAS NE TIENT PAS :
+      `exp_gpt-56-luna_proexp05_…_EN_c_t0_nosim` est `epuisee` à 181/3161 déplacements après 146
+      sollicitations, sur « Providers saturés ou indisponibles après 8s » puis désactivation de
+      l'instance côté passerelle — un travail d'adaptateur est en cours et non commité
+      (openai_adapter.py modifié, tests/unit/test_openai_adapter.py non suivi). ET IL MANQUE SON
+      PALIER MINIMAL : aucun bras `gpt-56-luna_promin02` n'existe, or un seul palier mesure un
+      niveau, pas l'écart de calibration — c'est-à-dire pas ce que le ticket doit établir. Repli
+      gratuit si l'adaptateur résiste : `openai/gpt-oss-120b` (Groq, 1 000 rpd) ou `gpt-oss-120b`
+      (Cerebras, 2 400 rpd), deux bras chacun. Antigravity et Claude restent hors périmètre
+      (décision du 16/09).
     triage:
       faisabilite: 4
       surete: 4
@@ -2250,7 +2309,7 @@ tickets:
       aamas: 5
 
   ticket_056_audit_et_reflexion_resultats_prompt_expert:
-    status: à faire
+    status: abandonné
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-13 (Task 13 de suivi_actions_publication.md). Tâche de réflexion critique et d'audit
@@ -2277,20 +2336,16 @@ tickets:
       sur l'ancien jeu quand leurs comparants sont sur le nouveau ; aucune conclusion n'est
       possible avant le rejeu des neuf bras LLM. Statut passé à `bloqué` le 2026-09-16 : le ticket
       ne peut pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets. DÉBLOQUÉ le 2026-09-17 : le ticket 088 est terminé, les deux conditions calibrées sont sur le jeu corrigé — prompt expert (pe05) à 4,86 de composite pour gemini-3.5.
-
-    triage:
-      faisabilite: 3
-      surete: 4
-      jeux_de_test: false
-      motif: >-
-        Faisable : diff textuel v2/v3 et audit de la chaîne de métriques, sans rien casser. Mais
-        l'audit PEUT INVALIDER le composite de 5,3452 et donc tout le chapitre 6 — c'est son but.
-        La non-monotonie v2 → v3 → v4 reste inexpliquée.
-        AAMAS ⭐⭐⭐⭐ (4/5) — il garde le chiffre de tête du chapitre 6 ; c'est son programme qui a
-        fait découvrir que le composite de 5,35 était calculé sur 274 lignes de journal sur 3
-        161.
-      date: '2026-09-14'
-      aamas: 4
+      ABANDONNÉ le 2026-09-21, décision de l'auteur : le ticket est obsolète. Les deux volets
+      qui portaient un risque réel ont été traités ailleurs — la chaîne de mesure par le 081
+      (garde-fou du scoreur, bras rescoré à 6,157, reconstitution manuelle à 6,17) et le substrat
+      par le 088 (jeu de mesure refait à la bonne date, seules les expériences suffixées `_c_`
+      sont publiables). Ce qui restait de l'audit proprement dit, le diff textuel v2/v3/v4 et
+      l'explication de la non-monotonie, porte sur des prompts (pe06/07/08) que le 080 a déclarés
+      inadmissibles pour H0, ayant été édités au vu des scores de la cohorte : il n'y a plus de
+      chiffre publiable derrière ce diff. Le chapitre 6 est désormais porté par l'ablation du
+      prompt répliquée sur trois modèles sur le jeu corrigé, pas par le composite de 5,3452 qui
+      avait déclenché ce ticket. Bloc `triage` retiré : un ticket clos ne se trie pas.
 
   ticket_057_audit_et_reflexion_double_lecture_tabulaire:
     status: terminé
@@ -2368,6 +2423,16 @@ tickets:
       in an unknown municipality » alors que leur code INSEE désigne Toulouse ou Bazus — géocodage
       inverse muet à la génération.
 
+      AVANCE DU 2026-09-18 : le premier bras LLM de l'audit unitaire est allé au bout. Le palier
+      minimal (`gemini-3.5-flash-lite` + `prompt_minimal_02` sur `enquete_058_test_20260316`) est
+      terminé — 9 689 décisions, 4 707 sollicitations, 183 minutes, deux renouvellements de quota
+      traversés sans erreur — à 64,8 % d'exactitude pondérée, sous le plancher « durée minimale »
+      (68,1 %), mais seul décideur à tenir ensemble vélo (24,1 %), transports collectifs (60,0 %)
+      et marche (44,2 %) ; la forêt aléatoire, jouée côté hôte, se place troisième à 69,9 %. Les
+      sept témoins déterministes sont tous terminés sur ce jeu. LE SECOND BRAS TOURNE : `proexp05`
+      sur le même jeu, exécution 2026-09-18_11_20_47, lancée après une exécution arrêtée à 171
+      décisions le matin. Ce sont ces deux bras qui remplissent les deux [xx] du § 6.4 attendus
+      par le ticket 080.
     triage:
       faisabilite: 4
       surete: 5
@@ -2388,6 +2453,41 @@ tickets:
       de l'Étape 3b pour le Chapitre 7 : protocole expérimental à 5 conditions (nominal, brut, paraphrase sans indice,
       placebo, oracle encodé), corpus gelé de 30 scénarios (Top 5 majeur), métrique de concordance directionnelle
       (taux de signe et kappa pondéré) et critères stricts de réfutation de H3.
+      ÉLARGI LE 2026-09-21 — le ticket portait une réponse INSTANTANÉE à un texte, mémoire
+      éteinte. Il porte désormais TROIS ÉTAGES : (1) la réponse du jour, cinq conditions, cohorte
+      entière, hors simulateur — ne dépend de RIEN et peut démarrer aujourd'hui ; (2) la
+      PERSISTANCE du souvenir de lecture, en run GAMA, qui attend les expériences E1 à E3 du 095
+      (pas son code, en service) ; (3) la DIFFUSION dans le foyer, qui attend les lots 1 à 3 du
+      078, lequel n'a aucun code. Constat central de l'élargissement : un article ne fait subir
+      AUCUN retard, donc gravité 0,00 et souvenir servi ~3 jours — un canal `information` distinct
+      du canal `choc` du 079 est à écrire, avec une gravité CONSTANTE identique aux cinq articles
+      (0,70) pour que les écarts viennent du contenu et non du réglage, plus deux bras de
+      sensibilité. Second constat : en l'état, un article NE se diffuse PAS dans le foyer — la
+      règle R1 du 078 (`observations >= 1`) bloque l'ouï-dire, et il faut que le lecteur ait
+      vérifié par un déplacement réel pour que sa croyance reparte. C'est une prédiction de DÉLAI,
+      falsifiable, et c'est l'intérêt de l'étage 3. Plan d'expérience : UN SEUL RUN à cinq blocs de
+      foyers disjoints (le foyer est le seul canal inter-agents, donc aucun effet ne traverse) plus
+      un bloc témoin interne. REVU LE JOUR MÊME après retour de l'auteur — le run à cinq blocs est
+      ÉCARTÉ comme mode de travail (indébogable, et la facture d'appels se paie à chaque itération)
+      et redevient la FORME FINALE, jouée une fois quand plus rien n'itère. Le mode de travail est
+      un article à la fois, sur un escalier dont chaque marche décide de la suivante. Chiffrage :
+      le gros poste n'est pas les runs GAMA mais l'ÉTAGE 1 — 52 784 requêtes sur la cohorte entière
+      et cinq articles, soit 26 jours de campagne au plafond. D'où E1-a (200 déplacements, un
+      article, C1+C2) à 400 requêtes et E1-b (C3+C4) à 400 : le premier chiffre du chapitre 7
+      devient atteignable pour 800 requêtes. Runs GAMA : P0 la plomberie, 4 agents, 12 jours,
+      ~300 requêtes, OBLIGATOIRE ; P1 le mécanisme, 20 agents en foyers de taille 2, 25 jours,
+      ~3 100 ; P2 la mesure, un article, ~55 agents, ~10 200 ; P3 la campagne en blocs, ~43 000.
+      L'essentiel de la mise au point ne consomme AUCUN appel : le 079 a livré son canal avec
+      34 tests et zéro run. Vivier mesuré dans la v6 : 217 foyers multi-membres tous mobiles,
+      590 agents, dont 122 de taille 2 et 89 mêlant abonné TC et non-abonné — le vivier n'est
+      jamais le facteur limitant, le quota l'est. SEPT LOTS CODABLES DÈS MAINTENANT sans attendre le 095 :
+      corpus textuel `articles_txt/` avec test de lexique pour C3, grille des vingt signes gelée
+      (trois cellules ambiguës à trancher), script d'injection de l'étage 1 (= le 064), canal
+      `llm/informations.py`, sixième CSV `presse_par_jour.csv`, population de foyers, figures F1 à
+      F3. GO DE L'AUTEUR LE 2026-09-21 sur ces sept lots ; le plan d'architecture détaillé et le
+      contrat de tests passent d'abord (plan-first). Statut INCHANGÉ (`à faire`) tant qu'aucune
+      ligne n'est écrite ; onze questions attendent l'auteur au § 13 du ticket et dans
+      specs/ticket_059/questions.md, dont quatre bloquent le lot 4.
 
     triage:
       faisabilite: 3
@@ -2432,6 +2532,33 @@ tickets:
     status: bloqué
     category: Rédaction & Publication
     note: >-
+      AVANCE DU 2026-09-21, SECONDE PASSE — les DEUX réserves du chapitre sont levées, et le
+      RESTE ci-dessous est éteint. Vocabulaire : les deux dernières étiquettes « Tier » du corps
+      (enseignements 1 et 2) sont RETIRÉES et non traduites, dans les trois arbres. La consigne
+      que six en-têtes portaient — remplacer par exploratory / robust / transferable — était
+      INAPPLICABLE : le § 1 et le § 2 réservent ces mots aux degrés de certification de SILICA et
+      interdisent de les appliquer à nos propres conditions ; le chapitre 7 v1.0 avait déjà retiré
+      les étiquettes plutôt que de les convertir, précédent suivi. Renvois de section : la réserve
+      était PÉRIMÉE, le corps est à la numérotation actuelle (§ 6.4, § 8.3, § 8.4) et les deux
+      mentions d'une autre numérotation sont des citations historiques, le § 7 du manuscrit v1.6
+      en en-tête et le § 6.7 de la v0.2 du chapitre 6 dans un commentaire. Chapitre en v0.2 dans
+      les trois arbres. Le mot « Tier » ne subsiste plus dans aucun corps de l'article. Style :
+      cadratins 2,8 pour 1000 mots en FR et 4,2 en EN, sous le seuil ; la densité de gras reste
+      au-dessus (12,8 et 12,6 contre 10,0), écart ANTÉRIEUR porté par les cinq amorces en gras des
+      enseignements — 12,9 et 11,6 au dernier commit, la hausse de l'anglais venant de
+      l'emplacement **[xx]**, écrit en gras selon la convention du chapitre 3.
+      AVANCE DU 2026-09-21 — l'enseignement 4 perd le 90 / 10 de la cascade, deux chiffres du
+      manuscrit v1.6 sans aucune source dans le dépôt, que le chapitre 8 contredisait en deux
+      endroits (§ 8.4 et § 8.5 : la part de flux n'est pas mesurable, aucun compteur ne sépare
+      routine et rupture). La part devient un emplacement [xx] portant la raison de son absence,
+      et ce qui fonde la division du travail renvoie aux mesures qui existent, § 6.4 et § 8.3.
+      Écrit dans les trois arbres sous accord de l'auteur, chapitre en v0.1. Effet de bord : la
+      dette « Tier 1 / 2 / 3 » du RESTE ci-dessous tombe de cinq à trois occurrences, les deux
+      autres étant parties avec le chiffre. Détecteur de style : cadratins 4,8 -> 2,8 pour 1000
+      mots en FR et 4,4 -> 3,8 en EN ; la densité de gras reste au-dessus du seuil (12,6 et 11,5
+      contre 10,0), écart ANTÉRIEUR porté par les cinq amorces en gras des enseignements, qui
+      demande de restructurer le chapitre et non cet item. Le RESTE des renvois de section à
+      l'ancienne numérotation est inchangé.
       2026-09-15 — Chiffres du chapitre recoupés depuis le dépôt et pourvus de leur provenance.
       Point 1 : 7,30 pt d'erreur L1 argmax et 78,54 % d'accuracy retrouvés dans
       mode_choice_policy_metrics.json (13 045 trajets), 29,81 pt dans avancement.yaml (run du
@@ -2465,6 +2592,15 @@ tickets:
     status: bloqué
     category: Rédaction & Publication
     note: >-
+      AVANCE DU 2026-09-21 — une des trois réserves d'en-tête des annexes est RETIRÉE, parce
+      qu'elle était déjà payée : le vocabulaire « Tier 1 / 2 / 3 » ne figure dans AUCUN des trois
+      fichiers d'annexes (fr, en, LaTeX), vérifié ce jour, alors que les trois en-têtes
+      l'annonçaient comme une dette. L'en-tête LaTeX porte en outre la consigne pour le cas où il
+      reviendrait : le RETIRER, jamais le renommer en exploratory / robust / transferable, que le
+      § 1 et le § 2 réservent aux degrés de certification de SILICA. Les deux autres réserves sont
+      INTACTES et non vérifiées ici : chiffres à recouper depuis le dépôt, renvois de section à
+      l'ancienne numérotation — les six renvois de la forme « § x.y » pointent bien sur des
+      sections qui existent, mais les renvois en clair n'ont pas été contrôlés.
       Ouvert le 2026-09-13 (Task 29 de suivi_actions_publication.md). Consolidation et alignement des Annexes A à G
       (Chapitre 99) : quotas, scripts CLI, inférence locale, calibration, dictionnaire des 21 variables, journal des
       audits et convention Quetelet Progedo.
@@ -2495,6 +2631,10 @@ tickets:
       instrument tant que le protocole d'hystérésis n'a pas une ligne de code. Statut passé à
       `bloqué` le 2026-09-16 : le ticket ne peut pas être ENTIÈREMENT fait avant la fin de ce ou
       ces tickets.
+      MISE À JOUR DU 2026-09-17 : le bloquant 041 reste ouvert, donc le statut ne bouge pas — mais
+      l'instrument qui manquait au 041 existe maintenant (ticket 079, chocs déclarés). Ce qui
+      sépare cette campagne de son lancement n'est plus un mécanisme absent : c'est la validation
+      du plan du 041 puis ses lots L1 et L3.
 
     triage:
       faisabilite: 1
@@ -2517,6 +2657,17 @@ tickets:
       ⛔ DÉPEND DE : 059 — il demande le cadrage et le corpus gelé de 30 scénarios du 059, plus un
       script d'injection qui n'existe pas. Statut passé à `bloqué` le 2026-09-16 : le ticket ne
       peut pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets.
+      MISE À JOUR DU 2026-09-17 : le bloquant 059 est `à faire` et n'est lui-même bloqué par rien.
+      C'est donc le seul levier de la moitié « presse » du chapitre 7 : cadrage, corpus gelé de 30
+      scénarios, métrique de concordance. Rien d'autre ne l'empêche d'être pris aujourd'hui.
+      MISE À JOUR DU 2026-09-21 : l'élargissement du 059 range CE ticket dans son ÉTAGE 1, celui
+      qui ne dépend de rien — ni du 095, ni du 078, ni d'un run GAMA. Ses trois prérequis sont
+      nommés et chiffrés : le corpus textuel `articles_txt/` (absent du dépôt, seuls les HTML le
+      sont), la grille des vingt signes gelée (trois cellules ambiguës à trancher AVANT tout
+      appel), et le script d'injection lui-même. Ce sont les lots 1, 2 et 3 du 059. Un quatrième
+      contrôle manquait au dépouillement et il ne coûte rien : le rejeu à l'identique de la journée
+      nominale, sans quoi « le placebo déplace moins que l'article » se compare à zéro au lieu de
+      se comparer au bruit — plancher mesuré à 3,2 % sur l'agent à mémoire (095 § 7 bis).
 
     triage:
       faisabilite: 2
@@ -2572,7 +2723,7 @@ tickets:
       date: '2026-09-14'
       aamas: 3
   ticket_067_relecture_critique_chapitre_par_chapitre_aamas:
-    status: bloqué
+    status: à faire
     category: Rédaction & Publication
     note: >-
       Ouvert le 2026-09-13. Relecture critique systématique chapitre par chapitre du manuscrit (Ch. 00 à 09, 99)
@@ -2582,6 +2733,10 @@ tickets:
       relire un chapitre sur des chiffres non validés le fait relire deux fois. Statut passé à
       `bloqué` le 2026-09-16 : le ticket ne peut pas être ENTIÈREMENT fait avant la fin de ce ou
       ces tickets.
+      DÉBLOQUÉ le 2026-09-21 : son seul bloquant, le 056, est abandonné comme obsolète (décision
+      de l'auteur) ; le 057 était clos depuis plus longtemps. Plus aucun audit n'est en attente,
+      et les chiffres du chapitre 6 sont ceux du jeu corrigé : la relecture chapitre par chapitre
+      peut partir.
 
     triage:
       faisabilite: 3
@@ -2853,6 +3008,48 @@ tickets:
       refonte « entrerait en collision » (refonte portée par le 077, avec le 071 et le 075). Le
       reste du ticket est livré, pose manuelle comprise. Statut passé à `bloqué` le 2026-09-16 :
       le ticket ne peut pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets.
+      RECENSEMENT DU 2026-09-21, contre le code et non contre les notes — et il CORRIGE la
+      phrase ci-dessus : « le reste du ticket est livré » est INEXACT. FINIR LE 077 NE FINIRA
+      PAS CE TICKET ; le 077 ne débloque que le travail G, et DIX autres points restent
+      ouverts dont aucun ne dépend de lui. Le détail est au § « Reste à faire » du ticket,
+      groupé par ce qui bloque. En résumé : (a) BLOQUÉ PAR 077 — le souvenir du retard ;
+      (b) BLOQUÉ PAR UNE DÉCISION DE L'AUTEUR, pas par un ticket — l'ampleur du ralentissement
+      (`facteur_ralentissement` est une hypothèse déclarée, pas une mesure) ; (c) RIEN NE
+      BLOQUE — la GRAVITÉ n'existe pas (aucun accident tiré n'en porte, le retard est un
+      facteur unique, donc le critère « gravité journalisée à côté du retard » est hors
+      d'atteinte en l'état), le RAPPORT DE RUN ignore les accidents (run_report.py : zéro
+      occurrence ; manquent agents retardés, retard médian et cumulé, et l'[ALARME] quand des
+      accidents sont tirés sans toucher personne), le NOMBRE DE CALCULS À FROID provoqués par
+      la garde de cache n'est pas journalisé, la GARDE n'a jamais été vérifiée après un run
+      réel (le test exerce le prédicat et son branchement sur le TEXTE du module), la
+      LINÉARITÉ de l'exposition n'est pas vérifiée, et H1 N'A JAMAIS ÉTÉ TRANCHÉE alors que le
+      ticket la voulait tranchée AVANT le mécanisme — le mécanisme a été construit sans cette
+      réponse ; (d) EN ATTENTE D'UN DÉLAI, à lancer au plus tôt — l'archivage du flux DATEX
+      des DIR (plusieurs semaines de latence, seule source de durées réelles) et l'A/B du
+      protocole exogène. CINQ CRITÈRES D'ACCEPTATION COCHÉS le 2026-09-21 avec leur preuve
+      (fichier de coefficients, déterminisme du tirage, garde du cache, code unique
+      accident/normal, régime écrit dans docs/arch) ; UN CRITÈRE DÉCLARÉ CADUC — le taux de
+      désaccord catr/highway, l'appariement étant passé à la vitesse autorisée `vma`.
+      ✅ FACTEUR MÉTÉO TRANCHÉ LE 2026-09-21, décision de l'auteur : LA MÉTÉO NE CONDITIONNE PAS
+      L'ACCIDENTALITÉ, et ce n'est pas un chantier remis à plus tard mais une limite assumée. LA
+      QUESTION ÉTAIT MAL POSÉE et c'est l'auteur qui l'a redressée : on cherchait à mieux
+      estimer un coefficient sans vérifier que la condition EXISTE dans le jeu de données servi.
+      MESURÉ (trace 2026-09-21_meteo_servie_par_la_simulation, script rejouable) : weather_loader
+      ne lit QU'UN fichier, data/weather/meteo_toulouse_12_mois.csv, indexé par (mois, jour) —
+      un cycle annuel unique rejoué quelle que soit la date simulée. Sur ses 2 920 créneaux de
+      3 h : brouillard 1 (0,03 %), neige/grésil 4 (0,14 %), pluie réelle 239 (8,18 %), pluie
+      POSSIBLE — code 176, une prévision — 422 (14,45 %), couvert/brume 365 (12,50 %), dégagé
+      1 879 (64,35 %). Un facteur brouillard ou neige ne se déclencherait JAMAIS, et sur le jeu
+      gelé jeu-20260316 il est inatteignable (sept jours de ciel dégagé, une averse le 22). Le
+      ×33,7 du brouillard reposait sur UN SEUL créneau observé : il faudrait 0,8 jour de
+      brouillard par an pour qu'il tienne, et à toute fréquence plausible (10 à 50 jours/an) le
+      facteur retomberait entre 0,25 et 2,5. La colonne VISIBILITY_AVG_KM ne sauve rien : c'est
+      une moyenne JOURNALIÈRE, jamais sous 5 km en 485 jours, elle ne peut pas voir un
+      brouillard de trois heures à l'aube. Le calcul rejeté reste conservé dans le fichier de
+      coefficients pour que le refus soit vérifiable. ⚠ CE QUI ROUVRIRAIT LA QUESTION, ET RIEN
+      D'AUTRE : un jeu météo servi à la simulation qui porte réellement du brouillard, de la
+      neige, ou une distinction pluie/non-pluie fiable. Il reste donc NEUF points ouverts, un
+      seul attendant une décision de l'auteur (l'ampleur du ralentissement).
 
     triage:
       faisabilite: 1
@@ -2882,7 +3079,7 @@ tickets:
       date: '2026-09-14'
       aamas: 2
   ticket_071_evolution_memoire_du_code_actuel_a_l_etat_vise:
-    status: en cours
+    status: terminé
     note: >-
       Ouvert le 2026-09-14. PANEL COMPLET de l'évolution de la mémoire, de l'état actuel mesuré à
       l'état visé, en TROIS VOLETS : code, article, planches de présentation. Rassemble tout ce qui
@@ -3057,24 +3254,97 @@ tickets:
       bloquées par un fichier PowerPoint ouvert et une dépendance à installer, deux gestes qui
       demandent l'accord de l'auteur — et la formule de M_t du chapitre 7, qui ne correspond
       toujours à aucun code.
-      DÉPEND DE : aucun ticket — ce qui reste ne dépend d'aucun ticket mais de DEUX GESTES DE
-      L'AUTEUR : installer une dépendance et écraser un fichier PowerPoint ouvert. Statut laissé
-      `en cours` — `bloqué` ferait chercher un déblocage technique qui n'existe pas.
+      AVANCE DU 2026-09-21 — LE VOLET PLANCHES EST LIVRÉ, et la dette de RETARD_REF a quitté ce
+      ticket. Les deux obstacles matériels du 14/09 sont levés : `pptxgenjs` installé sous accord
+      de l'auteur (19 paquets), `node_modules/` ajouté au .gitignore où il n'était pas, et le
+      fichier de verrou ~$architecture_proposée.pptx a disparu de lui-même.
+      DECK 1 : IL N'AVAIT PAS BESOIN D'ÊTRE RÉGÉNÉRÉ, et le diagnostic du 14/09 était faux.
+      « pptx en retard sur son générateur » avait été déduit des dates de fichiers (pptx 07:04 <
+      générateur 22:32) ; ce 22:32 est un horodatage de masse que portent aussi scripts/slides/ et
+      specs/ticket_071/ en entier — trace d'un git checkout, pas d'une édition. Vérifié en
+      régénérant et en diffant : le XML des planches est IDENTIQUE, seuls docProps/core.xml et les
+      classeurs Excel embarqués diffèrent. Le binaire n'a donc pas été remplacé par un contenu
+      identique, ce qui n'aurait produit que du bruit dans git.
+      DECK 2 RECONSTRUIT, 20 planches, générateur scripts/slides/memoire_agents_mobilite.js.
+      L'AXE A CHANGÉ, et c'est le constat central : le ticket disait « trois affirmations ont
+      vieilli », or le deck entier reposait sur « voilà ce qui cloche → voilà les briques qu'on va
+      poser → voilà le gain ». Les lots étant livrés et le 077 ayant suivi, le proposé EST
+      l'actuel : on ne promet pas ce qui est fait. Axe retenu par l'auteur le 2026-09-21 : LA VIE
+      D'UN SOUVENIR, cinq actes, un seul cas qui traverse tout (30 min de retard mardi 17 h 10,
+      ligne A) du trajet qui crée le souvenir à la décision du vendredi. Le deck DÉCRIT, il ne
+      plaide plus.
+      CHIFFRES RELEVÉS EN EXÉCUTANT llm/gravite.py, pas recalculés : gravité 0,70 (0,50 retard +
+      0,20 incident), force 14,56 j contre 2,80 j pour un trajet banal, 81,4 % du poids à J+3 —
+      ce qui confirme le « 81 % » déjà écrit au chapitre 7. Réunis dans un objet CAS en tête du
+      générateur, avec la commande qui les revérifie dans scripts/slides/README.md.
+      CHARTE COMMUNE EXTRAITE dans scripts/slides/_charte.js (palette, polices, gabarit, 4 aides
+      de tracé) : deux générateurs qui redéclarent chacun leur palette divergent à la première
+      retouche. Extraction validée par l'épreuve écrite avant elle — deck 1 régénéré, XML des
+      planches identique. Défaut corrigé au passage : les générateurs écrivaient dans le
+      RÉPERTOIRE COURANT, ce qui a effectivement déposé un pptx orphelin à la racine du dépôt
+      pendant cette séance ; le défaut est désormais Divers/<nom>.pptx.
+      TROIS DÉBORDEMENTS DE TEXTE trouvés AU RENDU (LibreOffice → PDF → PNG) et corrigés : le XML
+      ne les montrait pas, et l'un venait de Courier rendu plus large que pptxgenjs ne le prévoit.
+      La vérification du rendu est inscrite dans le README comme épreuve à part entière.
+      ÉCART TROUVÉ EN ÉCRIVANT LA PLANCHE 4 : la spécification cible annonce « 15 champs plus 3
+      sur les concepts » ; le code en porte 23 — 17 communs, 5 propres au concept, plus
+      schema_version (compté par dataclasses.fields sur llm/memory.py). L'arbitrage du lot 2
+      (cinquième axe, météo) et le lot 3 ont creusé l'écart. La planche affiche le compte DU CODE
+      et signale celui de la spécification.
+      DÉPÔT DES PDF FAIT LE 2026-09-21 (rang 7) : les 9 références libres de droits sont dans
+      etat_de_lart/ (§ 9 de son README, total 51 → 60, et 60 PDF sur disque), avec leurs 9 clés
+      dans sources/sample.bib (36 → 45). Chaque PDF ouvert et son titre confronté à la notice :
+      les 9 correspondent, et CoALA affiche bien « Transactions on Machine Learning Research
+      (02/2024) », ce qui confirme la correction de notice du 14/09. Ciancone sortie comme prévu.
+      Conditions 1, 2 et 4 de CITATIONS.md remplies ; la 3 ne l'est pour AUCUNE — la phrase
+      citante vit dans CITATIONS.md, sous verrou, 9 entrées y restent à créer.
+      DÉFAUT TROUVÉ EN DÉPOSANT : CITATIONS.md exige la clé dans ../sources/references.bib, un
+      FICHIER QUI N'EXISTE PLUS — supprimé au commit 8c1871a. La bibliographie réelle est
+      sample.bib, celle que le template LaTeX appelle (\bibliography{sample}). Sous verrou.
+      RETARD_REF EST SORTI DE CE TICKET le 2026-09-21 (décision de l'auteur) : sa règle de
+      conception est le LOT F5 DU TICKET 095. Elle n'existait ici qu'à l'intérieur d'un critère de
+      clôture DÉJÀ COCHÉ, donc invisible — le 071 aurait pu se fermer en la laissant derrière.
+      CE QUI RESTE AU 071, ET RIEN D'AUTRE : l'article. Deux énoncés faux sur quatre subsistent —
+      « hystérésis J+1 avec mémoire court-terme M_t » dans les TROIS versions de la conclusion
+      (fr:15, en:20, overleaf:33), et « un tampon à court terme décroissant » dans
+      relecture/00_abstract.md:135 ; la décision ne lit que la mémoire longue. S'y ajoutent les 9
+      entrées de CITATIONS.md et son pointeur mort. ⚠ La formule de M_t du chapitre 7, que ce
+      ticket portait depuis le 15/09, N'EST PLUS UN RESTE : le chapitre 7 a été réécrit le 17/09
+      et dit explicitement que la formule sort du texte, faute d'implémentation. Vérifié : plus
+      aucune occurrence de w_m ni de M_t au chapitre 7, FR comme EN.
+      DÉPEND DE : aucun ticket — ce qui reste est sous VERROU D'ARTICLE et demande un accord
+      explicite de l'auteur, pas un déblocage technique. Statut laissé `en cours`.
+      CLÔTURE DU 2026-09-21. Les TROIS VOLETS sont traités. CODE : les cinq lots, puis le 077.
+      PLANCHES : deck 1 vérifié à jour sans retouche (XML identique après régénération), deck 2
+      reconstruit en 20 planches sur l'axe « la vie d'un souvenir », charte commune extraite,
+      épreuve de non-régression et vérification du rendu écrites dans scripts/slides/README.md.
+      ARTICLE, sous accord explicite de l'auteur le 2026-09-21 : les QUATRE énoncés faux du § 3.1
+      sont désormais corrigés — les introductions l'étaient le 14/09, les trois conclusions
+      (fr:17, en:20, overleaf:34) et relecture/00_abstract.md:135 le sont ce jour. « mémoire
+      court-terme M_t » sort : vérifié DANS LE CODE que le bloc de décision se construit
+      uniquement depuis long_term_memory (llm_agent.py:869, memoire_noyau), la mémoire courte
+      alimentant la réflexion et non la décision. Le pointeur mort de CITATIONS.md est réparé —
+      sa condition 4 exigeait la clé dans references.bib, fichier supprimé au commit 8c1871a ;
+      29 occurrences substituées vers sample.bib dans 11 fichiers. Onze entrées A40–A50 créées
+      avec leur récapitulatif B. Contrôle de style lancé À LA MAIN, les écritures étant passées
+      par Bash : 1 écart de densité de gras sur chaque conclusion, PRÉEXISTANT et mesuré sur HEAD
+      (fr 12,9/1k, en 11,6/1k, seuil 10,0) ; ma substitution n'ajoute aucun gras et fait baisser
+      le FR à 12,7. Dé-graisser relèverait d'une passe de style, hors de l'accord reçu.
+      DÉPÔT : 11 PDF dans etat_de_lart/ (total 62, index à jour) et 11 clés dans sample.bib
+      (total 53). Deux au-delà des neuf annoncés : Reflexion, que le chapitre 5 citait depuis
+      toujours SANS PDF NI CLÉ, et Laplace, domaine public — ⚠ le fichier déposé est la
+      réimpression Gauthier-Villars, pas l'original Courcier de 1814, et la notice le dit.
+      CE QUI N'EST PAS FAIT PART AU TICKET 099, plutôt que de garder ce chantier ouvert à 95 % :
+      les NEUF phrases citantes (condition 3 de CITATIONS.md, non remplie pour 9 des 11), le cas
+      TULVING que ni le code ni une session ne peuvent trancher (chapitre d'ouvrage sans version
+      libre, cité au § 3.4 FR et EN), et les douze références des groupes C et D restées hors
+      dépôt. Sans le lot C, l'ancrage ACT-R demandé par la relecture extérieure ne peut pas
+      entrer dans le texte.
+      Bloc triage retiré (règle 2 de la skill suivi-tickets, épreuve test_R34).
+      HISTORIQUE — DÉPEND DE : aucun ticket — ce qui restait le 15/09 ne dépendait d'aucun ticket
+      mais de DEUX GESTES DE L'AUTEUR : installer une dépendance et écraser un fichier PowerPoint
+      ouvert. Les deux ont été faits le 2026-09-21.
 
-    triage:
-      faisabilite: 3
-      surete: 2
-      jeux_de_test: true
-      motif: >-
-        Spécification très aboutie et huit items déjà livrés. Mais les quatre lots changent `MemoryEntry`
-        (+8 champs), le déclenchement de la consolidation, le modèle de plongement et le gabarit
-        `stm_reflection` — donc ce que le modèle voit. CONFLIT À TRANCHER avec le ticket 074 : le
-        071 passe le plongement à un modèle francophone, le 074 bascule tout en anglais.
-        AAMAS ⭐⭐⭐⭐ (4/5) — son volet code est passé au 077 et son § 3.4 à la passe du 050, mais
-        il reste porteur d'une phrase FAUSSE du papier — la formule de M_t du chapitre 7 ne
-        correspond à aucun code.
-      date: '2026-09-14'
-      aamas: 4
   ticket_072_impact_langue_et_cadrage_culturel_llm:
     status: terminé
     category: Expériences & Cognition
@@ -3086,7 +3356,7 @@ tickets:
       is an ineffective cue for cultural alignment ») tout en évitant les dégradations d'exactitude et biais
       de CoT non-anglais (Qi et al. 2025, Liu et al. 2025).
   ticket_074_bascule_anglaise_archivage_et_reprise_de_campagne:
-    status: en cours
+    status: terminé
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-14. Bascule de tout le dispositif en anglais (prompts, gabarits, couche de
@@ -3133,6 +3403,28 @@ tickets:
       § 4.3 de l'article, qui justifie l'anglais — donc un travail d'écriture SOUS VERROU, pas un
       blocage technique. Le critère de campagne, lui, est coché.
 
+      CONSTAT DU 2026-09-18 : le pipeline de reprise du lot D a fait son travail jusqu'au bout. La
+      campagne `rejeu_jeu_corrige_v6` est terminée le 2026-09-17 à 09:34:33 — 27 expériences
+      faites, aucune restante, aucune échouée, 2 repêchages, après un démarrage le 17/09 à 07:09
+      et une phase `llm` menée à travers les renouvellements de quota. Le réveil automatique au
+      renouvellement, qui était le point douteux du lot D, est donc démontré sur une campagne
+      complète.
+      TERMINÉ LE 2026-09-21. Le dernier critère non coché, le seul restant depuis le 15/09, est
+      livré : l'article dit enfin dans quelle langue le dispositif s'exécute, et pourquoi. Le
+      numéro « § 4.3 » écrit au ticket datait du 14/09 et ne désignait plus le socle d'évaluation
+      depuis la réorganisation v0.10 du chapitre 4 — la justification est au § 4.1 (fr, en,
+      LaTeX), et la réserve de Soegeng et al. (2026) devient le § 8.6 du chapitre 8 (fr, en),
+      comme l'arbitrage Q3 le demandait. Six entrées BibTeX créées, auteurs relevés sur les PDF
+      parce que les métadonnées JSON du corpus ont un champ authors vide. UNE RÉFÉRENCE ÉCARTÉE
+      ET DITE : Ananthram et al. (2025), que le § 1.3 du ticket comptait parmi les réserves,
+      porte sur des modèles VISION-LANGAGE en compréhension d'images — la transposer à une tâche
+      de décision textuelle n'est pas soutenable en double insu ; ce qu'elle apportait est
+      conservé sans citation. TROIS POINTS À RECOUPER AVANT SOUMISSION, notés entrée par entrée
+      dans CITATIONS.md : le troisième auteur de Bazoge et al., l'année de Bulté & Rigouts Terryn
+      (préprint 2025, DOI de revue daté 2026), et les deux caractères CJK du titre de Liu et al.
+      que pdflatex ne compose pas. NON TOUCHÉ, à signaler : overleaf/08_limits_and_hybrid.tex est
+      en retard d'une section sur son .md (le § 8.5 du 21/09 n'y est pas), donc le § 8.6 n'y est
+      pas versé — le resync LaTeX du chapitre 8 est un travail à part.
     triage:
       faisabilite: 4
       surete: 3
@@ -3150,7 +3442,7 @@ tickets:
       date: '2026-09-14'
       aamas: 3
   ticket_073_reproductibilite_prompt_calibre_multi_graines_multi_populations:
-    status: à faire
+    status: en cours
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-14. Évaluation de la reproductibilité et de la robustesse stochastique
@@ -3172,6 +3464,29 @@ tickets:
       ticket ne peut pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets. DÉBLOQUÉ le 2026-09-17 : le ticket 088 est terminé, le substrat de référence est `population_1000_AAMAS_v6_20260316_EN_c` — une mesure de reproductibilité ne sera plus à jeter.
 
 
+      AVANCE DU 2026-09-18, spec seulement, aucune mesure : le ticket porte désormais un AXE 0 —
+      réplicat à l'identique, demandé par l'auteur le même jour. Deux exécutions du MÊME bras,
+      même modèle, même prompt, même jeu, mêmes trois graines, et comparaison des MASSES de
+      probabilité que le modèle attribue aux modes, pas seulement du mode retenu. Il passe avant
+      l'axe 1 parce qu'une graine change l'ordre des sollicitations, le tirage et le calendrier :
+      la dispersion inter-graines mélange le non-déterminisme du fournisseur et l'aléa du
+      dispositif, et l'axe 0 ne change rien du tout. VÉRIFIÉ SUR PIÈCES, le bras est exécutable
+      sans une ligne de code : `experiences lancer` sans `--reprendre` crée une seconde exécution
+      (cli.py:640), le registre liste une ligne par exécution (registre.py:135), et le cache
+      sémantique est éteint par construction dans ce chemin (`settings.cache.enabled = False`,
+      cli.py:583, RG-2) — le second passage redemande réellement au modèle. PIÈGE NOMMÉ : avec
+      `--reprendre`, les décisions archivées sont resservies sans sollicitation (runner.py:600) et
+      le bras ne mesure rien. TÉMOIN DE DÉTERMINISME DÉJÀ ACQUIS : `exp_rf_…_EN_c_nosim` porte
+      deux exécutions (2026-09-16_13_53_48 et 15_52_59) au composite strictement identique (4,09 /
+      5,81 hors choix unique / L1 38,33), donc tout écart du réplicat LLM appartient au modèle.
+      CADUCITÉ CORRIGÉE : le rectificatif du 15/09 demandait ce rejeu sur `pe04`, variante
+      SUPPRIMÉE le 2026-09-17 ; le réplicat porte sur `prompt_expert_05`, exécution de référence
+      2026-09-16_22_20_25 (composite 4,86), coût ≈ 2 500 sollicitations fraîches soit ≈ 2,5 jours
+      de quota à 1 000 RPD. Les critères d'acceptation qui désignaient la cohorte v5 sont
+      repointés sur v6 et le jeu corrigé (la v5 est en archive froide depuis le 14/09). RESTE :
+      les cinq bras (1 réplicat + 4 graines), l'axe 2, et le SEUL outil manquant — aucun script
+      n'apparie deux exécutions ; `mode_probabilities.py` compare attendu contre tiré DANS une
+      exécution, `modal_variation_rate.py` compare un jour au précédent DANS un run.
     triage:
       faisabilite: 2
       surete: 4
@@ -3188,7 +3503,7 @@ tickets:
       aamas: 4
 
   ticket_075_journal_de_memoire_et_run_60_jours:
-    status: en cours
+    status: terminé
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-14. Rendre LISIBLE l'évolution de la mémoire des agents sur un run long,
@@ -3221,21 +3536,25 @@ tickets:
       par le client de la passerelle, seuil unique des trois appels. CONSÉQUENCE : le run de 30
       jours déjà produit, et le rapport du 077 qui en découle, ont une mémoire écrite en partie
       par un autre modèle — le run long est à produire APRÈS cette correction.
-    triage:
-      faisabilite: 2
-      surete: 4
-      jeux_de_test: false
-      motif: >-
-        TRIÉ le 2026-09-15 : le ticket était ouvert sans appréciation depuis le 14, donc absent de
-        tout classement et signalé par la règle R34. Trois de ses quatre chantiers sont livrés — la
-        météo qui avance d'un jour par jour simulé, le journal de mémoire par agent, la reprise à
-        chaud à mémoire gelée — et un run de 30 jours a tourné. Ce qui reste, le run long
-        lui-même, ne vaut RIEN avant le lot A du ticket 077 : ce run de 30 jours a précisément
-        montré que la mémoire apprend sur des étiquettes de mode qui ne traversent pas, d'où
-        faisabilité 2. Sûreté 4 : le mécanisme est livré et testé, un run long ne casse rien et ne
-        coûte que du quota gemini-3.1-flash-lite.
-      date: '2026-09-15'
-      aamas: 2
+      CLOS LE 2026-09-21, décision de l'auteur, LE RUN DE 60 JOURS N'A PAS ÉTÉ PRODUIT — et
+      il ne le sera pas depuis ce ticket. Le dispositif est livré et reste acquis : progression
+      météo, journal de mémoire par agent, reprise à chaud à mémoire gelée, population à cinq
+      profils. C'est le cinquième chantier, le run lui-même, qui est abandonné. VÉRIFIÉ SUR
+      PIÈCES le 2026-09-21, amplitude simulée et nombre d'agents recalculés depuis les
+      `moves.csv` de tous les runs portant `population_5_memoire_075` : le seul run long à cinq
+      habitants est `experiments/archive/2026-09-14_23_58`, 32,6 jours simulés, 514 décisions —
+      celui-là même que la note ci-dessus déclare disqualifié, puisqu'antérieur à la correction
+      du 2026-09-16 (ticket 087) et donc doté d'une mémoire écrite en partie par Mistral. Les
+      autres runs à cinq agents plafonnent à 15,1 j (2026-09-15_10_03) et 11,1 j
+      (2026-09-16_15_58) ; TOUT CE QUI TOURNE DEPUIS LE 18 SEPTEMBRE EST À UN SEUL AGENT — le
+      bras choqué du 077, 19 à 40,6 jours. AUCUN RUN À CINQ AGENTS APRÈS LE 2026-09-17.
+      CE QUI RESTAIT ET QUI N'EST PAS FAIT, pour la session qui voudrait le reprendre : (a) le
+      run 60 j × 5 agents sous `gemini-3.1-flash-lite` seul ; (b) l'arbitrage du lot D1 du
+      ticket 077 — servir l'auto-réflexion dans le bloc noyau ou l'éteindre
+      (`docs/tickets/ticket_077…md:352` et `:366`) — qui reste ouvert AU 077 et n'est pas
+      emporté par cette clôture, puisqu'il change le contenu du prompt de décision. Aucun
+      ticket ne portait `DÉPEND DE : 075` : cette clôture ne débloque rien en cascade. Le 070
+      reste bloqué par le 077, pas par celui-ci.
   ticket_076_sorties_de_comparaison_et_bras_payants_prompt_minimal:
     status: terminé
     category: Modélisation Statistique
@@ -3358,7 +3677,7 @@ tickets:
       aamas: 3
 
   ticket_078_partage_de_concepts_au_sein_du_foyer:
-    status: bloqué
+    status: à faire
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-15 à la demande de l'auteur ; mécanisme arrêté le jour même en trois tours
@@ -3411,6 +3730,17 @@ tickets:
       concepts sur 231 n'ont pas d'axe ; sans son lot B, le foyer se raconterait les marches
       fantômes d'un seul de ses membres. Statut passé à `bloqué` le 2026-09-16 : le ticket ne peut
       pas être ENTIÈREMENT fait avant la fin de ce ou ces tickets.
+      DÉBLOCAGE DU 2026-09-21 : statut repassé de `bloqué` à `à faire`. La dépendance stricte
+      ci-dessus nommait les lots A et B du 077, qui sont LIVRÉS depuis le 2026-09-15 avec 92
+      tests (suite à 1 286 verts) — l'axe des concepts et les observations que GAMA envoie sont
+      réparés. Le 077 reste ouvert, mais sur son SEUL lot D1, un arbitrage sur le service de
+      l'auto-réflexion dans le bloc noyau : il ne touche ni `axe_objet` ni le vocabulaire des
+      modes, donc ce ticket peut être ENTIÈREMENT fait sans attendre sa clôture, et la
+      convention du 2026-09-16 ne demande plus `bloqué`. CE QUI RETIENT ENCORE, et qui n'est
+      pas un ticket : la contrepartie à mesurer en premier (le 077 comptait 225 concepts sur
+      231 à zéro observation — si les confirmations ne repartent pas, le canal naît vide), la
+      population `population_12_foyers_078` qui n'existe pas, et le budget du run macro.
+      DÉPEND DE : aucun ticket.
 
     triage:
       faisabilite: 3
@@ -3433,7 +3763,7 @@ tickets:
       date: '2026-09-15'
       aamas: 2
   ticket_079_chocs_declares_vecus_par_les_agents:
-    status: bloqué
+    status: terminé
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-15 ; ENTRÉE DE STATUT CRÉÉE LE MÊME JOUR — le ticket avait son `.md` et
@@ -3459,20 +3789,36 @@ tickets:
       générale à cinq agents, et elle demande les lots A/B/C du 077 — « prérequis dur » selon son
       § 7. Statut passé à `bloqué` le 2026-09-16 : le ticket ne peut pas être ENTIÈREMENT fait
       avant la fin de ce ou ces tickets.
+      DÉBLOCAGE DU 2026-09-17 : le lot 5 attendait les lots A/B/C du ticket 077, qui sont LIVRÉS
+      (92 tests, suite à 1 286 verts). Ce ticket n'est donc plus bloqué. RECTIFICATIF au passage —
+      sa première phrase datait d'avant la livraison : les lots 1 à 4 SONT livrés depuis le
+      2026-09-15 et vérifiés dans le dépôt ce jour — `services/llm-agents/llm/chocs.py` (24 ko),
+      six cas déclarés dans `services/llm-agents/config/chocs/` (bouchon, crevaison, panne réseau,
+      train supprimé, orage, voiture suspecte), levier `make run CHOC=<nom>`, documentation
+      `docs/arch/chocs-declares.md`, tests `test_079_chocs.py`. RESTE le seul lot 5 : la répétition
+      générale à 5 agents. Aucun run portant un choc n'existe encore dans `experiments/archive/`.
+      CLÔTURE DU 2026-09-21, LE LOT 5 EST TRANSFÉRÉ AU TICKET 095 (E3) — décision de l'auteur.
+      Deux constats mesurés contre le dépôt ce jour, et non contre cette note. (1) La dernière
+      phrase ci-dessus est PÉRIMÉE : huit runs portant un choc existent dans
+      `experiments/archive/`, du 2026-09-16_15_58 au 2026-09-21_15_13, chacun avec son
+      `choc.yaml` et son `chocs.jsonl` — injection, gravité 0,70 avec son détail par
+      composante, retard injecté distinct du retard mesuré, texte vécu écrit. Le mécanisme a
+      donc déjà tourné de bout en bout huit fois, et le 077 § 10 a fermé au passage les six
+      causes de mort du bras choqué. (2) Ce qui reste vraiment du lot 5 n'est PAS la
+      répétition générale : c'est qu'UN SEUL des six cas déclarés a jamais été joué —
+      `c6_voiture_suspecte`, et toujours sur un agent seul (899549, puis 861500). C2
+      « crevaison », le cas où rien ne change dans le graphe et que le lot 5 désignait
+      nommément, n'a jamais été exécuté ; ni C1, C3, C4, C5. Or E3 du ticket 095 joue
+      précisément C2, C6 et C3, avec un attendu falsifiable — la date d'extinction suit la
+      gravité — là où la répétition générale n'aurait été qu'une épreuve de fumée payée ~1 jour
+      de quota. Le reliquat part donc dans E3 sous la forme de deux sorties attendues, écrites
+      dans la note du 095 : pour chacun des trois cas, `chocs.jsonl` non vide avec gravité et
+      détail par composante conformes à la déclaration ; et au moins un run à exposition
+      MULTI-AGENTS avec témoin interne non exposé, la règle `exposition.agents` n'ayant jamais
+      servi qu'avec un seul identifiant. La population des 10 personas mesurables du 093 la
+      fournit. Bloc `triage` retiré (règle 2 de la skill suivi-tickets, épreuve test_R34).
+      Aucun ticket ne portait `DÉPEND DE : 079` — vérifié, rien à débloquer en cascade.
 
-    triage:
-      faisabilite: 2
-      surete: 4
-      jeux_de_test: false
-      motif: >-
-        Le code est fait et vert ; ce qui reste est une répétition générale suspendue à un
-        prérequis DUR — les lots A/B/C du 077, sans lesquels l'agent se souviendrait d'un choc sur
-        des étiquettes de mode qui ne traversent pas. D'où faisabilité 2 : rien ne bloque
-        techniquement, mais le jouer maintenant produirait une trace à jeter. Sûreté 4 : le
-        mécanisme est éteint par défaut et ne s'active que par `make run CHOC=<nom>`, les deux
-        retards sont séparés partout, et aucun jeu scellé n'est touché.
-      date: '2026-09-15'
-      aamas: 3
   ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier:
     status: bloqué
     category: Rédaction & Publication
@@ -3515,7 +3861,32 @@ tickets:
       le modèle contre lequel la consigne a pourtant été réglée. Ce qui reste avant clôture n'est
       plus un impact mais deux mesures : dispersion inter-graines (073 axe 1, deux TBC au § 6.5) et
       exactitude unitaire de l'agent (058, deux [xx] au § 6.4).
+      DÉPEND DE : 073 (dispersion inter-graines, deux TBC au § 6.5) et 058 (exactitude unitaire de
+      l'agent sur les déplacements de l'enquête, deux [xx] au § 6.4). Ligne ajoutée le 2026-09-17 :
+      le ticket portait `bloqué` sans nommer de bloquant, donc sans apparaître dans aucun
+      recensement de dépendances. Il ne dépend d'AUCUN ticket du chapitre 7 — ni du 063, ni du 064,
+      ni du 059 : ce sont deux chaînes séparées qui ne se rejoignent qu'au chapitre 9 (ticket 061).
 
+      CONSTAT DU 2026-09-18 : les quatre bras que la note annonçait « à rejouer, tous arrêtés sur
+      quota » SONT FAITS. La campagne `rejeu_jeu_corrige_v6` est terminée le 2026-09-17 à 09:34:33
+      — 27 expériences faites, `restantes` vide, 2 repêchages, aucune échouée
+      (campagnes/…/etat.json). Les composites du jeu corrigé se lisent donc en entier :
+      gemini-3.5-flash-lite 7,02 (promin02) contre 4,86 (proexp05), 5,33 (proexp06), 6,58
+      (proexp08) ; gemini-3.1-flash-lite 12,38 contre 8,98 ; mistral-large-2512 14,75 contre 7,63
+      ; plafond tabulaire en chaîne 3,60 (lgbm) et 3,61 (klr). Les trois TBD du chapitre
+      n'attendent plus de run. Le blocage restant est inchangé et n'est pas celui-là : DÉPEND DE
+      073 (deux TBC au § 6.5) et 058 (deux [xx] au § 6.4).
+      RESTE À FAIRE, relevé le 2026-09-21 et écrit au § 6 bis du ticket — le ticket ne tient plus
+      qu'à DEUX MESURES ET UN TEXTE. (1) Ticket 073, seul blocage qui touche encore le chapitre 6 :
+      les deux TBC du § 6.5 anticipent une dispersion inter-graines non mesurée ; il faut cinq bras
+      sur la v6 et le jeu corrigé, plus l'outil manquant — aucun script du dépôt n'apparie deux
+      exécutions. (2) Ticket 058 : les deux [xx] du § 6.4 SONT REMPLIS, les deux bras d'enquête sont
+      scorés (promin02 10,41 sur 9 689 décisions, proexp05 7,66 sur 9 686) et le chapitre porte
+      l'exactitude unitaire sur 9 621 déplacements de 2 930 enquêtés avec sa figure ; le 058 ne
+      bloque donc plus le 080, à l'auteur de le confirmer. (3) Un seul critère d'acceptation sur sept
+      reste non satisfait : le chapitre 9 porte encore 7,30 contre 29,81 et le facteur 2 700, ce qui
+      contredit l'écart mesuré de +1,35 [+0,28 ; +2,47] — reprise au ticket 061, ce ticket-ci ne fait
+      que le signaler. Les six autres critères sont cochés et vérifiés dans le dépôt, pas sur note.
     triage:
       faisabilite: 4
       surete: 5
@@ -3737,10 +4108,46 @@ tickets:
       RESTE OUVERT : le verrou par clé sur `make run`, l'injection par run de `make run` (préalable
       à tout vidage du fichier), et `cache.enabled` / `cache_dir`.
 
+  ticket_087_la_restriction_ne_couvrait_que_les_decisions_et_gama_mourait_sur_une_pause:
+    status: terminé
+    category: Ingénierie & Système
+    note: >-
+      Ouvert et LIVRÉ le 2026-09-16, 11 tests dédiés, contrat `specs/ticket_087/tests.md` écrit
+      avant le code. ENTRÉE DE STATUT REMISE LE 2026-09-21 : le ticket avait son `.md` et plus
+      aucune ligne ici — perdue en démêlant le doublon de numéro avec l'attribution du nombre de
+      voitures par ménage — si bien qu'il s'affichait « sans statut ». Ce qu'il a livré : la
+      restriction d'instances ne portait QUE sur les décisions, et les deux autres appels du run —
+      réflexion à court terme, auto-réflexion à long terme — partaient sans consigne, servis selon
+      la priorité de la passerelle, qui commence par Mistral. Mesuré sur le run du matin : 5
+      décisions servies par gemini 3.1, la consolidation mémoire servie par Mistral, sur une
+      expérience dont l'objet d'étude EST la mémoire. La consigne est désormais portée par le
+      client de la passerelle, seuil unique des trois appels et de tout appel ajouté plus tard ; et
+      GAMA ne meurt plus sur une pause. ⚠ Deux tickets portent le numéro 087 : la clé est le nom de
+      fichier complet, jamais la forme courte.
+
   ticket_087_attribution_du_nombre_de_voitures_par_menage:
-    status: amélioration
+    status: abandonné
     category: Modélisation Statistique
     note: >-
+      ABANDONNÉ le 2026-09-21 sur décision de l'auteur : la vérification de filière n'a plus
+      d'objet. CONTRÔLE FAIT LE JOUR MÊME, avant de fermer. Dans toute la chaîne d'exécution
+      `number_of_cars` n'est lu qu'en booléen — `vehicle_chain.py:184`, `population_utils.py:44` et
+      `handle/application.py:465` font tous `> 0` — donc l'agent ne voit JAMAIS le nombre. Les deux
+      seuls consommateurs de la valeur fine sont en amont, comme covariable continue :
+      `bike_ownership.py:320` et `equipment_propensity.py:217`. Y confondre 3 et 4 décale d'une unité
+      une covariable sur 1,5 % des ménages, très au-dessous de la résolution de l'instrument (1,3
+      point par décideur), et l'usage aval était déjà clos au 057. LE POINT 2.3 EST TRANCHÉ ET
+      IL N'Y A RIEN À CORRIGER. `CONTROLE.md` publie `motorisation_personne` et `motorisation_menage`
+      avec les mêmes effectifs 136 / 377 / 487 et `n = 1000`, ce qui a d'abord fait soupçonner un IC95
+      calculé sur le mauvais effectif. Faux : la base ménage est le fichier personnes pondéré à
+      1/taille, et `control_population.py:508` calcule l'IC par Clopper-Pearson sur l'EFFECTIF EFFICACE
+      DE KISH. Recalculé depuis `population.json` le 2026-09-21, somme des poids 491,8 et n_eff 749,1 :
+      les trois intervalles publiés tombent au dixième — [16,4 · 22,2], [41,8 · 49,0] et [32,0 · 38,9]
+      contre [32,0 · 39,0]. Reste un libellé qui se lit mal (colonne `n` en effectif brut personnes,
+      en-tête « Base menage, n = 1000 », sous des pourcentages de ménages) : lisibilité, pas
+      statistique, et aucun chiffre de l'article n'en dépend. Pas de ticket ouvert là-dessus.
+      Le renvoi au 087 dans les tickets associés du chapitre 8 est retiré le 2026-09-21, en FR et en
+      EN, sous accord de l'auteur ; aucune prose ni aucun chiffre touché. ── HISTORIQUE ──
       Ouvert le 2026-09-16 à la demande de l'auteur, passé en amélioration le 2026-09-17. Piste d'audit
       future non bloquante sur la filière `number_of_cars` (vérification de filière eqasim vs enquête et
       écart sur 3 vs 4+ VP). Ne bloque aucune publication ni run. Vérification de FILIÈRE : d'où vient `number_of_cars`, par quel
@@ -3765,19 +4172,6 @@ tickets:
       dix-huit fois sous la résolution de l'instrument, aucun run à rejouer) ; une valeur fausse ne
       rouvrirait pas ce point, la règle n'en lit que le signe. Coût nul : aucun appel LLM, aucune
       exécution relancée, lecture seule.
-
-    triage:
-      faisabilite: 4
-      surete: 5
-      jeux_de_test: false
-      motif: >-
-        Faisabilité 4 : lecture de filière sur des fichiers déjà en place, plus deux mesures
-        agrégées que le 057 a déjà su produire en quelques minutes. Le seul inconnu est le chemin
-        du vivier eqasim, qui n'a pas encore été parcouru pour ce trait. Sûreté 5 : lecture seule
-        de bout en bout, aucun jeu scellé consommé ni modifié, aucune exécution relancée — un
-        verdict, pas une correction. Pas de drapeau.
-      date: '2026-09-16'
-      aamas: 3
 
   ticket_092_la_restriction_ne_couvrait_que_les_decisions_et_gama_mourait_sur_une_pause:
     status: terminé
@@ -3936,10 +4330,10 @@ tickets:
       et la vérification a lieu au démarrage du contrôleur, avant toute décision.
 
   ticket_093_personas_mesurables_et_suivi_des_habitudes:
-    status: en cours
+    status: terminé
     category: Expériences & Cognition
     note: >-
-      Ouvert le 2026-09-16 et EN COURS le même jour, après l'analyse du run 2026-09-16_15_58
+      TERMINÉ le 2026-09-21. Ouvert le 2026-09-16, après l'analyse du run 2026-09-16_15_58
       (dix jours, cinq personas).
       TROIS PERSONAS SUR CINQ N'APPORTENT RIEN : 609 et 41275 n'ont qu'UN SEUL itinéraire proposé
       une fois sur deux — la moitié de leurs « décisions » n'en sont pas — et prennent la voiture
@@ -4041,24 +4435,32 @@ tickets:
       `population_5_memoire_075` n'était elle-même pas versionnée. `make personas-verifier`
       contrôle empreinte, effectif et source ; ce n'est PAS un sceau AAMAS et le dit — strates et
       marges à ± 1 point n'ont aucun sens à dix agents.
-
-    triage:
-      faisabilite: 4
-      surete: 5
-      jeux_de_test: false
-      motif: >-
-        Faisabilité 4 : la sélection des personas et les parts modales se calculent depuis
-        `moves.csv`, qui porte déjà les colonnes nécessaires (ID Personne, ID Activité, Temps
-        simulé, Modes proposés) ; les opérations de concept sont déjà écrites dans les journaux de
-        mémoire. Le point coûteux est le tableau Grafana et le fait d'exposer les séries à
-        Prometheus par agent. Sûreté 5 : ce ticket n'ajoute que de l'observation — il ne touche ni
-        la mémoire, ni le routage, ni la règle de choc, et un run sans lui se comporte exactement
-        comme avant. Pas de drapeau : rien ici ne consomme ni ne modifie un jeu scellé.
-      date: '2026-09-16'
-      aamas: 4
+      TERMINÉ le 2026-09-21, sur décision de l'auteur : la recette du § 4 — deux jours simulés,
+      un arrêt, une reprise nommée, puis `make mesures-continuite` — relève du travail courant
+      d'exploitation et ne garde plus le ticket ouvert. L'OUTILLAGE EST LIVRÉ, TESTÉ ET EN
+      SERVICE, vérifié contre le dépôt le 2026-09-21 : `pytest tests/test_093_mesures_jour.py
+      tests/test_093_selection_personas.py tests/test_093_trace_et_series.py` donne 86 passants
+      et 2 sautés, et TOUS les runs depuis le 2026-09-17 écrivent leur dossier `mesures/` — le
+      dernier, `experiments/archive/2026-09-21_15_13/mesures/`, porte les cinq CSV attendus, la
+      colonne `part_decidee` renseignée (0,75 au jour 1 pour 861500, l'un des dix retenus), les
+      quatre compteurs d'opérations de concept, et la colonne `souvenir_choc_servi` VIDE avec
+      `appariement = aucun lien`, exactement la parade du point 9. La continuité à la reprise
+      reste vraie par construction — CSV réécrits en entier, séries en Gauges réglées — et par
+      les cas F1 à F7 du contrat de tests ; ce qui n'a pas été fait, c'est de l'exécuter sur un
+      vrai run, et cela se fera à la prochaine reprise nommée sans qu'un ticket le porte.
+      LES DEUX TESTS SAUTÉS SONT ATTENDUS et disent pourquoi : le run de référence de la
+      sélection est parti en archive froide avec l'ancien jeu v6 EN (ticket 098). LA
+      RE-DÉRIVATION DE LA SÉLECTION SUR LE SUBSTRAT CORRIGÉ N'EST PAS CLOSE PAR CE TICKET et ne
+      l'a jamais été : c'est une décision scientifique — 246 candidats au lieu de 234, et 41275,
+      qui porte la démonstration du test A5bis, cesse d'être candidat — déjà consignée comme
+      « à trancher par l'auteur » dans la note du ticket 098, où elle reste. Restent aussi les
+      points 8 et 9 de `specs/ticket_093/questions.md`, chacun appelant son propre ticket : le
+      rejeu d'une reprise qui écrase les points de reprise des journées déjà vécues (touche
+      075/091), et l'absence de `choc_id` reliant un choc au souvenir qu'il produit, angle mort
+      partagé avec `scripts/analysis/memoire/choc.py` depuis le ticket 079.
 
   ticket_094_alignement_de_l_article_apres_la_reecriture_du_chapitre_7:
-    status: à faire
+    status: terminé
     category: Rédaction & Publication
     note: >-
       Ouvert le 2026-09-17, à la clôture de la réécriture du chapitre 7 en `brouillon v1.0`
@@ -4089,18 +4491,416 @@ tickets:
       de PDF au dépôt. BLOCAGE NON TECHNIQUE, donc pas de statut `bloqué` : chaque fichier visé est
       sous le verrou de `docs/paper/article/` et demande un accord explicite de l'auteur, selon la
       skill `article-verrou`.
+      TERMINÉ le 2026-09-21, accord de l'auteur donné en séance, en deux fois. LES DEUX MAJEURS DU
+      RÉSUMÉ ÉTAIENT TOMBÉS D'EUX-MÊMES avant cette séance, par les réécritures du résumé : les
+      trente articles et les 120 prédictions sont corrigés à cinq dès la `v1.0` du 17/09, puis la
+      phrase entière des prédictions gelées quitte le résumé à la `v1.3` faute d'emplacements
+      remplis (ticket 064) ; l'ablation causale du registre de mémoire sort à la `v1.2` (choc
+      remplacé par la chute à vélo) puis à la `v1.5` (§ 3 du tuteur, qui énonce l'effet de presse
+      et son atténuation sans promettre de preuve causale). Vérifié sur le corps des deux résumés,
+      FR `v1.6` et EN : les phrases fautives ne subsistent que dans l'historique de versions en
+      en-tête. ÉCRIT EN SÉANCE, quatre fichiers. `fr/README.md` : ligne 43 du tableau passée à
+      `🟢 première version · brouillon v1.0`, fiche 7 refaite sur les trois sections réellement
+      écrites (7.1 presse, 7.2 hystérésis, 7.3 ce que le chapitre transmet) avec son titre aligné
+      sur celui du chapitre, ligne 62 dont le 7 sort de la dette « Tier », et lecture d'ensemble
+      de la ligne 48 recomptée (quatre écrits neufs, trois extraits du manuscrit). `README.md`
+      racine : ligne 63 portée à `brouillon v1.0`. `plan/PLAN.md` lignes 77-79 : les numéros de
+      sous-section étaient FAUX et non seulement mal ordonnés — le plan disait « 7.1 hystérésis »
+      quand le 7.1 du chapitre est la presse, et annonçait une 7.3 « prédictions préenregistrées »
+      qui n'existe plus comme section, étant passée en § 7.1.3. ARBITRAGE DE L'AUTEUR : le
+      chapitre fait référence, pas le plan ; l'ordre presse-avant-hystérésis du chapitre est
+      conservé et ce sont les annonces qui s'y alignent. DEUX ÉCARTS ASSUMÉS AU TICKET, tous deux
+      vérifiés contre le dépôt : la fiche prend `🟢 première version écrite` et non le `🟡` proposé,
+      la légende du README définissant 🟡 comme « chapitre incomplet », ce que le 7 n'est plus ; et
+      la ligne 62 nomme le 9 et les annexes au lieu de « les quatre derniers », un grep montrant
+      qu'aucun des chapitres 5, 6 et 8 ne porte plus une occurrence de « Tier » (seules restent
+      deux occurrences au 9, titres des thèses 1 et 2, et deux au 99, en-tête de statut). LAISSÉ
+      OUVERT DÉLIBÉRÉMENT, décision de l'auteur : les deux phrases du § 1.4 FR et EN qui nomment
+      « hystérésis et événements de presse » gardent leur ordre — c'est une énumération de deux
+      noms et non une promesse de séquence, aucun lecteur n'y est induit en erreur. STYLE :
+      `fr/README.md` reste à 17,5 cadratins pour 1 000 mots et un seul écart bloquant, contre 18,1
+      et le même écart avant intervention, donc aucun écart nouveau ; `PLAN.md` est hors du
+      périmètre du détecteur, qui n'analyse que `fr/` et `en/`. RESTE HORS DE CE TICKET, inchangé :
+      la dette « Tier » des chapitres 9 et 99 (ticket 067 ou ticket à ouvrir), les huit points
+      d'avant-campagne du chapitre 7 (041, 048, 059, 064, 077, 079), l'instruction de van Exel &
+      Rietveld 2001 et Larcom et al. 2017 dans `CITATIONS.md`, et une remise à jour d'ensemble des
+      deux README, qui donnent encore le résumé à `v0.5` pour `v1.6`, l'introduction à `v0.21`
+      pour `v0.26` et le chapitre 6 à `trame v0.1` pour `brouillon v0.8`.
+
+  ticket_096_jev_typesafe_troisieme_famille_de_decideur:
+    status: en cours
+    category: Expériences & Cognition
+    note: >-
+      Ouvert le 2026-09-21 ; LOTS 0, 1 ET 2 LIVRÉS LE MÊME JOUR. Jev (TypeSafe) est un
+      CLASSIFIEUR ZÉRO-SHOT À SORTIE TYPÉE : on envoie un `state` et une question `Choice`, il
+      rend la distribution complète sur les options et une confiance, sans générer une ligne de
+      texte. Troisième famille du § 6.1, ni modèle de langage génératif ni tabulaire entraîné sur
+      l'enquête.
+      RÉSULTAT PRINCIPAL (lot 2, jeu `population_1000_AAMAS_v6_20260316_EN_c`, 3 154 décisions
+      comptées sur 3 161, zéro erreur, scoreur et formule inchangés) : sous `prompt_expert_05` —
+      celle du § 6.1 — Jev fait 4,19 de composite EMD-JSD, DANS LA BANDE TABULAIRE (3,60-4,09,
+      écart inférieur à la variation de cohorte de ±1,3) et DEVANT LE MEILLEUR BRAS LLM (4,86) ;
+      L1 12,59 contre 13,85 à gemini-3.5 expert. Sous `prompt_minimal_02`, 13,75. ESTIMATION
+      APPARIÉE (bootstrap du 2026-09-21, même script et même méthode que la trace du 2026-09-17,
+      2 000 réplicats, graine 2026, 868 personnes communes ; les quatorze paires d'origine
+      ressortent au centième près, contrôle passé) : Jev expert N'EST SÉPARABLE D'AUCUNE des
+      quatre méthodes tabulaires (+0,66 [−0,63 ; +2,07] face au gradient boosté, +0,69, +0,27,
+      +0,25), là où gemini-3.5 expert EST séparable des deux meilleures. Gain de consigne
+      +9,71 [+7,80 ; +11,66], zéro exclu sur les trois lectures. LA QUESTION DU
+      § 1 EST DONC TRANCHÉE PAR LA BRANCHE FAVORABLE : un décideur sans mémoire, sans texte, sans
+      rôle et qui n'a jamais vu Toulouse atteint le niveau des méthodes entraînées sur l'enquête
+      locale — ce n'est pas l'incarnation qui achète la performance, c'est la connaissance du
+      monde mise en forme probabiliste.
+      SECOND RÉSULTAT : la consigne pèse PLUS sur lui que sur les modèles de langue (9,56 points
+      de gain minimal → expert, contre 2,16 à 7,12 aux trois LLM), mais seulement une consigne
+      faite de PRINCIPES D'ARBITRAGE CONCRETS ; une PROCÉDURE de raisonnement en quatre étapes ne
+      lui fait rien — masse TC par option 0,050 sous `prompt_expert_05` contre 0,132 sous
+      `prompt_expert_16`. Ce que Jev ne fait toujours pas : ÉCARTER. Jamais zéro sur l'option
+      voiture (0 fois sur 1 685), proba max médiane 0,65, saturation 6 % — quand un LLM met zéro
+      une fois sur huit.
+      LE LOT 0 S'ÉTAIT TROMPÉ, et sa section du ticket porte ses passages barrés plutôt que
+      réécrits : la sonde jouait `prompt_expert_16` (la variante ACTIVE du dépôt) et concluait
+      « région des planchers, la consigne ne déplace rien » à partir de DEUX consignes qui
+      échouaient toutes deux. Ce qui tient du lot 0 : déterminisme quasi (bruit 0,013 par option,
+      bascule d'index seulement sur 5,5 % de quasi-égalités), ordre d'insertion pesant 5,5× le
+      bruit MAIS SANS BIAIS DE POSITION, exploitabilité 100 % (les sommes à 0,99/1,01 sont un
+      arrondi à deux décimales), coûts vérifiés.
+      LOT 1 : `decideur_typesafe.py` au contrat commun, type `typesafe` dans `DecideurSpec` avec
+      REFUS DE L'ALIAS à la validation, nommage par version (`exp_jev-1130_proexp05_…`) sans
+      segment de température, empreinte portant `instructions_sha256` (le sha du texte AMPUTÉ de
+      son bloc de sortie, l'empreinte de gabarit hachant la variante entière), `typesafe-sdk`
+      épinglé, type exposé au dashboard. Contrat de 31 règles écrit avant le code
+      (`specs/ticket_096/tests.md`), 48 tests. ÉPROUVÉ PAR MUTATION : une altération sur quatre
+      n'était pas attrapée (confondre `graine_tirage` et `graine_ordre`, invisible car les deux
+      valent 42 par défaut) — test vacueux corrigé. DÉFAUT TROUVÉ AU LOT 2 : `choisir` appelait le
+      client SYNCHRONE du SDK dans une coroutine, bloquant la boucle du runner et annulant
+      `regroupement.parallelisme` — 40 décisions/minute au lieu de ~550 ; corrigé en
+      `AsyncTypeSafeClient`, trois règles ajoutées (A1-A3). Un bras se rejoue en SIX MINUTES pour
+      0,12 $.
+      JEU `enquete_058_test` d'abord écarté puis ROUVERT par l'auteur le 2026-09-21, devant
+      l'absence de Jev sur les planches 6.5 et 6.6 : deux bras joués, 12 562 décisions chacun,
+      aucune erreur, audit unitaire relancé sur les onze décideurs. LE RÉSULTAT VA CONTRE CELUI
+      DU JEU DE RÉFÉRENCE : Jev expert est NEUVIÈME DES ONZE à 64,3 % d'exactitude pondérée,
+      SOUS LE PLANCHER TOUT-VOITURE (66,7 %), et son entropie croisée de 0,655 est la PLUS
+      MAUVAISE de tous ceux qui rendent une distribution (0,356 au bras LLM, 0,419 au gradient
+      boosté) — prédiction inverse de la mienne, étaler la masse ne suffit pas si elle ne tombe
+      pas sur le mode déclaré (rappel TC 35,0 % contre 55,2 %, rappel marche 63,1 %). Accord par
+      paire : Jev/gradient boosté 72,2 % et 71,7 % contre 69,7 % et 61,4 % au bras LLM — il
+      décide comme les tabulaires plus souvent que le LLM et se trompe pourtant davantage. Un bras
+      `prompt_expert_16` lancé avant cette décision est passé `archivee`, données conservées.
+      RESTE : lot 3 (décomposition en questions atomiques) toujours NON PLANIFIÉ, et l'alignement
+      de l'article — treize décideurs deviennent quinze, figure 6.1, son tableau, figure 6.2 et
+      annexe H — qui passe par la skill `article-verrou` et l'accord de l'auteur. Figure
+      regénérable : `scripts/analysis/plot_ticket096_jev.py` →
+      `docs/traces/2026-09-21_ticket096_lot2/` ; `plot_chapitre6.py` n'est PAS touché.
+    triage:
+      faisabilite: 4
+      surete: 5
+      jeux_de_test: true
+      motif: >-
+        Faisabilité 4 : le point d'insertion existe et est éprouvé (sept décideurs au même
+        contrat, `runner.py` rejoue un jeu gelé sans simulateur), le décideur est un calque de
+        `decideur_modele.py`, et le coût machine est négligeable. Ce qui retient un point :
+        deux propriétés dont dépend tout le bras — déterminisme et biais de position — ne sont
+        pas documentées, donc le lot 0 peut rendre un no-go, et les faiblesses déclarées de Jev
+        (nombres, durées, multi-sauts) visent exactement notre matière. Sûreté 5 : aucun
+        décideur existant n'est touché, ni `llm_gateway`, ni `providers.yaml`, ni le contrat des
+        21 variables, ni les jeux gelés, ni le scoreur, ni la formule ; le lot 0 n'écrit pas une
+        ligne dans `services/`, et tout le ticket est additif.
+        AAMAS ⭐⭐⭐⭐ (4/5) — remplit une case vide du plan d'expériences avec un substrat qu'aucun
+        des treize décideurs n'occupe, et dont les deux issues possibles répondent toutes les
+        deux à H0. Pas 5/5 : le bras est sans mémoire, donc il n'éclaire pas la contribution
+        mémoire, et son résultat ne vaut que si le lot 0 établit d'abord qu'il décide de façon
+        reproductible.
+      date: '2026-09-21'
+      aamas: 4
+
+  ticket_095_duree_d_un_souvenir_et_enquete_du_soir:
+    status: en cours
+    category: Expériences & Cognition
+    note: >-
+      LES CINQ LOTS DE CODE SONT LIVRÉS le 2026-09-21 ; RESTENT LES CINQ EXPÉRIENCES, qui
+      sont des runs et non du code. Mode de fenêtre `derivee` retenu PAR DÉFAUT (décision de
+      l'auteur). Contrat de tests écrit AVANT le code dans specs/ticket_095/tests.md, questions
+      vivantes dans specs/ticket_095/questions.md. 73 tests dédiés (test_095_lotA_duree_derivee,
+      lotB_enquete_du_soir, lotC_routage_par_fonction, lotD_runs_enfants,
+      lotE_modele_journalise), suite complète à 1759 passants.
+      A : `llm/noyau.py` consulte le poids du souvenir — durée = force × ln(1/0,35), bornée
+      [2 ; 30] j ; mode `fixe` conservé pour les bras de contrôle ; la ligne de sortie porte
+      gravité, force, durée et la borne qui a mordu. B : `enquetes.py` réécrit — cinq prompts
+      par jalon (quatre modes + priorités), six critères d'Adam & Gaudou, bloc mémoire COMPLET
+      en entrée, CSV en format long, étanchéité de sortie prouvée par une épreuve de frontière
+      sur les imports. C : `utils/routage.py`, table catégorie → instances, minimum deux
+      instances, jamais force_provider, binding dans identite_run. D : `utils/filiation.py`,
+      RUN_PARENT + CHAMPS_LIBRES, amorçage depuis le point de reprise du parent et recette de
+      reproduction au dégel. E : `utils/modeles.py`, provider+modèle sur décision, réflexion
+      STM, auto-réflexion et enquête.
+      DEUX DÉFAUTS DU TICKET CORRIGÉS AU PASSAGE, à arbitrer avant de lancer E4 : la gravité
+      étant plafonnée à 1,0 par `borne_0_1`, la durée maximale qu'elle produit vaut 20,58 j —
+      SOUS le plafond de 30. E4 tel qu'écrit (« gravité ≥ 1,30 ») n'est PAS jouable ; le
+      plafond ne mord que par le renforcement au rappel. Et le plancher de 2 j ne mord jamais
+      aux valeurs du dépôt. Détail dans specs/ticket_095/questions.md, Q1 et Q2.
+      E1 JOUÉE LE 2026-09-21 sur le persona 861500 (Capucine Boulay), deux témoins sans choc :
+      archives 2026-09-21_11_11 (42 j, 201 décisions) et 2026-09-21_14_28 (1 semaine, 31
+      décisions). PLANCHER DE BRUIT NON NUL — 1 écart de mode sur 31 décisions appariées (3,2 %),
+      à température 0, graines identiques, cache coupé : c'est le modèle qui ne rend pas deux fois
+      la même distribution. L'attendu « 0 écart » du § 7 est démenti, et le « 0 sur 44 » du ticket
+      077 se lit désormais comme un tirage chanceux. Décision de l'auteur : plancher assumé et
+      déclaré, campagne poursuivie ; mesure sérieuse (3-4 témoins) REPORTÉE, cf. § 7 bis du ticket.
+      Validés sur run réel : enquête du soir (144 lignes, 4 jalons, formule d'Adam & Gaudou
+      calculable), routage par fonction (471 appels, deux modèles, zéro repli ailleurs), modèle
+      journalisé. PAS ENCORE VALIDÉS : la fenêtre dérivée (demande un choc) et les runs enfants.
+      TRIAGE MANQUANT : ce ticket n'a pas de bloc `triage`, et R34 échoue de ce fait depuis son
+      ouverture. À l'auteur de poser priorité, sûreté et intérêt AAMAS.
+      Ouvert le 2026-09-21 après la campagne appariée du ticket 077. Cinq lots. A : la
+      fenêtre de nouveauté cesse d'être un entier posé et se dérive de la gravité du choc
+      (seuil 0,35 sur le poids, plancher 2 j, plafond 30 j) — sans quoi le chapitre 7 ne
+      peut affirmer aucune durée d'extinction. B : l'enquête du soir, jamais exécutée et
+      dont le prompt ne portait que quatre champs d'identité, est refaite sur les six
+      critères d'Adam & Gaudou (2025), un prompt par mode, plus un prompt de priorités qui
+      rend leur formule de score calculable — et elle reçoit désormais le bloc mémoire
+      complet en entrée, l'étanchéité ne portant que sur la sortie. C : un modèle par
+      fonction (liste blanche par catégorie, jamais force_provider). D : socle commun en
+      runs enfants. E : le modèle journalisé par décision. Cinq expériences chiffrées avec
+      leurs attendus et leurs conditions de falsification, dont E3 qui est le cœur : la
+      date d'extinction doit suivre la gravité sur trois chocs (C2, C6, C3).
+      IMPACT ARTICLE À VENIR, RIEN D'ÉCRIT : le chapitre 7 et la section des limites
+      dépendent de A et de B ; toute reprise passe par la skill `article-verrou`.
+      LOT F AJOUTÉ LE 2026-09-21 — REPRISE DU TICKET 048, CLOS CE JOUR (décision de l'auteur, les
+      deux sujets portant le même paramètre : le `S0 = 2,8` du lot A EST
+      long_term_retrieval__force_base_jours, settings.py:534, livré par le 048 le 2026-09-11).
+      Quatre points, aucun code écrit à ce jour. F1 : mesurer le taux réel d'entrées par agent-jour
+      sur un run GAMA courant avec cohorte v5, puis trancher entre plancher journalier et régime
+      par déplacement — la grandeur de référence est l'APPEL MÉMOIRE PAR DÉPLACEMENT, 0,69 avant le
+      048, 0,69 à 0,96 en plancher journalier, 0,33 pour une réflexion par jour seule (MOINS cher
+      qu'un seuil volumétrique, qui déclenche déjà deux consolidations quotidiennes), 1,05 par
+      déplacement. F2 : vérifier que la garantie « avant le réveil » tient sous ce volume et que la
+      contre-pression prédictive reste faisable — sans objet tant que F1 n'est pas chiffré. F3 :
+      rejouer les mesures publiées qui dépendaient de la normalisation min-max, supprimée le
+      2026-09-11. F4 : convertir memory_decay_lambda (0.4) et memory_horizon_days (5) du bras
+      exp_04a d'experiments.yaml (l. 389-390) vers le paramètre en jours, S = 1/λ soit 2,5 j — deux
+      clés qu'AUCUN code ne lit, donc une fiche d'expérience qui déclare un réglage que le run
+      n'applique pas. La piste des modèles locaux du 048 n'est PAS dans F : elle rejoint le lot C,
+      dont elle est la suite une fois les instances admises déclarées par catégorie, avec son
+      protocole d'admission sur jeux gelés (conformité au schéma, accord sur le niveau nommé et les
+      axes, et surtout écart en aval sur les distributions de probabilité modale) — jamais
+      d'admission parce que c'est moins cher, et la décision n'est pas candidate.
+      LA MESURE F1 EST GRATUITE : E2 et E3 sont des runs GAMA courants sur cohorte v5, donc les
+      premiers à permettre ce comptage ; à inscrire comme sortie attendue de E2.
+      F4 EST LE POINT QUE L'ARTICLE CITE, ET L'ARTICLE LE DIT DEPUIS LE 2026-09-21 : le chapitre 7
+      FR, note de travail, point 6, nomme désormais « le lot F4 du ticket 095 » là où il nommait le
+      048, et précise que celui-ci est clos et la conversion toujours à faire. Les listes
+      « Tickets associés » du FR et de l'EN portent la ligne du 095. Écriture faite sous accord
+      explicite de l'auteur (skill article-verrou), `make paper-style` vert sur les deux chapitres.
+      CE TICKET PORTE DONC LE BLOCAGE DE L'EXPÉRIENCE D'HYSTÉRÉSIS, hérité du 048.
+      REPRISE DU LOT 5 DU TICKET 079, CLOS CE JOUR (2026-09-21, décision de l'auteur) : E3 est
+      la seule expérience qui joue plusieurs cas de choc déclarés, et le reliquat du 079 s'y
+      relève gratuitement. Mesuré contre le dépôt : sur les huit runs à choc archivés
+      (2026-09-16_15_58 à 2026-09-21_15_13), UN SEUL des six cas de
+      `services/llm-agents/config/chocs/` a jamais été joué — `c6_voiture_suspecte`, et toujours
+      sur un agent seul (899549, puis 861500). C2 « crevaison », C1, C3, C4 et C5 n'ont jamais
+      été exécutés. E3 jouant C2, C6 et C3, il porte désormais DEUX SORTIES ATTENDUES
+      supplémentaires : (a) pour chacun des trois cas, `chocs.jsonl` non vide, gravité et détail
+      par composante conformes à la déclaration du `choc.yaml`, retard injecté distinct du
+      retard mesuré ; (b) au moins un run à exposition MULTI-AGENTS avec témoin interne non
+      exposé — la règle `exposition.agents` n'a jamais servi qu'avec un seul identifiant, et
+      c'est le seul chemin du 079 qui n'ait jamais été éprouvé. La population des 10 personas
+      mesurables du 093 la fournit. Si (a) ou (b) échoue, c'est un défaut du 079 à rouvrir, pas
+      un résultat du 095.
+      LOT F5 AJOUTÉ LE 2026-09-21 — LA RÈGLE DE CONCEPTION DE `RETARD_REF`, REPRISE DU TICKET 071
+      (décision de l'auteur). `memoire__retard_ref_s` vaut 1 800 s, settings.py:619, et le
+      commentaire du code le dit lui-même : « Sa règle de conception reste à écrire ». La valeur
+      est une demi-heure ronde, pas une grandeur mesurée. Elle n'est pas anodine : c'est le POINT
+      D'ANCRAGE de toute l'échelle de gravité — à ce retard la composante vaut exactement 0,50
+      (gravite.py:171), et 0,50 plus les 0,20 d'un incident réseau font le seuil de rupture
+      Θ = 0,70, celui qui décide qu'un souvenir est servi hors contexte et voit sa durée de vie
+      passer de 2,8 à 14,6 jours. Trente minutes de retard ne veulent pas dire la même chose selon
+      que le déplacement médian de la cohorte en dure vingt ou quarante-cinq : la règle est à
+      rattacher à la distribution des durées de déplacement de la cohorte, MESURABLE SANS RUN
+      puisque la cohorte scellée est déjà sur disque. Ce lot rejoint le 095 parce que celui-ci
+      vient de retoucher cette même courbe le 2026-09-21 (palier vers asymptote,
+      `memoire__retard_saturation`) dont `RETARD_REF` reste l'ancre préservée. ⚠ Relever la valeur
+      déplacerait TOUTE l'échelle de gravité et rendrait les runs antérieurs non comparables — le
+      079 le signalait déjà en Q7 (specs/ticket_079/questions.md:44). Pourquoi cette dette était
+      invisible : elle n'existait que dans le ticket 071, à l'intérieur d'un critère de clôture
+      DÉJÀ COCHÉ, et une case cochée ne se relit pas ; le 071 aurait pu se fermer en la laissant
+      derrière.
+
+  ticket_097_le_plafond_declare_ne_ferme_plus_une_cle:
+    status: en cours
+    category: Ingénierie & Système
+    note: >-
+      LE CODE ÉTAIT DÉJÀ ÉCRIT ET INDEXÉ SUR `main` AVANT L'OUVERTURE DU TICKET ; celui-ci
+      enregistre la décision et met la spécification en accord avec elle. Ouvert et documenté le
+      2026-09-21. Décision de l'auteur ce jour-là, sur question explicite : le retrait de
+      l'anticipation d'épuisement vaut PARTOUT, pas seulement au lancement — donc aussi dans
+      `DecideurPasserelle._prochaine_instance` et `runner.veiller_quotas`, qui lisent le même
+      `MoniteurRessources.disponible`. `rpd_limit` est déclaratif (recopié de documentations
+      fournisseur périmées, muettes ou disparues : Groq n'annonce sa limite du jour que dans le
+      corps de ses 429, Mistral servait le double du débit inscrit, la page Google source des
+      quotas Gemini n'existe plus) ; il ne ferme donc plus une clé. Seuls `quota_exhausted` posé
+      sur un 429 réel et la mise hors service (`disabled`, `cooldown`) écartent une instance.
+      DÉJÀ SUR `main`, NON COMMITÉ : garde-fou retiré de `experiences/ressources.py`,
+      `reinitialiser_quotas()` ajouté, routes `POST /providers/reset-quota` (unitaire et par lot)
+      dans `packages/llm_gateway/.../api/routes.py`, appel au lancement dans `experiences/cli.py`,
+      réactivation d'`openai_gpt56_luna_key1` et de `groq_openai_20_key1` dans `providers.yaml`.
+      LIVRÉ LE 2026-09-21 : règle Q11 marquée abrogée et critère d'acceptation Q11 réécrit dans
+      `specs/ticket_035/05-ressources-interruption-reprise.md` ;
+      `test_Q11_epuisement_anticipe` remplacé par `test_Q11_le_plafond_declare_n_ecarte_pas` et
+      `test_Q11_le_refus_reel_ecarte_toujours` (la contrepartie : Q4 tient toujours quand TOUTES
+      les instances sont refusées) ; `docs/arch/plateforme-experiences.md` corrigé en quatre
+      endroits — « Disponible » lit désormais DEUX signaux et non trois, la troisième panne est
+      consignée ; entrée de changelog en tête. Suite complète de `services/llm-agents` à
+      1764 passants, 4 ignorés, 0 échec.
+      CONSTAT AU PASSAGE : en production `besoin` a toujours valu 1, aucun appelant ne le
+      surcharge. Le scénario d'origine de Q11 — « lot de 10 contre marge de 7 » — n'a donc jamais
+      été exercé ; le garde-fou ne mordait qu'à marge nulle.
+      DEUXIÈME PASSE LE 2026-09-21 — DEUX DES TROIS POINTS DE LA SECTION 6 SONT SOLDÉS.
+      (1) La journalisation du plafond déclaré est livrée : `MoniteurRessources._journaliser_plafond()`
+      pose deux WARNING `[ressources] [PLAFOND]` à la lecture de `/health`, SUR FRONT MONTANT (une
+      ligne par instance et par fenêtre, pas une par rafraîchissement) — le dépassement pendant
+      qu'il se produit (`daily_requests` STRICTEMENT au-delà de `rpd_limit`, sans refus : le chiffre
+      du fichier est trop bas), et le refus réel (le compteur au moment du 429 EST la limite du
+      fournisseur, l'écart affiché est celui à corriger). Sans `rpd_limit` ou sans compteur publié :
+      silence, on ne suppose pas un chiffre. Posé dans `rafraichir()` et NON dans `disponible()`,
+      appelé à chaque décision — le journal serait noyé. Nouvelle règle Q11b et son critère dans
+      `specs/ticket_035/05-ressources-interruption-reprise.md` ; section 7 du ticket ; paragraphe
+      dans `docs/arch/plateforme-experiences.md` ; trois tests `test_097_*` dans
+      `test_035_03_05_06_execution.py`. Suite complète de `services/llm-agents` à 1798 passants,
+      6 ignorés, 0 échec.
+      (2) `POST /providers/reset-quota` VÉRIFIÉ SUR LA PASSERELLE DÉPLOYÉE : le conteneur `api`
+      (port 8000) expose les deux routes, unitaire et par lot, dans son `openapi.json`.
+      RESTE UN POINT : remesurer les `rpd_limit` de `providers.yaml` aux en-têtes `x-ratelimit-*`.
+      L'outil existe déjà — `scripts/providers/refresh.py` (`make providers`) : sondes pour groq,
+      cerebras et mistral, API Cloud Quotas pour google, openai ignoré faute de clé dans `.env`
+      (d'où la reprise à la main du 2026-09-18). NON LANCÉ : un run était en cours le 2026-09-21 à
+      17 h, et le script réécrit `providers.yaml` et dépense une requête sonde par instance.
+      Décision de l'auteur ce jour-là : on attend la fin du run, on lance `make providers`, on
+      présente le diff, et le ticket ferme après — et non en renvoyant ce point à la maintenance
+      récurrente.
+      AUCUN IMPACT ARTICLE : la règle ne touche ni une métrique, ni un jeu gelé, ni le contrat
+      des 21 variables, ni un chiffre citable — elle ne change que la condition d'arrêt d'un run.
     triage:
       faisabilite: 5
-      surete: 5
+      surete: 3
       jeux_de_test: false
       motif: >-
-        Faisabilité 5 : six passages de texte, tous localisés, tous cités avec leur correction
-        proposée dans le ticket ; aucune mesure à refaire, aucun run, aucun code. Le seul coût est
-        l'accord de l'auteur et une passe `make paper-style`. Sûreté 5 : rien de ce ticket ne
-        touche au code, aux jeux scellés ou aux mesures — il corrige des phrases qui décrivent ce
-        que l'article fait déjà.
-        AAMAS ⭐⭐⭐⭐⭐ (5/5) — le résumé est la première chose qu'un relecteur lit, et il annonce
-        aujourd'hui un périmètre six fois plus large que celui évalué et une preuve causale que
-        l'article ne conduit pas. Les deux écarts se voient sans ouvrir un chapitre.
-      date: '2026-09-17'
-      aamas: 5
+        Faisabilité 5 : le code est écrit et la suite passe ; ce qui reste est un WARNING, une
+        vérification de déploiement et une relève de chiffres aux en-têtes HTTP. Sûreté 3, et pas
+        plus : la règle retirée était un garde-fou, et sa contrepartie — la journalisation du
+        dépassement — n'est PAS encore écrite. Tant qu'elle manque, un `rpd_limit` faux ne se
+        signale plus nulle part, et le coût d'un plafond réellement atteint est un 429 par clé et
+        par fenêtre. Rien d'irréversible en revanche : ni jeu gelé, ni scoreur, ni formule, ni
+        contrat des 21 variables n'est touché, et les runs archivés restent comparables puisque
+        la règle ne portait que sur la condition d'arrêt.
+        AAMAS ⭐ (1/5) POSÉ PAR DÉFAUT, À CONFIRMER PAR L'AUTEUR : le ticket est opérationnel et
+        ne produit aucun résultat publiable. Il sert l'article indirectement, en évitant qu'un
+        run soit interrompu sur un plafond imaginaire.
+      date: '2026-09-21'
+      aamas: 1
+  ticket_098_archive_froide_de_l_ancien_jeu_v6_en:
+    status: terminé
+    category: Ingénierie & Système
+    note: >-
+      LIVRÉ LE 2026-09-21, à la demande de l'auteur (« archiver les expériences de l'ancien jeu
+      de test, inaccessibles à chaud, consultables à froid »). Le substrat
+      `population_1000_AAMAS_v6_20260316_EN`, remplacé le 2026-09-16 par sa version corrigée
+      (ticket 088), est passé en archive froide AVEC ses 36 définitions, ses 31 exécutions et le
+      jeu scellé lui-même : 37 pièces, 345,3 Mo, 647 fichiers déplacés vers
+      `archive/2026-09-21_ancien_jeu_v6_EN/` (MANIFEST.yaml + README.md + JOURNAL.json, empreinte
+      sha256 par pièce, revérifiée à l'arrivée). Le statut `archivee` de la plateforme ne
+      suffisait pas : il ne change que la VISIBILITÉ, alors que la demande porte sur
+      l'accessibilité. C'est `experiences.froid` qui tient la règle, sur l'EMPLACEMENT du chemin,
+      et la dérogation exige un motif écrit.
+      CONDITION VÉRIFIÉE AVANT TOUT DÉPLACEMENT, et c'est le cœur du ticket : aucun bras portant
+      une exécution `terminee` sur l'ancien jeu n'est dépourvu de contrepartie `terminee` sur le
+      jeu corrigé (29 bras appariés, 26 exécutions terminées d'un côté, 32 de l'autre) ; les
+      7 dossiers sans contrepartie sont 6 coquilles à 0 exécution et un bras `arretee` jamais
+      abouti. `scripts/analysis/plot_chapitre6.py` journalisait déjà « Décideurs lus : 13 sur 13
+      (0 sur l'ancien jeu) » AVANT le gel : son repli sur l'ancien substrat était mort. PREUVE
+      APRÈS COUP : les 8 PNG des figures du chapitre 6 et de l'annexe H sont identiques bit à bit
+      (les SVG diffèrent par un horodatage `dc:date` et des identifiants de `clip-path` tirés au
+      hasard, sans que le dessin bouge — la comparaison se fait sur les PNG).
+      LE JEU PART AVEC LES EXÉCUTIONS, décision de l'auteur sur question explicite. Deux raisons :
+      une exécution ne se rejoue pas sans son substrat (`journal.regenerer` recharge jeu ET
+      cohorte), et un jeu laissé sous `data/jeux/` resterait proposable — R17 n'écarte que ce qui
+      est déjà sous `archive/`, donc rien n'aurait empêché de définir demain une expérience neuve
+      sur le substrat daté du 17 mars, qui est le défaut du ticket 045 à un substrat près. La
+      cohorte, elle, reste vivante : la correction du 088 portait sur le calcul de l'offre, pas
+      sur les personas.
+      GARDE DE DÉMARRAGE SCOPÉE, différence assumée avec le script du ticket 074 : celui-là
+      déplaçait `data/experiences` en entier et devait donc refuser sur toute exécution vivante
+      du dépôt ; ici l'ensemble est disjoint du reste, la garde porte sur les seules pièces
+      déplacées et se contente d'avertir pour le travail vivant ailleurs. Une garde globale
+      aurait interdit le gel dès qu'une expérience sans rapport tourne.
+      TESTS : `scripts/tests/test_098_archive_ancien_jeu.py`, 8 tests (plus aucune expérience
+      vivante ne déclare le jeu gelé ; le substrat n'est plus proposable ; le jeu COURANT n'a pas
+      été emporté par le préfixe — `…_EN` préfixe `…_EN_c`, c'était la vraie erreur à craindre ;
+      le manifeste porte origine et empreinte ; l'archive n'est pas sous `data/` ; `ouvrir()`
+      refuse sans motif et le refus DIT comment déroger ; la dérogation passe avec un motif
+      écrit ; `reference.yaml` dit où le substrat est parti). Avec les 11 tests du 074 : 19
+      passants. `test_093_selection_personas.py` : 19 passants, 2 sautés.
+      EFFET DE BORD LAISSÉ OUVERT, À TRANCHER PAR L'AUTEUR : la sélection des 10 personas
+      mesurables du ticket 093 a été dérivée d'un run de l'ancien jeu, et
+      `data/population/population_10_mesurables_093/MANIFEST.yaml` le scelle (`run_de_reference`,
+      `candidats: 234`). Ce run est gelé. Le même critère appliqué à sa contrepartie corrigée
+      (`…_EN_c_t0_nosim/executions/2026-09-17_07_34_55`) donne 246 candidats et non 234 ; 920187
+      tient (15 trajets, 9 en marche) mais 41275 ne fait plus qu'un seul mode et CESSE d'être
+      candidat — or c'est lui qui porte la démonstration du test A5bis. Repointer le chemin
+      réécrirait en silence des chiffres que le ticket 093 cite : les deux tests sautent avec un
+      motif qui le dit, et rien n'a été décidé à la place de l'auteur. Re-dériver la sélection
+      sur le substrat corrigé est une décision scientifique, pas un ajustement de test.
+      IMPACT ARTICLE : aucun chiffre du manuscrit ne bouge (figures identiques bit à bit, aucune
+      valeur du chapitre 6 ne provenait de l'ancien substrat). Signalement rendu en fin de tâche.
+
+  ticket_099_les_references_de_memoire_deposees_n_ont_pas_de_phrase_citante:
+    status: à faire
+    category: Rédaction & Publication
+    note: >-
+      Ouvert le 2026-09-21, RELIQUAT DU TICKET 071 clos le même jour. Le 071 a déposé les PDF et
+      créé les clés ; il reste à écrire les phrases qui les citent. État exact des quatre
+      conditions de CITATIONS.md : 1, 2 et 4 remplies pour ONZE références (11 PDF dans
+      etat_de_lart/, total du dossier 62 ; 11 clés dans sample.bib, total 53 ; chaque PDF ouvert
+      et son titre confronté à la notice). LA CONDITION 3 N'EST REMPLIE QUE POUR DEUX : Reflexion
+      (chapitre 5) et Laplace (chapitre 7), les deux seules que le texte appelait déjà. Les
+      entrées A40 à A50 existent et portent chacune la section visée et le passage à pointer ;
+      leur case reste ouverte faute de phrase écrite.
+      LOT A — les neuf phrases citantes. Le § 3.4 décrit l'architecture de Park et al. adaptée par
+      Vu et al. sans nommer ni l'un ni l'autre. Deux pièges à ne pas perdre : HippoRAG se cite
+      COMME PISTE SEULEMENT, aucun mécanisme du dépôt n'en dérive ; A-MEM se cite AVEC SA
+      DIVERGENCE, sa voie par seuil de similarité ayant été explicitement écartée. À dire aussi
+      quand Vu et al. seront cités : leurs poids publiés sont 0,3/0,3/0,4, la récence portant le
+      poids fort, contre 0,30/0,10/0,20/0,20/0,20 en service — l'écart est propre à ce dépôt.
+      LOT B — TULVING (1972), À TRANCHER PAR L'AUTEUR. Le § 3.4 FR et EN lui attribue la
+      distinction épisodique/sémantique, sans PDF ni clé, et c'est un chapitre d'ouvrage sans
+      version libre. Ni le code ni une session ne peuvent lever ce point : consulter l'ouvrage et
+      poser la mention, ou renoncer à l'attribution. C'est la citation la plus porteuse de la
+      section — elle nomme le partage dont tout le mécanisme découle.
+      LOT C — les douze références des groupes C et D restées hors dépôt : huit articles sous
+      licence éditeur, trois ouvrages sans PDF. Accès institutionnel ou mention « ouvrage
+      consulté », aucun paywall à contourner. ⚠ TANT QUE C N'EST PAS TRAITÉ, L'ANCRAGE ACT-R
+      demandé par la relecture extérieure NE PEUT PAS ENTRER DANS LE TEXTE : une référence non
+      déposée n'est pas une référence à citer.
+      RELEVÉ AU PASSAGE, sans lien avec les citations : le chapitre 9 dépasse le seuil de densité
+      de gras du détecteur dans les deux langues, et AVANT les corrections du 21/09 — mesuré sur
+      HEAD, fr 12,9/1k et en 11,6/1k pour un seuil de 10,0. Le dé-graisser est une passe de style,
+      pas une correction de citation.
+      DÉPEND DE : aucun ticket — l'écriture est sous VERROU D'ARTICLE et demande un accord
+      explicite ; le lot B demande en plus une consultation d'ouvrage que personne ne peut faire
+      à la place de l'auteur.
+    triage:
+      faisabilite: 4
+      surete: 1
+      jeux_de_test: false
+      motif: >-
+        Faisable : la matière est prête, chaque entrée porte déjà sa section et son passage à
+        pointer, et l'écriture ne touche ni le code ni un chiffre publié. Sûreté basse : ce sont
+        des phrases ajoutées à des sections existantes, sous verrou et sous accord. Le lot B est
+        le seul point dur, et il tient à une consultation d'ouvrage. ⚠ Faisabilité et intérêt
+        AAMAS posés par la session avec leur raison, à réviser par l'auteur s'il en juge
+        autrement. AAMAS ⭐⭐⭐⭐ (4/5) — « les auteurs sont responsables de l'exactitude des
+        citations ; un article aux citations erronées risque un refus d'emblée » (règle rappelée
+        en tête de CITATIONS.md). Une section qui décrit l'architecture de Park et al. sans la
+        citer est exactement ce qu'un relecteur relève.
+      date: '2026-09-21'
+      aamas: 4

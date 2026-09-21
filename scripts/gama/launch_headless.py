@@ -150,6 +150,14 @@ async def main() -> None:
         prefix = "[ALARME] " if mtype in ERROR_TYPES else ""
         log(f"{prefix}[gama] {json.dumps(msg, ensure_ascii=False)}")
 
+        # Fin de simulation déclarée par GAMA (do pause à simulation_max_days)
+        if mtype == "SimulationOutput":
+            content_msg = msg.get("content", {}).get("message", "") if isinstance(msg.get("content"), dict) else str(msg.get("content"))
+            if "Simulation stopped after" in content_msg:
+                log("🏁 Fin de simulation détectée (Simulation stopped after). Fermeture propre du launcher.")
+                await asyncio.sleep(2)
+                break
+
 
 if __name__ == "__main__":
     try:

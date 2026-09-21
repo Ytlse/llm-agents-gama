@@ -39,19 +39,19 @@ providers:
   #
   # ── OpenAI ───────────────────────────────────────────────
   #
-  # Désactivée le 2026-09-08 : aucune clé fournie (PROVIDER_KEYS__openai jamais
-  # définie) et zéro requête servie. La garde anti-repli refuse désormais une
-  # instance sans clé propre — la réactiver demande PROVIDER_KEYS__openai_key1.
-  # openai_key1:
-  #   adapter:           openai
-  #   rpm_limit:         15
-  #   tpm_limit:         200000 # TBC
-  #   tpd_limit:         2000000 # TBC
-  #   base_url:          https://api.openai.com/v1
-  #   default_model:     gpt-4o-mini
-  #   max_output_tokens: 16384  # limite de complétion gpt-4o-mini
-  #   weight:            1.0   # min(15, 200000/3000)/15 = 1.0
-  #   concurrency_limit: 3
+  # Activée le 2026-09-18 : clé PROVIDER_KEYS__openai fournie.
+  # Quotas mesurés aux en-têtes HTTP de l'API OpenAI le 2026-09-18 :
+  # 50 req/min (x-ratelimit-limit-requests) et 100 000 jetons/min (x-ratelimit-limit-tokens).
+  # Modèle de raisonnement gpt-5.6-luna (max_completion_tokens, température par défaut).
+  openai_gpt56_luna_key1:
+    adapter:           openai
+    rpm_limit:         50
+    tpm_limit:         100000
+    base_url:          https://api.openai.com/v1
+    default_model:     gpt-5.6-luna
+    max_output_tokens: 16384
+    weight:            2.2   # min(50, 100000/3000)/15 = 2.2
+    concurrency_limit: 2
 
   #
   # ── Mistral ───────────────────────────────────────────────
@@ -314,18 +314,17 @@ providers:
     concurrency_limit: 3
     disable_timeout:   120
 
-  # groq_openai_20: KO
-  #   adapter:           groq
-  #   rpm_limit:         30
-  #   tpm_limit:         8000
-  #   max_tokens_per_request: 8000  # TPM free tier = 8000 → requête unique > 8000 tokens → HTTP 413
-  #   tpd_limit:         200000
-  #   base_url:          https://api.groq.com/openai/v1
-  #   default_model:     openai/gpt-oss-20b
-  #   max_output_tokens: 65536
-  #   weight:            0.2   # min(30, 8000/3000)/15 = 0.18 — borné par le TPM
-  #   concurrency_limit: 3
-  #   disable_timeout:   120
+  groq_openai_20_key1:
+    adapter:           groq
+    rpm_limit:         30
+    rpd_limit:         1000
+    max_tokens_per_request: 6000
+    base_url:          https://api.groq.com/openai/v1
+    default_model:     openai/gpt-oss-20b
+    max_output_tokens: 65536
+    weight:            0.18
+    concurrency_limit: 3
+    disable_timeout:   120
 
 
   # ----  (DISABLED: `max_tokens` must be less than or equal to `512`). --- 

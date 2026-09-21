@@ -209,6 +209,32 @@ async def health(request: Request) -> dict:
     }
 
 
+@router.post(
+    "/providers/{provider}/reset-quota",
+    summary="Réinitialiser le verrou d'épuisement de quota d'un provider",
+    description="Supprime le drapeau quota_exhausted posé suite à un 429 pour permettre de re-tester l'instance.",
+)
+async def reset_provider_quota(provider: str, request: Request) -> dict:
+    deps = _deps(request)
+    deps.limiter.clear_quota_exhausted(provider)
+    return {"status": "ok", "provider": provider}
+
+
+@router.post(
+    "/providers/reset-quota",
+    summary="Réinitialiser les verrous d'épuisement de quota",
+    description="Supprime les drapeaux quota_exhausted pour les providers spécifiés ou pour tous les providers.",
+)
+async def reset_providers_quota(request: Request, payload: dict | None = None) -> dict:
+    deps = _deps(request)
+    providers = (payload or {}).get("providers")
+    if providers is None:
+        providers = list(deps.settings.providers.keys())
+    for p in providers:
+        deps.limiter.clear_quota_exhausted(p)
+    return {"status": "ok", "reset": providers}
+
+
 @router.get(
     "/errors/recent",
     summary="Dernières erreurs LLM remontées par les providers",

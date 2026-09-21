@@ -36,6 +36,11 @@ qdrant-client >=1.9.0,<2.0.0
 nltk>=3.9.1,<4.0.0
 wordcloud>=1.9.4,<2.0.0
 demjson3>=3.0.6,<4.0.0
+# Décideur « typesafe » (ticket 096) : le SDK de Jev, classifieur zéro-shot à sortie typée.
+# Version épinglée — c'est la seule qui ait servi les mesures du lot 0 (2026-09-21), et le
+# décideur refuse déjà les alias de MODÈLE pour la même raison : rien de ce qui entre dans
+# l'empreinte ne doit pouvoir bouger sans que l'empreinte bouge.
+typesafe-sdk==0.7.0
 
 # --- LlamaIndex Ecosystem ---
 llama-index>=0.12.43,<0.13.0

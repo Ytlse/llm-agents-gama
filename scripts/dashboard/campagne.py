@@ -96,6 +96,12 @@ def libelle(nom: str) -> str:
         params = dec.get("parametres") or {}
         if params.get("temperature") is not None:
             bouts.append(f"T={params['temperature']}")
+    elif type_dec == "typesafe":
+        # Ticket 096 — Jev porte une VERSION épinglée (`jev-1.13.0`), jamais un alias : deux
+        # versions ne rendent pas les mêmes distributions, et le libellé qui les confondrait
+        # ferait lire une campagne pour une autre. Le repli « témoin … » ci-dessous nommait le
+        # type sans le modèle, ce qui perdait exactement l'information distinctive.
+        bouts.append(f"classifieur typé {dec.get('modele') or 'version inconnue'}")
     elif type_dec == "modele":
         artefact = Path(str(dec.get("artefact") or "")).stem or "artefact inconnu"
         bouts.append(f"modèle ajusté {artefact}")

@@ -11,6 +11,10 @@ from prometheus_client import Counter, Gauge, Histogram
 
 from mobility_llm.mode_choice import draw_index, mode_distribution
 from llm_gateway.telemetry.alarms import fire_alarme
+# `settings` était lu dans `_redraw` sans être importé (ticket 077, 2026-09-18) : le tirage
+# depuis une entrée de cache levait `NameError`. Le défaut est resté invisible parce que le
+# cache était coupé sur tous les runs du ticket — il aurait cassé le premier run cache actif.
+from settings import settings
 from sim_clock import wall_clock
 
 COLLECTION_NAME = "llm_decisions"
@@ -506,7 +510,11 @@ class LlmSemanticCache:
         if sum(weights) <= 0:
             return None
 
-        index = draw_index(weights, *seed_parts)
+        index = draw_index(
+            weights,
+            *seed_parts,
+            min_prob_threshold=settings.agent.mode_choice_truncation_threshold,
+        )
         modes = [opt.mode_label() for opt in options]
         return {
             "index": index,

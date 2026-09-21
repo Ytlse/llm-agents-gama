@@ -2,7 +2,7 @@
 
 **Projet :** LLM-Agents GAMA / Défis Clés Occitanie (MIDOC)  
 **Document maître associé :** [`MANUSCRIT_DETAILLE_2026.md`](../archive/MANUSCRIT_DETAILLE_2026_v1.6.md) (`v1.5`)  
-**Fichier BibTeX source :** [`references.bib`](references.bib)  
+**Fichier BibTeX source :** [`sample.bib`](sample.bib)  
 **Dernière mise à jour :** 2 septembre 2026  
 
 ---

@@ -171,7 +171,7 @@ propositions.jsonl   une ligne par déplacement :
 
 ```yaml
 nom, population: {chemin}, jeu: {nom}, gabarit: {categorie: itinary_multi_agent}   # empreinte = texte effectif
-decideur: {type: passerelle|antigravity|duree_minimale|rejeu|aleatoire|modele|majoritaire_voiture,
+decideur: {type: passerelle|antigravity|duree_minimale|rejeu|aleatoire|modele|majoritaire_voiture|typesafe,
            modele, portee: local|distant|null, parametres: {temperature, top_p, max_tokens},
            rejeu_de: <exec>|null, graine: <int>|null, artefact: <chemin>|null}
 mode: sans_simulateur | simulateur
@@ -201,10 +201,13 @@ dépôt (commit + arbre propre).
 `providers.yaml` puis `/health`), sans simulateur avec mémoire/événement/horizon > 1 (S3), date hors
 période couverte (E9 : `calendar*.txt` des feeds, bornes du CSV météo), jeu périmé non accepté.
 
-**« Disponible » lit trois signaux, pas un** (`MoniteurRessources.disponible`). Une instance est
-servable si la passerelle ne l'a pas mise **hors service** (`/health` : `disabled`, désactivée après
-des erreurs consécutives, ou `cooldown`), si son quota du jour n'est pas `quota_exhausted`, et si sa
-marge `rpd_limit − daily_requests` couvre le besoin. Deux pannes ont fixé cette lecture :
+**« Disponible » lit deux signaux, tous deux mesurés** (`MoniteurRessources.disponible`). Une
+instance est servable si la passerelle ne l'a pas mise **hors service** (`/health` : `disabled`,
+désactivée après des erreurs consécutives, ou `cooldown`) et si son quota du jour n'est pas
+`quota_exhausted`. La marge `rpd_limit − daily_requests` est toujours calculée et affichée
+(`marge()`, panneau des ressources, `raison_epuisement`), mais depuis le 2026-09-21 (ticket 097)
+**elle n'écarte plus** : `rpd_limit` est déclaré dans `providers.yaml`, pas observé. Trois pannes
+ont fixé cette lecture :
 
 - 2026-09-07 : le go/no-go ne lisait que le quota. `cerebras_gpt-oss-120b`, désactivée après une
   HTTP 402, restait `quota_exhausted: false` (son seau du jour était intact) et l'expérience était
@@ -216,6 +219,28 @@ marge `rpd_limit − daily_requests` couvre le besoin. Deux pannes ont fixé cet
   décisions après sa reprise, l'exécution a été déclarée épuisée jusqu'au lendemain 07:00, sans
   quota ni panne. Depuis, `hors_service()` lit `disabled` et `cooldown` ; « occupée » est une
   information du tableau (`occupee`), jamais un refus.
+- 2026-09-21 : le troisième signal, la marge, écartait des instances sur un plafond que personne
+  n'avait mesuré. Les `rpd_limit` de `providers.yaml` sont recopiés de documentations fournisseur
+  périmées ou muettes — Groq n'annonce sa limite journalière que dans le corps de ses 429, et le
+  RPM réellement servi par Mistral valait le double du chiffre inscrit. Une clé pouvait donc être
+  déclarée pleine avec des centaines de requêtes encore servables. Depuis, le plafond informe, il
+  ne décide pas : seul le fournisseur ferme une clé.
+
+**Ce qu'il reste au plafond déclaré : journaliser.** Ne fermant plus de clé, il ne resterait rien
+de lui sans trace, et l'écart entre `providers.yaml` et la limite réelle passerait inaperçu.
+`MoniteurRessources` en tire deux WARNING, posés à la lecture de `/health` et **sur front montant**
+— une ligne par instance et par fenêtre, pas une par rafraîchissement :
+
+- `[ressources] [PLAFOND] g1 : 612/500 requêtes/jour — plafond déclaré dépassé de 112 et le
+  fournisseur sert toujours` : le chiffre inscrit est trop bas, et c'est la seule occasion de
+  l'apprendre. Strictement au-delà : à `612 == 612`, le plafond n'est pas encore démenti.
+- `[ressources] [PLAFOND] g1 refusée par le fournisseur (429) à 412 requêtes/jour — limite réelle
+  observée ; plafond déclaré 500 (écart -88)` : `daily_requests` au moment du refus **est** la
+  limite du fournisseur. C'est ce chiffre-là qui alimente la remesure de `providers.yaml`
+  (`make providers`, en-têtes `x-ratelimit-*`).
+
+Sans `rpd_limit` déclaré ou sans compteur publié, rien n'est journalisé : il n'y a pas de
+comparaison à faire, et supposer un chiffre est exactement ce que le ticket 097 corrige.
 
 Une passerelle ancienne qui ne publie ni `disabled` ni `cooldown` est lue sur `available`, seul
 signal disponible ; une passerelle qui ne publie rien reste permissive : l'absence de mesure ne
@@ -252,6 +277,36 @@ dossier a disparu mais qui figure dans `experience.yaml: executions_connues` res
 lancement, jamais réinitialisé. `comparer(a, b)` : comparable ⇔ empreintes partagées identiques
 (population, jeu, gabarit si commun, calendrier, graines, tolérances) ; sinon liste des différences en
 tête et mention « non comparable ». **[H]** le régime de regroupement n'entre pas dans la règle.
+
+**Appariement décision par décision** (`scripts/analysis/appariement_executions.py`, CLI
+`make apparier A=… B=…`, ticket 073 axe 0). `comparer` répond « ces deux mesures sont-elles
+comparables ? » ; `apparier` répond « de combien le décideur a-t-il bougé, décision par
+décision ? ». Il appelle d'abord `comparer` — apparier deux conditions différentes ne mesure
+pas le non-déterminisme du fournisseur, et le refus est la garde — puis lit les deux
+`decisions.jsonl` en appariant sur `(person_id, activity_id)`. Lecture seule.
+
+Le classement des couples communs EST la mesure, et confondre ses familles fausse le chiffre :
+
+| famille | critère | sort |
+|---|---|---|
+| `cascade_amont` | les options offertes diffèrent | écartée — l'écart est hérité du déplacement précédent, pas produit ici |
+| `methode_dissymetrique` | même offre, méthode différente | écartée et **signalée** : le décideur a répondu d'un côté seulement |
+| `choix_unique` | une seule option des deux côtés | écartée — aucune sollicitation |
+| `hors_mesure` | même méthode, rien à comparer (`inexploitable`, `sans_solution`) | écartée |
+| `appariables` | même offre **et** décideur sollicité des deux côtés | **la seule population chiffrée** |
+
+Les masses se lisent dans `poids_presentes`, **jamais** dans `distribution` : celui-ci agrège sur
+les six modes canoniques et écrase deux options d'un même mode. Sur les 120 premières décisions du
+réplicat, `distribution` annonçait 5 bascules « à masses égales » contre UNE pour
+`poids_presentes` — or le ticket qualifie ce cas de défaut du dispositif, donc le mauvais vecteur
+invente un bug. Ces bascules sortent **nommées** (personne, poids, index de part et d'autre,
+graine de tirage, lot), pas résumées en taux.
+
+Deux `[ALARME]` : une bascule à masses strictement identiques (le tirage devrait être
+reproductible à graine égale), et une **couverture** — `communes / max(|A|, |B|)` — sous 80 %.
+La seconde vise le défaut du 2026-09-15 : un `moves.csv` tronqué à 274 lignes lu comme s'il
+portait les 3 299 décisions. Le taux se calcule ainsi, et non `appariables / communes`, parce que
+les choix uniques feraient chuter ce dernier alors qu'ils sont légitimes.
 
 ## 5. Spec 03 + 05 — le runner (`experiences/runner.py`, `experiences/decideurs.py`)
 
@@ -292,8 +347,41 @@ durée et six compteurs (S8).
   une exécution ne fournit aucune mesure publiable de parts modales (P2), valant comme banc d'essai
   et mesure à coût nul. Local, asynchrone, sans quota.
 
-**Ressources** (Q1–Q11) : `/health` de la passerelle lu avant chaque vague (Q11 : marge <
-sollicitations à soumettre ⇒ instance écartée ; plus aucune ⇒ `epuisee` avant le premier 429) ;
+- `DecideurTypesafe` (`type: typesafe`, ticket 096) : Jev, un **classifieur zéro-shot à sortie
+  typée** — troisième famille, ni modèle de langage génératif ni modèle tabulaire entraîné sur
+  l'enquête. On lui envoie un `state` et une question `Choice` ; il rend la distribution complète
+  sur les options et une confiance, sans produire une ligne de texte. Quatre conséquences, toutes
+  voulues :
+  - la **présentation ne se réimplémente pas** : le texte servi sort du même
+    `LlmAgent.build_travel_plan_payload` que les bras LLM. Ce qui change est la FORME — les options
+    quittent le texte pour `criteria` (clés `option_<i>`, indexées et non nommées par mode, deux
+    itinéraires partageant souvent le même), et la consigne perd son bloc `[Output instructions]`
+    que le type `Choice` remplace ;
+  - l'empreinte porte le **sha du texte réellement envoyé** (`instructions_sha256`) en plus de
+    l'empreinte de gabarit : celle-ci hache la variante entière, donc changer la règle d'amputation
+    ne la ferait pas bouger, et deux exécutions incomparables porteraient la même signature ;
+  - la **version est figée** (`jev-1.13.0`) : un alias (`jev-latest`, `jev-preview`) est **refusé**
+    à la validation, jamais résolu au lancement — un alias résolu scelle une version que
+    l'`experience.yaml` ne porte pas ;
+  - `raison` reste **vide**. Jev ne rédige pas, et une phrase fabriquée à partir des probabilités
+    se lirait comme une sortie de modèle dans les traces et les rapports mémoire.
+
+  Jev rend ses probabilités **arrondies à deux décimales** : une somme à 0,99 ou 1,01 est normale,
+  tolérée à 0,02 et renormalisée. Au-delà, clé d'option manquante ou masse nulle : **non-décision
+  explicite** (`non_imputable`), archivée, comptée, jamais réessayée. À distinguer d'un échec de
+  transport (429, 529, timeout, coupure), qui est une **erreur** réessayée par le runner sous
+  `passerelle_occupee:` — et d'une erreur de configuration (401, 422) qui se dit `configuration:`,
+  parce qu'il y a une ligne de YAML à corriger et non un quota à attendre. Local au sens des
+  quotas : `sans_quota`, aucune clé réservée, aucune rotation (1 200 req/min annoncés). Clé API :
+  `PROVIDER_KEYS__typesafeAI`, passée explicitement au SDK — le laisser résoudre son propre
+  `TYPESAFE_API_KEY` ferait servir une clé traînant dans l'environnement à l'insu de l'empreinte.
+  **Sans mémoire par construction** : les catégories STM/LTM produisent du texte, Jev n'en produit
+  pas. Le bras se nomme par sa version et sa variante de prompt (`exp_jev-1130_proexp05_…`), sans
+  segment de température — Jev n'en a pas, en écrire un scellerait un réglage inexistant.
+
+**Ressources** (Q1–Q12) : `/health` de la passerelle lu avant chaque vague (Q11, depuis le
+2026-09-21 : la marge déclarée n'écarte plus ; seul un `quota_exhausted` réel écarte, et `epuisee`
+survient donc **après** le premier 429, plus avant) ;
 `reprise_possible_a` = réouverture de la fenêtre `rpd` du fournisseur ; pause manuelle par fichier `PAUSE` dans le
 dossier d'exécution ou `SIGINT` → point sûr → `en_pause`, **en quelques secondes** (voir
 « Pause effective en quelques secondes » ci-dessous). Reprise : `decisions.jsonl` relu,
@@ -588,6 +676,46 @@ une anomalie — mais alors il imprime la commande à lancer à la main.
 **À retenir au-delà de ce ticket** : seul un *déplacement* casse un montage. L'archivage de
 `data/population/population_1000_AAMAS_v5` n'a rien cassé, parce qu'il déplaçait un ENFANT du
 dossier monté, pas le dossier lui-même.
+
+### Une seconde archive froide : l'ancien jeu v6 EN (ticket 098, 2026-09-21)
+
+`archive/2026-09-21_ancien_jeu_v6_EN/` gèle le substrat remplacé le 2026-09-16 par sa version
+corrigée (ticket 088) et **tout ce qui a été décidé dessus** : 36 définitions, 31 exécutions,
+et le jeu scellé lui-même — 345,3 Mo, 647 fichiers, tous en **déplacement**.
+
+Rien n'est copié cette fois : contrairement au 074, aucune de ces pièces n'est une surface qu'on
+réécrit sur place. Elles ne doivent plus servir, point.
+
+**Pourquoi le jeu part avec ses exécutions.** Une exécution ne se rejoue pas sans son substrat
+(`journal.regenerer` recharge jeu **et** cohorte). Et un jeu laissé sous `data/jeux/` resterait
+proposé : la règle R17 n'écarte que ce qui est *déjà* sous `archive/`. Rien n'aurait empêché de
+définir demain une expérience neuve sur le substrat daté du 17 mars — le défaut du ticket 045, à
+un substrat près. La **cohorte**, elle, reste vivante : la correction portait sur le calcul de
+l'offre, pas sur les personas.
+
+**La garde de démarrage est scopée, et c'est une différence assumée.** Le script du 074 refusait
+de démarrer si une exécution QUELCONQUE du dépôt avait écrit depuis moins de deux minutes —
+c'était juste, il déplaçait `data/experiences` en entier. Ici l'ensemble déplacé est disjoint du
+reste : `scripts/archiver_ancien_jeu_v6_en.py` refuse sur les seules pièces concernées, et se
+contente d'**avertir** pour le travail vivant ailleurs (que le réancrage Docker fera néanmoins
+sursauter). Une garde globale aurait interdit le gel dès qu'une expérience sans rapport tourne.
+
+**Ce que le gel a coûté : rien de mesurable, et c'était la condition.** Vérifié avant de déplacer
+quoi que ce soit — aucun bras portant une exécution `terminee` sur l'ancien jeu n'est dépourvu de
+contrepartie `terminee` sur le jeu corrigé, et `plot_chapitre6.py` journalisait déjà
+`13 sur 13, 0 sur l'ancien jeu`. Les PNG des huit figures sont **identiques bit à bit** après le
+gel. Le repli de `resoudre()` sur l'ancien jeu était mort avant ; il nomme désormais l'archive
+au lieu de rendre un `None` muet, pour qu'un rejeu incomplet ne se diagnostique pas comme un
+substrat gelé.
+
+**Un effet de bord qui reste ouvert.** La sélection des 10 personas mesurables du ticket 093 a
+été dérivée d'un run de l'ancien jeu, et
+`data/population/population_10_mesurables_093/MANIFEST.yaml` le scelle (`run_de_reference`,
+`candidats: 234`). Ce run est maintenant gelé, et le même critère appliqué à sa contrepartie
+corrigée donne **246 candidats**, avec un persona de la démonstration (41275) qui cesse de
+passer. Les deux tests concernés de `test_093_selection_personas.py` sautent désormais, avec un
+motif qui le DIT. Re-dériver la sélection est une décision scientifique, pas un ajustement de
+test : elle n'a pas été prise ici.
 
 ## 6 quinquies. Nommage des variantes de prompt (ticket 074, C-4/C-5)
 
@@ -990,6 +1118,147 @@ Commandes : `make experience-statuts` (tout, masquées comprises),
 
 Spec : `specs/hygiene-prompts-et-plateforme-experiences.md` §3.2 et §5.
 
+## 7 quinquies. Un réglage d'expérience appartient au run (ticket 077, lot K)
+
+**La règle.** Ce qu'un bras d'expérience fait varier se pose par l'**environnement** et s'inscrit
+dans `identite_run.json`. Ce qui appartient au projet reste dans `config/config.yaml`.
+
+| | `config/config.yaml` | Environnement (`AGENT__…`) |
+|---|---|---|
+| Portée | tout run du dépôt, mesuré ou non | ce run-là |
+| Durée de vie | jusqu'à ce que quelqu'un le remarque | celle du processus |
+| Trace | aucune | `identite_run.json`, et une reprise qui diffère est refusée |
+
+⚠ **Pourquoi la règle existe.** Le 2026-09-18, quatre réglages d'expérience ont été posés dans
+`config.yaml` — chaînage des véhicules, verrou de retour, seuil de troncature du tirage, plancher
+de réflexion — plus un seuil de mémoire. Deux conséquences :
+
+1. ils sont devenus le **défaut du dépôt**. Trente tests énonçant les règles que ces réglages
+   contredisent sont restés rouges pendant que personne ne pouvait dire s'ils signalaient une
+   régression ou une configuration ;
+2. ils ne figuraient dans **aucune identité de run**. Trois bras aux réglages opposés portaient
+   la même identité, et rien ne permettait, après coup, de dire sous quels réglages un run avait
+   tourné. C'est précisément ce que le ticket 091 existait pour empêcher.
+
+**Ce que l'identité porte désormais**, en plus des onze champs du 091 : chaînage des véhicules,
+verrou de retour au domicile, seuil de troncature du tirage, seuil de choc en mémoire, fenêtre et
+plafond du bloc « ce qui a changé récemment », plancher d'entrées avant réflexion, météo par agent.
+
+Un run antérieur au 2026-09-19 n'est donc plus reprenable, et le refus le dit dans ces mots :
+**« absent du run repris »** — la cause est l'âge du run, pas un réglage différent. C'est le bon
+comportement : on ne sait pas sous quelles valeurs ces runs ont tourné.
+
+⚠ **Conséquence pratique.** Un `make run` lancé à la main tourne aux valeurs par défaut du dépôt.
+Pour reproduire un bras d'expérience, passer par `scripts/experiment/run_sequential_cohort.py`,
+qui pose les réglages et les fait enregistrer. C'est l'inverse du piège précédent : un run manuel
+ne porte plus en silence les réglages d'une expérience.
+
+### Le nom de la variable est le nom NU du champ
+
+`VEHICLE_CHAIN_ENABLED`, `MEMOIRE__FENETRE_CHANGEMENTS_JOURS`. **Pas** `AGENT__…`.
+
+Les sous-configurations de `settings.py` sont des `BaseSettings` instanciées sans préfixe : le
+préfixe `AGENT__` n'est lu par personne. `run_sequential_cohort.py` l'a posé pendant des semaines
+sans le moindre effet, et le premier bras de campagne du 2026-09-19 a tourné aux valeurs par
+défaut du dépôt.
+
+Et il ne suffit pas de poser la variable sur l'hôte : **Docker Compose ne transmet au conteneur
+que ce qu'il déclare.** Chaque réglage figure donc en passe-plat dans `infra/docker-compose.yml`,
+avec un défaut égal à celui de `settings.py` — deux valeurs par défaut écrites à deux endroits
+divergent, et `test_077_lotL_passage_reglages.py` les tient ensemble.
+
+### Les réglages du ticket 095
+
+| Variable | Défaut | Ce qu'elle décide |
+|---|---|---|
+| `MEMOIRE__MODE_FENETRE_CHANGEMENTS` | `derivee` | `derivee` : la durée d'un souvenir de choc se calcule depuis sa gravité. `fixe` : coupure franche à `MEMOIRE__FENETRE_CHANGEMENTS_JOURS`, comportement d'avant le ticket — c'est le bras de contrôle méthodologique |
+| `MEMOIRE__SEUIL_SERVICE_CHANGEMENT` | `0.35` | Le poids sous lequel le souvenir quitte le bloc. Domaine ouvert `]0, 1[` |
+| `MEMOIRE__PLANCHER_CHANGEMENT_JOURS` | `2.0` | Borne de sûreté basse. Ne mord pas aux valeurs du dépôt |
+| `MEMOIRE__PLAFOND_CHANGEMENT_JOURS` | `30.0` | Borne haute. Mord par le renforcement au rappel, jamais par la gravité |
+| `EXPERIMENT_SURVEY_MODES` | *(vide)* | Modes interrogés par l'enquête du soir. Vide = les quatre d'Adam & Gaudou ; à étendre à `train` ou `deux_roues` quand le choc du run les vise |
+| `RUN_PARENT` | *(vide)* | Nom ou chemin du run **parent** dont ce bras hérite le socle commun (run enfant, lot D) |
+| `CHAMPS_LIBRES` | *(vide)* | Les champs d'identité que cet enfant déclare faire varier par rapport à son parent. Tout autre écart fait refuser le démarrage |
+
+⚠ **`MEMOIRE__MODE_FENETRE_CHANGEMENTS` change le comportement par défaut de tout run.** Un run
+archivé avant le 2026-09-21 ne se compare à un run neuf qu'en déclarant `fixe`.
+
+### Un modèle par fonction (ticket 095, lot C)
+
+`LLM__INSTANCES_ADMISES` accepte, en plus d'une liste plate, une **table `catégorie →
+instances`** :
+
+```
+LLM__INSTANCES_ADMISES='{"defaut": ["google_gemini31_key1", "google_gemini31_key2"],
+                         "stm_reflection": ["google_gemini35_key1", "google_gemini35_key2"],
+                         "enquete_affinite": ["google_gemini35_key1", "google_gemini35_key2"]}'
+```
+
+La clé `defaut` est le repli de toute catégorie non nommée. **Minimum deux instances par
+catégorie** : en deçà, une alarme se lève, parce qu'un HTTP 503 devient alors un échec sec — les
+quatorze `high demand` de la campagne du 2026-09-19 sont passés précisément parce qu'il restait
+une seconde clé. `force_provider` n'est jamais posé par ce chemin : `task_worker` ne retente que
+si `force_provider is None`.
+
+⚠ **Ce n'est pas un réglage d'infrastructure.** Changer le modèle des réflexions STM change le
+contenu de la mémoire, donc les décisions. Le binding entre dans `identite_run.json`
+(`routage_instances`), se gèle avant la campagne et reste identique dans tous les bras — sinon
+l'écart mesuré n'est plus attribuable au choc.
+
+### Runs enfants (ticket 095, lot D)
+
+Les quatorze premiers jours des trois bras de la campagne du ticket 077 étaient identiques — 44
+décisions, 0 écart — et payés trois fois. Un run **parent** joue le socle commun jusqu'à la veille
+du choc et se fige ; chaque bras démarre depuis son dernier point de reprise :
+
+```bash
+RUN_PARENT=2026-09-21_socle CHAMPS_LIBRES=choc,mode_fenetre_changements make run OFFLINE=1
+```
+
+L'enfant hérite de la **mémoire** de son parent. Si la population, le modèle ou les graines
+diffèrent, cette mémoire décrit une autre expérience que celle qu'il va jouer — et rien, dans les
+sorties, ne le dirait. D'où le refus par défaut : tout écart d'identité non nommé dans
+`CHAMPS_LIBRES` fait échouer le démarrage en citant le champ. Un champ libre inconnu est refusé
+lui aussi, sans quoi une faute de frappe laisserait passer l'écart qu'on croyait avoir déclaré.
+
+Au dégel du rejeu, la **recette de reproduction** compare décision par décision l'enfant et son
+parent sur les jours communs, et lève une `[ALARME] [filiation]` chiffrée en cas d'écart. Sans
+elle, l'économie serait une promesse : deux bras croiraient partager une baseline qu'ils ne
+partagent plus.
+
+⚠ **Une clé présente dans `config.yaml` l'emporte sur l'environnement** : le YAML est passé à
+l'initialisation, qui prime. C'est pour cela que ces clés en ont été retirées.
+
+La règle ne vaut pas que pour les réglages d'agent. Le 2026-09-21, les quatre variables
+`EXPERIMENT_SURVEY_ENABLED`, `EXPERIMENT_SURVEY_DAYS`, `EXPERIMENT_TARGET_PERSONAS` et
+`EXPERIMENT_HIBERNATE_ON_QUOTA` ont été ajoutées au passe-plat : elles manquaient depuis
+l'origine, et **l'enquête du soir comme la mise en veille sur quota n'ont jamais tourné** —
+sans alarme, sans ligne de journal, dans les trois bras de la campagne du ticket 077. Un
+dispositif qui ne s'annonce pas quand il démarre ne se distingue pas d'un dispositif absent :
+c'est la raison d'être de la journalisation du succès.
+
+### `make run` ne bloque pas, et l'orchestrateur ne doit pas le croire
+
+La recette lance `launch_headless.py` en arrière-plan (`&`) : `make run OFFLINE=1` rend la main
+en une vingtaine de secondes, alors que le run dure des heures. C'est cohérent avec l'usage
+humain — on lance, puis on regarde les journaux — mais un orchestrateur qui attend `make` croit
+le bras terminé.
+
+Le 2026-09-19 à 16:44, il a donc enchaîné sur le bras suivant, dont la première étape
+(`make stop-run`) a **tué le bras précédent trente-quatre secondes après son démarrage**.
+
+Le signal franc est le lanceur lui-même : GAMA Server tue l'expérience dès que son client
+WebSocket se déconnecte, donc `launch_headless.py` vit exactement le temps du run. L'orchestrateur
+attend sa disparition, journalise la journée simulée atteinte toutes les cinq minutes, et refuse
+de démarrer un bras si un lanceur tourne déjà — `make run` se contenterait d'écrire « Lancement
+ignoré » et de rendre 0.
+
+### Un bras se vérifie en vingt secondes, pas en trois heures
+
+`identite_run.json` est écrit au démarrage du contrôleur. L'orchestrateur le relit dès qu'il
+apparaît, le compare aux réglages demandés, et **arrête le bras** au premier écart, en nommant
+attendu et obtenu. La campagne s'interrompt : un bras qui échoue laisse la pile dans un état dont
+le suivant hériterait.
+
 ## 8. Ce que ce design ne fait pas
 
 - Aucune valeur d'enquête dans le code : la synthèse lit `scripts/data/population/cerema_values.yaml`
@@ -1007,7 +1276,7 @@ Ce qui existe, testé (`services/llm-agents/tests/test_035_*.py`, un test par r�
 | 02 — décision unique | `vehicle_chain.py` et `candidats.py` extraits du contrôleur ; `experiences/decision.py` (éligibilité motivée, plafond tracé, ordre déterministe D7, trace D6, `decider`, `avancer_chaine`) ; le contrôleur et `LlmAgent` l'utilisent | D1, D2, D4–D7, D10, D11, plafond | **D8** (égalité GAMA ↔ runner sur 100 personnes) exige un run réel ; D3 = les 73 tests existants, verts |
 | 01 — jeu enregistré | `experiences/jeu.py` : préparation tous modes sans plafond, reprise, clôture, empreinte, dépendances, péremption, consultation ; CLI `preparer-jeu`, `consulter-jeu`, `verifier-jeu` ; `make jeu` | J1–J16 | préparation sur la population réelle (services OTP/OSMnx requis) non exécutée ici |
 | 03 — sans simulateur | `experiences/runner.py` : ordre horaire par personne, parallélisme, non couverts, avancement, journal, `moves.csv` compatible `make report` | S1–S4, S6–S10 | S5 : la taille réelle des lots de la passerelle n'est pas rendue au client (question 15) |
-| 05 — ressources | `experiences/ressources.py` + `decideurs.DecideurPasserelle` : instances du modèle épinglées, substitution refusée, épuisement anticipé et arrêt propre, attente bornée, pause/arrêt par fichier ou signal, reprise depuis l'archive, dernière ligne tronquée réparée | Q1–Q3, Q4, Q5–Q9, Q11, Q12 | Q1/Q4 contre la passerelle réelle (non exercés hors réseau) |
+| 05 — ressources | `experiences/ressources.py` + `decideurs.DecideurPasserelle` : instances du modèle épinglées, substitution refusée, épuisement sur refus réel du fournisseur et arrêt propre, attente bornée, pause/arrêt par fichier ou signal, reprise depuis l'archive, dernière ligne tronquée réparée | Q1–Q3, Q4, Q5–Q9, Q11, Q12 | Q1/Q4 contre la passerelle réelle (non exercés hors réseau) |
 | 06 — expérience, registre | `experiences/experience.py` (E1–E9, estimation citant ses sources), `archive.py` (E10, E11, E19), `registre.py` (E12–E17, E20), CLI, onglet dashboard « 🧪 Expériences » | E1–E14, E16–E20, E22 | E15 = onglet dashboard (non testé automatiquement) ; E21 (grep des clés) à ajouter |
 | 04 — simulation sur jeu | `settings.data.jeu_enregistre` + tolérances ; `/init` charge et refuse (G1, G5) ; contrôleur : servi du jeu (G3), recalcul par groupe hors tolérance (G5), sources (G6), recalcul sans effet + ALARME (G7), `jeu_stats.json` + rubrique `make report` (G14), colonne « Source des propositions » de `moves.csv` ; `make run JEU=<nom>` (G2) | G1, G3, G5–G7, G13, G14 | **G8/G9** événements : refusés au lancement (question 14) ; **G10** pause à chaud GAMA : non câblée (le `DecideurRejeu` existe, la reprise `CONT=1` ne l'appelle pas encore) ; G12 exige un run réel |
 

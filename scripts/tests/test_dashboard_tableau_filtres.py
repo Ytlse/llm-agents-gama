@@ -248,25 +248,27 @@ def test_R1_les_colonnes_par_defaut_dans_l_ordre_annonce():
     presentes = list(D.COLONNES_REGISTRE)
     choix = D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")
     assert choix["colonnes"] == list(D.COLONNES_REGISTRE_DEFAUT)
-    for sortie in ("scores", "jeu_etat", "chaine", "formule"):
+    for sortie in ("scores", "jeu", "jeu_etat", "chaine", "formule"):
         assert sortie not in choix["colonnes"], sortie
 
 
-def test_R21_jeu_est_au_defaut_entre_prompt_et_mode():
-    """Le substrat se lit sans rappeler la colonne : c'est lui qui décide du grisé (R22)."""
-    colonnes = D._panneau_colonnes_et_filtres(FauxSt(), LIGNES, list(D.COLONNES_REGISTRE),
-                                              "")["colonnes"]
+def test_R21_jeu_n_est_plus_au_defaut_mais_garde_sa_place_canonique():
+    """Le nom du jeu figure dans le titre de chaque tableau. Rappelée, la colonne se place entre prompt et mode."""
+    st = FauxSt()
+    presentes = list(D.COLONNES_REGISTRE)
+    st.session_state[D._cle_vue(st, "colonnes")] = list(D.COLONNES_REGISTRE_DEFAUT) + ["jeu"]
+    colonnes = D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")["colonnes"]
     assert colonnes.index("prompt") < colonnes.index("jeu") < colonnes.index("mode")
 
 
 def test_R2_une_colonne_rappelee_reprend_sa_place():
-    """Rappelée, `jeu_etat` se replace entre `jeu` et `mode` — jamais recollée en bout de ligne."""
+    """Rappelée, `jeu_etat` se replace entre `prompt` (ou `jeu`) et `mode` — jamais recollée en bout de ligne."""
     st = FauxSt()
     presentes = list(D.COLONNES_REGISTRE)
     D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")
-    st.session_state[D._cle_vue(st, "colonnes")] = list(D.COLONNES_REGISTRE_DEFAUT) + ["jeu_etat"]
+    st.session_state[D._cle_vue(st, "colonnes")] = list(D.COLONNES_REGISTRE_DEFAUT) + ["jeu", "jeu_etat"]
     colonnes = D._panneau_colonnes_et_filtres(st, LIGNES, presentes, "")["colonnes"]
-    assert colonnes.index("jeu") < colonnes.index("jeu_etat") < colonnes.index("mode")
+    assert colonnes.index("prompt") < colonnes.index("jeu") < colonnes.index("jeu_etat") < colonnes.index("mode")
 
 
 def test_R2_les_cinq_colonnes_restent_proposees_au_selecteur():

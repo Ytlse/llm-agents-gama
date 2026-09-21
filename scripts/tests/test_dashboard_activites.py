@@ -457,7 +457,7 @@ def test_R29_ce_qui_est_refuse_est_ce_qui_est_dangereux(plateforme):
     """Les accents sont sans danger ; les espaces cassent `make EXP=` faute de guillemets."""
     acceptes = ("premiere_minimal", "Prompt_Éco", "jeu.v5-1", "P", "prompt2")
     refuses = ("Prompt Minimaliste", "a/b", "../../evade", "-flag", "_debut", "a;rm -rf",
-               "a$(ls)", "", "   ", "x" * 65)
+               "a$(ls)", "", "   ", "x" * 129)
     for nom in acceptes:
         assert experiences.MOTIF_NOM.match(nom), f"{nom!r} devrait être accepté"
     for nom in refuses:

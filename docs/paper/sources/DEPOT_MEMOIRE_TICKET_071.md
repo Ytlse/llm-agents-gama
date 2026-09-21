@@ -14,7 +14,7 @@
 1. le PDF est dans `etat_de_lart/`, **ou l'ouvrage est consulté** pour les livres sans PDF ;
 2. l'attribution est exacte ;
 3. le passage est identifié ;
-4. la clé BibTeX existe dans `sources/references.bib`.
+4. la clé BibTeX existe dans `sources/sample.bib`.
 
 Cocher une case, c'est avoir vérifié les quatre **à la main**.
 
@@ -73,15 +73,47 @@ consulté » avec page pointée, que `CITATIONS.md` admet.
 
 ---
 
+## État du dépôt au 21 septembre 2026
+
+**Fait.** Les neuf PDF des groupes A et B sont déposés dans `etat_de_lart/`, indexés au § 9 de
+son `README.md`, et leurs neuf clés BibTeX sont dans `sources/sample.bib`. Chaque PDF a été
+ouvert et son titre vérifié contre la notice : les neuf correspondent. Conditions 1, 2 et 4
+remplies pour ces neuf.
+
+| Fichier déposé | Clé BibTeX |
+|---|---|
+| `Sumers_2024_CoALA.pdf` | `sumers2024coala` |
+| `Zhong_2024_MemoryBank.pdf` | `zhong2024memorybank` |
+| `Chhikara_2025_Mem0.pdf` | `chhikara2025mem0` |
+| `Xu_2025_A-MEM.pdf` | `xu2025amem` |
+| `Packer_2023_MemGPT.pdf` | `packer2023memgpt` |
+| `Liu_2025_GATSim.pdf` | `liu2025gatsim` |
+| `Gutierrez_2024_HippoRAG.pdf` | `gutierrez2024hipporag` |
+| `Reimers_2019_Sentence-BERT.pdf` | `reimers2019sbert` |
+| `Papineni_2002_BLEU.pdf` | `papineni2002bleu` |
+
+⚠ **La condition 3 n'est remplie pour aucune des neuf** : le passage citant doit être identifié
+dans `CITATIONS.md`, qui est sous verrou d'écriture. Neuf entrées y restent à créer, sous accord.
+
+⚠ **`CITATIONS.md` pointe une bibliographie qui n'existe pas.** Sa condition 4 nomme
+`../sources/references.bib` ; seul `sample.bib` existe, et c'est lui que le template LaTeX
+appelle (`\bibliography{sample}`). Le pointeur est à corriger, sous verrou.
+
 ## Ce qu'il reste à faire, dans cet ordre
 
 1. **Retirer Ciancone et al. (2024)** du § 3.3 du ticket : le passage au plongement francophone
    est abandonné, la référence n'a plus d'objet.
-2. **Déposer les dix PDF des groupes A et B**, dont huit préprints arXiv. Aucune barrière.
+2. ~~Déposer les dix PDF des groupes A et B~~ — **fait le 21 septembre 2026**, neuf fichiers
+   (Ciancone sortie de la liste).
 3. **Trancher pour le groupe C** : accès institutionnel, ou mention « ouvrage consulté ».
+   *Demande une main humaine : aucun paywall ne se contourne.*
 4. **Consulter les quatre ouvrages du groupe D** et pointer le passage.
-5. **Ajouter les clés BibTeX** dans `sources/references.bib` : seules `park2023` et `vu2025`
-   y sont aujourd'hui.
+   *Demande une main humaine : un ouvrage ne se consulte pas à ma place.*
+5. ~~Ajouter les clés BibTeX dans `sources/sample.bib`~~ — **fait le 21 septembre 2026** pour les
+   neuf déposées. Les douze références des groupes C et D restent sans clé, ce qui est correct :
+   une référence non déposée n'est pas une référence à citer.
+6. **Créer les neuf entrées de `CITATIONS.md`** avec leur phrase citante et leur passage pointé,
+   sous accord explicite (verrou de l'article).
 
 ⚠ **Une référence non déposée n'est pas une référence à citer.** La règle de tenue de
 `CITATIONS.md` existe pour cela, et la section 3.4 de l'article ne doit pas s'appuyer sur ce

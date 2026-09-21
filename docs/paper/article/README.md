@@ -44,21 +44,34 @@ service », fichier « figé dans le dépôt », empreintes, ce qui est gelé o�
 mesuré, sur quoi et comment ; la traçabilité vit dans les commentaires HTML `<!-- source: … -->`
 à côté du chiffre, et dans le dépôt.
 
+Elle s'arrête là : le rendu LaTeX d'[`overleaf/`](overleaf/) ne reprend **aucun** commentaire
+`source:`. Décision de l'auteur, 21 septembre 2026 — les notes alourdissaient le fichier collé dans
+Overleaf sans rien y apporter, `fr/` et `en/` les portant déjà. Une traduction ne les réintroduit
+pas ; l'en-tête de chaque `.tex` le rappelle.
+
 ## État d'avancement
 
 | # | Chapitre | EN | FR | LaTeX | Relecture |
 |---|---|---|---|---|---|
-| 0 | Résumé (*abstract*) | `v0.6` | `v0.6` | `v0.6` | [00](relecture/00_abstract.md) |
-| 1 | Introduction | `v0.22` | `v0.22` | `v0.22` | [01](relecture/01_introduction.md) |
-| 2 | État de l'art (*related work*) | `v0.17` | `v0.17` | `v0.17` | dans le fichier du ch. 1 |
-| 3 | Le dispositif (*architecture*) | `brouillon v0.5` | `brouillon v0.5` | `brouillon v0.5` | — |
-| 4 | Métriques et socle d'évaluation | — | `brouillon v0.16` | `v0.16` | — |
-| 5 | Quatre façons de choisir, une seule information *(protocole)* | — | `brouillon v0.8` | — | — |
-| 6 | Résultats | — | `brouillon v0.4` | — | — |
-| 7 | Régimes non tabulés | — | brouillon | — | — |
-| 8 | Limites et implications hybrides | — | brouillon | — | — |
-| 9 | Conclusion | — | brouillon | — | — |
-| 99 | Annexes techniques | — | brouillon | — | — |
+| 0 | Résumé (*abstract*) | `v1.9` | `v1.9` | `v1.9` | [00](relecture/00_abstract.md) |
+| 1 | Introduction | `v0.26` | `v0.26` | `v0.25` | [01](relecture/01_introduction.md) |
+| 2 | État de l'art (*related work*) | `v0.19` | `v0.19` | `v0.19` | dans le fichier du ch. 1 |
+| 3 | Le dispositif (*architecture*) | `brouillon v0.7` | `brouillon v0.7` | `v0.7` | — |
+| 4 | Métriques et socle d'évaluation | `brouillon v0.19` | `brouillon v0.19` | `v0.18` | — |
+| 5 | Quatre façons de choisir, une seule information *(protocole)* | `brouillon v0.11` | `brouillon v0.11` | `v0.10` | — |
+| 6 | Résultats | `brouillon v0.4` | `brouillon v0.8` | `v0.4` | — |
+| 7 | Régimes non tabulés | `brouillon v1.0` | `brouillon v1.0` | `v1.0` | — |
+| 8 | Limites et implications hybrides | `brouillon v0.3` | `brouillon v0.3` | `v0.2` | — |
+| 9 | Conclusion | `brouillon v0.2` | `brouillon v0.2` | `v0.2` | — |
+| 99 | Annexes techniques | `brouillon v0` | `brouillon v0` | `v0` | — |
+
+**Ce tableau est un instantané, relevé le 21 septembre 2026** depuis la ligne de statut de chaque
+fichier. Neuf de ses onze lignes étaient fausses ce jour-là : elles donnaient pour absents des
+textes anglais et des rendus LaTeX qui existent depuis, et elles gelaient les versions du français
+à leur état du 15 septembre. Le chapitre 6 est réellement désaligné, `v0.8` en français contre
+`v0.4` en anglais et en LaTeX ; le chapitre 8 a changé de version pendant la journée du 21. Une
+ligne qui ne bouge pas quand un chapitre bouge trompe davantage qu'une case vide : c'est la ligne
+de statut du fichier qui fait foi, jamais ce tableau.
 
 **Restructuration du 15 septembre 2026 — chapitres 5 et 6.** Le chapitre intercalaire 4.5 **a été
 absorbé** par le chapitre 5, qui devient le chapitre de **protocole** (ce que l'on compare) ; le 6

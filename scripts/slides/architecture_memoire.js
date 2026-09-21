@@ -11,45 +11,17 @@
  * s'oublient plus à l'horloge.
  */
 const pptxgen = require("pptxgenjs");
-
-const INK = "2B1B3D", INK_SOFT = "3D2B52";
-const VIOLET = "6D4E8C", VIOLET_PALE = "B9A3D0";
-const AMBER = "E8A33D", BRICK = "C4453C";
-const WHITE = "FFFFFF", TINT = "F3EFF7", TINT_DEEP = "E6DEEF";
-const MUTED = "6B6076", MUTED_DARK = "C9BCD6";
-const HEAD = "Cambria", BODY = "Calibri", MONO = "Courier New";
+const {
+  INK, INK_SOFT, VIOLET, VIOLET_PALE, AMBER, BRICK,
+  WHITE, TINT, TINT_DEEP, MUTED, MUTED_DARK,
+  HEAD, BODY, MONO, W, M, aides, sortie,
+} = require("./_charte");
 
 const pres = new pptxgen();
 pres.layout = "LAYOUT_WIDE";
 pres.author = "Projet LLM-Agents GAMA";
 pres.title = "Architecture memoire proposee";
-const W = 13.3, M = 0.6;
-
-function card(s, x, y, w, h, fill, edge) {
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x, y, w, h, rectRadius: 0.08, fill: { color: fill || TINT },
-    line: { color: edge || TINT_DEEP, width: 0.75 },
-    shadow: { type: "outer", angle: 90, blur: 8, offset: 0.04, color: INK, opacity: 0.1 },
-  });
-}
-function numDot(s, x, y, n, bg, fg, d) {
-  const sz = d || 0.42;
-  s.addShape(pres.shapes.OVAL, { x, y, w: sz, h: sz, fill: { color: bg }, line: { color: bg, width: 0 } });
-  s.addText(String(n), { x, y, w: sz, h: sz, isTextBox: true, margin: 0,
-    fontFace: HEAD, fontSize: sz > 0.45 ? 17 : 15, bold: true, color: fg, align: "center", valign: "middle" });
-}
-function head(s, kick, title, dark) {
-  s.addText(kick.toUpperCase(), { x: M, y: 0.16, w: W - 2 * M, h: 0.3, isTextBox: true, margin: 0,
-    fontFace: BODY, fontSize: 11, bold: true, color: dark ? AMBER : VIOLET, charSpacing: 2, valign: "middle" });
-  s.addText(title, { x: M, y: 0.5, w: W - 2 * M, h: 0.75, isTextBox: true, margin: 0,
-    fontFace: HEAD, fontSize: 34, bold: true, color: dark ? WHITE : INK, valign: "middle" });
-}
-function banner(s, y, txt, fill, color) {
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: M, y, w: W - 2 * M, h: 0.82, rectRadius: 0.06,
-    fill: { color: fill }, line: { color: fill, width: 0 } });
-  s.addText(txt, { x: M + 0.32, y, w: W - 2 * M - 0.64, h: 0.82, isTextBox: true, margin: 0,
-    fontFace: BODY, fontSize: 13, bold: true, color, valign: "middle" });
-}
+const { card, numDot, head, banner } = aides(pres);
 
 // ======================================================== 1 · TITRE
 const s1 = pres.addSlide();
@@ -358,5 +330,5 @@ s8.addNotes("C'est la sortie visible de tout ce qui précède. Les compteurs d'o
   "la consolidation des concepts, le dernier bloc vient de la gravité, et le choix des souvenirs " +
   "épisodiques qui complètent le bloc vient des trois viviers.");
 
-pres.writeFile({ fileName: process.argv[2] || "architecture_proposée.pptx" })
+pres.writeFile({ fileName: sortie("architecture_proposée.pptx") })
   .then(f => console.log("écrit :", f));

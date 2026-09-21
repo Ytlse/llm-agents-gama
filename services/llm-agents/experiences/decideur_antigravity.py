@@ -32,6 +32,8 @@ from mobility_llm.mode_choice import (
 )
 from urban_mobility_agents.agents.llm_agent import Context, _format_distribution
 
+from settings import settings
+
 
 class DecideurAntigravity:
     """Décideur déléguant le choix modal à un sous-agent Antigravity via IPC sur disque."""
@@ -391,7 +393,11 @@ class DecideurAntigravity:
                             ctx.timestamp, tz=timezone.utc
                         ).strftime("%Y-%m-%d"),
                     )
-                    idx_sorted = draw_index(weights, *seed_parts)
+                    idx_sorted = draw_index(
+                        weights,
+                        *seed_parts,
+                        min_prob_threshold=settings.agent.mode_choice_truncation_threshold,
+                    )
                     chosen_plan = sorted_options[idx_sorted]
                     idx_presentees = options.index(chosen_plan)
 

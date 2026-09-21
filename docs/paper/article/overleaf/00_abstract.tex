@@ -1,33 +1,42 @@
 % =====================================================================
-% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v1.2 (17 September 2026)
-% Dernière mise à jour : 2026-09-17
-% Chapter 0 of the paper: the abstract. To be inserted before 01_introduction.tex.
+% 00_abstract.tex — LaTeX rendering of ../en/00_abstract.md v1.9 (21 September 2026)
+% Dernière mise à jour : 2026-09-21
+% Chapter 0 of the paper: the abstract. Insert before 01_introduction.tex.
 % Ready to paste into the Overleaf project (acmart + natbib: \citep, \citet).
 % Derived file: regenerate after every validated pass of ../en/00_abstract.md.
-% Submission word count: 297 (placeholders count as one word, LaTeX commands excluded),
-% inside the 100-300 OpenReview bound, with 3 words of margin. No short cut is left in
-% paragraph 4: the next one would take a whole sentence.
-% Placeholders: the three <xx> await the local-press campaign (ticket 064): the size of
-% the shift, the number of frozen predictions and the verification rate. The <x.x> is the
-% fading constant of the hysteresis regime (§ 7.2.2), awaiting the longitudinal campaign
-% (tickets 041 and 063).
-% Paragraph 4 is corrected: the campaign runs on five articles, not thirty; the count of
-% frozen predictions becomes a placeholder, chapter 7 writing twenty where the author
-% does not yet fix it; and the shift is read against the article-free control (condition
-% C1, ticket 064). At v1.1 the second comparator goes: the clause on the tabular reference
-% moving only when the event withdraws a mode is out of the abstract and stays in § 7.2.
-% At v1.2 the hysteresis regime changes shock: the metro failure gives way to a bike fall,
-% which touches neither the network nor any of the 21 variables, so no tabular reference
-% can move and any gap read the next day comes from memory alone. The second press example
-% (Jardin des Plantes) pays for it. CHAPTER 7 DOES NOT FOLLOW YET: its § 7.2 still
-% describes the network failure, severity 0.70 and a 14.6-day trace, where a fall is 0.50
-% and 11.2 days; and the shock case itself has yet to be written.
-% Previous version frozen as ../../archive/00_abstract_TEX_v1.1.tex.
+%
+% LENGTH: 320 words at v1.9, footnote excluded — TWENTY WORDS OVER the bound, which takes
+% "around 100-300 words in plain text". The overshoot is knowingly carried: the compensating
+% cut proposed in paragraph 3 was turned down by the author. TO BE SETTLED BEFORE 1 Oct 2026.
+% ONE TEXT still serves the PDF and the OpenReview registration field.
+% Source of the bound: https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/instructions/
+% (read 2026-09-21). Calendar: author registration 17 Sep 2026, abstract 1 Oct 2026,
+% paper 8 Oct 2026 — see ../SOUMISSION_AAMAS_2027.md § 0.
+% NO PLACEHOLDER REMAINS.
+%
+% AUTHOR-ADDED FOOTNOTE — PRESERVE ON REGENERATION. The survey citation hangs on
+% "EMC^2 2023 survey" in paragraph 2, in the form the distributor requires. It does not count
+% towards the word total, and it cannot travel into the OpenReview field, which is plain text:
+% there, the sentence simply names the survey.
+% Same footnote as the GAMA Days source, docs/paper/gama_days/GAMA_DAYS_ABSTRACT_EN_TEX.md.
+%
+% v1.8 — the 300-word text becomes the abstract everywhere. WHAT THE PAPER'S ABSTRACT GAVE UP:
+% the contract sentence (same 21 variables, 1,000 sealed personas, car prior, four named
+% tabular references — sections 4.3 and 4.4); the calibration figures (section 6.1, appendix
+% H.1); the decision-level disagreement, one trip in three against one in ten (section 6.4).
+% The 393-word version is frozen as ../../archive/00_abstract_TEX_v1.7.tex.
+% Paragraphs 1, 3 and 4 follow the tutor's revision of the GAMA Days source.
+%
+% v1.9 — paragraph 4 says what the language model is worth instead of deferring it. Two things
+% that travel with that sentence in the GAMA Days source are DELIBERATELY NOT carried here:
+% the "In addition," linking the two statements, and the Liu, Yang & Yin footnote, which would
+% double \citep{liu2024toward}, already cited in sections 1 and 2, and cannot enter the
+% plain-text registration field.
 % =====================================================================
 
 \begin{abstract}
-Urban mobility simulations rely on tabular models estimated from surveys or on explicit rules: the space of representable behaviours is fixed a priori, a factor encoded as neither variable nor rule being unable to influence any decision. Yet multimodal choice is multidimensional: logical variables (time, effort, comfort) intertwine there with subjective factors tied to personality and experience. LLM-based agents promise to lift that limit: fed on vast corpora, they carry heuristics that surveys do not record.
-\\Against the certified EMC$^2$ 2023 survey, we measure the calibration gap between these agents and the models estimated on it, then test whether they respond to situations no variable encodes. The contract gives every decider the same 21 variables: 1,000 sealed personas, 3,299 trips on real networks, a car prior as floor and four tabular references: the multinomial logit, gradient boosting, the kernel regression and the random forest.
-\\Without prompt engineering, the agent stays two to four times further from the survey than the tabular references, depending on the model carrying it. A qualitative prompt without numeric thresholds brings the best model within 1.4 points, in distribution, of gradient boosting, which read 39,203 survey trips the agent never saw. The agent and gradient boosting name a different most-likely mode on one trip in three, tabular methods on one in ten.
-\\We then measure adaptation: does the agent respond to subjective factors no survey has recorded? Same persona, same day, one dated Toulouse news article added (bed bugs in the metro): shares move $\langle \mathrm{xx} \rangle$ points against the article-free control, contract variables unchanged. Five articles carry $\langle \mathrm{xx} \rangle$ predictions frozen before any call to the model, $\langle \mathrm{xx} \rangle$\,\% of them met. A bike fall on day two leaves a memory, the network untouched. The next day, ideal weather, the agent still avoids the bike; without memory, it does not. The gap fades over $\langle \mathrm{x.x} \rangle$ days.
+Existing multi-agent simulations of multimodal urban mobility rely on tabular models estimated from household travel surveys, or on explicit rules defined by domain experts. In both, the space of representable behaviours is fixed \emph{a priori}: a factor encoded as neither variable nor rule cannot influence any decision. Yet mode choice is multidimensional, and integrating that complexity at city scale is difficult. LLM-based generative agents promise to overcome it: fed on massive corpora, they carry decision heuristics surveys do not record, adapting without explicit rules.
+\\Against the certified EMC$^2$ 2023 survey\footnote{Enquête Ménages Déplacements (EMD), Toulouse / Grande agglomération toulousaine (EMD, Toulouse / Grande agglomération toulousaine) --- 2023, CEREMA, Syndicat mixte des transports en commun de l'agglomération toulousaine (producteurs), PROGEDO-ADISP (diffuseur). Final report: \url{https://www.aua-toulouse.org/wp-content/uploads/2024/05/Rapport-final-68-pages-Enquete-mobilite-2023-Bassin-de-vie-toulousain.pdf}}, we measure the calibration gap between these agents and the models estimated from it, then whether they adapt to what no variable encodes.
+\\Using a dataset of 3,299 trips, we compare the results of our generative agents with those of classical systems based on rigid rules or tabular data. In known situations (where the space of representable behaviours is defined \emph{a priori}), generative agents produce results very close to traditional models, with a slight deviation. Their true strength emerges in unforeseen circumstances, such as a news article mentioning bed bugs in the metro, which influences the agents' decisions. We observe an evolution in their choices over time, as well as their ability to gradually reduce the impact of this information, an adaptability that classical models cannot replicate.
+\\Each decision incurs an inference cost, and on an ordinary day, the representativeness of generative agents does not justify the expense: tabular models perform just as well, if not slightly better, at no cost and instantly. The value of the language model lies in describing complex mode choices, especially during unforeseen circumstances. This is not possible with rule-based models and static household travel surveys. This opens the way for a hybrid architecture: the tabular model would handle the nominal regime, while the language model, aligned with the inhabitants' choices, would determine when to take over and make decisions based on each individual's personality.
 \end{abstract}

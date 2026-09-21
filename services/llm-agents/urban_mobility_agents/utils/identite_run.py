@@ -39,6 +39,7 @@ FICHIER = "identite_run.json"
 LIBELLES = {
     "modeles_admis": "modèle(s)",
     "instances_admises": "instances admises",
+    "routage_instances": "routage des instances par fonction",
     "variante_prompt": "variante de prompt",
     "population": "population",
     "memoire_longue": "mémoire longue",
@@ -48,7 +49,42 @@ LIBELLES = {
     "graine_ordre": "graine d'ordre des options",
     "graine_meteo": "graine de météo",
     "cache_decisions": "cache de décisions",
+    # Réglages d'EXPÉRIENCE (ticket 077, lot K). Ils ne vivent pas dans `config.yaml` — ils
+    # appartiennent au run, qui les enregistre ici. Sans eux, trois bras aux réglages opposés
+    # portaient la même identité, et rien ne permettait de dire, après coup, sous quels réglages
+    # un run avait tourné.
+    "chaine_vehicules": "chaînage des véhicules",
+    "verrou_retour_domicile": "verrou de retour au domicile",
+    "seuil_troncature": "seuil de troncature du tirage",
+    "seuil_choc": "seuil de choc en mémoire",
+    # Ticket 095 — le MODÈLE DE GRAVITÉ appartient à l'expérience. Deux bras qui ne donnent pas
+    # la même gravité au même retard n'écrivent pas la même mémoire.
+    "retard_saturation": "forme de la composante de retard",
+    "retard_gravite_max": "maximum de la composante de retard",
+    "retard_ref_s": "retard de référence (s)",
+    "fenetre_changements_jours": "fenêtre « ce qui a changé récemment » (jours)",
+    # Ticket 095, lot A — la durée d'un souvenir de choc se dérive de sa gravité. Le MODE en
+    # vigueur appartient à l'identité : deux bras qui ne servent pas les souvenirs selon la même
+    # règle ne mesurent pas la même chose, même à fenêtre déclarée identique.
+    "mode_fenetre_changements": "mode de la fenêtre de changements",
+    "seuil_service_changement": "seuil de service d'un souvenir de choc",
+    "plancher_changement_jours": "plancher de durée d'un souvenir de choc (jours)",
+    "plafond_changement_jours": "plafond de durée d'un souvenir de choc (jours)",
+    "changements_max": "lignes du bloc « ce qui a changé récemment »",
+    "reflexion_stm_min_entrees": "plancher d'entrées avant réflexion",
+    "meteo_par_agent": "météo tirée par agent",
+    # ── Filiation (ticket 095, lot D) ──
+    # Un enfant hérite de la MÉMOIRE de son parent : de quel parent, et ce qu'il s'autorise à
+    # faire varier, appartiennent à son identité. Repris sous un autre parent, il n'est plus le
+    # même bras.
+    "run_parent": "run parent",
+    "champs_libres": "champs déclarés libres vis-à-vis du parent",
 }
+
+# Sentinelle : le champ n'existait pas dans l'identité écrite. Ce n'est pas « réglé à None »,
+# c'est « le run est antérieur au champ » — et le message de refus doit le dire, sinon on
+# cherche un écart de configuration là où il n'y a qu'un écart d'âge.
+ABSENT = object()
 
 
 class IdentiteIncompatible(RuntimeError):
@@ -92,16 +128,43 @@ def _modeles_des_instances(reglages: Any, admises: list[str]) -> list[str]:
     return sorted(modeles)
 
 
-def composer(reglages: Any, empreinte_choc: str | None = None) -> dict:
+def _routage(reglages: Any) -> tuple[list[str], dict[str, list[str]]]:
+    """(instances admises, routage par catégorie) — ticket 095, lot C.
+
+    `instances_admises` accepte une liste plate ou une table `catégorie → instances`. Un
+    `sorted()` appliqué tel quel à une table rendrait ses CLÉS, c'est-à-dire des noms de
+    catégories présentés comme des noms d'instances : une identité qui se compare sans jamais
+    échouer, donc une vérification qui n'en est plus une.
+    """
+    brut = getattr(reglages.llm, "instances_admises", None)
+    if isinstance(brut, dict):
+        routes = {str(k): sorted(str(v) for v in (vs or [])) for k, vs in brut.items()}
+        union = sorted({i for instances in routes.values() for i in instances})
+        return union, routes
+    return sorted(str(v) for v in (brut or [])), {}
+
+
+def composer(
+    reglages: Any,
+    empreinte_choc: str | None = None,
+    *,
+    run_parent: str = "",
+    champs_libres: tuple[str, ...] = (),
+) -> dict:
     """L'identité de l'expérience telle que la configuration courante la décrit."""
     params = dict(getattr(reglages.agent, "llm_params", {}) or {})
-    admises = sorted(getattr(reglages.llm, "instances_admises", []) or [])
+    admises, routes = _routage(reglages)
     return {
         # Le modèle n'est pas un réglage à part : il est porté par les instances admises. Le
         # dériver plutôt que de lire un champ qui n'existe pas évite une clé toujours vide —
         # un champ qui ne discrimine jamais donne l'illusion d'une vérification.
         "modeles_admis": _modeles_des_instances(reglages, admises),
         "instances_admises": admises,
+        # Ticket 095, lot C — le binding fonction → modèle appartient à l'expérience. Deux bras
+        # qui ne routent pas les réflexions vers le même modèle n'écrivent pas la même mémoire,
+        # donc ne prennent pas les mêmes décisions : l'écart mesuré cesserait d'être
+        # attribuable au choc. Vide = liste plate, donc pas de routage.
+        "routage_instances": routes,
         "variante_prompt": str(params.get("prompt_variant", "")),
         "population": str(getattr(reglages.data, "population_file", "")),
         "memoire_longue": bool(getattr(reglages.agent, "long_term_memory_enabled", False)),
@@ -113,6 +176,45 @@ def composer(reglages: Any, empreinte_choc: str | None = None) -> dict:
         "graine_ordre": int(getattr(reglages.agent, "option_order_seed", 0)),
         "graine_meteo": int(getattr(reglages.agent, "weather_draw_seed", 0)),
         "cache_decisions": bool(getattr(reglages.cache, "enabled", False)),
+        # ── Réglages d'expérience (lot K) ──
+        "chaine_vehicules": bool(getattr(reglages.agent, "vehicle_chain_enabled", True)),
+        "verrou_retour_domicile": bool(
+            getattr(reglages.agent, "vehicle_return_home_lock", True)
+        ),
+        "seuil_troncature": float(
+            getattr(reglages.agent, "mode_choice_truncation_threshold", 0.0)
+        ),
+        "seuil_choc": float(getattr(reglages.agent, "memoire__importance_choc", 0.7)),
+        "retard_saturation": str(
+            getattr(reglages.agent, "memoire__retard_saturation", "asymptote")
+        ),
+        "retard_gravite_max": float(
+            getattr(reglages.agent, "memoire__retard_gravite_max", 0.70)
+        ),
+        "retard_ref_s": int(getattr(reglages.agent, "memoire__retard_ref_s", 1800)),
+        "fenetre_changements_jours": int(
+            getattr(reglages.agent, "memoire__fenetre_changements_jours", 14)
+        ),
+        "changements_max": int(getattr(reglages.agent, "memoire__changements_max", 3)),
+        "mode_fenetre_changements": str(
+            getattr(reglages.agent, "memoire__mode_fenetre_changements", "derivee")
+        ),
+        "seuil_service_changement": float(
+            getattr(reglages.agent, "memoire__seuil_service_changement", 0.35)
+        ),
+        "plancher_changement_jours": float(
+            getattr(reglages.agent, "memoire__plancher_changement_jours", 2.0)
+        ),
+        "plafond_changement_jours": float(
+            getattr(reglages.agent, "memoire__plafond_changement_jours", 30.0)
+        ),
+        "reflexion_stm_min_entrees": int(
+            getattr(reglages.agent, "stm_reflection_min_entries", 10)
+        ),
+        "meteo_par_agent": bool(getattr(reglages.agent, "weather_per_agent_dates", True)),
+        # ── Filiation (lot D) ──
+        "run_parent": str(run_parent or ""),
+        "champs_libres": sorted(champs_libres or ()),
     }
 
 
@@ -129,6 +231,15 @@ def ecrire(workdir: str | Path, identite: dict, *, ecraser: bool = False) -> boo
     """
     cible = chemin(workdir)
     if cible.exists() and not ecraser:
+        # Muet jusqu'au 2026-09-19, et ce silence a coûté un bras de campagne : le nom du
+        # répertoire de run a une granularité à la MINUTE, deux contrôleurs démarrés dans la
+        # même minute le partagent, et c'est l'identité du PREMIER qui reste. Le 19 septembre
+        # à 16:57, celle d'un contrôleur lancé sans les réglages d'expérience ni le choc.
+        logger.info(
+            f"[identite] {cible.name} déjà posée — laissée en place. Attendu à la REPRISE "
+            f"d'un run nommé ; sinon, un autre contrôleur a ouvert ce répertoire avant celui-ci "
+            f"et c'est SON identité qui fait foi."
+        )
         return False
     cible.parent.mkdir(parents=True, exist_ok=True)
     cible.write_text(
@@ -159,8 +270,14 @@ def differences(attendue: dict, actuelle: dict) -> list[str]:
     """
     ecarts = []
     for champ, libelle in LIBELLES.items():
-        a = attendue.get(champ)
-        b = actuelle.get(champ)
+        a = attendue.get(champ, ABSENT)
+        b = actuelle.get(champ, ABSENT)
+        if a is ABSENT:
+            # Le run repris est antérieur à ce champ : on ne SAIT PAS sous quelle valeur il a
+            # tourné. Le dire ainsi, plutôt que « None au run repris », envoie chercher la
+            # bonne cause — l'âge du run, pas un réglage différent.
+            ecarts.append(f"{libelle} : absent du run repris, {b!r} maintenant")
+            continue
         if a != b:
             ecarts.append(f"{libelle} : {a!r} au run repris, {b!r} maintenant")
     return ecarts

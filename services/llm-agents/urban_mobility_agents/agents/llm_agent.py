@@ -49,6 +49,8 @@ from llm.journal_memoire import journal
 from llm.longterm import MultiUserLongTermMemory
 from llm.memory import MemoryEntry, MemoryType
 from llm.noyau import memoire_noyau
+from urban_mobility_agents.utils.modeles import origine as origine_modele
+from urban_mobility_agents.utils.routage import instances_pour, toutes_les_instances
 from llm.reflection_store import ReflectionMemoStore
 from llm.shortterm import UserShortTermMemory
 from llm.trace_concepts import tracer_operation
@@ -556,9 +558,12 @@ class LlmAgent:
             backpressure_release_ratio=settings.agent.remote_llm_backpressure_ratio,
             circuit_failure_threshold=settings.agent.remote_llm_circuit_failure_threshold,
             circuit_probe_interval=settings.agent.remote_llm_circuit_probe_interval,
-            # Ticket 092 — posée sur le CLIENT : elle couvre les trois appels du run
-            # (décision, réflexion STM, auto-réflexion LTM) et tout appel ajouté plus tard.
-            instances_admises=list(settings.llm.instances_admises or []),
+            # Ticket 092 — posée sur le CLIENT : elle couvre tout appel ajouté plus tard.
+            # Ticket 095, lot C — les appels connus posent désormais leur liste blanche PAR
+            # CATÉGORIE dans leur payload, que le SDK respecte telle quelle. Celle-ci reste le
+            # filet : l'UNION de tout ce qui est admis, pour qu'un appel neuf soit restreint
+            # par défaut plutôt que libre.
+            instances_admises=toutes_les_instances(),
         )
         self.prompt_manager = PromptManager(
             os.path.join(os.path.dirname(__file__), "prompts")
@@ -868,6 +873,7 @@ class LlmAgent:
                 self.long_term_memory.journal_trajets(context.person.person_id),
                 _entrees,
                 wall_clock(context.timestamp),
+                context.person.person_id,
             )
         except Exception as err:  # noqa: BLE001
             # Un bloc qui ne se construit pas ne doit pas faire perdre la décision — mais il
@@ -966,6 +972,10 @@ class LlmAgent:
 
         return {
             "category": "itinary_multi_agent",
+            # Ticket 095, lot C — la liste blanche est posée PAR CATÉGORIE, et non une fois
+            # pour tout le run. La décision est la variable mesurée de l'article : elle ne
+            # partage pas sa file avec la réflexion nocturne, qui consomme autant de jetons.
+            "instances_admises": instances_pour("itinary_multi_agent"),
             "agents": [
                 {
                     "agent_id": agent_id,
@@ -1315,7 +1325,11 @@ class LlmAgent:
                     weights = [0.0] * len(sorted_options)
                     for opt, w in zip(shuffled_options, shuffled_weights):
                         weights[position_in_sorted[id(opt)]] += w
-                    index = draw_index(weights, *seed_parts)
+                    index = draw_index(
+                        weights,
+                        *seed_parts,
+                        min_prob_threshold=settings.agent.mode_choice_truncation_threshold,
+                    )
                     decision_list = sorted_options
 
                     # Justification PAR OPTION (2026-08-26) : `normalize_option_probabilities`
@@ -1438,6 +1452,20 @@ class LlmAgent:
                             fournisseur=provider_used,
                             distribution=distribution,
                         )
+                    # ── Ticket 095, lot E — la décision, avec le MODÈLE qui l'a produite ──
+                    # `llm_exchanges.jsonl` portait déjà le fournisseur ; le journal
+                    # applicatif, non. Une décision lue dans `app.log` ne disait pas quel
+                    # modèle l'avait prise, et il fallait recouper deux fichiers pour
+                    # l'établir. C'est la reconstitution d'une exécution après coup qui en
+                    # dépend, et elle ne coûte rien.
+                    logger.info(
+                        f"[decision] agent={context.person.person_id} "
+                        f"activite={context.activity_id} "
+                        f"mode={chosen_plan.mode_label()} "
+                        f"raison={reason} "
+                        f"origine={'cache' if (trace or {}).get('cache') else 'direct'} "
+                        f"modele={origine_modele(provider_used)}"
+                    )
                     # Retourne l'index dans la liste originale (non mélangée) pour cohérence avec le caller
                     return original_index, reason, provider_used, distribution
 
@@ -1579,6 +1607,7 @@ class LlmAgent:
         if reflection is None:
             payload = {
                 "category": "ltm_self_reflection",
+                "instances_admises": instances_pour("ltm_self_reflection"),
                 "agents": [
                     {
                         "agent_id": context.person.person_id,
@@ -1600,6 +1629,12 @@ class LlmAgent:
             # AgentResponse accepte les champs hors schéma (extra=allow) —
             # "reflection" est porté par la catégorie ltm_self_reflection.
             reflection = getattr(results[0], "reflection", "") or ""
+            # Ticket 095, lot E — rare (13 par run) et à fort enjeu : c'est celle qui relit
+            # toute la mémoire longue.
+            logger.info(
+                f"[auto-reflexion] agent={context.person.person_id} "
+                f"modele={origine_modele(llm_result.provider_used)}"
+            )
             if self.reflection_memo is not None:
                 await asyncio.to_thread(
                     self.reflection_memo.store,
@@ -1834,6 +1869,7 @@ class LlmAgent:
         if reflection is None:
             payload = {
                 "category": "stm_reflection",
+                "instances_admises": instances_pour("stm_reflection"),
                 "min_tpm_required": settings.agent.stm_reflection_min_tpm,
                 "agents": [
                     {
@@ -1862,6 +1898,14 @@ class LlmAgent:
             # "reflection"/"concepts" sont portés par la catégorie stm_reflection.
             reflection = (getattr(agent_result, "reflection", "") or "").strip()
             concepts = getattr(agent_result, "concepts", []) or []
+            # Ticket 095, lot E — changer le modèle des réflexions change le CONTENU de la
+            # mémoire, donc les décisions. Savoir lequel a écrit quoi n'est pas un détail
+            # d'infrastructure.
+            logger.info(
+                f"[reflexion-stm] agent={context.person.person_id} "
+                f"concepts={len(concepts)} "
+                f"modele={origine_modele(llm_result.provider_used)}"
+            )
 
             if self.reflection_memo is not None:
                 # Le store refuse le vide (D3) : un échec de génération ne se rejoue pas.

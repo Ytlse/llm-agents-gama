@@ -16,8 +16,14 @@
 > contrôleur, deux retards séparés partout, colonnes de trace, garde de contenu, cinq cas dans
 > `services/llm-agents/config/chocs/`, levier `make run CHOC=<nom>`, documentation
 > [`docs/arch/chocs-declares.md`](../arch/chocs-declares.md). Suite complète du dépôt : 1 344 tests
-> au vert. **Reste le lot 5** : la répétition générale à 5 agents, qui demande les lots A/B/C du
-> ticket 077.
+> au vert. **Le lot 5 est transféré au ticket 095 (E3) le 2026-09-21**, et ce ticket est clos.
+> Motif : sur les huit runs à choc archivés (2026-09-16 au 2026-09-21), un seul des six cas a
+> jamais été joué — `c6_voiture_suspecte`, toujours sur un agent seul. C2 « crevaison », que le
+> lot 5 désignait, n'a jamais été exécuté. E3 joue C2, C6 et C3 avec un attendu falsifiable, et
+> porte désormais les deux sorties attendues qui restaient d'ici : conformité de `chocs.jsonl`
+> à la déclaration pour chacun des trois cas, et un run à exposition **multi-agents** avec
+> témoin interne non exposé — la règle `exposition.agents` n'ayant jamais servi qu'avec un seul
+> identifiant. Détail dans `scripts/dashboard/tickets_status.yaml`.
 >
 > **Deux choses que l'implémentation a apprises**, et qui n'étaient pas dans ce texte :
 > 1. **Le retard sature à 30 minutes.** Un profil 60/40/25 donnait la MÊME gravité les jours 1 et 2 ;

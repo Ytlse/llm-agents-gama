@@ -81,9 +81,22 @@ substituer, et reprendre sans redemander une décision déjà obtenue.
   épuisement confirmé, l'exécution peut, au lieu de passer `epuisee`, **dormir jusqu'à
   `reprise_possible_a`** (état `en_attente_quota`, in-process, non final), rafraîchir le moniteur,
   puis repartir seule et retenter le déplacement. Aucune substitution, aucune décision par défaut.
-- **Q11** *(déduite)* — **Épuisement anticipé.** Avant chaque lot, si la marge restante d'une instance
-  est inférieure au coût du lot, le lot n'est pas soumis à cette instance ; s'il ne reste aucune
-  instance, Q4 s'applique **avant** le premier 429.
+- **Q11** *(déduite le 2026-09-06 ; **abrogée le 2026-09-21**, ticket 097)* — **Le plafond déclaré
+  n'écarte plus une instance.** La marge `rpd_limit − daily_requests` reste lue, affichée et
+  journalisée, mais elle ne conditionne plus l'admission. Motif : `rpd_limit` vient de
+  `providers.yaml`, où il est **déclaratif** — recopié d'une documentation fournisseur souvent
+  périmée, parfois fausse d'un facteur — si bien qu'une instance écartée sur ce seul motif ne l'est
+  jamais sur une mesure. Seul un refus réel écarte désormais : `quota_exhausted` posé par un 429, ou
+  une mise hors service (`disabled`, `cooldown`). Q4 s'applique donc **après** le premier 429, et
+  non plus avant. Le prix assumé est ce premier 429 : une requête perdue par clé et par fenêtre, en
+  échange d'un plafond mesuré au lieu d'être supposé.
+- **Q11b** *(2026-09-21, ticket 097)* — **Ce que le plafond déclaré journalise encore.** Puisqu'il
+  ne décide plus, il ne resterait rien de lui sans trace : l'abrogation supprimerait le garde-fou
+  **et** la mesure. À chaque lecture de `/health`, et sur **front montant** (une ligne par instance
+  et par fenêtre), le moniteur pose deux WARNING : (a) `daily_requests` **strictement** au-delà de
+  `rpd_limit` sans refus — le chiffre déclaré est trop bas ; (b) `quota_exhausted` posé — le
+  compteur à cet instant est la limite réelle, et l'écart au chiffre déclaré est celui à corriger
+  dans `providers.yaml`. Sans `rpd_limit` ou sans compteur publié : aucune trace, aucune supposition.
 - **Q12** *(déduite)* — **Un décideur local ne s'épuise pas.** Heuristique et modèle supervisé
   n'ont ni quota ni fenêtre ; les règles Q1 à Q4 leur sont inapplicables et l'affichage le dit
   (« sans quota »), au lieu d'afficher 0 / 0.
@@ -111,8 +124,14 @@ substituer, et reprendre sans redemander une décision déjà obtenue.
   écartée, reprise la redemande.
 - **Q10** — Ressource indisponible au-delà de la durée déclarée → passage à « épuisée » avec raison
   « attente dépassée », pas de processus muet.
-- **Q11** — Marge 7 requêtes, lot suivant = 10 sollicitations → lot non soumis, aucun 429 émis,
-  état « épuisée » motivé par l'anticipation.
+- **Q11** *(réécrit le 2026-09-21, ticket 097)* — Instance à 493/500 requêtes déclarées, sans
+  `quota_exhausted` et non hors service → **admise**, quel que soit le besoin annoncé ; une seconde
+  instance à `quota_exhausted: true` reste écartée. L'exécution ne passe « épuisée » que lorsque
+  toutes les instances du modèle ont été refusées par le fournisseur.
+- **Q11b** *(2026-09-21, ticket 097)* — Instance à 612/500 sans refus → un WARNING nommant le
+  dépassement, l'instance reste admise ; second rafraîchissement à état identique → aucune ligne de
+  plus ; compteur retombé puis redépassé → la trace se rejoue. Refus à 412 pour 500 déclarés → un
+  WARNING citant 412 et l'écart −88. Instance sans `rpd_limit` ou sans `daily_requests` → silence.
 - **Q12** — Décideur « durée minimale » → panneau « sans quota », aucune règle d'épuisement évaluée.
 
 ## Non-goals

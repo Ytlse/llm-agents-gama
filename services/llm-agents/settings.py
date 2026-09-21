@@ -188,7 +188,21 @@ class LlmConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Sert à mener une expérience sur une famille de modèles pendant que la passerelle en sert
     # d'autres à un autre travail : le fichier de fournisseurs est global à la pile, ce réglage
     # ne l'est pas.
-    instances_admises: list[str] = []
+    #
+    # ── Ticket 095, lot C — UN MODÈLE PAR FONCTION ────────────────────────────
+    # Accepte, en plus d'une liste plate, une TABLE `catégorie → instances` :
+    #
+    #   {"defaut": ["a", "b"], "stm_reflection": ["c", "d"]}
+    #
+    # La clé `defaut` est le repli de toute catégorie non nommée — sans elle, une catégorie
+    # absente de la table ne serait restreinte par rien, ce qui est l'inverse de ce qu'on
+    # demande à une liste blanche.
+    #
+    # ⚠ Ce n'est PAS un réglage d'infrastructure. Changer le modèle des réflexions STM change le
+    # contenu de la mémoire, donc les décisions : le binding se gèle avant la campagne, entre
+    # dans `identite_run.json`, et reste identique dans tous les bras — sinon l'écart mesuré
+    # n'est plus attribuable au choc. Son adoption impose de refaire le plancher de bruit (E1).
+    instances_admises: list[str] | dict[str, list[str]] = []
 
     # Cooldown court du provider fautif lors d'un basculement (parse error / 4xx) :
     # force la rotation à choisir un autre modèle au réessai (cf. worker/task_worker).
@@ -597,10 +611,31 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # nettoyage en service. Les concepts ne sont JAMAIS purgés, seulement marqués
     # dépassés : leur mise à l'écart datée est l'observable que l'expérience cherche. Lot 1.
     memoire__purge_seuil_poids: float = 0.01
-    # Retard qui SATURE la composante déterministe de gravité, en secondes.
+    # Retard de RÉFÉRENCE de la composante déterministe de gravité, en secondes. C'est le point
+    # d'ancrage de la calibration : à ce retard, la composante vaut exactement `POIDS_RETARD`
+    # (0,50). Tout le catalogue de chocs est construit autour de ce point.
     # ⚠ Sa règle de conception reste à écrire : à rattacher à la distribution des durées
     # de déplacement de la cohorte, mesurable sans run. La valeur est celle du ticket. Lot 1.
     memoire__retard_ref_s: int = 1800
+    # ── Ce que devient la composante AU-DELÀ du retard de référence (ticket 095) ──
+    #   `asymptote` — DÉFAUT depuis le 2026-09-21. La composante croît sans jamais atteindre
+    #                 son maximum : `max × (1 - exp(-t/τ))`, τ calé pour que le retard de
+    #                 référence rende exactement 0,50. **Aucun retard n'est confondu avec un
+    #                 autre**, et la composante reste bornée.
+    #   `palier`    — le comportement d'avant : coupure nette au retard de référence. Au-delà,
+    #                 déclarer 45, 60 ou 90 minutes donne rigoureusement la même gravité, et un
+    #                 profil décroissant resté au-dessus de 30 minutes est INVISIBLE du
+    #                 mécanisme. Conservé pour reproduire les runs antérieurs.
+    #
+    # ⚠ Retirer simplement le palier sans changer de forme ne supprime pas le mur, il le
+    # DÉPLACE : une composante linéaire non bornée atteindrait 1,0 à 60 minutes, et 60, 90 et
+    # 120 minutes redeviendraient indiscernables. Seule une forme asymptotique le supprime.
+    memoire__retard_saturation: str = "asymptote"
+    # Maximum que la composante de retard approche sans jamais l'atteindre, en mode `asymptote`.
+    # Doit rester STRICTEMENT supérieur à POIDS_RETARD (0,50), sans quoi la constante de temps
+    # serait indéfinie. À 0,70, un retard d'une heure vaut 0,64 et un retard d'une heure et demie
+    # 0,68 : l'écart se réduit, il ne s'annule jamais.
+    memoire__retard_gravite_max: float = 0.70
     # Seuil du choc, soit le niveau `grave` et au-dessus. Ouvre le vivier C du lot 2,
     # qui sert ces souvenirs SANS aucune condition de lieu, d'heure ni de motif. Lot 1 et 2.
     memoire__importance_choc: float = 0.7
@@ -634,6 +669,53 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # `long_term_max_entries_query`, qui reste le top-K du rappel : réutiliser le même nom pour
     # deux choses différentes rendrait toute mesure de sensibilité ambiguë.
     memoire__episodiques_avec_noyau: int = 3
+    # ── Bloc « ce qui a changé récemment » (lot 4 du 071, rendu réglable par le 077) ──
+    # Fenêtre d'âge, en jours simulés, d'un souvenir de gravité de choc servi dans ce bloc.
+    # COUPURE FRANCHE : au-delà, il n'est plus servi du tout — ce n'est pas une décroissance.
+    #
+    # ⚠ C'est le paramètre qui gouverne la durée d'un effet de choc, et il était écrit en dur.
+    # Sur `experiments/archive/2026-09-19_07_31`, la voiture disparaît le lendemain du choc et
+    # revient QUATORZE JOURS plus tard, jour pour jour, au premier prompt qui ne porte plus le
+    # récit : P(voiture) = 6,9 % tant qu'il est là (n = 18), 55,2 % une fois sorti (n = 33). Le
+    # rapport du run attribuait ce retour à la décroissance du souvenir, dont la durée de vie
+    # calculée valait ~14,6 jours : les deux explications prédisent la même date, et rien ne
+    # permettait de les départager. Déclaré ici, le paramètre devient ablatable.
+    #
+    # 0 = aucun épisodique de choc dans le bloc. C'est la valeur du bras d'ablation, pas une
+    # extinction accidentelle. Une valeur négative est ramenée à 0 et journalisée.
+    memoire__fenetre_changements_jours: int = 14
+    # Nombre maximal de lignes du bloc. Au-delà, il coûte des jetons sans rien apprendre.
+    memoire__changements_max: int = 3
+    # ── La durée d'un souvenir de choc, DÉRIVÉE de sa gravité (ticket 095, lot A) ──
+    # Mode de service du bloc « ce qui a changé récemment » :
+    #   `derivee` — DÉFAUT. Un souvenir est servi tant que son poids de décroissance
+    #               `exp(-Δt / force)` dépasse `memoire__seuil_service_changement`, soit une
+    #               durée `force × ln(1/seuil)` bornée par le plancher et le plafond ci-dessous.
+    #               La durée devient une CONSÉQUENCE de l'événement, et non un entier posé.
+    #   `fixe`     — le comportement d'avant le ticket 095 : coupure franche à
+    #               `memoire__fenetre_changements_jours`, quelle que soit la gravité. Conservé
+    #               pour les bras de contrôle méthodologique, qui doivent pouvoir reproduire
+    #               les campagnes des 19 et 20 septembre 2026.
+    #
+    # ⚠ Le défaut CHANGE le comportement de tout run qui ne déclare rien (décision de l'auteur,
+    # 2026-09-21). Un run archivé ne se compare à un run neuf qu'en déclarant `fixe`.
+    memoire__mode_fenetre_changements: str = "derivee"
+    # Seuil de poids sous lequel un souvenir de choc quitte le bloc. Règle : à 0,35, un souvenir
+    # a perdu les deux tiers de son poids — il pèse encore, mais il ne domine plus. Domaine
+    # ouvert ]0, 1[ : à 1 la durée serait nulle (ablation silencieuse), à 0 elle serait infinie.
+    memoire__seuil_service_changement: float = 0.35
+    # Plancher de la durée servie, en jours. Borne de sûreté : à S0 = 2,8 j et seuil 0,35, la
+    # durée d'un souvenir de gravité NULLE vaut déjà 2,94 j, donc ce plancher ne mord pas. Il
+    # n'est pas une durée minimale observée, et ne doit pas être cité comme telle.
+    memoire__plancher_changement_jours: float = 2.0
+    # Plafond de la durée servie, en jours. Il ne mord PAS par la gravité — `borne_0_1` plafonne
+    # celle-ci à 1,0, d'où une force de 19,6 j et une durée de 20,58 j au plus. Il mord par le
+    # RENFORCEMENT AU RAPPEL : `force_apres_rappel` ajoute un jour par rappel jusqu'à 30, et à
+    # force = 30 la durée vaut 31,49 j. Sans ce plafond, un souvenir grave et souvent rappelé
+    # repousserait indéfiniment sa propre échéance, et le bloc — de taille fixe — deviendrait
+    # une archive au lieu d'une fenêtre. Même valeur que `memoire__force_max_jours`, posée
+    # explicitement pour que la borne se lise au lieu d'émerger d'un calcul.
+    memoire__plafond_changement_jours: float = 30.0
     # ════════════════════════════════════════════════════════════════════════════
 
     long_term_self_reflect_enabled: bool = True  # surchargé par la valeur GAMA
@@ -728,6 +810,15 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # dépasse ce ratio (sur au moins N retours observés, pour éviter le bruit de démarrage).
     vehicle_orphan_alarm_ratio: float = 0.05
     vehicle_orphan_alarm_min_returns: int = 200
+
+    # --- Seuil de troncature du Consideration Set (ticket 077, rejeu 30 j) ---
+    # Les options dont la part relative est strictement inférieure à ce seuil
+    # sont éliminées (poids mis à zéro) avant le tirage catégoriel. La masse
+    # restante est renormalisée. Valeur 0.0 = pas de troncature (comportement
+    # historique). Valeur recommandée pour un agent individuel : 0.15 (15 %).
+    # Référence : Consideration Set (Hauser & Wernerfelt 1990, Ben-Akiva &
+    # Boccara 1995) — un voyageur n'intègre pas les alternatives marginales.
+    mode_choice_truncation_threshold: float = 0.0
 
     quantify_time_window: bool = True
     reflection_custom_guidelines: str | None = None

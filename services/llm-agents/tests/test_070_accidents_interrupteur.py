@@ -511,12 +511,18 @@ def test_la_classe_d_axe_suit_baac_et_non_la_longueur_du_reseau():
     )
 
 
-def test_facteur_meteo_reste_neutre_tant_qu_il_n_est_pas_etabli():
-    """Le facteur météo mesuré a été REJETÉ : il ne doit rien multiplier.
+def test_facteur_meteo_est_neutre_par_decision():
+    """La météo ne conditionne PAS l'accidentalité — décision de l'auteur du 2026-09-21.
 
-    Si ce test tombe parce que `facteur_meteo_etabli` est passé à vrai, c'est qu'une
-    nouvelle estimation a été versée — elle doit alors venir avec sa source d'exposition
-    découpée comme `atm`, ou avec un risque relatif déclaré exogène.
+    Ce n'est pas un chantier remis à plus tard mais une limite assumée, et elle tient à un
+    fait mesuré : les conditions à risque n'existent pas dans le monde simulé. Sur les 2 920
+    créneaux d'une année servie par `weather_loader`, le brouillard en occupe UN et la neige
+    QUATRE — un facteur pour ces conditions ne se déclencherait jamais. Pour celles qui
+    restent, les nomenclatures `atm` et météo locale sont incommensurables.
+
+    Si ce test tombe parce que `facteur_meteo_etabli` est passé à vrai, la seule chose qui
+    puisse le justifier est un jeu météo servi à la simulation qui porte réellement ces
+    conditions — pas une nouvelle correspondance ajustée sur les mêmes données.
     """
     loi = LoiBaac.charger()
     assert loi.facteur_meteo_etabli is False

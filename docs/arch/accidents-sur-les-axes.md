@@ -107,22 +107,43 @@ Tirer l'arête au seul prorata de sa longueur, comme le faisait la première tra
 58 % des accidents en zone apaisée — qui n'en porte que 8 % dans la réalité — et n'en mettait
 presque aucun sur la classe 71-90, qui en porte 27 % pour 4,4 % des kilomètres.
 
-### ⚠ Le facteur météo a été calculé, puis rejeté
+### La météo ne conditionne pas l'accidentalité — décision du 2026-09-21
 
-Il vaut **1**, et ce n'est pas un oubli. Rapporter la part d'accidents par condition à la
-fréquence de cette condition dans les relevés de Toulouse donne : pluie légère ×0,47,
-temps couvert ×0,17, brouillard ×33,7. Soit « la pluie légère est deux fois plus sûre que la
-moyenne » et « le brouillard multiplie le risque par 34 ». Ni l'un ni l'autre n'est croyable.
+Le facteur météo vaut **1**, et c'est une **limite assumée**, pas un chantier remis à plus
+tard. Deux raisons, dont la première suffirait seule.
 
-La cause est une **incommensurabilité des nomenclatures** : `atm` est ce que l'agent
-verbalisateur a coché — 84 % des constats portent « normale », y compris sous un ciel couvert —
-quand la source météo locale classe 20 % des créneaux en « pluie légère », catégorie qui
-absorbe le code « pluie possible », une prévision et non une observation. Les deux vocabulaires
-ne découpent pas le même monde.
+**Les conditions à risque n'existent pas dans le monde simulé.** `weather_loader` ne lit qu'un
+fichier — `data/weather/meteo_toulouse_12_mois.csv` — indexé par (mois, jour) : un cycle annuel
+unique, rejoué quelle que soit la date simulée. Sur ses 2 920 créneaux de trois heures :
 
-Ajuster la correspondance jusqu'à obtenir des nombres plausibles reviendrait à choisir le
-résultat. Les deux voies propres : une source d'exposition découpée comme `atm`, ou un risque
-relatif déclaré exogène ([protocole](protocole-parametre-exogene.md)).
+| Famille | Créneaux | Part |
+|---|---:|---:|
+| dégagé | 1 879 | 64,35 % |
+| pluie **possible** (code 176, une prévision) | 422 | 14,45 % |
+| couvert / brume | 365 | 12,50 % |
+| pluie réelle | 239 | 8,18 % |
+| orage | 10 | 0,34 % |
+| neige / grésil | 4 | 0,14 % |
+| **brouillard** | **1** | **0,03 %** |
+
+Un facteur brouillard ou neige ne se déclencherait donc quasiment jamais, et sur le jeu gelé
+`jeu-20260316` il est carrément inatteignable : sept jours de ciel dégagé, une averse le 22.
+Mesure rejouable : `docs/traces/2026-09-21_meteo_servie_par_la_simulation/`.
+
+**Pour les conditions qui restent, les nomenclatures sont incommensurables.** `atm` est ce que
+le verbalisateur a coché — 84 % des constats portent « normale », y compris sous un ciel
+couvert — quand la source météo range 14,45 % des créneaux sous « pluie possible à
+proximité », une prévision et non une observation. Les deux vocabulaires ne découpent pas le
+même monde.
+
+**Le calcul rejeté est conservé** dans le fichier de coefficients, pour que le refus soit
+vérifiable : normale ×1,36, couvert ×0,17, pluie légère ×0,47, brouillard ×33,7 — soit « la
+pluie légère est deux fois plus sûre que la moyenne ». Le ×33,7 repose sur **un seul créneau
+observé** ; il faudrait 0,8 jour de brouillard par an pour qu'il tienne, et à toute fréquence
+plausible le facteur retomberait entre 0,25 et 2,5.
+
+⚠ **Ce qui rouvrirait la question, et rien d'autre :** un jeu météo servi à la simulation qui
+porte réellement du brouillard, de la neige, ou une distinction pluie / non-pluie fiable.
 
 ## Le retard, et les deux gardes qui l'accompagnent obligatoirement
 

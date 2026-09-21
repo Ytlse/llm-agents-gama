@@ -106,3 +106,23 @@ class TestFenetreDuJour:
         """Une seconde avant le reset, on attend 1 s — jamais 0, qui ferait boucler l'appelant."""
         juste_avant = datetime(2026, 9, 8, 6, 59, 59, tzinfo=UTC)
         assert seconds_until_quota_reset("America/Los_Angeles", juste_avant) >= 1
+
+
+class TestReinitialisationQuota:
+    def test_in_memory_clear_quota_exhausted(self):
+        from llm_gateway.config import ProviderConfig
+        from llm_gateway.infra.memory.rate_limiter import InMemoryRateLimiter
+
+        cfg = ProviderConfig(
+            rpm_limit=15,
+            rpd_limit=500,
+            adapter="google",
+            base_url="https://example.com",
+            default_model="gemini-test",
+        )
+        limiter = InMemoryRateLimiter({"p1": cfg})
+        limiter.mark_quota_exhausted_until("p1", kind="rpd")
+        assert limiter.is_quota_exhausted("p1") is True
+
+        limiter.clear_quota_exhausted("p1")
+        assert limiter.is_quota_exhausted("p1") is False

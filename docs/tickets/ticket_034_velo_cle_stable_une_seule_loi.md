@@ -3,9 +3,17 @@
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
 > vérité.
 >
+> **CLOS le 2026-09-21 — option (a).** L'auteur abandonne le **lot 1** : il devait partir avec
+> un scellement de cohorte, la **v6 a été scellée le 2026-09-14 sans lui** (sel resté
+> `personal_bike_v1`), et le livrer ensuite coûterait une v7 pour lui seul — trop tard dans le
+> calendrier de l'article. La limite est déclarée, définitivement, dans
+> [`velo-equipement.md`](../arch/velo-equipement.md) § Déterminisme. Si une cohorte v7 est un
+> jour scellée (ticket 073), la spécification du lot 1 ci-dessous reste bonne et se rouvre en
+> ticket neuf.
+>
 > **Décisions de l'auteur du dépôt (2026-09-04)** : le **lot 2 est livré** (la loi est retirée
 > du fork, mesures ci-dessous) ; le **lot 1 — la clé de tirage — est reporté** et sera traité
-> dans une autre session.
+> dans une autre session. *(Reporté le 04/09, abandonné le 21/09 — voir ci-dessus.)*
 
 ## Le constat, en deux mesures (2026-09-03, soir)
 

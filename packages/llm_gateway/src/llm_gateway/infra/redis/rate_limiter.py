@@ -194,24 +194,13 @@ class RedisRateLimiter:
     # ------------------------------------------------------------------
 
     def _daily_quota_exhausted(self, provider: str, cfg: ProviderConfig) -> bool:
-        """True si le provider a atteint son quota journalier (requêtes ou tokens).
-        Le premier dépassement pose un flag TTL jusqu'à minuit UTC : les appels
-        suivants court-circuitent le comptage tant que le flag est présent."""
-        if cfg.rpd_limit is None and cfg.tpd_limit is None:
-            return False
+        """True si le provider a été écarté pour quota journalier (sur parole du fournisseur).
 
-        if self._r.exists(f"{QUOTA_EXHAUSTED_PREFIX}{provider}"):
-            return True
-
-        if cfg.rpd_limit is not None and self.daily_requests(provider) >= cfg.rpd_limit:
-            self._mark_quota_exhausted(provider, "rpd", self.daily_requests(provider), cfg.rpd_limit)
-            return True
-
-        if cfg.tpd_limit is not None and self.daily_tokens(provider) >= cfg.tpd_limit:
-            self._mark_quota_exhausted(provider, "tpd", self.daily_tokens(provider), cfg.tpd_limit)
-            return True
-
-        return False
+        Le plafond local (rpd_limit/tpd_limit) est déclaratif et informatif : il ne bloque
+        plus localement les réservations afin de pouvoir mesurer les dépassements réels.
+        Seule la présence du flag QUOTA_EXHAUSTED_PREFIX (posé lors d'un 429 effectif
+        via mark_quota_exhausted_until) écarte le provider."""
+        return bool(self._r.exists(f"{QUOTA_EXHAUSTED_PREFIX}{provider}"))
 
     def _mark_quota_exhausted(self, provider: str, kind: str, used: int, limit: int) -> None:
         tz = self._tz(provider)
@@ -245,6 +234,11 @@ class RedisRateLimiter:
             f"reset={cible.isoformat(timespec='seconds')} reset_in={ttl}s"
         )
         return ttl
+
+    def clear_quota_exhausted(self, provider: str) -> None:
+        """Lève le verrou d'épuisement de quota journalier pour ce provider afin de re-tester l'API."""
+        self._r.delete(f"{QUOTA_EXHAUSTED_PREFIX}{provider}")
+        logger.info(f"Verrou de quota journalier réinitialisé | provider={provider}")
 
     def _incr_daily_requests(self, provider: str) -> None:
         key = f"{RPD_KEY_PREFIX}{provider}:{quota_day(self._tz(provider))}"

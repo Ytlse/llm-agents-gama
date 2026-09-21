@@ -22,12 +22,14 @@ import contextlib
 import datetime
 import heapq
 import json
+import os
+import signal
 import time
 from collections import Counter as _Compteur
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from backpressure import ThroughputEwma
 from chaine_activites import activite_suivante
@@ -83,7 +85,7 @@ from urban_mobility_agents.candidats import (  # noqa: F401 — ré-exportés (t
 from urban_mobility_agents.core.scenario import Action, BaseScenario, Observation
 from urban_mobility_agents.utils.ancre_run import ancrer, jours_ecoules
 from urban_mobility_agents.utils.history_log import HistoryStreamLog
-from urban_mobility_agents.utils import mesures_jour
+from urban_mobility_agents.utils import filiation, mesures_jour
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
 from urban_mobility_agents.utils.reprise import degeler_si_depasse, ecrire_point
@@ -576,6 +578,8 @@ class SimulationLoopV1(BaseScenario):
         self._next_population_checkpoint_at: int | None = None
         # Ticket 075 — prochain point de reprise (3 h simulées), posé au premier sync.
         self._next_reprise_at: int | None = None
+        # Ticket 077 — enquêtes d'affinité modale déclarée (jours simulés déjà sondés)
+        self._enquetes_menees: set[int] = set()
         # Suivi temporel : heure réelle franchie à chaque tranche de 24h de temps simulé
         self._sim_start_ts: int | None = None  # premier timestamp simulé observé
         self._sim_real_start: float | None = (
@@ -1498,6 +1502,25 @@ class SimulationLoopV1(BaseScenario):
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self.population.dump_population_snapshot, path)
 
+    def _verifier_filiation(self, timestamp: int) -> None:
+        """Le rejeu d'un run enfant a-t-il reproduit son parent, décision par décision ?
+
+        Sans cette recette, l'économie du lot D est une promesse : deux bras croiraient partager
+        une baseline qu'ils ne partagent plus, et l'écart mesuré après le choc porterait sur deux
+        histoires différentes. Elle ne coûte rien — la trace de décisions du ticket 090 s'écrit
+        déjà pendant la vie normale de tout run.
+        """
+        nom = filiation.parent_declare()
+        if not nom:
+            return
+        try:
+            parent_dir = filiation.repertoire_parent(nom, Path(settings.workdir).parent)
+            filiation.verifier_reproduction(
+                parent_dir, Path(settings.workdir), float(timestamp)
+            )
+        except Exception as err:  # noqa: BLE001 — une recette ne fait pas tomber un run
+            logger.error(f"[ALARME] [filiation] recette de reproduction impossible : {err}")
+
     async def _ecrire_point_de_reprise(self, timestamp: int) -> None:
         """Point de reprise de la nuit : mémoire longue, journal, ancre, compteurs.
 
@@ -1538,6 +1561,65 @@ class SimulationLoopV1(BaseScenario):
         # ni faire tomber la simulation, ni la ralentir quand personne ne mesure.
         if mesures_jour.actif():
             await asyncio.to_thread(mesures_jour.ecrire_mesures_du_jour, settings.workdir)
+
+    async def _declencher_hibernation_propre(self, resume_at: Any, person_id: str) -> None:
+        """Arrêt ordonné du contrôleur sur épuisement du quota journalier (ticket 077, axe 3).
+
+        Garantit qu'aucun repli par défaut (index 0) n'entre dans les résultats : plutôt que de
+        choisir à la place du modèle, le run s'arrête et se reprend après la réouverture du quota.
+
+        ⚠ L'arrêt passe par un SIGTERM au processus, et NON par `sys.exit` : cette coroutine est
+        servie par l'ASGI, où `SystemExit` se ravale en erreur de requête sans jamais rendre de
+        code de retour. L'orchestrateur du run séquentiel, lui, attend un 0 pour enchaîner.
+        """
+        from urban_mobility_agents.utils import rejeu_decisions
+
+        logger.warning(
+            f"[hibernation] Quota journalier épuisé pour {person_id} (réouverture : {resume_at}). "
+            "Arrêt ordonné du contrôleur."
+        )
+
+        # FAIL-OPEN sur le marqueur, et sur lui seul : perdre le marqueur coûte une reprise à
+        # nommer à la main, ne PAS s'arrêter coûte le reste du run en replis par défaut.
+        try:
+            en_attente_path = Path(settings.workdir) / "en_attente_quota.json"
+            resume_str = (
+                resume_at.isoformat() if hasattr(resume_at, "isoformat") else str(resume_at)
+            )
+            en_attente_path.write_text(
+                json.dumps(
+                    {
+                        "resume_at": resume_str,
+                        "person_id": str(person_id),
+                        "timestamp": self._current_sim_timestamp,
+                        "jour_simule": jours_ecoules(self._current_sim_timestamp) + 1,
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            logger.info(f"[hibernation] Marqueur d'attente écrit dans {en_attente_path}")
+        except OSError as exc:
+            logger.error(
+                f"[ALARME] [hibernation] marqueur d'attente non écrit ({exc!r}) — la reprise "
+                f"devra être nommée à la main (REPRISE=<nom>)."
+            )
+
+        # Rien à vider : `rejeu_decisions.tracer` ouvre, écrit et referme à chaque décision —
+        # la trace est déjà sur disque. On journalise son bilan, qui dit ce que la reprise
+        # pourra resservir sans le repayer au modèle.
+        logger.info(f"[hibernation] trace de rejeu — {rejeu_decisions.bilan()}")
+
+        try:
+            await self._ecrire_point_de_reprise(self._current_sim_timestamp)
+        except Exception as exc:
+            logger.error(
+                f"[ALARME] [hibernation] point de reprise d'urgence non écrit ({exc!r}) — "
+                f"la reprise repartirait du point précédent."
+            )
+
+        logger.info("[hibernation] SIGTERM au contrôleur — sortie attendue en code 0.")
+        os.kill(os.getpid(), signal.SIGTERM)
 
     async def _tirer_accidents_du_jour(self, timestamp: int) -> None:
         """Tire les accidents de la journée simulée en cours, si le régime est actif.
@@ -1675,6 +1757,10 @@ class SimulationLoopV1(BaseScenario):
             _j = journal()
             if _j is not None:
                 _j.degeler("rejeu terminé")
+            # Ticket 095, lot D — la recette du run enfant, à l'instant exact où il cesse de
+            # rejouer son parent. C'est le SEUL moment où la comparaison a un sens : avant, le
+            # rejeu n'est pas fini ; après, l'enfant écrit ses propres décisions.
+            self._verifier_filiation(timestamp)
         # Puis le point du jour, à 3 h simulées : après le drainage nocturne des réflexions et
         # après le plancher de 22 h, donc sur des tampons de mémoire courte vides.
         if self._next_reprise_at is None:
@@ -1685,6 +1771,28 @@ class SimulationLoopV1(BaseScenario):
             _ts_point = self._next_reprise_at
             self._next_reprise_at += 86400
             self._spawn(self._ecrire_point_de_reprise(_ts_point))
+
+        # Ticket 077 — enquête d'affinité modale déclarée, aux jalons DÉCLARÉS
+        # (`EXPERIMENT_SURVEY_DAYS`, défaut J12/J17/J29/J40).
+        #
+        # ⚠ Ticket 095, lot B — c'est l'AGENT COMPLET qui est passé, et non son seul client LLM.
+        # La sonde a besoin du récit d'identité et de la mémoire noyau du persona : sans eux,
+        # elle interroge le modèle de base sur un âge et une occupation, et rend la même réponse
+        # au jour 12 et au jour 29.
+        from urban_mobility_agents import enquetes as enquetes_module
+        _jour_enquete = enquetes_module.is_enquete_due(timestamp, self._enquetes_menees)
+        if _jour_enquete is not None:
+            self._enquetes_menees.add(_jour_enquete)
+            if self.agent and hasattr(self.agent, "llm_client"):
+                self._spawn(
+                    enquetes_module.executer_enquetes_jalon(
+                        _jour_enquete,
+                        timestamp,
+                        list(self.population.people.values()),
+                        self.agent,
+                        Path(settings.workdir),
+                    )
+                )
 
         # --- Phase 2 : réflexion STM déclenchée par volume d'entrées ---
         # Chaque réflexion part en file EDF (kind "reflect") avec pour échéance le
@@ -3090,6 +3198,18 @@ class SimulationLoopV1(BaseScenario):
                 if isinstance(plan_index, int) and 0 <= plan_index < len(itineraries):
                     selection_method = "LLM"
                 else:
+                    # Ticket 077, axe 3 — hibernation sur quota journalier, armée par
+                    # EXPERIMENT_HIBERNATE_ON_QUOTA : le run s'arrête plutôt que de laisser
+                    # l'index 0 se faire passer pour une décision du modèle.
+                    if (
+                        os.getenv("EXPERIMENT_HIBERNATE_ON_QUOTA") == "1"
+                        and _trace_decision.get("genre_erreur") == "quota_journalier"
+                    ):
+                        resume_at = _trace_decision.get("reprise_a")
+                        await self._declencher_hibernation_propre(resume_at, person.person_id)
+                        # SIGTERM demandé ; le couple respecte la signature au cas où la
+                        # coroutine reprend la main avant que le processus ne tombe.
+                        return None, None
                     plan_index = 0
                     provider_info = ""
                     mode_probabilities = {}

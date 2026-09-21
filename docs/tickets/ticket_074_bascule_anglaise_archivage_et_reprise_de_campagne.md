@@ -386,8 +386,19 @@ D et E peuvent être développés en parallèle de B et C — ils n'en dépenden
 - [x] L'onglet 🔁 Campagne affiche l'avancement, le temps avant renouvellement, et les échecs.
 - [x] `docs/arch/plateforme-experiences.md` (§ 6 sexies) et `docs/arch/dashboard.md` sont à
       jour ; `docs/changelog.md` porte l'entrée.
-- [ ] Le § 4.3 de l'article justifie l'anglais avec les références du § 1.3 **et** énonce les
-      réserves du même paragraphe. *(Soumis au verrou de l'article.)*
+- [x] L'article justifie l'anglais avec les références du § 1.3 **et** énonce les réserves du
+      même paragraphe. *Livré le 2026-09-21, accord de l'auteur donné en session.* Le numéro
+      « § 4.3 » écrit ici datait du 2026-09-14 et ne désigne plus le socle d'évaluation depuis la
+      réorganisation `v0.10` du chapitre 4 : la justification est au **§ 4.1**, en fin de section,
+      et la réserve de Soegeng et al. (2026) devient le **§ 8.6** du chapitre 8, comme l'arbitrage
+      Q3 le demandait. Écartée : Ananthram et al. (2025), dont la conclusion porte sur des modèles
+      vision-langage en compréhension d'images ; ce qu'elle apportait est conservé sans citation,
+      par la phrase qui déclare qu'aucune mesure de ce travail n'établit que l'exécution en
+      français dégradait les scores. Six entrées BibTeX créées (A34 à A39 de `CITATIONS.md`),
+      trois points à recouper avant soumission : le troisième auteur de Bazoge et al., l'année de
+      Bulté & Rigouts Terryn, et les deux caractères CJK du titre de Liu et al. Le rendu LaTeX du
+      chapitre 8 n'est **pas** touché : il est déjà en retard d'une section sur le `.md` (§ 8.5),
+      et son resync est un travail à part.
 
 ---
 

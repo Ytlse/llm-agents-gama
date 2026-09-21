@@ -166,3 +166,26 @@ def test_D7b_une_instance_disparue_reste_lisible(tmp_path, providers):
     """Une archive doit se lire même quand l'instance qui l'a servie n'est plus déclarée."""
     d = _execution(tmp_path / "exec", ["groq_modele_retire_key1", "lmstudio_vieux_key1"])
     assert experiences.fournisseur_execute(d) == "groq · local"
+
+
+def test_D8_modele_local_de_respecte_portee_distante(providers):
+    """Un modèle servi des deux côtés ne doit pas être vu comme local si la portée est distante."""
+    exp_distante = {
+        "decideur": {"type": "passerelle", "modele": "qwen/qwen3.8-27b", "portee": "distant"}
+    }
+    assert experiences.modele_local_de(exp_distante) is None
+
+    exp_locale = {
+        "decideur": {"type": "passerelle", "modele": "qwen/qwen3.8-27b", "portee": "local"}
+    }
+    assert experiences.modele_local_de(exp_locale) == "qwen/qwen3.8-27b"
+
+
+def test_D9_parallelisme_conseille_respecte_portee_distante(providers):
+    """Un modèle servi des deux côtés ne doit pas recevoir les contraintes locales si la portée est distante."""
+    conseil_distant = experiences.parallelisme_conseille("qwen/qwen3.8-27b", None, portee="distant")
+    assert conseil_distant is None or not conseil_distant.get("local")
+
+    conseil_local = experiences.parallelisme_conseille("qwen/qwen3.8-27b", None, portee="local")
+    assert conseil_local is not None and conseil_local.get("local") is True
+

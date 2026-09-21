@@ -150,7 +150,7 @@ Deux conséquences de fond, et pas seulement de numérotation :
   et non une contribution annoncée.
 - **Les références quittent la numérotation des sections.** Elles vivent dans
   [`../../sources/BIBLIOGRAPHIE.md`](../../sources/BIBLIOGRAPHIE.md) et
-  [`../../sources/references.bib`](../../sources/references.bib), comme toute matière première.
+  [`../../sources/sample.bib`](../../sources/sample.bib), comme toute matière première.
 
 ## 4. Versions antérieures
 

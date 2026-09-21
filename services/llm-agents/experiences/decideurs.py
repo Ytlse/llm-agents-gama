@@ -402,6 +402,7 @@ def construire_decideur(
     dossier_echanges=None,
     attente_max_s: int = 120,
     execution=None,
+    gabarit=None,
 ):
     """Fabrique depuis `DecideurSpec` (experience.py)."""
     if spec.type == "duree_minimale":
@@ -439,6 +440,20 @@ def construire_decideur(
             # lent, il est mort.
             demarrage_max_s=None,
         )
+    if spec.type == "typesafe":
+        from experiences.decideur_typesafe import DecideurTypesafe
+
+        if agent is None:
+            raise ValueError(
+                "un décideur typesafe exige un LlmAgent : la présentation servie à Jev sort du "
+                "MÊME `build_travel_plan_payload` que les bras LLM, elle ne se réimplémente pas"
+            )
+        return DecideurTypesafe(
+            agent=agent,
+            modele=spec.modele,
+            variante=getattr(gabarit, "variante", None),
+            categorie=getattr(gabarit, "categorie", "itinary_multi_agent"),
+        )
     if spec.type == "modele":
         # Import tardif : LightGBM / geopandas ne sont chargés que si on décide par modèle.
         from experiences.decideur_modele import DecideurModele
@@ -448,6 +463,10 @@ def construire_decideur(
 
 
 def __getattr__(name: str):
+    if name == "DecideurTypesafe":
+        from experiences.decideur_typesafe import DecideurTypesafe
+
+        return DecideurTypesafe
     if name == "DecideurAntigravity":
         from experiences.decideur_antigravity import DecideurAntigravity
 
@@ -457,6 +476,7 @@ def __getattr__(name: str):
 
 __all__ = [
     "DecideurAleatoire",
+    "DecideurTypesafe",
     "DecideurAntigravity",
     "DecideurDureeMinimale",
     "DecideurMajoritaireVoiture",

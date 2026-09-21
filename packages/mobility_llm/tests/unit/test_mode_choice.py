@@ -270,6 +270,19 @@ class TestDrawIndex:
         assert derive_seed(42, "a") != derive_seed(42, "b")
         assert derive_seed(None, "a") == derive_seed("", "a")
 
+    def test_troncature_consideration_set(self):
+        """Les options sous le seuil sont éliminées et ne reçoivent aucun tirage."""
+        # Options : Voiture 80%, Bus 10%, Vélo 10%. Seuil 15% -> seul l'indice 0 survit
+        w = [0.80, 0.10, 0.10]
+        draws = {draw_index(w, 42, "agent", "act", i, min_prob_threshold=0.15) for i in range(100)}
+        assert draws == {0}
+
+    def test_troncature_toutes_options_eliminees_conserve_origine(self):
+        """Si toutes les options tombent sous le seuil, repli sur les poids d'origine."""
+        w = [0.10, 0.10, 0.10]  # Chacune vaut 33.3% relative, mais si seuil > 0.35 :
+        draws = {draw_index(w, 42, "agent", "act", i, min_prob_threshold=0.50) for i in range(100)}
+        assert len(draws) > 1
+
 
 class TestArgmaxIndex:
 

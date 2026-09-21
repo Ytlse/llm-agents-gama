@@ -42,6 +42,7 @@ CATEGORIES: dict[str, CategorySpec] = {
     "perception_filter": _cat("perception_filter"),
     "stm_reflection": _cat("stm_reflection"),
     "ltm_self_reflection": _cat("ltm_self_reflection"),
+    "enquete_affinite": _cat("enquete_affinite"),
 }
 
 

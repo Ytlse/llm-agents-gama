@@ -28,6 +28,302 @@ familles:
 active:
   itinary_multi_agent: prompt_expert_16
 prompts:
+  # ── Variantes réglées pour le décideur Jev (typesafe:jev-1.13.0), 2026-09-21 ───────────
+  # Numérotées à partir de 31 : la bande 21-30 est laissée libre parce qu'une entrée de
+  # `docs/changelog.md` du 2026-09-21 annonce cinq variantes 21 à 25 réglées pour
+  # `gemini-3.1-flash-lite`, pas encore inscrites ici. Deux textes sous un même nom se
+  # résolvent en clé dupliquée, que PyYAML tranche en silence au profit de la dernière.
+  # Trace : docs/traces/2026-09-21_jev_mutations/README.md
+  prompt_expert_25:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: 9fb3e4155899f865ea2d8f0cfe7e175cc6c5bac35b4dd92d6dfc358f385e1b9e
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+      - Real exposure to the weather: Weigh the weather by what the traveller is actually exposed to, for the length of this trip and at this hour. Cool or overcast conditions with nothing falling are ordinary weather. Waiting outdoors at a stop and walking to and from it are exposure too, so a scheduled service shelters less than it appears to.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'mutation M4 du tour de reglage du 2026-09-21 : peser la meteo a l''exposition reelle du voyageur, l''attente a un arret comprise. Reglee POUR gemini-3.1-flash-lite, pas pour un autre modele'
+      obtention: 'identique a ''prompt_expert_05'', a l''exception d''une 5e puce inseree APRES la puce « Working people''s life time ». Aucune autre ligne ne bouge'
+      derive_de: 'prompt_expert_05'
+      date: '2026-09-21'
+      mots: 338
+      mesure: 'rejeu apparie de 176 decisions du run exp_gemini-31-fl_proexp05_..._EN_c_t0_nosim/2026-09-17_00_51_26, 22 lots de 8, texte utilisateur identique a l''octet entre bras (empreinte 96065984e08f). Contre le bras temoin : TC -1,0 point, marche +0,8, voiture +0,0, velo +0,2 ; L1 de l''echantillon 53,3 -> 51,6 ; inerte sur le groupe temoin aleatoire (+0,1). EFFET ESTIME SUR LA COHORTE ENTIERE, par reponderation des groupes : L1 global 31,25 -> 31,05, soit -0,20 point, six fois plus petit que l''intervalle de confiance de la cohorte (+/-1,3). Gain non mesurable sur un run. Quatre autres mutations rejetees (M1, M3, M5) ou neutres (M2) ; cumul M2+M4 moins bon que M4 seule'
+      audit: 'audit rendu le 2026-09-21 sur le texte exact (sha256 ci-dessus) : C1 a C5 et E1 satisfaites, aucun constat'
+      incident: 'premier depot le 2026-09-21 vers 12h00 ; supprime a 12:25:02 par la reecriture du bloc prompts d''une autre session (renumerotation de son lot Jev 21-24 -> 31-34). Redepose a l''identique, meme sha256'
+      reference: 'docs/traces/2026-09-21_11-30_pe05_gemini31_mutations/README.md'
+  prompt_expert_31:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: aff533fede38feb16e92c604a499b7981d0eeebf21c7e6cc4a504212d9229301
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Cost of the continuous walk: walking spends the traveller's own time and legs, unbroken, from door to door. Set that effort against what the day still holds: someone with further trips ahead keeps a reserve rather than spending it on one leg. Past the point where the walk stops being an easy stretch of the journey and becomes its main exertion, avoiding an interchange no longer pays for it.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'contrepoids à la clause de friction de chaîne du parent : la marche continue porte son propre coût — temps, fatigue, réserve d''effort pour la suite de la journée. 5e puce insérée APRÈS « Chain friction ». Réglée POUR Jev (typesafe:jev-1.13.0), pas pour un modèle de langue'
+      obtention: 'identique à ''prompt_expert_05'' hormis la modification décrite dans `role`. Aucune autre ligne ne bouge'
+      derive_de: 'prompt_expert_05'
+      mots: 347
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
+  prompt_expert_32:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: 4d775e21cbe84ccea9705cca46df1b49bd6ddffbeeec3b1cbf039b74f3f165ea
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration on both sides — access walk, waiting, in-vehicle trip and egress on one; the unbroken walking effort on the other. If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting. If the direct walk is itself the long part of the journey, that simplicity is paid in time and fatigue, and it stops being the easy option.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'même visée que prompt_expert_31 par une autre voie : la puce « Chain friction » réécrite à deux versants, au lieu d''une puce ajoutée. Les deux ne sont pas cumulables. Réglée POUR Jev (typesafe:jev-1.13.0). VARIANTE RETENUE du lot du 2026-09-21'
+      obtention: 'identique à ''prompt_expert_05'' hormis la modification décrite dans `role`. Aucune autre ligne ne bouge'
+      derive_de: 'prompt_expert_05'
+      mots: 318
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
+  prompt_expert_33:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: 0c5c5069f7148dd2a61f2864b49e916d120d07e348ca7c2ebab1bf9aeea5f0c2
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+      - Cost borne by the household: a motorised vehicle is paid for well beyond the trip at hand — bought, insured, fuelled and parked, out of resources the household also needs elsewhere. Where those resources are tight, a fare on the collective network, or a trip made under one's own power, is not a fallback but the ordinary way of getting about.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'coût récurrent d''un véhicule motorisé face au niveau de ressources du foyer — levier visant la sous-représentation des transports collectifs sur les trajets réguliers. 5e puce ajoutée en fin de bloc de principes. Réglée POUR Jev (typesafe:jev-1.13.0). ÉCARTÉE : composite 9,16 contre 4,19 au témoin, la voiture chute de 17,0 points'
+      obtention: 'identique à ''prompt_expert_05'' hormis la modification décrite dans `role`. Aucune autre ligne ne bouge'
+      audit: 'un premier texte de cette variante, qui conditionnait l''arbitrage au statut de conducteur et au caractère partagé du véhicule, a été déclaré NON CONFORME (C4) le 2026-09-21 : ces deux données sont retirées du récit de persona depuis le 2026-08-26 (ticket 018). Le texte inscrit ici s''adosse au seul « household of N, <niveau> income », effectivement servi'
+      derive_de: 'prompt_expert_05'
+      mots: 339
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
+  prompt_expert_34:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: 6de932169e94d5671041d365f96d2a22105804590c18c7465e31ce4f589a6072
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+      - Regularity of a usual journey: when a trip serves one of the traveller's usual purposes at its ordinary hour, it is not weighed like an exceptional outing. Its constraints are expected rather than discovered, and the discomfort of a scheduled service weighs less on a journey made as a matter of course than on a one-off trip.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'régularité d''un trajet servant un motif habituel — second levier sur les transports collectifs, indépendant de celui de prompt_expert_33. 5e puce ajoutée en fin de bloc de principes. Réglée POUR Jev (typesafe:jev-1.13.0). ÉCARTÉE : composite dans le bruit du témoin (4,14 contre 4,19 et 4,14 sur deux exécutions du prompt en service) mais L1 global dégradé de 12,6 à 16,2'
+      obtention: 'identique à ''prompt_expert_05'' hormis la modification décrite dans `role`. Aucune autre ligne ne bouge'
+      audit: 'un premier texte de cette variante s''appuyait sur une ligne « déjà connue » et des correspondances « apprises », lisibles dans le seul bloc History, que `memoire: false` coupe — avis conforme_avec_reserve du 2026-09-21. Le texte inscrit ici confronte « Usual trip purposes » au motif du trajet courant, tous deux servis sans condition'
+      derive_de: 'prompt_expert_05'
+      mots: 335
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
+  prompt_expert_35:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: 5a00958a0e1ef2cfb9068b961409812bc3599e0a99b90bb8d51f15e93d31a041
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration on both sides — access walk, waiting, in-vehicle trip and egress on one; the unbroken walking effort on the other. If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting; and where the destination is close enough to be reached on foot without giving it a thought, walking remains the obvious choice. It is only when the direct walk is itself the long part of the journey that its simplicity is paid in time and fatigue, and stops being the easy option.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'prompt_expert_32 plus une protection explicite de la marche de proximité, plus une restriction du contrepoids. Réglée POUR Jev (typesafe:jev-1.13.0). ÉCARTÉE : la restriction annule l''effet de la mutation — composite 4,16, dans le bruit des deux exécutions du témoin (4,19 et 4,14)'
+      obtention: 'dérivée de ''prompt_expert_32'' par DEUX changements dans la même puce, et non un seul : (1) l''incise « and where the destination is close enough to be reached on foot without giving it a thought, walking remains the obvious choice » ; (2) la troisième phrase passe de « If the direct walk is itself the long part… » à « It is ONLY WHEN the direct walk is itself the long part… », ce qui restreint le contrepoids au lieu de le poser. Les deux agissent dans le même sens : un écart mesuré contre la 32 porte sur les deux, pas sur l''incise seule (relevé par l''auditeur, 2026-09-21)'
+      derive_de: 'prompt_expert_32'
+      mots: 343
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
+  prompt_expert_36:
+    _neutralite:
+      verdict: conforme
+      famille: experte
+      le: '2026-09-21'
+      sha256_texte: c3ffee01427af72ef316a3190c98d864ec282be65f36af2380ebbaf017245254
+      auditeur: prompt-auditor (agent independant)
+      langue: en
+      regles_evaluees:
+        - C1
+        - C2
+        - C3
+        - C4
+        - C5
+        - E1
+      constats: []
+    content: |
+      Select the optimal travel mode taking the persona into account.
+
+      Situational trade-off principles:
+      - Chain friction: Reconstruct the real door-to-door duration on both sides — access walk, waiting, in-vehicle trip and egress on one; the unbroken walking effort on the other. If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting; and where the destination is close enough to be reached on foot without giving it a thought, walking remains the obvious choice. If the direct walk is itself the long part of the journey, that simplicity is paid in time and fatigue, and it stops being the easy option.
+      - Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+      - Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+      - Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+
+      [Output instructions]
+
+      1. Analyse the profile through these principles.
+      2. Do not rule out any option: assign to EACH proposed option, by its index, the probability in % that this persona picks it — the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+      3. Return only a valid JSON object — no markdown, no extra text.
+      4. Justify the distribution in one concise sentence.
+
+      Expected JSON schema: { "type": "object", "properties": { "agents": { "type": "array", "items": { "type": "object", "properties": { "agent_id": { "type": "string", "description": "Copy exactly the agent_id provided for this persona (numeric identifier only, no prefix and no name)." }, "probabilities": { "type": "array", "description": "One entry per option offered to this persona, without exception. The sum of the `probability` values must be exactly 100.", "items": { "type": "object", "properties": { "index": { "type": "integer", "description": "Index of the option, as shown in brackets." }, "mode": { "type": "string", "description": "Mode of the option, copied from the option." }, "probability": { "type": "number", "description": "Probability in % (0 to 100) that this persona picks this option. 0 if the option is impossible for them." } }, "required": [ "index", "mode", "probability" ], "additionalProperties": false } }, "reason": { "type": "string" } }, "required": [ "agent_id", "probabilities", "reason" ], "additionalProperties": false } } }, "required": [ "agents" ], "additionalProperties": false }
+    _provenance:
+      role: 'isole ce que prompt_expert_35 confondait : l''incise de proximité seule, sans la restriction du contrepoids. Réglée POUR Jev (typesafe:jev-1.13.0). ÉCARTÉE : protège la bande courte (L1 de distance/0-1km à 10,3 au lieu de 19,6 sous la 31) mais rogne le gain et dégrade le L1 global (13,3 contre 12,6 au témoin)'
+      obtention: 'dérivée de ''prompt_expert_32'' par un seul changement : l''incise « and where the destination is close enough to be reached on foot without giving it a thought, walking remains the obvious choice » ajoutée à la deuxième phrase de la puce. La troisième phrase reste celle de la 32'
+      audit: 'conforme, mais l''auditeur relève une forme que ni la 32 ni l''incise ne portaient seules : les deux éléments visent désormais la MÊME variable (la longueur de la marche directe) et y attachent des conclusions opposées à chaque extrémité, soit la forme d''une règle de seuil dont le seuil reste tacite. Verdict maintenu — C1 a le nombre pour seul critère (jurisprudence du 2026-09-10, Q5) et les deux conditions ne pavent pas l''axe, la zone intermédiaire restant à l''appréciation du modèle'
+      derive_de: 'prompt_expert_32'
+      mots: 340
+      date: '2026-09-21'
+      reference: 'docs/traces/2026-09-21_jev_mutations/README.md'
   prompt_expert_07:
     _neutralite:
       verdict: conforme

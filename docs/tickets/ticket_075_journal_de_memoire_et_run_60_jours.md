@@ -158,3 +158,40 @@ Il ne change **aucune** règle de la mémoire : ni gravité, ni oubli, ni vivier
 rappel, ni opérations de concept. Tout ce qu'il ajoute est observable ou hors du chemin de
 décision. La seule exception est la progression météo du § 1, qui est un changement de dispositif
 et non de mémoire, et qui est réversible à l'identique au premier jour d'un run.
+
+---
+
+## 7. Clôture du 2026-09-21 — sans le run
+
+Ticket clos sur décision de l'auteur. **Le run de soixante jours n'a pas été produit**, et ce
+ticket ne le produira pas.
+
+**Vérification faite avant de clore**, sur les `moves.csv` de tous les runs portant
+`population_5_memoire_075` — amplitude simulée et nombre d'agents recalculés, pas lus dans une
+note :
+
+| Run | Jours simulés | Agents |
+|---|---|---|
+| `2026-09-14_23_58` | 32,6 | 5 |
+| `2026-09-15_10_03` | 15,1 | 5 |
+| `2026-09-16_15_58` | 11,1 | 5 |
+| `2026-09-17_07_18` | 21,1 | 10 |
+| tout run du 18 au 21 septembre | 19 à 40,6 | **1** |
+
+Le seul run long à cinq habitants est celui du 14 septembre, et c'est précisément celui que la
+correction du ticket 087 disqualifie : sa mémoire a été écrite en partie par Mistral alors que
+le § 5 exige `gemini-3.1-flash-lite` seul. Aucun run à cinq agents n'a été lancé après le
+17 septembre ; ce qui tourne depuis est le bras choqué du ticket 077, à un agent.
+
+**Ce qui reste acquis** : les §§ 1 à 4 — progression de la date météo, journal de mémoire par
+agent, reprise à chaud à mémoire gelée, population à cinq profils. Livrés, testés, en service.
+
+**Ce qui n'est pas fait**, pour qui voudrait le reprendre : le run du § 5 lui-même. Son
+prérequis n'a pas disparu avec cette clôture — l'arbitrage du lot D1 du
+[ticket 077](ticket_077_la_memoire_apprend_sur_des_observations_fausses.md) (servir
+l'auto-réflexion dans le bloc noyau ou l'éteindre) change le contenu du prompt de décision, et
+lancer soixante jours avant de le trancher, c'est accepter de les refaire. Cet arbitrage reste
+ouvert au 077.
+
+Aucun ticket ne portait `DÉPEND DE : 075` : cette clôture ne débloque rien en cascade. Le
+ticket 070 reste bloqué par le 077, pas par celui-ci.

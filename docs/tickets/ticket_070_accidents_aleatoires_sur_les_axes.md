@@ -1,7 +1,8 @@
 # Ticket 070 — Des accidents tirés au sort sur les axes, et le retard qu'ils font subir
 
 > Le statut de ce ticket vit dans `scripts/dashboard/tickets_status.yaml`, seule source de
-> vérité. Ouvert le 2026-09-14, **en cours** depuis le même jour.
+> vérité — ne pas le recopier ici, il s'y périme en silence. Ouvert le 2026-09-14.
+> **Ce qui reste est recensé au § « Reste à faire », daté du 2026-09-21.**
 >
 > **CE QUI EST LIVRÉ (2026-09-14, défaut basculé le 2026-09-15).** Un interrupteur
 > « Accidents sur les axes » dans l'IHM GAMA, **VRAI par défaut** depuis le 2026-09-15,
@@ -19,10 +20,10 @@
 > rien demandé, et un agent retardé rejouerait sa décision d'avant. L'expérimentateur peut
 > **poser** un accident choisi depuis l'IHM ou par `POST /accidents` (travail F).
 >
-> **CE QUI RESTE.** Le **souvenir** du retard (travail G) — il faudrait que l'information
-> remonte du routage jusqu'à l'agent, et la chaîne mémoire est en refonte (tickets 071, 075).
-> Le **contournement**. Le **facteur météo** (calculé, **rejeté**, neutre) et la vérification
-> de **linéarité** en taille de cohorte.
+> **CE QUI RESTE** est au § « Reste à faire », recensé le 2026-09-21 contre le code. En
+> résumé : le **souvenir** du retard attend le ticket **077** ; l'**ampleur du ralentissement**
+> attend une décision de l'auteur (le **facteur météo**, lui, est tranché) ; la **gravité**, le
+> **rapport de run**, la **linéarité** et le pré-test **H1** n'attendent rien du tout.
 >
 > ⚠ **Les runs d'avant et d'après le 2026-09-15 ne sont pas comparables** : le régime est actif
 > par défaut et les accidents ralentissent.
@@ -1111,17 +1112,29 @@ déguisée en résultat — le motif récurrent du dépôt.
 
 ## Critères d'acceptation
 
-- [ ] `config/accidents.yaml` existe, chaque coefficient porte sa **source** et sa
+- [x] `config/accidents.yaml` existe, chaque coefficient porte sa **source** et sa
       `provenance`, et aucun n'a été ajusté sur un score.
+      → Livré sous le nom `services/llm-agents/config/accidents_baac.yaml` (2026-09-14).
+      Chaque coefficient porte sa source et la raison de son choix ; le facteur météo, lui,
+      a été **rejeté plutôt qu'ajusté**, et le calcul rejeté est conservé dans le fichier.
 - [ ] La ressource gelée d'accidents appariés aux arêtes est datée, tracée, et son script de
       construction se rejoue.
-- [ ] Le tirage est **déterministe** : deux runs de même graine produisent le même ensemble
+- [x] Le tirage est **déterministe** : deux runs de même graine produisent le même ensemble
       d'accidents. Un test le vérifie.
-- [ ] **Aucun itinéraire perturbé n'est écrit dans le cache OSMnx.** Un test vérifie qu'après
+      → `test_r7_tirage_deterministe_a_graine_fixee`.
+- [x] **Aucun itinéraire perturbé n'est écrit dans le cache OSMnx.** Un test vérifie qu'après
       un run avec accidents, aucune entrée de cache ne porte de durée perturbée — et que la
       décision de ne pas cacher est prise **avant** la lecture, pas après.
-- [ ] Le chemin « accident actif » et le chemin normal sont **le même code**, à un poids
-      d'arête près. Le nombre de calculs à froid provoqués par les accidents est journalisé.
+      → La garde laisse `_p_key` à `None`, ce qui neutralise d'un coup la lecture et les deux
+      écritures ; elle est posée avant la lecture. `test_r9_le_cache_d_itineraires_est_contourne_pendant_un_accident`.
+      ⚠ Le test exerce le prédicat et vérifie son branchement **sur le texte du module** : le
+      chemin complet est asynchrone et tient au réseau. La vérification « après un run réel »
+      reste à faire — voir « Reste à faire ».
+- [x] Le chemin « accident actif » et le chemin normal sont **le même code**, à un poids
+      d'arête près.
+      → Un seul `_congested_travel_time` ; l'accident s'y multiplie à côté du facteur de zone.
+      ⚠ **Le nombre de calculs à froid provoqués par les accidents n'est PAS journalisé** —
+      voir « Reste à faire ».
 - [ ] Le **taux de désaccord entre `catr` et le tag `highway`** de l'arête appariée est mesuré
       et publié. Un appariement sans ce taux est une hypothèse muette.
 - [ ] La **gravité** de chaque accident tiré est journalisée à côté du retard produit : sans
@@ -1137,9 +1150,10 @@ déguisée en résultat — le motif récurrent du dépôt.
       dans les deux cas, le sens et l'ampleur du biais restant.
 - [ ] **H1 est tranchée avant le mécanisme** : le pré-test de sensibilité mémoire (lot 0 ter) a
       eu lieu, et son résultat — y compris nul — est archivé avec la puissance du test.
-- [ ] Le régime retenu (**réaliste, monde partagé**, mesure par événement posé) est écrit dans
+- [x] Le régime retenu (**réaliste, monde partagé**, mesure par événement posé) est écrit dans
       `docs/arch/` avec sa raison, et la limite qu'il emporte — le tirage aléatoire ne porte
       aucune figure — y figure aussi.
+      → `docs/arch/accidents-sur-les-axes.md`.
 - [x] Le **nombre d'agents traversant l'axe visé** est mesuré et publié **avant** que le
       mécanisme soit écrit. Sous ~100 trajets touchés, aucune figure n'est annoncée.
       → Fait le 2026-09-14 : **38,5 par journée simulée** (médiane, 1 000 agents), donc
@@ -1153,6 +1167,79 @@ déguisée en résultat — le motif récurrent du dépôt.
       hypothèses.
 - [ ] L'A/B du protocole exogène est passé avant la mise en production, et son résultat est
       archivé — y compris s'il est nul.
+
+## Reste à faire
+
+> Recensé le 2026-09-21 contre l'état réel du code, pas contre les notes. Le statut vit dans
+> `scripts/dashboard/tickets_status.yaml` : `bloqué`.
+>
+> ⚠ **Finir le 077 ne finira pas ce ticket.** Le 077 ne débloque que le souvenir (travail G).
+> **Neuf** autres points restent ouverts, dont aucun ne dépend de lui : un attend une décision
+> de l'auteur, six n'attendent rien, deux attendent un délai.
+>
+> ✅ **Le facteur météo est tranché** (2026-09-21) : la météo ne conditionne pas
+> l'accidentalité, et ce n'est pas remis à plus tard. Les conditions à risque n'existent pas
+> dans le jeu météo servi — 1 créneau de brouillard et 4 de neige sur 2 920. Voir la doc
+> d'architecture et la trace `2026-09-21_meteo_servie_par_la_simulation`.
+
+### 1. Bloqué par un autre ticket
+
+- **Le souvenir du retard (travail G)** — `DÉPEND DE : 077`. Un agent traverse un accident,
+  arrive en retard, et n'en garde aucune trace. Il faudrait que « ce trajet a traversé un
+  accident, +N min » remonte du routage — seul endroit qui connaisse les arêtes empruntées —
+  jusqu'à l'agent, en traversant le `TravelPlan`. Écrire dans la chaîne mémoire pendant sa
+  refonte entrerait en collision. **Contrainte de contenu :** le souvenir ne nomme ni
+  l'accident ni la gravité, seulement des minutes (arbitrage 6).
+
+### 2. Bloqué par une décision de l'auteur, pas par un ticket
+
+- **L'ampleur du ralentissement.** `facteur_ralentissement` est une **hypothèse déclarée**,
+  pas une mesure. Tout effet mesuré sur les agents sera l'effet de ce nombre. Sa source
+  attend l'archivage du flux DIR (point 4).
+
+### 3. Rien ne bloque — travail de code ou de mesure
+
+- **La gravité n'existe pas.** Aucun accident tiré n'en porte : le retard est un facteur
+  unique. Le critère d'acceptation qui demande « la gravité journalisée à côté du retard
+  produit » est donc hors d'atteinte en l'état, et la répartition par gravité du rapport de
+  run avec lui.
+- **Le rapport de run ignore les accidents.** `scripts/debug/run_report.py` n'en dit rien.
+  Manquent : accidents tirés, arêtes touchées, agents effectivement retardés, retard médian
+  et cumulé, et l'`[ALARME]` qui se lève quand des accidents sont tirés sans toucher personne.
+  Le journal, lui, porte déjà les accidents tirés et les trajets touchés.
+- **Le nombre de calculs à froid provoqués par les accidents n'est pas journalisé.** La garde
+  du cache est en place et son coût est estimé (une à trois heures de routage à froid par
+  journée simulée), mais rien ne le mesure sur un run réel.
+- **La garde du cache n'a pas été vérifiée après un run réel.** Le test exerce le prédicat et
+  vérifie son branchement sur le texte du module ; personne n'a encore inspecté une base de
+  cache après un run avec accidents.
+- **La linéarité de l'exposition en taille de cohorte** n'est pas vérifiée. Les tailles
+  « ≈ 2 600 / ≈ 10 400 agents » restent une extrapolation : la seule exécution archivée
+  au-dessus de 1 000 agents précède les identifiants de `moves.csv`. Demande un run à cohorte
+  élargie.
+- **H1 n'a jamais été tranchée**, et le ticket disait qu'elle devait l'être **avant** le
+  mécanisme. Personne n'a vérifié qu'un retard vécu modifie la décision du lendemain. Le
+  mécanisme a été construit sans cette réponse ; le pré-test (lot 0 ter) reste à faire, et
+  son issue « le souvenir remonte et ne pèse pas » serait un résultat publiable.
+
+### 4. En attente d'un délai, à lancer au plus tôt
+
+- **L'archivage du flux DATEX des DIR.** Seule source de **durées réelles** de blocage, et
+  elle n'existe que si on commence à la collecter : plusieurs semaines de latence. Tant
+  qu'elle manque, l'ampleur du retard reste une hypothèse. Rien ne l'empêche de démarrer.
+- **L'A/B du protocole exogène**, à passer avant toute mise en production du retard.
+
+### Hors périmètre, déclaré — ne pas rouvrir sans décision
+
+Le **contournement** (l'agent subit le retard sur le chemin déjà choisi), l'**agent victime**
+d'un accident, les accidents sur le **réseau TC**, la **propagation de congestion**, et faire
+**rouler les agents sur le graphe routier** — ce dernier étant un gros ticket à part.
+
+Le **taux de désaccord `catr` / `highway`** tombe lui aussi : l'appariement par ce chemin a
+été abandonné au profit de la **vitesse autorisée** (`vma`, renseignée à 97,9 %), qui ne
+demande aucune table de correspondance. Le critère d'acceptation correspondant est **caduc**.
+
+---
 
 ## Questions ouvertes
 

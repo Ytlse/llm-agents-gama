@@ -9,7 +9,11 @@
 EXP_DEPOT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null)
 EXP_DEPOT_ARBRE_PROPRE := $(shell test -z "$$(git status --porcelain --untracked-files=no 2>/dev/null)" && echo 1 || echo 0)
 
+# Un chemin de l'hôte vu du conteneur : la racine du dépôt y est montée sur /app.
+chemin_app = $(if $(patsubst /app/%,,$(1)),/app/$(patsubst ./%,%,$(1)),$(1))
+
 EXPERIENCES_PY = $(COMPOSE) exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml -e EXP_DEPOT_COMMIT=$(EXP_DEPOT_COMMIT) -e EXP_DEPOT_ARBRE_PROPRE=$(EXP_DEPOT_ARBRE_PROPRE) controller python -m experiences
+APPARIER_PY = $(COMPOSE) exec -T -e EXPERIENCES_DIR=/app/data/experiences -e JEUX_DIR=/app/data/jeux -e REFERENTIEL_ENQUETE=/app/scripts/data/population/cerema_values.yaml -e EXP_DEPOT_COMMIT=$(EXP_DEPOT_COMMIT) -e EXP_DEPOT_ARBRE_PROPRE=$(EXP_DEPOT_ARBRE_PROPRE) controller python /app/scripts/analysis/appariement_executions.py
 
 ## Prépare un jeu de déplacements enregistré. Usage : make jeu POP=data/population/population_1000_AAMAS_v5 NOM=v5_j1 [JOUR=2026-03-16] [CONCURRENCE=8] [REQUIS="…"]
 ## Les moteurs de routage (défaut : controller otp1 otp2 otp3 osmnx1) sont démarrés et attendus sains d'abord.
@@ -172,6 +176,20 @@ experience-statuer:
 comparer:
 	$(EXPERIENCES_PY) comparer $(A) $(B) $(if $(TOUT),--inclure-invalides,)
 
+## Apparie DEUX exécutions décision par décision — le chiffrage de l'axe 0 (ticket 073) :
+##   make apparier A=<dossier exécution> B=<dossier exécution> [JSON=<fichier>] [TOUT=1] [SEUIL=0.8]
+## A et B se donnent relativement à la racine du dépôt (data/experiences/<exp>/executions/<horodatage>).
+## Tourne dans le conteneur `controller`, seul endroit où la garde de comparabilité du registre
+## est disponible. LECTURE SEULE : rien n'est écrit dans les exécutions.
+## `comparer` répond « ces deux mesures sont-elles comparables ? » ; `apparier` répond
+## « de combien le modèle a-t-il bougé, décision par décision ? ».
+apparier:
+	@test -n "$(A)" -a -n "$(B)" || { echo "Usage : make apparier A=<dossier> B=<dossier> [JSON=<fichier>] [TOUT=1]"; exit 1; }
+	$(APPARIER_PY) $(call chemin_app,$(A)) $(call chemin_app,$(B)) \
+	  $(if $(JSON),--json $(call chemin_app,$(JSON)),) $(if $(TOUT),--tout,) $(if $(SEUIL),--seuil $(SEUIL),)
+
+.PHONY: apparier
+
 .PHONY: campagne-lancer campagne-etat campagne-arreter
 
 .PHONY: services-pretes passerelle-recharger jeu jeu-consulter lmstudio-charger lmstudio-decharger lmstudio-etat jeu-verifier jeu-verifier-jours experience-definir experience-estimer experience-lancer experience-reprendre experience-pause experience-arreter experience-erreurs experience-file experience-actives experience-defiler experience-ordonnancer experiences-renommer registre comparer experience-statuts experience-statuer
@@ -218,7 +236,7 @@ status:
 ## Pour tout arrêter, y compris les services : make down.
 stop-run:
 	@if $(COMPOSE) ps --status running controller 2>/dev/null | grep -q controller; then \
-		$(COMPOSE) exec -T controller pkill -f launch_headless.py 2>/dev/null || true; \
+		$(COMPOSE) exec -T controller python3 -c "import os, psutil, signal; [p.send_signal(signal.SIGTERM) for p in psutil.process_iter(['name', 'cmdline']) if p.pid != os.getpid() and p.info['cmdline'] and any('launch_headless.py' in arg for arg in p.info['cmdline'])]" 2>/dev/null || true; \
 	fi
 	-@pkill -f "scripts/gama/launch_headless.py" 2>/dev/null || true
 	-@$(COMPOSE) --profile offline stop gama 2>/dev/null || true

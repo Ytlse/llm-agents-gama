@@ -119,10 +119,15 @@ class TestRateLimiterContract:
             time.sleep(0.002)   # au-delà de l'intervalle de lissage de p3 (60 µs)
             assert lim.try_reserve("p3") is True
         assert lim.daily_requests("p3") == 3
-        # rpd_limit=3 atteint : le provider est écarté jusqu'à minuit UTC
+        # rpd_limit=3 est déclaratif/informatif : on continue de réserver et mesurer au-delà
         time.sleep(0.002)
-        assert lim.try_reserve("p3") is False
+        assert lim.try_reserve("p3") is True
+        assert lim.daily_requests("p3") == 4
+        assert lim.is_quota_exhausted("p3") is False
+        # Seul un 429 effectif (via mark_quota_exhausted_until) écarte le provider
+        lim.mark_quota_exhausted_until("p3")
         assert lim.is_quota_exhausted("p3") is True
+        assert lim.try_reserve("p3") is False
 
     def test_reset_windows_remet_les_compteurs_rpm(self, ports):
         lim = ports.limiter

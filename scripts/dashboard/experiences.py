@@ -37,6 +37,11 @@ try:  # importé comme paquet (app.py, tests) ou à plat (Streamlit lancé depui
 except ImportError:  # pragma: no cover
     import lmstudio  # type: ignore
 
+try:  # même double chemin que `lmstudio` ci-dessus, et pour la même raison
+    from scripts.dashboard.tickets_par_experience import ticket_par_experience
+except ImportError:  # pragma: no cover
+    from tickets_par_experience import ticket_par_experience  # type: ignore
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Le fichier compose vit dans infra/ (ticket 039) : `-f` le désigne et
@@ -69,7 +74,8 @@ POP_CONTENEUR = "/data/eqasim-output"          # montage de data/population dans
 # est donc ce qui est dangereux — séparateurs de chemin, espaces, métacaractères — et non ce
 # qui est inhabituel : les lettres accentuées sont sans danger et « Prompt_Éco » est valide.
 # Le premier caractère est une lettre ou un chiffre, pour écarter « ../… » et « -flag ».
-MOTIF_NOM = re.compile(r"^[^\W_][\w.\-]{0,63}$", re.UNICODE)
+# Limite portée à 128 caractères (2026-09-14, commit 6c268ef3) pour ne plus tronquer les suffixes.
+MOTIF_NOM = re.compile(r"^[^\W_][\w.\-]{0,127}$", re.UNICODE)
 
 ETAT_EN_COURS = "en_cours"
 ETAT_TERMINEE = "terminee"
@@ -131,7 +137,7 @@ ETAT_FORMULAIRE = REPO_ROOT / "experiments" / ".dashboard" / "formulaire_experie
 
 # L'ordre canonique du tableau. Une colonne rappelée au sélecteur reprend sa place ici :
 # elle n'est jamais recollée en bout de ligne.
-COLONNES_REGISTRE = ("scores", "experience", "execution", "etat", "decideur", "fournisseur",
+COLONNES_REGISTRE = ("scores", "experience", "ticket", "execution", "etat", "decideur", "fournisseur",
                      "prompt", "jeu", "jeu_etat", "mode", "chaine", "couverture",
                      "journal", "choix_forces", "part_forces", "choix_forces_score",
                      "composite_emd", "composite_emd_hors_forces",
@@ -153,8 +159,10 @@ COLONNES_REGISTRE = ("scores", "experience", "execution", "etat", "decideur", "f
 # substrat). Mesuré le 2026-09-12, les retirer déplace le composite de −3,75 à +12,22 points
 # EMD et change le classement. Une colonne qu'il faut rappeler pour voir cela serait une
 # colonne que personne ne rappelle.
-COLONNES_REGISTRE_DEFAUT = ("experience", "execution", "etat", "decideur", "fournisseur",
-                            "prompt", "jeu", "mode", "couverture", "choix_forces",
+# Partitionnement par jeu de test : le nom du jeu figure dans le titre de chaque tableau,
+# la colonne `jeu` n'a donc plus besoin d'être affichée dans les colonnes par défaut.
+COLONNES_REGISTRE_DEFAUT = ("experience", "ticket", "execution", "etat", "decideur", "fournisseur",
+                            "prompt", "mode", "couverture", "choix_forces",
                             "composite_emd", "composite_emd_hors_forces", "composite_l1")
 
 # R17 — celles-ci se filtrent par bornes, pas par liste de valeurs : `composite_l1` porte
@@ -218,6 +226,11 @@ SERVICES_ROUTAGE = ("otp1", "otp2", "otp3", "osmnx1")
 SERVICES_MONITORING = ("prometheus", "grafana", "cadvisor", "node_exporter", "flower")
 
 TOLERANCES_PROPOSEES = {"walk": "insensible", "bike": "insensible", "car": "heure", "transit": {"pas_min": 10}, "rail": {"pas_min": 10}}
+# Version de Jev, telle que `decideur_typesafe.RE_VERSION_FIGEE` l'exige au lancement. Recopiée
+# ici — et non importée — pour que le formulaire AVERTISSE avant l'enregistrement plutôt que de
+# laisser découvrir le refus au lancement ; le contrôle qui fait foi reste celui du décideur.
+RE_VERSION_JEV = re.compile(r"^jev-\d+\.\d+\.\d+$")
+
 TYPES_DECIDEUR = (
     "passerelle",
     "antigravity",
@@ -226,6 +239,7 @@ TYPES_DECIDEUR = (
     "rejeu",
     "modele",
     "majoritaire_voiture",
+    "typesafe",
 )
 # Le formulaire scinde « passerelle » en deux entrées : un modèle servi par un fournisseur
 # DISTANT (quota journalier, clés) ou par LM Studio sur CETTE machine (chargement, contexte).
@@ -240,6 +254,7 @@ CHOIX_DECIDEUR = (
     "rejeu",
     "modele",
     "majoritaire_voiture",
+    "typesafe",
 )
 LIBELLES_DECIDEUR = {
     "passerelle_distant": "modèle de langage (distant)",
@@ -250,6 +265,7 @@ LIBELLES_DECIDEUR = {
     "rejeu": "rejeu d'une exécution archivée",
     "modele": "modèle LightGBM (PROGEDO)",
     "majoritaire_voiture": "a priori : majorité voiture",
+    "typesafe": "Jev (TypeSafe) — classifieur typé, sans quota",
 }
 
 
@@ -267,9 +283,11 @@ def portee_plateforme(choix: str) -> Optional[str]:
     `instances_pour_modele` ré-élargissait ensuite aux deux bords.
     """
     c = str(choix)
-    if not c.startswith("passerelle"):
-        return None
-    return "local" if c == "passerelle_local" else "distant"
+    if c == "passerelle_local":
+        return "local"
+    if c == "passerelle_distant":
+        return "distant"
+    return None
 
 
 def choix_decideur(
@@ -710,7 +728,7 @@ def etat_passerelle(url: str = "http://localhost:8000/health", timeout: float = 
 
 
 def quotas_par_modele(etat: Optional[dict]) -> dict[str, dict]:
-    """modèle → {instances: [...], marge: requêtes/jour restantes ou None, limite: total, detail: str}."""
+    """modèle → {instances: [...], marge: requêtes/jour restantes ou None, limite: total, detail: str, epuisee: bool}."""
     d = _yaml(PROVIDERS_YAML)
     providers = d.get("providers", d) if isinstance(d, dict) else {}
     out: dict[str, dict] = {}
@@ -718,20 +736,28 @@ def quotas_par_modele(etat: Optional[dict]) -> dict[str, dict]:
         if not isinstance(cfg, dict) or not cfg.get("default_model"):
             continue
         limite = cfg.get("rpd_limit")
-        conso = ((etat or {}).get(nom) or {}).get("daily_requests")
-        m = out.setdefault(str(cfg["default_model"]), {"instances": [], "marge": 0, "limite": 0, "inconnu": False, "detail": []})
+        inst_etat = ((etat or {}).get(nom) or {})
+        conso = inst_etat.get("daily_requests")
+        est_epuisee = bool(inst_etat.get("quota_exhausted"))
+        m = out.setdefault(str(cfg["default_model"]), {"instances": [], "marge": 0, "limite": 0, "inconnu": False, "detail": [], "epuisee": True})
         m["instances"].append(nom)
         # « clé N » = rang de l'instance parmi celles qui servent ce modèle, pas son nom :
         # l'utilisateur raisonne en clés/seaux de quota, pas en identifiants providers.yaml.
         cle = f"clé {len(m['instances'])}"
-        if limite is None:
+        if est_epuisee:
+            m["limite"] += int(limite or 0)
+            m["detail"].append(f"{cle} : quota épuisé (reprise attendue)")
+        elif limite is None:
             m["inconnu"] = True
+            m["epuisee"] = False
             m["detail"].append(f"{cle} : sans limite journalière")
         elif etat is None or conso is None:
             m["limite"] += int(limite); m["inconnu"] = True
+            m["epuisee"] = False
             m["detail"].append(f"{cle} : {limite}/jour (consommation inconnue)")
         else:
             m["marge"] += max(0, int(limite) - int(conso)); m["limite"] += int(limite)
+            m["epuisee"] = False
             m["detail"].append(f"{cle} : {int(limite) - int(conso)} restantes sur {limite}")
     return dict(sorted(out.items()))
 
@@ -763,7 +789,7 @@ def debit_par_modele(etat: Optional[dict]) -> dict[str, dict]:
     return out
 
 
-def parallelisme_conseille(modele: str, etat: Optional[dict]) -> Optional[dict]:
+def parallelisme_conseille(modele: str, etat: Optional[dict], portee: Optional[str] = None) -> Optional[dict]:
     """Le parallélisme qu'un modèle peut réellement absorber, ou None si on l'ignore.
 
     Demander huit décisions simultanées à une instance qui accepte quinze requêtes par
@@ -777,7 +803,9 @@ def parallelisme_conseille(modele: str, etat: Optional[dict]) -> Optional[dict]:
     """
     d = _yaml(PROVIDERS_YAML)
     locales = lmstudio.modeles_locaux(d).get(modele)
-    if locales:
+    distantes = lmstudio.modeles_distants(d).get(modele)
+    est_local = (portee == "local") or (portee is None and locales and not distantes)
+    if locales and est_local:
         # Un modèle local ne se mesure pas en requêtes par minute : LM Studio sert au plus
         # `concurrency_limit` appels à la fois par instance, le reste attend et la passerelle
         # répond « saturés ». Le conseil, c'est ce nombre d'appels — un ou deux sur un Mac.
@@ -1240,6 +1268,71 @@ def hors_reference(jeu: Optional[str], reference: Optional[str]) -> bool:
     return bool(reference and jeu and jeu != reference)
 
 
+def anciens_jeux_reference() -> list[str]:
+    """Liste des anciens jeux de référence consignés dans reference.yaml."""
+    anciens = (_yaml(JEU_REFERENCE_YAML) or {}).get("anciens")
+    if not isinstance(anciens, list):
+        return []
+    res = []
+    for a in anciens:
+        if isinstance(a, dict) and a.get("jeu") and isinstance(a["jeu"], str):
+            res.append(a["jeu"].strip())
+        elif isinstance(a, str) and a.strip():
+            res.append(a.strip())
+    return res
+
+
+def normaliser_cle_jeu(j: Optional[str]) -> str:
+    """Clé normalisée du jeu pour le regroupement dans le registre."""
+    if not isinstance(j, str) or not j.strip() or j.strip() in ("—", "None"):
+        return "sans_jeu"
+    return j.strip()
+
+
+def ordonner_jeux(cles: list[str], ref: Optional[str] = None, anciens: Optional[list[str]] = None) -> list[str]:
+    """Ordonne les jeux : référence courante en premier, anciens jeux, autres, sans jeu en dernier."""
+    ref = ref or jeu_reference()
+    anciens = anciens if anciens is not None else anciens_jeux_reference()
+
+    def rang(c: str) -> tuple[int, int, str]:
+        if ref and c == ref:
+            return (0, 0, c)
+        if anciens and c in anciens:
+            return (1, anciens.index(c), c)
+        if c == "sans_jeu":
+            return (3, 0, c)
+        return (2, 0, c)
+
+    return sorted(cles, key=rang)
+
+
+def titre_groupe_jeu(cle: str, nb: int, ref: Optional[str] = None, anciens: Optional[list[str]] = None) -> tuple[str, str]:
+    """Titre markdown et légende d'un groupe de jeu dans le registre."""
+    ref = ref or jeu_reference()
+    anciens = anciens if anciens is not None else anciens_jeux_reference()
+    s = "s" if nb > 1 else ""
+
+    if cle == "sans_jeu":
+        return (
+            f"⚪ Sans jeu de test ({nb} exécution{s})",
+            "Exécutions sans jeu de test associé. Non comparables aux autres jeux.",
+        )
+    if ref and cle == ref:
+        return (
+            f"🎯 {cle} · référence ({nb} exécution{s})",
+            "Substrat de référence actif pour les comparaisons scientifiques.",
+        )
+    if anciens and cle in anciens:
+        return (
+            f"📦 {cle} · ancien jeu de référence ({nb} exécution{s})",
+            f"Ancien substrat de référence (remplacé par « {ref} »). Scores comparables uniquement entre exécutions de ce jeu.",
+        )
+    return (
+        f"📦 {cle} ({nb} exécution{s})",
+        "Substrat de test spécifique. Scores comparables uniquement au sein de ce jeu.",
+    )
+
+
 def formule_reference() -> Optional[dict]:
     """Nom, SHA et poids de la formule de référence courante (pour le panneau)."""
     try:
@@ -1316,14 +1409,17 @@ def _lignes_selectionnees(event, total: Optional[int] = None) -> list[int]:
     return [i for i in rows if 0 <= i < total] if total is not None else rows
 
 
-def _apercu_ligne_selectionnee(st, event, df) -> None:
+def _apercu_ligne_selectionnee(st, event=None, df=None, ligne: Optional[dict] = None) -> None:
     """Rend inline la page de scores de la ligne cliquée dans le tableau (EF-75)."""
     import pandas as pd
 
-    rows = _lignes_selectionnees(event, len(df))
-    if not rows:
-        return
-    ligne = df.iloc[rows[0]].to_dict()
+    if ligne is None:
+        if event is None or df is None:
+            return
+        rows = _lignes_selectionnees(event, len(df))
+        if not rows:
+            return
+        ligne = df.iloc[rows[0]].to_dict()
     if pd.isna(ligne.get("composite_emd")):
         st.caption(f"« {ligne.get('experience')} / {ligne.get('execution')} » n'est pas scorée "
                    "(exécution non terminée) — pas de détail par sous-catégorie.")
@@ -1445,19 +1541,43 @@ def _decideur_label(dec: Optional[dict]) -> str:
     return f"{t}:{dec.get('modele') or ''}".rstrip(":")
 
 
+def _types_lisant_un_prompt() -> tuple[str, ...]:
+    """Les décideurs qui lisent un prompt, depuis la SEULE liste qui fasse foi (N5).
+
+    Import tardif comme les autres emprunts à `experiences` (cf. `_formule_reference_sha`) :
+    ce module-ci s'appelle lui aussi `experiences`, et l'import se résout depuis l'hôte.
+    Repli sur la valeur littérale si le paquet n'est pas au `PYTHONPATH` — le tableau de bord
+    reste consultable sans les services, et une colonne approchée vaut mieux qu'une page morte.
+    """
+    try:
+        from experiences.nommage import TYPES_LISANT_UN_PROMPT
+
+        return TYPES_LISANT_UN_PROMPT
+    except Exception:  # noqa: BLE001 — le tableau s'affiche même sans le paquet
+        return ("passerelle", "antigravity", "typesafe")
+
+
 def _prompt_affiche(variante: Optional[str], dec: Optional[dict]) -> str:
     """Le prompt système AFFICHÉ : la variante seulement si le décideur en lit un.
 
-    Seule la passerelle lit un prompt système : `experiences/cli.py` ne transmet
-    `parameters.prompt_variant` que sous `decideur.type == "passerelle"`. Pour un modèle
-    statistique, un rejeu, un tirage ou l'heuristique de durée, `gabarit.variante` est un
-    résidu du formulaire que l'exécution ignore, et l'afficher laissait croire le contraire :
-    le 2026-09-08, `exp_lgbm_jtir_nosim` (décideur LightGBM) annonçait « minimal_persona »
-    alors qu'aucune phrase n'a été envoyée — le dossier d'exécution ne porte pas un seul
-    échange LLM. Même règle que N5 du nommage, qui retire pour cette raison le segment de
-    prompt du nom canonique (`exp_lgbm_jtir_nosim`, et non `exp_lgbm_minper_jtir_nosim`).
+    Trois décideurs lisent un prompt système — la passerelle, Antigravity et, depuis le
+    ticket 096, le classifieur typé `typesafe`. Pour un modèle statistique, un rejeu, un
+    tirage ou l'heuristique de durée, `gabarit.variante` est un résidu du formulaire que
+    l'exécution ignore, et l'afficher laissait croire le contraire : le 2026-09-08,
+    `exp_lgbm_jtir_nosim` (décideur LightGBM) annonçait « minimal_persona » alors qu'aucune
+    phrase n'a été envoyée — le dossier d'exécution ne porte pas un seul échange LLM. Même
+    règle que N5 du nommage, qui retire pour cette raison le segment de prompt du nom
+    canonique (`exp_lgbm_jtir_nosim`, et non `exp_lgbm_minper_jtir_nosim`).
+
+    Le défaut symétrique a duré du 2026-09-21 au même jour : `typesafe` manquait à cette
+    liste, et TOUTE exécution Jev affichait « — » alors que sa consigne nomme son expérience
+    (`proexp05`) et se scelle dans son empreinte. La liste ne se recopie plus ici.
+
+    Jev reçoit la variante AMPUTÉE de son bloc `[Output instructions]` : la colonne affiche
+    quand même le nom nu, pour que le filtre garde une seule valeur par variante ; c'est la
+    fiche de détail qui porte la troncature (décision de l'auteur, 2026-09-21).
     """
-    if (dec or {}).get("type") not in ("passerelle", "antigravity"):
+    if (dec or {}).get("type") not in _types_lisant_un_prompt():
         return "—"
     return variante or "actif"  # sans variante désignée : le prompt ACTIF de la passerelle
 
@@ -1607,6 +1727,13 @@ def fiche_conditions(exp: Optional[dict]) -> list[tuple[str, str]]:
         fiche.append(("fournisseur", fournisseur))
     prompt = _prompt_affiche((exp.get("gabarit") or {}).get("variante"), dec)
     if prompt != "—":
+        # La fiche a la place de dire ce que la colonne tait : Jev ne reçoit PAS le texte
+        # entier. Le bloc `[Output instructions]` lui est retiré (le type `Choice` le
+        # remplace), et le texte servi porte son propre sha dans l'empreinte de l'exécution.
+        # Sans cette mention, deux lignes « prompt_expert_05 », l'une Jev l'autre LLM,
+        # laisseraient croire à une consigne identique.
+        if dec.get("type") in ("typesafe",):
+            prompt += " (sans le bloc de sortie — sortie typée)"
         fiche.append(("prompt", prompt))
     if params.get("temperature") is not None:
         fiche.append(("température", str(params["temperature"])))
@@ -1635,6 +1762,8 @@ def fiche_conditions(exp: Optional[dict]) -> list[tuple[str, str]]:
         fiche.append(("mémoire", "activée" if exp["memoire"] else "désactivée"))
     if "vehicule_chaine" in exp or "verrou_retour" in exp:
         fiche.append(("chaîne des véhicules", libelle_chaine(exp)))
+    if "troncature_15" in exp:
+        fiche.append(("troncature 15 %", "activée (Consideration Set)" if exp["troncature_15"] else "désactivée"))
     par = (exp.get("regroupement") or {}).get("parallelisme")
     if par is not None:
         fiche.append(("parallélisme", str(par)))
@@ -1920,6 +2049,13 @@ def lister(dossier: Optional[Path] = None) -> list[dict]:
     # Ce qui tourne reste visible même retiré du tableau : une exécution relancée en console
     # (`make experience-reprendre`) sur une ligne retirée écrirait sinon sans que personne ne
     # la voie ni ne puisse l'arrêter. Le retrait la reprendra quand elle se sera tue.
+    # Le ticket qui porte chaque expérience (colonne `ticket`). Posé ICI et non dans `base` :
+    # la correspondance se calcule sur la liste ENTIÈRE, parce qu'un réplicat `_2` ne se
+    # reconnaît qu'en voyant que son aîné existe. Un seul appel, mémoïsé dans son module.
+    tickets = ticket_par_experience({l["experience"] for l in lignes if l.get("experience")})
+    for l in lignes:
+        l["ticket"] = tickets.get(l.get("experience") or "", "")
+
     caches = {_cle_masque(e["experience"], e.get("execution")) for e in masques(dossier)}
     return [l for l in lignes
             if _cle_masque(l["experience"], l.get("execution")) not in caches
@@ -2422,7 +2558,8 @@ def motifs_indisponibilite(exp: dict, *, jeu_clos: bool, controleur_ok: bool, re
                            construction: Optional[str] = None,
                            ecrasement: Optional[str] = None,
                            modele_local: Optional[str] = None,
-                           docker_ok: bool = True) -> dict[str, list[str]]:
+                           docker_ok: bool = True,
+                           quota_epuise: Optional[str] = None) -> dict[str, list[str]]:
     """Ce qui manque, bouton par bouton (R20).
 
     Un bouton grisé sans motif se lit comme une panne : le 2026-09-06, « Lancer » était
@@ -2436,7 +2573,7 @@ def motifs_indisponibilite(exp: dict, *, jeu_clos: bool, controleur_ok: bool, re
         nom_refuse.append(raison or "le nom de l'expérience n'a pas pu être calculé")
     elif not MOTIF_NOM.match(exp["nom"]):
         nom_refuse.append("le nom ne peut porter ni espace ni séparateur de chemin — lettres, "
-                          "chiffres, accents, tiret, souligné et point, 64 au plus, en commençant "
+                          "chiffres, accents, tiret, souligné et point, 128 au plus, en commençant "
                           "par une lettre ou un chiffre : il devient un dossier et la valeur de "
                           "`EXP=` pour `make`")
     # Enregistrer ne demande QUE un nom recevable : le schéma de la plateforme accepte une
@@ -2460,10 +2597,11 @@ def motifs_indisponibilite(exp: dict, *, jeu_clos: bool, controleur_ok: bool, re
     # Un modèle LM Studio absent ou chargé trop court n'interdit que le lancement : enregistrer
     # et estimer n'appellent pas le modèle (2026-09-08 : sept minutes sans décision, sinon).
     local = [modele_local] if modele_local else []
+    q_ep = [quota_epuise] if quota_epuise else []
     return {
         "enregistrer": nom_refuse + ecr,
         "estimer": nom_refuse + sans_jeu + sans_controleur + ecr,
-        "lancer": nom_refuse + sans_jeu + non_clos + sans_docker + sans_registre + ecr + local,
+        "lancer": nom_refuse + sans_jeu + non_clos + sans_docker + sans_registre + ecr + local + q_ep,
         "construire": sans_docker + sans_registre + ([construction] if construction else []),
     }
 
@@ -2589,7 +2727,7 @@ def defauts() -> dict:
         "reflexion": None, "niveau_reflexion": None,
         "graine_decideur": 42, "rejeu_de": "", "artefact": "",
         "mode": "sans_simulateur", "politique": "commune", "date": "2026-03-16", "graine_calendrier": 42,
-        "horizon_jours": 1, "memoire": False, "graine_ordre": 42, "graine_tirage": 42, "parallelisme": 8,
+        "horizon_jours": 1, "memoire": False, "troncature_15": False, "graine_ordre": 42, "graine_tirage": 42, "parallelisme": 8,
         "max_candidats": 6, "attente_max_s": 120, "tolerances": dict(TOLERANCES_PROPOSEES), "derive_de": None,
     }
 
@@ -2622,7 +2760,8 @@ def depuis_experience(e: dict) -> dict:
         "rejeu_de": dec.get("rejeu_de") or "", "artefact": dec.get("artefact") or "", "mode": e.get("mode", d["mode"]),
         "politique": cal.get("politique", d["politique"]), "date": str(cal.get("date", d["date"])),
         "graine_calendrier": cal.get("graine", d["graine_calendrier"]), "horizon_jours": e.get("horizon_jours", 1),
-        "memoire": bool(e.get("memoire", False)), "graine_ordre": e.get("graine_ordre", 42), "graine_tirage": e.get("graine_tirage", 42),
+        "memoire": bool(e.get("memoire", False)), "troncature_15": bool(e.get("troncature_15", False)),
+        "graine_ordre": e.get("graine_ordre", 42), "graine_tirage": e.get("graine_tirage", 42),
         "parallelisme": (e.get("regroupement") or {}).get("parallelisme", 8), "max_candidats": e.get("max_candidats", 6),
         "attente_max_s": e.get("attente_max_s", 120), "tolerances": e.get("tolerances_horaires") or dict(TOLERANCES_PROPOSEES),
         "derive_de": e.get("nom"),
@@ -2671,6 +2810,8 @@ def _valider_base(brut: dict) -> dict:
                     valeur = int(valeur)
                 except (TypeError, ValueError):
                     continue
+        elif cle in ("memoire", "troncature_15"):
+            valeur = bool(valeur)
         elif cle == "politique" and valeur not in POLITIQUES:
             continue
         elif cle == "mode" and valeur not in ("sans_simulateur", "simulateur"):
@@ -2703,7 +2844,10 @@ def _valider_base(brut: dict) -> dict:
     if type_plateforme(base["decideur_type"]) == "passerelle":
         # Un brouillon d'avant la scission — ou un modèle qui a changé de bord depuis — se range
         # du côté qui le sert AUJOURD'HUI : le libellé du sélecteur ne doit pas mentir.
-        base["decideur_type"] = choix_decideur("passerelle", base.get("modele"), modeles_par_portee()[0])
+        portee_voulue = portee_plateforme(brut.get("decideur_type")) or (
+            brut.get("portee") if brut.get("portee") in ("local", "distant") else None
+        )
+        base["decideur_type"] = choix_decideur("passerelle", base.get("modele"), modeles_par_portee()[0], portee_voulue)
     return base
 
 
@@ -2762,6 +2906,11 @@ def construire_experience(v: dict) -> dict:
         elif v.get("reflexion") is not None:
             params["thinking_budget"] = int(v["reflexion"])
         decideur.update({"modele": v["modele"], "parametres": params})
+    elif type_ == "typesafe":
+        # La VERSION, et rien d'autre : ni température (Jev n'en a pas), ni portée (il n'est
+        # pas servi par la passerelle), ni réflexion. Écrire un `parametres` peuplé scellerait
+        # dans l'empreinte des réglages que le décideur n'applique pas.
+        decideur["modele"] = (v.get("modele") or "").strip() or None
     elif type_ == "aleatoire":
         decideur["graine"] = int(v["graine_decideur"])
     elif type_ == "rejeu":
@@ -2777,7 +2926,8 @@ def construire_experience(v: dict) -> dict:
         "decideur": decideur,
         "mode": v["mode"],
         "calendrier": {"politique": v["politique"], "date": str(v["date"]), "graine": int(v["graine_calendrier"])},
-        "horizon_jours": int(v["horizon_jours"]), "memoire": bool(v["memoire"]), "evenements": [],
+        "horizon_jours": int(v["horizon_jours"]), "memoire": bool(v["memoire"]),
+        "troncature_15": bool(v.get("troncature_15", False)), "evenements": [],
         "graine_ordre": int(v["graine_ordre"]), "graine_tirage": int(v["graine_tirage"]),
         "regroupement": {"parallelisme": int(v["parallelisme"])},
         "tolerances_horaires": v["tolerances"], "max_candidats": int(v["max_candidats"]), "attente_max_s": int(v["attente_max_s"]),
@@ -2796,7 +2946,7 @@ def enregistrer(exp: dict) -> tuple[Path, bool]:
     if not MOTIF_NOM.match(str(exp.get("nom", ""))):
         raise ValueError(
             f"nom d'expérience refusé : {exp.get('nom')!r} — ni espace ni séparateur de chemin, "
-            f"64 caractères au plus, en commençant par une lettre ou un chiffre, puisqu'il devient "
+            f"128 caractères au plus, en commençant par une lettre ou un chiffre, puisqu'il devient "
             f"un dossier et la valeur de EXP= pour make"
         )
     d = DOSSIER / exp["nom"]
@@ -3089,7 +3239,14 @@ def modele_local_de(exp: dict) -> Optional[str]:
     dec = exp.get("decideur") or {}
     if dec.get("type") != "passerelle" or not dec.get("modele"):
         return None
-    return str(dec["modele"]) if str(dec["modele"]) in modeles_par_portee()[0] else None
+    portee = dec.get("portee")
+    if portee == "distant":
+        return None
+    if portee == "local":
+        return str(dec["modele"])
+    locaux, distants = modeles_par_portee()
+    m = str(dec["modele"])
+    return m if m in locaux and m not in distants else None
 
 
 def _suivi_lmstudio(st, modele: str, lancer) -> None:
@@ -3651,51 +3808,135 @@ def _suivi_du_registre(st, pd) -> None:
         st.caption(f"{len(df)} ligne(s) affichée(s) sur {len(candidates)} — cliquez une ligne "
                    "pour voir son détail par sous-catégorie. La couverture accompagne chaque "
                    "score ; une exécution non scorée affiche « — », jamais 0.")
-        # R22 — hors référence : la ligne entière en gris. Un composite ne se compare qu'à
-        # l'intérieur d'un même substrat, et trois jeux cohabitent dans le registre depuis la
-        # correction du ticket 088. Le gris ne touche que la copie AFFICHÉE : `df` et
-        # `candidates` gardent les valeurs nues, donc ni le tri ni les filtres ne le voient.
+        # Partitionnement par jeu de test : un tableau distinct par jeu, ordonné (référence en tête)
         ref_jeu = jeu_reference()
-        hors = [bool(l.get("hors_reference")) for l in df.to_dict("records")]
-        if not ref_jeu:
-            st.caption("Aucun jeu de référence désigné dans "
-                       "`services/llm-agents/experiences/jeux/reference.yaml` : aucune ligne "
-                       "n'est grisée, et la colonne `jeu` est seule à dire sur quel substrat "
-                       "chaque exécution a tourné.")
-        elif any(hors):
-            st.caption(f"⬜ {sum(hors)} ligne(s) grisée(s) : elles ont tourné sur un autre jeu "
-                       f"que la référence « {ref_jeu} ». Leur score ne se compare pas à celui "
-                       f"des lignes noires — la colonne `jeu` dit lequel elles ont couru.")
-        rendu = vue
-        if any(hors):
-            # Streamlit ne rend d'un Styler que `color` et `background-color` : le gris passe,
-            # une italique ne passerait pas.
-            rendu = vue.style.apply(
-                lambda ligne: ["color: #9aa0a6" if hors[ligne.name] else "" for _ in ligne],
-                axis=1)
+        anciens_jeux = anciens_jeux_reference()
+
+        cles_lignes = [normaliser_cle_jeu(l.get("jeu")) for l in df.to_dict("records")]
+        df["_cle_jeu"] = cles_lignes
+
+        groupes_uniques = list(dict.fromkeys(cles_lignes))
+        groupes_ordonnes = ordonner_jeux(groupes_uniques, ref_jeu, anciens_jeux)
+
+        # La colonne `jeu` n'a plus besoin d'être montrée dans les tableaux (le jeu figure dans le titre)
+        cols_tableau = [c for c in vue.columns if c != "jeu"]
+        vue_tableau = vue[cols_tableau]
+
         cfg = {}
         if hasattr(st, "column_config"):
             cfg["column_config"] = {
                 "choix_forces": st.column_config.TextColumn(
                     "choix_forces",
                     help="Pourcentage des choix forcés (itinéraire unique) par rapport au nombre total de choix faits",
+                ),
+                "ticket": st.column_config.TextColumn(
+                    "ticket",
+                    help="Le ticket qui porte ce bras, relu à chaque fois dans docs/tickets/ "
+                         "et campagnes/ — jamais recopié. Vide = aucune source ne le nomme ; "
+                         "rien n'est deviné.",
                 )
             }
-        event = st.dataframe(
-            rendu,
-            width="stretch",
-            hide_index=True,
-            on_select="rerun",
-            selection_mode="single-row",
-            key="exp-table",
-            **cfg,
-        )
+
+        # Détection des sélections et synchronisation mono-sélection
+        # Streamlit interdit de modifier st.session_state[cle] après l'instanciation du widget (StreamlitAPIException).
+        # La synchronisation mono-sélection et la remise à zéro des autres tables doivent donc être effectuées
+        # AVANT le rendu des widgets st.dataframe.
+        memoire_sel = st.session_state.setdefault("_sel_tables_mem", {})
+        changement_selection = None
+        changement_deselection = None
+
+        for cle_grp in groupes_ordonnes:
+            cle_w = f"exp-table-{cle_grp}"
+            if cle_w in st.session_state:
+                indices = df.index[df["_cle_jeu"] == cle_grp].tolist()
+                sel_actuelle = _lignes_selectionnees(st.session_state[cle_w], len(indices))
+                anciennes = memoire_sel.get(cle_grp, [])
+                if sel_actuelle != anciennes:
+                    if sel_actuelle:
+                        if changement_selection is None:
+                            changement_selection = (cle_grp, sel_actuelle[0])
+                    else:
+                        if changement_deselection is None:
+                            changement_deselection = cle_grp
+
+        if changement_selection:
+            active_cle, active_row = changement_selection
+            st.session_state["_table_active_cle"] = active_cle
+            st.session_state["_table_active_row"] = active_row
+            for k in groupes_ordonnes:
+                memoire_sel[k] = [active_row] if k == active_cle else []
+                if k != active_cle and f"exp-table-{k}" in st.session_state:
+                    st.session_state[f"exp-table-{k}"] = {"selection": {"rows": [], "columns": []}}
+        elif changement_deselection and st.session_state.get("_table_active_cle") == changement_deselection:
+            st.session_state["_table_active_cle"] = None
+            st.session_state["_table_active_row"] = None
+            memoire_sel[changement_deselection] = []
+
+        events_par_groupe: dict[str, tuple] = {}
+        lignes_sel_par_groupe: dict[str, list[int]] = {}
+
+        if not groupes_ordonnes:
+            cle_widget = "exp-table-vide"
+            st.dataframe(
+                vue_tableau,
+                width="stretch",
+                hide_index=True,
+                key=cle_widget,
+                **cfg,
+            )
+
+        for idx_grp, cle_grp in enumerate(groupes_ordonnes):
+            indices = df.index[df["_cle_jeu"] == cle_grp].tolist()
+            df_grp = df.loc[indices].reset_index(drop=True)
+            vue_grp = vue_tableau.loc[indices].reset_index(drop=True)
+
+            titre, explication = titre_groupe_jeu(cle_grp, len(df_grp), ref_jeu, anciens_jeux)
+            st.markdown(f"#### {titre}")
+            if explication:
+                st.caption(explication)
+
+            cle_widget = f"exp-table-{cle_grp}"
+            event_grp = st.dataframe(
+                vue_grp,
+                width="stretch",
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key=cle_widget,
+                **cfg,
+            )
+            events_par_groupe[cle_grp] = (event_grp, df_grp)
+            sel_grp = _lignes_selectionnees(event_grp, len(df_grp))
+            lignes_sel_par_groupe[cle_grp] = sel_grp
+
+        if not changement_selection and not changement_deselection:
+            for k, sel in lignes_sel_par_groupe.items():
+                memoire_sel[k] = sel
+
+        active_cle = st.session_state.get("_table_active_cle")
+        active_row = st.session_state.get("_table_active_row")
+        if not active_cle:
+            for k in groupes_ordonnes:
+                if lignes_sel_par_groupe.get(k):
+                    active_cle = k
+                    active_row = lignes_sel_par_groupe[k][0]
+                    st.session_state["_table_active_cle"] = active_cle
+                    st.session_state["_table_active_row"] = active_row
+                    break
+
+        ligne_choisie = None
+        event_actif = None
+        df_actif = None
+        if active_cle and active_cle in events_par_groupe and active_row is not None:
+            ev, df_g = events_par_groupe[active_cle]
+            if 0 <= active_row < len(df_g):
+                ligne_choisie = df_g.iloc[active_row].to_dict()
+                event_actif = ev
+                df_actif = df_g
 
         # Les actions portent sur la LIGNE COCHÉE du tableau (plus de sélecteur séparé), et
         # se dessinent AU-DESSUS du détail par sous-catégorie : on agit sur ce qu'on regarde.
-        rows = _lignes_selectionnees(event, len(df))
-        if rows:
-            ligne_choisie = df.iloc[rows[0]].to_dict()
+        if ligne_choisie:
             choix = ligne_choisie.get("experience")
             # Une exécution absente devient NaN dans le DataFrame : on ne garde que du texte,
             # sinon la ligne « definie » se retirerait sous la clé « nan » au lieu de « rien ».
@@ -3722,6 +3963,9 @@ def _suivi_du_registre(st, pd) -> None:
                 if choix in exps:
                     st.session_state["exp_base"] = _valider_base(depuis_experience(exps[choix]))
                     st.session_state["exp_version"] = int(st.session_state.get("exp_version", 0)) + 1
+                    st.session_state["exp_source_rabattre"] = choix
+                    st.session_state["exp_source_recopiee"] = choix
+                    st.session_state["exp_source_avis"] = ("caption", f"Réglages de « {choix} » recopiés — le nom se recalcule des paramètres.")
                     st.rerun()
             if a4.button("♻️ Recharger passerelle", disabled=not lancer_fn, width="stretch", key=f"act-reload-passerelle-{choix}",
                          help="`make passerelle-recharger` : redémarre api et worker pour charger les nouvelles variantes de prompts.yaml"):
@@ -3770,7 +4014,7 @@ def _suivi_du_registre(st, pd) -> None:
             st.caption("🧾 " + (fiche_en_ligne(fiche_de_ligne(l)) or "conditions illisibles"))
             _boutons_arret(st, l, index, prefixe="reg")
 
-        _apercu_ligne_selectionnee(st, event, df)
+        _apercu_ligne_selectionnee(st, event=event_actif, df=df_actif, ligne=ligne_choisie)
 
     vivant = any(l.get("etat") == ETAT_EN_COURS for l in lister())
     st.fragment(run_every="5s" if vivant else None)(dessiner)()
@@ -3880,9 +4124,12 @@ def _formulaire(st, base: dict, version: int) -> dict:
             inaptes = modeles_inaptes()
             ecartes = [m for m in noms if m in inaptes]
             noms = [m for m in noms if m not in inaptes]
+            familles_map = familles_par_modele()
             def _lib_modele(m: str) -> str:
                 q = quotas[m]
-                if q["inconnu"] and not q["marge"]:
+                if q.get("epuisee"):
+                    dispo = "quota épuisé (fenêtre fermée)"
+                elif q["inconnu"] and not q["marge"]:
                     dispo = f"{q['limite']} req/jour, consommation inconnue (passerelle injoignable)" if q["limite"] else "sans limite journalière"
                 else:
                     dispo = f"{q['marge']} req/jour disponibles sur {q['limite']}"
@@ -3891,13 +4138,18 @@ def _formulaire(st, base: dict, version: int) -> dict:
                 # de clés qui le servent (= seaux de quota cumulés) suffit ; le détail par clé
                 # est dans la légende sous le sélecteur.
                 n = len(q["instances"])
-                return f"{m} — {dispo} · {n} clé{'s' if n > 1 else ''}"
+                fams = [f for f in familles_map.get(m, []) if f != FOURNISSEUR_LOCAL]
+                tag = f"[{'/'.join(fams).upper()}] " if fams else ""
+                return f"{tag}{m} — {dispo} · {n} clé{'s' if n > 1 else ''}"
             libelle, cle_widget = "Modèle (RPD = requêtes/jour restantes)", "modele-distant"
         idx_modele = noms.index(base["modele"]) if base.get("modele") in noms else (
             noms.index("gemini-3.8-flash") if antigravity and "gemini-3.8-flash" in noms else 0
         )
         v["modele"] = c3.selectbox(libelle, noms, index=idx_modele,
                                    key=k(cle_widget), format_func=_lib_modele) if noms else c3.text_input("Modèle", value=base["modele"], key=k(cle_widget))
+        if not local and quotas.get(v.get("modele", ""), {}).get("epuisee"):
+            c3.warning("⚠️ Quota de ce modèle momentanément épuisé côté fournisseur (fenêtre fermée). "
+                       "Le lancement sera refusé tant que le fournisseur n'a pas renouvelé son quota.")
         if ecartes:
             with c3.expander(f"🚫 {len(ecartes)} modèle(s) écarté(s) — inutilisables pour une expérience"):
                 for m in ecartes:
@@ -3959,6 +4211,24 @@ def _formulaire(st, base: dict, version: int) -> dict:
         if (v["reflexion"] is not None or v["niveau_reflexion"] is not None) and local:
             c3.caption("⚠ Ce réglage n'est transmis que par les fournisseurs Google : sur un "
                        "modèle local il sera scellé dans l'empreinte sans être appliqué.")
+    elif v["decideur_type"] == "typesafe":
+        # Jev n'est pas servi par la passerelle : il n'a ni quota, ni clé, ni instance à
+        # choisir, donc rien à lire dans `providers.yaml` — d'où un champ libre et non un
+        # sélecteur. Mais il a une VERSION, et elle est obligatoire : `segment_decideur` nomme
+        # l'expérience d'après elle (`jev-1130`), et sans elle le nom ne se calcule pas.
+        # Jusqu'au 2026-09-21 ce champ n'existait pas : le formulaire posait `modele: None`,
+        # le nom sortait vide et l'enregistrement était refusé sans dire pourquoi — autrement
+        # dit, une expérience Jev ne pouvait se déclarer QUE par son YAML.
+        v["modele"] = c3.text_input("Version de Jev (épinglée)", value=base.get("modele") or "jev-1.13.0",
+                                    key=k("modele-typesafe"), placeholder="jev-1.13.0")
+        if not RE_VERSION_JEV.match(str(v.get("modele") or "")):
+            c3.warning("⚠️ Version attendue sous la forme `jev-<majeur>.<mineur>.<correctif>`. "
+                       "Les alias `jev-latest` et `jev-preview` sont refusés au lancement : ils "
+                       "rendraient l'empreinte mensongère au premier changement de version.")
+        c3.caption("Classifieur zéro-shot à sortie typée : il rend une distribution sur les "
+                   "options sans produire de texte. Il LIT le prompt système, amputé de son "
+                   "bloc `[Output instructions]` — le type `Choice` le remplace. Ni quota, ni "
+                   "clé, ni température.")
     elif v["decideur_type"] == "aleatoire":
         v["graine_decideur"] = c3.number_input("Graine du tirage", 0, 10**9, int(base["graine_decideur"]), key=k("gdec"))
     elif v["decideur_type"] == "rejeu":
@@ -3977,7 +4247,7 @@ def _formulaire(st, base: dict, version: int) -> dict:
     # est utile en soi), mais il ne se présente plus comme un réglage de l'exécution quand
     # celle-ci n'en lira rien : c'est ici que « minimal_persona » entrait dans un
     # `experience.yaml` de décideur LightGBM, et de là dans le tableau (cf. `_prompt_affiche`).
-    lit_un_prompt = type_plateforme(v["decideur_type"]) in ("passerelle", "antigravity")
+    lit_un_prompt = type_plateforme(v["decideur_type"]) in _types_lisant_un_prompt()
     t = textes.get(v["variante"]) or {}
     prov = t.get("provenance") or {}
     col_p_titre, col_p_reload = st.columns([3, 1], vertical_alignment="bottom")
@@ -4023,7 +4293,7 @@ def _formulaire(st, base: dict, version: int) -> dict:
             st.toast("Passerelle en cours de rechargement — suivi dans 📟 Activités en cours")
 
     # ── temps : mode, calendrier, puis le jour SEULEMENT si la date est commune ──
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns([1.1, 1.4, 1.2, 0.9, 1.4])
     v["mode"] = c1.radio("Mode", ("sans_simulateur", "simulateur"), index=0 if base["mode"] == "sans_simulateur" else 1, key=k("mode"),
                          format_func=lambda x: "sans simulateur (rapide)" if x == "sans_simulateur" else "avec GAMA")
     v["politique"] = c2.selectbox("Calendrier", POLITIQUES, index=POLITIQUES.index(base["politique"]), key=k("pol"),
@@ -4041,6 +4311,14 @@ def _formulaire(st, base: dict, version: int) -> dict:
                                          help="un seul jour sans simulateur ; l'horizon ne vaut qu'avec GAMA")
     if v["mode"] == "sans_simulateur":
         v["horizon_jours"] = 1
+    v["troncature_15"] = c5.selectbox(
+        "Troncature (Consideration Set)",
+        (False, True),
+        index=1 if base.get("troncature_15") else 0,
+        format_func=lambda x: "Activée (15 %)" if x else "Désactivée",
+        key=k("tr15"),
+        help="Théorie du Consideration Set (Hauser & Wernerfelt 1990) : élimine les options alternatives dont la part relative est < 15 % avant tirage catégoriel pour supprimer le bruit de roulette.",
+    )
     with st.expander("Réglages avancés (graines, regroupement, tolérances horaires)"):
         c1, c2, c3, c4 = st.columns(4)
         v["memoire"] = c1.checkbox("Mémoire des agents (GAMA seulement)", value=bool(base["memoire"]), key=k("mem"), disabled=(v["mode"] == "sans_simulateur"),
@@ -4048,7 +4326,8 @@ def _formulaire(st, base: dict, version: int) -> dict:
         v["parallelisme"] = c2.number_input("Personnes en parallèle", 1, 64, int(base["parallelisme"]), key=k("par"))
         # Aligner la demande sur la capacité réelle du modèle : au-delà, la passerelle répond
         # « saturés » et la moitié des tentatives part en pure perte.
-        conseil = parallelisme_conseille(str(v.get("modele") or ""), _etat_passerelle_cache(st))
+        conseil = parallelisme_conseille(str(v.get("modele") or ""), _etat_passerelle_cache(st),
+                                        portee=portee_plateforme(v.get("decideur_type")))
         if conseil and conseil.get("local"):
             c2.caption(f"Conseillé : **{conseil['valeur']}** — modèle local : {conseil['valeur']} appel(s) simultané(s) "
                        f"acceptés par LM Studio (`concurrency_limit` de {len(conseil['instances'])} instance(s)) ; "
@@ -4433,6 +4712,7 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
     version = int(st.session_state.get("exp_version", 0))
     base = st.session_state.get("exp_base") or charger_etat_formulaire() or defauts()
     valeurs = _formulaire(st, base, version)
+    st.session_state["exp_base"] = {**base, **valeurs}
     _afficher_avis_source(st, zone_avis, valeurs)
     sauver_etat_formulaire(valeurs)  # brouillon : les choix survivent au redémarrage (R21)
     exp = construire_experience(valeurs)
@@ -4484,9 +4764,14 @@ def render(st, pd, *, lancer: Optional[Callable[[str, dict], None]] = None, inli
 
     diag_local = lmstudio.diagnostic(modele_local, _etat_lmstudio_cache(st)) if modele_local else None
     motif_local = None if diag_local is None or diag_local.pret else f"modèle local : {diag_local.motif}"
+    etat_pass = _etat_passerelle_cache(st)
+    quotas_map = quotas_par_modele(etat_pass)
+    modele_choisi = (exp.get("decideur") or {}).get("modele")
+    q_info = quotas_map.get(str(modele_choisi)) or {}
+    motif_quota = "quota du modèle momentanément épuisé (fenêtre fermée côté fournisseur)" if (not modele_local and q_info.get("epuisee")) else None
     motifs = motifs_indisponibilite(exp, jeu_clos=jeu_clos, controleur_ok=controleur_ok,
                                     registre=bool(lancer), construction=construction, modele_local=motif_local,
-                                    docker_ok=services is not None)
+                                    docker_ok=services is not None, quota_epuise=motif_quota)
     bloc_enregistrer, bloc_estimer = motifs["enregistrer"], motifs["estimer"]
     bloc_lancer, bloc_construire = motifs["lancer"], motifs["construire"]
     sans_jeu = bool(valeurs.get("sans_jeu"))

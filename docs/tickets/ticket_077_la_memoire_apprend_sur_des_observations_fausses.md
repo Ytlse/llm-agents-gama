@@ -557,3 +557,64 @@ valeur, à écarter.
 
 **La prochaine action est la recette du § 10.5**, puis, si elle passe, le bras choqué puis le bras
 témoin, ~1 h 40 chacun au rythme mesuré de 6,5 minutes par journée vécue.
+
+## 11. Rejeu 30 jours — Décisions de reconception (2026-09-18)
+
+Diagnostic approfondi du run initial (20 jours, persona 899549 « Corinne ») :
+traces dans `experiments/archive/2026-09-18_14_31/`.
+
+### 11.1 Trois causes techniques identifiées
+
+1. **Instabilité pré-choc (J1-J5)** : Le LLM assignait systématiquement 55-80 % à la voiture,
+   mais le tirage catégoriel de Monte-Carlo (`draw_index`) tombait dans la queue de 9-25 %,
+   sélectionnant des modes que l'agent ne voulait pas. Le chaînage des véhicules (`retour_force`)
+   propageait ensuite le choix involontaire à tout le reste de la journée.
+2. **Non-transmission du choc en mémoire** : Les gravités mesurées (0,6167 au J8, 0,4000 au J9)
+   étaient toutes deux inférieures au seuil `memoire__importance_choc = 0,70`. Le choc n'a
+   **jamais** été injecté dans la section « Ce qui a changé récemment » du prompt de décision.
+3. **Écrasement du choc dans le Top-K ChromaDB** : Le concept de panne (0 rappels) était
+   systématiquement éliminé par les souvenirs de routine (15 rappels, similarité supérieure).
+
+### 11.2 Quatre corrections appliquées
+
+| Paramètre | Ancienne valeur | Nouvelle valeur | Justification |
+|---|---|---|---|
+| `vehicle_chain_enabled` | `true` | **`false`** | Isoler le raisonnement cognitif du blocage physique (Ticket 040, ablation lot 1) |
+| `vehicle_return_home_lock` | `true` | **`false`** | Idem — le verrou de retour ne s'applique plus |
+| `mode_choice_truncation_threshold` | `0.0` (inexistant) | **`0.15`** | Consideration Set (Hauser & Wernerfelt 1990). Les options < 15 % sont éliminées avant tirage. Supprime le bruit de roulette sur un agent individuel |
+| `memoire__importance_choc` | `0.70` | **`0.50`** | Tout incident « gênant » ($G \ge 0,50$) entre immédiatement en mémoire noyau |
+
+⚠ **La quatrième correction a été ANNULÉE le 2026-09-19.** Elle était inutile et elle violait le
+§ 9 de ce ticket. La gravité du choc du J15 vaut **exactement 0,70** et la comparaison est `>=` :
+le choc franchissait le seuil d'origine sans qu'on l'abaisse. Seul le J16 (0,533) en dépendait,
+et le J16 ne s'est jamais appliqué — l'exposition est restreinte aux trajets en voiture, et
+l'agent n'en faisait plus. Le seul effet mesurable de l'abaissement a été d'élargir le vivier C
+— rappel **sans aucune condition de contexte** — à six souvenirs supplémentaires sur 219.
+
+Le commentaire d'origine de `c6_voiture_suspecte.yaml` plaidait explicitement pour le
+sous-seuil : « Le souvenir n'atteint PAS le seuil du vivier des chocs (0,70). Il est donc rappelé
+par le vivier par objet — quand la voiture figure dans les options — et non hors contexte. C'est
+voulu : un moteur qui fait du bruit n'est pas une panne de réseau. » Cet argument a été supprimé
+le 18 septembre, pas réfuté. Le seuil est revenu à 0,70, et une règle du contrat (lot J) interdit
+désormais qu'une règle de mémoire soit redéfinie dans `config.yaml`.
+
+### 11.3 Protocole temporel étendu
+
+- **Baseline** : 10 jours ouvrés (J1-J5 + J8-J12, soit 2 semaines calendaires).
+  L'habitude se cristallise en LTM (confiance ≥ 0,85 après ≥ 5 observations homogènes).
+- **Chocs** : J15 (retard 30 min, gravité 0,70) et J16 (retard 20 min, gravité 0,53).
+  Les deux franchissent le seuil de 0,50.
+- **Observation post-choc** : J17 à J42 (18 jours ouvrés restants sur 20 prévus).
+  Durée de vie du souvenir du J15 : ~14,6 jours → s'éteint vers J30.
+  Horizon total : `simulation_max_days = 42` (30 jours de mobilité active).
+
+### 11.4 Fichiers modifiés
+
+- `packages/mobility_llm/src/mobility_llm/mode_choice.py` — `draw_index(min_prob_threshold=)`
+- `services/llm-agents/settings.py` — `mode_choice_truncation_threshold: float = 0.0`
+- `services/llm-agents/urban_mobility_agents/agents/llm_agent.py` — passage du seuil
+- `services/llm-agents/llm/cache.py` — passage du seuil
+- `services/llm-agents/experiences/decideur_antigravity.py` — passage du seuil
+- `services/llm-agents/config/config.yaml` — paramétrage de l'expérience
+- `services/llm-agents/config/chocs/c6_voiture_suspecte.yaml` — recalage J15/J16
+- `services/GAMA/CityTransport/config/sim_params.yaml` — `simulation_max_days: 42`

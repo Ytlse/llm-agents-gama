@@ -90,28 +90,45 @@ km_reseau_par_classe:
   '71-90': 1350.2
   '>90': 431.3
 
-# ── Météo : SEUL FACTEUR NON ÉTABLI, et il reste neutre ────────────────────────────
+# ── Météo : LA DÉCISION EST PRISE — le facteur vaut 1, définitivement ──────────────
 #
-# Le calcul a été fait et son résultat est REJETÉ. Rapporter la part d'accidents par
-# condition à la fréquence de cette condition dans les relevés de Toulouse donne :
-#   normale × 1,36 · temps couvert × 0,17 · pluie légère × 0,47 · pluie forte × 1,23
-#   neige × 0,53 · brouillard × 33,7
-# soit « la pluie légère est deux fois plus sûre que la moyenne » et « le brouillard
-# multiplie le risque par 34 ». Aucune des deux n'est croyable.
+# Décision de l'auteur du 2026-09-21 : la météo ne conditionne PAS l'accidentalité dans ce
+# dispositif. Ce n'est pas un chantier remis à plus tard, c'est une limite assumée, et voici
+# sur quoi elle s'appuie — deux raisons, dont la seconde suffirait seule.
 #
-# LA CAUSE EST UNE INCOMMENSURABILITÉ DES NOMENCLATURES, pas un manque de données.
-# `atm` est ce que l'agent verbalisateur a coché : 84 % des constats portent « normale »,
-# y compris sous un ciel couvert. La source météo locale, elle, classe 15,6 % des
-# créneaux en « couvert » et 20,2 % en « pluie légère » — cette dernière catégorie
-# absorbant le code 176 « pluie possible », qui est une prévision, pas une observation.
-# Les deux vocabulaires ne découpent pas le même monde ; leur rapport ne mesure rien.
-# Le brouillard s'y ajoute d'un défaut de dénominateur : 0,03 % des créneaux, soit une
-# poignée d'observations, et le ratio explose.
+# RAISON 1 — LES CONDITIONS À RISQUE N'EXISTENT PAS DANS LE MONDE SIMULÉ.
+# Mesuré le 2026-09-21 sur `data/weather/meteo_toulouse_12_mois.csv`, le SEUL fichier que
+# `weather_loader` lit (trace 2026-09-21_meteo_servie_par_la_simulation, script rejouable).
+# Sur les 2 920 créneaux de trois heures d'une année servie :
+#     brouillard      1 créneau   (0,03 %)   — le 30 août, hors de toute saison
+#     neige / grésil  4 créneaux  (0,14 %)
+#     pluie réelle  239 créneaux  (8,18 %)
+#     pluie POSSIBLE 422 créneaux (14,45 %)  — code 176, une PRÉVISION
+#     couvert/brume 365 créneaux  (12,50 %)
+#     dégagé      1 879 créneaux  (64,35 %)
+# Un facteur brouillard ou neige ne se déclencherait donc QUASIMENT JAMAIS — et sur le jeu
+# gelé `jeu-20260316`, sept jours de ciel dégagé et une averse : il est inatteignable.
+# Estimer finement un coefficient pour une condition absente du jeu de données serait du
+# travail sans objet.
 #
-# TANT QUE CE FACTEUR N'EST PAS ÉTABLI, IL VAUT 1. Ajuster la correspondance jusqu'à
-# obtenir des nombres plausibles reviendrait à choisir le résultat. Les deux voies
-# propres sont : une source d'exposition découpée comme `atm`, ou un risque relatif
-# déclaré exogène (docs/arch/protocole-parametre-exogene.md).
+# RAISON 2 — POUR LES CONDITIONS QUI RESTENT, LES NOMENCLATURES SONT INCOMMENSURABLES.
+# `atm` est ce que le verbalisateur a coché : 84 % des constats portent « normale », y
+# compris sous un ciel couvert. La source météo locale, elle, range 14,45 % des créneaux
+# sous « pluie possible à proximité » — une prévision, pas une observation de pluie. Les
+# deux vocabulaires ne découpent pas le même monde ; leur rapport ne mesure rien.
+#
+# CE QUE LE CALCUL REJETÉ DONNAIT, conservé plus bas pour que le refus soit vérifiable :
+#   normale ×1,36 · couvert ×0,17 · pluie légère ×0,47 · pluie forte ×1,23 · neige ×0,53
+#   · brouillard ×33,7
+# soit « la pluie légère est deux fois plus sûre que la moyenne ». Le ×33,7 du brouillard
+# repose sur UN SEUL créneau observé : il faudrait 0,8 jour de brouillard par an pour qu'il
+# tienne. À toute fréquence plausible (10 à 50 jours/an), le facteur retomberait entre 0,25
+# et 2,5 — autour de 1, pas de 34.
+#
+# ⚠ CE QUI ROUVRIRAIT LA QUESTION, et rien d'autre : un jeu météo servi à la simulation qui
+# porte réellement du brouillard, de la neige ou une distinction pluie/non-pluie fiable. Tant
+# que le fichier servi est celui-ci, le facteur reste à 1. Ajuster la correspondance jusqu'à
+# obtenir des nombres plausibles reviendrait à choisir le résultat.
 facteur_meteo_etabli: false
 facteur_meteo:
   'normale': 1.0

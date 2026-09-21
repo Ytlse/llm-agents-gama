@@ -76,7 +76,8 @@ from urban_mobility_agents.factory.factory import (
     init_static_data,
 )
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
-from urban_mobility_agents.utils import identite_run, rejeu_decisions
+from urban_mobility_agents.utils import filiation, identite_run, rejeu_decisions
+from urban_mobility_agents.utils.routage import journal_du_routage
 from urban_mobility_agents.utils.reprise import (
     point_de_reprise_timestamp,
     restaurer_si_demande,
@@ -883,7 +884,30 @@ async def startup_event():
     # fausse que rien ne signalerait.
     _workdir = Path(settings.workdir)
     _reprise = os.environ.get("REPRISE_RUN", "").strip()
-    _identite = identite_run.composer(settings, empreinte_choc=_empreinte_choc_courante())
+
+    # Ticket 095, lot C — le routage par fonction se lit au démarrage. Un binding qu'on ne lit
+    # nulle part est un binding qu'on découvre après la campagne.
+    logger.info(f"[routage] instances admises — {journal_du_routage()}")
+
+    # Ticket 095, lot D — RUN ENFANT. Le socle commun se joue une fois, chez le parent ; chaque
+    # bras en hérite. La filiation se vérifie AVANT d'écrire quoi que ce soit : un enfant qui
+    # diffère de son parent sur un champ non déclaré hériterait d'une mémoire produite sous
+    # d'autres réglages, et rien dans les sorties ne le dirait.
+    _parent_nom = filiation.parent_declare()
+    _parent_dir: Path | None = None
+    _champs_libres: tuple[str, ...] = ()
+    if _parent_nom:
+        _champs_libres = filiation.champs_libres()
+    _identite = identite_run.composer(
+        settings,
+        empreinte_choc=_empreinte_choc_courante(),
+        run_parent=_parent_nom,
+        champs_libres=_champs_libres,
+    )
+    if _parent_nom and not _reprise:
+        _parent_dir = filiation.repertoire_parent(_parent_nom, _workdir.parent)
+        filiation.amorcer(_workdir, _parent_dir, _identite)
+
     if _reprise:
         identite_run.verifier(_workdir, _identite)
         logger.info(f"[identite] reprise de {_workdir.name} : même expérience, vérifiée champ à champ")
@@ -896,9 +920,11 @@ async def startup_event():
     # après deux journées simulées.
     rejeu_decisions.charger(_workdir)
 
+    # Un enfant restaure le point hérité de son parent comme une reprise ordinaire : c'est le
+    # même mécanisme de gel, et le rejeu des jours communs ne réécrit donc aucune mémoire.
     restaurer_si_demande(
         _workdir,
-        reprise_demandee=bool(_reprise),
+        reprise_demandee=bool(_reprise) or bool(_parent_dir),
         alarme_si_absent=True,
     )
     # La trace de décisions (ticket 090) n'est chargée QUE sur une reprise nommée et vérifiée :

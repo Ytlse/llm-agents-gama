@@ -90,6 +90,41 @@ Néanmoins, l'audit scientifique et épistémologique révèle plusieurs points 
 | **P4 — Évolution conceptuelle** | Moyen terme | Étudier la séparation physique des magasins épisodique et sémantique et la résolution par similarité vectorielle A-MEM. |
 
 ## Critères de clôture
-- [ ] Le diagnostic théorique et les distinctions conceptuelles (épisodique vs sémantique, Système 1 vs 2) sont partagés et documentés.
-- [ ] La section 3.4 de l'article est rédigée sans les biais ou contresens identifiés.
-- [ ] Les correctifs de robustesse du code (`longterm.py`) sont ordonnancés.
+
+Relevés le 2026-09-21, chacun vérifié contre l'état du dépôt et non contre une note.
+
+- [x] **Le diagnostic théorique et les distinctions conceptuelles sont partagés et documentés.**
+  Épisodique contre sémantique : `docs/arch/memory-stm-ltm.md`, § « Ce qui s'oublie au temps, et
+  ce qui ne s'oublie pas » (2026-09-14), avec la table des deux registres, la règle retenue et
+  la lecture exacte du seuil de confiance. Système 1 contre Système 2 : même document, § « Régime
+  Système 1 / Système 2 : évalué, non retenu » (2026-09-21) — il ne vivait que dans le ticket 071
+  § 2.9, invisible d'une session qui lit la doc d'architecture. La notice Verplanken & Aarts
+  (1999) est ajoutée à la bibliographie du document, marquée **non recoupée**.
+- [x] **La section 3.4 de l'article est rédigée sans les biais ou contresens identifiés.**
+  Reprise en entier le 2026-09-15 lors de la passe du ticket 050, affinée en `v0.7` le 17. Elle
+  porte les deux registres avec leurs deux horloges et la citation de Tulving, le rappel à cinq
+  termes et la fenêtre égale à l'horizon. Vérifié le 2026-09-21 : plus aucune occurrence de
+  « BLEU-2 » ni d'HippoRAG dans tout `docs/paper/article/`, et la rectification d'HippoRAG est
+  consignée en `memory-stm-ltm.md` (§ des trois viviers, et notice bibliographique disant
+  qu'aucun mécanisme n'en dérive).
+- [x] **Les correctifs de robustesse du code (`longterm.py`) sont ordonnancés** — et livrés le
+  2026-09-14 par les lots du ticket 071. Vérifié ligne à ligne le 2026-09-21 :
+  `cleanup_user_memories` prend le temps simulé et **abandonne** le nettoyage plutôt que de
+  retomber sur l'horloge machine (`longterm.py:1119`) ; la suppression est propagée à l'index
+  vectoriel (`:1188`) ; `max_past_days` est évalué même sous le filtre jour ouvré (`:564`).
+  P2 est livré du même coup : aucun plancher temporel ne subsiste, et l'affinité catégorielle et
+  météo remplace le terme dit « BLEU-2 » (`:902`, `llm/axes.py`), la fonction `_bleu_score`
+  (`:1060`) restant en place mais n'étant plus câblée.
+
+**Ce que le ticket a produit et qui n'était pas dans ses critères.** Deux de ses quatre verrous
+conceptuels ont été tranchés contre la proposition d'origine, et c'est le résultat : l'identité
+conceptuelle par seuil `cos > 0,85` du § B est **écartée** au profit du panier de candidats et
+de la désignation par le modèle (ticket 071 § 2.3) — un seuil fixe sur un plongement n'a pas de
+fondement mesuré ; le régime Système 1 / Système 2 du § C est **écarté** au profit de la mesure
+de l'habitude, coder l'automatisme interdisant de montrer qu'il émerge.
+
+**Reste, hors critères.** La prospective demandée au chapitre 8 par la feuille de route P3 :
+elle n'existait dans aucune version du chapitre. Écrite le 2026-09-21 sous accord de l'auteur,
+§ 8.5. La séparation physique des magasins (P4) n'appartient pas à ce ticket : les deux registres
+partagent aujourd'hui un index unique par agent, et l'étude de leur séparation est portée par le
+ticket 071.

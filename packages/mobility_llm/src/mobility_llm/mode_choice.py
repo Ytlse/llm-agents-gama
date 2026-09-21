@@ -365,11 +365,20 @@ def derive_seed(*parts: Any) -> int:
     return int.from_bytes(hashlib.sha256(raw.encode("utf-8")).digest()[:8], "big")
 
 
-def draw_index(weights: Sequence[float], *seed_parts: Any) -> int:
+def draw_index(
+    weights: Sequence[float],
+    *seed_parts: Any,
+    min_prob_threshold: float = 0.0,
+) -> int:
     """Tire l'index d'une option proportionnellement à sa probabilité.
 
     Sans ``seed_parts``, le tirage utilise une instance ``Random`` fraîche, non
     rejouable. Avec, la graine est dérivée du contexte : même contexte → même tirage.
+
+    Si ``min_prob_threshold > 0.0``, les options dont la part relative
+    est strictement inférieure au seuil sont éliminées (poids mis à zéro)
+    et la masse restante est tirée (théorie du Consideration Set).
+    Si toutes les options tombent sous le seuil (cas limite), les poids d'origine sont conservés.
     """
     if not weights:
         raise ValueError("draw_index: aucune option à tirer")
@@ -377,8 +386,18 @@ def draw_index(weights: Sequence[float], *seed_parts: Any) -> int:
     total = sum(weights)
     if total <= 0:
         return rng.randrange(len(weights))
+
+    effective_weights = list(weights)
+    if min_prob_threshold > 0.0:
+        filtered = [
+            w if (w / total) >= min_prob_threshold else 0.0
+            for w in weights
+        ]
+        if sum(filtered) > 0:
+            effective_weights = filtered
+
     # random.choices tolère des poids non normalisés — inutile de re-normaliser.
-    return rng.choices(range(len(weights)), weights=weights, k=1)[0]
+    return rng.choices(range(len(effective_weights)), weights=effective_weights, k=1)[0]
 
 
 def argmax_index(weights: Sequence[float]) -> int:

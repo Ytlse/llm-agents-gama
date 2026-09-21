@@ -592,7 +592,7 @@ paramètres et s'affiche en tête du formulaire (cf. « Le nom se calcule » plu
 retouches, une légende nomme ce qui vient d'être recopié tant que le formulaire n'est pas retouché, une expérience supprimée du disque —
 au moment du choix ou après coup — laisse le formulaire intact, le dit et remet la liste d'aplomb, et les valeurs relues passent par la
 même validation que le brouillon (une valeur inconnue ou hors bornes revient à son défaut au lieu de casser la page) ; « Dupliquer »,
-dans « Mes expériences », fait la même recopie ; le prompt choisi s'affiche en entier et peut être retouché puis enregistré sous un autre nom (`ajouter_variante`, ajout en fin de `prompts.yaml`, relu et annulé si invalide, jamais d'écrasure) ; quand le décideur choisi **ne lit aucun prompt** (modèle statistique, rejeu, tirage, durée minimale), le sélecteur et l'aperçu restent offerts — lire un prompt avant de le choisir est utile en soi — mais le titre porte « non lu par ce décideur » et une légende dit que ce choix n'entrera ni dans le nom calculé ni dans la colonne `prompt` du registre ; la liste des modèles porte les requêtes/jour restantes lues sur `/health` ; le bloc **🐳 Services nécessaires** est remonté en tête de la configuration, en **lecture seule** (plus de bouton de démarrage : « ▶ Lancer » démarre lui-même ce qui manque) et n'affiche plus la liste des dépendances entraînées. **« Estimer le coût »** ouvre une popup réduite au **nombre de requêtes LLM** (durée et part de quota en légende). Le bouton **« Warm-up : construire le jeu »** n'apparaît que lorsqu'aucun jeu n'existe encore pour la population : préparer un second jeu ne se fait plus d'ici. Il n'y a plus de case de confirmation d'écrasement (réenregistrer un nom déjà exécuté est direct — les exécutions archivées gardent leur copie figée) ni de case « Arrêter d'abord ce qui tourne » : lancer n'interrompt plus les exécutions concurrentes. **Mes expériences** : registre (état, décideur, prompt, jeu,
+dans « Mes expériences », fait la même recopie ; le prompt choisi s'affiche en entier et peut être retouché puis enregistré sous un autre nom (`ajouter_variante`, ajout en fin de `prompts.yaml`, relu et annulé si invalide, jamais d'écrasure) ; le décideur `typesafe` y porte un champ **« Version de Jev (épinglée) »** — texte libre, contrôlé sur `jev-<majeur>.<mineur>.<correctif>`, sans quota ni température : c'est cette version qui nomme l'expérience (`jev-1130`), et sans elle le nom ne se calculait pas, si bien qu'une expérience Jev ne pouvait se déclarer que par son YAML (corrigé le 2026-09-21) ; quand le décideur choisi **ne lit aucun prompt** (modèle statistique, rejeu, tirage, durée minimale), le sélecteur et l'aperçu restent offerts — lire un prompt avant de le choisir est utile en soi — mais le titre porte « non lu par ce décideur » et une légende dit que ce choix n'entrera ni dans le nom calculé ni dans la colonne `prompt` du registre ; la liste des modèles porte les requêtes/jour restantes lues sur `/health` ; le bloc **🐳 Services nécessaires** est remonté en tête de la configuration, en **lecture seule** (plus de bouton de démarrage : « ▶ Lancer » démarre lui-même ce qui manque) et n'affiche plus la liste des dépendances entraînées. **« Estimer le coût »** ouvre une popup réduite au **nombre de requêtes LLM** (durée et part de quota en légende). Le bouton **« Warm-up : construire le jeu »** n'apparaît que lorsqu'aucun jeu n'existe encore pour la population : préparer un second jeu ne se fait plus d'ici. Il n'y a plus de case de confirmation d'écrasement (réenregistrer un nom déjà exécuté est direct — les exécutions archivées gardent leur copie figée) ni de case « Arrêter d'abord ce qui tourne » : lancer n'interrompt plus les exécutions concurrentes. **Mes expériences** : registre (état, décideur, prompt, jeu,
 couverture décidés / attendus exploitables, parts modales), barre d'avancement des exécutions en
 cours lue dans `progression.json` (écrit toutes les 5 s par le runner). Les colonnes
 `composite_emd` / `composite_l1` et l'icône 📊 se remplissent **toutes seules** : le runner score
@@ -612,12 +612,25 @@ sont lus (l'artefact à noyau pèse 1,5 Mo et la table se rafraîchit toutes les
 indexé sur la taille et la date du fichier (un modèle ré-estimé est relu), et un artefact absent
 ou sans `format` laisse « modele » nu — inventer une famille serait pire que n'en dire aucune.
 Un `artefact` vide désigne le booster par défaut, comme à l'exécution. La colonne **`prompt` ne dit une variante que si le
-décideur en lit une** : seule la passerelle reçoit un prompt système
-(`experiences/cli.py` ne transmet `parameters.prompt_variant` que sous
-`decideur.type == "passerelle"`), si bien qu'un modèle statistique, un rejeu, un tirage ou
-l'heuristique de durée affichent « — ». C'est la même règle que N5 du nommage, qui retire pour
-cette raison le segment de prompt du nom calculé (`exp_lgbm_jtir_nosim`, et non
-`exp_lgbm_minper_jtir_nosim`). Comme le décideur, le prompt suit le **snapshot figé** de chaque
+décideur en lit une** : la passerelle, le canal Antigravity et le classifieur typé `typesafe`
+(Jev) en reçoivent une ; un modèle statistique, un rejeu, un tirage ou l'heuristique de durée
+affichent « — ». C'est la même règle que N5 du nommage, qui retire pour cette raison le segment
+de prompt du nom calculé (`exp_lgbm_jtir_nosim`, et non `exp_lgbm_minper_jtir_nosim`).
+
+La liste des décideurs concernés vit à un seul endroit, `experiences/nommage.py`
+(`TYPES_LISANT_UN_PROMPT`), et les quatre consommateurs l'importent : le nommage, la validation
+d'une définition, cette colonne et la fiche de détail. Elle était recopiée à la main dans
+chacun, et le ticket 096 n'en a mis à jour que deux — du 2026-09-21 au même jour, toute
+exécution Jev affichait « — » alors que sa consigne nomme son expérience et se scelle dans son
+empreinte, et une expérience Jev pouvait se définir sur une variante inexistante sans le moindre
+avertissement.
+
+**Jev reçoit la variante amputée de son bloc `[Output instructions]`** : le type `Choice`
+remplace la consigne de format, et le texte réellement servi porte son propre sha
+(`instructions_sha256`). Deux lignes « prompt_expert_05 », l'une Jev l'autre à modèle de langue,
+ne désignent donc pas le même texte servi. La colonne affiche quand même le nom nu, pour que son
+filtre garde une valeur unique par variante ; c'est la **fiche de détail** qui porte la mention
+« sans le bloc de sortie — sortie typée ». Comme le décideur, le prompt suit le **snapshot figé** de chaque
 exécution, pas la définition courante. La colonne **`fournisseur`**, à côté du décideur, dit
 **qui sert les décisions** : `local` (une instance LM Studio, reconnue à son `base_url`),
 `google`, `groq`, `cerebras`, `mistral`… (l'`adapter` de l'instance dans `providers.yaml`,
@@ -1118,6 +1131,39 @@ bouton. Les exécutions archivées ne bougent pas, chacune portant sa propre cop
 de la définition dans son `execution.yaml`. Dans « Mes expériences », la colonne
 `jeu` dit sur quel jeu l'exécution a tourné (voir ci-dessous) et `jeu_etat`, rappelable au
 sélecteur, dit si le jeu d'une expérience est prêt.
+
+### La colonne `ticket` : qui porte ce bras
+
+`ticket` dit le ticket auquel une expérience se rattache. Elle est **affichée par défaut**,
+juste après `experience`, et sa valeur n'est stockée nulle part : elle se recalcule à chaque
+lecture du registre, dans `scripts/dashboard/tickets_par_experience.py`.
+
+Ne rien stocker est un choix. L'association vit déjà dans deux endroits — les tickets, qui
+citent des noms de bras, et les campagnes, dont l'en-tête nomme leur ticket. La recopier dans
+un fichier de correspondance ou dans les `experience.yaml` créerait un second endroit à tenir
+à jour, et donc un ticket affiché à côté d'une expérience qu'il ne porte plus.
+
+Trois sources, dans cet ordre — la première trouvée gagne :
+
+| source | ce qui la déclenche |
+|---|---|
+| citation | un ticket écrit le **nom exact** de l'expérience |
+| campagne | l'expérience figure dans une campagne dont l'en-tête nomme un ticket |
+| déduction | un segment du nom désigne un dispositif qu'un ticket décrit, et un seul |
+
+Les déductions se comptent sur les doigts, et chacune s'appuie sur un texte : les graines
+`go123_gt123_gc123` et ses sœurs 456, 789 et 2026 renvoient au ticket 073, dont l'axe 1 liste
+exactement ces quatre-là ; un nom en `_2` dont l'aîné est présent renvoie au même ticket,
+axe 0 ; un substrat `enquete_058` renvoie au ticket 058, qui lui donne son nom.
+
+**Une case vide veut dire qu'aucune source n'atteint ce bras, et rien de plus.** Elle n'est
+jamais remplie par ressemblance. Au 2026-09-21, 46 expériences sur 81 portent un ticket — les
+35 autres, dont les cinq bras Antigravity et les deux `cset15_tronc`, restent vides. Une
+colonne à moitié vide dit la vérité ; une colonne remplie au jugé se cite et se propage.
+
+Le calcul relit 93 tickets et les campagnes : il est mémoïsé sur la date de modification des
+deux dossiers, parce que le registre se redessine toutes les cinq secondes tant qu'une
+exécution tourne. Un ticket modifié pendant que la page est ouverte est donc repris tout seul.
 
 ### Le substrat de référence, et ce qui n'y est pas
 

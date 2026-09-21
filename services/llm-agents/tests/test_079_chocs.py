@@ -315,22 +315,35 @@ def test_R20bis_agents_designes_et_modes_declares_se_conjuguent(tmp_path, monkey
 
 
 # ── E. Gravité et mémoire ────────────────────────────────────────────────────────────────
-def test_R21_un_bouchon_dune_heure_atteint_le_seuil_de_choc():
-    """Le calcul n'est pas recopié : il vient de `llm/gravite.py`."""
+def test_R21_un_bouchon_dune_heure_depasse_le_seuil_de_choc():
+    """Le calcul n'est pas recopié : il vient de `llm/gravite.py`.
+
+    ⚠ Ticket 095 — une heure de bouchon ne vaut PLUS la même chose qu'une demi-heure. Sous le
+    palier, les deux rendaient 0,70 : un bouchon d'une heure et un bouchon de trente minutes
+    étaient le même événement pour la mémoire. La composante asymptotique les sépare, et c'est
+    tout l'objet du changement.
+    """
     gravite, detail = gravite_deterministe(retard_s=3600, incident_reseau=True)
-    assert gravite == pytest.approx(0.70, abs=1e-9)
+    assert gravite == pytest.approx(0.8835830003, abs=1e-9)
     assert gravite >= settings.agent.memoire__importance_choc  # entre au vivier des chocs
-    assert detail.retard == pytest.approx(0.50)
+    assert detail.retard == pytest.approx(0.6835830003, abs=1e-9)
     assert detail.incident_reseau == pytest.approx(0.20)
-    assert force_initiale(gravite) == pytest.approx(14.56, abs=0.01)  # jours, contre 2,8
+    assert force_initiale(gravite) == pytest.approx(17.64, abs=0.01)  # jours, contre 2,8
+    # Et une demi-heure reste au point d'ancrage : elle n'a pas bougé.
+    demi, _ = gravite_deterministe(retard_s=1800, incident_reseau=True)
+    assert demi == pytest.approx(0.70, abs=1e-9)
+    assert gravite > demi
 
 
 def test_R21bis_la_panne_reseau_est_le_choc_le_plus_marquant():
     gravite, _ = gravite_deterministe(
         retard_s=2700, correspondance_ratee=True, incident_reseau=True
     )
-    assert gravite == pytest.approx(0.90, abs=1e-9)
-    assert force_initiale(gravite) == pytest.approx(17.92, abs=0.01)
+    # ⚠ Ticket 095 — elle SATURE désormais l'échelle. 45 minutes de retard valent 0,64 au lieu
+    # de 0,50 ; avec la correspondance ratée (0,20) et l'incident (0,20), le total dépasse 1 et
+    # le bornage mord. C'est le seul choc du catalogue dans ce cas, et il porte bien son nom.
+    assert gravite == pytest.approx(1.00, abs=1e-9)
+    assert force_initiale(gravite) == pytest.approx(19.60, abs=0.01)
 
 
 def test_R22_incident_reseau_cesse_detre_inactif_quand_un_choc_le_porte(tmp_path):
@@ -371,7 +384,7 @@ def test_R27_chaque_application_laisse_une_ligne(tmp_path, monkeypatch):
     assert ligne["jour_relatif"] == 0
     assert ligne["retard_injecte_s"] == 3600
     assert ligne["vecu"] == VECU_VALIDE
-    assert ligne["gravite"] == pytest.approx(0.70)
+    assert ligne["gravite"] == pytest.approx(0.8836, abs=1e-4)  # arrondi du journal
     assert ligne["gravite_detail"]["incident_reseau"] == pytest.approx(0.20)
 
 

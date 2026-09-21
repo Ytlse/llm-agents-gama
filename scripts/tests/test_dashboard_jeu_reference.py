@@ -207,72 +207,64 @@ def test_R21_une_experience_jamais_lancee_montre_le_jeu_qu_elle_designe(platefor
     assert ligne["jeu"] == REF and ligne["hors_reference"] is False
 
 
-def test_R21_la_colonne_jeu_est_affichee_sans_qu_on_la_rappelle(plateforme, reference):
+def test_un_tableau_par_jeu_sans_colonne_jeu(plateforme, reference):
+    """Chaque jeu de test dispose de son propre tableau, et la colonne jeu n'est plus affichée dans la table."""
     st = FauxSt()
     _dessiner(st)
-    assert "jeu" in getattr(st.tables[-1], "data", st.tables[-1]).columns
+    tables_jeux = [t for t in st.tables if "experience" in getattr(t, "data", t).columns]
+    assert len(tables_jeux) == 2, "Deux jeux distincts (REF et ANCIEN) doivent produire deux tableaux"
+    for table in tables_jeux:
+        vue = getattr(table, "data", table)
+        assert "jeu" not in vue.columns, "Le jeu figure dans le titre, pas dans les colonnes"
+        assert "experience" in vue.columns
+
+    # Le tableau de référence est en tête
+    vue_ref = getattr(tables_jeux[0], "data", tables_jeux[0])
+    vue_ancien = getattr(tables_jeux[1], "data", tables_jeux[1])
+    assert "exp_a_jour" in vue_ref["experience"].values
+    assert "exp_vieille" in vue_ancien["experience"].values
+
+    # Les titres markdown contiennent les noms des jeux et le badge référence
+    titres = [t for t in st.textes if t.startswith("####")]
+    assert any(REF in t and "référence" in t for t in titres), titres
+    assert any(ANCIEN in t for t in titres), titres
 
 
-def test_R21_un_jeu_absent_s_ecrit_tiret_jamais_une_case_vide(plateforme, reference):
+def test_un_jeu_absent_cree_un_groupe_dedie_sans_jeu(plateforme, reference):
+    """Une expérience sans jeu rattaché produit un tableau dédié avec titre Sans jeu."""
     _ecrire(plateforme / "exp_sans_jeu" / "experience.yaml",
             {"nom": "exp_sans_jeu", "mode": "sans_simulateur",
              "decideur": {"type": "passerelle", "modele": "m1"}})
     st = FauxSt()
     _dessiner(st)
-    vue = getattr(st.tables[-1], "data", st.tables[-1])
-    assert (vue.loc[vue["experience"] == "exp_sans_jeu", "jeu"] == "—").all()
+    titres = [t for t in st.textes if t.startswith("####")]
+    assert any("Sans jeu de test" in t for t in titres), titres
 
 
-# ── R22 — le grisé ───────────────────────────────────────────────────────────
-
-
-def test_R22_seules_les_lignes_hors_reference_sont_grisees(plateforme, reference):
-    st = FauxSt()
-    _dessiner(st)
-    style = st.tables[-1]
-    assert hasattr(style, "data"), "hors référence : Streamlit doit recevoir un Styler"
-    rendu = style.data.copy()
-    applique = style._compute().ctx  # {(ligne, colonne): [styles]}
-    gris = {i for (i, _), styles in applique.items()
-            if any("color" in str(s) for s in styles)}
-    hors = {i for i, nom in enumerate(rendu["experience"]) if nom == "exp_vieille"}
-    assert gris == hors, f"grisées {gris}, attendues {hors}"
-
-
-def test_R22_le_nombre_de_lignes_grisees_est_dit(plateforme, reference):
-    st = FauxSt()
-    _dessiner(st)
-    assert any("1 ligne(s) grisée(s)" in l and REF in l for l in st.legendes), st.legendes
-
-
-def test_R22_sans_reference_designee_rien_n_est_grise_et_la_page_le_dit(plateforme, tmp_path,
-                                                                       monkeypatch):
+def test_sans_reference_designee_les_tableaux_sont_rendus(plateforme, tmp_path, monkeypatch):
+    """Sans fichier de référence, les tableaux restent rendus par jeu sans erreur."""
     monkeypatch.setattr(D, "JEU_REFERENCE_YAML", tmp_path / "absent.yaml")
     assert D.jeu_reference() is None
     st = FauxSt()
     _dessiner(st)
-    assert not hasattr(st.tables[-1], "data"), "aucune référence : aucun style à poser"
-    assert any("Aucun jeu de référence" in l for l in st.legendes), st.legendes
+    tables_jeux = [t for t in st.tables if "experience" in getattr(t, "data", t).columns]
+    assert len(tables_jeux) == 2
 
 
-def test_R22_une_reference_illisible_ne_grise_pas(plateforme, tmp_path, monkeypatch):
-    """Un fichier abîmé ne doit ni lever ni griser : il n'y a plus de référence, c'est tout."""
+def test_reference_illisible_ne_bloque_pas(plateforme, tmp_path, monkeypatch):
+    """Un fichier abîmé ne doit ni lever ni bloquer : jeu_reference() rend None."""
     abime = tmp_path / "reference.yaml"
     abime.write_text("jeu: [pas, une, chaine\n", encoding="utf-8")
     monkeypatch.setattr(D, "JEU_REFERENCE_YAML", abime)
     assert D.jeu_reference() is None
-
-
-def test_R22_le_grise_ne_touche_ni_le_tri_ni_les_filtres(plateforme, reference):
-    """Le style vit sur la copie affichée : les valeurs filtrables restent nues (R11, R15)."""
     st = FauxSt()
     _dessiner(st)
-    vue = st.tables[-1].data
-    assert set(vue["jeu"]) == {REF, ANCIEN}, "le nom du jeu n'est pas décoré"
-    assert D.hors_reference(ANCIEN, REF) and not D.hors_reference(REF, REF)
+    tables_jeux = [t for t in st.tables if "experience" in getattr(t, "data", t).columns]
+    assert len(tables_jeux) == 2
 
 
-def test_R22_aucune_designation_ne_vaut_pas_hors_reference():
-    """Sans référence, aucune ligne n'est fautive — on ne grise que ce qu'on sait faux."""
+def test_hors_reference_helper():
+    assert D.hors_reference(ANCIEN, REF) is True
+    assert D.hors_reference(REF, REF) is False
     assert D.hors_reference(ANCIEN, None) is False
     assert D.hors_reference(None, REF) is False

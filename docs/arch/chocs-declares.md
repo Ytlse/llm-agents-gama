@@ -57,20 +57,54 @@ Le ticket 071 avait câblé la gravité de bout en bout en laissant `incident_re
 source, avec le commentaire « il n'y a qu'une source à brancher le jour venu ». **Le choc est cette
 source.** Une fois le retard ajouté et la composante portée, tout le reste suit sans une ligne :
 
-| Choc | Retard | Composantes | Gravité | Durée de vie |
-|---|---|---|---|---|
-| Trajet banal | 0 | — | 0,00 | **2,8 j** |
-| Orage (c5) | 15 min | retard 0,25 + incident 0,20 | 0,45 | 10,4 j |
-| Bouchon (c1, jour 3) | 12 min | retard 0,17 + incident 0,20 | 0,37 | 9,0 j |
-| Bouchon (c1, jour 2) | 25 min | retard 0,42 + incident 0,20 | 0,62 | 13,2 j |
-| Crevaison (c2) · Bouchon (c1, jour 1) · Train (c4) | ≥ 30 min | retard 0,50 + incident 0,20 | **0,70** | **14,6 j** |
-| Panne réseau (c3) | 45 min + corresp. ratée | 0,50 + 0,20 + 0,20 | **0,90** | **17,9 j** |
+Valeurs **calculées depuis les déclarations**, jamais recopiées d'un run :
 
-⚠ **La composante de retard sature à 30 minutes** (`memoire__retard_ref_s` = 1800 s). Au-delà,
-déclarer 45, 60 ou 90 minutes donne rigoureusement la même gravité. Un profil décroissant qui
-resterait tout entier au-dessus de 30 minutes serait donc **invisible du mécanisme** et n'existerait
-que dans le texte : c'est pourquoi `c1` descend à 25 puis 12 minutes. C'est le premier piège de
-toute nouvelle déclaration.
+| Choc | Retard | Gravité (avant le 21/09) | Gravité | Durée de vie | Servi dans le bloc |
+|---|---|---:|---:|---:|---|
+| Trajet banal | 0 | 0,00 | 0,00 | 2,8 j | non |
+| Bouchon (c1, jour 3) | 12 min | 0,40 | 0,40 | 9,5 j | non |
+| Orage (c5) | 15 min | 0,45 | 0,45 | 10,4 j | non |
+| Moteur (c6, jour 2) · Panne réseau (c3, jour 2) | 20 min | 0,53 | 0,53 | 11,8 j | non |
+| Bouchon (c1, jour 2) | 25 min | 0,62 | 0,62 | 13,2 j | non |
+| **Moteur (c6, jour 1)** | 30 min | 0,70 | **0,70** | 14,6 j | **15,3 j** |
+| **Crevaison (c2)** | 35 min | 0,70 | **0,77** | 15,7 j | **16,5 j** |
+| **Train supprimé (c4)** | 50 min | 0,70 | **0,86** | 17,3 j | **18,2 j** |
+| **Bouchon (c1, jour 1)** | 60 min | 0,70 | **0,88** | 17,6 j | **18,5 j** |
+| **Panne réseau (c3)** | 45 min + corresp. ratée | 0,90 | **1,00** | 19,6 j | **20,6 j** |
+
+## Le retard ne sature plus (ticket 095, 2026-09-21)
+
+**Avant**, la composante de retard faisait palier à 30 minutes. Déclarer 45, 60 ou 90 minutes
+donnait rigoureusement la même gravité : quatre chocs du catalogue — la crevaison, le train, le
+bouchon du premier jour et le moteur — étaient **le même événement** pour la mémoire, alors que
+leurs retards vont de 30 à 60 minutes. Un profil décroissant resté au-dessus de 30 minutes
+n'existait que dans le texte.
+
+**Maintenant**, la composante monte encore au-dessus de la référence, en décélérant, vers un
+maximum de 0,70 qu'elle n'atteint jamais :
+
+```
+t ≤ 30 min :  0,50 × t / 30 min                     ← rigoureusement inchangé
+t > 30 min :  0,70 − 0,20 × exp(−(t − 30 min) / 12 min)
+```
+
+**En dessous de trente minutes, rien n'a bougé d'un millième** — c'est ce qui rend le changement
+sûr, les trois quarts du catalogue étant dans ce cas. La constante de temps du prolongement est
+calée pour que la **pente** soit continue au point d'ancrage : sans cela, une seconde de plus que
+la référence vaudrait un saut de gravité.
+
+⚠ **Pourquoi pas simplement retirer le palier.** Une composante linéaire non bornée atteindrait
+1,0 dès soixante minutes, la gravité totale étant bornée à 1 : soixante, quatre-vingt-dix et cent
+vingt minutes redeviendraient indiscernables, et les trois autres composantes cesseraient de peser
+quoi que ce soit. Le mur serait déplacé, pas supprimé.
+
+⚠ **Deux conséquences à connaître.** La somme des quatre maxima vaut désormais 1,20 et non plus
+1,00 : le bornage à 1 mord pour la combinaison extrême, et c'est le cas de la panne réseau (c3),
+seul choc du catalogue à saturer l'échelle. Et le cumul de gravité d'une journée monte avec les
+retards longs, donc la réflexion de rupture se déclenche un peu plus souvent.
+
+Le mode d'avant reste déclarable — `MEMOIRE__RETARD_SATURATION=palier` — pour reproduire un run
+antérieur au 21 septembre 2026.
 
 Au-delà de **0,70**, le souvenir entre au **vivier des chocs** : il est repêché à chaque décision
 **sans aucune condition** de lieu, d'heure ni de motif. C'est le mécanisme qui porte l'hystérésis.
@@ -89,6 +123,29 @@ Un texte qui s'adresse à l'agent ou lui dicte une conduite est **refusé au cha
 |---|---|
 | « I was stuck for a solid hour on the ring road » | « avoid the ring road tomorrow » |
 | « Flat tyre, hands covered in grease » | « you should take the metro instead » |
+
+**Il ne conclut pas non plus, et il n'annonce rien** (2026-09-19). La première version de la règle
+ne refusait que l'adresse à la **deuxième** personne. Elle laissait passer le même biais écrit à
+la première : un verdict sur un mode, ou une intention pour demain.
+
+| Famille | Admis | Refusé |
+|---|---|---|
+| **Verdict** — une croyance durable sur un mode | « the engine stalled twice on the way » | « I no longer trust this car », « this bus line is unreliable » |
+| **Intention** — ce que l'agent fera | « I had to sort out another way of getting around » (fait passé) | « I am thinking about not using this car anymore », « from now on I will take the metro » |
+| **Doute** — ni l'un ni l'autre | « I am starting to wonder whether this is worth it » | — |
+
+La croyance est exactement ce que l'étape de réflexion existe pour **produire**. L'écrire dans le
+`vecu` court-circuite le seul mécanisme que l'expérience prétend mesurer, et le résultat se lit
+comme un apprentissage alors qu'il n'est qu'une reformulation.
+
+⚠ **Mesuré sur le run du 2026-09-19.** `vecu` : *« I no longer trust this car at all »*. Réflexion
+nocturne produite le soir même : *« consider alternative transport options »*. Cette phrase a été
+servie à chacune des quarante décisions des quatorze jours suivants, et la part modale de la
+voiture est passée de 80 % à 0 % du jour au lendemain. On ne mesurait plus un agent qui apprend,
+mais un modèle qui ne se contredit pas.
+
+La limite basse est volontairement placée sur le **doute** : les cinq chocs c1 à c5 passaient déjà
+la règle sans modification — elle rend vérifiable une pratique existante, elle ne la condamne pas.
 
 Le refus est franc et non un avertissement : un avertissement au milieu d'un journal de run
 n'alerte personne — le ticket 077 l'a mesuré, deux WARNING noyés dans 355 000 lignes ont laissé le
@@ -130,6 +187,42 @@ que soit son mode.
 
 Le tirage est une empreinte de `(graine, choc, agent)` : il ne dépend ni de l'ordre d'arrivée des
 observations, ni du nombre d'agents. Deux rejeux du même scénario touchent exactement les mêmes.
+
+## Cadence
+
+Combien de fois par journée un agent exposé subit-il le choc ?
+
+| `cadence` | Effet | Pour |
+|---|---|---|
+| `trajet` (défaut) | chaque arrivée éligible le subit | un bouchon, une panne de réseau — l'état du monde dure toute la journée |
+| `jour` | seule la **première** arrivée éligible de la journée le subit | une panne réparée, une crevaison — l'incident est ponctuel |
+
+Le défaut est `trajet`, comportement historique ; il est **journalisé au chargement** pour qu'un
+fichier muet ne change jamais de comportement en silence. Une valeur inconnue est refusée, comme
+une règle d'exposition inconnue.
+
+⚠ **Pourquoi ce réglage existe.** Au run du 2026-09-19, c6 déclarait une panne avec dépannage de
+trente minutes, et l'agent faisait quatre trajets en voiture ce jour-là : `chocs.jsonl` porte
+**quatre** applications, quatre dépannages, quatre fois le même récit. Le protocole en comptait
+un. L'intensité réelle valait quatre fois l'intensité annoncée, et rien ne le disait.
+
+Les arrivées non touchées parce que l'agent l'avait déjà été le jour même sont comptées **à
+part** dans le journal : ni exposées, ni épargnées. Les confondre ferait passer un choc appliqué
+une fois pour un choc qui rate trois trajets sur quatre.
+
+## Une journée de choc sans exposé est une alarme
+
+Une journée déclarée dans `jours` et close avec zéro exposé est un protocole qui **n'a pas eu
+lieu**. Elle lève une `[ALARME]` en ERROR, et l'analyse ne doit pas la compter comme une journée
+de choc.
+
+⚠ Le second choc de c6 (jour 16) est dans ce cas : l'exposition est restreinte aux trajets en
+voiture, et l'agent n'en faisait plus. Un choc de renforcement ne peut frapper que ceux qui n'ont
+pas déjà réagi. Le journal le disait en INFO, personne ne l'a lu, et le rapport du run a continué
+d'annoncer deux jours de choc et une « phase péri-choc J15–J16 » qui n'existe pas.
+
+**`chocs.jsonl` fait foi, jamais le fichier de déclaration** : le premier dit ce qui a eu lieu,
+le second ce qui était prévu.
 
 ## Limites connues
 

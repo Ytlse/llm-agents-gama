@@ -3,9 +3,9 @@
 % Inline math only (amsmath is loaded by aamas.cls): the agent tuple, the policy vector and the
 %   categorical draw. No display equation, no numbered equation. The action space is deliberately
 %   kept in plain words.
-% Dernière mise à jour : 2026-09-17
+% Dernière mise à jour : 2026-09-21
 % Chapter 3 of the paper, a \section of its own, to be inserted right after overleaf/02_related_work.tex.
-% This chapter cites nothing: no \citep / \citet, and it adds no entry to references.bib.
+% This chapter cites nothing: no \citep / \citet, and it adds no entry to sample.bib.
 % Cross-references use \label / \ref, so no number is hard-coded.
 % Forward reference: sec:results (chapter 6) is NOT defined yet, that chapter having no LaTeX
 %   rendering so far. It resolves to ?? until 06 is written; the label is reserved with this name.
@@ -21,7 +21,8 @@
 %   The template requires the caption BELOW the figure and a mandatory \Description{} (plain text,
 %   2000 characters at most, not printed). Set as figure* (both columns): the diagram is 16:9, and a
 %   single column would make it unreadable. Switch to figure + \columnwidth if the page budget demands it.
-% Comments "% source:" give the repository file a plain-text figure is recomputed from.
+% Traceability: the "source:" comments live in the ../fr/ and ../en/ masters only. Do not carry them
+%   over into this file when rendering a chapter into LaTeX (author's decision, 2026-09-21).
 % =====================================================================
 % =====================================================================
 
@@ -34,7 +35,7 @@
 
 The device couples three components. A GAMA multi-agent simulation carries the world: the real geography of the Toulouse area, the networks, the clock, and the physical execution of trips. A controller carries the agent life cycle: it detects that an agent is due to leave and builds the itinerary supply actually available at that hour. A decision module carries the choice itself: it is there, and only there, that the language model intervenes.
 
-\begin{figure*}[t]
+\begin{figure*}[tp]
   \centering
   \includegraphics[width=\textwidth]{architecture_GAMA_Agents.jpg}
   \caption{The device. At the bottom, the GAMA simulation carries the bodies, the network and the clock; at the top, the generative agent carries memory, reasoning and decision; between them, the exchange pipeline: perception goes up over HTTP, actions come back down over WebSocket. On the right, the two engines that produce the itinerary supply; on the left, the gateway that serves the calls to the language model.}
@@ -46,9 +47,9 @@ The loop is closed. An idle agent triggers a planning step; it receives the itin
 
 A thousand agents decide asynchronously while the simulated clock runs. The controller therefore serves planning tasks by increasing deadline, the deadline being the simulated departure time, and holds the GAMA clock whenever the estimated time to drain the queue threatens a deadline. No agent leaves before it has decided, and no decision is taken after the fact.
 
-Formally, an agent is a quadruple $\text{Agent}_i = \langle P_i, M_{i,t}, C_{i,t}, \pi_\theta \rangle$: $P_i$ the sealed sociodemographic persona, restricted to the variable contract of Section~\ref{sec:decision}; $M_{i,t}$ the two-component memory register at time $t$, a circular buffer of recent observations and a long-term vector index (Section~\ref{sec:memory}); $C_{i,t}$ the state at time $t$ of the household vehicle chain (where the car and the bicycle are, who holds a licence, Section~\ref{sec:chain}); and $\pi_\theta$ the decision policy verbalised by the language model $\theta$. The first three terms tell agents apart; the fourth is common to them all, and it is the one the rest of the paper puts to the test.
+Formally, an agent is a quadruple $\text{Agent}_i = \langle P_i, M_{i,t}, C_{i,t}, \pi_\theta \rangle$: $P_i$ the sealed sociodemographic persona, restricted to the protocol variables of Section~\ref{sec:decision}; $M_{i,t}$ the two-component memory register at time $t$, a circular buffer of recent observations and a long-term vector index (Section~\ref{sec:memory}); $C_{i,t}$ the state at time $t$ of the household vehicle chain (where the car and the bicycle are, who holds a licence, Section~\ref{sec:chain}); and $\pi_\theta$ the decision policy verbalised by the language model $\theta$. The first three terms tell agents apart; the fourth is common to them all, and it is the one the rest of the paper puts to the test.
 
-The agent has a fixed schedule: the same chain of activities, in the same order, every weekday, closing in the evening on the return home. Weekends carry no activity, for simplicity. It must carry that schedule out with what the city offers at that hour, in that place, and with the vehicles it has to hand. Those bounds are set by the controller, before the question is ever put to the model. What the simulation adds is of another nature: it produces the consequences. The trip as lived is not the trip as planned; a missed bus, a missed transfer, a jam born of an incident, a quarter of an hour of delay are facts produced by execution, and it is these that come back into the loop. This is what separates the device from a classifier queried in a vacuum, and what makes the floor and the ceiling of Section~\ref{sec:metrics} comparable with the agent: all three decide on the same substrate.
+The agent has a fixed schedule: the same chain of activities, in the same order, every weekday, closing in the evening on the return home. Weekends carry no activity, for simplicity. It must carry that schedule out with what the city offers at that hour, in that place, and with the vehicles it has to hand. Those bounds are set by the controller, before the question is ever put to the model. What the simulation adds is of another nature: it produces the consequences. The trip as lived is not the trip as planned; a missed bus, a missed transfer, a jam born of an incident, a quarter of an hour of delay are facts produced by execution, and it is these that come back into the loop.
 
 \subsection{The itineraries offered}
 \label{sec:field}
@@ -56,7 +57,6 @@ The agent has a fixed schedule: the same chain of activities, in the same order,
 The itineraries offered to the agent come from two sources. OpenTripPlanner produces the public transport itineraries: bus, tram, metro, regional trains, intercity coaches, on the real timetables of the networks. A shortest-path computation on the OpenStreetMap graph produces the direct trips: walking, cycling, car. The perimeter is that of the reference survey, the Cerema's EMC\textsuperscript{2} 2023: the 453 municipalities of the Toulouse metropolitan area.
 
 Not every mode is offered to everyone, and that restriction operates before the decision. Car and bicycle are only proposed if the agent owns them and they are at the point of departure. Driving further requires a licence and legal age, but an agent who does not drive may still travel by car as a \textbf{passenger} in a motorised household, and the option stays open on that footing.
-% source: docs/arch/routing.md, § Modes disponibles par agent ; docs/arch/vehicle-chain.md, § 1 bis
 
 \subsection{The decision point}
 \label{sec:decision}
@@ -76,7 +76,7 @@ Consolidation fires on two conditions: as soon as the buffer reaches ten entries
 
 It writes into long-term memory, a vector index specific to each agent, where two registers coexist without obeying the same clock. \textbf{Episodic} traces (what happened, and when) erode: their weight decays exponentially from the last recall, with a time constant of 2.8 days that a serious memory lengthens, never beyond thirty. \textbf{Concepts} (what the agent holds to be true, ``this line saturates when it rains'') do not erode: they live on a confidence that each observation confirms or contradicts, a fact not becoming false because ten days have passed. This is Tulving's distinction between episodic and semantic memory, and it is what settles what gets forgotten (Figure~\ref{fig:memory-clocks}).
 
-\begin{figure*}[t]
+\begin{figure*}[tp]
   \centering
   \includegraphics[width=\textwidth]{ch3_oubli.png}
   \caption{The temporal component of the retrieval score, by age since last recall. Episodic traces at two levels of gravity; a concept before and after five counter-examples.}
@@ -95,7 +95,6 @@ The agent does not merely remember that it arrived late: it draws a consequence 
 An agent who cycled to work has no car at the office in the evening. That obvious fact is not obvious to a system that would decide each trip independently, and it is what separates the device from a classifier called once per trip.
 
 The controller therefore holds, for each agent, the position of their personal vehicles, and draws three rules from it: a vehicle mode is only proposed if the vehicle is parked at the point of departure; the vehicle of the chosen mode follows its user to the destination, the others stay where they are; and on a return trip, if a vehicle is waiting at the origin, the candidate itineraries are restricted to that mode. This last rule filters the options, it does not add a decision.
-% source: docs/arch/vehicle-chain.md, § Les trois règles
 
 The methodological consequence has to be drawn, and Section~\ref{sec:results} returns to it: part of the simulated modal split is produced \textbf{under} these constraints, so as to be more representative of real situations. An agent whose car stayed at home does not choose not to drive, it cannot. This is why the floor and the ceiling of Section~\ref{sec:metrics} are placed under exactly the same constraints: without that, we would be comparing decisions taken in different worlds.
 
@@ -115,3 +114,8 @@ The methodological consequence has to be drawn, and Section~\ref{sec:results} re
 %     the agent and the statistical models see the same thing; the ticket establishes that the agent
 %     receives more. To be revisited once the ticket is settled. Noted, not corrected.
 % =====================================================================
+
+% NO FLOAT FLUSH HERE. \afterpage{\clearpage} stood here until 2026-09-21 and broke the
+%   compilation: with double-column floats pending, the deferred \clearpage raises
+%   "Float(s) lost" then "This may be a LaTeX bug". Two full-width figures for 1.3 pages of
+%   text will therefore surface in chapter 4. Do not reinstate \afterpage.

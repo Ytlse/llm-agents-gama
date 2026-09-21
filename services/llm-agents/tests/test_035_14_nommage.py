@@ -385,3 +385,49 @@ def test_n12_le_nom_ecrit_est_autoritaire(tmp_path):
     assert a.nom == "exp_durmin_pop-1000_AAMAS_nosim"
     assert a.reutilise is None
     assert (tmp_path / "un_nom_historique" / "experience.yaml").is_file()
+
+
+def test_n7_troncature_15_consideration_set():
+    """troncature_15 False est muet (défaut) ; True ajoute cset15."""
+    nom_defaut = N.nom_canonique(exp(troncature_15=False))
+    assert nom_defaut == "exp_durmin_pop-1000_AAMAS_nosim"
+    assert "cset15" not in nom_defaut
+
+    nom_cset = N.nom_canonique(exp(troncature_15=True))
+    assert "cset15" in nom_cset
+    assert nom_cset == "exp_durmin_pop-1000_AAMAS_cset15_nosim"
+
+
+def test_experience_pydantic_troncature_15():
+    from experiences import experience as E
+
+    # Sans le champ (rétrocompatibilité)
+    e_sans = E.Experience.model_validate(exp())
+    assert e_sans.troncature_15 is False
+
+    # Avec le champ
+    e_avec = E.Experience.model_validate(exp(troncature_15=True))
+    assert e_avec.troncature_15 is True
+    assert E.experience_vers_dict(e_avec)["troncature_15"] is True
+
+
+def test_cli_reglages_troncature_15():
+    from experiences.cli import reglages_herites_de
+    from settings import settings
+
+    class FausseExp:
+        vehicule_chaine = True
+        verrou_retour = True
+        troncature_15 = True
+
+    e = FausseExp()
+    settings.agent.mode_choice_truncation_threshold = 0.15 if e.troncature_15 else 0.0
+    reg = reglages_herites_de(e)
+    assert reg["troncature_15"] is True
+    assert reg["mode_choice_truncation_threshold"] == 0.15
+
+    e.troncature_15 = False
+    settings.agent.mode_choice_truncation_threshold = 0.15 if e.troncature_15 else 0.0
+    reg = reglages_herites_de(e)
+    assert reg["troncature_15"] is False
+    assert reg["mode_choice_truncation_threshold"] == 0.0

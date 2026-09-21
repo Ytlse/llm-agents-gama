@@ -121,6 +121,19 @@ mémoire, durée de vie) sont lus dans le **point de reprise** qui clôt la jour
 seule fois** : un état ne se reconstitue pas — la `force` d'un souvenir croît à chaque rappel, et
 le rejeu d'une reprise écrase les points des journées déjà vécues avec l'état gelé.
 
+**Le branchement fait partie de la mesure.** L'écriture est appelée depuis
+`_ecrire_point_de_reprise`, juste après le point, et nulle part ailleurs : c'est le seul endroit
+où l'instantané d'état existe. Le module étant *fail-open* et éteint par défaut, il est **muet
+quand il ne tourne pas** — un run qui ne produit aucun CSV ressemble en tout point à un run où
+la mesure était éteinte.
+
+⚠ **Cette confusion a déjà coûté un run.** Le 19 septembre 2026, une méthode insérée au milieu de
+`_ecrire_point_de_reprise` a laissé l'appel aux mesures après un `sys.exit(0)` : plus aucun CSV
+pendant quarante-deux jours simulés, sans un mot dans le journal, et les tests du 093 sont restés
+verts parce qu'ils vérifiaient le module sans vérifier qu'on l'appelle. Le branchement est
+désormais tenu par une règle à lui, `specs/ticket_077/tests.md` section G — et par une garde qui
+refuse toute instruction placée après un appel terminal dans le contrôleur.
+
 ---
 
 ## 5. Prometheus et Grafana
@@ -194,3 +207,108 @@ réécrit — protège les runs à venir, pas ceux qui sont déjà archivés.
 
 **Une part modale de population.** Dix agents ne représentent rien. La référence de l'article reste
 `data/population/population_1000_AAMAS_v6`.
+
+---
+
+## 9. L'enquête du soir : mesurer la croyance, pas seulement le comportement
+
+> Ticket 095, lot B. Contrat de tests : `specs/ticket_095/tests.md`, sections D à F.
+
+Toutes les mesures ci-dessus portent sur ce que l'agent **fait**. L'enquête du soir porte sur ce
+qu'il **dit croire** — et sans elle, une part modale qui s'effondre ne permet pas de dire si
+l'agent a changé d'avis ou seulement d'itinéraire.
+
+### Ce qu'elle demande
+
+Les six critères d'Adam & Gaudou (2025) — **rapidité, praticité, confort, sécurité, accessibilité
+financière, écologie** — sur une échelle de Likert 0-10, avec ancrages verbaux 0/5/10 répétés à
+chaque jalon pour que l'échelle ne dérive pas.
+
+**Cinq prompts par jalon et par persona**, à 21 h simulées :
+
+- **quatre prompts de perception**, un par mode, le mode nommé et les trois autres jamais cités.
+  Les 24 scores demandés d'un seul coup produisaient une grille plate — la voiture à 9 partout,
+  le bus à 3 partout : on payait 24 nombres pour en obtenir 4 ;
+- **un prompt de priorités**, qui ne nomme aucun mode.
+
+Ensemble, ils rendent calculable, depuis le seul CSV :
+
+```
+score(mode) = Σ  val(mode, critère) × prio(critère)
+             critères
+```
+
+soit le mode que le modèle symbolique d'Adam & Gaudou prédirait à partir des déclarations de
+notre agent, à confronter au mode qu'il choisit réellement le lendemain.
+
+**L'écologie est la question témoin.** Aucun des six chocs déclarés du dépôt ne la vise. Si le
+score d'écologie du vélo chute après une crevaison, l'agent n'a pas noté un critère : il a exprimé
+une humeur globale, et **l'instrument entier est invalide**. Une question qui doit rester plate est
+une garde, pas une dépense.
+
+### Étanchéité en sortie, fidélité en entrée
+
+Deux exigences distinctes, et le module n'en portait qu'une jusqu'au 2026-09-21.
+
+| | Règle | Pourquoi |
+|---|---|---|
+| **Sortie** | La réponse va dans `affinites_declarees.csv` et nulle part ailleurs — ni STM, ni LTM, ni ChromaDB, ni réflexion nocturne | La sonde ne doit pas contaminer les délibérations qu'elle observe |
+| **Entrée** | Le prompt sert **exactement** le bloc `memoire_noyau` du prompt de décision, plus le récit d'identité complet | Sans lui, la sonde mesure le modèle de base et non l'agent |
+
+⚠ **L'enquête LIT la mémoire, elle ne la RAPPELLE pas.** `memoire_noyau` ne touche ni `force` ni
+`dernier_rappel` ; le chemin de rappel vectoriel, lui, renforce la force de chaque souvenir servi.
+Une sonde qui prolonge la durée de vie de ce qu'elle observe modifie ce qu'elle mesure.
+
+Avant ce lot, la perception servie tenait en quatre champs — nom, âge, genre, occupation. **Telle
+qu'écrite, l'enquête mesurait l'a priori du modèle de base sur une femme de 53 ans à temps
+partiel** : identique au jour 12 et au jour 29, identique dans les deux bras de fenêtre. Elle
+n'aurait rien détecté, et son silence aurait été pris pour une absence d'effet.
+
+### Le fichier
+
+`affinites_declarees.csv`, **format long** : une ligne par (jour, persona, mode, critère, score).
+Les six priorités s'écrivent dans le même fichier, avec `mode = critere_priorite`.
+
+| Colonne | Contenu |
+|---|---|
+| `sim_timestamp`, `date_simulee`, `jour_simule` | quand |
+| `persona_id` | qui |
+| `mode` | le mode interrogé, ou `critere_priorite` |
+| `critere` | `rapidite`, `praticite`, `confort`, `securite`, `cout`, `ecologie` |
+| `score` | 0-10, **tel que rendu** |
+| `justification` | une phrase pour le bloc entier |
+| `provider`, `model` | qui l'a produit (ticket 095, lot E) |
+
+Le format long absorbe le train et le deux-roues sans changer de schéma ; le format large à
+24 colonnes obligeait à réécrire l'en-tête dès qu'un mode s'ajoutait.
+
+### Activer
+
+```bash
+EXPERIMENT_SURVEY_ENABLED=1 EXPERIMENT_SURVEY_DAYS=12,17,29,40 \
+EXPERIMENT_SURVEY_MODES=voiture,transports_collectifs,velo,marche make run OFFLINE=1
+```
+
+Un jalon posé un samedi ou un dimanche ne se déclenchera **jamais** — la simulation saute les
+départs de week-end — et un avertissement le dit au démarrage.
+
+### Les alarmes
+
+`[ALARME] [enquete]` se lève quand un jalon passe sans aucune réponse, quand un jalon est
+incomplet, et quand un score sort du domaine 0-10. **Un score hors domaine est écrit tel quel,
+jamais raboté** : un 14 ramené à 10 se lirait comme un avis maximal alors qu'il dit que le modèle
+n'a pas respecté l'échelle.
+
+### Ce que l'enquête ne mesure pas
+
+Deux sondes ont été écartées le 2026-09-21, et la section des limites de l'article doit le dire :
+
+- **la préférence déclarée tous modes en concurrence** (répartir 100 points entre les modes),
+  jugée redondante avec les prompts de perception. Conséquence : la dissociation entre croyance
+  et comportement se lira sur les courbes de perception face aux parts modales, ce qui est moins
+  direct qu'une intention déclarée ;
+- **le rappel libre** (« que te rappelles-tu de tes déplacements des deux dernières semaines ? »).
+  Conséquence : la sortie de fenêtre reste observable depuis le journal, pas depuis l'agent.
+
+Aucune comparaison aux 650 répondants humains d'Adam & Gaudou n'est prévue : hors périmètre, et
+le mélange des deux populations ferait dériver l'analyse.

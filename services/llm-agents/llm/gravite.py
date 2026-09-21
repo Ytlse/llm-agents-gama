@@ -110,6 +110,113 @@ class DetailGravite:
         )
 
 
+MODE_RETARD_ASYMPTOTE = "asymptote"
+MODE_RETARD_PALIER = "palier"
+_MODES_RETARD = (MODE_RETARD_ASYMPTOTE, MODE_RETARD_PALIER)
+
+# Réglages de retard hors domaine déjà signalés. Une alarme répétée à chaque souvenir cesse d'en
+# être une ; une alarme muette laisse un repli passer pour un réglage accepté.
+_RETARD_FAUTIFS_DITS: set[str] = set()
+
+
+def reinitialiser_alarmes_retard() -> None:
+    """Oublie les alarmes de réglage déjà levées. Réservé aux tests."""
+    _RETARD_FAUTIFS_DITS.clear()
+
+
+def _alarme_retard(cle: str, message: str) -> None:
+    if cle in _RETARD_FAUTIFS_DITS:
+        return
+    _RETARD_FAUTIFS_DITS.add(cle)
+    logger.error(message)
+
+
+def part_de_retard(retard_s: float) -> float:
+    """La composante de retard de la gravité, dans [0, max].
+
+    DEUX FORMES, et c'est un réglage (`memoire__retard_saturation`).
+
+    `palier` — la forme d'origine : `0,50 × min(t / ref, 1)`. Nette, mais elle **efface tout
+    au-delà de la référence**. Déclarer 45, 60 ou 90 minutes donnait rigoureusement la même
+    gravité, et un profil de choc décroissant resté au-dessus de 30 minutes n'existait que dans
+    le texte — c'était le premier piège de toute nouvelle déclaration de choc.
+
+    `asymptote` — DÉFAUT depuis le 2026-09-21. **En dessous de la référence, rien ne change** :
+    la composante reste `0,50 × t / ref`. Au-dessus, le palier est remplacé par une montée qui
+    décélère vers `max` sans jamais l'atteindre. Deux retards différents donnent donc deux
+    gravités différentes, quelle que soit leur durée.
+
+    Ce découpage n'est pas une commodité. Une exponentielle pure passant par le point d'ancrage
+    serait 1,75 fois plus raide à l'origine : neuf minutes de retard passeraient de 0,15 à 0,22,
+    et TOUS les petits incidents deviendraient plus graves — un effet que personne n'a demandé,
+    et qui ferait franchir le seuil de rupture à des journées qui ne le franchissaient pas. La
+    forme par morceaux ne touche que ce qu'on veut corriger.
+
+    La constante de temps du prolongement est calée pour que la PENTE soit continue au point
+    d'ancrage : sans cela la courbe ferait un coude à trente minutes, et une seconde de plus
+    vaudrait un saut de gravité.
+
+    ⚠ Retirer le palier sans changer de forme ne supprime pas le mur, il le DÉPLACE. Une
+    composante linéaire non bornée vaudrait 1,0 dès 60 minutes, la gravité totale étant bornée à
+    1 : 60, 90 et 120 minutes redeviendraient indiscernables, et les trois autres composantes
+    cesseraient de peser quoi que ce soit. La forme asymptotique est ce qui supprime réellement
+    la limite.
+
+    Le point d'ancrage est PRÉSERVÉ d'une forme à l'autre : à `memoire__retard_ref_s`, les deux
+    rendent 0,50. Aucun choc du catalogue ne change donc de classification par le seul
+    changement de forme — ils ne font que se séparer les uns des autres au-dessus de la
+    référence.
+    """
+    t = max(0.0, float(retard_s))
+    ref = float(settings.agent.memoire__retard_ref_s)
+    if ref <= 0:
+        # Un `ref` nul ou négatif rendrait la composante indéfinie. On ne devine pas : elle vaut
+        # zéro ET on le dit, sans quoi le retard cesserait de compter en silence.
+        _alarme_retard(
+            f"ref:{ref}",
+            f"[ALARME] memoire__retard_ref_s = {ref} : la composante de retard de la "
+            f"gravité est INACTIVE — toute gravité de retard vaudra zéro",
+        )
+        return 0.0
+
+    mode = str(getattr(settings.agent, "memoire__retard_saturation", MODE_RETARD_ASYMPTOTE)).strip()
+    if mode not in _MODES_RETARD:
+        _alarme_retard(
+            f"mode:{mode}",
+            f"[ALARME] memoire__retard_saturation inconnu ({mode!r}) — repli sur "
+            f"{MODE_RETARD_ASYMPTOTE!r}. Modes admis : {list(_MODES_RETARD)}.",
+        )
+        mode = MODE_RETARD_ASYMPTOTE
+
+    if mode == MODE_RETARD_PALIER:
+        return POIDS_RETARD * min(t / ref, 1.0)
+
+    maxi = float(getattr(settings.agent, "memoire__retard_gravite_max", 0.70))
+    if maxi <= POIDS_RETARD:
+        # Sans marge au-dessus du point d'ancrage, il n'y a rien à faire monter : la constante
+        # de temps du prolongement serait nulle.
+        _alarme_retard(
+            f"max:{maxi}",
+            f"[ALARME] memoire__retard_gravite_max = {maxi} n'est pas strictement supérieur à "
+            f"POIDS_RETARD = {POIDS_RETARD} : il ne reste aucune marge au-dessus du point "
+            f"d'ancrage. Repli sur le mode {MODE_RETARD_PALIER!r}, qui efface tout au-delà de "
+            f"{ref:.0f} s.",
+        )
+        return POIDS_RETARD * min(t / ref, 1.0)
+
+    # EN DESSOUS de la référence : rigoureusement inchangé. C'est ce qui rend le changement
+    # sûr — aucun choc déclaré sous 30 minutes ne bouge d'un millième, et les trois quarts du
+    # catalogue sont dans ce cas.
+    if t <= ref:
+        return POIDS_RETARD * t / ref
+
+    # AU-DESSUS : le palier est remplacé par une montée qui décélère vers `maxi` sans jamais
+    # l'atteindre. τ est calé pour que la PENTE soit continue au point d'ancrage — sans quoi la
+    # courbe ferait un coude à 30 minutes, et une seconde de plus vaudrait un saut de gravité.
+    tau = (maxi - POIDS_RETARD) * ref / POIDS_RETARD
+    return maxi - (maxi - POIDS_RETARD) * math.exp(-(t - ref) / tau)
+
+
 def gravite_deterministe(
     retard_s: float = 0.0,
     correspondance_ratee: bool = False,
@@ -125,17 +232,7 @@ def gravite_deterministe(
     Une arrivée EN AVANCE n'est pas un bonus : un retard négatif vaut zéro, jamais une gravité
     négative qui viendrait compenser un incident réel dans la même entrée.
     """
-    retard_ref = float(settings.agent.memoire__retard_ref_s)
-    if retard_ref > 0:
-        part_retard = POIDS_RETARD * min(max(float(retard_s), 0.0) / retard_ref, 1.0)
-    else:
-        # Un `RETARD_REF` nul ou négatif rendrait la composante indéfinie. On ne devine pas :
-        # elle vaut zéro ET on le dit, sans quoi le retard cesserait de compter en silence.
-        logger.error(
-            f"[ALARME] memoire__retard_ref_s = {retard_ref} : la composante de retard de la "
-            f"gravité est INACTIVE — toute gravité de retard vaudra zéro"
-        )
-        part_retard = 0.0
+    part_retard = part_de_retard(retard_s)
 
     detail = DetailGravite(
         retard=part_retard,

@@ -195,9 +195,18 @@ bord.
 deux ménages la partagent. Le tirage est donc stable à ordre et à sous-ensemble fixés, pas
 pour une personne donnée : **201 des 1 000 personas** de la v4 scellée portent un vélo
 différent de celui qu'ils avaient dans le vivier pré-imputé (distribution globale inchangée ;
-logement, permis, abonnement : 0 différence). Clé stable (`person_id`, `household.id`) et sel
-`personal_bike_v2` : [ticket 034](../tickets/ticket_034_velo_cle_stable_une_seule_loi.md),
-décision non prise.
+logement, permis, abonnement : 0 différence). La v6 scellée le 2026-09-14 porte la même
+limite : son sel est resté `personal_bike_v1`.
+
+**Cette limite est définitive.** La clé stable (`person_id`, `household.id`, sel
+`personal_bike_v2`) était spécifiée ligne à ligne par le
+[ticket 034](../tickets/ticket_034_velo_cle_stable_une_seule_loi.md), et l'auteur l'a
+**abandonnée le 2026-09-21** : elle devait partir avec un scellement de cohorte, la v6 est
+passée sans elle, et la livrer ensuite coûterait une v7 pour elle seule. Ce qu'il faut en
+retenir à la lecture d'un résultat : le `personal_bike` d'un persona de la v6 ne se compare
+pas à celui qu'il porte dans le vivier source, et toute cohorte ré-extraite ou réordonnée
+rebat le parc d'environ un persona sur cinq. Les marges, les douze contrôles et le sceau ne
+sont pas en cause — le bruit est symétrique et la distribution globale ne bouge pas.
 
 ---
 
@@ -510,8 +519,9 @@ qu'un persona n'a pas de vélo là où la vérité est « personne ne s'est pron
 *et* `[ALARME]`) du trait qui **dit** « Pas de vélo ». La clé n'est plus écrite que si la
 colonne existe.
 
-Ce qui reste du ticket 034 — la clé de tirage, qui dépend encore de la position du persona
-dans le fichier — est traité dans une autre session.
+Ce qui restait du ticket 034 — la clé de tirage, qui dépend encore de la position du persona
+dans le fichier — a été **abandonné le 2026-09-21** et le ticket est clos : voir la limite
+déclarée au § « Déterminisme ».
 
 ## Hors périmètre
 

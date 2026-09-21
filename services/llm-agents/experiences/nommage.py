@@ -68,7 +68,35 @@ ABREV_DECIDEUR = {
     "majoritaire_voiture": "majvoiture",
     "modele": "lgbm",
     "rejeu": "rejeu",
+    # Ticket 096 — repli seulement : `segment_decideur` nomme un décideur typesafe par son
+    # MODÈLE (`jev-1130`), pour que deux versions de Jev ne partagent pas un nom d'expérience.
+    "typesafe": "jev",
 }
+
+#: Les décideurs qui LISENT une variante de `prompts.yaml`. Source unique : la règle « le
+#: prompt ne compte que pour un décideur qui en lit un » vaut pour le nommage (N5), pour la
+#: validation d'une définition, pour la colonne `prompt` du registre et pour la fiche de
+#: détail. Elle était recopiée à la main dans chacun de ces quatre endroits.
+#:
+#: Le ticket 096 a ajouté `typesafe` à DEUX d'entre eux et oublié les autres : jusqu'au
+#: 2026-09-21, le registre affichait « — » dans la colonne `prompt` de toute exécution Jev,
+#: et une expérience Jev pouvait se définir sur une variante inexistante sans le moindre
+#: avertissement — l'erreur ne sortait qu'à la première décision, au milieu d'un run. Une
+#: liste recopiée à quatre endroits se met à jour à deux ; celle-ci n'existe qu'ici.
+#:
+#: ⚠ Ne PAS s'en servir pour les gardes qui parlent d'autre chose : le quota
+#: (`cli.py`, Jev est `sans_quota`), la température (N8, non documentée chez Jev),
+#: l'injection des `llm_params` ou l'échantillonnage du décideur excluent `typesafe` à
+#: juste titre. Cette constante ne répond qu'à « ce décideur lit-il un prompt système ? ».
+TYPES_LISANT_UN_PROMPT = ("passerelle", "antigravity", "typesafe")
+
+#: Ceux d'entre eux qui reçoivent la variante AMPUTÉE de son bloc `[Output instructions]`.
+#: Jev rend une sortie typée : la consigne de format ne lui est pas envoyée, et le texte
+#: réellement servi porte son propre sha (`instructions_sha256` de l'empreinte). Deux
+#: exécutions sous « le même » prompt, l'une Jev l'autre LLM, ne partagent donc pas le texte
+#: servi — ce que la fiche de détail dit, et que la colonne du registre tait pour garder un
+#: filtre unique par variante (décision de l'auteur, 2026-09-21).
+TYPES_A_PROMPT_TRONQUE = ("typesafe",)
 
 # Portée d'un décideur passerelle : `distant` est la valeur de référence, donc MUETTE (N7) —
 # aucun nom existant ne bouge. Seul `local` se dit, parce qu'un même identifiant de modèle est
@@ -103,6 +131,7 @@ DEFAUTS_NOMMAGE: dict[str, Any] = {
     # donc muette, et les noms existants ne bougent pas. Coupée, elle se dit (R13).
     "vehicule_chaine": True,
     "verrou_retour": True,
+    "troncature_15": False,
     "evenements": 0,
     "parallelisme": 8,
     "max_candidats": 6,
@@ -185,7 +214,10 @@ def abreger_variante(variante: str | None) -> str:
 def _slug(texte: str, taille: int = 16) -> str:
     """Un fragment sûr pour un segment de nom : accents conservés, danger remplacé."""
     net = re.sub(
-        r"[^\w.\-]+", "-", unicodedata.normalize("NFC", str(texte)).strip(), flags=re.UNICODE
+        r"[^\w.\-]+",
+        "-",
+        unicodedata.normalize("NFC", str(texte)).strip(),
+        flags=re.UNICODE,
     )
     return re.sub(r"-{2,}", "-", net).strip("-._")[:taille]
 
@@ -296,13 +328,25 @@ def segment_decideur(decideur: dict) -> str:
     dec = decideur or {}
     type_ = str(dec.get("type") or "")
     if not type_:
-        raise NommageImpossible("decideur.type est vide : aucun nom ne peut être composé")
+        raise NommageImpossible(
+            "decideur.type est vide : aucun nom ne peut être composé"
+        )
     if type_ == "passerelle":
         slug = abreger_modele(str(dec.get("modele") or ""))
         if not slug:
             raise NommageImpossible(
                 "decideur.modele est vide : choisissez le modèle, c'est lui qui nomme "
                 "l'expérience"
+            )
+        return slug
+    if type_ == "typesafe":
+        # Nommé par sa VERSION : `jev-1.13.0` → `jev-1130`. Deux versions de Jev sont deux
+        # décideurs, et l'article devra pouvoir les distinguer dans un tableau (N1/N2).
+        slug = abreger_modele(str(dec.get("modele") or ""))
+        if not slug:
+            raise NommageImpossible(
+                "decideur.modele est vide : choisissez la version de Jev, c'est elle qui "
+                "nomme l'expérience"
             )
         return slug
     if type_ == "antigravity":
@@ -345,7 +389,9 @@ def segments(exp: dict) -> list[str]:
             out.append(ABREV_PORTEE[portee])
 
     # N5 — le prompt ne compte que pour un décideur qui lit un prompt.
-    if dec.get("type") in ("passerelle", "antigravity"):
+    # Ticket 096 : `typesafe` lit lui aussi une variante de `prompts.yaml` (amputée de son
+    # bloc de sortie) — elle nomme donc son expérience, comme pour un bras LLM (N3).
+    if dec.get("type") in TYPES_LISANT_UN_PROMPT:
         out.append(abreger_variante((exp.get("gabarit") or {}).get("variante")))
 
     # N6 — le calendrier, muet dans le cas simple. Le jour du jeu se lit dans son nom quand
@@ -353,7 +399,9 @@ def segments(exp: dict) -> list[str]:
     # dit (le segment `jeu-…` dira de son côté que le jeu n'est pas celui qu'on attendait).
     politique = str(cal.get("politique") or "")
     jeu_nom = str((exp.get("jeu") or {}).get("nom") or "")
-    conventionnel = re.fullmatch(rf"{re.escape(pop)}_(\d{{8}})", jeu_nom) if pop else None
+    conventionnel = (
+        re.fullmatch(rf"{re.escape(pop)}_(\d{{8}})", jeu_nom) if pop else None
+    )
     jour_du_jeu = conventionnel.group(1) if conventionnel else None
     date_compacte = str(cal.get("date") or "").replace("-", "")
     if politique in ABREV_POLITIQUE:
@@ -381,6 +429,8 @@ def segments(exp: dict) -> list[str]:
         out.append("nochn")
     if bool(exp.get("verrou_retour", D["verrou_retour"])) != D["verrou_retour"]:
         out.append("noret")
+    if bool(exp.get("troncature_15", D["troncature_15"])) != D["troncature_15"]:
+        out.append("cset15")
     if int(exp.get("horizon_jours") or 1) != D["horizon_jours"]:
         out.append(f"h{int(exp['horizon_jours'])}j")
     if bool(exp.get("memoire")) != D["memoire"]:
@@ -407,10 +457,14 @@ def segments(exp: dict) -> list[str]:
 
     # N8 — température et mode, toujours nommés.
     if dec.get("type") in ("passerelle", "antigravity"):
-        out.append("t" + _nombre((dec.get("parametres") or {}).get("temperature") or 0.0))
+        out.append(
+            "t" + _nombre((dec.get("parametres") or {}).get("temperature") or 0.0)
+        )
     mode = str(exp.get("mode") or "")
     if mode not in ABREV_MODE:
-        raise NommageImpossible(f"mode inconnu : {mode!r} (sans_simulateur | simulateur)")
+        raise NommageImpossible(
+            f"mode inconnu : {mode!r} (sans_simulateur | simulateur)"
+        )
     out.append(ABREV_MODE[mode])
     return out
 
@@ -515,7 +569,9 @@ class Attribution:
     voisins: list[str] = field(default_factory=list)  # noms pris qui partagent la base
 
 
-def attribuer_nom(exp: dict, dossier: str | Path, existantes: dict[str, str] | None = None) -> Attribution:
+def attribuer_nom(
+    exp: dict, dossier: str | Path, existantes: dict[str, str] | None = None
+) -> Attribution:
     """Le nom à écrire, indice de collision compris (N10, N11).
 
     `reutilise` renseigné = ce nom désigne DÉJÀ cette expérience, à l'identique : la relancer
@@ -524,7 +580,9 @@ def attribuer_nom(exp: dict, dossier: str | Path, existantes: dict[str, str] | N
     base = nom_canonique(exp)
     prises = definitions_existantes(dossier) if existantes is None else dict(existantes)
     sig = signature(exp)
-    voisins = [n for n in prises if n == base or re.fullmatch(rf"{re.escape(base)}_\d+", n)]
+    voisins = [
+        n for n in prises if n == base or re.fullmatch(rf"{re.escape(base)}_\d+", n)
+    ]
     for indice in range(1, 1000):
         candidat = _avec_indice(base, indice)
         connue = prises.get(candidat)
@@ -548,6 +606,8 @@ __all__ = [
     "LONGUEUR_MAX",
     "MOTIF_NOM",
     "TOLERANCES_REFERENCE",
+    "TYPES_A_PROMPT_TRONQUE",
+    "TYPES_LISANT_UN_PROMPT",
     "Attribution",
     "NommageImpossible",
     "abreger_modele",

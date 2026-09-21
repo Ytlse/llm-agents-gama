@@ -40,14 +40,14 @@ réellement dans le fichier sont relevés fiche par fiche, plus bas.
 | 4 | [`04_metrics_and_substrate.md`](04_metrics_and_substrate.md) | 🟢 première version | ⬜ Vide | `brouillon v0.9` | socle et cohorte chiffrés sur la v6 ; plus aucun emplacement `[xx]` ; lecture des chiffres à relire |
 | 5 | [`05_factual_neutral_prompt.md`](05_factual_neutral_prompt.md) | 🟢 première version | ⬜ Vide | `brouillon v0.8` | chapitre de **protocole** ; quatre sections rédigées, fusion du 4.5 faite, planchers chiffrés ; réponse du bras palier 1 à reprendre, audit du § 5.4 à jouer |
 | 6 | [`06_results.md`](06_results.md) | 🟠 brouillon |  ⬜ Vide |`trame v0.1` | chapitre de **résultats**, à l'arrêt : idée directrice et titre en décision ([ticket 080](../../../tickets/ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md)) |
-| 7 | [`07_untabulated_regimes.md`](07_untabulated_regimes.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | campagnes non jouées, numérotation périmée |
+| 7 | [`07_untabulated_regimes.md`](07_untabulated_regimes.md) | 🟢 première version | ⬜ Vide | `brouillon v1.0` | trois sections écrites ; les deux campagnes ne sont pas jouées |
 | 8 | [`08_limits_and_hybrid.md`](08_limits_and_hybrid.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | la limite de l'itinéraire mixte reste à écrire |
 | 9 | [`09_conclusion.md`](09_conclusion.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | aucune des trois sous-sections prévues |
 | 99 | [`99_annexes.md`](99_annexes.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | annexes A à D réduites à une ou deux phrases |
 
-**Lecture d'ensemble :** trois chapitres relus (0, 1, 2), trois écrits neufs et jamais relus
-(3, 4, 5), un en trame (6, à l'arrêt depuis la restructuration du 15 septembre 2026), et quatre
-qui sont encore l'extrait du manuscrit (7, 8, 9, 99).
+**Lecture d'ensemble :** trois chapitres relus (0, 1, 2), quatre écrits neufs et jamais relus
+(3, 4, 5, 7), un en trame (6, à l'arrêt depuis la restructuration du 15 septembre 2026), et trois
+qui sont encore l'extrait du manuscrit (8, 9, 99).
 
 **Le point dur, au 15 septembre 2026 :** les scores recalculés depuis le dépôt ont paru un
 moment contredire l'hypothèse **H0 de non-atteinte** que le chapitre 6 devait établir. Cette
@@ -59,9 +59,12 @@ son titre, et la répercussion sur le résumé, le § 1.3 et le chapitre 9 sont 
 Rien ne se rédige dans le 6 avant que trois verrous soient levés : dispersion non mesurée
 (ticket 073), lecture de référence non arrêtée (ticket 046), deux décideurs à modèle de langue seulement scorés sur
 v6 et sans réplicat (ticket 074).
-Les cinq derniers partagent la même dette : vocabulaire « Tier 1 / 2 / 3 » à remplacer par
-*exploratory / robust / transferable*, chiffres à recouper depuis le dépôt, renvois de section
-à refaire, et une numérotation interne qui est encore celle du manuscrit.
+Les annexes portent encore deux dettes : chiffres à recouper depuis le dépôt, et une
+numérotation interne qui est encore celle du manuscrit. Le 9 les a soldées le 21 septembre 2026.
+La dette de vocabulaire, elle, n'existe plus nulle part : « Tier 1 / 2 / 3 » a été **retiré** du 9
+et avait déjà quitté les annexes. Il ne se remplace pas par *exploratoire / robuste /
+transférable* — le § 1 et le § 2 réservent ces trois mots aux degrés de certification de SILICA et
+interdisent de les appliquer à nos propres conditions.
 
 ---
 
@@ -92,8 +95,8 @@ qu'une seule est préenregistrée. Le substrat est passé à la cohorte scellée
 
 ### 2 — `02_related_work.md` · Travaux connexes
 
-**Statut :** 🔵 relu · `v0.17` (10 septembre 2026) · 2 418 mots
-**Sections prévues :** 2.1 utilité aléatoire et rationalité limitée · 2.2 agents génératifs en mobilité · 2.3 alignement distributionnel
+**Statut :** 🔵 relu · `v0.19` (21 septembre 2026) · 2 418 mots
+**Sections prévues :** 2.1 choix discrets et filtres de perception · 2.2 agents génératifs en mobilité · 2.3 alignement distributionnel
 **Présent :** les trois.
 **Reste à faire :** rien d'identifié. Les citations ont été vérifiées sur les notices arXiv le
 10 septembre 2026 ; le suivi par référence est dans [`../CITATIONS.md`](../CITATIONS.md).
@@ -199,21 +202,26 @@ déplace · 6.3 le détail des résultats agrégés, sur Gemini 3.5 · 6.4 déci
 autrement · 6.5 variation de cohorte et dispersion entre graines. Le détail des résultats vit à
 l'annexe H du chapitre 99.
 **Ce qui reste ouvert :** la dispersion inter-graines, écrite comme acquise et marquée **TBC**
-(ticket 073, axe 1) · l'exactitude unitaire de l'agent, deux `[xx]` au § 6.4 (ticket 058) · la
-lecture de référence non arrêtée (chapitre 4 § 4.3, ticket 046). Les treize décideurs sont
+(ticket 073, axe 1) · la lecture de référence non arrêtée (chapitre 4 § 4.3, ticket 046).
+L'exactitude unitaire de l'agent est mesurée depuis le 2026-09-19 et renseignée au § 6.4
+(ticket 058). Les treize décideurs sont
 mesurés sur le jeu corrigé du ticket 088 depuis le 2026-09-17.
 **En décision :** l'idée directrice et le titre — trois options posées au
 [ticket 080](../../../tickets/ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md).
 **Tickets :** 080 *(bloquant)* · 073 · 056 · 057 · 058
 **Mes notes :**
 
-### 7 — `07_untabulated_regimes.md` · Régimes non tabulés : hystérésis et presse locale
+### 7 — `07_untabulated_regimes.md` · Réagir à ce qu'aucune variable n'encode
 
-**Statut :** 🟠 brouillon hérité · `brouillon v0` · 1 220 mots
-**Sections prévues :** 7.1 hystérésis sur cinq jours · 7.2 cinq événements de presse locale · 7.3 prédictions préenregistrées
-**Présent :** 5.1 · 5.2 · 5.3 — même contenu, numérotation du manuscrit.
-**Reste à faire :** les deux campagnes ne sont pas jouées ; les chiffres cités viennent du
-manuscrit et n'ont pas été recoupés ; vocabulaire « Tier 1 / 2 / 3 » à reprendre.
+**Statut :** 🟢 première version écrite · `brouillon v1.0` (17 septembre 2026) · 1 659 mots de prose
+**Sections :** 7.1 cinq événements de presse locale, cinq conditions · 7.2 cinq jours, un retard
+subi le deuxième · 7.3 ce que ce chapitre transmet
+**Ordre des deux régimes :** la presse avant l'hystérésis. Après le chapitre 6, la presse
+n'ajoute qu'un texte au contexte, mémoire éteinte, quand l'hystérésis ajoute la mémoire. Le § 1.4
+et le plan annoncent encore l'ordre inverse et restent à permuter (ticket 094).
+**Reste à faire :** aucun résultat n'est publié, les deux campagnes ne sont pas jouées et chaque
+grandeur attendue porte l'emplacement du run qui la produira ; huit points à traiter avant la
+première campagne, listés en fin de chapitre.
 **Tickets :** 041 hystérésis longitudinale · 059 presse locale et prédictions préenregistrées (*à faire*) · 063 campagne hystérésis · 064 campagne presse locale
 **Mes notes :**
 

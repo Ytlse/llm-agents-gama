@@ -1,6 +1,6 @@
 # 7. Réagir à ce qu'aucune variable n'encode
 
-<!-- Dernière mise à jour : 2026-09-17 -->
+<!-- Dernière mise à jour : 2026-09-21 -->
 
 **Document :** chapitre 7 de l'article AAMAS 2027 — le chapitre des régimes qu'aucune variable d'enquête ne porte : le chapitre 6 mesure l'agent sur les 21 entrées du contrat, celui-ci le mesure sur un article du jour et sur le retard de la veille.
 **Statut :** `brouillon v1.0` (17 septembre 2026) — réécriture complète du brouillon hérité du manuscrit `v1.6`. Le vocabulaire « Tier 1 / 2 / 3 » sort. La formule $w_m(t)$ du manuscrit sort du texte : elle n'est pas implémentée, et le plan longitudinal en fait un modèle descriptif ajusté après coup. Les deux régimes passent dans l'ordre où le dispositif reçoit ses ingrédients : la presse d'abord, mémoire éteinte, la mémoire ensuite. Aucun résultat n'est publié : les deux campagnes ne sont pas jouées, et chaque grandeur attendue porte l'emplacement du run qui la produira.
@@ -10,7 +10,7 @@
 
 ---
 
-Le chapitre 6 compare les décideurs sur les 21 variables du contrat, et les quatre références tabulaires y devancent le meilleur prompt expert, 3,60 à 4,09 de composite contre 4,49. Ces 21 variables décrivent une personne, un motif, une heure et une géométrie ; aucune ne porte la météo, aucune ne porte une durée de trajet, aucune ne porte un événement du jour. <!-- source : scripts/progedo_logit/feature_spec.json, 21 entrées : 12 persona, 2 motif, 1 heure de départ, 6 géométrie -->
+Le chapitre 6 compare les décideurs sur les 21 variables du protocole, et les quatre références tabulaires y devancent le meilleur prompt expert, 3,60 à 4,09 de composite contre 4,49. Ces 21 variables décrivent une personne, un motif, une heure et une géométrie ; aucune ne porte la météo, aucune ne porte une durée de trajet, aucune ne porte un événement du jour. <!-- source : scripts/progedo_logit/feature_spec.json, 21 entrées : 12 persona, 2 motif, 1 heure de départ, 6 géométrie -->
 
 Ce chapitre mesure les mêmes décideurs sur deux régimes que l'enquête ne tabule pas : un article de presse paru le matin, et un retard subi la veille. Aucune enquête ne suit les mêmes voyageurs à travers un événement toulousain daté, donc aucune valeur mesurée ici n'a de cible. Ce qui se teste est le signe d'un déplacement, l'ordre des conditions, et la monotonie d'un retour, tous trois écrits avant le premier appel au modèle.
 
@@ -36,7 +36,7 @@ Chaque événement est joué sous cinq conditions sur les mêmes 3 299 déplacem
 | C4 | Agent, texte témoin | un article local réel de longueur comparable, sans lien plausible avec le choix modal | l'effet du contenu de l'effet d'ajouter un texte |
 | C5 | Référence tabulaire, événement encodé | l'événement traduit dans l'offre : liens coupés, fréquences dégradées | ce qu'une référence tabulaire fait de l'événement quand il l'atteint |
 
-La condition C5 n'existe que lorsque l'événement modifie l'offre. Les 21 variables ne portant ni météo ni durée, le seul canal par lequel un événement atteint une référence tabulaire est la règle 3 du contrat : un mode retiré de l'offre sort de la prédiction, qui se renormalise sur les modes restants. La parade de La Machine se traduit ainsi en coupures dans le graphe et en modes retirés ; la rumeur des punaises de lit ne se traduit pas, et C5 y est identique à C1. La portée se mesure et se publie plutôt qu'elle ne se suppose : sur une coupure de rocade, 18,2 % des trajets voiture de 7 h à 9 h empruntent l'axe touché. <!-- source : trace 2026-09-14_11-20_exposition_rocade_lot0bis ; la mesure porte sur un événement écarté depuis, elle donne l'ordre de grandeur, pas la valeur des cinq -->
+La condition C5 n'existe que lorsque l'événement modifie l'offre. Les 21 variables ne portant ni météo ni durée, le seul canal par lequel un événement atteint une référence tabulaire est la règle 3 du protocole : un mode retiré de l'offre sort de la prédiction, qui se renormalise sur les modes restants. La parade de La Machine se traduit ainsi en coupures dans le graphe et en modes retirés ; la rumeur des punaises de lit ne se traduit pas, et C5 y est identique à C1. La portée se mesure et se publie plutôt qu'elle ne se suppose : sur une coupure de rocade, 18,2 % des trajets voiture de 7 h à 9 h empruntent l'axe touché. <!-- source : trace 2026-09-14_11-20_exposition_rocade_lot0bis ; la mesure porte sur un événement écarté depuis, elle donne l'ordre de grandeur, pas la valeur des cinq -->
 
 ### 7.1.3 Prédictions et mesure
 
@@ -88,16 +88,16 @@ Un pilote de dix jours sur cinq agents donne la mesure de ce que cette prédicti
 
 ## 7.3 Ce que ce chapitre transmet
 
-Les deux régimes donnent à lire ce que les 21 variables du contrat ne portent pas : la réaction à un texte paru le matin, et la persistance d'un retard subi la veille. Leur portée est bornée par ce que le dispositif encode : un seul choc, un seul modèle, une condition tabulaire informée seulement là où l'événement atteint l'offre, et un effectif d'exposés qui décide de ce qui est mesurable.
+Les deux régimes donnent à lire ce que les 21 variables du protocole ne portent pas : la réaction à un texte paru le matin, et la persistance d'un retard subi la veille. Leur portée est bornée par ce que le dispositif encode : un seul choc, un seul modèle, une condition tabulaire informée seulement là où l'événement atteint l'offre, et un effectif d'exposés qui décide de ce qui est mesurable.
 
-Le chapitre 8 discute les limites du contrat et les implications pour des conceptions hybrides ; le coût d'exécution des conditions à modèle de langue est au chapitre 9.
+Le chapitre 8 discute les limites du protocole et les implications pour des conceptions hybrides ; le coût d'exécution des conditions à modèle de langue est au chapitre 9.
 
 ---
 
 ### Tickets associés à ce chapitre
 
 - [Ticket 041](../../../tickets/ticket_041_etape_3a_hysteresis_longitudinale.md) — protocole longitudinal, bras, effectif, calendrier et prédictions préenregistrées
-- [Ticket 048](../../../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — plancher de consolidation à 22 h et constante d'oubli en jours
+- [Ticket 048](../../../tickets/ticket_048_calendrier_de_consolidation_et_echelle_d_oubli.md) — plancher de consolidation à 22 h et constante d'oubli en jours ; clos le 21 septembre 2026, son reliquat est le lot F du ticket 095
 - [Ticket 059](../../../tickets/ticket_059_etape_3b_presse_locale_et_predictions_preenregistrees.md) — protocole à cinq conditions, corpus de presse et métriques de concordance
 - [Ticket 063](../../../tickets/ticket_063_campagne_experimentale_hysteresis_longitudinale.md) — campagne longitudinale d'hystérésis
 - [Ticket 064](../../../tickets/ticket_064_campagne_experimentale_presse_locale_et_scoring.md) — campagne de presse locale et scoring
@@ -105,6 +105,7 @@ Le chapitre 8 discute les limites du contrat et les implications pour des concep
 - [Ticket 077](../../../tickets/ticket_077_la_memoire_apprend_sur_des_observations_fausses.md) — intégrité des observations dont la mémoire apprend
 - [Ticket 079](../../../tickets/ticket_079_chocs_declares_vecus_par_les_agents.md) — déclaration d'un choc subi et du souvenir qu'il laisse
 - [Ticket 093](../../../tickets/ticket_093_personas_mesurables_et_suivi_des_habitudes.md) — mesures par jour simulé, habitudes et opérations de concept
+- [Ticket 095](../../../tickets/ticket_095_duree_d_un_souvenir_et_enquete_du_soir.md) — durée d'un souvenir dérivée de sa gravité, enquête du soir, et le calendrier de consolidation repris du 048
 
 ---
 
@@ -134,17 +135,21 @@ AVANT LE PREMIER APPEL, § 7.2.
    brancher les décideurs tabulaires dans le contrôleur GAMA, rejouer hors ligne les décisions
    du run GAMA depuis moves.csv, ou assumer la condition tabulaire par construction. Le rejeu
    hors ligne garde une mesure là où la troisième issue donne une constante.
-6. Le ticket 048 déclare bloquer l'expérience tant que les déclarations `memory_decay_lambda`
+6. Le lot F4 du ticket 095 bloque l'expérience tant que les déclarations `memory_decay_lambda`
    et `memory_horizon_days` d'`experiments.yaml` n'ont pas été converties vers
-   `long_term_retrieval__force_base_jours`.
+   `long_term_retrieval__force_base_jours`. Le ticket 048, qui portait ce blocage, est clos
+   depuis le 2026-09-21 ; la conversion reste à faire.
 7. Le cas C3 du ticket 079 (panne du réseau) est écrit sur deux jours d'affilée ; le § 1.3
    annonce un choc au jour 2 et un réseau nominal dès le jour 3. Aligner l'un ou l'autre.
-8. Le ticket 077 est sur le chemin critique : sans ses lots A et B, ce que la mémoire apprend
-   est faux, et les opérations de concept du § 7.2.3 ne mesurent rien.
+8. Le ticket 077 a livré ses lots A et B le 2026-09-15 (92 tests) : l'axe des concepts et les
+   observations que GAMA envoie sont réparés, et les opérations de concept du § 7.2.3 ont de
+   quoi mesurer. Ce qui reste au 077 est son lot D1, un arbitrage sur le service de
+   l'auto-réflexion dans le bloc noyau ; il ne conditionne pas ce chapitre.
 
-TRANSMISSION AU SEIN DU FOYER. Le ticket 078 n'a pas de code, dépend du 077, et son run macro
-est différé au titre d'une campagne. Il ne figure pas dans ce chapitre ; sa place, le jour où
-il aura une mesure, est une perspective du chapitre 8.
+TRANSMISSION AU SEIN DU FOYER. Le ticket 078 n'a pas de code et son run macro est différé au
+titre d'une campagne. Sa dépendance au 077 est levée depuis le 2026-09-21, les lots A et B de
+celui-ci étant livrés. Il ne figure pas dans ce chapitre ; sa place, le jour où il aura une
+mesure, est une perspective du chapitre 8.
 
 CITATIONS. Aucune référence nouvelle n'entre ici. Les deux ordres de grandeur du § 7.2.2
 (perte permanente de part après une grève) viennent de van Exel & Rietveld (2001) et Larcom,

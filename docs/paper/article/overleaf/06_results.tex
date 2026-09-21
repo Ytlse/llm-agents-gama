@@ -1,30 +1,31 @@
 % =====================================================================
 % overleaf/06_results.tex — LaTeX rendering of en/06_results.md draft v0.4 (17 September 2026)
-% Dernière mise à jour : 2026-09-17
+% Dernière mise à jour : 2026-09-21
 % Chapter 6 of the paper, a \section of its own, to be inserted right after overleaf/05_factual_neutral_prompt.tex.
 % This file DEFINES \label{sec:results}, referenced forward by overleaf/04_metrics_and_substrate.tex and
 %   overleaf/05_factual_neutral_prompt.tex, and which resolved to ?? until this file existed. Keep the spelling.
-% Forward reference: app:detail (appendix H) is defined by overleaf/99_annexes.tex.
+% Forward reference: app:detail (appendix H) and app:unit (appendix I) are defined by overleaf/99_annexes.tex.
 % Preamble additions:
 %   \newcommand{\todo}[1]{\textbf{[#1]}}   % placeholder figures
-% Figures: four, all PNG, all composed IN ENGLISH by scripts/analysis/plot_chapitre6.py and regenerated
-%   on 2026-09-17. Caption BELOW and a mandatory \Description{} (plain text, 2000 characters at most, not printed).
+% Figures: six, all PNG, all composed IN ENGLISH — four by scripts/analysis/plot_chapitre6.py, regenerated
+%   on 2026-09-17, and the two of the unit audit by scripts/analysis/plot_audit_unitaire.py, 2026-09-21. Caption BELOW and a mandatory \Description{} (plain text, 2000 characters at most, not printed).
 %   fig:scale and fig:residual are set as figure* (both columns): thirteen labelled rows, and six panels
 %   respectively, are unreadable in a single column. fig:engineering and fig:distance fit \columnwidth.
 %   FILES TO UPLOAD to the Overleaf project, flat, next to the .tex, as architecture_GAMA_Agents.jpg already is:
-%   ch6_echelle.png, ch6_ingenierie.png, ch6_distance.png, ch6_residu.png (sources in docs/paper/article/images/).
-% Tables: three, caption ABOVE, booktabs (both loaded by aamas.cls). tab:scale (13 rows) and tab:engineering
-%   (confidence intervals in the cells) are set as table* across both columns; tab:agreement fits one column.
+%   ch6_echelle.png, ch6_ingenierie.png, ch6_distance.png, ch6_residu.png, ch6_audit_modes.png,
+%   ch6_audit_distance.png (sources in docs/paper/article/images/).
+% Tables: four, caption ABOVE, booktabs (both loaded by aamas.cls). tab:scale (13 rows) and tab:engineering
+%   (confidence intervals in the cells) are set as table* across both columns; tab:agreement and tab:unit fit one column.
 % Numbers: the Markdown decimal comma becomes a decimal point, and the thousands separator a comma.
-% Comments "% source:" give the repository file a figure is recomputed from.
+% Traceability: the "source:" comments live in the ../fr/ and ../en/ masters only. Do not carry them
+%   over into this file when rendering a chapter into LaTeX (author's decision, 2026-09-21).
 % Derived file: regenerate after every validated pass of en/06_results.md.
 % =====================================================================
-
 
 \section{Results}
 \label{sec:results}
 
-Section~\ref{sec:prompt} described four ways of deciding a travel mode from the same state. This section confronts them with the survey, on the cohort of 1{,}000 personas and the 3{,}154 scored decisions of the evaluated day. % source: data/experiences/exp_*_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_*/executions/*/scores.json; 3,154 decisions out of 3,299 expected, 868 mobile people; 138 unusable trips are excluded by the scorer
+Section~\ref{sec:prompt} described four ways of deciding a travel mode from the same state. This section confronts them with the survey, on the cohort of 1{,}000 personas and the 3{,}154 scored decisions of the evaluated day.
 
 Every result here bears on a couple: a language model and an arbitration instruction, carried by its system prompt and subject to the prohibitions of Section~\ref{sec:expert-prompt}, among them any numerical threshold. Engineering that prompt brings \texttt{gemini-3.5-flash-lite} 2.3 composite points closer to the survey distribution and \texttt{mistral-large-2512} 7.3 points closer, where cohort variation is of the order of 1.3 points. The carrier weighs as much as the instruction: submitted as it stands to a second model from the same provider, the variant tuned against \texttt{gemini-3.5-flash-lite} leaves 4.2 points between the two, more than it brings to the weaker of them. Of the three couples measured, one comes within a point and a half of the tabular ceiling, separable from two of the four reference methods and not separable from the other two, and that proximity of the margins covers a decision-by-decision disagreement that the tabular methods, among themselves, do not have.
 
@@ -33,16 +34,16 @@ Every result here bears on a couple: a language model and an arbitration instruc
 
 The three readings defined in Section~\ref{sec:quantities} are published for every decider, in Table~\ref{tab:scale} and Figure~\ref{fig:scale}.
 
-\begin{figure*}[t]
+\begin{figure*}[tp]
   \centering
   \includegraphics[width=\textwidth]{ch6_echelle.png}
-  \caption{The thirteen deciders on the composite EMD--JSD axis. The scale spans a factor of fourteen between the random floor and the best composite, and four groups separate clearly on it. The floors occupy the upper half, from 27 to 50. The minimal prompt places the language models between 7.0 and 14.8, against 27.0 for the shortest-duration heuristic: the facts alone, with no arbitration instruction, already carry behavioural information, distinct from what the survey records. The expert prompt brings the same models back to between 4.9 and 9.0. The four tabular methods hold within a half-point interval, from 3.60 to 4.09. The grey band gives cohort variation, of the order of 1.3 points.}
+  \caption{The thirteen deciders on the composite EMD--JSD axis, a factor of fourteen between the random floor and the best composite. Four groups separate on it: the floors from 27 to 50, the minimal prompt from 7.0 to 14.8, the expert prompt from 4.9 to 9.0, the four tabular methods from 3.60 to 4.09. The minimal prompt thus passes below the shortest-duration heuristic, at 27.0: the facts alone, with no arbitration instruction, already carry behavioural information. The grey band gives cohort variation, of the order of 1.3 points.}
   \label{fig:scale}
   \Description{A horizontal dot plot. The x axis is the composite EMD-JSD error, running from zero on the left to about fifty-five on the right; lower is better. Thirteen deciders are stacked as rows and coloured by group. At the far right, the three floors: uniform random draw at 50.2, all-car at 30.7, shortest duration at 27.0. In the middle, the three language models under the minimal prompt, mistral-large at 14.8, gemini-3.1-flash-lite at 12.4 and gemini-3.5-flash-lite at 7.0. Slightly to their left, the same three models under the expert prompt, gemini-3.1 at 9.0, mistral-large at 7.6 and gemini-3.5 at 4.9. At the far left, packed together between 3.6 and 4.1, the four tabular methods: gradient boosting, kernel logistic regression, the multinomial logit and the random forest. A vertical grey band of about 1.3 points in width marks cohort variation, the resolution below which two scores cannot be told apart.}
 \end{figure*}
 
-\begin{table*}[t]
-  \caption{The thirteen deciders on the three readings of the evaluation contract. The composite bears on every decision of the day, constrained trips included; the reading excluding single choice removes those where only one option existed; the L1 on global shares looks only at the four aggregate modal shares, with no stratification. In bold, the best score in each column; lower is better throughout.}
+\begin{table*}[tp]
+  \caption{The thirteen deciders on the three readings of the comparison protocol. The composite bears on every decision of the day, constrained trips included; the reading excluding single choice removes those where only one option existed; the L1 on global shares looks only at the four aggregate modal shares, with no stratification. In bold, the best score in each column; lower is better throughout.}
   \label{tab:scale}
   \begin{tabular}{llrrr}
     \toprule
@@ -68,27 +69,18 @@ The three readings defined in Section~\ref{sec:quantities} are published for eve
   \end{tabular}
 \end{table*}
 
-% sources: scores.json, composite.emd_jsd, composite.emd_jsd_hors_choix_unique, global.l1. Minimal prompt = prompt_minimal_02;
-%   expert prompt = prompt_expert_05, promoted on 2026-09-17 (prompt_expert_04 deleted from the repository the same day,
-%   at the author's request). In this campaign, prompt_expert_05 was tuned against gemini-3.5-flash-lite then submitted
-%   as it stands to the other two models; nothing in the protocol requires a single instruction.
-
-Two scores a point apart are not told apart by this table, cohort variation being of the same order (Section~\ref{sec:dispersion}). Playing two deciders on the same personas removes that term, since it then acts on both sides. Paired this way, \texttt{gemini-3.5} under the expert prompt is behind gradient boosting by 1.35 points $[+0.28; +2.47]$ and behind kernel regression by 1.38 $[+0.32; +2.45]$, while not separable from the random forest, $+0.94$ $[-0.06; +1.98]$, nor from the multinomial logit, $+0.96$ $[-0.18; +2.17]$. The other two models stay 4.07 $[+2.47; +5.75]$ and 5.50 $[+4.19; +6.93]$ behind gradient boosting. One of the three couples therefore comes within reach of the tabular ceiling, and its gap excludes zero against two of the four reference methods. Prompt engineering was carried out on \texttt{gemini-3.5}: the distance of the other two measures what an instruction transports, not what a tuning conducted on them would produce.
-
-No equivalence test is reported: the margin was not written before the measurement, and a margin chosen now would be chosen after seeing the figures. Hypothesis H0 of Section~\ref{sec:contributions} is therefore presented as a paired estimate, with a sign, an amplitude and an interval. % source: docs/traces/2026-09-17_09-40_ch6_jeu_corrige_complet/ — fourteen paired differences recomputed after the replay campaign ended, 2,000 replicates, seed 2026, cluster resampling at the person level over 868 common people
-
 \subsection{What prompt engineering moves}
 \label{sec:engineering}
 
-\begin{figure}[t]
+\begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{ch6_ingenierie.png}
-  \caption{What prompt engineering makes each model travel. The hollow circle is the minimal prompt, the filled circle the expert prompt evaluated out of sample, the squares two variants tuned in sight of the evaluated cohort. The green band gives the interval of the four tabular methods. The three models start from different places, advance by different amounts, and one alone comes into contact with the band.}
+  \caption{What prompt engineering makes each model travel. The hollow circle is the minimal prompt, the filled circle the reference expert prompt, the squares two variants rewritten on the residuals of the cohort. The green band gives the interval of the four tabular methods. The three models start from different places, advance by different amounts, and one alone comes into contact with the band.}
   \label{fig:engineering}
   \Description{Three horizontal tracks, one per language model, over a common x axis of composite EMD-JSD error running from about three on the left to about fifteen on the right; lower is better. On each track a hollow circle marks the minimal prompt and a filled circle the expert prompt, joined by an arrow pointing left, that is towards lower error. The mistral-large-2512 track is the longest, from 14.8 down to 7.6. The gemini-3.1-flash-lite track runs from 12.4 down to 9.0. The gemini-3.5-flash-lite track is the shortest but ends furthest left, from 7.0 down to 4.9. Two square markers on the gemini-3.5 track sit further left still: variants tuned in sight of the evaluated cohort, shown apart as an in-sample upper bound. A vertical green band between 3.60 and 4.09 marks the interval of the four tabular methods; only the filled circle of gemini-3.5 comes into contact with it.}
 \end{figure}
 
-\begin{table*}[t]
+\begin{table*}[tp]
   \caption{Paired gain of the expert prompt over the minimal prompt, on the three readings, with 95\,\% intervals. A positive gain is a lower error. Measured at identical personas, itinerary offer, seed and foundation model, the instruction alone changing.}
   \label{tab:engineering}
   \begin{tabular}{lccc}
@@ -102,29 +94,22 @@ No equivalence test is reported: the margin was not written before the measureme
   \end{tabular}
 \end{table*}
 
-A dozen engineering iterations on \texttt{gemini-3.5-flash-lite} and two or three on each of the other two models produce the displacements of Table~\ref{tab:engineering} and Figure~\ref{fig:engineering}. The three intervals exclude zero on the three readings, and the gain runs from one and a half to five and a half times cohort variation. The variant measured here was tuned against \texttt{gemini-3.5}, then submitted as it stands to the other two models: submitted that way to \texttt{gemini-3.1}, it leaves the latter behind \texttt{gemini-3.5} by 4.15 points $[+2.99; +5.43]$, more than the 3.37 points it brings it, so that a benchmark run under a single instruction measures the model--instruction couple and not the model. The gain itself does not go to the model the instruction was tuned against: \texttt{gemini-3.1} takes 3.37 points from it and \texttt{gemini-3.5} 2.27, while the second stays 4.15 points ahead of the first after tuning. What prompt engineering moves and the level it reaches are two distinct quantities.
-
-% source: docs/traces/2026-09-17_09-40_ch6_jeu_corrige_complet/; 2,000 replicates, seed 2026, 868 common people, every decider
-%   on the corrected set. The number of iterations is the order of magnitude declared by the author. The gaps between carriers
-%   under each instruction, the reversal of ranking between gemini-3.1 and mistral-large, and the ablation of the
-%   justification clause are in Appendix~\ref{app:detail}.
+These displacements are measured at identical personas, itinerary offer, seed and foundation model, the instruction alone changing. The three intervals exclude zero on the three readings, and the gain runs from one and a half to five and a half times cohort variation.
 
 \subsection{The detail of the aggregate results, on Gemini 3.5}
 \label{sec:detail}
 
 What follows is measured on \texttt{gemini-3.5-flash-lite}, the model against which prompt engineering was conducted; the amplitudes of Section~\ref{sec:engineering} show that each model responds in its own way.
 
-\begin{figure}[t]
+\begin{figure}[tbp]
   \centering
   \includegraphics[width=\columnwidth]{ch6_distance.png}
-  \caption{The car share by distance band: the survey target, \texttt{gemini-3.5} under the minimal prompt then under the expert prompt, and the tabular method closest to the target on this dimension. Section~\ref{sec:expert-prompt} describes the lever introduced against a car share flat from one band to the next: engaging a vehicle costs a fixed amount paid in full whatever the length of the trip, and therefore weighs the more heavily the shorter the trip.}
+  \caption{The car share by distance band: the survey target, \texttt{gemini-3.5} under the minimal prompt then under the expert prompt, and the tabular method closest to the target on this dimension.}
   \label{fig:distance}
   \Description{A line chart. The x axis carries five distance bands, under one kilometre, one to three, three to ten, ten to fifty, and over fifty kilometres. The y axis is the car share in per cent, from zero to a hundred. The survey target rises steeply across the bands, from about eighteen per cent under one kilometre to about seventy-seven per cent beyond fifty. The curve for gemini-3.5 under the minimal prompt is almost flat, staying between forty and fifty per cent across every band, so it is far above the target on short trips and far below it on long ones. The curve for the same model under the expert prompt keeps the same low starting point, about eight points under the target under one kilometre, then rises band by band and ends eight to fourteen points higher than the minimal prompt at the long distances, which gives it a slope in the same direction as the target. A fourth curve shows the tabular method closest to the target on this dimension, the random forest, which tracks the target more closely at both ends.}
 \end{figure}
 
-The lever produces what it aimed at, and it creates a slope rather than shifting a level: the car share stays under one kilometre where it was, eight points below the target, and rises by eight to fourteen points at long distances. \texttt{gemini-3.5} under the expert prompt passes there ahead of the four methods fitted on the survey, 14.2 points of weighted error against 16.8 for the random forest and 17.8 for gradient boosting. It is the only dimension where an agent manages this, and the one the lever was written against.
-
-\begin{figure*}[t]
+\begin{figure*}[tp]
   \centering
   \includegraphics[width=\textwidth]{ch6_residu.png}
   \caption{The two modes that carry the residual, read by age and by occupation. The public transport peak of the 15--19 year olds, 47.4\,\% in the survey, is reproduced by no decider: the agent places 20.8\,\% there after tuning and the random forest 26.4\,\%. Cycling follows the opposite path on the same stratum, 19.7\,\% for the agent against 4.1\,\% observed, and tuning does not move it.}
@@ -132,45 +117,77 @@ The lever produces what it aimed at, and it creates a slope rather than shifting
   \Description{Four bar panels in two rows. The top row carries public transport, the bottom row cycling; the left column reads by age band, the right column by occupation. In each panel, grouped bars compare the survey target, gemini-3.5 under the minimal prompt, the same model under the expert prompt, and the random forest. In the top-left panel the survey bar for the fifteen to nineteen year olds rises to 47.4 per cent, far above every other age band, while the agent reaches only 20.8 per cent after tuning and the random forest 26.4 per cent; the gap closes on the adult bands. The top-right panel repeats the pattern for school pupils and students. In the bottom-left panel the cycling bars are inverted: the agent places 19.7 per cent on the fifteen to nineteen year olds against 4.1 per cent observed, and the bar for the expert prompt is the same height as the bar for the minimal prompt, showing that tuning does not move this mode. The bottom-right panel shows the same excess for pupils and students.}
 \end{figure*}
 
-What tuning does not correct concentrates on these two modes and on the school-age strata. The 15--19 year olds, school pupils and students are the three strata where the agent places the most cycling, up to five times the observed share, and where it misses the most public transport. The levers of the prompt are written for the arbitrations of a motorised adult, the cost of engaging a vehicle, the value of time under a schedule constraint, the burden of bad weather, and they do not bear on a population for which the survey places nearly half the trips in public transport.
-
 The two minority modes carry an error the instruction does not correct. The three language models place cycling between 6.8 and 8.1\,\% where the survey counts 4.1\,\%, and prompt engineering moves that share by only one tenth to eight tenths of a point, where it makes public transport fall back by four to eleven points: two errors coexist in the same decider, and only one answers the instruction. The two dimensions absent from the calibration cycle as from the composite, the residential ring and the housing type, are those where the agent falls furthest behind, by eight and by seven points against gradient boosting.
 
 The detailed results are in Appendix~\ref{app:detail}: the error by dimension and by decider, the modal shares of each, the strata that tuning degrades on the three models, and four plates.
 
-% source: scores.json, detail.<dimension>.strates and global.actual/target; every decider on the corrected set …_20260316_EN_c.
-%   The figure compares prompt_minimal_02 and prompt_expert_05, regenerated on 2026-09-17 by scripts/analysis/plot_chapitre6.py.
-%   Weighted L1 error on the distance dimension: 14.19 for gemini-3.5 under the expert prompt, 16.79 random forest,
-%   17.79 gradient boosting, 18.09 kernel regression, 20.73 multinomial logit. The 15-19 year olds and trips over 50 km
-%   resist every decider, tabular methods included: 34 to 59 and 42 to 72 points of error.
-
-\subsection{Deciding alike, deciding otherwise}
+\subsection{Agreement between deciders, trip by trip}
 \label{sec:agreement}
 
 Two deciders can produce the same aggregate shares without ever deciding the same thing. On an equal offer, over the trips where both actually chose, agreement is measured on the most likely mode and on the mode actually drawn (Table~\ref{tab:agreement}).
 
-\begin{table}[t]
+\begin{table}[tbp]
   \caption{Decision-by-decision agreement between deciders, on the trips carrying at least two options offered to both.}
   \label{tab:agreement}
-  \begin{tabular}{lrr}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabularx}{\columnwidth}{@{}Lrr@{}}
     \toprule
-    Pair & Most likely mode & Drawn mode \\
+    Pair & \multicolumn{1}{c}{Most likely} & \multicolumn{1}{c}{Drawn} \\
+         & \multicolumn{1}{c}{mode} & \multicolumn{1}{c}{mode} \\
     \midrule
     Gradient boosting / kernel regression        & 91.6\,\% & 90.5\,\% \\
     Expert \texttt{gemini-3.5} / gradient boosting & 69.7\,\% & 61.4\,\% \\
     Expert \texttt{gemini-3.5} / expert \texttt{gemini-3.1} & 79.6\,\% & 72.8\,\% \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{table}
 
 The four tabular methods form a block, at nine agreements out of ten. No agent enters it, and the agents do not form a second one: the two language models compared here agree as little with each other as with a tabular method. One trip in three receives two different answers from two deciders that the aggregate shares give as neighbours.
 
-Which of the two is right on a given trip cannot be read off the synthetic cohort, which carries no individual truth. The unit accuracy announced in Section~\ref{sec:quantities} is measured on the survey test partition, 13{,}045 trips split by household and weighted: the ``always the car'' prior reaches 57.1\,\% there, the multinomial logit 76.6\,\%, the random forest 77.6\,\%, kernel logistic regression 78.4\,\% and gradient boosting 78.5\,\%. The agent is being measured on the same partition, by the protocol of Section~\ref{sec:audit}: \todo{xx} for the minimal prompt, \todo{xx} for the expert prompt. A decider can restore the split of a territory while getting half the individuals wrong, and the converse holds too; the composite of Section~\ref{sec:scale} therefore does not tell apart two deciders that decide one trip in three differently.
+\subsection{Individual decision}
+\label{sec:individual}
 
-% sources: moves.csv of the corrected-set runs, trips carrying at least two options offered to both deciders, 2,374 to 2,479
-%   depending on the pair; the six pairs and the median gap between distributions are in Appendix~\ref{app:detail}.
-%   Accuracies: scripts/progedo_logit/{mode_choice_policy,klr_model,rf_mode_choice,mnl_model}_metrics.json,
-%   test.accuracy_weighted over 13,045 trips. Not commensurable with the composites: different set, different support.
+The unit accuracy announced in Section~\ref{sec:quantities} is measured on the days the respondents actually described, by the protocol of Section~\ref{sec:audit}: 9{,}621 trips made by 2{,}930 people, each carrying the mode they declared (Table~\ref{tab:unit}).
+
+\begin{table}[tbp]
+  \caption{Unit agreement on the declared trips, five deciders out of nine, in per cent except for cross-entropy, measured over the 5{,}451 decisions every decider compared scores. The other four and the precision columns are in Appendix~\ref{app:unit}.}
+  \label{tab:unit}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabularx}{\columnwidth}{@{}Lrrrr@{}}
+    \toprule
+    Decider & \multicolumn{1}{c}{Acc.} & \multicolumn{1}{c}{Cross-} & \multicolumn{1}{c}{Bike} & \multicolumn{1}{c}{Walk} \\
+            &    & \multicolumn{1}{c}{ent.} & \multicolumn{1}{c}{rec.} & \multicolumn{1}{c}{rec.} \\
+    \midrule
+    Gradient boosting & 71.5 & $\mathbf{0.299}$ & 20.4 & 63.4 \\
+    Multinomial logit & 68.6 & 0.358 & 18.3 & 60.0 \\
+    Shortest duration & 68.1 & ---   & 25.8 & 19.2 \\
+    Expert prompt, \texttt{gemini-3.5}  & 67.6 & 0.342 & 22.5 & 47.2 \\
+    Minimal prompt, \texttt{gemini-3.5} & 64.8 & 0.383 & 24.1 & 44.2 \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+The expert prompt names the declared mode slightly less often than the tabular methods. On cross-entropy, which weighs the probability a decider gave to the mode finally declared, it comes ahead of one of them alone, the multinomial logit. The ranking therefore depends on the quantity read without bringing the agent ahead, and neither of these two readings can be read off the composite of Section~\ref{sec:scale}, which compares aggregate shares alone.
+
+\begin{figure*}[tp]
+  \centering
+  \includegraphics[width=\textwidth]{ch6_audit_modes.png}
+  \caption{Recall and precision per mode, for the tabular ceiling and the two levels. Bikes are better recalled and less well predicted; walking goes to the car.}
+  \label{fig:audit-modes}
+  \Description{Two panels of grouped bars, recall on the left and precision on the right. In each panel the horizontal axis carries the four modes, bike, car, public transport and walking, and the vertical axis a percentage from zero to ninety. Three bars per mode: gradient boosting, the expert prompt and the minimal prompt. On the recall panel the two prompt bars stand above the gradient boosting bar on bike and below it on walking and public transport. On the precision panel the relation is reversed on those two modes: the prompt bars stand below gradient boosting on bike and above it on walking.}
+\end{figure*}
+
+\begin{figure*}[tp]
+  \centering
+  \includegraphics[width=\textwidth]{ch6_audit_distance.png}
+  \caption{Unit agreement by distance band. The deciders separate below 2 km, a third of the sample; beyond 10 km the all-car baseline matches the tabular ceiling.}
+  \label{fig:audit-distance}
+  \Description{A line chart. The horizontal axis carries six distance bands, from zero to one kilometre up to twenty to fifty kilometres, with the number of trips under each label. The vertical axis carries the agreement with the declared mode, in per cent, from thirty to ninety-five. Four series are plotted: gradient boosting, the expert prompt, the minimal prompt and the all-car baseline. On the first band the four series are widely spread, from thirty-seven per cent for the all-car baseline to sixty-two for gradient boosting. The spread narrows band by band, and on the last two bands the four series lie within two points of each other, above eighty per cent.}
+\end{figure*}
+
+The per-mode detail of the nine deciders, the confusion matrix and the ceiling of the audit are in Appendix~\ref{app:unit}.
 
 \subsection{Cohort variation and between-seed dispersion}
 \label{sec:dispersion}
@@ -186,4 +203,12 @@ Between-seed dispersion, for its part, leaves the gaps of this section where the
 
 Two measurements already give the order of magnitude. The same prompt, on the same model and with the same seed, replayed on a corrected substrate, moves its composite by 0.24 to 1.17 points depending on the decider, where deterministic deciders move by less than 0.12; and two runs of the same prompt on two successive cohorts agree on 86.1\,\% of the most likely modes. Both confound the non-determinism of the model with the change of substrate, and it is identical replay that separates them.
 
-Two asymmetries of the device remain declared rather than corrected. The tabular methods were fitted on real days, themselves chained, and playing them under the chain constraint applies that constraint a second time (Section~\ref{sec:references}). The agent sees the agenda of its day where the tabular methods decide each trip in isolation (Section~\ref{sec:contract}, taken up again in Section~\ref{sec:limits}).
+% NO FLOAT FLUSH HERE. \afterpage{\clearpage} stood here until 2026-09-21 and broke the
+%   compilation (see 03_architecture.tex). Ten floats for less than one page of running text,
+%   six of them full width, about 1,760 pt of double-column matter where a page offers at most
+%   0.85 * 662 pt of top area: the queue drains at its own pace and the plates land where LaTeX
+%   can place them, chapters 7 to 9 included.
+%   THE MASS IS THE PROBLEM, not the flush: as long as ch6_echelle, ch6_residu, ch6_audit_modes
+%   and ch6_audit_distance are all figure*, chapter 6 carries three or four pages of near-solid
+%   figures. Demoting ch6_audit_modes or ch6_audit_distance to single column, or moving one plate
+%   to the appendix, is the only thing that changes that. Author's call, not made here.

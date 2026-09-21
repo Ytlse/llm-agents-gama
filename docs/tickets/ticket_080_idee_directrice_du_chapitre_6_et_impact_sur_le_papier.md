@@ -553,19 +553,80 @@ dans 6.1.
 6. **La répercussion** sur les chapitres 4.5, 8 et 9 et sur le point 4.13 de la relecture.
 7. **Deux tickets d'ingénierie ouverts** le 15/09 : [081](ticket_081_garde_fou_du_scoreur_sur_journal_tronque.md) (garde-fou du scoreur + régénération du journal) et [082](ticket_082_couronnes_de_residence_v6_non_reconnues_par_le_scoreur.md) (couronnes v6). Les intervalles dans `scores.json` restent à ouvrir.
 
+## 6 bis. Ce qui reste à faire — état vérifié le 2026-09-21
+
+Le ticket ne tient plus qu'à **deux mesures et un texte**. Tout le reste est fait et vérifié dans
+le dépôt ce jour, critère par critère (§ 7).
+
+### Bloquant 1 — la dispersion entre graines (ticket 073)
+
+C'est le seul blocage qui touche encore le chapitre 6. Les **deux `TBC` du § 6.5** anticipent un
+résultat qui n'est pas mesuré : rejoué sur la même cohorte avec d'autres graines, un décideur
+bouge-t-il moins que l'écart qui le sépare du suivant ? Tant que la réponse n'existe pas, le
+chapitre annonce une conclusion qu'il ne démontre pas — l'auteur l'a accepté le 2026-09-17, avec
+un avertissement de relecture en commentaire.
+
+Ce que le 073 doit livrer pour lever ce point : cinq bras sur la cohorte v6 et le jeu corrigé
+(un réplicat à l'identique, puis quatre graines), soit ≈ 2 500 sollicitations fraîches chacun.
+Et **l'outil qui manque** : aucun script du dépôt n'apparie deux exécutions entre elles —
+`mode_probabilities.py` compare attendu contre tiré *dans* une exécution,
+`modal_variation_rate.py` compare un jour au précédent *dans* un run.
+
+### Bloquant 2 — levé, à confirmer par l'auteur (ticket 058)
+
+Les deux `[xx]` du § 6.4 que ce ticket attendait **sont remplis**. Les deux bras d'enquête sont
+scorés : `promin02` composite 10,41 sur 9 689 décisions (exécution 2026-09-17_07_02_10) et
+`proexp05` composite 7,66 sur 9 686 décisions (2026-09-18_11_20_47). Le chapitre porte
+l'exactitude unitaire sur 9 621 déplacements de 2 930 enquêtés, avec sa figure par tranche de
+distance. Le 058 reste `en cours` pour ses propres livrables, mais **il ne bloque plus le 080** :
+à l'auteur de le confirmer, la dépendance étant déclarée dans la note de statut.
+
+### Reste de rédaction — le chapitre 9
+
+Le seul critère du § 7 qui n'est pas satisfait. La conclusion porte encore les chiffres d'avant
+(erreur L1 de 7,30 contre 29,81, « quatre fois plus fidèle », facteur 2 700 en vitesse), sur son
+`brouillon v0` antérieur à la réécriture de l'introduction. Deux réserves y ont été ajoutées, qui
+disent que les deux erreurs ne sortent pas du même substrat — mais la phrase principale contredit
+toujours le chapitre 6, où l'écart au plafond vaut +1,35 [+0,28 ; +2,47] et non un facteur quatre.
+
+La reprise appartient au [ticket 061](ticket_061_finalisation_chapitre_9_conclusion.md), lui-même
+en attente des ordres de grandeur du chapitre 7. Ce ticket-ci n'a donc qu'à **signaler**, ce qui
+est fait ici.
+
+### Ce qui est acquis et ne demande plus rien
+
+- Les trois `TBD` du tableau du § 6.1 n'attendent plus de run : la campagne de rejeu est close et
+  les composites du jeu corrigé se lisent en entier.
+- Les quatorze différences appariées sont recalculées sur le seul jeu corrigé (2 000 réplicats,
+  trace `2026-09-17_09-40`), et recoupées indépendamment le même jour (trace `2026-09-17_10-10`,
+  mêmes valeurs au centième).
+- Le prompt du palier 2 est nommé (`prompt_expert_05`) et cité comme tel dans les chapitres 5 et 6.
+- Le numéro de section `4.5` a disparu de `fr/` ; les deux occurrences restantes de `plan/PLAN.md`
+  sont l'historique de version et la phrase qui acte la disparition, pas une section vivante.
+- Antigravity est hors périmètre publiable : ni le modèle ni la température n'y sont vérifiables.
+
+---
+
 ## 7. Critères d'acceptation
 
-- [ ] L'idée directrice du chapitre 6 est écrite en une phrase, datée, dans ce ticket.
-- [ ] Aucune phrase du papier n'affirme une équivalence ou une infériorité sans intervalle apparié.
-- [ ] La lecture de référence est fixée au chapitre 4 **avant** que le moindre emplacement chiffré
+*Relevé le 2026-09-21, chaque case vérifiée dans le dépôt et non sur une note.*
+
+- [x] L'idée directrice du chapitre 6 est écrite en une phrase, datée, dans ce ticket.
+- [x] Aucune phrase du papier n'affirme une équivalence ou une infériorité sans intervalle apparié.
+      ⚠ Les deux `TBC` du § 6.5 anticipent un résultat non mesuré — l'auteur l'a assumé le
+      2026-09-17, avec avertissement de relecture. La case se rouvre si le 073 contredit.
+- [x] La lecture de référence est fixée au chapitre 4 **avant** que le moindre emplacement chiffré
       du chapitre 6 ne soit rempli.
-- [ ] Tous les chiffres publiés viennent de la campagne v6, aucun de v5, et aucun d'une exécution
-      dont `lecture.total` s'écarte de 3 161.
-- [ ] Le prompt qui porte le palier 2 est nommé, et les prompts édités au vu de la cohorte sont
-      étiquetés comme tels.
-- [ ] Le résumé, le § 1.3, la règle 2 du chapitre 4.5 et le chapitre 9 ne contredisent plus le
-      chapitre 6.
-- [ ] Le numéro de section `4.5` n'existe plus ni dans `fr/`, ni dans `plan/PLAN.md`.
+- [x] Tous les chiffres publiés viennent de la campagne v6, aucun de v5, et aucun d'une exécution
+      dont `lecture.total` s'écarte de 3 161. Le jeu corrigé du ticket 088 s'y ajoute comme
+      condition : les bras `_c_` seuls sont publiés.
+- [x] Le prompt qui porte le palier 2 est nommé (`prompt_expert_05`), et les prompts édités au vu
+      de la cohorte sont étiquetés comme tels.
+- [ ] Le résumé, le § 1.3, la règle 2 de l'ancien chapitre 4.5 et le chapitre 9 ne contredisent
+      plus le chapitre 6. **SEUL CRITÈRE NON SATISFAIT** : le chapitre 9 porte encore les chiffres
+      d'avant (7,30 contre 29,81, facteur 2 700). Reprise au ticket 061.
+- [x] Le numéro de section `4.5` n'existe plus dans `fr/` ; dans `plan/PLAN.md` il ne subsiste que
+      dans l'historique de version et dans la phrase qui acte sa disparition.
 
 ## 8. Liens
 
