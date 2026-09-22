@@ -1230,14 +1230,22 @@ def test_D18_date_autre_que_le_jour_du_jeu(banc):
     assert not any("équivalente" in r for r in refus)
 
 
-def test_D14_format_evenement_pret_mais_refuse(banc):
+def test_D14_format_evenement_pret_et_PLUS_refuse(banc):
+    """Le refus E6 est LEVÉ depuis le ticket 100 (2026-09-22), pour les DEUX types.
+
+    Il datait du jour où aucun mécanisme d'événement n'existait dans le code. Les deux passent
+    désormais par le même canal : `incident` = canal `vecu`, prise `arrivee` ; `information` =
+    canal `lu`, prise `reveil`. Le format reste DESCRIPTIF — c'est
+    `config/evenements/<nom>.yaml` qui arme un run — et le reste de la validation ne bouge pas.
+    """
     ev = EV
     exp = _exp(banc, mode="simulateur", evenements=[ev])
     assert exp.evenements[0].cible == {"ligne": "metro_A"}
     refus, _ = E.refuser_si_impossible(
         exp, banc["jeu"], banc["info"], dependances={"commit": "abc"}, periodes={}
     )
-    assert any("pas encore joués par GAMA" in r for r in refus)
+    assert not any("pas encore joués par GAMA" in r for r in refus)
+    # Ce qui reste refusé le reste : la politique de calendrier, et une heure impossible.
     with pytest.raises(E.ExperienceInvalide, match="heure_debut"):
         _exp(banc, mode="simulateur", evenements=[{**ev, "heure_debut": "25h"}])
 

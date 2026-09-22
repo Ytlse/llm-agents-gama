@@ -29,6 +29,7 @@ from llm_gateway.config.providers import (
     load_providers_file,
 )
 from llm_gateway.config.sources import ENV_PREFIX, LegacyEnvSource, yaml_sources
+from llm_gateway.core.batching import compute_batch_max_agents
 from llm_gateway.core.quota import DEFAUT_FUSEAU_QUOTA
 from llm_gateway.telemetry.logger import get_logger
 
@@ -289,9 +290,13 @@ class GatewaySettings(BaseSettings):
         key = self._resolve_key(name, adapter_name)
         # Coût tokens (in+out) d'un agent dans un lot — dimensionne batch_max_agents.
         tokens_per_agent = b.assumed_prompt_tokens + b.assumed_output_tokens
-        tpm_bound = int(entry.tpm_limit / tokens_per_agent) if entry.tpm_limit else entry.rpm_limit
-        req_bound = int(entry.max_tokens_per_request / tokens_per_agent) if entry.max_tokens_per_request else b.max_batch_agents
-        batch_max = max(1, min(tpm_bound, req_bound, entry.rpm_limit, b.max_batch_agents))
+        batch_max = compute_batch_max_agents(
+            tpm_limit=entry.tpm_limit,
+            rpm_limit=entry.rpm_limit,
+            max_tokens_per_request=entry.max_tokens_per_request,
+            tokens_per_agent=tokens_per_agent,
+            plafond=b.max_batch_agents,
+        )
         if entry.batch_max_agents is not None:
             logger.warning(
                 f"Provider '{name}' : batch_max_agents={entry.batch_max_agents} écrit dans le fichier "

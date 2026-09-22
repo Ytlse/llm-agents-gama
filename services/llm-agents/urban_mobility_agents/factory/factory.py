@@ -158,13 +158,14 @@ def init_dynamic_scenario(
     accidents_module.reinitialiser()
     accidents_module.initialiser()
 
-    # Choc déclaré du run (ticket 079). Même règle que les accidents : ouvert ou fermé, il le
-    # journalise. Un refus de chargement ARRÊTE ici — mieux vaut un échec franc au démarrage
-    # qu'un run de soixante jours qui ne fait rien et dont personne ne saura pourquoi.
-    from llm import chocs as chocs_module
+    # Événement déclaré du run (ticket 100 ; ticket 079 pour les chocs). Même règle que les
+    # accidents : ouvert ou fermé, il le journalise. Un refus de chargement ARRÊTE ici — mieux
+    # vaut un échec franc au démarrage qu'un run de soixante jours qui ne fait rien et dont
+    # personne ne saura pourquoi.
+    from llm import evenements as evenements_module
 
-    chocs_module.reinitialiser()
-    chocs_module.initialiser(workdir=settings.workdir)
+    evenements_module.reinitialiser()
+    evenements_module.initialiser(workdir=settings.workdir)
 
     _save_scenario_params(
         population_size=settings.data.population_size,
@@ -203,6 +204,17 @@ def init_dynamic_scenario(
         #EqasimJSONPopulationLoader(filters=[stop_filter])
         EqasimJSONPopulationLoader(filters=[])
     ).init(world_bbox=world_bbox)
+
+    # Ticket 100, lot 4 — index des ménages, dès que la population est chargée. Le foyer est
+    # le SEUL groupe social de la simulation qui porte un identifiant stable, et deux
+    # mécanismes en dépendent : la règle d'exposition `foyers` et la circulation au sein du
+    # foyer. Indexé ouvert ou fermé, et journalisé dans les deux cas : sans `household_id`,
+    # une [ALARME] le dit plutôt que de laisser un run entier se dérouler avec un canal vide
+    # et sans le moindre symptôme.
+    from llm import foyer as foyer_module
+
+    foyer_module.reinitialiser()
+    foyer_module.initialiser(population.get_people_list())
 
     for person in population.get_people_list():
         scheduler = PersonScheduler(person)

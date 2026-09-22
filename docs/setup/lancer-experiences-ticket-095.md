@@ -357,6 +357,80 @@ déplacer le seuil à 0,66, ce qui ne change aucune classification.
 
 ---
 
+## Décisions de protocole du 2026-09-21, pour la campagne suivante
+
+### L'enquête passe au quotidien
+
+**Un questionnaire par jour simulé**, et non plus quatre jalons. Les quatre jalons établissent
+l'aller-retour des opinions ; ils ne montrent pas sa forme, et l'intervalle qu'ils ne couvrent pas
+est précisément celui où le récit quitte le contexte.
+
+```bash
+EXPERIMENT_SURVEY_DAYS=$(seq -s, 1 42) \
+EXPERIMENT_SURVEY_MODES=voiture,transports_collectifs,velo,marche,train make run OFFLINE=1
+```
+
+Coût : six questionnaires par jour sur quarante-deux jours, soit **252 appels** contre 24, environ
+**+90 % du budget d'un bras**. C'est le prix de la dynamique, et il est assumé.
+
+### La propension quotidienne ne coûte rien et se lit déjà
+
+À chaque décision, le modèle annonce une probabilité par mode, enregistrée dans `moves.csv`
+(`P(Voiture Privée) %`…). Ce signal est quotidien, gratuit, et **ne demande aucun découpage en
+phases** — donc aucune borne dérivée du paramètre dont on mesure l'effet. Sur la campagne du
+2026-09-21, il chute de 90 % à 40 % le jour de l'avarie et remonte à 77 % le lendemain de la
+sortie du contexte. C'est la figure du chapitre 7.
+
+`scripts/analysis/ch7_choc_figures.py` la trace, avec les phases calées sur le choc déclaré et la
+sortie calculée. ⚠ `modal_variation_rate.py`, qui génère les cinq figures automatiques du run,
+code ses quatre phases **en dur sur un choc aux jours 8-9** : ses graphiques sont inutilisables
+tant qu'il n'est pas paramétré.
+
+### Arrêt précoce sur l'extinction journalisée
+
+Le contrôleur écrit, à l'instant exact où le dernier souvenir de choc quitte le bloc :
+
+```
+[noyau] <agent> : le souvenir de choc du <date> est sorti du bloc « ce qui a changé récemment »
+(…) — plus aucun souvenir de choc ne pèse sur ses décisions.
+```
+
+**Arrêter sept jours vécus après cette ligne.** Le retour et sa stabilité sont acquis, le reste est
+payé pour rien. Sur la campagne du 2026-09-21 : arrêt vers le 22 avril au lieu du 27, soit environ
+12 % d'économie.
+
+⚠ Ne pas arrêter sur un critère de stabilité de la part modale : le 11 avril affiche 5 % et le 13
+en affiche 52 %, une bande étroite déclencherait au gré du bruit. L'extinction journalisée est un
+événement daté, pas une statistique.
+
+**Depuis le 2026-09-22, l'orchestrateur le fait lui-même.** `run_sequential_cohort.py` prend
+`--arret-sur-extinction` (et `--jours-apres-extinction`, 7 par défaut) : il lit la date simulée de
+la **dernière** application de l'événement dans `evenements.jsonl`, surveille la sortie de ce
+souvenir-là dans `app.log`, puis coupe. Il n'y a plus de `--souvenir-du` à recopier à la main, et
+plus de surveillance à lancer à côté.
+
+La date surveillée est celle de la **dernière** application, pas de la première : un événement à
+deux jours n'est éteint que quand le second souvenir est sorti.
+
+⚠ **Le bras traité devient plus court que son témoin.** Le témoin ne subit aucun événement
+déclaré : sa trace est vide, aucune date n'est trouvée, il va jusqu'à son horizon. C'est voulu —
+mais **l'analyse doit tronquer les deux bras au même jour simulé**, et ce jour est écrit dans
+`arret_sur_extinction.json`, déposé dans le répertoire du run avec la date du souvenir, le nombre
+de jours vécus observés et le dernier jour simulé. Ne pas le déduire de la longueur du journal.
+
+### Le plafond d'observation : cinquante jours
+
+Décision du 2026-09-22. Le formulaire d'expérience accepte un horizon de 1 à **50 jours**
+(`HORIZON_MAX_JOURS` dans `scripts/dashboard/experiences.py`) — il valait 31 tant que la durée de
+vie d'un souvenir était plafonnée à 30.
+
+Ce n'est **pas une durée attendue** : les cinq ancres servent de 4,70 à 20,58 jours, et 31,49 au
+plus quand les rappels ont porté la force à son maximum. Un run s'arrête normalement bien avant,
+sur l'extinction. Cinquante jours bornent le coût du cas pathologique — un run qui ne s'éteindrait
+jamais — sans rien borner de ce que le protocole mesure.
+
+---
+
 ## Coût prévisionnel
 
 | Poste | Requêtes par bras |

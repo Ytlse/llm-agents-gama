@@ -1,0 +1,26 @@
+# ══ MIGRÉ AU FORMAT DU TICKET 100 (canal unique) le 2026-09-21 ═══════════════════════════
+# `choc:` devient `evenement:`, et trois champs apparaissent. Ils ne changent RIEN à ce que ce
+# fichier faisait : `canal: vecu` et `moment: arrivee` sont le régime subi du ticket 079, et
+# `jugement: aucun` est l'état d'avant le lot 3 — l'agent ne juge pas encore ce qu'il subit.
+# Le test en or du lot 1 rejoue l'original de `config/chocs/` et exige la même trace.
+# C4 — Train supprimé · train
+# Peu d'agents concernés, gravité forte. L'exposition par mode suffit : seuls les trajets
+# comportant une jambe ferroviaire remontent `train` comme mode principal.
+evenement: c4_train_supprime
+canal: vecu                  # vecu | lu — d'où vient le texte
+moment: arrivee              # arrivee (après la décision) | reveil (avant)
+jugement: aucun              # aucun | a_l_injection (lot 3 du ticket 100)
+libelle: "Regional train cancelled"
+source: "scénario déclaré"
+
+exposition:
+  regle: mode
+  modes: [train]
+
+jours:
+  - jour: 12
+    retard_min: 50
+    incident_reseau: true
+    vecu: >-
+      My regional train was cancelled. No reason was given, and no replacement time was announced
+      for 30 minutes. I waited 50 minutes on the platform for the next service.

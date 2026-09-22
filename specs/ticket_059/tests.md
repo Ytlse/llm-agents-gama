@@ -1,5 +1,17 @@
 # Ticket 059 — contrat de tests
 
+> ⚠ **PÉRIMÉ SUR TROIS POINTS depuis le 2026-09-21/22.** Ce fichier a été écrit avant les
+> arbitrages du quatrième tour (`questions.md`). Trois choses n'ont plus d'objet :
+> **(1)** la condition **C3 paraphrase neutre** est retirée du protocole — le lot 1 n'écrit pas de
+> `paraphrase.txt`, et `lexique_mobilite` ne sert plus qu'à vérifier le texte témoin ;
+> **(2)** la condition **C5 référence tabulaire à événement encodé** est retirée — le point de
+> comparaison est un décideur à règles rigides qui ne lit pas, rejoué hors ligne (Q20) ;
+> **(3)** l'**étage 1** (3 299 déplacements, mémoire éteinte, hors simulateur) ne se joue plus —
+> tout est longitudinal, quelques foyers sur plusieurs jours, mémoire allumée.
+> L'ancienne C4, le texte témoin, prend le numéro **C3**. Les identifiants C1 à C9 de `tests.md`
+> numérotent des **cas de test du corpus** et n'ont rien à voir avec les conditions du protocole.
+> Ce fichier n'est pas réécrit tant que le lot 1 n'est pas repris : il est lu avec cet en-tête.
+
 Écrit AVANT le code, le 2026-09-21. **Les prédictions du § 3 sont posées avant tout run et ne se
 réécrivent pas après mesure.**
 
@@ -47,13 +59,24 @@ les deux versions sont gelées avec leurs empreintes, et l'entrée servie à l'a
 « Translated from French ». Une traduction servie comme un original serait une sixième condition
 non déclarée.
 
-**Une paraphrase sans indice modal se vérifie, elle ne se déclare pas.** La liste des mots
-interdits vit dans un fichier ; un mot qui passe rend la condition C3 sans objet, donc le refus est
-franc.
+**Une paraphrase se vérifie, elle ne se déclare pas — et elle ne cache pas son sujet.** La liste
+des mots interdits vit dans un fichier, et un mot qui passe rend la condition C3 sans objet : le
+refus est franc. Mais l'objection à réfuter n'est pas « le texte parle de transport », c'est « le
+texte dit à l'agent quel mode prendre » : un article sur le vélo partagé nomme le vélo, et le
+cacher rendrait la paraphrase inintelligible sans rien prouver. Chaque article déclare donc ses
+mots exemptés, sous deux gardes — un mot ne s'exempte que s'il figure dans le texte brut, et aucun
+article n'exempte un mode vers lequel son événement pousserait.
 
-**La gravité d'un article est une constante, identique aux cinq.** Une gravité par article
-ramènerait la durée de l'effet au rang de réglage, ce que le lot A du 095 vient de corriger. Les
-écarts entre articles doivent venir du contenu.
+**La gravité d'un article, c'est l'agent qui la décide.** Décision de l'auteur du 2026-09-21 :
+ni constante, ni cote par article. Le mécanisme est celui qui existe — `gravite_jugee` note sur
+cinq échelons ancrés par une conséquence observable, `gravite_concept` applique
+`max(jugement, déterministe)` — et un article ne portant aucun fait mesuré, le terme déterministe
+vaut zéro : le jugement décide seul, par la règle déjà en vigueur. La durée de l'effet cesse donc
+d'être un réglage, et deux agents peuvent ne pas retenir la même chose du même texte.
+
+**Un échelon hors grille se refuse, il ne se remplace pas.** `gravite_jugee` rend `None` et
+retombe sur le déterministe, qui vaut zéro ici : l'article s'effacerait en trois jours parce que
+le modèle a mal répondu, et cet effet nul se lirait comme un résultat.
 
 **L'article est su avant de décider.** Le canal `information` s'injecte à la bascule de journée,
 avant tout réveil — jamais à l'arrivée. Un test le verrouille sur l'ordre des appels, parce que
@@ -83,10 +106,12 @@ parfait.
 | # | Règle | Refus attendu |
 |---|---|---|
 | C1 | `brut.txt` correspond à l'empreinte du HTML source déclarée au manifeste | un texte modifié après gel |
-| C2 | `paraphrase.txt` ne contient **aucun** mot de `lexique_mobilite` | un seul mot suffit à refuser |
+| C2 | `paraphrase.txt` ne contient aucun mot de `lexique_mobilite` **hors exemptions déclarées** | un seul mot de report suffit à refuser |
 | C3 | `temoin.txt` n'en contient aucun non plus | un témoin qui parle de circulation n'est pas un témoin |
 | C4 | longueur du témoin à ±15 % de son article | au-delà, l'appariement est perdu |
 | C5 | les **30 fichiers** existent — français source et anglais gelé pour chacun des 15 textes | un fichier manquant fait échouer le chargement |
+| C8 | un mot exempté figure dans le **texte brut** de son article | on n'exempte pas par précaution, on exempte ce que le sujet impose |
+| C9 | aucun article n'exempte un mode vers lequel son événement pousserait | « métro » s'exempte sur les punaises, « vélo » non : il en est le report attendu |
 | C6 | l'entrée injectée porte la mention **« Translated from French »** | une traduction servie comme un original |
 | C7 | `MANIFEST.yaml` nomme **qui** a traduit et **quand** | une traduction anonyme ne se vérifie pas |
 
@@ -96,8 +121,10 @@ parfait.
 |---|---|---|
 | I1 | empreinte du texte ≠ manifeste → **refus au chargement** | la garde de citation |
 | I2 | consigne, verdict ou intention dans le texte → refus | marqueurs repris de `chocs.py` |
-| I3 | `gravite ∉ ]0 ; 1,3]` → refus | hors du domaine que la force sait porter |
-| I4 | `jour` hors de l'horizon du run → refus | une parution qui n'arrive jamais |
+| I3 | un champ `gravite` dans la déclaration → **refus** | l'agent juge ; une gravité posée à la main rétablirait le paramètre supprimé par Q1 |
+| I3 bis | échelon hors des cinq → **refus et `[ALARME]`** | un repli silencieux ferait vivre l'article trois jours, et l'effet nul se lirait comme un résultat |
+| I4 | fenêtre de parution hors de l'horizon du run → refus | une parution qui n'arrive jamais |
+| I4 bis | le jour de parution est tiré par foyer, à graine fixe, et deux tirages coïncident | sinon deux rejeux du même scénario sont deux expériences |
 | I5 | règle d'exposition inconnue, ou foyer absent de la population → refus | une faute de frappe ne doit pas produire un run muet |
 | I6 | **un seul lecteur par foyer**, tiré par hachage déterministe, et le tirage est journalisé | deux extractions donnent les mêmes lecteurs |
 | I7 | le jour de parution se calcule sur l'**ancre du run** (`jours_ecoules`), pas sur le premier timestamp observé | après reprise à chaud, la parution ne recule pas |

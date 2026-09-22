@@ -279,5 +279,11 @@ class LoadBalancer:
                 "tpd_limit":       cfg.tpd_limit,
                 "quota_exhausted": quota_exhausted,
                 "available":       available,
+                # Publiés pour que l'estimation de coût d'une expérience convertisse des
+                # DÉPLACEMENTS en REQUÊTES sans recopier la formule : le plafond de lot est
+                # calculé au démarrage depuis l'environnement de CE conteneur, et la valeur
+                # relue ailleurs dans `providers.yaml` peut en diverger.
+                "batch_max_agents":          cfg.batch_max_agents,
+                "tpm_estimate_per_request":  cfg.tpm_estimate_per_request,
             }
         return status

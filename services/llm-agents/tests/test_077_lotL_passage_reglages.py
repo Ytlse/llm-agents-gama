@@ -40,6 +40,14 @@ REGLAGES = {
     "MEMOIRE__RETARD_SATURATION": "memoire__retard_saturation",
     "MEMOIRE__RETARD_GRAVITE_MAX": "memoire__retard_gravite_max",
     "MEMOIRE__RETARD_REF_S": "memoire__retard_ref_s",
+    # Ticket 100, lot 4 — le partage au sein du foyer, et la garde de la décision D7.
+    # Ajoutés le 2026-09-22 : le run de bout en bout du canal `lu` a eu besoin d'allumer le
+    # partage, et l'interrupteur n'atteignait pas le conteneur.
+    "MEMOIRE__PARTAGE_FOYER_ENABLED": "memoire__partage_foyer_enabled",
+    "MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN": "memoire__partage_foyer_observations_min",
+    "MEMOIRE__PARTAGE_FOYER_MAX_BLOC": "memoire__partage_foyer_max_bloc",
+    "MEMOIRE__RECIT_SOIR_MAX": "memoire__recit_soir_max",
+    "MEMOIRE__ECART_JUGEMENT_ALARME": "memoire__ecart_jugement_alarme",
 }
 
 

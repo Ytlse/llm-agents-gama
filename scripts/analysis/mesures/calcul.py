@@ -217,6 +217,11 @@ class LigneChoc:
     date_simulee: str
     person_id: str
     choc_id: str
+    # Ticket 100 — par quel CANAL l'événement est entré : `vecu` (subi à l'arrivée, après la
+    # décision) ou `lu` (su au réveil, avant de décider). Les deux régimes se mesurent avec la
+    # même fonction et se lisent dans le même fichier, ce qui est tout l'objet du ticket ;
+    # mais ils ne se confondent pas, et une colonne les sépare. Vide pour les runs antérieurs.
+    canal: str
     expositions: int
     minutes_injectees: float
     incidents_reseau: int
@@ -541,7 +546,12 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
     précisément la conclusion que le ticket cherche à établir. Un lien explicite posé à la source
     est nécessaire ; il est signalé, pas bricolé ici.
     """
-    evenements = _jsonl(Path(chemin_run) / "chocs.jsonl")
+    # Ticket 100 — `evenements.jsonl` est le nom neuf ; `chocs.jsonl` reste lu pour les runs
+    # archivés, et c'est là que vivent les chiffres publiés du § 7.2. On lit le premier qui
+    # existe, jamais les deux : dans un run neuf, le second est un lien vers le premier.
+    evenements = _jsonl(Path(chemin_run) / "evenements.jsonl")
+    if not evenements:
+        evenements = _jsonl(Path(chemin_run) / "chocs.jsonl")
     if not evenements:
         return []
     index = {j.date: j for j in journees}
@@ -553,8 +563,12 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
         journee = journee_du_moment(str(evenement.get("horodatage_simule") or ""))
         agent = str(evenement.get("person_id") or "")
         if journee and agent:
-            groupes.setdefault((journee, agent, str(evenement.get("choc_id") or "")), []).append(
-                evenement)
+            # `evenement_id` est le nom neuf, `choc_id` celui du 079 : les deux sont écrits
+            # côte à côte dans un run neuf, et seul le second dans un run archivé.
+            identifiant = str(
+                evenement.get("evenement_id") or evenement.get("choc_id") or ""
+            )
+            groupes.setdefault((journee, agent, identifiant), []).append(evenement)
 
     lignes = []
     for (date, agent, choc_id), liste in sorted(groupes.items()):
@@ -568,6 +582,9 @@ def chocs(chemin_run: Path, journees: Sequence[Journee]) -> list[LigneChoc]:
             date_simulee=date,
             person_id=agent,
             choc_id=choc_id,
+            # Vide — jamais `vecu` — pour un run archivé qui ne portait pas le champ : écrire
+            # une modalité qu'on n'a pas mesurée en ferait une mesure.
+            canal=str(liste[0].get("canal") or ""),
             expositions=len(liste),
             minutes_injectees=round(
                 sum(float(e.get("retard_injecte_s") or 0) for e in liste) / 60.0, 2),

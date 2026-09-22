@@ -43,6 +43,14 @@ from typing import Any
 
 from loguru import logger
 
+# Le détecteur d'extinction vit dans son propre module — il est pur, et ses tests l'exercent
+# sans run. Deux chemins d'import parce que ce fichier s'exécute en script (sys.path[0] vaut
+# alors `scripts/experiment/`) ET s'importe en module depuis les tests.
+try:
+    from arret_sur_extinction import analyser as analyser_extinction
+except ImportError:  # pragma: no cover — dépend du mode d'invocation, pas du code
+    from scripts.experiment.arret_sur_extinction import analyser as analyser_extinction
+
 COHORTE_10_PERSONAS = [
     "899549",   # Corinne (sujet historique Ticket 077)
     "1250941",  # Victoire
@@ -94,6 +102,10 @@ ATTENTE_IDENTITE_S = 180
 ATTENTE_RUN_S = 6 * 3600
 PAS_DE_SONDAGE_S = 30
 PAS_DE_JOURNAL_S = 300
+# Jours VÉCUS observés après l'extinction du souvenir déclaré avant de couper le run. Sept :
+# une semaine simulée complète, assez pour voir si le comportement revient à celui d'avant, et
+# c'est la durée déjà retenue par `arret_sur_extinction.py` en ligne de commande.
+JOURS_APRES_EXTINCTION = 7
 
 CHOC_REFERENCE = "c6_voiture_suspecte"
 CHOCS_DIR = Path("services/llm-agents/config/chocs")
@@ -186,6 +198,8 @@ def executer_run_persona(
     is_resume: bool,
     dry_run: bool = False,
     extra_env: dict[str, str] | None = None,
+    arret_extinction: bool = False,
+    jours_apres_extinction: int = JOURS_APRES_EXTINCTION,
 ) -> int:
     """Lance un run GAMA/Python de 30 jours ouvrés (42j calendaires) pour un persona donné."""
     env = os.environ.copy()
@@ -354,7 +368,13 @@ def executer_run_persona(
     )
 
     # 2. Attendre la VRAIE fin du run.
-    if not attendre_fin_du_run(persona_id, branch, archive):
+    if not attendre_fin_du_run(
+        persona_id,
+        branch,
+        archive,
+        arret_extinction=arret_extinction,
+        jours_apres_extinction=jours_apres_extinction,
+    ):
         return 6
 
     logger.info(f"[{persona_id}_{branch}] Bras terminé.")
@@ -392,8 +412,50 @@ def derniere_journee_simulee(archive: Path | None) -> str:
     return "?"
 
 
+def date_du_souvenir_declare(archive: Path | None) -> str | None:
+    """La date simulée de la DERNIÈRE application de l'événement déclaré, ou None.
+
+    C'est elle que l'arrêt anticipé surveille — pas « plus aucun souvenir de choc ne pèse »,
+    qui n'arrive qu'en toute fin de run puisque l'agent fabrique ses propres souvenirs de
+    gravité de choc (le bras témoin, qui ne subit rien, en produit trois).
+
+    La DERNIÈRE et non la première : un événement à deux jours (c6 : J15 puis J16) n'est éteint
+    que quand le second souvenir est sorti. Surveiller le premier arrêterait le run alors que
+    l'agent porte encore le second dans son contexte.
+
+    Rend None tant que la trace est vide — un run dont l'événement ne s'est pas encore appliqué
+    ne peut pas s'être éteint, et l'attente continue.
+    """
+    if archive is None:
+        return None
+    trace = archive / "evenements.jsonl"
+    if not trace.is_file():
+        return None
+    dates: list[str] = []
+    try:
+        with open(trace, encoding="utf-8", errors="replace") as f:
+            for ligne in f:
+                ligne = ligne.strip()
+                if not ligne:
+                    continue
+                try:
+                    horodatage = json.loads(ligne).get("horodatage_simule")
+                except json.JSONDecodeError:
+                    continue  # ligne tronquée : le fichier s'écrit pendant qu'on le lit
+                if isinstance(horodatage, str) and len(horodatage) >= 10:
+                    dates.append(horodatage[:10])
+    except OSError:
+        return None
+    return max(dates) if dates else None
+
+
 def attendre_fin_du_run(
-    persona_id: str, branch: str, archive: Path | None, timeout_s: int = ATTENTE_RUN_S
+    persona_id: str,
+    branch: str,
+    archive: Path | None,
+    timeout_s: int = ATTENTE_RUN_S,
+    arret_extinction: bool = False,
+    jours_apres_extinction: int = JOURS_APRES_EXTINCTION,
 ) -> bool:
     """Attend que le lanceur GAMA ait disparu. Rend False si le délai de garde est dépassé.
 
@@ -404,9 +466,20 @@ def attendre_fin_du_run(
 
     Le lanceur, lui, vit exactement le temps du run : GAMA Server tue l'expérience dès que son
     client WebSocket se déconnecte. C'est le signal franc.
+
+    ⚠ `arret_extinction` RACCOURCIT LE BRAS, et deux bras de longueurs différentes ne se
+    comparent pas jour à jour. Le témoin ne subit aucun événement déclaré : sa trace est vide,
+    aucune date n'est trouvée, et il ira donc jusqu'à son horizon complet pendant que le bras
+    traité s'arrêtera plus tôt. C'est voulu — les jours payés après l'extinction n'apprennent
+    rien — mais l'analyse DOIT tronquer les deux bras au même jour simulé. Le fichier
+    `arret_sur_extinction.json` écrit dans le répertoire du run porte ce jour ; c'est lui qu'on
+    lit, pas la longueur du journal.
     """
     debut = time.monotonic()
     dernier_journal = 0.0
+    souvenir_du: str | None = None
+    extinction_annoncee = False
+    dernier_examen = -PAS_DE_JOURNAL_S  # premier examen au premier tour, sans attendre 5 min
     while lanceur_en_cours():
         ecoule = time.monotonic() - debut
         if ecoule > timeout_s:
@@ -422,6 +495,67 @@ def attendre_fin_du_run(
                 f"[{persona_id}_{branch}] en cours depuis {int(ecoule // 60)} min — "
                 f"journée simulée : {derniere_journee_simulee(archive)}"
             )
+        # Arrêt anticipé : le souvenir déclaré est sorti du bloc depuis N jours VÉCUS.
+        # Vérifié au pas du journal (5 min) et non à celui du sondage (30 s) : la détection relit
+        # tout app.log, qui atteint des dizaines de méga-octets sur une campagne de cinquante
+        # jours. L'extinction est un événement à l'échelle de la journée simulée — cinq minutes de
+        # latence ne coûtent rien, soixante relectures inutiles par demi-heure, si.
+        if arret_extinction and archive and (ecoule - dernier_examen) >= PAS_DE_JOURNAL_S:
+            dernier_examen = ecoule
+            if souvenir_du is None:
+                souvenir_du = date_du_souvenir_declare(archive)
+                if souvenir_du:
+                    logger.info(
+                        f"[{persona_id}_{branch}] arrêt sur extinction armé — souvenir déclaré "
+                        f"du {souvenir_du}, observation de {jours_apres_extinction} jours vécus "
+                        f"après sa sortie du bloc « ce qui a changé récemment »."
+                    )
+            journal = archive / "app.log"
+            if souvenir_du and journal.is_file():
+                try:
+                    with open(journal, encoding="utf-8", errors="replace") as f:
+                        vue, ecoules = analyser_extinction(f, souvenir_du)
+                except OSError:
+                    vue, ecoules = False, 0
+                if vue and not extinction_annoncee:
+                    extinction_annoncee = True
+                    logger.info(
+                        f"[{persona_id}_{branch}] extinction du souvenir du {souvenir_du} "
+                        f"détectée — encore {jours_apres_extinction} jours vécus à observer."
+                    )
+                if vue and ecoules >= jours_apres_extinction:
+                    dernier_jour = derniere_journee_simulee(archive)
+                    logger.info(
+                        f"[{persona_id}_{branch}] {ecoules} jours vécus depuis l'extinction du "
+                        f"{souvenir_du} (dernier jour simulé : {dernier_jour}) — arrêt anticipé. "
+                        f"Tronquer le bras témoin à ce jour pour comparer."
+                    )
+                    try:
+                        (archive / "arret_sur_extinction.json").write_text(
+                            json.dumps(
+                                {
+                                    "souvenir_du": souvenir_du,
+                                    "jours_apres_extinction": ecoules,
+                                    "seuil_jours": jours_apres_extinction,
+                                    "dernier_jour_simule": dernier_jour,
+                                    "persona": persona_id,
+                                    "branche": branch,
+                                },
+                                ensure_ascii=False,
+                                indent=2,
+                            ),
+                            encoding="utf-8",
+                        )
+                    except OSError as exc:
+                        logger.error(
+                            f"[ALARME] [{persona_id}_{branch}] arrêt anticipé décidé mais la "
+                            f"preuve n'a pas pu être écrite ({exc}) : le bras est tronqué et "
+                            f"rien ne dit à quel jour. L'analyse appariée est compromise."
+                        )
+                    time.sleep(3)
+                    subprocess.run(["make", "stop-run"], check=False)
+                    break
+
         # Détection de fin de simulation via gama_headless.log (sécurité anti-blocage)
         if archive:
             gama_log = archive / "gama_headless.log"
@@ -687,6 +821,21 @@ def main() -> None:
         action="store_true",
         help="Affiche le plan d'exécution sans lancer les simulations",
     )
+    parser.add_argument(
+        "--arret-sur-extinction",
+        action="store_true",
+        help="Coupe le bras une fois le souvenir DÉCLARÉ sorti du bloc « ce qui a changé "
+             "récemment » depuis --jours-apres-extinction jours vécus. Le bras est alors plus "
+             "court que son témoin : l'analyse doit tronquer les deux au jour écrit dans "
+             "arret_sur_extinction.json. Sans ce drapeau, le run va jusqu'à son horizon.",
+    )
+    parser.add_argument(
+        "--jours-apres-extinction",
+        type=int,
+        default=JOURS_APRES_EXTINCTION,
+        help=f"Jours VÉCUS observés après l'extinction avant de couper "
+             f"(défaut : {JOURS_APRES_EXTINCTION})",
+    )
 
     args = parser.parse_args()
 
@@ -710,6 +859,11 @@ def main() -> None:
     print(f"Dossier racine  : {base_dir}")
     _jalons = os.getenv("EXPERIMENT_SURVEY_DAYS") or "12,17,29,40 (défaut)"
     print(f"Jalons enquêtes : {_jalons} — 21h00, étanchéité mémoire absolue")
+    if args.arret_sur_extinction:
+        print(f"Arrêt anticipé  : ARMÉ — {args.jours_apres_extinction} jours vécus après "
+              f"l'extinction du souvenir déclaré (bras plus court que son témoin)")
+    else:
+        print("Arrêt anticipé  : désarmé — chaque bras va jusqu'à son horizon")
     print("=" * 75)
 
     for i, pid in enumerate(personas, 1):
@@ -724,6 +878,8 @@ def main() -> None:
                 workdir=workdir,
                 is_resume=is_resume,
                 dry_run=args.dry_run,
+                arret_extinction=args.arret_sur_extinction,
+                jours_apres_extinction=args.jours_apres_extinction,
             )
 
             if not args.dry_run and ret == 0:

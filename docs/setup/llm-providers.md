@@ -25,6 +25,11 @@ providers:
     disable_timeout: 180       # durée (s) de mise à l’écart du provider après 30 erreurs consécutives (pas un timeout HTTP)
 ```
 
+`/health` publie la valeur retenue pour chaque instance (champs `batch_max_agents` et
+`tpm_estimate_per_request`) : c'est la source autoritaire, celle du conteneur qui sert
+réellement les requêtes, et l'estimation de coût d'une expérience s'en sert pour convertir
+des déplacements en requêtes.
+
 `batch_max_agents` est calculé automatiquement au démarrage :
 `max(1, min(tpm_limit / tokens_per_agent, rpm_limit, max_batch_agents))`
 

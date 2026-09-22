@@ -1,0 +1,147 @@
+"""Ticket 059, lot 6 — l'extraction porte sur des FOYERS, pas sur des individus.
+
+Contrat : `specs/ticket_059/tests.md`. Extraire un membre sans l'autre supprimerait la grandeur
+mesurée — la date à laquelle le co-résident d'un lecteur change de comportement.
+
+Tout est PUR : aucun simulateur, aucun modèle. Les cas qui portent sur la cohorte scellée
+sautent si elle n'est pas présente (elle n'est pas versionnée).
+
+Lancement :
+    services/llm-agents/.venv/bin/python -m pytest scripts/tests/test_059_population_foyers.py -q
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+RACINE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(RACINE))
+
+from scripts.data.population.extraire_foyers import (  # noqa: E402
+    TAILLE_FOYER,
+    _rang,
+    choisir,
+    foyers_eligibles,
+)
+
+COHORTE = RACINE / "data" / "population" / "population_1000_AAMAS_v6" / "population.json"
+SORTIE = RACINE / "data" / "population" / "population_20_foyers_059"
+
+besoin_cohorte = pytest.mark.skipif(not COHORTE.is_file(), reason="cohorte v6 absente (non versionnée)")
+
+
+def _personne(pid: str, menage: str, *, mobile: bool = True, tc: bool = False) -> dict:
+    return {
+        "person_id": pid,
+        "immobile": not mobile,
+        "household": {"id": menage},
+        "identity": {"traits_json": {"name": f"P{pid}", "has_pt_subscription": tc}},
+    }
+
+
+# ── Ce que l'éligibilité retient, et ce qu'elle écarte ───────────────────────────────────
+
+
+def test_seuls_les_foyers_de_taille_deux_sont_retenus():
+    pop = [
+        _personne("1", "A", tc=True), _personne("2", "A"),
+        _personne("3", "B", tc=True),
+        _personne("4", "C", tc=True), _personne("5", "C"), _personne("6", "C"),
+    ]
+    assert list(foyers_eligibles(pop, abonnement_tc=False)) == ["A"]
+
+
+def test_un_foyer_dont_un_membre_est_immobile_est_ecarte():
+    """Un agent immobile ne décide de rien : il n'entend rien et ne raconte rien."""
+    pop = [_personne("1", "A", tc=True), _personne("2", "A", mobile=False)]
+    assert foyers_eligibles(pop, abonnement_tc=False) == {}
+
+
+def test_le_critere_tc_ecarte_les_foyers_sans_aucun_abonne():
+    """L'article joué en premier vise les TC : un foyer sans usager n'a rien à reporter."""
+    pop = [
+        _personne("1", "A", tc=True), _personne("2", "A"),
+        _personne("3", "B"), _personne("4", "B"),
+    ]
+    assert list(foyers_eligibles(pop, abonnement_tc=True)) == ["A"]
+    assert list(foyers_eligibles(pop, abonnement_tc=False)) == ["A", "B"]
+
+
+# ── Déterminisme ────────────────────────────────────────────────────────────────────────
+
+
+def test_l_affectation_ne_depend_pas_de_l_ordre_de_la_population():
+    """Deux extractions du même sceau rendent les mêmes groupes, quel que soit l'ordre d'entrée."""
+    pop = [x for i in range(8) for x in (_personne(f"{2*i}", f"M{i}", tc=True), _personne(f"{2*i+1}", f"M{i}"))]
+    a = choisir(pop, exposes=3, temoins=2, graine=59, abonnement_tc=True)[:2]
+    b = choisir(list(reversed(pop)), exposes=3, temoins=2, graine=59, abonnement_tc=True)[:2]
+    assert a == b
+
+
+def test_changer_la_graine_change_les_groupes():
+    pop = [x for i in range(12) for x in (_personne(f"{2*i}", f"M{i}", tc=True), _personne(f"{2*i+1}", f"M{i}"))]
+    a = choisir(pop, exposes=4, temoins=3, graine=59, abonnement_tc=True)[0]
+    b = choisir(pop, exposes=4, temoins=3, graine=60, abonnement_tc=True)[0]
+    assert a != b, "une graine sans effet rendrait le manifeste trompeur"
+
+
+def test_le_rang_est_borne_et_stable():
+    assert 0.0 <= _rang(59, "5177") < 1.0
+    assert _rang(59, "5177") == _rang(59, "5177")
+
+
+def test_exposes_et_temoins_sont_disjoints():
+    pop = [x for i in range(10) for x in (_personne(f"{2*i}", f"M{i}", tc=True), _personne(f"{2*i+1}", f"M{i}"))]
+    exposes, temoins, _ = choisir(pop, exposes=4, temoins=3, graine=59, abonnement_tc=True)
+    assert not set(exposes) & set(temoins)
+    assert len(exposes) == 4 and len(temoins) == 3
+
+
+def test_refus_franc_quand_le_vivier_est_trop_petit():
+    """Un groupe incomplet rendrait un bras plus petit que l'autre sans que rien ne le dise."""
+    pop = [_personne("1", "A", tc=True), _personne("2", "A")]
+    with pytest.raises(SystemExit, match="foyers éligibles"):
+        choisir(pop, exposes=6, temoins=4, graine=59, abonnement_tc=True)
+
+
+# ── La population livrée ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.skipif(not (SORTIE / "MANIFEST.yaml").is_file(), reason="population non extraite")
+def test_la_population_livree_tient_ses_promesses():
+    manifeste = yaml.safe_load((SORTIE / "MANIFEST.yaml").read_text(encoding="utf-8"))
+    agents = json.loads((SORTIE / "population.json").read_text(encoding="utf-8"))
+
+    assert manifeste["population"]["n"] == len(agents)
+    exposes = manifeste["groupes"]["expose"]
+    temoins = manifeste["groupes"]["temoin"]
+
+    # Les témoins sont dans le MÊME fichier : le plancher de bruit du 095 n'est pas nul.
+    assert exposes and temoins
+    assert all(len(f["membres"]) == TAILLE_FOYER for f in exposes + temoins)
+
+    menages = {str(a["household"]["id"]) for a in agents}
+    assert menages == {f["household_id"] for f in exposes + temoins}
+    # Aucun foyer n'est à la fois exposé et témoin.
+    assert not {f["household_id"] for f in exposes} & {f["household_id"] for f in temoins}
+
+
+@pytest.mark.skipif(not (SORTIE / "MANIFEST.yaml").is_file(), reason="population non extraite")
+def test_le_manifeste_dit_que_ce_n_est_pas_un_sceau():
+    """Vingt agents observent un mécanisme ; ils ne mesurent aucune part modale."""
+    tete = (SORTIE / "MANIFEST.yaml").read_text(encoding="utf-8")[:600]
+    assert "PAS un sceau" in tete
+    assert "population_1000_AAMAS_v6" in tete
+
+
+@besoin_cohorte
+def test_le_vivier_de_la_cohorte_est_suffisant_pour_les_paliers_P0_et_P1():
+    """P0 demande 2 foyers, P1 en demande 10. Le vivier ne doit jamais être le facteur limitant."""
+    pop = json.loads(COHORTE.read_text(encoding="utf-8"))
+    assert len(foyers_eligibles(pop, abonnement_tc=True)) >= 10
+    assert len(foyers_eligibles(pop, abonnement_tc=False)) >= 10

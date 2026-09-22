@@ -81,6 +81,20 @@ CACHE ?=
 # le choc peut être resservie pendant. Une [ALARME] se lève si on l'oublie.
 CHOC ?=
 CHOCS_DIR = services/llm-agents/config/chocs
+# `make run EVENEMENT=<nom>` : joue l'événement déclaré dans
+# services/llm-agents/config/evenements/<nom>.yaml — un choc SUBI à l'arrivée, ou un article LU
+# au réveil. `EVENEMENT=0` le retire. Sans EVENEMENT, le fichier n'est pas touché.
+# `CHOC=` et `PRESSE=` sont des alias : ils écrivent la même clé, et disent lequel a servi.
+# Le cache de décisions se coupe désormais TOUT SEUL les jours d'événement (ticket 100) ; il
+# reste actif le reste du run, et le journal compte ce qu'il y sert.
+EVENEMENT ?=
+PRESSE ?=
+EVENEMENTS_DIR = services/llm-agents/config/evenements
+# Les trois leviers écrivent la même clé. L'ordre dit lequel gagne si deux sont posés, et le
+# nom du levier retenu est affiché : deux leviers contradictoires dans une même commande ne
+# doivent pas se résoudre en silence.
+EVT := $(or $(EVENEMENT),$(PRESSE),$(CHOC))
+EVT_LEVIER := $(if $(EVENEMENT),EVENEMENT,$(if $(PRESSE),PRESSE,$(if $(CHOC),CHOC,)))
 SIM_PARAMS = services/GAMA/CityTransport/config/sim_params.yaml
 APP_CONFIG = services/llm-agents/config/config.yaml
 

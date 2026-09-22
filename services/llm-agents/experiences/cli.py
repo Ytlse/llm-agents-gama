@@ -1078,21 +1078,27 @@ def _campagne_estimer(nom: str) -> int:
     Volontairement LÉGER, et c'est un choix : `estimer` complet a besoin du moniteur de la
     passerelle et des contrôles de lancement, donc du conteneur. La campagne, elle, pilote
     depuis l'hôte. On lit donc ce qui suffit à décider — le nombre de déplacements couverts
-    du jeu, qui EST le nombre de sollicitations (`experience.estimer`, unité « déplacement »),
-    et le type de décideur, qui dit si ces sollicitations coûtent du quota.
+    du jeu, et le type de décideur, qui dit si ces déplacements coûtent du quota.
+
+    **Deux colonnes, deux unités.** Un déplacement est une décision à prendre ; une requête est
+    un appel fournisseur, et la passerelle en regroupe plusieurs. Une seule colonne « appels
+    LLM » alimentée par les déplacements surestimait le budget d'environ huit fois. La colonne
+    des requêtes porte le chiffre PRUDENT (cf. `lots.facteurs`) : sans exécution archivée
+    comparable il vaut le nombre de déplacements, donc le devis ne devient jamais plus
+    optimiste que celui d'avant.
 
     Ce que ça ne remplace pas : `make experience-estimer EXP=<nom>` reste la mesure de
-    référence pour une expérience, jetons et fenêtre de quota compris. Ici on répond à une
-    seule question — « combien la campagne va-t-elle coûter en tout ? » — et on dit avec
-    quoi on y répond.
+    référence pour une expérience, jetons et fenêtre de quota compris.
     """
     from experiences import campagne as C
+    from experiences import lots as L
 
     camp = C.charger(nom)
-    total, par_phase = 0, []
+    total_depl, total_req, par_phase = 0, 0, []
     print(f"Budget de la campagne {camp.nom!r} — {len(camp.toutes)} expériences")
+    print(f"     {'expérience':58s}  {'déplacements':>13s}  {'requêtes':>10s}")
     for phase in camp.phases:
-        appels_phase = 0
+        depl_phase, req_phase = 0, 0
         print(f"\n  ── phase {phase.nom} ({len(phase.experiences)}) ──")
         for exp_nom in phase.experiences:
             try:
@@ -1102,23 +1108,45 @@ def _campagne_estimer(nom: str) -> int:
             except Exception as err:  # noqa: BLE001 — un devis raté ne bloque pas le total
                 print(f"     {exp_nom:58s}  devis impossible : {err}")
                 continue
-            # Seul un décideur qui passe par un fournisseur consomme du quota. Les témoins
-            # déterministes et les modèles ajustés tournent en local, à zéro appel.
-            avec_quota = exp.decideur.type in ("passerelle", "antigravity")
-            appels = couverts if avec_quota else 0
-            appels_phase += appels
-            marque = f"{appels:>7d} appel(s) LLM" if avec_quota else "      0 (local)"
-            print(f"     {exp_nom:58s}  {marque}")
-        par_phase.append((phase.nom, appels_phase))
-        total += appels_phase
+            # Seul un décideur qui passe par la PASSERELLE consomme du quota fournisseur. Les
+            # témoins déterministes et les modèles ajustés tournent en local ; Antigravity passe
+            # par un sous-agent sur disque (`DecideurAntigravity.sans_quota`), une décision à la
+            # fois et sans regroupement — il ne compte donc pas non plus.
+            if exp.decideur.type != "passerelle":
+                print(f"     {exp_nom:58s}  {couverts:>13d}  {'0 (local)':>10s}")
+                depl_phase += couverts
+                continue
+            providers, instances = E.instances_visees(exp)
+            reg = L.facteurs(
+                providers=providers,
+                instances=instances,
+                parallelisme=(
+                    exp.regroupement.parallelisme
+                    if exp.mode == E.MODE_SANS_SIMULATEUR
+                    else None
+                ),
+                empreinte_gabarit_=E.empreinte_gabarit(
+                    exp.gabarit.categorie, exp.gabarit.variante
+                )["sha256"],
+                troncature=bool(getattr(exp, "troncature_15", False)),
+            )
+            req = L.requetes(couverts, reg["prudent"])
+            depl_phase += couverts
+            req_phase += req
+            print(f"     {exp_nom:58s}  {couverts:>13d}  {req:>10d}")
+        par_phase.append((phase.nom, depl_phase, req_phase))
+        total_depl += depl_phase
+        total_req += req_phase
 
     print("\n  ── total ──")
-    for nom_phase, appels in par_phase:
-        print(f"     {nom_phase:58s}  {appels:>7d} appel(s) LLM")
-    print(f"     {'CAMPAGNE':58s}  {total:>7d} appel(s) LLM")
+    for nom_phase, depl, req in par_phase:
+        print(f"     {nom_phase:58s}  {depl:>13d}  {req:>10d}")
+    print(f"     {'CAMPAGNE':58s}  {total_depl:>13d}  {total_req:>10d}")
     print(
-        "\n  Source : déplacements couverts du jeu de chaque expérience "
-        "(mêmes chiffres que `experience-estimer`, champ `sollicitations`)."
+        "\n  Déplacements : couverture du jeu de chaque expérience (champ `deplacements` de "
+        "`experience-estimer`).\n  Requêtes : appels fournisseur au regroupement PRUDENT — "
+        "c'est ce que le quota décompte (champ `requetes.prudente`).\n  Sans exécution "
+        "archivée comparable, le regroupement prudent vaut 1 et les deux colonnes coïncident."
     )
     return 0
 

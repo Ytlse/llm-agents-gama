@@ -498,7 +498,15 @@ décisions.** Un seul écart invalide toute la campagne qui suit.
 
 À rejouer obligatoirement si le lot C est adopté, puisqu'il change le modèle des réflexions.
 
-### E2 — La fenêtre dérivée reproduit la fenêtre fixe
+### E2 — La fenêtre dérivée reproduit la fenêtre fixe · OPTIONNELLE
+
+⚠ **Rendue optionnelle le 2026-09-21** (décision de l'auteur). Le bras « fenêtre fixe 14 » est un
+contrôle de non-régression : il vérifie que le calcul nouveau reproduit l'ancien comportement là
+où les deux devraient coïncider. La campagne du 2026-09-21 a montré la sortie du bloc à la date
+que la gravité prédit, et cette date se lit dans le journal avec la force et la gravité qui la
+produisent — le calcul est donc vérifié par la trace, sans second bras. À jouer si l'on veut la
+comparaison de courbe à courbe ; à laisser si le budget va ailleurs.
+
 
 Trois bras : témoin sans choc · fenêtre fixe 14 jours · fenêtre dérivée (seuil 0,35). Gravité du choc
 C6 : 0,70, donc durée calculée 15 jours.
@@ -518,6 +526,61 @@ le run et s'écrit dans `specs/ticket_095/tests.md`.
 
 **Ce qui falsifierait :** des extinctions au même jour malgré des gravités différentes (le calcul n'est
 pas branché), ou des extinctions dans le désordre (la gravité ne mesure pas ce qu'on croit).
+
+⚠ **E3 ET E4 SONT DÉPLACÉES PAR LA DÉCISION D7 DU TICKET 100 (2026-09-22).** Leur protocole
+repose sur une prémisse qui n'est plus vraie : que la gravité d'un choc se **déclare**, par son
+retard et ses composantes, et que trois chocs de sévérités mesurées distinctes produisent trois
+durées de vie distinctes. Depuis D7, la gravité d'une entrée d'événement est **l'estimation de
+l'agent**, et le fait mesuré n'en est plus le plancher.
+
+Conséquence directe : déclarer C2, C6 et C3 ne garantit plus 8, 15 et 19 jours. Si l'agent juge
+les trois « génant », les trois vivent **la même** durée, et le run ne falsifierait pas la
+théorie — il mesurerait le jugement. Trois sorties, à trancher avant de lancer quoi que ce soit :
+
+1. **Jouer E3 et E4 sous `jugement: aucun`**, qui est désormais le seul chemin par lequel la
+   gravité déterministe qualifie une entrée. Le protocole d'origine tient alors mot pour mot —
+   mais il mesure un dispositif qui n'est plus celui des campagnes de l'article.
+2. **Réécrire l'attendu** : ce n'est plus « la durée suit la gravité déclarée » mais « la durée
+   suit la gravité **jugée** », et la prédiction se pose sur l'intensité que l'agent rend, lue
+   dans `evenements.jsonl`. C'est une expérience différente, et sans doute plus intéressante.
+3. **Les retirer**, si le chapitre n'en a plus besoin.
+
+Tant que ce n'est pas tranché, **E3 et E4 ne se lancent pas** : elles coûteraient du quota pour
+mesurer une prémisse caduque.
+
+**TRANCHÉ LE 2026-09-22 — sortie 2 : E3 se rejoue sur la gravité JUGÉE.** La gravité est celle
+de l'agent, et la prédiction se pose sur l'intensité qu'il rend. Deux conditions posées avec la
+décision : un **garde-fou en amont** (grille d'attendus déclarée avant de voir les réponses, la
+campagne ne part pas si le jugement sort de la plage) et la **variation par profil mesurée**
+plutôt que corrigée. Détail et forme proposée : `specs/ticket_095/expose_duree_d_un_souvenir.md`,
+§ 6. E4 reste ouverte, sa question est reformulée au § 7 du même document.
+
+⚠ **DÉFAUT ANTÉRIEUR À D7, trouvé le 2026-09-22 :** C2, C6 et C3 tels qu'ils sont déclarés
+donnent des gravités mesurées de 0,768 / 0,700 / 1,000, soit des durées servies de
+**16,5 / 15,3 / 20,6 jours**. C2, censé être le cas faible, arrive à un jour de C6 — la part du
+retard est fortement concave (30 min → 0,50 ; 45 min → 0,64 ; 60 min → 0,68). Le protocole
+d'origine ne produisait donc **déjà pas** l'attendu 8 / 15 / 19, avec ou sans D7. Les trois
+déclarations sont à revoir avant tout run, quelle que soit la sortie retenue.
+
+**MESURE DU 2026-09-22, APRÈS-MIDI — elle change l'arbitrage sans le trancher.** Le banc
+fonctionnel du ticket 100 a d'abord donné « l'agent répond `anodin` à tout », ce qui aurait
+condamné la sortie 2. C'était un défaut : le texte de l'événement n'atteignait pas le modèle.
+Corrigé, B1 et B3 rejoués sur Groq donnent, sur 38 appels sans une seule réponse vide :
+
+| Ce qu'on craignait | Ce qui est mesuré |
+|---|---|
+| un seul échelon pour tout | **trois** échelons — `notable` ×8, `anodin` ×5, `genant` ×2 |
+| un jugement instable d'un appel à l'autre | **4/4 identiques** sur deux événements, amplitude **0 jour** |
+| l'agent minore le fait mesuré | c6 mesuré à 0,53 → jugé **`grave`** (0,75), écart **+0,22** |
+
+Durées SERVIES qui en découlent : **4,70 / 8,23 / 11,76 / 16,17 jours** — la force de l'oubli
+(4,48 / 7,84 / 11,20 / 15,40 j) multipliée par `ln(1/0,35) = 1,0498`. L'étalement que E3
+attendait (≈ 8, 15, 19) existe donc dans le jugement, sur cinq articles et trois personas.
+
+Ce que cela ne dit pas : que la sortie 2 est jouable telle quelle. Le jugement est reproductible
+**à texte identique** ; rien ne dit encore qu'il l'est d'un agent à l'autre ni d'un jour à
+l'autre dans un run, et c'est exactement ce dont dépend une date d'extinction. Trace :
+`docs/traces/banc_fonctionnel_100/BILAN.md`, section « Ce que la cause a changé ».
 
 ### E4 — Le plafond mord
 
@@ -590,6 +653,27 @@ mesurait 0 sur 44 décisions doit se lire comme un tirage chanceux plutôt que c
 Un effet de choc devra dépasser ce plancher pour être attribuable. Sur la campagne de septembre
 l'effet allait de 95 % à 0 % de part voiture, très au-dessus — mais **le plancher se déclare, il
 ne se tait pas.**
+
+### Ce que la décision du 2026-09-22 y change
+
+Ce plancher servait d'argument au **témoin interne** du ticket 059 § 6.4 : un foyer non exposé
+dans le **même** run, parce que comparer deux runs distincts l'aurait fait entrer dans l'effet
+mesuré. L'auteur a retiré cette exigence le 22 septembre — le chapitre 7 ne décrit plus les trois
+rôles, et le 059 cesse de demander un foyer témoin.
+
+**Le plancher, lui, ne change pas de valeur et ne cesse pas d'exister.** Ce qui change, c'est
+d'où il vient : il n'est plus produit par le run de campagne, il se reprend d'ici (3,2 %, une
+seule mesure, sur un seul persona) ou se réétablit par un rejeu à l'identique. Deux conséquences
+à porter dans toute lecture de résultat :
+
+- **La valeur est fragile.** Un écart sur trente et une décisions appariées, un persona, un
+  modèle donné. Elle ne se transporte pas telle quelle à une autre population ni à un autre
+  décideur — `scripts/analysis/presse/scoring.py` la demande en paramètre
+  (`plancher_de_bruit`) précisément pour qu'elle soit **déclarée avec le résultat** et non
+  supposée.
+- **Un rejeu à l'identique reste le seul moyen de l'établir pour un décideur donné.** Il coûte
+  un bras de plus, et c'est le prix du retrait du témoin interne : le témoin interne le donnait
+  « sans rien payer de plus », il faut désormais le payer ou l'assumer repris d'ailleurs.
 
 ### DÉCISION DE L'AUTEUR, 2026-09-21
 

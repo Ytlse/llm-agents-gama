@@ -6,7 +6,7 @@ Un chapitre par section de l'article, dans trois arbres parallèles :
 |---|---|
 | [`en/`](en/) | **maître anglais** — c'est le texte de référence |
 | [`fr/`](fr/) | miroir français, et brouillons des chapitres pas encore rédigés |
-| [`overleaf/`](overleaf/) | rendu LaTeX, à inclure dans le projet Overleaf **dans l'ordre des numéros** |
+| [`overleaf/`](overleaf/) | rendu LaTeX : `main.tex` assemble les chapitres de [`overleaf/chapters/`](overleaf/chapters/) par `\input`, dans l'ordre des numéros |
 | [`relecture/`](relecture/) | relecture section par section, un fichier par chapitre |
 | [`plan/`](plan/) | la trame, dérivée du texte — voir [`plan/README.md`](plan/README.md) |
 | [`CITATIONS.md`](CITATIONS.md) | vérification des citations, une entrée par référence |
@@ -17,6 +17,11 @@ Un chapitre par section de l'article, dans trois arbres parallèles :
 
 Le numéro de fichier **est** le numéro de section annoncé en 1.4 du chapitre 1. Une
 renumérotation se voit donc dans `git status`, et pas seulement dans une phrase.
+
+Le nom porte ensuite le titre court du chapitre — `06_Empirical_Evaluation`,
+`07_Adaptation` — et il est le même dans `fr/`, `en/` et `overleaf/chapters/`. C'est le
+nom du projet Overleaf qui fait foi : un chapitre y est renommé, le dépôt suit. Les
+annexes, `overleaf/99_annexes.tex`, sont la seule pièce absente du projet en ligne.
 
 Chaque fichier porte, juste après son titre, un commentaire `Dernière mise à jour : AAAA-MM-JJ`
 — `<!-- … -->` en Markdown, `% …` dans l'en-tête LaTeX. Il donne la date de la dernière
@@ -38,6 +43,14 @@ avec ses chiffres ; l'objection se traite au chapitre des limites, ou pas du tou
 un chiffre qui n'alimente aucune affirmation du chapitre sort du corps du texte, et vit en
 commentaire HTML ou en annexe. Règle tirée de la relecture du chapitre 4, 16 septembre 2026.
 
+**Un chapitre ne réexpose pas ce qu'un chapitre antérieur a établi.** Un mécanisme décrit au
+chapitre 3, une métrique définie au chapitre 4, un résultat publié au chapitre 6 se citent par leur
+numéro de section. La reprise coûte deux fois : elle allonge le texte, et elle se désaligne dès que
+l'original bouge — deux formulations du même mécanisme finissent par en décrire deux, et le
+relecteur ne sait plus laquelle fait foi. Le rappel admis tient dans une subordonnée au service de
+la phrase en cours ; dès qu'il prend une phrase à lui, c'est un renvoi qu'il fallait. Règle tirée de
+la relecture du chapitre 7, 21 septembre 2026.
+
 **Ce qui n'entre pas dans le texte.** Une phrase qui décrit la fabrication plutôt que la mesure
 n'a pas sa place dans un chapitre : versions antérieures archivées, dossier « immuable » ou « en
 service », fichier « figé dans le dépôt », empreintes, ce qui est gelé où. Le texte dit ce qui est
@@ -53,14 +66,14 @@ pas ; l'en-tête de chaque `.tex` le rappelle.
 
 | # | Chapitre | EN | FR | LaTeX | Relecture |
 |---|---|---|---|---|---|
-| 0 | Résumé (*abstract*) | `v1.9` | `v1.9` | `v1.9` | [00](relecture/00_abstract.md) |
-| 1 | Introduction | `v0.26` | `v0.26` | `v0.25` | [01](relecture/01_introduction.md) |
+| 0 | Résumé (*abstract*) | `v1.9` | `v1.9` | `v1.9` | [00](relecture/00_Abstract.md) |
+| 1 | Introduction | `v0.27` | `v0.27` | `v0.27` | [01](relecture/01_Introduction.md) |
 | 2 | État de l'art (*related work*) | `v0.19` | `v0.19` | `v0.19` | dans le fichier du ch. 1 |
-| 3 | Le dispositif (*architecture*) | `brouillon v0.7` | `brouillon v0.7` | `v0.7` | — |
+| 3 | Le dispositif (*architecture*) | `brouillon v0.7` | `brouillon v0.8` | `v0.7` | — | <!-- FR en avance : le § 3.4 a reçu les quatre voies le 22 septembre, l'anglais et le LaTeX ne l'ont pas -->
 | 4 | Métriques et socle d'évaluation | `brouillon v0.19` | `brouillon v0.19` | `v0.18` | — |
 | 5 | Quatre façons de choisir, une seule information *(protocole)* | `brouillon v0.11` | `brouillon v0.11` | `v0.10` | — |
 | 6 | Résultats | `brouillon v0.4` | `brouillon v0.8` | `v0.4` | — |
-| 7 | Régimes non tabulés | `brouillon v1.0` | `brouillon v1.0` | `v1.0` | — |
+| 7 | Régimes non tabulés | `brouillon v2.1` | `brouillon v2.1` | `v2.1` | — |
 | 8 | Limites et implications hybrides | `brouillon v0.3` | `brouillon v0.3` | `v0.2` | — |
 | 9 | Conclusion | `brouillon v0.2` | `brouillon v0.2` | `v0.2` | — |
 | 99 | Annexes techniques | `brouillon v0` | `brouillon v0` | `v0` | — |

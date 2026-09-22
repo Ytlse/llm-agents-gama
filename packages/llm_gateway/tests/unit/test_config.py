@@ -198,3 +198,83 @@ class TestProviderConfig:
     def test_repr_ne_montre_pas_la_cle(self):
         cfg = ProviderConfig(api_key=SecretStr("abc"), rpm_limit=1, base_url="u", default_model="m")
         assert "abc" not in repr(cfg) and "api_key_length=3" in repr(cfg)
+
+
+# ── Le plafond de lot est une fonction pure, réutilisable hors du gateway ────
+#
+# L'estimation de coût d'une expérience (`experiences/lots.py`) doit convertir des
+# déplacements en requêtes. Recopier la formule là-bas l'aurait fait diverger en silence
+# le jour où celle-ci change : elle est extraite, et ces tests tiennent l'équivalence.
+
+class TestPlafondDeLotPartage:
+    def test_la_fonction_pure_rend_ce_que_resolve_calcule(self, clean_env, providers_file):
+        from llm_gateway.core.batching import compute_batch_max_agents
+
+        s = _settings(providers_file, provider_keys={"big": "k", "groq": "k"})
+        b = s.batching
+        for nom, cfg in s.providers.items():
+            assert cfg.batch_max_agents == compute_batch_max_agents(
+                tpm_limit=cfg.tpm_limit,
+                rpm_limit=cfg.rpm_limit,
+                max_tokens_per_request=cfg.max_tokens_per_request,
+                tokens_per_agent=b.assumed_prompt_tokens + b.assumed_output_tokens,
+                plafond=b.max_batch_agents,
+            ), nom
+
+    def test_sans_tpm_le_rpm_borne(self):
+        from llm_gateway.core.batching import compute_batch_max_agents
+
+        assert compute_batch_max_agents(
+            tpm_limit=None, rpm_limit=3, max_tokens_per_request=None,
+            tokens_per_agent=3000, plafond=20,
+        ) == 3
+
+    def test_jamais_moins_dun_agent(self):
+        from llm_gateway.core.batching import compute_batch_max_agents
+
+        assert compute_batch_max_agents(
+            tpm_limit=100, rpm_limit=1, max_tokens_per_request=100,
+            tokens_per_agent=3000, plafond=20,
+        ) == 1
+
+
+class TestTailleDeLot:
+    """La taille d'un lot se lit sur l'identifiant que le worker forge.
+
+    `llm_exchanges.jsonl` consigne les jetons du LOT, une ligne par requête. Sans cette
+    lecture, ces jetons passent pour ceux d'un agent et toute estimation bâtie dessus est
+    multipliée par le facteur de regroupement (relevé : 4 607 jetons pour 8 agents).
+    """
+
+    def test_lit_le_nombre_dagents(self):
+        from llm_gateway.core.batching import taille_de_lot
+
+        assert taille_de_lot("batch_7cc7ed2c_8") == 8
+        assert taille_de_lot("batch_7cc7ed2c_15") == 15
+
+    def test_forme_inconnue_rend_none_plutot_que_un(self):
+        from llm_gateway.core.batching import taille_de_lot
+
+        for mauvais in (None, "", "batch_zz_8", "7cc7ed2c_8", "batch_7cc7ed2c", "batch_7cc7ed2c_0"):
+            assert taille_de_lot(mauvais) is None, mauvais
+
+
+class TestSanteExposeLaCapacite:
+    def test_health_publie_batch_max_agents(self, clean_env, providers_file):
+        from llm_gateway.balancer.router import LoadBalancer
+
+        s = _settings(providers_file, provider_keys={"big": "k", "groq": "k"})
+        actifs = filter_providers_without_api_key(s)
+
+        class _LimiterFactice:
+            def current_rpm(self, n): return 0
+            def is_quota_exhausted(self, n): return False
+            def is_disabled(self, n): return False
+            def is_in_cooldown(self, n): return False
+            def active_workers(self, n): return 0
+            def daily_requests(self, n): return 0
+            def daily_tokens(self, n): return 0
+
+        statut = LoadBalancer(actifs, _LimiterFactice()).get_status()
+        assert statut["big"]["batch_max_agents"] == actifs["big"].batch_max_agents
+        assert statut["big"]["tpm_estimate_per_request"] == actifs["big"].tpm_estimate_per_request

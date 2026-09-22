@@ -675,10 +675,16 @@ def refuser_si_impossible(
                 + ") → mode: simulateur, ou retirez-les"
             )
     if exp.evenements:
-        # Question 14 : aucun mécanisme d'événement dans le code — refuser vaut mieux qu'un déclencheur fantôme.
-        refus.append(
-            "les événements (incident, information extérieure) ne sont pas encore joués par GAMA — format accepté et archivé, exécution refusée → retirez `evenements` ou attendez le lot GAMA qui les charge"
-        )
+        # Ticket 100 — le refus E6 est LEVÉ pour les deux types, le 2026-09-22. Il datait du
+        # jour où aucun mécanisme d'événement n'existait dans le code : « refuser vaut mieux
+        # qu'un déclencheur fantôme ». Les deux passent désormais par le même canal —
+        # `incident` = canal `vecu`, prise `arrivee` ; `information` = canal `lu`, prise
+        # `reveil` — et l'exécution est déclarée par `config/evenements/<nom>.yaml`, dont le
+        # chargement refuse franchement ce qu'il ne sait pas jouer.
+        #
+        # ⚠ Ce que l'expérience porte ici reste DESCRIPTIF : c'est la déclaration d'événement
+        # qui arme le run, pas ce bloc. Les deux ne doivent pas diverger, et c'est pourquoi le
+        # levier `EVENEMENT=` écrit la configuration plutôt que ce format.
         if exp.calendrier.politique != "commune":
             refus.append(
                 "un événement exige la politique de calendrier `commune` → calendrier.politique: commune"
@@ -822,18 +828,58 @@ def refuser_si_impossible(
 # ── Estimation (E5) ──────────────────────────────────────────────────────────
 
 
+def echanges_archives(chemin: Path) -> list[dict]:
+    """Les échanges d'un journal de la passerelle, quelle que soit sa mise en forme.
+
+    `llm_exchanges.jsonl` porte l'extension `.jsonl` mais n'en est pas : le rédacteur y
+    concatène des objets JSON **indentés** (cf. `llm_gateway/telemetry/logger.py`). Un parseur
+    ligne à ligne n'y lit donc rien — silencieusement, chaque ligne étant du JSON invalide.
+    On décode en continu avec `raw_decode`, ce qui accepte les deux formes.
+    """
+    import json
+
+    try:
+        texte = chemin.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    decodeur, i, n, objets = json.JSONDecoder(), 0, len(texte), []
+    while i < n:
+        while i < n and texte[i] in " \t\r\n":
+            i += 1
+        if i >= n:
+            break
+        try:
+            obj, i = decodeur.raw_decode(texte, i)
+        except ValueError:
+            # Journal tronqué par un arrêt brutal : on garde ce qui précède plutôt que de tout
+            # perdre, et on ne devine pas la suite.
+            break
+        if isinstance(obj, dict):
+            objets.append(obj)
+    return objets
+
+
 def jetons_mesures(
     dossier_experiences_: Path | None, empreinte_gabarit_: str
 ) -> dict | None:
-    """Médiane des jetons par sollicitation sur les exécutions archivées du MÊME gabarit — source citée."""
-    import json
+    """Médiane des jetons par sollicitation sur les exécutions archivées du MÊME gabarit — source citée.
+
+    ⚠ Une ligne du journal décrit une **requête**, pas une sollicitation : le worker y consigne
+    les jetons du LOT entier, une fois par appel fournisseur (`log_llm_exchange`, appelé après
+    la fusion). Les compter pour un agent multipliait la mesure par le facteur de regroupement
+    — relevé le 2026-09-22 : 4 607 jetons d'entrée pour `batch_7cc7ed2c_8`, soit 576 par agent
+    et non 4 607. On divise donc par la taille du lot, lue sur l'identifiant (`batch_<hash>_<n>`)
+    avec repli sur le nombre de réponses d'agents. Une ligne dont la taille reste illisible est
+    **ignorée** : la compter pour un agent serait exactement l'erreur qu'on corrige.
+    """
+    from llm_gateway.core.batching import taille_de_lot
 
     racine = (
         Path(dossier_experiences_) if dossier_experiences_ else dossier_experiences()
     )
     if not racine.is_dir():
         return None
-    entrees, sorties, sources = [], [], []
+    entrees, sorties, sources, ignorees = [], [], [], 0
     for exec_yaml in racine.glob("*/executions/*/execution.yaml"):
         try:
             conf = yaml.safe_load(exec_yaml.read_text(encoding="utf-8")) or {}
@@ -847,21 +893,34 @@ def jetons_mesures(
             chemin = exec_yaml.parent / fichier
             if not chemin.is_file():
                 continue
-            for ligne in chemin.read_text(encoding="utf-8").splitlines():
-                try:
-                    j = json.loads(ligne)
-                except ValueError:
+            for j in echanges_archives(chemin):
+                if not (j.get("tokens_in") and j.get("tokens_out")):
                     continue
-                if j.get("tokens_in") and j.get("tokens_out"):
-                    entrees.append(int(j["tokens_in"]))
-                    sorties.append(int(j["tokens_out"]))
+                agents = taille_de_lot(j.get("task_id"))
+                if agents is None:
+                    reponse = j.get("response")
+                    agents = len(reponse) if isinstance(reponse, list) and reponse else None
+                if agents is None:
+                    ignorees += 1
+                    continue
+                entrees.append(int(j["tokens_in"]) / agents)
+                sorties.append(int(j["tokens_out"]) / agents)
         sources.append(str(exec_yaml.parent.relative_to(racine)))
+    if ignorees:
+        logger.warning(
+            f"[estimation] {ignorees} échange(s) archivé(s) ignoré(s) : taille de lot illisible "
+            f"(ni `task_id` en `batch_<hash>_<n>`, ni liste de réponses) — les compter pour un "
+            f"agent surestimerait les jetons par sollicitation"
+        )
     if not entrees:
         return None
     return {
         "entree": int(statistics.median(entrees)),
         "sortie": int(statistics.median(sorties)),
-        "source": f"médiane sur {len(entrees)} sollicitations archivées ({len(sources)} exécutions, même gabarit)",
+        "source": (
+            f"médiane sur {len(entrees)} requête(s) archivée(s) ramenée(s) à l'agent "
+            f"({len(sources)} exécutions, même gabarit)"
+        ),
     }
 
 
@@ -899,39 +958,141 @@ def ratios_du_plan(chemin: Path | None = None) -> dict | None:
     }
 
 
+def instances_visees(exp: Experience, moniteur=None) -> tuple[dict[str, dict], list[str]]:
+    """(providers, instances) que ce décideur solliciterait — du moniteur s'il existe, du fichier sinon.
+
+    `estimer` doit savoir chiffrer sans conteneur : la campagne devise depuis l'hôte, sans
+    passerelle joignable (cf. `cli._campagne_estimer`). Sans moniteur on relit donc
+    `providers.yaml` directement ; ce qui se perd alors, c'est l'état du jour, pas la capacité.
+    """
+    if moniteur is not None:
+        return (getattr(moniteur, "providers", {}) or {}), list(
+            getattr(moniteur, "instances", []) or []
+        )
+    try:
+        from experiences.ressources import charger_providers, instances_pour_modele
+
+        providers = charger_providers()
+        return providers, instances_pour_modele(
+            exp.decideur.modele or "", providers, exp.decideur.portee
+        )
+    except Exception as e:  # noqa: BLE001 — un devis dégradé vaut mieux qu'un devis absent
+        logger.warning(f"[estimation] instances non résolues ({type(e).__name__}: {e})")
+        return {}, []
+
+
 def estimer(
     exp: Experience, jeu: Jeu, *, moniteur=None, jetons: dict | None = None
 ) -> dict:
-    """Coût prévisionnel, chaque valeur avec sa source. Aucun littéral ici."""
+    """Coût prévisionnel, chaque valeur avec sa source. Aucun littéral ici.
+
+    **Deux unités, et c'est leur confusion qui produisait l'erreur** : un DÉPLACEMENT est une
+    décision à prendre, une REQUÊTE est un appel fournisseur. La passerelle fusionne plusieurs
+    agents par appel — huit, mesuré sur les bras de référence : un bras complet tient en quelque
+    310 requêtes, soit à peu près 0,3 jour de quota (ticket 073 § 4). Poser l'égalité en
+    annonçait 2 500 et faisait renoncer à des lancements largement finançables.
+
+    Le champ `sollicitations` est conservé tel quel — il compte des déplacements, il en comptait
+    déjà — et `requetes` porte la seconde unité, avec trois chiffres dont un seul décide
+    (cf. `lots.facteurs`).
+    """
+    from experiences import lots as L
+
     couv = jeu.couverture()
-    sollicitations = couv["deplacements_couverts"]  # unité = déplacement (question 1)
+    deplacements = couv["deplacements_couverts"]
+    attendus = couv["deplacements_attendus"]
+    # Un jeu NON CLOS n'a pas encore d'`attendus` à son manifeste : il vaut 0, tandis que les
+    # `couverts` se comptent sur l'index en cours de remplissage. La soustraction rendait alors
+    # un nombre NÉGATIF de non couverts (`-773` relevé le 2026-09-22), et les « déplacements »
+    # annoncés n'étaient que l'avancement du jeu à cet instant — pas la charge du bras. On le
+    # dit plutôt que de publier deux chiffres qui n'en sont pas.
+    jeu_clos = attendus > 0
+    if not jeu_clos:
+        logger.warning(
+            f"[estimation] jeu {jeu.nom!r} non clos : son manifeste ne déclare aucun déplacement "
+            f"attendu. Les {deplacements} déplacements chiffrés ici sont l'AVANCEMENT de sa "
+            f"préparation, pas la charge de l'expérience — le devis sera à refaire une fois le "
+            f"jeu scellé."
+        )
+    origine = (
+        f"déplacements couverts du jeu {jeu.nom!r}"
+        if jeu_clos
+        else (
+            f"jeu {jeu.nom!r} NON CLOS : avancement de sa préparation à cet instant, "
+            f"pas la charge de l'expérience"
+        )
+    )
     est: dict[str, Any] = {
+        "deplacements": {
+            "valeur": deplacements,
+            "unite": "déplacement",
+            "jeu_clos": jeu_clos,
+            "source": origine,
+        },
+        # Nom historique, même valeur, même unité : une sollicitation EST un déplacement.
+        # Ce n'est PAS un nombre de requêtes — les appelants qui l'affichaient comme tel
+        # doivent lire `requetes` (dashboard, campagne).
         "sollicitations": {
-            "valeur": sollicitations,
-            "source": f"déplacements couverts du jeu {jeu.nom!r}",
+            "valeur": deplacements,
+            "unite": "déplacement",
+            "source": origine,
         },
         "non_couverts": {
-            "valeur": couv["deplacements_attendus"] - couv["deplacements_couverts"],
-            "source": "jeu",
+            "valeur": (attendus - deplacements) if jeu_clos else None,
+            "source": "jeu" if jeu_clos else "jeu non clos : rien à soustraire",
         },
     }
     if exp.decideur.type != "passerelle":
+        sans = f"décideur {exp.decideur.type} : aucune requête fournisseur"
+        est["regroupement"] = {"valeur": None, "source": sans}
+        est["requetes"] = {"valeur": 0, "unite": "requête fournisseur", "source": sans}
         est["quota"] = {"valeur": None, "source": "décideur local : sans quota"}
         est["jetons"] = {"valeur": None, "source": "décideur local : aucun jeton"}
         return est
-    j = (
-        jetons
-        or jetons_mesures(
-            None,
-            empreinte_gabarit(exp.gabarit.categorie, exp.gabarit.variante)["sha256"],
-        )
-        or ratios_du_plan()
+    empreinte = empreinte_gabarit(exp.gabarit.categorie, exp.gabarit.variante)["sha256"]
+    j = jetons or jetons_mesures(None, empreinte) or ratios_du_plan()
+
+    # ── Du déplacement à la requête ──────────────────────────────────────────
+    providers, instances = instances_visees(exp, moniteur)
+    reg = L.facteurs(
+        providers=providers,
+        instances=instances,
+        # Le parallélisme ne borne le lot QUE sans simulateur : c'est alors la plateforme qui
+        # tient la file (`parallelisme` personnes en vol, déplacements sériels par personne).
+        # En mode simulateur, GAMA l'alimente et le bornage ne tient pas.
+        parallelisme=(
+            exp.regroupement.parallelisme if exp.mode == MODE_SANS_SIMULATEUR else None
+        ),
+        empreinte_gabarit_=empreinte,
+        troncature=bool(getattr(exp, "troncature_15", False)),
+        etat_passerelle=getattr(moniteur, "etat", None),
     )
+    est["regroupement"] = {**reg, "unite": "agents par requête"}
+    prudente = L.requetes(deplacements, reg["prudent"])
+    est["requetes"] = {
+        "prudente": prudente,
+        "attendue": L.requetes(deplacements, reg["attendu"]),
+        "plancher": L.requetes(deplacements, reg["plafond"]),
+        "unite": "requête fournisseur",
+        "decision": "prudente",
+        "source": (
+            f"{deplacements} déplacements ÷ regroupement ({reg['source']}). Le plancher "
+            f"suppose le plafond atteint à chaque requête : il s'affiche, il ne décide pas."
+        ),
+    }
+
     if j:
         est["jetons"] = {
-            "entree": j["entree"] * sollicitations,
-            "sortie": j["sortie"] * sollicitations,
+            "entree": j["entree"] * deplacements,
+            "sortie": j["sortie"] * deplacements,
             "par_sollicitation": {"entree": j["entree"], "sortie": j["sortie"]},
+            # Ce que le fournisseur voit passer dans UN appel, au regroupement attendu : c'est
+            # ce chiffre-là que ses plafonds par requête arbitrent.
+            "par_requete": {
+                "entree": int(j["entree"] * reg["attendu"]),
+                "sortie": int(j["sortie"] * reg["attendu"]),
+                "agents": reg["attendu"],
+            },
             "source": j["source"],
         }
     else:
@@ -949,14 +1110,18 @@ def estimer(
         )
         marge_totale = sum(marges) if marges else None
         est["quota"] = {
-            "part": (sollicitations / marge_totale) if marge_totale else None,
+            "part": (prudente / marge_totale) if marge_totale else None,
             "marge_requetes_jour": marge_totale,
             "instances": list(moniteur.instances),
-            "source": "providers.yaml (rpd_limit) + /health (daily_requests)",
+            "source": (
+                "providers.yaml (rpd_limit) + /health (daily_requests), rapportés aux "
+                "REQUÊTES prudentes — un quota se compte en requêtes, pas en déplacements"
+            ),
         }
         est["duree_s"] = {
-            "valeur": (sollicitations / rpm * 60) if rpm else None,
-            "source": "rpm_limit cumulé des instances (providers.yaml)",
+            "valeur": (prudente / rpm * 60) if rpm else None,
+            "attendue": (est["requetes"]["attendue"] / rpm * 60) if rpm else None,
+            "source": "rpm_limit cumulé des instances (providers.yaml) ÷ requêtes",
         }
     return est
 
@@ -982,10 +1147,12 @@ __all__ = [
     "dossier_experiences",
     "dossier_jeux",
     "dupliquer",
+    "echanges_archives",
     "empreinte_gabarit",
     "empreintes",
     "estimer",
     "experience_vers_dict",
+    "instances_visees",
     "jetons_mesures",
     "periodes_couvertes",
     "ratios_du_plan",

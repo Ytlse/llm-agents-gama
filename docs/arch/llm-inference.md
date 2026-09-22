@@ -406,6 +406,62 @@ Deux limites distinctes gouvernent le batching :
 avec `tokens_per_agent = assumed_prompt_tokens + assumed_output_tokens` (3 000 — calé
 sur les ~1 600 tokens/agent mesurés + 25 % de marge).
 
+#### Du déplacement à la requête : ce que l'estimation doit diviser
+
+Deux unités circulent dans le projet et elles ne se valent pas :
+
+| unité | ce que c'est | ce qui la compte |
+|---|---|---|
+| **déplacement** (« sollicitation ») | une décision modale à prendre pour un agent | couverture du jeu, `compteurs.json: sollicitations` |
+| **requête** | un appel au fournisseur, portant *plusieurs* agents | quota `rpd_limit`, `compteurs.json: requetes.delta` |
+
+La clé de lot (`compute_batch_key`) est bâtie sur la catégorie, les paramètres, l'instance
+forcée et les instances admises — toutes **constantes à l'intérieur d'un bras**. Toutes les
+décisions d'une expérience partagent donc le même lot, et la passerelle en groupe huit par
+requête : un bras complet tient en quelque 310 requêtes, soit à peu près 0,3 jour de quota
+(ticket 073 § 4). Jusqu'au 2026-09-22, `experiences estimer` posait une requête par déplacement
+et en annonçait 2 500 — huit fois trop, de quoi renoncer à un bras largement finançable.
+
+Le diviseur vient de `services/llm-agents/experiences/lots.py`, qui ne l'invente jamais :
+
+- **plafond dérivé** — `min(batch_max_agents des instances visées, parallélisme)`.
+  `batch_max_agents` est lu sur `/health`, qui le publie depuis le 2026-09-22 ; à défaut,
+  recalculé par `compute_batch_max_agents`, la fonction que le gateway utilise lui-même. Le
+  parallélisme ne borne qu'en mode **sans simulateur** : `regroupement.parallelisme` personnes
+  avancent de front et les déplacements d'une personne sont sériels, il ne peut donc pas y
+  avoir plus de tâches en attente de fusion. En mode simulateur c'est GAMA qui alimente la
+  file, et des lots de 15 agents s'y observent pour un parallélisme déclaré de 8.
+- **facteur observé** — mesuré sur les exécutions archivées du même gabarit, même parallélisme
+  et même troncature (les trois réglages qui déplacent le coût en jetons d'un agent, donc la
+  taille des lots).
+
+`estimer` publie **trois** nombres de requêtes, et un seul décide :
+
+| champ | facteur | rôle |
+|---|---|---|
+| `requetes.plancher` | plafond dérivé | s'affiche, ne décide jamais |
+| `requetes.attendue` | médiane des exécutions comparables, à défaut le plafond | ce que le bras coûtera vraisemblablement |
+| `requetes.prudente` | minimum des exécutions comparables, **à défaut 1** | alimente l'avertissement de quota, `quota.part` et `duree_s` |
+
+Sans mesure, le facteur prudent vaut 1 : le verdict retombe exactement sur celui d'avant la
+correction. Une estimation trop optimiste ferait lancer un bras qui n'irait pas au bout, le
+plafond dérivé ne peut donc pas tenir ce rôle.
+
+**Le compteur `quota[].requetes_jour` n'est pas le coût d'une exécution.** Il agrège la journée
+d'une clé, réessais compris. Lu tel quel sur une exécution qui avait épuisé son quota (clé à
+506 requêtes pour une limite de 500), il annonce 2,4 agents/requête là où le regroupement réel
+est de l'ordre de 8. Une mesure bâtie dessus n'est donc retenue que si l'exécution est
+terminée, sans reprise, sans quota au plafond et sans franchir le minuit qui remet les
+compteurs à zéro ; le rapport doit en outre tomber dans `[1, plafond]`. Depuis le 2026-09-22 le
+runner écrit la mesure propre — `compteurs.json: requetes` porte les compteurs de la passerelle
+à l'ouverture et à la clôture, leur différence et un drapeau `fiable` — et c'est elle que
+l'estimation préfère.
+
+**Les jetons d'une ligne de `llm_exchanges.jsonl` sont ceux du LOT**, pas d'un agent : le
+worker journalise une fois par requête, après la fusion. `jetons_mesures` divise donc par la
+taille du lot, lue sur `task_id` (`batch_<hash>_<n>`). Une ligne dont la taille est illisible
+est ignorée plutôt que comptée pour un agent.
+
 #### Budget de sortie (max_tokens) proportionnel au batch
 
 Le `max_tokens` envoyé par le client (défaut **8192** depuis le 2026-08-26, 4096 avant)
@@ -640,6 +696,49 @@ sans lui, la mesure porterait sur un prompt que la production n'envoie plus.
 Témoin complémentaire déjà en place : `llm_mode_label_mismatch_total` / `llm_mode_label_checked_total`
 (mode annoncé ≠ mode de l'option, cf. `docs/arch/monitoring.md`) — même symptôme vu depuis
 les index restés *dans* les bornes.
+
+#### Un champ qu'un gabarit lit doit être déclaré sur `AgentSpec`
+
+`AgentSpec` (`packages/mobility_llm/src/mobility_llm/persona.py`) est le modèle d'item qui
+porte un agent jusqu'au gabarit. Il est déclaré `extra="ignore"` : **tout champ que le payload
+envoie sans qu'il soit déclaré est jeté en silence**. Le prompt part alors complet, bien formé,
+et amputé — aucune erreur, aucun avertissement, aucune trace.
+
+Le motif a coûté deux mesures. `mode_interroge` (ticket 095, lot B) faisait poser six questions
+dans le vide. `evenement` (ticket 100, lot 3) demandait à l'agent de juger une page blanche :
+quinze jugements sur quinze ont répondu « négligeable », et le défaut s'est d'abord lu comme
+« le modèle n'utilise pas l'échelle ».
+
+`test_tout_champ_lu_par_un_gabarit_est_declare_sur_AgentSpec` confronte désormais ce que les
+gabarits lisent sous `agent.` à ce que le modèle déclare. Il ne peut pas prouver qu'un champ
+déclaré est rempli — il rend impossible la troisième occurrence de ce motif-là.
+
+#### Ce que la passerelle fait d'une réponse mal enveloppée
+
+`BaseAdapter._parse_output` accepte le JSON du modèle, avec ou sans balises Markdown, et en
+extrait la liste `agents`. Trois règles, posées après la panne du 2026-09-22 :
+
+- **Un agent désenveloppé est réenveloppé.** Un modèle qui rend `{"agent_id": …, "severity": …}`
+  sans la clé `agents` est compris, et un avertissement le dit.
+- **Une liste de chaînes n'est pas une liste d'agents.** L'ancien repli prenait « la première
+  liste venue » du dictionnaire ; sur `evenement_jugement`, c'était la liste des modes de
+  transport. Le repli n'accepte plus qu'une liste non vide de dictionnaires.
+- **Zéro agent est un échec.** Un lot est soumis POUR des agents ; n'en rendre aucun levait
+  auparavant `status=success` avec un résultat vide, et l'appelant voyait une tâche réussie sans
+  réponse. C'est désormais une `ProviderParseError`, retentable, journalisée avec la réponse
+  brute.
+
+#### Le budget de sortie paie aussi le raisonnement
+
+`max_tokens` est un budget **par tâche**, et sur les modèles de raisonnement la réflexion se
+paie dessus. Mesuré sur Groq le 2026-09-22 : `gpt-oss-120b` dépense 240 à 330 jetons de
+réflexion **avant le premier caractère de JSON**. Sous ce seuil, le fournisseur rend
+`max completion tokens reached before generating a valid document`, ou — quand la réflexion
+tient de justesse — un JSON valide mais dégradé, où le modèle prend la première valeur de
+chaque énumération. Une catégorie qui fixe son propre `max_tokens` doit donc prévoir la
+réflexion : `evenement_jugement` est passée de 256 à 1 024. `google_adapter` porte déjà cette
+réserve (`RESERVE_REFLEXION`) ; l'adapter compatible OpenAI ne l'a pas, et c'est à l'appelant
+de la prévoir.
 
 #### Contexte (météo/trafic) réinjecté par persona
 

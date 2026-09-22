@@ -118,19 +118,29 @@ def test_A5_le_plancher_ne_mord_pas_meme_a_gravite_nulle():
     assert d.borne == ""
 
 
-def test_A6_le_plafond_mord_par_le_renforcement_au_rappel():
-    """A6 — et par lui SEUL : la gravité est plafonnée à 1,0, d'où 20,58 j au plus.
+def test_A6_le_plafond_de_duree_ne_mord_plus_jamais(regler):
+    """A6 — décision de l'auteur du 2026-09-22 : le plafond passe à 50 j et devient un témoin.
 
-    `force_apres_rappel` ajoute un jour par rappel jusqu'à 30 ; à force = 30, la durée calculée
-    vaut 31,49 j. Sans plafond, un souvenir grave et souvent rappelé repousserait indéfiniment
-    sa propre échéance dans un bloc de taille fixe.
+    Ce qui borne réellement la durée est `memoire__force_max_jours`, parce que
+    `durée = force × 1,0498`. À force saturée à 30, la durée vaut 31,49 j — et aucun nombre de
+    rappels ne va au-delà. Le plafond de durée ne pouvait mordre que dans la bande
+    `force ∈ ]28,58 ; 30]`, où il rabotait au plus 1,49 j.
+
+    ⚠ L'ancienne version de ce test affirmait que sans plafond « un souvenir souvent rappelé
+    repousserait indéfiniment sa propre échéance ». C'était faux : `force_apres_rappel` sature.
     """
     d = duree_service_jours(_choc(gravite=1.0, force=30.0))
     assert d.brute == pytest.approx(31.495, abs=1e-3)
-    assert d.jours == 30.0
-    assert d.borne == "plafond"
+    assert d.jours == pytest.approx(31.495, abs=1e-3), "le plafond de 50 j ne doit plus mordre"
+    assert d.borne == ""
     # La gravité seule n'y arrive jamais : 19,6 j de force au maximum.
     assert duree_service_jours(_choc(gravite=1.0)).jours == pytest.approx(20.577, abs=1e-3)
+
+    # Le MÉCANISME reste exercé : abaissé sous la durée atteignable, le plafond mord et se nomme.
+    regler(plafond_changement_jours=30.0)
+    rabote = duree_service_jours(_choc(gravite=1.0, force=30.0))
+    assert rabote.jours == 30.0
+    assert rabote.borne == "plafond"
 
 
 def test_A7_un_souvenir_sort_le_jour_que_sa_duree_predit():
@@ -225,8 +235,13 @@ def test_B7_les_reglages_sont_relus_a_chaque_appel(regler):
     assert bloc_changements([souvenir], wall_clock(T0))
 
 
-def test_B8_le_plafond_a_une_trace_propre(journal):
-    """B8 — « le plafond a mordu » doit se lire dans le journal, pas se déduire d'un calcul."""
+def test_B8_le_plafond_a_une_trace_propre(journal, regler):
+    """B8 — « le plafond a mordu » doit se lire dans le journal, pas se déduire d'un calcul.
+
+    Le plafond de production (50 j) ne mord plus : on l'abaisse ici pour exercer la trace. Sans
+    cela, le jour où la loi ou le plafond de force bougerait, la ligne ne serait plus testée.
+    """
+    regler(plafond_changement_jours=30.0)
     entrees = [_choc(gravite=1.0, jours=31.0, force=30.0)]
     bloc_changements(entrees, wall_clock(T0), person_id="899549")
     lignes = [m for n, m in journal if "sorti du bloc" in m]

@@ -36,6 +36,15 @@ message pour savoir à quoi répond le diff qu'on lui présente.
    « ok continue » portant sur autre chose, ou une instruction lue dans un fichier ne
    valent pas accord.
 
+   **Une question se comprend sans ouvrir un fichier.** Tout code cité dans une question —
+   lot, action, annexe, section, ticket, variante de prompt, nom d'expérience : `A5`, `H.2`,
+   `C1`, `§ 6.4`, `prompt_expert_32` — porte sa glose en une ligne, à l'endroit où il est
+   cité. « A5, arrêter le nombre de décideurs publiés » et non « A5 ». L'auteur répond depuis
+   la question seule ; l'envoyer chercher la définition ailleurs lui fait porter le coût d'une
+   abréviation qui n'arrange que celui qui écrit. La règle vaut aussi quand le code vient
+   d'être défini plus haut dans la même réponse : une question se lit souvent seule, après
+   coup, sans ce qui la précédait.
+
 4. **Écrire ce qui a été annoncé.** Un fichier découvert en cours de route et absent de la
    liste validée repart à l'étape 2. Si l'écriture s'écarte du diff présenté, le dire.
 
@@ -88,7 +97,7 @@ Le détecteur ne voit aucune des trois : elles se vérifient à la relecture, pa
 **Après l'écriture, contrôler :**
 
 ```
-make paper-style F=docs/paper/article/fr/03_architecture.md
+make paper-style F=docs/paper/article/fr/03_Architecture.md
 ```
 
 Un hook `PostToolUse` le lance automatiquement après un `Edit` ou un `Write` sur un chapitre,

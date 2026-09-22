@@ -82,6 +82,14 @@
                 "target_id": {
                   "type": "string",
                   "description": "The id of the existing belief this operation applies to (e.g. 'K3'), or an empty string for 'create'"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "lived",
+                    "heard"
+                  ],
+                  "description": "Whether this belief comes from your own day, or from something you were told at home"
                 }
               },
               "required": [
@@ -94,7 +102,8 @@
                 "severity",
                 "valence",
                 "operation",
-                "target_id"
+                "target_id",
+                "source"
               ],
               "additionalProperties": false
             }

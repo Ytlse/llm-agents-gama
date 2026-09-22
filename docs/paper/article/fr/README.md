@@ -33,16 +33,16 @@ réellement dans le fichier sont relevés fiche par fiche, plus bas.
 
 | # | Fichier | Statut | Overleaf | Version | Ce qui reste |
 |---|---|---|---|---|---|
-| 0 | [`00_abstract.md`](00_abstract.md) | 🔵 relu | 🟢 alignée | `v0.5` | 8 emplacements chiffrés ; les deux modes biaisés ne sont plus nommés |
-| 1 | [`01_introduction.md`](01_introduction.md) | 🔵 relu | 🟢 alignée |  `v0.21` | 1 remarque de relecture encore ouverte (point 4.13) |
-| 2 | [`02_related_work.md`](02_related_work.md) | 🔵 relu | 🟢 alignée |  `v0.17` | rien d'ouvert à ce jour |
-| 3 | [`03_architecture.md`](03_architecture.md) | 🟢 première version | 🟢 alignée | `brouillon v0.5` | quadruplet et tirage posés, espace d'action en clair ; § 3.4 écrit sur l'état visé du ticket 071 |
-| 4 | [`04_metrics_and_substrate.md`](04_metrics_and_substrate.md) | 🟢 première version | ⬜ Vide | `brouillon v0.9` | socle et cohorte chiffrés sur la v6 ; plus aucun emplacement `[xx]` ; lecture des chiffres à relire |
-| 5 | [`05_factual_neutral_prompt.md`](05_factual_neutral_prompt.md) | 🟢 première version | ⬜ Vide | `brouillon v0.8` | chapitre de **protocole** ; quatre sections rédigées, fusion du 4.5 faite, planchers chiffrés ; réponse du bras palier 1 à reprendre, audit du § 5.4 à jouer |
-| 6 | [`06_results.md`](06_results.md) | 🟠 brouillon |  ⬜ Vide |`trame v0.1` | chapitre de **résultats**, à l'arrêt : idée directrice et titre en décision ([ticket 080](../../../tickets/ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md)) |
-| 7 | [`07_untabulated_regimes.md`](07_untabulated_regimes.md) | 🟢 première version | ⬜ Vide | `brouillon v1.0` | trois sections écrites ; les deux campagnes ne sont pas jouées |
-| 8 | [`08_limits_and_hybrid.md`](08_limits_and_hybrid.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | la limite de l'itinéraire mixte reste à écrire |
-| 9 | [`09_conclusion.md`](09_conclusion.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | aucune des trois sous-sections prévues |
+| 0 | [`00_Abstract.md`](00_Abstract.md) | 🔵 relu | 🟢 alignée | `v0.5` | 8 emplacements chiffrés ; les deux modes biaisés ne sont plus nommés |
+| 1 | [`01_Introduction.md`](01_Introduction.md) | 🔵 relu | 🟢 alignée |  `v0.21` | 1 remarque de relecture encore ouverte (point 4.13) |
+| 2 | [`02_Related_work.md`](02_Related_work.md) | 🔵 relu | 🟢 alignée |  `v0.17` | rien d'ouvert à ce jour |
+| 3 | [`03_Architecture.md`](03_Architecture.md) | 🟢 première version | 🟢 alignée | `brouillon v0.5` | quadruplet et tirage posés, espace d'action en clair ; § 3.4 écrit sur l'état visé du ticket 071 |
+| 4 | [`04_Evaluation.md`](04_Evaluation.md) | 🟢 première version | ⬜ Vide | `brouillon v0.9` | socle et cohorte chiffrés sur la v6 ; plus aucun emplacement `[xx]` ; lecture des chiffres à relire |
+| 5 | [`05_Protocol.md`](05_Protocol.md) | 🟢 première version | ⬜ Vide | `brouillon v0.8` | chapitre de **protocole** ; quatre sections rédigées, fusion du 4.5 faite, planchers chiffrés ; réponse du bras palier 1 à reprendre, audit du § 5.4 à jouer |
+| 6 | [`06_Empirical_Evaluation.md`](06_Empirical_Evaluation.md) | 🟠 brouillon |  ⬜ Vide |`trame v0.1` | chapitre de **résultats** ; titre arrêté le 22 septembre 2026, idée directrice encore en décision ([ticket 080](../../../tickets/ticket_080_idee_directrice_du_chapitre_6_et_impact_sur_le_papier.md)) |
+| 7 | [`07_Adaptation.md`](07_Adaptation.md) | 🟢 première version | ⬜ Vide | `brouillon v1.0` | trois sections écrites ; les deux campagnes ne sont pas jouées |
+| 8 | [`08_Limitations.md`](08_Limitations.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | la limite de l'itinéraire mixte reste à écrire |
+| 9 | [`09_Conclusion.md`](09_Conclusion.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | aucune des trois sous-sections prévues |
 | 99 | [`99_annexes.md`](99_annexes.md) | 🟠 brouillon hérité | ⬜ Vide | `brouillon v0` | annexes A à D réduites à une ou deux phrases |
 
 **Lecture d'ensemble :** trois chapitres relus (0, 1, 2), quatre écrits neufs et jamais relus
@@ -70,7 +70,7 @@ interdisent de les appliquer à nos propres conditions.
 
 ## Fiches par document
 
-### 0 — `00_abstract.md` · Résumé
+### 0 — `00_Abstract.md` · Résumé
 
 **Statut :** 🔵 relu · `v0.5` (13 septembre 2026) · 834 mots de fichier, 241 mots de résumé
 **Sections prévues :** texte d'un seul tenant, quatre paragraphes (cadrage, dispositif, résultats, portée)
@@ -79,10 +79,10 @@ interdisent de les appliquer à nos propres conditions.
 gradient boosté. Point ouvert consigné en en-tête : la v0.2 annonçait une sur-attraction du **vélo**,
 le run du 8 septembre 2026 mesure celle des **transports en commun** ; les deux modes biaisés
 ne sont plus nommés en attendant que les résultats se stabilisent.
-**Relecture :** [`../relecture/00_abstract.md`](../relecture/00_abstract.md) — comparaison v0.1 / v0.2 / v0.3, close.
+**Relecture :** [`../relecture/00_Abstract.md`](../relecture/00_Abstract.md) — comparaison v0.1 / v0.2 / v0.3, close.
 **Mes notes :**
 
-### 1 — `01_introduction.md` · Introduction
+### 1 — `01_Introduction.md` · Introduction
 
 **Statut :** 🔵 relu · `v0.22` (16 septembre 2026) · 4 758 mots
 **Sections prévues :** 1.1 contexte · 1.2 plausibilité individuelle et agrégat · 1.3 contributions et hypothèses · 1.4 organisation
@@ -90,10 +90,10 @@ ne sont plus nommés en attendant que les résultats se stabilisent.
 **Reste à faire :** un point de relecture encore marqué ⏳ — 4.13, « two hypotheses » alors
 qu'une seule est préenregistrée. Le substrat est passé à la cohorte scellée **v6** en `v0.21`.
 **À vérifier :** le tableau d'avancement de [`../README.md`](../README.md) annonce encore `v0.19`.
-**Relecture :** [`../relecture/01_introduction.md`](../relecture/01_introduction.md) — porte aussi le chapitre 2.
+**Relecture :** [`../relecture/01_Introduction.md`](../relecture/01_Introduction.md) — porte aussi le chapitre 2.
 **Mes notes :**
 
-### 2 — `02_related_work.md` · Travaux connexes
+### 2 — `02_Related_work.md` · Travaux connexes
 
 **Statut :** 🔵 relu · `v0.19` (21 septembre 2026) · 2 418 mots
 **Sections prévues :** 2.1 choix discrets et filtres de perception · 2.2 agents génératifs en mobilité · 2.3 alignement distributionnel
@@ -102,7 +102,7 @@ qu'une seule est préenregistrée. Le substrat est passé à la cohorte scellée
 10 septembre 2026 ; le suivi par référence est dans [`../CITATIONS.md`](../CITATIONS.md).
 **Mes notes :**
 
-### 3 — `03_architecture.md` · Le dispositif : décider dans une ville contrainte
+### 3 — `03_Architecture.md` · Le dispositif : décider dans une ville contrainte
 
 **Statut :** 🟢 première version écrite · `brouillon v0.5` (15 septembre 2026)
 **Sections prévues :** 3.1 vue d'ensemble · 3.2 le terrain · 3.3 le point de décision · 3.4 la mémoire · 3.5 modélisation par chaînes de déplacements
@@ -115,7 +115,7 @@ si le chapitrage du ticket 080 est retenu.
 **Tickets :** 050 formalisation mathématique (*appliqué en v0.5 ; espace d'action laissé en clair, décision du 15/09*) · 051 refonte de l'architecture mémoire (*en cours*) · 070 accidents et retard subi (*anticipé*) · 071 évolution de la mémoire (*anticipé*) · 046 asymétrie du contrat (*dépendance notée*)
 **Mes notes :**
 
-### 4 — `04_metrics_and_substrate.md` · Métriques et socle d'évaluation
+### 4 — `04_Evaluation.md` · Métriques et socle d'évaluation
 
 **Statut :** 🟢 première version écrite · `brouillon v0.9` (15 septembre 2026)
 **Sections prévues :** 4.1 deux échelles · 4.2 les trois règles du contrat · 4.3 socle de référence · 4.4 cohorte scellée
@@ -142,7 +142,7 @@ distincts (ticket 080 § 3.4).
 **Tickets :** 080 restructuration · 004 industrialisation · 054 sobriété computationnelle
 **Mes notes :**
 
-### 5 — `05_factual_neutral_prompt.md` · Quatre façons de choisir, une seule information
+### 5 — `05_Protocol.md` · Quatre façons de choisir, une seule information
 
 **Statut :** 🟢 première version écrite · `brouillon v0.8` (16 septembre 2026) · passe `make paper-style` et les règles d'écriture du README
 **Rôle :** le chapitre de **protocole** — il définit ce que l'on compare ; le 6 dit ce que la
@@ -188,7 +188,7 @@ mesures vivent au ticket 023 ; si le point entre dans l'article, ce sera au chap
 variabilité · 054 coût de la calibration · 083 signature IA
 **Mes notes :**
 
-### 6 — `06_results.md` · *titre à arrêter* — ce que la comparaison établit
+### 6 — `06_Empirical_Evaluation.md` · Évaluation empirique
 
 **Statut :** 🟢 rédigé · `brouillon v0.4` (17 septembre 2026) · passe `make paper-style`
 **Rôle :** le chapitre de **résultats**.
@@ -198,8 +198,8 @@ que la consigne, un seul des trois couples vient à portée du plafond tabulaire
 proximité des marges recouvre un désaccord décision par décision. Quatre figures en anglais,
 régénérées par `scripts/analysis/plot_chapitre6.py` ; le détail des résultats vit à l'annexe H.
 **Sections :** 6.1 treize décideurs sur la même échelle · 6.2 ce que l'ingénierie de prompt
-déplace · 6.3 le détail des résultats agrégés, sur Gemini 3.5 · 6.4 décider pareil, décider
-autrement · 6.5 variation de cohorte et dispersion entre graines. Le détail des résultats vit à
+déplace · 6.3 le détail des résultats agrégés, sur Gemini 3.5 · 6.4 décision individuelle ·
+6.5 variation de cohorte et dispersion entre graines. Le détail des résultats vit à
 l'annexe H du chapitre 99.
 **Ce qui reste ouvert :** la dispersion inter-graines, écrite comme acquise et marquée **TBC**
 (ticket 073, axe 1) · la lecture de référence non arrêtée (chapitre 4 § 4.3, ticket 046).
@@ -211,21 +211,21 @@ mesurés sur le jeu corrigé du ticket 088 depuis le 2026-09-17.
 **Tickets :** 080 *(bloquant)* · 073 · 056 · 057 · 058
 **Mes notes :**
 
-### 7 — `07_untabulated_regimes.md` · Réagir à ce qu'aucune variable n'encode
+### 7 — `07_Adaptation.md` · Adaptation des agents aux chocs externes
 
-**Statut :** 🟢 première version écrite · `brouillon v1.0` (17 septembre 2026) · 1 659 mots de prose
-**Sections :** 7.1 cinq événements de presse locale, cinq conditions · 7.2 cinq jours, un retard
-subi le deuxième · 7.3 ce que ce chapitre transmet
-**Ordre des deux régimes :** la presse avant l'hystérésis. Après le chapitre 6, la presse
-n'ajoute qu'un texte au contexte, mémoire éteinte, quand l'hystérésis ajoute la mémoire. Le § 1.4
-et le plan annoncent encore l'ordre inverse et restent à permuter (ticket 094).
-**Reste à faire :** aucun résultat n'est publié, les deux campagnes ne sont pas jouées et chaque
-grandeur attendue porte l'emplacement du run qui la produira ; huit points à traiter avant la
-première campagne, listés en fin de chapitre.
-**Tickets :** 041 hystérésis longitudinale · 059 presse locale et prédictions préenregistrées (*à faire*) · 063 campagne hystérésis · 064 campagne presse locale
+**Statut :** 🟢 refondu · `brouillon v2.1` (22 septembre 2026) · 1 783 mots de prose
+**Sections :** 7.1 le mécanisme commun aux deux régimes · 7.2 le choc vécu par un agent seul ·
+7.3 l'article lu, puis raconté en famille
+**Ordre des deux régimes :** le choc avant la presse, comme le § 1.4 et le plan l'annoncent. Le
+désalignement noté le 17 septembre est levé.
+**Reste à faire :** le § 7.2 porte des résultats mesurés ; le § 7.3 n'en a aucun, sa campagne
+n'étant pas jouée, et chaque grandeur attendue porte l'emplacement du run qui la produira. Le
+§ 7.1 décrit le mécanisme du ticket 100, qui n'a pas encore de code : aucune de ses phrases ne
+doit passer au passé avant une campagne. Points ouverts listés en fin de chapitre.
+**Tickets :** 059 presse locale et prédictions préenregistrées · 064 campagne presse locale · 079 chocs déclarés · 095 durée d'un souvenir et enquête du soir · 100 un seul canal d'événement pour le vécu et le lu
 **Mes notes :**
 
-### 8 — `08_limits_and_hybrid.md` · Limites et implications hybrides
+### 8 — `08_Limitations.md` · Limites et implications hybrides
 
 **Statut :** 🟠 brouillon hérité · `brouillon v0` · 795 mots
 **Sections prévues :** 8.1 limites · 8.2 la cascade hybride en perspective · 8.3 cadre comparatif · 8.4 échelle du foyer et chaînes de véhicules
@@ -239,7 +239,7 @@ paragraphes qui doivent porter l'amplitude *et* le sens du biais.
 **Tickets :** 049 itinéraire mixte (*terminé — à vérifier*) · 060 formalisation de l'architecture hybride (*à faire*)
 **Mes notes :**
 
-### 9 — `09_conclusion.md` · Conclusion
+### 9 — `09_Conclusion.md` · Conclusion
 
 **Statut :** 🟠 brouillon hérité · `brouillon v0` · 453 mots — le plus court du dossier
 **Sections prévues :** 9.1 ce que l'évaluation établit en régime nominal · 9.2 domaine de pertinence des agents génératifs · 9.3 ce que l'hybridation résout et laisse ouvert

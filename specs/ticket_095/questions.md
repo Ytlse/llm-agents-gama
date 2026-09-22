@@ -116,3 +116,131 @@ Tranché par l'auteur le 2026-09-21 : `memoire__mode_fenetre_changements = "deri
 Conséquence à assumer : **les runs déjà archivés ne sont pas comparables à un run neuf** sans
 déclarer `fixe`. Les bras de contrôle méthodologique (E2, « fixe 14 ») doivent le déclarer
 explicitement.
+
+---
+
+## Q6 — Ce que le chapitre 7 revendique de cette campagne · TRANCHÉ PAR L'AUTEUR le 2026-09-21
+
+Le § 7.2 de l'article s'appelle désormais **« Un choc individuel, et ce que l'agent en garde »** :
+la campagne de ce ticket y est présentée comme une **étude de mécanisme sur un agent**, jamais
+comme une mesure de population. Ce qui en est revendiqué est arrêté, et c'est le cadre dans
+lequel les chiffres du lot A et du lot B seront lus :
+
+- **revendiqué** — le **signe** du déplacement, et sa **forme** : un décrochage le jour du choc,
+  puis un retour progressif vers le niveau d'avant ;
+- **non revendiqué** — l'**ampleur** du décrochage, la **date exacte** du retour, et tout
+  réalisme de l'un ou de l'autre.
+
+Conséquence directe pour la rédaction des résultats : la phrase « elle revient dans la bande de
+l'agent non exposé le 15 avril » se garde comme **observation datée**, et non comme prédiction
+vérifiée. La durée de service calculée (15,29 jours pour une gravité de 0,70) reste ce qui fait
+que le récit quitte le contexte ; elle ne prédit pas la date du retour comportemental, et le
+chapitre écrit qu'un jour sépare les deux.
+
+**Ce que cela retire du ticket :** rien à coder. **Ce que cela ajoute :** toute phrase de résultat
+qui chiffrerait une amplitude comme si elle était réaliste est hors cadre, et le lot B doit rendre
+la forme lisible — d'où le point suivant.
+
+---
+
+## Q7 — L'enquête du soir passe au quotidien pour la campagne suivante · TRANCHÉ le 2026-09-21
+
+La campagne du 2026-09-21 a interrogé l'agent à **quatre jalons**. Les trois critères de la
+voiture reviennent à l'entier près entre la deuxième et la troisième interrogation, et cet
+intervalle est **précisément** celui où le récit du choc quitte le bloc de contexte : la dynamique
+du retour n'est donc pas observée là où elle se joue.
+
+La forme que le chapitre 7 revendique (décrochage puis retour progressif) ne se lit pas sur quatre
+points. **L'enquête passe au quotidien** pour la campagne suivante.
+
+**Coût à assumer :** une enquête par agent et par jour s'ajoute aux 6,2 requêtes par agent-jour
+relevées sur cette campagne. Sur un run de 40 jours et 20 agents, c'est 800 requêtes de plus, à
+mettre en regard des ~5 000 du run. **À journaliser :** le nombre d'enquêtes servies par jour, de
+sorte qu'un run à cadence mixte se repère au dépouillement.
+
+---
+
+## Q7 — E3 et E4 : les trois sorties, reposées le 2026-09-22 · E3 TRANCHÉE, E4 OUVERTE
+
+> 📄 **Exposé complet, lisible seul, sans codes : [`expose_duree_d_un_souvenir.md`](expose_duree_d_un_souvenir.md).**
+
+**TRANCHÉ PAR L'AUTEUR LE 2026-09-22 — sortie 2 retenue pour E3.** La gravité est celle de
+l'agent, et E3 se rejoue sur la gravité JUGÉE. Deux conditions posées avec la décision :
+
+1. **Un garde-fou en amont.** « Il faudrait s'assurer que quand l'agent décide, on soit au niveau
+   de ce qu'on avait imaginé lors de l'analyse de l'article. Si l'agent a un jugement
+   inapproprié, ça ne va pas passer. » Donc : une grille d'attendus déclarée AVANT de voir les
+   réponses, et un test fonctionnel qui refuse de lancer la campagne si le jugement sort de la
+   plage. Forme proposée au § 6 de l'exposé — **à valider avant tout code**.
+2. **La variation par profil est attendue, pas corrigée.** « Peut-être que selon le profil de la
+   personne, la réponse ne sera pas systématiquement la même. » Le garde-fou la MESURE donc au
+   lieu de la traiter comme du bruit.
+
+⚠ **Défaut trouvé en rédigeant l'exposé, antérieur à D7 et indépendant d'elle :** les trois
+incidents de E3 tels qu'ils sont déclarés donnent des gravités mesurées de 0,768 / 0,700 / 1,000,
+soit des durées servies de 16,5 / 15,3 / 20,6 jours. La crevaison, censée être le cas faible,
+arrive à un jour de la panne moteur — la part du retard est fortement concave (30 min → 0,50,
+45 min → 0,64, 60 min → 0,68). **Le protocole d'origine ne produisait déjà pas 8 / 15 / 19.**
+
+**E4 reste ouverte** et sa question est reformulée au § 7 de l'exposé : elle ne porte pas sur la
+gravité (impossible d'atteindre le plafond par là — 20,6 j au maximum absolu contre 30) mais sur
+l'ENTRETIEN par le rappel.
+
+---
+
+### Les trois sorties, telles qu'elles étaient posées
+
+D7 a levé la prémisse d'origine : la gravité d'une entrée d'événement n'est plus celle qu'on
+déclare, c'est celle que l'agent estime. Le banc du ticket 100 a mesuré ce que le jugement fait
+réellement (38 appels sur Groq, zéro réponse vide) — les trois sorties sont donc à relire avec
+un chiffre en main plutôt qu'avec une crainte.
+
+### Sortie 1 — jouer E3 et E4 sous `jugement: aucun`
+
+Le protocole d'origine tient mot pour mot : C2, C6 et C3 gardent leurs gravités déterministes, et
+l'attendu 8 / 15 / 19 jours reste posé tel quel.
+
+**Ce qu'il faut accepter :** la campagne mesure alors un dispositif qui n'est **pas** celui des
+campagnes de l'article, où l'article de presse — qui ne fait rien subir — vaudrait zéro.
+
+**Question :** l'article a-t-il besoin que E3 porte sur le dispositif des campagnes, ou lui
+suffit-il que la loi durée ↔ gravité soit exercée quelque part, fût-ce sur un chemin de service ?
+
+### Sortie 2 — réécrire l'attendu sur la gravité JUGÉE
+
+Ce n'est plus « la durée suit la gravité déclarée » mais « la durée suit la gravité jugée », et
+la prédiction se pose sur l'intensité rendue, lue dans `evenements.jsonl`.
+
+**Ce que la mesure du 22/09 apporte :** trois échelons distincts sur cinq articles, un jugement
+reproductible à quatre répétitions (amplitude 0 jour), et un agent qui **surestime** la panne
+moteur (0,75 jugé contre 0,53 mesuré) au lieu de la minorer. Les durées SERVIES 4,70 / 8,23 /
+11,76 / 16,17 jours couvrent l'étalement attendu (4,48 / 7,84 / 11,20 / 15,40 sont les FORCES,
+qu'il faut multiplier par `ln(1/0,35)` pour obtenir une durée).
+
+**Ce qui manque encore :** la reproductibilité mesurée l'est à **texte identique, même persona,
+même journée**. Une date d'extinction dépend de la stabilité du jugement **entre agents** et
+**au fil d'un run** — jamais mesurée. Trois personas suffisent à le savoir pour ~9 appels.
+
+**Question :** accepte-t-on de poser la prédiction sur une quantité que le run produit lui-même
+(l'intensité jugée) plutôt que sur une quantité déclarée avant le run ? C'est une expérience
+plus honnête vis-à-vis du dispositif, et plus faible comme falsification : elle ne peut plus être
+contredite par « les trois chocs vivent le même temps », seulement par « la durée ne suit pas
+l'intensité que l'agent a lui-même rendue ».
+
+### Sortie 3 — les retirer
+
+**Ce qu'on perd :** le § du chapitre 7 sur la durée d'un souvenir n'a plus de campagne, et le
+plafond de 30 jours reste du code non exercé hors test unitaire (cf. Q1).
+
+**Question :** le chapitre en a-t-il encore besoin, maintenant que l'ambition affichée est « la
+mémoire est un élément, pas une preuve causale isolée » ?
+
+### Et E4, qui a son propre problème
+
+Q1 l'a déjà établi et rien ne l'a changé : **aucun bras E4 n'est lançable tel que le ticket
+l'écrit**, parce que `borne_0_1` plafonne la gravité à 1,0 et que la durée maximale qui en
+découle (20,6 j) passe **sous** le plafond de 30. E4 ne mord que par le renforcement au rappel.
+
+**Question :** E4 devient-elle « un souvenir suffisamment rappelé atteint le plafond » — ce qui
+est exactement le premier argument du ticket en faveur du plafond — ou un bras à
+`MEMOIRE__FORCE_K_IMPORTANCE` relevé, qui mesure le réglage et non le souvenir ?

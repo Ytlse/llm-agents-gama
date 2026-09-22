@@ -24,6 +24,8 @@ class UserShortTermMemory:
         activity_id: Optional[str] = None,
         importance: float = 0.0,
         axes: Optional[dict] = None,
+        valence: str = "neutre",
+        origine: Optional[str] = None,
     ):
         """Add a chat message to short-term memory.
 
@@ -47,6 +49,11 @@ class UserShortTermMemory:
             person_id=self.person_id,
             activity_id=activity_id,
             importance=float(importance or 0.0),
+            # Ticket 100 — la valence et la provenance voyagent avec l'entrée. Elles
+            # n'étaient portées par aucun paramètre : la `MemoryEntry` les déclarait, et
+            # personne ne les renseignait sur ce chemin.
+            valence=str(valence or "neutre"),
+            origine=origine,
             # Les axes sont normalisés À L'ÉCRITURE (ticket 071, lot 2) : c'est ici qu'on sait
             # quel mode a été retenu, sous quelle météo et pour quel motif. Les recalculer au
             # rappel referait le même travail à chaque décision, sur le chemin critique — et

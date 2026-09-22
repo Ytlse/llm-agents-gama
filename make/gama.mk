@@ -82,17 +82,25 @@ ifneq ($(CACHE),)
 	@perl -0pi -e 's/^(cache:\n(?:.*\n)*?\s*enabled:).*/$$1 $(if $(filter 0,$(CACHE)),false,true)/m' $(APP_CONFIG)
 	@echo "💾 Cache sémantique LLM : $(if $(filter 0,$(CACHE)),DÉSACTIVÉ — chaque décision sera journalisée (~4x plus d'appels),activé) — écrit dans $(APP_CONFIG)"
 endif
-ifneq ($(CHOC),)
-	@# Ticket 079 : le choc vit dans son propre fichier, comme la loi BAAC des accidents.
-	@# `CHOC=0` retire la déclaration ; tout autre nom la pose après avoir vérifié qu'elle existe.
-ifeq ($(CHOC),0)
-	@perl -0pi -e 's/^chocs:\n(?:[ \t]+.*\n)*//m' $(APP_CONFIG)
-	@echo "⚡ Choc : AUCUN — retiré de $(APP_CONFIG)"
+# ── Ticket 100 — un seul levier pour les deux régimes ────────────────────────────────
+# `EVENEMENT=` est le nom neuf ; `CHOC=` et `PRESSE=` sont des alias, et disent lequel a servi.
+# Le fichier vit dans config/evenements/, comme la loi BAAC vit hors de la configuration.
+ifneq ($(EVT),)
+ifeq ($(EVT),0)
+	@perl -0pi -e 's/^chocs:\n(?:[ \t]+.*\n)*//m; s/^evenements:\n(?:[ \t]+.*\n)*//m' $(APP_CONFIG)
+	@echo "⚡ Événement : AUCUN — retiré de $(APP_CONFIG) (levier $(EVT_LEVIER))"
 else
-	@test -f $(CHOCS_DIR)/$(CHOC).yaml || { echo "❌ Choc introuvable : $(CHOCS_DIR)/$(CHOC).yaml (les cas livrés : $$(ls $(CHOCS_DIR)/*.yaml | xargs -n1 basename | sed 's/.yaml//' | tr '\n' ' '))"; exit 1; }
-	@perl -0pi -e 's/^chocs:\n(?:[ \t]+.*\n)*//m' $(APP_CONFIG)
-	@printf 'chocs:\n  enabled: true\n  fichier: /app/config/chocs/%s.yaml\n' "$(CHOC)" >> $(APP_CONFIG)
-	@echo "⚡ Choc : $(CHOC) — écrit dans $(APP_CONFIG)$(if $(filter 0,$(CACHE)),, ⚠ pensez à CACHE=0)"
+	@# Cherché dans config/evenements/ puis, pour les déclarations non encore migrées, dans
+	@# config/chocs/ — qui se charge toujours, avec un avertissement nommant le fichier.
+	@test -f $(EVENEMENTS_DIR)/$(EVT).yaml || test -f $(CHOCS_DIR)/$(EVT).yaml || { echo "❌ Événement introuvable : $(EVENEMENTS_DIR)/$(EVT).yaml (les cas livrés : $$(ls $(EVENEMENTS_DIR)/*.yaml | xargs -n1 basename | sed 's/.yaml//' | tr '\n' ' '))"; exit 1; }
+	@perl -0pi -e 's/^chocs:\n(?:[ \t]+.*\n)*//m; s/^evenements:\n(?:[ \t]+.*\n)*//m' $(APP_CONFIG)
+	@if [ -f $(EVENEMENTS_DIR)/$(EVT).yaml ]; then \
+		printf 'evenements:\n  enabled: true\n  fichier: /app/config/evenements/%s.yaml\n' "$(EVT)" >> $(APP_CONFIG); \
+	else \
+		printf 'evenements:\n  enabled: true\n  fichier: /app/config/chocs/%s.yaml\n' "$(EVT)" >> $(APP_CONFIG); \
+		echo "  ↳ déclaration au format du ticket 079 ; elle se charge, et le journal le dit"; \
+	fi
+	@echo "⚡ Événement : $(EVT) (levier $(EVT_LEVIER)) — écrit dans $(APP_CONFIG). Le cache de décisions se coupe tout seul les jours d'événement."
 endif
 endif
 ifneq ($(JEU),)

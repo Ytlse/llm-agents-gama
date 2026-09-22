@@ -55,7 +55,7 @@ make providers DRY_RUN=1           # depuis la racine : sonde les quotas réels 
 | `weight` | non | `1.0` | balancer : séquence SWRR ; `0` = défini mais **hors rotation**, utilisable seulement en `force_provider` |
 | `concurrency_limit` | non | `2` | rate-limiter : workers Celery simultanés sur ce provider |
 | `disable_timeout` | non | `180` | worker : durée de désactivation après 30 erreurs consécutives |
-| `batch_max_agents` | ne pas écrire | calculé | `Settings.build_providers` — voir [Régler les quotas](regler-les-quotas.md) |
+| `batch_max_agents` | ne pas écrire | calculé | `compute_batch_max_agents` (core/batching), publié dans `/health` — voir [Régler les quotas](regler-les-quotas.md) |
 | `tpm_estimate_per_request` | ne pas écrire | calculé | idem |
 
 Toutes ces valeurs sont **appliquées** par le code. En revanche les quotas eux-mêmes sont

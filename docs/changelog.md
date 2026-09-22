@@ -1,3 +1,1221 @@
+## [2026-09-22] L'article retire son hypothèse H0 et nomme le prompt expert de Jev
+
+L'hypothèse **H0** du § 1.3 est retirée. Elle n'était plus un test depuis le 17 septembre —
+aucune marge d'équivalence n'a jamais été écrite avant la mesure — et son nom appelait une
+machinerie que l'article n'emploie pas. À sa place, le § 1.3 énonce l'échelle que le protocole
+mesure vraiment : bornée en haut par les modèles ajustés sur les données locales, en bas par les
+planchers sans connaissance du comportement, les agents génératifs se lisant entre les deux.
+
+**`prompt_expert_32` est le prompt expert de Jev**, décision de l'auteur. La ligne du § 6.1 le
+dit au lieu de « prompt réglé pour lui », et les étiquettes inversées de la figure 6.2 et des
+annexes sont corrigées : ce qui s'appelait « Jev, prompt expert » dans les annexes est la
+consigne écrite pour `gemini-3.5` puis servie telle quelle, et porte désormais ce nom.
+
+**La dispersion entre graines est mesurée**, ce qui lève le premier des deux TBC du § 6.5.
+
+**Avant :** « Rejoué sur la même cohorte avec d'autres graines, un décideur à modèle de langue
+reste dans la variation de cohorte **TBC** »
+**Après :** trois graines donnent 4,86, 4,65 et 4,30 de composite, une étendue de 0,56 point,
+moins de la moitié de la variation de cohorte. Le second TBC est retiré sans être levé : le
+prompt minimal n'a pas été rejoué sous ces graines.
+
+**Les deux planches du chapitre 6 suivent.** La figure 6.2 dessinait le prompt expert de Jev
+en carré estompé, parmi les variantes écartées, alors que le § 6.1 le publie : il prend le disque
+plein des consignes publiées, la consigne de `gemini-3.5` servie à Jev descend en carré avec les
+autres variantes, et une note de pied porte le fait que la consigne publiée de Jev a été réglée
+sur la cohorte qui le note. La figure 6.5 ne garde que le plafond tabulaire et le prompt expert de chaque
+famille, trois séries au lieu de cinq.
+
+Le chapitre 2 revient à sa `v0.19`, sans le § 2.4. Le chapitre 7 perd les trois passages sur le
+classifieur à sortie typée. Le § 6.4 gagne ses deux bras, où il occupe les dernières places sur
+l'entropie croisée alors qu'il tient la bande tabulaire au § 6.1. La figure 6.6 est retirée du
+chapitre et la figure 6.3 resserrée dans le rendu LaTeX.
+
+---
+
+## [2026-09-22] La campagne coupe d'elle-même quand le souvenir est éteint
+
+Un run d'événement passait jusqu'ici tout son horizon, y compris les jours où plus rien du choc
+ne pèse sur les décisions — payés, et sans rien à apprendre. Le détecteur d'extinction existait,
+mais c'était un script à lancer à côté, en lui recopiant à la main la date du souvenir à
+surveiller. Personne ne surveille à la main une campagne de cinquante jours.
+
+`run_sequential_cohort.py` prend désormais `--arret-sur-extinction`. Il lit la date simulée de la
+dernière application de l'événement dans la trace du run, attend que ce souvenir-là soit sorti du
+bloc « ce qui a changé récemment » depuis sept jours vécus, puis coupe. Sur la campagne du
+21 septembre, cela retirait environ 12 % du run.
+
+**Avant :** le bras allait à son horizon ; l'arrêt anticipé demandait un second terminal,
+`--souvenir-du` recopié depuis la trace, et quelqu'un pour le lancer.
+**Après :** `--arret-sur-extinction` suffit ; le bandeau d'ouverture dit si l'arrêt est armé, et
+le run dépose `arret_sur_extinction.json` avec la date du souvenir et le dernier jour simulé.
+
+⚠ **Un bras qui s'arrête tôt est plus court que son témoin** — le témoin ne subit aucun événement
+déclaré, sa trace est vide, il va jusqu'au bout. C'est voulu, mais l'analyse doit ramener les deux
+bras au jour écrit dans `arret_sur_extinction.json`, jamais à la longueur du journal.
+
+L'horizon déclarable d'une expérience passe par ailleurs de 31 à **50 jours**, la valeur retenue
+comme garde-fou de coût. Ce n'est pas une durée attendue : les cinq niveaux de gravité servent des
+souvenirs de 4,70 à 20,58 jours, 31,49 au plus avec les rappels.
+
+---
+
+## [2026-09-22] L'article lu circule dans le foyer, dans un vrai run
+
+Quatre jours, vingt agents, dix foyers de deux personnes. Un article de presse sur les punaises
+du métro paraît, six habitants le lisent — un par foyer, à des dates différentes tirées d'avance —
+et le soir, ce qu'ils en retiennent atteint leur conjoint.
+
+C'est la première fois que cette chaîne tourne ailleurs que dans les tests : jusqu'ici le banc
+appelait les fonctions une à une, ce qui ne dit rien du câblage.
+
+Ce qui est désormais vérifié : l'index des foyers se construit sur la vraie population, un seul
+membre par foyer reçoit l'article, le co-résident non tiré ne reçoit rien — c'est lui le témoin —,
+l'article est jugé au moment où il est lu, il entre en mémoire longue le matin même de sorte que
+la journée peut s'en servir, et le soir 28 convictions traversent réellement d'une personne à
+l'autre. La règle qui interdit à ce qu'un conducteur apprend de sa voiture de devenir la
+conviction de quelqu'un qui ne conduit pas a mordu sept fois.
+
+Cinq lecteurs sur six jugent l'article de la même façon ; le sixième le trouve plus gênant. Et
+c'est la troisième fois de la journée qu'un modèle différent rend le même verdict sur ce texte.
+
+**Un défaut trouvé par le run.** Le bilan du soir comptait 707 convictions examinées pour 488
+issues : 219 disparaissaient sans laisser de trace. C'étaient celles que la règle du saut unique
+écarte — ce qui a été entendu ne se répète pas. La règle fonctionnait, elle était muette. Elle se
+compte désormais comme les autres, et une alarme se lève si le compte ne tombe plus juste.
+
+**Avant :** le canal lu n'existait que dans les tests, et une garde travaillait sans le dire.
+**Après :** il tourne, il transmet, et chaque refus a son compteur.
+
+---
+
+## [2026-09-22] L'agent juge enfin ce qu'il subit, dans un vrai run
+
+Un run de trois jours sur GAMA vient de faire pour la première fois ce que la décision du matin
+demandait : l'agent estime lui-même la gravité de ce qui lui arrive, et c'est cette estimation
+qui décide de la durée de son souvenir.
+
+Jusqu'ici, aucune déclaration d'incident n'armait le jugement — les neuf portaient « aucun » — et
+seul le banc de test appelait le juge directement, ce qui ne prouvait rien du câblage.
+
+Ce qui est désormais vérifié de bout en bout : l'incident est jugé à l'arrivée, la gravité
+estimée est celle qui est retenue, l'écart au fait mesuré est journalisé sans être corrigé,
+l'alarme reste muette quand l'écart est du bruit, le fait mesuré continue d'être tracé bien qu'il
+ne décide plus, et le souvenir remonte jusqu'à la réflexion du soir — d'où sort la conviction
+« ma voiture n'est pas fiable, les voyants reviennent ».
+
+**Une confirmation qui n'était pas demandée :** ce jugement a été rendu par Gemini, pas par le
+modèle sur lequel toutes les mesures de la journée avaient été faites. Même texte, même réponse.
+L'idée que le comportement observé serait une particularité d'un seul modèle perd son premier
+point d'appui.
+
+**Avant :** le chemin du jugement n'existait que dans les tests.
+**Après :** il tourne, et il écrit ce qu'il faut pour être relu.
+
+---
+
+## [2026-09-22] Le chapitre 2 dit ce que le décideur typé n'a pas derrière lui
+
+L'état de l'art couvrait deux familles : des modèles de choix discrets qui rendent des
+probabilités calibrées mais estimées sur la population qu'ils décrivent, et des agents génératifs
+qui portent une connaissance du monde mais l'expriment en verbalisant. Un § 2.4 situe la
+troisième, celle que le chapitre 6 mesure, et l'accroche au résultat de Meister et al. (2024) sur
+les façons d'obtenir une distribution d'un modèle : la verbaliser, l'échantillonner, ou la lire
+directement en sortie.
+
+La section n'introduit **aucune référence nouvelle**, et c'est le fond du propos. Le modèle
+évalué n'est pas adossé à une littérature scientifique établie : c'est un produit de recherche
+appliquée en lancement précoce, dont les résultats sont pour l'essentiel auto-déclarés par son
+éditeur, sans article, sans poids et sans architecture publiée. L'article le désigne par sa
+fonction plutôt que par le vocabulaire de son éditeur.
+
+**Avant :** aucune des trois sections de l'état de l'art n'accueillait ce décideur, qui n'est ni
+un modèle de choix discret, ni un agent génératif, ni un échantillon silicone
+**Après :** une section le situe, et dit pourquoi il entre comme décideur mesuré et non comme
+résultat cité — ce que le chapitre 6 en rapporte est une mesure indépendante là où il n'en
+existait pas
+
+La section déclare aussi ce qu'elle ne peut pas trancher : le modèle et la forme de sa sortie
+varient ensemble entre les bras, et aucune expérience de l'article ne les sépare.
+
+---
+
+## [2026-09-22] Les chapitres 7 et 8 disent ce qu'un décideur qui ne rédige pas ne peut pas faire
+
+Le chapitre 7 opposait les agents génératifs à un décideur à règles, dont la courbe reste plate
+par construction. Un second comparateur existe depuis le chapitre 6, et les deux régimes du
+chapitre ne se rangent pas du même côté sur lui.
+
+Le régime du choc vécu lui est **fermé par conception** : noter un événement, l'écrire à la
+première personne, le consolider en une croyance et la reformuler sont des générations de texte.
+L'argument ne coûte aucune campagne. Le chapitre distingue au passage deux choses qu'on
+confondait : constituer un souvenir demande un modèle qui écrive, le rappeler n'en demande aucun
+— l'index, la décroissance et les habitudes se calculent depuis le journal.
+
+Le régime de l'article lu, lui, n'est pas fermé, et le chapitre cesse de laisser croire le
+contraire.
+
+**Avant :** le § 7.3 se lisait comme si la sensibilité à un texte d'actualité était propre aux
+agents génératifs
+**Après :** il établit qu'aucune variable tabulaire n'encode ces cinq événements, et dit
+explicitement que le bras témoin qui trancherait l'autre question n'a pas été joué
+
+Le chapitre 8 publie le coût des trois familles, que le § 8.3 citait sans en donner un chiffre :
+1,06 dollar contre 49,28 à charge égale, alors que l'entrée par décision du décideur typé est
+**plus grosse**, l'écart venant du tarif et d'une sortie non facturée. Au périmètre d'enquête il
+rencontre un mur d'une autre nature, un état par requête, soit quarante heures pour environ
+130 dollars : le prix cesse d'être la contrainte, le débit la devient.
+
+Le § 8.4 lui donne l'étage tabulaire de la cascade, qui ne demande alors aucune enquête locale, et
+décrit un second découpage possible, par fonction plutôt que par aiguillage, qui se passe du
+critère qui manque depuis le début. Son chiffrage refroidit l'enthousiasme : sept dixièmes
+d'économie et non un facteur cinquante, parce que la mémoire porte la quasi-totalité du coût
+restant. Le plancher de coût d'un agent qui se souvient est sa mémoire, pas ses décisions.
+
+Un § 8.7 sépare enfin deux limites qu'on confondait : celle de la famille, qui ne peut pas
+constituer ses propres souvenirs, et celle du fournisseur, un service fermé sans publication dont
+le bras peut devenir irrejouable avant la conférence.
+
+---
+
+## [2026-09-22] L'estimation d'une expérience compte les requêtes, pas les déplacements
+
+`experiences estimer` chiffrait le quota en supposant un appel fournisseur par déplacement. La
+passerelle en groupe huit : un bras complet tient en quelque 310 requêtes, soit environ 0,3 jour
+de quota, là où l'estimation en annonçait 2 500 et déconseillait un lancement largement
+finançable.
+
+La sortie porte désormais les deux unités sous deux noms. Le champ `requetes` publie trois
+chiffres — `plancher` (regroupement maximal, s'affiche mais ne décide jamais), `attendue`
+(mesuré sur les exécutions comparables) et `prudente`, le seul qui alimente l'avertissement de
+quota, la part de quota et la durée. **Sans exécution archivée comparable, le facteur prudent
+vaut 1** : le verdict retombe exactement sur celui d'avant, jamais en dessous. Le facteur ne
+s'invente pas — il se dérive du `batch_max_agents` que la passerelle calcule pour l'instance
+visée (désormais publié dans `/health`), borné par le parallélisme de l'expérience, ou se mesure
+sur les exécutions archivées du même gabarit.
+
+**Avant :** `2 285 sollicitations` contre `1 000 requêtes/jour déclarées` → « ~2,3 jours »,
+avertissement de quota court sur un bras qui tenait dans la journée.
+**Après :** `2 285 déplacements → ~286 requêtes (regroupement retenu 8,00 agent(s)/requête ;
+2 exécutions archivées du même gabarit)` → aucun avertissement.
+
+Le compteur journalier d'une clé n'est pas le coût d'une exécution : il agrège la journée,
+réessais compris. Lu tel quel sur un run qui avait épuisé son quota, il annonce 2,4
+agents/requête au lieu de 8. Une mesure bâtie dessus n'est donc retenue que si l'exécution est
+terminée, sans reprise, sans quota au plafond et sans franchir le minuit qui remet les compteurs
+à zéro. Surtout, chaque exécution consigne maintenant sa propre mesure — les compteurs de la
+passerelle à l'ouverture et à la clôture, leur différence, et un drapeau qui dit si l'on peut
+s'y fier — et le journal l'annonce à la clôture, succès compris.
+
+Deux corrections de la même famille dans la même fonction :
+
+- les jetons lus sur les journaux d'échange archivés étaient ceux du **lot entier** comptés pour
+  un agent (4 607 jetons d'entrée pour huit agents en valent 576) ; ils sont ramenés à l'agent,
+  et le journal, qui n'est pas du JSONL malgré son extension, se lit enfin ;
+- un jeu **non clos** ne déclare aucun déplacement attendu : l'estimation affichait `-773`
+  déplacements non couverts. Elle dit maintenant que le jeu n'est pas clos et que le chiffre
+  affiché est l'avancement de sa préparation, pas la charge du bras.
+
+Le budget d'une campagne (`campagne --estimer`) et le popup d'estimation du tableau de bord
+affichent les deux colonnes ; ce dernier libellait « Requêtes LLM » un nombre de déplacements.
+Les témoins locaux et Antigravity, qui ne passent par aucun fournisseur, comptent zéro requête.
+
+---
+
+## [2026-09-22] Le décideur à sortie typée entre dans le papier, du résumé à la conclusion
+
+Le chapitre 6 portait treize décideurs et les neuf autres chapitres ignoraient l'existence d'une
+troisième famille. Le résumé, l'introduction, le chapitre de résultats, la conclusion et les
+annexes H et I la portent désormais, et les quatre figures du chapitre 6 sont régénérées avec
+elle.
+
+Ce que le lecteur y gagne : la parité au régime nominal cesse d'être présentée comme une
+propriété des agents génératifs. Un décideur zéro-shot qui ne rédige rien et n'a lu aucune donnée
+locale l'atteint aussi, et ce qui reste à créditer au modèle de langue est nommé pour ce que
+c'est, la mémoire.
+
+**Avant :** « les agents génératifs produisent des résultats très proches des modèles
+traditionnels » et, en conclusion, « pas de LLM pour la prédiction de masse statique »
+**Après :** la parité au régime nominal ne demande ni mémoire ni génération de texte, et ce
+n'est donc pas le modèle de langue qui échoue — c'est la génération de texte qui n'y sert à rien
+
+Une contrainte de conception est énoncée partout où la nouvelle famille apparaît : constituer un
+souvenir demande d'écrire un récit puis d'entretenir une croyance, ce qu'un modèle qui ne produit
+aucun texte ne fait pas. Un décideur de cette famille doté d'une mémoire est nécessairement
+hybride, la sienne étant écrite par un modèle de langue, et la dépendance ne joue que dans ce
+sens.
+
+Les annexes H.1, H.2, H.3, H.5, H.6, I.1, I.1 bis, I.2 et I.3 portent ses trois bras. L'annexe
+H.5 a demandé de retrouver la méthode du tableau d'accord, qu'aucun script du dépôt ne portait :
+elle est maintenant outillée et reproduit les six lignes publiées au dixième près.
+
+**Le résumé gagne dix-sept mots** et reste au-delà de la borne OpenReview, à trancher avant le
+1er octobre.
+
+---
+
+## [2026-09-22] Ce qui rend un incident grave, pour l'agent, tient en une question
+
+Quatre séries de textes, sept incidents, cinquante-deux appels. La règle que suit l'agent est
+désormais identifiable, et elle tient sur un seul point : **ai-je manqué quelque chose ?**
+
+Tout le reste laisse l'échelon inchangé. Quarante-cinq minutes perdues ne battent pas
+vingt-huit. Un poids lourd qui s'arrête à quelques mètres du pare-chocs ne monte pas d'un cran.
+Une journée entière en chaussures mouillées vaut une crevaison. « Quatrième panne de la ligne ce
+mois-ci » ne fait pas passer au niveau supérieur. Un rendez-vous *décalé* ne compte pas ; un
+rendez-vous *manqué* compte, à chaque fois, à l'unanimité des personas.
+
+Ce n'est pas un défaut de rédaction : quatre réécritures indépendantes, dont deux dictées par
+l'auteur, retrouvent la même règle.
+
+**Ce que cela change pour l'expérience sur la durée des souvenirs.** Une hiérarchie à trois
+niveaux n'est pas atteignable sur des incidents vécus avec ce modèle. Il en reste deux, nets et
+reproductibles : « il m'est arrivé quelque chose » (11,8 jours) et « j'ai manqué quelque chose »
+(16,2 jours), séparés de 4,4 jours sans dispersion entre personas.
+
+Ce constat a coûté cinquante-deux appels et une heure. Il aurait autrement coûté trois campagnes
+de cinquante jours.
+
+**Avant :** on pensait régler des textes jusqu'à obtenir trois niveaux.
+**Après :** on sait que le troisième niveau n'existe pas pour ce qui est vécu, et pourquoi.
+
+L'ordre visé des incidents se déclare désormais dans la grille d'attendus, plus dans le code du
+test : c'est à l'auteur de dire l'hypothèse, pas au testeur. Et deux incidents auxquels il
+attribue la même plage ne sont plus départagés de force — on n'exige pas d'une mesure qu'elle
+tranche ce que personne n'a prédit.
+
+---
+
+## [2026-09-22] Une seconde cohorte, sans un seul persona en commun avec la première
+
+Le scelleur de population sait désormais tirer une cohorte **disjointe** d'une ou plusieurs
+cohortes déjà scellées : `select --exclure <dossier scellé>` retire leurs ménages du vivier avant
+toute sélection. Jusqu'ici, rejouer la sélection sur le même vivier redonnait exactement la même
+cohorte — l'ordre d'entrée des ménages vient d'un sel écrit en dur —, et rien ne permettait
+d'obtenir une seconde cohorte ni de garantir qu'elle ne recouvrait pas la première.
+
+La première cohorte tirée ainsi est livrée : `population_1000_AAMAS_v6_c2`, 1 000 personas en 501
+ménages, **zéro person_id et zéro household.id en commun** avec `population_1000_AAMAS_v6`. Elle
+passe le contrôle territorial sans indulgence — mêmes marges, même borne, 13 verdicts conformes
+sur 13, aucune marge non mesurable.
+
+Le sel du hachage ne bouge pas : c'est l'exclusion seule qui produit une cohorte différente, ce
+qui rend l'écart entre les deux interprétable. Un test rejoue le tirage à exclusion vide et
+retrouve la cohorte de référence au sha256 près.
+
+Deux écarts méritent d'être connus. La descente part de plus haut et arrive un peu moins bas
+(87,98 → 3,91 pt contre 60,98 → 3,50) : un vivier amputé offre moins de candidats d'échange. Et
+la 3ᵉ couronne perd l'Aude, dont les deux seuls personas du vivier étaient déjà dans la première
+cohorte — cinq départements représentés au lieu de six, 135 communes au lieu de 139.
+
+**Avant :** une seule cohorte de 1 000 personas, et aucun moyen d'en tirer une autre. La question
+« ce prompt est-il sur-appris sur ces mille-là ? » n'était pas mesurable.
+**Après :** deux cohortes indépendantes du même territoire, chacune scellée et contrôlée. La
+question devient mesurable — un écart, avec sa barre d'erreur, pas une dispersion.
+
+---
+
+## [2026-09-22] L'agent n'a que deux niveaux pour ce qui lui arrive
+
+Quatre incidents réécrits pour que chaque niveau soit posé par des faits, quatre prédictions
+écrites avant la mesure, seize appels. Trois prédictions sur quatre tenues — dont un pari à un
+seul niveau.
+
+**Le gain, qui n'était pas cherché.** La réécriture en faits a supprimé le désaccord entre
+personas. Ce matin, deux personnes exposées au même incident recevaient des durées de souvenir
+écartées de onze jours ; ce soir, trois incidents sur quatre sont jugés à l'unanimité, écart
+nul. Un texte qui **énonce une conséquence** — un rendez-vous décalé, une journée en chaussures
+mouillées — est lu pareil par un automobiliste et par quelqu'un qui n'a pas le permis. Un texte
+qui laissait ressentir dépendait de qui lisait.
+
+**Le constat qui bloque.** Douze minutes de crevaison qui ne changent rien à la journée reçoivent
+la même note que trente minutes de panne avec un rendez-vous décalé, et que l'arrivée trempé avec
+des chaussures mouillées pour la journée. Le texte de la crevaison dit pourtant, mot pour mot,
+ce que la définition du niveau inférieur demande. Trois personas sur quatre montent quand même
+d'un cran.
+
+Ce plancher n'existe pas pour les articles de presse, mesurés le même jour : ceux-là reçoivent
+les trois niveaux bas de l'échelle. **Dès que quelque chose arrive à l'agent lui-même, cela vaut
+au moins « cela m'a coûté du temps ».**
+
+Il reste donc deux niveaux utilisables pour un incident vécu — « il m'est arrivé quelque chose »
+et « j'ai manqué quelque chose » — séparés de 4,4 jours de durée de souvenir, et désormais sans
+la moindre dispersion.
+
+**Une limite à dire :** l'agent ne distingue pas une gêne qui dure d'un temps perdu. L'orage —
+quinze minutes de retard, mais trempé toute la journée — reçoit exactement la note de la panne
+moteur.
+
+**Avant :** trois niveaux attendus, un instrument dont le bruit dépassait le signal.
+**Après :** deux niveaux nets, et on sait lesquels.
+
+---
+
+## [2026-09-22] L'audit unitaire rend ses intervalles, et les bras Jev entrent aux annexes
+
+Le chapitre 6 publiait des exactitudes et des entropies croisées sans intervalle : à l'échelle
+agrégée chaque écart était accompagné d'une estimation appariée, à l'échelle individuelle aucun.
+L'annexe I porte désormais les différences appariées de l'audit unitaire, même méthode que pour
+le composite — 2 000 réplicats, graine 2026, grappe au niveau de la personne, 2 929 personnes.
+L'annexe H.1 accueille les six paires du décideur à sortie typée, et les annexes I.1 à I.3 ses
+trois bras.
+
+Ce que les intervalles autorisent à dire, et que les niveaux ne donnaient pas : le décideur à
+sortie typée, qu'aucune comparaison appariée ne sépare des quatre méthodes tabulaires sur la
+répartition agrégée, est séparable de chacune d'elles sur les journées déclarées — et du plancher
+tout-voiture. Les deux échelles se dissocient, avec une borne.
+
+**Avant :** « il est neuvième des onze, sous le plancher tout-voiture qui fait 66,7 % », sans
+savoir si l'écart tenait au bruit d'échantillonnage
+**Après :** −2,42 point d'exactitude [−4,26 ; −0,62], zéro exclu
+
+Une correction dans l'autre sens, sur le même passage : l'avance du prompt expert à modèle de
+langue sur le logit multinomial en entropie croisée ne se sépare pas de zéro, −0,018
+[−0,039 ; +0,003]. Ce qui est établi est qu'il est derrière le gradient boosté et la forêt
+aléatoire, pas qu'il devance quoi que ce soit sur cette grandeur.
+
+---
+
+## [2026-09-22] Les chocs disent des faits, plus des états d'âme
+
+Un choc racontait jusqu'ici une expérience : on arrivait « shaken », « in a foul mood », « late
+and filthy », et le métro s'arrêtait « sans que personne ne dise un mot pendant ce qui parut une
+éternité ». Sur décision de l'auteur, les six chocs ne décrivent plus que des faits observables —
+une durée, une correspondance ratée, une absence d'information pendant vingt-cinq minutes, un
+avant-bras éraflé.
+
+**Ce n'était pas une question de style.** Depuis que la gravité d'un souvenir est celle que
+l'agent estime, c'est le texte qui décide combien de temps ce souvenir pèsera. Douze appels le
+montrent en aller-retour :
+
+- la **panne du réseau**, réécrite en faits, passe de « gênant » à « grave », quatre personas sur
+  quatre, et rejoint le rang que le protocole lui donnait depuis le début ;
+- la **panne moteur**, dont le seul mot retiré est « shaken », redescend de « grave » à
+  « gênant ».
+
+Le mot faisait donc le travail à la place de l'événement. En durée de souvenir, cela vaut quatre
+jours et demi.
+
+**Un effet qui n'était pas cherché :** la panne du réseau est jugée à l'unanimité, la crevaison
+et la panne moteur restent partagées d'un persona à l'autre. La première nomme une conséquence
+sur les *projets* de la personne — un rendez-vous manqué —, les autres sur un *mode* qu'on
+utilise ou non. Une sévérité attachée à un projet traverse le profil ; attachée à un mode, non.
+
+**Le garde-fou refuse encore**, et sa raison est nette : la crevaison et la panne moteur se
+retrouvent au même niveau. Une fois les faits écrits noir sur blanc, les deux déclarations ne
+diffèrent que de cinq minutes de retard. La hiérarchie « faible, moyen, fort » du protocole
+vivait dans l'intention, pas dans ce qui était déclaré.
+
+**Avant :** trois incidents censés se distinguer par leur gravité, distingués en fait par leur
+écriture.
+**Après :** trois incidents qui disent ce qui s'est passé — et deux d'entre eux qui, disant la
+même chose, reçoivent la même note.
+
+---
+
+## [2026-09-22] Une seule entropie croisée pour tout l'article
+
+L'entropie croisée de l'audit unitaire portait deux définitions sous le même nom, et le classement
+des décideurs s'inversait selon celle qu'on lisait. Le chapitre 6 et l'annexe I publiaient la
+mesure sur le support commun — les décisions que tous les décideurs à distribution notent — quand
+la version alternative du chapitre 6 publiait celle où chaque décideur est noté sur son propre
+sous-ensemble. Les trois fichiers portent désormais la première, sur les 5 229 décisions communes
+aux neuf décideurs joués sur le jeu d'enquête, bras Jev compris.
+
+Les deux lectures ne mesurent pas la même chose. Un zéro exact sur le mode déclaré n'a pas
+d'entropie croisée et sort du calcul : le décideur qui tranche le plus dur retire le plus de ses
+propres échecs. Le prompt expert à modèle de langue, qui met zéro une fois sur onze, était noté
+sur 5 923 décisions quand le gradient boosté, qui rend une softmax et ne produit jamais de zéro
+exact, l'était sur 6 588. La correction coûte 0,015 au premier et 0,120 au second.
+
+**Avant :** dans la version alternative du chapitre 6, le prompt expert passait devant les quatre
+méthodes tabulaires sur l'entropie croisée, à 0,356 contre 0,419 au gradient boosté
+**Après :** il devance le seul logit multinomial, à 0,341 contre 0,299, et reste derrière les
+trois autres — ce que le chapitre 6 de référence disait déjà
+
+Les chiffres du chapitre 6 et de l'annexe I sont confirmés : l'entrée des trois bras Jev parmi les
+décideurs qui définissent le support retire 222 décisions sur 5 451 et déplace au plus un millième
+sur une valeur publiée. Aucun classement ne bouge de ce côté.
+
+---
+
+## [2026-09-22] Le coût d'une expérience LLM se comptait en déplacements, pas en requêtes
+
+L'estimation de charge d'une expérience assimile un déplacement à une requête au fournisseur, et
+en déduit un nombre de jours de quota. Le micro-batching de la passerelle n'entre nulle part dans
+ce calcul, alors qu'il groupe les décisions d'un même bras dans une seule requête — la clé de lot
+ne sépare que la catégorie, les paramètres, le fournisseur forcé, le TPM minimal et les instances
+admises, tous constants à l'intérieur d'une expérience.
+
+Relevé sur une exécution complète sans réemploi, dans le champ `quota` de son `compteurs.json` :
+318 requêtes pour 2 442 sollicitations, soit 7,7 agents par requête. Le chapitre 8 de l'article
+publiait déjà le repère — huit par requête, quelque 270 requêtes pour la journée de référence —,
+et c'est l'outil d'estimation qui l'ignorait, pas la mesure.
+
+Un compteur trompeur au passage : `requetes_jour` agrège la JOURNÉE d'une clé, réessais compris,
+et non le coût d'une exécution. Lu comme tel sur un bras qui avait épuisé son quota, il donnait
+2,4 agents par requête au lieu de 7,7.
+
+Les volumes du ticket 073 sont corrigés. L'estimation rendue par `experiences estimer` ne l'est
+pas : elle continue de surestimer, d'un facteur égal au regroupement.
+
+**Avant :** un bras de 1 000 personas était annoncé à ≈ 2 500 requêtes, soit ≈ 2,5 jours de quota
+sur deux clés à 500 RPD — de quoi renoncer à une cohorte supplémentaire.
+**Après :** ≈ 310 requêtes, soit ≈ 0,3 jour. Un bras coûte un tiers de journée de quota, pas deux
+jours et demi.
+
+---
+
+## [2026-09-22] Un garde-fou décide si la campagne part, pour trente-deux appels
+
+Depuis la décision de ce matin, la gravité d'un souvenir est celle que l'agent estime, et elle
+seule : c'est elle qui fixe combien de temps ce souvenir pèsera sur les décisions. Un modèle qui
+répondrait « anodin » à tout ferait donc tourner cinquante jours de simulation pour ne rien
+mesurer — ce qui a failli arriver aujourd'hui même.
+
+Un nouveau test refuse désormais de laisser partir une campagne tant que le jugement de l'agent
+ne tombe pas dans la plage qu'on avait en tête en analysant les textes. Chaque texte déclare une
+**plage** d'échelons — pas une valeur, parce que deux personnes sensées ne jugent pas
+identiquement un article sur des punaises — les modes sur lesquels cela devrait porter, et le
+motif de la plage, qui est ce qu'on relira dans six mois.
+
+Il refuse dans quatre cas : un appel sans réponse, moins de trois échelons distincts sur
+l'ensemble des textes, trois incidents qui ne se séparent pas dans l'ordre prédit, ou trop de
+jugements hors de leur plage. Chaque refus dit quoi faire, pas seulement qu'il refuse.
+
+**Ce qui compte pour la valeur du test, et qui est écrit dans la grille :** une plage posée après
+avoir vu des réponses ne prouve presque rien. Chaque texte déclare donc s'il avait déjà été jugé.
+Les deux populations ne se mélangent jamais — seules les prédictions **aveugles** peuvent bloquer
+une campagne, les autres se contentent de se signaler.
+
+**Avant :** on découvrait qu'une campagne ne mesurait rien après l'avoir payée.
+**Après :** trente-deux appels et une douzaine de minutes le disent d'abord.
+
+**Et il a refusé au premier passage.** Le dispositif sépare bien — quatre niveaux distincts sur
+huit textes, des modes cohérents, aucune réponse perdue —, mais pas là où l'expérience en a
+besoin. La panne du réseau, censée être l'incident le plus grave des trois, est jugée au même
+niveau que la crevaison et en dessous de la panne moteur, par les quatre personas sans une seule
+hésitation.
+
+Plus gênant encore : **l'écart entre deux personnes exposées au même incident dépasse l'écart
+entre les incidents eux-mêmes** — onze jours contre quatre. Savoir qui a été exposé renseigne
+donc plus sur la durée du souvenir que savoir à quoi. Ce n'est pas un défaut du jugement, c'est
+sa conséquence, et elle était annoncée : le persona qui n'a ni permis ni voiture juge sans
+importance la panne moteur que les autres trouvent grave. Il n'a pas tort.
+
+Trois campagnes de cinquante jours auraient appris cela. Trente-deux appels l'ont appris.
+
+---
+
+## [2026-09-22] L'axe des graines s'arrête à trois, et les deux définitions de trop disparaissent
+
+L'étude de dispersion inter-graines du prompt expert (ticket 073, axe 1) se joue désormais sur
+trois graines au lieu de cinq : 42 pour la référence, 123 terminée, 789 reprise depuis son
+interruption à 57,9 %. Les définitions des graines 456 et 2026 sont supprimées de
+`data/experiences/`, à la demande de l'auteur, pour qu'elles ne partent pas par inadvertance :
+chacune coûtait ≈ 2 500 sollicitations fraîches, soit ≈ 2,5 jours de quota.
+
+Aucune mesure n'est perdue — les deux dossiers ne portaient que leur `experience.yaml`, sans
+exécution. Les définitions sont recopiées telles quelles dans
+`docs/traces/2026-09-22_12-12_suppression_graines_456_2026_ticket073/`, d'où elles se restaurent
+en recréant le dossier.
+
+**Avant :** six définitions `gemini-35-fl_proexp05` sur la cohorte v6, dont deux jamais lancées
+et lançables d'un `experiences lancer`.
+**Après :** quatre, et l'axe 1 se lit sur trois points de mesure une fois 789 terminée.
+
+---
+
+## [2026-09-22] L'accord entre décideurs quitte le corps du chapitre 6
+
+La section qui mesurait, déplacement par déplacement, l'accord entre deux décideurs est
+supprimée du chapitre 6, dans les trois arbres — français, anglais et LaTeX. Le chapitre compte
+cinq sections : l'audit unitaire devient le § 6.4 et la variation de cohorte le § 6.5. Les six
+figures gardent leurs numéros, qui ne suivent pas ceux des sections.
+
+La mesure elle-même n'est pas perdue : l'annexe H.5 publie les six paires et l'écart médian
+entre distributions. Les trois renvois qui citaient le § 6.4 — les deux enseignements de la
+conclusion et le bloc de traçabilité du résumé — pointent désormais l'annexe.
+
+**Avant :** le chapitre 6 portait six sections, et la conclusion lisait l'accord décision par
+décision dans son corps.
+**Après :** cinq sections, et le même chiffre se lit à l'annexe H.5.
+
+Corrigé au passage : l'enseignement 5 de la conclusion renvoyait au § 6.4 pour une
+non-séparabilité qui se lit au § 6.1 et à l'annexe H.1, et le renvoi LaTeX des figures de
+l'audit unitaire pointait la section d'accord au lieu de la section qui les porte.
+
+---
+
+## [2026-09-22] Le plafond de durée d'un souvenir devient un témoin, pas un clamp
+
+Le plafond de durée servie passe de 30 à 50 jours. Comme un souvenir ne peut jamais être servi
+plus de 31,49 jours — c'est le plafond de *force* qui l'impose, et lui seul —, cette borne ne
+mord plus jamais.
+
+Elle n'est pas supprimée pour autant : elle se journalise quand elle mord. Le jour où une ligne
+de journal la nommerait, ce serait le signe que la loi de décroissance ou le plafond de force a
+bougé sans que personne le remarque. Elle passe donc de garde-fou à témoin.
+
+**Avant :** un souvenir très rappelé voyait sa durée ramenée de 31,49 à 30 jours — un rabotage
+de 1,5 jour, dans un cas rare, et la date d'extinction observée était alors la borne et non la
+loi.
+**Après :** la date d'extinction est toujours celle que le modèle prédit. Le garde-fou sur le
+coût passe là où il appartient : l'horizon du run, fixé à 50 jours, l'arrêt normal restant
+l'extinction du souvenir suivie de sept jours vécus d'observation.
+
+Corrigé au passage : le commentaire du réglage et le test qui l'accompagnait affirmaient tous
+deux que sans ce plafond « un souvenir souvent rappelé repousserait indéfiniment sa propre
+échéance ». C'est faux — le renforcement au rappel sature à 30 jours de force.
+
+À ne pas citer comme durées observées : « entre 2 et 30 jours ». Les deux bornes sont des gardes
+de sûreté que rien n'a jamais atteintes — à gravité nulle un souvenir est déjà servi 2,94 jours.
+
+---
+
+## [2026-09-22] Le dépôt porte les noms de chapitres du projet Overleaf
+
+Le projet Overleaf a été reconstruit autour d'un `main.tex` qui appelle neuf chapitres par
+`\input{chapters/NN_Nom}`, avec les figures rangées dans `images/`. Le dépôt suit : un chapitre
+porte désormais le même nom dans `fr/`, dans `en/` et dans `overleaf/chapters/`, et c'est le
+nom du projet en ligne qui fait foi. Ouvrir le fichier qu'on vient de modifier dans Overleaf
+ne demande plus de table de correspondance.
+
+**Avant :** `fr/06_results.md`, `en/06_results.md`, `overleaf/06_results.tex`, et sur Overleaf
+un chapitre nommé autrement.
+**Après :** `fr/06_Empirical_Evaluation.md`, `en/06_Empirical_Evaluation.md`,
+`overleaf/chapters/06_Empirical_Evaluation.tex`, comme en ligne.
+
+Deux chapitres changent de titre, arrêté en ligne et recopié dans les deux langues. Le 6
+s'appelle « Empirical Evaluation » — « Évaluation empirique » en français — là où il s'appelait
+« Résultats » ; le 7 s'appelle « Agent Adaptation to External Shocks » — « Adaptation des agents
+aux chocs externes » — là où il s'appelait « Réagir à ce qu'aucune variable n'encode ». Aucun
+chiffre, aucune mesure et aucun paragraphe ne bougent.
+
+Deux figures du chapitre 7 étaient appelées sous un nom de travail, `tmp_ch7_propension_quotidienne`
+et `tmp_ch7_affinites_tous_modes`, qu'aucun fichier ne portait : le chapitre ne pouvait pas se
+composer. Elles pointent maintenant sur les fichiers livrés.
+
+`make paper-parite` reconnaît les nouveaux noms et retrouve les onze chapitres sur les trois
+arbres ; les annexes restent la seule pièce du dépôt absente du projet en ligne.
+
+---
+
+## [2026-09-22] La durée d'un souvenir, expliquée sans codes — et deux bornes qui ne mordent jamais
+
+Un texte qui se lit seul remplace les renvois à E3, E4, C2, C3 et C6 :
+`specs/ticket_095/expose_duree_d_un_souvenir.md`. Il dit ce qu'est la durée d'un souvenir, d'où
+vient sa gravité, ce que les deux expériences voulaient montrer, et ce qui reste à décider.
+
+**Tranché :** la gravité d'un souvenir est celle de l'agent. L'expérience sur la durée se rejouera
+donc sur le jugement, à deux conditions — un garde-fou vérifie en amont que le jugement tombe
+dans la plage qu'on avait en tête en analysant les textes, et la variation d'un profil à l'autre
+est mesurée plutôt que corrigée.
+
+**Deux choses trouvées en l'écrivant.**
+
+Les trois incidents de l'expérience ne produisaient déjà pas l'étalement attendu. Recalculés, ils
+donnent des durées de 16,5, 15,3 et 20,6 jours là où le protocole annonçait 8, 15 et 19 : la
+crevaison, censée être le cas faible, arrive à un jour de la panne moteur. La part du retard est
+fortement concave — une demi-heure compte pour moitié, une heure n'en vaut que les deux tiers.
+Le défaut est antérieur à la décision sur la gravité et indépendant d'elle.
+
+Et **ni le plancher de 2 jours ni le plafond de 30 ne peuvent mordre**. À gravité nulle un
+souvenir est déjà servi 2,94 jours ; à gravité maximale, 20,58. Le plafond n'est atteignable que
+par le rappel, qui entretient un souvenir consulté tous les jours. Si l'article annonce « entre 2
+et 30 jours », il annonce deux bornes de sûreté qu'aucune campagne n'a jamais observées.
+
+**Correction :** le bilan d'hier soir donnait 4,48 / 7,84 / 11,20 / 15,40 jours comme durées de
+vie. Ce sont les **forces** de l'oubli ; les durées servies valent `force × 1,0498`, soit
+4,70 / 8,23 / 11,76 / 16,17 jours. Corrigé dans le bilan, le ticket et le tableau de bord.
+
+---
+
+## [2026-09-22] L'agent jugeait une page blanche
+
+On lui demandait ce qu'il pensait d'un article de presse, et le texte de l'article n'arrivait
+jamais jusqu'à lui. Quinze fois sur quinze il a répondu « anodin » — ce qui était la bonne
+réponse à la question qu'on lui posait réellement.
+
+Trois défauts se tenaient l'un derrière l'autre, et aucun ne levait d'erreur.
+
+**Le texte ne voyageait pas.** Le modèle de données qui porte un agent jusqu'au prompt jette en
+silence tout champ qu'il ne déclare pas. Le champ de l'événement n'y était pas déclaré. Le
+prompt partait donc complet, bien formé, et amputé du seul passage qui comptait.
+
+**Le budget de sortie était trop serré.** Les modèles de raisonnement dépensent leur réflexion
+dans le même budget que leur réponse : 240 à 330 jetons avant le premier caractère de JSON, pour
+un plafond fixé à 256. Un appel sur deux revenait vide, et ceux qui passaient répondaient en
+prenant la première valeur de chaque liste.
+
+**Une réponse mal enveloppée passait pour un succès.** Quand le modèle rendait l'agent seul, sans
+l'enveloppe attendue, la passerelle cherchait « la première liste venue » et tombait sur la liste
+des modes de transport. Vide, elle rendait « succès, zéro agent » ; pleine, ses éléments étaient
+écartés un par un. Dans les deux cas le jugement était perdu **sans qu'une seule erreur soit
+levée**. Une tâche qui ne rend aucun agent est désormais un échec, et elle le dit.
+
+**Avant :** quinze jugements sur quinze à « anodin », valence neutre, aucun mode ; un appel sur
+deux sans réponse. Tous les souvenirs étaient servis 4,7 jours, quel qu'ait été l'événement.
+
+**Après :** trois échelons distincts sur les cinq articles — 8 « notable », 5 « anodin »,
+2 « génant » — des modes cohérents avec chaque texte (les punaises portent sur le métro, le vent
+sur la marche et le vélo), et zéro réponse vide sur trente-huit appels. Le même jugement répété
+quatre fois rend quatre fois le même échelon. La panne moteur, que la simulation mesure à 0,53,
+est jugée « grave » (0,75) : l'agent surestime le fait plutôt que de le minorer.
+
+Les durées de service qui en découlent — 4,7, 8,2, 11,8 et 16,2 jours — retrouvent l'étalement
+que l'expérience sur la durée d'un souvenir attendait, et qui semblait perdu hier soir.
+
+---
+
+## [2026-09-22] Le banc a trouvé ce qu'il cherchait, et deux choses qu'il ne cherchait pas
+
+Premier passage du banc fonctionnel et d'un run court sur GAMA. Quarante-deux appels au modèle,
+trois jours simulés, et trois défauts sortis avant qu'une campagne ne les paie.
+
+**Ce qui marche.** La circulation dans le foyer fait exactement ce qu'on lui demande : quand un
+agent entend son conjoint parler de sa journée, la conviction qu'il en tire porte la mention
+« entendu » ; quand il n'entend personne, elle porte « vécu ». La règle qui empêche l'information
+de tourner en rond s'engage donc pour de bon.
+
+Et sur GAMA, la chaîne complète tient : le contrôleur charge l'événement, le ménage de l'agent
+arrive jusqu'à la simulation, l'incident s'applique à l'arrivée du deuxième jour, et la trace
+écrite porte tout ce qu'il faut pour la relire. Le premier jour, l'agent n'a pas pris sa voiture
+et l'alarme « aucun exposé » s'est levée — c'est le bon comportement, et il fonctionne.
+
+**Ce qui ne marche pas, et c'est le plus important.** Sur les onze jugements aboutis — cinq
+articles, trois personas, deux incidents — l'agent répond **la même chose à tout** : « anodin ».
+Or depuis la décision de ce matin, c'est ce jugement seul qui fixe la durée de vie d'un souvenir.
+Tous les souvenirs vivraient donc quatre jours et demi, qu'il s'agisse d'une panne de trente
+minutes ou d'un article de presse. L'expérience qui attend huit, quinze et dix-neuf jours selon
+la gravité ne mesurerait rien.
+
+À vérifier sur le modèle des campagnes avant d'en conclure : ceux du banc ne sont pas ceux-là. Et
+c'est exactement pourquoi la question a coûté quarante-deux appels plutôt qu'une campagne.
+
+**Second défaut :** six demandes de jugement sur dix ne reviennent avec rien du tout — succès
+annoncé, réponse vide, aucune erreur. Doubler le délai entre les appels n'y change rien, ce n'est
+donc pas une question de débit.
+
+**Un piège à connaître.** Les quatre premiers appels disaient que la mention « entendu »
+n'apparaissait jamais. C'était faux : les services tournaient depuis la veille et servaient encore
+l'ancien format, où le champ n'existait pas. La commande d'arrêt utilisée n'avait rien arrêté —
+elle a réussi sans rien faire. **Avant de conclure d'une mesure, vérifier depuis quand les
+services tournent.**
+
+**Et un défaut trouvé par le run, que le banc avait laissé passer** : le dépouillement cherchait
+l'agent dans une colonne qui porte l'identifiant de la simulation. Les faux journaux du banc
+écrivaient au même mauvais endroit — ils vérifiaient leur propre convention. La règle « reprendre
+les formats du dépôt plutôt que les recopier » couvrait les noms de colonnes, pas leur sens.
+
+---
+
+## [2026-09-22] Un banc de tests qui cherche les défauts avant que la campagne ne les paie
+
+Une campagne de quarante jours est un mauvais endroit pour découvrir qu'une colonne est mal
+nommée. Il existe désormais un banc qui joue toute la chaîne — de l'injection d'un événement
+jusqu'à la figure du papier — **sans simulateur, sans modèle et sans un seul appel**.
+
+Le principe : tout ce qui n'est pas une question posée au modèle est fabriqué à la main. Une
+population, une mémoire longue, un journal de décisions, un point de reprise : ce sont des
+formats, pas des intelligences. Les écrire soi-même coûte zéro jeton et les rend reproductibles,
+ce qu'un run ne sera jamais. Les huit jours qu'il faudrait attendre pour voir une consolidation
+se remplacent par une entrée écrite à la bonne date.
+
+**Avant :** vérifier que la chaîne tient demandait une campagne.
+**Après :** trente-quatre vérifications en quelques secondes, et la campagne ne part que si
+elles passent.
+
+Les stubs **importent** les formats du dépôt au lieu de les recopier. Un faux journal de
+décisions qui recopierait sa liste de colonnes resterait vert le jour où le vrai format change —
+c'est précisément le défaut qu'on veut voir.
+
+**Ce qui reste à demander au modèle tient en trois questions**, vingt-sept appels en tout. Dit-il
+d'où lui vient une conviction quand le foyer lui a parlé ? Le même jugement, répété, rend-il la
+même réponse ? Se sert-il de toute l'échelle, ou répond-il pareil à tout ? La première passe en
+premier parce que son échec est invisible en production : rien ne planterait, les convictions
+circuleraient simplement sans origine.
+
+Le banc **ne bascule jamais de passerelle**. Si le quota est épuisé, il attend ou s'arrête. Il
+compte ses jetons de sortie et s'interrompt au budget déclaré, plutôt que de déborder sur le
+quota des campagnes — et il écrit dans chaque résultat quel modèle a répondu, sans quoi deux
+mesures sur deux passerelles seraient incomparables sans qu'on puisse le dire.
+
+---
+
+## [2026-09-22] Le dépouillement de presse retrouve son chemin, et perd un test qui mentait
+
+Le calcul du score de presse existait mais parlait d'une expérience abandonnée : il comparait
+deux conditions jouées sur les mêmes trajets, là où une campagne compare un lecteur avant et
+après sa parution. La passerelle manquante est écrite.
+
+**Et un test statistique est retiré.** Le score s'accompagnait d'un binomial sur vingt
+prédictions, qui supposait vingt observations indépendantes. Elles ne le sont pas : les parts
+d'un même événement somment à un, si bien qu'un seul comportement — quitter le vélo pour la
+voiture — produit mécaniquement plusieurs concordances. L'incertitude passe désormais par un
+rééchantillonnage des **articles**, chacun emportant ses quatre prédictions en bloc.
+
+**Avant :** un intervalle de 60 % à 95 %, obtenu en traitant vingt cellules liées comme
+indépendantes.
+**Après :** de 40 % à 100 % sur les mêmes données. L'intervalle double de largeur sans qu'aucune
+donnée n'ait changé — la précision perdue était fabriquée par l'hypothèse, pas mesurée. Cinq
+événements ne portent pas ce que vingt cellules prétendaient donner.
+
+---
+
+## [2026-09-22] La gravité d'un souvenir est celle que l'agent lui donne, et rien d'autre
+
+Jusqu'ici, quand un agent minimisait ce qui venait de lui arriver, le dispositif le corrigeait :
+un dépannage de trente minutes comptait pour trente minutes, même si l'agent disait que ce
+n'était rien. Ce garde-fou est levé. Ce qu'un souvenir pèse, c'est ce que celui qui le porte en
+dit.
+
+**Avant :** une panne de trente minutes jugée anodine valait quand même 0,70, et son souvenir
+vivait quinze jours.
+**Après :** elle vaut 0,10, et le souvenir vit moins de trois jours — parce que c'est ce que
+l'agent en a dit.
+
+Ce n'est pas un détail de calcul : le retard reste subi, il décale la journée, il contraint les
+trajets suivants et l'agent le raconte le soir. Ce qui change, c'est qu'il ne décide plus à la
+place de l'agent de l'importance du souvenir.
+
+**La contrepartie est réelle, et elle est instrumentée plutôt que tue.** Sans ce garde-fou, une
+campagne où le modèle minimise tout ressemblerait trait pour trait à une campagne où il ne s'est
+rien passé. L'écart entre ce que l'agent estime et ce que la simulation a mesuré est donc écrit à
+chaque fois dans le journal de l'événement, et une alarme se lève quand l'agent sous-estime de
+plus d'un échelon. **Elle ne corrige rien** : corriger en silence rétablirait l'ancien garde-fou
+sous un autre nom, et on mesurerait de nouveau la garde au lieu de mesurer l'agent.
+
+Deux points de protocole tombent au passage. Le **bras « ouï-dire »**, qui devait mesurer ce
+qu'une information non vérifiée fait au foyer, n'a plus d'objet : le récit du soir porte
+désormais toute la journée de chacun, il n'y a plus de seuil à abaisser pour l'observer. Et le
+**foyer témoin** n'est plus exigé, ni dans le même run — mais le plancher de bruit qu'il
+fournissait gratuitement doit alors être repris d'ailleurs et déclaré avec le résultat. Un écart
+plus petit que lui n'est pas un effet, et cette règle-là ne disparaît pas avec le témoin.
+
+---
+
+## [2026-09-22] La gravité d'un événement est ce que l'agent en dit, et rien d'autre
+
+Jusqu'ici, un retard mesuré par la simulation imposait un plancher : un modèle qui jugeait
+« anodin » un dépannage de trente minutes ne pouvait pas le faire descendre sous ce que la
+simulation avait relevé. Ce plancher est retiré. C'est l'estimation de l'agent, et elle seule, qui
+fixe la gravité d'une entrée en mémoire, qu'il ait vécu l'événement ou lu un article.
+
+**Avant :** `gravité retenue = max(estimation, fait mesuré)`, dans le code et dans le contrat de
+tests.
+**Après :** `gravité retenue = estimation`. Le fait mesuré ne disparaît pas du dispositif — le
+retard est toujours subi, il décale la journée et entre dans ce que l'agent raconte le soir — il
+cesse seulement de peser sur la note.
+
+**Ce que cela coûte, et c'est écrit noir sur blanc dans le ticket :** plus aucune garde contre un
+jugement aberrant. Un souvenir de trois jours là où le plancher en imposait quinze ne se distingue
+plus d'un événement qui n'a rien produit. La proposition de remplacement est de journaliser
+l'écart entre estimation et fait mesuré et d'alarmer au-delà d'un seuil, sans jamais corriger la
+valeur.
+
+**La décision n'est pas encore dans le code.** `gravite_concept` applique toujours le maximum,
+sous un commentaire « NON NÉGOCIABLE » que cette décision lève. Un test du lot 3 échouera tant que
+la reprise n'est pas faite ; il est nommé dans le contrat de tests.
+
+---
+
+## [2026-09-22] Le chapitre 7 dit sa réserve sur le choc qu'il a joué
+
+La campagne a tourné sur une avarie moteur, et le chapitre s'appuie sur le fait que la voiture
+reste proposée le lendemain pour montrer qu'un arbitrage se déplace. Une panne de cette nature
+mettrait le véhicule au garage : la réserve est maintenant écrite dans le texte. La campagne
+suivante prend le bouchon de rocade, déjà spécifié, qui laisse le véhicule disponible sans
+discussion, décroît sur trois jours et peut se reproduire — ce dont la prédiction d'extinction par
+contradiction a besoin.
+
+La section qui annonçait les mesures communes aux deux régimes est retirée : sa seule colonne
+mesurée figurait déjà dans les résultats du choc, et le reste était une promesse.
+
+---
+
+## [2026-09-22] Les articles visaient des foyers qui n'existaient pas dans la population de campagne
+
+Deux défauts trouvés en préparant les expériences, et corrigés avant qu'une campagne ne les paie.
+
+Les cinq articles de presse désignaient deux foyers repris d'une liste établie sur la cohorte
+complète de mille agents. Or la campagne tourne sur une population de vingt agents, dix foyers
+entièrement différents. La campagne aurait démarré, crié qu'aucun lecteur n'était retenu, et
+tourné jusqu'au bout **sans qu'un seul agent ne lise quoi que ce soit**. Les articles visent
+désormais les six foyers que le manifeste de cette population déclare exposés — et un contrôle
+vérifie aussi qu'aucun foyer témoin n'est visé par erreur, puisque les témoins vivent dans le
+même run.
+
+**Avant :** une campagne de presse se serait déroulée entière sans lecteur.
+**Après :** les foyers visés sont ceux de la population jouée, et l'accord est vérifié.
+
+Second défaut, plus discret : le foyer comptait pourquoi chaque croyance ne circulait pas —
+faute d'ancrage, faute de mode praticable, parce qu'elle avait déjà été dite — puis jetait ce
+décompte. Or c'est le premier chiffre à regarder : si presque rien ne franchit la règle
+d'ancrage, le canal est vide et rien d'autre n'a de sens à mesurer. Le bilan est maintenant
+journalisé chaque jour simulé, même quand il est à zéro, et une alarme se lève si des blocs
+sont servis sans qu'aucune croyance ne passe jamais.
+
+---
+
+## [2026-09-22] Le chapitre 7 expose le mécanisme avant les deux régimes
+
+Le chapitre ouvre désormais sur ce que le choc vécu et l'article lu ont en commun : une entrée en
+mémoire, une estimation faite par l'agent, un récit du soir qui fait sauter l'information au reste
+du foyer, et deux façons de s'éteindre — par contradiction quand l'agent refait le trajet, par
+usure quand rien ne vient le démentir. Les deux régimes ne sont plus deux dispositifs juxtaposés,
+et le choc passe avant l'article, dans l'ordre que le § 1.4 et le plan annonçaient déjà.
+
+**Avant :** chaque section redisait sa part du mécanisme, et une section finale reprenait ce que
+les deux avaient montré.
+**Après :** le mécanisme est énoncé une fois, les sections mesurent, et un tableau final donne par
+quelle voie l'événement a atteint la décision dans chaque régime.
+
+**Le chapitre 3 dit enfin par où le passé atteint une décision.** Le § 3.4 nomme les quatre
+voies — mes habitudes, ce que je sais, ce qui a changé récemment, les souvenirs rappelés par
+similarité — et dit ce que la gravité d'un événement décide : la constante d'érosion, et le
+nombre de jours pendant lesquels son récit est servi. D'où les deux façons dont un souvenir cesse
+d'agir, par contradiction ou par usure. Le chapitre 7 décrivait tout cela faute de l'avoir en
+amont ; il s'y réfère désormais.
+
+**Une quatrième règle de style entre au README de l'article :** un chapitre ne réexpose pas ce
+qu'un chapitre antérieur a établi, il le cite par son numéro de section. Deux formulations du
+même mécanisme finissent par en décrire deux, et le relecteur ne sait plus laquelle fait foi.
+
+**Tout ce qui parlait encore du chapitre 7 dans son ancienne forme est rattrapé** : le § 1.4 des
+deux introductions et de leur rendu LaTeX, la trame, les deux tableaux d'avancement, le maître
+anglais et le rendu LaTeX du chapitre, entièrement réécrits — ils décrivaient un protocole
+longitudinal sur 200 agents que le dispositif ne joue plus. `make paper-parite` repasse au vert,
+dix chapitres à parité sur les trois arbres, zéro écart.
+
+**Les liens du chapitre étaient tous cassés.** Le fichier venait d'un dossier plus profond : ses
+trois images et ses douze liens de tickets pointaient un niveau trop haut. Les dix-huit liens
+relatifs résolvent.
+
+---
+
+## [2026-09-22] Une seule figure pour les deux régimes, et un tableau qui dit par où c'est passé
+
+Le choc subi et l'article lu se lisent désormais sur la **même** courbe : la propension au mode
+visé, par jour relatif à l'événement, et par rôle — celui qui l'a rencontré, celui qui vit sous
+le même toit et n'a fait qu'en entendre parler, et celui que rien n'a touché. La figure du
+chapitre 7 en est la première instance ; la suivante ne coûtera pas un script de plus.
+
+Elle écrit **« non concluant » sur l'image** quand un rôle n'a pas assez de décisions derrière
+lui, au lieu de laisser la courbe manquer. Une série absente se lit comme un effet nul par celui
+qui ne sait pas qu'elle manque.
+
+**Et un tableau dit par quel chemin le passé a atteint la décision.** L'agent en a quatre : ses
+habitudes, ce qu'il tient pour vrai, ce qui vient de changer, et les souvenirs que le rappel lui
+ramène. Quand un agent se détourne d'un mode puis y revient, on peut maintenant demander
+laquelle des quatre a porté l'effet.
+
+Le tableau dit aussi ce qu'il **ne** sait pas faire, ce qui est le point. Retrouver un choc dans
+un prompt par son texte échoue : la réflexion du soir le reformule avant qu'il n'atteigne la
+mémoire longue. Une seconde recherche, par mots rares, rattrape une partie — et ses résultats
+sont marqués comme indicatifs. Les décisions où rien n'est retrouvé sont comptées et nommées :
+« on ne sait pas le dire » n'est pas « cela n'a pesé sur rien ».
+
+---
+
+## [2026-09-22] Les agents jugent ce qui leur arrive, et le foyer se met à parler
+
+Deux additions qui changent ce qu'un événement laisse derrière lui.
+
+**L'agent juge.** Jusqu'ici la gravité d'un incident était purement comptable : tant de minutes
+de retard, une correspondance ratée. Un article de presse, ne faisant rien subir, valait donc
+zéro — c'est-à-dire exactement la même chose qu'un trajet parfait, et il disparaissait de la
+mémoire en moins de trois jours. L'agent dit maintenant ce que cela lui a fait, sur cinq
+niveaux ancrés par une conséquence concrète.
+
+**Avant :** un article lu valait zéro et s'effaçait le surlendemain.
+**Après :** il vaut ce que son lecteur en dit, et vit aussi longtemps que cela mérite.
+
+Le fait mesuré reste le plancher : un agent qui minimise un dépannage de trente minutes ne peut
+pas le faire disparaître. Et si le modèle répond hors de l'échelle, l'exposition est déclarée
+non avenue plutôt que ramenée à une valeur moyenne — une exposition non jugée qu'on compterait
+comme les autres serait pire qu'une exposition perdue.
+
+**Le foyer se met à parler.** Quatre agents sur cinq de la cohorte vivent avec quelqu'un d'autre
+de la simulation, et jusqu'ici rien ne passait. Le soir, chacun entend le bilan de journée des
+autres membres présents — celui qu'ils ont eux-mêmes écrit, cité mot pour mot — et ce qu'ils ont
+appris de leurs trajets. Aucun appel supplémentaire au modèle : cela s'ajoute à la réflexion qui
+a déjà lieu. Et rien n'est écrit dans le dos de personne : ce qui est entendu n'entre en mémoire
+que si celui qui l'entend en fait quelque chose.
+
+**Ce qui circule ne fait qu'un saut.** Une conviction née de ce qu'on a entendu porte sa
+provenance et ne repart jamais, même confirmée plus tard par sa propre expérience. Quatre gardes
+tiennent la boucle fermée : on ne redit jamais deux fois la même chose à la même personne, le
+receveur voit ce qu'il croit déjà, ce qui est entendu ne repart pas, et un détecteur signale une
+famille qui se répéterait — sans jamais rien couper de lui-même.
+
+Le partage est **éteint par défaut** : tout ce qui a été mesuré avant reste comparable, et le
+bras « sans foyer » est un interrupteur, pas une reconstruction.
+
+**Un seul levier pour les deux régimes.** `make run EVENEMENT=<nom>` joue un choc comme un
+article ; `CHOC=` et `PRESSE=` restent valides et disent lequel a servi. Les mesures par jour
+tiennent dans un seul fichier, avec une colonne qui dit par quel canal l'événement est entré.
+Et les expériences peuvent de nouveau déclarer un événement : le refus qui datait du jour où
+aucun mécanisme n'existait est levé.
+
+---
+
+## [2026-09-22] L'article lu le matin atteint enfin les décisions de la journée
+
+Correction d'un défaut introduit le jour même, et qui vidait le nouveau régime de son sens. Un
+article déposé au réveil n'entrait qu'en mémoire courte — or un agent qui décide ne consulte que
+sa mémoire longue, et la mémoire courte n'y passe que le soir, reformulée par sa réflexion.
+L'article n'aurait donc pesé qu'à partir du lendemain, et « l'agent sait avant de choisir » aurait
+été faux.
+
+**Avant :** un article lu à 3 h du matin n'était vu par aucune décision de la journée.
+**Après :** il entre dans les deux mémoires. La longue, pour que les décisions du jour le
+trouvent ; la courte, pour que la réflexion du soir le voie et puisse en tirer une conviction.
+
+Le choc, lui, ne change pas : il s'applique après la décision, son effet commence le lendemain, et
+c'est exactement ce qu'on veut — c'est ce qui rend les jours suivants imputables au seul souvenir.
+L'asymétrie entre les deux régimes n'est pas un oubli, elle est le sujet.
+
+**Un article peut nommer des modes de transport**, et cela n'a jamais été refusé. La règle qui
+l'interdit vise la paraphrase et le texte témoin, pas l'article lui-même — un article sur une
+grève des transports qui ne pourrait pas dire « métro » serait inintelligible. Ce qui reste
+refusé est un texte qui dit à l'agent quoi faire, conclut à sa place sur la fiabilité d'un mode,
+ou annonce ce qu'il fera demain. La frontière n'est pas le vocabulaire, c'est à qui la phrase
+s'adresse.
+
+---
+
+## [2026-09-22] Un agent peut lire le journal le matin, et le savoir en choisissant
+
+Jusqu'ici, tout ce qui arrivait à un agent lui arrivait **après** qu'il ait choisi son mode de
+transport : il décidait en voyant l'offre normale, puis encaissait. Il existe maintenant un
+second régime. Un article de presse locale entre dans sa mémoire au réveil, avant sa première
+décision de la journée. C'est la différence entre subir et savoir, et c'est elle que le
+chapitre 7 cherche à mesurer.
+
+**Avant :** un événement ne pouvait qu'être subi, à l'arrivée.
+**Après :** il peut aussi être su, au réveil — et dans ce cas le monde, lui, ne bouge pas. Aucun
+retard, aucune ligne coupée. Ce qui change est seulement ce que l'agent a en tête.
+
+Les cinq articles de presse toulousaine du corpus sont déclarés. Le texte est **cité**, jamais
+réécrit : son empreinte est vérifiée au chargement contre sa déclaration **et** contre le
+manifeste du corpus. Un article retouché en même temps que sa déclaration se voit — c'est
+exactement ce que la seconde vérification existe pour attraper.
+
+**Qui lit, et quand.** Un seul membre par foyer, tiré à graine fixe : celui qui ne lit pas est le
+témoin, et sans lui il n'y aurait personne chez qui observer ce qui se transmet. Le jour de
+parution est tiré **par foyer** dans une fenêtre déclarée — si tous lisaient le même matin,
+l'effet de l'article et celui du calendrier seraient inséparables. Les membres d'un même foyer,
+eux, lisent le même jour.
+
+**Le cache de décisions se coupe tout seul les jours d'événement.** Plus besoin d'y penser au
+lancement. Une réserve est journalisée plutôt que tue : la coupure protège le jour de
+l'événement, pas les jours d'après, qui sont pourtant ceux qu'on mesure. Le journal compte
+désormais, jour par jour, combien de décisions ont été servies depuis le cache dans cette
+fenêtre — de quoi savoir sur quoi porte le doute avant de publier une courbe.
+
+**Un article ne peut pas encore être joué.** Il lui manque le jugement de l'agent : sans lui il
+entre avec une gravité nulle, vit 2,8 jours et disparaît du prompt le surlendemain — son silence
+passerait pour une absence d'effet. Le chargement le dit en toutes lettres et refuse de démarrer
+un run. Les déclarations, elles, se vérifient dès maintenant.
+
+Un point a demandé un arbitrage. Les règles qui refusent un texte donnant des consignes à
+l'agent ont été écrites pour des récits que nous rédigeons à la première personne ; un article de
+presse y tombe pour des raisons qui ne regardent pas le lecteur. Sur les cinq articles, une seule
+occurrence : « City staff must first inspect each site to make sure there is no danger ». Elle se
+lève par une exemption déclarée et motivée, qui tombe si le texte change. S'adresser au lecteur à
+la deuxième personne, en revanche, ne s'exempte jamais.
+
+---
+
+## [2026-09-21] Un choc et un article de presse empruntent désormais le même chemin
+
+Un choc subi sur un trajet et un article lu le matin entraient par deux chemins de code
+distincts — l'un livré, l'autre sur le point d'être écrit comme sa copie. Ils n'en font plus
+qu'un. Tout ce que le dépôt savait faire d'un choc, il saura le faire d'un article : gravité,
+durée de vie du souvenir, service dans le prompt, consolidation, croyance.
+
+Pour qui lance des runs, **rien ne change aujourd'hui**. Les déclarations de
+`config/chocs/` continuent de se charger, les commandes ne bougent pas, et les chiffres déjà
+mesurés restent valides — un test rejoue le choc « moteur suspect » et exige la même trace,
+champ pour champ.
+
+**Avant :** un choc se déclarait et se jouait ; un article de presse n'avait aucun chemin, et
+en aurait eu un second, parallèle et redondant.
+**Après :** une seule déclaration, deux moments d'entrée possibles. Le choc arrive **après** la
+décision — l'agent a choisi en voyant l'offre normale, puis il encaisse. L'article arrivera
+**avant** — il saura en choisissant. C'est ce contraste que le chapitre 7 mesure, et il fallait
+un seul mécanisme pour que les deux régimes soient comparables.
+
+Deux choses s'ajoutent à la mémoire au passage. Chaque souvenir dit désormais **d'où il vient** :
+vécu, lu, ou entendu d'un membre du foyer. Et le ménage d'un agent, présent dans les données
+depuis le sceau, arrive enfin jusqu'à la simulation — il s'y perdait silencieusement au
+chargement, ce qui aurait rendu inopérant tout ce qui vise un foyer.
+
+L'alarme du cache de décisions dit enfin la bonne raison. Elle invoquait « la durée » ; le motif
+réel est que la clé exacte du cache ne porte pas la mémoire de l'agent, et que sa branche
+sémantique n'écarte une décision qu'en dessous de 0,95 de similarité — une ligne de souvenir
+ajoutée à un bloc n'y suffit pas toujours. Coupez le cache pour toute campagne à événement.
+
+Les canaux et les prises qui ne sont pas encore livrés — l'article, le réveil, le jugement de
+l'agent, le foyer — sont **refusés au chargement** avec le nom du lot où ils arrivent. Un champ
+accepté et sans effet part en run sur un protocole qui n'est pas celui qu'on a écrit.
+
+---
+
+## [2026-09-21] Le chapitre 7 dit qui lit le journal, et la campagne de presse change d'échelle
+
+La section presse du chapitre 7 ne s'arrête plus à la réaction du jour. Un article est lu par un
+seul membre du foyer, tiré à graine fixe, et le chapitre suit ce que les autres en font : ce qui
+circule le soir, ce sont les concepts ancrés dans un trajet réellement fait, pas la lecture du
+matin. La séquence attendue est datée jalon par jalon, et un co-résident qui bougerait dès le
+lendemain la réfuterait.
+
+**Avant :** la campagne se jouait sur les 3 299 déplacements de la cohorte, mémoire éteinte, en
+une journée, sous cinq conditions.
+**Après :** quelques foyers, plusieurs jours, mémoire allumée, et trois conditions — journée
+nominale, article brut, texte témoin. La paraphrase neutre et la référence tabulaire à événement
+encodé sortent du protocole ; le point de comparaison devient un décideur à règles rigides qui ne
+lit pas et dont la courbe reste plate.
+
+Le chapitre dit aussi ce qu'il ne mesure pas. Ce qui est revendiqué est le signe du déplacement et
+sa forme — un décrochage, puis un retour progressif — jamais son ampleur ni le réalisme de la date
+de retour. Les tickets 059 et 095 portent la même phrase, pour que les chiffres à venir soient lus
+dans ce cadre.
+
+**Un résultat du chapitre 7 était sous-déclaré.** La nouvelle figure des opinions déclarées, six
+critères sur les cinq modes au lieu de la seule voiture, montre que **cinq** critères de la
+voiture décrochent après l'avarie et reviennent au point près, là où le texte n'en citait que
+trois. Elle montre surtout que sur les quatre autres modes les deux agents dérivent autant l'un
+que l'autre : la voiture est le seul endroit où l'exposé bouge et le témoin non, et c'est ce qui
+rend l'écart attribuable à l'avarie plutôt qu'au bruit de l'enquête.
+
+**Les trois figures du chapitre 7 s'affichent enfin.** Elles étaient écrites dans
+`docs/paper/images/`, un dossier qu'aucun chapitre ne peut atteindre : depuis `fr/`, `../images/`
+désigne `docs/paper/article/images/`. Les deux scripts écrivent désormais au bon endroit, dans le
+stock `docs/paper/figures/` et sa copie d'article, et chacun sort en PNG comme en SVG.
+
+**Et la grille des vingt signes se regarde au lieu de se lire.** `figure_grille_signes.py` rend un
+damier de cinq articles par quatre modes depuis le fichier gelé, en PNG et en SVG : flèche pour le
+sens, pastilles pleines pour l'intensité, pointillé pour les trois cellules où aucun déplacement
+net n'est attendu. Le script refuse de dessiner si le compte n'est pas de vingt cellules, ou si
+une intensité contredit son signe.
+
+---
+
+## [2026-09-21] La campagne de demain se lance en une commande, et s'arrête quand elle n'apprend plus rien
+
+Deux bras répondent aux deux objections de la relecture : l'un coupe le bloc de contexte en
+gardant la mémoire active, l'autre abaisse le seuil d'entrée d'un souvenir de choc. Le premier
+transforme en mesure ce qui n'était qu'une déduction par absence — « l'effet tient au seul bloc de
+texte » n'avait jamais été vérifié en coupant ce bloc. Le second dit si le silence des croyances
+vient du seuil ou du classement.
+
+**Avant :** chaque bras se lançait à la main, avec ses variables d'environnement à ne pas oublier.
+**Après :** `scripts/experiment/campagne_095_ablation.sh`, et l'enquête passe au quotidien.
+
+**Un run peut désormais s'arrêter dès que le choc est éteint.** Le contrôleur écrit déjà la ligne
+qui date l'extinction ; `arret_sur_extinction.py` l'attend, compte les jours vécus, et rend la
+main. Mesuré sur la campagne du jour : six jours vécus économisés sur treize.
+
+Une précision qui change tout dans son usage : viser « plus aucun souvenir de choc ne pèse » ne
+rapporte rien, parce que l'agent **fabrique ses propres souvenirs graves** — le bras témoin, qui
+ne subit aucun incident, en produit trois. Cette ligne-là n'arrive que cinq jours avant la fin.
+C'est la sortie du souvenir DÉCLARÉ qu'il faut viser, à sa date.
+
+Et une mise en garde inscrite dans le code : ne jamais arrêter sur la stabilité d'une part modale.
+Sur cette campagne, la propension quotidienne vaut 5 % le 11 avril et 52 % le 13. Une bande
+étroite arrêterait le run au gré du bruit.
+
+---
+
+## [2026-09-21] Le chapitre 7 perd un test qui comptait quatre fois ce qu'il voyait une fois
+
+Le protocole de presse annonçait vingt prédictions signées et un test binomial : quinze
+concordances sur vingt pour battre le hasard. Les vingt cellules ne sont pas vingt observations
+indépendantes. Les parts modales d'un même événement somment à un — un agent qui déserte le métro
+fait monter la voiture, le vélo et la marche par construction — et la grille l'écrit noir sur
+blanc : sur la rumeur des punaises, elle attend trois hausses pour une baisse. Un seul
+comportement produisait donc quatre concordances.
+
+**Avant :** quinze signes sur vingt, p = 0,021.
+**Après :** le taux se publie toujours sur les vingt cellules, mais l'incertitude vient d'un
+rééchantillonnage groupé par événement — cinq grappes, pas vingt tirages.
+
+Le chapitre gagne au passage ce qui manquait à sa portée : la sélection des cinq événements est
+rattachée à la question d'ouverture. Choisir des faits qu'aucune variable n'encode n'est pas
+biaiser la mesure, c'est la seule façon de demander si un facteur non encodé peut influencer une
+décision. Ce qui reste à établir n'est pas qu'un modèle tabulaire reste immobile — il n'a aucune
+entrée par où bouger — mais que la réaction aille dans le sens attendu et ne se produise pas devant
+n'importe quel texte.
+
+L'agent note désormais ce qu'il lit avant d'avoir rien décidé : une intensité signée, du très grave
+au réjouissant, et les modes qu'il estime touchés. Cette déclaration se confronte à la même grille
+que les parts modales, et l'écart entre les deux devient une mesure : un agent qui annonce le bon
+sens sans se déplacer a lu le texte sans en tirer de conséquence. La durée de l'effet suit la même
+note, si bien qu'elle dépend de ce que l'agent a retenu et non d'un réglage.
+
+---
+
+## [2026-09-21] La presse locale a son corpus gelé, sa grille de prédictions et ses foyers
+
+Le protocole à cinq conditions du chapitre 7 annonçait vingt prédictions signées et un taux
+d'accord de signe. Rien n'était vérifiable : les textes n'existaient pas au dépôt, trois cellules
+de la grille restaient ambiguës, et aucun code ne pouvait dire si une paraphrase était bien
+dépourvue de toute mention de transport.
+
+Les trois manques sont comblés. La grille des vingt signes est gelée, cellule par cellule, avec
+le motif de chacune et une empreinte que tout rapport de dépouillement recopie — c'est ce qui rend
+le « pré-enregistré » vérifiable après coup. Les trois cellules ambiguës prennent « pas d'effet
+attendu », qui est une prédiction et non une abstention : un déplacement significatif la réfute au
+même titre qu'un signe inversé.
+
+Les cinq extraits de presse sont extraits des archives par un script, selon une règle écrite —
+titre, puis paragraphes du corps, encarts de recommandation retirés, coupe à la fin d'un
+paragraphe. Deux exécutions rendent le même texte, ce qu'un copier-coller ne permet pas.
+
+**Avant :** la paraphrase « sans indice modal » s'affirmait dans un ticket.
+**Après :** elle se mesure contre une liste de mots de mobilité, en français et en anglais, et un
+seul mot la fait refuser au chargement. Deux se sont fait prendre dès le premier essai — « mises
+en ligne » et « underground » — qu'aucune relecture humaine n'aurait signalés.
+
+Les textes sont traduits du français, et le dispositif le dit trois fois plutôt que de le taire :
+les deux versions sont au dépôt, le manifeste nomme qui a traduit et quand, et l'agent lit
+`[Translated from French]` en tête de l'article. Un texte traduit servi comme un original serait
+une sixième condition que personne n'aurait déclarée.
+
+Enfin, une population de vingt agents en dix foyers de deux permet d'observer ce qu'un article lu
+par une seule personne fait au reste de son foyer. Les foyers témoins sont dans le même fichier,
+donc dans le même run : le plancher de bruit mesuré la veille n'est pas nul, et un témoin lancé
+séparément le ferait entrer dans l'effet mesuré.
+
+Le dépouillement suit : écart apparié sur l'intersection des deux conditions, accord de signe avec
+son binomial exact — il retrouve les 0,021 et 0,058 que le chapitre annonce pour quinze et
+quatorze concordances sur vingt — et kappa pondéré. Deux gardes y comptent plus que le calcul. Un
+mode trop rare rend « non concluant » et jamais 0,0, parce que dans ce dépôt l'absence de mesure
+produit le score parfait. Et le plancher de bruit du décideur n'a **pas** de valeur par défaut :
+un écart plus petit que lui n'est pas un effet, et un défaut se ferait oublier.
+
+Le corpus est **complet** : 22 fichiers sur 22. Le texte témoin de la condition placebo ne pouvait
+pas venir des trente articles, réunis précisément pour leur lien avec la mobilité ; c'est une
+dépêche de sciences naturelles, la même pour les cinq, appariée en longueur de 0,5 % à 8 %. Un
+témoin unique rend la condition comparable d'un article à l'autre plutôt que dépendante de cinq
+choix.
+
+La paraphrase, elle, ne cache plus son sujet. La première écriture interdisait tout mot de
+transport, y compris celui dont l'article parle : elle racontait le lancement du vélo partagé sans
+nommer le vélo. L'objection à réfuter n'est pourtant pas « le texte parle de transport », c'est
+« le texte dit à l'agent quel mode prendre ». Le sujet se nomme désormais, les modes de report
+disparaissent, et chaque exemption se déclare avec sa raison sous deux gardes : un mot ne s'exempte
+que s'il figure dans le texte de l'article, et aucun article n'exempte un mode vers lequel son
+événement pousserait. « Métro » passe sur l'article des punaises parce qu'il en est le sujet ;
+« vélo » n'y passe pas, parce qu'il en est le report attendu.
+
+**Avant :** une paraphrase qui parlait d'« espaces collectifs souterrains » et d'« engins ».
+**Après :** elle dit le métro et le vélo, et se tait sur ce vers quoi on pourrait se reporter.
+
+---
+
 ## [2026-09-21] L'article compile de nouveau : le vidage de la file de flottants est retiré
 
 Les chapitres 3, 5, 6 et 7 se terminaient sur `\afterpage{\clearpage}`, censé garder les
@@ -109,6 +1327,26 @@ comparaison planche par planche montre un contenu identique — la date venait d
 checkout`, pas d'une édition. Et la planche qui liste les champs d'un souvenir a révélé un écart
 avec la spécification cible : celle-ci annonçait quinze champs plus trois pour les concepts, le
 code en porte vingt-trois. C'est le compte du code qui est affiché.
+
+---
+
+## [2026-09-21] Les plafonds de quota sont remesurés : rien à corriger, deux clés hors de portée
+
+Les `rpd_limit` de `providers.yaml` ont été confrontés aux quotas réellement servis, une fois le
+run du jour terminé. Les trois clés Groq confirment leurs 1000 requêtes/jour par leurs propres
+en-têtes ; mistral et google n'ont pas bougé d'une ligne. Le fichier était juste partout où la
+question pouvait se poser.
+
+Deux clés échappent encore à la mesure, et pour un motif qui n'a rien d'un quota : le compte
+Cerebras répond « paiement requis », le compte OpenAI « plus aucun crédit ». Elles restent
+inchangées, chacune avec son alarme — jamais d'assouplissement silencieux. À noter : l'instance
+OpenAI réactivée la veille ne peut donc pas servir aujourd'hui. Ce que la sonde n'atteint pas, la
+trace posée le matin même l'atteindra : le jour où ces clés serviront, leur refus donnera leur
+limite réelle sans qu'on ait à relancer quoi que ce soit.
+
+**Avant :** les plafonds venaient de documentations fournisseur, sans date ni source vérifiable.
+**Après :** ceux qui sont mesurables le sont, et les deux qui ne le sont pas le disent, avec la
+raison — un compte vide, pas un seau plein.
 
 ---
 

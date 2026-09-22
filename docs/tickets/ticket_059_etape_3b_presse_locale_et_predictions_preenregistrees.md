@@ -16,9 +16,51 @@
 > service. L'étage 3 attend les lots 1 à 3 du
 > [078](ticket_078_partage_de_concepts_au_sein_du_foyer.md), qui n'a aucun code.
 >
+> **REVU LE 2026-09-21, second tour de relecture du chapitre 7.** L'auteur a tranché le
+> dispositif : la campagne ne se joue plus sur les 3 299 déplacements à mémoire éteinte mais sur
+> **quelques foyers, plusieurs jours, mémoire allumée**. L'**étage 1 disparaît** comme passe
+> autonome, les conditions **C3 (paraphrase neutre) et C5 (référence tabulaire à événement
+> encodé) sont retirées**, et le point de comparaison devient un **décideur à règles rigides qui
+> ne lit pas**. Le détail et ce que chaque retrait coûte sont dans
+> `specs/ticket_059/questions.md`, quatrième tour. Les § 2, § 3 et § 4.4 ci-dessous sont à lire
+> avec ce bandeau ; le § 5 et le § 6 ne bougent pas.
+>
 > **Ce ticket n'écrit pas dans l'article.** Le chapitre 7 § 7.1 décrit l'étage 1 et rien d'autre ;
 > les étages 2 et 3 lui manquent. Le signalement se fait par la skill `article-impact` au moment
 > où une mesure existe, pas à l'élargissement du cadrage.
+
+---
+
+## 0 bis. Alignement sur le chapitre 7, au 2026-09-22
+
+Le chapitre 7 a été refondu les 21 et 22 septembre. Trois choses de ce ticket ne s'y lisent plus
+sous le même nom, et une quatrième n'a plus d'objet.
+
+| Ce que le ticket dit | Ce que le chapitre porte au 22 septembre |
+|---|---|
+| « le chapitre 7 § 7.1 » pour la presse | c'est le **§ 7.3**. Le § 7.1 est désormais le mécanisme commun aux deux régimes, le § 7.2 le choc vécu |
+| « un § 7.1 bis » à écrire pour la presse en régime longitudinal (§ 12) | **sans objet** : le § 7.3 est longitudinal d'emblée depuis le retrait de l'étage 1. Il n'y a pas de section à ajouter, il y a une campagne à jouer |
+| « la barre du binomial du § 7.1.3 » | le § 7.3.3 ne publie **aucun test** : le damier des accords paraît tel quel |
+| le § 7.4 « ce que les deux régimes partagent » | **retiré du chapitre le 22 septembre.** Sa colonne mesurée était déjà au § 7.2.1, et sa prédiction de stratification est remontée au § 7.1 |
+
+⚠ **Le bras « ouï-dire » (Q3) n'a plus d'objet.** Il faisait varier
+`memoire__partage_foyer_observations_min`, le seuil d'ancrage d'une croyance avant qu'elle
+circule. La décision D1 du [ticket 100](ticket_100_un_seul_canal_d_evenement_pour_le_vecu_et_le_lu.md)
+supprime l'ancrage : le récit du soir porte **tous** les épisodes de la journée, sans condition de
+gravité ni d'observation. Il n'y a plus de seuil à mettre à zéro. Ce que ce bras mesurait —
+l'amplification sans contact avec le monde — reste une question ouverte, mais elle se pose
+maintenant sur le **saut unique** de D2, pas sur l'ancrage.
+
+✅ **TRANCHÉ le 2026-09-22 : le foyer témoin n'est plus demandé.** Lecteur, co-résident et témoin
+interne étaient décrits au § 7.1.4 du chapitre, que l'auteur a retiré ; le § 7.3.2 ne dit plus
+qu'une chose, qu'un membre par foyer reçoit le texte. Ce ticket cesse donc d'exiger un foyer
+témoin non exposé, et cesse d'exiger qu'il soit dans le même run — voir le § 6.4, réécrit.
+
+⚠ **Ce que cela coûte, et il faut le savoir en lisant les résultats.** Le 095 § 7 bis a mesuré
+un plancher de bruit **non nul** entre deux bras identiques : 1 écart de mode sur 31 décisions
+appariées. Sans foyer témoin dans le run, ce plancher n'est plus mesuré par le run lui-même ; il
+reste à reprendre du 095, ou à réétablir par un rejeu à l'identique. Un écart plus petit que lui
+n'est pas un effet, et cette garde-là ne disparaît pas avec le témoin.
 
 ---
 
@@ -54,6 +96,15 @@ du jour » :
 
 ## 2. Trois étages, et ce qui les sépare
 
+> ⚠ **Périmé depuis le 2026-09-21.** Le tableau ci-dessous décrit trois étages dont le premier
+> se jouait hors simulateur, mémoire éteinte, sur la cohorte entière. Cet étage n'existe plus :
+> tout se joue dans un run GAMA longitudinal, mémoire allumée, sur quelques foyers. Ce qui reste
+> vrai du tableau est la colonne « Question » et la ligne « Dépend de ». Ce qui est faux : les
+> lignes « Mémoire », « Simulateur », « Horizon » et « Unité d'analyse » pour l'étage 1, et la
+> colonne « Sortie pour l'article », le § 7.1 portant désormais les trois questions à la fois.
+> Conservé tel quel parce que les dépendances aux tickets 095 et 078 s'y lisent encore.
+
+
 | | Étage 1 — la réponse | Étage 2 — la persistance | Étage 3 — la diffusion |
 |---|---|---|---|
 | Question | l'agent réagit-il au texte, et au bon sens ? | combien de temps, et comment ça s'éteint ? | qui d'autre en entend parler ? |
@@ -88,16 +139,31 @@ retiré au hasard à chaque requête.
 |---|---|---|---|
 | **C1** | Agent, journée nominale | aucun article | le niveau de référence |
 | **C2** | Agent, article brut | le texte de presse tel qu'il a paru | l'effet total de l'événement |
-| **C3** | Agent, paraphrase neutre | le même fait, réécrit sans **aucune** mention de mode ni de voirie | l'exécution d'une consigne lexicale, de l'inférence sur la situation |
-| **C4** | Agent, texte témoin | un article local réel, de longueur appariée, sans lien plausible avec le choix modal | l'effet du contenu, de l'effet d'ajouter un texte |
-| **C5** | Référence tabulaire, événement encodé | l'événement traduit dans l'offre : liens coupés, fréquences dégradées | ce qu'une référence tabulaire fait de l'événement quand il l'atteint |
+| **C3** | Agent, texte témoin | un texte d'actualité sans lien plausible avec le choix modal, apparié en longueur, le même pour les cinq | l'effet du contenu, de l'effet d'ajouter un texte |
 
-**C5 n'existe que lorsque l'événement modifie l'offre.** Les 21 variables ne portant ni météo ni
+**Trois conditions depuis le 2026-09-21, et non plus cinq.** L'ancienne C3 (paraphrase neutre) et
+l'ancienne C5 (référence tabulaire à événement encodé) sont retirées par l'auteur ; l'ancienne C4
+(texte témoin) prend le numéro C3. Toute référence à « C4 » ou « C5 » ailleurs dans ce ticket,
+dans `plan.md` ou dans `tests.md` désigne l'ancienne numérotation et se lit avec cette phrase.
+Attention : dans `specs/ticket_059/tests.md`, les identifiants C1 à C9 numérotent des **cas de
+test du corpus**, pas des conditions du protocole — les deux séries ne se confondent pas.
+
+**Le point de comparaison est un décideur à règles rigides qui ne lit pas.** Il ne figure pas au
+tableau parce qu'il ne reçoit aucune des trois entrées ci-dessus. Aucune de ses variables ne bouge
+entre la veille et le jour de parution, et sa part modale est donc identique des deux côtés. C'est
+ce qui remplace l'ancienne C5 : au lieu de traduire l'événement dans l'offre pour voir ce que la
+référence en fait, on montre qu'elle n'a pas d'endroit où répondre.
+
+<!-- PÉRIMÉ le 2026-09-21, conservé parce que la règle 3 du protocole s'y lit : la condition C5
+traduisait l'événement dans l'offre, liens coupés et fréquences dégradées, seul canal par lequel
+un événement atteignait une référence tabulaire. La parade de La Machine s'y traduisait en
+coupures de graphe, la rumeur des punaises pas du tout, et C5 y était identique à C1.
+C5 n'existait que lorsque l'événement modifiait l'offre. Les 21 variables ne portant ni météo ni
 durée, le seul canal par lequel un événement atteint une référence tabulaire est la règle 3 du
 protocole : un mode retiré de l'offre sort de la prédiction, qui se renormalise sur les modes
 restants. La parade de La Machine se traduit en coupures de graphe ; la rumeur des punaises de lit
 ne se traduit pas, et **C5 y est identique à C1**. Ce n'est pas une faiblesse du protocole, c'est
-la mesure elle-même — et elle se publie plutôt qu'elle ne se suppose.
+la mesure elle-même — et elle se publie plutôt qu'elle ne se suppose. -->
 
 ---
 
@@ -144,11 +210,22 @@ c'est de lire le signe après la mesure.
 
 $H_3$ (adaptation contextuelle écologique supérieure de l'agent à mémoire) est réfutée si :
 
-1. le **texte témoin** (C4) produit une perturbation modale d'amplitude comparable à l'article
-   actif — défaut de spécificité ;
-2. la **paraphrase** (C3) détruit la réallocation modale sur la majorité des cellules —
-   l'agent exécute un ordre lexical, il ne raisonne pas ;
-3. $S_{\text{sign}}$ n'atteint pas quinze sur vingt.
+1. le **texte témoin** (C3, ex-C4) produit une perturbation modale d'amplitude comparable à
+   l'article actif — défaut de spécificité ;
+2. aucun **décrochage** ne suit la parution, ou le retour ne suit pas le décrochage — la forme
+   annoncée par le chapitre 7 n'est pas produite ;
+3. le signe observé contredit la grille sur la majorité des cellules.
+
+⚠ **Le critère n° 2 a changé le 2026-09-21.** Il portait la paraphrase neutre : « la paraphrase
+détruit la réallocation modale sur la majorité des cellules — l'agent exécute un ordre lexical,
+il ne raisonne pas. » Cette condition est retirée du protocole, et **l'objection lexicale n'a
+donc plus de contrôle**. Elle se traite au chapitre des limites ou par le corpus, pas par une
+condition ; c'est la Q21 des questions vivantes. Le critère n° 2 est remplacé par la forme, que
+le chapitre 7 revendique désormais explicitement.
+
+⚠ **La barre des quinze signes sur vingt ne s'applique plus.** Elle supposait un test binomial
+sur la cohorte entière ; l'étage 1 a disparu, et les vingt cellules se lisent sur quelques
+foyers, sans test. Le taux d'accord se publie tel quel.
 
 ⚠ **Il manque un quatrième contrôle, et il ne coûte rien** : le **rejeu à l'identique** de la
 journée nominale, qui donne le bruit propre du décideur. Sans lui, « C4 déplace moins que C2 » se
@@ -182,26 +259,109 @@ Un article de presse **ne fait subir aucun retard**. Passé tel quel par le cana
 silence serait pris pour une absence d'effet — exactement le défaut que le lot B du 095 a trouvé
 dans l'enquête du soir avant qu'elle ne tourne.
 
-### 5.2 La gravité d'une information : une constante, pas une cote
+### 5.2 La gravité d'une information : l'agent décide — arrêté le 2026-09-21
 
-Trois options ont été pesées le 2026-09-21.
+Trois options avaient été pesées, dont une constante unique à 0,70 pour les cinq articles.
+**L'auteur les a toutes écartées : c'est l'agent qui juge ce qu'il vient de lire.**
 
-| Option | Ce qu'elle donne | Décision |
+Ce n'est pas un mécanisme à inventer, et c'est ce qui rend la réponse bonne marché. `llm/gravite.py`
+sépare déjà deux sources et les arbitre :
+
+> les **entrées brutes** reçoivent une gravité déterministe, calculée depuis ce que la simulation
+> mesure ; les **concepts** reçoivent un niveau nommé jugé par le modèle. Et une règle de sécurité
+> les arbitre : `I = max(I_llm, I_det)` — le fait mesuré l'emporte toujours sur le jugement.
+
+Un article ne porte **aucun fait mesuré** : ni retard, ni correspondance ratée, ni contrainte de
+mode. Son terme déterministe vaut donc zéro, et `max(I_llm, 0) = I_llm` : **le jugement décide
+seul, sans qu'aucune règle nouvelle soit écrite.** Le cas de la presse est le cas limite d'une
+mécanique qui existe, pas une exception qu'on lui ajoute.
+
+L'échelle est celle des cinq échelons, ancrés par une conséquence observable et non par une
+intensité ressentie — c'est ce qui rend comparables un article du jour 9 et un retard du jour 3 :
+
+| Échelon | Ancre | Gravité | Durée servie |
+|---|---|---:|---:|
+| anodin | *Everything went as I had planned.* | 0,10 | 4 j |
+| notable | *A noticeable deviation, with no consequence.* | 0,30 | 8 j |
+| gênant | *It cost me time, or forced me to shift a schedule.* | 0,50 | 11 j |
+| grave | *It made me miss something, or put me in difficulty.* | 0,75 | 16 j |
+| marquant | *I will remember this in a month; it changes how I travel.* | 1,00 | 23 j |
+
+**Trois gains, et ils comptent pour l'article.**
+
+1. **La durée de l'effet cesse d'être un réglage.** C'est exactement ce que le lot A du 095
+   cherchait pour les chocs, obtenu ici sans constante à défendre devant un relecteur.
+2. **Deux agents ne retiennent pas la même chose du même article**, et l'écart se mesure. La
+   distribution des échelons devient une sortie de l'expérience : *comment cinq personnes
+   reçoivent-elles le même texte ?* Aucune constante ne pouvait produire cette grandeur.
+3. **Un article peut ne rien faire.** Si tous les lecteurs le jugent anodin, l'effet est faible et
+   court. C'est un résultat, il s'accepte d'avance, et il ne se corrige pas en remontant un
+   paramètre.
+
+### L'échelle — arrêtée par l'auteur le 2026-09-21
+
+Les cinq échelons du dépôt mesurent une **intensité de contrariété** : anodin, notable, gênant,
+grave, marquant. Ils suffisent pour un retard subi, qui ne peut que dégrader une journée. Ils ne
+savent pas dire qu'un article est une **bonne** nouvelle — or le lancement du vélo partagé en est
+une, et la grille lui prédit un signe positif sur le vélo. Une échelle qui ne descend jamais en
+dessous de zéro ne peut pas porter la moitié du corpus.
+
+L'agent note donc sur une échelle **signée**, et il dit **quels modes** sont touchés :
+
+| Libellé servi au modèle | Valeur | Importance en mémoire |
+|---|---:|---:|
+| à ne pas manquer | **+1,00** | 1,00 |
+| génial | +0,75 | 0,75 |
+| super | +0,50 | 0,50 |
+| bien | +0,25 | 0,25 |
+| on s'en moque | **0,00** | 0,10 |
+| préoccupant | −0,25 | 0,25 |
+| gênant | −0,50 | 0,50 |
+| effrayant | −0,75 | 0,75 |
+| très grave | **−1,00** | 1,00 |
+
+Deux grandeurs sortent d'un seul jugement, et elles ne servent pas à la même chose :
+
+- **l'importance** — la valeur absolue — alimente la mémoire telle quelle. `gravite_concept(|v|, 0)`
+  rend `|v|`, la force suit, la durée de service aussi. Rien à écrire de plus.
+- **le signe, par mode** — c'est la nouveauté, et c'est ce qui rend le jugement confrontable. La
+  grille pré-enregistrée prédit vingt signes ; l'agent en produit un par mode qu'il nomme. **On
+  peut donc comparer ce que l'agent dit du texte à ce que la grille prédit, sans attendre qu'il
+  se déplace.**
+
+C'est un troisième niveau de mesure, qui n'existait dans aucune version antérieure du protocole :
+
+| Niveau | Grandeur | Ce qu'il dit |
 |---|---|---|
-| Gravité dérivée des **étoiles de la grille** | la durée de l'effet est déduite de l'intensité qu'on prétend prédire | **refusée** — circulaire : on poserait le résultat dans le réglage |
-| Gravité **déclarée par article**, valeur libre | cinq réglages, cinq durées, aucune comparabilité | **refusée** — ramène la durée au rang de paramètre, ce que le lot A du 095 vient de corriger |
-| **Une seule constante, identique aux cinq articles** | les différences entre articles viennent du **contenu**, jamais du réglage | **retenue** |
+| 1 | part modale observée | ce que l'agent **fait** |
+| 2 | scores d'affinité de l'enquête du soir (095, lot B) | ce que l'agent **croit** |
+| **3** | **signe et intensité déclarés à la lecture** | ce que l'agent **a compris du texte** |
 
-Règle proposée : `information__gravite = 0,70`, **la même pour les cinq articles**, valeur qui est
-déjà le seuil du vivier des chocs et donne 14,6 jours de force. Elle n'est pas un résultat : elle
-est le choix de placer tous les articles au même niveau d'attention, et **elle se déclare comme
-telle dans l'article**. Un bras de sensibilité à 0,35 et un à 1,00 disent ce que la constante
-coûte ; si les cinq articles se classent dans le même ordre aux trois valeurs, le classement n'est
-pas un artefact de réglage.
+Un désaccord entre les niveaux 3 et 1 est le résultat le plus intéressant que ce ticket puisse
+produire : l'agent a lu correctement — il annonce le bon signe — et ne se déplace pas pour autant.
+C'est exactement l'écart que le chapitre 6 mesure entre déclaration et comportement, transposé à
+un texte que nulle variable ne code.
 
-⚠ **Ce que cette constante ne doit pas devenir.** Si un jour un article se voit attribuer une
-gravité supérieure parce qu'il « paraît plus grave », le dispositif mesure l'opinion de celui qui
-règle. La constante unique est la garde, et elle se tient.
+⚠ **Le jugement ne remplace pas la grille.** Un agent qui déclarerait « très grave, mode voiture »
+sur l'article des punaises se tromperait, et c'est mesurable. Le taux d'accord entre les signes
+déclarés et la grille devient une sortie à part entière — et un accord parfait serait suspect
+avant d'être rassurant : il dirait que le modèle relit la grille dans le texte.
+
+**Deux points restent à trancher**, et ils sont au § 13 :
+
+- **quand** le jugement est demandé — à la lecture, par un appel dédié, ou le soir à la
+  consolidation. La proposition est *à la lecture* : le soir, l'entrée aurait déjà vécu la journée
+  à gravité nulle, donc n'aurait pas pesé sur les décisions du jour de parution, celui-là même où
+  l'article est censé agir (Q16) ;
+- **que faire d'un échelon hors grille.** `gravite_jugee` rend `None` et retombe sur le
+  déterministe, qui vaut zéro ici : un article s'effacerait en trois jours parce que le modèle a mal
+  répondu, et l'effet nul se lirait comme un résultat. Proposition : refus explicite et `[ALARME]`,
+  jamais de repli silencieux (Q17).
+
+⚠ **Ce que cela coûte en contrepartie.** La gravité devient une variable aléatoire du dispositif,
+donc les bras ne sont plus comparables sur ce terme : deux runs du même article peuvent donner deux
+durées. C'est le prix d'une durée qui n'est plus un paramètre, et il se paie en journalisant
+l'échelon de chaque lecteur — sans quoi une différence entre bras serait inexplicable.
 
 ### 5.3 Le point d'injection : le matin, avant la première décision
 
@@ -288,29 +448,45 @@ l'article, et il faut les lire ensemble :
   l'agent a **revécu la chose**. Une croyance née d'une lecture ne repart donc pas dans le foyer
   tant que son porteur ne l'a pas vérifiée par un déplacement réel.
 
-**Ce n'est pas un défaut, c'est le résultat.** Le 078 § 4.1 l'écrit pour les conversations ; il
-vaut mot pour mot pour la presse : *une croyance ne circule qu'ancrée dans un déplacement réel*.
-L'ouï-dire ne traverse pas le foyer. L'expérience, oui.
+✅ **RÉSOLU par la décision D1 du ticket 100** (auteur, 2026-09-21), et le § 6.2 tombe avec.
+L'auteur avait redemandé cette diffusion explicitement — *« il doit partager ces souvenirs avec
+sa famille »* — et les deux règles ci-dessus l'empêchaient. La sortie n'a été aucune des trois
+envisagées en Q18 : **un second canal a été ouvert**. Le *récit du soir* porte tous les épisodes
+de la journée de chaque membre, sans condition d'ancrage, lecture du matin comprise. Il n'y a
+donc plus rien à lever, et plus de seuil à mettre à zéro.
 
-Et cela donne la **prédiction de délai** qui fait tout l'intérêt de l'étage 3 :
+**L'ancrage reste, et il gouverne un autre canal.** R1 continue de s'appliquer aux **croyances** :
+une croyance ne circule qu'ancrée dans un déplacement réel — le 078 § 4.1 l'écrit pour les
+conversations, et cela vaut mot pour mot pour la presse. Ce qui a changé, c'est que le récit du
+soir n'est pas une croyance : c'est une citation de ce que l'autre a écrit de sa journée.
 
-> Le co-résident non lecteur ne bouge **pas** avant que le lecteur ait lui-même vécu un trajet qui
-> ancre sa croyance. La séquence attendue est : parution → décision du lecteur → trajet du lecteur
-> dans le mode visé → concept ancré → énoncé transmis au foyer le soir → consolidation du
-> co-résident → sa première décision infléchie. **Cinq jalons, dans cet ordre, datés.**
+**Ce que cela fait à la prédiction de délai**, qui faisait tout l'intérêt de l'étage 3 — elle
+raccourcit, et elle reste réfutable :
 
-**Ce qui la falsifierait :** un co-résident qui bouge le jour de la parution ou le lendemain. Cela
-signifierait que le canal observé n'est pas la mémoire — et le § 6.3 nomme le suspect.
+> Le co-résident n'entend pas une croyance ancrée, il entend le **bilan du soir** du lecteur, dès
+> le soir de la parution. La séquence attendue devient : parution → décision du lecteur dans la
+> journée → récit du soir → consolidation du co-résident la même nuit → **sa première décision le
+> lendemain au plus tôt**. Quatre jalons, dans cet ordre, datés.
 
-### 6.2 Deux régimes d'ancrage, et il en faut deux bras
+**Ce qui la falsifierait :** un co-résident qui bouge **le jour même de la parution**, avant le
+soir. Il n'a rien pu entendre à ce moment-là : le canal observé ne serait alors pas la mémoire,
+et le § 6.3 nomme le suspect.
 
-`memoire__partage_foyer_observations_min` est paramétrable (défaut 1). Il donne gratuitement le
-bras de sensibilité qui transforme le constat du § 6.1 en mesure :
+### 6.2 ~~Deux régimes d'ancrage~~ — RETIRÉ le 2026-09-22
 
-| Bras | Seuil | Ce qui circule | Ce qu'on lit |
-|---|---:|---|---|
-| **Ancré** (nominal) | 1 | ce que le porteur a vérifié | le délai de diffusion, et ce que l'ancrage coûte en vitesse |
-| **Ouï-dire** | 0 | tout concept, dès sa naissance | ce que l'ancrage **évite** : amplification sans contact avec le monde |
+Ce paragraphe posait deux bras, en faisant varier `memoire__partage_foyer_observations_min` : un
+bras **ancré** (seuil 1) et un bras **ouï-dire** (seuil 0), pour mesurer ce que l'ancrage évite.
+
+**Il n'a plus d'objet.** D1 du ticket 100 fait porter au récit du soir tous les épisodes de la
+journée, sans condition d'ancrage : ce que le bras ouï-dire cherchait à observer — qu'une
+information circule sans avoir été vérifiée — se produit désormais dans le régime nominal. Il
+n'y a plus de seuil à mettre à zéro pour l'obtenir.
+
+⚠ **Le réglage reste dans le code, et R1 avec lui.** L'ancrage continue de gouverner la
+circulation des **croyances**, qui est un canal distinct du récit. Ce qui disparaît est le bras
+d'expérience, pas la règle — et la question que le bras posait reste ouverte, mais elle se pose
+maintenant sur le **saut unique** de D2 : ce qui est entendu ne repart jamais, même confirmé
+ensuite. C'est cela qui empêche l'amplification, et non plus l'ancrage seul.
 
 ⚠ **Le second bras est une mesure, pas une option.** Sans lui, « l'ancrage protège de la chambre
 d'écho » est une affirmation de conception, pas un résultat. Avec lui, la mesure n° 3 du 078 —
@@ -336,22 +512,32 @@ Trois parades, à combiner :
    contrainte de chaîne **ne compte pas** comme diffusion. Le champ existe déjà dans la gravité
    (`CONTRAINTES_MODE_FORCE`) ; il faut le porter dans la sortie de mesure.
 
-### 6.4 Les trois rôles, et le témoin est interne
+### 6.4 Deux rôles, et le témoin n'est plus exigé (révisé le 2026-09-22)
 
 | Rôle | Définition | Ce qu'il mesure |
 |---|---|---|
 | **Lecteur** | membre désigné d'un foyer exposé, reçoit l'entrée `[ PRESSE ]` | l'effet direct |
 | **Co-résident** | autre membre du **même** foyer, ne reçoit rien | la diffusion |
-| **Témoin** | membre d'un foyer non exposé, même run, mêmes graines | le plancher de bruit et la dérive commune |
 
 **Un seul lecteur par foyer.** On lit le journal seul ; et un foyer où tout le monde a lu n'a plus
 de co-résident, donc plus rien à mesurer. Le lecteur est désigné par tirage à graine fixe parmi
 les membres mobiles du foyer, et **le tirage est journalisé**.
 
-⚠ **Le témoin doit être dans le même run.** Le 095 § 7 bis a mesuré un plancher de bruit non nul
-entre deux bras identiques : 1 écart de mode sur 31 décisions appariées. Comparer un run exposé à
-un run témoin lancé séparément ferait entrer ce plancher dans l'effet mesuré. Le design en blocs
-du § 7.2 donne le témoin interne sans rien payer de plus.
+**Le foyer témoin non exposé n'est plus obligatoire** (décision de l'auteur, 2026-09-22). Le
+chapitre ne l'annonce plus, et le ticket cesse de l'exiger — y compris l'exigence qu'il soit dans
+le même run. Les foyers exposés peuvent donc être joués seuls.
+
+⚠ **Ce que le témoin portait ne disparaît pas pour autant, et ne se devine pas.** Le 095 § 7 bis
+a mesuré un plancher de bruit **non nul** entre deux bras identiques : 1 écart de mode sur 31
+décisions appariées. Un écart plus petit que ce plancher n'est pas un effet. Sans témoin dans le
+run, ce plancher ne s'y lit plus : il faut le reprendre du 095, ou le réétablir par un rejeu à
+l'identique, et **le déclarer avec le résultat**. `scripts/analysis/presse/scoring.py` l'exige
+déjà comme paramètre (`plancher_de_bruit`) : il ne se tait pas, il se déclare.
+
+⚠ **Un foyer témoin lancé séparément ne vaut pas un témoin interne.** Si l'on en reprend un un
+jour, il faudra qu'il soit dans le même run : comparer deux runs distincts ferait entrer le
+plancher de bruit dans l'effet mesuré. C'est la raison qui avait fait choisir le témoin interne,
+et elle reste vraie — c'est l'exigence qui tombe, pas la raison.
 
 ---
 
@@ -631,6 +817,31 @@ Sept lots, aucun ne touche la mémoire, aucun ne demande un run.
 | **6** | **La population** — `population_N_foyers_059` par `scripts/data/population/extraire_sous_population.py`, `MANIFEST.yaml` sur le modèle du 075, stratification déclarée, tirage du lecteur à graine fixe et journalisé | S | lot 0 |
 | **7** | **Les figures F1, F2, F3** sur données de forme, avant tout run : une figure dont le script n'existe qu'après la mesure se taille sur ce qu'elle a trouvé | M | 5 |
 
+### État au 2026-09-21
+
+| Lot | État | Ce qui est au dépôt |
+|---|---|---|
+| **2** | **livré** | `grille_signes.yaml` gelée, 20 cellules avec motif et empreinte ; `scripts/analysis/presse/grille.py` ; 11 tests |
+| **1** | **à moitié** | `extraire_textes.py` (extraire · sceller · verifier), les 5 articles en français et en anglais, les 5 paraphrases dans les deux langues, le lexique FR+EN, le chargeur, le README. **20 textes scellés sur 30 — il ne manque que les témoins** |
+| **6** | **livré** | `extraire_foyers.py`, `population_20_foyers_059` (6 exposés, 4 témoins), 11 tests |
+| **3** | **à moitié** | `scripts/analysis/presse/scoring.py` — écart apparié, accord de signe et binomial exact, kappa pondéré, garde de vacuité et plancher de bruit obligatoire ; 14 tests. Restent les sous-commandes `echantillon` et `jouer`, qui demandent le corpus complet |
+| **4** | bloqué | Q1, Q2, Q5, Q6 |
+| **5**, **7** | à faire | dépendent du lot 4 |
+
+⚠ **C3 corrigée le 2026-09-21 — le sujet se nomme, les modes de report disparaissent.** La
+première écriture interdisait tout mot de mobilité, sujet compris : elle racontait le lancement du
+vélo partagé sans nommer le vélo. L'objection à réfuter n'est pas « le texte parle de transport »,
+c'est « le texte dit à l'agent quel mode prendre ». Chaque article déclare donc ses mots exemptés —
+métro et rame pour les punaises, vélo et station pour VélôToulouse, aucun pour les trois autres —
+avec deux gardes : un mot ne s'exempte que s'il figure dans le texte brut, et aucun article
+n'exempte un mode vers lequel son événement pousserait.
+
+⚠ **Ce qui bloque le lot 1, et donc le lot 3 : les cinq textes témoins de C4.** Ils ne peuvent
+pas venir du corpus des trente — celui-ci a été constitué article par article **pour** son lien
+avec la mobilité, et un témoin doit n'en avoir aucun. Il faut cinq articles locaux neufs, sans
+lien plausible avec le choix modal, appariés en longueur. C'est une collecte, et elle demande une
+décision (Q14).
+
 ⚠ **Le lot 4 est le seul qui touche le chemin de production.** Il ajoute un canal ; il ne modifie
 ni la gravité, ni l'oubli, ni les viviers, ni les concepts, ni un seuil. Drapeau éteint par défaut,
 comme les autres leviers de mémoire, pour que tout ce qui a été mesuré avant reste comparable.
@@ -702,12 +913,12 @@ proposées. Elles se tranchent avant le lot 4.
 
 | # | Question | Hypothèse retenue faute de réponse |
 |---|---|---|
-| Q1 | **La constante de gravité des articles** : 0,70 pour les cinq ? | oui, avec deux bras de sensibilité à 0,35 et 1,00 (§ 5.2) |
-| Q2 | **Un lecteur par foyer**, ou tous les membres d'un foyer exposé ? | un seul, tiré à graine fixe — sans quoi il n'y a plus de co-résident (§ 6.4) |
-| Q3 | **Le bras ouï-dire** (`observations_min = 0`) fait-il partie de P1, ou attend-il P2 ? | il entre dès P1 : c'est lui qui transforme le § 6.1 en mesure |
+| Q1 | La constante de gravité des articles | **TRANCHÉ — l'agent décide** (§ 5.2). Reste Q16 (quand le jugement est demandé) et Q17 (échelon hors grille) |
+| Q2 | Un lecteur par foyer | **TRANCHÉ — un seul**, tiré à graine fixe et journalisé (§ 6.4) |
+| ~~Q3~~ | ~~**Le bras ouï-dire** (`observations_min = 0`) fait-il partie de P1 ?~~ | **SANS OBJET depuis le 2026-09-22.** D1 du ticket 100 fait porter au récit du soir tous les épisodes, sans ancrage : il n'y a plus de seuil à mettre à zéro. Voir le § 6.2 |
 | Q4 | **Les trois cellules ambiguës** : dédoublées par motif, ou « pas d'effet attendu » ? | « pas d'effet attendu », et la grille reste à vingt (§ 4.2) |
-| Q5 | **L'article vise-t-il un jour ouvré unique, ou une parution répétée** (comme C1 sur trois jours) ? | un jour unique — une parution répétée mêlerait la persistance du souvenir à la répétition du stimulus |
-| Q6 | **Le chaînage des véhicules** : actif partout, ou coupé dans les blocs visant la voiture ? | actif, avec le premier article choisi pour viser les TC (§ 6.3), et un bras coupé si un article voiture est joué |
+| Q5 | Parution unique ou répétée | **TRANCHÉ — tirée au sort.** Jour de parution tiré par foyer, à graine fixe : un effet de calendrier ne peut plus se confondre avec l'effet de l'article. Reste Q15 (par foyer, ou un seul jour pour le run) |
+| Q6 | Le chaînage des véhicules | **TRANCHÉ — actif partout.** Le confondant du § 6.3 ne se supprime donc pas, il se MESURE : `contrainte_chaine` devient obligatoire, et un changement de mode concomitant à une contrainte de chaîne ne compte pas comme diffusion |
 | Q7 | **Le cache de décisions** pendant une campagne de presse | coupé, comme pour les chocs — la clé ne porte ni l'article ni le souvenir |
 | Q8 | **P0 est-il obligatoire** avant d'engager P1 ? | oui — 300 requêtes pour savoir si le canal s'allume (§ 7.3) |
 | Q9 | **L'étage 1 démarre-t-il par E1-a** (200 déplacements, un article, 800 requêtes avec E1-b) plutôt que par la cohorte entière (52 784) ? | oui — et E1-d ne se lance que si un relecteur l'exige (§ 7.3) |

@@ -635,7 +635,8 @@ def test_un_vivier_qui_ne_porte_pas_les_grands_menages_le_dit_et_sort_en_code_1(
     pool = _pool(60)
     path = tmp_path / "vivier.json"
     path.write_text(json.dumps(pool), encoding="utf-8")
-    args = argparse.Namespace(pool=path, n=150, out=tmp_path / "out.json", selection_json=None)
+    args = argparse.Namespace(pool=path, n=150, out=tmp_path / "out.json", selection_json=None,
+                              exclure=None)   # vivier entier — cf. `--exclure` (ticket 073)
     with caplog.at_level(logging.ERROR, logger="aamas.seal"):
         code = seal.cmd_select(args)
     assert code == 1

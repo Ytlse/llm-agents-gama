@@ -2772,9 +2772,19 @@ def depuis_experience(e: dict) -> dict:
     return d
 
 
+# Garde-fou de durée d'observation, décidé le 2026-09-22. Ce n'est PAS une durée attendue :
+# un run d'événement s'arrête de lui-même quand le souvenir a quitté le bloc « ce qui a changé
+# récemment » depuis une semaine (`scripts/experiment/arret_sur_extinction.py`), et les durées
+# servies par les cinq ancres vont de 4,70 à 20,58 jours — 31,49 au plus avec les rappels.
+# Cinquante jours bornent donc le coût du cas pathologique (un run qui ne s'éteint jamais), sans
+# rien borner de ce que le protocole mesure. Passer d'ici à une valeur plus haute demande de
+# rouvrir la question du coût, pas seulement de changer le chiffre.
+HORIZON_MAX_JOURS = 50
+
+
 # Bornes des champs numériques du formulaire : un fichier de reprise hors bornes ferait
 # lever `st.number_input`, donc on le ramène dans l'intervalle au lieu de casser la page.
-_BORNES = {"temperature": (0.0, 2.0, float), "graine_decideur": (0, 10**9, int), "horizon_jours": (1, 31, int),
+_BORNES = {"temperature": (0.0, 2.0, float), "graine_decideur": (0, 10**9, int), "horizon_jours": (1, HORIZON_MAX_JOURS, int),
            "parallelisme": (1, 64, int), "graine_ordre": (0, 10**9, int), "graine_tirage": (0, 10**9, int),
            "graine_calendrier": (0, 10**9, int), "max_candidats": (1, 20, int), "attente_max_s": (1, 3600, int)}
 
@@ -4307,8 +4317,8 @@ def _formulaire(st, base: dict, version: int) -> dict:
     else:
         v["date"] = str(jour_jeu)
         c3.caption(f"Jour de l'offre : celui du jeu ({jour_jeu}). La date de chaque personne est tirée dans la fenêtre d'enquête (graine du calendrier).")
-    v["horizon_jours"] = c4.number_input("Horizon (jours)", 1, 31, int(base["horizon_jours"]), key=k("hor"), disabled=(v["mode"] == "sans_simulateur"),
-                                         help="un seul jour sans simulateur ; l'horizon ne vaut qu'avec GAMA")
+    v["horizon_jours"] = c4.number_input("Horizon (jours)", 1, HORIZON_MAX_JOURS, int(base["horizon_jours"]), key=k("hor"), disabled=(v["mode"] == "sans_simulateur"),
+                                         help=f"un seul jour sans simulateur ; l'horizon ne vaut qu'avec GAMA. Plafond {HORIZON_MAX_JOURS} j : garde-fou de coût, pas une durée attendue — un run s'arrête normalement sur l'extinction du souvenir")
     if v["mode"] == "sans_simulateur":
         v["horizon_jours"] = 1
     v["troncature_15"] = c5.selectbox(
@@ -4551,11 +4561,14 @@ def _panneau_file_reservations(st, lancer, jobs) -> None:
 
 
 def _popup_estimation(st, sortie: str) -> None:
-    """Popup réduit à l'essentiel : le nombre de requêtes LLM que coûterait l'expérience.
+    """Popup réduit à l'essentiel : ce que l'expérience coûterait, dans ses DEUX unités.
 
     `experience-estimer` imprime un JSON riche (jetons, quota, durée) suivi d'un éventuel
-    bloc « REFUS ». On n'en garde à l'écran que le compteur de requêtes ; le reste (durée,
-    part de quota) tient en une ligne de légende, et un refus éventuel est signalé.
+    bloc « REFUS ». On n'en garde à l'écran que les deux compteurs qui décident : les
+    déplacements à décider et les requêtes fournisseur qu'ils représentent — la passerelle
+    regroupe plusieurs agents par appel, et ce popup affichait jusqu'au 2026-09-22 les
+    déplacements sous l'étiquette « Requêtes LLM ». Le reste (durée, part de quota) tient en
+    une ligne de légende, et un refus éventuel est signalé.
     """
     brut = sortie or ""
     i = brut.find("REFUS")
@@ -4566,8 +4579,22 @@ def _popup_estimation(st, sortie: str) -> None:
 
     @st.dialog("🧮 Estimation du coût")
     def _contenu() -> None:
-        if est and isinstance(est.get("sollicitations"), dict):
-            st.metric("Requêtes LLM", _n(est["sollicitations"].get("valeur")))
+        depl = (est or {}).get("deplacements") or (est or {}).get("sollicitations")
+        if est and isinstance(depl, dict):
+            req = est.get("requetes") or {}
+            g, d = st.columns(2)
+            g.metric("Déplacements à décider", _n(depl.get("valeur")))
+            d.metric(
+                "Requêtes LLM",
+                _n(req.get("prudente") if req.get("prudente") is not None else req.get("valeur")),
+                help="Appels fournisseur au regroupement prudent — c'est ce que le quota décompte.",
+            )
+            reg = est.get("regroupement") or {}
+            if reg.get("attendu") and req.get("attendue"):
+                st.caption(
+                    f"Attendu ≈ {_n(req['attendue'])} requêtes à {reg['attendu']} agents/requête "
+                    f"({reg.get('fiabilite', 'source non dite')})."
+                )
             duree = (est.get("duree_s") or {}).get("valeur")
             if duree:
                 st.caption(f"Durée estimée ≈ {int(duree // 60)} min ({int(duree)} s) au débit courant.")

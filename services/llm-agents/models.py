@@ -288,3 +288,16 @@ class Person(BaseModel):
     state: PersonState = PersonState()
     # hybrid technique
     is_llm_based: bool = True
+    # Ménage d'appartenance (ticket 100, lot 1). Le JSON de population le porte depuis le
+    # sceau, sous `household.id` — mais à la RACINE de l'entrée, et `Person` ignorant les clés
+    # inconnues, il n'arrivait jamais jusqu'au runtime. Le seul lecteur du dépôt
+    # (`inputs/population/perimeter.py`) travaille sur le dict brut, avant validation.
+    #
+    # C'est le SEUL groupe social de la simulation qui porte un identifiant stable, et deux
+    # mécanismes en dépendent : la règle d'exposition `foyers` (lot 2) et la circulation au
+    # sein du foyer (lot 4). Sans lui, vingt foyers déclarés produiraient un run entier sans
+    # un seul lecteur, et sans le moindre symptôme.
+    #
+    # `None` = population générée sans `household`, ou chargée par un chemin qui ne le pose
+    # pas. Une [ALARME] se lève au démarrage si un mécanisme qui en a besoin est actif.
+    household_id: Optional[str] = None

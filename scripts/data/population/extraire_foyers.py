@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Extrait des FOYERS entiers d'une population scellée — ticket 059, lot 6.
+
+POURQUOI UN SCRIPT DE PLUS
+--------------------------
+`extraire_sous_population.py` prélève des INDIVIDUS par prédicat, et c'est ce qu'il fallait
+pour lire cinq mémoires (ticket 075). Ici l'objet est le foyer : extraire un membre sans
+l'autre supprime la grandeur mesurée. Les cinq agents du 075 appartiennent d'ailleurs à cinq
+ménages distincts, et le mécanisme de diffusion y serait strictement inobservable.
+
+CE QUE LA POPULATION PORTE
+--------------------------
+Des foyers de TAILLE 2 dont les deux membres sont mobiles, répartis en deux groupes :
+
+- **exposés** — le foyer recevra l'article ; un seul de ses deux membres le lira, et le tirage
+  du lecteur appartient au canal `information`, pas à ce script ;
+- **témoins** — le foyer ne recevra rien, dans le MÊME run. Le plancher de bruit mesuré au
+  ticket 095 n'est pas nul (1 écart de mode sur 31 décisions appariées) : comparer à un run
+  témoin lancé séparément ferait entrer ce plancher dans l'effet mesuré.
+
+Taille 2 uniquement, et c'est un choix de mise au point : un lecteur, un co-résident, rien
+d'autre à démêler. Les foyers de quatre ou cinq disent si un énoncé atteint tout le monde ou
+s'arrête au premier — question des paliers P2 et P3, pas de la plomberie.
+
+DÉTERMINISME
+------------
+Le tri est celui des identifiants de ménage, en ordre numérique. L'affectation exposé/témoin
+est un hachage stable de `graine:household_id` : deux extractions rendent les mêmes groupes, et
+changer la graine se voit au manifeste.
+
+USAGE
+-----
+    services/llm-agents/.venv/bin/python -m scripts.data.population.extraire_foyers \
+        --source data/population/population_1000_AAMAS_v6/population.json \
+        --sortie data/population/population_20_foyers_059 \
+        --exposes 6 --temoins 4 --abonnement-tc
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+TAILLE_FOYER = 2
+
+
+def _traits(personne: dict) -> dict:
+    return (personne.get("identity") or {}).get("traits_json") or {}
+
+
+def _mobile(personne: dict) -> bool:
+    return not personne.get("immobile", False)
+
+
+def _sha256(chemin: Path) -> str:
+    return hashlib.sha256(chemin.read_bytes()).hexdigest()
+
+
+def _cle_de_tri(identifiant: str) -> tuple[int, int, str]:
+    """Tri numérique quand l'identifiant l'est, alphabétique sinon.
+
+    La cohorte v6 n'a que des identifiants numériques, mais `int()` sur un identifiant
+    alphanumérique ferait échouer l'extraction entière sur une population de forme différente —
+    un refus incompréhensible là où un ordre stable suffit.
+    """
+    return (0, int(identifiant), "") if identifiant.isdigit() else (1, 0, identifiant)
+
+
+def _rang(graine: int, household_id: str) -> float:
+    """Rang stable dans [0, 1[ — l'affectation exposé/témoin ne dépend d'aucun ordre d'exécution."""
+    brut = hashlib.sha256(f"{graine}:{household_id}".encode("utf-8")).hexdigest()[:8]
+    return int(brut, 16) / 0xFFFFFFFF
+
+
+def foyers_eligibles(population: list[dict], *, abonnement_tc: bool) -> dict[str, list[dict]]:
+    """Les foyers de taille 2 dont les deux membres sont mobiles, triés par identifiant."""
+    par_menage: dict[str, list[dict]] = defaultdict(list)
+    for personne in population:
+        menage = (personne.get("household") or {}).get("id")
+        if menage:
+            par_menage[str(menage)].append(personne)
+
+    retenus: dict[str, list[dict]] = {}
+    for menage, membres in par_menage.items():
+        if len(membres) != TAILLE_FOYER:
+            continue
+        if not all(_mobile(m) for m in membres):
+            continue
+        if abonnement_tc and not any(_traits(m).get("has_pt_subscription") for m in membres):
+            # L'article joué en premier vise les transports collectifs : un foyer où personne
+            # n'en est usager n'a rien à reporter, et sa présence diluerait la mesure.
+            continue
+        retenus[menage] = sorted(membres, key=lambda p: _cle_de_tri(str(p["person_id"])))
+    return {m: retenus[m] for m in sorted(retenus, key=_cle_de_tri)}
+
+
+def choisir(
+    population: list[dict], *, exposes: int, temoins: int, graine: int, abonnement_tc: bool
+) -> tuple[list[str], list[str], dict[str, list[dict]]]:
+    eligibles = foyers_eligibles(population, abonnement_tc=abonnement_tc)
+    besoin = exposes + temoins
+    if len(eligibles) < besoin:
+        raise SystemExit(
+            f"REFUS : {len(eligibles)} foyers éligibles pour {besoin} demandés → assouplissez le "
+            f"critère (--abonnement-tc), ou réduisez --exposes / --temoins. Un groupe incomplet "
+            f"rendrait l'un des deux bras plus petit que l'autre sans que rien ne le dise."
+        )
+    ordonnes = sorted(eligibles, key=lambda m: (_rang(graine, m), _cle_de_tri(m)))
+    return ordonnes[:exposes], ordonnes[exposes:besoin], eligibles
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--source", required=True, type=Path, help="population.json scellée")
+    p.add_argument("--sortie", required=True, type=Path, help="répertoire à créer")
+    p.add_argument("--exposes", type=int, default=6, help="foyers qui recevront l'article")
+    p.add_argument("--temoins", type=int, default=4, help="foyers qui ne recevront rien")
+    p.add_argument("--graine", type=int, default=59)
+    p.add_argument(
+        "--abonnement-tc",
+        action="store_true",
+        help="n'accepter que les foyers comptant au moins un abonné aux transports collectifs",
+    )
+    args = p.parse_args(argv)
+
+    population = json.loads(args.source.read_text(encoding="utf-8"))
+    exposes, temoins, eligibles = choisir(
+        population,
+        exposes=args.exposes,
+        temoins=args.temoins,
+        graine=args.graine,
+        abonnement_tc=args.abonnement_tc,
+    )
+
+    agents: list[dict] = []
+    for menage in exposes + temoins:
+        # Les agents sont recopiés TELS QUELS : aucune normalisation, aucun champ ajouté. Une
+        # population de test qui diverge du sceau dont elle sort ne prouve plus rien — et le
+        # rôle (exposé, témoin) vit au manifeste, pas dans les données de l'agent.
+        agents.extend(eligibles[menage])
+
+    args.sortie.mkdir(parents=True, exist_ok=True)
+    fichier = args.sortie / "population.json"
+    fichier.write_text(json.dumps(agents, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    lignes: list[str] = [
+        "# Population de TEST — ticket 059, lot 6. Ce n'est PAS un sceau AAMAS.",
+        "#",
+        f"# {len(agents)} agents ne représentent rien : ils servent à observer si une information",
+        "# lue par un seul membre d'un foyer atteint l'autre, et à quelle date. Ils ne mesurent",
+        "# aucune part modale. La référence de l'article reste",
+        "# data/population/population_1000_AAMAS_v6.",
+        "#",
+        "# Les foyers témoins sont dans le MÊME fichier, donc dans le même run : le plancher de",
+        "# bruit mesuré au ticket 095 n'est pas nul, et un témoin lancé séparément le ferait",
+        "# entrer dans l'effet mesuré.",
+        f"nom: {args.sortie.name}",
+        f"extrait_le: '{datetime.now(timezone.utc).isoformat()}'",
+        "source:",
+        f"  fichier: {args.source.as_posix()}",
+        f"  sha256: {_sha256(args.source)}",
+        f"  n: {len(population)}",
+        "population:",
+        "  fichier: population.json",
+        f"  sha256: {_sha256(fichier)}",
+        f"  n: {len(agents)}",
+        "selection:",
+        "  methode: >-",
+        "    Foyers de taille 2 dont les deux membres sont mobiles, triés par rang stable",
+        "    sha256(graine:household_id). Aucun tirage dépendant de l'ordre d'exécution.",
+        "    Reproductible par scripts/data/population/extraire_foyers.py.",
+        f"  graine: {args.graine}",
+        f"  abonnement_tc_exige: {bool(args.abonnement_tc)}",
+        f"  foyers_eligibles: {len(eligibles)}",
+        "groupes:",
+    ]
+    for role, menages in (("expose", exposes), ("temoin", temoins)):
+        lignes.append(f"  {role}:")
+        for menage in menages:
+            membres = eligibles[menage]
+            lignes.append(f"    - household_id: '{menage}'")
+            lignes.append("      membres:")
+            for m in membres:
+                t = _traits(m)
+                lignes += [
+                    f"        - person_id: '{m['person_id']}'",
+                    f"          nom: {json.dumps(t.get('name', ''), ensure_ascii=False)}",
+                    f"          age: {t.get('age')}",
+                    f"          occupation: {json.dumps(t.get('main_occupation', ''), ensure_ascii=False)}",
+                    f"          zone: {json.dumps(t.get('residence_zone', ''), ensure_ascii=False)}",
+                    f"          abonnement_tc: {bool(t.get('has_pt_subscription'))}",
+                    f"          voiture: {json.dumps(t.get('car_availability', ''), ensure_ascii=False)}",
+                    f"          velo: {json.dumps(t.get('personal_bike', ''), ensure_ascii=False)}",
+                ]
+    (args.sortie / "MANIFEST.yaml").write_text("\n".join(lignes) + "\n", encoding="utf-8")
+
+    print(
+        f"{len(agents)} agents, {len(exposes)} foyers exposés et {len(temoins)} témoins, "
+        f"sur {len(eligibles)} éligibles → {args.sortie}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

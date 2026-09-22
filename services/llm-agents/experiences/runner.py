@@ -428,6 +428,69 @@ def _confirme_epuise(
     return moniteur.epuise()
 
 
+def _instantane_requetes(moniteur) -> dict[str, int] | None:
+    """{instance: requêtes du jour} tel que la passerelle le publie à cet instant.
+
+    Relevé à l'ouverture ET à la clôture, il donne par différence le nombre de requêtes
+    RÉELLEMENT consommées par ce run — la seule mesure honnête du facteur de regroupement
+    (cf. `experiences/lots.py`). Le compteur seul, relevé à la clôture, agrège tout ce que
+    l'instance a servi ce jour-là : les autres runs, les réflexions, les réessais.
+    """
+    if moniteur is None:
+        return None
+    etat = getattr(moniteur, "etat", None) or {}
+    instantane = {}
+    for i in getattr(moniteur, "instances", []) or []:
+        v = (etat.get(i) or {}).get("daily_requests")
+        if v is not None:
+            instantane[str(i)] = int(v)
+    return instantane or None
+
+
+def _bilan_requetes(
+    moniteur, ouverture: dict[str, int] | None, debut_iso: str | None
+) -> dict:
+    """Requêtes fournisseur consommées par CE run, ou pourquoi on ne peut pas le dire.
+
+    `fiable` est faux dès qu'un doute existe : instantané d'ouverture manquant, instance
+    apparue en cours de route, delta négatif (le compteur journalier s'est remis à zéro pendant
+    le run — minuit dans le fuseau du fournisseur). Un chiffre sans ce drapeau serait pire que
+    pas de chiffre : l'estimation s'en servirait comme d'une mesure.
+    """
+    cloture = _instantane_requetes(moniteur)
+    if not ouverture or not cloture:
+        return {
+            "ouverture": ouverture,
+            "cloture": cloture,
+            "delta": None,
+            "fiable": False,
+            "motif": "instantané manquant à l'ouverture ou à la clôture",
+        }
+    manquantes = [i for i in cloture if i not in ouverture]
+    deltas = {i: cloture[i] - ouverture.get(i, 0) for i in cloture}
+    negatifs = [i for i, d in deltas.items() if d < 0]
+    fiable = not manquantes and not negatifs
+    motif = None
+    if negatifs:
+        motif = (
+            f"compteur journalier remis à zéro pendant le run sur {', '.join(sorted(negatifs))} "
+            f"(fenêtre de quota traversée) : delta inexploitable"
+        )
+    elif manquantes:
+        motif = f"instance(s) apparue(s) en cours de run : {', '.join(sorted(manquantes))}"
+    bilan = {
+        "ouverture": ouverture,
+        "cloture": cloture,
+        "par_instance": deltas,
+        "delta": sum(d for d in deltas.values() if d >= 0),
+        "fiable": fiable,
+        "depuis": debut_iso,
+    }
+    if motif:
+        bilan["motif"] = motif
+    return bilan
+
+
 async def executer(
     exp: Experience,
     jeu: Jeu,
@@ -528,6 +591,17 @@ async def executer(
                     f"sera refusé à la clôture"
                 )
     execution.changer_etat(ETAT_EN_COURS)
+    # Compteurs de la passerelle AVANT la première requête : sans ce point de départ, seule la
+    # valeur de clôture subsiste — un compteur journalier, qui compte aussi ce que les autres
+    # runs du jour ont consommé. C'est ce qui rendait les archives inexploitables pour mesurer
+    # le regroupement (rapports observés de 0,26 à 14 agents/requête sur un même gabarit).
+    requetes_ouverture = _instantane_requetes(moniteur)
+    debut_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if requetes_ouverture:
+        logger.info(
+            f"[execution] requêtes déjà servies aujourd'hui par les instances visées : "
+            f"{requetes_ouverture} — le delta à la clôture donnera le coût réel de ce run"
+        )
     execution.mettre_a_jour_regime(
         parallelisme=exp.regroupement.parallelisme,
         unite_sollicitation="deplacement",
@@ -980,6 +1054,14 @@ async def executer(
             if getattr(decideur, "sans_quota", False)
             else (moniteur.tableau() if moniteur else {})
         ),
+        # Requêtes fournisseur de CE run — l'autre unité. `sollicitations` compte des
+        # déplacements ; ces deux nombres ne sont pas le même et leur rapport EST le facteur de
+        # regroupement que l'estimation d'un prochain bras réutilisera.
+        "requetes": (
+            {"sans_quota": True}
+            if getattr(decideur, "sans_quota", False)
+            else _bilan_requetes(moniteur, requetes_ouverture, debut_iso)
+        ),
     }
     execution.ecrire_compteurs(compteurs)
     nb_archivees = len(execution.decisions)
@@ -1057,6 +1139,23 @@ async def executer(
         f"attentes {compteurs['attentes']} · erreurs {compteurs['erreurs']} · "
         f"sollicitations {compteurs['sollicitations']}, resservies {compteurs['resservies']}"
     )
+    # Le regroupement mesuré, dit explicitement même quand tout va bien : c'est le chiffre que
+    # l'estimation du prochain bras réutilisera, et un journal muet là-dessus ne permet pas de
+    # distinguer « la passerelle a fusionné » de « le relevé n'a pas eu lieu ».
+    bilan = compteurs.get("requetes") or {}
+    if bilan.get("fiable") and bilan.get("delta"):
+        logger.info(
+            f"[execution] regroupement mesuré : {compteurs['sollicitations']} sollicitation(s) "
+            f"servie(s) en {bilan['delta']} requête(s) fournisseur, soit "
+            f"{compteurs['sollicitations'] / bilan['delta']:.2f} agent(s)/requête "
+            f"({bilan.get('par_instance')})"
+        )
+    elif not bilan.get("sans_quota"):
+        logger.warning(
+            f"[execution] regroupement NON mesuré sur ce run : "
+            f"{bilan.get('motif') or 'relevé indisponible'} — l'estimation des bras suivants "
+            f"retombera sur l'hypothèse prudente d'une requête par déplacement"
+        )
     compteurs["etat"] = etat
     return compteurs
 

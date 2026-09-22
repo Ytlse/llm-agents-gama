@@ -8,6 +8,8 @@ l'impossible, on avertit sur le lent.
 
 from __future__ import annotations
 
+import pytest
+
 from experiences import aptitude as APT
 
 CHARGE = dict(
@@ -178,3 +180,115 @@ def test_niveau_et_budget_ensemble_refuses():
         niveau_demande="high", reflexion_demandee=1024,
     )
     assert refus and "ensemble" in refus[0] and "400" in refus[0]
+
+
+# ── Les quotas se comptent en REQUÊTES, pas en déplacements (2026-09-22) ─────
+#
+# La passerelle fusionne plusieurs agents par appel. Comparer un `rpd_limit` à un nombre de
+# déplacements surestimait la charge d'un facteur 2 à 8 et faisait crier au quota court des
+# bras qui tenaient largement.
+
+
+def test_le_quota_se_compare_aux_requetes_pas_aux_deplacements():
+    """2 285 déplacements groupés par 8 tiennent dans 1 000 requêtes/jour : plus d'alerte."""
+    providers = {"a": {"rpd_limit": 500}, "b": {"rpd_limit": 500}}
+    _, avert_avant = _verifier(providers)
+    assert any("plus court que la charge" in m for m in avert_avant), "garde-fou du test"
+    refus, avert = APT.verifier(
+        modele="m",
+        providers=providers,
+        instances=list(providers),
+        requetes=286,
+        regroupement={"prudent": 8.0, "source": "2 exécutions archivées"},
+        **CHARGE,
+    )
+    assert refus == []
+    assert not any("plus court que la charge" in m for m in avert)
+
+
+def test_lavertissement_nomme_les_deux_unites_et_sa_source():
+    refus, avert = APT.verifier(
+        modele="m",
+        providers={"a": {"rpd_limit": 500}},
+        instances=["a"],
+        requetes=1143,
+        regroupement={"prudent": 2.0, "source": "2 exécutions archivées du même gabarit"},
+        **CHARGE,
+    )
+    (msg,) = [m for m in avert if "plus court que la charge" in m]
+    assert "1143 requêtes" in msg and "2285 déplacements" in msg
+    assert "2.00 agent(s)/requête" in msg and "exécutions archivées" in msg
+
+
+def test_sans_regroupement_declare_le_verdict_est_celui_davant():
+    """`requetes=None` ⇒ une requête par déplacement : la prudence ne peut pas baisser."""
+    avant = _verifier({"a": {"rpd_limit": 500}, "b": {"rpd_limit": 500}})
+    apres = APT.verifier(
+        modele="m",
+        providers={"a": {"rpd_limit": 500}, "b": {"rpd_limit": 500}},
+        instances=["a", "b"],
+        requetes=None,
+        **CHARGE,
+    )
+    assert avant == apres
+
+
+def _duree_h(providers, *, facteur, deplacements, appels):
+    _, avert = APT.verifier(
+        modele="m",
+        providers=providers,
+        instances=list(providers),
+        requetes=appels,
+        regroupement={"prudent": facteur, "source": "test"},
+        **{**CHARGE, "sollicitations": deplacements},
+    )
+    (msg,) = [m for m in avert if "durée estimée" in m]
+    return float(msg.split("~")[1].split(" h")[0])
+
+
+def test_le_bornage_par_les_jetons_est_insensible_au_regroupement():
+    """n·jetons_agent ÷ tpm des deux côtés : grouper ne fait pas gagner de TPM.
+
+    Le piège que ce test garde : les jetons d'une requête sont ceux de TOUS ses agents.
+    Diviser le nombre de requêtes sans multiplier les jetons par requête aurait divisé la
+    durée par le facteur de regroupement — une durée fausse, et optimiste.
+    """
+    providers = {"i": {"rpd_limit": 999999, "rpm_limit": 600, "tpm_limit": 4_000}}
+    seul = _duree_h(providers, facteur=1.0, deplacements=2288, appels=2288)
+    groupe = _duree_h(providers, facteur=8.0, deplacements=2288, appels=286)
+    assert seul == pytest.approx(groupe, rel=0.01), (seul, groupe)
+
+
+def test_le_bornage_par_le_rpm_est_divise_par_le_regroupement():
+    """Sans plafond de jetons, grouper par 8 divise bien la durée par 8."""
+    providers = {"i": {"rpd_limit": 999999, "rpm_limit": 1}}
+    seul = _duree_h(providers, facteur=1.0, deplacements=22880, appels=22880)
+    groupe = _duree_h(providers, facteur=8.0, deplacements=22880, appels=2860)
+    assert seul / groupe == pytest.approx(8.0, rel=0.01)
+
+
+def test_un_agent_seul_trop_gros_reste_un_refus():
+    """Le plafond par requête s'arbitre sur l'AGENT : un lot trop gros, la passerelle le réduit."""
+    refus, _ = APT.verifier(
+        modele="m",
+        providers={"i": {"rpd_limit": 99999, "max_tokens_per_request": 1000}},
+        instances=["i"],
+        requetes=286,
+        regroupement={"prudent": 8.0, "source": "test"},
+        **CHARGE,
+    )
+    assert refus and "même sans regroupement" in refus[0]
+
+
+def test_lavertissement_dit_aussi_ce_que_le_bras_coutera_vraisemblablement():
+    """Sans mesure, le prudent vaut les déplacements : sans l'attendu à côté, on lit le pire seul."""
+    refus, avert = APT.verifier(
+        modele="m",
+        providers={"a": {"rpd_limit": 500}},
+        instances=["a"],
+        requetes=None,
+        regroupement={"prudent": 1.0, "attendu": 8.0, "source": "aucune mesure"},
+        **CHARGE,
+    )
+    (msg,) = [m for m in avert if "plus court que la charge" in m]
+    assert "attendu plutôt ~286 requêtes" in msg and "aucune mesure ne le garantit" in msg

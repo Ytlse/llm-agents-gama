@@ -176,7 +176,7 @@ decideur: {type: passerelle|antigravity|duree_minimale|rejeu|aleatoire|modele|ma
            rejeu_de: <exec>|null, graine: <int>|null, artefact: <chemin>|null}
 mode: sans_simulateur | simulateur
 calendrier: {politique: commune|propre|aleatoire, date: "2026-03-16", graine: 42}
-horizon_jours: 1
+horizon_jours: 1                         # 1 à 50 (garde-fou de coût, 2026-09-22 ; cf. plus bas)
 memoire: false
 evenements: []
 graine_ordre: 42
@@ -200,6 +200,15 @@ dépôt (commit + arbre propre).
 `refuser_si_impossible(exp)` (E6) : jeu ≠ population, décideur sans instance disponible (lecture de
 `providers.yaml` puis `/health`), sans simulateur avec mémoire/événement/horizon > 1 (S3), date hors
 période couverte (E9 : `calendar*.txt` des feeds, bornes du CSV météo), jeu périmé non accepté.
+
+**L'horizon se déclare entre 1 et 50 jours** (`HORIZON_MAX_JOURS`, `scripts/dashboard/experiences.py`).
+Cinquante n'est pas une durée attendue mais un garde-fou de coût : un run d'événement s'arrête
+normalement sur l'extinction du souvenir — sept jours vécus après sa sortie du bloc « ce qui a
+changé récemment », `run_sequential_cohort.py --arret-sur-extinction` — et les cinq niveaux de
+gravité servent des souvenirs de 4,70 à 20,58 jours, 31,49 au plus avec les rappels. La borne ne
+mord donc que sur un run qui ne s'éteindrait jamais. Elle reste sous la fenêtre d'âge du rappel
+(`memoire__fenetre_age_max_jours`, 60 j), qui vaut l'horizon plafonné : aucun horizon déclarable
+ne la fait mordre.
 
 **« Disponible » lit deux signaux, tous deux mesurés** (`MoniteurRessources.disponible`). Une
 instance est servable si la passerelle ne l'a pas mise **hors service** (`/health` : `disabled`,
@@ -246,10 +255,19 @@ Une passerelle ancienne qui ne publie ni `disabled` ni `cooldown` est lue sur `a
 signal disponible ; une passerelle qui ne publie rien reste permissive : l'absence de mesure ne
 doit pas bloquer, mais elle ne doit pas non plus passer pour un feu vert.
 
-`estimer(exp)` (E5) : sollicitations = déplacements couverts du jeu ; jetons/sollicitation = médiane
-mesurée sur les `decisions.jsonl` archivés du même gabarit (source citée), sinon
-`docs/paper/methode/experience_plan/experiments.yaml: measured_ratios` (cité) ; quotas = `providers.yaml`
-`rpd_limit` + `/health.daily_requests`. Aucun littéral dans le code.
+`estimer(exp)` (E5) — **deux unités, nommées séparément** : `deplacements` (= déplacements
+couverts du jeu, l'ancien champ `sollicitations`, conservé) et `requetes` (= appels fournisseur,
+ce que le quota décompte). La passerelle groupe environ huit agents par requête ; le diviseur
+vient de `experiences/lots.py` — plafond dérivé de `batch_max_agents` borné par le parallélisme,
+facteur observé sur les exécutions archivées comparables. Trois chiffres de requêtes sont
+publiés (`plancher`, `attendue`, `prudente`) et **seul `prudente` décide** ; sans mesure il vaut
+le nombre de déplacements, si bien que le verdict ne peut pas devenir plus permissif qu'avant le
+2026-09-22. Jetons/sollicitation = médiane mesurée sur les journaux d'échange archivés du même
+gabarit, **ramenée à l'agent** (une ligne porte les jetons du lot entier), sinon
+`docs/paper/methode/experience_plan/experiments.yaml: measured_ratios` (cité) ; quotas =
+`providers.yaml` `rpd_limit` + `/health.daily_requests`. Un jeu non clos ne déclare aucun
+attendu : `non_couverts` vaut alors `null` et la source le dit, au lieu d'un nombre négatif.
+Aucun littéral dans le code.
 
 **Exécution** — `data/experiences/<nom>/executions/<AAAA-MM-JJ_HH_MM_SS>/` :
 
@@ -258,7 +276,7 @@ execution.yaml    configuration figée + empreintes + regime_applique + sources_
 etat.json         {etat: definie|en_cours|en_pause|epuisee|arretee|terminee, raison, reprise_possible_a, maj}
 decisions.jsonl   une TraceDecision complète par décision (texte présenté inclus), append atomique
 moves.csv         mêmes colonnes que la simulation (+ « Source des propositions ») → `make report`, synthèse
-compteurs.json    décidés / non couverts / sans solution / choix unique / replis / erreurs / sollicitations
+compteurs.json    décidés / non couverts / sans solution / choix unique / replis / erreurs / sollicitations / requetes (delta passerelle)
 synthese.json     parts modales par mode canonique AVEC couverture, référentiel cité (chemin + sha256)
 synthese.html     rendu de synthese.json — ne calcule rien que le JSON n'ait (E16)
 ```

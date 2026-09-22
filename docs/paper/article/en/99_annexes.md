@@ -5,7 +5,7 @@
 **Document:** appendices of the AAMAS 2027 paper. English master; French mirror in [`fr/99_annexes.md`](../fr/99_annexes.md); LaTeX rendering for Overleaf in [`overleaf/99_annexes.tex`](../overleaf/99_annexes.tex).
 **Status:** `draft v0` (17 September 2026) — first English master. Appendices A to G translate the French `brouillon v0`, itself extracted from `MANUSCRIT_DETAILLE_2026.md` `v1.6` (3 September 2026); appendix H translates the detailed results written on 17 September 2026 for chapter 6. The whole manuscript is frozen in [`../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md`](../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md).
 **Two things to take up in appendices A to G before submission,** carried over from the French header and **not** repaired by the translation: the figures, to be cross-checked against their source in the repository rather than copied from here; and the section cross-references, which follow the old numbering of the manuscript. The "Tier 1 / 2 / 3" vocabulary has left these appendices — checked on 21 September 2026, not one occurrence remains; it was withdrawn without this header saying so. Appendix H does not carry these reservations: it is written on the corrected set and its figures carry their source.
-**Place in the paper:** section of the same number in the plan announced in § 1.4 of [`../en/01_introduction.md`](../en/01_introduction.md). Progress: [`../README.md`](../README.md).
+**Place in the paper:** section of the same number in the plan announced in § 1.4 of [`../en/01_Introduction.md`](../en/01_Introduction.md). Progress: [`../README.md`](../README.md).
 
 ---
 

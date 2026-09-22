@@ -395,3 +395,19 @@ def test_le_formulaire_sait_declarer_une_experience_jev(plateforme):
     relu = yaml.safe_load(chemin.read_text(encoding="utf-8"))
     assert relu["decideur"]["modele"] == "jev-1.13.0"
     assert relu["gabarit"]["variante"] == "b_min"
+
+
+def test_l_horizon_declarable_est_borne_au_garde_fou_de_cinquante_jours():
+    """Le plafond d'observation vit dans UNE constante, et il borne bien le formulaire.
+
+    Décision du 2026-09-22 : cinquante jours. Le chiffre a valu 31 tant que le plafond de durée
+    d'un souvenir valait 30 ; les deux ont bougé ensemble, et rien ne le disait. Ce test attache
+    le formulaire à la constante — le jour où l'un des deux rebouge, l'autre se voit.
+    """
+    assert experiences.HORIZON_MAX_JOURS == 50
+    assert experiences._BORNES["horizon_jours"] == (1, 50, int)
+
+    # Un brouillon qui demande plus revient au plafond, il ne casse pas la page.
+    assert experiences._valider_base({"horizon_jours": 400})["horizon_jours"] == 50
+    assert experiences._valider_base({"horizon_jours": 0})["horizon_jours"] == 1
+    assert experiences._valider_base({"horizon_jours": 42})["horizon_jours"] == 42

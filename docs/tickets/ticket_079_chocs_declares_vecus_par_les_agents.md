@@ -381,3 +381,33 @@ il faut juste en choisir une.
 5. **Un choc doit-il pouvoir toucher un agent qui n'a pas utilisé le mode ?** Par exemple : le
    bouchon retarde-t-il aussi le bus pris dans le même trafic ? *Hypothèse retenue :* non au premier
    lot, une règle d'exposition par mode et rien de plus.
+
+---
+
+## Le choc à jouer à la campagne suivante — arbitrage du 2026-09-22
+
+La campagne du § 7.2 de l'article a tourné sur `c6_voiture_suspecte`, « Engine trouble » : le
+moteur cale sur la voie rapide, dépannage, trente minutes de retard, puis vingt le lendemain.
+L'auteur a relevé le défaut à la relecture, et il est réel : **une panne de cette nature
+immobiliserait le véhicule**. Or la simulation continue de proposer la voiture le lendemain, et
+c'est précisément ce que le chapitre met en avant — « la voiture est offerte aussi souvent
+qu'avant, et cesse d'être prise ». L'argument porte sur un monde que la panne n'aurait pas laissé
+intact.
+
+**Le cas à jouer est le C1, le bouchon monstre sur la rocade**, et il est déjà écrit au § 4 :
+
+- **le véhicule reste disponible sans réserve.** Un embouteillage ne met personne au garage ;
+  l'arbitrage mesuré est alors un vrai arbitrage, et la phrase du chapitre tient sans réserve ;
+- **son profil décroît sur trois jours**, 60 puis 25 puis 12 minutes. C'est le cas qui exerce la
+  durée dérivée de la gravité, là où C6 tenait sur deux jours ;
+- **il peut se reproduire**, ce qui ouvre la voie d'extinction par contradiction. La campagne C6
+  n'a fourni qu'un cas d'extinction par usure, et le chapitre le dit ; la prédiction de
+  stratification du § 7.1 a besoin de l'autre.
+
+Le cas **C2, la crevaison**, est le contre-exemple utile et il reste au dossier tel quel : au
+jour J+1 le vélo est **indisponible**, `has_bike = false`, et la contrainte de mode ajoute 0,10 à
+la gravité. Le dépôt sait donc déjà distinguer « le mode reste offert » de « le mode disparaît » ;
+c'est le choix du choc qui ne l'avait pas fait.
+
+⚠ **Les chiffres publiés au § 7.2 restent ceux de C6** et ne se remplacent pas par ceux de C1 :
+ce sont deux campagnes. Tant que C1 n'est pas jouée, le chapitre garde C6 et sa réserve écrite.

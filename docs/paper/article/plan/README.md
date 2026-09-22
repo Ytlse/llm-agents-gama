@@ -5,7 +5,7 @@ Ce dossier porte la trame de l'article. Un seul fichier courant, [`PLAN.md`](PLA
 ## 1. Ce qui fait foi
 
 **Le texte de l'article fait foi.** La numérotation et le découpage des sections sont ceux
-annoncés dans la section 1.4 du chapitre 1, [`../en/01_introduction.md`](../en/01_introduction.md).
+annoncés dans la section 1.4 du chapitre 1, [`../en/01_Introduction.md`](../en/01_Introduction.md).
 `PLAN.md` en est **dérivé** — jamais l'inverse.
 
 Quand les deux divergent, c'est le plan qui a tort et qui se corrige. Cette règle existe parce

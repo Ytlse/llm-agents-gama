@@ -147,12 +147,23 @@ CSV_HEADERS = [
     "Origine de la décision",
     # Ticket 077, lot E3 — descriptif des options présentées, index par index.
     "Options (descriptif)",
-    # Ticket 079 — le choc en vigueur, et le jour RELATIF à son premier jour (−2, −1, 0, +1…).
-    # Renseignés pour TOUTE décision, y compris les jours nominaux : le jour relatif est
-    # l'abscisse des courbes d'hystérésis, et une abscisse qui n'existerait que les jours de
-    # choc ne tracerait rien. Vides quand aucun choc n'est déclaré.
+    # Ticket 079, élargi au ticket 100 — l'événement en vigueur, et le jour RELATIF à son
+    # premier jour (−2, −1, 0, +1…). Renseignés pour TOUTE décision, y compris les jours
+    # nominaux : le jour relatif est l'abscisse des courbes de décrochage et de retour, et une
+    # abscisse qui n'existerait que les jours d'événement ne tracerait rien. Vides quand aucun
+    # événement n'est déclaré.
+    #
+    # ⚠ Les deux premiers gardent leur NOM du ticket 079. Les renommer casserait la relecture
+    # des runs déjà archivés — et ce sont eux qui portent les chiffres publiés du § 7.2. Le
+    # vocabulaire neuf vit dans `evenements.jsonl` ; ici, on ajoute sans substituer.
     "Choc",
     "Jour relatif au choc",
+    # Ticket 100, lot 5 — le rôle de l'agent dans le dispositif : `expose`, `co_resident`
+    # (même toit qu'un exposé, rien reçu — c'est chez lui que se lit la diffusion) ou
+    # `temoin`. Vide quand le dispositif ne sait pas encore qui lit : une colonne vide n'est
+    # pas un rôle, et écrire `temoin` ferait passer une ignorance pour une mesure.
+    "Rôle",
+    "Raison d'exposition",
 ]
 
 
@@ -240,25 +251,35 @@ def _available_modes_summary(options: Optional[list]) -> str:
     return " | ".join(_plan_transport_mode(opt) for opt in options)
 
 
-def _contexte_choc(start_time_ms: Optional[int]) -> tuple:
-    """Ticket 079 — `(identifiant du choc, jour relatif)` pour cette décision.
+def _contexte_choc(start_time_ms: Optional[int], person_id: str = "") -> tuple:
+    """Tickets 079 et 100 — `(événement, jour relatif, rôle, raison)` pour cette décision.
 
-    Renseigné pour TOUTE décision d'un run à choc, y compris les jours nominaux : le jour
-    relatif est l'abscisse des courbes d'hystérésis, et une abscisse qui n'existerait que les
-    jours de choc ne tracerait rien. Deux valeurs vides quand aucun choc n'est déclaré, ce qui
-    laisse les runs sans choc rigoureusement identiques à ce qu'ils étaient.
+    Renseigné pour TOUTE décision d'un run à événement, y compris les jours nominaux : le jour
+    relatif est l'abscisse des courbes de décrochage et de retour, et une abscisse qui
+    n'existerait que les jours d'événement ne tracerait rien. Quatre valeurs vides quand aucun
+    événement n'est déclaré, ce qui laisse les runs nominaux rigoureusement identiques à ce
+    qu'ils étaient.
 
     Ne lève jamais : une colonne de contexte absente vaut mieux qu'une décision perdue.
     """
     try:
-        from llm import chocs as chocs_module
+        from llm import evenements as evenements_module
 
-        registre = chocs_module.registre()
+        registre = evenements_module.registre()
         if registre is None or start_time_ms is None:
-            return ("", "")
-        return (registre.choc.choc_id, registre.jour_relatif(int(start_time_ms) // 1000))
+            # ⚠ Quatre valeurs, comme toutes les sorties de cette fonction : une ligne de
+            # `moves.csv` qui n'a pas le nombre de colonnes de son en-tête décale tout ce qui
+            # suit, et le décalage ne se voit qu'à la relecture, quand il est trop tard.
+            return ("", "", "", "")
+        role, raison = registre.role_de(str(person_id))
+        return (
+            registre.evenement.evenement_id,
+            registre.jour_relatif(int(start_time_ms) // 1000),
+            role,
+            raison,
+        )
     except Exception:  # noqa: BLE001
-        return ("", "")
+        return ("", "", "", "")
 
 
 def _options_descriptif(options: Optional[list]) -> str:
@@ -470,7 +491,7 @@ class MoveLogger:
                 len(available_options) if available_options else 0,
                 origine_decision or "",
                 _options_descriptif(available_options),
-                *_contexte_choc(start_time),
+                *_contexte_choc(start_time, person.person_id),
             ]
 
             # Écriture déportée hors de l'event loop (open/write bloquants)

@@ -65,7 +65,9 @@ from settings import settings
 from sim_clock import wall_clock
 from text_helper import env_ob_to_text, parse_ob
 from trip_helper import accidents as accidents_module
-from llm import chocs as chocs_module
+from llm import evenements as evenements_module
+from llm.memory import MemoryEntry, MemoryType
+from llm import foyer as foyer_module
 from trip_helper.base import TripHelper
 from trip_helper.school_bus import (
     SCHOOL_BUS_CHOSEN,
@@ -88,7 +90,7 @@ from urban_mobility_agents.utils.history_log import HistoryStreamLog
 from urban_mobility_agents.utils import filiation, mesures_jour
 from urban_mobility_agents.utils.move_logger import GamaArrivalsLogger, MoveLogger
 from urban_mobility_agents.utils.pipeline_logger import PipelineLogger
-from urban_mobility_agents.utils.reprise import degeler_si_depasse, ecrire_point
+from urban_mobility_agents.utils.reprise import degeler_si_depasse, ecrire_point, gel_actif
 from urban_mobility_agents.utils.weather_loader import day_weather_outlook, get_weather
 from urban_mobility_agents.vehicle_chain import (  # noqa: F401 — ré-exportés (ticket 035, D1)
     _VEHICLE_MODES,
@@ -1547,6 +1549,7 @@ class SimulationLoopV1(BaseScenario):
                     if memoire is not None
                     else {},
                 },
+                foyer=foyer_module.etat_pour_reprise(),
             )
         except Exception as exc:
             # FAIL-OPEN : perdre un point coûte le rejeu d'une journée, faire tomber le run
@@ -1620,6 +1623,206 @@ class SimulationLoopV1(BaseScenario):
 
         logger.info("[hibernation] SIGTERM au contrôleur — sortie attendue en code 0.")
         os.kill(os.getpid(), signal.SIGTERM)
+
+    async def _juger_evenement_subi(
+        self, registre, applique, person, entree_courte, gravite_mesuree: float,
+        timestamp: int, detail=None,
+    ) -> None:
+        """Le jugement d'un événement SUBI, hors du chemin de l'observation (ticket 100, Q6).
+
+        Ne lève jamais : un jugement qui échoue laisse l'événement qualifié sur le fait mesuré,
+        ce qui reste vrai — mais il laisse une alarme, jamais un silence.
+        """
+        try:
+            jugement = await evenements_module.juger(
+                self.agent.llm_client,
+                str(person.person_id),
+                self.agent.get_person_identity_description(person),
+                applique.texte,
+                gravite_deterministe=gravite_mesuree,
+                evenement_id=applique.evenement_id,
+                jour=applique.jour_run,
+            )
+        except evenements_module.JugementRefuse:
+            # `juger` a déjà levé l'alarme. L'exposition a eu lieu : elle se trace, sans ses
+            # colonnes de jugement — vides, jamais à zéro.
+            registre.tracer(
+                applique, person.person_id, timestamp, gravite_mesuree, detail
+            )
+            return
+        except Exception as err:  # noqa: BLE001
+            logger.error(
+                f"[ALARME] [evenements] jugement impossible pour {person.person_id} sur "
+                f"« {applique.evenement_id} » : {err}. L'événement reste qualifié sur le seul "
+                f"fait mesuré ({gravite_mesuree:.2f}) — depuis la décision D7 c'est le SEUL "
+                f"chemin par lequel la gravité déterministe qualifie encore une entrée, et ce "
+                f"n'est pas ce qui était déclaré."
+            )
+            registre.tracer(
+                applique, person.person_id, timestamp, gravite_mesuree, detail
+            )
+            return
+
+        tampon = self.agent.get_short_term_memory(person.person_id).recent_entries
+        if entree_courte not in tampon:
+            logger.error(
+                f"[ALARME] [evenements] le jugement de {person.person_id} sur "
+                f"« {applique.evenement_id} » est arrivé APRÈS la consolidation du soir : "
+                f"l'entrée avait déjà été consommée, et l'événement a été qualifié sur le seul "
+                f"fait mesuré ({gravite_mesuree:.2f}) au lieu de {jugement.importance_retenue:.2f}. "
+                f"Ne pas lire ce jour-là comme un jour jugé."
+            )
+            registre.tracer(
+                applique, person.person_id, timestamp, gravite_mesuree, detail
+            )
+            return
+        entree_courte.importance = jugement.importance_retenue
+        entree_courte.valence = jugement.valence
+        registre.tracer(
+            applique, person.person_id, timestamp,
+            jugement.importance_retenue, detail, jugement=jugement,
+        )
+
+    async def _injecter_evenements_du_reveil(self, timestamp: int) -> None:
+        """Ce que les agents ont lu ce matin, déposé avant leur première décision.
+
+        Ticket 100, lot 2. Rien quand aucun événement n'est déclaré, ou quand l'événement
+        déclaré est du moment `arrivee` — la très grande majorité des runs ne passe donc
+        jamais par ici.
+
+        ⚠ **Le gel du rejeu (ticket 075) est vérifié ICI, et pas seulement en aval.**
+        `add_short_term_memory` renvoie sans rien écrire tant que l'agent rejoue une journée
+        déjà apprise : un article dont le jour de parution tombe dans la fenêtre de rejeu
+        disparaîtrait donc en silence, et le protocole aurait sauté sans qu'une ligne le dise.
+        Le refus est FRANC et nommé.
+
+        FAIL-OPEN pour le reste : une injection qui échoue lève une alarme et laisse la
+        simulation continuer — mais elle laisse une alarme, pas un silence.
+        """
+        registre = evenements_module.registre()
+        if registre is None or registre.evenement.moment != "reveil":
+            return
+        try:
+            dus = evenements_module.au_reveil(
+                registre, list(self.population.people.values()), timestamp
+            )
+            if not dus:
+                return
+            if gel_actif():
+                logger.error(
+                    f"[ALARME] [evenements] {len(dus)} injection(s) au réveil dues à "
+                    f"{humanize_date(timestamp)}, alors que le REJEU d'une reprise à chaud "
+                    f"est en cours : la mémoire courte n'écrit rien pendant le rejeu, et ces "
+                    f"injections seraient perdues sans trace. Le protocole n'a PAS eu lieu ce "
+                    f"jour-là — ne pas le compter dans l'analyse."
+                )
+                return
+            for person_id, applique in dus:
+                personne = self.population.people.get(person_id)
+                if personne is None:
+                    logger.error(
+                        f"[ALARME] [evenements] lecteur « {person_id} » retenu pour "
+                        f"« {applique.evenement_id} » mais absent de la population chargée : "
+                        f"l'injection n'a pas eu lieu."
+                    )
+                    continue
+                # Gravité DÉTERMINISTE d'un article : zéro, et c'est un fait — lire le journal
+                # ne fait subir aucun retard. Le jugement de l'agent (lot 3) est ce qui lui
+                # donnera son poids ; sans lui, l'entrée vit 2,8 jours et le chargement l'a
+                # déjà dit en [ALARME].
+                _contexte = Context(
+                    person=personne,
+                    activity_id=None,
+                    timestamp=timestamp,
+                    data={"evenement": applique.evenement_id, "canal": applique.canal},
+                )
+                _texte = evenements_module.entree_de_lecture(applique)
+
+                # ── Le jugement, AVANT l'écriture (ticket 100, lot 3, D4) ──────────────
+                # Juger d'abord et écrire ensuite évite toute requalification : l'entrée naît
+                # avec sa gravité DÉFINITIVE, donc avec la bonne durée de vie. La force est
+                # fixée à l'écriture (`longterm.py`) ; relever l'importance après coup ne la
+                # recalculerait pas, et le souvenir porterait une gravité en vivant selon une
+                # autre.
+                #
+                # À 3 h simulées rien n'attend — aucune arrivée à traiter, aucun agent
+                # réveillé — donc cet appel ne retarde rien. C'est ce qui permet de juger ici
+                # plutôt que dans la file du soir : différé, l'article passerait la journée à
+                # gravité 0,00, hors du bloc « Ce qui a changé récemment », donc sans effet le
+                # jour même — ce qui viderait le régime de son sens.
+                _importance = 0.0
+                _valence = "neutre"
+                _jugement = None
+                if registre.evenement.jugement == "a_l_injection":
+                    try:
+                        _jugement = await evenements_module.juger(
+                            self.agent.llm_client,
+                            str(person_id),
+                            self.agent.get_person_identity_description(personne),
+                            applique.texte,
+                            gravite_deterministe=0.0,
+                            evenement_id=applique.evenement_id,
+                            jour=applique.jour_run,
+                        )
+                    except evenements_module.JugementRefuse:
+                        # L'alarme a été levée par `juger`. L'exposition est non avenue : on
+                        # n'écrit RIEN plutôt que d'écrire une entrée non jugée qui se
+                        # compterait comme les autres.
+                        continue
+                    _importance = _jugement.importance_retenue
+                    _valence = _jugement.valence
+                # (1) Mémoire COURTE — pour que la réflexion du soir voie ce que l'agent a lu
+                # et puisse en tirer une croyance. C'est le seul chemin vers un concept.
+                self.agent.add_short_term_memory(
+                    context=_contexte,
+                    msg=_texte,
+                    timestamp=timestamp,
+                    importance=_importance,
+                    valence=_valence,
+                    origine=applique.canal,
+                )
+                # (2) Mémoire LONGUE — et sans elle, ce régime ne ferait pas ce qu'il annonce.
+                #
+                # ⚠ MESURÉ, pas supposé : la décision d'un agent ne lit QUE la mémoire longue
+                # (`query_past_experiences_for_travel` → `aquery_user_memories`), et la
+                # consolidation du soir CONSOMME le tampon court en n'écrivant que la réflexion
+                # et les concepts — le texte brut n'atteint jamais la mémoire longue tel quel.
+                # Une entrée posée à 3 h en mémoire courte ne serait donc vue par AUCUNE
+                # décision de la journée, et « l'agent sait avant de décider » serait faux.
+                #
+                # C'est la seule asymétrie entre les deux prises, et elle EST le régime : un
+                # choc s'applique après la décision, son effet commence le lendemain et c'est
+                # voulu ; un article est su avant, il doit donc être consultable le jour même.
+                # Ce qui reste commun aux deux canaux est la QUALIFICATION — gravité, valence,
+                # origine, force, durée de service — pas le chemin d'écriture.
+                self._spawn(
+                    self.agent.aadd_long_term_memory(
+                        _contexte,
+                        MemoryEntry(
+                            content=_texte,
+                            timestamp=wall_clock(timestamp),
+                            memory_type=MemoryType.CONVERSATION,
+                            person_id=str(person_id),
+                            importance=_importance,
+                            valence=_valence,
+                            origine=applique.canal,
+                        ),
+                    )
+                )
+                registre.tracer(
+                    applique, person_id, timestamp, _importance, None, jugement=_jugement
+                )
+                logger.info(
+                    f"[evenements] « {applique.evenement_id} » lu par {person_id} à "
+                    f"{humanize_date(timestamp)} (jour {applique.jour_run} du run, "
+                    f"{applique.raison})"
+                )
+        except Exception as err:  # noqa: BLE001
+            logger.error(
+                f"[ALARME] [evenements] injection au réveil impossible à "
+                f"{humanize_date(timestamp)} : {err}. La simulation continue, mais le "
+                f"protocole de ce jour-là n'a pas eu lieu."
+            )
 
     async def _tirer_accidents_du_jour(self, timestamp: int) -> None:
         """Tire les accidents de la journée simulée en cours, si le régime est actif.
@@ -1771,6 +1974,21 @@ class SimulationLoopV1(BaseScenario):
             _ts_point = self._next_reprise_at
             self._next_reprise_at += 86400
             self._spawn(self._ecrire_point_de_reprise(_ts_point))
+            # Ticket 100, lot 4 — le bilan du foyer, une fois par jour simulé et MÊME À ZÉRO.
+            # La mesure n° 1 du 078 § 6 passe avant toutes les autres : si rien ne passe R1,
+            # le canal est vide et rien d'autre n'a de sens à mesurer.
+            foyer_module.journaliser_compteurs()
+
+        # ── Ticket 100, lot 2 — la prise `reveil` ────────────────────────────────────────
+        # Ce que l'agent a lu ce matin entre AVANT sa première décision de la journée. C'est
+        # ce qui sépare ce régime du choc : l'article est su en choisissant, le choc est subi
+        # après avoir choisi. Le contraste entre les deux est ce que le chapitre 7 mesure, et
+        # il n'existe que si les deux prises restent à leur place.
+        #
+        # Posé au même jalon que le point de reprise — 3 h simulées — donc après le drainage
+        # nocturne des réflexions et le plancher de 22 h, sur des tampons vides, et avant le
+        # premier réveil de la journée. Idempotent par journée, comme le tirage des accidents.
+        self._spawn(self._injecter_evenements_du_reveil(timestamp))
 
         # Ticket 077 — enquête d'affinité modale déclarée, aux jalons DÉCLARÉS
         # (`EXPERIMENT_SURVEY_DAYS`, défaut J12/J17/J29/J40).
@@ -2043,7 +2261,7 @@ class SimulationLoopV1(BaseScenario):
         # zéro, ce qui est un FAIT (aucun retard mesuré) et non une valeur manquante.
         _retard_observe_s = 0.0
 
-        # ── Ticket 079 — le choc déclaré, s'il y en a un ──────────────────────────────────
+        # ── Ticket 100 — l'événement déclaré, s'il y en a un (ticket 079 pour la prise) ───
         # ⚠ RÈGLE QUI NE SE NÉGOCIE PAS : le retard INJECTÉ ne se confond jamais avec le
         # retard MESURÉ. Deux variables, deux colonnes, deux champs dans la trace. Sans cette
         # séparation, aucune relecture ne pourrait plus distinguer ce que la simulation a
@@ -2079,27 +2297,29 @@ class SimulationLoopV1(BaseScenario):
                         f"({_err}) — gravité de retard tenue pour nulle"
                     )
                     _retard_observe_s = 0.0
-            # Ticket 079 — le choc s'applique à l'ARRIVÉE, après la décision : l'agent a
-            # choisi en voyant l'offre nominale, il encaisse ensuite. C'est le régime SUBI, et
-            # c'est ce qui rend le jour du choc muet sur le choix et les jours suivants
-            # entièrement imputables au souvenir.
-            _registre_chocs = chocs_module.registre()
+            # Ticket 100, prise `arrivee` — l'événement s'applique APRÈS la décision :
+            # l'agent a choisi en voyant l'offre nominale, il encaisse ensuite. C'est le
+            # régime SUBI, et c'est ce qui rend le jour de l'événement muet sur le choix et
+            # les jours suivants entièrement imputables au souvenir.
+            # ⚠ La prise `reveil` — l'article su AVANT de décider — n'est pas ici : elle vit
+            # à la bascule de journée (ticket 100, lot 2).
+            _registre_chocs = evenements_module.registre()
             if _registre_chocs is not None and observation.env_ob_code == "arrival":
                 # Le mode vient de la table posée à la DÉCISION (ticket 077, lot C). Lu sans
                 # le consommer : le journal des habitudes le retirera plus bas.
                 _mode_du_trajet = self._mode_par_activite.get(
                     (person.person_id, str(observation.activity_id))
                 )
-                _choc = _registre_chocs.applique(
-                    person.person_id, _mode_du_trajet, observation.timestamp
+                _choc = evenements_module.a_l_arrivee(
+                    _registre_chocs, person.person_id, _mode_du_trajet, observation.timestamp
                 )
                 if _choc is not None:
                     _retard_injecte_s = _choc.retard_injecte_s
                     _incident_reseau = _choc.incident_reseau
                     _correspondance_choc = _choc.correspondance_ratee
-                    # Le vécu est JOINT à l'observation, jamais substitué : l'agent doit garder
-                    # ce que la simulation a mesuré, et y ajouter ce qu'il a vécu.
-                    ob_text = f"{ob_text}\n[ INCIDENT ] {_choc.vecu}"
+                    # Le texte est JOINT à l'observation, jamais substitué : l'agent doit
+                    # garder ce que la simulation a mesuré, et y ajouter ce qu'il a vécu.
+                    ob_text = evenements_module.joindre(ob_text, _choc)
 
             await GamaArrivalsLogger.get_instance().log_arrival(
                 move_id=str(observation.data.get("moving_id", "")),
@@ -2177,7 +2397,17 @@ class SimulationLoopV1(BaseScenario):
             ),
             incident_reseau=_incident_reseau,
         )
-        if _choc is not None and _registre_chocs is not None:
+        # ⚠ UNE SEULE LIGNE PAR EXPOSITION, quoi qu'il arrive. Quand un jugement est
+        # attendu, la trace part avec lui — sinon l'exposition s'écrirait deux fois, une
+        # fois nue et une fois jugée, et tout compte par exposition serait faux. Quand le
+        # jugement échoue, elle s'écrit quand même, sans ses colonnes de jugement : une
+        # exposition qui a eu lieu se trace, jugée ou non.
+        _jugement_attendu = (
+            _choc is not None
+            and _registre_chocs is not None
+            and _registre_chocs.evenement.jugement == "a_l_injection"
+        )
+        if _choc is not None and _registre_chocs is not None and not _jugement_attendu:
             _registre_chocs.tracer(
                 _choc, person.person_id, observation.timestamp, _gravite, _detail
             )
@@ -2210,7 +2440,32 @@ class SimulationLoopV1(BaseScenario):
             msg=ob_text,
             timestamp=observation.timestamp,
             importance=_gravite,
+            origine="vecu",
         )
+
+        # ── Ticket 100, lot 3 — le jugement de l'agent, DANS LA FILE DU SOIR (Q6) ───────
+        # L'appel ne retarde pas le traitement de l'arrivée : il part en tâche de fond, et son
+        # résultat relève l'importance de l'entrée de mémoire courte qui vient d'être écrite.
+        #
+        # Pourquoi cela suffit, et pourquoi rien n'est à requalifier : la consolidation du soir
+        # prend pour PLANCHER la plus forte importance des entrées qu'elle consomme, et c'est
+        # elle qui écrit l'entrée durable. Relever l'entrée courte avant qu'elle soit consommée
+        # relève donc la réflexion, sa gravité et sa durée de vie — toutes calculées au moment
+        # de l'écriture, comme il se doit.
+        #
+        # ⚠ Si le jugement arrive APRÈS la consolidation, l'événement aura été qualifié sur le
+        # seul fait mesuré. Ce n'est pas faux, mais ce n'est pas ce qui était déclaré : une
+        # [ALARME] le dit, plutôt que de laisser croire que l'agent a jugé.
+        if _jugement_attendu:
+            _entree_courte = self.agent.get_short_term_memory(
+                person.person_id
+            ).recent_entries[-1]
+            self._spawn(
+                self._juger_evenement_subi(
+                    _registre_chocs, _choc, person, _entree_courte, _gravite,
+                    observation.timestamp, _detail,
+                )
+            )
 
         # Ticket 071, lot 4 — le trajet accompli entre au JOURNAL, d'où sortent les habitudes
         # de l'agent. C'est ici, et seulement ici, que le mode retenu et le retard RÉELLEMENT

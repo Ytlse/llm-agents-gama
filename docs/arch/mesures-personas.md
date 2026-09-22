@@ -70,7 +70,7 @@ réécrit **à chaque point du jour**, à 3 h simulées.
 | `habitudes_par_activite.csv` | jour, agent, **activité** | mode, mode de la veille, reprise, mode habituel, conformité |
 | `memoire_par_jour.csv` | jour, agent | vivier de rappel, souvenirs servis, **opérations de concept**, entrées |
 | `duree_de_vie_par_type.csv` | jour, agent, type | durée de vie médiane, en jours |
-| `choc_par_jour.csv` | jour, agent, choc | expositions, minutes injectées, souvenir du choc servi |
+| `evenement_par_jour.csv` | jour, agent, événement | **canal** (`vecu` \| `lu`), expositions, minutes injectées, souvenir servi |
 
 L'habitude est mesurée **par activité** : le trajet domicile-travail et le trajet de loisir n'ont
 aucune raison de basculer ensemble, et les agréger masquerait le changement cherché. Deux mesures,
@@ -79,6 +79,17 @@ le jour où elle arrive, la **conformité à l'habitude** (mode majoritaire des 
 observations de cette activité) voit une dérive lente.
 
 ---
+
+
+> ⚠ **`choc_par_jour.csv` s'appelle `evenement_par_jour.csv` depuis le 2026-09-22** (ticket 100,
+> lot 5). Le nom du ticket 079 ne décrivait plus que la moitié de ce qu'il porte : un seul
+> fichier couvre désormais les deux régimes, le choc subi à l'arrivée et l'article lu au réveil,
+> et la colonne `canal` les sépare. Elle est **vide** pour un run archivé qui ne portait pas le
+> champ — écrire `vecu` là où rien n'a été mesuré en ferait une mesure.
+>
+> La lecture accepte les deux sources : `evenements.jsonl` d'abord, `chocs.jsonl` ensuite. Les
+> runs déjà archivés — ceux qui portent les chiffres publiés du § 7.2 — restent dépouillables
+> sans être touchés.
 
 ## 3 bis. Deux repères temporels, et ils ne disent pas la même chose
 

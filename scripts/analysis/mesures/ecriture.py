@@ -40,7 +40,9 @@ FICHIER_CHOIX_MODAL = "choix_modal_par_jour.csv"
 FICHIER_HABITUDES = "habitudes_par_activite.csv"
 FICHIER_MEMOIRE = "memoire_par_jour.csv"
 FICHIER_DUREES = "duree_de_vie_par_type.csv"
-FICHIER_CHOC = "choc_par_jour.csv"
+# Ticket 100 — un seul fichier pour les deux régimes, vécu et lu. Le nom du ticket 079
+# (`choc_par_jour.csv`) ne décrivait plus que la moitié de ce qu'il porte.
+FICHIER_CHOC = "evenement_par_jour.csv"
 
 
 @dataclass(frozen=True)
@@ -89,7 +91,7 @@ TABLES = {
     ),
     "chocs": Table(
         FICHIER_CHOC,
-        ("jour_simule", "date_simulee", "person_id", "choc_id", "expositions",
+        ("jour_simule", "date_simulee", "person_id", "choc_id", "canal", "expositions",
          "minutes_injectees", "incidents_reseau", "correspondances_ratees",
          "souvenir_choc_servi", "decisions_avec_souvenir_choc", "appariement"),
         ("jour_simule", "person_id", "choc_id"),

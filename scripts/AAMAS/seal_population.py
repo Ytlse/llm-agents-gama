@@ -111,6 +111,13 @@ logger = logging.getLogger("aamas.seal")
 # de tirage changeait ; ici il ne change pas.
 SELECTION_NAMESPACE = "aamas_seal_v4"   # sel du hachage des MÉNAGES — inchangé, cf. ci-dessus
 SELECTION_RULE = "aamas_seal_v5"
+# Une sélection sur vivier AMPUTÉ (ticket 073, axe 2 — spec `cohortes-disjointes-axe2`) ne porte
+# pas le même nom de règle qu'une sélection sur vivier entier, même si la mécanique est identique
+# au caractère près : deux cohortes tirées sur des viviers différents ne sont pas tirées de la
+# même façon, et une étiquette commune le ferait croire. Le SEL, lui, ne change pas — c'est
+# l'exclusion qui produit une cohorte différente, et elle suffit ; changer les deux rendrait
+# impossible de dire lequel a produit l'écart observé.
+SELECTION_RULE_DISJOINT = "aamas_seal_v5_disjoint"
 SEAL_VERSION = "sceau1"
 # La cohorte COURANTE. La règle de sélection, elle, reste `aamas_seal_v5` : la v6 est la
 # même cohorte dans une autre langue (ticket 074), pas une nouvelle façon de la tirer —
@@ -849,19 +856,108 @@ def _marges_defs(personas: dict[str, ctl.Persona]) -> list[tuple[str, Callable, 
 
 # ── Sélection ─────────────────────────────────────────────────────────────────
 
-def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tuple[list[dict], dict]:
-    """Sélection stratifiée par ménages de `n` personas. Rend `(retenus, journal)`."""
+def charger_exclusions(dossiers: list[Path]) -> tuple[set[str], list[dict]]:
+    """Ménages retenus par des cohortes déjà scellées, à retirer du vivier.
+
+    Lit les `household.id` dans le `population.json` de chaque cohorte, et non dans son
+    `selection.json` : c'est le fichier scellé qui dit ce que la cohorte contient RÉELLEMENT, et
+    c'est lui dont le sha256 circule. Exclure l'identifiant du ménage exclut tous ses membres au
+    moment du regroupement, y compris ceux que la cohorte n'avait pas retenus — la disjonction
+    porte sur le ménage, pas sur la personne (R2).
+
+    Le sha256 de chaque cohorte est REVÉRIFIÉ contre son manifeste : une cohorte dont le fichier
+    a bougé depuis son scellement n'est plus celle que l'on croit exclure, et l'on ne peut pas
+    savoir dans quel sens. C'est une erreur, jamais un avertissement (R9).
+    """
+    exclus: set[str] = set()
+    journal: list[dict] = []
+    for dossier in dossiers:
+        dossier = Path(dossier)
+        manifest_path, pop_path = dossier / "MANIFEST.yaml", dossier / "population.json"
+        for chemin in (manifest_path, pop_path):
+            if not chemin.exists():
+                raise ValueError(f"cohorte à exclure incomplète : {chemin} est absent")
+        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        attendu = ((manifest.get("population") or {}).get("sha256") or "")
+        lu = ctl.sha256_of(pop_path)
+        if attendu != lu:
+            raise ValueError(
+                f"cohorte {dossier.name} modifiée depuis son scellement : le manifeste annonce "
+                f"sha256 {attendu or '(absent)'}, le fichier vaut {lu} — rien n'est exclu"
+            )
+        records = ctl.load_population(pop_path)
+        ids = {str((r.get("household") or {}).get("id")) for r in records}
+        ids.discard("None")
+        avant = len(exclus)
+        exclus |= ids
+        journal.append({
+            "nom": manifest.get("nom") or dossier.name,
+            "dossier": str(dossier),
+            "sha256": lu,
+            "personnes": len(records),
+            "menages": len(ids),
+            "menages_nouveaux": len(exclus) - avant,
+        })
+        logger.info("exclusion : %s — %d ménages (%d personnes), sha256 %s…",
+                    journal[-1]["nom"], len(ids), len(records), lu[:16])
+    return exclus, journal
+
+
+def verifier_disjonction(retenus: set[str], exclus: set[str]) -> None:
+    """La disjonction se vérifie sur le RÉSULTAT, pas seulement à l'entrée (R10).
+
+    Un filtre qui se tromperait de clé — `id` contre `household.id`, un entier contre une chaîne —
+    laisserait passer une cohorte recouvrante sans qu'aucun message ne le dise, et l'axe 2 serait
+    publié sur du sable. Une erreur, pas une assertion : elle doit tenir sous `python -O`.
+    """
+    if not exclus:
+        return
+    fuite = sorted(retenus & exclus)
+    if fuite:
+        raise ValueError(
+            f"disjonction rompue : {len(fuite)} ménage(s) déjà retenu(s) par une cohorte "
+            f"antérieure figurent dans la sélection — {fuite[:5]}"
+        )
+
+
+def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET,
+           exclure_menages: Optional[set[str]] = None) -> tuple[list[dict], dict]:
+    """Sélection stratifiée par ménages de `n` personas. Rend `(retenus, journal)`.
+
+    `exclure_menages` retire du vivier les ménages retenus par des cohortes antérieures, pour
+    produire une cohorte disjointe (ticket 073, axe 2). Vivier entier par défaut : à exclusion
+    vide, cette fonction rend exactement ce qu'elle rendait avant qu'elle existe.
+    """
     t0 = time.monotonic()
+    exclure_menages = set(exclure_menages or ())
     joint = cible_jointe(joint_path)
     cells_pct = {f"{c} × {m}": float(joint["cible_pct"][c][m])
                  for c in COURONNES for m in MOTORISATION}
     targets = largest_remainder(cells_pct, n)
 
     menages, excluded = group_households(records)
+
+    # Amputation du vivier (R1). Elle intervient APRÈS le regroupement, donc l'exclusion d'un
+    # `household.id` emporte tous les membres du ménage sans qu'on ait à les énumérer (R2). Les
+    # capacités par cellule sont relevées AVANT et APRÈS pour que le journal distingue un déficit
+    # causé par l'exclusion d'un déficit du vivier lui-même (R7) : les deux se soldent par des
+    # reports vers d'autres cellules, mais pas pour la même raison et pas avec le même remède.
+    capacite_avant = Counter()
+    for m in menages:
+        capacite_avant[m.cellule] += m.size
+    if exclure_menages:
+        retires = [m for m in menages if m.id in exclure_menages]
+        menages = [m for m in menages if m.id not in exclure_menages]
+        excluded["exclus_cohorte_anterieure"] = sum(m.size for m in retires)
+        logger.info("vivier amputé : %d ménages retirés (%d personnes) — %d ménages restants",
+                    len(retires), sum(m.size for m in retires), len(menages))
+
     eligible = sum(m.size for m in menages)
     if eligible < n:
-        raise ValueError(f"vivier insuffisant : {eligible} personas éligibles pour {n} demandés "
-                         f"(exclus : {dict(excluded)})")
+        cause = ("après exclusion des cohortes antérieures" if exclure_menages
+                 else "sur le vivier entier")
+        raise ValueError(f"vivier insuffisant {cause} : {eligible} personas éligibles pour {n} "
+                         f"demandés (exclus : {dict(excluded)})")
     chosen, taken, deficits, reports, allocation = allocate(menages, targets, n)
     assert sum(m.size for m in chosen.values()) == n, (sum(m.size for m in chosen.values()), n)
     sous_cellules_allouees = Counter(sous_cellule(m) for m in chosen.values())
@@ -884,6 +980,18 @@ def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tupl
     retenus.sort(key=lambda r: int(str(r.get("person_id"))) if str(r.get("person_id")).isdigit()
                  else str(r.get("person_id")))
 
+    verifier_disjonction(set(chosen), exclure_menages)
+
+    # Déficits IMPUTABLES à l'amputation : la cellule servait la cible avant exclusion, plus après.
+    deficits_exclusion = {}
+    if exclure_menages and deficits:
+        deficits_exclusion = {c: manque for c, manque in deficits.items()
+                              if capacite_avant.get(c, 0) >= targets[c]}
+        if deficits_exclusion:
+            logger.error("[ALARME] %d cellule(s) en déficit du seul fait de l'exclusion — %s ; le "
+                         "vivier entier les remplissait. C'est une cohorte de trop, pas un vivier "
+                         "trop petit", len(deficits_exclusion), deficits_exclusion)
+
     if deficits:
         logger.error("[ALARME] sélection : %d cellule(s) en déficit — %s — %d report(s) ; le vivier "
                      "est trop petit pour la cible jointe", len(deficits), dict(deficits),
@@ -903,7 +1011,7 @@ def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tupl
                        "extérieures", perimetre["departements_representes"],
                        len(PERIMETRE["departements_attendus"]), perimetre["retenus_par_departement"])
     journal = {
-        "version": SELECTION_RULE,
+        "version": SELECTION_RULE_DISJOINT if exclure_menages else SELECTION_RULE,
         "perimetre": perimetre,
         "regle": ("unité = ménage (household.id) ; effectifs de cellule proportionnels à la cible "
                   "jointe couronne × motorisation (base personne) par plus fort reste, puis "
@@ -920,7 +1028,9 @@ def select(records: list[dict], n: int, joint_path: Path = JOINT_TARGET) -> tupl
         "n_demande": n,
         "n_retenu": len(retenus),
         "vivier": {"n": len(records), "eligibles": eligible, "exclus": dict(excluded),
-                   "menages": len(menages), "par_cellule": dict(by_cell_n)},
+                   "menages": len(menages), "par_cellule": dict(by_cell_n),
+                   "menages_exclus": len(exclure_menages)},
+        "deficits_imputables_a_l_exclusion": deficits_exclusion,
         "menages_retenus": {"n": len(chosen), "par_taille": {str(k): v for k, v in sorted(sizes.items())},
                             "membres_declares": sum(m.taille_declaree for m in chosen.values()),
                             "membres_presents": n},
@@ -952,10 +1062,13 @@ def cmd_select(args) -> int:
     logger.info("vivier : %s — %d personas, sha256 %s…", args.pool, len(records), pool_digest[:16])
     posed = ensure_residence_zone(records)
     try:
-        chosen, journal = select(records, args.n)
+        exclus, exclusions = charger_exclusions(args.exclure or [])
+        chosen, journal = select(records, args.n, exclure_menages=exclus)
     except (ReferenceError, ValueError) as exc:
         logger.error("[ALARME] sélection impossible : %s", exc)
         return 2
+    journal["disjonction"] = ({"regle": journal["version"], "cohortes": exclusions,
+                               "menages_exclus": len(exclus)} if exclusions else None)
     journal["vivier"]["fichier"] = str(args.pool)
     journal["vivier"]["sha256"] = pool_digest
     journal["vivier"]["residence_zone"] = dict(posed)
@@ -1101,6 +1214,11 @@ def cmd_seal(args) -> int:
         "population": {"fichier": "population.json", "sha256": digest, "n": n,
                        "source": str(args.population), "source_sha256": report["population"]["sha256"]},
         "perimetre": perimetre_manifest,
+        # De quoi cette cohorte est disjointe, nommément et par sha256 (R4). Sans ce bloc, la
+        # disjonction ne se relit sur rien : le `population.json` ne porte aucune trace de ce
+        # qu'on a retiré du vivier avant de le tirer. `null` pour une cohorte sur vivier entier —
+        # une clé absente laisserait croire à un manifeste d'une version antérieure.
+        "disjonction": (selection or {}).get("disjonction"),
         "selection": ({"fichier": "selection.json", "version": selection.get("version"),
                        "regle": selection.get("regle"),
                        "vivier": {k: v for k, v in selection.get("vivier", {}).items() if k != "par_cellule"},
@@ -1141,6 +1259,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     s.add_argument("--pool", type=Path, required=True)
     s.add_argument("--n", type=int, default=1000)
     s.add_argument("--out", type=Path, required=True)
+    s.add_argument("--exclure", type=Path, action="append", metavar="DOSSIER_SCELLE",
+                   help="dossier d'une cohorte déjà scellée dont les ménages sont retirés du "
+                        "vivier ; répétable. La cohorte produite est alors disjointe de celles-ci, "
+                        "et sa règle de sélection le déclare.")
     s.add_argument("--selection-json", type=Path, default=None,
                    help="journal de sélection (défaut : <out>_selection.json)")
     s.set_defaults(func=cmd_select)

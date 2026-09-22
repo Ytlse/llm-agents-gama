@@ -51,3 +51,36 @@ class TestDeparturePriority:
 
     def test_aucun_depart_rend_none(self):
         assert departure_priority([AgentSpec(agent_id="a", perception="p")]) is None
+
+
+# ---------------------------------------------------------------------------
+# Le champ qu'un gabarit lit doit exister sur le modèle d'item
+# ---------------------------------------------------------------------------
+
+def test_tout_champ_lu_par_un_gabarit_est_declare_sur_AgentSpec():
+    """`extra="ignore"` jette en silence : un gabarit peut lire un champ qui n'arrive jamais.
+
+    La panne a eu lieu deux fois. `mode_interroge` (ticket 095, lot B) posait six questions
+    dans le vide. `evenement` (ticket 100, lot 3) demandait à l'agent de juger une page
+    blanche : quinze appels sur quinze ont répondu `negligible`, sans une erreur nulle part,
+    et le défaut s'est d'abord lu comme « le modèle n'utilise pas l'échelle ».
+
+    Ce test regarde ce que les gabarits LISENT et le confronte à ce que le modèle DÉCLARE.
+    Il ne peut pas prouver qu'un champ déclaré est rempli — mais il rend impossible la
+    troisième occurrence de ce motif-là.
+    """
+    import re
+
+    from mobility_llm.persona import AgentSpec
+    from mobility_llm.prompts import CATEGORIES_DIR
+
+    declares = set(AgentSpec.model_fields)
+    manquants: dict[str, set[str]] = {}
+    for gabarit in sorted(CATEGORIES_DIR.glob("*/template.md.j2")):
+        lus = set(re.findall(r"\bagent\.([a-z_][a-z0-9_]*)", gabarit.read_text("utf-8")))
+        if absents := lus - declares:
+            manquants[gabarit.parent.name] = absents
+    assert not manquants, (
+        f"des gabarits lisent des champs qu'`AgentSpec` ne déclare pas : {manquants}. "
+        f"`extra=\"ignore\"` les jettera en silence et le prompt partira amputé."
+    )

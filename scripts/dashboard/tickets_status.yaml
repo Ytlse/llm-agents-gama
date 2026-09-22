@@ -2446,7 +2446,7 @@ tickets:
       date: '2026-09-14'
       aamas: 5
   ticket_059_etape_3b_presse_locale_et_predictions_preenregistrees:
-    status: à faire
+    status: bloqué
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-13 (Tasks 21 & 22 de suivi_actions_publication.md). Cadrage méthodologique et rédactionnel
@@ -2484,10 +2484,80 @@ tickets:
       corpus textuel `articles_txt/` avec test de lexique pour C3, grille des vingt signes gelée
       (trois cellules ambiguës à trancher), script d'injection de l'étage 1 (= le 064), canal
       `llm/informations.py`, sixième CSV `presse_par_jour.csv`, population de foyers, figures F1 à
-      F3. GO DE L'AUTEUR LE 2026-09-21 sur ces sept lots ; le plan d'architecture détaillé et le
-      contrat de tests passent d'abord (plan-first). Statut INCHANGÉ (`à faire`) tant qu'aucune
-      ligne n'est écrite ; onze questions attendent l'auteur au § 13 du ticket et dans
-      specs/ticket_059/questions.md, dont quatre bloquent le lot 4.
+      F3. GO DE L'AUTEUR LE 2026-09-21 sur ces sept lots, plan d'architecture et contrat de tests
+      écrits d'abord (specs/ticket_059/plan.md et tests.md).
+      LIVRÉ LE 2026-09-21 — LOTS 2, 6 ET LA MOITIÉ DU 1, 34 tests au vert. Lot 2 : grille des
+      vingt signes gelée (docs/paper/sources/actualites/grille_signes.yaml) avec motif par
+      cellule et empreinte, les trois cellules ambiguës déclarées « pas d'effet attendu » ;
+      chargeur scripts/analysis/presse/grille.py qui refuse une cellule manquante, un signe hors
+      domaine, un signe sans intensité et un motif vide. Lot 1 : scripts/data/presse/
+      extraire_textes.py (extraire | sceller | verifier), les cinq brut.fr.txt extraits des
+      archives selon une règle écrite et reproductible, lexique de mobilité FR+EN qui REFUSE une
+      paraphrase ou un témoin portant un mot de transport — deux se sont fait prendre au premier
+      essai, « mises en ligne » et « underground ». LES CINQ ARTICLES sont traduits et
+      paraphrasés dans les deux langues, corpus scellé à 20 textes sur 30 — il ne manque que les
+      témoins. Trois défauts d'extraction corrigés au passage : une annonce immobilière, une
+      interpellation du lecteur et un commentaire de lecteur passaient dans le corps ; le filtre
+      structurel qui les retire porte une garde de taille, un conteneur nommé `paywall`
+      enveloppant l'article entier chez La Dépêche. Lot 3 À MOITIÉ : scripts/analysis/presse/
+      scoring.py, écart apparié sur l'intersection, accord de signe et binomial exact (il
+      reproduit les 0,021 et 0,058 que le chapitre 7 annonce), kappa pondéré, garde de vacuité
+      partout et plancher de bruit SANS valeur par défaut ; restent `echantillon` et `jouer`, qui
+      demandent le corpus complet. README écrit. Lot 6 :
+      scripts/data/population/extraire_foyers.py et data/population/population_20_foyers_059
+      (6 foyers exposés, 4 témoins, taille 2, tous mobiles, au moins un abonné TC ; 48 éligibles
+      dans la v6). Article corrigé sous accord : la traduction déclarée au § 7.1.2 FR et EN, et
+      les notes de travail renvoyées aux lots ; make paper-style au vert sur les deux.
+      RESTE : les 10 TÉMOINS DE C4 QUI BLOQUENT — ils ne peuvent pas venir du corpus des trente,
+      constitué pour son lien avec la mobilité, et demandent cinq articles locaux neufs (décision
+      de l'auteur, Q14). Puis les deux sous-commandes du lot 3, et le lot 4, toujours bloqué par
+      Q1, Q2, Q5 et Q6. RÉSERVE DE LECTURE À PORTER DANS LES LIMITES : un article dont le sujet
+      EST un mode met la paraphrase sous une contrainte que les autres n'ont pas — si C3
+      s'effondre sur VélôToulouse et tient sur le vent d'Autan, la cause peut être la difficulté
+      de la paraphrase autant que l'absence de raisonnement.
+      1 test ignoré — celui des témoins, qui bascule en vérification le jour où ils arrivent au
+      lieu de rester un rappel. Trois échecs subsistent dans test_dashboard_tickets_status.py :
+      vérifiés PRÉEXISTANTS, identiques avec et sans cette livraison, et ils portent sur les
+      tickets 095 et 074.
+      RÉPONSES DE L'AUTEUR DU 2026-09-21, SECOND TOUR : Q1 la gravité d'un article — L'AGENT
+      DÉCIDE, ni constante ni cote ; le mécanisme existe déjà (gravite_jugee sur cinq échelons
+      ancrés, gravite_concept en max(jugement, déterministe)), et un article ne portant aucun fait
+      mesuré, le jugement décide seul par la règle en vigueur. La durée de l'effet cesse d'être un
+      réglage et devient une conséquence de ce que l'agent a fait du texte ; la distribution des
+      échelons devient une sortie de l'expérience. Q2 un seul lecteur par foyer. Q5 jour de
+      parution TIRÉ AU SORT, ce qui décorrèle l'effet du calendrier. Q6 chaînage actif partout,
+      donc le confondant « le lecteur libère la voiture » se MESURE au lieu d'être supprimé.
+      C3 CORRIGÉE : le sujet de l'article se nomme, seuls les modes de report disparaissent —
+      exemptions déclarées par article sous deux gardes (le mot doit être dans le texte brut,
+      aucun article n'exempte son propre report). Plan et contrat de tests révisés en conséquence.
+      Restent Q15 (parution tirée par foyer ou une fois pour le run), Q16 (quand le jugement est
+      demandé) et Q17 (échelon hors grille), plus Q14, les cinq articles témoins.
+      87 tests au vert. CORPUS COMPLET (22/22) le 2026-09-21 : le témoin de C4 est UNIQUE pour les
+      cinq articles — une dépêche France 24 du 19 septembre sur une espèce de félin, appariée en
+      longueur de 0,5 % à 8 %, aucun mot de mobilité. Il ne vient PAS de la presse locale et ne
+      pouvait pas en venir, les trente articles ayant été réunis pour leur lien avec la mobilité ;
+      la réserve est écrite dans le chapitre. ÉCHELLE DE JUGEMENT ARRÊTÉE : signée et qualitative,
+      neuf échelons de « très grave » à « à ne pas manquer », l'agent nommant les modes touchés —
+      les cinq échelons du dépôt ne mesurent qu'une intensité de contrariété et ne savent pas dire
+      qu'un article est une bonne nouvelle. Conséquence : un TROISIÈME niveau de mesure, ce que
+      l'agent a compris du texte, confrontable à la grille sans attendre qu'il se déplace.
+      CHAPITRE 7 CORRIGÉ SOUS ACCORD, quatre passages FR et EN : le témoin unique et non local, la
+      traduction, la paraphrase qui garde son sujet, le troisième niveau de mesure, la sélection
+      des événements rattachée à la question d'ouverture sur l'espace des comportements
+      représentables — et le RETRAIT DE LA BARRE BINOMIALE, les vingt cellules n'étant pas
+      indépendantes (les parts d'un même événement somment à un, un seul comportement produit
+      quatre concordances) ; l'incertitude passe par un rééchantillonnage groupé par événement.
+      make paper-style au vert sur les deux.
+      RÉDUIT LE 2026-09-21 PAR LE TICKET 100 (décision de l'auteur, D6). Le LOT 4 (canal
+      `information`, `llm/informations.py`) PASSE AU 100, qui pose un seul canal d'événement pour
+      le vécu et le lu ; le lot 3 (étage 1 hors simulateur) TOMBE, l'étage 1 n'existant plus depuis
+      le second tour de relecture. Restent ici : corpus (lot 1), grille (lot 2), population de
+      foyers (lot 6), mesure (lot 5) et figures (lot 7) propres à la presse. L'ÉCHELLE À NEUF
+      ÉCHELONS SIGNÉS DU TROISIÈME TOUR EST RETIRÉE (D3 du 100) : cinq intensités et une valence,
+      celles de gravite.py et du schéma de stm_reflection. La phrase « en l'état, un article ne se
+      diffuse pas » (§ 6.1) devient fausse dès le lot 4 du 100 : le lecteur raconte sa lecture le
+      soir même (D1), la séquence datée de l'étage 3 est à réécrire. DÉPEND DE : 100 — l'étage 3
+      et toute campagne longitudinale attendent le canal et le foyer.
 
     triage:
       faisabilite: 3
@@ -3425,22 +3495,11 @@ tickets:
       que pdflatex ne compose pas. NON TOUCHÉ, à signaler : overleaf/08_limits_and_hybrid.tex est
       en retard d'une section sur son .md (le § 8.5 du 21/09 n'y est pas), donc le § 8.6 n'y est
       pas versé — le resync LaTeX du chapitre 8 est un travail à part.
-    triage:
-      faisabilite: 4
-      surete: 3
-      jeux_de_test: true
-      motif: >-
-        RE-NOTÉ le 2026-09-14, APRÈS livraison des lots A à C : la note 2/1 portait sur un travail
-        qui est fait. Le piège fatal est refermé (`parse_option_modes` relisait les étiquettes de
-        mode dans le texte du prompt, `models.py:192`), l'archive froide est gelée et son
-        inaccessibilité prouvée par test, la v6 reproduit la v5 au chiffre près. Ce qui reste —
-        lot D (campagne : file, reprise au renouvellement de quota, état persistant) et lot E
-        (onglet) — est spécifié item par item et assemble des briques existantes
-        (`experience-lancer ATTENDRE_FENETRE=1`, `next_quota_reset()`, ordonnanceur). Le drapeau reste levé :
-        D-7 peut imposer de rejouer les 14 témoins sur la v6, et la campagne produit des
-        exécutions attachées au jeu scellé.
-      date: '2026-09-14'
-      aamas: 3
+      HYGIÈNE le 2026-09-22 : bloc `triage` retiré, ce ticket étant clos (règle R34 du dépôt — un
+      ticket terminé ne se trie pas, et son drapeau `jeux_de_test` faussait en plus le compte des
+      tickets touchant les jeux gelés : 7 comptés pour 6 réels). Le motif du triage, daté du
+      2026-09-14, disait « ce qui reste : lot D et lot E » — il était périmé, le lot D ayant été
+      livré depuis (commit « Les deux témoins random forest tournent sur la v6 »).
   ticket_073_reproductibilite_prompt_calibre_multi_graines_multi_populations:
     status: en cours
     category: Expériences & Cognition
@@ -3487,6 +3546,31 @@ tickets:
       les cinq bras (1 réplicat + 4 graines), l'axe 2, et le SEUL outil manquant — aucun script
       n'apparie deux exécutions ; `mode_probabilities.py` compare attendu contre tiré DANS une
       exécution, `modal_variation_rate.py` compare un jour au précédent DANS un run.
+
+
+      AVANCE DU 2026-09-22, DEUX DÉCISIONS DE L'AUTEUR ET UN LIVRABLE. (1) L'AXE 1 S'ARRÊTE À
+      TROIS GRAINES : 42 (référence, exécution 2026-09-16_22_20_25), 123 (terminée le 2026-09-21,
+      composite 4,646 contre 4,857 — 0,21 point d'écart, un sixième de la variation de cohorte) et
+      789, reprise depuis son interruption à 57,9 %. Les définitions des graines 456 et 2026 sont
+      SUPPRIMÉES de `data/experiences/` pour qu'elles ne partent pas par inadvertance ; leurs
+      `experience.yaml` sont dans `docs/traces/2026-09-22_12-12_suppression_graines_456_2026_ticket073/`.
+      Trois points donnent une étendue, jamais un écart-type ni un IC. (2) L'AXE 2 S'ARRÊTE À UNE
+      COHORTE, et elle est LIVRÉE : `population_1000_AAMAS_v6_c2`, scellée le 2026-09-22, sha256
+      `4c446e5419e70b90…`, 1 000 personas en 501 ménages, 13 verdicts conformes sur 13, aucune
+      marge non mesurable, zéro `person_id` et zéro `household.id` en commun avec la v6. Le
+      mécanisme est livré et testé : `seal_population.py select --exclure <dossier scellé>` ampute
+      le vivier des ménages d'une cohorte déjà scellée, le sel du hachage ne bouge pas, et un test
+      rejoue le tirage à exclusion vide pour retrouver la v6 à l'identique. Spec
+      `specs/cohortes-disjointes-axe2.md` (dix règles), tests
+      `scripts/tests/test_073_cohorte_disjointe.py` (17 tests, tous verts ; 44 avec la suite
+      population). Doc : `docs/arch/controle-population-jeu-de-test.md` section 6 bis-a.
+      CONSÉQUENCE À NE PAS PERDRE : avec K = 1 cohorte, l'ANOVA de la section 3 du ticket est HORS
+      DE PORTÉE, et le critère `Δ_gen < 1,0 point` ne se conclura pas — les deux cohortes ne sont
+      pas appariables et l'incertitude sur leur différence est de l'ordre de ±1,8 point. Ce qui se
+      publiera est un écart borné, pas une dispersion. RESTE : terminer la graine 789, préparer le
+      jeu gelé de la c2 (en cours au 2026-09-22), jouer le bras c2, et l'axe 0 dont la définition
+      `…_t0_nosim_2` est prête et sans exécution. À l'auteur de dire si un écart sur une seule
+      cohorte suffit à clore l'axe 2.
     triage:
       faisabilite: 2
       surete: 4
@@ -3677,7 +3761,7 @@ tickets:
       aamas: 3
 
   ticket_078_partage_de_concepts_au_sein_du_foyer:
-    status: à faire
+    status: terminé
     category: Expériences & Cognition
     note: >-
       Ouvert le 2026-09-15 à la demande de l'auteur ; mécanisme arrêté le jour même en trois tours
@@ -3741,27 +3825,17 @@ tickets:
       231 à zéro observation — si les confirmations ne repartent pas, le canal naît vide), la
       population `population_12_foyers_078` qui n'existe pas, et le budget du run macro.
       DÉPEND DE : aucun ticket.
+      CLOS LE 2026-09-21, ABSORBÉ PAR LE TICKET 100 (décision de l'auteur, D6). Ses lots 1 à 3
+      s'implémentent au lot 4 du 100, rendus indifférents au canal : le bloc du soir sert les
+      croyances (règles R1 à R6 inchangées) ET le récit de la journée de chaque membre (D1 du 100,
+      la variante C écartée ici est rouverte par l'auteur, sans restriction de gravité). Deux
+      décisions du 100 modifient ce que ce ticket avait arrêté : un SEUL SAUT, jamais de
+      rétro-information (D2), ce qui impose le champ de provenance que le § 4.1 refusait ; et le
+      récit d'épisodes, que le § 1 excluait. Ce texte reste la référence de conception des six
+      règles et de l'argument d'ancrage. Aucun ticket ne portait `DÉPEND DE : 078` — vérifié, le
+      059 nommait la dépendance dans son texte (étage 3), pas dans sa note ; elle passe au 100.
 
-    triage:
-      faisabilite: 3
-      surete: 4
-      jeux_de_test: false
-      motif: >-
-        Faisabilité 3 : il ne reste qu'un repère horodaté par agent, la construction d'un bloc dans
-        le contexte de `stm_reflection` (`agents/llm_agent.py` et le gabarit
-        `categories/stm_reflection/template.md.j2`), et un filtre qui relit deux compteurs existants
-        (`observations`, `derniere_observation`) plus `modes_vehicules_eligibles`. Aucun champ sur
-        les concepts, aucun champ de sortie, aucun schéma touché. Ce qui retient la note n'est donc
-        pas le travail mais la dépendance : rien ne commence avant que le 077 soit livré en entier,
-        et il faut d'abord construire une population de test qui n'existe pas. Sûreté 4 : drapeau
-        `memoire__partage_foyer_enabled` FAUX par défaut, aucune règle de mémoire touchée, aucun jeu
-        scellé consommé ni modifié, tout ce qui a été mesuré avant reste comparable. Deux points de
-        vigilance qui ne sont pas des régressions : le bloc foyer allonge un prompt dont le 077
-        vient de montrer qu'il stagne à ~2 100 jetons (d'où le garde-fou et sa mesure), et la règle
-        d'ancrage peut rendre le canal vide si les confirmations ne repartent pas — c'est la
-        première mesure du run, pas une découverte à faire après coup.
-      date: '2026-09-15'
-      aamas: 2
+
   ticket_079_chocs_declares_vecus_par_les_agents:
     status: terminé
     category: Expériences & Cognition
@@ -4725,7 +4799,166 @@ tickets:
       invisible : elle n'existait que dans le ticket 071, à l'intérieur d'un critère de clôture
       DÉJÀ COCHÉ, et une case cochée ne se relit pas ; le 071 aurait pu se fermer en la laissant
       derrière.
+      E3 TRANSFÉRÉ AU TICKET 100 le 2026-09-21 (décision de l'auteur, D6) : l'exposition
+      multi-agents avec témoin interne a besoin de la règle d'exposition `foyers` que le 100 pose.
+      Restent ici les lots C à F et E1, E2, E4, E5. Q3bis (seuil 0,70 sur la lame, marge et
+      déplacement à 0,66) reste ici aussi : le 100 refuse de toucher aux seuils de mémoire.
 
+      AVANCE DU 2026-09-22 : E3 TRANCHÉE par l'auteur — sortie 2, la gravité est celle de l'agent
+      et E3 se rejoue sur la gravité JUGÉE, à deux conditions : un garde-fou en amont (grille
+      d'attendus déclarée AVANT de voir les réponses, la campagne ne part pas si le jugement sort
+      de la plage) et la variation par profil MESURÉE plutôt que corrigée. E4 tranchée aussi : le
+      plafond de durée passe de 30 à 50 j et devient un TÉMOIN — la durée atteignable plafonne à
+      31,49 j (conséquence de memoire__force_max_jours=30), donc il ne mord plus jamais ; il reste
+      déclaré parce que DureeService.borne le journalise, et une ligne qui le nommerait dirait que
+      la loi ou le plafond de force a bougé. Le garde-fou sur le coût passe au PROTOCOLE : horizon
+      de run 50 j, l'arrêt normal restant l'extinction + 7 jours vécus (arret_sur_extinction.py).
+      Appliqué : settings.py et infra/docker-compose.yml (le test L1_2 du 077 garde l'égalité des
+      deux), tests A6 et B8 réécrits, le mécanisme du plafond restant exercé en abaissant la
+      borne. 1903 tests passés, 0 echec. DEFAUT ANTERIEUR A D7, trouvé le même jour : C2, C6 et C3
+      tels qu'ils sont déclarés donnent des durées servies de 16,5 / 15,3 / 20,6 j là où le
+      protocole annonce 8 / 15 / 19 — C2, censé être le cas faible, arrive à un jour de C6, la
+      part du retard étant fortement concave (30 min donne 0,50 ; 45 min 0,64 ; 60 min 0,68). Les
+      trois déclarations sont à recalibrer avant tout run. A SAVOIR : arret_sur_extinction.py
+      n'est PAS câblé dans le lanceur de campagne, c'est un script de surveillance à lancer à côté
+      du run. Exposé complet et lisible seul, où les codes E3, E4, C2, C3 et C6 sont traduits :
+      specs/ticket_095/expose_duree_d_un_souvenir.md.
+      GARDE-FOU LIVRÉ ET JOUÉ le 2026-09-22 : scripts/experiment/banc_fonctionnel/garde_fou_jugement.py,
+      grille specs/ticket_095/grille_attendus.yaml, 11 tests sans appel
+      (scripts/tests/test_095_garde_fou_jugement.py). Premier passage, 32 appels sur
+      groq_openai_120_key1, 0 réponse vide, 0 hors schéma : il REFUSE la campagne, et c'est son
+      travail. Deux motifs bloquants. (1) Les trois bras ne se séparent pas dans l'ordre prédit :
+      c2 genant (11,76 j), c6 grave (16,17 j), c3 genant (11,76 j) — c3, le cas censé être le
+      plus fort, est jugé au niveau de c2 et sous c6, unanimement 4 personas sur 4. La prédiction
+      AVEUGLE sur c3 était grave/marquant : démentie. Celle sur c2, notable/genant : tenue.
+      (2) Plus profond : la dispersion INTRA-bras dépasse l'écart INTER-bras — 11,47 j d'écart
+      entre deux personas du bras c6 contre 4,41 j entre le bras le plus fort et le plus faible.
+      Savoir QUI a été exposé renseigne plus sur la durée que savoir À QUOI. L'effet de profil est
+      réel et lisible (le persona sans permis ni voiture juge anodin la panne moteur que les trois
+      autres jugent grave) — c'est ce que l'auteur avait prévu, et cela change ce que l'expérience
+      peut prétendre montrer. Trois sorties proposées dans
+      docs/traces/garde_fou_jugement_095/BILAN.md, à l'auteur de choisir : réécrire c3, changer de
+      bras, ou poser l'expérience par persona. A SAVOIR : la grille a été remplie par la session
+      et non par l'auteur, six cellules sur huit après avoir vu des réponses ; seules c2 et c3
+      sont aveugles, et le rapport ne mélange jamais les deux taux.
+      CHOCS RÉÉCRITS EN FAITS le 2026-09-22 (décision de l'auteur) : les six déclarations perdent
+      toute charge émotionnelle (« shaken », « in a foul mood », « late and filthy », « nobody
+      said a word for what felt like forever ») au profit de faits observables — durée, absence
+      d'information pendant n minutes, correspondance ratée, rendez-vous manqué, avant-bras
+      éraflé. Les DEUX copies de chaque déclaration (config/chocs/ et config/evenements/) sont
+      modifiées ensemble et le test en or du lot 1 du 100 passe toujours. Les trois bras remis en
+      AVEUGLE dans la grille, puis rejoués : 12 appels, 0 réponse vide. Résultat en aller-retour —
+      c3 passe de genant (4/4) à GRAVE (4/4), donc la prédiction aveugle grave/marquant est tenue ;
+      c6, dont le seul mot retiré est « shaken », REDESCEND de grave à genant. Le mot faisait le
+      travail à la place de l'événement, et cela valait 4,5 jours de durée de souvenir. Effet non
+      cherché : c3 est unanime alors que c2 et c6 restent partagés entre personas — c3 nomme une
+      conséquence sur les PROJETS (un rendez-vous manqué), c2 et c6 sur un MODE qu'on utilise ou
+      non. Le garde-fou REFUSE encore : c2 et c6 sont au même échelon, et une fois les faits
+      écrits les deux déclarations ne diffèrent que de 5 minutes de retard — la hiérarchie
+      faible/moyen/fort vivait dans l'intention, pas dans le déclaré. RESTE À L'AUTEUR : poser la
+      marche factuelle de c2 (notable : retard court, rien de réorganisé) et de c6 (genant : un
+      horaire explicitement décalé), écrire la prédiction, rejouer le garde-fou en aveugle pour 12
+      appels. ⚠ Un troisième passage doit être le DERNIER : continuer d'ajuster les textes
+      jusqu'à ce que le garde-fou passe reviendrait à ajuster la grille après coup.
+      Trace : docs/traces/garde_fou_jugement_095/BILAN_TEXTES_FACTUELS.md.
+      MARCHE FACTUELLE, 3e et DERNIER passage le 2026-09-22 : quatre bras réécrits pour que chaque
+      échelon soit posé par des faits (c2 ramené à 12 min et « rien de réorganisé » ; c5 l'orage
+      demandé par l'auteur, trempé et chaussures mouillées toute la journée ; c6 gagne un
+      rendez-vous décalé d'une heure, retard_min INCHANGÉ à 30/20 donc les 0,700/0,533 cités au
+      § 7.2 de l'article restent exacts ; c3 inchangé). Quatre prédictions AVEUGLES écrites avant
+      la mesure, 16 appels, 0 réponse vide : c6 genant 4/4 (pari à un seul échelon, TENU), c5
+      genant 4/4 (tenu), c3 grave 4/4 (tenu), c2 genant 3 + notable 1 (DÉMENTI, prédiction
+      anodin/notable). GAIN MAJEUR NON CHERCHÉ : la réécriture factuelle a supprimé la dispersion
+      entre personas — étendue intra-bras sur c6 passée de 11,47 j à 0,00 j, trois bras sur quatre
+      unanimes. Un texte qui ÉNONCE une conséquence est lu pareil quel que soit le profil ; un
+      texte qui laissait ressentir dépendait du lecteur. CONSTAT BLOQUANT : l'échelle a un
+      PLANCHER à genant pour tout ce qui est VÉCU — 12 min sans conséquence, 30 min avec
+      rendez-vous décalé et une journée en chaussures mouillées reçoivent le même échelon. Le
+      plancher n'existe PAS pour les articles lus (anodin ×5, notable ×8, genant ×2 le même jour).
+      Il reste donc DEUX échelons utilisables pour un choc vécu : genant 11,76 j (il m'est arrivé
+      quelque chose) et grave 16,17 j (j'ai manqué quelque chose), séparés de 4,41 j et sans
+      dispersion. Le garde-fou refuse (2 échelons sur 3 demandés) et il NE FAUT PAS insister : un
+      4e passage reviendrait à ajuster la grille après coup. Trois suites proposées à l'auteur
+      dans docs/traces/garde_fou_jugement_095/BILAN_MARCHE.md — expérience à deux bras, extension
+      aux articles lus (l'échelle y couvre anodin à genant), ou par persona (argument AFFAIBLI :
+      après réécriture le profil n'explique presque plus rien). Observation publiable : l'agent ne
+      distingue pas une gêne qui dure d'un temps perdu. 1903 tests passés, 0 échec.
+      4e PASSAGE, TEXTES DICTÉS PAR L'AUTEUR le 2026-09-22 (c2 : 20 min de réparation + mains
+      pleines de cambouis, retard 20 ; c6 : poids lourd arrêté à quelques mètres du pare-chocs,
+      retard 45 ; c3 : 25 min sans info + rendez-vous MANQUÉ + rame bondée + 4e panne du mois,
+      retard 28). Retards volontairement décorrélés de la sévérité narrative. 12 appels, 0 vide :
+      c2 genant 4/4 (prédiction notable/genant TENUE), c3 grave 4/4 (grave/marquant TENUE), c6
+      genant 3 + anodin 1 (prédiction grave/marquant DÉMENTIE 0/4). RÉSULTAT CONSOLIDÉ sur 52
+      appels et 7 textes : la règle de décision du modèle tient sur UN SEUL prédicat — ai-je
+      MANQUÉ quelque chose. Le retard ne compte pas (45 min ne battent pas 28), la gravité
+      physique ne compte pas (accident évité de justesse : pas de montée), la gêne qui dure ne
+      compte pas (journée en chaussures mouillées = crevaison), la répétition ne compte pas (4e
+      fois du mois : pas de marquant), un rendez-vous DÉCALÉ ne compte pas, un rendez-vous MANQUÉ
+      compte à chaque fois et à l'unanimité. Une marche à 3 échelons n'est donc PAS atteignable
+      sur des chocs vécus avec ce modèle ; il en reste deux, genant 11,76 j et grave 16,17 j,
+      écart 4,41 j sans dispersion. NE PAS faire de 5e passage : ce serait régler l'instrument sur
+      la réponse voulue. Outillage : l'ordre visé se déclare maintenant dans la grille (clé
+      `marche:`) et non plus dans le code du test, et deux bras portant la même plage attendue ne
+      sont plus départagés de force. 13 tests sans appel, 1903 tests llm-agents, 0 échec. Trace :
+      docs/traces/garde_fou_jugement_095/BILAN_MARCHE_AUTEUR.md. ⚠ ARTICLE : le retard jour 1 de
+      c6 passe de 30 à 45 min, donc la gravité mesurée de 0,700 à 0,8427 — le commentaire source
+      du § 7.2 (« 30 puis 20 minutes, soit 0,700 puis 0,533 ») est périmé.
+      RUN JUGÉ SUR GAMA le 2026-09-22 (GO de l'auteur) : variante `c6_voiture_suspecte__banc_juge`,
+      3 jours, 1 persona — PREMIÈRE exécution de `jugement: a_l_injection` à travers le contrôleur.
+      Motif : les neuf déclarations de choc portent toutes `jugement: aucun`, donc le chemin
+      n'avait jamais été câblé de bout en bout ; le banc appelle juger() en direct. VERDICT : le
+      chemin tient. Jugé par 861500 au jour 2 : genant (0,50), valence negative, modes ['car'],
+      fait mesuré 0,5333, ecart_au_fait -0,0333 — sous le seuil de 0,30, donc l'alarme D7 se tait,
+      ce qui est le comportement voulu. Vérifiés : importance_retenue = jugée et non mesurée,
+      gravite_detail toujours tracé bien qu'il ne décide plus, moves.csv 19/19 lignes avec les
+      colonnes d'événement, cache de décisions coupé les jours d'événement, alarme « 0 exposé sur
+      4 arrivées » au jour 1 (l'agent n'a pas conduit). Le souvenir atteint la réflexion du soir :
+      concept « My car is currently unreliable due to recurring warning light issues. »
+      ⚠ CONFIRMATION NON DEMANDÉE : le jugement a été servi par google_gemini31_key1, PAS par
+      Groq — second modèle, même texte, MÊME échelon `genant`. L'hypothèse « c'est une
+      particularité de gpt-oss » perd son premier point d'appui. NON PROUVÉ par ce run : le canal
+      `lu` (écriture double STM+LTM, bloc du foyer) reste exercé par le seul banc ; trois jours ne
+      mesurent aucune durée d'extinction. Configurations restaurées (sim_params.yaml et
+      config.yaml propres dans git). Trace : docs/traces/run_juge_095/BILAN.md.
+      RUN CANAL LU DE BOUT EN BOUT le 2026-09-22 (GO de l'auteur, étape 2) : 4 jours, 20 agents,
+      population_20_foyers_059, variante `a13_punaises_metro__banc` (fenêtre ramenée à [1,2]),
+      MEMOIRE__PARTAGE_FOYER_ENABLED=true. VERDICT : la chaîne tient et elle TRANSMET. Index :
+      10 ménages sur 20 agents, tous à 2 membres. Règle `foyers` : 6 lecteurs sur 20, un par
+      foyer, 4 servis au jour 1 et 2 au jour 2 — la fenêtre tirée disperse bien les dates, et le
+      co-résident non tiré ne reçoit rien (témoin interne préservé). 6 jugements à l'injection :
+      5 `notable` (0,30) et 1 `genant` (0,50), tous modes public_transport, valence negative —
+      l'effet de profil existe aussi sur le canal lu. `ecart_au_fait` vaut la gravité entière
+      (0,30/0,50) puisque la gravité mesurée d'un article est nulle : le cas qui rendait le
+      plancher d'avant D7 inopérant, désormais lisible dans la trace. Écriture LTM du matin
+      confirmée (« [ PRESSE ] This morning I read in the paper… »). Foyer : 94 blocs servis à 166
+      consolidations, 140 bilans, 28 croyances transmises, 0 troncature ; R1:362, R2:91, R4:7 (la
+      règle du mode praticable MORD pour la première fois dans un run). Provenance LTM : 95 vecu,
+      41 entendu, 6 lu. ⚠ 3e modèle, même réponse : ce run tourne sur le pool complet (Google,
+      Mistral, Cerebras, LM Studio) et rend `notable` sur a13, comme gpt-oss-120b au garde-fou —
+      l'échelle ne dépend pas du fournisseur sur ce texte. DÉFAUT TROUVÉ PAR LE RUN et corrigé :
+      le bilan du foyer comptait 707 candidats pour 488 issues, 219 concepts quittaient la boucle
+      sans compteur — ceux que la garde G3 (saut unique, `origine: entendu`) écarte. La garde
+      marchait, elle était MUETTE, et le saut unique est une affirmation de l'article. G3 est
+      désormais compté comme les six règles, paraît au bilan, et une [ALARME] se lève si le
+      compte ne tombe pas juste (llm/foyer.py, 2 tests). Ajouté aussi : MEMOIRE__PARTAGE_FOYER_*,
+      MEMOIRE__RECIT_SOIR_MAX et MEMOIRE__ECART_JUGEMENT_ALARME dans docker-compose et dans
+      REGLAGES du test L1 du 077 — l'interrupteur du partage n'atteignait pas le conteneur.
+      NON PROUVÉ : 4 jours ne mesurent aucune extinction ; la fenêtre de banc à 2 jours ne
+      disperse pas comme celle du protocole à 5. 1946 tests passés, 0 échec. Configurations
+      restaurées. Trace : docs/traces/run_canal_lu_095/BILAN.md.
+      ARRÊT SUR EXTINCTION CÂBLÉ le 2026-09-22 — ceci PÉRIME le « A SAVOIR :
+      arret_sur_extinction.py n'est PAS câblé dans le lanceur de campagne » plus haut dans cette
+      note. run_sequential_cohort.py prend `--arret-sur-extinction` et `--jours-apres-extinction`
+      (7 par défaut) : il lit dans evenements.jsonl la date simulée de la DERNIÈRE application de
+      l'événement, surveille la sortie de CE souvenir dans app.log, puis coupe. Plus de
+      `--souvenir-du` à recopier, plus de surveillance à lancer à côté. ⚠ Le bras traité devient
+      plus court que son témoin (le témoin n'a pas de trace d'événement, donc aucune date, donc
+      aucun arrêt) : le run dépose `arret_sur_extinction.json` avec la date du souvenir et le
+      dernier jour simulé, et c'est ce fichier que l'analyse doit lire pour tronquer les deux bras
+      au même jour — jamais la longueur du journal. L'horizon déclarable d'une expérience passe
+      de 31 à 50 j (HORIZON_MAX_JOURS dans scripts/dashboard/experiences.py, test dédié) : le
+      garde-fou de coût décidé par l'auteur est désormais appliqué AU FORMULAIRE, pas seulement au
+      plafond de durée d'un souvenir. 5 tests neufs.
   ticket_097_le_plafond_declare_ne_ferme_plus_une_cle:
     status: en cours
     category: Ingénierie & Système
@@ -4770,16 +5003,48 @@ tickets:
       6 ignorés, 0 échec.
       (2) `POST /providers/reset-quota` VÉRIFIÉ SUR LA PASSERELLE DÉPLOYÉE : le conteneur `api`
       (port 8000) expose les deux routes, unitaire et par lot, dans son `openapi.json`.
-      RESTE UN POINT : remesurer les `rpd_limit` de `providers.yaml` aux en-têtes `x-ratelimit-*`.
-      L'outil existe déjà — `scripts/providers/refresh.py` (`make providers`) : sondes pour groq,
-      cerebras et mistral, API Cloud Quotas pour google, openai ignoré faute de clé dans `.env`
-      (d'où la reprise à la main du 2026-09-18). NON LANCÉ : un run était en cours le 2026-09-21 à
-      17 h, et le script réécrit `providers.yaml` et dépense une requête sonde par instance.
-      Décision de l'auteur ce jour-là : on attend la fin du run, on lance `make providers`, on
-      présente le diff, et le ticket ferme après — et non en renvoyant ce point à la maintenance
-      récurrente.
+      (3) REMESURE FAITE LE 2026-09-21 À 18:51, une fois le run terminé (« Simulation stopped after
+      42 simulated day(s) »), conformément à la décision de l'auteur : attendre la fin du run
+      plutôt que renvoyer ce point à la maintenance récurrente. RÉSULTAT : AUCUN `rpd_limit`
+      N'ÉTAIT À CORRIGER là où la sonde aboutit. Les trois instances Groq confirment 1000 par
+      leurs en-têtes `x-ratelimit-*` ; mistral et google n'ont bougé d'aucune ligne. DEUX
+      INSTANCES RESTENT NON MESURABLES, et pour un motif qui n'est pas un quota :
+      `cerebras_gptoss120b_key1` répond 402 *payment required*, `openai_gpt56_luna_key1` répond
+      429 *you have no credits remaining* sur tous les modèles — deux `[ALARME]`, deux blocs
+      laissés intacts. À RETENIR : l'instance OpenAI que ce ticket réactive NE PEUT PAS SERVIR
+      aujourd'hui (compte à sec) ; la règle nouvelle la traite correctement puisque la passerelle
+      la mettra hors service au premier refus, mais la réactivation est sans effet d'ici là. Ce
+      que la sonde n'atteint pas, la trace du point (1) l'atteindra : le WARNING posé sur le refus
+      donnera la limite réelle sans relancer de sonde.
+      EFFET DE BORD ARBITRÉ EN FAVEUR DU STATU QUO : le script ne touche pas que les `rpd_limit` —
+      il a rétabli `tpm_limit: 8000` sur les trois instances Groq et porté leur
+      `max_tokens_per_request` de 6000 à 8000, alors que ces valeurs avaient été neutralisées À LA
+      MAIN pour le debug du ticket 077 (verrou 60 s artificiel face au reset sub-seconde de Groq),
+      commentaire toujours en vigueur dans le fichier. `providers.yaml` a donc été RENDU À SON ÉTAT
+      D'AVANT LE SCRIPT — la remesure ne changeait aucun `rpd_limit`, il n'y avait pas de raison de
+      défaire au passage une décision du 077 ; la version produite par le script est conservée hors
+      dépôt. L'arbitrage « garder la neutralisation du 077 ou reprendre les 8000 mesurés »
+      appartient au ticket 077.
+      CLÔTURE : les trois points de la section 6 sont exécutés ; le statut attend le mot de
+      l'auteur, à qui le diff devait être présenté avant fermeture.
       AUCUN IMPACT ARTICLE : la règle ne touche ni une métrique, ni un jeu gelé, ni le contrat
       des 21 variables, ni un chiffre citable — elle ne change que la condition d'arrêt d'un run.
+      IMPACT DE D7 (ticket 100, 2026-09-22) SUR E3 ET E4, signalé le jour même : leur protocole
+      repose sur une prémisse devenue fausse — que la gravité d'un choc se DÉCLARE et que trois
+      sévérités mesurées distinctes donnent trois durées de vie distinctes. Depuis D7 la gravité
+      d'une entrée d'événement est l'estimation de l'AGENT, le fait mesuré n'en est plus le
+      plancher : déclarer C2, C6 et C3 ne garantit plus 8, 15 et 19 jours, et si l'agent juge les
+      trois pareil, le run mesurerait le jugement au lieu de falsifier la théorie. TROIS SORTIES
+      écrites au § 7 du ticket : jouer sous `jugement: aucun` (seul chemin restant pour la gravité
+      déterministe, mais dispositif différent de celui des campagnes de l'article), réécrire
+      l'attendu sur la gravité JUGÉE lue dans evenements.jsonl, ou les retirer. E3 ET E4 NE SE
+      LANCENT PAS avant arbitrage. Par ailleurs le § 7 bis est complété : le plancher de bruit de
+      3,2 % servait d'argument au témoin interne du 059, que l'auteur a retiré le 2026-09-22 — il
+      ne se lit plus dans le run de campagne, il se reprend ou se réétablit par rejeu, et se
+      déclare avec le résultat. ⚠ NOTE OBSOLÈTE plus haut : « restent les lots C à F » — vérifié
+      le 2026-09-22, le lot C est câblé (instances_pour par catégorie sur décision, réflexion,
+      auto-réflexion, enquête et jugement) et le lot D aussi (utils/filiation.py, _verifier_filiation,
+      champ run_parent). À reprendre au prochain passage.
     triage:
       faisabilite: 5
       surete: 3
@@ -4904,3 +5169,430 @@ tickets:
         citer est exactement ce qu'un relecteur relève.
       date: '2026-09-21'
       aamas: 4
+
+  ticket_100_un_seul_canal_d_evenement_pour_le_vecu_et_le_lu:
+    status: en cours
+    category: Expériences & Cognition
+    note: >-
+      Ouvert le 2026-09-21 à la demande de l'auteur, PRIORITAIRE sur le reste du chapitre 7
+      (confirmé le même jour). Constat : tout l'aval d'un événement est déjà commun (gravité, force,
+      durée de service dans noyau.py, consolidation, croyance, contradiction) et l'amont était en
+      train d'être dupliqué — le plan du 059 lot 4 prévoyait `informations.py` « frère de
+      chocs.py » recopiant garde de contenu, exposition, compteurs, jour du run, trace et alarme.
+      Le ticket pose UN SEUL CANAL D'ÉVÉNEMENT à deux prises : `arrivee` (après la décision, avec
+      fait mesuré, le choc d'aujourd'hui) et `reveil` (avant la première décision, sans fait
+      mesuré, l'article). SIX DÉCISIONS DE L'AUTEUR du 2026-09-21 : D1 récit du soir au foyer pour
+      TOUS les épisodes de la journée, sans seuil ; D2 UN SEUL SAUT, de la source vers les autres
+      puis stop, aucune rétro-information (impose un champ de provenance `origine: vecu | lu |
+      entendu` sur les entrées et dans le schéma de réflexion pour les croyances) ; D3 une seule
+      échelle de jugement, cinq intensités et une valence ; D4 l'agent juge à l'injection dans les
+      DEUX régimes, le fait mesuré restant le plancher par la règle du maximum ; D5 chapitre 7
+      alternatif sans écraser l'existant (sous verrou, en attente d'accord) ; D6 périmètre : absorbe
+      le code du 079, le lot 4 du 059, E3 du 095 et les lots 1 à 3 du 078 (clos). SEPT LOTS, 0 à 6,
+      plan-first : specs/ticket_100/plan.md et tests.md AVANT le code. Test en or du lot 1 : rejouer
+      c6_voiture_suspecte et exiger un evenements.jsonl égal champ à champ à l'ancien chocs.jsonl,
+      les 34 tests du 079 inchangés, donc les chiffres du § 7.2 restent valides. Lot 4 (foyer) le
+      plus lourd, seul à toucher le prompt de réflexion, derrière `memoire__partage_foyer_enabled`
+      faux par défaut. Cinq questions vivantes au § 10 (récit par déplacement ou par entrée ; une
+      croyance entendue puis confirmée repart-elle — hypothèse non ; vécu ou décidé dans le récit ;
+      bras sans jugement comme ablation déclarée ; cache coupé).
+      AVANCE DU 2026-09-21 : LOT 0 LIVRÉ — `specs/ticket_100/plan.md` (416 lignes, les sept lots,
+      fichier par fichier), `tests.md` (55 règles R1 à R55, une section par lot) et `questions.md`
+      (Q1 à Q11). Le plan a été écrit après lecture du code, et il rapporte TROIS constats que le
+      ticket n'avait pas. V1 — `Person` ne porte pas `household.id` : le JSON de population le
+      porte à la racine, `Person.model_validate` ignore les clés inconnues (world/population.py:219)
+      et le seul lecteur du dépôt travaille sur le dict brut (inputs/population/perimeter.py:162) ;
+      la règle `foyers` et tout le lot 4 lisent donc un identifiant que le runtime n'a pas, et ce
+      travail remonte du lot 4 au lot 1. V2 — la prise `arrivee` n'ÉCRIT pas une entrée, elle en
+      ANNEXE une (simulation_controller.py:2102, le vécu joint à `ob_text`, gravité sur la somme
+      des deux retards) : « une seule fonction dépose l'entrée » ne peut pas être littéral sans
+      faire échouer le test en or, d'où deux gestes, `joindre` et `poser`, sur une qualification
+      commune. V3 — `gel_actif()` coupe toute écriture de mémoire courte pendant le rejeu d'une
+      reprise à chaud : un jour dû tombant dans la fenêtre de rejeu serait perdu en silence, d'où
+      un refus au chargement (Q9). Deux autres points mesurés : 36 tests collectés dans
+      test_079_chocs.py (le ticket en annonçait 34) et le corpus du 059 lot 1 est déjà au dépôt,
+      empreintes fr/en au MANIFEST — le lot 2 n'attend rien. Six questions neuves : Q6 jugement
+      bloquant ou différé (bloque le lot 3 — la force est fixée à l'écriture, la relever après coup
+      ne la recalcule pas), Q7 montage du corpus dans le conteneur, Q8 champ propre plutôt que
+      trait de persona, Q9 rejeu, Q10 double graphie des colonnes de moves.csv pour garder les runs
+      archivés dépouillables, Q11 suppression de chocs.py après un run court de non-régression.
+      LOT 1 LIVRÉ le 2026-09-21, après le feu vert de l'auteur sur le plan. Paquet
+      `llm/evenements/` (déclaration, gardes, exposition, calendrier, registre, injection, façade) ;
+      `llm/chocs.py` tombe de 652 à 76 lignes et n'est plus qu'un adaptateur d'alias, à supprimer
+      au lot 6 après un run court de non-régression sur c6. PREUVES : les 36 tests de
+      test_079_chocs.py et les 24 du 077 lot H passent SANS qu'un attendu bouge ; 26 tests neufs
+      dans test_100_lot1_migration.py, dont le TEST EN OR qui rejoue `config/chocs/c6_voiture_suspecte.yaml`
+      — le fichier d'origine, pas sa version migrée — et exige une trace égale champ à champ, les
+      quatre champs ajoutés (`evenement_id`, `canal`, `moment`, `texte`) mis à part ; suite complète
+      1810 passés, 6 ignorés, 0 échec. Les huit déclarations migrées dans `config/evenements/` par
+      conversion TEXTUELLE, pour ne pas effacer les commentaires de protocole (c6 porte le journal
+      de la réécriture du lot H et de la journée de choc sans exposé du 19/09). `MemoryEntry.origine`
+      (vecu | lu | entendu), avec `None` distinct de `vecu` et `origine_effective` pour la lecture ;
+      `valence` et `origine` transportées le long de add_short_term_memory → add_message, où rien ne
+      les portait. `Person.household_id` renseigné par les DEUX chemins de chargement (V1 du plan).
+      Tout ce qui relève des lots 2 à 4 est REFUSÉ au chargement avec le nom de son lot.
+      L'[ALARME] du cache dit enfin le bon motif — vérifié dans llm/cache.py : la branche exacte
+      ne porte pas la mémoire, la branche sémantique ne rejette qu'en dessous de 0,95 de similarité
+      sur le bloc entier.
+      RÉPONSES DE L'AUTEUR du 2026-09-21 : Q2 = NON, une croyance entendue ne repart jamais, même
+      confirmée ensuite ; Q3 = le récit du soir n'apporte AUCUNE NOUVELLE INFORMATION — il cite ce
+      qui est déjà en mémoire, ce qui écarte pour de bon la variante C du 078. Q1, Q4 et Q6
+      détaillées dans specs/ticket_100/questions.md (chiffrage : un jugement `marquant` porte la
+      force du souvenir de c6 de 14,56 à 19,60 jours, soit cinq jours d'écart sur la date
+      d'extinction que mesure le § 7.2).
+      LOT 2 LIVRÉ le 2026-09-22. Canal `lu`, prise `reveil` (contrôleur, bascule de journée à 3 h
+      simulées, avant tout réveil, idempotente par journée), garde de citation à DEUX comparaisons
+      (déclaration et MANIFEST.yaml du corpus), règle d'exposition `foyers` avec un lecteur par
+      ménage tiré à graine fixe, fenêtre de parution tirée PAR FOYER, et les cinq articles du 059
+      déclarés dans config/evenements/ avec leurs empreintes réelles, toutes concordantes. Corpus
+      monté en lecture seule dans le conteneur controller. 30 tests neufs (R12 à R23), suite
+      complète 1835 passés / 6 ignorés / 0 échec.
+      Q5 APPLIQUÉE (auteur, 2026-09-22) : le cache de décisions est coupé AUTOMATIQUEMENT les jours
+      d'événement, sans dépendre d'un CACHE=0 qu'il faudrait poser ; pour une fenêtre tirée, la
+      coupure couvre toute la fenêtre faute de savoir qui lit quel matin. ⚠ RÉSERVE JOURNALISÉE,
+      pas tue : la coupure protège le jour de l'événement, pas la fenêtre d'APRÈS, qui est celle
+      qu'on mesure — la clé exacte du cache ne porte ni la date ni la mémoire, et seule la branche
+      sémantique (0,95 de similarité) l'en empêche, ce que personne n'a mesuré. Deux compteurs
+      journaliers disent sur combien de décisions la réserve porte.
+      DEUX POINTS D'ARBITRAGE nés du lot. (1) Lire une déclaration et ARMER un run sont séparés :
+      charger() vérifie un protocole pas encore jouable — sans quoi on ne pourrait pas contrôler
+      que les cinq articles concordent avec leur manifeste — mais initialiser() refuse de démarrer
+      un run sur `jugement: a_l_injection`, non livré. (2) Q12 : les marqueurs de consigne du 079,
+      calibrés sur des vécus écrits à la première personne, refusaient `a09_vent_autan` sur « make
+      sure », dans « City staff must first inspect each site to make sure there is no danger » —
+      sujet : le personnel municipal. Retenu : exemption DÉCLARÉE et motivée (précédent du 059
+      lot 1), refusée si le marqueur n'est pas dans le texte, caduque avec l'empreinte ; l'adresse
+      à la deuxième personne reste inexemptable. Mesuré : une seule occurrence sur les cinq
+      articles, zéro adresse à la deuxième personne.
+      Q1 TRANCHÉE (auteur, 2026-09-22) : le récit du soir est « un bilan de la journée avec les
+      événements importants à partager ». Lecture retenue et à confirmer : ce bilan EXISTE déjà —
+      c'est le champ `reflection` de stm_reflection, 200 mots, que l'agent écrit chaque soir. Le
+      récit le CITE au lieu d'en rédiger un, seule lecture compatible avec Q3 ; le volume est alors
+      borné par le gabarit et le tri par gravité perd son objet.
+      DÉFAUT TROUVÉ ET CORRIGÉ le 2026-09-22, dans le lot 2 livré le matin même. La prise `reveil`
+      n'écrivait qu'en mémoire COURTE — or la décision d'un agent ne lit QUE la mémoire longue
+      (query_past_experiences_for_travel → aquery_user_memories, llm_agent.py:807), et la
+      consolidation du soir CONSOMME le tampon court (remove_batch, llm_agent.py:1939) en n'écrivant
+      que la réflexion et les concepts : le texte brut n'atteint jamais la mémoire longue tel quel.
+      Un article posé à 3 h n'aurait donc été vu par AUCUNE décision de la journée, et « l'agent
+      sait avant de décider » aurait été faux. Correction : double écriture à l'injection — courte
+      pour que la réflexion du soir voie l'article, longue pour que les décisions du jour le
+      trouvent. L'asymétrie avec la prise `arrivee` est assumée et EST le régime ; ce qui reste
+      commun aux deux canaux est la QUALIFICATION, pas le chemin d'écriture. Deux tests-frontière
+      la verrouillent dans les deux sens.
+      RÉPONSES DE L'AUTEUR du 2026-09-22. Q4 : la prochaine campagne REMPLACERA l'existante — pas
+      de bras sans jugement en parallèle, `jugement: aucun` reste le mode du test en or mais cesse
+      d'être un bras de campagne ; SIGNALEMENT ARTICLE dû le jour où la campagne tournera (§ 7.2 et
+      ses figures deviennent caducs). Q6 : le jugement part DANS LA FILE DU SOIR — lecture retenue,
+      il se greffe sur la réflexion qui a déjà lieu (severity/valence y sont déjà demandés sur les
+      concepts), donc ZÉRO appel LLM supplémentaire ; conséquence à ne pas manquer, la force d'un
+      souvenir est fixée à l'écriture (longterm.py:434), donc requalifier au soir doit recalculer
+      importance ET force ENSEMBLE, jamais l'importance seule. À confirmer : jugement à l'injection
+      pour la prise `reveil` (à 3 h rien n'attend, et différé l'article passerait la journée à
+      gravité 0,00 donc sans effet le jour même). Q1 complétée : ATTENTION AUX BOUCLES DANS LE
+      FOYER, l'agent doit reconnaître une information déjà connue — quatre gardes listées dans
+      questions.md, dont trois existent (repère par receveur, known_beliefs dans le prompt,
+      origine: entendu) et une est à écrire (détecteur de reformulation circulaire, mesure n° 3 du
+      078, qui ALERTE sans jamais couper). Enfin : un article PEUT nommer des modes de transport ;
+      la liste qui l'interdit est celle du 059 lot 1 et porte sur la paraphrase (C3) et le témoin
+      (C4), pas sur l'article cité — note portée en tête de gardes.py et testée.
+      LOTS 3, 4, 5 (partiel) ET 6 LIVRÉS le 2026-09-22. LOT 3 : catégorie LLM `evenement_jugement`
+      (gabarit + schéma), `llm/evenements/jugement.py`, refus FRANC hors grille avec [ALARME] et
+      AUCUN repli, règle du maximum, les deux vocabulaires d'échelon, modes filtrés sur la
+      hiérarchie. Les ancres viennent de gravite.py par la charge utile, pas recopiées dans le
+      gabarit — une seule source, contrairement à stm_reflection. Prise `reveil` : jugement AVANT
+      écriture, donc aucune requalification et la bonne durée de vie du premier coup. Prise
+      `arrivee` : jugement différé (Q6), il relève l'importance de l'entrée courte avant que la
+      consolidation la consomme, et une [ALARME] le dit s'il arrive trop tard. UNE SEULE LIGNE DE
+      TRACE PAR EXPOSITION sur les quatre chemins de sortie. 22 tests.
+      LOT 4 : `llm/foyer.py` (480 lignes) — index des ménages, bilan du soir CITÉ (la réflexion que
+      l'autre a écrite, jamais reformulée : lecture de Q1+Q3), croyances R1 à R6 du 078, repère
+      `foyer_lu_jusqu_a` par receveur persisté au point de reprise, détecteur de reformulation
+      circulaire qui ALERTE sans couper. Champ `source` (lived|heard) dans le schéma de réflexion,
+      SCHEMA_REFLEXION_VERSION 3→4 (le cache accumulé est perdu, et c'est voulu). Quatre réglages,
+      `memoire__partage_foyer_enabled` FAUX par défaut. 28 tests couvrant les quatre gardes
+      anti-boucle demandées par l'auteur.
+      LOT 5 (partiel) : `moves.csv` gagne `Rôle` et `Raison d'exposition` — et GARDE les noms du
+      079 pour `Choc`/`Jour relatif au choc`, ce qui fait TOMBER Q10 : les renommer aurait cassé la
+      relecture des runs archivés qui portent les chiffres du § 7.2. `choc_par_jour.csv` devient
+      `evenement_par_jour.csv` avec une colonne `canal` ; lecture de `evenements.jsonl` puis repli
+      sur `chocs.jsonl`. RESTE : la figure unique et le tableau des quatre voies.
+      LOT 6 : levier `make run EVENEMENT=`, alias `CHOC=` et `PRESSE=` qui disent lequel a servi,
+      refus E6 LEVÉ pour les deux types d'événement, `docs/arch/evenements.md` remplace
+      `chocs-declares.md` (qui devient un renvoi), `memory-stm-ltm.md` et `mesures-personas.md` à
+      jour. Corpus monté en lecture seule dans le conteneur (lot 2).
+      ⚠ SIGNALEMENT ARTICLE DÛ : `docs/paper/article/en/07_untabulated_regimes.md:94` cite
+      `choc_par_jour.csv`, qui n'existe plus sous ce nom. Aucune écriture faite — l'article est
+      sous verrou. S'ajoute au signalement de Q4 (le § 7.2 devient caduc quand la campagne à
+      jugement tournera).
+      ÉTAT : 1888 tests passés, 6 ignorés, 0 échec dans services/llm-agents ; scripts/tests
+      inchangé à 63 échecs, tous antérieurs et vérifiés par rejeu sur l'arbre remisé.
+      LOT 5 COMPLÉTÉ le 2026-09-22. `scripts/analysis/figure_evenement.py` — UNE figure pour les
+      deux régimes : décrochage et retour par rôle, en jour relatif ; garde de vacuité ÉCRITE SUR
+      L'IMAGE (« not conclusive for: … ») plutôt qu'une série absente, effectif minimal déclaré de
+      3 décisions par point, figure en anglais légende comprise, écrite sur données de FORME avant
+      tout run. `scripts/analysis/tableau_quatre_voies.py` — par quelle voie du § 3.4 le passé a
+      atteint la décision, par régime et par rôle ; en-têtes de bloc LUS dans noyau.py et vérifiés
+      par test. DEUX POINTS D'HONNÊTETÉ dans ce tableau : l'appariement littéral échoue pour le
+      vécu (la réflexion reformule, mesuré le 2026-09-16), d'où une seconde recherche par mots
+      saillants MARQUÉE indicative (`~`) ; et les décisions où rien n'est retrouvé sont comptées et
+      NOMMÉES, parce qu'une ligne de cellules vides se lit comme « cela n'a pesé sur rien ».
+      L'attribution se fait sur `agent_id=` dans le prompt, non prévue au plan mais nécessaire au
+      canal `lu` : tous les lecteurs d'un article partagent le même texte. 17 tests neufs.
+      ÉTAT FINAL DES SIX LOTS : 1888 tests passés / 6 ignorés / 0 échec dans services/llm-agents ;
+      scripts/tests inchangé à 63 échecs, tous antérieurs, vérifiés par rejeu sur l'arbre remisé.
+      DEUX DÉFAUTS TROUVÉS ET CORRIGÉS le 2026-09-22, en répondant à « reste-t-il du travail
+      avant les expériences ». (1) Les cinq articles déclaraient `foyers: [5177, 18056]`, tirés
+      de la liste du ticket 078 § 7 qui porte sur la cohorte v6 ENTIÈRE — or la population de
+      campagne est population_20_foyers_059, dix foyers tout autres. Une campagne aurait levé
+      l'[ALARME] « aucun lecteur retenu » et se serait déroulée sans qu'un seul agent lise quoi
+      que ce soit. Les déclarations pointent désormais sur les SIX foyers que le MANIFEST déclare
+      exposés, et un test vérifie l'accord déclaration/manifeste ET qu'aucun foyer TÉMOIN n'est
+      exposé (les témoins sont dans le même run, cf. le manifeste). (2) Les refus par règle du
+      foyer étaient calculés puis JETÉS par `bloc_du_soir` : la mesure n° 1 du 078 § 6 — « ce qui
+      est éligible, avant tout le reste » — n'était émise nulle part, et un canal vide se serait
+      lu comme un foyer qui n'a rien à se dire. Compteurs cumulés, bilan journalisé chaque jour
+      simulé MÊME À ZÉRO, et [ALARME] si des blocs sont servis sans qu'aucune croyance ne passe,
+      renvoyant à R1 en premier. 1892 tests passés.
+      D7 APPLIQUÉE AU CODE le 2026-09-22 (décision de l'auteur à la relecture du chapitre 7).
+      La gravité d'une entrée d'événement est l'estimation de l'agent SEULE, dans les deux canaux :
+      `jugement.py` n'appelle plus `gravite_concept` avec le terme déterministe. Un dépannage de
+      30 min jugé « anodin » vaut désormais 0,10 et non 0,70 — son souvenir vit 2,8 jours au lieu
+      de 15,4. GARDE DE REMPLACEMENT LIVRÉE avec la décision (Q15) : `ecart_au_fait` calculé à
+      chaque jugement, porté par le `Jugement`, écrit dans `evenements.jsonl`, et [ALARME] sous
+      `memoire__ecart_jugement_alarme` = 0,30 — plus d'un échelon, les marches de l'échelle valant
+      0,20 à 0,25. Elle NE CORRIGE JAMAIS : corriger en silence rétablirait le plancher sous un
+      autre nom. Seul le seuil reste à confirmer. Contrat repris : R26 retirée, R26 bis posée,
+      `test_R26_un_jugement_faible_ne_degrade_pas_un_fait_mesure` remplacé par quatre tests dont
+      deux sur l'alarme. `gravite_concept` garde son rôle pour les CONCEPTS ; `jugement: aucun`
+      devient le seul chemin par lequel la gravité déterministe qualifie encore une entrée.
+      DEUX POINTS DE PROTOCOLE RETIRÉS le même jour. Le bras « ouï-dire » du 059 (Q3, § 6.2) n'a
+      plus d'objet — D1 fait porter au récit du soir tous les épisodes, il n'y a plus de seuil à
+      mettre à zéro ; ⚠ le réglage et R1 RESTENT dans le code, l'ancrage gouvernant les croyances,
+      qui sont un canal distinct du récit. Le foyer témoin du 059 § 6.4 n'est plus exigé, ni dans
+      le même run ; ⚠ le plancher de bruit du 095 § 7 bis (3,2 %, UNE mesure, UN persona) ne se
+      lit alors plus dans le run : il se reprend ou se réétablit par rejeu, et se déclare avec le
+      résultat — `scoring.py` l'exige déjà en paramètre. Tickets 059 et 095 mis à jour, § 7 bis du
+      095 complété. Impacts mineurs du ticket 100 repris : schéma de tête, ligne D5 à quatre
+      colonnes, § 2 bis sorti du tableau, D6/D7 réconciliés dans plan.md. 1900 tests passés.
+      BANC DE TESTS FONCTIONNELS livré le 2026-09-22, à la demande de l'auteur (« un maximum de
+      tests avec un minimum d'appels », pour trouver les défauts avant qu'une campagne ne consomme
+      le quota). Spécification : specs/ticket_100/tests_fonctionnels.md. FAMILLE A — un run
+      synthétique complet (population, décisions, mémoire, événement, points de reprise) joué sans
+      simulateur ni modèle, puis la VRAIE chaîne d'analyse par-dessus : 34 vérifications, ZÉRO
+      appel, quelques secondes. Elle attrape ce qu'aucun test unitaire n'attrape — une colonne mal
+      nommée, un rôle qui ne se propage pas, un jour relatif décalé. FAMILLE B — 27 appels, dans
+      l'ordre B2 (4, la provenance `heard`, dont l'échec est SILENCIEUX en production), B3 (8, le
+      plancher de bruit du JUGEMENT, rendu nécessaire par D7), B1 (15, l'usage de l'échelle).
+      STUBS : ils IMPORTENT les formats du dépôt (CSV_HEADERS, MemoryEntry, schémas, reprise._A_COPIER)
+      au lieu de les recopier — un stub qui recopie reste vert quand le vrai format change.
+      PASSERELLE : Groq seul aujourd'hui (auteur, 2026-09-22), autres modèles pour les runs longs,
+      donc PARAMÈTRE et non constante ; AUCUN repli, budget de jetons de SORTIE surveillé par le
+      banc (la limite qui mord est l'OTPM 1000 mesurée le 2026-09-08, invisible hors du corps des
+      429), appels en série, et l'instance servante écrite dans chaque résultat. Le banc se teste
+      lui-même (12 tests). SORTIES pour le papier : jugements.csv (le troisième niveau de mesure,
+      confrontable à la grille sans attendre un déplacement), plancher_jugement.md, provenance.csv,
+      passerelle.csv — réécrites après CHAQUE appel.
+      059 LOT 5 LIVRÉ le 2026-09-22 : scripts/analysis/presse/campagne.py, la passerelle d'un run
+      de campagne vers la grille gelée — l'appariement passe de CONDITION (étage 1, abandonné) à
+      RÔLE et PÉRIODE. Et le TEST BINOMIAL EST RETIRÉ de scoring.py : il supposait vingt cellules
+      indépendantes alors que les parts d'un même événement somment à un. Remplacé par un
+      rééchantillonnage GROUPÉ PAR ÉVÉNEMENT — mesuré sur un jeu de forme, l'intervalle passe de
+      [0,60 ; 0,95] à [0,40 ; 1,00] : la précision perdue était fabriquée par l'hypothèse. 27 tests
+      neufs (11 campagne, 16 scoring).
+      BANC ET RUN C6 JOUÉS le 2026-09-22. Bilan complet : docs/traces/banc_fonctionnel_100/BILAN.md.
+      FAMILLE A : 34/34 au vert, zéro appel. FAMILLE B : 42 appels sur Groq, trois constats.
+      (1) B2 PASSE — avec bloc foyer 2 concepts sur 2 portent `heard`, sans bloc 3 sur 3 portent
+      `lived` : la règle du saut unique s'engage. ⚠ Les quatre PREMIERS appels disaient l'inverse
+      et c'était FAUX : les conteneurs api et worker tournaient depuis 22 h et servaient le schéma
+      de la veille, SANS le champ `source` ; `docker compose -f infra/... restart` n'avait rien
+      redémarré (le projet ne se résout pas depuis ce chemin, la commande réussit sans rien faire).
+      Un `docker restart <conteneur>` a inversé le résultat. LEÇON POUR TOUTE CAMPAGNE : vérifier
+      `docker ps` avant de conclure d'une mesure. (2) DÉFAUT — 19 appels de jugement sur 38 rendent
+      une réponse VIDE avec statut SUCCESS et aucune erreur remontée ; doubler la pause de 12 à 30 s
+      n'y change rien, ce n'est donc PAS une limite de débit. `stm_reflection` passe sur le même
+      fournisseur : le défaut est propre à la catégorie `evenement_jugement`, qui n'est pas robuste
+      sans sortie structurée native. (3) DÉFAUT MAJEUR — sur les 11 jugements aboutis (5 articles,
+      3 personas, 2 chocs), TOUS rendent `anodin` (0,10) et `modes` est toujours vide. Depuis D7 la
+      gravité EST le jugement : tous les souvenirs vivraient 4,70 jours servis, et E3 du 095 (8/15/19
+      jours attendus) ne mesurerait rien. ⚠ À refaire sur le fournisseur de production avant d'en
+      conclure sur le dispositif — les modèles Groq ne sont pas ceux des campagnes.
+      RUN C6 : variante courte `c6_voiture_suspecte__banc` (choc jours 1-2, horizon 3 j, 1 persona)
+      — intégration prouvée, PAS les chiffres du § 7.2 que couvre le test en or. Le contrôleur
+      charge le paquet, `household_id` atteint le runtime, les liens chocs.jsonl→evenements.jsonl et
+      choc.yaml→evenement.yaml tiennent, `moves.csv` porte Rôle et Raison d'exposition (vides sur la
+      prise `arrivee`, exact). Jour 1 : [ALARME] 0 exposé sur 4 arrivées, l'agent n'ayant pas
+      conduit — comportement documenté du 19/09, alarme fonctionnelle. Jour 2 : INJECTION RÉUSSIE,
+      ligne de trace complète, gravité 0,5333 = retard 0,3333 + incident 0,20, `importance_estimee`
+      et `ecart_au_fait` à VIDE sous `jugement: aucun`. Configurations restaurées après le run.
+      DÉFAUT DE CODE TROUVÉ PAR LE RUN, que le banc avait laissé passer : `campagne.py` lisait
+      l'agent dans « Référence », qui porte l'identifiant du RUN ; l'agent est sous « ID Personne ».
+      Les stubs écrivaient au même mauvais endroit — ils testaient leur propre convention. La règle
+      « importer les formats » couvrait les EN-TÊTES, pas le SENS des colonnes. Corrigé, et un test
+      le couvre. R4 recadrée au passage : complétude de la migration d'un côté, égalité de l'autre,
+      pour que `config/evenements/` puisse accueillir des déclarations neuves.
+      1901 tests passés, 6 ignorés, 0 échec ; scripts/tests inchangé à 63 échecs antérieurs.
+      DÉPEND DE : aucun ticket. RESTE : refaire B1/B3 sur le fournisseur de production, rendre
+      `evenement_jugement` robuste à une réponse mal enveloppée, trancher E3/E4 du 095. Le run de
+      non-régression sur
+      c6_voiture_suspecte, qui conditionne la suppression de `llm/chocs.py` (Q11) — il consomme du
+      quota LLM et n'a pas été lancé sans accord. Deux points restent à confirmer par l'auteur (le
+      bilan du soir comme citation de la réflexion ; le jugement à l'injection pour la prise
+      `reveil`), et deux signalements article sont dus.
+      AVANCE DU 2026-09-22 (après-midi) : le « défaut majeur » du matin — 15 jugements sur 15 à
+      `anodin`, modes toujours vides, 19 réponses vides sur 38 — avait UNE cause unique en amont,
+      trouvée en comparant le corps HTTP réellement envoyé par le worker (3 051 caractères) au
+      prompt rendu à la main (4 205) : `AgentSpec` est `extra="ignore"` et ne déclarait pas
+      `evenement`, donc le texte de l'article était jeté en silence et l'agent jugeait une page
+      blanche. C'est la DEUXIÈME fois que ce motif coûte une mesure (le 095 lot B l'avait payé sur
+      `mode_interroge`) : un test structurel le clôt,
+      test_tout_champ_lu_par_un_gabarit_est_declare_sur_AgentSpec (packages/mobility_llm). Deux
+      défauts réels corrigés au passage, tous deux mesurés par curl direct sur les trois modèles
+      Groq : (a) budget de sortie — un modèle de raisonnement dépense 240 à 330 jetons AVANT le
+      premier caractère de JSON, 256 était sous le seuil, porté à 1 024 ; (b) la passerelle prenait
+      « la première liste venue » pour la liste des agents (c'était `modes`) et rendait
+      `status=success, agents=[]` — désormais l'agent désenveloppé est réenveloppé, une liste de
+      chaînes est refusée, et zéro agent est une ProviderParseError journalisée avec la réponse
+      brute (packages/llm_gateway/src/llm_gateway/adapters/base.py). B1 et B3 REJOUÉS : B1 rend 3
+      échelons distincts (notable ×8, anodin ×5, genant ×2) avec des modes cohérents par article,
+      B3 rend 4/4 identiques sur les deux événements (amplitude 0 jour), et c6 — panne moteur
+      mesurée à 0,5333 — est jugée `grave` (0,75), donc l'agent SURESTIME le fait, écart +0,22.
+      Zéro réponse vide sur 38 appels. Les durées SERVIES 4,70/8,23/11,76/16,17 j (forces
+      4,48/7,84/11,20/15,40 × ln(1/0,35)) RESTAURENT
+      l'étalement que E3 du 095 attendait (8/15/19) : l'argument « le jugement est constant » ne
+      tient plus, il ne l'était que parce que la question était vide. Tests : 1903 passés côté
+      llm-agents (0 échec), passerelle et mobility_llm au vert, scripts/tests inchangé à 63 échecs
+      préexistants, famille A 34/34. Traces : docs/traces/banc_fonctionnel_100/BILAN.md, section
+      « Ce que la cause a changé », et les mesures d'avant dans avant_correctif/. RESTE : le seuil
+      d'alarme D7 de 0,30 n'a qu'un point de mesure (+0,22 sur c6) ; le banc ne compte pas les
+      jetons de raisonnement (680 comptés pour ~3 000 émis) ; E3/E4 du 095 toujours à trancher.
+    triage:
+      faisabilite: 3
+      surete: 3
+      jeux_de_test: false
+      motif: >-
+        Faisabilité 3 : l'aval existe et n'est pas touché ; l'amont est une généralisation de
+        chocs.py dont les dataclasses, le hachage d'exposition et la trace se reprennent ; le lot
+        4 est le seul chantier neuf et il touche le prompt de réflexion. Sûreté 3 : la migration
+        des chocs est protégée par un test en or et les 34 tests du 079 ; le foyer et le jugement
+        à l'injection sont derrière des drapeaux ; mais un champ entre dans MemoryEntry et un
+        dans le schéma de réflexion, et le jugement à l'injection change le dispositif du § 7.2
+        pour la campagne suivante. ⚠ Faisabilité et intérêt AAMAS posés par la session avec leur
+        raison, à réviser par l'auteur. AAMAS ⭐⭐⭐⭐⭐ (5/5) — sans ce ticket, le § 7.3 du
+        chapitre 7 (l'article lu, la diffusion au foyer) n'a aucune campagne jouable, et les
+        trois prédictions communes du § 7.1 alternatif ne se testent que sur un régime.
+      date: '2026-09-21'
+      aamas: 5
+  ticket_101_integration_du_decideur_type_dans_l_article:
+    status: en cours
+    category: Rédaction & Publication
+    note: >-
+      Ouvert le 2026-09-22, PLAN D'EXÉCUTION DE L'ENTRÉE DE JEV DANS L'ARTICLE : rien n'est
+      écrit, neuf lots, dont un bloquant. Suite article du § 10 du ticket 096, qui bornait
+      l'impact au § 6.1, sa figure, la figure 6.2 et l'annexe H. LA PASSE DU 2026-09-22 SUR LES
+      DIX CHAPITRES MONTRE QUE C'EST TRÈS EN DESSOUS : le résultat Jev contredit des phrases des
+      chapitres 0, 1, 8 et 9, qui affirment toutes que la parité au régime nominal appartient aux
+      modèles tabulaires et que ce qui excède l'enquête appartient au modèle de langue. Fusionner
+      le chapitre 6 alternatif sans toucher aux quatre autres produirait un papier qui se
+      contredit d'un chapitre à l'autre. Analyse complète hors git,
+      docs/traces/2026-09-22_jev_impact_papier/README.md.
+      DÉPEND DE : aucun ticket — les lots 2 à 6 écrivent dans docs/paper/article/, sous le verrou
+      et l'accord explicite de l'auteur, un accord par tâche. Les lots 0, 1 et 7 sont exécutables
+      immédiatement et ne demandent aucun accord.
+      LOT 0, BLOQUANT, AUCUN APPEL API : l'entropie croisée n'a pas la même définition dans les
+      deux versions du chapitre 6, et le classement s'inverse. Le § 6.5 de référence et l'annexe
+      I.1 donnent 0,299 au gradient boosté contre 0,342 au prompt expert gemini-3.5, sur le
+      support commun de 5 451 décisions ; fr/alternative/06_results.md donne 0,419 et 0,356 en
+      cel_weighted sur tous les notés, ce qui fait passer le prompt expert DEVANT les quatre
+      méthodes tabulaires et lui fait tirer une phrase de conclusion. Aggravant : le commentaire
+      de la version alternative cite un TROISIÈME support, celui commun aux neuf décideurs à
+      distribution, réduit à 5 229 décisions par l'arrivée de Jev, où les deux bras Jev donnent
+      0,464 et 0,509 — valeurs absentes de son propre tableau. Et c'est un motif déjà payé : le
+      § 6.5 porte une note disant que la lecture par sous-ensemble propre à chaque décideur
+      « donnait le prompt expert premier » et a été corrigée le 2026-09-21 ; la version
+      alternative réintroduit la lecture corrigée. Une seule définition, appliquée simultanément
+      aux trois fichiers.
+      LA RÈGLE QUI PRIME SUR TOUT LE RESTE, décision de l'auteur du 2026-09-22 : un modèle
+      System One ne doit à aucun endroit se lire comme l'équivalent d'un agent à modèle de
+      langue. « Jev n'a pas de mémoire » NE TIENT PAS — rappel, décroissance, score à cinq termes
+      et habitudes sont du code, et Score/Noul pourraient en principe rendre gravité et valence.
+      Ce qui tient : la CONSOLIDATION — transformer un flux d'observations en traces épisodiques
+      et en concepts entretenus — est une génération de texte, que jev-1.13 n'est pas entraîné à
+      produire ; un décideur System One doté d'une mémoire est donc NÉCESSAIREMENT hybride, et
+      L'INVERSE N'EST PAS VRAI. Asymétrie à une voie, démontrable sans exécution, à porter au
+      § 1.3, au § 2.4, aux §§ 3.1 et 3.4, au § 6.1, à l'ouverture du chapitre 7, au chapitre 8 et
+      aux points 1 et 2 du chapitre 9. DEUX PIÈGES NOMMÉS : (a) ne jamais écrire « toute écriture
+      en mémoire passe par le modèle de langue », le § 3.4 disant déjà qu'un réajustement
+      d'horaire est écrit en mémoire à la première personne « sans passer par le modèle de
+      langue » ; (b) ne jamais fusionner le fait expérimental — aux chapitres 5 et 6 la mémoire
+      est désactivée POUR TOUT LE MONDE, vérifié sur les experience.yaml des deux bras, mode
+      sans_simulateur et memoire false de part et d'autre, donc parité stricte — et le fait
+      structurel, que les autres bras POURRAIENT l'activer et Jev non.
+      CE QUE LA RÈGLE FAIT GAGNER, et pourquoi elle n'est pas une précaution : elle referme
+      l'argument. Le chapitre 6 retire au modèle de langue le crédit du régime nominal, le
+      chapitre 7 lui rend le seul qui compte, et le § 7.2.1 le verrouille par la mesure — des
+      quatre voies par lesquelles le passé atteint une décision, UNE SEULE a porté l'effet de
+      l'avarie, « ce qui a changé récemment », 75 prompts sur 376, et c'est précisément celle
+      qu'un décideur typé ne peut pas alimenter.
+      DEUX AUTRES DÉCISIONS DE L'AUTEUR DU 2026-09-22 : D1, aucune campagne hybride, les
+      chapitres 5 et 6 n'ont pas besoin de mémoire et tous les résultats Jev existent ; D2, Jev
+      reste un bras PUR au chapitre 6 et l'agent hybride ne s'énonce qu'au chapitre 8 comme
+      architecture proposée — si Jev n'apparaissait que comme composant, le résultat du
+      chapitre 6 disparaîtrait, or il ne porte l'attribution causale que parce que le bras est
+      pur.
+      HORS PÉRIMÈTRE, À ARBITRER PAR L'AUTEUR : C1, un bras LLM à sortie typée (gemini-3.5
+      contraint à rendre sa distribution par logprobs sur les indices d'option) — c'est LE
+      confondant central, Jev différant des bras LLM par le modèle ET par la forme de la sortie,
+      et aucune expérience du dépôt ne les sépare ; tant qu'elles ne le sont pas, « ce n'est pas
+      le jeu de rôle génératif qui achète la performance » reste une hypothèse plausible et non
+      un résultat. C2, un second décideur zéro-shot typé OUVERT, sans quoi le § 2.4 n'a qu'un
+      point d'appui, fermé, sans publication et susceptible de disparaître avant AAMAS 2027.
+      Également hors périmètre : un second territoire sans enquête locale, tout usage de la
+      confiance de Jev dans une décision (archivée sans être validée, décision du 096), et la
+      levée des TBC du § 6.6 (ticket 073 axe 1 — quatre bras gemini-35-fl multi-graines existent,
+      un seul scoré à 4,646 contre 4,86 publié).
+      AVANCE DU 2026-09-22, retours de l'auteur sur les lots 0 à 6 déjà livrés : sept points
+      appliqués et deux décisions prises. DÉCISION 1, H0 EST RETIRÉE du § 1.3 — elle n'était plus
+      un test depuis la v0.23 du chapitre 1, et son nom appelait une machinerie que l'article
+      n'emploie pas ; à sa place, l'échelle bornée en haut par les modèles ajustés sur les données
+      locales et en bas par les planchers. Renvois restant à aligner : fr/README.md, en/01 et
+      overleaf/chapters/01_Introduction.tex (lot 8). DÉCISION 2, PROMPT_EXPERT_32 EST LE PROMPT
+      EXPERT DE JEV : le § 6.1 publie 3,65 sous ce nom, et les étiquettes inversées de la figure
+      6.2, de l'annexe H.6, de l'annexe I.1, de I.1 bis et de I.2 sont corrigées — ce qui s'y
+      appelait « Jev, prompt expert » est prompt_expert_05, la consigne écrite pour gemini-3.5 et
+      servie telle quelle, désormais nommée « consigne gemini-3.5 ». ⚠ Les différences appariées
+      de l'annexe H.1 n'existent que sur prompt_expert_05 ; l'équivalent sous prompt_expert_32
+      n'a pas été calculé, et un commentaire de source le dit aux deux endroits. LE LOT 5 EST
+      DÉFAIT : le chapitre 2 revient à sa v0.19, sans § 2.4, et l'entrée A12 de CITATIONS.md avec
+      lui. LE LOT 6 EST DÉFAIT POUR LE CHAPITRE 7, qui perd ses trois passages sur le classifieur ;
+      le chapitre 8 et son § 8.7 sont conservés. AUTRES COUPES : le renvoi au § 5.2.3 dans
+      l'ouverture du chapitre 6, le paragraphe des gains d'ingénierie, celui de la cinquième
+      condition, les quatre paragraphes sous le tableau du § 6.1, le tableau des gains appariés du
+      § 6.2, la figure 6.6. AJOUTS : les deux bras Jev au tableau du § 6.4 et à la figure 6.5, où
+      il est DERNIER sur l'entropie croisée (0,464 et 0,552) alors qu'il tient la bande tabulaire
+      au § 6.1 — c'est la mesure qui porte le mieux la règle de cadrage ; et la DISPERSION ENTRE
+      GRAINES, mesurée, qui lève le premier TBC du § 6.5 : trois graines du ticket 073 axe 1
+      donnent 4,86, 4,65 et 4,30 de composite, étendue 0,56 point. Le second TBC est retiré sans
+      être levé, le prompt minimal n'ayant pas été rejoué sous ces graines. Figures régénérées par
+      plot_chapitre6.py --avec-jev et plot_audit_unitaire.py --avec-jev --audit
+      docs/traces/2026-09-22_lot0_entropie_support_unique/audit_12_decideurs.json. RESTE : le lot
+      8 (anglais et LaTeX), qui porte désormais aussi les renvois à H0 ; le lot 7 reste optionnel.
+    triage:
+      faisabilite: 4
+      surete: 3
+      jeux_de_test: false
+      motif: >-
+        Faisabilité 4 : les lots 0, 1 et 7 sont des recalculs et des rejeux à quelques centimes
+        sur une plateforme déjà branchée ; le reste est de la rédaction sur des chiffres qui
+        existent tous. Aucun code de production n'est touché, aucun scoreur, aucun jeu gelé.
+        Sûreté 3 : le lot 0 CHANGE DES CHIFFRES DÉJÀ PUBLIÉS dans trois fichiers et inverse un
+        classement au § 6.5 ; les lots 2 à 6 réécrivent sept chapitres sous verrou, et le lot 3
+        touche un résumé déjà au-delà de la borne OpenReview à 320 mots. Rien n'est destructeur,
+        mais l'ordre compte : fusionner le chapitre 6 avant les chapitres 0, 1 et 9 laisserait le
+        papier se contredire. ⚠ Faisabilité et intérêt AAMAS posés par la session avec leur
+        raison, à réviser par l'auteur. AAMAS ⭐⭐⭐⭐⭐ (5/5) — sans ce ticket, onze expériences
+        Jev livrées et une version alternative du chapitre 6 entièrement rédigée restent hors du
+        papier, et le seul résultat qui dissocie les deux échelles dans les deux sens (juste en
+        agrégé, sous le plancher tout-voiture en individuel) n'est publié nulle part.
+      date: '2026-09-22'
+      aamas: 5

@@ -1,5 +1,17 @@
 # Ticket 059 — plan d'architecture des sept lots
 
+> ⚠ **PÉRIMÉ SUR TROIS POINTS depuis le 2026-09-21/22.** Ce fichier a été écrit avant les
+> arbitrages du quatrième tour (`questions.md`). Trois choses n'ont plus d'objet :
+> **(1)** la condition **C3 paraphrase neutre** est retirée du protocole — le lot 1 n'écrit pas de
+> `paraphrase.txt`, et `lexique_mobilite` ne sert plus qu'à vérifier le texte témoin ;
+> **(2)** la condition **C5 référence tabulaire à événement encodé** est retirée — le point de
+> comparaison est un décideur à règles rigides qui ne lit pas, rejoué hors ligne (Q20) ;
+> **(3)** l'**étage 1** (3 299 déplacements, mémoire éteinte, hors simulateur) ne se joue plus —
+> tout est longitudinal, quelques foyers sur plusieurs jours, mémoire allumée.
+> L'ancienne C4, le texte témoin, prend le numéro **C3**. Les identifiants C1 à C9 de `tests.md`
+> numérotent des **cas de test du corpus** et n'ont rien à voir avec les conditions du protocole.
+> Ce fichier n'est pas réécrit tant que le lot 1 n'est pas repris : il est lu avec cet en-tête.
+
 Écrit le 2026-09-21, après le GO de l'auteur sur les « sept lots codables aujourd'hui ».
 **Aucune ligne de code n'est écrite avant validation de ce plan** (règle plan-first).
 
@@ -209,15 +221,23 @@ de mesure produit le score parfait, et ce motif a déjà menti.
 
 ## Lot 4 — le canal `information`
 
-⚠ **Bloqué par Q1 (constante de gravité), Q2 (un lecteur par foyer), Q5 (parution unique) et
-Q6 (chaînage des véhicules).** Le reste du plan tient quelles que soient les réponses.
+**Les quatre questions bloquantes sont tranchées (2026-09-21).** Q1 : l'agent juge lui-même
+l'importance de ce qu'il lit, il n'y a plus de constante. Q2 : un seul lecteur par foyer. Q5 : le
+jour de parution est tiré au sort. Q6 : chaînage des véhicules actif partout.
+
+⚠ **Q1 change le lot en profondeur, et en bien.** `gravite: 0.70` disparaît de la déclaration ; à
+la place, un appel de jugement rend l'un des cinq échelons de `llm/gravite.py`, et
+`gravite_concept(i_llm, 0.0)` fait le reste — un article ne portant aucun fait mesuré, le jugement
+décide seul, par la règle déjà en vigueur. Deux points restent ouverts, au § 13 du ticket :
+**quand** le jugement est demandé (Q16, proposition : à la lecture) et **que faire d'un échelon
+hors grille** (Q17, proposition : refus et alarme, jamais de repli silencieux).
 
 ### Fichiers
 
 | Fichier | Nature |
 |---|---|
 | `services/llm-agents/llm/informations.py` | **neuf**, frère de `llm/chocs.py` |
-| `services/llm-agents/settings.py` | `InformationsConfig{enabled, fichier}` + `agent.information__gravite` |
+| `services/llm-agents/settings.py` | `InformationsConfig{enabled, fichier}` — **pas de réglage de gravité**, l'agent juge |
 | `services/llm-agents/urban_mobility_agents/simulation_controller.py` | un appel à la bascule de journée |
 | `services/llm-agents/experiences/experience.py` | lever le refus E6 pour le **seul** `type: information` |
 | `services/llm-agents/config/presse/*.yaml` + `README.md` | **neufs**, un fichier par article |
@@ -233,8 +253,14 @@ source: "presse locale — punaise-de-lit-info.fr, archivé sous articles_html/1
 texte_fichier: docs/paper/sources/actualites/articles_txt/a13_punaises/brut.txt
 texte_sha256: "…"          # vérifié au chargement contre le fichier
 
-jour: 9                     # rang du jour simulé, parution le matin
-gravite: 0.70               # CONSTANTE, identique aux cinq articles
+# Le jour de parution est TIRÉ AU SORT dans cette fenêtre, par foyer, à graine fixe : deux foyers
+# ne lisent pas le même jour, et un effet de calendrier ne peut plus se confondre avec celui de
+# l'article.
+parution:
+  fenetre_jours: [9, 13]
+  graine: 59
+
+# Pas de `gravite` : l'AGENT juge ce qu'il vient de lire, sur les cinq échelons de llm/gravite.py.
 
 exposition:
   regle: foyers             # foyers | agents | tirage
@@ -247,7 +273,7 @@ exposition:
 
 | Classe | Porte |
 |---|---|
-| `Information` | `information_id, libelle, source, texte, empreinte_texte, jour, gravite, exposition` |
+| `Information` | `information_id, libelle, source, texte, empreinte_texte, fenetre_parution, graine, exposition` — **plus de `gravite`** |
 | `Exposition` | `regle, foyers, agents, part, graine, lecteurs_par_foyer` |
 | `RegistreInformations` | le texte en vigueur, les lecteurs tirés, les compteurs, le journal |
 | `CompteursJournee` | lecteurs servis, foyers touchés, refus par règle |
@@ -258,7 +284,9 @@ exposition:
 |---|---|
 | `jour_du_run(ts)` | **réutilise `jours_ecoules` du ticket 075**, comme `chocs.py` — jamais le premier timestamp observé, sans quoi une reprise à chaud décalerait la parution |
 | `lecteurs(population)` | tire **un** membre mobile par foyer exposé, par hachage déterministe `graine:information_id:household_id`, et **journalise le tirage** |
-| `due(ts)` | vrai le jour de parution, une seule fois, avant tout réveil |
+| `jour_de_parution(household_id)` | tire le jour dans la fenêtre déclarée, par hachage stable `graine:information_id:household_id` |
+| `due(ts, household_id)` | vrai le jour de parution DE CE FOYER, une seule fois, avant tout réveil |
+| `juger(lecteur, texte)` | demande l'échelon au modèle, rend `gravite_concept(gravite_jugee(niveau), 0.0)` ; un échelon hors grille est REFUSÉ avec `[ALARME]`, jamais remplacé en silence |
 | `entree_pour(person_id)` | le texte, préfixé `[ PRESSE ] This morning I read in the paper: « … »` |
 | `tracer(...)` | une ligne par lecteur servi dans `informations.jsonl` |
 
@@ -266,8 +294,9 @@ exposition:
 
 À la **bascule de journée** du contrôleur, dans le même bloc que le déclenchement de l'enquête
 (`simulation_controller.py` ≈ l. 1775), **avant** tout réveil d'agent. L'entrée part en mémoire
-courte avec `importance = information.gravite`, ce qui suffit : la force `min(2,8 × (1 + 6·g), 30)`
-et le service dans le bloc « Ce qui a changé récemment » suivent sans une ligne de plus.
+courte avec l'importance que **le lecteur lui-même** a attribuée, et c'est tout : la force
+`min(2,8 × (1 + 6·g), 30)` et le service dans le bloc « Ce qui a changé récemment » suivent sans
+une ligne de plus.
 
 ⚠ **Ce n'est pas le point d'injection des chocs**, et la différence est le cœur du régime : un choc
 s'applique à l'arrivée, après la décision ; un article est su **avant** de décider.
@@ -280,7 +309,8 @@ s'applique à l'arrivée, après la décision ; un article est su **avant** de d
 | consigne (« avoid », « you should ») | reprise mot pour mot des marqueurs de `chocs.py` |
 | verdict sur un mode (« this line is unreliable ») | la croyance est ce que la réflexion doit produire |
 | intention (« from now on I will… ») | idem |
-| gravité hors `]0, 1,3]`, jour hors run, règle d'exposition inconnue, foyer absent de la population | une faute de frappe qui ne touche personne produirait un run entier sans symptôme |
+| fenêtre de parution hors run, règle d'exposition inconnue, foyer absent de la population | une faute de frappe qui ne touche personne produirait un run entier sans symptôme |
+| un champ `gravite` dans la déclaration | l'agent juge ; une gravité posée à la main rétablirait le paramètre que Q1 a supprimé |
 
 Plus l'alarme de `chocs.py`, reprise telle quelle : **`[ALARME]` si le cache de décisions est
 actif** — sa clé ne porte ni l'article ni le souvenir.

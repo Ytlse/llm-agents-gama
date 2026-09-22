@@ -265,13 +265,34 @@ class BaseAdapter(ABC):
             data = repaired
 
         # Step 2 — extract "agents" list
+        #
+        # ⚠ LE REPLI « PREMIÈRE LISTE VENUE » A COÛTÉ UNE MESURE. Un modèle qui oublie
+        # l'enveloppe et rend l'agent tout seul — {"agent_id": …, "severity": …, "modes": []} —
+        # n'a pas de clé `agents`. L'ancien repli prenait alors la première liste du dictionnaire,
+        # c'est-à-dire `modes` : vide, la tâche remontait « succès, zéro agent » ; non vide, ses
+        # éléments étaient des chaînes et se faisaient écarter un à un. Dans les deux cas le
+        # jugement était perdu SANS qu'une seule erreur soit levée (mesuré le 2026-09-22 sur
+        # `evenement_jugement`, 19 appels sur 38).
+        #
+        # Deux replis, dans cet ordre : d'abord reconnaître l'agent DÉSENVELOPPÉ, ensuite
+        # n'accepter qu'une liste de dictionnaires. Une liste de chaînes n'est pas une liste
+        # d'agents, et la prendre pour telle rend un résultat vide au lieu d'une erreur.
         agents_raw = None
         if "agents" in data:
             agents_raw = data["agents"]
+        elif "agent_id" in data:
+            _base_logger.warning(
+                f"_parse_output: réponse DÉSENVELOPPÉE (agent seul, sans clé 'agents') — "
+                f"réenveloppée | provider={provider} keys={list(data.keys())}"
+            )
+            agents_raw = [data]
         else:
-            # Fallback : on cherche la première clé qui contient une liste
-            for v in data.values():
-                if isinstance(v, list):
+            for cle, v in data.items():
+                if isinstance(v, list) and all(isinstance(x, dict) for x in v) and v:
+                    _base_logger.warning(
+                        f"_parse_output: clé 'agents' absente, liste de dictionnaires reprise "
+                        f"sous « {cle} » | provider={provider} keys={list(data.keys())}"
+                    )
                     agents_raw = v
                     break
 
@@ -314,6 +335,20 @@ class BaseAdapter(ABC):
                     provider, raw,
                     f"{type(e).__name__} on agents[{idx}]={item!r}: {e}"
                 ) from e
+
+        # ⚠ ZÉRO AGENT N'EST PAS UN SUCCÈS. La passerelle rendait alors `status=success` avec un
+        # résultat vide : l'appelant voyait une tâche réussie et aucune réponse, sans un mot
+        # dans le journal pour dire d'où venait le trou. Un lot est soumis POUR des agents ;
+        # n'en rendre aucun est un échec de génération, et il est retentable comme tel.
+        if not agents:
+            _base_logger.warning(
+                f"_parse_output FAILED: zéro agent après analyse | provider={provider} "
+                f"top_level_keys={list(data.keys())} raw_preview={raw[:500]!r}"
+            )
+            raise ProviderParseError(
+                provider, raw,
+                f"zéro agent rendu (clés présentes: {list(data.keys())})",
+            )
 
         return LLMOutput(agents=agents)
 

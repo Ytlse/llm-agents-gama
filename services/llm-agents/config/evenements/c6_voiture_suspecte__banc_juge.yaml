@@ -1,0 +1,110 @@
+# ⚠ VARIANTE DE BANC JUGÉE — ticket 095/100, run court du 2026-09-22.
+#
+# Identique à `c6_voiture_suspecte__banc` SAUF `jugement: a_l_injection`. Elle existe pour une
+# raison précise : au 2026-09-22, AUCUNE déclaration de choc n'arme le jugement — les neuf
+# portent `jugement: aucun` — si bien que le chemin « l'agent juge ce qu'il vient de subir »
+# n'avait JAMAIS traversé le contrôleur. Le banc fonctionnel l'exerce en appelant `juger()` en
+# direct, ce qui ne prouve rien du câblage : écriture de la gravité jugée dans la mémoire, champ
+# `ecart_au_fait` dans la trace, alarme D7 en cas de sous-estimation, gel du cache.
+#
+# La variante non jugée RESTE : elle continue de prouver le chemin `aucun`, et les deux
+# ensemble disent ce que le jugement change.
+#
+# NE PAS UTILISER POUR UNE CAMPAGNE.
+#
+# ⚠ VARIANTE DE BANC — ticket 100, run court de non-régression du 2026-09-22.
+# Identique à c6_voiture_suspecte SAUF les jours : 1 et 2 au lieu de 15 et 16. Elle sert à
+# prouver le CHEMIN GAMA — le contrôleur charge l'événement, la prise `arrivee` s'applique,
+# la trace s'écrit — sans jouer seize jours de quota. Elle ne reproduit PAS les chiffres du
+# § 7.2 : c'est le test en or (rejeu de trace) qui s'en charge, et il est au vert.
+# NE PAS UTILISER POUR UNE CAMPAGNE.
+# ══ MIGRÉ AU FORMAT DU TICKET 100 (canal unique) le 2026-09-21 ═══════════════════════════
+# `choc:` devient `evenement:`, et trois champs apparaissent. Ils ne changent RIEN à ce que ce
+# fichier faisait : `canal: vecu` et `moment: arrivee` sont le régime subi du ticket 079, et
+# `jugement: aucun` est l'état d'avant le lot 3 — l'agent ne juge pas encore ce qu'il subit.
+# Le test en or du lot 1 rejoue l'original de `config/chocs/` et exige la même trace.
+# C6 — Moteur suspect · voiture · agents nommés
+#
+# Cas d'étude demandé le 2026-09-15 : suivre un agent plus longtemps et relier sa mémoire à son
+# changement d'habitude. Conçu comme la moitié d'une comparaison APPARIÉE — le même run, mêmes
+# graines, tourne une seconde fois sans `CHOC=` : tout écart après le jour 15 vient du choc.
+# ⚠ Ce bras témoin n'a jamais tourné. Sans lui, aucun écart mesuré ici n'est attribuable.
+#
+# POURQUOI UN RETARD, ET PAS SEULEMENT UNE INQUIÉTUDE. La demande initiale était « la voiture
+# fait des bruits bizarres, je ne suis pas rassuré ». Une inquiétude sans retard mesuré donne une
+# gravité de 0,00 et un souvenir qui vit 2,8 jours : il s'éteint avant d'avoir pesé sur une seule
+# décision. La gravité se calcule sur ce que la simulation a MESURÉ, et c'est la garde qui empêche
+# de fabriquer le résultat qu'on prétend mesurer. L'inquiétude reste donc dans le `vecu` ; le
+# retard lui donne son poids.
+#
+# ══ PROTOCOLE TEMPOREL (2026-09-18) ══════════════════════════════════════════════════════
+#
+# Les jours du run se comptent en jours de CALENDRIER ; la simulation SAUTE les week-ends.
+#   Semaine 1 : J1-J5   (ouvrés 1-5)   | J6-J7   = samedi, dimanche
+#   Semaine 2 : J8-J12  (ouvrés 6-10)  | J13-J14 = samedi, dimanche
+#   Semaine 3 : J15 (ouvré 11, premier choc), J16 (ouvré 12, second choc)
+# Dix jours ouvrés de baseline, puis le choc. Horizon total 42 jours calendaires.
+#
+# Gravité obtenue au J15 : retard 30/30 × 0,50 = 0,50 · incident_reseau 0,20 → 0,70. Elle
+# atteint le seuil de choc d'origine (0,70, comparaison `>=`) SANS qu'il soit besoin de
+# l'abaisser : le réglage `memoire__importance_choc: 0.50` posé dans config.yaml le 18/09 n'a
+# rien changé pour ce jour-là et élargit le vivier C à tous les souvenirs de gravité ≥ 0,50.
+# Le J16 (0,53), lui, en dépend — mais il ne s'est jamais appliqué (voir plus bas).
+#
+# ══ RÉÉCRITURE DU 2026-09-19 (ticket 077, lot H) ═════════════════════════════════════════
+#
+# Les deux `vecu` concluaient à la place de l'agent : « I no longer trust this car at all »,
+# « I am seriously thinking about not using this car anymore ». La réflexion nocturne en a tiré
+# « consider alternative transport options », phrase servie ensuite à chacune des 40 décisions
+# des 14 jours suivants. On ne mesurait plus un agent qui apprend, mais un modèle qui ne se
+# contredit pas. Les deux textes ne disent plus que des faits et des sensations ; la croyance
+# « cette voiture n'est pas fiable » doit être PRODUITE par la réflexion, ou ne pas l'être.
+# Les règles R9 et R10 refusent désormais au chargement ce que ces textes contenaient.
+#
+# ⚠ LE SECOND CHOC NE S'EST JAMAIS APPLIQUÉ au run du 2026-09-19. L'exposition est restreinte
+# aux trajets en voiture, et l'agent n'en faisait plus au J16 : `chocs.jsonl` ne porte que
+# quatre applications, toutes au J15. Un choc de renforcement ne peut frapper que ceux qui
+# n'ont pas déjà réagi. C'est assumé — on ne retombe pas en panne dans une voiture qu'on ne
+# prend pas — mais une journée de choc close sans exposé lève désormais une `[ALARME]`, et
+# l'analyse doit lire `chocs.jsonl`, jamais ce fichier, pour savoir ce qui a eu lieu.
+#
+evenement: c6_voiture_suspecte__banc_juge
+canal: vecu                  # vecu | lu — d'où vient le texte
+moment: arrivee              # arrivee (après la décision) | reveil (avant)
+jugement: a_l_injection      # l'agent juge ce qu'il vient de SUBIR (lot 3, décision D4)
+libelle: "Engine trouble"
+source: "scénario déclaré — cas d'étude individuel, aucune source externe revendiquée"
+
+# Une panne réparée ne se reproduit pas à l'identique trois heures plus tard. Au run du
+# 2026-09-19, sans cette ligne, le choc s'est appliqué aux QUATRE trajets en voiture de la
+# journée : quatre dépannages de trente minutes, quatre fois le même récit, là où le protocole
+# en comptait un seul. L'intensité valait quatre fois l'intensité annoncée.
+cadence: jour
+
+exposition:
+  regle: agents
+  # Trois personas pour la cohorte séquentielle (`scripts/experiment/run_sequential_cohort.py`,
+  # un run par persona). Dans un run à une personne, les deux autres identifiants sont inertes
+  # et c'est voulu — le même fichier de choc sert les trois bras.
+  agents: ["899549", "1250941", "861500"]
+  # Restreint aux trajets faits EN VOITURE. Sans cette ligne, Corinne aurait lu « the engine
+  # made a grinding noise » au retour d'un trajet en bus — elle est multimodale, 60 % de
+  # voiture sur le run du 15/09 — et sa mémoire aurait enregistré une histoire impossible.
+  modes: [car]
+
+# Chocs au début de la 3e semaine (jours ouvrés 11 et 12), après 10 jours ouvrés de baseline.
+jours:
+  - jour: 1
+    retard_min: 45
+    incident_reseau: true
+    vecu: >-
+      The engine stalled on the expressway. The car lost speed in the middle lane; a lorry behind
+      me braked hard and came to a stop a few metres short of my rear bumper. I pulled onto the
+      hard shoulder and waited 35 minutes for roadside assistance before the car would restart. I
+      arrived 45 minutes after the time I had planned.
+  - jour: 2
+    retard_min: 20
+    incident_reseau: true
+    vecu: >-
+      The warning lights came on again. I drove at reduced speed for the whole journey and arrived
+      20 minutes late.

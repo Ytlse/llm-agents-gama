@@ -202,6 +202,23 @@ class WorldPopulation:
         admis, _ = perimeter_verdict(person, bbox)
         return admis
 
+    @staticmethod
+    def _avec_foyer(entry: dict) -> dict:
+        """Recopie `household.id` là où `Person` sait le lire (ticket 100, lot 1).
+
+        Pydantic ignore les clés inconnues : `household` était présent dans le JSON depuis le
+        sceau et perdu à la validation, sans qu'aucun log ne le dise. La recopie se fait sur
+        une COPIE de l'entrée — un chargeur ne modifie pas le dictionnaire de son appelant.
+        """
+        if entry.get("household_id") is not None:
+            return entry
+        foyer = entry.get("household") or {}
+        if not foyer.get("id"):
+            return entry
+        copie = dict(entry)
+        copie["household_id"] = str(foyer["id"])
+        return copie
+
     def load_population(self, world_bbox: BBox):
         file_name = f"{settings.data.population_cache_prefix}{settings.data.population_size}.json"
         if os.path.exists(file_name):
@@ -216,7 +233,7 @@ class WorldPopulation:
                 )
             else:
                 # Legacy Pydantic format
-                all_people = [Person.model_validate(p) for p in data]
+                all_people = [Person.model_validate(self._avec_foyer(p)) for p in data]
                 all_people = [p for p in all_people if self._is_within_bbox(p, world_bbox)]
                 excluded = len(data) - len(all_people)
                 if excluded > 0:

@@ -67,16 +67,16 @@ exposition:
 # Chocs au début de la 3e semaine (jours ouvrés 11 et 12), après 10 jours ouvrés de baseline.
 jours:
   - jour: 15
-    retard_min: 30
+    retard_min: 45
     incident_reseau: true
     vecu: >-
-      The engine made a grinding noise and the car stalled on the expressway.
-      I pulled over onto the hard shoulder and waited 30 minutes for roadside assistance
-      before it would restart. I arrived very late, shaken.
+      The engine stalled on the expressway. The car lost speed in the middle lane; a lorry behind
+      me braked hard and came to a stop a few metres short of my rear bumper. I pulled onto the
+      hard shoulder and waited 35 minutes for roadside assistance before the car would restart. I
+      arrived 45 minutes after the time I had planned.
   - jour: 16
     retard_min: 20
     incident_reseau: true
     vecu: >-
-      Warning lights came on again and the grinding noise was back, louder than the day
-      before. I drove at reduced speed the whole way, listening to the engine.
-      I arrived 20 minutes late.
+      The warning lights came on again. I drove at reduced speed for the whole journey and arrived
+      20 minutes late.

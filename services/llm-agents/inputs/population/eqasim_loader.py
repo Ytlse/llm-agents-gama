@@ -128,6 +128,19 @@ def _generate_name(gender: str) -> str:
     return fake.name()
 
 
+
+def _identifiant_de_foyer(entry: dict) -> str | None:
+    """`household.id` de l'entrée brute, ou `None` (ticket 100, lot 1).
+
+    Le ménage est le SEUL groupe social de la simulation qui porte un identifiant stable. Il
+    était dans le JSON depuis le sceau et perdu à la construction de `Person`, sans qu'aucun
+    log ne le dise — la règle d'exposition `foyers` et la circulation au sein du foyer en
+    dépendent toutes deux.
+    """
+    foyer = entry.get("household") or {}
+    identifiant = foyer.get("id")
+    return str(identifiant) if identifiant not in (None, "") else None
+
 class EqasimJSONPopulationLoader(PopulationLoader):
     def __init__(self, filters: Optional[list[Filter]] = None):
         self.filters = filters or []
@@ -210,6 +223,11 @@ class EqasimJSONPopulationLoader(PopulationLoader):
                 ),
                 state=state,
                 is_llm_based=entry.get("is_llm_based", True),
+                # Ticket 100, lot 1 — le ménage voyage jusqu'au runtime. `household` est à la
+                # racine de l'entrée eqasim, jamais dans les traits du persona : le mettre
+                # dans les traits le ferait entrer un jour dans un prompt, et l'appartenance
+                # au foyer est une propriété de simulation, pas un trait de personnage.
+                household_id=_identifiant_de_foyer(entry),
             )
             people.append(person)
 
@@ -288,6 +306,7 @@ class EqasimJSONPopulationLoader(PopulationLoader):
                 identity=PersonalIdentity(name=name, traits_json=traits_json, home=home, activities=activities),
                 state=state,
                 is_llm_based=entry.get("is_llm_based", True),
+                household_id=_identifiant_de_foyer(entry),
             )
             people.append(person)
 

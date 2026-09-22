@@ -168,7 +168,29 @@ class MemoryEntry:
     person_id: str
     activity_id: Optional[str]   # UUID de l'activité GAMA (clé de partition)
     tags: Optional[str]          # mots-clés pour le scoring BLEU en LTM
+    valence: str = "neutre"      # negative | neutral | positive
+    origine: Optional[str] = None  # vecu | lu | entendu  (ticket 100)
 ```
+
+#### `origine` — d'où vient ce que l'entrée raconte (ticket 100, lot 1)
+
+Trois valeurs : `vecu` (l'agent l'a fait ou subi), `lu` (canal presse, lot 2), `entendu` (un
+autre membre de son foyer le lui a dit, lot 4).
+
+Ce champ n'est pas documentaire : il porte la décision **D2 du ticket 100 — un seul saut**. Ce
+qui est entendu ne repart jamais. Sans lui, une croyance née d'un ouï-dire est indiscernable
+d'une croyance née d'un trajet, et il n'y a pas de raccourci : le ticket 078 § 4.1 avait
+explicitement refusé cette généalogie, au motif que l'ancrage (`observations ≥ 1`) suffisait à
+fermer la boucle. Il suffit à empêcher une amplification **non ancrée** ; il ne suffit pas à
+borner la circulation à un saut, ce que D2 exige.
+
+⚠ `None` n'est pas `vecu`. `None` veut dire « entrée écrite avant le ticket 100 » ; la propriété
+`origine_effective` la **lit** comme vécue, faute de mieux, mais l'entrée ne le **déclare** pas.
+Confondre les deux ferait passer pour une mesure ce qui n'est qu'un défaut de champ — et dans ce
+dépôt, l'absence de mesure produit volontiers la valeur parfaite.
+
+Au lot 1, le champ est écrit et journalisé, et ne filtre rien. Il ne devient une règle qu'au
+lot 4, avec la circulation au sein du foyer.
 
 ### Alimentation du buffer
 
@@ -927,14 +949,25 @@ cesse d'être un paramètre posé à côté du modèle d'oubli pour en devenir u
 l'ancienneté d'un changement, pas celle de sa dernière lecture. Le renforcement au rappel
 continue de jouer, mais par la `force`, donc sur la durée — il ne rajeunit pas l'événement.
 
-**Les deux bornes ne mordent pas au même endroit, et aucune ne mord par la gravité.**
-`borne_0_1` plafonne la gravité à 1,0 : la durée maximale issue de la gravité vaut 20,58 j, sous
-le plafond, et la durée minimale vaut 2,94 j à gravité nulle, au-dessus du plancher. Le **plafond
-mord par le renforcement au rappel** — `force_apres_rappel` ajoute un jour par rappel jusqu'à 30,
-et à force = 30 la durée calculée vaut 31,49 j. Sans lui, un souvenir grave et souvent rappelé
-repousserait indéfiniment sa propre échéance dans un bloc de taille fixe (`changements_max = 3`) :
-la fenêtre cesserait d'être une fenêtre pour devenir une archive. Le plancher, lui, est une borne
-de sûreté : **il ne faut pas citer « 2 jours » comme durée minimale observée.**
+**Aucune des deux bornes ne mord, et il ne faut citer ni « 2 » ni « 50 » comme durées
+observées.** `borne_0_1` plafonne la gravité à 1,0 : la durée maximale issue de la gravité vaut
+20,58 j et la durée minimale 2,94 j à gravité nulle — donc au-dessus du plancher de 2 j.
+
+Ce qui borne réellement par le haut est `memoire__force_max_jours = 30`, via le renforcement au
+rappel : `force_apres_rappel` ajoute un jour par rappel jusqu'à 30, et à force = 30 la durée vaut
+**31,49 j**. C'est LE plafond du dispositif, et c'est lui qui empêche un souvenir souvent rappelé
+de repousser indéfiniment son échéance dans un bloc de taille fixe (`changements_max = 3`) — la
+fenêtre cesserait d'être une fenêtre pour devenir une archive.
+
+`memoire__plafond_changement_jours` vaut **50 j depuis le 2026-09-22** (auparavant 30). Comme
+31,49 < 50, il ne peut plus mordre. Il est conservé comme **témoin** : `DureeService.borne` le
+journalise s'il mord, et une telle ligne signalerait que la loi de décroissance ou le plafond de
+force a bougé sans qu'on le remarque. Le garde-fou sur le coût d'un run est passé au protocole —
+horizon de 50 jours, l'arrêt normal restant l'extinction du souvenir suivie de sept jours vécus.
+
+⚠ Le commentaire précédent de ce paragraphe affirmait que sans le plafond de durée « un souvenir
+souvent rappelé repousserait indéfiniment son échéance ». C'était faux : le renforcement sature
+au plafond de force, et la protection vient de là.
 
 ### Le mode `fixe`, et pourquoi il reste
 

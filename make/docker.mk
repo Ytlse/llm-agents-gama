@@ -135,7 +135,7 @@ error:
 warning:
 	python3 scripts/warnings.py $(if $(LOG),$(LOG),experiments/current/app.log)
 
-## Marqueurs d'écriture générée dans les chapitres de l'article. Usage: make paper-style [F=docs/paper/article/fr/03_architecture.md]
+## Marqueurs d'écriture générée dans les chapitres de l'article. Usage: make paper-style [F=docs/paper/article/fr/03_Architecture.md]
 paper-style:
 	python3 scripts/paper/detecter_artefacts_ia.py $(if $(F),--fichier $(F),)
 

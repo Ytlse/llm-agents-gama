@@ -29,6 +29,7 @@ from llm.axes import (
     normaliser_motif,
 )
 from llm.cache import LlmSemanticCache
+from llm import foyer
 from llm.concepts import (
     CONCEPTS_MONTRES_PAR_PANIER,
     CONFIRMER,
@@ -424,6 +425,37 @@ class ConceptLu:
     mode: str | None = None
     operation: str = CREER
     cible: str = ""
+    # Ticket 100, lot 4 — la PROVENANCE. `vecu` par défaut : un concept écrit avant ce lot, ou
+    # par un modèle qui ignore le champ, vient de la journée de l'agent — c'est ce qui était
+    # vrai avant que le foyer existe, et c'est le défaut le moins inventif.
+    origine: str = "vecu"
+
+
+# Vocabulaire du schéma (anglais, ticket 074) → vocabulaire de `MemoryEntry` (français).
+_ORIGINES_MODELE: dict[str, str] = {"lived": "vecu", "heard": "entendu"}
+
+
+def _normaliser_origine(brut) -> str:
+    """La provenance rendue par le modèle, ramenée au vocabulaire de l'entrée.
+
+    Une valeur inconnue ou absente retombe sur `vecu`, et LAISSE UNE TRACE. C'est le repli le
+    moins inventif — on tient le concept pour né de la journée de l'agent, ce qui était vrai
+    avant que le foyer existe — mais il n'est pas anodin : un concept d'ouï-dire pris pour du
+    vécu REPARTIRAIT dans le foyer, ce que la décision D2 interdit. Un modèle qui ne
+    respecterait jamais ce champ doit donc se voir.
+    """
+    clef = str(brut or "").strip().lower()
+    if clef in _ORIGINES_MODELE:
+        return _ORIGINES_MODELE[clef]
+    if clef in ("vecu", "entendu", "lu"):
+        return clef
+    if clef:
+        logger.warning(
+            f"[concepts] provenance INCONNUE « {brut} » — hors de "
+            f"{sorted(_ORIGINES_MODELE)} ; le concept est tenu pour VÉCU, donc il pourra "
+            f"repartir dans le foyer. Vérifiez que le modèle respecte le champ `source`."
+        )
+    return "vecu"
 
 
 def _normaliser_concept(concept) -> ConceptLu:
@@ -448,6 +480,7 @@ def _normaliser_concept(concept) -> ConceptLu:
             mode=mode,
             operation=normaliser_operation(concept.get("operation")),
             cible=str(concept.get("target_id") or "").strip(),
+            origine=_normaliser_origine(concept.get("source")),
         )
     if isinstance(concept, (list, tuple)):
         cinq = [str(x) for x in list(concept)[:5]]
@@ -531,7 +564,15 @@ def _gravite_de_la_contrainte(context: Context) -> float:
 #       réflexions et des concepts, et aucun ne dirait de quel mode il parle.
 #   3 — ticket 071, lot 3 : chaque concept déclare son `operation` et sa cible. Les concepts
 #       cessent de s'empiler : ils se confirment, se précisent ou se voient contredire.
-SCHEMA_REFLEXION_VERSION = 3
+#   4 — ticket 100, lot 4 : chaque concept déclare sa PROVENANCE (`lived` | `heard`). Sans
+#       elle, un concept né d'un ouï-dire est indiscernable d'un concept né d'un trajet, et la
+#       décision D2 — un seul saut — n'a aucun moyen de s'appliquer. Le ticket 078 § 4.1
+#       refusait cette généalogie ; elle devient nécessaire dès lors que la circulation est
+#       bornée à un saut.
+#       ⚠ Le champ est demandé dans les DEUX bras, drapeau de partage allumé ou éteint : c'est
+#       ce qui garde une version de schéma unique entre eux, donc comparable. Drapeau éteint,
+#       aucun bloc de foyer n'entre dans l'appel et la réponse vaut `lived` partout.
+SCHEMA_REFLEXION_VERSION = 4
 
 
 class LlmAgent:
@@ -651,6 +692,8 @@ class LlmAgent:
         timestamp: int | None = None,
         importance: float = 0.0,
         axes: dict | None = None,
+        valence: str = "neutre",
+        origine: str | None = None,
     ):
         # Ticket 075 — rejeu d'une reprise à chaud : l'agent revit une journée qu'il a DÉJÀ
         # apprise. Le point d'étranglement est ici : sans entrée de mémoire courte, aucun agent
@@ -671,6 +714,8 @@ class LlmAgent:
             activity_id=context.activity_id,
             importance=importance,
             axes=axes,
+            valence=valence,
+            origine=origine,
         )
         history_log.log_shortterm_memory(
             timestamp=context.timestamp,
@@ -1139,7 +1184,19 @@ class LlmAgent:
         # Un miss reste un miss : le modèle est appelé normalement.
         _memory_text_cache = None if gel_actif() else memory_text
 
-        if self.llm_cache is not None:
+        # Ticket 100 (Q5, tranchée le 2026-09-22) — le cache de décisions est CONTOURNÉ les
+        # jours d'événement, automatiquement. Ce jour-là, chaque décision passe par le modèle :
+        # c'est le jour où l'agent décide en voyant l'offre nominale, et une décision resservie
+        # y ferait passer un choix d'un autre jour pour un choix de celui-ci.
+        #
+        # ⚠ La coupure ne porte QUE sur ce jour. La fenêtre d'après — celle qu'on mesure —
+        # garde son cache, et les compteurs de `evenements` disent jour par jour combien de
+        # décisions y ont été servies depuis le cache.
+        from llm import evenements as _evenements
+
+        _cache_coupe = _evenements.cache_coupe(context.timestamp)
+
+        if self.llm_cache is not None and not _cache_coupe:
             cache_hit = await self.llm_cache.lookup(
                 agent_id=context.person.person_id,
                 activity_id=context.activity_id,
@@ -1152,6 +1209,7 @@ class LlmAgent:
                 extra_key=anticipation_key,
                 traits_key=_traits_signature(context.person.identity.traits_json),
             )
+            _evenements.noter_decision(context.timestamp, depuis_cache=cache_hit is not None)
             if cache_hit is not None:
                 if trace is not None:
                     trace["cache"] = True
@@ -1807,23 +1865,44 @@ class LlmAgent:
         # moins de latitude pour en inventer un, et la correspondance est vérifiée au retour.
         _par_poignee = {f"K{i + 1}": e for i, e in enumerate(_connus)}
         self._compter_croyances_montrees(context.person.person_id, len(_par_poignee))
+        # ── Ticket 100, lot 4 — ce que le foyer a raconté ce soir ───────────────────────
+        # Le bloc est une ENTRÉE de l'appel, au même titre que les expériences de la journée.
+        # Rien n'est écrit dans la mémoire du receveur : c'est le modèle qui décide s'il en
+        # tire une croyance, et une phrase entendue qui ne résonne avec rien disparaît avec
+        # l'appel. C'est le bon défaut — la mémoire ne grossit pas d'avoir écouté.
+        #
+        # Vide quand le drapeau est éteint, quand l'agent vit seul, ou quand personne n'a rien
+        # produit de neuf depuis sa dernière consolidation.
+        _bloc_foyer = ""
+        try:
+            _bloc_foyer = foyer.bloc_du_soir(
+                self.long_term_memory, context.person, wall_clock(context.timestamp)
+            )
+        except Exception as err:  # noqa: BLE001 — le foyer ne fait jamais tomber une réflexion
+            logger.error(
+                f"[ALARME] [foyer] bloc du soir impossible pour "
+                f"{context.person.person_id} ({err}) — la consolidation continue SANS lui, "
+                f"donc sans ce que le foyer avait à dire ce soir."
+            )
+
+        _contexte_reflexion = {
+            "today": exp,
+            "known_beliefs": [
+                {
+                    "id": poignee,
+                    "belief": json.loads(e.content)[0]
+                    if e.content.startswith("[")
+                    else e.content,
+                    "times_observed": e.observations,
+                    "times_contradicted": e.contre_exemples,
+                }
+                for poignee, e in _par_poignee.items()
+            ],
+        }
+        if _bloc_foyer:
+            _contexte_reflexion["household"] = _bloc_foyer
         experiences_text = json.dumps(
-            {
-                "today": exp,
-                "known_beliefs": [
-                    {
-                        "id": poignee,
-                        "belief": json.loads(e.content)[0]
-                        if e.content.startswith("[")
-                        else e.content,
-                        "times_observed": e.observations,
-                        "times_contradicted": e.contre_exemples,
-                    }
-                    for poignee, e in _par_poignee.items()
-                ],
-            },
-            indent=2,
-            ensure_ascii=False,
+            _contexte_reflexion, indent=2, ensure_ascii=False
         )
 
         identity_description = self.get_person_identity_description(context.person)
@@ -1994,6 +2073,7 @@ class LlmAgent:
 
             for lu in normalises:
                 cinq, niveau, valence, mode = lu.cinq, lu.niveau, lu.valence, lu.mode
+                origine_concept = lu.origine
                 rang_courant[niveau] = rang_courant.get(niveau, 0) + 1
                 i_llm = gravite_jugee(
                     niveau, n_niveau=effectif[niveau], rang=rang_courant[niveau]
@@ -2129,6 +2209,10 @@ class LlmAgent:
                         tags=",".join(cinq[1:]),
                         importance=importance,
                         valence=valence,
+                        # D2 — un seul saut. Une croyance née de ce que l'agent a ENTENDU
+                        # porte sa provenance et ne repartira jamais dans le foyer, même
+                        # confirmée plus tard par un trajet (Q2, tranchée le 2026-09-21).
+                        origine=origine_concept,
                         # Axes normalisés à l'écriture (lot 2). Le mode vient du modèle, qui sait
                         # de quoi parle son concept ; le lieu de sa portée spatiale ; le motif de
                         # son objet. Le créneau et la météo viennent de la journée consommée : un

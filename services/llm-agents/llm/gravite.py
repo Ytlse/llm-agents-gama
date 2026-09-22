@@ -63,6 +63,20 @@ ANCRES: dict[str, str] = {
     "marquant": "I will remember this in a month; it changes how I travel.",
 }
 
+# Les ancres, RECLÉES dans le vocabulaire anglais des schémas de sortie. Elles ne sont pas
+# recopiées : elles se dérivent d'`ANCRES` et d'`ALIAS_NIVEAUX`, qui restent la seule source.
+#
+# ⚠ POURQUOI CETTE FONCTION EXISTE. `evenement_jugement` passait `ANCRES` telle quelle dans sa
+# charge utile, donc des clés FRANÇAISES — le prompt demandait « choisissez parmi anodin,
+# notable, genant, grave, marquant » pendant que son schéma de sortie n'acceptait que
+# `negligible`…`memorable`. Le modèle recevait deux vocabulaires pour une même échelle et
+# devait en deviner un. Mesuré sur Groq le 2026-09-22, corrigé le jour même.
+def ancres_anglaises() -> dict[str, str]:
+    """Les cinq ancres sous le libellé attendu par les schémas (`negligible`…`memorable`)."""
+    vers_anglais = {fr: en for en, fr in ALIAS_NIVEAUX.items()}
+    return {vers_anglais[niveau]: texte for niveau, texte in ANCRES.items()}
+
+
 # ── Poids de la gravité déterministe ─────────────────────────────────────────────
 POIDS_RETARD = 0.50
 POIDS_CORRESPONDANCE_RATEE = 0.20
@@ -386,7 +400,7 @@ def composantes_sans_source() -> tuple[str, ...]:
     inertes = list(COMPOSANTES_INACTIVES)
     if "incident_reseau" in inertes:
         try:
-            from llm.chocs import incident_reseau_a_une_source
+            from llm.evenements import incident_reseau_a_une_source
 
             if incident_reseau_a_une_source():
                 inertes.remove("incident_reseau")

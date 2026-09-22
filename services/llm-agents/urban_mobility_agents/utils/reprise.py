@@ -125,6 +125,7 @@ def ecrire_point(
     timestamp_simule: int,
     *,
     compteurs: dict | None = None,
+    foyer: dict | None = None,
 ) -> Path | None:
     """Écrit un point de reprise complet. Rend son chemin, ou `None` si rien n'a pu être écrit.
 
@@ -152,6 +153,12 @@ def ecrire_point(
                     "ancre_run": ancre(),
                     "ecrit_le": datetime.now().astimezone().isoformat(),
                     "compteurs": compteurs or {},
+                    # Ticket 100, lot 4 — le repère de lecture du foyer, par receveur, et les
+                    # croyances déjà montrées. Sans lui, une reprise à chaud ferait
+                    # RÉ-ENTENDRE au foyer entier plusieurs nuits déjà entendues : le défaut
+                    # que ce ticket a corrigé pour la mémoire, à ne pas réintroduire par la
+                    # porte du foyer.
+                    "foyer": foyer or {},
                     # Ticket 091 — l'identité du run voyage AVEC le point. Sans elle, un point
                     # restauré ne dit pas de quelle expérience il vient, et rien n'empêche de
                     # rendre à un run la mémoire d'un autre.

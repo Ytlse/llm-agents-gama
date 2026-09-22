@@ -1,0 +1,35 @@
+# ══ MIGRÉ AU FORMAT DU TICKET 100 (canal unique) le 2026-09-21 ═══════════════════════════
+# `choc:` devient `evenement:`, et trois champs apparaissent. Ils ne changent RIEN à ce que ce
+# fichier faisait : `canal: vecu` et `moment: arrivee` sont le régime subi du ticket 079, et
+# `jugement: aucun` est l'état d'avant le lot 3 — l'agent ne juge pas encore ce qu'il subit.
+# Le test en or du lot 1 rejoue l'original de `config/chocs/` et exige la même trace.
+# C2 — Crevaison · vélo
+# Individuel, et c'est le cas le plus intéressant : RIEN ne change dans le graphe, donc tout
+# effet observé les jours suivants ne peut venir que de la mémoire.
+# ⚠ Le jour 13 ne rend pas le vélo réellement indisponible (cf. config/chocs/README.md) : seul
+#   le souvenir le porte.
+evenement: c2_crevaison
+canal: vecu                  # vecu | lu — d'où vient le texte
+moment: arrivee              # arrivee (après la décision) | reveil (avant)
+jugement: aucun              # aucun | a_l_injection (lot 3 du ticket 100)
+libelle: "Flat tyre on the way"
+source: "scénario déclaré — Aldred (2016), TR-A 90, sur le poids des incidents vécus à vélo"
+
+exposition:
+  regle: tirage
+  part: 0.30
+  graine: 79
+
+jours:
+  - jour: 12
+    retard_min: 20
+    incident_reseau: true
+    vecu: >-
+      A tyre went flat on the way. I spent 20 minutes repairing it at the roadside, and my hands
+      were covered in grease for the rest of the journey. I arrived 20 minutes after the time I
+      had planned.
+  - jour: 13
+    retard_min: 0
+    incident_reseau: false
+    vecu: >-
+      I replaced the inner tube the same evening. The bike was available as usual.

@@ -130,7 +130,7 @@ réplicat LLM appartient au modèle**, et cette égalité est la mesure de réf�
 | Température | 0,0 · `top_p` 1,0 |
 | Graines | `graine_ordre` 42, `graine_tirage` 42, `graine_calendrier` 42 — **inchangées** |
 | Exécution de référence | `2026-09-16_22_20_25` (composite 4,86 · hors choix unique 6,86 · L1 58,48) |
-| Coût | ≈ 2 500 sollicitations fraîches (mesuré sur les bras sans reprise : 2 506 et 2 643), soit ≈ 2,5 jours de quota à 1 000 RPD |
+| Coût | ≈ 2 500 sollicitations fraîches (mesuré sur les bras sans reprise : 2 506 et 2 643), soit **≈ 310 requêtes** au fournisseur et **≈ 0,3 jour** de quota à 1 000 RPD — voir la correction ci-dessous : une sollicitation n'est pas une requête |
 | **Définition prête** | `exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_t0_nosim_2` — vérifiée le 2026-09-21 : `nommage.segments()` la recalcule au nom de son aîné, donc aucun écart d'identité. `vehicule_chaine`, `verrou_retour` et `troncature_15` y sont écrits explicitement, pour que l'égalité se lise sans exécuter de code. Aucune exécution : elle se lance **à vide**. |
 | Estimation | 3 161 sollicitations · ≈ 3,2 fenêtres de quota · ≈ 6 300 s de calcul utile |
 
@@ -251,22 +251,94 @@ Cette formalisation mathématique fournit une réponse chiffrée, irréfutable e
 
 ## 4. Stratégie d'Exécution & Économie de Moyens
 
+> **Correction du 2026-09-22 : une sollicitation n'est pas une requête.** Tous les coûts de ce
+> ticket ont été chiffrés en assimilant un déplacement à une requête au fournisseur. C'est ce que
+> fait le code d'estimation — `experience.estimer` pose `sollicitations = deplacements_couverts`
+> (`experiences/experience.py:913`) et `aptitude` en déduit `jours = sollicitations / rpd`
+> (`experiences/aptitude.py:91`) — et le **micro-batching de la passerelle n'y entre nulle part**.
+> Or il est actif : la clé de lot ne sépare que catégorie, paramètres, fournisseur forcé, TPM
+> minimal et instances admises (`llm_gateway/core/batching.py`), toutes constantes à l'intérieur
+> d'un bras, donc toutes les décisions d'une expérience partagent le même lot. Le nombre d'agents
+> par requête n'est pas fixé à 5 : il est **calculé** sur le TPM du fournisseur et le coût en
+> jetons d'un agent, avec un plafond absolu de 20 (`llm_gateway/config/settings.py:133`).
+>
+> Relevé sur les `compteurs.json` des bras joués, champ `quota` (requêtes réellement consommées
+> par instance) :
+>
+> | bras | sollicitations fraîches | requêtes | agents/requête |
+> |---|---|---|---|
+> | `cset15_tronc`, run complet du 2026-09-20 | 2 442 | 318 | **7,7** |
+> | journée de référence, § 8.3 de l'article | 2 108 | ≈ 270 | **≈ 7,8** |
+> | `go123`, run complet du 2026-09-21 | 2 229 | 931 | 2,4 — **à écarter**, cf. ci-dessous |
+> | graine 42, exécution reprise du 2026-09-16 | 194 (3 019 resservies) | — | non comparable |
+>
+> **Le repère est ≈ 8 agents par requête**, et il était déjà écrit : le § 8.3 du chapitre 8 le
+> publie, mesuré sur la journée de référence. Le relevé `cset15` le confirme à 7,7 sur une
+> exécution complète sans réemploi.
+>
+> **Le 2,4 de `go123` est écarté.** `requetes_jour` est un compteur de JOURNÉE par instance, pas
+> le coût d'une exécution : il agrège les réessais et tout ce qui a touché la même clé le même
+> jour — ce bras a d'ailleurs connu huit attentes pour quota épuisé, et sa `key1` affiche 506
+> requêtes pour une limite de 500. Prendre ce chiffre pour le coût du run, c'est confondre la
+> consommation d'une clé avec celle d'un bras. Erreur commise puis corrigée le 2026-09-22.
+>
+> **Le repère à retenir pour un bras complet est donc ≈ 310 requêtes, soit ≈ 0,3 jour** de quota
+> sur deux clés à 500 RPD — et non 2,5 jours. Les volumes ci-dessous sont corrigés en conséquence ;
+> l'estimation rendue par `experiences estimer` reste, elle, fausse dans le même sens tant qu'elle
+> ignore le regroupement.
+
+
 L'exécution d'un run complet sur 1 000 agents représentant environ 3 150 sollicitations du LLM (soit ~1,5 million de tokens en entrée et ~300 000 tokens en sortie par run), le plan expérimental est échelonné en **deux phases prioritaires** pour respecter les quotas et optimiser les temps de calcul :
 
 ### Phase 0 : Réplicat à l'identique (à faire en premier, un seul bras)
 - **Objectif** : isoler le non-déterminisme propre au fournisseur, en ne changeant rien du tout — même modèle, même prompt, même jeu, mêmes trois graines.
-- **Volume** : 1 run, ≈ 2 500 sollicitations fraîches, ≈ 2,5 jours de quota à 1 000 RPD.
+- **Volume** : 1 run, ≈ 2 500 sollicitations fraîches, ≈ 310 requêtes, ≈ 0,3 jour de quota à 1 000 RPD.
 - **Commande** : `experiences lancer --experience exp_gemini-35-fl_proexp05_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_c_t0_nosim` **sans** `--reprendre` (une reprise resservirait les décisions archivées et ne mesurerait rien), puis reprises successives de cette seconde exécution jusqu'à couverture complète.
 - **Résultat attendu** : part des décisions à masses identiques, L1 entre distributions appariées, taux de bascule du mode retenu, et écart macro contre l'exécution `2026-09-16_22_20_25`.
 - **Ce qu'il conditionne** : si le réplicat pur diverge déjà de l'ordre du point de composite, la dispersion inter-graines de la phase 1 ne mesure plus ce qu'elle prétend mesurer, et l'ordre de grandeur publié au § 6.5 doit le dire.
 
 ### Phase 1 : Variabilité stochastique multi-graines (Priorité immédiate)
-- **Objectif** : Exécuter 4 nouvelles graines (`seeds = [123, 456, 789, 2026]`) pour compléter le run de référence 42. **Sur la cohorte v6 et le jeu corrigé** (`population_1000_AAMAS_v6_20260316_EN_c`) : la v5 est en archive froide depuis le 2026-09-14 et inaccessible au code, et le substrat de mesure a changé de date (ticket 088).
-- **Volume** : 4 runs $\times$ 3 154 décisions $\approx$ 12 600 requêtes.
+
+> **Périmètre réduit le 2026-09-22, décision de l'auteur.** L'axe s'arrête à **trois graines** :
+> 42 (référence, `2026-09-16_22_20_25`), 123 (terminée le 2026-09-21, composite 4,646 contre
+> 4,857 — 0,21 point d'écart, un sixième de la variation de cohorte) et 789, reprise depuis son
+> interruption à 57,9 % (≈ 1 330 décisions restantes). **Les définitions des graines 456 et 2026
+> sont supprimées** de `data/experiences/` pour qu'elles ne partent pas par inadvertance ; leurs
+> `experience.yaml` sont dans `docs/traces/2026-09-22_12-12_suppression_graines_456_2026_ticket073/`.
+> Ce que trois points permettent : une étendue observée, à publier comme telle. Ce qu'ils ne
+> permettent pas : un écart-type ni un IC à 95 %, et aucune des deux affirmations ne se formule
+> en µ ± σ.
+- **Objectif** : Exécuter 2 nouvelles graines (`seeds = [123, 789]`) pour compléter le run de référence 42 — 456 et 2026 abandonnées le 2026-09-22. **Sur la cohorte v6 et le jeu corrigé** (`population_1000_AAMAS_v6_20260316_EN_c`) : la v5 est en archive froide depuis le 2026-09-14 et inaccessible au code, et le substrat de mesure a changé de date (ticket 088).
+- **Volume** : 2 runs $\times$ 3 154 décisions $\approx$ 6 300 requêtes, dont un repris à 57,9 %.
 - **Outillage** : Mode découplé sans simulateur (`_nosim`) via le pipeline de parallélisation d'Antigravity ou la gateway unifiée.
 - **Résultat attendu** : Barres d'erreur $\mu \pm \sigma$ et matrice de churn sur la cohorte v5.
 
 ### Phase 2 : Validation croisée multi-populations (Second temps)
+
+> **Ramenée à UNE cohorte le 2026-09-22, décision de l'auteur.** Le diptyque prévoyait 2 à 4
+> cohortes ; l'axe 2 se jouera sur une seule, `population_1000_AAMAS_v6_c2`, **scellée le
+> 2026-09-22** (sha256 `4c446e5419e70b90…`, 1 000 personas, 501 ménages, 13 verdicts conformes
+> sur 13). Elle est **disjointe** de la v6 : zéro `person_id` et zéro `household.id` en commun.
+>
+> **Le mécanisme est livré et testé** : `seal_population.py select --exclure <dossier scellé>`
+> retire les ménages d'une cohorte déjà scellée avant sélection ; le sel du hachage ne bouge pas,
+> et un test rejoue le tirage à exclusion vide pour retrouver la v6 à l'identique. Spec
+> `specs/cohortes-disjointes-axe2.md`, dix règles, un test par règle dans
+> `scripts/tests/test_073_cohorte_disjointe.py`. Détail et chiffres :
+> [docs/arch/controle-population-jeu-de-test.md](../arch/controle-population-jeu-de-test.md),
+> section 6 bis-a.
+>
+> **Ce qu'une cohorte permet, et ce qu'elle ne permet pas.** Elle donne un écart entre deux
+> cohortes indépendantes du même territoire. Elle ne donne ni écart-type inter-cohortes ni η² :
+> **l'ANOVA de la section 3 ci-dessus est hors de portée** avec K = 1, et le critère
+> `Δ_gen < 1,0 point` de l'axe 2 ne se conclura pas — les deux mesures ne sont pas appariables,
+> ce sont des gens différents, et l'incertitude sur leur différence est de l'ordre de ±1,8 point.
+> Ce qui se publiera est un écart borné, pas une dispersion.
+>
+> **Deux écarts de composition à déclarer si le résultat est publié** : la descente atterrit un
+> peu plus haut que sur la v6 (3,91 contre 3,50 pt — un vivier amputé offre moins de candidats
+> d'échange), et la 3ᵉ couronne perd l'Aude, dont les deux seuls personas du vivier étaient déjà
+> dans la v6 (cinq départements représentés au lieu de six, 135 communes au lieu de 139).
 - **Objectif** : Exécuter 2 à 3 cohortes alternatives scellées avec la graine de référence (42), plus un contrôle croisé avec une seconde graine.
 - **Volume** : 3 à 4 runs additionnels.
 - **Résultat attendu** : Mesure de l'écart de généralisation $\Delta_{\text{gen}}$ et tableau ANOVA complet.
@@ -300,7 +372,7 @@ L'exécution d'un run complet sur 1 000 agents représentant environ 3 150 solli
 - [ ] **Le pairage exécution-contre-exécution est écrit et versionné**, et rend les trois niveaux : masses (`distribution`, `poids_presentes` appariés sur `(person_id, activity_id)`), mode retenu, macro.
 - [ ] **Les masses sont chiffrées** : part des décisions à distribution identique, L1 moyenne et maximale entre distributions appariées, part des argmax qui basculent.
 - [ ] Toute bascule de mode retenu SANS écart de masse est instruite comme un défaut du dispositif (à `graine_tirage` égale, le tirage doit être reproductible) et non portée au compte du modèle.
-- [ ] Les 4 runs de graines alternatives sur `population_1000_AAMAS_v6_20260316_EN_c` sont exécutés et archivés avec succès (la v5 est en archive froide).
+- [ ] Les **2** runs de graines alternatives (123, 789) sur `population_1000_AAMAS_v6_20260316_EN_c` sont exécutés et archivés avec succès (la v5 est en archive froide ; 456 et 2026 abandonnées le 2026-09-22).
 - [ ] Au moins 2 populations synthétiques répliquées conformes au protocole territorial sont générées et exécutées.
 - [ ] Le script d'analyse statistique de variabilité et de décomposition de variance (ANOVA / $\eta^2$) est développé et versionné.
 - [ ] Les métriques de reproductibilité (moyenne, écart-type, IC 95%, taux de bascule individuel, $\kappa$) sont calculées et documentées.

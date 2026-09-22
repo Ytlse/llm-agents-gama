@@ -92,12 +92,9 @@ garde-fou ne mordait en pratique qu'à marge nulle.
 - [x] **2026-09-21** — Le franchissement du plafond déclaré est journalisé : deux WARNING posés par
       `MoniteurRessources._journaliser_plafond()` à la lecture de `/health`, sur front montant (une
       ligne par instance et par fenêtre). Détail en § 7.
-- [ ] Reprendre les `rpd_limit` de `providers.yaml` depuis les en-têtes `x-ratelimit-*` observés,
-      comme cela a été fait pour `openai_gpt56_luna_key1` le 2026-09-18. L'outil existe
-      (`scripts/providers/refresh.py`, `make providers`) : sondes `x-ratelimit-*` pour groq,
-      cerebras et mistral, API Cloud Quotas pour google, openai laissé de côté faute de clé dans
-      `.env`. **En attente de la fin du run en cours** — le script réécrit `providers.yaml` et
-      dépense une requête sonde par instance.
+- [x] **2026-09-21, 18:51** — `make providers` exécuté après la fin du run. **Aucun `rpd_limit`
+      n'était à corriger là où la sonde a abouti** ; deux instances restent hors de portée d'une
+      mesure. Détail en § 8.
 
 ---
 
@@ -122,3 +119,41 @@ Couvert par `test_097_le_depassement_du_plafond_est_journalise`,
 `test_097_le_refus_reel_mesure_la_limite` et `test_097_sans_chiffre_mesure_aucune_trace`
 (`services/llm-agents/tests/test_035_03_05_06_execution.py`), et spécifié en **Q11b**
 (`specs/ticket_035/05-ressources-interruption-reprise.md`).
+
+
+---
+
+## 8. La remesure du 2026-09-21 : ce que les sondes ont répondu
+
+`make providers` (`scripts/providers/refresh.py`), lancé à 18:51 une fois le run terminé.
+
+| Instance | Sonde | `rpd_limit` |
+|----------|-------|-------------|
+| `groq_openai_120_key1`, `groq_openai_20_key1`, `groq_qwen_qwen3_8_27b_key1` | en-têtes `x-ratelimit-*` lus | **1000, confirmé** — la valeur du fichier était juste |
+| mistral, google | sonde et API Cloud Quotas abouties, aucune ligne modifiée | inchangé (mistral n'a pas de quota journalier) |
+| `cerebras_gptoss120b_key1` | 🚨 HTTP 402 *payment required* | **non mesurable** |
+| `openai_gpt56_luna_key1` | 🚨 HTTP 429 *you have no credits remaining* sur tous les modèles | **non mesurable** |
+
+Les deux échecs ne disent rien d'un quota : ce sont des comptes sans crédit. Le script a laissé
+ces deux instances intactes et a levé une `[ALARME]` pour chacune — jamais d'assouplissement
+silencieux. À noter pour le § 3 : `openai_gpt56_luna_key1`, réactivée par ce ticket, **ne peut pas
+servir aujourd'hui**. La nouvelle règle la traite correctement — la passerelle la mettra hors
+service au premier 402/429 — mais sa réactivation reste sans effet tant que le compte est à sec.
+
+**Ce que la remesure ne peut pas atteindre, la trace du § 7 l'atteindra :** le jour où ces deux
+clés serviront, le WARNING posé sur leur refus donnera leur limite réelle sans qu'aucune sonde
+ne soit à relancer.
+
+### Un effet de bord à arbitrer (hors périmètre 097)
+
+Le script ne se limite pas aux `rpd_limit` : il a rétabli `tpm_limit: 8000` sur les trois
+instances Groq et porté leur `max_tokens_per_request` de 6000 à 8000. Or ces valeurs avaient été
+**neutralisées à la main** pour le debug du ticket 077 (« éviter le verrou 60 s artificiel de
+`tpm_limit=8000` face au reset sub-seconde de Groq »), commentaire toujours présent dans le
+fichier. Le script mesure juste, mais il ignore cette décision.
+
+`config/llm_gateway/providers.yaml` a donc été **rendu à son état d'avant le script** : la
+remesure ne changeait aucun `rpd_limit`, et il n'y avait pas de raison de défaire au passage une
+décision du 077 en cours de validité. La version produite par le script est conservée hors dépôt
+pour arbitrage. La question — garder la neutralisation du 077, ou reprendre les 8000 mesurés —
+appartient au ticket 077.

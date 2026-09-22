@@ -88,6 +88,26 @@ class TestParseOutputValid:
         out = adapter._parse_output(raw)
         assert out.agents[0].agent_id == "a1"
 
+    def test_agent_desenveloppe_est_reenveloppe(self, adapter):
+        """Le modèle rend l'agent SEUL, sans la clé `agents`.
+
+        Mesuré le 2026-09-22 sur `evenement_jugement` : l'ancien repli prenait la première liste
+        du dictionnaire, ici `modes`, et le jugement était perdu sans qu'une erreur soit levée.
+        """
+        raw = json.dumps({"agent_id": "a1", "severity": "noticeable", "modes": ["car"]})
+        out = adapter._parse_output(raw)
+        assert len(out.agents) == 1
+        assert out.agents[0].agent_id == "a1"
+
+    def test_liste_de_chaines_nest_pas_une_liste_dagents(self, adapter):
+        """`modes: []` ne doit jamais être pris pour la liste des agents.
+
+        C'est le cas qui rendait « succès, zéro agent » : une réponse vide qui n'accusait rien.
+        """
+        raw = json.dumps({"severity": "noticeable", "modes": ["car", "cycling"]})
+        with pytest.raises(ProviderParseError):
+            adapter._parse_output(raw)
+
     def test_json_embedded_in_text(self, adapter):
         # Texte parasite autour d'un JSON valide
         raw = 'Voici la réponse : {"agents": [{"agent_id": "a1"}]} fin.'
@@ -103,6 +123,15 @@ class TestParseOutputErrors:
     def test_invalid_json_raises_parse_error(self, adapter):
         with pytest.raises(ProviderParseError, match="JSONDecodeError"):
             adapter._parse_output("not json at all")
+
+    def test_zero_agent_nest_pas_un_succes(self, adapter):
+        """Un lot est soumis POUR des agents ; n'en rendre aucun est un échec de génération.
+
+        La passerelle rendait `status=success` avec un résultat vide, et l'appelant voyait une
+        tâche réussie sans réponse — sans une ligne de journal pour dire d'où venait le trou.
+        """
+        with pytest.raises(ProviderParseError, match="zéro agent"):
+            adapter._parse_output(json.dumps({"agents": []}))
 
     def test_missing_agents_key_and_no_list_raises(self, adapter):
         raw = json.dumps({"foo": "bar", "baz": 42})

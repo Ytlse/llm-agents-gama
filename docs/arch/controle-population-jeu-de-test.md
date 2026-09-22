@@ -423,6 +423,63 @@ zéro, c'est-à-dire la modalité de référence pour 100 % des personas. Détai
 
 ---
 
+## 6 bis-a. La cohorte c2 du 2026-09-22 — disjointe de la v6, tirée du même vivier
+
+`data/population/population_1000_AAMAS_v6_c2/` — sha256 `4c446e5419e70b90…`, **1 000 personas en
+501 ménages entiers**, règle **`aamas_seal_v5_disjoint`**. Tirée pour l'axe 2 du
+[ticket 073](../tickets/ticket_073_reproductibilite_prompt_calibre_multi_graines_multi_populations.md) :
+le prompt calibré donne-t-il un composite du même ordre sur des gens qu'il n'a jamais vus ?
+
+**Aucun recouvrement avec la v6** : zéro `person_id` et zéro `household.id` en commun, vérifié sur
+les deux fichiers scellés. La disjonction porte sur le **ménage** — exclure un `household.id`
+emporte tous ses membres, y compris ceux que la v6 n'avait pas retenus.
+
+**Le mécanisme.** `seal_population.py select --exclure <dossier scellé>` retire du vivier les
+ménages d'une cohorte déjà scellée avant toute sélection. Le **sel du hachage ne change pas** :
+c'est l'exclusion seule qui produit une cohorte différente. Changer les deux aurait rendu
+impossible de dire lequel produit l'écart observé — et le test `R8` le verrouille, en rejouant le
+tirage à exclusion vide pour retrouver la v6 à l'identique.
+
+**Pourquoi un autre nom de règle.** `aamas_seal_v5` désigne une sélection sur vivier entier. La
+mécanique est identique au caractère près, mais deux cohortes tirées sur des viviers différents ne
+sont pas tirées de la même façon, et une étiquette commune le ferait croire.
+
+| | v6 | c2 |
+|---|---|---|
+| personas | 1 000 | 1 000 |
+| ménages | 499 | 501 |
+| vivier d'entrée | 5 652 ménages | **5 153** (499 exclus) |
+| déficits · reports | 0 · 0 | **0 · 0** |
+| écart max de l'allocation | — | 0,058 pt |
+| descente | 347 échanges, 3 passes, 60,98 → 3,50 pt | 434 échanges, 4 passes, 87,98 → **3,91 pt** |
+| contrôle | 13 conformes / 13 | **13 conformes / 13**, 0 non mesurable |
+| départements représentés | 6 | **5** — l'Aude (11) n'a aucun retenu |
+| communes distinctes | 139 | 135 |
+
+**Les deux écarts à connaître.** La descente part de plus haut (87,98 contre 60,98) et arrive un
+peu moins bas : le vivier amputé offre moins de candidats d'échange à sous-cellule constante.
+L'atterrissage reste sous la borne, tous verdicts conformes. Et la 3ᵉ couronne perd l'Aude : les
+deux personas audois de la v6 étaient les seuls du vivier dans leur cellule, et ils en sont
+exclus. Le périmètre déclaré ne change pas — ce sont les mêmes 453 communes —, mais le tirage n'en
+couvre que 135.
+
+**Le manifeste dit de quoi la cohorte est disjointe**, nommément et par sha256 (bloc
+`disjonction`). Sans lui, la disjonction ne se relirait sur rien : le `population.json` ne porte
+aucune trace de ce qu'on a retiré du vivier avant de le tirer. Une cohorte tirée sur vivier entier
+porte `disjonction: null` — et non pas une clé absente, qui ne se distinguerait pas d'un manifeste
+d'avant ce mécanisme.
+
+**Ce que cette cohorte permet, et ce qu'elle ne permet pas.** Elle permet de constater un écart
+entre deux cohortes indépendantes du même territoire. Elle ne permet pas de décomposer la variance
+— l'ANOVA de la section 3 du ticket 073 exige plusieurs cohortes —, ni de conclure sur le critère
+`Δ_gen < 1,0 point` : les deux mesures ne sont pas appariables, ce sont des gens différents, et
+l'incertitude sur leur différence est de l'ordre de ±1,8 point.
+
+Spec : [`specs/cohortes-disjointes-axe2.md`](../../specs/cohortes-disjointes-axe2.md) — dix règles,
+une par test dans `scripts/tests/test_073_cohorte_disjointe.py`.
+
+---
+
 ## 6 ante. Une population de TEST à cinq agents (ticket 075) — ce n'est pas un sceau
 
 `data/population/population_5_memoire_075/` contient cinq habitants prélevés **tels quels** dans

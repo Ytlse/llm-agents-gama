@@ -4,7 +4,7 @@
 
 **Document :** brouillon français du chapitre, extrait de `MANUSCRIT_DETAILLE_2026.md` `v1.6` (3 septembre 2026), Annexes Techniques — « Annexes Techniques ». Le manuscrit entier est figé dans [`../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md`](../../archive/MANUSCRIT_DETAILLE_2026_v1.6.md).
 **Statut :** `brouillon v0` — texte **antérieur** à la réécriture de l'introduction (dont la v0.1 date du 8 septembre 2026). Deux choses à reprendre avant d'en faire un chapitre : les chiffres, à recouper depuis leur source dans le dépôt et non recopiés d'ici ; les renvois de section, qui suivent l'ancienne numérotation du manuscrit. Le vocabulaire « Tier 1 / 2 / 3 » a quitté ces annexes — vérifié le 21 septembre 2026, aucune occurrence n'y subsiste ; il était retiré sans que cet en-tête le dise. Ni maître anglais ni rendu LaTeX à ce stade. **Ajout du 11 septembre 2026 :** l'annexe G, écrite hors manuscrit, porte la source des données d'enquête, sa citation et les engagements de la convention `lil-1750`. **Ajout du 15 septembre 2026 ([ticket 053](../../../tickets/ticket_053_acces_donnees_recherche_et_reproductibilite.md)) :** l'annexe G porte aussi la démarche d'accès au portail de diffusion, le dépôt des fichiers reçus dans l'arborescence locale, les commandes de rejeu de l'ajustement, et la frontière de l'archive de soumission.
-**Place dans l'article :** section du même numéro dans le plan annoncé en 1.4 de [`../en/01_introduction.md`](../en/01_introduction.md). État d'avancement : [`../README.md`](../README.md).
+**Place dans l'article :** section du même numéro dans le plan annoncé en 1.4 de [`../en/01_Introduction.md`](../en/01_Introduction.md). État d'avancement : [`../README.md`](../README.md).
 
 ---
 
@@ -219,18 +219,32 @@ premier terme ; en gras, les intervalles qui ne contiennent pas zéro.
 | `mistral-large` − `gemini-3.5`, prompt expert | **+2,71 [+1,17 ; +4,25]** | **+5,24 [+3,76 ; +6,66]** | **+12,8 [+8,3 ; +17,4]** |
 | `gemini-3.1` − `mistral-large`, prompt expert | +1,44 [−0,10 ; +2,98] | +0,32 [−1,14 ; +1,82] | +4,6 [−0,1 ; +9,0] |
 | `gemini-3.1` − `mistral-large`, prompt minimal | **−2,45 [−4,08 ; −0,85]** | **−4,16 [−5,89 ; −2,45]** | **−4,8 [−7,4 ; −2,2]** |
+| Jev sous consigne `gemini-3.5` − prompt minimal | **−9,71 [−11,66 ; −7,80]** | **−12,78 [−14,86 ; −10,68]** | **−30,2 [−36,0 ; −24,6]** |
+| Jev sous consigne `gemini-3.5` − gradient boosté | +0,66 [−0,63 ; +2,07] | +1,32 [−0,19 ; +2,86] | +3,1 [−1,4 ; +7,3] |
+| Jev sous consigne `gemini-3.5` − régression à noyau | +0,69 [−0,57 ; +2,06] | **+1,58 [+0,22 ; +3,00]** | **+5,9 [+1,6 ; +9,8]** |
+| Jev sous consigne `gemini-3.5` − forêt aléatoire | +0,25 [−1,03 ; +1,61] | **+1,40 [+0,08 ; +2,80]** | **+6,5 [+1,8 ; +10,6]** |
+| Jev sous consigne `gemini-3.5` − logit multinomial | +0,27 [−1,11 ; +1,70] | +0,62 [−0,97 ; +2,24] | +3,1 [−1,7 ; +7,8] |
+| Jev sous consigne `gemini-3.5` − `gemini-3.5` expert | −0,69 [−2,04 ; +0,65] | +0,23 [−1,14 ; +1,56] | −1,2 [−7,0 ; +4,3] |
+
+<!-- ⚠ NOMMAGE DES BRAS JEV, aligné le 22 septembre 2026 sur la décision de l'auteur : prompt_expert_32 EST le prompt expert de Jev, et c'est lui que publie le § 6.1. Les lignes « Jev sous consigne `gemini-3.5` » de cette annexe sont prompt_expert_05, la consigne réglée contre gemini-3.5-flash-lite et servie telle quelle ; les lignes « Jev, prompt expert » sont prompt_expert_32. Les différences appariées de H.1 n'ont été calculées que sur prompt_expert_05 ; l'équivalent sous prompt_expert_32 n'existe pas. -->
 
 Le classement des modèles change avec la consigne. Sous prompt minimal, `gemini-3.1` devance
 `mistral-large` de 2,45 points, intervalle excluant zéro ; sous prompt expert, `mistral-large`
 repasse devant de 1,44, intervalle contenant zéro. Un banc d'essai conduit sous une seule
 consigne mesure donc le couple modèle-consigne, non le modèle.
 
+Le composite ne sépare Jev sous la consigne de `gemini-3.5` d'aucune des quatre méthodes tabulaires, alors que
+`gemini-3.5` sous la même consigne est séparable des deux meilleures. Les deux autres lectures le
+départagent davantage : hors choix unique, il reste derrière la régression à noyau et la forêt
+aléatoire, et sur les parts globales derrière les deux mêmes. Aucune des trois lectures ne le
+sépare du prompt expert à modèle de langue.
+
 L'ablation de la clause de justification, qui demandait à l'agent d'expliquer pourquoi la marche
 n'obtient pas la plus forte probabilité, vaut **+0,17 [−0,45 ; +0,79]** point à sa suppression :
 son retrait améliore le composite, sans que l'intervalle exclue zéro. Elle est mesurée sur
 l'ancien substrat, la variante qui la portait ayant été retirée du dépôt le 2026-09-17.
 
-<!-- source: docs/traces/2026-09-17_09-40_ch6_jeu_corrige_complet/ — quatorze paires, 2 000 réplicats, graine 2026, 868 personnes communes, tous les décideurs sur le jeu corrigé. La clause de justification vient de docs/traces/2026-09-16_15-05_pe04_intervalles_apparies_manquants/ (pe05 − pe04). -->
+<!-- source: docs/traces/2026-09-17_09-40_ch6_jeu_corrige_complet/ — quatorze paires, 2 000 réplicats, graine 2026, 868 personnes communes, tous les décideurs sur le jeu corrigé. La clause de justification vient de docs/traces/2026-09-16_15-05_pe04_intervalles_apparies_manquants/ (pe05 − pe04). Les six paires Jev viennent de docs/traces/2026-09-21_ticket096_lot2/paired_complet_B2000.json, même méthode et mêmes 868 personnes ; le même passage a recalculé les quatorze paires d'origine, qui ressortent au centième près — c'est le contrôle que l'ajout des deux bras n'a rien déplacé. Le bras prompt_expert_32, réglé pour Jev sur cette cohorte même, n'entre pas dans ce tableau : son score est en échantillon et ne se compare pas aux autres. -->
 
 #### H.2 L'erreur par dimension et par décideur
 
@@ -247,10 +261,19 @@ calibration.
 | `gemini-3.1`, prompt expert | 30,2 | 30,8 | 35,8 | 31,2 | 30,7 | 33,0 | 37,4 |
 | `mistral-large`, prompt minimal | 51,9 | 39,3 | 46,8 | 43,8 | 44,5 | 47,6 | 51,0 |
 | `mistral-large`, prompt expert | 33,7 | 27,9 | 30,4 | 28,6 | 25,3 | 29,6 | 33,0 |
+| Jev, prompt minimal | 47,0 | 40,2 | 45,9 | 43,0 | 42,5 | 44,5 | 47,5 |
+| Jev, consigne `gemini-3.5` | 20,4 | 22,1 | 20,5 | 16,3 | 11,8 | 20,2 | 19,7 |
+| Jev, prompt expert *(en échantillon)* | 17,9 | 17,2 | 19,8 | 14,1 | 9,5 | 19,2 | 21,1 |
 | Gradient boosté (LightGBM) | 17,8 | **13,6** | 18,2 | 15,7 | 8,5 | 11,5 | 16,6 |
 | Forêt aléatoire | 16,8 | 18,1 | **16,8** | **12,9** | **5,3** | **9,5** | **15,9** |
 
-<!-- source: scores.json, detail.<dimension>.strates, moyenne des l1 de strate pondérée par n sur les strates couvertes ; tous les décideurs sur le jeu corrigé. En gras, la plus faible erreur de chaque colonne : la distance est la seule où un agent la détient. Figures régénérées par scripts/analysis/plot_chapitre6.py. -->
+Deux dimensions n'entrent ni dans le composite ni dans le cycle de calibration, la couronne de
+résidence et le type de logement, et ce sont celles où les décideurs à consigne restent le plus
+loin des méthodes ajustées. Le classifieur à sortie typée s'y tient à 19,2 et 21,1 points quand
+la forêt aléatoire fait 9,5 et 15,9, alors qu'il la rejoint sur le genre et la distance. Ce qui
+n'est pas noté n'est pas réglé.
+
+<!-- source: scores.json, detail.<dimension>.strates, moyenne des l1 de strate pondérée par n sur les strates couvertes ; tous les décideurs sur le jeu corrigé. En gras, la plus faible erreur de chaque colonne : la distance est la seule où un agent la détient, et le bras en échantillon ne concourt pas. Les trois lignes Jev ont été calculées par le même passage que les autres, et ce passage reproduit au dixième près les deux lignes gemini-3.5 déjà publiées — c'est le contrôle que la règle d'agrégation n'a pas changé. Figures régénérées par scripts/analysis/plot_chapitre6.py. -->
 
 ![Part de la voiture par strate, six dimensions](../images/ch99_dimensions_voiture.png)
 
@@ -292,6 +315,9 @@ une population qu'aucun des quatre principes ne vise.*
 | Prompt expert, `gemini-3.1` | 46,2 | 21,7 | 24,8 | 7,4 |
 | Prompt minimal, `mistral-large` | 36,7 | 24,4 | 30,6 | 8,2 |
 | Prompt expert, `mistral-large` | 43,4 | 29,3 | 19,2 | 8,1 |
+| Prompt minimal, Jev | 38,7 | 23,4 | 31,0 | 6,9 |
+| Consigne `gemini-3.5`, Jev | 51,9 | 32,3 | 10,9 | 4,9 |
+| Prompt expert, Jev | 51,5 | 28,0 | 15,2 | 5,4 |
 | Gradient boosté | 52,8 | 29,1 | 14,8 | 3,3 |
 | Forêt aléatoire | 56,2 | 27,6 | 14,2 | 2,0 |
 | Régression logistique à noyau | 54,4 | 28,9 | 13,6 | 3,0 |
@@ -301,7 +327,13 @@ Tous les décideurs sous-estiment la voiture, effet de la contrainte de chaîne 
 en lecture chaînée. Les deux familles se trompent en sens opposés sur le vélo : les trois modèles
 de langue le placent entre 6,8 et 8,1 %, les quatre méthodes tabulaires entre 2,0 et 3,3 %.
 
-<!-- source: scores.json, global.actual et global.target -->
+Le classifieur à sortie typée se range du côté des méthodes tabulaires sur le vélo, 4,9 % sous la
+consigne experte pour une cible de 4,1 %, et il est le seul décideur à consigne à y parvenir. Sa
+marge d'erreur part ailleurs : il sur-produit la marche de cinq points et sous-produit les
+transports collectifs d'un point et demi, et c'est ce partage-là que la consigne réglée pour lui
+refait, sans jamais nommer l'un ni l'autre.
+
+<!-- source: scores.json, global.actual et global.target ; les trois lignes Jev viennent des exécutions du 2026-09-21 sur le jeu corrigé. -->
 
 #### H.4 Les strates que le réglage dégrade, sur les trois modèles
 
@@ -334,11 +366,26 @@ paire ; tous les décideurs sur le jeu corrigé.
 | Prompt expert `gemini-3.5` / forêt aléatoire | 71,4 % | 60,4 % | 42,6 |
 | Prompt expert `gemini-3.5` / prompt expert `gemini-3.1` | 79,6 % | 72,8 % | 40,0 |
 | Prompt expert `gemini-3.1` / prompt expert `mistral-large` | 72,6 % | 70,6 % | 40,0 |
+| Consigne `gemini-3.5` Jev / gradient boosté | 71,9 % | 71,1 % | 35,2 |
+| Consigne `gemini-3.5` Jev / forêt aléatoire | 73,3 % | 71,2 % | 35,6 |
+| Consigne `gemini-3.5` Jev / prompt expert `gemini-3.5` | 78,7 % | 65,7 % | 34,0 |
+| Consigne `gemini-3.5` Jev / prompt minimal Jev | 68,1 % | 70,3 % | 44,0 |
+| Prompt expert Jev / gradient boosté | 71,4 % | 70,4 % | 35,7 |
+| Prompt expert Jev / consigne `gemini-3.5` Jev | 92,1 % | 89,8 % | 10,0 |
 
 L'écart médian entre les distributions de deux agents vaut quatre fois celui qui sépare deux
 méthodes tabulaires.
 
-<!-- source: moves.csv des exécutions du jeu corrigé, colonnes P(Marche/Vélo/Voiture Privée/Transports_collectifs) % et Mode de transport Choisi ; recalculé le 2026-09-17 après la fin de la campagne de rejeu. -->
+Le classifieur à sortie typée se tient entre les deux familles, et sa colonne du mode tiré le
+montre mieux que celle du mode le plus probable. Il s'accorde avec le gradient boosté sur 71,9 %
+des modes les plus probables, à peine plus que le prompt expert à modèle de langue, mais son
+accord ne se défait pas au tirage, 71,1 % contre 61,4 % : ses distributions sont assez proches de
+celles d'une méthode tabulaire pour que le tirage les sépare peu, et son écart médian de 35,2 est
+le plus faible qu'un décideur à consigne obtienne face à une méthode ajustée. Les deux variantes
+expertes réglées sur lui, enfin, s'accordent à 92,1 % et ne s'écartent que de 10,0 points, au
+niveau de deux méthodes tabulaires entre elles.
+
+<!-- source: moves.csv des exécutions du jeu corrigé, colonnes P(Marche/Vélo/Voiture Privée/Transports_collectifs) % et Mode de transport Choisi ; les six premières lignes recalculées le 2026-09-17 après la fin de la campagne de rejeu, les six suivantes le 2026-09-22 par docs/traces/2026-09-22_lot1_apparies_audit/scripts/accord_paires_h5.py. Ce script reproduit les six lignes d'origine au dixième près et retrouve leur fourchette d'effectifs, ce qui a demandé de retrouver trois règles que le tableau ne disait pas : la distribution se lit sur les quatre colonnes primaires sans replier le train ni les deux-roues motorisés, le filtre des options offertes replie, et le mode tiré se compare sur son libellé brut. Les deux lignes Jev que le § 6.4 portait avant ce recalcul, 72,2 % et 71,7 % face au gradient boosté, venaient d'une recomputation qui déplaçait aussi les lignes publiées ; elles sont remplacées par les valeurs de ce passage. -->
 
 #### H.6 Les variantes de prompt et leurs scores
 
@@ -349,14 +396,36 @@ méthodes tabulaires.
 | `prompt_expert_06` | ajustée au vu de la cohorte évaluée | 5,33 | 7,24 | 15,39 |
 | `prompt_expert_08` | ajustée au vu de la cohorte évaluée | 6,58 | 10,32 | 21,74 |
 
-Toutes sur `gemini-3.5-flash-lite`. Les trois variantes expertes ont vu la cohorte, à des degrés
-différents : `prompt_expert_06` et `prompt_expert_08` ont été réécrites sur ses résidus,
-`prompt_expert_05` n'y a touché que par la rétention d'une ablation. Les deux premières devaient
-donner une borne haute d'ajustement en échantillon ; elles font moins bien que la troisième. Le
-plafond que le protocole attendait n'est pas atteint par les prompts qui avaient le plus accès
-aux résidus.
+Les quatre premières sur `gemini-3.5-flash-lite`. Les trois variantes expertes ont vu la cohorte,
+à des degrés différents : `prompt_expert_06` et `prompt_expert_08` ont été réécrites sur ses
+résidus, `prompt_expert_05` n'y a touché que par la rétention d'une ablation. Les deux premières
+devaient donner une borne haute d'ajustement en échantillon ; elles font moins bien que la
+troisième. Le plafond que le protocole attendait n'est pas atteint par les prompts qui avaient le
+plus accès aux résidus.
 
-<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim ; prompt_expert_07 déclaré, non joué ; prompt_expert_04 supprimé du dépôt le 2026-09-17. La procédure d'optimisation est décrite au § 5.2, ses garde-fous au § 5.2.3. Ordre de grandeur de la recherche, déclaré par l'auteur : une douzaine d'itérations sur gemini-3.5-flash-lite, deux ou trois sur chacun des deux autres modèles. -->
+Six mutations ont été mesurées sur le classifieur à sortie typée, seul porteur dont la consigne
+ait été réécrite au vu de ses propres écarts par strate. Toutes partent de `prompt_expert_05`,
+que ce porteur jouait à 4,19.
+
+| Variante | Mécanisme visé | Composite | Hors choix unique | L1 parts globales |
+|---|---|---:|---:|---:|
+| `prompt_expert_31` | la marche continue porte son propre coût, en cinquième principe | 3,63 | 6,32 | 11,28 |
+| `prompt_expert_32` | friction de chaîne réécrite à deux versants, **retenue** | 3,65 | 6,58 | 10,48 |
+| `prompt_expert_33` | coût récurrent du véhicule face aux ressources du foyer | 9,16 | 14,74 | 33,90 |
+| `prompt_expert_34` | régularité d'un trajet servant un motif habituel | 4,14 | 7,95 | 16,22 |
+| `prompt_expert_35` | la retenue, plus la protection de la marche courte et « only when » | 4,16 | 7,58 | 15,32 |
+| `prompt_expert_36` | la retenue, plus la protection de la marche courte seule | 3,91 | 7,08 | 13,27 |
+
+La variante retenue n'est pas celle qui obtient le meilleur composite. `prompt_expert_31` fait
+3,63 contre 3,65, écart indistinguable, mais dégrade deux fois plus de strates ; le choix s'est
+porté sur celle qui déplaçait le moins de choses par ailleurs. Deux mutations montrent où la
+marge se referme. Celle qui opposait le coût récurrent d'un véhicule aux ressources du foyer fait
+chuter la part voiture de dix-sept points et dégrade 32 strates sur 37. Et trois mots ajoutés
+devant la clause retenue, « It is only when », lui coûtent un demi-point de composite et cinq
+points de L1, de 3,65 à 4,16 et de 10,5 à 15,3. Une consigne qui nomme un critère déplace ce
+porteur ; la même consigne rendue conditionnelle ne le déplace plus.
+
+<!-- source: data/experiences/exp_gemini-35-fl_{promin02,proexp05,proexp06,proexp08}_jtir_pop-1000_AAMAS_v6_jeu-20260316_EN_*t0_nosim ; prompt_expert_07 déclaré, non joué ; prompt_expert_04 supprimé du dépôt le 2026-09-17. Les six mutations Jev : exp_jev-1130_proexp{31..36}_…_c_nosim, jouées le 2026-09-21, scores lus dans leurs scores.json ; textes, mécanismes et motifs de rejet dans docs/traces/2026-09-21_jev_mutations/README.md § 4, chacun audité conforme avant lancement par l'agent prompt-auditor. Les scores de ces six variantes sont en échantillon : les écarts qui ont guidé les mutations ont été lus sur la cohorte qui les note. La procédure d'optimisation est décrite au § 5.2, ses garde-fous au § 5.2.3. Ordre de grandeur de la recherche, déclaré par l'auteur : une douzaine d'itérations sur gemini-3.5-flash-lite, deux ou trois sur chacun des deux autres modèles. -->
 
 ---
 
@@ -371,22 +440,81 @@ chiffres ne se comparent pas à ceux de l'annexe H, qui portent sur la cohorte s
 | Décideur | Exactitude pondérée | Sur décisions arbitrées | Entropie croisée | GMPCA |
 |---|---:|---:|---:|---:|
 | Gradient boosté | 71,5 | 67,4 | **0,299** | **0,741** |
-| Régression logistique à noyau | 70,6 | 66,2 | 0,324 | 0,724 |
+| Régression logistique à noyau | 70,6 | 66,2 | 0,325 | 0,723 |
 | Forêt aléatoire | 69,9 | 65,5 | 0,321 | 0,726 |
 | Logit multinomial | 68,6 | 64,2 | 0,358 | 0,699 |
 | Durée minimale | 68,1 | 65,3 | — | — |
-| Prompt expert | 67,6 | 65,2 | 0,342 | 0,711 |
+| Prompt expert | 67,6 | 65,2 | 0,341 | 0,711 |
 | Tout-voiture | 66,7 | 61,7 | — | — |
-| Prompt minimal | 64,8 | 61,6 | 0,383 | 0,682 |
+| Prompt minimal | 64,8 | 61,6 | 0,384 | 0,682 |
+| Jev, prompt expert *(en échantillon)* | 64,7 | 60,8 | 0,464 | 0,629 |
+| Jev, consigne `gemini-3.5` | 64,3 | 60,2 | 0,509 | 0,601 |
+| Jev, prompt minimal | 56,6 | 52,2 | 0,552 | 0,576 |
 | Hasard uniforme | 23,5 | 21,5 | — | — |
 
 Le prompt expert gagne une place d'une colonne à l'autre : il passe derrière le logit
 multinomial sur l'exactitude et devant lui sur l'entropie croisée, les trois autres méthodes
-tabulaires restant devant sur les deux. Les deux planchers durs ne reçoivent pas d'entropie
-croisée, infinie dès la première erreur, et le hasard uniforme ne couvre pas le support commun.
+tabulaires restant devant sur les deux. Les trois bras Jev occupent les trois dernières places
+sur l'entropie croisée, et deux d'entre eux passent sous le plancher tout-voiture sur
+l'exactitude. Les deux planchers durs ne reçoivent pas d'entropie croisée, infinie dès la
+première erreur, et le hasard uniforme ne couvre pas le support commun.
 
-L'entropie croisée et le GMPCA sont mesurés sur le support commun : les 5 451 décisions
-arbitrées que notent tous les décideurs à distribution comparés ici.
+L'entropie croisée et le GMPCA sont mesurés sur le support commun : les 5 229 décisions
+arbitrées que notent tous les décideurs à distribution joués sur ce jeu.
+
+<!-- source: docs/traces/2026-09-22_lot0_entropie_support_unique/, ticket 101 lot 0 — rejeu du
+2026-09-22 par scripts/progedo_logit/audit_unitaire_058.py sur les douze expériences du jeu
+enquete_058_test_20260316. Le support est défini par les neuf décideurs à distribution, les
+trois bras Jev du ticket 096 compris : ils le raboteraient pour tout le monde s'ils en étaient
+exclus, et l'y faire entrer coûte 222 décisions sur les 5 451 de la mesure du 2026-09-21. Les
+valeurs déplacées sont la régression à noyau (0,324 → 0,325 et 0,724 → 0,723), le prompt expert
+(0,342 → 0,341) et le prompt minimal (0,383 → 0,384) ; le gradient boosté, la forêt aléatoire et
+le logit multinomial sont inchangés, et aucun classement ne bouge. Les trois lignes Jev viennent
+du même rejeu ; leurs bras sont exp_jev-1130_{promin02,proexp05,proexp32}_jtir_pop-enquete_058_test_…,
+joués le 2026-09-21, 12 562 décisions chacun, 9 612 à 9 614 déplacements notés. -->
+
+#### I.1 bis Les différences appariées sur l'audit unitaire
+
+Même méthode qu'à l'annexe H.1 : 2 000 réplicats, graine 2026, rééchantillonnage par grappe au
+niveau de la personne, 2 929 personnes. L'exactitude est rééchantillonnée sur tous les
+déplacements notés par le décideur, l'entropie croisée sur le support commun ; les deux supports
+sont tirés du même tirage de personnes. Un écart négatif sur l'exactitude et positif sur
+l'entropie croisée se lisent tous deux « le premier est derrière le second ». En gras, les
+intervalles qui ne contiennent pas zéro.
+
+| Différence appariée | Exactitude (pt) | Entropie croisée |
+|---|---|---|
+| Jev sous consigne `gemini-3.5` − gradient boosté | **−7,20 [−8,51 ; −5,78]** | **+0,210 [+0,181 ; +0,241]** |
+| Jev sous consigne `gemini-3.5` − régression à noyau | **−6,31 [−7,64 ; −4,89]** | **+0,184 [+0,156 ; +0,215]** |
+| Jev sous consigne `gemini-3.5` − forêt aléatoire | **−5,67 [−7,02 ; −4,27]** | **+0,189 [+0,162 ; +0,216]** |
+| Jev sous consigne `gemini-3.5` − logit multinomial | **−4,31 [−5,69 ; −2,87]** | **+0,151 [+0,122 ; +0,181]** |
+| Jev sous consigne `gemini-3.5` − prompt expert `gemini-3.5` | **−3,33 [−4,92 ; −1,55]** | **+0,169 [+0,141 ; +0,196]** |
+| Jev sous consigne `gemini-3.5` − tout-voiture | **−2,42 [−4,26 ; −0,62]** | — |
+| Jev prompt expert − Jev sous consigne `gemini-3.5` | +0,38 [−0,24 ; +1,03] | **−0,045 [−0,054 ; −0,037]** |
+| Jev prompt expert − tout-voiture | **−2,04 [−3,78 ; −0,29]** | — |
+| Prompt expert − gradient boosté | **−3,87 [−5,47 ; −2,28]** | **+0,041 [+0,021 ; +0,060]** |
+| Prompt expert − régression à noyau | **−2,98 [−4,61 ; −1,42]** | +0,016 [−0,005 ; +0,036] |
+| Prompt expert − forêt aléatoire | **−2,35 [−3,93 ; −0,76]** | **+0,020 [+0,001 ; +0,038]** |
+| Prompt expert − logit multinomial | −0,98 [−2,61 ; +0,58] | −0,018 [−0,039 ; +0,003] |
+| Prompt minimal − prompt expert | **−2,81 [−4,01 ; −1,54]** | **+0,043 [+0,031 ; +0,055]** |
+
+Deux lectures que ces intervalles autorisent et que les niveaux du tableau précédent ne
+donnaient pas. Jev sous la consigne de `gemini-3.5`, qu'aucune comparaison appariée ne sépare des quatre
+méthodes tabulaires sur la répartition agrégée (annexe H.1), est ici séparable de chacune
+d'elles, du prompt expert à modèle de langue et du plancher tout-voiture. Et l'avance du prompt
+expert sur le logit multinomial en entropie croisée, que le § 6.4 mentionne, ne se sépare pas de
+zéro : ce qui est établi est qu'il est derrière le gradient boosté et la forêt aléatoire.
+
+Le prompt expert de Jev déplace l'entropie croisée sans déplacer l'exactitude de façon
+séparable : elle ne lui fait pas désigner le mode déclaré plus souvent, elle lui laisse
+davantage de masse quand il se trompe.
+
+<!-- source: docs/traces/2026-09-22_lot1_apparies_audit/, ticket 101 lot 1 — script paired_audit_unitaire.py,
+sortie paired_audit_B2000.json. Les estimations ponctuelles recalculées par ce script reproduisent
+celles d'audit_unitaire_058.py à 1e-9 près sur les douze bras ; le script refuse de publier au-delà.
+Le bras « réglé pour lui » est prompt_expert_32 et son score est en échantillon : son intervalle
+borne une variation d'échantillonnage, pas une performance de généralisation. -->
+
 
 #### I.2 Précision et rappel par mode
 
@@ -400,6 +528,9 @@ arbitrées que notent tous les décideurs à distribution comparés ici.
 | Prompt expert | 15,0 / 22,5 | 80,1 / 80,4 | 49,7 / 55,2 | 62,9 / 47,2 |
 | Tout-voiture | 16,1 / 2,3 | 72,6 / 95,8 | 42,3 / 25,3 | 35,9 / 16,2 |
 | Prompt minimal | 14,7 / 24,1 | 81,2 / 75,1 | 42,8 / 60,0 | 61,2 / 44,2 |
+| Jev, prompt expert | 14,0 / 18,1 | 80,3 / 75,6 | 44,7 / 43,8 | 48,6 / 56,3 |
+| Jev, consigne `gemini-3.5` | 13,5 / 16,9 | 80,3 / 75,4 | 48,9 / 35,0 | 44,2 / 63,1 |
+| Jev, prompt minimal | 11,1 / 19,0 | 82,3 / 60,9 | 33,2 / 64,1 | 49,9 / 43,3 |
 
 Précision / rappel, en %. Effectifs déclarés : 431 vélo, 5 971 voiture, 1 562 TC, 1 652 marche.
 
@@ -408,6 +539,14 @@ au gradient boosté, et le paient en précision, 15,0 et 14,7 % contre 27,3. Ils
 rappel 47,2 et 44,2 % contre 63,4. Leur précision sur la marche est pourtant la meilleure du
 tableau, 62,9 % : quand ils annoncent la marche ils ont raison, ils ne l'annoncent pas assez
 souvent.
+
+Les bras Jev répartissent leur erreur autrement. Sous la consigne écrite pour `gemini-3.5`, la
+marche est rappelée à 63,1 %, au niveau du gradient boosté, et les transports collectifs tombent
+à 35,0 % contre 55,2 % au prompt expert à modèle de langue : c'est là que part la masse que
+l'exactitude ne retrouve pas. Sous prompt minimal, le rapport s'inverse sur les deux mêmes modes,
+64,1 % de rappel en transports collectifs et 43,3 % sur la marche, et la voiture perd quinze
+points de rappel. Son propre prompt expert refait le partage entre marche et transports
+collectifs sans nommer ni l'un ni l'autre.
 
 #### I.3 La matrice de confusion du prompt expert
 
@@ -420,11 +559,12 @@ souvent.
 
 L'audit porte un plafond : 1 295 déplacements, 13,5 %, ont leur mode déclaré absent des options
 présentées, retiré par le verrou de chaîne ou par le plafond d'options. Aucun décideur ne pouvait
-le trouver. Le compte va de 1 226 à 1 428 selon le décideur.
+le trouver. Le compte va de 1 226 à 1 838 selon le décideur, les trois bras Jev portant les trois
+valeurs les plus élevées.
 
-Les deux figures de cet audit sont au § 6.5, figures 6.5 et 6.6.
+La figure de cet audit est au § 6.4, figure 6.5.
 
-<!-- source: scripts/progedo_logit/audit_unitaire_058.py sur le jeu enquete_058_test_20260316, neuf décideurs, exécutions du 2026-09-16 au 2026-09-19 ; les deux bras LLM sont exp_gemini-35-fl_{promin02,proexp05}_jtir_pop-enquete_058_test_…, 12 562 décisions chacun. Figures régénérées par scripts/analysis/plot_audit_unitaire.py. Les déplacements dont l'enchaînement est rompu (11) sont écartés, et 9 612 à 9 618 sont notés selon le décideur. -->
+<!-- source: scripts/progedo_logit/audit_unitaire_058.py sur le jeu enquete_058_test_20260316, douze décideurs, exécutions du 2026-09-16 au 2026-09-21 ; les deux bras LLM sont exp_gemini-35-fl_{promin02,proexp05}_jtir_pop-enquete_058_test_… et les trois bras Jev exp_jev-1130_{promin02,proexp05,proexp32}_jtir_pop-enquete_058_test_…, 12 562 décisions chacun. Rejeu du 2026-09-22, docs/traces/2026-09-22_lot0_entropie_support_unique/. Figures régénérées par scripts/analysis/plot_audit_unitaire.py. Les déplacements dont l'enchaînement est rompu (11) sont écartés, et 9 612 à 9 618 sont notés selon le décideur. -->
 
 ---
 

@@ -1,0 +1,190 @@
+% =====================================================================
+% overleaf/chapters/05_Protocol.tex — LaTeX rendering of en/05_Protocol.md draft v0.10 (17 September 2026)
+% Dernière mise à jour : 2026-09-21
+% Chapter 5 of the paper, a \section of its own, to be inserted right after overleaf/chapters/04_Evaluation.tex.
+% This file DEFINES \label{sec:prompt}, already referenced forward by overleaf/chapters/04_Evaluation.tex,
+%   which resolved to ?? until this file existed. Keep the label spelling exactly.
+% Forward reference: sec:results (chapter 6) is defined by overleaf/chapters/06_Empirical_Evaluation.tex.
+% Citations: only guo2023evoprompt is in docs/paper/sources/sample.bib.
+%   Shinn et al. 2023 (Reflexion) and Yuksekgonul et al. 2024 (TextGrad) are NOT in the bibliography;
+%   they are written in plain text here and must get a .bib entry before submission. Checklist: article/CITATIONS.md.
+% Preamble additions:
+%   \newcommand{\todo}[1]{\textbf{[#1]}}   % placeholder figures, filled from methode/experience_plan/experiments.yaml
+% Display equations: one, unnumbered (\[ ... \]); amsmath is loaded by aamas.cls.
+% Tables: one, with the caption ABOVE, as acmart requires; booktabs is loaded by aamas.cls.
+%   The four-level ladder, an ASCII box drawing in the Markdown, is rendered here as a table*
+%   across both columns: the drawing does not survive a two-column page.
+% Verbatim blocks: the prompt context and the JSON answer are set in \footnotesize verbatim inside a figure*.
+%   NON-ASCII GLYPHS SUBSTITUTED for the LaTeX rendering only — T1/Libertine has no glyph for them and
+%   verbatim gives no fallback: "·" -> "-", "→" -> "->", "≈" -> "~", "°C" -> " C", "é" -> "e".
+%   The Markdown master keeps the original characters. Any re-export must redo the substitution.
+% Traceability: the "source:" comments live in the ../fr/ and ../en/ masters only. Do not carry them
+%   over into this file when rendering a chapter into LaTeX (author's decision, 2026-09-21).
+% Derived file: regenerate after every validated pass of en/05_Protocol.md.
+% =====================================================================
+
+
+\section{A protocol for calibrating mode choice}
+\label{sec:prompt}
+
+This section tunes the local decision policy of the agent before deploying it in the simulator. The tuning bears on an isolated choice: one specific trip, characterised by a sociological profile, a computed multimodal offer and weather conditions, with no dynamic history of the day already lived. The four levels of Section~\ref{sec:contributions} are compared there on equal inputs, under the comparison protocol of Section~\ref{sec:contract}.
+
+The two language-model conditions are measured on \texttt{gemini-3.1-flash-lite}, \texttt{gemini-3.5-flash-lite} and \texttt{mistral-large-2512}, with the same test set, the same agent contexts and the same randomisation of option order.
+
+\subsection{The minimal prompt}
+\label{sec:minimal-prompt}
+
+The baseline condition evaluates generic foundation models, used off the shelf with no prompt engineering, against a minimal and circumstantial prompt.
+
+The observation submitted to the model is the one of Section~\ref{sec:decision}: the sociological profile, the offer of viable itineraries with the detail of their legs, the agenda of the remaining activities and the weather context.
+
+The system instruction is strictly limited to defining the task and the output format of the decision: analyse the profile; rule out no option, but assign to each proposed option, by its index, the probability in per cent that this persona picks it, zero if it is impossible, the sum being exactly one hundred; return a valid JSON object only; justify the distribution in one concise sentence.
+
+Figure~\ref{fig:inference-case} shows the structure of the signal the model receives and the answer it returns. The model is given five options for a two-kilometre trip, among them two walking paths and one option combining walking and metro. With no directive on the relative burden of walking, the value of time or the effect of weather, the model spreads its probability mass over the available options. It is this continuous distribution that is scored under the protocol of Section~\ref{sec:contract}.
+
+\begin{figure*}[tp]
+  \footnotesize
+\begin{verbatim}
+--- agent_id=1320713 | Destination: work | Departure: 08:16 ---
+**Context:** Weather: 10 C, Clear/Sunny. Today 10 C to 22 C, sunrise 06:27, sunset 21:15.
+             No precipitation expected.
+**Weather later:** afternoon 15 C, Clear/Sunny - evening 16 C, Clear/Sunny.
+Frederic-Adrien, 28, Full-Time Worker (household of 2, very low income).
+Usual trip purposes: Work. Lives in: Toulouse
+
+**Further trips planned today:**
+    - 13:32 -> other (~12.4 km)      - 16:27 -> home (~11.5 km)      - 20:00 -> leisure (~15.1 km)
+
+**Trip options** (5 options, indices 0 to 4):
+- [0] foot,metro,foot: Travel time: 20 minutes, including 16 minutes of walking.
+      Has a public transport pass.
+    - Walk to 'Marengo-SNCF': 9 minutes.  - Metro 'A' to 'Esquirol': 4 minutes.
+    - Walk to 'work': 7 minutes.
+- [1] foot: Estimated duration: 26 minutes. Distance: 2.0 km.
+- [2] bicycle: Estimated duration: 11 minutes. Distance: 2.2 km.
+- [3] foot: Travel time: 28 minutes, including 28 minutes of walking.
+    - Walk to 'work': 28 minutes.
+- [4] car: Estimated duration: 11 minutes. Distance: 3.0 km.
+
+[{"agent_id": "1320713",
+  "probabilities": [
+    {"index": 0, "mode": "foot,metro,foot", "probability": 20.0},
+    {"index": 1, "mode": "foot",            "probability":  5.0},
+    {"index": 2, "mode": "bicycle",         "probability": 50.0},
+    {"index": 3, "mode": "foot",            "probability":  5.0},
+    {"index": 4, "mode": "car",             "probability": 20.0}],
+  "reason": "Frederic-Adrien favors the fast 11-minute bicycle ride to save time
+             on a tight schedule while keeping costs low, bypassing a slow walk."}]
+\end{verbatim}
+  \caption{One complete inference case: the block received by the model, then the answer it returns. The five options cover a two-kilometre trip to work.}
+  \label{fig:inference-case}
+  \Description{A monospaced text block in two parts. The first part is the context sent to the language model for agent 1320713, a trip to work leaving at 08:16: the weather at departure, ten degrees and clear, the forecast for the afternoon and evening, then the persona, Frederic-Adrien, twenty-eight, full-time worker in a household of two with very low income, living in Toulouse. Three further trips are planned the same day, at 13:32, 16:27 and 20:00. Five itinerary options follow, numbered zero to four: walking then metro line A then walking, twenty minutes; walking, twenty-six minutes over two kilometres; bicycle, eleven minutes over 2.2 kilometres; walking, twenty-eight minutes; car, eleven minutes over three kilometres. The second part is the JSON answer: a probability for each of the five indices, twenty per cent on the metro option, five on the first walk, fifty on the bicycle, five on the second walk and twenty on the car, followed by a one-sentence justification saying that the persona favours the fast eleven-minute bicycle ride to save time on a tight schedule while keeping costs low.}
+\end{figure*}
+
+% WARNING — CASE TO BE REDONE BEFORE PUBLICATION, in full. (1) The departure of this trip resolves to 17 March: it is
+%   one of the 866 cases that ticket 088 dated to the next day, so its itinerary offer was computed for the wrong day.
+%   (2) The answer quoted comes from the decider under the expert prompt, the Level 1 decider having no score on the v6.
+%   Both the received block AND the answer are to be taken again from a prompt_minimal_02 decider replayed on the
+%   corrected set (ticket 088, Section 3.4).
+
+\subsection{The expert prompt}
+\label{sec:expert-prompt}
+
+The minimal prompt produces systematic gaps to the survey, and those gaps concentrate on identifiable strata. The system prompt is tuned by iterations to reduce them, under the composite loss defined in Section~\ref{sec:metrics}.
+
+\subsubsection{Per-stratum loss}
+
+The prompt defines the local policy of the agent: for each perceived state, it assigns a probability distribution over the available transport modes. For a stratum (age band, trip purpose, socio-professional category, place of residence or distance class), the share of each mode generated by the prompt is the mean of the probabilities it assigns to the trips of that stratum. The survey supplies the reference value for each stratum. Calibrating means finding the text that minimises the gap between the probabilities the prompt produces and those reference values, stratum by stratum:
+\[
+  \min_p \sum_k w_k D_k(\hat{P}_k(p), P^{*}_{k}).
+\]
+% D_k: Jensen-Shannon divergence on nominal strata, optimal transport distance on ordered strata; weights w_k of Section~\ref{sec:metrics}.
+
+\subsubsection{Prompt engineering}
+
+The space of texts is discrete and non-differentiable. An evolutionary optimisation of prompts \citep{guo2023evoprompt} would evaluate populations of variants by crossover and selection, but fitness is not measured here on an isolated sample: it is measured on the distribution produced by a whole cohort, and ten prompts over ten generations on 800 personas require $10 \times 10 \times 800 = 80{,}000$ inferences. The tuning therefore proceeds by successive mutations of a single prompt, in the line of model-assisted reflective approaches (Shinn et al., 2023; Yuksekgonul et al., 2024). Each iteration starts from the per-stratum gaps produced by the prompt in service.
+
+A language model reads those gaps and the justifications the agent wrote with its decisions, states a hypothesis about the reasoning mechanism that produces the gap, and proposes a targeted textual mutation. The mutation is played first on some twenty trips chosen to be those the hypothesis says should switch, then on a larger stratified sample, replayed identically against a control arm carrying the unchanged prompt. It is retained if the over-represented mode recedes without another gap widening; otherwise it is rejected, and the reason for the rejection is recorded with it.
+
+\subsubsection{Admissibility guard-rails and the prompt retained}
+
+Three constraints frame the tuning.
+
+\textit{No numerical threshold.} The prompt may carry no numerical value, no distance bound and no quantitative target such as ``prefer walking under 1.5\,km'' or ``aim for 55\,\% car choice''. A syntactic analyser discards, before evaluation, any candidate carrying one. The text handles only qualitative arbitration notions: access friction, cumulative physical fatigue, exposure to bad weather, schedule constraints.
+
+\textit{No label of the survey.} The prompt names no professional category, no age band and no target municipality. It states its heuristics as principles transposable to another territory.
+
+\textit{Measurement on verbalised distributions.} On a cohort of this size, a stochastic draw spreads each modal share by $\pm 1.7$ points for one and the same prompt. The calibration score is therefore computed on the continuous probability vectors, not on drawn modes.
+
+The gaps that drive the mutations were read on the sealed cohort of Section~\ref{sec:substrate} itself, for most of the retained mutations. The expert-prompt scores reported in Section~\ref{sec:results} are therefore in-sample scores, not an out-of-sample generalisation performance.
+
+An expert prompt holds for the model it was tuned against. The per-stratum gaps differ from one model to the next, and a mutation retained on one is not retained by right on another.
+
+Only the system instruction distinguishes this condition from the minimal prompt. The block of facts, the chain that produces it and the expected JSON schema are those of Section~\ref{sec:minimal-prompt}. The text of the expert prompt is the following.
+
+\begin{quote}\small\itshape
+Select the optimal travel mode taking the persona into account.
+
+Situational trade-off principles:
+\begin{itemize}\setlength{\itemsep}{2pt}
+  \item Chain friction: Reconstruct the real door-to-door duration (access walk, waiting, in-vehicle trip, egress). If the access walk accounts for most of the direct trip in exchange for a few minutes on board, the traveller prefers the simplicity of walking straight there, with no interchange and no waiting.
+  \item Autonomy of older people: For elderly or frail people, a continuous, unhurried walk at one's own pace is the natural mode of independence for short distances, against the strain and stress of public transport (jolting, risk of falling, steps to climb, standing while waiting with no bench).
+  \item Carrying logistics: Take into account the physical constraint of loads (shopping, heavy bags, carrier bags). Carrying loads on public transport is off-putting; the trade-off leans towards direct access with no interchange (an immediate neighbourhood walk, or the boot of a private vehicle).
+  \item Working people's life time: For a working person facing a tightly scheduled day, the time taken away from personal life has critical value. Faced with public transport links that significantly increase the duration or impose multiple interchanges, the traveller prefers the efficiency and schedule control of their available vehicle.
+\end{itemize}
+
+[Output instructions]
+\begin{enumerate}\setlength{\itemsep}{2pt}
+  \item Analyse the profile through these principles.
+  \item Do not rule out any option: assign to EACH proposed option, by its index, the probability in \% that this persona picks it --- the higher the better it suits them, 0 if it is impossible for them. The sum must be exactly 100.
+  \item Return only a valid JSON object --- no markdown, no extra text.
+  \item Justify the distribution in one concise sentence.
+\end{enumerate}
+\end{quote}
+
+Four arbitration principles are added to the output instructions of Section~\ref{sec:minimal-prompt}, which the variant takes over unchanged apart from the reference to the principles in the first. None carries a numerical value, a distance bound or a modal share target (rule 1), and none names a professional category, an age band or a municipality of the survey (agnosticity predicate): chain friction, the continuous walk at one's own pace for an older person, the carrying of loads and the value of personal time for a working person under a schedule constraint are all stated as transposable mechanisms. The gap with the minimal prompt rests on those four directives alone, the task and the answer format staying unchanged.
+
+\subsection{Floors and tabular references}
+\label{sec:levels}
+
+A distribution gap is read between two bounds: the level reached with no behavioural knowledge, and the one reached by models trained on the real answers.
+
+The floor characterises the performance of deciders that hold no behavioural or sociological information: a uniform random draw, spreading probability equally over all the options computed for the trip, $1 / |\mathcal{O}_i|$; an empirical prior, or zero-rule, giving all the probability to the globally majority mode of the territory, the private car; and a shortest-duration physical heuristic, selecting deterministically the itinerary with the lowest travel time on the transport graphs.
+
+The ceiling is the performance of the four tabular references of Section~\ref{sec:references}, read axis by axis for want of a method that dominates all three. Table~\ref{tab:levels} places the four conditions on one ladder.
+
+\begin{table*}[tp]
+  \caption{The four decision conditions, from the floors to the tabular references. Every level receives the same 21 variables and the same itinerary offer, and every level decides under the vehicle-chain constraint.}
+  \label{tab:levels}
+  \begin{tabular}{llp{0.62\textwidth}}
+    \toprule
+    Level & Decider & What it holds \\
+    \midrule
+    0 & Statistical floors and physical heuristics & Uniform random draw, zero information; empirical prior, or zero-rule, always predicting the car; shortest-duration heuristic, the minimum of the OpenTripPlanner durations. \\
+    1 & Minimal and circumstantial prompt          & Full persona, OTP and OSM itinerary options, neutral instruction. No prompt engineering. \\
+    2 & Expert prompt                              & Contextual arbitration instructions, obtained by reflective optimisation under the four guard-rails, with no numerical threshold. \\
+    3 & Tabular references fitted on the survey    & Multinomial logit, gradient boosting, random forest, kernel logistic regression, all under the chain constraint, like the agents. \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The scores of the floors and the ceiling are consolidated in the comparative table of Section~\ref{sec:results}. The gap between them spans an order of magnitude, the floors showing divergences seven to fourteen times higher than the supervised models.
+
+% accuracy landmarks on the survey test partition (13,045 trips, split by household, calibration weights):
+%   "always the car" prior 57.1 %, multinomial logit 76.6 %, random forest 77.6 %, kernel logistic regression 78.4 %,
+%   gradient boosting 78.5 %. Sources: scripts/progedo_logit/{mode_choice_policy,klr_model,rf_mode_choice,mnl_model}_metrics.json,
+%   test.accuracy_weighted; the prior's accuracy equals the observed car share. These figures do NOT come from the
+%   scores.json of the v6 campaign, which carry no accuracy, and are not commensurable with the composites.
+
+\subsection{The unit audit at ground parity}
+\label{sec:audit}
+
+The audit confronts the decider, trip by trip, with the days the respondents actually described: 2{,}930 people and 9{,}621 trips, each carrying the declared mode. The itinerary offer is rebuilt by the same engines as the simulation, from the centroids of the zones and the declared departure time, with the weather bulletin of the day described.
+
+Each decider receives that offer under the chain constraint recalled in Table~\ref{tab:levels}: the agent under the minimal prompt, the agent under the expert prompt, the four supervised tabular models, renormalised over the offer under rule 3 of the protocol, and the empirical prior. The chain makes the offer path-dependent, since a decider who left the car at home is no longer offered it later on; the number of trips whose declared mode thereby falls out of the presented options is specific to each decider. This unit confrontation yields the disaggregate classification metrics announced in Section~\ref{sec:metrics}: weighted overall accuracy, cross-entropy, multi-class confusion matrices, precision and recall per transport mode.
+
+This audit evaluates the models on the very data substrate that served to train the supervised references.
+
+% NO FLOAT FLUSH HERE. \afterpage{\clearpage} stood here until 2026-09-21 and broke the
+%   compilation (see 03_Architecture.tex). One full-width figure and one full-width table
+%   will therefore be inherited by chapter 6. Do not reinstate \afterpage.

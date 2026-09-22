@@ -1,5 +1,11 @@
 # Chocs déclarés (ticket 079)
 
+> ⚠ **Ce répertoire a un successeur : [`../evenements/`](../evenements/README.md)** (ticket 100,
+> lot 1, 2026-09-21). Les déclarations qui sont ici continuent de se charger — elles sont
+> converties à la volée, avec un avertissement qui nomme le fichier — mais elles y ont toutes été
+> migrées. Ce qui suit reste exact ; ce qui s'y ajoute (article lu, injection au réveil, jugement
+> de l'agent, circulation au sein du foyer) se lit dans le README voisin.
+
 Un choc, c'est **un retard chiffré** plus **une phrase vécue**, posés sur des agents désignés à
 des jours désignés. Il ne coupe aucune ligne et ne dégrade aucune offre : l'agent décide en voyant
 l'offre nominale, puis encaisse. C'est le **régime subi**.

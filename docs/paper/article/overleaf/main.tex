@@ -5,15 +5,18 @@
 %
 % main.tex — master file of the paper. Created 2026-09-21.
 %
-% WHAT THIS FILE IS. The chapters live one per file next to it (00_abstract.tex to
-%   99_annexes.tex) and are pulled in by \input below. Nothing else assembles them:
+% WHAT THIS FILE IS. The chapters live one per file in chapters/ (00_Abstract.tex to
+%   09_Conclusion.tex) and are pulled in by \input below. The appendices, 99_annexes.tex,
+%   stay next to this file and are NOT uploaded: they are not part of the online project.
+%   Nothing else assembles the paper:
 %   before this file existed, the Overleaf project held the only copy of the preamble,
 %   so no cross-reference and no overfull box was detectable from the repository.
 %
-% FILES TO UPLOAD to the Overleaf project, flat, next to this one:
-%   aamas.cls, ACM-Reference-Format.bst, by.pdf, by.eps      (from template/)
-%   sample.bib                                               (from ../../sources/, NOT from template/)
-%   the PNGs of ../images/                                   (see \graphicspath below)
+% FILES TO UPLOAD to the Overleaf project, which mirrors this directory:
+%   aamas.cls, ACM-Reference-Format.bst, by.pdf, by.eps      flat, from template/
+%   sample.bib                                               flat, from ../../sources/, NOT from template/
+%   chapters/*.tex                                           as they are here
+%   the PNGs of ../images/                                   into images/ (see \graphicspath below)
 %
 % THE BIBLIOGRAPHY IS NOT template/sample.bib. That file is the ACM demo, eleven dummy
 %   keys, and none of the 35 keys this paper cites is in it: every \citep would print [?].
@@ -62,7 +65,7 @@
 %%%   A third change, \afterpage{\clearpage} at the end of each chapter carrying full-width
 %%%   floats, was removed on 2026-09-21: it is incompatible with double-column floats and
 %%%   aborted the build on "Float(s) lost". The float mass is unchanged: see the note at the
-%%%   end of 06_results.tex.
+%%%   end of 06_Empirical_Evaluation.tex.
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{2}
 \setcounter{totalnumber}{4}
@@ -74,10 +77,12 @@
 \renewcommand{\floatpagefraction}{0.75}
 \renewcommand{\dblfloatpagefraction}{0.75}
 
-%%% Where the figures are looked up. The second path lets the file compile from the
-%%% repository, where the PNGs sit in ../images/; on Overleaf the images are flat next
-%%% to the .tex and the first path serves.
-\graphicspath{{./}{images/}{../images/}}
+%%% Where the figures are looked up. Every \includegraphics names its file as
+%%% images/<name>.png. On Overleaf that folder sits next to this file and the first path
+%%% serves; in the repository the PNGs are one level up, in ../images/, which the second
+%%% path reaches. Adding a bare {images/} here would break the repository side, since the
+%%% prefix would then be applied twice.
+\graphicspath{{./}{../}}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -152,7 +157,7 @@ Generative agents in Multimodal Transport systems}
 %%% The abstract. It carries its own abstract environment and belongs in the preamble,
 %%% before \begin{document}, as the AAMAS sample does.
 
-\input{00_abstract}
+\input{chapters/00_Abstract}
 
 %%% Use this command to specify a few keywords describing your work.
 
@@ -169,15 +174,15 @@ Urban mobility; Mode choice; Travel survey calibration}
 %%% Body of the paper, one \section per file, in reading order.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\input{01_introduction}
-\input{02_related_work}
-\input{03_architecture}
-\input{04_metrics_and_substrate}
-\input{05_factual_neutral_prompt}
-\input{06_results}
-\input{07_untabulated_regimes}
-\input{08_limits_and_hybrid}
-\input{09_conclusion}
+\input{chapters/01_Introduction}
+\input{chapters/02_Related_work}
+\input{chapters/03_Architecture}
+\input{chapters/04_Evaluation}
+\input{chapters/05_Protocol}
+\input{chapters/06_Empirical_Evaluation}
+\input{chapters/07_Adaptation}
+\input{chapters/08_Limitations}
+\input{chapters/09_Conclusion}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -202,7 +207,9 @@ Urban mobility; Mode choice; Travel survey calibration}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Appendices. They come AFTER the bibliography, and \appendix is issued here
-%%% rather than inside 99_annexes.tex, which does not issue it itself.
+%%% rather than inside 99_annexes.tex, which does not issue it itself. That file is the
+%%% one piece of the paper absent from the Overleaf project: the \input below therefore
+%%% resolves in the repository only, and fails on Overleaf until the file is uploaded.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \appendix

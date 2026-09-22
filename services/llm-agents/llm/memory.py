@@ -48,6 +48,19 @@ class MemoryEntry:
     importance: float = 0.0
     # Sépare un souvenir marquant heureux d'un souvenir marquant subi.
     valence: str = "neutre"
+    # ── Provenance (ticket 100, D2) ──────────────────────────────────────────────
+    # D'où vient ce que l'entrée raconte : `vecu` (l'agent l'a fait ou subi), `lu` (il l'a
+    # lu, canal presse), `entendu` (un autre membre de son foyer le lui a dit).
+    #
+    # Elle porte la décision D2 — **un seul saut**. Ce qui est entendu ne repart jamais : une
+    # croyance née d'un ouï-dire est indiscernable d'une croyance née d'un trajet sans ce
+    # champ, et il n'y a pas de raccourci. Le ticket 078 § 4.1 refusait cette généalogie ;
+    # elle devient nécessaire dès lors que la circulation est bornée à un saut.
+    #
+    # `None` = entrée écrite AVANT ce ticket. Elle se LIT comme vécue (`origine_effective`)
+    # faute de mieux, mais elle ne le DÉCLARE pas : confondre les deux ferait passer pour une
+    # mesure ce qui n'est qu'un défaut, et ce dépôt a déjà payé ce motif.
+    origine: Optional[str] = None
     # Les quatre axes, NORMALISÉS À L'ÉCRITURE et jamais à la lecture (lot 2) : sans cela,
     # deux graphies de la même ligne de bus ne se rencontrent jamais. Un axe non résolu vaut
     # `None`, traité comme une absence de correspondance et non comme une correspondance
@@ -93,6 +106,11 @@ class MemoryEntry:
     # jamais qualifiée (gravité réellement inconnue) d'une entrée qualifiée à zéro
     # (trajet qui s'est bien passé). Les deux portent `importance = 0.0`.
     schema_version: int = 1
+
+    @property
+    def origine_effective(self) -> str:
+        """La provenance, avec sa lecture par défaut pour les entrées antérieures au 100."""
+        return self.origine or "vecu"
 
     @property
     def est_episodique(self) -> bool:

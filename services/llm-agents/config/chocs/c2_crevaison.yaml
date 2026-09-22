@@ -14,15 +14,14 @@ exposition:
 
 jours:
   - jour: 12
-    retard_min: 35
+    retard_min: 20
     incident_reseau: true
     vecu: >-
-      Flat tyre halfway through the ride. I spent twenty minutes patching it on the
-      pavement, hands covered in grease, then pushed the bike the rest of the way on foot.
-      I arrived late and filthy.
+      A tyre went flat on the way. I spent 20 minutes repairing it at the roadside, and my hands
+      were covered in grease for the rest of the journey. I arrived 20 minutes after the time I
+      had planned.
   - jour: 13
     retard_min: 0
     incident_reseau: false
     vecu: >-
-      My bike is still out of action after yesterday. I had to sort out another way of
-      getting around.
+      I replaced the inner tube the same evening. The bike was available as usual.

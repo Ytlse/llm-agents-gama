@@ -652,6 +652,38 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # Lecture exacte sous le lissage de Laplace : le concept a été contredit plus souvent
     # qu'il n'a été confirmé, contre_exemples > observations. Lot 3.
     memoire__confiance_seuil_service: float = 0.5
+
+    # ── Partage au sein du foyer (ticket 100, lot 4 ; conception : ticket 078) ───────────
+    # FAUX PAR DÉFAUT, et ce n'est pas une précaution de style : tout ce qui a été mesuré
+    # avant ce lot reste comparable, et le bras « sans partage » est un interrupteur, pas une
+    # reconstruction.
+    memoire__partage_foyer_enabled: bool = False
+    # R1, l'ancrage : on ne raconte au foyer que ce qu'on a vérifié soi-même. Un concept créé
+    # part à zéro observation — seule une journée où l'agent a REVÉCU la chose l'incrémente.
+    # C'est ce qui rend impossible un cycle d'amplification sans contact avec le monde, et
+    # cela ne coûte rien : la règle relit un compteur qui existe déjà.
+    # `0` est le bras « ouï-dire », de robustesse : il transforme le constat « l'ouï-dire ne
+    # circule pas » en mesure.
+    memoire__partage_foyer_observations_min: int = 1
+    # R5 — garde-fou, pas politique. Avec R1 et R2 le volume attendu est de quelques énoncés
+    # par nuit ; la borne est là pour qu'un emballement ne passe pas inaperçu dans un prompt
+    # dont le ticket 077 a mesuré qu'il stagne déjà vers 2 100 jetons.
+    memoire__partage_foyer_max_bloc: int = 12
+    # Borne du récit du soir (Q1). Un bilan par autre membre et par nuit : dans le plus grand
+    # ménage de la cohorte v6 (sept membres), six bilans. La borne ne devrait jamais mordre —
+    # si elle mord, une [ALARME] le dit, parce que cela signale un repère de lecture cassé.
+    memoire__recit_soir_max: int = 8
+
+    # ── D7, 2026-09-22 : la gravité est celle de l'agent, seule ─────────────────────────
+    # Le plancher `max(estimée, mesurée)` est levé. Rien ne corrige plus un jugement aberrant,
+    # et c'est assumé — mais quelque chose doit le DIRE. Une [ALARME] se lève quand l'agent
+    # sous-estime le fait mesuré de plus que cette valeur.
+    #
+    # 0,30 = plus d'un échelon. Les cinq échelons valent 0,10 / 0,30 / 0,50 / 0,75 / 1,00,
+    # donc des marches de 0,20 à 0,25 : un écart de 0,30 ne peut pas venir d'une hésitation
+    # entre deux niveaux voisins. Alarmer plus bas noierait le journal, plus haut laisserait
+    # passer le cas qui compte — « anodin » sur un dépannage de trente minutes vaut −0,60.
+    memoire__ecart_jugement_alarme: float = 0.30
     # Un concept est marqué DÉPASSÉ à ce nombre de contre-exemples ET confiance < 0,5.
     # Les deux conditions, pas une seule : ni trois contradictions contre vingt
     # confirmations, ni une majorité de contradictions sur deux observations. Lot 3.
@@ -708,14 +740,28 @@ class AgentConfig(BaseSettings, WorkdirPathResolutionMixin):
     # durée d'un souvenir de gravité NULLE vaut déjà 2,94 j, donc ce plancher ne mord pas. Il
     # n'est pas une durée minimale observée, et ne doit pas être cité comme telle.
     memoire__plancher_changement_jours: float = 2.0
-    # Plafond de la durée servie, en jours. Il ne mord PAS par la gravité — `borne_0_1` plafonne
-    # celle-ci à 1,0, d'où une force de 19,6 j et une durée de 20,58 j au plus. Il mord par le
-    # RENFORCEMENT AU RAPPEL : `force_apres_rappel` ajoute un jour par rappel jusqu'à 30, et à
-    # force = 30 la durée vaut 31,49 j. Sans ce plafond, un souvenir grave et souvent rappelé
-    # repousserait indéfiniment sa propre échéance, et le bloc — de taille fixe — deviendrait
-    # une archive au lieu d'une fenêtre. Même valeur que `memoire__force_max_jours`, posée
-    # explicitement pour que la borne se lise au lieu d'émerger d'un calcul.
-    memoire__plafond_changement_jours: float = 30.0
+    # Plafond de la durée servie, en jours. Porté de 30 à 50 le 2026-09-22, sur décision de
+    # l'auteur : **il ne mord plus jamais, et c'est le but.**
+    #
+    # Ce qui borne réellement la durée est `memoire__force_max_jours`, parce que
+    # `durée = force × ln(1/seuil) = force × 1,0498`. À force plafonnée à 30, la durée ne peut
+    # pas dépasser 31,49 j, quel que soit le nombre de rappels. Le plafond de durée ne pouvait
+    # donc mordre que dans la bande `force ∈ ]28,58 ; 30]`, où il rabotait AU PLUS 1,49 j —
+    # après 9 rappels pour un souvenir `marquant`, 25 pour un `anodin`.
+    #
+    # ⚠ Le commentaire précédent affirmait que sans ce plafond « un souvenir souvent rappelé
+    # repousserait indéfiniment sa propre échéance ». C'était FAUX : `force_apres_rappel`
+    # sature à `memoire__force_max_jours`, et la protection contre l'archive vient de là.
+    #
+    # Pourquoi le garder plutôt que le supprimer : une borne déclarée se lit, se journalise
+    # quand elle mord (`DureeService.borne`), et documente l'intention. Une borne qui ne mord
+    # jamais est un témoin — si une ligne de journal la nomme un jour, c'est que la loi ou le
+    # plafond de force a bougé sans qu'on le remarque.
+    #
+    # ⚠ NE PAS CITER « entre 2 et 30 jours » comme des durées observées : les deux bornes sont
+    # des gardes de sûreté que rien n'a jamais atteintes (plancher 2 j contre 2,94 j à gravité
+    # nulle ; plafond hors d'atteinte par construction).
+    memoire__plafond_changement_jours: float = 50.0
     # ════════════════════════════════════════════════════════════════════════════
 
     long_term_self_reflect_enabled: bool = True  # surchargé par la valeur GAMA
@@ -957,6 +1003,30 @@ class ChocsConfig(BaseSettings, WorkdirPathResolutionMixin):
     fichier: str | None = None
 
 
+class EvenementsConfig(BaseSettings, WorkdirPathResolutionMixin):
+    """Événement déclaré, vécu ou lu (ticket 100).
+
+    Un événement, c'est un TEXTE posé dans la mémoire d'agents désignés à des jours désignés,
+    avec au plus un FAIT MESURÉ. Deux prises : `arrivee`, après la décision — l'agent a choisi
+    en voyant l'offre nominale puis encaisse, c'est le régime subi du ticket 079 ; et `reveil`,
+    avant la première décision — l'agent sait avant de choisir, c'est l'article du ticket 059.
+
+    Ce bloc remplace `ChocsConfig`, qui reste lu une version de plus. La déclaration vit dans
+    son propre fichier, pas ici : `config/evenements/*.yaml`, comme `AccidentsConfig` ne porte
+    pas la loi BAAC.
+    """
+
+    _in_workdir_path_fields: ClassVar[list[str]] = []
+
+    # Faux par défaut : un run qui ne demande rien se comporte exactement comme avant.
+    enabled: bool = False
+
+    # Chemin de la déclaration. `None` — le défaut — vaut « aucun événement ». Un fichier
+    # désigné et invalide fait ÉCHOUER le chargement : mieux vaut un refus franc au démarrage
+    # qu'un run de soixante jours qui ne fait rien et dont personne ne saura pourquoi.
+    fichier: str | None = None
+
+
 class AppConfig(BaseSettings, WorkdirPathResolutionMixin):
     _in_workdir_path_fields: ClassVar[list[str]] = [
         "agent_memory_events_jsonl",
@@ -1007,6 +1077,9 @@ class Settings(BaseSettings):
     cache: CacheConfig = CacheConfig()
     accidents: AccidentsConfig = AccidentsConfig()
     chocs: ChocsConfig = ChocsConfig()
+    # Ticket 100 — le canal unique. `chocs` reste lu une version de plus, avec un
+    # avertissement : une campagne lancée sous l'ancienne clé doit continuer de tourner.
+    evenements: EvenementsConfig = EvenementsConfig()
 
     # Directory settings
     workdir: Path = Path.cwd()

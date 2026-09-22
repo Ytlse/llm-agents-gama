@@ -54,21 +54,21 @@ JSON_DEFAUT = (RACINE / "docs" / "traces" / "2026-09-21_08-52_ticket058_audit_un
 SORTIE_DEFAUT = RACINE / "docs" / "paper" / "figures"
 COPIE_DEFAUT = RACINE / "docs" / "paper" / "article" / "images"
 
-# Quatre décideurs suffisent à porter les deux énoncés : le plafond tabulaire, les deux
-# paliers, et le plancher qui devient imbattable à longue distance. Les cinq autres
-# encombreraient la planche sans rien y ajouter — ils restent dans les tableaux.
+# Décision de l'auteur du 2026-09-22 : la planche ne porte plus que le plafond tabulaire et le
+# prompt expert de chaque porteur audité. Les prompts minimaux et le plancher tout-voiture en
+# sortent — ils restent aux tableaux de l'annexe I, et la planche qui les exploitait, l'accord
+# unitaire par tranche de distance, a quitté le chapitre le même jour.
 DECIDEURS = [
     ("lgbm", "Gradient boosting (LightGBM)", "#1baf7a", "-", "o"),
     ("gemini-35-fl_proexp05", "Gemini 3.5 Flash-Lite, expert prompt", "#2a78d6", "-", "s"),
-    ("gemini-35-fl_promin02", "Gemini 3.5 Flash-Lite, minimal prompt", "#eb6834", "-", "^"),
-    ("majvoiture", "All-car baseline", "#8d8b86", "--", None),
 ]
 
 # Ticket 096 — versés dans DECIDEURS par `--avec-jev` seulement. Sans le drapeau, les deux
 # planches restent celles du chapitre de référence, qui n'en cite que quatre.
 DECIDEURS_JEV = [
-    ("jev-1130_proexp05", "Jev 1.13 (TypeSafe), expert prompt", "#9b51e0", "-", "D"),
-    ("jev-1130_promin02", "Jev 1.13 (TypeSafe), minimal prompt", "#c9a0ea", "--", "v"),
+    # prompt_expert_32 est le prompt expert de Jev (décision de l'auteur, 2026-09-22), et c'est
+    # le même bras qu'au § 6.1. prompt_expert_05 reste mesuré, il vit aux annexes H.6 et I.
+    ("jev-1130_proexp32", "Jev 1.13 (TypeSafe), expert prompt", "#9b51e0", "-", "D"),
 ]
 BANDES = ["0-1km", "1-2km", "2-5km", "5-10km", "10-20km", "20-50km"]
 LIBELLES_BANDES = ["0–1 km", "1–2 km", "2–5 km", "5–10 km", "10–20 km", "20–50 km"]
@@ -164,12 +164,12 @@ def main() -> int:
     analyseur.add_argument("--sans-copie", action="store_true")
     analyseur.add_argument(
         "--avec-jev", action="store_true",
-        help="ajoute les deux bras Jev 1.13 (ticket 096) aux deux planches",
+        help="ajoute le prompt expert de Jev 1.13 (ticket 096) aux planches",
     )
     arguments = analyseur.parse_args()
     if arguments.avec_jev:
         DECIDEURS.extend(DECIDEURS_JEV)
-        logger.info("Deux bras Jev versés : %d décideurs tracés", len(DECIDEURS))
+        logger.info("Bras Jev versé : %d décideurs tracés", len(DECIDEURS))
 
     depart = time.monotonic()
     resultats = charger(arguments.audit)

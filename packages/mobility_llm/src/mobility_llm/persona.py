@@ -40,6 +40,12 @@ class AgentSpec(BaseModel):
     # sans cette ligne, le gabarit recevrait un mode vide et poserait les six questions dans le
     # vide, sans qu'aucune erreur ne le dise.
     mode_interroge: str | None = None
+    # Le texte de l'événement jugé (ticket 100, lot 3) — l'article lu ou le choc subi. MÊME
+    # LEÇON que `mode_interroge` ci-dessus, et elle a été repayée le 2026-09-22 : sans cette
+    # ligne, `extra="ignore"` jetait le texte en silence et le gabarit demandait à l'agent de
+    # juger une page blanche. Le modèle répondait `negligible` — ce qui était la bonne réponse
+    # à la question qu'on lui posait vraiment. Quinze appels sur quinze, sans une erreur.
+    evenement: str | None = None
     # Anticipation de la chaîne de la journée (ticket 014).
     day_outlook: str | None = None            # météo des tranches restantes du jour
     agenda: list[str] = Field(default_factory=list)  # trajets restants (agenda glissant)

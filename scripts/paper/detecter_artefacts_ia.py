@@ -9,7 +9,7 @@ concentrent dans les chapitres les moins retravaillés (ticket 083).
 Le script mesure sur la PROSE SEULE. Il retire d'abord les blocs de code, les tableaux,
 les schémas ASCII, les commentaires HTML, les cibles de liens, le code inline, les lignes
 d'en-tête éditorial (`**Statut :**`, `**Version antérieure :**`) et les sections de queue
-qui listent les tickets. Sans ce retrait, `fr/02_related_work.md` afficherait quinze gras
+qui listent les tickets. Sans ce retrait, `fr/02_Related_work.md` afficherait quinze gras
 alors que sa prose n'en porte aucun.
 
 Usage : python3 scripts/paper/detecter_artefacts_ia.py [--fichier CHEMIN] [--racine DIR]
@@ -26,7 +26,7 @@ RACINE_DEFAUT = Path(__file__).resolve().parents[2] / "docs" / "paper" / "articl
 DOSSIERS = ("fr", "en")  # overleaf/ est du .tex, relecture/ des notes de travail : hors périmètre
 # Si overleaf/ entre un jour dans le périmètre : le .tex écrit le cadratin de DEUX façons, le
 # caractère « — » et la ligature « --- », et il faut compter les deux. Le 2026-09-15,
-# 03_architecture.tex en portait 8 du premier genre et 14 du second — compter le seul
+# 03_Architecture.tex en portait 8 du premier genre et 14 du second — compter le seul
 # caractère aurait raté les deux tiers du tic. Les commentaires LaTeX (%) ne sont pas du texte.
 
 # --- Seuils -----------------------------------------------------------------------------

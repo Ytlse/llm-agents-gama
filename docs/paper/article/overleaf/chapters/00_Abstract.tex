@@ -1,0 +1,42 @@
+% =====================================================================
+% 00_Abstract.tex — LaTeX rendering of ../en/00_Abstract.md v1.9 (21 September 2026)
+% Dernière mise à jour : 2026-09-21
+% Chapter 0 of the paper: the abstract. Insert before 01_Introduction.tex.
+% Ready to paste into the Overleaf project (acmart + natbib: \citep, \citet).
+% Derived file: regenerate after every validated pass of ../en/00_Abstract.md.
+%
+% LENGTH: 320 words at v1.9, footnote excluded — TWENTY WORDS OVER the bound, which takes
+% "around 100-300 words in plain text". The overshoot is knowingly carried: the compensating
+% cut proposed in paragraph 3 was turned down by the author. TO BE SETTLED BEFORE 1 Oct 2026.
+% ONE TEXT still serves the PDF and the OpenReview registration field.
+% Source of the bound: https://warwick.ac.uk/fac/sci/dcs/aamas2027/calls/instructions/
+% (read 2026-09-21). Calendar: author registration 17 Sep 2026, abstract 1 Oct 2026,
+% paper 8 Oct 2026 — see ../SOUMISSION_AAMAS_2027.md § 0.
+% NO PLACEHOLDER REMAINS.
+%
+% AUTHOR-ADDED FOOTNOTE — PRESERVE ON REGENERATION. The survey citation hangs on
+% "EMC^2 2023 survey" in paragraph 2, in the form the distributor requires. It does not count
+% towards the word total, and it cannot travel into the OpenReview field, which is plain text:
+% there, the sentence simply names the survey.
+% Same footnote as the GAMA Days source, docs/paper/gama_days/GAMA_DAYS_ABSTRACT_EN_TEX.md.
+%
+% v1.8 — the 300-word text becomes the abstract everywhere. WHAT THE PAPER'S ABSTRACT GAVE UP:
+% the contract sentence (same 21 variables, 1,000 sealed personas, car prior, four named
+% tabular references — sections 4.3 and 4.4); the calibration figures (section 6.1, appendix
+% H.1); the decision-level disagreement, one trip in three against one in ten (section 6.4).
+% The 393-word version is frozen as ../../archive/00_Abstract_TEX_v1.7.tex.
+% Paragraphs 1, 3 and 4 follow the tutor's revision of the GAMA Days source.
+%
+% v1.9 — paragraph 4 says what the language model is worth instead of deferring it. Two things
+% that travel with that sentence in the GAMA Days source are DELIBERATELY NOT carried here:
+% the "In addition," linking the two statements, and the Liu, Yang & Yin footnote, which would
+% double \citep{liu2024toward}, already cited in sections 1 and 2, and cannot enter the
+% plain-text registration field.
+% =====================================================================
+
+\begin{abstract}
+Existing multi-agent simulations of multimodal urban mobility rely on tabular models estimated from household travel surveys, or on explicit rules defined by domain experts. In both, the space of representable behaviours is fixed \emph{a priori}: a factor encoded as neither variable nor rule cannot influence any decision. Yet mode choice is multidimensional, and integrating that complexity at city scale is difficult. LLM-based generative agents promise to overcome it: fed on massive corpora, they carry decision heuristics surveys do not record, adapting without explicit rules.
+\\Against the certified EMC$^2$ 2023 survey\footnote{Enquête Ménages Déplacements (EMD), Toulouse / Grande agglomération toulousaine (EMD, Toulouse / Grande agglomération toulousaine) --- 2023, CEREMA, Syndicat mixte des transports en commun de l'agglomération toulousaine (producteurs), PROGEDO-ADISP (diffuseur). Final report: \url{https://www.aua-toulouse.org/wp-content/uploads/2024/05/Rapport-final-68-pages-Enquete-mobilite-2023-Bassin-de-vie-toulousain.pdf}}, we measure the calibration gap between these agents and the models estimated from it, then whether they adapt to what no variable encodes.
+\\Using a dataset of 3,299 trips, we compare the results of our generative agents with those of classical systems based on rigid rules or tabular data. In known situations (where the space of representable behaviours is defined \emph{a priori}), generative agents produce results very close to traditional models, with a slight deviation. Their true strength emerges in unforeseen circumstances, such as a news article mentioning bed bugs in the metro, which influences the agents' decisions. We observe an evolution in their choices over time, as well as their ability to gradually reduce the impact of this information, an adaptability that classical models cannot replicate.
+\\Each decision incurs an inference cost, and on an ordinary day, the representativeness of generative agents does not justify the expense: tabular models perform just as well, if not slightly better, at no cost and instantly. The value of the language model lies in describing complex mode choices, especially during unforeseen circumstances. This is not possible with rule-based models and static household travel surveys. This opens the way for a hybrid architecture: the tabular model would handle the nominal regime, while the language model, aligned with the inhabitants' choices, would determine when to take over and make decisions based on each individual's personality.
+\end{abstract}

@@ -12,7 +12,7 @@ une fonctionnalité — et il ne voit de toute façon pas les écritures passée
 (`sed -i`, heredoc, `>`), ce que la règle écrite couvre à sa place.
 
 Lancement direct, pour le test :
-    echo '{"tool_input":{"file_path":"docs/paper/article/fr/02_related_work.md"}}' \
+    echo '{"tool_input":{"file_path":"docs/paper/article/fr/02_Related_work.md"}}' \
       | python3 scripts/paper/hook_style_article.py
 """
 from __future__ import annotations

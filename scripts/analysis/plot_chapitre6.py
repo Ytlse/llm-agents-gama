@@ -172,15 +172,27 @@ DECIDEURS_JEV = [
 # publie), et les variantes ajustées au vu de la cohorte évaluée — borne haute
 # d'ajustement en échantillon, § 5.3.5, qui ne se compare pas aux précédentes.
 MINIMAL_V, HORS_ECH, EN_ECH = "minimal", "hors_echantillon", "en_echantillon"
+#: La consigne que le § 6.1 PUBLIE pour ce porteur, alors qu'elle a été réglée sur la cohorte
+#: qui la note. Le cas n'existe que pour Jev (décision de l'auteur du 2026-09-22). Elle se
+#: dessine comme un prompt expert — c'en est un — et porte un † renvoyant à la note de pied.
+PUBLIE_EN_ECH = "publie_en_echantillon"
+#: Une consigne mesurée sur ce porteur mais que le § 6.1 ne publie PAS pour lui. Le cas de
+#: Jev sous prompt_expert_05, la consigne écrite pour gemini-3.5 et servie telle quelle :
+#: elle est hors échantillon, mais ce n'est pas le prompt expert de ce porteur-là.
+AUTRE_VARIANTE = "autre_variante"
+NOTE_EN_ECH = "† expert prompt tuned on the cohort that scores it (in-sample)"
 
 # Ticket 096 — versé dans VARIANTES par `--avec-jev` seulement (cf. DECIDEURS_JEV).
 VARIANTES_JEV = {
     "jev-1.13.0": [
         ("promin02", "minimal prompt", MINIMAL_V,
          f"exp_jev-1130_promin02{SUFFIXE}_c_nosim", f"exp_jev-1130_promin02{SUFFIXE}_nosim"),
-        ("proexp05", "expert prompt", HORS_ECH,
+        # L'auteur a tranché le 2026-09-22 : prompt_expert_32 EST le prompt expert de Jev, et
+        # prompt_expert_05 est la consigne écrite pour gemini-3.5 puis servie telle quelle. Les
+        # deux libellés étaient inversés, ce que la figure 6.2 donnait à lire comme une anomalie.
+        ("proexp05", "gemini-3.5 expert prompt", AUTRE_VARIANTE,
          f"exp_jev-1130_proexp05{SUFFIXE}_c_nosim", f"exp_jev-1130_proexp05{SUFFIXE}_nosim"),
-        ("proexp32", "prompt tuned for it", EN_ECH,
+        ("proexp32", "expert prompt †", PUBLIE_EN_ECH,
          f"exp_jev-1130_proexp32{SUFFIXE}_c_nosim", f"exp_jev-1130_proexp32{SUFFIXE}_nosim"),
     ],
 }
@@ -476,7 +488,11 @@ def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
         if not points:
             continue
         depart = next(v for v, _, statut, _ in points if statut == MINIMAL_V)
-        arrivee = next(v for v, _, statut, _ in points if statut == HORS_ECH)
+        publies = [v for v, _, statut, _ in points if statut in (HORS_ECH, PUBLIE_EN_ECH)]
+        # La consigne réglée POUR le porteur prime quand elle existe : c'est celle que le
+        # § 6.1 publie, et la flèche doit finir là où finit le tableau.
+        publie_propre = [v for v, _, statut, _ in points if statut == PUBLIE_EN_ECH]
+        arrivee = (publie_propre or publies)[0]
         axes.annotate(
             "", xy=(arrivee, ligne), xytext=(depart, ligne),
             arrowprops={"arrowstyle": "-|>", "color": COULEURS_MODELES[modele],
@@ -488,8 +504,8 @@ def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
                 [valeur], [ligne], s=90, zorder=4,
                 facecolor="white" if statut == MINIMAL_V else COULEURS_MODELES[modele],
                 edgecolor=COULEURS_MODELES[modele], linewidth=1.8,
-                marker="s" if statut == EN_ECH else "o",
-                alpha=0.55 if statut == EN_ECH else 1.0,
+                marker="s" if statut in (EN_ECH, AUTRE_VARIANTE) else "o",
+                alpha=0.55 if statut in (EN_ECH, AUTRE_VARIANTE) else 1.0,
             )
             # Étiquettes alternées : sur Gemini 3.5, quatre variantes tiennent dans
             # deux points de composite et se recouvriraient toutes du même côté.
@@ -513,10 +529,10 @@ def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
         Line2D([], [], marker="o", color="#55534f", markerfacecolor="white",
                markersize=8, linestyle="none", label="minimal prompt"),
         Line2D([], [], marker="o", color="#55534f", markerfacecolor="#55534f",
-               markersize=8, linestyle="none", label="expert prompt, out of sample"),
+               markersize=8, linestyle="none", label="expert prompt (published)"),
         Line2D([], [], marker="s", color="#55534f", markerfacecolor="#55534f",
                markersize=8, linestyle="none", alpha=0.55,
-               label="variants tuned on the evaluated cohort"),
+               label="other measured variants"),
     ]
     axes.legend(handles=legende, fontsize=8.5, frameon=False,
                 **({"loc": "lower center", "bbox_to_anchor": (0.5, -0.30), "ncol": 3}
@@ -524,8 +540,17 @@ def figure_ingenierie(sortie: Path, tabulaires: list[float]) -> list[Path]:
                    else {"loc": "upper right", "bbox_to_anchor": (1.0, 0.72)}))
     axes.set_xlim(right=axes.get_xlim()[1] + 0.9)
     figure.tight_layout(rect=(0, 0.16 if legende_sous_axe else 0.045, 1, 1))
+    notes = [NOTE_EN_ECH] if any(
+        statut == PUBLIE_EN_ECH for m in modeles for _, _, statut, _, _ in VARIANTES[m]) else []
     if replis:
-        figure.text(0.012, 0.012, NOTE_REPLI, fontsize=8, color="#55534f")
+        notes.append(NOTE_REPLI)
+    # Ancrées sur l'axe et non sur la figure : l'écriture se fait en bbox serrée, et un
+    # figure.text() posé en bas agrandit la toile d'une bande blanche de la hauteur du vide.
+    for rang_note, texte in enumerate(notes):
+        axes.annotate(texte, xy=(0, 0), xycoords="axes fraction",
+                      xytext=(0, -82 - 13 * rang_note if legende_sous_axe else -52 - 13 * rang_note),
+                      textcoords="offset points", fontsize=8, color="#55534f",
+                      annotation_clip=False)
     return ecrire(figure, sortie, "ch6_ingenierie")
 
 

@@ -470,7 +470,16 @@ services:
       MEMOIRE__MODE_FENETRE_CHANGEMENTS: ${MEMOIRE__MODE_FENETRE_CHANGEMENTS:-derivee}
       MEMOIRE__SEUIL_SERVICE_CHANGEMENT: ${MEMOIRE__SEUIL_SERVICE_CHANGEMENT:-0.35}
       MEMOIRE__PLANCHER_CHANGEMENT_JOURS: ${MEMOIRE__PLANCHER_CHANGEMENT_JOURS:-2.0}
-      MEMOIRE__PLAFOND_CHANGEMENT_JOURS: ${MEMOIRE__PLAFOND_CHANGEMENT_JOURS:-30.0}
+      MEMOIRE__PLAFOND_CHANGEMENT_JOURS: ${MEMOIRE__PLAFOND_CHANGEMENT_JOURS:-50.0}
+      # ── Partage au sein du foyer (ticket 100, lot 4) et garde de la décision D7 ──────────
+      # Une règle de mémoire se fait varier par l'ENVIRONNEMENT, jamais par config.yaml : elle
+      # appartient au run et se retrouve dans son identité. Sans ces lignes, `MEMOIRE__…` posé
+      # sur l'hôte n'atteindrait pas le conteneur — c'est exactement ce que L1.1 du 077 vérifie.
+      MEMOIRE__PARTAGE_FOYER_ENABLED: ${MEMOIRE__PARTAGE_FOYER_ENABLED:-false}
+      MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN: ${MEMOIRE__PARTAGE_FOYER_OBSERVATIONS_MIN:-1}
+      MEMOIRE__PARTAGE_FOYER_MAX_BLOC: ${MEMOIRE__PARTAGE_FOYER_MAX_BLOC:-12}
+      MEMOIRE__RECIT_SOIR_MAX: ${MEMOIRE__RECIT_SOIR_MAX:-8}
+      MEMOIRE__ECART_JUGEMENT_ALARME: ${MEMOIRE__ECART_JUGEMENT_ALARME:-0.3}
       # ── Dispositifs d'expérience (ticket 077) ─────────────────────────────────
       # Même oubli que les réglages ci-dessus, trouvé le 2026-09-21 : l'orchestrateur les
       # posait sur l'hôte, compose ne les déclarait pas, et les deux dispositifs n'ont JAMAIS
@@ -508,6 +517,14 @@ services:
       # est vide — le repli précédent, la médiane des exécutions archivées, n'a plus de quoi
       # répondre (ticket 045). Montage étroit : le conteneur n'a pas besoin du reste de `docs/`.
       - ./docs/paper/methode/experience_plan:/app/docs/paper/methode/experience_plan:ro
+      # Corpus de presse du ticket 059, en LECTURE SEULE (ticket 100, lot 2). Le canal `lu`
+      # CITE ces textes : leur empreinte est vérifiée au chargement contre la déclaration ET
+      # contre le manifeste du corpus. Sans ce montage, un run à article refuse de démarrer en
+      # disant « texte introuvable » et en listant les chemins essayés. Montage étroit, sur le
+      # modèle du plan d'expériences ci-dessus : le conteneur n'a pas besoin du reste de `docs/`.
+      # ⚠ Lecture seule non négociable — un corpus que le conteneur pourrait réécrire ne
+      # prouverait plus rien.
+      - ./docs/paper/sources/actualites/articles_txt:/app/docs/paper/sources/actualites/articles_txt:ro
       # Les TROIS réseaux en service, pas le seul Tisséo : la porte de proximité
       # d'OTP (`trip_helper/otp.py`, feeds_en_service) énumère les feeds du premier
       # niveau de ce répertoire. Montée sur le seul tisseo_gtfs, elle refusait

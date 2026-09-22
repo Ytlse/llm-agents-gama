@@ -5,12 +5,12 @@
 %   preceded in the main file by \appendix (this file does NOT issue \appendix itself, so that the main file
 %   keeps control of where the appendix block starts).
 % LABELS DEFINED HERE, all three referenced from earlier chapters and resolving to ?? until this file existed:
-%   app:variables — Appendix E, the 21 variables. Referenced by overleaf/04_metrics_and_substrate.tex.
+%   app:variables — Appendix E, the 21 variables. Referenced by overleaf/chapters/04_Evaluation.tex.
 %   app:margins   — ATTACHED TO APPENDIX G, which is the nearest holder: chapter 4 references it for the
 %                   microdata recomputations of the margins the published report does not carry, and NO appendix
 %                   carries that margin-by-margin table today. Move the label if such an appendix is written.
-%   app:detail    — Appendix H, the detailed results. Referenced by overleaf/06_results.tex.
-%   app:unit      — Appendix I, the unit audit. Referenced by overleaf/06_results.tex.
+%   app:detail    — Appendix H, the detailed results. Referenced by overleaf/chapters/06_Empirical_Evaluation.tex.
+%   app:unit      — Appendix I, the unit audit. Referenced by overleaf/chapters/06_Empirical_Evaluation.tex.
 % TWO THINGS TO TAKE UP IN APPENDICES A TO G before submission, inherited from the French draft and NOT
 %   repaired by the rendering: the figures, to be cross-checked from the repository rather than copied from
 %   here; the cross-references, which followed the old manuscript numbering (rewritten as \ref here, still
@@ -22,7 +22,7 @@
 % Preamble additions:
 %   \newcommand{\todo}[1]{\textbf{[#1]}}
 % Figures: four, all PNG, all composed IN ENGLISH by scripts/analysis/plot_chapitre6.py, regenerated 2026-09-17.
-%   The two figures of the unit audit are carried by overleaf/06_results.tex, not by this file.
+%   The two figures of the unit audit are carried by overleaf/chapters/06_Empirical_Evaluation.tex, not by this file.
 %   Caption BELOW, mandatory \Description. All four are set as figure* across both columns: they are multi-panel
 %   plates and a single column makes them unreadable.
 %   FILES TO UPLOAD to the Overleaf project, flat, next to the .tex:
@@ -234,7 +234,7 @@ Table~\ref{tab:dimensions} gives the mean of the stratum L1 errors, weighted by 
 
 \begin{figure*}[tp]
   \centering
-  \includegraphics[width=\textwidth]{ch99_dimensions_voiture.png}
+  \includegraphics[width=\textwidth]{images/ch99_dimensions_voiture.png}
   \caption{The car share by stratum on six dimensions, before and after prompt engineering, against the survey target and the tabular method closest to that target on each dimension. The last two, residential ring and housing type, enter neither the composite nor the calibration cycle, and the gap stays wide there after tuning.}
   \label{fig:app-dimensions}
   \Description{Six panels, one per dimension: distance band, trip purpose, age band, occupation, residential ring and housing type. In each panel, the horizontal axis carries the strata of that dimension and the vertical axis the car share in per cent. Four series are plotted: the survey target, gemini-3.5 under the minimal prompt, the same model under the expert prompt, and the tabular method closest to the target on that dimension. On the first four panels the expert-prompt series sits closer to the target than the minimal-prompt series across most strata. On the last two panels, the residential ring and the housing type, the two agent series stay close to each other and both remain well away from the target, these dimensions entering neither the composite nor the calibration cycle.}
@@ -242,7 +242,7 @@ Table~\ref{tab:dimensions} gives the mean of the stratum L1 errors, weighted by 
 
 \begin{figure*}[tp]
   \centering
-  \includegraphics[width=\textwidth]{ch99_modes_distance.png}
+  \includegraphics[width=\textwidth]{images/ch99_modes_distance.png}
   \caption{The four modes by distance band, one panel per mode. Car and walking land on the target from one kilometre onwards; public transport is overestimated by two to five points between two and twenty kilometres, and cycling by a factor of two on every band where it weighs. The tabular method errs the other way on cycling, which it places below the target everywhere.}
   \label{fig:app-modes-distance}
   \Description{Four panels, one per transport mode: car, walking, public transport and cycling. In each panel the horizontal axis carries the five distance bands and the vertical axis the modal share in per cent. Four curves are drawn: the survey target, the agent under the minimal prompt, the agent under the expert prompt, and a tabular reference. On the car and walking panels the expert-prompt curve meets the target curve from one kilometre onwards. On the public transport panel the agent curves stay two to five points above the target between two and twenty kilometres. On the cycling panel the agent curves sit at about twice the target on every band where cycling has weight, while the tabular curve sits below the target everywhere.}
@@ -250,7 +250,7 @@ Table~\ref{tab:dimensions} gives the mean of the stratum L1 errors, weighted by 
 
 \begin{figure*}[tp]
   \centering
-  \includegraphics[width=\textwidth]{ch99_modes_occupation.png}
+  \includegraphics[width=\textwidth]{images/ch99_modes_occupation.png}
   \caption{The four modes read by occupation, same curves as Figure~\ref{fig:app-modes-distance}. The two school-age strata, pupils and students, are those where the agent places cycling highest: 8.2 and 13.3\,\% under the expert prompt, against 4.2 and 4.0\,\% in the survey. Student public transport goes from 37.9 to 35.5\,\% after tuning where the target is 41.4\,\%: tuning moves it away from the target on that stratum.}
   \label{fig:app-modes-occupation}
   \Description{Four panels, one per transport mode, with the eight occupation categories on the horizontal axis and the modal share in per cent on the vertical axis. The same four series are drawn as in the previous plate: survey target, agent under the minimal prompt, agent under the expert prompt, tabular reference. On the cycling panel the two school-age categories, pupils and students, carry the highest agent values of the plate, 8.2 and 13.3 per cent under the expert prompt against 4.2 and 4.0 per cent in the survey. On the public transport panel the student bar for the expert prompt sits lower than the bar for the minimal prompt, 35.5 against 37.9 per cent, while the target is 41.4, so the expert prompt moves away from the target on that stratum.}
@@ -258,7 +258,7 @@ Table~\ref{tab:dimensions} gives the mean of the stratum L1 errors, weighted by 
 
 \begin{figure*}[tp]
   \centering
-  \includegraphics[width=\textwidth]{ch99_modes_motif.png}
+  \includegraphics[width=\textwidth]{images/ch99_modes_motif.png}
   \caption{The four modes by trip purpose. Education is the purpose where the agent moves furthest from the target after tuning, and it moves away in the direction of the car, on a population that none of the four principles targets.}
   \label{fig:app-modes-motif}
   \Description{Four panels, one per transport mode, with the six trip purposes on the horizontal axis, home, work, education, shopping, leisure and other, and the modal share in per cent on the vertical axis. The same four series are drawn. On the car panel the education purpose shows the expert-prompt series above both the minimal-prompt series and the target, which is the largest such gap of the plate; the corresponding deficit appears on the public transport panel for the same purpose.}
@@ -433,4 +433,4 @@ Both levels recall bikes better than any fitted method, 22.5 and 24.1~\% against
 
 The audit carries a ceiling: 1{,}295 trips, 13.5~\%, have their declared mode absent from the options presented, removed by the vehicle chain or by the option cap. No decider could find it. The count runs from 1{,}226 to 1{,}428 depending on the decider.
 
-The two figures of this audit are in Section~\ref{sec:agreement}, Figures~\ref{fig:audit-modes} and~\ref{fig:audit-distance}.
+The two figures of this audit are in Section~\ref{sec:individual}, Figures~\ref{fig:audit-modes} and~\ref{fig:audit-distance}.

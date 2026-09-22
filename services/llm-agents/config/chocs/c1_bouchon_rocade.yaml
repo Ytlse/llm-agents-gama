@@ -19,17 +19,16 @@ jours:
     retard_min: 60
     incident_reseau: true
     vecu: >-
-      Stuck for a solid hour on the ring road, bumper to bumper. Horns everywhere, and a
-      man got out of his car to see what was going on. I turned up soaked in sweat and in
-      a foul mood.
+      Traffic on the ring road was at a standstill. I covered eight kilometres in one hour and
+      arrived 60 minutes after the time I had planned. Nothing I had arranged that day was
+      cancelled.
   - jour: 13
     retard_min: 25
     incident_reseau: true
     vecu: >-
-      The ring road again. Shorter than yesterday, but I knew straight away it had started
-      over.
+      The ring road was blocked again, for 25 minutes this time.
   - jour: 14
     retard_min: 12
     incident_reseau: true
     vecu: >-
-      Still crawling along. I am starting to wonder whether this is worth it.
+      The ring road was slow again: 12 minutes above the usual journey time.

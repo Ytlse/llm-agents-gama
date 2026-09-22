@@ -1,7 +1,7 @@
 # Points de consolidation — retirés de l'introduction, à reprendre plus tard
 
 **Objet :** éléments du protocole que l'auteur a retirés de l'introduction le 8 septembre 2026 faute de temps, mais qui restent scientifiquement utiles. Chaque point dit ce qu'il apporte, ce qu'il coûte, et ce qu'il faudrait faire pour le réintégrer. À reprendre si le calendrier le permet, sinon à mentionner en travaux futurs.
-**Fichiers liés :** [`REMARQUES_INTRODUCTION.md`](relecture/01_introduction.md) (décisions), [`PROTOCOLE_SCIENTIFIQUE.md`](../methode/PROTOCOLE_SCIENTIFIQUE.md) et [`PLAN_ARTICLE_2026.md`](plan/PLAN.md) (qui portent encore ces éléments : à aligner), [`experience_plan/experiments.yaml`](../methode/experience_plan/experiments.yaml).
+**Fichiers liés :** [`REMARQUES_INTRODUCTION.md`](relecture/01_Introduction.md) (décisions), [`PROTOCOLE_SCIENTIFIQUE.md`](../methode/PROTOCOLE_SCIENTIFIQUE.md) et [`PLAN_ARTICLE_2026.md`](plan/PLAN.md) (qui portent encore ces éléments : à aligner), [`experience_plan/experiments.yaml`](../methode/experience_plan/experiments.yaml).
 
 ---
 
@@ -61,7 +61,7 @@
 3. L'article doit expliciter clairement la disjonction entre les microdonnées d'enquête protégées (qui servent d'étalon statistique externe de référence et d'entraînement pour les références tabulaires) et la cohorte synthétique entièrement réplicable par les tiers.
 
 **Où le placer — trois points d'ancrage :**
-1. *Chapitre 4, Section 4.5 & 4.7* ([`fr/04_metrics_and_substrate.md`](fr/04_metrics_and_substrate.md)) : expliciter la distinction données d'enquête protégées vs cohorte synthétique réplicable.
+1. *Chapitre 4, Section 4.5 & 4.7* ([`fr/04_Evaluation.md`](fr/04_Evaluation.md)) : expliciter la distinction données d'enquête protégées vs cohorte synthétique réplicable.
 2. *Annexe G* ([`fr/99_annexes.md`](fr/99_annexes.md)) et [`SOUMISSION_AAMAS_2027.md`](SOUMISSION_AAMAS_2027.md) § 3 : cadrer la constitution du ZIP anonyme de 25 Mo.
 3. *Rebuttal / Réponses aux relecteurs* : réponse formelle préparée en cas d'attaque sur la reproductibilité.
 
@@ -100,13 +100,13 @@
 $$\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$$
 *où $P_i$ est le persona socio-démographique scellé, $M_{i,t}$ le registre de mémoire bi-composante (STM circulaire, LTM vectorielle), $C_i$ l'état de la chaîne de véhicules du ménage, et $\pi_\theta(a \mid o_t, M_{i,t})$ la distribution verbalisée sur l'espace d'action restreint $\mathcal{A}(o_t, C_i)$. »*
 
-**Ce que le papier doit faire.** Le chapitre 3 actuel ([`fr/03_architecture.md`](fr/03_architecture.md)) est rédigé en style narratif issu de la v0.1. AAMAS exige une rigueur formelle (*Dual Core*) pour les architectures multi-agents :
+**Ce que le papier doit faire.** Le chapitre 3 actuel ([`fr/03_Architecture.md`](fr/03_Architecture.md)) est rédigé en style narratif issu de la v0.1. AAMAS exige une rigueur formelle (*Dual Core*) pour les architectures multi-agents :
 1. Remplacer la prose narrative du § 3.1 par un bloc compact introduisant formellement le quadruplet $\text{Agent}_i = \langle P_i, M_{i,t}, C_i, \pi_\theta \rangle$.
 2. Spécifier rigoureusement l'espace d'action contextuel $\mathcal{A}(o_t, C_i)$ : sous-ensemble des modes physiques offerts à l'instant $t$ par OpenTripPlanner et OSMnx sous la contrainte d'éligibilité et de localisation des véhicules $C_i$ (règles de chaîne).
 3. Poser la décision comme un échantillonnage sur la distribution de probabilité verbalisée par le modèle : $a_t \sim \pi_\theta(\cdot \mid o_t, M_{i,t})$, garantissant la préservation de la diversité individuelle face aux modes déterministes.
 
 **Où le placer.**
-- *Chapitre 3, Section 3.1 & 3.3* ([`fr/03_architecture.md`](fr/03_architecture.md)) : remplacement direct de la narration en tête du chapitre.
+- *Chapitre 3, Section 3.1 & 3.3* ([`fr/03_Architecture.md`](fr/03_Architecture.md)) : remplacement direct de la narration en tête du chapitre.
 
 **Décision du 12 septembre 2026.** Consigné dans les actions pour l'écriture du papier.
 

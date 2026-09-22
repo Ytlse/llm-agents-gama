@@ -43,6 +43,10 @@ CATEGORIES: dict[str, CategorySpec] = {
     "stm_reflection": _cat("stm_reflection"),
     "ltm_self_reflection": _cat("ltm_self_reflection"),
     "enquete_affinite": _cat("enquete_affinite"),
+    # Ticket 100, lot 3 — l'agent juge ce qu'il vient de vivre ou de lire (décision D4). Un
+    # appel par EXPOSITION, et les expositions sont rares par construction : le run du
+    # 2026-09-19 en comptait quatre sur toute sa durée.
+    "evenement_jugement": _cat("evenement_jugement"),
 }
 
 

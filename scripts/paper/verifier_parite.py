@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Vérifie la parité des chapitres de l'article entre les trois arbres.
 
-L'arbre par langue (`article/en/`, `article/fr/`, `article/overleaf/`) éloigne les trois
+L'arbre par langue (`article/en/`, `article/fr/`, `article/overleaf/chapters/`) éloigne les trois
 fichiers d'un même chapitre : rien ne signale plus qu'un maître a bougé sans son miroir.
 Ce script rétablit le signal. Il relit l'en-tête de version de chaque fichier, aligne les
 chapitres par numéro, et sort en code 1 dès qu'un chapitre n'est pas cohérent.
@@ -19,7 +19,8 @@ from pathlib import Path
 
 RACINE_DEFAUT = Path(__file__).resolve().parents[2] / "docs" / "paper" / "article"
 
-RE_FICHIER = re.compile(r"^(\d{2})_([a-z0-9_]+)\.(md|tex)$")
+# Le nom de chapitre est calqué sur le projet Overleaf, qui capitalise : 06_Empirical_Evaluation.
+RE_FICHIER = re.compile(r"^(\d{2})_([A-Za-z0-9_]+)\.(md|tex)$")
 RE_VERSION_MD = re.compile(r"\*\*Version\s?:?\*\*\s*`(v[\d.]+)`")
 RE_BROUILLON = re.compile(r"\*\*Statut\s?:?\*\*\s*`(brouillon[^`]*)`")
 RE_VERSION_TEX = re.compile(r"%[^\n]*?\bv(\d+\.\d+)\b")
@@ -46,17 +47,23 @@ def etat(chemin: Path) -> str:
 def recenser(racine: Path) -> dict[str, dict[str, tuple[str, str]]]:
     """{numéro: {langue: (slug, état)}} pour en/, fr/ et overleaf/."""
     chapitres: dict[str, dict[str, tuple[str, str]]] = {}
-    for langue, dossier in (("en", "en"), ("fr", "fr"), ("tex", "overleaf")):
-        d = racine / dossier
-        if not d.is_dir():
-            print(f"ERREUR  arbre manquant : {d}", file=sys.stderr)
-            continue
-        for f in sorted(d.iterdir()):
-            m = RE_FICHIER.match(f.name)
-            if not m:
+    # Le troisième arbre a deux étages depuis le 2026-09-22 : les chapitres sont dans
+    # overleaf/chapters/, que main.tex assemble, et les annexes restent dans overleaf/.
+    for langue, dossiers in (("en", ["en"]), ("fr", ["fr"]), ("tex", ["overleaf/chapters", "overleaf"])):
+        trouve = False
+        for dossier in dossiers:
+            d = racine / dossier
+            if not d.is_dir():
                 continue
-            num, slug, _ = m.groups()
-            chapitres.setdefault(num, {})[langue] = (slug, etat(f))
+            trouve = True
+            for f in sorted(d.iterdir()):
+                m = RE_FICHIER.match(f.name)
+                if not m:
+                    continue
+                num, slug, _ = m.groups()
+                chapitres.setdefault(num, {}).setdefault(langue, (slug, etat(f)))
+        if not trouve:
+            print(f"ERREUR  arbre manquant : {racine}/{dossiers[0]}", file=sys.stderr)
     return chapitres
 
 
